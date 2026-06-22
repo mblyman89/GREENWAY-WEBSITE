@@ -87,6 +87,8 @@ function isCannabisItem(item: GreenwayMenuItem) {
 
 function displayStrain(item: GreenwayMenuItem) {
   if (isNonCannabisItem(item)) return "Non Cannabis";
+  // For items where strain type is still unknown (edibles, topicals, paraphernalia),
+  // show the category label since strain type doesn't apply to those products
   if (item.strainType === "unknown") return formatWebsiteCategory(item.category);
   return item.strainType.charAt(0).toUpperCase() + item.strainType.slice(1);
 }
