@@ -42,7 +42,7 @@ export default function MenuPage() {
                 Shop Our Menu
               </h1>
               <p className="mt-2 text-xs font-semibold leading-5 text-zinc-300 md:mt-3 md:max-w-2xl md:text-base md:leading-7">
-                Browse {posMenuPreviewItems.length.toLocaleString()} exact-match products from Greenway's POS export with real brands, prices, package labels, potency values, and {totalInventoryUnits().toLocaleString()} available inventory units represented.
+                Browse {posMenuPreviewItems.length.toLocaleString()} exact-match products from Greenway&apos;s POS export with real brands, prices, package labels, potency values, and {totalInventoryUnits().toLocaleString()} available inventory units represented.
               </p>
               <p className="mt-3 max-w-2xl rounded-2xl border border-white/10 bg-black/35 p-3 text-[0.7rem] font-semibold leading-5 text-zinc-400 md:text-xs md:leading-6">
                 This is the first live-data pass. Ambiguous, fuzzy, and unmatched products are still held back until their matching rules are approved.

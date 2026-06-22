@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type { GreenwayCategory, GreenwayMenuItem } from "@/lib/leafly/types";
 import { formatWebsiteCategory, websiteCategories } from "@/lib/pos/category-taxonomy";
 import { FilterMobile, MenuFilterControls } from "./FilterMobile";
@@ -224,21 +224,6 @@ export function InteractiveMenuBrowser({ items }: { items: GreenwayMenuItem[] })
   const [maxPrice, setMaxPrice] = useState(initialSpecial?.maxPrice ?? maxAvailablePrice);
   const [sortBy, setSortBy] = useState<SortOption>(initialSpecial?.sortBy ?? "name-az");
 
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const search = params.get("search") ?? "";
-    const categoryParam = params.get("category") ?? "";
-    const category = isWebsiteCategory(categoryParam) ? categoryParam : "";
-    const brand = params.get("brand") ?? "";
-    const specialKey = params.get("special") as PreviewSpecialCollectionKey | null;
-    const special = specialKey && specialKey in previewSpecialCollections ? previewSpecialCollections[specialKey] : null;
-
-    setQuery(search);
-    setSelectedCategories(category ? [category] : special?.categories ?? []);
-    setSelectedBrands(brand ? [brand] : []);
-    setMaxPrice(special?.maxPrice ?? maxAvailablePrice);
-    setSortBy(special?.sortBy ?? "name-az");
-  }, [maxAvailablePrice]);
 
   const criteria = useMemo<FilterCriteria>(() => ({
     query,
@@ -256,27 +241,27 @@ export function InteractiveMenuBrowser({ items }: { items: GreenwayMenuItem[] })
     const specialItems = specialItemIds ? items.filter((item) => specialItemIds.includes(item.id)) : items;
 
     return sortItems(specialItems.filter((item) => itemMatchesCriteria(item, criteria, maxAvailablePrice)), sortBy);
-  }, [criteria, initialSpecial?.itemIds, items, sortBy]);
+  }, [criteria, initialSpecial?.itemIds, items, maxAvailablePrice, sortBy]);
 
   const categoryOptions = useMemo(() => {
     const optionItems = items.filter((item) => itemMatchesCriteria(item, criteriaWithout(criteria, "selectedCategories"), maxAvailablePrice));
     return buildOptions(optionItems.flatMap((item) => item.filterCategories?.length ? item.filterCategories : [item.category]), selectedCategories, formatWebsiteCategory);
-  }, [criteria, items, selectedCategories]);
+  }, [criteria, items, maxAvailablePrice, selectedCategories]);
 
   const strainOptions = useMemo(() => {
     const optionItems = items.filter((item) => itemMatchesCriteria(item, criteriaWithout(criteria, "selectedStrains"), maxAvailablePrice));
     return buildOptions(optionItems.map((item) => item.strainType).filter((strainType) => strainType !== "unknown"), selectedStrains.filter((strainType) => strainType !== "unknown"));
-  }, [criteria, items, selectedStrains]);
+  }, [criteria, items, maxAvailablePrice, selectedStrains]);
 
   const brandOptions = useMemo(() => {
     const optionItems = items.filter((item) => itemMatchesCriteria(item, criteriaWithout(criteria, "selectedBrands"), maxAvailablePrice));
     return buildOptions(optionItems.map((item) => item.brand), selectedBrands);
-  }, [criteria, items, selectedBrands]);
+  }, [criteria, items, maxAvailablePrice, selectedBrands]);
 
   const weightOptions = useMemo(() => {
     const optionItems = items.filter((item) => itemMatchesCriteria(item, criteriaWithout(criteria, "selectedWeights"), maxAvailablePrice));
     return buildRequestedWeightOptions(optionItems, selectedWeights);
-  }, [criteria, items, selectedWeights]);
+  }, [criteria, items, maxAvailablePrice, selectedWeights]);
 
   const groupedItems = useMemo(() => {
     return websiteCategories
