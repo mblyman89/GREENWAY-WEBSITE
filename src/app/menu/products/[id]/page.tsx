@@ -96,7 +96,9 @@ function toneForItem(item: GreenwayMenuItem) {
 
 function displayStrain(item: GreenwayMenuItem) {
   if (isNonCannabisItem(item)) return "Non Cannabis";
-  if (item.strainType === "unknown") return "Hybrid";
+  // For cannabis items where strain type is still unknown (edibles, topicals),
+  // show the category label since strain type doesn't meaningfully apply
+  if (item.strainType === "unknown") return categoryAliases[item.category] ?? formatWebsiteCategory(item.category);
   return item.strainType.charAt(0).toUpperCase() + item.strainType.slice(1);
 }
 

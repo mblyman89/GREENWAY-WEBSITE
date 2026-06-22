@@ -40,6 +40,7 @@ export type GreenwayMenuItem = {
   posInventoryType?: string;
   posInventoryCategory?: string;
   strainType: GreenwayStrainType;
+  strainName?: string;
   thc: string | null;
   cbd: string | null;
   totalThc: GreenwayCannabinoid | null;
