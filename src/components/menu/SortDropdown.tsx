@@ -1,6 +1,7 @@
-export type SortOption = "name-az" | "name-za" | "price-low" | "price-high" | "category" | "best-sellers" | "potency-low" | "potency-high";
+export type SortOption = "featured-shuffle" | "name-az" | "name-za" | "price-low" | "price-high" | "category" | "best-sellers" | "potency-low" | "potency-high";
 
 export const sortOptions: { value: SortOption; label: string; helper: string }[] = [
+  { value: "featured-shuffle", label: "Featured Shuffle", helper: "Rotates products on every visit" },
   { value: "name-az", label: "Name A-Z", helper: "Alphabetical product browsing" },
   { value: "name-za", label: "Name Z-A", helper: "Reverse alphabetical browsing" },
   { value: "price-low", label: "Price Low-High", helper: "Lowest mock price first" },

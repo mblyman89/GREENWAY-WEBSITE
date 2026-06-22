@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import type { GreenwayCategory, GreenwayMenuItem } from "@/lib/leafly/types";
 import { formatWebsiteCategory, websiteCategories } from "@/lib/pos/category-taxonomy";
 import { FilterMobile, MenuFilterControls } from "./FilterMobile";
@@ -108,8 +108,45 @@ function potencyValue(item: GreenwayMenuItem) {
   return Math.max(cannabinoidPercentageValue(item.totalThc) ?? 0, cannabinoidPercentageValue(item.totalCbd) ?? 0);
 }
 
-function sortItems(items: GreenwayMenuItem[], sortBy: SortOption) {
+type GreenwayWindow = Window & {
+  __greenwayShuffleSignature?: string;
+  __greenwayShuffleRanks?: Record<string, number>;
+};
+
+function subscribeToShuffleStore() {
+  return () => {};
+}
+
+function createShuffleRanks(items: GreenwayMenuItem[]) {
+  return Object.fromEntries(
+    [...items]
+      .map((item) => ({ item, rank: Math.random() }))
+      .sort((a, b) => a.rank - b.rank)
+      .map(({ item }, index) => [item.id, index]),
+  );
+}
+
+function getBrowserShuffleRanks(items: GreenwayMenuItem[], signature: string) {
+  if (typeof window === "undefined") return {};
+  const greenwayWindow = window as GreenwayWindow;
+
+  if (greenwayWindow.__greenwayShuffleSignature !== signature || !greenwayWindow.__greenwayShuffleRanks) {
+    greenwayWindow.__greenwayShuffleSignature = signature;
+    greenwayWindow.__greenwayShuffleRanks = createShuffleRanks(items);
+  }
+
+  return greenwayWindow.__greenwayShuffleRanks;
+}
+
+const emptyShuffleRanks: Record<string, number> = {};
+
+function getServerShuffleRanks() {
+  return emptyShuffleRanks;
+}
+
+function sortItems(items: GreenwayMenuItem[], sortBy: SortOption, shuffleRanks: Record<string, number>) {
   return [...items].sort((a, b) => {
+    if (sortBy === "featured-shuffle") return (shuffleRanks[a.id] ?? 0) - (shuffleRanks[b.id] ?? 0);
     if (sortBy === "name-az") return a.name.localeCompare(b.name);
     if (sortBy === "name-za") return b.name.localeCompare(a.name);
     if (sortBy === "price-low") return a.priceMinorUnits - b.priceMinorUnits;
@@ -222,7 +259,13 @@ export function InteractiveMenuBrowser({ items }: { items: GreenwayMenuItem[] })
   const [maxCbd, setMaxCbd] = useState(100);
   const maxAvailablePrice = Math.max(100, Math.ceil(Math.max(...items.map((item) => item.priceMinorUnits), 0) / 100));
   const [maxPrice, setMaxPrice] = useState(initialSpecial?.maxPrice ?? maxAvailablePrice);
-  const [sortBy, setSortBy] = useState<SortOption>(initialSpecial?.sortBy ?? "name-az");
+  const shuffleSignature = useMemo(() => items.map((item) => item.id).join("|"), [items]);
+  const shuffleRanks = useSyncExternalStore(
+    subscribeToShuffleStore,
+    () => getBrowserShuffleRanks(items, shuffleSignature),
+    getServerShuffleRanks,
+  );
+  const [sortBy, setSortBy] = useState<SortOption>(initialSpecial?.sortBy ?? "featured-shuffle");
 
 
   const criteria = useMemo<FilterCriteria>(() => ({
@@ -240,8 +283,8 @@ export function InteractiveMenuBrowser({ items }: { items: GreenwayMenuItem[] })
     const specialItemIds = initialSpecial?.itemIds;
     const specialItems = specialItemIds ? items.filter((item) => specialItemIds.includes(item.id)) : items;
 
-    return sortItems(specialItems.filter((item) => itemMatchesCriteria(item, criteria, maxAvailablePrice)), sortBy);
-  }, [criteria, initialSpecial?.itemIds, items, maxAvailablePrice, sortBy]);
+    return sortItems(specialItems.filter((item) => itemMatchesCriteria(item, criteria, maxAvailablePrice)), sortBy, shuffleRanks);
+  }, [criteria, initialSpecial?.itemIds, items, maxAvailablePrice, shuffleRanks, sortBy]);
 
   const categoryOptions = useMemo(() => {
     const optionItems = items.filter((item) => itemMatchesCriteria(item, criteriaWithout(criteria, "selectedCategories"), maxAvailablePrice));
@@ -278,7 +321,7 @@ export function InteractiveMenuBrowser({ items }: { items: GreenwayMenuItem[] })
     setMaxThc(100);
     setMaxCbd(100);
     setMaxPrice(maxAvailablePrice);
-    setSortBy("name-az");
+    setSortBy("featured-shuffle");
   };
 
   const activeFilterTags = [
