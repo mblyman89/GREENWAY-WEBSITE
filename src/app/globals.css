@@ -1,0 +1,71 @@
+@import "tailwindcss";
+
+:root {
+  --background: #000000;
+  --foreground: #ffffff;
+  --greenway: #7ed957;
+  --greenway-dark: #12351f;
+  --gold: #ffd700;
+  --orange: #ff7f00;
+  --frost: #d1d5db;
+  --charcoal: #1a1a1a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at top left, rgba(126, 217, 87, 0.2), transparent 34rem),
+    radial-gradient(circle at top right, rgba(255, 127, 0, 0.16), transparent 28rem),
+    #000000;
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+::selection {
+  background: var(--greenway);
+  color: #08130b;
+}
+
+.film-strip {
+  position: relative;
+  overflow: hidden;
+}
+
+.film-strip::before,
+.film-strip::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 22px;
+  z-index: 5;
+  opacity: 0.5;
+  background-image: radial-gradient(circle, transparent 42%, rgba(0, 0, 0, 0.9) 44%);
+  background-size: 22px 34px;
+  pointer-events: none;
+}
+
+.film-strip::before {
+  left: 0;
+}
+
+.film-strip::after {
+  right: 0;
+}
+
+.noise-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.13;
+  mix-blend-mode: screen;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 160 160' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.45'/%3E%3C/svg%3E");
+}

@@ -1,0 +1,3070 @@
+[
+  {
+    "id": "pos-cartridge-2727-2727-vape-cart-2727-blueberry-pancakes-1g-0d3ac971",
+    "name": "2727 - Vape Cart - 2727 - Blueberry Pancakes - 1g",
+    "brand": "2727",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "unknown",
+    "thc": "92%",
+    "cbd": "4%",
+    "totalThc": {
+      "type": "thc",
+      "value": "92",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "4",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "92",
+        "unit": "%"
+      },
+      {
+        "type": "cbd",
+        "value": "4",
+        "unit": "%"
+      }
+    ],
+    "description": "POS preview item for 2727 - Vape Cart - 2727 - Blueberry Pancakes - 1g. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$25 1g",
+    "priceMinorUnits": 2500,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-2727-2727-vape-cart-2727-blueberry-pancakes-1g-0d3ac971-1g-03f97c",
+        "label": "1g",
+        "priceMinorUnits": 2500,
+        "inventoryLevel": 3,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "26128"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-2727-2727-vape-cart-2727-lemon-meringue-1g-287f668e",
+    "name": "2727 - Vape Cart - 2727 - Lemon Meringue - 1g",
+    "brand": "2727",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "unknown",
+    "thc": "80.61%",
+    "cbd": "3.5%",
+    "totalThc": {
+      "type": "thc",
+      "value": "80.61",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "3.5",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "80.61",
+        "unit": "%"
+      },
+      {
+        "type": "cbd",
+        "value": "3.5",
+        "unit": "%"
+      }
+    ],
+    "description": "POS preview item for 2727 - Vape Cart - 2727 - Lemon Meringue - 1g. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$25 1g",
+    "priceMinorUnits": 2500,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-2727-2727-vape-cart-2727-lemon-meringue-1g-287f668e-1g-da75a6",
+        "label": "1g",
+        "priceMinorUnits": 2500,
+        "inventoryLevel": 2,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "26129"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-agro-couture-ge-blackberry-cobbler-1g-indica-vape-cartridge-ec191eb8",
+    "name": "GE - Blackberry Cobbler - 1g Indica Vape Cartridge",
+    "brand": "Agro Couture",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "indica",
+    "thc": "91%",
+    "cbd": "1.3%",
+    "totalThc": {
+      "type": "thc",
+      "value": "91",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "1.3",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "91",
+        "unit": "%"
+      },
+      {
+        "type": "cbd",
+        "value": "1.3",
+        "unit": "%"
+      }
+    ],
+    "description": "POS preview item for GE - Blackberry Cobbler - 1g Indica Vape Cartridge. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$15 1g",
+    "priceMinorUnits": 1500,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-agro-couture-ge-blackberry-cobbler-1g-indica-vape-cartridge-ec191eb8-1g-ec1613",
+        "label": "1g",
+        "priceMinorUnits": 1500,
+        "inventoryLevel": 10,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "12856"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-agro-couture-ge-green-zkittlez-1g-sativa-vape-cartridge-45efefd3",
+    "name": "GE - Green Zkittlez - 1g Sativa Vape Cartridge",
+    "brand": "Agro Couture",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "sativa",
+    "thc": "92%",
+    "cbd": "0.16%",
+    "totalThc": {
+      "type": "thc",
+      "value": "92",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "0.16",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "92",
+        "unit": "%"
+      },
+      {
+        "type": "cbd",
+        "value": "0.16",
+        "unit": "%"
+      }
+    ],
+    "description": "POS preview item for GE - Green Zkittlez - 1g Sativa Vape Cartridge. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$15 1g",
+    "priceMinorUnits": 1500,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-agro-couture-ge-green-zkittlez-1g-sativa-vape-cartridge-45efefd3-1g-9251a7",
+        "label": "1g",
+        "priceMinorUnits": 1500,
+        "inventoryLevel": 12,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "20457"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-agro-couture-ge-sherbet-1g-indica-vape-cartridge-883a69ab",
+    "name": "GE - Sherbet - 1g Indica Vape Cartridge",
+    "brand": "Agro Couture",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "indica",
+    "thc": "92%",
+    "cbd": "0.16%",
+    "totalThc": {
+      "type": "thc",
+      "value": "92",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "0.16",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "92",
+        "unit": "%"
+      },
+      {
+        "type": "cbd",
+        "value": "0.16",
+        "unit": "%"
+      }
+    ],
+    "description": "POS preview item for GE - Sherbet - 1g Indica Vape Cartridge. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$15 1g",
+    "priceMinorUnits": 1500,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-agro-couture-ge-sherbet-1g-indica-vape-cartridge-883a69ab-1g-3923fe",
+        "label": "1g",
+        "priceMinorUnits": 1500,
+        "inventoryLevel": 4,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "20458"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-concentrate-2727-2727-badder-now-and-lator-1g-115909c5",
+    "name": "2727 - Badder - Now & Lator - 1g",
+    "brand": "2727",
+    "category": "concentrate",
+    "filterCategories": [
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Badder",
+    "strainType": "unknown",
+    "thc": "81.62%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "81.62",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "81.62",
+        "unit": "%"
+      }
+    ],
+    "description": "POS preview item for 2727 - Badder - Now & Lator - 1g. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$15 1g",
+    "priceMinorUnits": 1500,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-concentrate-2727-2727-badder-now-and-lator-1g-115909c5-1g-f3fb65",
+        "label": "1g",
+        "priceMinorUnits": 1500,
+        "inventoryLevel": 1,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "25087"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-concentrate-2727-2727-extracts-2727-honey-crumble-himalayan-kush-1g-ad57d540",
+    "name": "2727 - Extracts - 2727 - Honey Crumble - Himalayan Kush - 1g",
+    "brand": "2727",
+    "category": "concentrate",
+    "filterCategories": [
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "BHO",
+    "strainType": "unknown",
+    "thc": "80.48%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "80.48",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "80.48",
+        "unit": "%"
+      }
+    ],
+    "description": "POS preview item for 2727 - Extracts - 2727 - Honey Crumble - Himalayan Kush - 1g. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$15 1g",
+    "priceMinorUnits": 1500,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-concentrate-2727-2727-extracts-2727-honey-crumble-himalayan-kush-1g-ad57d540-1g-e59273",
+        "label": "1g",
+        "priceMinorUnits": 1500,
+        "inventoryLevel": 3,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "26143"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-concentrate-2727-2727-extracts-2727-sugar-wax-cherry-cookies-1g-7c9b38f6",
+    "name": "2727 - Extracts - 2727 - Sugar Wax - Cherry Cookies - 1g",
+    "brand": "2727",
+    "category": "concentrate",
+    "filterCategories": [
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "BHO",
+    "strainType": "unknown",
+    "thc": "75.82%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "75.82",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "75.82",
+        "unit": "%"
+      }
+    ],
+    "description": "POS preview item for 2727 - Extracts - 2727 - Sugar Wax - Cherry Cookies - 1g. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$15 1g",
+    "priceMinorUnits": 1500,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-concentrate-2727-2727-extracts-2727-sugar-wax-cherry-cookies-1g-7c9b38f6-1g-56d446",
+        "label": "1g",
+        "priceMinorUnits": 1500,
+        "inventoryLevel": 2,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "26126"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-concentrate-2727-2727-extracts-2727-sugar-wax-citrus-sunrise-1g-ccaaccb2",
+    "name": "2727 - Extracts - 2727 - Sugar Wax - Citrus Sunrise - 1g",
+    "brand": "2727",
+    "category": "concentrate",
+    "filterCategories": [
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "BHO",
+    "strainType": "unknown",
+    "thc": "69.34%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "69.34",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "69.34",
+        "unit": "%"
+      }
+    ],
+    "description": "POS preview item for 2727 - Extracts - 2727 - Sugar Wax - Citrus Sunrise - 1g. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$15 1g",
+    "priceMinorUnits": 1500,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-concentrate-2727-2727-extracts-2727-sugar-wax-citrus-sunrise-1g-ccaaccb2-1g-291981",
+        "label": "1g",
+        "priceMinorUnits": 1500,
+        "inventoryLevel": 2,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "18394"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-concentrate-2727-smb-extracts-smb-sugar-crumble-blueberry-caviar-1g-6ca5da8e",
+    "name": "SMB - Extracts - SMB - Sugar Crumble - Blueberry Caviar - 1g",
+    "brand": "2727",
+    "category": "concentrate",
+    "filterCategories": [
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "BHO",
+    "strainType": "unknown",
+    "thc": "76.72%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "76.72",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "76.72",
+        "unit": "%"
+      }
+    ],
+    "description": "POS preview item for SMB - Extracts - SMB - Sugar Crumble - Blueberry Caviar - 1g. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$10 1g",
+    "priceMinorUnits": 1000,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-concentrate-2727-smb-extracts-smb-sugar-crumble-blueberry-caviar-1g-6ca5da8e-1g-3519f0",
+        "label": "1g",
+        "priceMinorUnits": 1000,
+        "inventoryLevel": 5,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "26123"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-disposable-cartridge-1937-1937-disposable-cartridge-banana-bread-1g-b0c6fcc1",
+    "name": "1937 - Disposable Cartridge - Banana Bread - 1g",
+    "brand": "1937",
+    "category": "disposable-cartridge",
+    "filterCategories": [
+      "disposable-cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Disposable Cartridge",
+    "strainType": "unknown",
+    "thc": "84.5%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "84.5",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "84.5",
+        "unit": "%"
+      }
+    ],
+    "description": "POS preview item for 1937 - Disposable Cartridge - Banana Bread - 1g. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$30 1g",
+    "priceMinorUnits": 3000,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-disposable-cartridge-1937-1937-disposable-cartridge-banana-bread-1g-b0c6fcc1-1g-e892be",
+        "label": "1g",
+        "priceMinorUnits": 3000,
+        "inventoryLevel": 5,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "26505"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-disposable-cartridge-1937-1937-disposable-cartridge-tropicana-cherries-1g-732c2b87",
+    "name": "1937 - Disposable Cartridge - Tropicana Cherries - 1g",
+    "brand": "1937",
+    "category": "disposable-cartridge",
+    "filterCategories": [
+      "disposable-cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Disposable Cartridge",
+    "strainType": "unknown",
+    "thc": "86.48%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "86.48",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "86.48",
+        "unit": "%"
+      }
+    ],
+    "description": "POS preview item for 1937 - Disposable Cartridge - Tropicana Cherries - 1g. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$30 1g",
+    "priceMinorUnits": 3000,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-disposable-cartridge-1937-1937-disposable-cartridge-tropicana-cherries-1g-732c2b87-1g-3626d9",
+        "label": "1g",
+        "priceMinorUnits": 3000,
+        "inventoryLevel": 5,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "26506"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-disposable-cartridge-airo-pro-airox-strain-series-1gm-sativa-lemon-cake-80aa9274",
+    "name": "AiroX Strain Series - 1gm - Sativa - Lemon Cake",
+    "brand": "Airo Pro",
+    "category": "disposable-cartridge",
+    "filterCategories": [
+      "disposable-cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Disposable Cartridge",
+    "strainType": "sativa",
+    "thc": "92%",
+    "cbd": "1%",
+    "totalThc": {
+      "type": "thc",
+      "value": "92",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "1",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "92",
+        "unit": "%"
+      },
+      {
+        "type": "cbd",
+        "value": "1",
+        "unit": "%"
+      }
+    ],
+    "description": "POS preview item for AiroX Strain Series - 1gm - Sativa - Lemon Cake. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$45 1g",
+    "priceMinorUnits": 4500,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-disposable-cartridge-airo-pro-airox-strain-series-1gm-sativa-lemon-cake-80aa9274-1g-dee60e",
+        "label": "1g",
+        "priceMinorUnits": 4500,
+        "inventoryLevel": 1,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "13212"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-disposable-cartridge-bodhi-high-honey-tree-flavored-aio-disposable-vape-berry-blue-dream-1g-8b9bed0f",
+    "name": "Honey Tree Flavored AIO Disposable Vape - Berry Blue Dream 1g",
+    "brand": "Bodhi High",
+    "category": "disposable-cartridge",
+    "filterCategories": [
+      "disposable-cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Disposable Cartridge",
+    "strainType": "unknown",
+    "thc": "97%",
+    "cbd": "0.08%",
+    "totalThc": {
+      "type": "thc",
+      "value": "97",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "0.08",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "97",
+        "unit": "%"
+      },
+      {
+        "type": "cbd",
+        "value": "0.08",
+        "unit": "%"
+      }
+    ],
+    "description": "POS preview item for Honey Tree Flavored AIO Disposable Vape - Berry Blue Dream 1g. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$35 1g",
+    "priceMinorUnits": 3500,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-disposable-cartridge-bodhi-high-honey-tree-flavored-aio-disposable-vape-berry-blue-dream-1g-8b9bed0f-1g-d39649",
+        "label": "1g",
+        "priceMinorUnits": 3500,
+        "inventoryLevel": 4,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "26581"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-disposable-cartridge-bodhi-high-honey-tree-flavored-prana-pulse-aio-disposable-huckleberry-og-b0aab191",
+    "name": "Honey Tree Flavored Prana Pulse AIO Disposable - Huckleberry OG",
+    "brand": "Bodhi High",
+    "category": "disposable-cartridge",
+    "filterCategories": [
+      "disposable-cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Disposable Cartridge",
+    "strainType": "unknown",
+    "thc": "94%",
+    "cbd": "1.25%",
+    "totalThc": {
+      "type": "thc",
+      "value": "94",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "1.25",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "94",
+        "unit": "%"
+      },
+      {
+        "type": "cbd",
+        "value": "1.25",
+        "unit": "%"
+      }
+    ],
+    "description": "POS preview item for Honey Tree Flavored Prana Pulse AIO Disposable - Huckleberry OG. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$35 1g",
+    "priceMinorUnits": 3500,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-disposable-cartridge-bodhi-high-honey-tree-flavored-prana-pulse-aio-disposable-huckleberry-og-b0aab191-1g-a53843",
+        "label": "1g",
+        "priceMinorUnits": 3500,
+        "inventoryLevel": 3,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "26584"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-edible-liquid-agro-couture-a-c-sugar-free-root-beer-float-beverage-6188c3d1",
+    "name": "A.C. Sugar-Free Root Beer Float Beverage",
+    "brand": "Agro Couture",
+    "category": "edible-liquid",
+    "filterCategories": [
+      "edible-liquid"
+    ],
+    "posInventoryType": "Liquid Edible",
+    "posInventoryCategory": "Beverage",
+    "strainType": "unknown",
+    "thc": "100mg",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "100",
+      "unit": "mg"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "100",
+        "unit": "mg"
+      }
+    ],
+    "description": "POS preview item for A.C. Sugar-Free Root Beer Float Beverage. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$12 1.7 fl oz",
+    "priceMinorUnits": 1200,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-edible-liquid-agro-couture-a-c-sugar-free-root-beer-float-beverage-6188c3d1-1-7-fl-oz-239ae3",
+        "label": "1.7 fl oz",
+        "priceMinorUnits": 1200,
+        "inventoryLevel": 9,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "15558"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-edible-liquid-agro-couture-a-c-topical-drops-250mg-thc-1000-cbd-1-4-6620be0c",
+    "name": "A.C. Topical Drops - 250mg THC 1000 CBD 1:4",
+    "brand": "Agro Couture",
+    "category": "edible-liquid",
+    "filterCategories": [
+      "edible-liquid"
+    ],
+    "posInventoryType": "Tincture",
+    "posInventoryCategory": "Tincture",
+    "strainType": "cbd",
+    "thc": "1250mg",
+    "cbd": "1000mg",
+    "totalThc": {
+      "type": "thc",
+      "value": "1250",
+      "unit": "mg"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "1000",
+      "unit": "mg"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "1250",
+        "unit": "mg"
+      },
+      {
+        "type": "cbd",
+        "value": "1000",
+        "unit": "mg"
+      }
+    ],
+    "description": "POS preview item for A.C. Topical Drops - 250mg THC 1000 CBD 1:4. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$30 1.7 fl oz",
+    "priceMinorUnits": 3000,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-edible-liquid-agro-couture-a-c-topical-drops-250mg-thc-1000-cbd-1-4-6620be0c-1-7-fl-oz-b4dbaf",
+        "label": "1.7 fl oz",
+        "priceMinorUnits": 3000,
+        "inventoryLevel": 49,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "26087"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-edible-liquid-agro-couture-sungaze-beverage-lemon-ginger-12oz-6-x-2-5mg-15mg-5c849dbf",
+    "name": "Sungaze Beverage - Lemon Ginger - 12oz - 6 x 2.5mg - 15mg",
+    "brand": "Agro Couture",
+    "category": "edible-liquid",
+    "filterCategories": [
+      "edible-liquid"
+    ],
+    "posInventoryType": "Liquid Edible",
+    "posInventoryCategory": "Beverage",
+    "strainType": "unknown",
+    "thc": "7.5mg",
+    "cbd": "5mg",
+    "totalThc": {
+      "type": "thc",
+      "value": "7.5",
+      "unit": "mg"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "5",
+      "unit": "mg"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "7.5",
+        "unit": "mg"
+      },
+      {
+        "type": "cbd",
+        "value": "5",
+        "unit": "mg"
+      }
+    ],
+    "description": "POS preview item for Sungaze Beverage - Lemon Ginger - 12oz - 6 x 2.5mg - 15mg. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$30 1000ml",
+    "priceMinorUnits": 3000,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-edible-liquid-agro-couture-sungaze-beverage-lemon-ginger-12oz-6-x-2-5mg-15mg-5c849dbf-1000ml-954c6f",
+        "label": "1000ml",
+        "priceMinorUnits": 3000,
+        "inventoryLevel": 1,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "15653"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-edible-liquid-blaze-blaze-can-12oz-rosin-blue-raspberry-100mg-thc-989096fd",
+    "name": "BLAZE Can - 12oz Rosin - Blue Raspberry 100mg THC",
+    "brand": "Blaze",
+    "category": "edible-liquid",
+    "filterCategories": [
+      "edible-liquid"
+    ],
+    "posInventoryType": "Liquid Edible",
+    "posInventoryCategory": "Beverage",
+    "strainType": "unknown",
+    "thc": "110mg",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "110",
+      "unit": "mg"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "110",
+        "unit": "mg"
+      }
+    ],
+    "description": "POS preview item for BLAZE Can - 12oz Rosin - Blue Raspberry 100mg THC. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$15 12 fl oz",
+    "priceMinorUnits": 1500,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-edible-liquid-blaze-blaze-can-12oz-rosin-blue-raspberry-100mg-thc-989096fd-12-fl-oz-05eb67",
+        "label": "12 fl oz",
+        "priceMinorUnits": 1500,
+        "inventoryLevel": 7,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "22490"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-edible-liquid-ceres-ceres-tincture-lifted-sativa-201c8dbe",
+    "name": "Ceres Tincture Lifted Sativa",
+    "brand": "Ceres",
+    "category": "edible-liquid",
+    "filterCategories": [
+      "edible-liquid"
+    ],
+    "posInventoryType": "Tincture",
+    "posInventoryCategory": "Tincture",
+    "strainType": "sativa",
+    "thc": "120mg",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "120",
+      "unit": "mg"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "120",
+        "unit": "mg"
+      }
+    ],
+    "description": "POS preview item for Ceres Tincture Lifted Sativa. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$25 15ml",
+    "priceMinorUnits": 2500,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-edible-liquid-ceres-ceres-tincture-lifted-sativa-201c8dbe-15ml-a49ef3",
+        "label": "15ml",
+        "priceMinorUnits": 2500,
+        "inventoryLevel": 3,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "18011",
+        "5310"
+      ],
+      "sourceRowCount": 2,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-edible-solid-4-20-milk-chocolate-rosin-macadamia-nut-100mg-thc-pouch-9aa3c301",
+    "name": "- Milk Chocolate - Rosin - Macadamia Nut 100mg THC - Pouch",
+    "brand": "4.20",
+    "category": "edible-solid",
+    "filterCategories": [
+      "edible-solid"
+    ],
+    "posInventoryType": "Solid Edible",
+    "posInventoryCategory": "Chocolate",
+    "strainType": "indica",
+    "thc": "9.9mg",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "9.9",
+      "unit": "mg"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "9.9",
+        "unit": "mg"
+      }
+    ],
+    "description": "POS preview item for - Milk Chocolate - Rosin - Macadamia Nut 100mg THC - Pouch. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$25 57g",
+    "priceMinorUnits": 2500,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-edible-solid-4-20-milk-chocolate-rosin-macadamia-nut-100mg-thc-pouch-9aa3c301-57g-2ced47",
+        "label": "57g",
+        "priceMinorUnits": 2500,
+        "inventoryLevel": 12,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "26834"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-edible-solid-4-20-420-brand-milk-chocolate-rosin-honeycomb-toffee-100mg-thc-pouch-7defd28c",
+    "name": "420 Brand - Milk Chocolate - Rosin - Honeycomb Toffee 100mg THC - Pouch",
+    "brand": "4.20",
+    "category": "edible-solid",
+    "filterCategories": [
+      "edible-solid"
+    ],
+    "posInventoryType": "Solid Edible",
+    "posInventoryCategory": "Chocolate",
+    "strainType": "unknown",
+    "thc": "10mg",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "10",
+      "unit": "mg"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "10",
+        "unit": "mg"
+      }
+    ],
+    "description": "POS preview item for 420 Brand - Milk Chocolate - Rosin - Honeycomb Toffee 100mg THC - Pouch. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$25 57g",
+    "priceMinorUnits": 2500,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-edible-solid-4-20-420-brand-milk-chocolate-rosin-honeycomb-toffee-100mg-thc-pouch-7defd28c-57g-7e0bf9",
+        "label": "57g",
+        "priceMinorUnits": 2500,
+        "inventoryLevel": 10,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "26833"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-edible-solid-4-20-bar-4-20-bar-minis-dark-chocolate-sea-salt-2-00oz-6fd41a02",
+    "name": "4.20 Bar Minis Dark Chocolate Sea Salt - 2.00oz",
+    "brand": "4.20 Bar",
+    "category": "edible-solid",
+    "filterCategories": [
+      "edible-solid"
+    ],
+    "posInventoryType": "Solid Edible",
+    "posInventoryCategory": "Minis",
+    "strainType": "unknown",
+    "thc": "9.5mg",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "9.5",
+      "unit": "mg"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "9.5",
+        "unit": "mg"
+      }
+    ],
+    "description": "POS preview item for 4.20 Bar Minis Dark Chocolate Sea Salt - 2.00oz. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$20 2oz",
+    "priceMinorUnits": 2000,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-edible-solid-4-20-bar-4-20-bar-minis-dark-chocolate-sea-salt-2-00oz-6fd41a02-2oz-3ebd8e",
+        "label": "2oz",
+        "priceMinorUnits": 2000,
+        "inventoryLevel": 1,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "23711"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-edible-solid-4-20-minis-4-20-minis-chocolate-milk-chocolate-200mg-cbg-100mg-thc-1-2oz-df5e37d5",
+    "name": "4.20 Minis Chocolate Milk Chocolate 200mg CBG + 100mg THC - 1.2oz",
+    "brand": "4.20 Minis",
+    "category": "edible-solid",
+    "filterCategories": [
+      "edible-solid"
+    ],
+    "posInventoryType": "Solid Edible",
+    "posInventoryCategory": "Chocolate",
+    "strainType": "unknown",
+    "thc": null,
+    "cbd": null,
+    "totalThc": null,
+    "totalCbd": null,
+    "compounds": [],
+    "description": "POS preview item for 4.20 Minis Chocolate Milk Chocolate 200mg CBG + 100mg THC - 1.2oz. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$25 1.2oz",
+    "priceMinorUnits": 2500,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-edible-solid-4-20-minis-4-20-minis-chocolate-milk-chocolate-200mg-cbg-100mg-thc-1-2oz-df5e37d5-1-2oz-61135c",
+        "label": "1.2oz",
+        "priceMinorUnits": 2500,
+        "inventoryLevel": 4,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "949"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-edible-solid-4-20-minis-420-mini-milk-chocolate-2-1-cbn-thc-2a6799aa",
+    "name": "420 Mini - Milk Chocolate 2:1 CBN:THC",
+    "brand": "4.20 Minis",
+    "category": "edible-solid",
+    "filterCategories": [
+      "edible-solid"
+    ],
+    "posInventoryType": "Solid Edible",
+    "posInventoryCategory": "Chocolate",
+    "strainType": "unknown",
+    "thc": "36mg",
+    "cbd": "3mg",
+    "totalThc": {
+      "type": "thc",
+      "value": "36",
+      "unit": "mg"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "3",
+      "unit": "mg"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "36",
+        "unit": "mg"
+      },
+      {
+        "type": "cbd",
+        "value": "3",
+        "unit": "mg"
+      }
+    ],
+    "description": "POS preview item for 420 Mini - Milk Chocolate 2:1 CBN:THC. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$25 2oz",
+    "priceMinorUnits": 2500,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-edible-solid-4-20-minis-420-mini-milk-chocolate-2-1-cbn-thc-2a6799aa-2oz-ecd87c",
+        "label": "2oz",
+        "priceMinorUnits": 2500,
+        "inventoryLevel": 2,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "16883"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-flower-1937-1937-3-5g-flower-banana-bread-3-5g-738e9996",
+    "name": "1937 - 3.5g Flower - Banana Bread - 3.5g",
+    "brand": "1937",
+    "category": "flower",
+    "filterCategories": [
+      "flower"
+    ],
+    "posInventoryType": "Usable Marijuana",
+    "posInventoryCategory": "Flower",
+    "strainType": "unknown",
+    "thc": "19.39%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "19.39",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "19.39",
+        "unit": "%"
+      }
+    ],
+    "description": "POS preview item for 1937 - 3.5g Flower - Banana Bread - 3.5g. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$40 3.5g",
+    "priceMinorUnits": 4000,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-flower-1937-1937-3-5g-flower-banana-bread-3-5g-738e9996-3-5g-6de0d3",
+        "label": "3.5g",
+        "priceMinorUnits": 4000,
+        "inventoryLevel": 8,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "26516"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-flower-1937-1937-3-5g-flower-blockberry-3-5g-c12c937a",
+    "name": "1937 - 3.5g Flower - Blockberry - 3.5g",
+    "brand": "1937",
+    "category": "flower",
+    "filterCategories": [
+      "flower"
+    ],
+    "posInventoryType": "Usable Marijuana",
+    "posInventoryCategory": "Flower",
+    "strainType": "unknown",
+    "thc": "23.51%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "23.51",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "23.51",
+        "unit": "%"
+      }
+    ],
+    "description": "POS preview item for 1937 - 3.5g Flower - Blockberry - 3.5g. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$40 3.5g",
+    "priceMinorUnits": 4000,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-flower-1937-1937-3-5g-flower-blockberry-3-5g-c12c937a-3-5g-bf0207",
+        "label": "3.5g",
+        "priceMinorUnits": 4000,
+        "inventoryLevel": 5,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "26515"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-flower-1937-1937-3-5g-flower-cobra-chi-9-3-5g-66f300d9",
+    "name": "1937 - 3.5g Flower - Cobra Chi 9 - 3.5g",
+    "brand": "1937",
+    "category": "flower",
+    "filterCategories": [
+      "flower"
+    ],
+    "posInventoryType": "Usable Marijuana",
+    "posInventoryCategory": "Flower",
+    "strainType": "unknown",
+    "thc": "18.77%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "18.77",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "18.77",
+        "unit": "%"
+      }
+    ],
+    "description": "POS preview item for 1937 - 3.5g Flower - Cobra Chi 9 - 3.5g. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$45 3.5g",
+    "priceMinorUnits": 4500,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-flower-1937-1937-3-5g-flower-cobra-chi-9-3-5g-66f300d9-3-5g-db883f",
+        "label": "3.5g",
+        "priceMinorUnits": 4500,
+        "inventoryLevel": 3,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "24727"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-flower-1937-1937-3-5g-flower-first-class-funk-3-5g-a19ebffa",
+    "name": "1937 - 3.5g Flower - First Class Funk - 3.5g",
+    "brand": "1937",
+    "category": "flower",
+    "filterCategories": [
+      "flower"
+    ],
+    "posInventoryType": "Usable Marijuana",
+    "posInventoryCategory": "Flower",
+    "strainType": "unknown",
+    "thc": "26%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "26",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "26",
+        "unit": "%"
+      }
+    ],
+    "description": "POS preview item for 1937 - 3.5g Flower - First Class Funk - 3.5g. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$40 3.5g",
+    "priceMinorUnits": 4000,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-flower-1937-1937-3-5g-flower-first-class-funk-3-5g-a19ebffa-3-5g-3eba4d",
+        "label": "3.5g",
+        "priceMinorUnits": 4000,
+        "inventoryLevel": 10,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "26512"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-flower-1937-1937-3-5g-flower-pt-chimera-breath-3-5g-53e9c3fd",
+    "name": "1937 - 3.5g Flower - Pt Chimera Breath - 3.5g",
+    "brand": "1937",
+    "category": "flower",
+    "filterCategories": [
+      "flower"
+    ],
+    "posInventoryType": "Usable Marijuana",
+    "posInventoryCategory": "Flower",
+    "strainType": "unknown",
+    "thc": "23.51%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "23.51",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "23.51",
+        "unit": "%"
+      }
+    ],
+    "description": "POS preview item for 1937 - 3.5g Flower - Pt Chimera Breath - 3.5g. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$40 3.5g",
+    "priceMinorUnits": 4000,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-flower-1937-1937-3-5g-flower-pt-chimera-breath-3-5g-53e9c3fd-3-5g-006b32",
+        "label": "3.5g",
+        "priceMinorUnits": 4000,
+        "inventoryLevel": 8,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "26513"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-infused-preroll-agro-couture-a-c-diamond-stix-joint-gary-payton-1g-h-e571bd43",
+    "name": "A.C. Diamond Stix Joint - Gary Payton - 1g (H)",
+    "brand": "Agro Couture",
+    "category": "infused-preroll",
+    "filterCategories": [
+      "infused-preroll",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Infused Pre-roll",
+    "strainType": "unknown",
+    "thc": "35%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "35",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "35",
+        "unit": "%"
+      }
+    ],
+    "description": "POS preview item for A.C. Diamond Stix Joint - Gary Payton - 1g (H). Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$10 1g",
+    "priceMinorUnits": 1000,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-infused-preroll-agro-couture-a-c-diamond-stix-joint-gary-payton-1g-h-e571bd43-1g-34365d",
+        "label": "1g",
+        "priceMinorUnits": 1000,
+        "inventoryLevel": 2,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "12850"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-infused-preroll-agro-couture-a-c-diamond-stix-joint-super-boof-1g-h-e6eea401",
+    "name": "A.C. Diamond Stix Joint - Super Boof - 1g (H)",
+    "brand": "Agro Couture",
+    "category": "infused-preroll",
+    "filterCategories": [
+      "infused-preroll",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Infused Pre-roll",
+    "strainType": "unknown",
+    "thc": "33%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "33",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "33",
+        "unit": "%"
+      }
+    ],
+    "description": "POS preview item for A.C. Diamond Stix Joint - Super Boof - 1g (H). Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$10 1g",
+    "priceMinorUnits": 1000,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-infused-preroll-agro-couture-a-c-diamond-stix-joint-super-boof-1g-h-e6eea401-1g-a5c2e3",
+        "label": "1g",
+        "priceMinorUnits": 1000,
+        "inventoryLevel": 2,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "12852"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-infused-preroll-agro-couture-dabstar-dab-stix-pre-roll-1g-sticky-s-mores-h-7c3de46a",
+    "name": "Dabstar Dab Stix Pre-Roll 1g - Sticky S'mores (H)",
+    "brand": "Agro Couture",
+    "category": "infused-preroll",
+    "filterCategories": [
+      "infused-preroll",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Infused Pre-roll",
+    "strainType": "unknown",
+    "thc": "37%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "37",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "37",
+        "unit": "%"
+      }
+    ],
+    "description": "POS preview item for Dabstar Dab Stix Pre-Roll 1g - Sticky S'mores (H). Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$12 1g",
+    "priceMinorUnits": 1200,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-infused-preroll-agro-couture-dabstar-dab-stix-pre-roll-1g-sticky-s-mores-h-7c3de46a-1g-7d1049",
+        "label": "1g",
+        "priceMinorUnits": 1200,
+        "inventoryLevel": 6,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "20475"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-infused-preroll-agro-couture-dabstar-dab-stix-pre-roll-1g-strawberry-lemonade-s-62bdcc5c",
+    "name": "Dabstar Dab Stix Pre-Roll 1g - Strawberry Lemonade (S)",
+    "brand": "Agro Couture",
+    "category": "infused-preroll",
+    "filterCategories": [
+      "infused-preroll",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Infused Pre-roll",
+    "strainType": "unknown",
+    "thc": "40%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "40",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "40",
+        "unit": "%"
+      }
+    ],
+    "description": "POS preview item for Dabstar Dab Stix Pre-Roll 1g - Strawberry Lemonade (S). Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$12 1g",
+    "priceMinorUnits": 1200,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-infused-preroll-agro-couture-dabstar-dab-stix-pre-roll-1g-strawberry-lemonade-s-62bdcc5c-1g-271341",
+        "label": "1g",
+        "priceMinorUnits": 1200,
+        "inventoryLevel": 4,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "20476"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-infused-preroll-american-hash-makers-stars-and-rosin-99-sunsets-x-banana-cream-rosin-5g-b8ccfd73",
+    "name": "Stars & Rosin - 99 Sunsets x Banana Cream rosin - .5g",
+    "brand": "American Hash Makers",
+    "category": "infused-preroll",
+    "filterCategories": [
+      "infused-preroll",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Infused Pre-roll",
+    "strainType": "unknown",
+    "thc": "23.91%",
+    "cbd": "0.05%",
+    "totalThc": {
+      "type": "thc",
+      "value": "23.91",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "0.05",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "23.91",
+        "unit": "%"
+      },
+      {
+        "type": "cbd",
+        "value": "0.05",
+        "unit": "%"
+      }
+    ],
+    "description": "POS preview item for Stars & Rosin - 99 Sunsets x Banana Cream rosin - .5g. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$10 0.5g",
+    "priceMinorUnits": 1000,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-infused-preroll-american-hash-makers-stars-and-rosin-99-sunsets-x-banana-cream-rosin-5g-b8ccfd73-0-5g-0d6f30",
+        "label": "0.5g",
+        "priceMinorUnits": 1000,
+        "inventoryLevel": 13,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "13612"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-infused-preroll-pack-cannabis-northwest-cannabis-northwest-infused-pre-rolls-2-x-5g-blue-dream-1g-11f466a6",
+    "name": "Cannabis Northwest - Infused Pre-Rolls (2 x .5g) - Blue Dream - 1g",
+    "brand": "Cannabis Northwest",
+    "category": "infused-preroll-pack",
+    "filterCategories": [
+      "infused-preroll-pack",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Infused Pre-roll",
+    "strainType": "unknown",
+    "thc": "26.23%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "26.23",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "26.23",
+        "unit": "%"
+      }
+    ],
+    "description": "POS preview item for Cannabis Northwest - Infused Pre-Rolls (2 x .5g) - Blue Dream - 1g. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$12 1g",
+    "priceMinorUnits": 1200,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-infused-preroll-pack-cannabis-northwest-cannabis-northwest-infused-pre-rolls-2-x-5g-blue-dream-1g-11f466a6-1g-f3dfec",
+        "label": "1g",
+        "priceMinorUnits": 1200,
+        "inventoryLevel": 7,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "24350"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-infused-preroll-pack-cannabis-northwest-cannabis-northwest-infused-pre-rolls-2-x-5g-grease-monkey-1g-1eca7856",
+    "name": "Cannabis Northwest - Infused Pre-Rolls (2 x .5g) - Grease Monkey - 1g",
+    "brand": "Cannabis Northwest",
+    "category": "infused-preroll-pack",
+    "filterCategories": [
+      "infused-preroll-pack",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Infused Pre-roll",
+    "strainType": "unknown",
+    "thc": "25.03%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "25.03",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "25.03",
+        "unit": "%"
+      }
+    ],
+    "description": "POS preview item for Cannabis Northwest - Infused Pre-Rolls (2 x .5g) - Grease Monkey - 1g. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$12 1g",
+    "priceMinorUnits": 1200,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-infused-preroll-pack-cannabis-northwest-cannabis-northwest-infused-pre-rolls-2-x-5g-grease-monkey-1g-1eca7856-1g-e46d59",
+        "label": "1g",
+        "priceMinorUnits": 1200,
+        "inventoryLevel": 6,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "24351"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-infused-preroll-pack-constellation-2-pack-infused-coffee-creamer-ba8f5e3c",
+    "name": "2 Pack Infused - Coffee Creamer",
+    "brand": "Constellation",
+    "category": "infused-preroll-pack",
+    "filterCategories": [
+      "infused-preroll-pack",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Infused Pre-roll",
+    "strainType": "unknown",
+    "thc": "26.88%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "26.88",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "26.88",
+        "unit": "%"
+      }
+    ],
+    "description": "POS preview item for 2 Pack Infused - Coffee Creamer. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$10 1g",
+    "priceMinorUnits": 1000,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-infused-preroll-pack-constellation-2-pack-infused-coffee-creamer-ba8f5e3c-1g-166bda",
+        "label": "1g",
+        "priceMinorUnits": 1000,
+        "inventoryLevel": 2,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "21250"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-infused-preroll-pack-constellation-const-inf-14pk-7g-coffee-creamer-a2f55710",
+    "name": "Const INF 14pk 7g - Coffee Creamer",
+    "brand": "Constellation",
+    "category": "infused-preroll-pack",
+    "filterCategories": [
+      "infused-preroll-pack",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Infused Pre-roll",
+    "strainType": "unknown",
+    "thc": "26.88%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "26.88",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "26.88",
+        "unit": "%"
+      }
+    ],
+    "description": "POS preview item for Const INF 14pk 7g - Coffee Creamer. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$45 7g",
+    "priceMinorUnits": 4500,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-infused-preroll-pack-constellation-const-inf-14pk-7g-coffee-creamer-a2f55710-7g-fe6d74",
+        "label": "7g",
+        "priceMinorUnits": 4500,
+        "inventoryLevel": 2,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "23419",
+        "22794"
+      ],
+      "sourceRowCount": 2,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-infused-preroll-pack-constellation-const-inf-2pk-1g-medellin-0af0fe65",
+    "name": "Const INF 2pk 1g - Medellin",
+    "brand": "Constellation",
+    "category": "infused-preroll-pack",
+    "filterCategories": [
+      "infused-preroll-pack",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Infused Pre-roll",
+    "strainType": "unknown",
+    "thc": "25.66%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "25.66",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "25.66",
+        "unit": "%"
+      }
+    ],
+    "description": "POS preview item for Const INF 2pk 1g - Medellin. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$10 1g",
+    "priceMinorUnits": 1000,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-infused-preroll-pack-constellation-const-inf-2pk-1g-medellin-0af0fe65-1g-a2e42f",
+        "label": "1g",
+        "priceMinorUnits": 1000,
+        "inventoryLevel": 2,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "25206"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-paraphernalia-eo-vapes-eo-vapes-butter-knife-5369d6c3",
+    "name": "~EO Vapes Butter Knife",
+    "brand": "EO Vapes",
+    "category": "paraphernalia",
+    "filterCategories": [
+      "paraphernalia"
+    ],
+    "posInventoryType": "Non-cannabis (no limit)",
+    "posInventoryCategory": "Devices",
+    "strainType": "unknown",
+    "thc": null,
+    "cbd": null,
+    "totalThc": null,
+    "totalCbd": null,
+    "compounds": [],
+    "description": "POS preview item for ~EO Vapes Butter Knife. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$32.09 each",
+    "priceMinorUnits": 3209,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-paraphernalia-eo-vapes-eo-vapes-butter-knife-5369d6c3-each-2cf3aa",
+        "label": "each",
+        "priceMinorUnits": 3209,
+        "inventoryLevel": 3,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "2678"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-paraphernalia-greenway-glass-tip-6c75e6bc",
+    "name": "Glass Tip",
+    "brand": "Greenway",
+    "category": "paraphernalia",
+    "filterCategories": [
+      "paraphernalia"
+    ],
+    "posInventoryType": "Without Inventory Type",
+    "posInventoryCategory": "Accessories",
+    "strainType": "unknown",
+    "thc": null,
+    "cbd": null,
+    "totalThc": null,
+    "totalCbd": null,
+    "compounds": [],
+    "description": "POS preview item for Glass Tip. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$2 each",
+    "priceMinorUnits": 200,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-paraphernalia-greenway-glass-tip-6c75e6bc-each-a58d29",
+        "label": "each",
+        "priceMinorUnits": 200,
+        "inventoryLevel": 13,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "16514"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-paraphernalia-greenway-bloomers-1-14-cones-3266f026",
+    "name": "bloomers 1/14 cones",
+    "brand": "Greenway",
+    "category": "paraphernalia",
+    "filterCategories": [
+      "paraphernalia"
+    ],
+    "posInventoryType": "Without Inventory Type",
+    "posInventoryCategory": "Without Category",
+    "strainType": "unknown",
+    "thc": null,
+    "cbd": null,
+    "totalThc": null,
+    "totalCbd": null,
+    "compounds": [],
+    "description": "POS preview item for bloomers 1/14 cones. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$4 each",
+    "priceMinorUnits": 400,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-paraphernalia-greenway-bloomers-1-14-cones-3266f026-each-2837b7",
+        "label": "each",
+        "priceMinorUnits": 400,
+        "inventoryLevel": 2,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "15228"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-paraphernalia-greenway-marijuana-greenway-marijuana-pipe-5-b31474de",
+    "name": "Greenway Marijuana Pipe $5",
+    "brand": "Greenway Marijuana",
+    "category": "paraphernalia",
+    "filterCategories": [
+      "paraphernalia"
+    ],
+    "posInventoryType": "Non-cannabis (no limit)",
+    "posInventoryCategory": "Pipe",
+    "strainType": "unknown",
+    "thc": null,
+    "cbd": null,
+    "totalThc": null,
+    "totalCbd": null,
+    "compounds": [],
+    "description": "POS preview item for Greenway Marijuana Pipe $5. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$5.02 each",
+    "priceMinorUnits": 502,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-paraphernalia-greenway-marijuana-greenway-marijuana-pipe-5-b31474de-each-1e9ed7",
+        "label": "each",
+        "priceMinorUnits": 502,
+        "inventoryLevel": 427,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "24978",
+        "19135",
+        "7878"
+      ],
+      "sourceRowCount": 3,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-paraphernalia-hermanos-del-fuego-fire-bros-aio-phone-case-cf23d612",
+    "name": "Fire Bros AIO Phone Case",
+    "brand": "Hermanos Del Fuego",
+    "category": "paraphernalia",
+    "filterCategories": [
+      "paraphernalia"
+    ],
+    "posInventoryType": "Without Inventory Type",
+    "posInventoryCategory": "Accessories",
+    "strainType": "unknown",
+    "thc": null,
+    "cbd": null,
+    "totalThc": null,
+    "totalCbd": null,
+    "compounds": [],
+    "description": "POS preview item for Fire Bros AIO Phone Case. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$20 each",
+    "priceMinorUnits": 2000,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-paraphernalia-hermanos-del-fuego-fire-bros-aio-phone-case-cf23d612-each-ae6c1e",
+        "label": "each",
+        "priceMinorUnits": 2000,
+        "inventoryLevel": 13,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "18475"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-preroll-1937-1937-7g-regular-buds-tricho-jordan-5-7g-b255813a",
+    "name": "1937 - 7g Regular Buds - Tricho Jordan 5 - 7g",
+    "brand": "1937",
+    "category": "preroll",
+    "filterCategories": [
+      "preroll"
+    ],
+    "posInventoryType": "Usable Marijuana",
+    "posInventoryCategory": "Pre-roll",
+    "strainType": "unknown",
+    "thc": "17.28%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "17.28",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "17.28",
+        "unit": "%"
+      }
+    ],
+    "description": "POS preview item for 1937 - 7g Regular Buds - Tricho Jordan 5 - 7g. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$85 7g",
+    "priceMinorUnits": 8500,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-preroll-1937-1937-7g-regular-buds-tricho-jordan-5-7g-b255813a-7g-89187d",
+        "label": "7g",
+        "priceMinorUnits": 8500,
+        "inventoryLevel": 2,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "24730"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-preroll-2727-2727-pre-rolls-2727-doh-purple-punch-5g-c794bfbf",
+    "name": "2727 - Pre-Rolls - 2727 - DOH - Purple Punch - 5g",
+    "brand": "2727",
+    "category": "preroll",
+    "filterCategories": [
+      "preroll"
+    ],
+    "posInventoryType": "Usable Marijuana",
+    "posInventoryCategory": "Pre-roll",
+    "strainType": "unknown",
+    "thc": "23.93%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "23.93",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "23.93",
+        "unit": "%"
+      }
+    ],
+    "description": "POS preview item for 2727 - Pre-Rolls - 2727 - DOH - Purple Punch - 5g. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$18 5g",
+    "priceMinorUnits": 1800,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-preroll-2727-2727-pre-rolls-2727-doh-purple-punch-5g-c794bfbf-5g-3ceec5",
+        "label": "5g",
+        "priceMinorUnits": 1800,
+        "inventoryLevel": 10,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "26141"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-preroll-2727-2727-pre-rolls-2727-doh-uw-purple-5g-e0edf4a6",
+    "name": "2727 - Pre-Rolls - 2727 - DOH - UW Purple - 5g",
+    "brand": "2727",
+    "category": "preroll",
+    "filterCategories": [
+      "preroll"
+    ],
+    "posInventoryType": "Usable Marijuana",
+    "posInventoryCategory": "Pre-roll",
+    "strainType": "unknown",
+    "thc": "27.25%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "27.25",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "27.25",
+        "unit": "%"
+      }
+    ],
+    "description": "POS preview item for 2727 - Pre-Rolls - 2727 - DOH - UW Purple - 5g. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$18 5g",
+    "priceMinorUnits": 1800,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-preroll-2727-2727-pre-rolls-2727-doh-uw-purple-5g-e0edf4a6-5g-f4673c",
+        "label": "5g",
+        "priceMinorUnits": 1800,
+        "inventoryLevel": 8,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "25103"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-preroll-2727-2727-pre-rolls-now-and-lator-5g-8fcacc8f",
+    "name": "2727 - Pre-Rolls - Now & Lator - 5g",
+    "brand": "2727",
+    "category": "preroll",
+    "filterCategories": [
+      "preroll"
+    ],
+    "posInventoryType": "Usable Marijuana",
+    "posInventoryCategory": "Pre-roll",
+    "strainType": "unknown",
+    "thc": "19.92%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "19.92",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "19.92",
+        "unit": "%"
+      }
+    ],
+    "description": "POS preview item for 2727 - Pre-Rolls - Now & Lator - 5g. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$18 5g",
+    "priceMinorUnits": 1800,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-preroll-2727-2727-pre-rolls-now-and-lator-5g-8fcacc8f-5g-551c19",
+        "label": "5g",
+        "priceMinorUnits": 1800,
+        "inventoryLevel": 15,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "26133"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-preroll-2727-2727-pre-rolls-presidential-kush-5g-1404c7d9",
+    "name": "2727 - Pre-Rolls - Presidential Kush - 5g",
+    "brand": "2727",
+    "category": "preroll",
+    "filterCategories": [
+      "preroll"
+    ],
+    "posInventoryType": "Usable Marijuana",
+    "posInventoryCategory": "Pre-roll",
+    "strainType": "unknown",
+    "thc": "21.77%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "21.77",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "21.77",
+        "unit": "%"
+      }
+    ],
+    "description": "POS preview item for 2727 - Pre-Rolls - Presidential Kush - 5g. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$18 5g",
+    "priceMinorUnits": 1800,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-preroll-2727-2727-pre-rolls-presidential-kush-5g-1404c7d9-5g-1fa6a8",
+        "label": "5g",
+        "priceMinorUnits": 1800,
+        "inventoryLevel": 10,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "25089"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-preroll-pack-1937-1937-pre-rolls-5-x-2-pack-blueberry-muffins-1g-b6ea1270",
+    "name": "1937 - Pre-Rolls .5 x 2 pack - Blueberry Muffins - 1g",
+    "brand": "1937",
+    "category": "preroll-pack",
+    "filterCategories": [
+      "preroll-pack"
+    ],
+    "posInventoryType": "Usable Marijuana",
+    "posInventoryCategory": "Pre-roll",
+    "strainType": "unknown",
+    "thc": "23.08%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "23.08",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "23.08",
+        "unit": "%"
+      }
+    ],
+    "description": "POS preview item for 1937 - Pre-Rolls .5 x 2 pack - Blueberry Muffins - 1g. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$10 1g",
+    "priceMinorUnits": 1000,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-preroll-pack-1937-1937-pre-rolls-5-x-2-pack-blueberry-muffins-1g-b6ea1270-1g-6dd359",
+        "label": "1g",
+        "priceMinorUnits": 1000,
+        "inventoryLevel": 8,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "24735"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-preroll-pack-1937-1937-pre-rolls-5-x-2-pack-flyin-hawaiian-23-1e19e7d3",
+    "name": "1937 - Pre-Rolls .5 x 2 pack - Flyin Hawaiian 23",
+    "brand": "1937",
+    "category": "preroll-pack",
+    "filterCategories": [
+      "preroll-pack"
+    ],
+    "posInventoryType": "Usable Marijuana",
+    "posInventoryCategory": "Pre-roll",
+    "strainType": "unknown",
+    "thc": "18.82%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "18.82",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "18.82",
+        "unit": "%"
+      }
+    ],
+    "description": "POS preview item for 1937 - Pre-Rolls .5 x 2 pack - Flyin Hawaiian 23. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$10 1g",
+    "priceMinorUnits": 1000,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-preroll-pack-1937-1937-pre-rolls-5-x-2-pack-flyin-hawaiian-23-1e19e7d3-1g-0ab445",
+        "label": "1g",
+        "priceMinorUnits": 1000,
+        "inventoryLevel": 6,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "24733"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-preroll-pack-1937-1937-pre-rolls-5-x-2-pack-kabuki-sour-1g-b82d8738",
+    "name": "1937 - Pre-Rolls .5 x 2 pack - Kabuki Sour - 1g",
+    "brand": "1937",
+    "category": "preroll-pack",
+    "filterCategories": [
+      "preroll-pack"
+    ],
+    "posInventoryType": "Usable Marijuana",
+    "posInventoryCategory": "Pre-roll",
+    "strainType": "unknown",
+    "thc": "25.26%",
+    "cbd": "0.21%",
+    "totalThc": {
+      "type": "thc",
+      "value": "25.26",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "0.21",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "25.26",
+        "unit": "%"
+      },
+      {
+        "type": "cbd",
+        "value": "0.21",
+        "unit": "%"
+      }
+    ],
+    "description": "POS preview item for 1937 - Pre-Rolls .5 x 2 pack - Kabuki Sour - 1g. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$10 1g",
+    "priceMinorUnits": 1000,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-preroll-pack-1937-1937-pre-rolls-5-x-2-pack-kabuki-sour-1g-b82d8738-1g-8f5655",
+        "label": "1g",
+        "priceMinorUnits": 1000,
+        "inventoryLevel": 9,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "26509"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-preroll-pack-1937-1937-pre-rolls-5-x-2-pack-mimosa-a60f169e",
+    "name": "1937 - Pre-Rolls .5 x 2 pack - Mimosa",
+    "brand": "1937",
+    "category": "preroll-pack",
+    "filterCategories": [
+      "preroll-pack"
+    ],
+    "posInventoryType": "Usable Marijuana",
+    "posInventoryCategory": "Pre-roll",
+    "strainType": "unknown",
+    "thc": "22.8%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "22.8",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "22.8",
+        "unit": "%"
+      }
+    ],
+    "description": "POS preview item for 1937 - Pre-Rolls .5 x 2 pack - Mimosa. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$10 1g",
+    "priceMinorUnits": 1000,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-preroll-pack-1937-1937-pre-rolls-5-x-2-pack-mimosa-a60f169e-1g-999244",
+        "label": "1g",
+        "priceMinorUnits": 1000,
+        "inventoryLevel": 1,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "24734"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-preroll-pack-1937-1937-pre-rolls-5-x-2-pack-white-truffle-1g-cb9ca25f",
+    "name": "1937 - Pre-Rolls .5 x 2 pack - White Truffle - 1g",
+    "brand": "1937",
+    "category": "preroll-pack",
+    "filterCategories": [
+      "preroll-pack"
+    ],
+    "posInventoryType": "Usable Marijuana",
+    "posInventoryCategory": "Pre-roll",
+    "strainType": "unknown",
+    "thc": "23.79%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "23.79",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "23.79",
+        "unit": "%"
+      }
+    ],
+    "description": "POS preview item for 1937 - Pre-Rolls .5 x 2 pack - White Truffle - 1g. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$10 1g",
+    "priceMinorUnits": 1000,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-preroll-pack-1937-1937-pre-rolls-5-x-2-pack-white-truffle-1g-cb9ca25f-1g-924b83",
+        "label": "1g",
+        "priceMinorUnits": 1000,
+        "inventoryLevel": 7,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "24726"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-topical-agro-couture-a-c-topical-drops-4-1-1000mg-thc-250mg-cbn-1-7-oz-cf13ac0c",
+    "name": "A.C. Topical Drops 4:1 - 1000mg THC 250mg CBN - 1.7 oz",
+    "brand": "Agro Couture",
+    "category": "topical",
+    "filterCategories": [
+      "topical"
+    ],
+    "posInventoryType": "Topical Ointment",
+    "posInventoryCategory": "Topical",
+    "strainType": "unknown",
+    "thc": "1300mg",
+    "cbd": "12mg",
+    "totalThc": {
+      "type": "thc",
+      "value": "1300",
+      "unit": "mg"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "12",
+      "unit": "mg"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "1300",
+        "unit": "mg"
+      },
+      {
+        "type": "cbd",
+        "value": "12",
+        "unit": "mg"
+      }
+    ],
+    "description": "POS preview item for A.C. Topical Drops 4:1 - 1000mg THC 250mg CBN - 1.7 oz. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$35 1.7oz",
+    "priceMinorUnits": 3500,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-topical-agro-couture-a-c-topical-drops-4-1-1000mg-thc-250mg-cbn-1-7-oz-cf13ac0c-1-7oz-78ecea",
+        "label": "1.7oz",
+        "priceMinorUnits": 3500,
+        "inventoryLevel": 2,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "26090"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-topical-buddies-buddies-fire-and-ice-1-1-topical-roll-on-3-fl-oz-4e1b9949",
+    "name": "Buddies Fire & Ice 1:1 - Topical Roll-On - 3 fl oz",
+    "brand": "Buddies",
+    "category": "topical",
+    "filterCategories": [
+      "topical"
+    ],
+    "posInventoryType": "Topical Ointment",
+    "posInventoryCategory": "Topical",
+    "strainType": "unknown",
+    "thc": "3.1mg",
+    "cbd": "1.3mg",
+    "totalThc": {
+      "type": "thc",
+      "value": "3.1",
+      "unit": "mg"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "1.3",
+      "unit": "mg"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "3.1",
+        "unit": "mg"
+      },
+      {
+        "type": "cbd",
+        "value": "1.3",
+        "unit": "mg"
+      }
+    ],
+    "description": "POS preview item for Buddies Fire & Ice 1:1 - Topical Roll-On - 3 fl oz. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$35 3oz",
+    "priceMinorUnits": 3500,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-topical-buddies-buddies-fire-and-ice-1-1-topical-roll-on-3-fl-oz-4e1b9949-3oz-443da0",
+        "label": "3oz",
+        "priceMinorUnits": 3500,
+        "inventoryLevel": 1,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "24192"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-topical-ceres-cere-squeeze-tube-moon-cycle-3-4oz-6b142ebd",
+    "name": "Cere SQUEEZE TUBE MOON CYCLE - 3.4oz",
+    "brand": "Ceres",
+    "category": "topical",
+    "filterCategories": [
+      "topical"
+    ],
+    "posInventoryType": "Topical Ointment",
+    "posInventoryCategory": "Topical",
+    "strainType": "unknown",
+    "thc": "600mg",
+    "cbd": "280mg",
+    "totalThc": {
+      "type": "thc",
+      "value": "600",
+      "unit": "mg"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "280",
+      "unit": "mg"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "600",
+        "unit": "mg"
+      },
+      {
+        "type": "cbd",
+        "value": "280",
+        "unit": "mg"
+      }
+    ],
+    "description": "POS preview item for Cere SQUEEZE TUBE MOON CYCLE - 3.4oz. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$24 3.4g",
+    "priceMinorUnits": 2400,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-topical-ceres-cere-squeeze-tube-moon-cycle-3-4oz-6b142ebd-3-4g-a8a27b",
+        "label": "3.4g",
+        "priceMinorUnits": 2400,
+        "inventoryLevel": 3,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "11728"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-topical-ceres-ceres-dragon-balm-cbd-red-10210233",
+    "name": "Ceres Dragon Balm CBD RED",
+    "brand": "Ceres",
+    "category": "topical",
+    "filterCategories": [
+      "topical"
+    ],
+    "posInventoryType": "Topical Ointment",
+    "posInventoryCategory": "Topical",
+    "strainType": "cbd",
+    "thc": "561mg",
+    "cbd": "500mg",
+    "totalThc": {
+      "type": "thc",
+      "value": "561",
+      "unit": "mg"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "500",
+      "unit": "mg"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "561",
+        "unit": "mg"
+      },
+      {
+        "type": "cbd",
+        "value": "500",
+        "unit": "mg"
+      }
+    ],
+    "description": "POS preview item for Ceres Dragon Balm CBD RED. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$15 96.4g",
+    "priceMinorUnits": 1500,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-topical-ceres-ceres-dragon-balm-cbd-red-10210233-96-4g-a44cb5",
+        "label": "96.4g",
+        "priceMinorUnits": 1500,
+        "inventoryLevel": 14,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "26673",
+        "25726",
+        "24862"
+      ],
+      "sourceRowCount": 3,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-topical-ceres-ceres-dragon-balm-jar-cbd-red-3e16dc69",
+    "name": "Ceres Dragon Balm Jar CBD RED",
+    "brand": "Ceres",
+    "category": "topical",
+    "filterCategories": [
+      "topical"
+    ],
+    "posInventoryType": "Topical Ointment",
+    "posInventoryCategory": "Topical",
+    "strainType": "cbd",
+    "thc": "291mg",
+    "cbd": "250mg",
+    "totalThc": {
+      "type": "thc",
+      "value": "291",
+      "unit": "mg"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "250",
+      "unit": "mg"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "291",
+        "unit": "mg"
+      },
+      {
+        "type": "cbd",
+        "value": "250",
+        "unit": "mg"
+      }
+    ],
+    "description": "POS preview item for Ceres Dragon Balm Jar CBD RED. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "priceLabel": "$10 56.7g",
+    "priceMinorUnits": 1000,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-topical-ceres-ceres-dragon-balm-jar-cbd-red-3e16dc69-56-7g-e3fc02",
+        "label": "56.7g",
+        "priceMinorUnits": 1000,
+        "inventoryLevel": 4,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "20036"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  }
+]

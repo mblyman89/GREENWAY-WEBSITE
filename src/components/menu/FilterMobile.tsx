@@ -1,0 +1,214 @@
+"use client";
+
+import { useEffect, useState, type ReactNode } from "react";
+import { FilterCheckboxGroup, type FilterCheckboxOption } from "./FilterCheckboxGroup";
+import { FilterSection } from "./FilterSection";
+
+type FilterMobileProps = {
+  activeCount: number;
+  resultCount: number;
+  children: ReactNode;
+};
+
+export function FilterMobile({ activeCount, resultCount, children }: FilterMobileProps) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isOpen]);
+
+  return (
+    <div className="lg:hidden">
+      <button
+        type="button"
+        onClick={() => setIsOpen(true)}
+        className="flex min-h-14 w-full items-center justify-between gap-4 rounded-[1.35rem] border border-[var(--greenway)]/30 bg-[var(--greenway)]/12 px-4 py-3 text-left shadow-xl shadow-black/20 transition hover:border-[var(--greenway)]/60"
+        aria-expanded={isOpen}
+        aria-controls="mobile-menu-filters"
+      >
+        <span>
+          <span className="block text-sm font-black uppercase tracking-[0.14em] text-white">Filters & Categories</span>
+          <span className="mt-1 block text-[0.72rem] font-bold uppercase tracking-[0.1em] text-zinc-400">
+            {activeCount > 0 ? `${activeCount} active` : "All products"} · {resultCount} results
+          </span>
+        </span>
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[var(--orange)] text-xl font-black text-black" aria-hidden="true">
+          +
+        </span>
+      </button>
+
+      {isOpen ? (
+        <div id="mobile-menu-filters" className="fixed inset-0 z-[90] bg-black text-white" role="dialog" aria-modal="true" aria-label="Filters and categories">
+          <div className="flex h-full flex-col">
+            <header className="sticky top-0 z-10 border-b border-white/10 bg-zinc-950/95 px-4 py-4 backdrop-blur">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-[0.62rem] font-black uppercase tracking-[0.18em] text-[var(--greenway)]">Shop menu</p>
+                  <h2 className="mt-1 text-2xl font-black uppercase tracking-tight text-white">Filters</h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsOpen(false)}
+                  className="grid h-11 w-11 place-items-center rounded-full bg-white text-2xl font-black leading-none text-black"
+                  aria-label="Close filters"
+                >
+                  ×
+                </button>
+              </div>
+            </header>
+
+            <div className="flex-1 overflow-y-auto px-4 py-5">
+              {children}
+              <p className="mt-6 rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-xs leading-5 text-zinc-400">
+                Preview-only filters use exact-match POS product data. They do not reserve inventory, collect payment, create orders, or publish to Leafly/POS services.
+              </p>
+            </div>
+
+            <footer className="sticky bottom-0 border-t border-white/10 bg-zinc-950/95 p-4 backdrop-blur">
+              <button
+                type="button"
+                onClick={() => setIsOpen(false)}
+                className="w-full rounded-full bg-[var(--orange)] px-5 py-4 text-sm font-black uppercase tracking-[0.16em] text-black shadow-xl shadow-[rgba(255,127,0,0.2)]"
+              >
+                Show {resultCount} Results
+              </button>
+            </footer>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+export type MenuFilterControlsProps = {
+  selectedCategories: string[];
+  selectedStrains: string[];
+  selectedBrands: string[];
+  selectedWeights: string[];
+  maxThc: number;
+  maxCbd: number;
+  maxPrice: number;
+  maxAvailablePrice?: number;
+  onCategoryToggle: (category: string) => void;
+  onStrainToggle: (strain: string) => void;
+  onBrandToggle: (brand: string) => void;
+  onWeightToggle: (weight: string) => void;
+  onMaxThcChange: (value: number) => void;
+  onMaxCbdChange: (value: number) => void;
+  onMaxPriceChange: (price: number) => void;
+  onReset: () => void;
+  categoryOptions: FilterCheckboxOption[];
+  strainOptions: FilterCheckboxOption[];
+  brandOptions: FilterCheckboxOption[];
+  weightOptions: FilterCheckboxOption[];
+};
+
+export function MenuFilterControls({
+  selectedCategories,
+  selectedStrains,
+  selectedBrands,
+  selectedWeights,
+  maxThc,
+  maxCbd,
+  maxPrice,
+  maxAvailablePrice = 100,
+  onCategoryToggle,
+  onStrainToggle,
+  onBrandToggle,
+  onWeightToggle,
+  onMaxThcChange,
+  onMaxCbdChange,
+  onMaxPriceChange,
+  onReset,
+  categoryOptions,
+  strainOptions,
+  brandOptions,
+  weightOptions,
+}: MenuFilterControlsProps) {
+  return (
+    <>
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h2 className="text-sm font-black uppercase tracking-[0.18em] text-white">Filters</h2>
+          <p className="mt-1 text-[0.68rem] leading-4 text-zinc-500">Categories, brands, strains, weights, potency, and price.</p>
+        </div>
+        <button type="button" onClick={onReset} className="rounded-full bg-[var(--greenway)] px-3 py-2 text-[0.65rem] font-black uppercase tracking-[0.12em] text-black transition hover:bg-[var(--gold)]">
+          Clear
+        </button>
+      </div>
+
+      <FilterSection title="Categories" helper="Shop by product type">
+        <FilterCheckboxGroup name="categories" options={categoryOptions} selectedValues={selectedCategories} onToggle={onCategoryToggle} />
+      </FilterSection>
+
+      <FilterSection title="Brands" helper="Search only changes visible brand options">
+        <FilterCheckboxGroup name="brands" options={brandOptions} selectedValues={selectedBrands} onToggle={onBrandToggle} searchable searchPlaceholder="Search brands..." />
+      </FilterSection>
+
+      <FilterSection title="Strains" helper="Available profiles update with other filters">
+        <FilterCheckboxGroup name="strains" options={strainOptions} selectedValues={selectedStrains} onToggle={onStrainToggle} />
+      </FilterSection>
+
+      <FilterSection title="Weights" helper="Requested gram weights mapped to variants" defaultOpen={false}>
+        <FilterCheckboxGroup name="weights" options={weightOptions} selectedValues={selectedWeights} onToggle={onWeightToggle} />
+      </FilterSection>
+
+      <FilterSection title="Price" helper="Maximum preview product price">
+        <label className="block">
+          <span className="text-xs font-black uppercase tracking-[0.16em] text-[var(--greenway)]">Max Price: {maxPrice >= maxAvailablePrice ? `$${maxAvailablePrice}+` : `$${maxPrice}`}</span>
+          <input
+            type="range"
+            min="5"
+            max={maxAvailablePrice}
+            step="1"
+            value={maxPrice}
+            onChange={(event) => onMaxPriceChange(Number(event.target.value))}
+            className="mt-4 w-full accent-[var(--orange)]"
+          />
+          <span className="mt-2 flex justify-between text-xs text-zinc-500"><span>$5</span><span>${maxAvailablePrice}+</span></span>
+        </label>
+      </FilterSection>
+
+      <FilterSection title="THC" helper="THC potency ceiling">
+        <label className="block">
+          <span className="flex items-center justify-between gap-3 text-xs font-black uppercase tracking-[0.16em] text-[var(--greenway)]">
+            THC Percentage <span className="text-white">Up to {maxThc}%</span>
+          </span>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            step="1"
+            value={maxThc}
+            onChange={(event) => onMaxThcChange(Number(event.target.value))}
+            className="mt-4 w-full accent-[var(--orange)]"
+          />
+          <span className="mt-2 flex justify-between text-xs text-zinc-500"><span>0%</span><span>100%</span></span>
+        </label>
+      </FilterSection>
+
+      <FilterSection title="CBD" helper="CBD potency ceiling">
+        <label className="block">
+          <span className="flex items-center justify-between gap-3 text-xs font-black uppercase tracking-[0.16em] text-[var(--greenway)]">
+            CBD Percentage <span className="text-white">Up to {maxCbd}%</span>
+          </span>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            step="1"
+            value={maxCbd}
+            onChange={(event) => onMaxCbdChange(Number(event.target.value))}
+            className="mt-4 w-full accent-[var(--orange)]"
+          />
+          <span className="mt-2 flex justify-between text-xs text-zinc-500"><span>0%</span><span>100%</span></span>
+        </label>
+      </FilterSection>
+    </>
+  );
+}
