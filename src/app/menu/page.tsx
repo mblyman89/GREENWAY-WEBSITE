@@ -19,7 +19,22 @@ function totalInventoryUnits() {
   }, 0);
 }
 
-export default function MenuPage() {
+type MenuPageProps = {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+};
+
+function firstSearchParamValue(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] ?? "" : value ?? "";
+}
+
+export default async function MenuPage({ searchParams }: MenuPageProps) {
+  const resolvedSearchParams = await searchParams;
+  const initialSearchParams = {
+    search: firstSearchParamValue(resolvedSearchParams?.search),
+    category: firstSearchParamValue(resolvedSearchParams?.category),
+    brand: firstSearchParamValue(resolvedSearchParams?.brand),
+    special: firstSearchParamValue(resolvedSearchParams?.special),
+  };
   return (
     <main id="top">
       <Header />
@@ -63,7 +78,7 @@ export default function MenuPage() {
 
       <section id="products">
         <Suspense fallback={<div className="mx-auto max-w-7xl px-4 py-10 text-sm font-bold text-zinc-400 md:px-8">Loading menu filters...</div>}>
-          <InteractiveMenuBrowser items={posMenuPreviewItems} />
+          <InteractiveMenuBrowser items={posMenuPreviewItems} initialSearchParams={initialSearchParams} />
         </Suspense>
       </section>
       <Footer />

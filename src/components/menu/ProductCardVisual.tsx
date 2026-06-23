@@ -163,11 +163,12 @@ function ProductImageMockup({ item, tone }: { item: GreenwayMenuItem; tone: Card
 type ProductCardVisualProps = {
   item: GreenwayMenuItem;
   salePriceMinorUnits?: number;
+  saleBadgeLabel?: string;
   ctaLabel?: string;
   className?: string;
 };
 
-export function ProductCardVisual({ item, salePriceMinorUnits, ctaLabel = "ADD TO CART", className = "" }: ProductCardVisualProps) {
+export function ProductCardVisual({ item, salePriceMinorUnits, saleBadgeLabel, ctaLabel = "ADD TO CART", className = "" }: ProductCardVisualProps) {
   const showCannabinoids = isCannabisItem(item);
   const tone = cardToneForItem(item);
 
@@ -213,6 +214,11 @@ export function ProductCardVisual({ item, salePriceMinorUnits, ctaLabel = "ADD T
       </div>
 
       <div className="pt-4 text-center">
+        {saleBadgeLabel ? (
+          <div className="mb-2 rounded-full border border-[var(--greenway)]/55 bg-black/60 px-3 py-1.5 text-[0.66rem] font-black uppercase leading-tight tracking-[0.08em] text-[var(--greenway)] shadow-[0_0_18px_rgba(126,217,87,0.18)]">
+            {saleBadgeLabel}
+          </div>
+        ) : null}
         <ProductCardPriceSelector item={item} salePriceMinorUnits={salePriceMinorUnits} />
 
         <Link
