@@ -169,7 +169,7 @@ export function ProductCardVisual({ item, salePriceMinorUnits, ctaLabel = "ADD T
 
   return (
     <article
-      className={`group relative flex h-full min-h-[29.25rem] flex-col justify-between overflow-visible border p-4 text-white transition duration-300 hover:border-white/70 hover:shadow-[0_18px_44px_rgba(0,0,0,0.55)] ${className}`}
+      className={`group relative flex h-full min-h-[29.25rem] min-w-0 flex-col justify-between overflow-hidden border p-4 text-white transition duration-300 hover:border-white/70 hover:shadow-[0_18px_44px_rgba(0,0,0,0.55)] ${className}`}
       style={cardStyle(tone)}
     >
       <span className="pointer-events-none absolute -left-px top-10 h-[42%] w-px opacity-90 blur-[1px]" style={{ background: tone.glow }} aria-hidden="true" />
@@ -209,7 +209,7 @@ export function ProductCardVisual({ item, salePriceMinorUnits, ctaLabel = "ADD T
       </div>
 
       <div className="pt-4">
-        <div className="flex min-h-[2.85rem] items-end gap-2 leading-none">
+        <div className="flex min-h-[2.85rem] min-w-0 flex-wrap items-end gap-x-2 gap-y-1 leading-none">
           {hasSalePrice ? <span className="pb-1 text-sm font-black text-zinc-400 line-through md:text-[0.95rem]">{formatMinorCurrency(priceMinorUnits)}</span> : null}
           <span className="text-[1.72rem] font-black text-[var(--orange)] md:text-[1.95rem]">{formatMinorCurrency(displayPrice)}</span>
           {unitLabel ? <span className="pb-1.5 text-sm font-black text-white/90 md:text-base">{unitLabel}</span> : null}

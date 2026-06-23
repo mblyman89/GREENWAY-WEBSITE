@@ -344,7 +344,7 @@ export function MobileNavigation() {
       <button
         type="button"
         onClick={() => setIsOpen(true)}
-        className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-white/[0.04] text-white transition hover:border-[var(--greenway)] hover:text-[var(--greenway)]"
+        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/[0.04] text-white transition hover:border-[var(--greenway)] hover:text-[var(--greenway)] sm:h-10 sm:w-10"
         aria-label="Open site navigation menu"
         aria-expanded={isOpen}
       >
