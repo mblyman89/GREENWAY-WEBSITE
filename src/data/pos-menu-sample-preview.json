@@ -1,7 +1,8 @@
 [
   {
-    "id": "pos-cartridge-2727-2727-vape-cart-2727-blueberry-pancakes-1g-808de51f",
-    "name": "2727 - Vape Cart - 2727 - Blueberry Pancakes - 1g",
+    "id": "pos-cartridge-2727-2727-vape-cart-2727-blueberry-pancakes-1g-7a9ddabf",
+    "name": "Blueberry Pancakes",
+    "productName": "2727 - Vape Cart - 2727 - Blueberry Pancakes - 1g",
     "brand": "2727",
     "category": "cartridge",
     "filterCategories": [
@@ -36,13 +37,13 @@
         "unit": "%"
       }
     ],
-    "description": "POS preview item for 2727 - Vape Cart - 2727 - Blueberry Pancakes - 1g. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "description": "A hybrid vape cartridge filled with Blueberry Pancakes oil — smooth, flavorful vapor in a discreet, no-torch, push-button format that goes wherever you go. Flavor on the go, with notes of vanilla, butter, and blueberry, leading into a smooth, well-rounded vibe.",
     "priceLabel": "$25 1g",
     "priceMinorUnits": 2500,
     "inventoryStatus": "low-stock",
     "variants": [
       {
-        "id": "pos-cartridge-2727-2727-vape-cart-2727-blueberry-pancakes-1g-808de51f-1g-7cf0e5",
+        "id": "pos-cartridge-2727-2727-vape-cart-2727-blueberry-pancakes-1g-7a9ddabf-1g-d5b461",
         "label": "1g",
         "priceMinorUnits": 2500,
         "inventoryLevel": 3,
@@ -60,8 +61,9 @@
     }
   },
   {
-    "id": "pos-cartridge-2727-2727-vape-cart-2727-lemon-meringue-1g-0ddd72af",
-    "name": "2727 - Vape Cart - 2727 - Lemon Meringue - 1g",
+    "id": "pos-cartridge-2727-2727-vape-cart-2727-lemon-meringue-1g-4ae34cbb",
+    "name": "Lemon Meringue",
+    "productName": "2727 - Vape Cart - 2727 - Lemon Meringue - 1g",
     "brand": "2727",
     "category": "cartridge",
     "filterCategories": [
@@ -96,13 +98,13 @@
         "unit": "%"
       }
     ],
-    "description": "POS preview item for 2727 - Vape Cart - 2727 - Lemon Meringue - 1g. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "description": "This sativa cartridge loads Lemon Meringue into a sleek 510-thread pen for clean, convenient draws — premium oil, precise hits, zero hassle. Flavor on the go, with notes of lemon, citrus, and nutty, leading into a bright, heady lift.",
     "priceLabel": "$25 1g",
     "priceMinorUnits": 2500,
     "inventoryStatus": "low-stock",
     "variants": [
       {
-        "id": "pos-cartridge-2727-2727-vape-cart-2727-lemon-meringue-1g-0ddd72af-1g-2c98d0",
+        "id": "pos-cartridge-2727-2727-vape-cart-2727-lemon-meringue-1g-4ae34cbb-1g-37ef09",
         "label": "1g",
         "priceMinorUnits": 2500,
         "inventoryLevel": 2,
@@ -120,8 +122,9 @@
     }
   },
   {
-    "id": "pos-cartridge-agro-couture-ge-blackberry-cobbler-1g-indica-vape-cartridge-ec191eb8",
-    "name": "GE - Blackberry Cobbler - 1g Indica Vape Cartridge",
+    "id": "pos-cartridge-agro-couture-ge-blackberry-cobbler-1g-indica-vape-cartridge-e0888dbc",
+    "name": "Black & Blueberry",
+    "productName": "GE - Blackberry Cobbler - 1g Indica Vape Cartridge",
     "brand": "Agro Couture",
     "category": "cartridge",
     "filterCategories": [
@@ -156,13 +159,13 @@
         "unit": "%"
       }
     ],
-    "description": "POS preview item for GE - Blackberry Cobbler - 1g Indica Vape Cartridge. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "description": "A convenient indica cartridge carrying Black & Blueberry's character into flavorful, on-demand vapor — discreet, simple, and ready to go. Smooth, discreet, and flavorful — a sweet, ripe blackberry flavor, with a slow, mellow wind-down vibe.",
     "priceLabel": "$15 1g",
     "priceMinorUnits": 1500,
     "inventoryStatus": "in-stock",
     "variants": [
       {
-        "id": "pos-cartridge-agro-couture-ge-blackberry-cobbler-1g-indica-vape-cartridge-ec191eb8-1g-ec1613",
+        "id": "pos-cartridge-agro-couture-ge-blackberry-cobbler-1g-indica-vape-cartridge-e0888dbc-1g-bb394f",
         "label": "1g",
         "priceMinorUnits": 1500,
         "inventoryLevel": 10,
@@ -180,8 +183,9 @@
     }
   },
   {
-    "id": "pos-cartridge-agro-couture-ge-green-zkittlez-1g-sativa-vape-cartridge-c5eac836",
-    "name": "GE - Green Zkittlez - 1g Sativa Vape Cartridge",
+    "id": "pos-cartridge-agro-couture-ge-green-zkittlez-1g-sativa-vape-cartridge-f00cfe6a",
+    "name": "Green Zkittlez",
+    "productName": "GE - Green Zkittlez - 1g Sativa Vape Cartridge",
     "brand": "Agro Couture",
     "category": "cartridge",
     "filterCategories": [
@@ -216,13 +220,13 @@
         "unit": "%"
       }
     ],
-    "description": "POS preview item for GE - Green Zkittlez - 1g Sativa Vape Cartridge. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "description": "This hybrid cartridge loads Green Zkittlez into a sleek 510-thread pen for clean, convenient draws — premium oil, precise hits, zero hassle. Flavor on the go, a sweet candy-fruit aroma with a calm, happy, relaxed feel, leading into a balanced head-and-body experience.",
     "priceLabel": "$15 1g",
     "priceMinorUnits": 1500,
     "inventoryStatus": "in-stock",
     "variants": [
       {
-        "id": "pos-cartridge-agro-couture-ge-green-zkittlez-1g-sativa-vape-cartridge-c5eac836-1g-a1e21e",
+        "id": "pos-cartridge-agro-couture-ge-green-zkittlez-1g-sativa-vape-cartridge-f00cfe6a-1g-d8933a",
         "label": "1g",
         "priceMinorUnits": 1500,
         "inventoryLevel": 12,
@@ -240,8 +244,9 @@
     }
   },
   {
-    "id": "pos-cartridge-agro-couture-ge-sherbet-1g-indica-vape-cartridge-883a69ab",
-    "name": "GE - Sherbet - 1g Indica Vape Cartridge",
+    "id": "pos-cartridge-agro-couture-ge-sherbet-1g-indica-vape-cartridge-a2627655",
+    "name": "Sherbet",
+    "productName": "GE - Sherbet - 1g Indica Vape Cartridge",
     "brand": "Agro Couture",
     "category": "cartridge",
     "filterCategories": [
@@ -250,7 +255,7 @@
     ],
     "posInventoryType": "Concentrate for Inhalation",
     "posInventoryCategory": "Cartridge",
-    "strainType": "indica",
+    "strainType": "hybrid",
     "strainName": "Sherbet",
     "thc": "92%",
     "cbd": "0.16%",
@@ -276,13 +281,13 @@
         "unit": "%"
       }
     ],
-    "description": "POS preview item for GE - Sherbet - 1g Indica Vape Cartridge. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "description": "A hybrid vape cartridge filled with Sherbet oil — smooth, flavorful vapor in a discreet, no-torch, push-button format that goes wherever you go. Smooth, discreet, and flavorful — with notes of vanilla, berry, and blueberry, with a balanced head-and-body experience.",
     "priceLabel": "$15 1g",
     "priceMinorUnits": 1500,
     "inventoryStatus": "low-stock",
     "variants": [
       {
-        "id": "pos-cartridge-agro-couture-ge-sherbet-1g-indica-vape-cartridge-883a69ab-1g-3923fe",
+        "id": "pos-cartridge-agro-couture-ge-sherbet-1g-indica-vape-cartridge-a2627655-1g-d4f47a",
         "label": "1g",
         "priceMinorUnits": 1500,
         "inventoryLevel": 4,
@@ -300,42 +305,44 @@
     }
   },
   {
-    "id": "pos-concentrate-2727-2727-badder-now-and-lator-1g-caa2aad3",
-    "name": "2727 - Badder - Now & Lator - 1g",
-    "brand": "2727",
-    "category": "concentrate",
+    "id": "pos-cartridge-bodhi-high-bodhi-high-ultra-pure-cartridge-lavender-trainwrecks-1g-b0e04757",
+    "name": "Lavender Trainwreck",
+    "productName": "Bodhi High Ultra Pure Cartridge Lavender Trainwrecks- 1g",
+    "brand": "Bodhi High",
+    "category": "cartridge",
     "filterCategories": [
+      "cartridge",
       "concentrate"
     ],
-    "posInventoryType": "Concentrate for Inhalation",
-    "posInventoryCategory": "Badder",
+    "posInventoryType": "Usable Marijuana",
+    "posInventoryCategory": "Cartridge",
     "strainType": "hybrid",
-    "strainName": "Now & Lator",
-    "thc": "81.62%",
+    "strainName": "Lavender Trainwreck",
+    "thc": "75%",
     "cbd": null,
     "totalThc": {
       "type": "thc",
-      "value": "81.62",
+      "value": "75",
       "unit": "%"
     },
     "totalCbd": null,
     "compounds": [
       {
         "type": "thc",
-        "value": "81.62",
+        "value": "75",
         "unit": "%"
       }
     ],
-    "description": "POS preview item for 2727 - Badder - Now & Lator - 1g. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
-    "priceLabel": "$15 1g",
-    "priceMinorUnits": 1500,
+    "description": "A convenient hybrid cartridge carrying Lavender Trainwreck's character into flavorful, on-demand vapor — discreet, simple, and ready to go. Convenient and clean, a soft, floral lavender flavor, delivering a balanced head-and-body experience.",
+    "priceLabel": "$50 1g",
+    "priceMinorUnits": 5000,
     "inventoryStatus": "low-stock",
     "variants": [
       {
-        "id": "pos-concentrate-2727-2727-badder-now-and-lator-1g-caa2aad3-1g-813ed0",
+        "id": "pos-cartridge-bodhi-high-bodhi-high-ultra-pure-cartridge-lavender-trainwrecks-1g-b0e04757-1g-4084d6",
         "label": "1g",
-        "priceMinorUnits": 1500,
-        "inventoryLevel": 1,
+        "priceMinorUnits": 5000,
+        "inventoryLevel": 2,
         "medical": false
       }
     ],
@@ -343,48 +350,172 @@
       "source": "priority_matches_v2.csv",
       "matchMethod": "exact_name_brand_package",
       "sourceInventoryIds": [
-        "25087"
+        "26586"
       ],
       "sourceRowCount": 1,
       "generatedForInspectionOnly": true
     }
   },
   {
-    "id": "pos-concentrate-2727-2727-extracts-2727-honey-crumble-himalayan-kush-1g-5f9ae37c",
-    "name": "2727 - Extracts - 2727 - Honey Crumble - Himalayan Kush - 1g",
-    "brand": "2727",
-    "category": "concentrate",
+    "id": "pos-cartridge-bodhi-high-honey-tree-vape-bubba-kush-cc74d30f",
+    "name": "Bubba Kush",
+    "productName": "Honey Tree Vape - Bubba Kush",
+    "brand": "Bodhi High",
+    "category": "cartridge",
     "filterCategories": [
+      "cartridge",
       "concentrate"
     ],
     "posInventoryType": "Concentrate for Inhalation",
-    "posInventoryCategory": "BHO",
+    "posInventoryCategory": "Cartridge",
     "strainType": "indica",
-    "strainName": "Himalayan Kush",
-    "thc": "80.48%",
+    "strainName": "Bubba Kush",
+    "thc": "90%",
+    "cbd": "1.86%",
+    "totalThc": {
+      "type": "thc",
+      "value": "90",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "1.86",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "90",
+        "unit": "%"
+      },
+      {
+        "type": "cbd",
+        "value": "1.86",
+        "unit": "%"
+      }
+    ],
+    "description": "A indica vape cartridge filled with Bubba Kush oil — smooth, flavorful vapor in a discreet, no-torch, push-button format that goes wherever you go. Flavor on the go, with notes of coffee, earthy, and pungent, leading into a heavy, relaxed body calm.",
+    "priceLabel": "$25 1g",
+    "priceMinorUnits": 2500,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-bodhi-high-honey-tree-vape-bubba-kush-cc74d30f-1g-4f4e53",
+        "label": "1g",
+        "priceMinorUnits": 2500,
+        "inventoryLevel": 2,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "26598"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-bodhi-high-original-live-resin-510-vape-high-potency-presidential-kush-78b41d51",
+    "name": "Presidential Kush",
+    "productName": "Original - Live Resin 510 Vape - High Potency - Presidential Kush",
+    "brand": "Bodhi High",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "hybrid",
+    "strainName": "Presidential Kush",
+    "thc": "85%",
     "cbd": null,
     "totalThc": {
       "type": "thc",
-      "value": "80.48",
+      "value": "85",
       "unit": "%"
     },
     "totalCbd": null,
     "compounds": [
       {
         "type": "thc",
-        "value": "80.48",
+        "value": "85",
         "unit": "%"
       }
     ],
-    "description": "POS preview item for 2727 - Extracts - 2727 - Honey Crumble - Himalayan Kush - 1g. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
-    "priceLabel": "$15 1g",
-    "priceMinorUnits": 1500,
+    "description": "A convenient hybrid cartridge carrying Presidential Kush's character into flavorful, on-demand vapor — discreet, simple, and ready to go. Convenient and clean, an earthy, piney, hashy aroma and a classic, relaxing feel, delivering a versatile, anytime balance.",
+    "priceLabel": "$30 1g",
+    "priceMinorUnits": 3000,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-bodhi-high-original-live-resin-510-vape-high-potency-presidential-kush-78b41d51-1g-0cea35",
+        "label": "1g",
+        "priceMinorUnits": 3000,
+        "inventoryLevel": 7,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "26593"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-bodhi-high-pure-live-resin-510-vape-liquid-diamonds-durban-poison-sativa-1ml-9f0a3c31",
+    "name": "Durban Poison",
+    "productName": "Pure - Live Resin 510 Vape - Liquid Diamonds - Durban Poison - Sativa - 1mL",
+    "brand": "Bodhi High",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "sativa",
+    "strainName": "Durban Poison",
+    "thc": "85%",
+    "cbd": "0.06%",
+    "totalThc": {
+      "type": "thc",
+      "value": "85",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "0.06",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "85",
+        "unit": "%"
+      },
+      {
+        "type": "cbd",
+        "value": "0.06",
+        "unit": "%"
+      }
+    ],
+    "description": "Portable sativa vape cart of Durban Poison, dialed in for smooth flavor and easy dosing whenever and wherever you want it. Smooth, discreet, and flavorful — with notes of pine, earthy, and sage, with an active, daytime spark.",
+    "priceLabel": "$40 1g",
+    "priceMinorUnits": 4000,
     "inventoryStatus": "low-stock",
     "variants": [
       {
-        "id": "pos-concentrate-2727-2727-extracts-2727-honey-crumble-himalayan-kush-1g-5f9ae37c-1g-4e6cd8",
+        "id": "pos-cartridge-bodhi-high-pure-live-resin-510-vape-liquid-diamonds-durban-poison-sativa-1ml-9f0a3c31-1g-ade3bf",
         "label": "1g",
-        "priceMinorUnits": 1500,
+        "priceMinorUnits": 4000,
         "inventoryLevel": 3,
         "medical": false
       }
@@ -393,49 +524,60 @@
       "source": "priority_matches_v2.csv",
       "matchMethod": "exact_name_brand_package",
       "sourceInventoryIds": [
-        "26143"
+        "26591"
       ],
       "sourceRowCount": 1,
       "generatedForInspectionOnly": true
     }
   },
   {
-    "id": "pos-concentrate-2727-2727-extracts-2727-sugar-wax-cherry-cookies-1g-589118a8",
-    "name": "2727 - Extracts - 2727 - Sugar Wax - Cherry Cookies - 1g",
-    "brand": "2727",
-    "category": "concentrate",
+    "id": "pos-cartridge-bodhi-high-pure-live-resin-510-vape-liquid-diamonds-tropic-truffle-8ccc98dd",
+    "name": "Tropic Truffle",
+    "productName": "Pure - Live Resin 510 Vape - Liquid Diamonds - Tropic Truffle",
+    "brand": "Bodhi High",
+    "category": "cartridge",
     "filterCategories": [
+      "cartridge",
       "concentrate"
     ],
     "posInventoryType": "Concentrate for Inhalation",
-    "posInventoryCategory": "BHO",
-    "strainType": "sativa",
-    "strainName": "Cherry Cookies",
-    "thc": "75.82%",
-    "cbd": null,
+    "posInventoryCategory": "Cartridge",
+    "strainType": "hybrid",
+    "strainName": "Tropic Truffle",
+    "thc": "81%",
+    "cbd": "0.23%",
     "totalThc": {
       "type": "thc",
-      "value": "75.82",
+      "value": "81",
       "unit": "%"
     },
-    "totalCbd": null,
+    "totalCbd": {
+      "type": "cbd",
+      "value": "0.23",
+      "unit": "%"
+    },
     "compounds": [
       {
         "type": "thc",
-        "value": "75.82",
+        "value": "81",
+        "unit": "%"
+      },
+      {
+        "type": "cbd",
+        "value": "0.23",
         "unit": "%"
       }
     ],
-    "description": "POS preview item for 2727 - Extracts - 2727 - Sugar Wax - Cherry Cookies - 1g. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
-    "priceLabel": "$15 1g",
-    "priceMinorUnits": 1500,
+    "description": "A convenient hybrid cartridge carrying Tropic Truffle's character into flavorful, on-demand vapor — discreet, simple, and ready to go. Smooth, discreet, and flavorful — with notes of apricot, tropical, and mango, with an even, best-of-both-worlds feel.",
+    "priceLabel": "$40 1g",
+    "priceMinorUnits": 4000,
     "inventoryStatus": "low-stock",
     "variants": [
       {
-        "id": "pos-concentrate-2727-2727-extracts-2727-sugar-wax-cherry-cookies-1g-589118a8-1g-4d610f",
+        "id": "pos-cartridge-bodhi-high-pure-live-resin-510-vape-liquid-diamonds-tropic-truffle-8ccc98dd-1g-3de326",
         "label": "1g",
-        "priceMinorUnits": 1500,
-        "inventoryLevel": 2,
+        "priceMinorUnits": 4000,
+        "inventoryLevel": 4,
         "medical": false
       }
     ],
@@ -443,49 +585,51 @@
       "source": "priority_matches_v2.csv",
       "matchMethod": "exact_name_brand_package",
       "sourceInventoryIds": [
-        "26126"
+        "26589"
       ],
       "sourceRowCount": 1,
       "generatedForInspectionOnly": true
     }
   },
   {
-    "id": "pos-concentrate-2727-2727-extracts-2727-sugar-wax-citrus-sunrise-1g-77da897e",
-    "name": "2727 - Extracts - 2727 - Sugar Wax - Citrus Sunrise - 1g",
-    "brand": "2727",
-    "category": "concentrate",
+    "id": "pos-cartridge-bodhi-high-pure-vape-carbon-fiber-47294c65",
+    "name": "Carbon Fiber",
+    "productName": "Pure Vape - Carbon Fiber",
+    "brand": "Bodhi High",
+    "category": "cartridge",
     "filterCategories": [
+      "cartridge",
       "concentrate"
     ],
     "posInventoryType": "Concentrate for Inhalation",
-    "posInventoryCategory": "BHO",
-    "strainType": "sativa",
-    "strainName": "Citrus Sunrise",
-    "thc": "69.34%",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "hybrid",
+    "strainName": "Carbon Fiber",
+    "thc": "77%",
     "cbd": null,
     "totalThc": {
       "type": "thc",
-      "value": "69.34",
+      "value": "77",
       "unit": "%"
     },
     "totalCbd": null,
     "compounds": [
       {
         "type": "thc",
-        "value": "69.34",
+        "value": "77",
         "unit": "%"
       }
     ],
-    "description": "POS preview item for 2727 - Extracts - 2727 - Sugar Wax - Citrus Sunrise - 1g. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
-    "priceLabel": "$15 1g",
-    "priceMinorUnits": 1500,
-    "inventoryStatus": "low-stock",
+    "description": "A hybrid vape cartridge filled with Carbon Fiber oil — smooth, flavorful vapor in a discreet, no-torch, push-button format that goes wherever you go. Smooth, discreet, and flavorful — with notes of ammonia, chemical, and pepper, with a balanced head-and-body experience.",
+    "priceLabel": "$40 1g",
+    "priceMinorUnits": 4000,
+    "inventoryStatus": "in-stock",
     "variants": [
       {
-        "id": "pos-concentrate-2727-2727-extracts-2727-sugar-wax-citrus-sunrise-1g-77da897e-1g-0de7f0",
+        "id": "pos-cartridge-bodhi-high-pure-vape-carbon-fiber-47294c65-1g-3a8879",
         "label": "1g",
-        "priceMinorUnits": 1500,
-        "inventoryLevel": 2,
+        "priceMinorUnits": 4000,
+        "inventoryLevel": 7,
         "medical": false
       }
     ],
@@ -493,48 +637,621 @@
       "source": "priority_matches_v2.csv",
       "matchMethod": "exact_name_brand_package",
       "sourceInventoryIds": [
-        "18394"
+        "26588"
       ],
       "sourceRowCount": 1,
       "generatedForInspectionOnly": true
     }
   },
   {
-    "id": "pos-concentrate-2727-smb-extracts-smb-sugar-crumble-blueberry-caviar-1g-e0417c16",
-    "name": "SMB - Extracts - SMB - Sugar Crumble - Blueberry Caviar - 1g",
-    "brand": "2727",
-    "category": "concentrate",
+    "id": "pos-cartridge-bodhi-high-ultra-pure-live-resin-510-vape-liquid-diamonds-road-rage-og-indica-1ml-43498d5f",
+    "name": "road rage",
+    "productName": "Ultra Pure - Live Resin 510 Vape - Liquid Diamonds - Road Rage OG - Indica - 1mL",
+    "brand": "Bodhi High",
+    "category": "cartridge",
     "filterCategories": [
+      "cartridge",
       "concentrate"
     ],
     "posInventoryType": "Concentrate for Inhalation",
-    "posInventoryCategory": "BHO",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "hybrid",
+    "strainName": "road rage",
+    "thc": "82%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "82",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "82",
+        "unit": "%"
+      }
+    ],
+    "description": "Portable hybrid vape cart of Road Rage, dialed in for smooth flavor and easy dosing whenever and wherever you want it. Flavor on the go, a balanced, sweet-earthy profile, leading into an even, best-of-both-worlds feel.",
+    "priceLabel": "$50 1g",
+    "priceMinorUnits": 5000,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-bodhi-high-ultra-pure-live-resin-510-vape-liquid-diamonds-road-rage-og-indica-1ml-43498d5f-1g-c5dc6d",
+        "label": "1g",
+        "priceMinorUnits": 5000,
+        "inventoryLevel": 3,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "26587"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-buddies-bff-flavored-live-resin-vape-cart-smh-strawberry-mango-haze-1g-s-doh-31047bfe",
+    "name": "Strawberry Mango Haze",
+    "productName": "BFF Flavored Live Resin Vape Cart - SMH - Strawberry Mango Haze - 1g - (S) - DOH",
+    "brand": "Buddies",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Usable Marijuana",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "sativa",
+    "strainName": "Strawberry Mango Haze",
+    "thc": "86%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "86",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "86",
+        "unit": "%"
+      }
+    ],
+    "description": "A convenient sativa cartridge carrying Strawberry Mango Haze's character into flavorful, on-demand vapor — discreet, simple, and ready to go. Convenient and clean, with notes of mango, strawberry, and tropical, delivering an active, daytime spark.",
+    "priceLabel": "$36 1g",
+    "priceMinorUnits": 3600,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-buddies-bff-flavored-live-resin-vape-cart-smh-strawberry-mango-haze-1g-s-doh-31047bfe-1g-b2520b",
+        "label": "1g",
+        "priceMinorUnits": 3600,
+        "inventoryLevel": 4,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "27209"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-buddies-bff-flavored-live-resin-vape-cart-wyd-watermelon-yuzu-dragon-fruit-1g-h-doh-33f27ce8",
+    "name": "Watermelon Yuzu Dragon fruit",
+    "productName": "BFF Flavored Live Resin Vape Cart - WYD - Watermelon Yuzu Dragon fruit - 1g - (H) - DOH",
+    "brand": "Buddies",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Usable Marijuana",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "hybrid",
+    "strainName": "Watermelon Yuzu Dragon fruit",
+    "thc": "87%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "87",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "87",
+        "unit": "%"
+      }
+    ],
+    "description": "A hybrid vape cartridge filled with Watermelon Yuzu Dragon fruit oil — smooth, flavorful vapor in a discreet, no-torch, push-button format that goes wherever you go. Flavor on the go, a sweet, refreshing watermelon flavor, leading into a balanced head-and-body experience.",
+    "priceLabel": "$36 1g",
+    "priceMinorUnits": 3600,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-buddies-bff-flavored-live-resin-vape-cart-wyd-watermelon-yuzu-dragon-fruit-1g-h-doh-33f27ce8-1g-8022bd",
+        "label": "1g",
+        "priceMinorUnits": 3600,
+        "inventoryLevel": 4,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "27210"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-buddies-buddies-cart-apple-fritter-404ce77d",
+    "name": "Apple Fritter",
+    "productName": "Buddies cart Apple Fritter",
+    "brand": "Buddies",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "hybrid",
+    "strainName": "Apple Fritter",
+    "thc": "89%",
+    "cbd": "0.2%",
+    "totalThc": {
+      "type": "thc",
+      "value": "89",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "0.2",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "89",
+        "unit": "%"
+      },
+      {
+        "type": "cbd",
+        "value": "0.2",
+        "unit": "%"
+      }
+    ],
+    "description": "This hybrid cartridge loads Apple Fritter into a sleek 510-thread pen for clean, convenient draws — premium oil, precise hits, zero hassle. Flavor on the go, with notes of apple, butter, and cheese, leading into a versatile, anytime balance.",
+    "priceLabel": "$20 1g",
+    "priceMinorUnits": 2000,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-buddies-buddies-cart-apple-fritter-404ce77d-1g-ddee48",
+        "label": "1g",
+        "priceMinorUnits": 2000,
+        "inventoryLevel": 7,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "26768"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-buddies-buddies-flavored-vape-cart-blue-ox-1g-ac19ec2f",
+    "name": "Blue Ox",
+    "productName": "Buddies Flavored Vape Cart - Blue Ox - 1g",
+    "brand": "Buddies",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
     "strainType": "indica",
-    "strainName": "Blueberry Caviar",
-    "thc": "76.72%",
+    "strainName": "Blue Ox",
+    "thc": "92%",
     "cbd": null,
     "totalThc": {
       "type": "thc",
-      "value": "76.72",
+      "value": "92",
       "unit": "%"
     },
     "totalCbd": null,
     "compounds": [
       {
         "type": "thc",
-        "value": "76.72",
+        "value": "92",
         "unit": "%"
       }
     ],
-    "description": "POS preview item for SMB - Extracts - SMB - Sugar Crumble - Blueberry Caviar - 1g. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
-    "priceLabel": "$10 1g",
-    "priceMinorUnits": 1000,
+    "description": "A convenient indica cartridge carrying Blue Ox's character into flavorful, on-demand vapor — discreet, simple, and ready to go. Convenient and clean, with notes of blueberry, berry, and coffee, delivering settle-in, melt-into-the-couch ease.",
+    "priceLabel": "$20 1g",
+    "priceMinorUnits": 2000,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-buddies-buddies-flavored-vape-cart-blue-ox-1g-ac19ec2f-1g-dbbce3",
+        "label": "1g",
+        "priceMinorUnits": 2000,
+        "inventoryLevel": 12,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "27226",
+        "26769"
+      ],
+      "sourceRowCount": 2,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-buddies-buddies-flavored-vape-cart-grape-ape-1g-4ef31416",
+    "name": "Grape Ape",
+    "productName": "Buddies Flavored Vape Cart - Grape Ape - 1g",
+    "brand": "Buddies",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "indica",
+    "strainName": "Grape Ape",
+    "thc": "89%",
+    "cbd": "0.14%",
+    "totalThc": {
+      "type": "thc",
+      "value": "89",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "0.14",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "89",
+        "unit": "%"
+      },
+      {
+        "type": "cbd",
+        "value": "0.14",
+        "unit": "%"
+      }
+    ],
+    "description": "This indica cartridge loads Grape Ape into a sleek 510-thread pen for clean, convenient draws — premium oil, precise hits, zero hassle. Smooth, discreet, and flavorful — with notes of grape, berry, and sweet, with deep, easygoing relaxation.",
+    "priceLabel": "$20 1g",
+    "priceMinorUnits": 2000,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-buddies-buddies-flavored-vape-cart-grape-ape-1g-4ef31416-1g-dccd85",
+        "label": "1g",
+        "priceMinorUnits": 2000,
+        "inventoryLevel": 11,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "27227",
+        "27218",
+        "26356",
+        "26265"
+      ],
+      "sourceRowCount": 4,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-buddies-buddies-flavored-vape-cart-pineapple-express-1g-6da13f28",
+    "name": "Pineapple Express",
+    "productName": "Buddies Flavored Vape Cart - Pineapple Express - 1g",
+    "brand": "Buddies",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "hybrid",
+    "strainName": "Pineapple Express",
+    "thc": "90%",
+    "cbd": "0.18%",
+    "totalThc": {
+      "type": "thc",
+      "value": "90",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "0.18",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "90",
+        "unit": "%"
+      },
+      {
+        "type": "cbd",
+        "value": "0.18",
+        "unit": "%"
+      }
+    ],
+    "description": "Portable hybrid vape cart of Pineapple Express, dialed in for smooth flavor and easy dosing whenever and wherever you want it. Convenient and clean, with notes of pineapple, tropical, and citrus, delivering a smooth, well-rounded vibe.",
+    "priceLabel": "$20 1g",
+    "priceMinorUnits": 2000,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-buddies-buddies-flavored-vape-cart-pineapple-express-1g-6da13f28-1g-87f814",
+        "label": "1g",
+        "priceMinorUnits": 2000,
+        "inventoryLevel": 6,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "26770"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-buddies-buddies-flavored-vape-cart-raspberry-parfait-1g-f3f32dff",
+    "name": "Raspberry Parfait",
+    "productName": "Buddies Flavored Vape Cart - Raspberry Parfait - 1g",
+    "brand": "Buddies",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "hybrid",
+    "strainName": "Raspberry Parfait",
+    "thc": "89%",
+    "cbd": "0.12%",
+    "totalThc": {
+      "type": "thc",
+      "value": "89",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "0.12",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "89",
+        "unit": "%"
+      },
+      {
+        "type": "cbd",
+        "value": "0.12",
+        "unit": "%"
+      }
+    ],
+    "description": "A hybrid vape cartridge filled with Raspberry Parfait oil — smooth, flavorful vapor in a discreet, no-torch, push-button format that goes wherever you go. Convenient and clean, with notes of violet, plum, and berry, delivering a smooth, well-rounded vibe.",
+    "priceLabel": "$20 1g",
+    "priceMinorUnits": 2000,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-buddies-buddies-flavored-vape-cart-raspberry-parfait-1g-f3f32dff-1g-7c8fe1",
+        "label": "1g",
+        "priceMinorUnits": 2000,
+        "inventoryLevel": 6,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "26771"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-buddies-buddies-flavored-vape-cart-strawberry-cough-1g-59fce6d4",
+    "name": "Strawberry Cough",
+    "productName": "Buddies Flavored Vape Cart - Strawberry Cough - 1g",
+    "brand": "Buddies",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "sativa",
+    "strainName": "Strawberry Cough",
+    "thc": "89%",
+    "cbd": "0.16%",
+    "totalThc": {
+      "type": "thc",
+      "value": "89",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "0.16",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "89",
+        "unit": "%"
+      },
+      {
+        "type": "cbd",
+        "value": "0.16",
+        "unit": "%"
+      }
+    ],
+    "description": "Portable sativa vape cart of Strawberry Cough, dialed in for smooth flavor and easy dosing whenever and wherever you want it. Smooth, discreet, and flavorful — with notes of strawberry, sweet, and berry, with an upbeat, talkative energy.",
+    "priceLabel": "$20 1g",
+    "priceMinorUnits": 2000,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-buddies-buddies-flavored-vape-cart-strawberry-cough-1g-59fce6d4-1g-069671",
+        "label": "1g",
+        "priceMinorUnits": 2000,
+        "inventoryLevel": 8,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "27228",
+        "26267"
+      ],
+      "sourceRowCount": 2,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-buddies-buddies-legacy-vape-cart-northern-lights-1g-i-c57cacd9",
+    "name": "Northern Lights",
+    "productName": "Buddies Legacy Vape Cart - Northern Lights - 1g - (I)",
+    "brand": "Buddies",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "indica",
+    "strainName": "Northern Lights",
+    "thc": "87%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "87",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "87",
+        "unit": "%"
+      }
+    ],
+    "description": "A indica vape cartridge filled with Northern Lights oil — smooth, flavorful vapor in a discreet, no-torch, push-button format that goes wherever you go. Convenient and clean, with notes of pine, earthy, and woody, delivering a heavy, relaxed body calm.",
+    "priceLabel": "$22 1g",
+    "priceMinorUnits": 2200,
     "inventoryStatus": "low-stock",
     "variants": [
       {
-        "id": "pos-concentrate-2727-smb-extracts-smb-sugar-crumble-blueberry-caviar-1g-e0417c16-1g-9c8da8",
+        "id": "pos-cartridge-buddies-buddies-legacy-vape-cart-northern-lights-1g-i-c57cacd9-1g-f32b2e",
         "label": "1g",
-        "priceMinorUnits": 1000,
+        "priceMinorUnits": 2200,
+        "inventoryLevel": 3,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "27224",
+        "23970"
+      ],
+      "sourceRowCount": 2,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-buddies-buddies-live-resin-vape-cart-oz-kush-1g-e5bcd431",
+    "name": "OZ Kush",
+    "productName": "Buddies Live Resin Vape Cart - OZ Kush - 1g",
+    "brand": "Buddies",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "hybrid",
+    "strainName": "OZ Kush",
+    "thc": "87%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "87",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "87",
+        "unit": "%"
+      }
+    ],
+    "description": "A convenient hybrid cartridge carrying OZ Kush's character into flavorful, on-demand vapor — discreet, simple, and ready to go. Smooth, discreet, and flavorful — with notes of honey, butter, and woody, with an even, best-of-both-worlds feel.",
+    "priceLabel": "$25 1g",
+    "priceMinorUnits": 2500,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-buddies-buddies-live-resin-vape-cart-oz-kush-1g-e5bcd431-1g-f67405",
+        "label": "1g",
+        "priceMinorUnits": 2500,
         "inventoryLevel": 5,
         "medical": false
       }
@@ -543,49 +1260,403 @@
       "source": "priority_matches_v2.csv",
       "matchMethod": "exact_name_brand_package",
       "sourceInventoryIds": [
-        "26123"
+        "27215"
       ],
       "sourceRowCount": 1,
       "generatedForInspectionOnly": true
     }
   },
   {
-    "id": "pos-disposable-cartridge-1937-1937-disposable-cartridge-banana-bread-1g-7e77c071",
-    "name": "1937 - Disposable Cartridge - Banana Bread - 1g",
-    "brand": "1937",
-    "category": "disposable-cartridge",
+    "id": "pos-cartridge-buddies-buddies-live-resin-vape-cart-zazul-1g-6452f7c2",
+    "name": "Zazul",
+    "productName": "Buddies Live Resin Vape Cart - Zazul - 1g",
+    "brand": "Buddies",
+    "category": "cartridge",
     "filterCategories": [
-      "disposable-cartridge",
+      "cartridge",
       "concentrate"
     ],
     "posInventoryType": "Concentrate for Inhalation",
-    "posInventoryCategory": "Disposable Cartridge",
-    "strainType": "hybrid",
-    "strainName": "Banana Bread",
-    "thc": "84.5%",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "indica",
+    "strainName": "Zazul",
+    "thc": "83%",
     "cbd": null,
     "totalThc": {
       "type": "thc",
-      "value": "84.5",
+      "value": "83",
       "unit": "%"
     },
     "totalCbd": null,
     "compounds": [
       {
         "type": "thc",
-        "value": "84.5",
+        "value": "83",
         "unit": "%"
       }
     ],
-    "description": "POS preview item for 1937 - Disposable Cartridge - Banana Bread - 1g. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
+    "description": "Portable indica vape cart of Zazul, dialed in for smooth flavor and easy dosing whenever and wherever you want it. Smooth, discreet, and flavorful — with notes of cheese, blueberry, and orange, with settle-in, melt-into-the-couch ease.",
+    "priceLabel": "$25 1g",
+    "priceMinorUnits": 2500,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-buddies-buddies-live-resin-vape-cart-zazul-1g-6452f7c2-1g-194740",
+        "label": "1g",
+        "priceMinorUnits": 2500,
+        "inventoryLevel": 6,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "14171"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-buddies-mindmelt-live-resin-vape-cart-gg4-1g-h-doh-21d0df9d",
+    "name": "GG4",
+    "productName": "Mindmelt Live Resin Vape Cart - GG4 - 1g - (H) - DOH",
+    "brand": "Buddies",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Usable Marijuana",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "hybrid",
+    "strainName": "GG4",
+    "thc": "82%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "82",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "82",
+        "unit": "%"
+      }
+    ],
+    "description": "A hybrid vape cartridge filled with GG4 oil — smooth, flavorful vapor in a discreet, no-torch, push-button format that goes wherever you go. Smooth, discreet, and flavorful — with notes of pungent, earthy, and pine, with a balanced head-and-body experience.",
     "priceLabel": "$30 1g",
     "priceMinorUnits": 3000,
     "inventoryStatus": "low-stock",
     "variants": [
       {
-        "id": "pos-disposable-cartridge-1937-1937-disposable-cartridge-banana-bread-1g-7e77c071-1g-0996a1",
+        "id": "pos-cartridge-buddies-mindmelt-live-resin-vape-cart-gg4-1g-h-doh-21d0df9d-1g-a62556",
         "label": "1g",
         "priceMinorUnits": 3000,
+        "inventoryLevel": 4,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "27201"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-buddies-mindmelt-live-resin-vape-cart-marcel-clementine-1g-s-doh-84b68e03",
+    "name": "Marcel Clementine",
+    "productName": "Mindmelt Live Resin Vape Cart - Marcel Clementine - 1g - (S) - DOH",
+    "brand": "Buddies",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Usable Marijuana",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "hybrid",
+    "strainName": "Marcel Clementine",
+    "thc": "88%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "88",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "88",
+        "unit": "%"
+      }
+    ],
+    "description": "Portable hybrid vape cart of Marcel Clementine, dialed in for smooth flavor and easy dosing whenever and wherever you want it. Smooth, discreet, and flavorful — a balanced, sweet-earthy profile, with a versatile, anytime balance.",
+    "priceLabel": "$30 1g",
+    "priceMinorUnits": 3000,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-buddies-mindmelt-live-resin-vape-cart-marcel-clementine-1g-s-doh-84b68e03-1g-c8be15",
+        "label": "1g",
+        "priceMinorUnits": 3000,
+        "inventoryLevel": 3,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "27320",
+        "27202"
+      ],
+      "sourceRowCount": 2,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-clarity-farms-incredibulk-ib-cart-1g-amnesia-haze-1g-8ef5759d",
+    "name": "Amnesia Haze",
+    "productName": "Incredibulk - IB CART 1g - Amnesia Haze - 1g",
+    "brand": "Clarity Farms",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "sativa",
+    "strainName": "Amnesia Haze",
+    "thc": "92.85%",
+    "cbd": "0.85%",
+    "totalThc": {
+      "type": "thc",
+      "value": "92.85",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "0.85",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "92.85",
+        "unit": "%"
+      },
+      {
+        "type": "cbd",
+        "value": "0.85",
+        "unit": "%"
+      }
+    ],
+    "description": "This sativa cartridge loads Amnesia Haze into a sleek 510-thread pen for clean, convenient draws — premium oil, precise hits, zero hassle. Flavor on the go, with notes of citrus, lemon, and lime, leading into an upbeat, talkative energy.",
+    "priceLabel": "$10 1g",
+    "priceMinorUnits": 1000,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-clarity-farms-incredibulk-ib-cart-1g-amnesia-haze-1g-8ef5759d-1g-75073f",
+        "label": "1g",
+        "priceMinorUnits": 1000,
+        "inventoryLevel": 3,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "26216",
+        "25070",
+        "23899"
+      ],
+      "sourceRowCount": 3,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-clarity-farms-incredibulk-ib-cart-1g-sour-blueberry-1g-2ce73a1b",
+    "name": "Sour Blueberry",
+    "productName": "Incredibulk - IB CART 1g - Sour Blueberry - 1g",
+    "brand": "Clarity Farms",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "hybrid",
+    "strainName": "Sour Blueberry",
+    "thc": "92.8%",
+    "cbd": "1%",
+    "totalThc": {
+      "type": "thc",
+      "value": "92.8",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "1",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "92.8",
+        "unit": "%"
+      },
+      {
+        "type": "cbd",
+        "value": "1",
+        "unit": "%"
+      }
+    ],
+    "description": "Portable hybrid vape cart of Sour Blueberry, dialed in for smooth flavor and easy dosing whenever and wherever you want it. Smooth, discreet, and flavorful — with notes of blueberry, diesel, and berry, with an even, best-of-both-worlds feel.",
+    "priceLabel": "$10 1g",
+    "priceMinorUnits": 1000,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-clarity-farms-incredibulk-ib-cart-1g-sour-blueberry-1g-2ce73a1b-1g-44f14f",
+        "label": "1g",
+        "priceMinorUnits": 1000,
+        "inventoryLevel": 18,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "26220",
+        "25363"
+      ],
+      "sourceRowCount": 2,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-clarity-farms-kelso-kandy-kk-cart-1g-grape-slushie-1g-355ac207",
+    "name": "Grape Slushie",
+    "productName": "Kelso Kandy - KK CART 1g - Grape Slushie - 1g",
+    "brand": "Clarity Farms",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "hybrid",
+    "strainName": "Grape Slushie",
+    "thc": "92.8%",
+    "cbd": "0.8%",
+    "totalThc": {
+      "type": "thc",
+      "value": "92.8",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "0.8",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "92.8",
+        "unit": "%"
+      },
+      {
+        "type": "cbd",
+        "value": "0.8",
+        "unit": "%"
+      }
+    ],
+    "description": "Portable hybrid vape cart of Grape Slushie, dialed in for smooth flavor and easy dosing whenever and wherever you want it. Convenient and clean, a sweet, candy-like grape flavor, delivering a versatile, anytime balance.",
+    "priceLabel": "$12 1g",
+    "priceMinorUnits": 1200,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-clarity-farms-kelso-kandy-kk-cart-1g-grape-slushie-1g-355ac207-1g-a781bc",
+        "label": "1g",
+        "priceMinorUnits": 1200,
+        "inventoryLevel": 3,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "27179",
+        "21917"
+      ],
+      "sourceRowCount": 2,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-clarity-farms-o-geez-og-cart-1g-pineapple-express-1g-5ebab038",
+    "name": "Pineapple Express",
+    "productName": "O' Geez - OG CART 1g - Pineapple Express - 1g",
+    "brand": "Clarity Farms",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "hybrid",
+    "strainName": "Pineapple Express",
+    "thc": "92.8%",
+    "cbd": "0.8%",
+    "totalThc": {
+      "type": "thc",
+      "value": "92.8",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "0.8",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "92.8",
+        "unit": "%"
+      },
+      {
+        "type": "cbd",
+        "value": "0.8",
+        "unit": "%"
+      }
+    ],
+    "description": "This hybrid cartridge loads Pineapple Express into a sleek 510-thread pen for clean, convenient draws — premium oil, precise hits, zero hassle. Convenient and clean, with notes of pineapple, tropical, and citrus, delivering a versatile, anytime balance.",
+    "priceLabel": "$12 1g",
+    "priceMinorUnits": 1200,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-clarity-farms-o-geez-og-cart-1g-pineapple-express-1g-5ebab038-1g-ca6070",
+        "label": "1g",
+        "priceMinorUnits": 1200,
         "inventoryLevel": 5,
         "medical": false
       }
@@ -594,25 +1665,26 @@
       "source": "priority_matches_v2.csv",
       "matchMethod": "exact_name_brand_package",
       "sourceInventoryIds": [
-        "26505"
+        "26245"
       ],
       "sourceRowCount": 1,
       "generatedForInspectionOnly": true
     }
   },
   {
-    "id": "pos-disposable-cartridge-1937-1937-disposable-cartridge-tropicana-cherries-1g-900bdaec",
-    "name": "1937 - Disposable Cartridge - Tropicana Cherries - 1g",
-    "brand": "1937",
-    "category": "disposable-cartridge",
+    "id": "pos-cartridge-clarity-farms-tasty-terps-tc-cart-1g-caprizun-1g-1b361c1c",
+    "name": "Caprizun",
+    "productName": "Tasty Terps - TC CART 1g - Caprizun - 1g",
+    "brand": "Clarity Farms",
+    "category": "cartridge",
     "filterCategories": [
-      "disposable-cartridge",
+      "cartridge",
       "concentrate"
     ],
     "posInventoryType": "Concentrate for Inhalation",
-    "posInventoryCategory": "Disposable Cartridge",
+    "posInventoryCategory": "Cartridge",
     "strainType": "hybrid",
-    "strainName": "Tropicanna Cherry",
+    "strainName": "Caprizun",
     "thc": "86.48%",
     "cbd": null,
     "totalThc": {
@@ -628,1785 +1700,15 @@
         "unit": "%"
       }
     ],
-    "description": "POS preview item for 1937 - Disposable Cartridge - Tropicana Cherries - 1g. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
-    "priceLabel": "$30 1g",
-    "priceMinorUnits": 3000,
-    "inventoryStatus": "low-stock",
-    "variants": [
-      {
-        "id": "pos-disposable-cartridge-1937-1937-disposable-cartridge-tropicana-cherries-1g-900bdaec-1g-6d313a",
-        "label": "1g",
-        "priceMinorUnits": 3000,
-        "inventoryLevel": 5,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "26506"
-      ],
-      "sourceRowCount": 1,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-disposable-cartridge-airo-pro-airox-strain-series-1gm-sativa-lemon-cake-8dc9add5",
-    "name": "AiroX Strain Series - 1gm - Sativa - Lemon Cake",
-    "brand": "Airo Pro",
-    "category": "disposable-cartridge",
-    "filterCategories": [
-      "disposable-cartridge",
-      "concentrate"
-    ],
-    "posInventoryType": "Concentrate for Inhalation",
-    "posInventoryCategory": "Disposable Cartridge",
-    "strainType": "hybrid",
-    "strainName": "Lemon Cake",
-    "thc": "92%",
-    "cbd": "1%",
-    "totalThc": {
-      "type": "thc",
-      "value": "92",
-      "unit": "%"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "1",
-      "unit": "%"
-    },
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "92",
-        "unit": "%"
-      },
-      {
-        "type": "cbd",
-        "value": "1",
-        "unit": "%"
-      }
-    ],
-    "description": "POS preview item for AiroX Strain Series - 1gm - Sativa - Lemon Cake. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
-    "priceLabel": "$45 1g",
-    "priceMinorUnits": 4500,
-    "inventoryStatus": "low-stock",
-    "variants": [
-      {
-        "id": "pos-disposable-cartridge-airo-pro-airox-strain-series-1gm-sativa-lemon-cake-8dc9add5-1g-2c6ebe",
-        "label": "1g",
-        "priceMinorUnits": 4500,
-        "inventoryLevel": 1,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "13212"
-      ],
-      "sourceRowCount": 1,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-disposable-cartridge-bodhi-high-honey-tree-flavored-aio-disposable-vape-berry-blue-dream-1g-b0fa06d5",
-    "name": "Honey Tree Flavored AIO Disposable Vape - Berry Blue Dream 1g",
-    "brand": "Bodhi High",
-    "category": "disposable-cartridge",
-    "filterCategories": [
-      "disposable-cartridge",
-      "concentrate"
-    ],
-    "posInventoryType": "Concentrate for Inhalation",
-    "posInventoryCategory": "Disposable Cartridge",
-    "strainType": "hybrid",
-    "strainName": "Berry Blue Dream",
-    "thc": "97%",
-    "cbd": "0.08%",
-    "totalThc": {
-      "type": "thc",
-      "value": "97",
-      "unit": "%"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "0.08",
-      "unit": "%"
-    },
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "97",
-        "unit": "%"
-      },
-      {
-        "type": "cbd",
-        "value": "0.08",
-        "unit": "%"
-      }
-    ],
-    "description": "POS preview item for Honey Tree Flavored AIO Disposable Vape - Berry Blue Dream 1g. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
-    "priceLabel": "$35 1g",
-    "priceMinorUnits": 3500,
-    "inventoryStatus": "low-stock",
-    "variants": [
-      {
-        "id": "pos-disposable-cartridge-bodhi-high-honey-tree-flavored-aio-disposable-vape-berry-blue-dream-1g-b0fa06d5-1g-ed15cb",
-        "label": "1g",
-        "priceMinorUnits": 3500,
-        "inventoryLevel": 4,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "26581"
-      ],
-      "sourceRowCount": 1,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-disposable-cartridge-bodhi-high-honey-tree-flavored-prana-pulse-aio-disposable-huckleberry-og-f0ebce42",
-    "name": "Honey Tree Flavored Prana Pulse AIO Disposable - Huckleberry OG",
-    "brand": "Bodhi High",
-    "category": "disposable-cartridge",
-    "filterCategories": [
-      "disposable-cartridge",
-      "concentrate"
-    ],
-    "posInventoryType": "Concentrate for Inhalation",
-    "posInventoryCategory": "Disposable Cartridge",
-    "strainType": "sativa",
-    "strainName": "Huckleberry OG",
-    "thc": "94%",
-    "cbd": "1.25%",
-    "totalThc": {
-      "type": "thc",
-      "value": "94",
-      "unit": "%"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "1.25",
-      "unit": "%"
-    },
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "94",
-        "unit": "%"
-      },
-      {
-        "type": "cbd",
-        "value": "1.25",
-        "unit": "%"
-      }
-    ],
-    "description": "POS preview item for Honey Tree Flavored Prana Pulse AIO Disposable - Huckleberry OG. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
-    "priceLabel": "$35 1g",
-    "priceMinorUnits": 3500,
-    "inventoryStatus": "low-stock",
-    "variants": [
-      {
-        "id": "pos-disposable-cartridge-bodhi-high-honey-tree-flavored-prana-pulse-aio-disposable-huckleberry-og-f0ebce42-1g-0e9114",
-        "label": "1g",
-        "priceMinorUnits": 3500,
-        "inventoryLevel": 3,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "26584"
-      ],
-      "sourceRowCount": 1,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-edible-liquid-agro-couture-a-c-sugar-free-root-beer-float-beverage-7411d8bb",
-    "name": "A.C. Sugar-Free Root Beer Float Beverage",
-    "brand": "Agro Couture",
-    "category": "edible-liquid",
-    "filterCategories": [
-      "edible-liquid"
-    ],
-    "posInventoryType": "Liquid Edible",
-    "posInventoryCategory": "Beverage",
-    "strainType": "sativa",
-    "strainName": "Root Beer",
-    "thc": "100mg",
-    "cbd": null,
-    "totalThc": {
-      "type": "thc",
-      "value": "100",
-      "unit": "mg"
-    },
-    "totalCbd": null,
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "100",
-        "unit": "mg"
-      }
-    ],
-    "description": "POS preview item for A.C. Sugar-Free Root Beer Float Beverage. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
-    "priceLabel": "$12 1.7 fl oz",
-    "priceMinorUnits": 1200,
-    "inventoryStatus": "in-stock",
-    "variants": [
-      {
-        "id": "pos-edible-liquid-agro-couture-a-c-sugar-free-root-beer-float-beverage-7411d8bb-1-7-fl-oz-6bbe13",
-        "label": "1.7 fl oz",
-        "priceMinorUnits": 1200,
-        "inventoryLevel": 9,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "15558"
-      ],
-      "sourceRowCount": 1,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-edible-liquid-agro-couture-a-c-topical-drops-250mg-thc-1000-cbd-1-4-6620be0c",
-    "name": "A.C. Topical Drops - 250mg THC 1000 CBD 1:4",
-    "brand": "Agro Couture",
-    "category": "edible-liquid",
-    "filterCategories": [
-      "edible-liquid"
-    ],
-    "posInventoryType": "Tincture",
-    "posInventoryCategory": "Tincture",
-    "strainType": "cbd",
-    "strainName": "Topical Drops 1250mg 1:4",
-    "thc": "1250mg",
-    "cbd": "1000mg",
-    "totalThc": {
-      "type": "thc",
-      "value": "1250",
-      "unit": "mg"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "1000",
-      "unit": "mg"
-    },
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "1250",
-        "unit": "mg"
-      },
-      {
-        "type": "cbd",
-        "value": "1000",
-        "unit": "mg"
-      }
-    ],
-    "description": "POS preview item for A.C. Topical Drops - 250mg THC 1000 CBD 1:4. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
-    "priceLabel": "$30 1.7 fl oz",
-    "priceMinorUnits": 3000,
-    "inventoryStatus": "in-stock",
-    "variants": [
-      {
-        "id": "pos-edible-liquid-agro-couture-a-c-topical-drops-250mg-thc-1000-cbd-1-4-6620be0c-1-7-fl-oz-b4dbaf",
-        "label": "1.7 fl oz",
-        "priceMinorUnits": 3000,
-        "inventoryLevel": 49,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "26087"
-      ],
-      "sourceRowCount": 1,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-edible-liquid-agro-couture-sungaze-beverage-lemon-ginger-12oz-6-x-2-5mg-15mg-b39f9e6b",
-    "name": "Sungaze Beverage - Lemon Ginger - 12oz - 6 x 2.5mg - 15mg",
-    "brand": "Agro Couture",
-    "category": "edible-liquid",
-    "filterCategories": [
-      "edible-liquid"
-    ],
-    "posInventoryType": "Liquid Edible",
-    "posInventoryCategory": "Beverage",
-    "strainType": "sativa",
-    "strainName": "Lemon Ginger",
-    "thc": "7.5mg",
-    "cbd": "5mg",
-    "totalThc": {
-      "type": "thc",
-      "value": "7.5",
-      "unit": "mg"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "5",
-      "unit": "mg"
-    },
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "7.5",
-        "unit": "mg"
-      },
-      {
-        "type": "cbd",
-        "value": "5",
-        "unit": "mg"
-      }
-    ],
-    "description": "POS preview item for Sungaze Beverage - Lemon Ginger - 12oz - 6 x 2.5mg - 15mg. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
-    "priceLabel": "$30 1000ml",
-    "priceMinorUnits": 3000,
-    "inventoryStatus": "low-stock",
-    "variants": [
-      {
-        "id": "pos-edible-liquid-agro-couture-sungaze-beverage-lemon-ginger-12oz-6-x-2-5mg-15mg-b39f9e6b-1000ml-de996e",
-        "label": "1000ml",
-        "priceMinorUnits": 3000,
-        "inventoryLevel": 1,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "15653"
-      ],
-      "sourceRowCount": 1,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-edible-liquid-blaze-blaze-can-12oz-rosin-blue-raspberry-100mg-thc-9a386218",
-    "name": "BLAZE Can - 12oz Rosin - Blue Raspberry 100mg THC",
-    "brand": "Blaze",
-    "category": "edible-liquid",
-    "filterCategories": [
-      "edible-liquid"
-    ],
-    "posInventoryType": "Liquid Edible",
-    "posInventoryCategory": "Beverage",
-    "strainType": "hybrid",
-    "strainName": "Blue Raspberry",
-    "thc": "110mg",
-    "cbd": null,
-    "totalThc": {
-      "type": "thc",
-      "value": "110",
-      "unit": "mg"
-    },
-    "totalCbd": null,
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "110",
-        "unit": "mg"
-      }
-    ],
-    "description": "POS preview item for BLAZE Can - 12oz Rosin - Blue Raspberry 100mg THC. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
-    "priceLabel": "$15 12 fl oz",
-    "priceMinorUnits": 1500,
-    "inventoryStatus": "in-stock",
-    "variants": [
-      {
-        "id": "pos-edible-liquid-blaze-blaze-can-12oz-rosin-blue-raspberry-100mg-thc-9a386218-12-fl-oz-2f43f3",
-        "label": "12 fl oz",
-        "priceMinorUnits": 1500,
-        "inventoryLevel": 7,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "22490"
-      ],
-      "sourceRowCount": 1,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-edible-liquid-ceres-ceres-tincture-lifted-sativa-201c8dbe",
-    "name": "Ceres Tincture Lifted Sativa",
-    "brand": "Ceres",
-    "category": "edible-liquid",
-    "filterCategories": [
-      "edible-liquid"
-    ],
-    "posInventoryType": "Tincture",
-    "posInventoryCategory": "Tincture",
-    "strainType": "sativa",
-    "strainName": "Lifted",
-    "thc": "120mg",
-    "cbd": null,
-    "totalThc": {
-      "type": "thc",
-      "value": "120",
-      "unit": "mg"
-    },
-    "totalCbd": null,
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "120",
-        "unit": "mg"
-      }
-    ],
-    "description": "POS preview item for Ceres Tincture Lifted Sativa. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
-    "priceLabel": "$25 15ml",
-    "priceMinorUnits": 2500,
-    "inventoryStatus": "low-stock",
-    "variants": [
-      {
-        "id": "pos-edible-liquid-ceres-ceres-tincture-lifted-sativa-201c8dbe-15ml-a49ef3",
-        "label": "15ml",
-        "priceMinorUnits": 2500,
-        "inventoryLevel": 3,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "18011",
-        "5310"
-      ],
-      "sourceRowCount": 2,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-edible-solid-4-20-milk-chocolate-rosin-macadamia-nut-100mg-thc-pouch-e0f238c6",
-    "name": "- Milk Chocolate - Rosin - Macadamia Nut 100mg THC - Pouch",
-    "brand": "4.20",
-    "category": "edible-solid",
-    "filterCategories": [
-      "edible-solid"
-    ],
-    "posInventoryType": "Solid Edible",
-    "posInventoryCategory": "Chocolate",
-    "strainType": "hybrid",
-    "strainName": "Macadamia Nut Indica 100mg",
-    "thc": "9.9mg",
-    "cbd": null,
-    "totalThc": {
-      "type": "thc",
-      "value": "9.9",
-      "unit": "mg"
-    },
-    "totalCbd": null,
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "9.9",
-        "unit": "mg"
-      }
-    ],
-    "description": "POS preview item for - Milk Chocolate - Rosin - Macadamia Nut 100mg THC - Pouch. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
-    "priceLabel": "$25 57g",
-    "priceMinorUnits": 2500,
-    "inventoryStatus": "in-stock",
-    "variants": [
-      {
-        "id": "pos-edible-solid-4-20-milk-chocolate-rosin-macadamia-nut-100mg-thc-pouch-e0f238c6-57g-46e4eb",
-        "label": "57g",
-        "priceMinorUnits": 2500,
-        "inventoryLevel": 12,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "26834"
-      ],
-      "sourceRowCount": 1,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-edible-solid-4-20-420-brand-milk-chocolate-rosin-honeycomb-toffee-100mg-thc-pouch-7defd28c",
-    "name": "420 Brand - Milk Chocolate - Rosin - Honeycomb Toffee 100mg THC - Pouch",
-    "brand": "4.20",
-    "category": "edible-solid",
-    "filterCategories": [
-      "edible-solid"
-    ],
-    "posInventoryType": "Solid Edible",
-    "posInventoryCategory": "Chocolate",
-    "strainType": "unknown",
-    "strainName": "Honey Combz",
-    "thc": "10mg",
-    "cbd": null,
-    "totalThc": {
-      "type": "thc",
-      "value": "10",
-      "unit": "mg"
-    },
-    "totalCbd": null,
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "10",
-        "unit": "mg"
-      }
-    ],
-    "description": "POS preview item for 420 Brand - Milk Chocolate - Rosin - Honeycomb Toffee 100mg THC - Pouch. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
-    "priceLabel": "$25 57g",
-    "priceMinorUnits": 2500,
-    "inventoryStatus": "in-stock",
-    "variants": [
-      {
-        "id": "pos-edible-solid-4-20-420-brand-milk-chocolate-rosin-honeycomb-toffee-100mg-thc-pouch-7defd28c-57g-7e0bf9",
-        "label": "57g",
-        "priceMinorUnits": 2500,
-        "inventoryLevel": 10,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "26833"
-      ],
-      "sourceRowCount": 1,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-edible-solid-4-20-bar-4-20-bar-minis-dark-chocolate-sea-salt-2-00oz-745691ba",
-    "name": "4.20 Bar Minis Dark Chocolate Sea Salt - 2.00oz",
-    "brand": "4.20 Bar",
-    "category": "edible-solid",
-    "filterCategories": [
-      "edible-solid"
-    ],
-    "posInventoryType": "Solid Edible",
-    "posInventoryCategory": "Minis",
-    "strainType": "indica",
-    "strainName": "Dark Chocolate Sea Salt",
-    "thc": "9.5mg",
-    "cbd": null,
-    "totalThc": {
-      "type": "thc",
-      "value": "9.5",
-      "unit": "mg"
-    },
-    "totalCbd": null,
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "9.5",
-        "unit": "mg"
-      }
-    ],
-    "description": "POS preview item for 4.20 Bar Minis Dark Chocolate Sea Salt - 2.00oz. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
-    "priceLabel": "$20 2oz",
-    "priceMinorUnits": 2000,
-    "inventoryStatus": "low-stock",
-    "variants": [
-      {
-        "id": "pos-edible-solid-4-20-bar-4-20-bar-minis-dark-chocolate-sea-salt-2-00oz-745691ba-2oz-a26ee3",
-        "label": "2oz",
-        "priceMinorUnits": 2000,
-        "inventoryLevel": 1,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "23711"
-      ],
-      "sourceRowCount": 1,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-edible-solid-4-20-minis-4-20-minis-chocolate-milk-chocolate-200mg-cbg-100mg-thc-1-2oz-df5e37d5",
-    "name": "4.20 Minis Chocolate Milk Chocolate 200mg CBG + 100mg THC - 1.2oz",
-    "brand": "4.20 Minis",
-    "category": "edible-solid",
-    "filterCategories": [
-      "edible-solid"
-    ],
-    "posInventoryType": "Solid Edible",
-    "posInventoryCategory": "Chocolate",
-    "strainType": "unknown",
-    "strainName": "Milk Chocolate 200mg CBG + 100mg THC",
-    "thc": null,
-    "cbd": null,
-    "totalThc": null,
-    "totalCbd": null,
-    "compounds": [],
-    "description": "POS preview item for 4.20 Minis Chocolate Milk Chocolate 200mg CBG + 100mg THC - 1.2oz. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
-    "priceLabel": "$25 1.2oz",
-    "priceMinorUnits": 2500,
-    "inventoryStatus": "low-stock",
-    "variants": [
-      {
-        "id": "pos-edible-solid-4-20-minis-4-20-minis-chocolate-milk-chocolate-200mg-cbg-100mg-thc-1-2oz-df5e37d5-1-2oz-61135c",
-        "label": "1.2oz",
-        "priceMinorUnits": 2500,
-        "inventoryLevel": 4,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "949"
-      ],
-      "sourceRowCount": 1,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-edible-solid-4-20-minis-420-mini-milk-chocolate-2-1-cbn-thc-2a6799aa",
-    "name": "420 Mini - Milk Chocolate 2:1 CBN:THC",
-    "brand": "4.20 Minis",
-    "category": "edible-solid",
-    "filterCategories": [
-      "edible-solid"
-    ],
-    "posInventoryType": "Solid Edible",
-    "posInventoryCategory": "Chocolate",
-    "strainType": "unknown",
-    "strainName": "Milk Chocolate",
-    "thc": "36mg",
-    "cbd": "3mg",
-    "totalThc": {
-      "type": "thc",
-      "value": "36",
-      "unit": "mg"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "3",
-      "unit": "mg"
-    },
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "36",
-        "unit": "mg"
-      },
-      {
-        "type": "cbd",
-        "value": "3",
-        "unit": "mg"
-      }
-    ],
-    "description": "POS preview item for 420 Mini - Milk Chocolate 2:1 CBN:THC. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
-    "priceLabel": "$25 2oz",
-    "priceMinorUnits": 2500,
-    "inventoryStatus": "low-stock",
-    "variants": [
-      {
-        "id": "pos-edible-solid-4-20-minis-420-mini-milk-chocolate-2-1-cbn-thc-2a6799aa-2oz-ecd87c",
-        "label": "2oz",
-        "priceMinorUnits": 2500,
-        "inventoryLevel": 2,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "16883"
-      ],
-      "sourceRowCount": 1,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-flower-1937-1937-3-5g-flower-banana-bread-3-5g-107df9ef",
-    "name": "1937 - 3.5g Flower - Banana Bread - 3.5g",
-    "brand": "1937",
-    "category": "flower",
-    "filterCategories": [
-      "flower"
-    ],
-    "posInventoryType": "Usable Marijuana",
-    "posInventoryCategory": "Flower",
-    "strainType": "hybrid",
-    "strainName": "Banana Bread",
-    "thc": "19.39%",
-    "cbd": null,
-    "totalThc": {
-      "type": "thc",
-      "value": "19.39",
-      "unit": "%"
-    },
-    "totalCbd": null,
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "19.39",
-        "unit": "%"
-      }
-    ],
-    "description": "POS preview item for 1937 - 3.5g Flower - Banana Bread - 3.5g. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
-    "priceLabel": "$40 3.5g",
-    "priceMinorUnits": 4000,
-    "inventoryStatus": "in-stock",
-    "variants": [
-      {
-        "id": "pos-flower-1937-1937-3-5g-flower-banana-bread-3-5g-107df9ef-3-5g-b6c0f7",
-        "label": "3.5g",
-        "priceMinorUnits": 4000,
-        "inventoryLevel": 8,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "26516"
-      ],
-      "sourceRowCount": 1,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-flower-1937-1937-3-5g-flower-blockberry-3-5g-d6ef0a12",
-    "name": "1937 - 3.5g Flower - Blockberry - 3.5g",
-    "brand": "1937",
-    "category": "flower",
-    "filterCategories": [
-      "flower"
-    ],
-    "posInventoryType": "Usable Marijuana",
-    "posInventoryCategory": "Flower",
-    "strainType": "hybrid",
-    "strainName": "Blockberry",
-    "thc": "23.51%",
-    "cbd": null,
-    "totalThc": {
-      "type": "thc",
-      "value": "23.51",
-      "unit": "%"
-    },
-    "totalCbd": null,
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "23.51",
-        "unit": "%"
-      }
-    ],
-    "description": "POS preview item for 1937 - 3.5g Flower - Blockberry - 3.5g. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
-    "priceLabel": "$40 3.5g",
-    "priceMinorUnits": 4000,
-    "inventoryStatus": "low-stock",
-    "variants": [
-      {
-        "id": "pos-flower-1937-1937-3-5g-flower-blockberry-3-5g-d6ef0a12-3-5g-44093e",
-        "label": "3.5g",
-        "priceMinorUnits": 4000,
-        "inventoryLevel": 5,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "26515"
-      ],
-      "sourceRowCount": 1,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-flower-1937-1937-3-5g-flower-cobra-chi-9-3-5g-0ee05eb6",
-    "name": "1937 - 3.5g Flower - Cobra Chi 9 - 3.5g",
-    "brand": "1937",
-    "category": "flower",
-    "filterCategories": [
-      "flower"
-    ],
-    "posInventoryType": "Usable Marijuana",
-    "posInventoryCategory": "Flower",
-    "strainType": "hybrid",
-    "strainName": "Cobra Chi 9",
-    "thc": "18.77%",
-    "cbd": null,
-    "totalThc": {
-      "type": "thc",
-      "value": "18.77",
-      "unit": "%"
-    },
-    "totalCbd": null,
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "18.77",
-        "unit": "%"
-      }
-    ],
-    "description": "POS preview item for 1937 - 3.5g Flower - Cobra Chi 9 - 3.5g. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
-    "priceLabel": "$45 3.5g",
-    "priceMinorUnits": 4500,
-    "inventoryStatus": "low-stock",
-    "variants": [
-      {
-        "id": "pos-flower-1937-1937-3-5g-flower-cobra-chi-9-3-5g-0ee05eb6-3-5g-523f92",
-        "label": "3.5g",
-        "priceMinorUnits": 4500,
-        "inventoryLevel": 3,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "24727"
-      ],
-      "sourceRowCount": 1,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-flower-1937-1937-3-5g-flower-first-class-funk-3-5g-3d336e1a",
-    "name": "1937 - 3.5g Flower - First Class Funk - 3.5g",
-    "brand": "1937",
-    "category": "flower",
-    "filterCategories": [
-      "flower"
-    ],
-    "posInventoryType": "Usable Marijuana",
-    "posInventoryCategory": "Flower",
-    "strainType": "sativa",
-    "strainName": "First Class Funk",
-    "thc": "26%",
-    "cbd": null,
-    "totalThc": {
-      "type": "thc",
-      "value": "26",
-      "unit": "%"
-    },
-    "totalCbd": null,
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "26",
-        "unit": "%"
-      }
-    ],
-    "description": "POS preview item for 1937 - 3.5g Flower - First Class Funk - 3.5g. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
-    "priceLabel": "$40 3.5g",
-    "priceMinorUnits": 4000,
-    "inventoryStatus": "in-stock",
-    "variants": [
-      {
-        "id": "pos-flower-1937-1937-3-5g-flower-first-class-funk-3-5g-3d336e1a-3-5g-a36d6e",
-        "label": "3.5g",
-        "priceMinorUnits": 4000,
-        "inventoryLevel": 10,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "26512"
-      ],
-      "sourceRowCount": 1,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-flower-1937-1937-3-5g-flower-pt-chimera-breath-3-5g-3f1aee73",
-    "name": "1937 - 3.5g Flower - Pt Chimera Breath - 3.5g",
-    "brand": "1937",
-    "category": "flower",
-    "filterCategories": [
-      "flower"
-    ],
-    "posInventoryType": "Usable Marijuana",
-    "posInventoryCategory": "Flower",
-    "strainType": "sativa",
-    "strainName": "CHIMERA",
-    "thc": "23.51%",
-    "cbd": null,
-    "totalThc": {
-      "type": "thc",
-      "value": "23.51",
-      "unit": "%"
-    },
-    "totalCbd": null,
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "23.51",
-        "unit": "%"
-      }
-    ],
-    "description": "POS preview item for 1937 - 3.5g Flower - Pt Chimera Breath - 3.5g. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
-    "priceLabel": "$40 3.5g",
-    "priceMinorUnits": 4000,
-    "inventoryStatus": "in-stock",
-    "variants": [
-      {
-        "id": "pos-flower-1937-1937-3-5g-flower-pt-chimera-breath-3-5g-3f1aee73-3-5g-27b63f",
-        "label": "3.5g",
-        "priceMinorUnits": 4000,
-        "inventoryLevel": 8,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "26513"
-      ],
-      "sourceRowCount": 1,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-infused-preroll-agro-couture-a-c-diamond-stix-joint-gary-payton-1g-h-8e251af8",
-    "name": "A.C. Diamond Stix Joint - Gary Payton - 1g (H)",
-    "brand": "Agro Couture",
-    "category": "infused-preroll",
-    "filterCategories": [
-      "infused-preroll",
-      "concentrate"
-    ],
-    "posInventoryType": "Concentrate for Inhalation",
-    "posInventoryCategory": "Infused Pre-roll",
-    "strainType": "hybrid",
-    "strainName": "Gary Payton",
-    "thc": "35%",
-    "cbd": null,
-    "totalThc": {
-      "type": "thc",
-      "value": "35",
-      "unit": "%"
-    },
-    "totalCbd": null,
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "35",
-        "unit": "%"
-      }
-    ],
-    "description": "POS preview item for A.C. Diamond Stix Joint - Gary Payton - 1g (H). Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
-    "priceLabel": "$10 1g",
-    "priceMinorUnits": 1000,
-    "inventoryStatus": "low-stock",
-    "variants": [
-      {
-        "id": "pos-infused-preroll-agro-couture-a-c-diamond-stix-joint-gary-payton-1g-h-8e251af8-1g-16b3da",
-        "label": "1g",
-        "priceMinorUnits": 1000,
-        "inventoryLevel": 2,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "12850"
-      ],
-      "sourceRowCount": 1,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-infused-preroll-agro-couture-a-c-diamond-stix-joint-super-boof-1g-h-f2b12c0d",
-    "name": "A.C. Diamond Stix Joint - Super Boof - 1g (H)",
-    "brand": "Agro Couture",
-    "category": "infused-preroll",
-    "filterCategories": [
-      "infused-preroll",
-      "concentrate"
-    ],
-    "posInventoryType": "Concentrate for Inhalation",
-    "posInventoryCategory": "Infused Pre-roll",
-    "strainType": "hybrid",
-    "strainName": "Super Boof",
-    "thc": "33%",
-    "cbd": null,
-    "totalThc": {
-      "type": "thc",
-      "value": "33",
-      "unit": "%"
-    },
-    "totalCbd": null,
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "33",
-        "unit": "%"
-      }
-    ],
-    "description": "POS preview item for A.C. Diamond Stix Joint - Super Boof - 1g (H). Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
-    "priceLabel": "$10 1g",
-    "priceMinorUnits": 1000,
-    "inventoryStatus": "low-stock",
-    "variants": [
-      {
-        "id": "pos-infused-preroll-agro-couture-a-c-diamond-stix-joint-super-boof-1g-h-f2b12c0d-1g-e57ca0",
-        "label": "1g",
-        "priceMinorUnits": 1000,
-        "inventoryLevel": 2,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "12852"
-      ],
-      "sourceRowCount": 1,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-infused-preroll-agro-couture-dabstar-dab-stix-pre-roll-1g-sticky-s-mores-h-c920d42b",
-    "name": "Dabstar Dab Stix Pre-Roll 1g - Sticky S'mores (H)",
-    "brand": "Agro Couture",
-    "category": "infused-preroll",
-    "filterCategories": [
-      "infused-preroll",
-      "concentrate"
-    ],
-    "posInventoryType": "Concentrate for Inhalation",
-    "posInventoryCategory": "Infused Pre-roll",
-    "strainType": "hybrid",
-    "strainName": "Sticky S'mores",
-    "thc": "37%",
-    "cbd": null,
-    "totalThc": {
-      "type": "thc",
-      "value": "37",
-      "unit": "%"
-    },
-    "totalCbd": null,
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "37",
-        "unit": "%"
-      }
-    ],
-    "description": "POS preview item for Dabstar Dab Stix Pre-Roll 1g - Sticky S'mores (H). Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
-    "priceLabel": "$12 1g",
-    "priceMinorUnits": 1200,
-    "inventoryStatus": "in-stock",
-    "variants": [
-      {
-        "id": "pos-infused-preroll-agro-couture-dabstar-dab-stix-pre-roll-1g-sticky-s-mores-h-c920d42b-1g-56f678",
-        "label": "1g",
-        "priceMinorUnits": 1200,
-        "inventoryLevel": 6,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "20475"
-      ],
-      "sourceRowCount": 1,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-infused-preroll-agro-couture-dabstar-dab-stix-pre-roll-1g-strawberry-lemonade-s-e46a1a5f",
-    "name": "Dabstar Dab Stix Pre-Roll 1g - Strawberry Lemonade (S)",
-    "brand": "Agro Couture",
-    "category": "infused-preroll",
-    "filterCategories": [
-      "infused-preroll",
-      "concentrate"
-    ],
-    "posInventoryType": "Concentrate for Inhalation",
-    "posInventoryCategory": "Infused Pre-roll",
-    "strainType": "sativa",
-    "strainName": "Strawberry Lemonade",
-    "thc": "40%",
-    "cbd": null,
-    "totalThc": {
-      "type": "thc",
-      "value": "40",
-      "unit": "%"
-    },
-    "totalCbd": null,
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "40",
-        "unit": "%"
-      }
-    ],
-    "description": "POS preview item for Dabstar Dab Stix Pre-Roll 1g - Strawberry Lemonade (S). Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
-    "priceLabel": "$12 1g",
-    "priceMinorUnits": 1200,
-    "inventoryStatus": "low-stock",
-    "variants": [
-      {
-        "id": "pos-infused-preroll-agro-couture-dabstar-dab-stix-pre-roll-1g-strawberry-lemonade-s-e46a1a5f-1g-f066e2",
-        "label": "1g",
-        "priceMinorUnits": 1200,
-        "inventoryLevel": 4,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "20476"
-      ],
-      "sourceRowCount": 1,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-infused-preroll-american-hash-makers-stars-and-rosin-99-sunsets-x-banana-cream-rosin-5g-2e6a3786",
-    "name": "Stars & Rosin - 99 Sunsets x Banana Cream rosin - .5g",
-    "brand": "American Hash Makers",
-    "category": "infused-preroll",
-    "filterCategories": [
-      "infused-preroll",
-      "concentrate"
-    ],
-    "posInventoryType": "Concentrate for Inhalation",
-    "posInventoryCategory": "Infused Pre-roll",
-    "strainType": "sativa",
-    "strainName": "99 Sunsets",
-    "thc": "23.91%",
-    "cbd": "0.05%",
-    "totalThc": {
-      "type": "thc",
-      "value": "23.91",
-      "unit": "%"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "0.05",
-      "unit": "%"
-    },
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "23.91",
-        "unit": "%"
-      },
-      {
-        "type": "cbd",
-        "value": "0.05",
-        "unit": "%"
-      }
-    ],
-    "description": "POS preview item for Stars & Rosin - 99 Sunsets x Banana Cream rosin - .5g. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
-    "priceLabel": "$10 0.5g",
-    "priceMinorUnits": 1000,
-    "inventoryStatus": "in-stock",
-    "variants": [
-      {
-        "id": "pos-infused-preroll-american-hash-makers-stars-and-rosin-99-sunsets-x-banana-cream-rosin-5g-2e6a3786-0-5g-b0c959",
-        "label": "0.5g",
-        "priceMinorUnits": 1000,
-        "inventoryLevel": 13,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "13612"
-      ],
-      "sourceRowCount": 1,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-infused-preroll-pack-cannabis-northwest-cannabis-northwest-infused-pre-rolls-2-x-5g-blue-dream-1g-da9fdcf2",
-    "name": "Cannabis Northwest - Infused Pre-Rolls (2 x .5g) - Blue Dream - 1g",
-    "brand": "Cannabis Northwest",
-    "category": "infused-preroll-pack",
-    "filterCategories": [
-      "infused-preroll-pack",
-      "concentrate"
-    ],
-    "posInventoryType": "Concentrate for Inhalation",
-    "posInventoryCategory": "Infused Pre-roll",
-    "strainType": "hybrid",
-    "strainName": "Blue Dream",
-    "thc": "26.23%",
-    "cbd": null,
-    "totalThc": {
-      "type": "thc",
-      "value": "26.23",
-      "unit": "%"
-    },
-    "totalCbd": null,
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "26.23",
-        "unit": "%"
-      }
-    ],
-    "description": "POS preview item for Cannabis Northwest - Infused Pre-Rolls (2 x .5g) - Blue Dream - 1g. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
-    "priceLabel": "$12 1g",
-    "priceMinorUnits": 1200,
-    "inventoryStatus": "in-stock",
-    "variants": [
-      {
-        "id": "pos-infused-preroll-pack-cannabis-northwest-cannabis-northwest-infused-pre-rolls-2-x-5g-blue-dream-1g-da9fdcf2-1g-0ca0c7",
-        "label": "1g",
-        "priceMinorUnits": 1200,
-        "inventoryLevel": 7,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "24350"
-      ],
-      "sourceRowCount": 1,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-infused-preroll-pack-cannabis-northwest-cannabis-northwest-infused-pre-rolls-2-x-5g-grease-monkey-1g-51b1e1bf",
-    "name": "Cannabis Northwest - Infused Pre-Rolls (2 x .5g) - Grease Monkey - 1g",
-    "brand": "Cannabis Northwest",
-    "category": "infused-preroll-pack",
-    "filterCategories": [
-      "infused-preroll-pack",
-      "concentrate"
-    ],
-    "posInventoryType": "Concentrate for Inhalation",
-    "posInventoryCategory": "Infused Pre-roll",
-    "strainType": "sativa",
-    "strainName": "Grease Monkey",
-    "thc": "25.03%",
-    "cbd": null,
-    "totalThc": {
-      "type": "thc",
-      "value": "25.03",
-      "unit": "%"
-    },
-    "totalCbd": null,
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "25.03",
-        "unit": "%"
-      }
-    ],
-    "description": "POS preview item for Cannabis Northwest - Infused Pre-Rolls (2 x .5g) - Grease Monkey - 1g. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
-    "priceLabel": "$12 1g",
-    "priceMinorUnits": 1200,
-    "inventoryStatus": "in-stock",
-    "variants": [
-      {
-        "id": "pos-infused-preroll-pack-cannabis-northwest-cannabis-northwest-infused-pre-rolls-2-x-5g-grease-monkey-1g-51b1e1bf-1g-59d1c4",
-        "label": "1g",
-        "priceMinorUnits": 1200,
-        "inventoryLevel": 6,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "24351"
-      ],
-      "sourceRowCount": 1,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-infused-preroll-pack-constellation-2-pack-infused-coffee-creamer-6302726d",
-    "name": "2 Pack Infused - Coffee Creamer",
-    "brand": "Constellation",
-    "category": "infused-preroll-pack",
-    "filterCategories": [
-      "infused-preroll-pack",
-      "concentrate"
-    ],
-    "posInventoryType": "Concentrate for Inhalation",
-    "posInventoryCategory": "Infused Pre-roll",
-    "strainType": "hybrid",
-    "strainName": "Coffee Creamer",
-    "thc": "26.88%",
-    "cbd": null,
-    "totalThc": {
-      "type": "thc",
-      "value": "26.88",
-      "unit": "%"
-    },
-    "totalCbd": null,
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "26.88",
-        "unit": "%"
-      }
-    ],
-    "description": "POS preview item for 2 Pack Infused - Coffee Creamer. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
-    "priceLabel": "$10 1g",
-    "priceMinorUnits": 1000,
-    "inventoryStatus": "low-stock",
-    "variants": [
-      {
-        "id": "pos-infused-preroll-pack-constellation-2-pack-infused-coffee-creamer-6302726d-1g-001fe5",
-        "label": "1g",
-        "priceMinorUnits": 1000,
-        "inventoryLevel": 2,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "21250"
-      ],
-      "sourceRowCount": 1,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-infused-preroll-pack-constellation-const-inf-14pk-7g-coffee-creamer-c45ee448",
-    "name": "Const INF 14pk 7g - Coffee Creamer",
-    "brand": "Constellation",
-    "category": "infused-preroll-pack",
-    "filterCategories": [
-      "infused-preroll-pack",
-      "concentrate"
-    ],
-    "posInventoryType": "Concentrate for Inhalation",
-    "posInventoryCategory": "Infused Pre-roll",
-    "strainType": "hybrid",
-    "strainName": "Coffee Creamer",
-    "thc": "26.88%",
-    "cbd": null,
-    "totalThc": {
-      "type": "thc",
-      "value": "26.88",
-      "unit": "%"
-    },
-    "totalCbd": null,
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "26.88",
-        "unit": "%"
-      }
-    ],
-    "description": "POS preview item for Const INF 14pk 7g - Coffee Creamer. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
-    "priceLabel": "$45 7g",
-    "priceMinorUnits": 4500,
-    "inventoryStatus": "low-stock",
-    "variants": [
-      {
-        "id": "pos-infused-preroll-pack-constellation-const-inf-14pk-7g-coffee-creamer-c45ee448-7g-674bd0",
-        "label": "7g",
-        "priceMinorUnits": 4500,
-        "inventoryLevel": 2,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "23419",
-        "22794"
-      ],
-      "sourceRowCount": 2,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-infused-preroll-pack-constellation-const-inf-2pk-1g-medellin-00b16aca",
-    "name": "Const INF 2pk 1g - Medellin",
-    "brand": "Constellation",
-    "category": "infused-preroll-pack",
-    "filterCategories": [
-      "infused-preroll-pack",
-      "concentrate"
-    ],
-    "posInventoryType": "Concentrate for Inhalation",
-    "posInventoryCategory": "Infused Pre-roll",
-    "strainType": "hybrid",
-    "strainName": "Medellin",
-    "thc": "25.66%",
-    "cbd": null,
-    "totalThc": {
-      "type": "thc",
-      "value": "25.66",
-      "unit": "%"
-    },
-    "totalCbd": null,
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "25.66",
-        "unit": "%"
-      }
-    ],
-    "description": "POS preview item for Const INF 2pk 1g - Medellin. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
-    "priceLabel": "$10 1g",
-    "priceMinorUnits": 1000,
-    "inventoryStatus": "low-stock",
-    "variants": [
-      {
-        "id": "pos-infused-preroll-pack-constellation-const-inf-2pk-1g-medellin-00b16aca-1g-605620",
-        "label": "1g",
-        "priceMinorUnits": 1000,
-        "inventoryLevel": 2,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "25206"
-      ],
-      "sourceRowCount": 1,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-paraphernalia-eo-vapes-eo-vapes-butter-knife-5369d6c3",
-    "name": "~EO Vapes Butter Knife",
-    "brand": "EO Vapes",
-    "category": "paraphernalia",
-    "filterCategories": [
-      "paraphernalia"
-    ],
-    "posInventoryType": "Non-cannabis (no limit)",
-    "posInventoryCategory": "Devices",
-    "strainType": "unknown",
-    "strainName": "Paraphernalia",
-    "thc": null,
-    "cbd": null,
-    "totalThc": null,
-    "totalCbd": null,
-    "compounds": [],
-    "description": "POS preview item for ~EO Vapes Butter Knife. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
-    "priceLabel": "$32.09 each",
-    "priceMinorUnits": 3209,
-    "inventoryStatus": "low-stock",
-    "variants": [
-      {
-        "id": "pos-paraphernalia-eo-vapes-eo-vapes-butter-knife-5369d6c3-each-2cf3aa",
-        "label": "each",
-        "priceMinorUnits": 3209,
-        "inventoryLevel": 3,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "2678"
-      ],
-      "sourceRowCount": 1,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-paraphernalia-greenway-glass-tip-6c75e6bc",
-    "name": "Glass Tip",
-    "brand": "Greenway",
-    "category": "paraphernalia",
-    "filterCategories": [
-      "paraphernalia"
-    ],
-    "posInventoryType": "Without Inventory Type",
-    "posInventoryCategory": "Accessories",
-    "strainType": "unknown",
-    "strainName": "No Strain",
-    "thc": null,
-    "cbd": null,
-    "totalThc": null,
-    "totalCbd": null,
-    "compounds": [],
-    "description": "POS preview item for Glass Tip. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
-    "priceLabel": "$2 each",
-    "priceMinorUnits": 200,
-    "inventoryStatus": "in-stock",
-    "variants": [
-      {
-        "id": "pos-paraphernalia-greenway-glass-tip-6c75e6bc-each-a58d29",
-        "label": "each",
-        "priceMinorUnits": 200,
-        "inventoryLevel": 13,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "16514"
-      ],
-      "sourceRowCount": 1,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-paraphernalia-greenway-bloomers-1-14-cones-3266f026",
-    "name": "bloomers 1/14 cones",
-    "brand": "Greenway",
-    "category": "paraphernalia",
-    "filterCategories": [
-      "paraphernalia"
-    ],
-    "posInventoryType": "Without Inventory Type",
-    "posInventoryCategory": "Without Category",
-    "strainType": "unknown",
-    "strainName": "No Strain",
-    "thc": null,
-    "cbd": null,
-    "totalThc": null,
-    "totalCbd": null,
-    "compounds": [],
-    "description": "POS preview item for bloomers 1/14 cones. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
-    "priceLabel": "$4 each",
-    "priceMinorUnits": 400,
-    "inventoryStatus": "low-stock",
-    "variants": [
-      {
-        "id": "pos-paraphernalia-greenway-bloomers-1-14-cones-3266f026-each-2837b7",
-        "label": "each",
-        "priceMinorUnits": 400,
-        "inventoryLevel": 2,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "15228"
-      ],
-      "sourceRowCount": 1,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-paraphernalia-greenway-marijuana-greenway-marijuana-pipe-5-b31474de",
-    "name": "Greenway Marijuana Pipe $5",
-    "brand": "Greenway Marijuana",
-    "category": "paraphernalia",
-    "filterCategories": [
-      "paraphernalia"
-    ],
-    "posInventoryType": "Non-cannabis (no limit)",
-    "posInventoryCategory": "Pipe",
-    "strainType": "unknown",
-    "strainName": "Paraphernalia",
-    "thc": null,
-    "cbd": null,
-    "totalThc": null,
-    "totalCbd": null,
-    "compounds": [],
-    "description": "POS preview item for Greenway Marijuana Pipe $5. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
-    "priceLabel": "$5.02 each",
-    "priceMinorUnits": 502,
-    "inventoryStatus": "in-stock",
-    "variants": [
-      {
-        "id": "pos-paraphernalia-greenway-marijuana-greenway-marijuana-pipe-5-b31474de-each-1e9ed7",
-        "label": "each",
-        "priceMinorUnits": 502,
-        "inventoryLevel": 427,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "24978",
-        "19135",
-        "7878"
-      ],
-      "sourceRowCount": 3,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-paraphernalia-hermanos-del-fuego-fire-bros-aio-phone-case-cf23d612",
-    "name": "Fire Bros AIO Phone Case",
-    "brand": "Hermanos Del Fuego",
-    "category": "paraphernalia",
-    "filterCategories": [
-      "paraphernalia"
-    ],
-    "posInventoryType": "Without Inventory Type",
-    "posInventoryCategory": "Accessories",
-    "strainType": "unknown",
-    "strainName": "No Strain",
-    "thc": null,
-    "cbd": null,
-    "totalThc": null,
-    "totalCbd": null,
-    "compounds": [],
-    "description": "POS preview item for Fire Bros AIO Phone Case. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
-    "priceLabel": "$20 each",
+    "description": "A convenient hybrid cartridge carrying Caprizun's character into flavorful, on-demand vapor — discreet, simple, and ready to go. Smooth, discreet, and flavorful — a balanced, sweet-earthy profile, with a smooth, well-rounded vibe.",
+    "priceLabel": "$20 1g",
     "priceMinorUnits": 2000,
     "inventoryStatus": "in-stock",
     "variants": [
       {
-        "id": "pos-paraphernalia-hermanos-del-fuego-fire-bros-aio-phone-case-cf23d612-each-ae6c1e",
-        "label": "each",
+        "id": "pos-cartridge-clarity-farms-tasty-terps-tc-cart-1g-caprizun-1g-1b361c1c-1g-245fce",
+        "label": "1g",
         "priceMinorUnits": 2000,
-        "inventoryLevel": 13,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "18475"
-      ],
-      "sourceRowCount": 1,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-preroll-1937-1937-7g-regular-buds-tricho-jordan-5-7g-d6af1940",
-    "name": "1937 - 7g Regular Buds - Tricho Jordan 5 - 7g",
-    "brand": "1937",
-    "category": "preroll",
-    "filterCategories": [
-      "preroll"
-    ],
-    "posInventoryType": "Usable Marijuana",
-    "posInventoryCategory": "Pre-roll",
-    "strainType": "hybrid",
-    "strainName": "Tricho Jordan",
-    "thc": "17.28%",
-    "cbd": null,
-    "totalThc": {
-      "type": "thc",
-      "value": "17.28",
-      "unit": "%"
-    },
-    "totalCbd": null,
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "17.28",
-        "unit": "%"
-      }
-    ],
-    "description": "POS preview item for 1937 - 7g Regular Buds - Tricho Jordan 5 - 7g. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
-    "priceLabel": "$85 7g",
-    "priceMinorUnits": 8500,
-    "inventoryStatus": "low-stock",
-    "variants": [
-      {
-        "id": "pos-preroll-1937-1937-7g-regular-buds-tricho-jordan-5-7g-d6af1940-7g-d685cd",
-        "label": "7g",
-        "priceMinorUnits": 8500,
-        "inventoryLevel": 2,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "24730"
-      ],
-      "sourceRowCount": 1,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-preroll-2727-2727-pre-rolls-2727-doh-purple-punch-5g-2c786a76",
-    "name": "2727 - Pre-Rolls - 2727 - DOH - Purple Punch - 5g",
-    "brand": "2727",
-    "category": "preroll",
-    "filterCategories": [
-      "preroll"
-    ],
-    "posInventoryType": "Usable Marijuana",
-    "posInventoryCategory": "Pre-roll",
-    "strainType": "indica",
-    "strainName": "Purple Punch",
-    "thc": "23.93%",
-    "cbd": null,
-    "totalThc": {
-      "type": "thc",
-      "value": "23.93",
-      "unit": "%"
-    },
-    "totalCbd": null,
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "23.93",
-        "unit": "%"
-      }
-    ],
-    "description": "POS preview item for 2727 - Pre-Rolls - 2727 - DOH - Purple Punch - 5g. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
-    "priceLabel": "$18 5g",
-    "priceMinorUnits": 1800,
-    "inventoryStatus": "in-stock",
-    "variants": [
-      {
-        "id": "pos-preroll-2727-2727-pre-rolls-2727-doh-purple-punch-5g-2c786a76-5g-530385",
-        "label": "5g",
-        "priceMinorUnits": 1800,
         "inventoryLevel": 10,
         "medical": false
       }
@@ -2415,643 +1717,59 @@
       "source": "priority_matches_v2.csv",
       "matchMethod": "exact_name_brand_package",
       "sourceInventoryIds": [
-        "26141"
+        "26247"
       ],
       "sourceRowCount": 1,
       "generatedForInspectionOnly": true
     }
   },
   {
-    "id": "pos-preroll-2727-2727-pre-rolls-2727-doh-uw-purple-5g-c864ccbe",
-    "name": "2727 - Pre-Rolls - 2727 - DOH - UW Purple - 5g",
-    "brand": "2727",
-    "category": "preroll",
+    "id": "pos-cartridge-clarity-farms-tasty-terps-tc-cart-1g-kiwi-hi-chewz-1g-b14b6b57",
+    "name": "Kiwi Hi-Chewz",
+    "productName": "Tasty Terps - TC CART 1g - Kiwi Hi-Chewz - 1g",
+    "brand": "Clarity Farms",
+    "category": "cartridge",
     "filterCategories": [
-      "preroll"
+      "cartridge",
+      "concentrate"
     ],
-    "posInventoryType": "Usable Marijuana",
-    "posInventoryCategory": "Pre-roll",
-    "strainType": "indica",
-    "strainName": "UW Purple",
-    "thc": "27.25%",
-    "cbd": null,
-    "totalThc": {
-      "type": "thc",
-      "value": "27.25",
-      "unit": "%"
-    },
-    "totalCbd": null,
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "27.25",
-        "unit": "%"
-      }
-    ],
-    "description": "POS preview item for 2727 - Pre-Rolls - 2727 - DOH - UW Purple - 5g. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
-    "priceLabel": "$18 5g",
-    "priceMinorUnits": 1800,
-    "inventoryStatus": "in-stock",
-    "variants": [
-      {
-        "id": "pos-preroll-2727-2727-pre-rolls-2727-doh-uw-purple-5g-c864ccbe-5g-89377d",
-        "label": "5g",
-        "priceMinorUnits": 1800,
-        "inventoryLevel": 8,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "25103"
-      ],
-      "sourceRowCount": 1,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-preroll-2727-2727-pre-rolls-now-and-lator-5g-2ba3691a",
-    "name": "2727 - Pre-Rolls - Now & Lator - 5g",
-    "brand": "2727",
-    "category": "preroll",
-    "filterCategories": [
-      "preroll"
-    ],
-    "posInventoryType": "Usable Marijuana",
-    "posInventoryCategory": "Pre-roll",
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
     "strainType": "hybrid",
-    "strainName": "Now & Lator",
-    "thc": "19.92%",
-    "cbd": null,
+    "strainName": "Kiwi Hi-Chewz",
+    "thc": "88.6%",
+    "cbd": "0.34%",
     "totalThc": {
       "type": "thc",
-      "value": "19.92",
-      "unit": "%"
-    },
-    "totalCbd": null,
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "19.92",
-        "unit": "%"
-      }
-    ],
-    "description": "POS preview item for 2727 - Pre-Rolls - Now & Lator - 5g. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
-    "priceLabel": "$18 5g",
-    "priceMinorUnits": 1800,
-    "inventoryStatus": "in-stock",
-    "variants": [
-      {
-        "id": "pos-preroll-2727-2727-pre-rolls-now-and-lator-5g-2ba3691a-5g-5dfcb8",
-        "label": "5g",
-        "priceMinorUnits": 1800,
-        "inventoryLevel": 15,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "26133"
-      ],
-      "sourceRowCount": 1,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-preroll-2727-2727-pre-rolls-presidential-kush-5g-d3988628",
-    "name": "2727 - Pre-Rolls - Presidential Kush - 5g",
-    "brand": "2727",
-    "category": "preroll",
-    "filterCategories": [
-      "preroll"
-    ],
-    "posInventoryType": "Usable Marijuana",
-    "posInventoryCategory": "Pre-roll",
-    "strainType": "sativa",
-    "strainName": "Presidential Kush",
-    "thc": "21.77%",
-    "cbd": null,
-    "totalThc": {
-      "type": "thc",
-      "value": "21.77",
-      "unit": "%"
-    },
-    "totalCbd": null,
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "21.77",
-        "unit": "%"
-      }
-    ],
-    "description": "POS preview item for 2727 - Pre-Rolls - Presidential Kush - 5g. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
-    "priceLabel": "$18 5g",
-    "priceMinorUnits": 1800,
-    "inventoryStatus": "in-stock",
-    "variants": [
-      {
-        "id": "pos-preroll-2727-2727-pre-rolls-presidential-kush-5g-d3988628-5g-110342",
-        "label": "5g",
-        "priceMinorUnits": 1800,
-        "inventoryLevel": 10,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "25089"
-      ],
-      "sourceRowCount": 1,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-preroll-pack-1937-1937-pre-rolls-5-x-2-pack-blueberry-muffins-1g-068c8aa1",
-    "name": "1937 - Pre-Rolls .5 x 2 pack - Blueberry Muffins - 1g",
-    "brand": "1937",
-    "category": "preroll-pack",
-    "filterCategories": [
-      "preroll-pack"
-    ],
-    "posInventoryType": "Usable Marijuana",
-    "posInventoryCategory": "Pre-roll",
-    "strainType": "indica",
-    "strainName": "Blueberry Muffin",
-    "thc": "23.08%",
-    "cbd": null,
-    "totalThc": {
-      "type": "thc",
-      "value": "23.08",
-      "unit": "%"
-    },
-    "totalCbd": null,
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "23.08",
-        "unit": "%"
-      }
-    ],
-    "description": "POS preview item for 1937 - Pre-Rolls .5 x 2 pack - Blueberry Muffins - 1g. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
-    "priceLabel": "$10 1g",
-    "priceMinorUnits": 1000,
-    "inventoryStatus": "in-stock",
-    "variants": [
-      {
-        "id": "pos-preroll-pack-1937-1937-pre-rolls-5-x-2-pack-blueberry-muffins-1g-068c8aa1-1g-cf59df",
-        "label": "1g",
-        "priceMinorUnits": 1000,
-        "inventoryLevel": 8,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "24735"
-      ],
-      "sourceRowCount": 1,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-preroll-pack-1937-1937-pre-rolls-5-x-2-pack-flyin-hawaiian-23-285e8489",
-    "name": "1937 - Pre-Rolls .5 x 2 pack - Flyin Hawaiian 23",
-    "brand": "1937",
-    "category": "preroll-pack",
-    "filterCategories": [
-      "preroll-pack"
-    ],
-    "posInventoryType": "Usable Marijuana",
-    "posInventoryCategory": "Pre-roll",
-    "strainType": "sativa",
-    "strainName": "Flyin Hawaiian",
-    "thc": "18.82%",
-    "cbd": null,
-    "totalThc": {
-      "type": "thc",
-      "value": "18.82",
-      "unit": "%"
-    },
-    "totalCbd": null,
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "18.82",
-        "unit": "%"
-      }
-    ],
-    "description": "POS preview item for 1937 - Pre-Rolls .5 x 2 pack - Flyin Hawaiian 23. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
-    "priceLabel": "$10 1g",
-    "priceMinorUnits": 1000,
-    "inventoryStatus": "in-stock",
-    "variants": [
-      {
-        "id": "pos-preroll-pack-1937-1937-pre-rolls-5-x-2-pack-flyin-hawaiian-23-285e8489-1g-30d1d9",
-        "label": "1g",
-        "priceMinorUnits": 1000,
-        "inventoryLevel": 6,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "24733"
-      ],
-      "sourceRowCount": 1,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-preroll-pack-1937-1937-pre-rolls-5-x-2-pack-kabuki-sour-1g-79f4486c",
-    "name": "1937 - Pre-Rolls .5 x 2 pack - Kabuki Sour - 1g",
-    "brand": "1937",
-    "category": "preroll-pack",
-    "filterCategories": [
-      "preroll-pack"
-    ],
-    "posInventoryType": "Usable Marijuana",
-    "posInventoryCategory": "Pre-roll",
-    "strainType": "sativa",
-    "strainName": "Kabuki Sour",
-    "thc": "25.26%",
-    "cbd": "0.21%",
-    "totalThc": {
-      "type": "thc",
-      "value": "25.26",
+      "value": "88.6",
       "unit": "%"
     },
     "totalCbd": {
       "type": "cbd",
-      "value": "0.21",
+      "value": "0.34",
       "unit": "%"
     },
     "compounds": [
       {
         "type": "thc",
-        "value": "25.26",
+        "value": "88.6",
         "unit": "%"
       },
       {
         "type": "cbd",
-        "value": "0.21",
+        "value": "0.34",
         "unit": "%"
       }
     ],
-    "description": "POS preview item for 1937 - Pre-Rolls .5 x 2 pack - Kabuki Sour - 1g. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
-    "priceLabel": "$10 1g",
-    "priceMinorUnits": 1000,
+    "description": "A convenient hybrid cartridge carrying Kiwi Hi-Chewz's character into flavorful, on-demand vapor — discreet, simple, and ready to go. Smooth, discreet, and flavorful — a tangy kiwi flavor, with an even, best-of-both-worlds feel.",
+    "priceLabel": "$20 1g",
+    "priceMinorUnits": 2000,
     "inventoryStatus": "in-stock",
     "variants": [
       {
-        "id": "pos-preroll-pack-1937-1937-pre-rolls-5-x-2-pack-kabuki-sour-1g-79f4486c-1g-4fa6bc",
+        "id": "pos-cartridge-clarity-farms-tasty-terps-tc-cart-1g-kiwi-hi-chewz-1g-b14b6b57-1g-4f7a96",
         "label": "1g",
-        "priceMinorUnits": 1000,
-        "inventoryLevel": 9,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "26509"
-      ],
-      "sourceRowCount": 1,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-preroll-pack-1937-1937-pre-rolls-5-x-2-pack-mimosa-9beff2b2",
-    "name": "1937 - Pre-Rolls .5 x 2 pack - Mimosa",
-    "brand": "1937",
-    "category": "preroll-pack",
-    "filterCategories": [
-      "preroll-pack"
-    ],
-    "posInventoryType": "Usable Marijuana",
-    "posInventoryCategory": "Pre-roll",
-    "strainType": "hybrid",
-    "strainName": "Mimosa",
-    "thc": "22.8%",
-    "cbd": null,
-    "totalThc": {
-      "type": "thc",
-      "value": "22.8",
-      "unit": "%"
-    },
-    "totalCbd": null,
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "22.8",
-        "unit": "%"
-      }
-    ],
-    "description": "POS preview item for 1937 - Pre-Rolls .5 x 2 pack - Mimosa. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
-    "priceLabel": "$10 1g",
-    "priceMinorUnits": 1000,
-    "inventoryStatus": "low-stock",
-    "variants": [
-      {
-        "id": "pos-preroll-pack-1937-1937-pre-rolls-5-x-2-pack-mimosa-9beff2b2-1g-5143ff",
-        "label": "1g",
-        "priceMinorUnits": 1000,
-        "inventoryLevel": 1,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "24734"
-      ],
-      "sourceRowCount": 1,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-preroll-pack-1937-1937-pre-rolls-5-x-2-pack-white-truffle-1g-1bcd86ac",
-    "name": "1937 - Pre-Rolls .5 x 2 pack - White Truffle - 1g",
-    "brand": "1937",
-    "category": "preroll-pack",
-    "filterCategories": [
-      "preroll-pack"
-    ],
-    "posInventoryType": "Usable Marijuana",
-    "posInventoryCategory": "Pre-roll",
-    "strainType": "indica",
-    "strainName": "White Truffle",
-    "thc": "23.79%",
-    "cbd": null,
-    "totalThc": {
-      "type": "thc",
-      "value": "23.79",
-      "unit": "%"
-    },
-    "totalCbd": null,
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "23.79",
-        "unit": "%"
-      }
-    ],
-    "description": "POS preview item for 1937 - Pre-Rolls .5 x 2 pack - White Truffle - 1g. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
-    "priceLabel": "$10 1g",
-    "priceMinorUnits": 1000,
-    "inventoryStatus": "in-stock",
-    "variants": [
-      {
-        "id": "pos-preroll-pack-1937-1937-pre-rolls-5-x-2-pack-white-truffle-1g-1bcd86ac-1g-9bd0e4",
-        "label": "1g",
-        "priceMinorUnits": 1000,
-        "inventoryLevel": 7,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "24726"
-      ],
-      "sourceRowCount": 1,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-topical-agro-couture-a-c-topical-drops-4-1-1000mg-thc-250mg-cbn-1-7-oz-cf13ac0c",
-    "name": "A.C. Topical Drops 4:1 - 1000mg THC 250mg CBN - 1.7 oz",
-    "brand": "Agro Couture",
-    "category": "topical",
-    "filterCategories": [
-      "topical"
-    ],
-    "posInventoryType": "Topical Ointment",
-    "posInventoryCategory": "Topical",
-    "strainType": "unknown",
-    "strainName": "CBN",
-    "thc": "1300mg",
-    "cbd": "12mg",
-    "totalThc": {
-      "type": "thc",
-      "value": "1300",
-      "unit": "mg"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "12",
-      "unit": "mg"
-    },
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "1300",
-        "unit": "mg"
-      },
-      {
-        "type": "cbd",
-        "value": "12",
-        "unit": "mg"
-      }
-    ],
-    "description": "POS preview item for A.C. Topical Drops 4:1 - 1000mg THC 250mg CBN - 1.7 oz. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
-    "priceLabel": "$35 1.7oz",
-    "priceMinorUnits": 3500,
-    "inventoryStatus": "low-stock",
-    "variants": [
-      {
-        "id": "pos-topical-agro-couture-a-c-topical-drops-4-1-1000mg-thc-250mg-cbn-1-7-oz-cf13ac0c-1-7oz-78ecea",
-        "label": "1.7oz",
-        "priceMinorUnits": 3500,
-        "inventoryLevel": 2,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "26090"
-      ],
-      "sourceRowCount": 1,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-topical-buddies-buddies-fire-and-ice-1-1-topical-roll-on-3-fl-oz-00de0d65",
-    "name": "Buddies Fire & Ice 1:1 - Topical Roll-On - 3 fl oz",
-    "brand": "Buddies",
-    "category": "topical",
-    "filterCategories": [
-      "topical"
-    ],
-    "posInventoryType": "Topical Ointment",
-    "posInventoryCategory": "Topical",
-    "strainType": "hybrid",
-    "strainName": "Buddies Fire & Ice 1:1",
-    "thc": "3.1mg",
-    "cbd": "1.3mg",
-    "totalThc": {
-      "type": "thc",
-      "value": "3.1",
-      "unit": "mg"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "1.3",
-      "unit": "mg"
-    },
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "3.1",
-        "unit": "mg"
-      },
-      {
-        "type": "cbd",
-        "value": "1.3",
-        "unit": "mg"
-      }
-    ],
-    "description": "POS preview item for Buddies Fire & Ice 1:1 - Topical Roll-On - 3 fl oz. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
-    "priceLabel": "$35 3oz",
-    "priceMinorUnits": 3500,
-    "inventoryStatus": "low-stock",
-    "variants": [
-      {
-        "id": "pos-topical-buddies-buddies-fire-and-ice-1-1-topical-roll-on-3-fl-oz-00de0d65-3oz-e46d27",
-        "label": "3oz",
-        "priceMinorUnits": 3500,
-        "inventoryLevel": 1,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "24192"
-      ],
-      "sourceRowCount": 1,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-topical-ceres-cere-squeeze-tube-moon-cycle-3-4oz-6b142ebd",
-    "name": "Cere SQUEEZE TUBE MOON CYCLE - 3.4oz",
-    "brand": "Ceres",
-    "category": "topical",
-    "filterCategories": [
-      "topical"
-    ],
-    "posInventoryType": "Topical Ointment",
-    "posInventoryCategory": "Topical",
-    "strainType": "unknown",
-    "strainName": "Moon Cycle",
-    "thc": "600mg",
-    "cbd": "280mg",
-    "totalThc": {
-      "type": "thc",
-      "value": "600",
-      "unit": "mg"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "280",
-      "unit": "mg"
-    },
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "600",
-        "unit": "mg"
-      },
-      {
-        "type": "cbd",
-        "value": "280",
-        "unit": "mg"
-      }
-    ],
-    "description": "POS preview item for Cere SQUEEZE TUBE MOON CYCLE - 3.4oz. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
-    "priceLabel": "$24 3.4g",
-    "priceMinorUnits": 2400,
-    "inventoryStatus": "low-stock",
-    "variants": [
-      {
-        "id": "pos-topical-ceres-cere-squeeze-tube-moon-cycle-3-4oz-6b142ebd-3-4g-a8a27b",
-        "label": "3.4g",
-        "priceMinorUnits": 2400,
-        "inventoryLevel": 3,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "11728"
-      ],
-      "sourceRowCount": 1,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-topical-ceres-ceres-dragon-balm-cbd-red-c0a30dbf",
-    "name": "Ceres Dragon Balm CBD RED",
-    "brand": "Ceres",
-    "category": "topical",
-    "filterCategories": [
-      "topical"
-    ],
-    "posInventoryType": "Topical Ointment",
-    "posInventoryCategory": "Topical",
-    "strainType": "hybrid",
-    "strainName": "Dragon Balm",
-    "thc": "561mg",
-    "cbd": "500mg",
-    "totalThc": {
-      "type": "thc",
-      "value": "561",
-      "unit": "mg"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "500",
-      "unit": "mg"
-    },
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "561",
-        "unit": "mg"
-      },
-      {
-        "type": "cbd",
-        "value": "500",
-        "unit": "mg"
-      }
-    ],
-    "description": "POS preview item for Ceres Dragon Balm CBD RED. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
-    "priceLabel": "$15 96.4g",
-    "priceMinorUnits": 1500,
-    "inventoryStatus": "in-stock",
-    "variants": [
-      {
-        "id": "pos-topical-ceres-ceres-dragon-balm-cbd-red-c0a30dbf-96-4g-6e2b93",
-        "label": "96.4g",
-        "priceMinorUnits": 1500,
+        "priceMinorUnits": 2000,
         "inventoryLevel": 14,
         "medical": false
       }
@@ -3060,59 +1778,311 @@
       "source": "priority_matches_v2.csv",
       "matchMethod": "exact_name_brand_package",
       "sourceInventoryIds": [
-        "26673",
-        "25726",
-        "24862"
+        "26248",
+        "25392"
       ],
-      "sourceRowCount": 3,
+      "sourceRowCount": 2,
       "generatedForInspectionOnly": true
     }
   },
   {
-    "id": "pos-topical-ceres-ceres-dragon-balm-jar-cbd-red-c1ed171c",
-    "name": "Ceres Dragon Balm Jar CBD RED",
-    "brand": "Ceres",
-    "category": "topical",
+    "id": "pos-cartridge-clarity-farms-tasty-terps-tc-cart-1g-laffy-taffy-1g-ddb044eb",
+    "name": "Laffy Taffy",
+    "productName": "Tasty Terps - TC CART 1g - Laffy Taffy - 1g",
+    "brand": "Clarity Farms",
+    "category": "cartridge",
     "filterCategories": [
-      "topical"
+      "cartridge",
+      "concentrate"
     ],
-    "posInventoryType": "Topical Ointment",
-    "posInventoryCategory": "Topical",
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
     "strainType": "hybrid",
-    "strainName": "Dragon Balm",
-    "thc": "291mg",
-    "cbd": "250mg",
+    "strainName": "Laffy Taffy",
+    "thc": "84.5%",
+    "cbd": null,
     "totalThc": {
       "type": "thc",
-      "value": "291",
-      "unit": "mg"
+      "value": "84.5",
+      "unit": "%"
     },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "250",
-      "unit": "mg"
-    },
+    "totalCbd": null,
     "compounds": [
       {
         "type": "thc",
-        "value": "291",
-        "unit": "mg"
-      },
-      {
-        "type": "cbd",
-        "value": "250",
-        "unit": "mg"
+        "value": "84.5",
+        "unit": "%"
       }
     ],
-    "description": "POS preview item for Ceres Dragon Balm Jar CBD RED. Real product descriptions and images are not included in the current POS exports and should be added through the enrichment layer before public launch.",
-    "priceLabel": "$10 56.7g",
-    "priceMinorUnits": 1000,
+    "description": "A hybrid vape cartridge filled with Laffy Taffy oil — smooth, flavorful vapor in a discreet, no-torch, push-button format that goes wherever you go. Convenient and clean, a balanced, sweet-earthy profile, delivering a versatile, anytime balance.",
+    "priceLabel": "$20 1g",
+    "priceMinorUnits": 2000,
     "inventoryStatus": "low-stock",
     "variants": [
       {
-        "id": "pos-topical-ceres-ceres-dragon-balm-jar-cbd-red-c1ed171c-56-7g-2a93ee",
-        "label": "56.7g",
-        "priceMinorUnits": 1000,
+        "id": "pos-cartridge-clarity-farms-tasty-terps-tc-cart-1g-laffy-taffy-1g-ddb044eb-1g-c858c1",
+        "label": "1g",
+        "priceMinorUnits": 2000,
+        "inventoryLevel": 1,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "21945"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-constellation-const-rosin-vape-cart-0-5g-kosher-headband-468bf81a",
+    "name": "Kosher Headband",
+    "productName": "Const Rosin Vape Cart 0.5g - Kosher Headband",
+    "brand": "Constellation",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "hybrid",
+    "strainName": "Kosher Headband",
+    "thc": "75.25%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "75.25",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "75.25",
+        "unit": "%"
+      }
+    ],
+    "description": "A convenient hybrid cartridge carrying Kosher Headband's character into flavorful, on-demand vapor — discreet, simple, and ready to go. Smooth, discreet, and flavorful — a balanced, sweet-earthy profile, with an even, best-of-both-worlds feel.",
+    "priceLabel": "$40 0.5g",
+    "priceMinorUnits": 4000,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-constellation-const-rosin-vape-cart-0-5g-kosher-headband-468bf81a-0-5g-bb30e2",
+        "label": "0.5g",
+        "priceMinorUnits": 4000,
+        "inventoryLevel": 10,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "27259"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-constellation-const-rosin-vape-cart-0-5g-pie-hoe-a19859be",
+    "name": "Pie Hoe",
+    "productName": "Const Rosin Vape Cart 0.5g - Pie Hoe",
+    "brand": "Constellation",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "hybrid",
+    "strainName": "Pie Hoe",
+    "thc": "74.22%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "74.22",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "74.22",
+        "unit": "%"
+      }
+    ],
+    "description": "A convenient hybrid cartridge carrying Pie Hoe's character into flavorful, on-demand vapor — discreet, simple, and ready to go. Convenient and clean, with notes of grape, berry, and pungent, delivering a smooth, well-rounded vibe.",
+    "priceLabel": "$40 0.5g",
+    "priceMinorUnits": 4000,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-constellation-const-rosin-vape-cart-0-5g-pie-hoe-a19859be-0-5g-34e19b",
+        "label": "0.5g",
+        "priceMinorUnits": 4000,
+        "inventoryLevel": 10,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "27260"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-constellation-constellation-cold-cure-1g-black-domina-79d4d5e2",
+    "name": "Black Domina",
+    "productName": "Constellation Cold Cure 1g - Black Domina",
+    "brand": "Constellation",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "indica",
+    "strainName": "Black Domina",
+    "thc": "78.95%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "78.95",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "78.95",
+        "unit": "%"
+      }
+    ],
+    "description": "Portable indica vape cart of Black Domina, dialed in for smooth flavor and easy dosing whenever and wherever you want it. Convenient and clean, with notes of pepper, spicy/herbal, and woody, delivering a slow, mellow wind-down vibe.",
+    "priceLabel": "$45 1g",
+    "priceMinorUnits": 4500,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-constellation-constellation-cold-cure-1g-black-domina-79d4d5e2-1g-1bc806",
+        "label": "1g",
+        "priceMinorUnits": 4500,
+        "inventoryLevel": 9,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "27248"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-constellation-constellation-cold-cure-1g-cali-swiss-1b2dea0c",
+    "name": "Cali Swiss",
+    "productName": "Constellation Cold Cure 1g - Cali Swiss",
+    "brand": "Constellation",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "hybrid",
+    "strainName": "Cali Swiss",
+    "thc": "78.13%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "78.13",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "78.13",
+        "unit": "%"
+      }
+    ],
+    "description": "This hybrid cartridge loads Cali Swiss into a sleek 510-thread pen for clean, convenient draws — premium oil, precise hits, zero hassle. Flavor on the go, a balanced, sweet-earthy profile, leading into a balanced head-and-body experience.",
+    "priceLabel": "$45 1g",
+    "priceMinorUnits": 4500,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-constellation-constellation-cold-cure-1g-cali-swiss-1b2dea0c-1g-7d6fa3",
+        "label": "1g",
+        "priceMinorUnits": 4500,
+        "inventoryLevel": 9,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "27249"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-constellation-rosin-vape-cart-0-5g-amarelo-doh-dab431a1",
+    "name": "Amarelo",
+    "productName": "Rosin Vape Cart 0.5g - Amarelo- DOH",
+    "brand": "Constellation",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "hybrid",
+    "strainName": "Amarelo",
+    "thc": "72.04%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "72.04",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "72.04",
+        "unit": "%"
+      }
+    ],
+    "description": "A convenient hybrid cartridge carrying Amarelo's character into flavorful, on-demand vapor — discreet, simple, and ready to go. Flavor on the go, with notes of blueberry and apple, leading into an even, best-of-both-worlds feel.",
+    "priceLabel": "$40 0.5g",
+    "priceMinorUnits": 4000,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-constellation-rosin-vape-cart-0-5g-amarelo-doh-dab431a1-0-5g-db23a7",
+        "label": "0.5g",
+        "priceMinorUnits": 4000,
         "inventoryLevel": 4,
         "medical": false
       }
@@ -3121,7 +2091,1297 @@
       "source": "priority_matches_v2.csv",
       "matchMethod": "exact_name_brand_package",
       "sourceInventoryIds": [
-        "20036"
+        "18869"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-cookies-cookies-cannabis-terps-cartridge-1g-hollywood-4c78142e",
+    "name": "Hollywood",
+    "productName": "Cookies - Cannabis Terps - Cartridge - 1g - Hollywood",
+    "brand": "Cookies",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "hybrid",
+    "strainName": "Hollywood",
+    "thc": "90.87%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "90.87",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "90.87",
+        "unit": "%"
+      }
+    ],
+    "description": "A hybrid vape cartridge filled with Hollywood oil — smooth, flavorful vapor in a discreet, no-torch, push-button format that goes wherever you go. Smooth, discreet, and flavorful — with notes of apple, berry, and lemon, with a versatile, anytime balance.",
+    "priceLabel": "$30 1g",
+    "priceMinorUnits": 3000,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-cookies-cookies-cannabis-terps-cartridge-1g-hollywood-4c78142e-1g-9e2d54",
+        "label": "1g",
+        "priceMinorUnits": 3000,
+        "inventoryLevel": 2,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "24784"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-cormorant-edibles-rpg-510-cartridge-cured-resin-bubblegum-runtz-1g-e332741a",
+    "name": "Bubblegum Runtz",
+    "productName": "RPG - 510 Cartridge - Cured Resin - Bubblegum Runtz - 1g",
+    "brand": "Cormorant Edibles",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "hybrid",
+    "strainName": "Bubblegum Runtz",
+    "thc": "81.41%",
+    "cbd": "0.18%",
+    "totalThc": {
+      "type": "thc",
+      "value": "81.41",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "0.18",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "81.41",
+        "unit": "%"
+      },
+      {
+        "type": "cbd",
+        "value": "0.18",
+        "unit": "%"
+      }
+    ],
+    "description": "A convenient hybrid cartridge carrying Bubblegum Runtz's character into flavorful, on-demand vapor — discreet, simple, and ready to go. Convenient and clean, a sweet, fruity candy aroma with a smooth, euphoric, balanced feel, delivering a versatile, anytime balance.",
+    "priceLabel": "$20 1g",
+    "priceMinorUnits": 2000,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-cormorant-edibles-rpg-510-cartridge-cured-resin-bubblegum-runtz-1g-e332741a-1g-d96abc",
+        "label": "1g",
+        "priceMinorUnits": 2000,
+        "inventoryLevel": 6,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "24339"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-downtown-live-extract-vape-cart-mint-condition-1g-71ecc906",
+    "name": "Mint Condition",
+    "productName": "LIVE extract - vape cart - MINT CONDITION - 1g",
+    "brand": "Downtown",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "hybrid",
+    "strainName": "Mint Condition",
+    "thc": "72.14%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "72.14",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "72.14",
+        "unit": "%"
+      }
+    ],
+    "description": "Portable hybrid vape cart of Mint Condition, dialed in for smooth flavor and easy dosing whenever and wherever you want it. Smooth, discreet, and flavorful — a cool, refreshing mint flavor, with a versatile, anytime balance.",
+    "priceLabel": "$35 1g",
+    "priceMinorUnits": 3500,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-downtown-live-extract-vape-cart-mint-condition-1g-71ecc906-1g-ee7f26",
+        "label": "1g",
+        "priceMinorUnits": 3500,
+        "inventoryLevel": 18,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "27286",
+        "26308"
+      ],
+      "sourceRowCount": 2,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-downtown-live-extract-vape-cart-space-og-1g-df993ef2",
+    "name": "Space OG",
+    "productName": "LIVE extract - vape cart - SPACE OG - 1g",
+    "brand": "Downtown",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "hybrid",
+    "strainName": "Space OG",
+    "thc": "69.11%",
+    "cbd": "0.11%",
+    "totalThc": {
+      "type": "thc",
+      "value": "69.11",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "0.11",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "69.11",
+        "unit": "%"
+      },
+      {
+        "type": "cbd",
+        "value": "0.11",
+        "unit": "%"
+      }
+    ],
+    "description": "A convenient hybrid cartridge carrying Space OG's character into flavorful, on-demand vapor — discreet, simple, and ready to go. Smooth, discreet, and flavorful — a pungent earthy-pine and fuel aroma with a strong, classic, relaxing feel, with a versatile, anytime balance.",
+    "priceLabel": "$36 1g",
+    "priceMinorUnits": 3600,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-downtown-live-extract-vape-cart-space-og-1g-df993ef2-1g-a9d7cb",
+        "label": "1g",
+        "priceMinorUnits": 3600,
+        "inventoryLevel": 17,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "27278",
+        "26327"
+      ],
+      "sourceRowCount": 2,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-downtown-live-extract-vape-cart-sprinkles-1g-52745c55",
+    "name": "Sprinkles",
+    "productName": "LIVE extract - vape cart - SPRINKLES - 1g",
+    "brand": "Downtown",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "hybrid",
+    "strainName": "Sprinkles",
+    "thc": "79.14%",
+    "cbd": "0.14%",
+    "totalThc": {
+      "type": "thc",
+      "value": "79.14",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "0.14",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "79.14",
+        "unit": "%"
+      },
+      {
+        "type": "cbd",
+        "value": "0.14",
+        "unit": "%"
+      }
+    ],
+    "description": "A hybrid vape cartridge filled with Sprinkles oil — smooth, flavorful vapor in a discreet, no-torch, push-button format that goes wherever you go. Convenient and clean, with notes of pineapple, berry, and butter, delivering a balanced head-and-body experience.",
+    "priceLabel": "$36 1g",
+    "priceMinorUnits": 3600,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-downtown-live-extract-vape-cart-sprinkles-1g-52745c55-1g-e1d944",
+        "label": "1g",
+        "priceMinorUnits": 3600,
+        "inventoryLevel": 8,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "27287"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-downtown-live-extract-vape-cart-swift-cheese-1g-47a3a2fa",
+    "name": "Swift Cheese",
+    "productName": "LIVE extract - vape cart - SWIFT CHEESE - 1g",
+    "brand": "Downtown",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "hybrid",
+    "strainName": "Swift Cheese",
+    "thc": "81.52%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "81.52",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "81.52",
+        "unit": "%"
+      }
+    ],
+    "description": "A convenient hybrid cartridge carrying Swift Cheese's character into flavorful, on-demand vapor — discreet, simple, and ready to go. Convenient and clean, a funky, savory cheese flavor, delivering a balanced head-and-body experience.",
+    "priceLabel": "$35 1g",
+    "priceMinorUnits": 3500,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-downtown-live-extract-vape-cart-swift-cheese-1g-47a3a2fa-1g-009d40",
+        "label": "1g",
+        "priceMinorUnits": 3500,
+        "inventoryLevel": 15,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "27267",
+        "26310"
+      ],
+      "sourceRowCount": 2,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-downtown-live-extract-vape-cart-twisted-toast-1g-73c508df",
+    "name": "Twisted Toast",
+    "productName": "LIVE extract - vape cart - TWISTED TOAST - 1g",
+    "brand": "Downtown",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "hybrid",
+    "strainName": "Twisted Toast",
+    "thc": "69.14%",
+    "cbd": "0.14%",
+    "totalThc": {
+      "type": "thc",
+      "value": "69.14",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "0.14",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "69.14",
+        "unit": "%"
+      },
+      {
+        "type": "cbd",
+        "value": "0.14",
+        "unit": "%"
+      }
+    ],
+    "description": "Portable hybrid vape cart of Twisted Toast, dialed in for smooth flavor and easy dosing whenever and wherever you want it. Flavor on the go, a balanced, sweet-earthy profile, leading into an even, best-of-both-worlds feel.",
+    "priceLabel": "$35 1g",
+    "priceMinorUnits": 3500,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-downtown-live-extract-vape-cart-twisted-toast-1g-73c508df-1g-b2822d",
+        "label": "1g",
+        "priceMinorUnits": 3500,
+        "inventoryLevel": 7,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "26326"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-downtown-cannabis-live-extract-vape-cart-hassel-hoth-1g-5651ff40",
+    "name": "Hassel Hoth",
+    "productName": "LIVE extract - vape cart - HASSEL HOTH - 1g",
+    "brand": "Downtown Cannabis",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "hybrid",
+    "strainName": "Hassel Hoth",
+    "thc": "81.32%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "81.32",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "81.32",
+        "unit": "%"
+      }
+    ],
+    "description": "A convenient hybrid cartridge carrying Hassel Hoth's character into flavorful, on-demand vapor — discreet, simple, and ready to go. Smooth, discreet, and flavorful — a balanced, sweet-earthy profile, with an even, best-of-both-worlds feel.",
+    "priceLabel": "$40 1g",
+    "priceMinorUnits": 4000,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-downtown-cannabis-live-extract-vape-cart-hassel-hoth-1g-5651ff40-1g-46baa1",
+        "label": "1g",
+        "priceMinorUnits": 4000,
+        "inventoryLevel": 5,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "27266"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-full-spec-cookies-cannabis-terps-cartridge-1g-london-pound-cake-75-92f592b6",
+    "name": "London Pound Cake",
+    "productName": "Cookies - Cannabis Terps - Cartridge - 1g - London Pound Cake #75",
+    "brand": "Full Spec",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "hybrid",
+    "strainName": "London Pound Cake",
+    "thc": "96.11%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "96.11",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "96.11",
+        "unit": "%"
+      }
+    ],
+    "description": "A hybrid vape cartridge filled with London Pound Cake oil — smooth, flavorful vapor in a discreet, no-torch, push-button format that goes wherever you go. Smooth, discreet, and flavorful — with notes of butter, vanilla, and lemon, with a versatile, anytime balance.",
+    "priceLabel": "$40 1g",
+    "priceMinorUnits": 4000,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-full-spec-cookies-cannabis-terps-cartridge-1g-london-pound-cake-75-92f592b6-1g-b196af",
+        "label": "1g",
+        "priceMinorUnits": 4000,
+        "inventoryLevel": 1,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "19462"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-full-spec-full-spec-cadet-cartridge-9lb-hammer-6-6d354e94",
+    "name": "9# Hammer",
+    "productName": "Full Spec Cadet Cartridge 9lb Hammer #6",
+    "brand": "Full Spec",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "indica",
+    "strainName": "9# Hammer",
+    "thc": "93.06%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "93.06",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "93.06",
+        "unit": "%"
+      }
+    ],
+    "description": "A convenient indica cartridge carrying 9# Hammer's character into flavorful, on-demand vapor — discreet, simple, and ready to go. Smooth, discreet, and flavorful — earthy, sweet undertones, with deep, easygoing relaxation.",
+    "priceLabel": "$30 1g",
+    "priceMinorUnits": 3000,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-full-spec-full-spec-cadet-cartridge-9lb-hammer-6-6d354e94-1g-ebefa6",
+        "label": "1g",
+        "priceMinorUnits": 3000,
+        "inventoryLevel": 2,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "25892"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-full-spec-full-spec-cart-bubble-kush-1g-bc1b37d0",
+    "name": "Bubble Kush",
+    "productName": "Full Spec Cart Bubble Kush 1g",
+    "brand": "Full Spec",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "hybrid",
+    "strainName": "Bubble Kush",
+    "thc": "88.63%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "88.63",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "88.63",
+        "unit": "%"
+      }
+    ],
+    "description": "A convenient hybrid cartridge carrying Bubble Kush's character into flavorful, on-demand vapor — discreet, simple, and ready to go. Convenient and clean, with notes of tar, diesel, and pine, delivering a versatile, anytime balance.",
+    "priceLabel": "$30 1g",
+    "priceMinorUnits": 3000,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-full-spec-full-spec-cart-bubble-kush-1g-bc1b37d0-1g-b59943",
+        "label": "1g",
+        "priceMinorUnits": 3000,
+        "inventoryLevel": 7,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "26885"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-full-spec-full-spec-cart-lemon-tree-midnight-1g-15fce49c",
+    "name": "Lemon Tree",
+    "productName": "Full Spec Cart Lemon Tree Midnight 1g",
+    "brand": "Full Spec",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "hybrid",
+    "strainName": "Lemon Tree",
+    "thc": "82.02%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "82.02",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "82.02",
+        "unit": "%"
+      }
+    ],
+    "description": "Portable hybrid vape cart of Lemon Tree, dialed in for smooth flavor and easy dosing whenever and wherever you want it. Smooth, discreet, and flavorful — with notes of lemon, citrus, and diesel, with a smooth, well-rounded vibe.",
+    "priceLabel": "$30 1g",
+    "priceMinorUnits": 3000,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-full-spec-full-spec-cart-lemon-tree-midnight-1g-15fce49c-1g-525cac",
+        "label": "1g",
+        "priceMinorUnits": 3000,
+        "inventoryLevel": 9,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "26884"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-full-spec-full-spec-elite-cartridge-1g-core-4-h-purple-churro-834470f9",
+    "name": "Purple Churro",
+    "productName": "Full Spec - Elite - Cartridge - 1g - (Core 4) (H) Purple Churro",
+    "brand": "Full Spec",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "hybrid",
+    "strainName": "Purple Churro",
+    "thc": "77.13%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "77.13",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "77.13",
+        "unit": "%"
+      }
+    ],
+    "description": "A hybrid vape cartridge filled with Purple Churro oil — smooth, flavorful vapor in a discreet, no-torch, push-button format that goes wherever you go. Flavor on the go, with notes of apple, berry, and diesel, leading into a versatile, anytime balance.",
+    "priceLabel": "$36 1g",
+    "priceMinorUnits": 3600,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-full-spec-full-spec-elite-cartridge-1g-core-4-h-purple-churro-834470f9-1g-604339",
+        "label": "1g",
+        "priceMinorUnits": 3600,
+        "inventoryLevel": 2,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "22944"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-full-spec-full-spec-elite-cartridge-1g-core-4-s-rose-47-76b34a45",
+    "name": "Rose-47",
+    "productName": "Full Spec - Elite - Cartridge - 1g - (Core 4) (S) Rose-47",
+    "brand": "Full Spec",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "hybrid",
+    "strainName": "Rose-47",
+    "thc": "89.58%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "89.58",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "89.58",
+        "unit": "%"
+      }
+    ],
+    "description": "A convenient hybrid cartridge carrying Rose-47's character into flavorful, on-demand vapor — discreet, simple, and ready to go. Smooth, discreet, and flavorful — a soft, floral rose flavor, with a versatile, anytime balance.",
+    "priceLabel": "$36 1g",
+    "priceMinorUnits": 3600,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-full-spec-full-spec-elite-cartridge-1g-core-4-s-rose-47-76b34a45-1g-735486",
+        "label": "1g",
+        "priceMinorUnits": 3600,
+        "inventoryLevel": 6,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "26892"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-full-spec-full-spec-elite-cartridge-1g-holidaze-i-sleigh-ride-c26129ab",
+    "name": "Sleigh Ride",
+    "productName": "Full Spec - Elite - Cartridge - 1g - (Holidaze) (I) Sleigh Ride",
+    "brand": "Full Spec",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "hybrid",
+    "strainName": "Sleigh Ride",
+    "thc": "82.73%",
+    "cbd": "4.85%",
+    "totalThc": {
+      "type": "thc",
+      "value": "82.73",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "4.85",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "82.73",
+        "unit": "%"
+      },
+      {
+        "type": "cbd",
+        "value": "4.85",
+        "unit": "%"
+      }
+    ],
+    "description": "A hybrid vape cartridge filled with Sleigh Ride oil — smooth, flavorful vapor in a discreet, no-torch, push-button format that goes wherever you go. Smooth, discreet, and flavorful — a balanced, sweet-earthy profile, with a balanced head-and-body experience.",
+    "priceLabel": "$35 1g",
+    "priceMinorUnits": 3500,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-full-spec-full-spec-elite-cartridge-1g-holidaze-i-sleigh-ride-c26129ab-1g-117e63",
+        "label": "1g",
+        "priceMinorUnits": 3500,
+        "inventoryLevel": 1,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "20681"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-full-spec-full-spec-elite-cartridge-1g-i-twilight-twinkle-e2e7b866",
+    "name": "Twilight Twinkle",
+    "productName": "Full Spec - Elite - Cartridge - 1g - (I) Twilight Twinkle",
+    "brand": "Full Spec",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "hybrid",
+    "strainName": "Twilight Twinkle",
+    "thc": "84.17%",
+    "cbd": "5.33%",
+    "totalThc": {
+      "type": "thc",
+      "value": "84.17",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "5.33",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "84.17",
+        "unit": "%"
+      },
+      {
+        "type": "cbd",
+        "value": "5.33",
+        "unit": "%"
+      }
+    ],
+    "description": "Portable hybrid vape cart of Twilight Twinkle, dialed in for smooth flavor and easy dosing whenever and wherever you want it. Smooth, discreet, and flavorful — a balanced, sweet-earthy profile, with a balanced head-and-body experience.",
+    "priceLabel": "$35 1g",
+    "priceMinorUnits": 3500,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-full-spec-full-spec-elite-cartridge-1g-i-twilight-twinkle-e2e7b866-1g-01deed",
+        "label": "1g",
+        "priceMinorUnits": 3500,
+        "inventoryLevel": 1,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "22097"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-full-spec-full-spec-elite-cartridge-1g-s-slippery-pear-7a08db79",
+    "name": "Slippery Pear",
+    "productName": "Full Spec - Elite - Cartridge - 1g - (S) Slippery Pear",
+    "brand": "Full Spec",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "hybrid",
+    "strainName": "Slippery Pear",
+    "thc": "83.61%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "83.61",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "83.61",
+        "unit": "%"
+      }
+    ],
+    "description": "A convenient hybrid cartridge carrying Slippery Pear's character into flavorful, on-demand vapor — discreet, simple, and ready to go. Convenient and clean, a balanced, sweet-earthy profile, delivering a versatile, anytime balance.",
+    "priceLabel": "$35 1g",
+    "priceMinorUnits": 3500,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-full-spec-full-spec-elite-cartridge-1g-s-slippery-pear-7a08db79-1g-7fdb31",
+        "label": "1g",
+        "priceMinorUnits": 3500,
+        "inventoryLevel": 1,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "22098"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-full-spec-full-spec-elite-cartridge-green-bliss-sh-d5280c89",
+    "name": "Green Bliss",
+    "productName": "Full Spec Elite Cartridge Green Bliss (SH)",
+    "brand": "Full Spec",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "hybrid",
+    "strainName": "Green Bliss",
+    "thc": "83.72%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "83.72",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "83.72",
+        "unit": "%"
+      }
+    ],
+    "description": "A convenient hybrid cartridge carrying Green Bliss's character into flavorful, on-demand vapor — discreet, simple, and ready to go. Smooth, discreet, and flavorful — a balanced, sweet-earthy profile, with a smooth, well-rounded vibe.",
+    "priceLabel": "$36 1g",
+    "priceMinorUnits": 3600,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-full-spec-full-spec-elite-cartridge-green-bliss-sh-d5280c89-1g-16b923",
+        "label": "1g",
+        "priceMinorUnits": 3600,
+        "inventoryLevel": 1,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "25886"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-full-spec-solr-bear-live-rosin-xl-cartridge-1g-h-vampire-sunset-9bf47ea3",
+    "name": "Vampire Sunset",
+    "productName": "Solr Bear - Live Rosin XL - Cartridge - 1g - (H) Vampire Sunset",
+    "brand": "Full Spec",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "hybrid",
+    "strainName": "Vampire Sunset",
+    "thc": "71.09%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "71.09",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "71.09",
+        "unit": "%"
+      }
+    ],
+    "description": "A convenient hybrid cartridge carrying Vampire Sunset's character into flavorful, on-demand vapor — discreet, simple, and ready to go. Convenient and clean, a balanced, sweet-earthy profile, delivering a smooth, well-rounded vibe.",
+    "priceLabel": "$42 1g",
+    "priceMinorUnits": 4200,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-full-spec-solr-bear-live-rosin-xl-cartridge-1g-h-vampire-sunset-9bf47ea3-1g-24d818",
+        "label": "1g",
+        "priceMinorUnits": 4200,
+        "inventoryLevel": 4,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "18295"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-goodgood-1g-goodgood-cartridge-banana-candy-h-511b1985",
+    "name": "Banana Candy",
+    "productName": "1g GoodGood Cartridge - Banana Candy (H)",
+    "brand": "GoodGood",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "indica",
+    "strainName": "Banana Candy",
+    "thc": "87.89%",
+    "cbd": "0.51%",
+    "totalThc": {
+      "type": "thc",
+      "value": "87.89",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "0.51",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "87.89",
+        "unit": "%"
+      },
+      {
+        "type": "cbd",
+        "value": "0.51",
+        "unit": "%"
+      }
+    ],
+    "description": "A convenient indica cartridge carrying Banana Candy's character into flavorful, on-demand vapor — discreet, simple, and ready to go. Smooth, discreet, and flavorful — with notes of tree fruit, tropical, and sweet, with deep, easygoing relaxation.",
+    "priceLabel": "$20 1g",
+    "priceMinorUnits": 2000,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-goodgood-1g-goodgood-cartridge-banana-candy-h-511b1985-1g-711fe0",
+        "label": "1g",
+        "priceMinorUnits": 2000,
+        "inventoryLevel": 6,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "24110"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-goodgood-1g-goodgood-cartridge-cherry-s-h-d55f9482",
+    "name": "Cherry",
+    "productName": "1g GoodGood Cartridge - Cherry's (H)",
+    "brand": "GoodGood",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "hybrid",
+    "strainName": "Cherry",
+    "thc": "91%",
+    "cbd": "0.56%",
+    "totalThc": {
+      "type": "thc",
+      "value": "91",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "0.56",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "91",
+        "unit": "%"
+      },
+      {
+        "type": "cbd",
+        "value": "0.56",
+        "unit": "%"
+      }
+    ],
+    "description": "A hybrid vape cartridge filled with Cherry oil — smooth, flavorful vapor in a discreet, no-torch, push-button format that goes wherever you go. Smooth, discreet, and flavorful — a sweet, ripe cherry flavor, with a balanced head-and-body experience.",
+    "priceLabel": "$20 1g",
+    "priceMinorUnits": 2000,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-goodgood-1g-goodgood-cartridge-cherry-s-h-d55f9482-1g-91e0cd",
+        "label": "1g",
+        "priceMinorUnits": 2000,
+        "inventoryLevel": 3,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "25904"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-goodgood-1g-goodgood-cartridge-marshmallow-puff-i-1c0db2e8",
+    "name": "Marshmallow Puff",
+    "productName": "1g GoodGood Cartridge - Marshmallow Puff (I)",
+    "brand": "GoodGood",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "hybrid",
+    "strainName": "Marshmallow Puff",
+    "thc": "87.89%",
+    "cbd": "0.51%",
+    "totalThc": {
+      "type": "thc",
+      "value": "87.89",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "0.51",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "87.89",
+        "unit": "%"
+      },
+      {
+        "type": "cbd",
+        "value": "0.51",
+        "unit": "%"
+      }
+    ],
+    "description": "This hybrid cartridge loads Marshmallow Puff into a sleek 510-thread pen for clean, convenient draws — premium oil, precise hits, zero hassle. Convenient and clean, a balanced, sweet-earthy profile, delivering a smooth, well-rounded vibe.",
+    "priceLabel": "$20 1g",
+    "priceMinorUnits": 2000,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-goodgood-1g-goodgood-cartridge-marshmallow-puff-i-1c0db2e8-1g-36d1dd",
+        "label": "1g",
+        "priceMinorUnits": 2000,
+        "inventoryLevel": 3,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "21998",
+        "21464"
+      ],
+      "sourceRowCount": 2,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-goodgood-1g-goodgood-cartridge-scary-raspberry-rush-h-d9c1e749",
+    "name": "Raspberry",
+    "productName": "1g GoodGood Cartridge - Scary Raspberry Rush (H)",
+    "brand": "GoodGood",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "hybrid",
+    "strainName": "Raspberry",
+    "thc": "91%",
+    "cbd": "0.56%",
+    "totalThc": {
+      "type": "thc",
+      "value": "91",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "0.56",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "91",
+        "unit": "%"
+      },
+      {
+        "type": "cbd",
+        "value": "0.56",
+        "unit": "%"
+      }
+    ],
+    "description": "A convenient hybrid cartridge carrying Raspberry's character into flavorful, on-demand vapor — discreet, simple, and ready to go. Flavor on the go, with notes of berry, blueberry, and sweet, leading into an even, best-of-both-worlds feel.",
+    "priceLabel": "$20 1g",
+    "priceMinorUnits": 2000,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-goodgood-1g-goodgood-cartridge-scary-raspberry-rush-h-d9c1e749-1g-25c268",
+        "label": "1g",
+        "priceMinorUnits": 2000,
+        "inventoryLevel": 2,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "25906"
       ],
       "sourceRowCount": 1,
       "generatedForInspectionOnly": true

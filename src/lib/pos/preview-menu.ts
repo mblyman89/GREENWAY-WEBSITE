@@ -1,4 +1,4 @@
-import posMenuPreview from "@/data/pos-menu-sample-preview.json";
+import posMenuPreview from "@/data/pos-menu-preview.json";
 import type { GreenwayMenuItem } from "@/lib/leafly/types";
 
 export const posMenuPreviewItems = posMenuPreview as GreenwayMenuItem[];
