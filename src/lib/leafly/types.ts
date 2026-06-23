@@ -34,6 +34,7 @@ export type GreenwayMenuVariant = {
 export type GreenwayMenuItem = {
   id: string;
   name: string;
+  productName?: string;
   brand: string;
   category: GreenwayCategory;
   filterCategories?: GreenwayCategory[];

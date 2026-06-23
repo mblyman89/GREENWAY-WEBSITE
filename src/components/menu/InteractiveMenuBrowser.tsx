@@ -90,7 +90,7 @@ function matchesSearch(item: GreenwayMenuItem, query: string) {
   const categoryLabels = [item.category, ...(item.filterCategories ?? [])].map(formatWebsiteCategory).join(" ");
   const sourceClassifications = `${item.posInventoryType ?? ""} ${item.posInventoryCategory ?? ""}`;
   const variantLabels = item.variants.map((variant) => variant.label).join(" ");
-  const haystack = `${item.name} ${item.brand} ${item.category} ${categoryLabels} ${sourceClassifications} ${item.strainType} ${variantLabels}`.toLowerCase();
+  const haystack = `${item.name} ${item.productName ?? ""} ${item.strainName ?? ""} ${item.brand} ${item.category} ${categoryLabels} ${sourceClassifications} ${item.strainType} ${variantLabels}`.toLowerCase();
   return haystack.includes(query.trim().toLowerCase());
 }
 
