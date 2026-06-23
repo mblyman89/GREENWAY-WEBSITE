@@ -31,8 +31,10 @@ export function ProductCardPriceSelector({ item, salePriceMinorUnits }: ProductC
     [selectedVariantId, variants],
   );
   const priceMinorUnits = selectedVariant?.priceMinorUnits ?? item.priceMinorUnits;
-  const hasSalePrice = typeof salePriceMinorUnits === "number" && salePriceMinorUnits > 0 && salePriceMinorUnits < priceMinorUnits;
-  const displayPrice = hasSalePrice ? salePriceMinorUnits : priceMinorUnits;
+  const saleRatio = typeof salePriceMinorUnits === "number" && salePriceMinorUnits > 0 && salePriceMinorUnits < item.priceMinorUnits ? salePriceMinorUnits / item.priceMinorUnits : undefined;
+  const variantSalePrice = saleRatio ? Math.round(priceMinorUnits * saleRatio) : undefined;
+  const hasSalePrice = typeof variantSalePrice === "number" && variantSalePrice > 0 && variantSalePrice < priceMinorUnits;
+  const displayPrice = hasSalePrice ? variantSalePrice : priceMinorUnits;
   const unitLabel = selectedVariant?.label ? `/${selectedVariant.label}` : "";
   const showDropdown = variants.length > 1;
 

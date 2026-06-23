@@ -37,6 +37,13 @@ const previewSpecialCollections: Record<string, PreviewSpecialCollection> = {
     maxPrice: 100,
     sortBy: "price-low",
   },
+  "doobie-tuesday": {
+    label: "Doobie Tuesday",
+    helper: "All prerolls, blunts, infused prerolls, and multi-packs are 20% off for 1–3 items. Buy 4 or more for 25% off in store.",
+    categories: ["preroll", "preroll-pack", "infused-preroll", "infused-preroll-pack"],
+    maxPrice: 100,
+    sortBy: "category",
+  },
   "wax-wednesday": {
     label: "Wax Wednesday",
     helper: "Concentrate and vape products for the Wednesday wax deal.",
@@ -236,18 +243,25 @@ function criteriaWithout(criteria: FilterCriteria, key: keyof FilterCriteria): F
   return criteria;
 }
 
-function initialSearchParams() {
-  if (typeof window === "undefined") return new URLSearchParams();
-  return new URLSearchParams(window.location.search);
-}
+type InitialMenuSearchParams = {
+  search?: string;
+  category?: string;
+  brand?: string;
+  special?: string;
+};
 
-export function InteractiveMenuBrowser({ items }: { items: GreenwayMenuItem[] }) {
+type InteractiveMenuBrowserProps = {
+  items: GreenwayMenuItem[];
+  initialSearchParams?: InitialMenuSearchParams;
+};
+
+export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: InteractiveMenuBrowserProps) {
   const [initialParams] = useState(initialSearchParams);
-  const initialSearchQuery = initialParams.get("search") ?? "";
-  const initialCategoryParam = initialParams.get("category") ?? "";
+  const initialSearchQuery = initialParams.search ?? "";
+  const initialCategoryParam = initialParams.category ?? "";
   const initialCategory = isWebsiteCategory(initialCategoryParam) ? initialCategoryParam : "";
-  const initialBrand = initialParams.get("brand") ?? "";
-  const initialSpecialKey = initialParams.get("special") as PreviewSpecialCollectionKey | null;
+  const initialBrand = initialParams.brand ?? "";
+  const initialSpecialKey = initialParams.special as PreviewSpecialCollectionKey | undefined;
   const initialSpecial = initialSpecialKey && initialSpecialKey in previewSpecialCollections ? previewSpecialCollections[initialSpecialKey] : null;
   const initialSpecialCategories = initialSpecial?.categories ?? [];
   const [query, setQuery] = useState(initialSearchQuery);

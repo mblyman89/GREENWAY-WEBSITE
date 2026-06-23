@@ -10,6 +10,7 @@ import { getMockMenuItemById, mockMenuItems } from "@/lib/leafly/mock-menu";
 import type { GreenwayMenuItem } from "@/lib/leafly/types";
 import { formatWebsiteCategory } from "@/lib/pos/category-taxonomy";
 import { getPosPreviewMenuItemById, posMenuPreviewItems } from "@/lib/pos/preview-menu";
+import { formatActiveDiscountBadge, getActiveMenuDiscount } from "@/lib/specials/daily-deals";
 
 type ProductTone = {
   border: string;
@@ -104,11 +105,6 @@ function brandInitials(brand: string) {
   );
 }
 
-function salePriceFor(item: GreenwayMenuItem) {
-  if (isNonCannabisItem(item)) return undefined;
-  return Math.round(item.priceMinorUnits * 0.7);
-}
-
 function imageShellStyle(tone: ProductTone): CSSProperties {
   return {
     boxShadow: `0 22px 45px rgba(0,0,0,0.32), inset 0 0 0 1px rgba(0,0,0,0.08)`,
@@ -189,13 +185,11 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
   const brandHref = `/menu?brand=${encodeURIComponent(item.brand)}`;
   const productDescription = item.description?.trim() || "No description available for this product.";
   const showCannabinoids = !isNonCannabisItem(item);
-  const salePrice = salePriceFor(item);
+  const activeDiscount = getActiveMenuDiscount(item);
 
   return (
     <main id="top" className="min-h-screen bg-black text-white">
-      <div className="hidden md:block">
-        <Header />
-      </div>
+      <Header />
 
       <section className="mx-auto w-full max-w-[430px] px-4 pb-10 pt-4 md:max-w-5xl md:px-8 md:pt-8">
         <Link href="/menu" className="inline-flex items-center text-[0.68rem] font-black uppercase tracking-[0.18em] text-white transition hover:text-[var(--greenway)]">
@@ -229,7 +223,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
               {showCannabinoids ? <span className="inline-flex min-h-7 items-center bg-white px-2.5 py-1 text-[0.72rem] font-black uppercase leading-none text-black">CBD: {item.cbd ?? "--"}</span> : null}
             </div>
 
-            <ProductDetailPurchasePanel item={item} salePriceMinorUnits={salePrice} />
+            <ProductDetailPurchasePanel item={item} salePriceMinorUnits={activeDiscount?.salePriceMinorUnits} />
           </article>
         </div>
 
@@ -253,9 +247,18 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
 
           {relatedItems.length > 0 ? (
             <div className="mt-5 -mx-4 flex snap-x gap-4 overflow-x-auto px-4 pb-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {relatedItems.map((related) => (
-                <ProductCardVisual key={related.id} item={related} salePriceMinorUnits={salePriceFor(related)} className="w-[17.25rem] shrink-0 snap-start" />
-              ))}
+              {relatedItems.map((related) => {
+                const relatedDiscount = getActiveMenuDiscount(related);
+                return (
+                  <ProductCardVisual
+                    key={related.id}
+                    item={related}
+                    salePriceMinorUnits={relatedDiscount?.salePriceMinorUnits}
+                    saleBadgeLabel={relatedDiscount ? formatActiveDiscountBadge(relatedDiscount) : undefined}
+                    className="w-[17.25rem] shrink-0 snap-start"
+                  />
+                );
+              })}
             </div>
           ) : (
             <div className="mt-5 border border-white/10 bg-white/5 p-5 text-sm leading-6 text-zinc-300">No additional products from this brand are available in the current preview menu.</div>
@@ -263,9 +266,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
         </section>
       </section>
 
-      <div className="hidden md:block">
-        <Footer />
-      </div>
+      <Footer />
     </main>
   );
 }
