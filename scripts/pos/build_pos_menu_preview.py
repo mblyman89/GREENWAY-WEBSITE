@@ -55,6 +55,102 @@ CONCENTRATE_FAMILY_CATEGORIES = {
     "infused-preroll-pack",
 }
 
+VARIANT_GROUP_CATEGORIES = {
+    "flower",
+    "preroll",
+    "preroll-pack",
+    "infused-preroll",
+    "infused-preroll-pack",
+}
+
+JOINT_STYLE_CATEGORIES = {
+    "preroll",
+    "preroll-pack",
+    "infused-preroll",
+    "infused-preroll-pack",
+}
+
+PACKAGE_TOKEN_PATTERNS = [
+    r"\[[^\]]*?(?:\d+(?:\.\d+)?\s*(?:g|gram|grams|mg|oz|ounce|ounces)|\d+\s*(?:pk|pack|ct|count))[^\]]*?\]",
+    r"\([^)]*?(?:\d+(?:\.\d+)?\s*(?:g|gram|grams|mg|oz|ounce|ounces)|\d+\s*(?:pk|pack|ct|count))[^)]*?\)",
+    r"\b\d+(?:\.\d+)?\s*(?:g|gram|grams|mg|oz|ounce|ounces)\b",
+    r"\b\d+\s*(?:pk|pack|ct|count)\b",
+    r"\b\.?\d+(?:\.\d+)?\s*x\s*\d+\s*(?:pk|pack|ct|count)?\b",
+]
+
+
+def variant_group_base_name(product_name: str) -> str:
+    """Strip only package/weight/count tokens for cautious multi-size grouping."""
+    text = clean_text(product_name).lower().replace("&", " and ")
+    for pattern in PACKAGE_TOKEN_PATTERNS:
+        text = re.sub(pattern, " ", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bd\.?o\.?h\.?\s*compliant\b", " ", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bcompliant\b", " ", text, flags=re.IGNORECASE)
+    text = re.sub(r"[\[\](){}]", " ", text)
+    text = re.sub(r"[^a-z0-9]+", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def menu_group_key(product_name: str, brand: str, category: str, strain: str, display_name: str) -> tuple[str, ...]:
+    if category in VARIANT_GROUP_CATEGORIES:
+        return (
+            "variant-group",
+            slugify(brand),
+            category,
+            strain,
+            slugify(display_name),
+            slugify(variant_group_base_name(product_name)),
+        )
+    return ("single", slugify(brand), category, slugify(product_name), strain, slugify(display_name))
+
+
+def extract_joint_variant_label(product_name: str) -> str:
+    """Prefer visible joint pack/weight labels from product names when POS package keys are too generic."""
+    text = clean_text(product_name)
+    lower = text.lower()
+    pack_count: int | None = None
+
+    count_patterns = [
+        r"\b(\d+)\s*(?:pk|pack|ct|count)\b",
+        r"\b(\d+)\s*x\s*\.?\d",
+        r"\b\.?\d+(?:\.\d+)?\s*g\s*x\s*(\d+)\b",
+    ]
+    for pattern in count_patterns:
+        count_match = re.search(pattern, lower)
+        if count_match:
+            pack_count = int(count_match.group(1))
+            break
+
+    weights: list[float] = []
+    for match in re.finditer(r"(?<![a-z0-9])(\.?\d+(?:\.\d+)?)\s*(g|gram|grams)\b", lower):
+        raw_num = match.group(1)
+        if raw_num.startswith("."):
+            raw_num = f"0{raw_num}"
+        parsed = parse_float(raw_num)
+        if parsed is not None:
+            weights.append(parsed)
+
+    total_weight = weights[-1] if weights else None
+    if pack_count and weights:
+        each_weight = weights[0]
+        calculated_total = each_weight * pack_count
+        if total_weight is None or abs(total_weight - calculated_total) <= 0.05:
+            total_weight = calculated_total
+        return f"{pack_count}pk / {trim_number(str(total_weight))}g"
+    if pack_count:
+        return f"{pack_count}pk"
+    if total_weight is not None:
+        return f"{trim_number(str(total_weight))}g"
+    return ""
+
+
+def variant_label_for_row(row: dict[str, str], category: str, grouped: bool) -> str:
+    if grouped and category in JOINT_STYLE_CATEGORIES:
+        extracted = extract_joint_variant_label(clean_text(row.get("product_name")) or clean_text(row.get("inventory_product")))
+        if extracted:
+            return extracted
+    return package_label(row)
+
 
 def clean_text(value: Any) -> str:
     if value is None:
@@ -383,7 +479,7 @@ def build_preview() -> tuple[list[dict[str, Any]], dict[str, Any], list[dict[str
         strain = normalize_strain_type(row.get("product_type", ""))
         strain_name = clean_text(row.get("product_strain")) or clean_text(row.get("inventory_strain"))
         display_name = display_name_for_product(product_name, strain_name, category)
-        key = (slugify(product_name), slugify(brand), category, strain, slugify(display_name))
+        key = menu_group_key(product_name, brand, category, strain, display_name)
         groups[key].append(row)
         counters["included_variant_rows"] += 1
         category_counter[category] += 1
@@ -402,8 +498,9 @@ def build_preview() -> tuple[list[dict[str, Any]], dict[str, Any], list[dict[str
         strain_name = clean_text(first.get("product_strain")) or clean_text(first.get("inventory_strain", ""))
         name = display_name_for_product(product_name, strain_name, category)
         description = description_for_product(first.get("product_description", ""), name, product_name)
-        item_hash = stable_hash([product_name, brand, category, strain, name])
-        item_id = f"pos-{category}-{slugify(brand)}-{slugify(product_name)}-{item_hash}"
+        group_base_name = variant_group_base_name(product_name) if category in VARIANT_GROUP_CATEGORIES else product_name
+        item_hash = stable_hash([group_base_name, brand, category, strain, name])
+        item_id = f"pos-{category}-{slugify(brand)}-{slugify(group_base_name)}-{item_hash}"
         unit = unit_for_category(category)
 
         variants_by_signature: dict[tuple[str, int], dict[str, Any]] = {}
@@ -415,7 +512,7 @@ def build_preview() -> tuple[list[dict[str, Any]], dict[str, Any], list[dict[str
         for row in group_rows:
             source_inventory_ids.append(clean_text(row.get("inventory_id")))
             units = parse_int(row.get("units_available"))
-            label = package_label(row)
+            label = variant_label_for_row(row, category, len(group_rows) > 1)
             price_minor = parse_money_minor(row.get("product_price_master"))
             if price_minor is None or price_minor <= 0:
                 price_minor = parse_money_minor(row.get("product_price_inventory")) or 0
@@ -536,6 +633,7 @@ def build_preview() -> tuple[list[dict[str, Any]], dict[str, Any], list[dict[str
         "notes": [
             "This feed maps website categories from POS inventory type plus POS category, with product_category weighted as the customer-facing clue.",
             "Only strict exact v2 matches are included. Ambiguous, fuzzy, and unmatched rows are intentionally held back for later guardrails.",
+            "Flower and joint-style categories are cautiously grouped into multi-variant cards only when brand, category, strain type, display name, and package-stripped base product identity match.",
             "Rows with zero available-for-sale units are excluded from public-menu preview output.",
             "Descriptions come from the manually enriched Description column in the Products workbook when present.",
             "Images are still not included because the POS exports do not provide downloadable product image assets.",

@@ -1,8 +1,8 @@
 import type { CSSProperties } from "react";
 import Link from "next/link";
-import { formatMinorCurrency } from "@/lib/leafly/format";
 import type { GreenwayMenuItem } from "@/lib/leafly/types";
 import { formatWebsiteCategory } from "@/lib/pos/category-taxonomy";
+import { ProductCardPriceSelector } from "./ProductCardPriceSelector";
 
 type CardTone = {
   border: string;
@@ -168,11 +168,6 @@ type ProductCardVisualProps = {
 };
 
 export function ProductCardVisual({ item, salePriceMinorUnits, ctaLabel = "ADD TO CART", className = "" }: ProductCardVisualProps) {
-  const firstVariant = item.variants[0];
-  const priceMinorUnits = firstVariant?.priceMinorUnits ?? item.priceMinorUnits;
-  const hasSalePrice = typeof salePriceMinorUnits === "number" && salePriceMinorUnits > 0 && salePriceMinorUnits < priceMinorUnits;
-  const displayPrice = hasSalePrice ? salePriceMinorUnits : priceMinorUnits;
-  const unitLabel = firstVariant?.label ? `/${firstVariant.label}` : "";
   const showCannabinoids = isCannabisItem(item);
   const tone = cardToneForItem(item);
 
@@ -218,11 +213,7 @@ export function ProductCardVisual({ item, salePriceMinorUnits, ctaLabel = "ADD T
       </div>
 
       <div className="pt-4 text-center">
-        <div className="flex min-h-[2.85rem] min-w-0 flex-wrap items-end justify-center gap-x-2 gap-y-1 leading-none">
-          {hasSalePrice ? <span className="pb-1 text-sm font-black text-zinc-400 line-through md:text-[0.95rem]">{formatMinorCurrency(priceMinorUnits)}</span> : null}
-          <span className="text-[1.72rem] font-black text-[var(--orange)] md:text-[1.95rem]">{formatMinorCurrency(displayPrice)}</span>
-          {unitLabel ? <span className="pb-1.5 text-sm font-black text-white/90 md:text-base">{unitLabel}</span> : null}
-        </div>
+        <ProductCardPriceSelector item={item} salePriceMinorUnits={salePriceMinorUnits} />
 
         <Link
           href={`/menu/products/${item.id}`}
