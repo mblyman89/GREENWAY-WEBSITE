@@ -421,7 +421,7 @@ export function InteractiveMenuBrowser({ items }: { items: GreenwayMenuItem[] })
   );
 
   return (
-    <section className="mx-auto grid max-w-7xl gap-5 px-4 py-5 md:px-8 md:py-10 lg:grid-cols-[300px_1fr] lg:gap-8">
+    <section className="mx-auto grid max-w-7xl gap-5 overflow-x-clip px-3 py-5 sm:px-4 md:px-8 md:py-10 lg:grid-cols-[300px_1fr] lg:gap-8">
       <div className="space-y-3 lg:col-start-2 lg:space-y-5">
         {initialSpecial ? (
           <div className="rounded-3xl border border-[var(--gold)]/30 bg-[var(--gold)]/10 p-4 md:p-5">
@@ -443,7 +443,7 @@ export function InteractiveMenuBrowser({ items }: { items: GreenwayMenuItem[] })
             <p className="text-sm font-black text-white">Showing {filteredItems.length} of {items.length} POS products</p>
             <p className="mt-1 text-xs text-zinc-400">Filters use POS inventory type + category classification.</p>
           </div>
-          <div className="grid grid-cols-[minmax(0,1fr)_7.25rem] gap-2 lg:contents">
+          <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_12rem] lg:contents">
             <label className="grid gap-1.5 text-[0.62rem] font-black uppercase tracking-[0.14em] text-zinc-300 lg:gap-2 lg:text-xs">
               Search
               <input
@@ -481,7 +481,7 @@ export function InteractiveMenuBrowser({ items }: { items: GreenwayMenuItem[] })
           <div className="space-y-10">
             {groupedItems.map((group) => (
               <section key={group.category} id={group.category} className="scroll-mt-32">
-                <div className="mb-4 flex items-end justify-between gap-4">
+                <div className="mb-4 flex min-w-0 flex-wrap items-end justify-between gap-3">
                   <div>
                     <p className="text-xs font-black uppercase tracking-[0.2em] text-[var(--greenway)]">Category</p>
                     <h2 className="mt-1 text-3xl font-black text-white">{formatWebsiteCategory(group.category)}</h2>

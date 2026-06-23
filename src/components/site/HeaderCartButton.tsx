@@ -11,7 +11,7 @@ export function HeaderCartButton() {
     <button
       type="button"
       onClick={openCart}
-      className="group relative inline-flex h-10 min-w-10 items-center justify-center gap-2 rounded-full border border-white/15 bg-white/[0.04] px-2 text-white transition hover:border-[var(--orange)] hover:bg-[var(--orange)] hover:text-black sm:min-h-10 sm:px-3 sm:py-2"
+      className="group relative inline-flex h-9 min-w-9 shrink-0 items-center justify-center gap-2 rounded-full border border-white/15 bg-white/[0.04] px-1.5 text-white transition hover:border-[var(--orange)] hover:bg-[var(--orange)] hover:text-black sm:h-10 sm:min-w-10 sm:px-3 sm:py-2"
       aria-label={accessibleLabel}
     >
       <span className="sr-only">Cart</span>
