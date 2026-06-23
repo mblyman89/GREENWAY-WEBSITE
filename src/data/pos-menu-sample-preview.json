@@ -1,66 +1,5 @@
 [
   {
-    "id": "pos-cartridge-2727-2727-vape-cart-2727-blueberry-pancakes-1g-7a9ddabf",
-    "name": "Blueberry Pancakes",
-    "productName": "2727 - Vape Cart - 2727 - Blueberry Pancakes - 1g",
-    "brand": "2727",
-    "category": "cartridge",
-    "filterCategories": [
-      "cartridge",
-      "concentrate"
-    ],
-    "posInventoryType": "Concentrate for Inhalation",
-    "posInventoryCategory": "Cartridge",
-    "strainType": "hybrid",
-    "strainName": "Blueberry Pancakes",
-    "thc": "92%",
-    "cbd": "4%",
-    "totalThc": {
-      "type": "thc",
-      "value": "92",
-      "unit": "%"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "4",
-      "unit": "%"
-    },
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "92",
-        "unit": "%"
-      },
-      {
-        "type": "cbd",
-        "value": "4",
-        "unit": "%"
-      }
-    ],
-    "description": "A hybrid vape cartridge filled with Blueberry Pancakes oil — smooth, flavorful vapor in a discreet, no-torch, push-button format that goes wherever you go. Flavor on the go, with notes of vanilla, butter, and blueberry, leading into a smooth, well-rounded vibe.",
-    "priceLabel": "$25 1g",
-    "priceMinorUnits": 2500,
-    "inventoryStatus": "low-stock",
-    "variants": [
-      {
-        "id": "pos-cartridge-2727-2727-vape-cart-2727-blueberry-pancakes-1g-7a9ddabf-1g-d5b461",
-        "label": "1g",
-        "priceMinorUnits": 2500,
-        "inventoryLevel": 3,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "26128"
-      ],
-      "sourceRowCount": 1,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
     "id": "pos-cartridge-2727-2727-vape-cart-2727-lemon-meringue-1g-4ae34cbb",
     "name": "Lemon Meringue",
     "productName": "2727 - Vape Cart - 2727 - Lemon Meringue - 1g",
@@ -122,71 +61,10 @@
     }
   },
   {
-    "id": "pos-cartridge-agro-couture-ge-blackberry-cobbler-1g-indica-vape-cartridge-e0888dbc",
-    "name": "Black & Blueberry",
-    "productName": "GE - Blackberry Cobbler - 1g Indica Vape Cartridge",
-    "brand": "Agro Couture",
-    "category": "cartridge",
-    "filterCategories": [
-      "cartridge",
-      "concentrate"
-    ],
-    "posInventoryType": "Concentrate for Inhalation",
-    "posInventoryCategory": "Cartridge",
-    "strainType": "indica",
-    "strainName": "Black & Blueberry",
-    "thc": "91%",
-    "cbd": "1.3%",
-    "totalThc": {
-      "type": "thc",
-      "value": "91",
-      "unit": "%"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "1.3",
-      "unit": "%"
-    },
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "91",
-        "unit": "%"
-      },
-      {
-        "type": "cbd",
-        "value": "1.3",
-        "unit": "%"
-      }
-    ],
-    "description": "A convenient indica cartridge carrying Black & Blueberry's character into flavorful, on-demand vapor — discreet, simple, and ready to go. Smooth, discreet, and flavorful — a sweet, ripe blackberry flavor, with a slow, mellow wind-down vibe.",
-    "priceLabel": "$15 1g",
-    "priceMinorUnits": 1500,
-    "inventoryStatus": "in-stock",
-    "variants": [
-      {
-        "id": "pos-cartridge-agro-couture-ge-blackberry-cobbler-1g-indica-vape-cartridge-e0888dbc-1g-bb394f",
-        "label": "1g",
-        "priceMinorUnits": 1500,
-        "inventoryLevel": 10,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "12856"
-      ],
-      "sourceRowCount": 1,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-cartridge-agro-couture-ge-green-zkittlez-1g-sativa-vape-cartridge-f00cfe6a",
-    "name": "Green Zkittlez",
-    "productName": "GE - Green Zkittlez - 1g Sativa Vape Cartridge",
-    "brand": "Agro Couture",
+    "id": "pos-cartridge-2727-2727-vape-cart-2727-blueberry-pancakes-1g-7a9ddabf",
+    "name": "Blueberry Pancakes",
+    "productName": "2727 - Vape Cart - 2727 - Blueberry Pancakes - 1g",
+    "brand": "2727",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -195,9 +73,9 @@
     "posInventoryType": "Concentrate for Inhalation",
     "posInventoryCategory": "Cartridge",
     "strainType": "hybrid",
-    "strainName": "Green Zkittlez",
+    "strainName": "Blueberry Pancakes",
     "thc": "92%",
-    "cbd": "0.16%",
+    "cbd": "4%",
     "totalThc": {
       "type": "thc",
       "value": "92",
@@ -205,7 +83,7 @@
     },
     "totalCbd": {
       "type": "cbd",
-      "value": "0.16",
+      "value": "4",
       "unit": "%"
     },
     "compounds": [
@@ -216,20 +94,20 @@
       },
       {
         "type": "cbd",
-        "value": "0.16",
+        "value": "4",
         "unit": "%"
       }
     ],
-    "description": "This hybrid cartridge loads Green Zkittlez into a sleek 510-thread pen for clean, convenient draws — premium oil, precise hits, zero hassle. Flavor on the go, a sweet candy-fruit aroma with a calm, happy, relaxed feel, leading into a balanced head-and-body experience.",
-    "priceLabel": "$15 1g",
-    "priceMinorUnits": 1500,
-    "inventoryStatus": "in-stock",
+    "description": "A hybrid vape cartridge filled with Blueberry Pancakes oil — smooth, flavorful vapor in a discreet, no-torch, push-button format that goes wherever you go. Flavor on the go, with notes of vanilla, butter, and blueberry, leading into a smooth, well-rounded vibe.",
+    "priceLabel": "$25 1g",
+    "priceMinorUnits": 2500,
+    "inventoryStatus": "low-stock",
     "variants": [
       {
-        "id": "pos-cartridge-agro-couture-ge-green-zkittlez-1g-sativa-vape-cartridge-f00cfe6a-1g-d8933a",
+        "id": "pos-cartridge-2727-2727-vape-cart-2727-blueberry-pancakes-1g-7a9ddabf-1g-d5b461",
         "label": "1g",
-        "priceMinorUnits": 1500,
-        "inventoryLevel": 12,
+        "priceMinorUnits": 2500,
+        "inventoryLevel": 3,
         "medical": false
       }
     ],
@@ -237,7 +115,7 @@
       "source": "priority_matches_v2.csv",
       "matchMethod": "exact_name_brand_package",
       "sourceInventoryIds": [
-        "20457"
+        "26128"
       ],
       "sourceRowCount": 1,
       "generatedForInspectionOnly": true
@@ -305,44 +183,53 @@
     }
   },
   {
-    "id": "pos-cartridge-bodhi-high-bodhi-high-ultra-pure-cartridge-lavender-trainwrecks-1g-b0e04757",
-    "name": "Lavender Trainwreck",
-    "productName": "Bodhi High Ultra Pure Cartridge Lavender Trainwrecks- 1g",
-    "brand": "Bodhi High",
+    "id": "pos-cartridge-agro-couture-ge-green-zkittlez-1g-sativa-vape-cartridge-f00cfe6a",
+    "name": "Green Zkittlez",
+    "productName": "GE - Green Zkittlez - 1g Sativa Vape Cartridge",
+    "brand": "Agro Couture",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
       "concentrate"
     ],
-    "posInventoryType": "Usable Marijuana",
+    "posInventoryType": "Concentrate for Inhalation",
     "posInventoryCategory": "Cartridge",
     "strainType": "hybrid",
-    "strainName": "Lavender Trainwreck",
-    "thc": "75%",
-    "cbd": null,
+    "strainName": "Green Zkittlez",
+    "thc": "92%",
+    "cbd": "0.16%",
     "totalThc": {
       "type": "thc",
-      "value": "75",
+      "value": "92",
       "unit": "%"
     },
-    "totalCbd": null,
+    "totalCbd": {
+      "type": "cbd",
+      "value": "0.16",
+      "unit": "%"
+    },
     "compounds": [
       {
         "type": "thc",
-        "value": "75",
+        "value": "92",
+        "unit": "%"
+      },
+      {
+        "type": "cbd",
+        "value": "0.16",
         "unit": "%"
       }
     ],
-    "description": "A convenient hybrid cartridge carrying Lavender Trainwreck's character into flavorful, on-demand vapor — discreet, simple, and ready to go. Convenient and clean, a soft, floral lavender flavor, delivering a balanced head-and-body experience.",
-    "priceLabel": "$50 1g",
-    "priceMinorUnits": 5000,
-    "inventoryStatus": "low-stock",
+    "description": "This hybrid cartridge loads Green Zkittlez into a sleek 510-thread pen for clean, convenient draws — premium oil, precise hits, zero hassle. Flavor on the go, a sweet candy-fruit aroma with a calm, happy, relaxed feel, leading into a balanced head-and-body experience.",
+    "priceLabel": "$15 1g",
+    "priceMinorUnits": 1500,
+    "inventoryStatus": "in-stock",
     "variants": [
       {
-        "id": "pos-cartridge-bodhi-high-bodhi-high-ultra-pure-cartridge-lavender-trainwrecks-1g-b0e04757-1g-4084d6",
+        "id": "pos-cartridge-agro-couture-ge-green-zkittlez-1g-sativa-vape-cartridge-f00cfe6a-1g-d8933a",
         "label": "1g",
-        "priceMinorUnits": 5000,
-        "inventoryLevel": 2,
+        "priceMinorUnits": 1500,
+        "inventoryLevel": 12,
         "medical": false
       }
     ],
@@ -350,7 +237,68 @@
       "source": "priority_matches_v2.csv",
       "matchMethod": "exact_name_brand_package",
       "sourceInventoryIds": [
-        "26586"
+        "20457"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-agro-couture-ge-blackberry-cobbler-1g-indica-vape-cartridge-e0888dbc",
+    "name": "Black & Blueberry",
+    "productName": "GE - Blackberry Cobbler - 1g Indica Vape Cartridge",
+    "brand": "Agro Couture",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "indica",
+    "strainName": "Black & Blueberry",
+    "thc": "91%",
+    "cbd": "1.3%",
+    "totalThc": {
+      "type": "thc",
+      "value": "91",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "1.3",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "91",
+        "unit": "%"
+      },
+      {
+        "type": "cbd",
+        "value": "1.3",
+        "unit": "%"
+      }
+    ],
+    "description": "A convenient indica cartridge carrying Black & Blueberry's character into flavorful, on-demand vapor — discreet, simple, and ready to go. Smooth, discreet, and flavorful — a sweet, ripe blackberry flavor, with a slow, mellow wind-down vibe.",
+    "priceLabel": "$15 1g",
+    "priceMinorUnits": 1500,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-agro-couture-ge-blackberry-cobbler-1g-indica-vape-cartridge-e0888dbc-1g-bb394f",
+        "label": "1g",
+        "priceMinorUnits": 1500,
+        "inventoryLevel": 10,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "12856"
       ],
       "sourceRowCount": 1,
       "generatedForInspectionOnly": true
@@ -696,10 +644,10 @@
     }
   },
   {
-    "id": "pos-cartridge-buddies-bff-flavored-live-resin-vape-cart-smh-strawberry-mango-haze-1g-s-doh-31047bfe",
-    "name": "Strawberry Mango Haze",
-    "productName": "BFF Flavored Live Resin Vape Cart - SMH - Strawberry Mango Haze - 1g - (S) - DOH",
-    "brand": "Buddies",
+    "id": "pos-cartridge-bodhi-high-bodhi-high-ultra-pure-cartridge-lavender-trainwrecks-1g-b0e04757",
+    "name": "Lavender Trainwreck",
+    "productName": "Bodhi High Ultra Pure Cartridge Lavender Trainwrecks- 1g",
+    "brand": "Bodhi High",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -707,33 +655,33 @@
     ],
     "posInventoryType": "Usable Marijuana",
     "posInventoryCategory": "Cartridge",
-    "strainType": "sativa",
-    "strainName": "Strawberry Mango Haze",
-    "thc": "86%",
+    "strainType": "hybrid",
+    "strainName": "Lavender Trainwreck",
+    "thc": "75%",
     "cbd": null,
     "totalThc": {
       "type": "thc",
-      "value": "86",
+      "value": "75",
       "unit": "%"
     },
     "totalCbd": null,
     "compounds": [
       {
         "type": "thc",
-        "value": "86",
+        "value": "75",
         "unit": "%"
       }
     ],
-    "description": "A convenient sativa cartridge carrying Strawberry Mango Haze's character into flavorful, on-demand vapor — discreet, simple, and ready to go. Convenient and clean, with notes of mango, strawberry, and tropical, delivering an active, daytime spark.",
-    "priceLabel": "$36 1g",
-    "priceMinorUnits": 3600,
+    "description": "A convenient hybrid cartridge carrying Lavender Trainwreck's character into flavorful, on-demand vapor — discreet, simple, and ready to go. Convenient and clean, a soft, floral lavender flavor, delivering a balanced head-and-body experience.",
+    "priceLabel": "$50 1g",
+    "priceMinorUnits": 5000,
     "inventoryStatus": "low-stock",
     "variants": [
       {
-        "id": "pos-cartridge-buddies-bff-flavored-live-resin-vape-cart-smh-strawberry-mango-haze-1g-s-doh-31047bfe-1g-b2520b",
+        "id": "pos-cartridge-bodhi-high-bodhi-high-ultra-pure-cartridge-lavender-trainwrecks-1g-b0e04757-1g-4084d6",
         "label": "1g",
-        "priceMinorUnits": 3600,
-        "inventoryLevel": 4,
+        "priceMinorUnits": 5000,
+        "inventoryLevel": 2,
         "medical": false
       }
     ],
@@ -741,16 +689,16 @@
       "source": "priority_matches_v2.csv",
       "matchMethod": "exact_name_brand_package",
       "sourceInventoryIds": [
-        "27209"
+        "26586"
       ],
       "sourceRowCount": 1,
       "generatedForInspectionOnly": true
     }
   },
   {
-    "id": "pos-cartridge-buddies-bff-flavored-live-resin-vape-cart-wyd-watermelon-yuzu-dragon-fruit-1g-h-doh-33f27ce8",
-    "name": "Watermelon Yuzu Dragon fruit",
-    "productName": "BFF Flavored Live Resin Vape Cart - WYD - Watermelon Yuzu Dragon fruit - 1g - (H) - DOH",
+    "id": "pos-cartridge-buddies-mindmelt-live-resin-vape-cart-marcel-clementine-1g-s-doh-84b68e03",
+    "name": "Marcel Clementine",
+    "productName": "Mindmelt Live Resin Vape Cart - Marcel Clementine - 1g - (S) - DOH",
     "brand": "Buddies",
     "category": "cartridge",
     "filterCategories": [
@@ -760,32 +708,32 @@
     "posInventoryType": "Usable Marijuana",
     "posInventoryCategory": "Cartridge",
     "strainType": "hybrid",
-    "strainName": "Watermelon Yuzu Dragon fruit",
-    "thc": "87%",
+    "strainName": "Marcel Clementine",
+    "thc": "88%",
     "cbd": null,
     "totalThc": {
       "type": "thc",
-      "value": "87",
+      "value": "88",
       "unit": "%"
     },
     "totalCbd": null,
     "compounds": [
       {
         "type": "thc",
-        "value": "87",
+        "value": "88",
         "unit": "%"
       }
     ],
-    "description": "A hybrid vape cartridge filled with Watermelon Yuzu Dragon fruit oil — smooth, flavorful vapor in a discreet, no-torch, push-button format that goes wherever you go. Flavor on the go, a sweet, refreshing watermelon flavor, leading into a balanced head-and-body experience.",
-    "priceLabel": "$36 1g",
-    "priceMinorUnits": 3600,
+    "description": "Portable hybrid vape cart of Marcel Clementine, dialed in for smooth flavor and easy dosing whenever and wherever you want it. Smooth, discreet, and flavorful — a balanced, sweet-earthy profile, with a versatile, anytime balance.",
+    "priceLabel": "$30 1g",
+    "priceMinorUnits": 3000,
     "inventoryStatus": "low-stock",
     "variants": [
       {
-        "id": "pos-cartridge-buddies-bff-flavored-live-resin-vape-cart-wyd-watermelon-yuzu-dragon-fruit-1g-h-doh-33f27ce8-1g-8022bd",
+        "id": "pos-cartridge-buddies-mindmelt-live-resin-vape-cart-marcel-clementine-1g-s-doh-84b68e03-1g-c8be15",
         "label": "1g",
-        "priceMinorUnits": 3600,
-        "inventoryLevel": 4,
+        "priceMinorUnits": 3000,
+        "inventoryLevel": 3,
         "medical": false
       }
     ],
@@ -793,16 +741,17 @@
       "source": "priority_matches_v2.csv",
       "matchMethod": "exact_name_brand_package",
       "sourceInventoryIds": [
-        "27210"
+        "27320",
+        "27202"
       ],
-      "sourceRowCount": 1,
+      "sourceRowCount": 2,
       "generatedForInspectionOnly": true
     }
   },
   {
-    "id": "pos-cartridge-buddies-buddies-cart-apple-fritter-404ce77d",
-    "name": "Apple Fritter",
-    "productName": "Buddies cart Apple Fritter",
+    "id": "pos-cartridge-buddies-buddies-flavored-vape-cart-strawberry-cough-1g-59fce6d4",
+    "name": "Strawberry Cough",
+    "productName": "Buddies Flavored Vape Cart - Strawberry Cough - 1g",
     "brand": "Buddies",
     "category": "cartridge",
     "filterCategories": [
@@ -811,10 +760,10 @@
     ],
     "posInventoryType": "Concentrate for Inhalation",
     "posInventoryCategory": "Cartridge",
-    "strainType": "hybrid",
-    "strainName": "Apple Fritter",
+    "strainType": "sativa",
+    "strainName": "Strawberry Cough",
     "thc": "89%",
-    "cbd": "0.2%",
+    "cbd": "0.16%",
     "totalThc": {
       "type": "thc",
       "value": "89",
@@ -822,7 +771,7 @@
     },
     "totalCbd": {
       "type": "cbd",
-      "value": "0.2",
+      "value": "0.16",
       "unit": "%"
     },
     "compounds": [
@@ -833,20 +782,20 @@
       },
       {
         "type": "cbd",
-        "value": "0.2",
+        "value": "0.16",
         "unit": "%"
       }
     ],
-    "description": "This hybrid cartridge loads Apple Fritter into a sleek 510-thread pen for clean, convenient draws — premium oil, precise hits, zero hassle. Flavor on the go, with notes of apple, butter, and cheese, leading into a versatile, anytime balance.",
+    "description": "Portable sativa vape cart of Strawberry Cough, dialed in for smooth flavor and easy dosing whenever and wherever you want it. Smooth, discreet, and flavorful — with notes of strawberry, sweet, and berry, with an upbeat, talkative energy.",
     "priceLabel": "$20 1g",
     "priceMinorUnits": 2000,
     "inventoryStatus": "in-stock",
     "variants": [
       {
-        "id": "pos-cartridge-buddies-buddies-cart-apple-fritter-404ce77d-1g-ddee48",
+        "id": "pos-cartridge-buddies-buddies-flavored-vape-cart-strawberry-cough-1g-59fce6d4-1g-069671",
         "label": "1g",
         "priceMinorUnits": 2000,
-        "inventoryLevel": 7,
+        "inventoryLevel": 8,
         "medical": false
       }
     ],
@@ -854,60 +803,8 @@
       "source": "priority_matches_v2.csv",
       "matchMethod": "exact_name_brand_package",
       "sourceInventoryIds": [
-        "26768"
-      ],
-      "sourceRowCount": 1,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-cartridge-buddies-buddies-flavored-vape-cart-blue-ox-1g-ac19ec2f",
-    "name": "Blue Ox",
-    "productName": "Buddies Flavored Vape Cart - Blue Ox - 1g",
-    "brand": "Buddies",
-    "category": "cartridge",
-    "filterCategories": [
-      "cartridge",
-      "concentrate"
-    ],
-    "posInventoryType": "Concentrate for Inhalation",
-    "posInventoryCategory": "Cartridge",
-    "strainType": "indica",
-    "strainName": "Blue Ox",
-    "thc": "92%",
-    "cbd": null,
-    "totalThc": {
-      "type": "thc",
-      "value": "92",
-      "unit": "%"
-    },
-    "totalCbd": null,
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "92",
-        "unit": "%"
-      }
-    ],
-    "description": "A convenient indica cartridge carrying Blue Ox's character into flavorful, on-demand vapor — discreet, simple, and ready to go. Convenient and clean, with notes of blueberry, berry, and coffee, delivering settle-in, melt-into-the-couch ease.",
-    "priceLabel": "$20 1g",
-    "priceMinorUnits": 2000,
-    "inventoryStatus": "in-stock",
-    "variants": [
-      {
-        "id": "pos-cartridge-buddies-buddies-flavored-vape-cart-blue-ox-1g-ac19ec2f-1g-dbbce3",
-        "label": "1g",
-        "priceMinorUnits": 2000,
-        "inventoryLevel": 12,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "27226",
-        "26769"
+        "27228",
+        "26267"
       ],
       "sourceRowCount": 2,
       "generatedForInspectionOnly": true
@@ -978,9 +875,9 @@
     }
   },
   {
-    "id": "pos-cartridge-buddies-buddies-flavored-vape-cart-pineapple-express-1g-6da13f28",
-    "name": "Pineapple Express",
-    "productName": "Buddies Flavored Vape Cart - Pineapple Express - 1g",
+    "id": "pos-cartridge-buddies-buddies-flavored-vape-cart-blue-ox-1g-ac19ec2f",
+    "name": "Blue Ox",
+    "productName": "Buddies Flavored Vape Cart - Blue Ox - 1g",
     "brand": "Buddies",
     "category": "cartridge",
     "filterCategories": [
@@ -989,42 +886,33 @@
     ],
     "posInventoryType": "Concentrate for Inhalation",
     "posInventoryCategory": "Cartridge",
-    "strainType": "hybrid",
-    "strainName": "Pineapple Express",
-    "thc": "90%",
-    "cbd": "0.18%",
+    "strainType": "indica",
+    "strainName": "Blue Ox",
+    "thc": "92%",
+    "cbd": null,
     "totalThc": {
       "type": "thc",
-      "value": "90",
+      "value": "92",
       "unit": "%"
     },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "0.18",
-      "unit": "%"
-    },
+    "totalCbd": null,
     "compounds": [
       {
         "type": "thc",
-        "value": "90",
-        "unit": "%"
-      },
-      {
-        "type": "cbd",
-        "value": "0.18",
+        "value": "92",
         "unit": "%"
       }
     ],
-    "description": "Portable hybrid vape cart of Pineapple Express, dialed in for smooth flavor and easy dosing whenever and wherever you want it. Convenient and clean, with notes of pineapple, tropical, and citrus, delivering a smooth, well-rounded vibe.",
+    "description": "A convenient indica cartridge carrying Blue Ox's character into flavorful, on-demand vapor — discreet, simple, and ready to go. Convenient and clean, with notes of blueberry, berry, and coffee, delivering settle-in, melt-into-the-couch ease.",
     "priceLabel": "$20 1g",
     "priceMinorUnits": 2000,
     "inventoryStatus": "in-stock",
     "variants": [
       {
-        "id": "pos-cartridge-buddies-buddies-flavored-vape-cart-pineapple-express-1g-6da13f28-1g-87f814",
+        "id": "pos-cartridge-buddies-buddies-flavored-vape-cart-blue-ox-1g-ac19ec2f-1g-dbbce3",
         "label": "1g",
         "priceMinorUnits": 2000,
-        "inventoryLevel": 6,
+        "inventoryLevel": 12,
         "medical": false
       }
     ],
@@ -1032,130 +920,8 @@
       "source": "priority_matches_v2.csv",
       "matchMethod": "exact_name_brand_package",
       "sourceInventoryIds": [
-        "26770"
-      ],
-      "sourceRowCount": 1,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-cartridge-buddies-buddies-flavored-vape-cart-raspberry-parfait-1g-f3f32dff",
-    "name": "Raspberry Parfait",
-    "productName": "Buddies Flavored Vape Cart - Raspberry Parfait - 1g",
-    "brand": "Buddies",
-    "category": "cartridge",
-    "filterCategories": [
-      "cartridge",
-      "concentrate"
-    ],
-    "posInventoryType": "Concentrate for Inhalation",
-    "posInventoryCategory": "Cartridge",
-    "strainType": "hybrid",
-    "strainName": "Raspberry Parfait",
-    "thc": "89%",
-    "cbd": "0.12%",
-    "totalThc": {
-      "type": "thc",
-      "value": "89",
-      "unit": "%"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "0.12",
-      "unit": "%"
-    },
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "89",
-        "unit": "%"
-      },
-      {
-        "type": "cbd",
-        "value": "0.12",
-        "unit": "%"
-      }
-    ],
-    "description": "A hybrid vape cartridge filled with Raspberry Parfait oil — smooth, flavorful vapor in a discreet, no-torch, push-button format that goes wherever you go. Convenient and clean, with notes of violet, plum, and berry, delivering a smooth, well-rounded vibe.",
-    "priceLabel": "$20 1g",
-    "priceMinorUnits": 2000,
-    "inventoryStatus": "in-stock",
-    "variants": [
-      {
-        "id": "pos-cartridge-buddies-buddies-flavored-vape-cart-raspberry-parfait-1g-f3f32dff-1g-7c8fe1",
-        "label": "1g",
-        "priceMinorUnits": 2000,
-        "inventoryLevel": 6,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "26771"
-      ],
-      "sourceRowCount": 1,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-cartridge-buddies-buddies-flavored-vape-cart-strawberry-cough-1g-59fce6d4",
-    "name": "Strawberry Cough",
-    "productName": "Buddies Flavored Vape Cart - Strawberry Cough - 1g",
-    "brand": "Buddies",
-    "category": "cartridge",
-    "filterCategories": [
-      "cartridge",
-      "concentrate"
-    ],
-    "posInventoryType": "Concentrate for Inhalation",
-    "posInventoryCategory": "Cartridge",
-    "strainType": "sativa",
-    "strainName": "Strawberry Cough",
-    "thc": "89%",
-    "cbd": "0.16%",
-    "totalThc": {
-      "type": "thc",
-      "value": "89",
-      "unit": "%"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "0.16",
-      "unit": "%"
-    },
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "89",
-        "unit": "%"
-      },
-      {
-        "type": "cbd",
-        "value": "0.16",
-        "unit": "%"
-      }
-    ],
-    "description": "Portable sativa vape cart of Strawberry Cough, dialed in for smooth flavor and easy dosing whenever and wherever you want it. Smooth, discreet, and flavorful — with notes of strawberry, sweet, and berry, with an upbeat, talkative energy.",
-    "priceLabel": "$20 1g",
-    "priceMinorUnits": 2000,
-    "inventoryStatus": "in-stock",
-    "variants": [
-      {
-        "id": "pos-cartridge-buddies-buddies-flavored-vape-cart-strawberry-cough-1g-59fce6d4-1g-069671",
-        "label": "1g",
-        "priceMinorUnits": 2000,
-        "inventoryLevel": 8,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "27228",
-        "26267"
+        "27226",
+        "26769"
       ],
       "sourceRowCount": 2,
       "generatedForInspectionOnly": true
@@ -1267,44 +1033,44 @@
     }
   },
   {
-    "id": "pos-cartridge-buddies-buddies-live-resin-vape-cart-zazul-1g-6452f7c2",
-    "name": "Zazul",
-    "productName": "Buddies Live Resin Vape Cart - Zazul - 1g",
+    "id": "pos-cartridge-buddies-bff-flavored-live-resin-vape-cart-wyd-watermelon-yuzu-dragon-fruit-1g-h-doh-33f27ce8",
+    "name": "Watermelon Yuzu Dragon fruit",
+    "productName": "BFF Flavored Live Resin Vape Cart - WYD - Watermelon Yuzu Dragon fruit - 1g - (H) - DOH",
     "brand": "Buddies",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
       "concentrate"
     ],
-    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryType": "Usable Marijuana",
     "posInventoryCategory": "Cartridge",
-    "strainType": "indica",
-    "strainName": "Zazul",
-    "thc": "83%",
+    "strainType": "hybrid",
+    "strainName": "Watermelon Yuzu Dragon fruit",
+    "thc": "87%",
     "cbd": null,
     "totalThc": {
       "type": "thc",
-      "value": "83",
+      "value": "87",
       "unit": "%"
     },
     "totalCbd": null,
     "compounds": [
       {
         "type": "thc",
-        "value": "83",
+        "value": "87",
         "unit": "%"
       }
     ],
-    "description": "Portable indica vape cart of Zazul, dialed in for smooth flavor and easy dosing whenever and wherever you want it. Smooth, discreet, and flavorful — with notes of cheese, blueberry, and orange, with settle-in, melt-into-the-couch ease.",
-    "priceLabel": "$25 1g",
-    "priceMinorUnits": 2500,
-    "inventoryStatus": "in-stock",
+    "description": "A hybrid vape cartridge filled with Watermelon Yuzu Dragon fruit oil — smooth, flavorful vapor in a discreet, no-torch, push-button format that goes wherever you go. Flavor on the go, a sweet, refreshing watermelon flavor, leading into a balanced head-and-body experience.",
+    "priceLabel": "$36 1g",
+    "priceMinorUnits": 3600,
+    "inventoryStatus": "low-stock",
     "variants": [
       {
-        "id": "pos-cartridge-buddies-buddies-live-resin-vape-cart-zazul-1g-6452f7c2-1g-194740",
+        "id": "pos-cartridge-buddies-bff-flavored-live-resin-vape-cart-wyd-watermelon-yuzu-dragon-fruit-1g-h-doh-33f27ce8-1g-8022bd",
         "label": "1g",
-        "priceMinorUnits": 2500,
-        "inventoryLevel": 6,
+        "priceMinorUnits": 3600,
+        "inventoryLevel": 4,
         "medical": false
       }
     ],
@@ -1312,7 +1078,59 @@
       "source": "priority_matches_v2.csv",
       "matchMethod": "exact_name_brand_package",
       "sourceInventoryIds": [
-        "14171"
+        "27210"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-buddies-bff-flavored-live-resin-vape-cart-smh-strawberry-mango-haze-1g-s-doh-31047bfe",
+    "name": "Strawberry Mango Haze",
+    "productName": "BFF Flavored Live Resin Vape Cart - SMH - Strawberry Mango Haze - 1g - (S) - DOH",
+    "brand": "Buddies",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Usable Marijuana",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "sativa",
+    "strainName": "Strawberry Mango Haze",
+    "thc": "86%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "86",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "86",
+        "unit": "%"
+      }
+    ],
+    "description": "A convenient sativa cartridge carrying Strawberry Mango Haze's character into flavorful, on-demand vapor — discreet, simple, and ready to go. Convenient and clean, with notes of mango, strawberry, and tropical, delivering an active, daytime spark.",
+    "priceLabel": "$36 1g",
+    "priceMinorUnits": 3600,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-buddies-bff-flavored-live-resin-vape-cart-smh-strawberry-mango-haze-1g-s-doh-31047bfe-1g-b2520b",
+        "label": "1g",
+        "priceMinorUnits": 3600,
+        "inventoryLevel": 4,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "27209"
       ],
       "sourceRowCount": 1,
       "generatedForInspectionOnly": true
@@ -1371,43 +1189,287 @@
     }
   },
   {
-    "id": "pos-cartridge-buddies-mindmelt-live-resin-vape-cart-marcel-clementine-1g-s-doh-84b68e03",
-    "name": "Marcel Clementine",
-    "productName": "Mindmelt Live Resin Vape Cart - Marcel Clementine - 1g - (S) - DOH",
+    "id": "pos-cartridge-buddies-buddies-flavored-vape-cart-raspberry-parfait-1g-f3f32dff",
+    "name": "Raspberry Parfait",
+    "productName": "Buddies Flavored Vape Cart - Raspberry Parfait - 1g",
     "brand": "Buddies",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
       "concentrate"
     ],
-    "posInventoryType": "Usable Marijuana",
+    "posInventoryType": "Concentrate for Inhalation",
     "posInventoryCategory": "Cartridge",
     "strainType": "hybrid",
-    "strainName": "Marcel Clementine",
-    "thc": "88%",
+    "strainName": "Raspberry Parfait",
+    "thc": "89%",
+    "cbd": "0.12%",
+    "totalThc": {
+      "type": "thc",
+      "value": "89",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "0.12",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "89",
+        "unit": "%"
+      },
+      {
+        "type": "cbd",
+        "value": "0.12",
+        "unit": "%"
+      }
+    ],
+    "description": "A hybrid vape cartridge filled with Raspberry Parfait oil — smooth, flavorful vapor in a discreet, no-torch, push-button format that goes wherever you go. Convenient and clean, with notes of violet, plum, and berry, delivering a smooth, well-rounded vibe.",
+    "priceLabel": "$20 1g",
+    "priceMinorUnits": 2000,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-buddies-buddies-flavored-vape-cart-raspberry-parfait-1g-f3f32dff-1g-7c8fe1",
+        "label": "1g",
+        "priceMinorUnits": 2000,
+        "inventoryLevel": 6,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "26771"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-buddies-buddies-flavored-vape-cart-pineapple-express-1g-6da13f28",
+    "name": "Pineapple Express",
+    "productName": "Buddies Flavored Vape Cart - Pineapple Express - 1g",
+    "brand": "Buddies",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "hybrid",
+    "strainName": "Pineapple Express",
+    "thc": "90%",
+    "cbd": "0.18%",
+    "totalThc": {
+      "type": "thc",
+      "value": "90",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "0.18",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "90",
+        "unit": "%"
+      },
+      {
+        "type": "cbd",
+        "value": "0.18",
+        "unit": "%"
+      }
+    ],
+    "description": "Portable hybrid vape cart of Pineapple Express, dialed in for smooth flavor and easy dosing whenever and wherever you want it. Convenient and clean, with notes of pineapple, tropical, and citrus, delivering a smooth, well-rounded vibe.",
+    "priceLabel": "$20 1g",
+    "priceMinorUnits": 2000,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-buddies-buddies-flavored-vape-cart-pineapple-express-1g-6da13f28-1g-87f814",
+        "label": "1g",
+        "priceMinorUnits": 2000,
+        "inventoryLevel": 6,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "26770"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-buddies-buddies-cart-apple-fritter-404ce77d",
+    "name": "Apple Fritter",
+    "productName": "Buddies cart Apple Fritter",
+    "brand": "Buddies",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "hybrid",
+    "strainName": "Apple Fritter",
+    "thc": "89%",
+    "cbd": "0.2%",
+    "totalThc": {
+      "type": "thc",
+      "value": "89",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "0.2",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "89",
+        "unit": "%"
+      },
+      {
+        "type": "cbd",
+        "value": "0.2",
+        "unit": "%"
+      }
+    ],
+    "description": "This hybrid cartridge loads Apple Fritter into a sleek 510-thread pen for clean, convenient draws — premium oil, precise hits, zero hassle. Flavor on the go, with notes of apple, butter, and cheese, leading into a versatile, anytime balance.",
+    "priceLabel": "$20 1g",
+    "priceMinorUnits": 2000,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-buddies-buddies-cart-apple-fritter-404ce77d-1g-ddee48",
+        "label": "1g",
+        "priceMinorUnits": 2000,
+        "inventoryLevel": 7,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "26768"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-buddies-buddies-live-resin-vape-cart-zazul-1g-6452f7c2",
+    "name": "Zazul",
+    "productName": "Buddies Live Resin Vape Cart - Zazul - 1g",
+    "brand": "Buddies",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "indica",
+    "strainName": "Zazul",
+    "thc": "83%",
     "cbd": null,
     "totalThc": {
       "type": "thc",
-      "value": "88",
+      "value": "83",
       "unit": "%"
     },
     "totalCbd": null,
     "compounds": [
       {
         "type": "thc",
-        "value": "88",
+        "value": "83",
         "unit": "%"
       }
     ],
-    "description": "Portable hybrid vape cart of Marcel Clementine, dialed in for smooth flavor and easy dosing whenever and wherever you want it. Smooth, discreet, and flavorful — a balanced, sweet-earthy profile, with a versatile, anytime balance.",
-    "priceLabel": "$30 1g",
-    "priceMinorUnits": 3000,
+    "description": "Portable indica vape cart of Zazul, dialed in for smooth flavor and easy dosing whenever and wherever you want it. Smooth, discreet, and flavorful — with notes of cheese, blueberry, and orange, with settle-in, melt-into-the-couch ease.",
+    "priceLabel": "$25 1g",
+    "priceMinorUnits": 2500,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-buddies-buddies-live-resin-vape-cart-zazul-1g-6452f7c2-1g-194740",
+        "label": "1g",
+        "priceMinorUnits": 2500,
+        "inventoryLevel": 6,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "14171"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-clarity-farms-kelso-kandy-kk-cart-1g-grape-slushie-1g-355ac207",
+    "name": "Grape Slushie",
+    "productName": "Kelso Kandy - KK CART 1g - Grape Slushie - 1g",
+    "brand": "Clarity Farms",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "hybrid",
+    "strainName": "Grape Slushie",
+    "thc": "92.8%",
+    "cbd": "0.8%",
+    "totalThc": {
+      "type": "thc",
+      "value": "92.8",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "0.8",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "92.8",
+        "unit": "%"
+      },
+      {
+        "type": "cbd",
+        "value": "0.8",
+        "unit": "%"
+      }
+    ],
+    "description": "Portable hybrid vape cart of Grape Slushie, dialed in for smooth flavor and easy dosing whenever and wherever you want it. Convenient and clean, a sweet, candy-like grape flavor, delivering a versatile, anytime balance.",
+    "priceLabel": "$12 1g",
+    "priceMinorUnits": 1200,
     "inventoryStatus": "low-stock",
     "variants": [
       {
-        "id": "pos-cartridge-buddies-mindmelt-live-resin-vape-cart-marcel-clementine-1g-s-doh-84b68e03-1g-c8be15",
+        "id": "pos-cartridge-clarity-farms-kelso-kandy-kk-cart-1g-grape-slushie-1g-355ac207-1g-a781bc",
         "label": "1g",
-        "priceMinorUnits": 3000,
+        "priceMinorUnits": 1200,
         "inventoryLevel": 3,
         "medical": false
       }
@@ -1416,8 +1478,245 @@
       "source": "priority_matches_v2.csv",
       "matchMethod": "exact_name_brand_package",
       "sourceInventoryIds": [
-        "27320",
-        "27202"
+        "27179",
+        "21917"
+      ],
+      "sourceRowCount": 2,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-clarity-farms-tasty-terps-tc-cart-1g-kiwi-hi-chewz-1g-b14b6b57",
+    "name": "Kiwi Hi-Chewz",
+    "productName": "Tasty Terps - TC CART 1g - Kiwi Hi-Chewz - 1g",
+    "brand": "Clarity Farms",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "hybrid",
+    "strainName": "Kiwi Hi-Chewz",
+    "thc": "88.6%",
+    "cbd": "0.34%",
+    "totalThc": {
+      "type": "thc",
+      "value": "88.6",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "0.34",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "88.6",
+        "unit": "%"
+      },
+      {
+        "type": "cbd",
+        "value": "0.34",
+        "unit": "%"
+      }
+    ],
+    "description": "A convenient hybrid cartridge carrying Kiwi Hi-Chewz's character into flavorful, on-demand vapor — discreet, simple, and ready to go. Smooth, discreet, and flavorful — a tangy kiwi flavor, with an even, best-of-both-worlds feel.",
+    "priceLabel": "$20 1g",
+    "priceMinorUnits": 2000,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-clarity-farms-tasty-terps-tc-cart-1g-kiwi-hi-chewz-1g-b14b6b57-1g-4f7a96",
+        "label": "1g",
+        "priceMinorUnits": 2000,
+        "inventoryLevel": 14,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "26248",
+        "25392"
+      ],
+      "sourceRowCount": 2,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-clarity-farms-tasty-terps-tc-cart-1g-caprizun-1g-1b361c1c",
+    "name": "Caprizun",
+    "productName": "Tasty Terps - TC CART 1g - Caprizun - 1g",
+    "brand": "Clarity Farms",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "hybrid",
+    "strainName": "Caprizun",
+    "thc": "86.48%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "86.48",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "86.48",
+        "unit": "%"
+      }
+    ],
+    "description": "A convenient hybrid cartridge carrying Caprizun's character into flavorful, on-demand vapor — discreet, simple, and ready to go. Smooth, discreet, and flavorful — a balanced, sweet-earthy profile, with a smooth, well-rounded vibe.",
+    "priceLabel": "$20 1g",
+    "priceMinorUnits": 2000,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-clarity-farms-tasty-terps-tc-cart-1g-caprizun-1g-1b361c1c-1g-245fce",
+        "label": "1g",
+        "priceMinorUnits": 2000,
+        "inventoryLevel": 10,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "26247"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-clarity-farms-o-geez-og-cart-1g-pineapple-express-1g-5ebab038",
+    "name": "Pineapple Express",
+    "productName": "O' Geez - OG CART 1g - Pineapple Express - 1g",
+    "brand": "Clarity Farms",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "hybrid",
+    "strainName": "Pineapple Express",
+    "thc": "92.8%",
+    "cbd": "0.8%",
+    "totalThc": {
+      "type": "thc",
+      "value": "92.8",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "0.8",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "92.8",
+        "unit": "%"
+      },
+      {
+        "type": "cbd",
+        "value": "0.8",
+        "unit": "%"
+      }
+    ],
+    "description": "This hybrid cartridge loads Pineapple Express into a sleek 510-thread pen for clean, convenient draws — premium oil, precise hits, zero hassle. Convenient and clean, with notes of pineapple, tropical, and citrus, delivering a versatile, anytime balance.",
+    "priceLabel": "$12 1g",
+    "priceMinorUnits": 1200,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-clarity-farms-o-geez-og-cart-1g-pineapple-express-1g-5ebab038-1g-ca6070",
+        "label": "1g",
+        "priceMinorUnits": 1200,
+        "inventoryLevel": 5,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "26245"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-clarity-farms-incredibulk-ib-cart-1g-sour-blueberry-1g-2ce73a1b",
+    "name": "Sour Blueberry",
+    "productName": "Incredibulk - IB CART 1g - Sour Blueberry - 1g",
+    "brand": "Clarity Farms",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "hybrid",
+    "strainName": "Sour Blueberry",
+    "thc": "92.8%",
+    "cbd": "1%",
+    "totalThc": {
+      "type": "thc",
+      "value": "92.8",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "1",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "92.8",
+        "unit": "%"
+      },
+      {
+        "type": "cbd",
+        "value": "1",
+        "unit": "%"
+      }
+    ],
+    "description": "Portable hybrid vape cart of Sour Blueberry, dialed in for smooth flavor and easy dosing whenever and wherever you want it. Smooth, discreet, and flavorful — with notes of blueberry, diesel, and berry, with an even, best-of-both-worlds feel.",
+    "priceLabel": "$10 1g",
+    "priceMinorUnits": 1000,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-clarity-farms-incredibulk-ib-cart-1g-sour-blueberry-1g-2ce73a1b-1g-44f14f",
+        "label": "1g",
+        "priceMinorUnits": 1000,
+        "inventoryLevel": 18,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "26220",
+        "25363"
       ],
       "sourceRowCount": 2,
       "generatedForInspectionOnly": true
@@ -1487,305 +1786,6 @@
     }
   },
   {
-    "id": "pos-cartridge-clarity-farms-incredibulk-ib-cart-1g-sour-blueberry-1g-2ce73a1b",
-    "name": "Sour Blueberry",
-    "productName": "Incredibulk - IB CART 1g - Sour Blueberry - 1g",
-    "brand": "Clarity Farms",
-    "category": "cartridge",
-    "filterCategories": [
-      "cartridge",
-      "concentrate"
-    ],
-    "posInventoryType": "Concentrate for Inhalation",
-    "posInventoryCategory": "Cartridge",
-    "strainType": "hybrid",
-    "strainName": "Sour Blueberry",
-    "thc": "92.8%",
-    "cbd": "1%",
-    "totalThc": {
-      "type": "thc",
-      "value": "92.8",
-      "unit": "%"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "1",
-      "unit": "%"
-    },
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "92.8",
-        "unit": "%"
-      },
-      {
-        "type": "cbd",
-        "value": "1",
-        "unit": "%"
-      }
-    ],
-    "description": "Portable hybrid vape cart of Sour Blueberry, dialed in for smooth flavor and easy dosing whenever and wherever you want it. Smooth, discreet, and flavorful — with notes of blueberry, diesel, and berry, with an even, best-of-both-worlds feel.",
-    "priceLabel": "$10 1g",
-    "priceMinorUnits": 1000,
-    "inventoryStatus": "in-stock",
-    "variants": [
-      {
-        "id": "pos-cartridge-clarity-farms-incredibulk-ib-cart-1g-sour-blueberry-1g-2ce73a1b-1g-44f14f",
-        "label": "1g",
-        "priceMinorUnits": 1000,
-        "inventoryLevel": 18,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "26220",
-        "25363"
-      ],
-      "sourceRowCount": 2,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-cartridge-clarity-farms-kelso-kandy-kk-cart-1g-grape-slushie-1g-355ac207",
-    "name": "Grape Slushie",
-    "productName": "Kelso Kandy - KK CART 1g - Grape Slushie - 1g",
-    "brand": "Clarity Farms",
-    "category": "cartridge",
-    "filterCategories": [
-      "cartridge",
-      "concentrate"
-    ],
-    "posInventoryType": "Concentrate for Inhalation",
-    "posInventoryCategory": "Cartridge",
-    "strainType": "hybrid",
-    "strainName": "Grape Slushie",
-    "thc": "92.8%",
-    "cbd": "0.8%",
-    "totalThc": {
-      "type": "thc",
-      "value": "92.8",
-      "unit": "%"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "0.8",
-      "unit": "%"
-    },
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "92.8",
-        "unit": "%"
-      },
-      {
-        "type": "cbd",
-        "value": "0.8",
-        "unit": "%"
-      }
-    ],
-    "description": "Portable hybrid vape cart of Grape Slushie, dialed in for smooth flavor and easy dosing whenever and wherever you want it. Convenient and clean, a sweet, candy-like grape flavor, delivering a versatile, anytime balance.",
-    "priceLabel": "$12 1g",
-    "priceMinorUnits": 1200,
-    "inventoryStatus": "low-stock",
-    "variants": [
-      {
-        "id": "pos-cartridge-clarity-farms-kelso-kandy-kk-cart-1g-grape-slushie-1g-355ac207-1g-a781bc",
-        "label": "1g",
-        "priceMinorUnits": 1200,
-        "inventoryLevel": 3,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "27179",
-        "21917"
-      ],
-      "sourceRowCount": 2,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-cartridge-clarity-farms-o-geez-og-cart-1g-pineapple-express-1g-5ebab038",
-    "name": "Pineapple Express",
-    "productName": "O' Geez - OG CART 1g - Pineapple Express - 1g",
-    "brand": "Clarity Farms",
-    "category": "cartridge",
-    "filterCategories": [
-      "cartridge",
-      "concentrate"
-    ],
-    "posInventoryType": "Concentrate for Inhalation",
-    "posInventoryCategory": "Cartridge",
-    "strainType": "hybrid",
-    "strainName": "Pineapple Express",
-    "thc": "92.8%",
-    "cbd": "0.8%",
-    "totalThc": {
-      "type": "thc",
-      "value": "92.8",
-      "unit": "%"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "0.8",
-      "unit": "%"
-    },
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "92.8",
-        "unit": "%"
-      },
-      {
-        "type": "cbd",
-        "value": "0.8",
-        "unit": "%"
-      }
-    ],
-    "description": "This hybrid cartridge loads Pineapple Express into a sleek 510-thread pen for clean, convenient draws — premium oil, precise hits, zero hassle. Convenient and clean, with notes of pineapple, tropical, and citrus, delivering a versatile, anytime balance.",
-    "priceLabel": "$12 1g",
-    "priceMinorUnits": 1200,
-    "inventoryStatus": "low-stock",
-    "variants": [
-      {
-        "id": "pos-cartridge-clarity-farms-o-geez-og-cart-1g-pineapple-express-1g-5ebab038-1g-ca6070",
-        "label": "1g",
-        "priceMinorUnits": 1200,
-        "inventoryLevel": 5,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "26245"
-      ],
-      "sourceRowCount": 1,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-cartridge-clarity-farms-tasty-terps-tc-cart-1g-caprizun-1g-1b361c1c",
-    "name": "Caprizun",
-    "productName": "Tasty Terps - TC CART 1g - Caprizun - 1g",
-    "brand": "Clarity Farms",
-    "category": "cartridge",
-    "filterCategories": [
-      "cartridge",
-      "concentrate"
-    ],
-    "posInventoryType": "Concentrate for Inhalation",
-    "posInventoryCategory": "Cartridge",
-    "strainType": "hybrid",
-    "strainName": "Caprizun",
-    "thc": "86.48%",
-    "cbd": null,
-    "totalThc": {
-      "type": "thc",
-      "value": "86.48",
-      "unit": "%"
-    },
-    "totalCbd": null,
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "86.48",
-        "unit": "%"
-      }
-    ],
-    "description": "A convenient hybrid cartridge carrying Caprizun's character into flavorful, on-demand vapor — discreet, simple, and ready to go. Smooth, discreet, and flavorful — a balanced, sweet-earthy profile, with a smooth, well-rounded vibe.",
-    "priceLabel": "$20 1g",
-    "priceMinorUnits": 2000,
-    "inventoryStatus": "in-stock",
-    "variants": [
-      {
-        "id": "pos-cartridge-clarity-farms-tasty-terps-tc-cart-1g-caprizun-1g-1b361c1c-1g-245fce",
-        "label": "1g",
-        "priceMinorUnits": 2000,
-        "inventoryLevel": 10,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "26247"
-      ],
-      "sourceRowCount": 1,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-cartridge-clarity-farms-tasty-terps-tc-cart-1g-kiwi-hi-chewz-1g-b14b6b57",
-    "name": "Kiwi Hi-Chewz",
-    "productName": "Tasty Terps - TC CART 1g - Kiwi Hi-Chewz - 1g",
-    "brand": "Clarity Farms",
-    "category": "cartridge",
-    "filterCategories": [
-      "cartridge",
-      "concentrate"
-    ],
-    "posInventoryType": "Concentrate for Inhalation",
-    "posInventoryCategory": "Cartridge",
-    "strainType": "hybrid",
-    "strainName": "Kiwi Hi-Chewz",
-    "thc": "88.6%",
-    "cbd": "0.34%",
-    "totalThc": {
-      "type": "thc",
-      "value": "88.6",
-      "unit": "%"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "0.34",
-      "unit": "%"
-    },
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "88.6",
-        "unit": "%"
-      },
-      {
-        "type": "cbd",
-        "value": "0.34",
-        "unit": "%"
-      }
-    ],
-    "description": "A convenient hybrid cartridge carrying Kiwi Hi-Chewz's character into flavorful, on-demand vapor — discreet, simple, and ready to go. Smooth, discreet, and flavorful — a tangy kiwi flavor, with an even, best-of-both-worlds feel.",
-    "priceLabel": "$20 1g",
-    "priceMinorUnits": 2000,
-    "inventoryStatus": "in-stock",
-    "variants": [
-      {
-        "id": "pos-cartridge-clarity-farms-tasty-terps-tc-cart-1g-kiwi-hi-chewz-1g-b14b6b57-1g-4f7a96",
-        "label": "1g",
-        "priceMinorUnits": 2000,
-        "inventoryLevel": 14,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "26248",
-        "25392"
-      ],
-      "sourceRowCount": 2,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
     "id": "pos-cartridge-clarity-farms-tasty-terps-tc-cart-1g-laffy-taffy-1g-ddb044eb",
     "name": "Laffy Taffy",
     "productName": "Tasty Terps - TC CART 1g - Laffy Taffy - 1g",
@@ -1832,58 +1832,6 @@
       "matchMethod": "exact_name_brand_package",
       "sourceInventoryIds": [
         "21945"
-      ],
-      "sourceRowCount": 1,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-cartridge-constellation-const-rosin-vape-cart-0-5g-kosher-headband-468bf81a",
-    "name": "Kosher Headband",
-    "productName": "Const Rosin Vape Cart 0.5g - Kosher Headband",
-    "brand": "Constellation",
-    "category": "cartridge",
-    "filterCategories": [
-      "cartridge",
-      "concentrate"
-    ],
-    "posInventoryType": "Concentrate for Inhalation",
-    "posInventoryCategory": "Cartridge",
-    "strainType": "hybrid",
-    "strainName": "Kosher Headband",
-    "thc": "75.25%",
-    "cbd": null,
-    "totalThc": {
-      "type": "thc",
-      "value": "75.25",
-      "unit": "%"
-    },
-    "totalCbd": null,
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "75.25",
-        "unit": "%"
-      }
-    ],
-    "description": "A convenient hybrid cartridge carrying Kosher Headband's character into flavorful, on-demand vapor — discreet, simple, and ready to go. Smooth, discreet, and flavorful — a balanced, sweet-earthy profile, with an even, best-of-both-worlds feel.",
-    "priceLabel": "$40 0.5g",
-    "priceMinorUnits": 4000,
-    "inventoryStatus": "in-stock",
-    "variants": [
-      {
-        "id": "pos-cartridge-constellation-const-rosin-vape-cart-0-5g-kosher-headband-468bf81a-0-5g-bb30e2",
-        "label": "0.5g",
-        "priceMinorUnits": 4000,
-        "inventoryLevel": 10,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "27259"
       ],
       "sourceRowCount": 1,
       "generatedForInspectionOnly": true
@@ -1942,9 +1890,9 @@
     }
   },
   {
-    "id": "pos-cartridge-constellation-constellation-cold-cure-1g-black-domina-79d4d5e2",
-    "name": "Black Domina",
-    "productName": "Constellation Cold Cure 1g - Black Domina",
+    "id": "pos-cartridge-constellation-const-rosin-vape-cart-0-5g-kosher-headband-468bf81a",
+    "name": "Kosher Headband",
+    "productName": "Const Rosin Vape Cart 0.5g - Kosher Headband",
     "brand": "Constellation",
     "category": "cartridge",
     "filterCategories": [
@@ -1953,33 +1901,33 @@
     ],
     "posInventoryType": "Concentrate for Inhalation",
     "posInventoryCategory": "Cartridge",
-    "strainType": "indica",
-    "strainName": "Black Domina",
-    "thc": "78.95%",
+    "strainType": "hybrid",
+    "strainName": "Kosher Headband",
+    "thc": "75.25%",
     "cbd": null,
     "totalThc": {
       "type": "thc",
-      "value": "78.95",
+      "value": "75.25",
       "unit": "%"
     },
     "totalCbd": null,
     "compounds": [
       {
         "type": "thc",
-        "value": "78.95",
+        "value": "75.25",
         "unit": "%"
       }
     ],
-    "description": "Portable indica vape cart of Black Domina, dialed in for smooth flavor and easy dosing whenever and wherever you want it. Convenient and clean, with notes of pepper, spicy/herbal, and woody, delivering a slow, mellow wind-down vibe.",
-    "priceLabel": "$45 1g",
-    "priceMinorUnits": 4500,
+    "description": "A convenient hybrid cartridge carrying Kosher Headband's character into flavorful, on-demand vapor — discreet, simple, and ready to go. Smooth, discreet, and flavorful — a balanced, sweet-earthy profile, with an even, best-of-both-worlds feel.",
+    "priceLabel": "$40 0.5g",
+    "priceMinorUnits": 4000,
     "inventoryStatus": "in-stock",
     "variants": [
       {
-        "id": "pos-cartridge-constellation-constellation-cold-cure-1g-black-domina-79d4d5e2-1g-1bc806",
-        "label": "1g",
-        "priceMinorUnits": 4500,
-        "inventoryLevel": 9,
+        "id": "pos-cartridge-constellation-const-rosin-vape-cart-0-5g-kosher-headband-468bf81a-0-5g-bb30e2",
+        "label": "0.5g",
+        "priceMinorUnits": 4000,
+        "inventoryLevel": 10,
         "medical": false
       }
     ],
@@ -1987,7 +1935,7 @@
       "source": "priority_matches_v2.csv",
       "matchMethod": "exact_name_brand_package",
       "sourceInventoryIds": [
-        "27248"
+        "27259"
       ],
       "sourceRowCount": 1,
       "generatedForInspectionOnly": true
@@ -2040,6 +1988,58 @@
       "matchMethod": "exact_name_brand_package",
       "sourceInventoryIds": [
         "27249"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-constellation-constellation-cold-cure-1g-black-domina-79d4d5e2",
+    "name": "Black Domina",
+    "productName": "Constellation Cold Cure 1g - Black Domina",
+    "brand": "Constellation",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "indica",
+    "strainName": "Black Domina",
+    "thc": "78.95%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "78.95",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "78.95",
+        "unit": "%"
+      }
+    ],
+    "description": "Portable indica vape cart of Black Domina, dialed in for smooth flavor and easy dosing whenever and wherever you want it. Convenient and clean, with notes of pepper, spicy/herbal, and woody, delivering a slow, mellow wind-down vibe.",
+    "priceLabel": "$45 1g",
+    "priceMinorUnits": 4500,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-constellation-constellation-cold-cure-1g-black-domina-79d4d5e2-1g-1bc806",
+        "label": "1g",
+        "priceMinorUnits": 4500,
+        "inventoryLevel": 9,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "27248"
       ],
       "sourceRowCount": 1,
       "generatedForInspectionOnly": true
@@ -2211,6 +2211,67 @@
     }
   },
   {
+    "id": "pos-cartridge-downtown-live-extract-vape-cart-sprinkles-1g-52745c55",
+    "name": "Sprinkles",
+    "productName": "LIVE extract - vape cart - SPRINKLES - 1g",
+    "brand": "Downtown",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "hybrid",
+    "strainName": "Sprinkles",
+    "thc": "79.14%",
+    "cbd": "0.14%",
+    "totalThc": {
+      "type": "thc",
+      "value": "79.14",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "0.14",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "79.14",
+        "unit": "%"
+      },
+      {
+        "type": "cbd",
+        "value": "0.14",
+        "unit": "%"
+      }
+    ],
+    "description": "A hybrid vape cartridge filled with Sprinkles oil — smooth, flavorful vapor in a discreet, no-torch, push-button format that goes wherever you go. Convenient and clean, with notes of pineapple, berry, and butter, delivering a balanced head-and-body experience.",
+    "priceLabel": "$36 1g",
+    "priceMinorUnits": 3600,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-downtown-live-extract-vape-cart-sprinkles-1g-52745c55-1g-e1d944",
+        "label": "1g",
+        "priceMinorUnits": 3600,
+        "inventoryLevel": 8,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "27287"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
     "id": "pos-cartridge-downtown-live-extract-vape-cart-mint-condition-1g-71ecc906",
     "name": "Mint Condition",
     "productName": "LIVE extract - vape cart - MINT CONDITION - 1g",
@@ -2322,67 +2383,6 @@
         "26327"
       ],
       "sourceRowCount": 2,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-cartridge-downtown-live-extract-vape-cart-sprinkles-1g-52745c55",
-    "name": "Sprinkles",
-    "productName": "LIVE extract - vape cart - SPRINKLES - 1g",
-    "brand": "Downtown",
-    "category": "cartridge",
-    "filterCategories": [
-      "cartridge",
-      "concentrate"
-    ],
-    "posInventoryType": "Concentrate for Inhalation",
-    "posInventoryCategory": "Cartridge",
-    "strainType": "hybrid",
-    "strainName": "Sprinkles",
-    "thc": "79.14%",
-    "cbd": "0.14%",
-    "totalThc": {
-      "type": "thc",
-      "value": "79.14",
-      "unit": "%"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "0.14",
-      "unit": "%"
-    },
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "79.14",
-        "unit": "%"
-      },
-      {
-        "type": "cbd",
-        "value": "0.14",
-        "unit": "%"
-      }
-    ],
-    "description": "A hybrid vape cartridge filled with Sprinkles oil — smooth, flavorful vapor in a discreet, no-torch, push-button format that goes wherever you go. Convenient and clean, with notes of pineapple, berry, and butter, delivering a balanced head-and-body experience.",
-    "priceLabel": "$36 1g",
-    "priceMinorUnits": 3600,
-    "inventoryStatus": "in-stock",
-    "variants": [
-      {
-        "id": "pos-cartridge-downtown-live-extract-vape-cart-sprinkles-1g-52745c55-1g-e1d944",
-        "label": "1g",
-        "priceMinorUnits": 3600,
-        "inventoryLevel": 8,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "27287"
-      ],
-      "sourceRowCount": 1,
       "generatedForInspectionOnly": true
     }
   },
@@ -2553,9 +2553,9 @@
     }
   },
   {
-    "id": "pos-cartridge-full-spec-cookies-cannabis-terps-cartridge-1g-london-pound-cake-75-92f592b6",
-    "name": "London Pound Cake",
-    "productName": "Cookies - Cannabis Terps - Cartridge - 1g - London Pound Cake #75",
+    "id": "pos-cartridge-full-spec-full-spec-elite-cartridge-1g-core-4-s-rose-47-76b34a45",
+    "name": "Rose-47",
+    "productName": "Full Spec - Elite - Cartridge - 1g - (Core 4) (S) Rose-47",
     "brand": "Full Spec",
     "category": "cartridge",
     "filterCategories": [
@@ -2565,32 +2565,32 @@
     "posInventoryType": "Concentrate for Inhalation",
     "posInventoryCategory": "Cartridge",
     "strainType": "hybrid",
-    "strainName": "London Pound Cake",
-    "thc": "96.11%",
+    "strainName": "Rose-47",
+    "thc": "89.58%",
     "cbd": null,
     "totalThc": {
       "type": "thc",
-      "value": "96.11",
+      "value": "89.58",
       "unit": "%"
     },
     "totalCbd": null,
     "compounds": [
       {
         "type": "thc",
-        "value": "96.11",
+        "value": "89.58",
         "unit": "%"
       }
     ],
-    "description": "A hybrid vape cartridge filled with London Pound Cake oil — smooth, flavorful vapor in a discreet, no-torch, push-button format that goes wherever you go. Smooth, discreet, and flavorful — with notes of butter, vanilla, and lemon, with a versatile, anytime balance.",
-    "priceLabel": "$40 1g",
-    "priceMinorUnits": 4000,
-    "inventoryStatus": "low-stock",
+    "description": "A convenient hybrid cartridge carrying Rose-47's character into flavorful, on-demand vapor — discreet, simple, and ready to go. Smooth, discreet, and flavorful — a soft, floral rose flavor, with a versatile, anytime balance.",
+    "priceLabel": "$36 1g",
+    "priceMinorUnits": 3600,
+    "inventoryStatus": "in-stock",
     "variants": [
       {
-        "id": "pos-cartridge-full-spec-cookies-cannabis-terps-cartridge-1g-london-pound-cake-75-92f592b6-1g-b196af",
+        "id": "pos-cartridge-full-spec-full-spec-elite-cartridge-1g-core-4-s-rose-47-76b34a45-1g-735486",
         "label": "1g",
-        "priceMinorUnits": 4000,
-        "inventoryLevel": 1,
+        "priceMinorUnits": 3600,
+        "inventoryLevel": 6,
         "medical": false
       }
     ],
@@ -2598,59 +2598,7 @@
       "source": "priority_matches_v2.csv",
       "matchMethod": "exact_name_brand_package",
       "sourceInventoryIds": [
-        "19462"
-      ],
-      "sourceRowCount": 1,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-cartridge-full-spec-full-spec-cadet-cartridge-9lb-hammer-6-6d354e94",
-    "name": "9# Hammer",
-    "productName": "Full Spec Cadet Cartridge 9lb Hammer #6",
-    "brand": "Full Spec",
-    "category": "cartridge",
-    "filterCategories": [
-      "cartridge",
-      "concentrate"
-    ],
-    "posInventoryType": "Concentrate for Inhalation",
-    "posInventoryCategory": "Cartridge",
-    "strainType": "indica",
-    "strainName": "9# Hammer",
-    "thc": "93.06%",
-    "cbd": null,
-    "totalThc": {
-      "type": "thc",
-      "value": "93.06",
-      "unit": "%"
-    },
-    "totalCbd": null,
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "93.06",
-        "unit": "%"
-      }
-    ],
-    "description": "A convenient indica cartridge carrying 9# Hammer's character into flavorful, on-demand vapor — discreet, simple, and ready to go. Smooth, discreet, and flavorful — earthy, sweet undertones, with deep, easygoing relaxation.",
-    "priceLabel": "$30 1g",
-    "priceMinorUnits": 3000,
-    "inventoryStatus": "low-stock",
-    "variants": [
-      {
-        "id": "pos-cartridge-full-spec-full-spec-cadet-cartridge-9lb-hammer-6-6d354e94-1g-ebefa6",
-        "label": "1g",
-        "priceMinorUnits": 3000,
-        "inventoryLevel": 2,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "25892"
+        "26892"
       ],
       "sourceRowCount": 1,
       "generatedForInspectionOnly": true
@@ -2761,6 +2709,110 @@
     }
   },
   {
+    "id": "pos-cartridge-full-spec-full-spec-cadet-cartridge-9lb-hammer-6-6d354e94",
+    "name": "9# Hammer",
+    "productName": "Full Spec Cadet Cartridge 9lb Hammer #6",
+    "brand": "Full Spec",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "indica",
+    "strainName": "9# Hammer",
+    "thc": "93.06%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "93.06",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "93.06",
+        "unit": "%"
+      }
+    ],
+    "description": "A convenient indica cartridge carrying 9# Hammer's character into flavorful, on-demand vapor — discreet, simple, and ready to go. Smooth, discreet, and flavorful — earthy, sweet undertones, with deep, easygoing relaxation.",
+    "priceLabel": "$30 1g",
+    "priceMinorUnits": 3000,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-full-spec-full-spec-cadet-cartridge-9lb-hammer-6-6d354e94-1g-ebefa6",
+        "label": "1g",
+        "priceMinorUnits": 3000,
+        "inventoryLevel": 2,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "25892"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
+    "id": "pos-cartridge-full-spec-full-spec-elite-cartridge-green-bliss-sh-d5280c89",
+    "name": "Green Bliss",
+    "productName": "Full Spec Elite Cartridge Green Bliss (SH)",
+    "brand": "Full Spec",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "hybrid",
+    "strainName": "Green Bliss",
+    "thc": "83.72%",
+    "cbd": null,
+    "totalThc": {
+      "type": "thc",
+      "value": "83.72",
+      "unit": "%"
+    },
+    "totalCbd": null,
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "83.72",
+        "unit": "%"
+      }
+    ],
+    "description": "A convenient hybrid cartridge carrying Green Bliss's character into flavorful, on-demand vapor — discreet, simple, and ready to go. Smooth, discreet, and flavorful — a balanced, sweet-earthy profile, with a smooth, well-rounded vibe.",
+    "priceLabel": "$36 1g",
+    "priceMinorUnits": 3600,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-full-spec-full-spec-elite-cartridge-green-bliss-sh-d5280c89-1g-16b923",
+        "label": "1g",
+        "priceMinorUnits": 3600,
+        "inventoryLevel": 1,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "25886"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
     "id": "pos-cartridge-full-spec-full-spec-elite-cartridge-1g-core-4-h-purple-churro-834470f9",
     "name": "Purple Churro",
     "productName": "Full Spec - Elite - Cartridge - 1g - (Core 4) (H) Purple Churro",
@@ -2813,9 +2865,9 @@
     }
   },
   {
-    "id": "pos-cartridge-full-spec-full-spec-elite-cartridge-1g-core-4-s-rose-47-76b34a45",
-    "name": "Rose-47",
-    "productName": "Full Spec - Elite - Cartridge - 1g - (Core 4) (S) Rose-47",
+    "id": "pos-cartridge-full-spec-full-spec-elite-cartridge-1g-s-slippery-pear-7a08db79",
+    "name": "Slippery Pear",
+    "productName": "Full Spec - Elite - Cartridge - 1g - (S) Slippery Pear",
     "brand": "Full Spec",
     "category": "cartridge",
     "filterCategories": [
@@ -2825,90 +2877,29 @@
     "posInventoryType": "Concentrate for Inhalation",
     "posInventoryCategory": "Cartridge",
     "strainType": "hybrid",
-    "strainName": "Rose-47",
-    "thc": "89.58%",
+    "strainName": "Slippery Pear",
+    "thc": "83.61%",
     "cbd": null,
     "totalThc": {
       "type": "thc",
-      "value": "89.58",
+      "value": "83.61",
       "unit": "%"
     },
     "totalCbd": null,
     "compounds": [
       {
         "type": "thc",
-        "value": "89.58",
+        "value": "83.61",
         "unit": "%"
       }
     ],
-    "description": "A convenient hybrid cartridge carrying Rose-47's character into flavorful, on-demand vapor — discreet, simple, and ready to go. Smooth, discreet, and flavorful — a soft, floral rose flavor, with a versatile, anytime balance.",
-    "priceLabel": "$36 1g",
-    "priceMinorUnits": 3600,
-    "inventoryStatus": "in-stock",
-    "variants": [
-      {
-        "id": "pos-cartridge-full-spec-full-spec-elite-cartridge-1g-core-4-s-rose-47-76b34a45-1g-735486",
-        "label": "1g",
-        "priceMinorUnits": 3600,
-        "inventoryLevel": 6,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "26892"
-      ],
-      "sourceRowCount": 1,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-cartridge-full-spec-full-spec-elite-cartridge-1g-holidaze-i-sleigh-ride-c26129ab",
-    "name": "Sleigh Ride",
-    "productName": "Full Spec - Elite - Cartridge - 1g - (Holidaze) (I) Sleigh Ride",
-    "brand": "Full Spec",
-    "category": "cartridge",
-    "filterCategories": [
-      "cartridge",
-      "concentrate"
-    ],
-    "posInventoryType": "Concentrate for Inhalation",
-    "posInventoryCategory": "Cartridge",
-    "strainType": "hybrid",
-    "strainName": "Sleigh Ride",
-    "thc": "82.73%",
-    "cbd": "4.85%",
-    "totalThc": {
-      "type": "thc",
-      "value": "82.73",
-      "unit": "%"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "4.85",
-      "unit": "%"
-    },
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "82.73",
-        "unit": "%"
-      },
-      {
-        "type": "cbd",
-        "value": "4.85",
-        "unit": "%"
-      }
-    ],
-    "description": "A hybrid vape cartridge filled with Sleigh Ride oil — smooth, flavorful vapor in a discreet, no-torch, push-button format that goes wherever you go. Smooth, discreet, and flavorful — a balanced, sweet-earthy profile, with a balanced head-and-body experience.",
+    "description": "A convenient hybrid cartridge carrying Slippery Pear's character into flavorful, on-demand vapor — discreet, simple, and ready to go. Convenient and clean, a balanced, sweet-earthy profile, delivering a versatile, anytime balance.",
     "priceLabel": "$35 1g",
     "priceMinorUnits": 3500,
     "inventoryStatus": "low-stock",
     "variants": [
       {
-        "id": "pos-cartridge-full-spec-full-spec-elite-cartridge-1g-holidaze-i-sleigh-ride-c26129ab-1g-117e63",
+        "id": "pos-cartridge-full-spec-full-spec-elite-cartridge-1g-s-slippery-pear-7a08db79-1g-7fdb31",
         "label": "1g",
         "priceMinorUnits": 3500,
         "inventoryLevel": 1,
@@ -2919,7 +2910,7 @@
       "source": "priority_matches_v2.csv",
       "matchMethod": "exact_name_brand_package",
       "sourceInventoryIds": [
-        "20681"
+        "22098"
       ],
       "sourceRowCount": 1,
       "generatedForInspectionOnly": true
@@ -2987,9 +2978,9 @@
     }
   },
   {
-    "id": "pos-cartridge-full-spec-full-spec-elite-cartridge-1g-s-slippery-pear-7a08db79",
-    "name": "Slippery Pear",
-    "productName": "Full Spec - Elite - Cartridge - 1g - (S) Slippery Pear",
+    "id": "pos-cartridge-full-spec-full-spec-elite-cartridge-1g-holidaze-i-sleigh-ride-c26129ab",
+    "name": "Sleigh Ride",
+    "productName": "Full Spec - Elite - Cartridge - 1g - (Holidaze) (I) Sleigh Ride",
     "brand": "Full Spec",
     "category": "cartridge",
     "filterCategories": [
@@ -2999,29 +2990,38 @@
     "posInventoryType": "Concentrate for Inhalation",
     "posInventoryCategory": "Cartridge",
     "strainType": "hybrid",
-    "strainName": "Slippery Pear",
-    "thc": "83.61%",
-    "cbd": null,
+    "strainName": "Sleigh Ride",
+    "thc": "82.73%",
+    "cbd": "4.85%",
     "totalThc": {
       "type": "thc",
-      "value": "83.61",
+      "value": "82.73",
       "unit": "%"
     },
-    "totalCbd": null,
+    "totalCbd": {
+      "type": "cbd",
+      "value": "4.85",
+      "unit": "%"
+    },
     "compounds": [
       {
         "type": "thc",
-        "value": "83.61",
+        "value": "82.73",
+        "unit": "%"
+      },
+      {
+        "type": "cbd",
+        "value": "4.85",
         "unit": "%"
       }
     ],
-    "description": "A convenient hybrid cartridge carrying Slippery Pear's character into flavorful, on-demand vapor — discreet, simple, and ready to go. Convenient and clean, a balanced, sweet-earthy profile, delivering a versatile, anytime balance.",
+    "description": "A hybrid vape cartridge filled with Sleigh Ride oil — smooth, flavorful vapor in a discreet, no-torch, push-button format that goes wherever you go. Smooth, discreet, and flavorful — a balanced, sweet-earthy profile, with a balanced head-and-body experience.",
     "priceLabel": "$35 1g",
     "priceMinorUnits": 3500,
     "inventoryStatus": "low-stock",
     "variants": [
       {
-        "id": "pos-cartridge-full-spec-full-spec-elite-cartridge-1g-s-slippery-pear-7a08db79-1g-7fdb31",
+        "id": "pos-cartridge-full-spec-full-spec-elite-cartridge-1g-holidaze-i-sleigh-ride-c26129ab-1g-117e63",
         "label": "1g",
         "priceMinorUnits": 3500,
         "inventoryLevel": 1,
@@ -3032,16 +3032,16 @@
       "source": "priority_matches_v2.csv",
       "matchMethod": "exact_name_brand_package",
       "sourceInventoryIds": [
-        "22098"
+        "20681"
       ],
       "sourceRowCount": 1,
       "generatedForInspectionOnly": true
     }
   },
   {
-    "id": "pos-cartridge-full-spec-full-spec-elite-cartridge-green-bliss-sh-d5280c89",
-    "name": "Green Bliss",
-    "productName": "Full Spec Elite Cartridge Green Bliss (SH)",
+    "id": "pos-cartridge-full-spec-cookies-cannabis-terps-cartridge-1g-london-pound-cake-75-92f592b6",
+    "name": "London Pound Cake",
+    "productName": "Cookies - Cannabis Terps - Cartridge - 1g - London Pound Cake #75",
     "brand": "Full Spec",
     "category": "cartridge",
     "filterCategories": [
@@ -3051,31 +3051,31 @@
     "posInventoryType": "Concentrate for Inhalation",
     "posInventoryCategory": "Cartridge",
     "strainType": "hybrid",
-    "strainName": "Green Bliss",
-    "thc": "83.72%",
+    "strainName": "London Pound Cake",
+    "thc": "96.11%",
     "cbd": null,
     "totalThc": {
       "type": "thc",
-      "value": "83.72",
+      "value": "96.11",
       "unit": "%"
     },
     "totalCbd": null,
     "compounds": [
       {
         "type": "thc",
-        "value": "83.72",
+        "value": "96.11",
         "unit": "%"
       }
     ],
-    "description": "A convenient hybrid cartridge carrying Green Bliss's character into flavorful, on-demand vapor — discreet, simple, and ready to go. Smooth, discreet, and flavorful — a balanced, sweet-earthy profile, with a smooth, well-rounded vibe.",
-    "priceLabel": "$36 1g",
-    "priceMinorUnits": 3600,
+    "description": "A hybrid vape cartridge filled with London Pound Cake oil — smooth, flavorful vapor in a discreet, no-torch, push-button format that goes wherever you go. Smooth, discreet, and flavorful — with notes of butter, vanilla, and lemon, with a versatile, anytime balance.",
+    "priceLabel": "$40 1g",
+    "priceMinorUnits": 4000,
     "inventoryStatus": "low-stock",
     "variants": [
       {
-        "id": "pos-cartridge-full-spec-full-spec-elite-cartridge-green-bliss-sh-d5280c89-1g-16b923",
+        "id": "pos-cartridge-full-spec-cookies-cannabis-terps-cartridge-1g-london-pound-cake-75-92f592b6-1g-b196af",
         "label": "1g",
-        "priceMinorUnits": 3600,
+        "priceMinorUnits": 4000,
         "inventoryLevel": 1,
         "medical": false
       }
@@ -3084,7 +3084,7 @@
       "source": "priority_matches_v2.csv",
       "matchMethod": "exact_name_brand_package",
       "sourceInventoryIds": [
-        "25886"
+        "19462"
       ],
       "sourceRowCount": 1,
       "generatedForInspectionOnly": true
@@ -3143,9 +3143,9 @@
     }
   },
   {
-    "id": "pos-cartridge-goodgood-1g-goodgood-cartridge-banana-candy-h-511b1985",
-    "name": "Banana Candy",
-    "productName": "1g GoodGood Cartridge - Banana Candy (H)",
+    "id": "pos-cartridge-goodgood-1g-goodgood-cartridge-scary-raspberry-rush-h-d9c1e749",
+    "name": "Raspberry",
+    "productName": "1g GoodGood Cartridge - Scary Raspberry Rush (H)",
     "brand": "GoodGood",
     "category": "cartridge",
     "filterCategories": [
@@ -3154,42 +3154,42 @@
     ],
     "posInventoryType": "Concentrate for Inhalation",
     "posInventoryCategory": "Cartridge",
-    "strainType": "indica",
-    "strainName": "Banana Candy",
-    "thc": "87.89%",
-    "cbd": "0.51%",
+    "strainType": "hybrid",
+    "strainName": "Raspberry",
+    "thc": "91%",
+    "cbd": "0.56%",
     "totalThc": {
       "type": "thc",
-      "value": "87.89",
+      "value": "91",
       "unit": "%"
     },
     "totalCbd": {
       "type": "cbd",
-      "value": "0.51",
+      "value": "0.56",
       "unit": "%"
     },
     "compounds": [
       {
         "type": "thc",
-        "value": "87.89",
+        "value": "91",
         "unit": "%"
       },
       {
         "type": "cbd",
-        "value": "0.51",
+        "value": "0.56",
         "unit": "%"
       }
     ],
-    "description": "A convenient indica cartridge carrying Banana Candy's character into flavorful, on-demand vapor — discreet, simple, and ready to go. Smooth, discreet, and flavorful — with notes of tree fruit, tropical, and sweet, with deep, easygoing relaxation.",
+    "description": "A convenient hybrid cartridge carrying Raspberry's character into flavorful, on-demand vapor — discreet, simple, and ready to go. Flavor on the go, with notes of berry, blueberry, and sweet, leading into an even, best-of-both-worlds feel.",
     "priceLabel": "$20 1g",
     "priceMinorUnits": 2000,
-    "inventoryStatus": "in-stock",
+    "inventoryStatus": "low-stock",
     "variants": [
       {
-        "id": "pos-cartridge-goodgood-1g-goodgood-cartridge-banana-candy-h-511b1985-1g-711fe0",
+        "id": "pos-cartridge-goodgood-1g-goodgood-cartridge-scary-raspberry-rush-h-d9c1e749-1g-25c268",
         "label": "1g",
         "priceMinorUnits": 2000,
-        "inventoryLevel": 6,
+        "inventoryLevel": 2,
         "medical": false
       }
     ],
@@ -3197,7 +3197,7 @@
       "source": "priority_matches_v2.csv",
       "matchMethod": "exact_name_brand_package",
       "sourceInventoryIds": [
-        "24110"
+        "25906"
       ],
       "sourceRowCount": 1,
       "generatedForInspectionOnly": true
@@ -3265,6 +3265,67 @@
     }
   },
   {
+    "id": "pos-cartridge-goodgood-1g-goodgood-cartridge-banana-candy-h-511b1985",
+    "name": "Banana Candy",
+    "productName": "1g GoodGood Cartridge - Banana Candy (H)",
+    "brand": "GoodGood",
+    "category": "cartridge",
+    "filterCategories": [
+      "cartridge",
+      "concentrate"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Cartridge",
+    "strainType": "indica",
+    "strainName": "Banana Candy",
+    "thc": "87.89%",
+    "cbd": "0.51%",
+    "totalThc": {
+      "type": "thc",
+      "value": "87.89",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "0.51",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "87.89",
+        "unit": "%"
+      },
+      {
+        "type": "cbd",
+        "value": "0.51",
+        "unit": "%"
+      }
+    ],
+    "description": "A convenient indica cartridge carrying Banana Candy's character into flavorful, on-demand vapor — discreet, simple, and ready to go. Smooth, discreet, and flavorful — with notes of tree fruit, tropical, and sweet, with deep, easygoing relaxation.",
+    "priceLabel": "$20 1g",
+    "priceMinorUnits": 2000,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-cartridge-goodgood-1g-goodgood-cartridge-banana-candy-h-511b1985-1g-711fe0",
+        "label": "1g",
+        "priceMinorUnits": 2000,
+        "inventoryLevel": 6,
+        "medical": false
+      }
+    ],
+    "_previewMeta": {
+      "source": "priority_matches_v2.csv",
+      "matchMethod": "exact_name_brand_package",
+      "sourceInventoryIds": [
+        "24110"
+      ],
+      "sourceRowCount": 1,
+      "generatedForInspectionOnly": true
+    }
+  },
+  {
     "id": "pos-cartridge-goodgood-1g-goodgood-cartridge-marshmallow-puff-i-1c0db2e8",
     "name": "Marshmallow Puff",
     "productName": "1g GoodGood Cartridge - Marshmallow Puff (I)",
@@ -3323,67 +3384,6 @@
         "21464"
       ],
       "sourceRowCount": 2,
-      "generatedForInspectionOnly": true
-    }
-  },
-  {
-    "id": "pos-cartridge-goodgood-1g-goodgood-cartridge-scary-raspberry-rush-h-d9c1e749",
-    "name": "Raspberry",
-    "productName": "1g GoodGood Cartridge - Scary Raspberry Rush (H)",
-    "brand": "GoodGood",
-    "category": "cartridge",
-    "filterCategories": [
-      "cartridge",
-      "concentrate"
-    ],
-    "posInventoryType": "Concentrate for Inhalation",
-    "posInventoryCategory": "Cartridge",
-    "strainType": "hybrid",
-    "strainName": "Raspberry",
-    "thc": "91%",
-    "cbd": "0.56%",
-    "totalThc": {
-      "type": "thc",
-      "value": "91",
-      "unit": "%"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "0.56",
-      "unit": "%"
-    },
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "91",
-        "unit": "%"
-      },
-      {
-        "type": "cbd",
-        "value": "0.56",
-        "unit": "%"
-      }
-    ],
-    "description": "A convenient hybrid cartridge carrying Raspberry's character into flavorful, on-demand vapor — discreet, simple, and ready to go. Flavor on the go, with notes of berry, blueberry, and sweet, leading into an even, best-of-both-worlds feel.",
-    "priceLabel": "$20 1g",
-    "priceMinorUnits": 2000,
-    "inventoryStatus": "low-stock",
-    "variants": [
-      {
-        "id": "pos-cartridge-goodgood-1g-goodgood-cartridge-scary-raspberry-rush-h-d9c1e749-1g-25c268",
-        "label": "1g",
-        "priceMinorUnits": 2000,
-        "inventoryLevel": 2,
-        "medical": false
-      }
-    ],
-    "_previewMeta": {
-      "source": "priority_matches_v2.csv",
-      "matchMethod": "exact_name_brand_package",
-      "sourceInventoryIds": [
-        "25906"
-      ],
-      "sourceRowCount": 1,
       "generatedForInspectionOnly": true
     }
   }
