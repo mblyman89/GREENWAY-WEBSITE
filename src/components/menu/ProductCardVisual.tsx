@@ -114,6 +114,15 @@ function brandInitials(brand: string) {
   );
 }
 
+function CartIcon({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M6.2 6.5h15.1l-1.7 8.1a2 2 0 0 1-2 1.6H8.8a2 2 0 0 1-2-1.7L5.4 3.8H2.8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M9.4 20.2h.01M17.2 20.2h.01" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function ProductImageMockup({ item, tone }: { item: GreenwayMenuItem; tone: CardTone }) {
   const initials = brandInitials(item.brand);
   const nonCannabis = isNonCannabisItem(item);
@@ -187,29 +196,29 @@ export function ProductCardVisual({ item, salePriceMinorUnits, ctaLabel = "ADD T
 
         <Link
           href={`/menu/products/${item.id}`}
-          className="mt-4 line-clamp-2 block min-h-[2.45rem] text-[1.08rem] font-black leading-[1.12] text-white transition group-hover:text-white md:text-[1.18rem]"
+          className="mx-auto mt-4 line-clamp-2 block min-h-[2.45rem] text-center text-[1.08rem] font-black leading-[1.12] text-white transition group-hover:text-white md:text-[1.18rem]"
         >
           {item.name}
         </Link>
 
-        <div className="mt-3 flex flex-wrap items-center gap-2">
+        <div className="mt-3 grid gap-2 text-center">
           <span
-            className="inline-flex min-h-8 items-center rounded-[2px] px-3 py-1.5 text-sm font-black leading-none text-white"
+            className="flex min-h-9 w-full items-center justify-center rounded-md px-3 py-2 text-sm font-black uppercase leading-none text-white"
             style={{ backgroundColor: tone.pill, color: isNonCannabisItem(item) ? "#111" : "#fff" }}
           >
             {displayStrain(item)}
           </span>
           {showCannabinoids ? (
-            <>
-              <span className="inline-flex min-h-8 items-center rounded-[2px] bg-white px-2.5 py-1.5 text-[0.72rem] font-black uppercase leading-none text-black">THC: {item.thc ?? "--"}</span>
-              <span className="inline-flex min-h-8 items-center rounded-[2px] bg-white px-2.5 py-1.5 text-[0.72rem] font-black uppercase leading-none text-black">CBD: {item.cbd ?? "--"}</span>
-            </>
+            <div className="grid grid-cols-2 gap-2">
+              <span className="flex min-h-9 items-center justify-center rounded-md bg-white px-2.5 py-2 text-[0.72rem] font-black uppercase leading-none text-black">THC: {item.thc ?? "--"}</span>
+              <span className="flex min-h-9 items-center justify-center rounded-md bg-white px-2.5 py-2 text-[0.72rem] font-black uppercase leading-none text-black">CBD: {item.cbd ?? "--"}</span>
+            </div>
           ) : null}
         </div>
       </div>
 
-      <div className="pt-4">
-        <div className="flex min-h-[2.85rem] min-w-0 flex-wrap items-end gap-x-2 gap-y-1 leading-none">
+      <div className="pt-4 text-center">
+        <div className="flex min-h-[2.85rem] min-w-0 flex-wrap items-end justify-center gap-x-2 gap-y-1 leading-none">
           {hasSalePrice ? <span className="pb-1 text-sm font-black text-zinc-400 line-through md:text-[0.95rem]">{formatMinorCurrency(priceMinorUnits)}</span> : null}
           <span className="text-[1.72rem] font-black text-[var(--orange)] md:text-[1.95rem]">{formatMinorCurrency(displayPrice)}</span>
           {unitLabel ? <span className="pb-1.5 text-sm font-black text-white/90 md:text-base">{unitLabel}</span> : null}
@@ -217,10 +226,10 @@ export function ProductCardVisual({ item, salePriceMinorUnits, ctaLabel = "ADD T
 
         <Link
           href={`/menu/products/${item.id}`}
-          className="mt-3 flex h-12 w-full items-center justify-center gap-2 bg-white px-4 text-sm font-black uppercase tracking-[0.08em] text-black transition hover:bg-[var(--orange)]"
+          className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-white px-4 text-sm font-black uppercase tracking-[0.08em] text-black transition hover:bg-[var(--orange)]"
           aria-label={`${ctaLabel} ${item.name}`}
         >
-          <span className="text-base" aria-hidden="true">🛒</span>
+          <CartIcon />
           {ctaLabel}
         </Link>
       </div>
