@@ -38,10 +38,10 @@ export function ProductCardPriceSelector({ item, salePriceMinorUnits }: ProductC
 
   return (
     <div className="rounded-xl border border-white/18 bg-black/42 p-2.5 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_10px_22px_rgba(0,0,0,0.2)] backdrop-blur-sm">
-      <div className="flex min-h-[2.65rem] min-w-0 flex-wrap items-end justify-center gap-x-2 gap-y-1 leading-none">
-        {hasSalePrice ? <span className="pb-1 text-sm font-black text-zinc-400 line-through md:text-[0.95rem]">{formatMinorCurrency(priceMinorUnits)}</span> : null}
+      <div className="flex min-h-[2.65rem] min-w-0 flex-wrap items-center justify-center gap-x-2 gap-y-1 leading-none">
+        {hasSalePrice ? <span className="text-sm font-black text-zinc-400 line-through md:text-[0.95rem]">{formatMinorCurrency(priceMinorUnits)}</span> : null}
         <span className="text-[1.72rem] font-black text-[var(--orange)] md:text-[1.95rem]">{formatMinorCurrency(displayPrice)}</span>
-        {unitLabel ? <span className="pb-1.5 text-sm font-black text-white/90 md:text-base">{unitLabel}</span> : null}
+        {unitLabel ? <span className="text-sm font-black text-white/90 md:text-base">{unitLabel}</span> : null}
       </div>
 
       {showDropdown ? (

@@ -4,7 +4,7 @@ import { greenwayBusiness } from "@/content/business";
 export function SecondaryBar() {
   return (
     <div className="border-t border-black/10 bg-[var(--greenway)] text-black">
-      <div className="mx-auto grid max-w-7xl grid-cols-[minmax(0,1.55fr)_minmax(3.15rem,0.52fr)_auto] items-center gap-[clamp(0.18rem,0.75vw,0.65rem)] px-[clamp(0.22rem,1.05vw,0.8rem)] py-1 md:flex md:max-w-none md:flex-nowrap md:justify-between md:px-5 lg:px-6 xl:px-8">
+      <div className="mx-auto grid max-w-7xl grid-cols-[minmax(0,42vw)_minmax(4.65rem,1fr)_auto] items-center gap-[clamp(0.16rem,0.65vw,0.55rem)] px-[clamp(0.2rem,0.9vw,0.8rem)] py-1 md:flex md:max-w-none md:flex-nowrap md:justify-between md:px-5 lg:px-6 xl:px-8">
         <Link
           href="/locations"
           className="inline-flex h-[clamp(1.85rem,7.65vw,2.32rem)] min-w-0 items-center rounded-full bg-black px-[clamp(0.58rem,2.25vw,1.15rem)] text-[var(--greenway)] transition hover:bg-white hover:text-black md:h-9 md:max-w-none"
