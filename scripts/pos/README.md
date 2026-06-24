@@ -31,6 +31,10 @@ pos-data/raw/INVENTORIES.xlsx
 
 These raw workbooks are intentionally gitignored. They are operational exports, not source code.
 
+## CI / Vercel behavior
+
+Vercel does not receive `pos-data/raw/*.xlsx` because those workbooks are intentionally gitignored. During local builds, if both raw workbooks exist, the transformer regenerates the menu JSON. During CI/Vercel builds, if the raw workbooks are missing but `src/data/pos-menu-preview.json` already exists, the transformer logs a clear message and uses the committed JSON without regenerating. This keeps deployments stable while still allowing local POS refreshes before committing.
+
 ## Outputs
 
 The transformer writes website data to:

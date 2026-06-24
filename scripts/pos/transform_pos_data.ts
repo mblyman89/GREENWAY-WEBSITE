@@ -662,8 +662,23 @@ function summary(products: ProductRow[], inventories: InventoryRow[], groups: Pr
   };
 }
 
+function rawWorkbooksAvailable() {
+  return fs.existsSync(PRODUCTS_PATH) && fs.existsSync(INVENTORIES_PATH);
+}
+
 function main() {
   ensureDir(GENERATED_DIR);
+  if (!rawWorkbooksAvailable()) {
+    const missing = [
+      fs.existsSync(PRODUCTS_PATH) ? null : path.relative(ROOT, PRODUCTS_PATH),
+      fs.existsSync(INVENTORIES_PATH) ? null : path.relative(ROOT, INVENTORIES_PATH),
+    ].filter(Boolean);
+    if (fs.existsSync(OUT_FULL)) {
+      console.log(`POS raw workbook(s) missing (${missing.join(", ")}); using committed ${path.relative(ROOT, OUT_FULL)} without regenerating.`);
+      return;
+    }
+    throw new Error(`Required POS workbook(s) not found: ${missing.join(", ")}. Add raw files locally under pos-data/raw/ or commit generated menu JSON before building.`);
+  }
   const products = readWorkbookRows(PRODUCTS_PATH, "Sheet1");
   const inventories = readWorkbookRows(INVENTORIES_PATH, "Inventories");
   requireColumns(products, ["Product Name", "Inventory Type", "Category", "Brand", "Type", "Strain", "UOM", "Package Size", "Price", "Description"], "PRODUCTS.xlsx");
