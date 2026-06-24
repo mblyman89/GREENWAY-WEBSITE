@@ -43,6 +43,10 @@ next-env.d.ts
 # local preview form submissions
 /storage/loyalty-signups.jsonl
 
+# local POS raw exports and generated diagnostics
+/pos-data/raw/*.xlsx
+/pos-data/generated/
+
 # local agent/generated artifacts
 .screenshots/
 outputs/
