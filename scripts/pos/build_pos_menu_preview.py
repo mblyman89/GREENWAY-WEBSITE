@@ -19,7 +19,24 @@ from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-ROOT = REPO_ROOT / "pos-data"
+WORKSPACE_ROOT = REPO_ROOT.parent
+
+def resolve_pos_data_root() -> Path:
+    """Find POS analysis data whether it lives inside the repo or workspace research.
+
+    Local development keeps the large raw/analysis artifacts outside the app repo,
+    while the script still supports an in-repo pos-data folder for CI/manual runs.
+    """
+    candidates = [
+        REPO_ROOT / "pos-data",
+        WORKSPACE_ROOT / "research" / "pos-data-analysis",
+    ]
+    for candidate in candidates:
+        if (candidate / "analysis" / "priority_matches_v2.csv").exists() or (candidate / "raw").exists():
+            return candidate
+    return candidates[0]
+
+ROOT = resolve_pos_data_root()
 ANALYSIS = ROOT / "analysis"
 GENERATED = ROOT / "generated"
 MATCHES_CSV = ANALYSIS / "priority_matches_v2.csv"
@@ -92,6 +109,11 @@ def variant_group_base_name(product_name: str) -> str:
 
 
 def menu_group_key(product_name: str, brand: str, category: str, strain: str, display_name: str) -> tuple[str, ...]:
+    if category == "flower":
+        # Flower variants commonly differ by product-line text such as Flower,
+        # Smalls, Regular Buds, or Packaged Flower. Group by the customer-facing
+        # strain identity so 1g/3.5g/7g/14g/28g sizes collapse into one card.
+        return ("flower-variant-group", slugify(brand), category, strain, slugify(display_name))
     if category in VARIANT_GROUP_CATEGORIES:
         return (
             "variant-group",
@@ -217,6 +239,37 @@ def pack_count_from_text(*values: str) -> int:
     return 1
 
 
+def name_category_override(inventory_type: str = "", name: str = "", category: str = "", package: str = "") -> str | None:
+    """Correct obvious POS category mistakes using the product name plus inventory type.
+
+    Name evidence wins only for high-confidence cases where product names carry
+    explicit category terms, such as a usable-marijuana item named Pre-Rolls that
+    was accidentally assigned to Panda Candies.
+    """
+    type_text = clean_text(inventory_type).lower()
+    category_text = clean_text(category).lower()
+    name_text = clean_text(name).lower()
+    package_text = clean_text(package).lower()
+    combined = " ".join([name_text, package_text])
+    count = pack_count_from_text(name_text, package_text)
+    cannabis_like = not any(term in type_text for term in ["non-cannabis", "non cannabis", "without inventory type", "sample jar"])
+
+    if cannabis_like and re.search(r"\b(?:infused\s*)?(?:pre[-\s]?rolls?|prerolls?|pre\s*rolled|blunts?|joints?)\b", combined):
+        infused = "infused" in combined or "infused" in category_text or "marijuana mix infused" in type_text
+        if infused:
+            return "infused-preroll-pack" if count > 1 else "infused-preroll"
+        return "preroll-pack" if count > 1 else "preroll"
+    if cannabis_like and re.search(r"\b(?:disposable|aio|all\s*in\s*one)\b", combined) and re.search(r"\b(?:vape|cart|cartridge)\b", combined):
+        return "disposable-cartridge"
+    if cannabis_like and re.search(r"\b(?:cart|cartridge)\b", combined):
+        return "cartridge"
+    if cannabis_like and re.search(r"\b(?:flower|bud)\b", combined) and "pre" not in combined:
+        return "flower"
+    if cannabis_like and re.search(r"\b(?:live resin|rosin|badder|budder|batter|bho|hash|diamonds?|crumble|sugar|shatter|wax|sauce|rso|dab)\b", combined):
+        return "concentrate"
+    return None
+
+
 def normalize_category(category: str, inventory_type: str = "", name: str = "", package: str = "") -> str | None:
     """Map POS inventory type/category/name into customer-facing website categories.
 
@@ -232,10 +285,14 @@ def normalize_category(category: str, inventory_type: str = "", name: str = "", 
     package_text = clean_text(package).lower()
     combined = " ".join([category_text, type_text, name_text, package_text])
     count = pack_count_from_text(category_text, name_text, package_text)
+    override = name_category_override(inventory_type, name, category, package)
 
     non_cannabis_type = any(term in type_text for term in ["non-cannabis", "non cannabis", "without inventory type", "sample jar"])
     if non_cannabis_type or any(term in category_text for term in ["accessor", "paraphernalia", "device", "pipe", "blunt wrap", "non cannabis", "other non cannabis"]):
         return "paraphernalia"
+
+    if override in {"preroll", "preroll-pack", "infused-preroll", "infused-preroll-pack", "cartridge", "disposable-cartridge", "flower", "concentrate"}:
+        return override
 
     if "disposable" in category_text and "cartridge" in category_text:
         return "disposable-cartridge"
@@ -317,39 +374,74 @@ VALID_STRAIN_TYPES = {
     "indica": "indica",
     "sativa": "sativa",
     "hybrid": "hybrid",
-    "cbd": "cbd",
 }
 
-PRODUCT_NAME_DISPLAY_CATEGORIES = {"edible-solid", "edible-liquid", "topical"}
+PRODUCT_NAME_DISPLAY_CATEGORIES = {"edible-solid", "edible-liquid"}
+CATEGORY_PREFIX_EXCLUDED_CATEGORIES = PRODUCT_NAME_DISPLAY_CATEGORIES | {"flower"}
+CATEGORY_DISPLAY_PREFIXES = {
+    "preroll": "Pre-Roll",
+    "preroll-pack": "Pre-Roll",
+    "infused-preroll": "Infused Pre-Roll",
+    "infused-preroll-pack": "Infused Pre-Roll",
+    "cartridge": "Cartridge",
+    "disposable-cartridge": "Disposable",
+    "concentrate": "Concentrate",
+    "topical": "Topical",
+    "trim": "Trim",
+    "paraphernalia": "Accessory",
+}
 
 
 def normalize_strain_type(pos_type: str) -> str:
-    """Use the cleaned Products spreadsheet Type column as the source of truth.
+    """Normalize every product to Hybrid/Sativa/Indica, defaulting to Hybrid.
 
-    The POS product master now carries strain type directly, so the website feed
-    should not infer strain type from strain names, product names, category, or a
-    lookup table. Blank or non-standard values are kept as unknown so data issues
-    remain visible and fixable at the source spreadsheet/POS layer.
+    The Products workbook Type column is still the source of truth when it says
+    Hybrid, Sativa, or Indica. Anything blank, CBD-focused, or non-standard is
+    intentionally coerced to hybrid so the website never emits unknown/CBD strain
+    types and every cannabis-style card receives a stable visual formula.
     """
     value = clean_text(pos_type).lower()
     value = re.sub(r"[^a-z]+", " ", value).strip()
-    if not value:
-        return "unknown"
-    if "cbd" in value:
-        return "cbd"
-    for key, normalized in VALID_STRAIN_TYPES.items():
-        if key in value:
-            return normalized
-    return "unknown"
+    if "indica" in value:
+        return "indica"
+    if "sativa" in value:
+        return "sativa"
+    if "hybrid" in value:
+        return "hybrid"
+    return "hybrid"
 
 
-def display_name_for_product(product_name: str, strain_name: str, category: str) -> str:
-    """Choose the customer-facing card/detail name from mapped POS fields."""
+def category_prefix_for_name(category: str, pos_category: str = "") -> str:
+    prefix = CATEGORY_DISPLAY_PREFIXES.get(category, "")
+    pos_text = clean_text(pos_category)
+    if category in {"cartridge", "disposable-cartridge", "concentrate", "topical", "trim", "paraphernalia"} and pos_text:
+        prefix = pos_text
+    return clean_text(prefix)
+
+
+def display_name_for_product(product_name: str, strain_name: str, category: str, pos_category: str = "") -> str:
+    """Choose the customer-facing card/detail name from mapped POS fields.
+
+    Flower remains strain-only. Solid edibles and liquid edibles/tinctures keep
+    the spreadsheet product name. All other menu categories get
+    the POS category type before the strain name so cards read like
+    "Pre-Roll Blue Dream" or "Live Resin Comatoast".
+    """
     product_name = clean_text(product_name)
     strain_name = clean_text(strain_name)
     if category in PRODUCT_NAME_DISPLAY_CATEGORIES:
         return product_name or strain_name or "Unnamed product"
-    return strain_name or product_name or "Unnamed product"
+    base_name = strain_name or product_name or "Unnamed product"
+    if category in CATEGORY_PREFIX_EXCLUDED_CATEGORIES:
+        return base_name
+    prefix = category_prefix_for_name(category, pos_category)
+    if not prefix:
+        return base_name
+    base_lower = base_name.lower()
+    prefix_lower = prefix.lower()
+    if base_lower == prefix_lower or base_lower.startswith(prefix_lower + " ") or base_lower.startswith(prefix_lower + " -"):
+        return base_name
+    return f"{prefix} {base_name}"
 
 
 def description_for_product(description: str, display_name: str, product_name: str) -> str:
@@ -478,7 +570,7 @@ def build_preview() -> tuple[list[dict[str, Any]], dict[str, Any], list[dict[str
 
         strain = normalize_strain_type(row.get("product_type", ""))
         strain_name = clean_text(row.get("product_strain")) or clean_text(row.get("inventory_strain"))
-        display_name = display_name_for_product(product_name, strain_name, category)
+        display_name = display_name_for_product(product_name, strain_name, category, row.get("product_category", "") or row.get("inventory_category", ""))
         key = menu_group_key(product_name, brand, category, strain, display_name)
         groups[key].append(row)
         counters["included_variant_rows"] += 1
@@ -496,7 +588,7 @@ def build_preview() -> tuple[list[dict[str, Any]], dict[str, Any], list[dict[str
         category = normalize_category(first.get("product_category", "") or first.get("inventory_category", ""), first.get("product_inventory_type", ""), product_name, package_label(first)) or "paraphernalia"
         strain = normalize_strain_type(first.get("product_type", ""))
         strain_name = clean_text(first.get("product_strain")) or clean_text(first.get("inventory_strain", ""))
-        name = display_name_for_product(product_name, strain_name, category)
+        name = display_name_for_product(product_name, strain_name, category, first.get("product_category", "") or first.get("inventory_category", ""))
         description = description_for_product(first.get("product_description", ""), name, product_name)
         group_base_name = variant_group_base_name(product_name) if category in VARIANT_GROUP_CATEGORIES else product_name
         item_hash = stable_hash([group_base_name, brand, category, strain, name])
@@ -601,6 +693,18 @@ def build_preview() -> tuple[list[dict[str, Any]], dict[str, Any], list[dict[str
     status_counter = Counter(item["inventoryStatus"] for item in items)
     variant_count = sum(len(item["variants"]) for item in items)
     total_inventory_units = sum(sum(v["inventoryLevel"] for v in item["variants"]) for item in items)
+    variant_count_by_category = {category: dict(sorted(Counter(len(item["variants"]) for item in items if item["category"] == category).items())) for category in sorted(item_category_counter)}
+    single_variant_flower_examples = [
+        {
+            "id": item["id"],
+            "name": item["name"],
+            "brand": item["brand"],
+            "productName": item["productName"],
+            "variantLabels": [variant["label"] for variant in item["variants"]],
+        }
+        for item in items
+        if item["category"] == "flower" and len(item["variants"]) == 1
+    ][:50]
 
     summary = {
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -622,6 +726,8 @@ def build_preview() -> tuple[list[dict[str, Any]], dict[str, Any], list[dict[str
             "generated_variants": variant_count,
             "total_inventory_units_in_preview": total_inventory_units,
             "average_variants_per_product": round(variant_count / len(items), 2) if items else 0,
+            "variant_count_by_category": variant_count_by_category,
+            "single_variant_flower_examples_for_audit": single_variant_flower_examples,
         },
         "item_category_counts": dict(sorted(item_category_counter.items())),
         "item_strain_counts": dict(sorted(item_strain_counter.items())),
@@ -630,10 +736,16 @@ def build_preview() -> tuple[list[dict[str, Any]], dict[str, Any], list[dict[str
         "included_variant_row_category_counts": dict(sorted(category_counter.items())),
         "included_variant_row_strain_counts": dict(sorted(strain_counter.items())),
         "exclusion_examples": exclusion_examples,
+        "validation": {
+            "allowed_strain_types": sorted(VALID_STRAIN_TYPES),
+            "invalid_strain_type_count": sum(1 for item in items if item["strainType"] not in VALID_STRAIN_TYPES),
+            "category_override_rule": "High-confidence product-name terms override spreadsheet category after inventory type context is considered.",
+            "variant_grouping_rule": "Flower groups by same brand, category, normalized strain type, and display strain name; preroll/blunt groups also require package-stripped base product identity for safety.",
+        },
         "notes": [
             "This feed maps website categories from POS inventory type plus POS category, with product_category weighted as the customer-facing clue.",
             "Only strict exact v2 matches are included. Ambiguous, fuzzy, and unmatched rows are intentionally held back for later guardrails.",
-            "Flower and joint-style categories are cautiously grouped into multi-variant cards only when brand, category, strain type, display name, and package-stripped base product identity match.",
+            "Flower sizes are grouped by brand, category, normalized strain type, and display strain name so more true size variants are discovered; joint-style categories remain stricter and require package-stripped base product identity.",
             "Rows with zero available-for-sale units are excluded from public-menu preview output.",
             "Descriptions come from the manually enriched Description column in the Products workbook when present.",
             "Images are still not included because the POS exports do not provide downloadable product image assets.",

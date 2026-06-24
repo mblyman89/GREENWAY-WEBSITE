@@ -174,14 +174,14 @@ export function ProductCardVisual({ item, salePriceMinorUnits, saleBadgeLabel, c
 
   return (
     <article
-      className={`group relative flex h-full min-h-[29.25rem] min-w-0 flex-col justify-between overflow-hidden border p-4 text-white transition duration-300 hover:border-white/70 hover:shadow-[0_18px_44px_rgba(0,0,0,0.55)] ${className}`}
+      className={`group relative flex h-full min-h-[29.25rem] min-w-0 flex-col overflow-hidden border p-4 text-white transition duration-300 hover:border-white/70 hover:shadow-[0_18px_44px_rgba(0,0,0,0.55)] ${className}`}
       style={cardStyle(tone)}
     >
       <span className="pointer-events-none absolute -left-px top-10 h-[42%] w-px opacity-90 blur-[1px]" style={{ background: tone.glow }} aria-hidden="true" />
       <span className="pointer-events-none absolute -right-px top-[31%] h-[46%] w-px opacity-90 blur-[1px]" style={{ background: tone.glow }} aria-hidden="true" />
       <span className="pointer-events-none absolute inset-x-7 -bottom-px h-px opacity-70 blur-[1px]" style={{ background: tone.glow }} aria-hidden="true" />
 
-      <div>
+      <div className="flex min-h-0 flex-1 flex-col">
         <p className="truncate pb-3 text-center text-lg font-black leading-none text-white md:text-xl">{item.brand}</p>
 
         <Link href={`/menu/products/${item.id}`} className="block" aria-label={`View ${item.name}`}>
@@ -192,12 +192,12 @@ export function ProductCardVisual({ item, salePriceMinorUnits, saleBadgeLabel, c
 
         <Link
           href={`/menu/products/${item.id}`}
-          className="mx-auto mt-4 line-clamp-2 block min-h-[2.45rem] text-center text-[1.08rem] font-black leading-[1.12] text-white transition group-hover:text-white md:text-[1.18rem]"
+          className="mx-auto mt-4 line-clamp-3 block text-center text-[1.08rem] font-black leading-[1.12] text-white transition group-hover:text-white md:text-[1.18rem]"
         >
           {item.name}
         </Link>
 
-        <div className="mt-3 grid gap-2 text-center">
+        <div className="mt-auto grid gap-2 pt-3 text-center">
           <span
             className="flex min-h-9 w-full items-center justify-center rounded-md px-3 py-2 text-sm font-black uppercase leading-none text-white"
             style={{ backgroundColor: tone.pill, color: isNonCannabisItem(item) ? "#111" : "#fff" }}
@@ -213,7 +213,7 @@ export function ProductCardVisual({ item, salePriceMinorUnits, saleBadgeLabel, c
         </div>
       </div>
 
-      <div className="pt-4 text-center">
+      <div className="pt-3 text-center">
         {saleBadgeLabel ? (
           <div className="mb-2 rounded-full border border-[var(--greenway)]/55 bg-black/60 px-3 py-1.5 text-[0.66rem] font-black uppercase leading-tight tracking-[0.08em] text-[var(--greenway)] shadow-[0_0_18px_rgba(126,217,87,0.18)]">
             {saleBadgeLabel}

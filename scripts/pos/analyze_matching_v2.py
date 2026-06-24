@@ -11,7 +11,8 @@ from pathlib import Path
 
 import pandas as pd
 
-BASE = Path('pos-data')
+BASE_CANDIDATES = [Path('pos-data'), Path.cwd().parent / 'research' / 'pos-data-analysis']
+BASE = next((candidate for candidate in BASE_CANDIDATES if (candidate / 'raw').exists()), BASE_CANDIDATES[0])
 RAW = BASE / 'raw'
 OUT = BASE / 'analysis'
 OUT.mkdir(parents=True, exist_ok=True)
