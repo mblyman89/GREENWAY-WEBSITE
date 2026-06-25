@@ -5,7 +5,7 @@ import crypto from "node:crypto";
 import * as XLSX from "xlsx";
 
 type GreenwayCategory =
-  | "flower" | "paraphernalia" | "preroll-pack" | "cartridge" | "disposable-cartridge"
+  | "flower" | "popcorn-bud" | "paraphernalia" | "preroll-pack" | "cartridge" | "disposable-cartridge"
   | "edible-solid" | "concentrate" | "infused-preroll" | "infused-preroll-pack"
   | "preroll" | "edible-liquid" | "topical" | "trim";
 
@@ -96,7 +96,7 @@ function addDiagnostic(severity: Severity, code: string, message: string, contex
 }
 
 const VALID_CATEGORIES = new Set<GreenwayCategory>([
-  "flower", "paraphernalia", "preroll-pack", "cartridge", "disposable-cartridge", "edible-solid", "concentrate", "infused-preroll", "infused-preroll-pack", "preroll", "edible-liquid", "topical", "trim",
+  "flower", "popcorn-bud", "paraphernalia", "preroll-pack", "cartridge", "disposable-cartridge", "edible-solid", "concentrate", "infused-preroll", "infused-preroll-pack", "preroll", "edible-liquid", "topical", "trim",
 ]);
 
 const CATEGORY_MAP: Record<string, GreenwayCategory> = {
@@ -135,7 +135,7 @@ const CATEGORY_MAP: Record<string, GreenwayCategory> = {
   "Bath Salts": "topical",
   "Roll On": "topical",
   "Trim": "trim",
-  "Popcorn Bud": "trim",
+  "Popcorn Bud": "popcorn-bud",
   "Balls": "edible-solid",
   "Bites": "edible-solid",
   "Hard Candy": "edible-solid",
@@ -214,7 +214,7 @@ function tryNormalizeCategory(category: string): GreenwayCategory | null {
 }
 
 const CATEGORY_FALLBACK: Record<string, GreenwayCategory> = {
-  "flower": "flower", "preroll": "preroll", "cartridge": "cartridge", "concentrate": "concentrate",
+  "flower": "flower", "popcorn": "popcorn-bud", "preroll": "preroll", "cartridge": "cartridge", "concentrate": "concentrate",
   "edible-solid": "edible-solid", "edible-liquid": "edible-liquid", "topical": "topical", "trim": "trim",
 };
 
@@ -226,6 +226,27 @@ function categoryWithFallback(rawCategory: string): GreenwayCategory {
     if (lowered.includes(keyword)) return cat;
   }
   return "concentrate";
+}
+
+/**
+ * Detect popcorn bud from product name keywords.
+ * Popcorn bud is a distinct product tier (small/budget buds) that should be
+ * separated from regular premium flower. The POS Category column often says
+ * "Flower" for these products, but the product name contains "popcorn",
+ * "popcorn flower", "popcorn bud", or "indoor popcorn flower".
+ *
+ * This detection runs AFTER category normalization but BEFORE grouping,
+ * so popcorn products get their own product cards instead of merging
+ * into regular flower cards as confusingly-priced variants.
+ */
+const POPCORN_KEYWORDS = /\b(popcorn\s*(?:bud|flower)?)\b/i;
+
+function detectPopcornBud(productName: string, currentCategory: GreenwayCategory): GreenwayCategory {
+  if (currentCategory !== "flower") return currentCategory;
+  if (POPCORN_KEYWORDS.test(normalizeWhitespace(productName))) {
+    return "popcorn-bud";
+  }
+  return currentCategory;
 }
 
 function normalizeStrainType(value: string, category: GreenwayCategory): GreenwayStrainType {
@@ -376,7 +397,7 @@ function deriveDisplayName(product: ProductRow | undefined, inv: CollapsedInvent
   const productStrain = normalizeWhitespace(product?.Strain);
   const invStrain = normalizeWhitespace(inv.strain);
   const strain = firstNonBlank(productStrain, invStrain);
-  if (["flower", "preroll", "preroll-pack", "infused-preroll", "infused-preroll-pack", "concentrate", "cartridge", "disposable-cartridge", "trim"].includes(category)) {
+  if (["flower", "popcorn-bud", "preroll", "preroll-pack", "infused-preroll", "infused-preroll-pack", "concentrate", "cartridge", "disposable-cartridge", "trim"].includes(category)) {
     const displayName = strain || stripVariantNoise(firstNonBlank(product?.["Product Name"], inv.productName), firstNonBlank(product?.Brand, inv.brand), inv.category);
     return { displayName, strainName: displayName };
   }
@@ -402,7 +423,8 @@ function buildGroups(products: ProductRow[], inventories: InventoryRow[]) {
     const matchingRows = productMap.get(inv.productKey) ?? [];
     if (matchingRows.length === 0) {
       addDiagnostic("warning", "inventory_without_product_master", "Inventory item has no Products workbook match; including as hidden menu item for review.", { product: inv.productName, inventoryType: inv.inventoryType, category: inv.category, units: inv.totalUnits });
-      const category = categoryWithFallback(inv.category);
+      const rawCategory = categoryWithFallback(inv.category);
+      const category = detectPopcornBud(inv.productName, rawCategory);
       const brand = firstNonBlank(inv.brand, "Greenway");
       const { displayName, strainName } = deriveDisplayName(undefined, inv, category);
       const identity = groupingIdentity(undefined, inv, category, displayName) + "|no-product-master";
@@ -426,7 +448,8 @@ function buildGroups(products: ProductRow[], inventories: InventoryRow[]) {
     }
     matchedProductKeys.add(inv.productKey);
     const product = matchingRows[0];
-    const category = normalizeCategory(firstNonBlank(product.Category, inv.category));
+    const rawCategory = normalizeCategory(firstNonBlank(product.Category, inv.category));
+    const category = detectPopcornBud(firstNonBlank(product["Product Name"], inv.productName), rawCategory);
     const brand = firstNonBlank(product.Brand, inv.brand, "Greenway");
     const { displayName, strainName } = deriveDisplayName(product, inv, category);
     const identity = groupingIdentity(product, inv, category, displayName);
@@ -454,7 +477,8 @@ function buildGroups(products: ProductRow[], inventories: InventoryRow[]) {
     if (!matchedProductKeys.has(productKey)) {
       const product = rows[0];
       addDiagnostic("warning", "product_without_inventory", "Products workbook item has no matching inventory; including as hidden menu item for review.", { product: product["Product Name"], brand: product.Brand, category: product.Category });
-      const category = categoryWithFallback(firstNonBlank(product.Category));
+      const rawCategory = categoryWithFallback(firstNonBlank(product.Category));
+      const category = detectPopcornBud(firstNonBlank(product["Product Name"]), rawCategory);
       const brand = firstNonBlank(product.Brand, "Greenway");
       const displayName = stripVariantNoise(firstNonBlank(product["Product Name"]), brand, product.Category ?? "");
       const strainName = firstNonBlank(normalizeWhitespace(product.Strain), displayName);
@@ -514,6 +538,7 @@ function filterCategoriesFor(item: Pick<GreenwayMenuItem, "category" | "posInven
   const cats = new Set<GreenwayCategory>([item.category]);
   if (["cartridge", "disposable-cartridge"].includes(item.category)) cats.add("concentrate");
   if (["infused-preroll", "infused-preroll-pack", "preroll-pack"].includes(item.category)) cats.add("preroll");
+  if (item.category === "popcorn-bud") cats.add("flower");
   return [...cats];
 }
 
@@ -522,6 +547,33 @@ function toMenuItem(group: ProductGroup): GreenwayMenuItem {
   const firstAvailable = variants.find((variant) => variant.totalUnits > 0) ?? variants[0];
   const firstPrice = firstAvailable?.priceMinorUnits ?? 0;
   const itemId = `pos-${stableId(group.identityKey)}`;
+
+  // Diagnostic: detect same-size variants with very different prices on flower cards.
+  // This is a strong indicator that popcorn bud and premium flower are incorrectly
+  // grouped together. The popcorn-bud keyword detection should prevent this, but
+  // the heuristic catches any cases that slip through.
+  if (group.category === "flower" && variants.length >= 2) {
+    const bySize = new Map<string, number[]>();
+    for (const v of variants) {
+      const sizeKey = v.package.label;
+      const prices = bySize.get(sizeKey) ?? [];
+      prices.push(v.priceMinorUnits);
+      bySize.set(sizeKey, prices);
+    }
+    for (const [sizeLabel, prices] of bySize) {
+      if (prices.length >= 2) {
+        const min = Math.min(...prices);
+        const max = Math.max(...prices);
+        // Flag if the price difference is > 40% of the higher price and > $10
+        if (max > 0 && (max - min) / max > 0.4 && (max - min) > 1000) {
+          addDiagnostic("warning", "flower_same_size_different_price",
+            `Flower card has same package size (${sizeLabel}) with very different prices ($${min / 100} vs $${max / 100}). This may indicate popcorn bud mixed with premium flower that was not detected by keyword.`,
+            { displayName: group.displayName, brand: group.brand, sizeLabel, prices: prices.map(p => p / 100) });
+        }
+      }
+    }
+  }
+
   const menuVariants: GreenwayMenuVariant[] = variants.map((variant) => ({
     id: `${itemId}-${stableId(variant.package.label, variant.priceMinorUnits, variant.medical ? "medical" : "adult")}`,
     label: variant.package.label,

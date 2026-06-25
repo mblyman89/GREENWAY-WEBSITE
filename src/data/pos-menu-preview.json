@@ -73495,454 +73495,6 @@
     ]
   },
   {
-    "id": "pos-dddb6585c532",
-    "name": "91 Octane",
-    "productName": "Green Reaper - Indoor Popcorn Flower - 91 Octane - 28g",
-    "brand": "Green Reaper",
-    "category": "flower",
-    "filterCategories": [
-      "flower"
-    ],
-    "posInventoryType": "Usable Marijuana",
-    "posInventoryCategory": "Flower",
-    "strainType": "hybrid",
-    "strainName": "91 Octane",
-    "thc": "15.19%",
-    "cbd": "N/A",
-    "totalThc": {
-      "type": "thc",
-      "value": "15.19",
-      "unit": "%"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "N/A",
-      "unit": "%"
-    },
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "0.28",
-        "unit": "%"
-      },
-      {
-        "type": "thca",
-        "value": "17",
-        "unit": "%"
-      }
-    ],
-    "description": "91 Octane is a hybrid flower with notes of chemical, berry, and cheese, with smooth, well-rounded flavor. Expect balanced, well-rounded effects.",
-    "priceLabel": "$70.00 1oz",
-    "priceMinorUnits": 7000,
-    "inventoryStatus": "low-stock",
-    "variants": [
-      {
-        "id": "pos-dddb6585c532-4ab7a469b015",
-        "label": "1oz",
-        "priceMinorUnits": 7000,
-        "inventoryLevel": 3,
-        "medical": false
-      }
-    ]
-  },
-  {
-    "id": "pos-ca7b2c4dc72b",
-    "name": "Alpine Guava",
-    "productName": "Green Reaper - Indoor Popcorn Flower - Alpine Guava - 14g",
-    "brand": "Green Reaper",
-    "category": "flower",
-    "filterCategories": [
-      "flower"
-    ],
-    "posInventoryType": "Usable Marijuana",
-    "posInventoryCategory": "Flower",
-    "strainType": "hybrid",
-    "strainName": "Alpine Guava",
-    "thc": "16.03%",
-    "cbd": "N/A",
-    "totalThc": {
-      "type": "thc",
-      "value": "16.03",
-      "unit": "%"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "N/A",
-      "unit": "%"
-    },
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "0.24",
-        "unit": "%"
-      },
-      {
-        "type": "thca",
-        "value": "18",
-        "unit": "%"
-      }
-    ],
-    "description": "Alpine Guava is a hybrid flower with a sweet, balanced earthy-fruity aroma, with smooth, well-rounded flavor. Expect balanced, well-rounded effects.",
-    "priceLabel": "$38.00 14g",
-    "priceMinorUnits": 3800,
-    "inventoryStatus": "in-stock",
-    "variants": [
-      {
-        "id": "pos-ca7b2c4dc72b-fc4f9c89c7e2",
-        "label": "14g",
-        "priceMinorUnits": 3800,
-        "inventoryLevel": 4,
-        "medical": false
-      },
-      {
-        "id": "pos-ca7b2c4dc72b-4ab7a469b015",
-        "label": "1oz",
-        "priceMinorUnits": 7000,
-        "inventoryLevel": 1,
-        "medical": false
-      }
-    ]
-  },
-  {
-    "id": "pos-64177f7e203e",
-    "name": "Candy Gas",
-    "productName": "Green Reaper - Indoor Popcorn Flower - Candy Gas - 14g",
-    "brand": "Green Reaper",
-    "category": "flower",
-    "filterCategories": [
-      "flower"
-    ],
-    "posInventoryType": "Usable Marijuana",
-    "posInventoryCategory": "Flower",
-    "strainType": "hybrid",
-    "strainName": "Candy Gas",
-    "thc": "16.4%",
-    "cbd": "N/A",
-    "totalThc": {
-      "type": "thc",
-      "value": "16.4",
-      "unit": "%"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "N/A",
-      "unit": "%"
-    },
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "0.61",
-        "unit": "%"
-      },
-      {
-        "type": "thca",
-        "value": "18",
-        "unit": "%"
-      }
-    ],
-    "description": "Candy Gas is a hybrid flower with a pungent fuel flavor and balanced, well-rounded effects.",
-    "priceLabel": "$38.00 14g",
-    "priceMinorUnits": 3800,
-    "inventoryStatus": "in-stock",
-    "variants": [
-      {
-        "id": "pos-64177f7e203e-fc4f9c89c7e2",
-        "label": "14g",
-        "priceMinorUnits": 3800,
-        "inventoryLevel": 5,
-        "medical": false
-      },
-      {
-        "id": "pos-64177f7e203e-4ab7a469b015",
-        "label": "1oz",
-        "priceMinorUnits": 7000,
-        "inventoryLevel": 4,
-        "medical": false
-      }
-    ]
-  },
-  {
-    "id": "pos-3d9ff286bd6b",
-    "name": "Celtic Cream",
-    "productName": "Green Reaper - Indoor Popcorn Flower - Celtic Cream - 14g",
-    "brand": "Green Reaper",
-    "category": "flower",
-    "filterCategories": [
-      "flower"
-    ],
-    "posInventoryType": "Usable Marijuana",
-    "posInventoryCategory": "Flower",
-    "strainType": "hybrid",
-    "strainName": "Celtic Cream",
-    "thc": "21.85%",
-    "cbd": "N/A",
-    "totalThc": {
-      "type": "thc",
-      "value": "21.85",
-      "unit": "%"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "N/A",
-      "unit": "%"
-    },
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "0.8",
-        "unit": "%"
-      },
-      {
-        "type": "thca",
-        "value": "24",
-        "unit": "%"
-      }
-    ],
-    "description": "Celtic Cream is a hybrid flower with a sweet, balanced earthy-fruity aroma, with smooth, well-rounded flavor. Expect balanced, well-rounded effects.",
-    "priceLabel": "$38.00 14g",
-    "priceMinorUnits": 3800,
-    "inventoryStatus": "low-stock",
-    "variants": [
-      {
-        "id": "pos-3d9ff286bd6b-fc4f9c89c7e2",
-        "label": "14g",
-        "priceMinorUnits": 3800,
-        "inventoryLevel": 1,
-        "medical": false
-      }
-    ]
-  },
-  {
-    "id": "pos-1aa8964aaec6",
-    "name": "Dutch Gouda Butter",
-    "productName": "Green Reaper - Indoor Popcorn Flower - Dutch Gouda Butter - 14g",
-    "brand": "Green Reaper",
-    "category": "flower",
-    "filterCategories": [
-      "flower"
-    ],
-    "posInventoryType": "Usable Marijuana",
-    "posInventoryCategory": "Flower",
-    "strainType": "hybrid",
-    "strainName": "Dutch Gouda Butter",
-    "thc": "16.03%",
-    "cbd": "N/A",
-    "totalThc": {
-      "type": "thc",
-      "value": "16.03",
-      "unit": "%"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "N/A",
-      "unit": "%"
-    },
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "0.24",
-        "unit": "%"
-      },
-      {
-        "type": "thca",
-        "value": "18",
-        "unit": "%"
-      }
-    ],
-    "description": "Dutch Gouda Butter is a hybrid flower with a sweet, balanced earthy-fruity aroma and balanced, well-rounded effects.",
-    "priceLabel": "$38.00 14g",
-    "priceMinorUnits": 3800,
-    "inventoryStatus": "low-stock",
-    "variants": [
-      {
-        "id": "pos-1aa8964aaec6-fc4f9c89c7e2",
-        "label": "14g",
-        "priceMinorUnits": 3800,
-        "inventoryLevel": 1,
-        "medical": false
-      },
-      {
-        "id": "pos-1aa8964aaec6-4ab7a469b015",
-        "label": "1oz",
-        "priceMinorUnits": 7000,
-        "inventoryLevel": 2,
-        "medical": false
-      }
-    ]
-  },
-  {
-    "id": "pos-8178b0b76b5b",
-    "name": "Ice Cream Zoap",
-    "productName": "Green Reaper - Indoor Popcorn Flower - Ice Cream Zoap - 14g",
-    "brand": "Green Reaper",
-    "category": "flower",
-    "filterCategories": [
-      "flower"
-    ],
-    "posInventoryType": "Usable Marijuana",
-    "posInventoryCategory": "Flower",
-    "strainType": "hybrid",
-    "strainName": "Ice Cream Zoap",
-    "thc": "25.88%",
-    "cbd": "N/A",
-    "totalThc": {
-      "type": "thc",
-      "value": "25.88",
-      "unit": "%"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "N/A",
-      "unit": "%"
-    },
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "0.8",
-        "unit": "%"
-      },
-      {
-        "type": "thca",
-        "value": "28.5",
-        "unit": "%"
-      },
-      {
-        "type": "cbda",
-        "value": "0.1",
-        "unit": "%"
-      }
-    ],
-    "description": "Ice Cream Zoap is a hybrid flower with a smooth, creamy flavor and balanced, well-rounded effects.",
-    "priceLabel": "$38.00 14g",
-    "priceMinorUnits": 3800,
-    "inventoryStatus": "low-stock",
-    "variants": [
-      {
-        "id": "pos-8178b0b76b5b-fc4f9c89c7e2",
-        "label": "14g",
-        "priceMinorUnits": 3800,
-        "inventoryLevel": 2,
-        "medical": false
-      },
-      {
-        "id": "pos-8178b0b76b5b-4ab7a469b015",
-        "label": "1oz",
-        "priceMinorUnits": 7000,
-        "inventoryLevel": 1,
-        "medical": false
-      }
-    ]
-  },
-  {
-    "id": "pos-8d60ed8ec8e5",
-    "name": "Permanent Pounder",
-    "productName": "Green Reaper - Indoor Popcorn Flower - Permanent Pounder - 14g",
-    "brand": "Green Reaper",
-    "category": "flower",
-    "filterCategories": [
-      "flower"
-    ],
-    "posInventoryType": "Usable Marijuana",
-    "posInventoryCategory": "Flower",
-    "strainType": "hybrid",
-    "strainName": "Permanent Pounder",
-    "thc": "19.77%",
-    "cbd": "N/A",
-    "totalThc": {
-      "type": "thc",
-      "value": "19.77",
-      "unit": "%"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "N/A",
-      "unit": "%"
-    },
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "2.67",
-        "unit": "%"
-      },
-      {
-        "type": "thca",
-        "value": "19.5",
-        "unit": "%"
-      }
-    ],
-    "description": "Permanent Pounder is a hybrid flower with a sweet, balanced earthy-fruity aroma and balanced, well-rounded effects.",
-    "priceLabel": "$38.00 14g",
-    "priceMinorUnits": 3800,
-    "inventoryStatus": "low-stock",
-    "variants": [
-      {
-        "id": "pos-8d60ed8ec8e5-fc4f9c89c7e2",
-        "label": "14g",
-        "priceMinorUnits": 3800,
-        "inventoryLevel": 2,
-        "medical": false
-      }
-    ]
-  },
-  {
-    "id": "pos-57bcdba1e4a9",
-    "name": "Popscottie",
-    "productName": "Green Reaper - Indoor Popcorn Flower - Popscottie - 14g",
-    "brand": "Green Reaper",
-    "category": "flower",
-    "filterCategories": [
-      "flower"
-    ],
-    "posInventoryType": "Usable Marijuana",
-    "posInventoryCategory": "Flower",
-    "strainType": "hybrid",
-    "strainName": "Popscottie",
-    "thc": "22.32%",
-    "cbd": "N/A",
-    "totalThc": {
-      "type": "thc",
-      "value": "22.32",
-      "unit": "%"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "N/A",
-      "unit": "%"
-    },
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "1.1",
-        "unit": "%"
-      },
-      {
-        "type": "thca",
-        "value": "24.2",
-        "unit": "%"
-      }
-    ],
-    "description": "Popscottie is a hybrid flower with notes of blueberry, diesel, and berry, with smooth, well-rounded flavor. Expect balanced, well-rounded effects.",
-    "priceLabel": "$38.00 14g",
-    "priceMinorUnits": 3800,
-    "inventoryStatus": "in-stock",
-    "variants": [
-      {
-        "id": "pos-57bcdba1e4a9-fc4f9c89c7e2",
-        "label": "14g",
-        "priceMinorUnits": 3800,
-        "inventoryLevel": 4,
-        "medical": false
-      },
-      {
-        "id": "pos-57bcdba1e4a9-4ab7a469b015",
-        "label": "1oz",
-        "priceMinorUnits": 7000,
-        "inventoryLevel": 3,
-        "medical": false
-      }
-    ]
-  },
-  {
     "id": "pos-bac9c49c9e55",
     "name": "Black Maple",
     "productName": "Heavenly Buds Flower - Black Maple - 7g",
@@ -79493,62 +79045,6 @@
     ]
   },
   {
-    "id": "pos-a3c8b1e4dd20",
-    "name": "Gumbo",
-    "productName": "Popcorn - Gumbo - 28g",
-    "brand": "Mz. A",
-    "category": "flower",
-    "filterCategories": [
-      "flower"
-    ],
-    "posInventoryType": "Usable Marijuana",
-    "posInventoryCategory": "Flower",
-    "strainType": "indica",
-    "strainName": "Gumbo",
-    "thc": "25.58%",
-    "cbd": "N/A",
-    "totalThc": {
-      "type": "thc",
-      "value": "25.58",
-      "unit": "%"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "N/A",
-      "unit": "%"
-    },
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "1.8",
-        "unit": "%"
-      },
-      {
-        "type": "thca",
-        "value": "27.04",
-        "unit": "%"
-      },
-      {
-        "type": "cbda",
-        "value": "0.07",
-        "unit": "%"
-      }
-    ],
-    "description": "Gumbo is an indica flower with notes of ammonia, pine, and sage, with an earthy, sweet flavor and a smooth finish. Expect relaxing, mellow body comfort.",
-    "priceLabel": "$100.00 1oz",
-    "priceMinorUnits": 10000,
-    "inventoryStatus": "low-stock",
-    "variants": [
-      {
-        "id": "pos-a3c8b1e4dd20-e79d98a851a2",
-        "label": "1oz",
-        "priceMinorUnits": 10000,
-        "inventoryLevel": 3,
-        "medical": false
-      }
-    ]
-  },
-  {
     "id": "pos-239111f1abeb",
     "name": "Lemon Cherry Runtz",
     "productName": "Flower - Lemon Cherry Runtz - 1.5g",
@@ -79607,13 +79103,6 @@
         "label": "3.5g",
         "priceMinorUnits": 2500,
         "inventoryLevel": 7,
-        "medical": false
-      },
-      {
-        "id": "pos-239111f1abeb-e79d98a851a2",
-        "label": "1oz",
-        "priceMinorUnits": 10000,
-        "inventoryLevel": 4,
         "medical": false
       },
       {
@@ -79979,52 +79468,6 @@
         "label": "3.5g",
         "priceMinorUnits": 3000,
         "inventoryLevel": 6,
-        "medical": false
-      }
-    ]
-  },
-  {
-    "id": "pos-068e316743bb",
-    "name": "Winter Sunrise",
-    "productName": "Popcorn - Winter Sunrise - 28g",
-    "brand": "Mz. A",
-    "category": "flower",
-    "filterCategories": [
-      "flower"
-    ],
-    "posInventoryType": "Usable Marijuana",
-    "posInventoryCategory": "Flower",
-    "strainType": "hybrid",
-    "strainName": "Winter Sunrise",
-    "thc": "18%",
-    "cbd": "N/A",
-    "totalThc": {
-      "type": "thc",
-      "value": "18",
-      "unit": "%"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "N/A",
-      "unit": "%"
-    },
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "18",
-        "unit": "%"
-      }
-    ],
-    "description": "Winter Sunrise is a hybrid flower with a sweet, balanced earthy-fruity aroma and balanced, well-rounded effects.",
-    "priceLabel": "$100.00 1oz",
-    "priceMinorUnits": 10000,
-    "inventoryStatus": "low-stock",
-    "variants": [
-      {
-        "id": "pos-068e316743bb-e79d98a851a2",
-        "label": "1oz",
-        "priceMinorUnits": 10000,
-        "inventoryLevel": 2,
         "medical": false
       }
     ]
@@ -92945,62 +92388,6 @@
         "label": "3.5g",
         "priceMinorUnits": 4000,
         "inventoryLevel": 1,
-        "medical": false
-      }
-    ]
-  },
-  {
-    "id": "pos-28c45d381680",
-    "name": "Old School Lemons",
-    "productName": "Viking Cannabis - Old School Lemons - Popcorn - 10g",
-    "brand": "Viking Cannabis",
-    "category": "flower",
-    "filterCategories": [
-      "flower"
-    ],
-    "posInventoryType": "Usable Marijuana",
-    "posInventoryCategory": "Flower",
-    "strainType": "hybrid",
-    "strainName": "Old School Lemons",
-    "thc": "23.1%",
-    "cbd": "N/A",
-    "totalThc": {
-      "type": "thc",
-      "value": "23.1",
-      "unit": "%"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "N/A",
-      "unit": "%"
-    },
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "0.59",
-        "unit": "%"
-      },
-      {
-        "type": "thca",
-        "value": "22.45",
-        "unit": "%"
-      },
-      {
-        "type": "cbda",
-        "value": "0.06",
-        "unit": "%"
-      }
-    ],
-    "description": "Old School Lemons is a hybrid flower with a sweet, balanced earthy-fruity aroma, with smooth, well-rounded flavor. Expect balanced, well-rounded effects.",
-    "priceLabel": "$60.00 10g",
-    "priceMinorUnits": 6000,
-    "inventoryStatus": "low-stock",
-    "variants": [
-      {
-        "id": "pos-28c45d381680-c39b8f18ade2",
-        "label": "10g",
-        "priceMinorUnits": 6000,
-        "inventoryLevel": 3,
         "medical": false
       }
     ]
@@ -122274,6 +121661,739 @@
     ]
   },
   {
+    "id": "pos-949fd6a756ff",
+    "name": "91 Octane",
+    "productName": "Green Reaper - Indoor Popcorn Flower - 91 Octane - 28g",
+    "brand": "Green Reaper",
+    "category": "popcorn-bud",
+    "filterCategories": [
+      "popcorn-bud",
+      "flower"
+    ],
+    "posInventoryType": "Usable Marijuana",
+    "posInventoryCategory": "Flower",
+    "strainType": "hybrid",
+    "strainName": "91 Octane",
+    "thc": "15.19%",
+    "cbd": "N/A",
+    "totalThc": {
+      "type": "thc",
+      "value": "15.19",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "N/A",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "0.28",
+        "unit": "%"
+      },
+      {
+        "type": "thca",
+        "value": "17",
+        "unit": "%"
+      }
+    ],
+    "description": "91 Octane is a hybrid flower with notes of chemical, berry, and cheese, with smooth, well-rounded flavor. Expect balanced, well-rounded effects.",
+    "priceLabel": "$70.00 1oz",
+    "priceMinorUnits": 7000,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-949fd6a756ff-4ab7a469b015",
+        "label": "1oz",
+        "priceMinorUnits": 7000,
+        "inventoryLevel": 3,
+        "medical": false
+      }
+    ]
+  },
+  {
+    "id": "pos-c41bfd8ab0e8",
+    "name": "Alpine Guava",
+    "productName": "Green Reaper - Indoor Popcorn Flower - Alpine Guava - 14g",
+    "brand": "Green Reaper",
+    "category": "popcorn-bud",
+    "filterCategories": [
+      "popcorn-bud",
+      "flower"
+    ],
+    "posInventoryType": "Usable Marijuana",
+    "posInventoryCategory": "Flower",
+    "strainType": "hybrid",
+    "strainName": "Alpine Guava",
+    "thc": "16.03%",
+    "cbd": "N/A",
+    "totalThc": {
+      "type": "thc",
+      "value": "16.03",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "N/A",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "0.24",
+        "unit": "%"
+      },
+      {
+        "type": "thca",
+        "value": "18",
+        "unit": "%"
+      }
+    ],
+    "description": "Alpine Guava is a hybrid flower with a sweet, balanced earthy-fruity aroma, with smooth, well-rounded flavor. Expect balanced, well-rounded effects.",
+    "priceLabel": "$38.00 14g",
+    "priceMinorUnits": 3800,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-c41bfd8ab0e8-fc4f9c89c7e2",
+        "label": "14g",
+        "priceMinorUnits": 3800,
+        "inventoryLevel": 4,
+        "medical": false
+      },
+      {
+        "id": "pos-c41bfd8ab0e8-4ab7a469b015",
+        "label": "1oz",
+        "priceMinorUnits": 7000,
+        "inventoryLevel": 1,
+        "medical": false
+      }
+    ]
+  },
+  {
+    "id": "pos-343f6a56f132",
+    "name": "Candy Gas",
+    "productName": "Green Reaper - Indoor Popcorn Flower - Candy Gas - 14g",
+    "brand": "Green Reaper",
+    "category": "popcorn-bud",
+    "filterCategories": [
+      "popcorn-bud",
+      "flower"
+    ],
+    "posInventoryType": "Usable Marijuana",
+    "posInventoryCategory": "Flower",
+    "strainType": "hybrid",
+    "strainName": "Candy Gas",
+    "thc": "16.4%",
+    "cbd": "N/A",
+    "totalThc": {
+      "type": "thc",
+      "value": "16.4",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "N/A",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "0.61",
+        "unit": "%"
+      },
+      {
+        "type": "thca",
+        "value": "18",
+        "unit": "%"
+      }
+    ],
+    "description": "Candy Gas is a hybrid flower with a pungent fuel flavor and balanced, well-rounded effects.",
+    "priceLabel": "$38.00 14g",
+    "priceMinorUnits": 3800,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-343f6a56f132-fc4f9c89c7e2",
+        "label": "14g",
+        "priceMinorUnits": 3800,
+        "inventoryLevel": 5,
+        "medical": false
+      },
+      {
+        "id": "pos-343f6a56f132-4ab7a469b015",
+        "label": "1oz",
+        "priceMinorUnits": 7000,
+        "inventoryLevel": 4,
+        "medical": false
+      }
+    ]
+  },
+  {
+    "id": "pos-1dbddef83036",
+    "name": "Celtic Cream",
+    "productName": "Green Reaper - Indoor Popcorn Flower - Celtic Cream - 14g",
+    "brand": "Green Reaper",
+    "category": "popcorn-bud",
+    "filterCategories": [
+      "popcorn-bud",
+      "flower"
+    ],
+    "posInventoryType": "Usable Marijuana",
+    "posInventoryCategory": "Flower",
+    "strainType": "hybrid",
+    "strainName": "Celtic Cream",
+    "thc": "21.85%",
+    "cbd": "N/A",
+    "totalThc": {
+      "type": "thc",
+      "value": "21.85",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "N/A",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "0.8",
+        "unit": "%"
+      },
+      {
+        "type": "thca",
+        "value": "24",
+        "unit": "%"
+      }
+    ],
+    "description": "Celtic Cream is a hybrid flower with a sweet, balanced earthy-fruity aroma, with smooth, well-rounded flavor. Expect balanced, well-rounded effects.",
+    "priceLabel": "$38.00 14g",
+    "priceMinorUnits": 3800,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-1dbddef83036-fc4f9c89c7e2",
+        "label": "14g",
+        "priceMinorUnits": 3800,
+        "inventoryLevel": 1,
+        "medical": false
+      }
+    ]
+  },
+  {
+    "id": "pos-f20d8e2ddf00",
+    "name": "Dutch Gouda Butter",
+    "productName": "Green Reaper - Indoor Popcorn Flower - Dutch Gouda Butter - 14g",
+    "brand": "Green Reaper",
+    "category": "popcorn-bud",
+    "filterCategories": [
+      "popcorn-bud",
+      "flower"
+    ],
+    "posInventoryType": "Usable Marijuana",
+    "posInventoryCategory": "Flower",
+    "strainType": "hybrid",
+    "strainName": "Dutch Gouda Butter",
+    "thc": "16.03%",
+    "cbd": "N/A",
+    "totalThc": {
+      "type": "thc",
+      "value": "16.03",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "N/A",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "0.24",
+        "unit": "%"
+      },
+      {
+        "type": "thca",
+        "value": "18",
+        "unit": "%"
+      }
+    ],
+    "description": "Dutch Gouda Butter is a hybrid flower with a sweet, balanced earthy-fruity aroma and balanced, well-rounded effects.",
+    "priceLabel": "$38.00 14g",
+    "priceMinorUnits": 3800,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-f20d8e2ddf00-fc4f9c89c7e2",
+        "label": "14g",
+        "priceMinorUnits": 3800,
+        "inventoryLevel": 1,
+        "medical": false
+      },
+      {
+        "id": "pos-f20d8e2ddf00-4ab7a469b015",
+        "label": "1oz",
+        "priceMinorUnits": 7000,
+        "inventoryLevel": 2,
+        "medical": false
+      }
+    ]
+  },
+  {
+    "id": "pos-af6fbf7e4681",
+    "name": "Ice Cream Zoap",
+    "productName": "Green Reaper - Indoor Popcorn Flower - Ice Cream Zoap - 14g",
+    "brand": "Green Reaper",
+    "category": "popcorn-bud",
+    "filterCategories": [
+      "popcorn-bud",
+      "flower"
+    ],
+    "posInventoryType": "Usable Marijuana",
+    "posInventoryCategory": "Flower",
+    "strainType": "hybrid",
+    "strainName": "Ice Cream Zoap",
+    "thc": "25.88%",
+    "cbd": "N/A",
+    "totalThc": {
+      "type": "thc",
+      "value": "25.88",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "N/A",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "0.8",
+        "unit": "%"
+      },
+      {
+        "type": "thca",
+        "value": "28.5",
+        "unit": "%"
+      },
+      {
+        "type": "cbda",
+        "value": "0.1",
+        "unit": "%"
+      }
+    ],
+    "description": "Ice Cream Zoap is a hybrid flower with a smooth, creamy flavor and balanced, well-rounded effects.",
+    "priceLabel": "$38.00 14g",
+    "priceMinorUnits": 3800,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-af6fbf7e4681-fc4f9c89c7e2",
+        "label": "14g",
+        "priceMinorUnits": 3800,
+        "inventoryLevel": 2,
+        "medical": false
+      },
+      {
+        "id": "pos-af6fbf7e4681-4ab7a469b015",
+        "label": "1oz",
+        "priceMinorUnits": 7000,
+        "inventoryLevel": 1,
+        "medical": false
+      }
+    ]
+  },
+  {
+    "id": "pos-32164f7ab92c",
+    "name": "Permanent Pounder",
+    "productName": "Green Reaper - Indoor Popcorn Flower - Permanent Pounder - 14g",
+    "brand": "Green Reaper",
+    "category": "popcorn-bud",
+    "filterCategories": [
+      "popcorn-bud",
+      "flower"
+    ],
+    "posInventoryType": "Usable Marijuana",
+    "posInventoryCategory": "Flower",
+    "strainType": "hybrid",
+    "strainName": "Permanent Pounder",
+    "thc": "19.77%",
+    "cbd": "N/A",
+    "totalThc": {
+      "type": "thc",
+      "value": "19.77",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "N/A",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "2.67",
+        "unit": "%"
+      },
+      {
+        "type": "thca",
+        "value": "19.5",
+        "unit": "%"
+      }
+    ],
+    "description": "Permanent Pounder is a hybrid flower with a sweet, balanced earthy-fruity aroma and balanced, well-rounded effects.",
+    "priceLabel": "$38.00 14g",
+    "priceMinorUnits": 3800,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-32164f7ab92c-fc4f9c89c7e2",
+        "label": "14g",
+        "priceMinorUnits": 3800,
+        "inventoryLevel": 2,
+        "medical": false
+      }
+    ]
+  },
+  {
+    "id": "pos-cb8f6834bdb3",
+    "name": "Popscottie",
+    "productName": "Green Reaper - Indoor Popcorn Flower - Popscottie - 14g",
+    "brand": "Green Reaper",
+    "category": "popcorn-bud",
+    "filterCategories": [
+      "popcorn-bud",
+      "flower"
+    ],
+    "posInventoryType": "Usable Marijuana",
+    "posInventoryCategory": "Flower",
+    "strainType": "hybrid",
+    "strainName": "Popscottie",
+    "thc": "22.32%",
+    "cbd": "N/A",
+    "totalThc": {
+      "type": "thc",
+      "value": "22.32",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "N/A",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "1.1",
+        "unit": "%"
+      },
+      {
+        "type": "thca",
+        "value": "24.2",
+        "unit": "%"
+      }
+    ],
+    "description": "Popscottie is a hybrid flower with notes of blueberry, diesel, and berry, with smooth, well-rounded flavor. Expect balanced, well-rounded effects.",
+    "priceLabel": "$38.00 14g",
+    "priceMinorUnits": 3800,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-cb8f6834bdb3-fc4f9c89c7e2",
+        "label": "14g",
+        "priceMinorUnits": 3800,
+        "inventoryLevel": 4,
+        "medical": false
+      },
+      {
+        "id": "pos-cb8f6834bdb3-4ab7a469b015",
+        "label": "1oz",
+        "priceMinorUnits": 7000,
+        "inventoryLevel": 3,
+        "medical": false
+      }
+    ]
+  },
+  {
+    "id": "pos-d463f6e1f700",
+    "name": "Gumbo",
+    "productName": "Popcorn - Gumbo - 28g",
+    "brand": "Mz. A",
+    "category": "popcorn-bud",
+    "filterCategories": [
+      "popcorn-bud",
+      "flower"
+    ],
+    "posInventoryType": "Usable Marijuana",
+    "posInventoryCategory": "Flower",
+    "strainType": "indica",
+    "strainName": "Gumbo",
+    "thc": "25.58%",
+    "cbd": "N/A",
+    "totalThc": {
+      "type": "thc",
+      "value": "25.58",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "N/A",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "1.8",
+        "unit": "%"
+      },
+      {
+        "type": "thca",
+        "value": "27.04",
+        "unit": "%"
+      },
+      {
+        "type": "cbda",
+        "value": "0.07",
+        "unit": "%"
+      }
+    ],
+    "description": "Gumbo is an indica flower with notes of ammonia, pine, and sage, with an earthy, sweet flavor and a smooth finish. Expect relaxing, mellow body comfort.",
+    "priceLabel": "$100.00 1oz",
+    "priceMinorUnits": 10000,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-d463f6e1f700-e79d98a851a2",
+        "label": "1oz",
+        "priceMinorUnits": 10000,
+        "inventoryLevel": 3,
+        "medical": false
+      }
+    ]
+  },
+  {
+    "id": "pos-8aaaa6e6f3e4",
+    "name": "Lemon Cherry Runtz",
+    "productName": "Popcorn - Lemon Cherry Runtz - 28g",
+    "brand": "Mz. A",
+    "category": "popcorn-bud",
+    "filterCategories": [
+      "popcorn-bud",
+      "flower"
+    ],
+    "posInventoryType": "Usable Marijuana",
+    "posInventoryCategory": "Flower",
+    "strainType": "hybrid",
+    "strainName": "Lemon Cherry Runtz",
+    "thc": "21.18%",
+    "cbd": "N/A",
+    "totalThc": {
+      "type": "thc",
+      "value": "21.18",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "N/A",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "1.72",
+        "unit": "%"
+      },
+      {
+        "type": "thca",
+        "value": "22.13",
+        "unit": "%"
+      },
+      {
+        "type": "cbda",
+        "value": "0.06",
+        "unit": "%"
+      }
+    ],
+    "description": "Lemon Cherry Runtz is a hybrid flower with notes of lemon, diesel, and berry, with smooth, well-rounded flavor. Expect balanced, well-rounded effects.",
+    "priceLabel": "$100.00 1oz",
+    "priceMinorUnits": 10000,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-8aaaa6e6f3e4-e79d98a851a2",
+        "label": "1oz",
+        "priceMinorUnits": 10000,
+        "inventoryLevel": 4,
+        "medical": false
+      }
+    ]
+  },
+  {
+    "id": "pos-ffe1ed0308b9",
+    "name": "Winter Sunrise",
+    "productName": "Popcorn - Winter Sunrise - 28g",
+    "brand": "Mz. A",
+    "category": "popcorn-bud",
+    "filterCategories": [
+      "popcorn-bud",
+      "flower"
+    ],
+    "posInventoryType": "Usable Marijuana",
+    "posInventoryCategory": "Flower",
+    "strainType": "hybrid",
+    "strainName": "Winter Sunrise",
+    "thc": "18%",
+    "cbd": "N/A",
+    "totalThc": {
+      "type": "thc",
+      "value": "18",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "N/A",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "18",
+        "unit": "%"
+      }
+    ],
+    "description": "Winter Sunrise is a hybrid flower with a sweet, balanced earthy-fruity aroma and balanced, well-rounded effects.",
+    "priceLabel": "$100.00 1oz",
+    "priceMinorUnits": 10000,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-ffe1ed0308b9-e79d98a851a2",
+        "label": "1oz",
+        "priceMinorUnits": 10000,
+        "inventoryLevel": 2,
+        "medical": false
+      }
+    ]
+  },
+  {
+    "id": "pos-d27a1f50fb2c",
+    "name": "Trophy wife",
+    "productName": "Phat Panda bong buddies Trophy wife - 2g",
+    "brand": "Phat Panda",
+    "category": "popcorn-bud",
+    "filterCategories": [
+      "popcorn-bud",
+      "flower"
+    ],
+    "posInventoryType": "Usable Marijuana",
+    "posInventoryCategory": "Popcorn Bud",
+    "strainType": "unknown",
+    "strainName": "Trophy wife",
+    "thc": "28%",
+    "cbd": "N/A",
+    "totalThc": {
+      "type": "thc",
+      "value": "28",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "N/A",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "0.99",
+        "unit": "%"
+      },
+      {
+        "type": "thca",
+        "value": "26",
+        "unit": "%"
+      },
+      {
+        "type": "cbda",
+        "value": "0.06",
+        "unit": "%"
+      }
+    ],
+    "description": "Trophy wife from Phat Panda. Browse current availability, package options, and pricing at Greenway Marijuana in Port Orchard.",
+    "priceLabel": "$12.00 2g",
+    "priceMinorUnits": 1200,
+    "inventoryStatus": "low-stock",
+    "hidden": true,
+    "hiddenReason": "no_product_master",
+    "variants": [
+      {
+        "id": "pos-d27a1f50fb2c-2c050d9f9033",
+        "label": "2g",
+        "priceMinorUnits": 1200,
+        "inventoryLevel": 1,
+        "medical": true
+      }
+    ]
+  },
+  {
+    "id": "pos-d3f1e6461fd1",
+    "name": "Old School Lemons",
+    "productName": "Viking Cannabis - Old School Lemons - Popcorn - 10g",
+    "brand": "Viking Cannabis",
+    "category": "popcorn-bud",
+    "filterCategories": [
+      "popcorn-bud",
+      "flower"
+    ],
+    "posInventoryType": "Usable Marijuana",
+    "posInventoryCategory": "Flower",
+    "strainType": "hybrid",
+    "strainName": "Old School Lemons",
+    "thc": "23.1%",
+    "cbd": "N/A",
+    "totalThc": {
+      "type": "thc",
+      "value": "23.1",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "N/A",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "0.59",
+        "unit": "%"
+      },
+      {
+        "type": "thca",
+        "value": "22.45",
+        "unit": "%"
+      },
+      {
+        "type": "cbda",
+        "value": "0.06",
+        "unit": "%"
+      }
+    ],
+    "description": "Old School Lemons is a hybrid flower with a sweet, balanced earthy-fruity aroma, with smooth, well-rounded flavor. Expect balanced, well-rounded effects.",
+    "priceLabel": "$60.00 10g",
+    "priceMinorUnits": 6000,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-d3f1e6461fd1-c39b8f18ade2",
+        "label": "10g",
+        "priceMinorUnits": 6000,
+        "inventoryLevel": 3,
+        "medical": false
+      }
+    ]
+  },
+  {
     "id": "pos-b160f5227209",
     "name": ".5 X 2 Blueberry Muffins",
     "productName": "1937 - Pre-Rolls .5 x 2 pack - Blueberry Muffins - 1g",
@@ -150954,64 +151074,6 @@
         "priceMinorUnits": 6000,
         "inventoryLevel": 2,
         "medical": false
-      }
-    ]
-  },
-  {
-    "id": "pos-c6c908736052",
-    "name": "Trophy wife",
-    "productName": "Phat Panda bong buddies Trophy wife - 2g",
-    "brand": "Phat Panda",
-    "category": "trim",
-    "filterCategories": [
-      "trim"
-    ],
-    "posInventoryType": "Usable Marijuana",
-    "posInventoryCategory": "Popcorn Bud",
-    "strainType": "unknown",
-    "strainName": "Trophy wife",
-    "thc": "28%",
-    "cbd": "N/A",
-    "totalThc": {
-      "type": "thc",
-      "value": "28",
-      "unit": "%"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "N/A",
-      "unit": "%"
-    },
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "0.99",
-        "unit": "%"
-      },
-      {
-        "type": "thca",
-        "value": "26",
-        "unit": "%"
-      },
-      {
-        "type": "cbda",
-        "value": "0.06",
-        "unit": "%"
-      }
-    ],
-    "description": "Trophy wife from Phat Panda. Browse current availability, package options, and pricing at Greenway Marijuana in Port Orchard.",
-    "priceLabel": "$12.00 2g",
-    "priceMinorUnits": 1200,
-    "inventoryStatus": "low-stock",
-    "hidden": true,
-    "hiddenReason": "no_product_master",
-    "variants": [
-      {
-        "id": "pos-c6c908736052-2c050d9f9033",
-        "label": "2g",
-        "priceMinorUnits": 1200,
-        "inventoryLevel": 1,
-        "medical": true
       }
     ]
   }

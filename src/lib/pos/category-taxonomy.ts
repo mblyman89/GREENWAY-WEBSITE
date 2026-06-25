@@ -7,7 +7,7 @@ export type WebsiteCategoryDefinition = {
 };
 
 export const websiteCategoryDefinitions = [
-  { value: "flower", label: "Flower", helper: "Flower and usable marijuana flower categories" },
+  { value: "flower", label: "Flower", helper: "Premium and regular usable marijuana flower categories (popcorn bud excluded)" },
   { value: "paraphernalia", label: "Paraphernalia", helper: "Accessories, devices, glass, pipes, batteries, wraps, and non-cannabis gear" },
   { value: "preroll-pack", label: "Preroll Pack", helper: "Non-infused multi-pack prerolls" },
   { value: "cartridge", label: "Cartridge", helper: "Cartridge categories, including live resin cartridge rows" },
@@ -19,7 +19,8 @@ export const websiteCategoryDefinitions = [
   { value: "preroll", label: "Preroll", helper: "Single non-infused prerolls and blunts" },
   { value: "edible-liquid", label: "Edible (Liquid)", helper: "Beverages, shots, soda, tinctures, and other liquid edible rows" },
   { value: "topical", label: "Topical", helper: "Topicals, transdermals, bath salts, balms, lotions, and salves" },
-  { value: "trim", label: "Trim", helper: "Trim, shake, popcorn, and mix flower categories" },
+  { value: "popcorn-bud", label: "Popcorn Bud", helper: "Popcorn bud, small bud, and budget flower categories" },
+  { value: "trim", label: "Trim", helper: "Trim, shake, and mix flower categories" },
 ] as const satisfies readonly WebsiteCategoryDefinition[];
 
 export const websiteCategories = websiteCategoryDefinitions.map((category) => category.value);
