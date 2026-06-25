@@ -30,7 +30,6 @@ const shopCategoryItems: SiteMenuItem[] = [
   { label: "Edible (Liquid)", href: "/menu?category=edible-liquid" },
   { label: "Tincture", href: "/menu?category=tincture" },
   { label: "Topical", href: "/menu?category=topical" },
-  { label: "Trim", href: "/menu?category=trim" },
   { label: "Accessories", href: "/menu?category=accessories" },
 ];
 

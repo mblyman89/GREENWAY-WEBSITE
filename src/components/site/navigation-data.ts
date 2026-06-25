@@ -40,7 +40,6 @@ export const primaryNavigationItems: NavigationItem[] = [
       { label: "Edible (Liquid)", href: "/menu?category=edible-liquid", helper: "Beverages, shots, sodas, and liquid edibles." },
       { label: "Tincture", href: "/menu?category=tincture", helper: "Dropper tinctures for precise dosing." },
       { label: "Topical", href: "/menu?category=topical", helper: "Balms, lotions, salves, and transdermals." },
-      { label: "Trim", href: "/menu?category=trim", helper: "Trim, shake, and mix flower." },
       { label: "Accessories", href: "/menu?category=accessories", helper: "Glass, rolling gear, batteries, dab tools, and lighters." },
     ],
   },
