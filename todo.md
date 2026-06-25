@@ -1,65 +1,55 @@
-# Major Shop Page Refinement Branch Todo
+# Shop Filter Section Expansion Todo
 
-## Context / Current Architecture Notes
-- POS workbooks are transformed by `scripts/pos/transform_pos_data.ts` into `src/data/pos-menu-preview.json`.
-- Product card data type is defined in `src/lib/leafly/types.ts` as `GreenwayMenuItem` and related category/variant types.
-- Shop category filters are defined in `src/lib/pos/category-taxonomy.ts`.
-- Shop page UI uses `src/app/menu/page.tsx` → `InteractiveMenuBrowser` → `ProductCard` → `ProductCardVisual` → `ProductCardPriceSelector`.
-- Filter matching uses `item.filterCategories` when present; otherwise it falls back to `item.category`.
-- Card section grouping currently groups filtered results by `item.category`, not by raw POS category.
-- Raw POS category is preserved on each item as `posInventoryCategory`.
+## Context / logic map
+- POS data comes from `pos-data/raw/PRODUCTS.xlsx` and `pos-data/raw/INVENTORIES.xlsx`.
+- `scripts/pos/transform_pos_data.ts` normalizes raw POS rows into `src/data/pos-menu-preview.json` during `npm run transform:pos` and `npm run build`.
+- `GreenwayCategory`, menu item fields, variant labels, potency, package labels, and filter categories are defined in the transformer and mirrored in `src/lib/leafly/types.ts`.
+- Visible category filters are defined in `src/lib/pos/category-taxonomy.ts`.
+- Shop filtering/grouping happens in `src/components/menu/InteractiveMenuBrowser.tsx`.
+- Product card display and variant price labels use `ProductCardVisual.tsx` and `ProductCardPriceSelector.tsx`.
+- Prior branch grouped broad `concentrate` filter results by raw POS category. This branch should extend that same sectioning idea to cartridges, disposable cartridges, solid edibles, liquid edibles, and preroll/blunt families.
 
 ## A. Refresh / discovery
-- [x] Review file tree and current branch state
-- [x] Re-read transformer, category taxonomy, menu browser, product card, and selector files
-- [x] Inspect raw edible/liquid/tincture workbook rows to verify strain/potency/package fields before changing logic
-- [x] Inspect current generated edible/liquid/tincture output to compare against source rows
+- [x] Confirm branch state and re-read the relevant transformer, taxonomy, menu browser, and card files
+- [x] Inspect current generated items for cartridges/disposables/edibles/liquids/prerolls/blunts to see raw categories, names, variants, and package labels
+- [x] Inspect raw workbook package/name fields for edible/liquid/tincture rows before changing package logic
+- [x] Identify where colon punctuation is currently stripped from display names and confirm representative affected source names
+- [x] Inspect existing image/content conventions before adding accessory category cards
 
-## B. Variant selector visual refinement
-- [x] Remove the “box inside a box” look from the collapsed price/variant selector
-- [x] Make the collapsed selector a single dark price box with the chevron inside the same box
-- [x] Make the expanded option list feel like an extension of that same box, not a separate floating/nested box
-- [x] Ensure single-variant products and multi-variant products have matching selector width/height styling
-- [x] Preserve sale price display, line-through original price, and `/unit` suffix where appropriate
+## B. Filtered-section grouping expansion
+- [x] Extend broad-filter grouping so `cartridge` filtered results section by cartridge subtype such as Live Resin Cartridge, Rosin Cartridge, Distillate Cartridge, Pod, etc. where detectable
+- [x] Extend broad-filter grouping so `disposable-cartridge` filtered results section by disposable subtype where detectable
+- [x] Extend broad-filter grouping so `edible-solid` results section by raw edible type such as Gummies, Candy, Sugar, Mints, Chocolate, Capsules, etc.
+- [x] Extend broad-filter grouping so `edible-liquid` results section by raw liquid type such as Beverage, Soda, Shots, Other Liquid Edible, Tincture, etc.
+- [x] Extend filtered grouping for preroll/blunt families so selected preroll/infused-preroll/blunt/infused-blunt views separate single-pack and multi-pack sections
+- [x] Preserve normal default grouping behavior unless one of these broad filters is the active grouping context
 
-## C. Edible / liquid edible / tincture card data corrections
-- [x] Stop forcing edible-solid and edible-liquid items to `unknown` strain type when source row has indica/sativa/hybrid/cbd
-- [x] Verify tinctures are included in the edible-liquid correction path unless moved to a dedicated filter category only
-- [x] Expand THC/CBD display eligibility so edible/liquid/tincture rows can show source potency values when present
-- [x] Prevent edible/liquid/tincture card price boxes from showing misleading package suffixes such as `/2 each` or `/100mg`
-- [x] Ensure variant option labels still remain distinguishable if a product truly has multiple edible/liquid variants
-- [x] Regenerate POS preview JSON and confirm representative edible/liquid/tincture cards show correct strain and potency fields
+## C. Accessories filter and accessory section cards
+- [x] Add an `accessories` filter category back to the visible filter taxonomy without mapping raw POS spreadsheet rows into it
+- [x] Add static accessory section cards for bongs, pipes, papers, bowl pieces, rolling trays, grinders, vape batteries, dab tools, dab rigs, down stems, bubblers, Sherlocks, chillums, and lighters
+- [x] Include real image URLs and useful descriptions for each accessory section card
+- [x] Show accessory section cards when the Accessories filter is selected without polluting POS product data or raw category mapping
+- [x] Ensure accessory cards do not break count/filter behavior for actual POS products
 
-## D. Infused preroll filter mapping correction
-- [x] Remove `preroll` from `filterCategories` for `infused-preroll`
-- [x] Remove `preroll` from `filterCategories` for `infused-preroll-pack` if present
-- [x] Keep non-infused `preroll-pack` mapped to `preroll` unless evidence says otherwise
-- [x] Verify filtering by Preroll no longer surfaces infused prerolls before regular prerolls
+## D. Colon preservation in customer-facing names
+- [x] Update display-name cleanup so meaningful colons from raw product names are preserved instead of stripped/blanked
+- [x] Avoid preserving separator noise only when it is clearly variant/brand/category punctuation rather than meaningful product punctuation
+- [x] Regenerate POS data and verify representative names with colons keep them correctly
 
-## E. Additional shop filter categories
-- [x] Add filter category type support for `blunt`, `infused-blunt`, `tincture`, and `rso`
-- [x] Add category taxonomy definitions/labels/helpers for Blunt, Infused Blunt, Tincture, and RSO
-- [x] Add raw POS category → filter category mapping so:
-  - POS `Blunt` items keep their main category but also filter under `blunt`
-  - POS `Infused Blunt` items keep their main category but also filter under `infused-blunt`
-  - POS `Tincture` items keep their main category but also filter under `tincture`
-  - POS `RSO` items keep their main category but also filter under `rso`
-- [x] Confirm `Live Resin Cartridge` remains main category `cartridge` and still cross-filters under `concentrate`
+## E. Edible/liquid/tincture package-size validation
+- [x] Build transformer helper logic to extract package size from raw product names for edible-solid, edible-liquid, and tincture items
+- [x] Compare product-name package size against Package Size column and use product-name value as source of truth when they conflict
+- [x] Normalize package labels like 12oz, 2oz, 100mg, 10pk, etc. consistently for card variant labels
+- [x] Use validated edible/liquid/tincture package labels in price-per-unit boxes, e.g. `$12 /12oz`
+- [x] Keep multi-variant edible/liquid/tincture options distinguishable and avoid misleading fallback labels like `12 each`
 
-## F. Concentrate filtered section grouping
-- [x] Update `InteractiveMenuBrowser` grouping so when the selected category is `concentrate`, results are separated into sections by raw POS category where useful
-- [x] Ensure concentrate filtered sections can show labels like Rosin, BHO, Badder, Hash, RSO, Live Resin Cartridge, Cartridge, Disposable Cartridge, Moon Rocks/Infused Flower, etc.
-- [x] Preserve normal unfiltered grouping behavior unless a broad concentrate filter is active
-- [x] Ensure section anchors/keys are safe and stable
+## F. Verification
+- [x] Run POS transformer and inspect category/filter/section-package outputs with targeted scripts
+- [x] Run TypeScript/build verification with `npm run build`
+- [x] Review git diff for scope control and remove temporary scripts
 
-## G. Verification
-- [x] Run transformer and inspect generated category/filter counts
-- [x] Run targeted script checks for edibles/liquids/tinctures strain + THC/CBD + card unit suffix behavior assumptions
-- [x] Run `npm run build`
-- [x] Review git diff for scope control
-
-## H. GitHub / Vercel
-- [x] Commit changes with descriptive message
-- [x] Push branch with token-safe GitHub push command
-- [x] Create or update PR for Vercel preview
-- [x] If user asked for production Vercel update, merge after build/PR verification or report preview URL/status for inspection
+## G. GitHub / Vercel
+- [ ] Commit changes with descriptive messages
+- [ ] Push branch with token-safe GitHub push command
+- [ ] Create or update PR for Vercel preview
+- [ ] Report PR and Vercel preview/deployment status; merge only if checks are clearly healthy or explicitly appropriate

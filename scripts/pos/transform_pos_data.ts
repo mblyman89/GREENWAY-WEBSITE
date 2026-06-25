@@ -329,6 +329,71 @@ function parsePackageSize(rawPackage: string, fallbackSize?: string, fallbackUni
   return { quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : 1, unit, gramsEquivalent, label, sortValue: (Number.isFinite(quantity) ? quantity : 1) * sortUnitWeight, raw };
 }
 
+function packageFromParts(quantity: number, unit: string, raw: string): ParsedPackage {
+  const normalizedUnit = unit.toLowerCase()
+    .replace(/fluid\s*ounces?|fluidounce|fl\.?\s*oz/, "oz")
+    .replace(/milligrams?/, "mg")
+    .replace(/milliliters?/, "ml")
+    .replace(/grams?/, "g")
+    .replace(/ounces?/, "oz")
+    .replace(/packs?|pk/, "pk");
+  const safeQuantity = Number.isFinite(quantity) && quantity > 0 ? quantity : 1;
+  const label = normalizedUnit === "pk" ? `${formatNumber(safeQuantity)}pk` : `${formatNumber(safeQuantity)}${normalizedUnit}`;
+  const gramsEquivalent = normalizedUnit === "g" ? safeQuantity : normalizedUnit === "oz" ? safeQuantity * 28 : undefined;
+  const sortUnitWeight = normalizedUnit === "mg" ? 0.001 : normalizedUnit === "g" ? 1 : normalizedUnit === "oz" ? 28 : normalizedUnit === "ml" ? 0.01 : normalizedUnit === "pk" ? 100 : 10000;
+  return { quantity: safeQuantity, unit: normalizedUnit, gramsEquivalent, label, sortValue: safeQuantity * sortUnitWeight, raw };
+}
+
+function packageCandidateFromProductName(productName: string, category: string, inventoryType: string): ParsedPackage | null {
+  const name = normalizeWhitespace(productName);
+  if (!name) return null;
+  const rawCategory = normalizeWhitespace(category);
+  const rawType = normalizeWhitespace(inventoryType);
+  const eligible = ["Edible", "Gummies", "Chocolate", "Fruit Chews", "Chewees", "Mints", "Capsule", "Beverage", "Shots", "Soda", "Liquid Infused Edible", "Tincture", "Other Liquid Edible", "Panda Candies", "Balls", "Minis"].includes(rawCategory)
+    || ["Solid Edible", "Liquid Edible", "Tincture"].includes(rawType);
+  if (!eligible) return null;
+
+  const volume = name.match(/\b(\d+(?:\.\d+)?)\s*(fl\.?\s*oz|fluid\s*ounces?|fluidounce|oz|ml|milliliters?)\b/i);
+  if (volume && (rawType !== "Solid Edible" || /\b(?:drink|beverage|lemonade|shot|soda|can|tincture|drops?|sorbet)\b/i.test(name))) {
+    return packageFromParts(Number(volume[1]), volume[2], volume[0]);
+  }
+
+  const pack = name.match(/\b(\d+)\s*(?:pk|pack|packs)\b/i);
+  if (pack) return packageFromParts(Number(pack[1]), "pk", pack[0]);
+
+  const dosePack = name.match(/\b(\d+)\s*x\s*\d+(?:\.\d+)?\s*mg\b/i);
+  if (dosePack) return packageFromParts(Number(dosePack[1]), "pk", dosePack[0]);
+
+  const parentheticalWeight = name.match(/\((\d+(?:\.\d+)?)\s*(g|grams?|oz|ounces?|ml|milliliters?)\)/i);
+  if (parentheticalWeight) return packageFromParts(Number(parentheticalWeight[1]), parentheticalWeight[2], parentheticalWeight[0]);
+
+  const weight = name.match(/\b(\d+(?:\.\d+)?)\s*(g|grams?)\b/i);
+  if (weight && !/\bmg\b/i.test(weight[0])) return packageFromParts(Number(weight[1]), weight[2], weight[0]);
+
+  const potency = name.match(/\b(\d+(?:\.\d+)?)\s*mg\b/i);
+  if (potency) return packageFromParts(Number(potency[1]), "mg", potency[0]);
+
+  return null;
+}
+
+function validatedPackageSize(productName: string, rawPackage: string, category: string, inventoryType: string): ParsedPackage {
+  const packageColumn = parsePackageSize(rawPackage);
+  const fromName = packageCandidateFromProductName(productName, category, inventoryType);
+  if (!fromName) return packageColumn;
+  if (fromName.label !== packageColumn.label) {
+    addDiagnostic("info", "package_size_name_override", "Product-name package size used as source of truth over Package Size column for edible/liquid/tincture item.", {
+      productName,
+      rawCategory: category,
+      inventoryType,
+      packageColumn: packageColumn.label,
+      packageName: fromName.label,
+      rawPackage,
+      nameMatch: fromName.raw,
+    });
+  }
+  return fromName;
+}
+
 function statusForInventory(level: number): Exclude<InventoryStatus, "mock"> {
   if (level <= 0) return "unavailable";
   if (level <= 3) return "low-stock";
@@ -376,7 +441,7 @@ function collapseInventoryRows(inventories: InventoryRow[]): Map<string, Collaps
       continue;
     }
     const productKey = comparableName(productName);
-    const pkg = parsePackageSize(row["Package Size"]);
+    const pkg = validatedPackageSize(productName, row["Package Size"], row.Category, row.InventoryType);
     const priceMinorUnits = priceToMinorUnits(row["Product Price"]);
     const collapseKey = [productKey, pkg.label, priceMinorUnits, toBool(row["Is Medical"]) ? "medical" : "adult"].join("|");
     const units = Math.max(0, Math.floor(toNumber(row["Units Available For Sale"]) ?? 0));
@@ -431,7 +496,8 @@ function stripVariantNoise(value: string, brand: string, category: string): stri
     .replace(/\b(?:single|pack|packs|pouch|jar|tin|unit|each)\b/gi, " ")
     .replace(/\b(?:pre[- ]?rolls?|infused|blunt|flower|cartridge|disposable|vape|rosin|resin|bho|badder|hash|gummies|edible|beverage|shot|topical)\b/gi, " ")
     .replace(/[()\[\]]/g, " ")
-    .replace(/\s*[-:|/]\s*/g, " ")
+    .replace(/\s*[-|/]\s*/g, " ")
+    .replace(/\s*:\s*/g, ":")
     .replace(/\s+/g, " ")
     .trim();
   if (!s || s.length < 3) s = normalizeWhitespace(value.replace(brand, ""));
@@ -630,10 +696,9 @@ function toMenuItem(group: ProductGroup): GreenwayMenuItem {
     }
   }
 
-  const suppressSingleEdiblePackageLabel = ["edible-solid", "edible-liquid"].includes(group.category) && variants.length <= 1;
   const menuVariants: GreenwayMenuVariant[] = variants.map((variant) => ({
     id: `${itemId}-${stableId(variant.package.label, variant.priceMinorUnits, variant.medical ? "medical" : "adult")}`,
-    label: suppressSingleEdiblePackageLabel ? "" : variant.package.label,
+    label: variant.package.label === "each" ? "" : variant.package.label,
     priceMinorUnits: variant.priceMinorUnits,
     inventoryLevel: variant.totalUnits,
     medical: variant.medical,
@@ -645,7 +710,7 @@ function toMenuItem(group: ProductGroup): GreenwayMenuItem {
   const unit = cannabinoidUnitForInventoryType(inventoryType);
   const unitPattern = unit === "%" ? /%$/ : /mg$/;
   const packageLabel = firstAvailable?.package.label ?? "each";
-  const displayPackageLabel = ["edible-solid", "edible-liquid"].includes(group.category) && variants.length <= 1 ? "" : packageLabel;
+  const displayPackageLabel = packageLabel === "each" ? "" : packageLabel;
   const priceLabel = [formatCurrency(firstPrice), displayPackageLabel].filter(Boolean).join(" ");
   const item: GreenwayMenuItem = {
     id: itemId,

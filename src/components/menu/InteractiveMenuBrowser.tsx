@@ -91,14 +91,189 @@ type MenuItemGroup = {
   items: GreenwayMenuItem[];
 };
 
+type AccessorySectionCard = {
+  key: string;
+  label: string;
+  description: string;
+  imageUrl: string;
+};
+
+const accessorySectionCards: AccessorySectionCard[] = [
+  { key: "bongs", label: "Bongs", description: "Water pipes for cooler, smoother flower sessions, including beaker, straight-tube, and compact tabletop styles.", imageUrl: "https://images.unsplash.com/photo-1603909223429-69bb7101f420?auto=format&fit=crop&w=900&q=80" },
+  { key: "pipes", label: "Pipes", description: "Hand pipes, spoons, and everyday dry pieces for simple flower use without extra accessories.", imageUrl: "https://images.unsplash.com/photo-1603908125839-742cbace1c26?auto=format&fit=crop&w=900&q=80" },
+  { key: "papers", label: "Papers", description: "Rolling papers, cones, wraps, tips, and paper accessories for classic hand-rolled sessions.", imageUrl: "https://images.unsplash.com/photo-1605792657660-596af9009e82?auto=format&fit=crop&w=900&q=80" },
+  { key: "bowl-pieces", label: "Bowl Pieces", description: "Replacement and upgrade bowls for glass water pipes, with common glass-on-glass joint sizes and styles.", imageUrl: "https://images.unsplash.com/photo-1589401806207-2381455bce23?auto=format&fit=crop&w=900&q=80" },
+  { key: "rolling-trays", label: "Rolling Trays", description: "Trays that keep flower, papers, filters, grinders, and tools organized while rolling or packing.", imageUrl: "https://images.unsplash.com/photo-1615485290382-441e4d049cb5?auto=format&fit=crop&w=900&q=80" },
+  { key: "grinders", label: "Grinders", description: "Two-piece, four-piece, and kief-catching grinders for breaking flower down evenly before use.", imageUrl: "https://images.unsplash.com/photo-1590114538379-8aeb2c34f856?auto=format&fit=crop&w=900&q=80" },
+  { key: "vape-batteries", label: "Vape Batteries", description: "510-thread and compatible batteries for cartridges, with simple draw-activated and variable-voltage options.", imageUrl: "https://images.unsplash.com/photo-1627123424574-724758594e93?auto=format&fit=crop&w=900&q=80" },
+  { key: "dab-tools", label: "Dab Tools", description: "Tools, carb caps, containers, and handling accessories for concentrates, rosin, resin, and extracts.", imageUrl: "https://images.unsplash.com/photo-1517157837591-031d016b67e8?auto=format&fit=crop&w=900&q=80" },
+  { key: "dab-rigs", label: "Dab Rigs", description: "Glass rigs and concentrate pieces built for vaporizing extracts with bangers, nails, or e-rig accessories.", imageUrl: "https://images.unsplash.com/photo-1616699002805-0741e1e4a9c5?auto=format&fit=crop&w=900&q=80" },
+  { key: "down-stems", label: "Down Stems", description: "Replacement down stems and adapters for matching compatible water-pipe joint sizes and lengths.", imageUrl: "https://images.unsplash.com/photo-1598300188904-6287d52746ad?auto=format&fit=crop&w=900&q=80" },
+  { key: "bubblers", label: "Bubblers", description: "Portable water-filtered pieces that sit between hand pipes and full-size bongs for smoother flower sessions.", imageUrl: "https://images.unsplash.com/photo-1603909223429-69bb7101f420?auto=format&fit=crop&w=900&q=80" },
+  { key: "sherlocks", label: "Sherlocks", description: "Curved Sherlock-style hand pipes with a classic profile and comfortable grip for dry flower.", imageUrl: "https://images.unsplash.com/photo-1603908125839-742cbace1c26?auto=format&fit=crop&w=900&q=80" },
+  { key: "chillums", label: "Chillums", description: "Compact one-hitters and straight glass pieces for quick, low-profile flower sessions.", imageUrl: "https://images.unsplash.com/photo-1589401806207-2381455bce23?auto=format&fit=crop&w=900&q=80" },
+  { key: "lighters", label: "Lighters", description: "Everyday lighters, torches, hemp wick, and ignition essentials for flower, prerolls, and concentrate gear.", imageUrl: "https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=900&q=80" },
+];
+
 function safeSectionId(value: string) {
   return value.toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "section";
 }
 
+function itemSourceText(item: GreenwayMenuItem) {
+  return `${item.posInventoryCategory ?? ""} ${item.productName ?? ""} ${item.name} ${item.brand}`.toLowerCase();
+}
+
+function hasAny(sourceText: string, patterns: RegExp[]) {
+  return patterns.some((pattern) => pattern.test(sourceText));
+}
+
 function rawCategorySectionLabel(item: GreenwayMenuItem) {
-  const sourceText = `${item.posInventoryCategory ?? ""} ${item.productName ?? ""} ${item.name}`.toLowerCase();
+  const sourceText = itemSourceText(item);
   if (item.category === "cartridge" && sourceText.includes("live resin cartridge")) return "Live Resin Cartridge";
   return item.posInventoryCategory?.trim() || formatWebsiteCategory(item.category);
+}
+
+function cartridgeSubtypeLabel(item: GreenwayMenuItem) {
+  const sourceText = itemSourceText(item);
+  if ((item.posInventoryCategory ?? "").toLowerCase() === "pod" || /\bpod\b/.test(sourceText)) return "Pods";
+  if (hasAny(sourceText, [/liquid diamonds?/, /diamond cart/, /diamond vape/])) return "Liquid Diamonds Cartridge";
+  if (hasAny(sourceText, [/solventless/, /live rosin/, /rosin cart/, /rosin cartridge/])) return "Rosin Cartridge";
+  if (hasAny(sourceText, [/live resin/, /resin cart/, /resin cartridge/])) return "Live Resin Cartridge";
+  if (hasAny(sourceText, [/cured resin/])) return "Cured Resin Cartridge";
+  if (hasAny(sourceText, [/distillate/, /dst cart/, /vape cart/, /510 vape/, /510 cartridge/])) return "Distillate Cartridge";
+  if (hasAny(sourceText, [/cbd/, /cbn/, /cbg/, /\b\d+:\d+/])) return "CBD / Ratio Cartridge";
+  return rawCategorySectionLabel(item);
+}
+
+function disposableSubtypeLabel(item: GreenwayMenuItem) {
+  const sourceText = itemSourceText(item);
+  if (hasAny(sourceText, [/liquid diamonds?/, /diamond aio/, /diamond disposable/])) return "Liquid Diamonds Disposable";
+  if (hasAny(sourceText, [/solventless/, /live rosin/, /rosin aio/, /rosin disposable/])) return "Rosin Disposable";
+  if (hasAny(sourceText, [/live resin/, /resin aio/, /resin disposable/])) return "Live Resin Disposable";
+  if (hasAny(sourceText, [/flavored/, /flavour/])) return "Flavored Disposable";
+  if (hasAny(sourceText, [/\baio\b/, /all[- ]?in[- ]?one/, /prana pulse/])) return "All-in-One Disposable";
+  if (hasAny(sourceText, [/distillate/, /dst disposable/])) return "Distillate Disposable";
+  if (hasAny(sourceText, [/cbd/, /cbn/, /cbg/, /\b\d+:\d+/])) return "CBD / Ratio Disposable";
+  return rawCategorySectionLabel(item);
+}
+
+function edibleSolidSectionLabel(item: GreenwayMenuItem) {
+  const raw = item.posInventoryCategory?.trim();
+  const sourceText = itemSourceText(item);
+  if (raw && raw !== "Edible") return raw;
+  if (hasAny(sourceText, [/gumm(y|ies)/, /hrg/, /doozies/, /jellies/])) return "Gummies";
+  if (hasAny(sourceText, [/chocolate/, /truffle/, /bar minis?/, /skuared/, /peanut butter cup/])) return "Chocolate";
+  if (hasAny(sourceText, [/fruit chews?/, /chewees?/, /chew_/, /fruit burst/])) return "Fruit Chews";
+  if (hasAny(sourceText, [/mint/, /peppermint/])) return "Mints";
+  if (hasAny(sourceText, [/capsule/, /softgel/])) return "Capsules";
+  if (hasAny(sourceText, [/drops?/, /hot sugar/, /candy/, /candies/, /sugar/])) return "Candy / Sugar";
+  if (hasAny(sourceText, [/cookie/, /brownie/, /bakery/])) return "Baked Edibles";
+  return raw || "Other Solid Edibles";
+}
+
+function edibleLiquidSectionLabel(item: GreenwayMenuItem) {
+  const raw = item.posInventoryCategory?.trim();
+  const sourceText = itemSourceText(item);
+  if (raw === "Tincture") return "Tinctures";
+  if (raw === "Shots" || hasAny(sourceText, [/shot/, /moonshot/, /hot shotz/])) return "Shots";
+  if (raw === "Soda" || hasAny(sourceText, [/soda/, /root beer/, /cola/])) return "Soda";
+  if (raw === "Beverage" || hasAny(sourceText, [/beverage/, /lemonade/, /tea/, /can\b/, /drink/])) return "Beverages";
+  if (raw === "Liquid Infused Edible") return "Liquid Infused Edibles";
+  return raw || "Other Liquid Edibles";
+}
+
+function isMultiPackPreroll(item: GreenwayMenuItem) {
+  const sourceText = itemSourceText(item);
+  const variantText = item.variants.map((variant) => variant.label).join(" ").toLowerCase();
+  return hasAny(`${sourceText} ${variantText}`, [
+    /\b\d+\s*(?:pk|pack|packs)\b/,
+    /\b(?:two|three|four|five|six|ten)[- ]?pack\b/,
+    /\b\d+\s*x\s*\.?\d+\s*g\b/,
+    /\.5\s*x\s*2/,
+    /2pk/,
+    /multi[- ]?pack/,
+  ]);
+}
+
+function prerollPackSectionLabel(item: GreenwayMenuItem) {
+  return isMultiPackPreroll(item) ? "Multi-Pack" : "Single-Pack";
+}
+
+function filteredSectionLabel(activeCategory: GreenwayCategory, item: GreenwayMenuItem) {
+  if (activeCategory === "concentrate") return rawCategorySectionLabel(item);
+  if (activeCategory === "cartridge") return cartridgeSubtypeLabel(item);
+  if (activeCategory === "disposable-cartridge") return disposableSubtypeLabel(item);
+  if (activeCategory === "edible-solid") return edibleSolidSectionLabel(item);
+  if (activeCategory === "edible-liquid") return edibleLiquidSectionLabel(item);
+  if (["preroll", "blunt", "infused-preroll", "infused-blunt", "preroll-pack", "infused-preroll-pack"].includes(activeCategory)) return prerollPackSectionLabel(item);
+  return formatWebsiteCategory(item.category);
+}
+
+function groupedByActiveFilter(activeCategory: GreenwayCategory, filteredItems: GreenwayMenuItem[]): MenuItemGroup[] {
+  const bySection = new Map<string, GreenwayMenuItem[]>();
+  for (const item of filteredItems) {
+    const label = filteredSectionLabel(activeCategory, item);
+    bySection.set(label, [...(bySection.get(label) ?? []), item]);
+  }
+
+  const sectionOrder = [
+    "Single-Pack",
+    "Multi-Pack",
+    "Live Resin Cartridge",
+    "Rosin Cartridge",
+    "Liquid Diamonds Cartridge",
+    "Distillate Cartridge",
+    "CBD / Ratio Cartridge",
+    "Pods",
+    "Live Resin Disposable",
+    "Rosin Disposable",
+    "Liquid Diamonds Disposable",
+    "All-in-One Disposable",
+    "Flavored Disposable",
+    "Distillate Disposable",
+    "CBD / Ratio Disposable",
+    "Gummies",
+    "Chocolate",
+    "Fruit Chews",
+    "Mints",
+    "Capsules",
+    "Candy / Sugar",
+    "Beverages",
+    "Soda",
+    "Shots",
+    "Tinctures",
+    "Liquid Infused Edibles",
+  ];
+
+  return [...bySection.entries()]
+    .sort(([labelA], [labelB]) => {
+      const indexA = sectionOrder.indexOf(labelA);
+      const indexB = sectionOrder.indexOf(labelB);
+      if (indexA !== -1 || indexB !== -1) return (indexA === -1 ? 999 : indexA) - (indexB === -1 ? 999 : indexB);
+      return labelA.localeCompare(labelB);
+    })
+    .map(([label, groupItems]) => ({
+      key: `${activeCategory}-${safeSectionId(label)}`,
+      id: `${activeCategory}-${safeSectionId(label)}`,
+      eyebrow: activeCategory === "concentrate" ? "POS category" : "Filtered section",
+      label,
+      items: groupItems,
+    }));
+}
+
+function AccessoryCard({ card }: { card: AccessorySectionCard }) {
+  return (
+    <article className="group overflow-hidden rounded-[1.35rem] border border-white/10 bg-zinc-950 shadow-xl shadow-black/25 transition hover:-translate-y-1 hover:border-[var(--greenway)]/45">
+      <div className="aspect-[4/3] overflow-hidden bg-zinc-900">
+        <img src={card.imageUrl} alt="" className="h-full w-full object-cover opacity-82 transition duration-500 group-hover:scale-105 group-hover:opacity-100" loading="lazy" />
+      </div>
+      <div className="p-5">
+        <p className="text-[0.62rem] font-black uppercase tracking-[0.18em] text-[var(--greenway)]">Accessory section</p>
+        <h3 className="mt-2 text-2xl font-black text-white">{card.label}</h3>
+        <p className="mt-3 text-sm leading-6 text-zinc-300">{card.description}</p>
+      </div>
+    </article>
+  );
 }
 
 type FilterCriteria = {
@@ -321,7 +496,8 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
 
   const categoryOptions = useMemo(() => {
     const optionItems = items.filter((item) => itemMatchesCriteria(item, criteriaWithout(criteria, "selectedCategories"), maxAvailablePrice));
-    return buildOptions(optionItems.flatMap((item) => item.filterCategories?.length ? item.filterCategories : [item.category]), selectedCategories, formatWebsiteCategory);
+    const categoryValues = optionItems.flatMap((item) => item.filterCategories?.length ? item.filterCategories : [item.category]);
+    return buildOptions([...categoryValues, ...Array(accessorySectionCards.length).fill("accessories")], selectedCategories, formatWebsiteCategory);
   }, [criteria, items, maxAvailablePrice, selectedCategories]);
 
   const strainOptions = useMemo(() => {
@@ -339,26 +515,24 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
     return buildRequestedWeightOptions(optionItems, selectedWeights);
   }, [criteria, items, maxAvailablePrice, selectedWeights]);
 
+  const activeSectionCategory = selectedCategories.length === 1 ? selectedCategories[0] : null;
+  const usesFilteredSections = activeSectionCategory !== null && [
+    "concentrate",
+    "cartridge",
+    "disposable-cartridge",
+    "edible-solid",
+    "edible-liquid",
+    "preroll",
+    "blunt",
+    "infused-preroll",
+    "infused-blunt",
+    "preroll-pack",
+    "infused-preroll-pack",
+  ].includes(activeSectionCategory);
+  const showAccessorySections = selectedCategories.length === 1 && selectedCategories[0] === "accessories";
+
   const groupedItems = useMemo<MenuItemGroup[]>(() => {
-    const onlyConcentrateSelected = selectedCategories.length === 1 && selectedCategories[0] === "concentrate";
-
-    if (onlyConcentrateSelected) {
-      const byRawCategory = new Map<string, GreenwayMenuItem[]>();
-      for (const item of filteredItems) {
-        const label = rawCategorySectionLabel(item);
-        byRawCategory.set(label, [...(byRawCategory.get(label) ?? []), item]);
-      }
-
-      return [...byRawCategory.entries()]
-        .sort(([labelA], [labelB]) => labelA.localeCompare(labelB))
-        .map(([label, groupItems]) => ({
-          key: `concentrate-${safeSectionId(label)}`,
-          id: `concentrate-${safeSectionId(label)}`,
-          eyebrow: "POS category",
-          label,
-          items: groupItems,
-        }));
-    }
+    if (activeSectionCategory && usesFilteredSections) return groupedByActiveFilter(activeSectionCategory, filteredItems);
 
     return websiteCategories
       .map((category) => ({
@@ -369,7 +543,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
         items: filteredItems.filter((item) => item.category === category),
       }))
       .filter((group) => group.items.length > 0);
-  }, [filteredItems, selectedCategories]);
+  }, [activeSectionCategory, filteredItems, usesFilteredSections]);
 
   const resetFilters = () => {
     setQuery("");
@@ -530,7 +704,21 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
       <div className="lg:col-start-2">
         <FilterTags tags={activeFilterTags} onClearAll={resetFilters} />
 
-        {filteredItems.length === 0 ? (
+        {showAccessorySections ? (
+          <section id="accessories" className="scroll-mt-32">
+            <div className="mb-4 flex min-w-0 flex-wrap items-end justify-between gap-3">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.2em] text-[var(--greenway)]">Static shopping guide</p>
+                <h2 className="mt-1 text-3xl font-black text-white">Accessories</h2>
+                <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-400">These cards are broad in-store accessory sections, not POS-mapped cannabis products. They keep Accessories browseable without changing raw spreadsheet category mapping.</p>
+              </div>
+              <span className="text-xs font-black uppercase tracking-[0.16em] text-zinc-500">{accessorySectionCards.length} sections</span>
+            </div>
+            <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+              {accessorySectionCards.map((card) => <AccessoryCard key={card.key} card={card} />)}
+            </div>
+          </section>
+        ) : filteredItems.length === 0 ? (
           <div className="rounded-3xl border border-dashed border-white/20 bg-zinc-950 p-10 text-center">
             <p className="text-2xl font-black text-white">No preview products match those filters.</p>
             <p className="mt-3 text-sm text-zinc-400">Try widening THC, CBD, price, search, or checkbox selections.</p>
