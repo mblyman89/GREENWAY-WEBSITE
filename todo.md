@@ -1,65 +1,50 @@
-# Shop Page Cosmetic Overhaul — Handoff-Ready Plan
+# Shop Page Enhancement — PR #18 (feature/shop-page-cosmetic-overhaul)
 
-Branch: `feature/shop-page-cosmetic-overhaul` (based on `main` @ 9add48c)
-Goal: Make the shop page (`/menu`) cleaner, wider, 4-column, with smart data-derived filters,
-target-style filter pills, fixed desktop filter scroll, high-CBD filter, and aligned product cards.
-Visual target: Uncle Oke's dispensary screenshot (clean hero, left-aligned breadcrumb + pills below, 4 columns).
+Handoff plan for the 7-part enhancement request. All tasks complete & verified.
 
-## Data-derived constants (verified from src/data/pos-menu-preview.json, visible items n=2325)
-- Variant weight labels actually present: 0.5g, 1g, 1.5g, 2g, 2.5g, 3g, 3.5g, 5g, 7g, 14g, 1oz, 10pk, plus oz/fl oz/ml/mg
-- Price: min $3, max $320, median $24  -> price slider 3 -> 320
-- THC%: min 0.3, max 99.0, median 37.4 -> THC slider max ~99 (data-derived)
-- CBD%: min 0.0, max 72.0, median 0.2  -> CBD slider max ~72 (data-derived)
-- strainType counts: hybrid 1953, sativa 170, indica 170, unknown 32, cbd 0
-  -> High-CBD must be threshold-based on totalCbd (unit %), NOT strainType.
-- High-CBD threshold: CBD >= 4% (industry "CBD-rich" / Dutch Passion). Yields ~31 items.
+## A. Sidebar in-flow scroll (FIX prior sticky)
+- [x] Remove `lg:sticky lg:top-6 lg:max-h-[...] lg:overflow-y-auto` from `<aside>`
+- [x] Keep `lg:self-start` so sidebar is tied to its top position and scrolls with the page
+- [x] Verified: sidebar scrolls together with product cards, stops once past last filter
 
-## Tasks
+## B. Remove helper text under filter labels
+- [x] Removed `helper=` from Strains, Weights, Price, THC, CBD FilterSections
+- [x] Kept Categories ("Shop by product type") and Brands helper text
+- [x] Applies to both desktop + mobile (shared `MenuFilterControls`)
 
-### A. Top section cleanup (src/app/menu/page.tsx)
-- [x] Remove badges, long description (totalInventoryUnits), disclaimer box, 3 buttons
-- [x] Remove `<MenuCollectionShell>` desktop block (stats + SHOP BY CATEGORY clutter)
-- [x] Drop unused imports (Link, MenuCollectionShell, totalInventoryUnits helper)
+## C. Remove preview-only paragraph
+- [x] Removed "Preview-only filters use exact-match POS product data..." block
 
-### B. Hero banner — wide + short (src/app/menu/page.tsx)
-- [x] Wide, short banner: "SHOP OUR MENU" left-aligned + one short subtitle line
-- [x] Keep a tasteful illustration on the right, NO logo icon
-- [x] Reduce vertical height vs current
+## D. Fix Shop dropdown navigation
+- [x] navigation-data.ts: 20 real categories mirroring `websiteCategoryDefinitions`
+- [x] Each href `/menu?category=<value>` pre-filters the shop page
+- [x] NavLink.tsx: dropdown scrollable (`max-h-[70vh] overflow-y-auto`)
+- [x] MobileNavigation.tsx: same category list with `?category=<value>`
+- [x] Verified: dropdown shows all 20 categories w/ customer-friendly helpers
 
-### C. Wider page + 4th column (InteractiveMenuBrowser.tsx)
-- [x] Increase shop max width beyond max-w-7xl (max-w-[88rem])
-- [x] Product grids: sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4
-- [x] Adjust sidebar grid lg:grid-cols-[280px_1fr]
+## E. Fix daily-deals → product card mapping (CRITICAL BUG)
+- [x] daily-deals.ts rewritten: `getStoreWeekday()` via Intl America/Los_Angeles
+- [x] All 7 days implemented (Mon Munchie, Tue Doobie, Wed Wax, Thu Top Shelf,
+      Fri Ounce, Sat Super, Sun Ice Cream) with category gating + bonus notes
+- [x] useStoreWeekday.ts hook (useSyncExternalStore, hydration-safe)
+- [x] ProductCard / RelatedProductCard / ProductDetailPurchasePanel resolve client-side
+- [x] Verified LIVE: badge reads "Top Shelf Thursday · 25% off" (today=Thursday) — bug fixed
 
-### D. Desktop filter scroll/pin fix (InteractiveMenuBrowser.tsx aside)
-- [x] Sticky aside scrollable: lg:sticky lg:top-24 + max-h + overflow-y-auto. Mobile unchanged.
+## F. Accessories images + descriptions
+- [x] 14 professional WebP images on dark theme in public/accessories/ (516K total)
+- [x] Rewrote all 14 accessory descriptions as compelling sales copy
+- [x] Verified: 14/14 images load, descriptions render
 
-### E. High-CBD "CBD" strain filter
-- [x] Add synthetic strain option value "cbd" labeled "CBD" to strainOptions
-- [x] itemMatchesCriteria: selected "cbd" => totalCbd unit % value >= 4
-- [x] Count = items meeting threshold
+## G. Filter persistence on back/breadcrumb
+- [x] menu/page.tsx forwards categories/strains/brands/weights/maxThc/maxCbd/maxPrice/sort
+- [x] InteractiveMenuBrowser lazy-inits state from persisted params (hydration-safe)
+- [x] URL-write effect (replaceState) gated by firstWriteRef
+- [x] Verified: product → back restores URL, pills, sort
 
-### F. Smart filter values
-- [x] Replace hardcoded requestedWeights with weights derived from actual variant labels
-- [x] Price slider min=3, max=data max; THC max=data max; CBD max=data max
-- [x] Pass min/max props to MenuFilterControls; update sentinel logic
-
-### G. Product card box alignment (ProductCardVisual.tsx)
-- [x] Move strain pill + THC/CBD grid into the BOTTOM group (above price/cart)
-- [x] Boxes align across cards regardless of name length
-
-### H. Filter pills target-style (FilterTags.tsx)
-- [x] Remove "No active filters" empty box (render nothing when none)
-- [x] Clean horizontal pill row (value + x)
-
-### I. Search NOT a pill (InteractiveMenuBrowser.tsx)
-- [x] Remove "search" entry from activeFilterTags; verify search still composes
-
-### J. Layout/breadcrumb
-- [x] HOME > SHOP left-aligned, widen to shop width
-- [x] Filter pills horizontal line below breadcrumb area
-
-### K. Verification & delivery
-- [x] npx tsc --noEmit clean
-- [x] npm run build succeeds
-- [x] Commit + push; open PR -> Vercel preview
+## H. Verify & deliver
+- [x] tsc --noEmit: 0 errors
+- [x] eslint changed files: 0 errors (1 pre-existing <img> warning)
+- [x] npm run build: success, 2366 pages, /menu Dynamic, BUILD_ID qcpeTe04ev_kNl9kuo4JS
+- [x] Live browser verification of A–G
+- [ ] Commit + push to feature/shop-page-cosmetic-overhaul
+- [ ] Confirm PR #18 updates + Vercel preview

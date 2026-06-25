@@ -14,12 +14,24 @@ type SiteMenuItem = {
 
 const shopCategoryItems: SiteMenuItem[] = [
   { label: "Flower", href: "/menu?category=flower" },
-  { label: "Pre-Rolls", href: "/menu?category=preroll" },
-  { label: "Edibles", href: "/menu?category=edible-solid" },
-  { label: "Cartridges", href: "/menu?category=cartridge" },
-  { label: "Concentrates", href: "/menu?category=concentrate" },
-  { label: "Topicals", href: "/menu?category=topical" },
-  { label: "Accessories", href: "/menu?category=paraphernalia" },
+  { label: "Popcorn Bud", href: "/menu?category=popcorn-bud" },
+  { label: "Infused Flower", href: "/menu?category=infused-flower" },
+  { label: "Preroll", href: "/menu?category=preroll" },
+  { label: "Blunt", href: "/menu?category=blunt" },
+  { label: "Preroll Pack", href: "/menu?category=preroll-pack" },
+  { label: "Infused Preroll", href: "/menu?category=infused-preroll" },
+  { label: "Infused Blunt", href: "/menu?category=infused-blunt" },
+  { label: "Infused Preroll Pack", href: "/menu?category=infused-preroll-pack" },
+  { label: "Cartridge", href: "/menu?category=cartridge" },
+  { label: "Disposable Cartridge", href: "/menu?category=disposable-cartridge" },
+  { label: "Concentrate", href: "/menu?category=concentrate" },
+  { label: "RSO", href: "/menu?category=rso" },
+  { label: "Edible (Solid)", href: "/menu?category=edible-solid" },
+  { label: "Edible (Liquid)", href: "/menu?category=edible-liquid" },
+  { label: "Tincture", href: "/menu?category=tincture" },
+  { label: "Topical", href: "/menu?category=topical" },
+  { label: "Trim", href: "/menu?category=trim" },
+  { label: "Accessories", href: "/menu?category=accessories" },
 ];
 
 const primaryMenuItems: SiteMenuItem[] = [

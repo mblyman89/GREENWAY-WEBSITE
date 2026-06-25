@@ -2,7 +2,7 @@ import type { CSSProperties } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ProductCardVisual } from "@/components/menu/ProductCardVisual";
+import { RelatedProductCard } from "@/components/menu/RelatedProductCard";
 import { ProductDetailPurchasePanel } from "@/components/menu/ProductDetailPurchasePanel";
 import { Footer } from "@/components/site/Footer";
 import { Header } from "@/components/site/Header";
@@ -10,7 +10,6 @@ import { getMockMenuItemById, mockMenuItems } from "@/lib/leafly/mock-menu";
 import type { GreenwayMenuItem } from "@/lib/leafly/types";
 import { formatWebsiteCategory } from "@/lib/pos/category-taxonomy";
 import { getPosPreviewMenuItemById, posMenuPreviewItems } from "@/lib/pos/preview-menu";
-import { formatActiveDiscountBadge, getActiveMenuDiscount } from "@/lib/specials/daily-deals";
 
 type ProductTone = {
   border: string;
@@ -185,7 +184,6 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
   const brandHref = `/menu?brand=${encodeURIComponent(item.brand)}`;
   const productDescription = item.description?.trim() || "No description available for this product.";
   const showCannabinoids = !isNonCannabisItem(item);
-  const activeDiscount = getActiveMenuDiscount(item);
 
   return (
     <main id="top" className="min-h-screen bg-black text-white">
@@ -223,7 +221,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
               {showCannabinoids ? <span className="inline-flex min-h-7 items-center bg-white px-2.5 py-1 text-[0.72rem] font-black uppercase leading-none text-black">CBD: {item.cbd ?? "--"}</span> : null}
             </div>
 
-            <ProductDetailPurchasePanel item={item} salePriceMinorUnits={activeDiscount?.salePriceMinorUnits} />
+            <ProductDetailPurchasePanel item={item} />
           </article>
         </div>
 
@@ -247,18 +245,13 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
 
           {relatedItems.length > 0 ? (
             <div className="mt-5 -mx-4 flex snap-x gap-4 overflow-x-auto px-4 pb-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {relatedItems.map((related) => {
-                const relatedDiscount = getActiveMenuDiscount(related);
-                return (
-                  <ProductCardVisual
-                    key={related.id}
-                    item={related}
-                    salePriceMinorUnits={relatedDiscount?.salePriceMinorUnits}
-                    saleBadgeLabel={relatedDiscount ? formatActiveDiscountBadge(relatedDiscount) : undefined}
-                    className="w-[17.25rem] shrink-0 snap-start"
-                  />
-                );
-              })}
+              {relatedItems.map((related) => (
+                <RelatedProductCard
+                  key={related.id}
+                  item={related}
+                  className="w-[17.25rem] shrink-0 snap-start"
+                />
+              ))}
             </div>
           ) : (
             <div className="mt-5 border border-white/10 bg-white/5 p-5 text-sm leading-6 text-zinc-300">No additional products from this brand are available in the current preview menu.</div>

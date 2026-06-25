@@ -29,14 +29,14 @@ export function NavLink({ item }: NavLinkProps) {
         </span>
       </Link>
 
-      <div className="pointer-events-none absolute left-1/2 top-full z-[70] mt-2 w-[22rem] -translate-x-1/2 translate-y-2 rounded-[1.5rem] border border-white/10 bg-zinc-950/98 p-3 text-white opacity-0 shadow-2xl shadow-black/60 backdrop-blur transition group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:translate-y-0 group-focus-within:opacity-100">
+      <div className="pointer-events-none absolute left-1/2 top-full z-[70] mt-2 w-[22rem] max-h-[70vh] -translate-x-1/2 translate-y-2 overflow-y-auto rounded-[1.5rem] border border-white/10 bg-zinc-950/98 p-3 text-white opacity-0 shadow-2xl shadow-black/60 backdrop-blur transition group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:translate-y-0 group-focus-within:opacity-100">
         <div className="absolute -top-8 left-0 h-8 w-full" aria-hidden="true" />
-        <div className="grid gap-1.5">
+        <div className="grid gap-1">
           {item.children?.map((child) => (
             <Link
               key={child.label}
               href={child.href}
-              className="group/child rounded-2xl border border-transparent p-3 transition hover:border-white/10 hover:bg-white/[0.05]"
+              className="group/child rounded-2xl border border-transparent px-3 py-2.5 transition hover:border-white/10 hover:bg-white/[0.05]"
             >
               <span className="flex items-center justify-between gap-3 text-sm font-black text-white transition group-hover/child:text-[var(--greenway)]">
                 {child.label}
@@ -44,7 +44,7 @@ export function NavLink({ item }: NavLinkProps) {
                   →
                 </span>
               </span>
-              <span className="mt-1 block text-xs leading-5 text-zinc-500">{child.helper}</span>
+              <span className="mt-0.5 block text-xs leading-5 text-zinc-500">{child.helper}</span>
             </Link>
           ))}
         </div>

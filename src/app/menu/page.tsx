@@ -26,6 +26,16 @@ export default async function MenuPage({ searchParams }: MenuPageProps) {
     category: firstSearchParamValue(resolvedSearchParams?.category),
     brand: firstSearchParamValue(resolvedSearchParams?.brand),
     special: firstSearchParamValue(resolvedSearchParams?.special),
+    // Richer persisted filter params (Task G) so server + client agree and the
+    // menu restores the shopper's exact state when returning from a product page.
+    categories: firstSearchParamValue(resolvedSearchParams?.categories),
+    strains: firstSearchParamValue(resolvedSearchParams?.strains),
+    brands: firstSearchParamValue(resolvedSearchParams?.brands),
+    weights: firstSearchParamValue(resolvedSearchParams?.weights),
+    maxThc: firstSearchParamValue(resolvedSearchParams?.maxThc),
+    maxCbd: firstSearchParamValue(resolvedSearchParams?.maxCbd),
+    maxPrice: firstSearchParamValue(resolvedSearchParams?.maxPrice),
+    sort: firstSearchParamValue(resolvedSearchParams?.sort),
   };
   return (
     <main id="top">

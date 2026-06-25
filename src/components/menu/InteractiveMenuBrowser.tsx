@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { GreenwayCategory, GreenwayMenuItem } from "@/lib/leafly/types";
 import { formatWebsiteCategory, websiteCategories } from "@/lib/pos/category-taxonomy";
 import { FilterMobile, MenuFilterControls } from "./FilterMobile";
@@ -114,20 +114,20 @@ type AccessorySectionCard = {
 };
 
 const accessorySectionCards: AccessorySectionCard[] = [
-  { key: "bongs", label: "Bongs", description: "Water pipes for cooler, smoother flower sessions, including beaker, straight-tube, and compact tabletop styles.", imageUrl: "https://images.unsplash.com/photo-1603909223429-69bb7101f420?auto=format&fit=crop&w=900&q=80" },
-  { key: "pipes", label: "Pipes", description: "Hand pipes, spoons, and everyday dry pieces for simple flower use without extra accessories.", imageUrl: "https://images.unsplash.com/photo-1603908125839-742cbace1c26?auto=format&fit=crop&w=900&q=80" },
-  { key: "papers", label: "Papers", description: "Rolling papers, cones, wraps, tips, and paper accessories for classic hand-rolled sessions.", imageUrl: "https://images.unsplash.com/photo-1605792657660-596af9009e82?auto=format&fit=crop&w=900&q=80" },
-  { key: "bowl-pieces", label: "Bowl Pieces", description: "Replacement and upgrade bowls for glass water pipes, with common glass-on-glass joint sizes and styles.", imageUrl: "https://images.unsplash.com/photo-1589401806207-2381455bce23?auto=format&fit=crop&w=900&q=80" },
-  { key: "rolling-trays", label: "Rolling Trays", description: "Trays that keep flower, papers, filters, grinders, and tools organized while rolling or packing.", imageUrl: "https://images.unsplash.com/photo-1615485290382-441e4d049cb5?auto=format&fit=crop&w=900&q=80" },
-  { key: "grinders", label: "Grinders", description: "Two-piece, four-piece, and kief-catching grinders for breaking flower down evenly before use.", imageUrl: "https://images.unsplash.com/photo-1590114538379-8aeb2c34f856?auto=format&fit=crop&w=900&q=80" },
-  { key: "vape-batteries", label: "Vape Batteries", description: "510-thread and compatible batteries for cartridges, with simple draw-activated and variable-voltage options.", imageUrl: "https://images.unsplash.com/photo-1627123424574-724758594e93?auto=format&fit=crop&w=900&q=80" },
-  { key: "dab-tools", label: "Dab Tools", description: "Tools, carb caps, containers, and handling accessories for concentrates, rosin, resin, and extracts.", imageUrl: "https://images.unsplash.com/photo-1517157837591-031d016b67e8?auto=format&fit=crop&w=900&q=80" },
-  { key: "dab-rigs", label: "Dab Rigs", description: "Glass rigs and concentrate pieces built for vaporizing extracts with bangers, nails, or e-rig accessories.", imageUrl: "https://images.unsplash.com/photo-1616699002805-0741e1e4a9c5?auto=format&fit=crop&w=900&q=80" },
-  { key: "down-stems", label: "Down Stems", description: "Replacement down stems and adapters for matching compatible water-pipe joint sizes and lengths.", imageUrl: "https://images.unsplash.com/photo-1598300188904-6287d52746ad?auto=format&fit=crop&w=900&q=80" },
-  { key: "bubblers", label: "Bubblers", description: "Portable water-filtered pieces that sit between hand pipes and full-size bongs for smoother flower sessions.", imageUrl: "https://images.unsplash.com/photo-1603909223429-69bb7101f420?auto=format&fit=crop&w=900&q=80" },
-  { key: "sherlocks", label: "Sherlocks", description: "Curved Sherlock-style hand pipes with a classic profile and comfortable grip for dry flower.", imageUrl: "https://images.unsplash.com/photo-1603908125839-742cbace1c26?auto=format&fit=crop&w=900&q=80" },
-  { key: "chillums", label: "Chillums", description: "Compact one-hitters and straight glass pieces for quick, low-profile flower sessions.", imageUrl: "https://images.unsplash.com/photo-1589401806207-2381455bce23?auto=format&fit=crop&w=900&q=80" },
-  { key: "lighters", label: "Lighters", description: "Everyday lighters, torches, hemp wick, and ignition essentials for flower, prerolls, and concentrate gear.", imageUrl: "https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=900&q=80" },
+  { key: "bongs", label: "Bongs", description: "Big, smooth, water-cooled hits without the harshness. Premium borosilicate beakers and straight tubes with built-in percs filter every pull so your flower tastes cleaner and hits easier — the centerpiece your sessions deserve.", imageUrl: "/accessories/bongs.webp" },
+  { key: "pipes", label: "Pipes", description: "Grab, pack, and go. Hand-blown glass spoons in bold colors that fit perfectly in your palm and your pocket — the everyday classic that's ready whenever you are, no water or setup required.", imageUrl: "/accessories/pipes.webp" },
+  { key: "papers", label: "Papers", description: "Roll the perfect joint every time. Slow-burning papers, ready-to-fill cones, and tips that keep ash even and flavor pure. Stock up — the difference between a good roll and a great one starts here.", imageUrl: "/accessories/papers.webp" },
+  { key: "bowl-pieces", label: "Bowl Pieces", description: "Upgrade your rip or replace a lost slide in seconds. Thick glass bowls in standard joint sizes with easy-grip handles and built-in screens — pack bigger, pull cleaner, and breathe new life into the piece you already love.", imageUrl: "/accessories/bowl-pieces.webp" },
+  { key: "rolling-trays", label: "Rolling Trays", description: "Keep every session tidy and stash-free. Sleek metal trays with raised edges corral your flower, papers, and grinder so nothing spills and nothing's lost — the clean, organized home base every roller wants on the table.", imageUrl: "/accessories/rolling-trays.webp" },
+  { key: "grinders", label: "Grinders", description: "Fluffy, even grind and zero waste. Precision-milled aluminum teeth break down flower effortlessly while the mesh screen collects every speck of potent kief in the bottom chamber — more flavor, easier packing, nothing left behind.", imageUrl: "/accessories/grinders.webp" },
+  { key: "vape-batteries", label: "Vape Batteries", description: "Power any 510-thread cart with one reliable click. Long-lasting batteries with draw-activated ease or adjustable voltage to dial in your hit, plus fast USB charging — consistent clouds, pocket-ready, all day long.", imageUrl: "/accessories/vape-batteries.webp" },
+  { key: "dab-tools", label: "Dab Tools", description: "Handle your concentrates like a pro. Rust-proof stainless steel tools, precision carb caps, and a non-stick silicone container keep every dab clean, mess-free, and exactly where it belongs — no sticky fingers, no wasted wax.", imageUrl: "/accessories/dab-tools.webp" },
+  { key: "dab-rigs", label: "Dab Rigs", description: "Flavor-first dabs with maximum vapor. Compact glass rigs paired with quartz bangers and water percolation deliver smooth, terpene-rich hits that hit hard and taste incredible — built for concentrate lovers who want every drop to count.", imageUrl: "/accessories/dab-rigs.webp" },
+  { key: "down-stems", label: "Down Stems", description: "The perfect-fit upgrade your bong's been missing. Diffused glass down stems in multiple lengths break smoke into tiny bubbles for cooler, smoother pulls — match your joint size and instantly level up filtration.", imageUrl: "/accessories/down-stems.webp" },
+  { key: "bubblers", label: "Bubblers", description: "Bong-smooth hits in a piece that fits your hand. Hand-held glass bubblers add water filtration and a built-in perc to a portable frame — the best of both worlds for sessions that travel without sacrificing a single smooth pull.", imageUrl: "/accessories/bubblers.webp" },
+  { key: "sherlocks", label: "Sherlocks", description: "Timeless style meets a cooler hit. The signature gooseneck curve on these striped glass Sherlocks keeps smoke away from your hand and the flame at a comfortable distance — a collector-worthy classic that feels as good as it looks.", imageUrl: "/accessories/sherlocks.webp" },
+  { key: "chillums", label: "Chillums", description: "One-hit, one-and-done discretion. Slim swirl-glass chillums load a quick bowl and stash anywhere — the low-profile, easy-to-clean pick for a fast, flavorful pull on the move with zero fuss.", imageUrl: "/accessories/chillums.webp" },
+  { key: "lighters", label: "Lighters", description: "Never get caught without a flame. Refillable torches that fire up dabs and bowls, classic flip lighters for everyday carry, and natural hemp wick for a cleaner-tasting light — the dependable essentials no session should start without.", imageUrl: "/accessories/lighters.webp" },
 ];
 
 function safeSectionId(value: string) {
@@ -477,7 +477,44 @@ type InitialMenuSearchParams = {
   category?: string;
   brand?: string;
   special?: string;
+  // Richer persisted filter params (Task G).
+  categories?: string;
+  strains?: string;
+  brands?: string;
+  weights?: string;
+  maxThc?: string;
+  maxCbd?: string;
+  maxPrice?: string;
+  sort?: string;
 };
+
+const SORT_OPTION_VALUES: SortOption[] = [
+  "featured-shuffle",
+  "best-sellers",
+  "price-low",
+  "price-high",
+  "potency-high",
+  "category",
+];
+
+// Parse a comma-separated persisted param into a clean string list.
+function parsePersistedList(raw: string | undefined): string[] {
+  return (raw ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
+// Parse a numeric persisted param, returning null when absent/invalid.
+function parsePersistedNumber(raw: string | undefined): number | null {
+  if (raw === undefined || raw === "") return null;
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : null;
+}
+
+function parsePersistedSort(raw: string | undefined): SortOption | null {
+  return raw && SORT_OPTION_VALUES.includes(raw as SortOption) ? (raw as SortOption) : null;
+}
 
 type InteractiveMenuBrowserProps = {
   items: GreenwayMenuItem[];
@@ -493,11 +530,27 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
   const initialSpecialKey = initialParams.special as PreviewSpecialCollectionKey | undefined;
   const initialSpecial = initialSpecialKey && initialSpecialKey in previewSpecialCollections ? previewSpecialCollections[initialSpecialKey] : null;
   const initialSpecialCategories = initialSpecial?.categories ?? [];
+
+  // Richer persisted filter params (Task G). When present they take precedence
+  // so the menu restores the shopper's exact state on return from a product page.
+  const persistedCategories = parsePersistedList(initialParams.categories).filter(isWebsiteCategory) as GreenwayCategory[];
+  const persistedStrains = parsePersistedList(initialParams.strains);
+  const persistedBrands = parsePersistedList(initialParams.brands);
+  const persistedWeights = parsePersistedList(initialParams.weights);
+  const persistedMaxThc = parsePersistedNumber(initialParams.maxThc);
+  const persistedMaxCbd = parsePersistedNumber(initialParams.maxCbd);
+  const persistedMaxPrice = parsePersistedNumber(initialParams.maxPrice);
+  const persistedSort = parsePersistedSort(initialParams.sort);
+
   const [query, setQuery] = useState(initialSearchQuery);
-  const [selectedCategories, setSelectedCategories] = useState<GreenwayCategory[]>(initialCategory ? [initialCategory] : initialSpecialCategories);
-  const [selectedStrains, setSelectedStrains] = useState<string[]>([]);
-  const [selectedBrands, setSelectedBrands] = useState<string[]>(initialBrand ? [initialBrand] : []);
-  const [selectedWeights, setSelectedWeights] = useState<string[]>([]);
+  const [selectedCategories, setSelectedCategories] = useState<GreenwayCategory[]>(
+    persistedCategories.length ? persistedCategories : initialCategory ? [initialCategory] : initialSpecialCategories,
+  );
+  const [selectedStrains, setSelectedStrains] = useState<string[]>(persistedStrains);
+  const [selectedBrands, setSelectedBrands] = useState<string[]>(
+    persistedBrands.length ? persistedBrands : initialBrand ? [initialBrand] : [],
+  );
+  const [selectedWeights, setSelectedWeights] = useState<string[]>(persistedWeights);
   // Data-derived bounds for sliders (no hardcoded ceilings).
   const maxAvailablePrice = useMemo(
     () => Math.max(10, Math.ceil(Math.max(...items.map((item) => item.priceMinorUnits), 0) / 100)),
@@ -515,9 +568,9 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
     () => Math.max(0, Math.floor(Math.min(...items.map((item) => item.priceMinorUnits), 0) / 100)),
     [items],
   );
-  const [maxThc, setMaxThc] = useState(maxAvailableThc);
-  const [maxCbd, setMaxCbd] = useState(maxAvailableCbd);
-  const [maxPrice, setMaxPrice] = useState(initialSpecial?.maxPrice ?? maxAvailablePrice);
+  const [maxThc, setMaxThc] = useState(persistedMaxThc ?? maxAvailableThc);
+  const [maxCbd, setMaxCbd] = useState(persistedMaxCbd ?? maxAvailableCbd);
+  const [maxPrice, setMaxPrice] = useState(persistedMaxPrice ?? initialSpecial?.maxPrice ?? maxAvailablePrice);
   const cannabinoidBounds = useMemo<CannabinoidBounds>(
     () => ({ maxAvailableThc, maxAvailableCbd }),
     [maxAvailableThc, maxAvailableCbd],
@@ -528,8 +581,49 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
     () => getBrowserShuffleRanks(items, shuffleSignature),
     getServerShuffleRanks,
   );
-  const [sortBy, setSortBy] = useState<SortOption>(initialSpecial?.sortBy ?? "featured-shuffle");
+  const [sortBy, setSortBy] = useState<SortOption>(persistedSort ?? initialSpecial?.sortBy ?? "featured-shuffle");
 
+  // --- Filter persistence (Task G) ---------------------------------------
+  // State is hydrated from forwarded URL params above (server + client agree,
+  // so no hydration mismatch). Here we write the current state BACK to the URL
+  // (replaceState — no history spam) so returning from a product page restores
+  // everything. We skip the very first paint to avoid rewriting the URL before
+  // it differs from the hydrated state.
+  const firstWriteRef = useRef(true);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (firstWriteRef.current) {
+      firstWriteRef.current = false;
+      return;
+    }
+    const params = new URLSearchParams();
+    if (query.trim()) params.set("search", query.trim());
+    if (selectedCategories.length) params.set("categories", selectedCategories.join(","));
+    if (selectedStrains.length) params.set("strains", selectedStrains.join(","));
+    if (selectedBrands.length) params.set("brands", selectedBrands.join(","));
+    if (selectedWeights.length) params.set("weights", selectedWeights.join(","));
+    if (maxThc < maxAvailableThc) params.set("maxThc", String(maxThc));
+    if (maxCbd < maxAvailableCbd) params.set("maxCbd", String(maxCbd));
+    if (maxPrice < maxAvailablePrice) params.set("maxPrice", String(maxPrice));
+    if (sortBy !== "featured-shuffle") params.set("sort", sortBy);
+    const queryString = params.toString();
+    const newUrl = `${window.location.pathname}${queryString ? `?${queryString}` : ""}${window.location.hash}`;
+    window.history.replaceState(window.history.state, "", newUrl);
+  }, [
+    query,
+    selectedCategories,
+    selectedStrains,
+    selectedBrands,
+    selectedWeights,
+    maxThc,
+    maxCbd,
+    maxPrice,
+    sortBy,
+    maxAvailableThc,
+    maxAvailableCbd,
+    maxAvailablePrice,
+  ]);
 
   const criteria = useMemo<FilterCriteria>(() => ({
     query,
@@ -762,7 +856,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
         </FilterMobile>
       </div>
 
-      <aside className="hidden rounded-3xl border border-white/10 bg-zinc-950 p-5 lg:col-start-1 lg:row-start-2 lg:row-span-2 lg:sticky lg:top-6 lg:block lg:self-start lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto">
+      <aside className="hidden rounded-3xl border border-white/10 bg-zinc-950 p-5 lg:col-start-1 lg:row-start-2 lg:row-span-2 lg:block lg:self-start">
         {filterControls}
       </aside>
 
