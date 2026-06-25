@@ -1,6 +1,20 @@
+import type { CSSProperties } from "react";
 import Link from "next/link";
 import { SpecialsDailyDeals } from "@/components/specials/SpecialsDailyDeals";
 import { posMenuPreviewItems } from "@/lib/pos/preview-menu";
+
+type DealTone = {
+  /** Glowing card border color (matches ProductCardVisual tones). */
+  border: string;
+  /** Strong radial-glow color. */
+  glow: string;
+  /** Soft radial-glow color. */
+  glowSoft: string;
+  /** Inner panel tint. */
+  panel: string;
+  /** Package mockup gradient. */
+  packageGradient: string;
+};
 
 type DailyDeal = {
   day: string;
@@ -11,9 +25,70 @@ type DailyDeal = {
   details: string[];
   href: string;
   categoryLabel: string;
-  accent: string;
-  glow: string;
+  tone: DealTone;
 };
+
+// Build a product-card style background (radial color glow + charcoal panel).
+function dealCardStyle(tone: DealTone): CSSProperties {
+  return {
+    borderColor: tone.border,
+    backgroundColor: "#101010",
+    backgroundImage: `radial-gradient(ellipse 54% 72% at -9% 44%, ${tone.glow} 0%, ${tone.glowSoft} 28%, rgba(20,20,20,0) 61%), radial-gradient(ellipse 48% 68% at 108% 61%, ${tone.glow} 0%, ${tone.glowSoft} 26%, rgba(20,20,20,0) 59%), linear-gradient(180deg, rgba(18,18,18,0.94), ${tone.panel} 48%, rgba(10,10,10,0.98))`,
+    boxShadow: `inset 18px 0 34px -31px ${tone.glow}, inset -18px 0 34px -31px ${tone.glow}, 0 13px 28px rgba(0,0,0,0.38)`,
+  };
+}
+
+const tones = {
+  gold: {
+    border: "#b08a2f",
+    glow: "rgba(217,176,39,0.9)",
+    glowSoft: "rgba(255,215,77,0.32)",
+    panel: "rgba(42,34,13,0.74)",
+    packageGradient: "linear-gradient(145deg,#ffd700 0%,#ffb000 50%,#ff7f00 100%)",
+  },
+  green: {
+    border: "#5e9a45",
+    glow: "rgba(126,217,87,0.9)",
+    glowSoft: "rgba(160,224,127,0.32)",
+    panel: "rgba(18,34,20,0.74)",
+    packageGradient: "linear-gradient(145deg,#7ed957 0%,#34d399 50%,#ffd700 100%)",
+  },
+  blue: {
+    border: "#5499b8",
+    glow: "rgba(84,153,184,0.92)",
+    glowSoft: "rgba(116,184,214,0.32)",
+    panel: "rgba(11,26,34,0.75)",
+    packageGradient: "linear-gradient(145deg,#38bdf8 0%,#7ed957 52%,#ff7f00 100%)",
+  },
+  platinum: {
+    border: "#cfae5e",
+    glow: "rgba(240,224,170,0.78)",
+    glowSoft: "rgba(255,245,210,0.3)",
+    panel: "rgba(36,30,18,0.76)",
+    packageGradient: "linear-gradient(145deg,#f5f5f5 0%,#ffd700 50%,#ff7f00 100%)",
+  },
+  lime: {
+    border: "#6f835f",
+    glow: "rgba(126,151,95,0.92)",
+    glowSoft: "rgba(160,184,127,0.32)",
+    panel: "rgba(20,30,18,0.76)",
+    packageGradient: "linear-gradient(145deg,#bef264 0%,#7ed957 48%,#15803d 100%)",
+  },
+  orange: {
+    border: "#b46f34",
+    glow: "rgba(217,117,39,0.9)",
+    glowSoft: "rgba(255,151,53,0.32)",
+    panel: "rgba(42,25,13,0.74)",
+    packageGradient: "linear-gradient(145deg,#ff7f00 0%,#ffd700 52%,#ffffff 100%)",
+  },
+  violet: {
+    border: "#9a78a9",
+    glow: "rgba(160,112,190,0.9)",
+    glowSoft: "rgba(209,151,234,0.3)",
+    panel: "rgba(34,24,40,0.76)",
+    packageGradient: "linear-gradient(145deg,#c084fc 0%,#e565c8 50%,#ffd700 100%)",
+  },
+} satisfies Record<string, DealTone>;
 
 const dailyDeals: DailyDeal[] = [
   {
@@ -24,8 +99,7 @@ const dailyDeals: DailyDeal[] = [
     details: ["All edibles, RSO, drinks, and tinctures are 25% off."],
     href: "/menu?categories=edible-solid,edible-liquid,rso,tincture",
     categoryLabel: "edibles",
-    accent: "from-[var(--gold)] via-[#ffb000] to-[var(--orange)]",
-    glow: "rgba(255,215,0,0.28)",
+    tone: tones.gold,
   },
   {
     day: "Tuesday",
@@ -35,8 +109,7 @@ const dailyDeals: DailyDeal[] = [
     details: ["All prerolls and blunts, including infused and multi-packs, are 20% off for 1–3 items.", "Buy 4 or more eligible items for 25% off in store."],
     href: "/menu?categories=preroll,blunt,preroll-pack,infused-preroll,infused-blunt,infused-preroll-pack",
     categoryLabel: "pre-rolls",
-    accent: "from-[var(--greenway)] via-emerald-300 to-[var(--gold)]",
-    glow: "rgba(126,217,87,0.26)",
+    tone: tones.green,
   },
   {
     day: "Wednesday",
@@ -46,8 +119,7 @@ const dailyDeals: DailyDeal[] = [
     details: ["All concentrates and vapes are 20% off.", "Get 30% off when you buy $150 or more before tax."],
     href: "/menu?categories=cartridge,disposable-cartridge,concentrate,rso",
     categoryLabel: "wax + vapes",
-    accent: "from-sky-300 via-[var(--greenway)] to-[var(--orange)]",
-    glow: "rgba(56,189,248,0.22)",
+    tone: tones.blue,
   },
   {
     day: "Thursday",
@@ -55,11 +127,10 @@ const dailyDeals: DailyDeal[] = [
     titleLines: ["Top Shelf", "Thursday"],
     offer: "25% off",
     desktopOffer: "25%",
-    details: ["Select top shelf products and brands are 25% off."],
-    href: "/menu?categories=flower,infused-flower,concentrate,cartridge,disposable-cartridge",
+    details: ["Select top shelf brands are 25% off."],
+    href: "/menu?brands=Lifted,Phat%20Panda,Buddies,Clarity%20Farms,Constellation",
     categoryLabel: "top shelf",
-    accent: "from-zinc-100 via-[var(--gold)] to-[var(--orange)]",
-    glow: "rgba(255,255,255,0.2)",
+    tone: tones.platinum,
   },
   {
     day: "Friday",
@@ -69,8 +140,7 @@ const dailyDeals: DailyDeal[] = [
     details: ["Full ounces are 30% off, half ounces are 20% off, and quarter ounces are 15% off.", "Mix and match any flower from any brand."],
     href: "/menu?categories=flower,popcorn-bud,infused-flower,trim",
     categoryLabel: "flower",
-    accent: "from-lime-200 via-[var(--greenway)] to-emerald-700",
-    glow: "rgba(34,197,94,0.24)",
+    tone: tones.lime,
   },
   {
     day: "Saturday",
@@ -80,8 +150,7 @@ const dailyDeals: DailyDeal[] = [
     details: ["30% off any one item and 15% off everything else store wide.", "30% off applies to the lowest price item."],
     href: "/menu",
     categoryLabel: "store wide",
-    accent: "from-[var(--orange)] via-[var(--gold)] to-white",
-    glow: "rgba(255,127,0,0.26)",
+    tone: tones.orange,
   },
   {
     day: "Sunday",
@@ -92,12 +161,13 @@ const dailyDeals: DailyDeal[] = [
     details: ["Buy 3 for the price of 2 store wide for 33% off.", "Items must be of similar type and price."],
     href: "/menu",
     categoryLabel: "store wide",
-    accent: "from-purple-300 via-fuchsia-300 to-[var(--gold)]",
-    glow: "rgba(216,180,254,0.24)",
+    tone: tones.violet,
   },
 ];
 
-function ProductArtwork({ label, title, accent, glow }: { label: string; title: string; accent: string; glow: string }) {
+// Product-style package mockup: white image panel with a glossy "package"
+// matching the look of the live ProductCardVisual image area.
+function ProductArtwork({ label, title, tone }: { label: string; title: string; tone: DealTone }) {
   const initials = title
     .split(" ")
     .filter(Boolean)
@@ -106,11 +176,11 @@ function ProductArtwork({ label, title, accent, glow }: { label: string; title: 
     .join("");
 
   return (
-    <div className="relative flex aspect-[1.12] items-center justify-center overflow-hidden rounded-[1.05rem] bg-white p-3 shadow-inner shadow-black/10 md:rounded-[1.35rem]">
-      <div className="absolute inset-0" style={{ background: `radial-gradient(circle at 24% 18%, ${glow}, transparent 36%), radial-gradient(circle at 78% 78%, rgba(255,127,0,0.18), transparent 34%)` }} />
+    <div className="relative flex aspect-[1.12] items-center justify-center overflow-hidden rounded-[1.05rem] bg-gradient-to-b from-white to-zinc-100 p-3 shadow-inner shadow-black/10 md:rounded-[1.35rem]">
+      <div className="absolute inset-0" style={{ background: `radial-gradient(circle at 24% 18%, ${tone.glowSoft}, transparent 40%), radial-gradient(circle at 78% 80%, ${tone.glowSoft}, transparent 38%)` }} />
       <div className="relative h-[82%] w-[62%] rounded-[1.05rem] border border-black/10 bg-zinc-950 p-2 shadow-2xl shadow-black/25">
-        <div className={`h-full rounded-[0.85rem] bg-gradient-to-br ${accent} p-2 text-black`}>
-          <div className="flex h-full flex-col justify-between rounded-[0.7rem] border border-black/10 bg-white/78 p-2 text-center backdrop-blur-sm">
+        <div className="h-full rounded-[0.85rem] p-2 text-black" style={{ backgroundImage: tone.packageGradient }}>
+          <div className="flex h-full flex-col justify-between rounded-[0.7rem] border border-black/10 bg-white/80 p-2 text-center backdrop-blur-sm">
             <p className="text-[0.46rem] font-black uppercase tracking-[0.18em] text-black/55 md:text-[0.52rem]">Greenway</p>
             <div className="mx-auto grid h-11 w-11 place-items-center rounded-full bg-black text-sm font-black text-white shadow-lg shadow-black/25 md:h-14 md:w-14 md:text-base">
               {initials || "G"}
@@ -119,7 +189,10 @@ function ProductArtwork({ label, title, accent, glow }: { label: string; title: 
           </div>
         </div>
       </div>
-      <span className="absolute left-2 top-2 rounded-full bg-black px-2 py-1 text-[0.52rem] font-black uppercase tracking-[0.12em] text-white md:text-[0.58rem]">
+      <span
+        className="absolute left-2 top-2 rounded-full border bg-black/70 px-2.5 py-1 text-[0.52rem] font-black uppercase tracking-[0.12em] md:text-[0.58rem]"
+        style={{ borderColor: tone.border, color: tone.border }}
+      >
         {label}
       </span>
     </div>
@@ -127,14 +200,17 @@ function ProductArtwork({ label, title, accent, glow }: { label: string; title: 
 }
 
 function DailyDealCard({ deal }: { deal: DailyDeal }) {
+  const { tone } = deal;
   return (
     <div className="flex h-full flex-col gap-2.5 md:gap-3">
-      <article className="group flex h-full flex-col overflow-hidden rounded-[1.2rem] border border-white/10 bg-zinc-950 shadow-xl shadow-black/30 transition hover:-translate-y-1 hover:border-white/25 md:rounded-[1.65rem]">
-        <div className={`h-2.5 bg-gradient-to-r ${deal.accent}`} />
+      <article
+        className="group flex h-full flex-col overflow-hidden rounded-[1.2rem] border transition hover:-translate-y-1 md:rounded-[1.65rem]"
+        style={dealCardStyle(tone)}
+      >
         <div className="flex flex-1 flex-col p-4 md:p-5">
           <div className="flex items-start justify-between gap-3 md:relative md:block">
             <div className="md:min-h-[5.35rem] md:pr-[5.4rem] lg:pr-[6.1rem]">
-              <p className="text-[0.62rem] font-black uppercase tracking-[0.18em] text-[var(--gold)] md:text-[0.68rem]">{deal.day}</p>
+              <p className="text-[0.62rem] font-black uppercase tracking-[0.18em] md:text-[0.68rem]" style={{ color: tone.border }}>{deal.day}</p>
               <h2 className="mt-2 text-2xl font-black uppercase leading-[0.95] tracking-tight text-white md:text-[1.62rem] lg:text-[1.72rem]">
                 <span className="md:hidden">{deal.title}</span>
                 <span className="hidden md:block">
@@ -146,30 +222,31 @@ function DailyDealCard({ deal }: { deal: DailyDeal }) {
                 </span>
               </h2>
             </div>
-            <span className="shrink-0 rounded-full bg-white px-2.5 py-1.5 text-[0.56rem] font-black uppercase tracking-[0.1em] text-black md:absolute md:right-0 md:top-0 md:max-w-[5.8rem] md:rounded-none md:bg-transparent md:p-0 md:text-right md:text-[1.35rem] md:leading-[0.9] md:tracking-[-0.04em] md:text-[var(--gold)] lg:max-w-[6.7rem] lg:text-[1.52rem]">
+            <span className="shrink-0 rounded-full border border-[var(--orange)]/60 bg-black/55 px-2.5 py-1.5 text-[0.56rem] font-black uppercase tracking-[0.1em] text-[var(--orange)] md:absolute md:right-0 md:top-0 md:max-w-[5.8rem] md:rounded-none md:border-0 md:bg-transparent md:p-0 md:text-right md:text-[1.35rem] md:leading-[0.9] md:tracking-[-0.04em] lg:max-w-[6.7rem] lg:text-[1.52rem]">
               <span className="md:hidden">{deal.offer}</span>
               <span className="hidden md:block">{deal.desktopOffer}</span>
             </span>
           </div>
 
           <div className="mt-4 md:mt-3">
-            <ProductArtwork label={deal.categoryLabel} title={deal.title} accent={deal.accent} glow={deal.glow} />
+            <ProductArtwork label={deal.categoryLabel} title={deal.title} tone={tone} />
           </div>
 
-          <div className="mt-4 flex flex-1 flex-col gap-2.5 text-sm font-semibold leading-6 text-zinc-300">
+          <div className="mt-4 flex flex-1 flex-col gap-2.5 text-sm font-semibold leading-6 text-zinc-200">
             {deal.details.map((detail) => (
               <p key={detail}>{detail}</p>
             ))}
           </div>
+
+          <Link
+            href={deal.href}
+            className="mt-4 inline-flex w-full items-center justify-center rounded-full bg-[var(--orange)] px-4 py-2.5 text-[0.7rem] font-black uppercase tracking-[0.14em] text-black transition hover:bg-white md:text-xs"
+            aria-label={`Shop Now for ${deal.title}`}
+          >
+            Shop Now
+          </Link>
         </div>
       </article>
-      <Link
-        href={deal.href}
-        className="self-start text-[0.72rem] font-black uppercase tracking-[0.14em] text-zinc-300 underline-offset-4 transition hover:text-[var(--gold)] hover:underline md:text-xs"
-        aria-label={`Shop Now for ${deal.title}`}
-      >
-        Shop Now
-      </Link>
     </div>
   );
 }

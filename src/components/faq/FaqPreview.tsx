@@ -77,10 +77,10 @@ export function FaqPreview() {
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_8%,rgba(126,217,87,0.13),transparent_18rem),radial-gradient(circle_at_86%_12%,rgba(255,127,0,0.1),transparent_20rem)]" />
       <div className="noise-overlay" />
 
-      <div className="relative mx-auto max-w-5xl px-4 py-10 md:px-8 md:py-16 lg:py-20">
-        <div className="mx-auto max-w-4xl text-center">
-          <h1 className="text-4xl font-black leading-tight tracking-tight text-white sm:text-5xl md:text-6xl lg:text-7xl">
-            Frequently Asked Question
+      <div className="relative mx-auto max-w-6xl px-4 py-10 md:px-8 md:py-16 lg:py-20">
+        <div className="mx-auto max-w-5xl text-center">
+          <h1 className="text-4xl font-black leading-tight tracking-tight text-white sm:text-5xl md:whitespace-nowrap md:text-5xl lg:text-6xl">
+            Frequently Asked Questions
           </h1>
           <p className="mx-auto mt-4 max-w-2xl text-sm font-semibold leading-6 text-zinc-400 md:text-base md:leading-7">
             Everything you need to know about shopping with us.

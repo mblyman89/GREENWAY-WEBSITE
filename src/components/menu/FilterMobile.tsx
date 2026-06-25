@@ -106,6 +106,10 @@ export type MenuFilterControlsProps = {
   strainOptions: FilterCheckboxOption[];
   brandOptions: FilterCheckboxOption[];
   weightOptions: FilterCheckboxOption[];
+  clearanceActive?: boolean;
+  dailyDealsActive?: boolean;
+  onClearanceToggle?: () => void;
+  onDailyDealsToggle?: () => void;
 };
 
 export function MenuFilterControls({
@@ -132,24 +136,57 @@ export function MenuFilterControls({
   strainOptions,
   brandOptions,
   weightOptions,
+  clearanceActive = false,
+  dailyDealsActive = false,
+  onClearanceToggle,
+  onDailyDealsToggle,
 }: MenuFilterControlsProps) {
+  const specialsEnabled = Boolean(onClearanceToggle || onDailyDealsToggle);
   return (
     <>
       <div className="flex items-center justify-between gap-4">
-        <div>
-          <h2 className="text-sm font-black uppercase tracking-[0.18em] text-white">Filters</h2>
-          <p className="mt-1 text-[0.68rem] leading-4 text-zinc-500">Categories, brands, strains, weights, potency, and price.</p>
-        </div>
+        <h2 className="text-sm font-black uppercase tracking-[0.18em] text-white">Filters</h2>
         <button type="button" onClick={onReset} className="rounded-full bg-[var(--greenway)] px-3 py-2 text-[0.65rem] font-black uppercase tracking-[0.12em] text-black transition hover:bg-[var(--gold)]">
           Clear
         </button>
       </div>
 
-      <FilterSection title="Categories" helper="Shop by product type">
+      {specialsEnabled ? (
+        <FilterSection title="Specials">
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={onClearanceToggle}
+              aria-pressed={clearanceActive}
+              className={`rounded-full border px-3 py-2.5 text-[0.68rem] font-black uppercase tracking-[0.12em] transition ${
+                clearanceActive
+                  ? "border-[var(--orange)] bg-[var(--orange)] text-black"
+                  : "border-white/15 bg-black/40 text-zinc-200 hover:border-[var(--orange)]/60 hover:text-white"
+              }`}
+            >
+              50% Off
+            </button>
+            <button
+              type="button"
+              onClick={onDailyDealsToggle}
+              aria-pressed={dailyDealsActive}
+              className={`rounded-full border px-3 py-2.5 text-[0.68rem] font-black uppercase tracking-[0.12em] transition ${
+                dailyDealsActive
+                  ? "border-[var(--greenway)] bg-[var(--greenway)] text-black"
+                  : "border-white/15 bg-black/40 text-zinc-200 hover:border-[var(--greenway)]/60 hover:text-white"
+              }`}
+            >
+              Daily Deals
+            </button>
+          </div>
+        </FilterSection>
+      ) : null}
+
+      <FilterSection title="Categories">
         <FilterCheckboxGroup name="categories" options={categoryOptions} selectedValues={selectedCategories} onToggle={onCategoryToggle} />
       </FilterSection>
 
-      <FilterSection title="Brands" helper="Search only changes visible brand options">
+      <FilterSection title="Brands">
         <FilterCheckboxGroup name="brands" options={brandOptions} selectedValues={selectedBrands} onToggle={onBrandToggle} searchable searchPlaceholder="Search brands..." />
       </FilterSection>
 

@@ -93,6 +93,26 @@ const ounceFridayCategories: GreenwayCategory[] = [
   "trim",
 ];
 
+// Thursday — Top Shelf Thursday: brand-based. Greenway selects ~4–5 featured
+// brands each week. Update this list to rotate the participating brands.
+export const topShelfThursdayBrands: string[] = [
+  "Lifted",
+  "Phat Panda",
+  "Buddies",
+  "Clarity Farms",
+  "Constellation",
+];
+
+function itemMatchesBrands(item: GreenwayMenuItem, brands: string[]) {
+  if (!item.brand) return false;
+  const itemBrand = item.brand.trim().toLowerCase();
+  return brands.some((brand) => brand.trim().toLowerCase() === itemBrand);
+}
+
+export function isTopShelfThursdayItem(item: GreenwayMenuItem) {
+  return itemMatchesBrands(item, topShelfThursdayBrands);
+}
+
 function itemCategoriesOf(item: GreenwayMenuItem): GreenwayCategory[] {
   return item.filterCategories?.length ? item.filterCategories : [item.category];
 }
@@ -153,12 +173,8 @@ export function getActiveMenuDiscount(
       });
     }
     case "thursday": {
-      // Top Shelf Thursday targets "select top shelf products and brands."
-      // There is no reliable top-shelf flag in the preview data, so we surface
-      // the deal on premium flower + concentrate/vape families conservatively.
-      if (!itemMatchesCategories(item, ["flower", "infused-flower", "concentrate", "cartridge", "disposable-cartridge"])) {
-        return undefined;
-      }
+      // Top Shelf Thursday is brand-based: only the featured brands are on deal.
+      if (!isTopShelfThursdayItem(item)) return undefined;
       return buildDiscount(item, { label: "Top Shelf Thursday", discountPercent: 25 });
     }
     case "friday": {

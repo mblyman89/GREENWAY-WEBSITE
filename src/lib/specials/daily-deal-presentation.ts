@@ -42,7 +42,7 @@ const PRESENTATION: Record<StoreWeekday, Omit<DailyDealPresentation, "weekday">>
   thursday: {
     title: "Top Shelf Thursday",
     subtitle: "25% off select top shelf products & brands",
-    menuHref: "/menu?categories=flower,infused-flower,concentrate,cartridge,disposable-cartridge",
+    menuHref: "/menu?brands=Lifted,Phat%20Panda,Buddies,Clarity%20Farms,Constellation",
   },
   friday: {
     title: "Ounce Friday",

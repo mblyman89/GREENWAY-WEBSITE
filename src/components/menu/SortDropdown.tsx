@@ -18,13 +18,10 @@ type SortDropdownProps = {
 };
 
 export function SortDropdown({ value, onChange }: SortDropdownProps) {
-  const activeOption = sortOptions.find((option) => option.value === value) ?? sortOptions[0];
-
   return (
     <label className="grid gap-1.5 text-[0.62rem] font-black uppercase tracking-[0.14em] text-zinc-300 sm:min-w-64 lg:gap-2 lg:text-xs">
       <span className="flex items-center justify-between gap-3">
         Sort by
-        <span className="hidden text-[0.64rem] font-bold tracking-[0.14em] text-[var(--greenway)] sm:inline">{activeOption.helper}</span>
       </span>
       <span className="relative block">
         <select

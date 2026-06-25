@@ -7,6 +7,21 @@ import { FilterMobile, MenuFilterControls } from "./FilterMobile";
 import { FilterTags } from "./FilterTags";
 import { ProductCard } from "./ProductCard";
 import { SortDropdown, type SortOption } from "./SortDropdown";
+import { getActiveMenuDiscount } from "@/lib/specials/daily-deals";
+import { useStoreWeekday } from "@/lib/specials/useStoreWeekday";
+
+// Item IDs eligible for the 50% Off clearance lane. These are placeholder IDs
+// (no live 50%-off inventory yet), so selecting "50% OFF" shows the empty state.
+const clearanceItemIds: string[] = [
+  "mock-flower-001",
+  "mock-flower-002",
+  "mock-preroll-001",
+  "mock-preroll-002",
+  "mock-edible-001",
+  "mock-vape-001",
+  "mock-concentrate-001",
+  "mock-topical-001",
+];
 
 // Canonical gram-weight order. Only weights actually present in the data are shown (see deriveWeightOptions).
 const weightDisplayOrder = ["0.5g", "0.7g", "0.75g", "1g", "1.2g", "1.5g", "2g", "2.5g", "3g", "3.5g", "4g", "5g", "7g", "14g", "28g", "1oz", "10pk"];
@@ -620,6 +635,11 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
   );
   const [sortBy, setSortBy] = useState<SortOption>(persistedSort ?? initialSpecial?.sortBy ?? "featured-shuffle");
 
+  // Specials quick-filters (top of the filter panel).
+  const [clearanceOnly, setClearanceOnly] = useState(false);
+  const [dailyDealsOnly, setDailyDealsOnly] = useState(false);
+  const storeWeekday = useStoreWeekday();
+
   // --- Filter persistence (Task G) ---------------------------------------
   // State is hydrated from forwarded URL params above (server + client agree,
   // so no hydration mismatch). Here we write the current state BACK to the URL
@@ -720,10 +740,18 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
 
   const filteredItems = useMemo(() => {
     const specialItemIds = initialSpecial?.itemIds;
-    const specialItems = specialItemIds ? items.filter((item) => specialItemIds.includes(item.id)) : items;
+    let pool = specialItemIds ? items.filter((item) => specialItemIds.includes(item.id)) : items;
 
-    return sortItems(specialItems.filter((item) => itemMatchesCriteria(item, criteria, maxAvailablePrice, cannabinoidBounds)), sortBy, shuffleRanks);
-  }, [cannabinoidBounds, criteria, initialSpecial?.itemIds, items, maxAvailablePrice, shuffleRanks, sortBy]);
+    // Specials quick-filters.
+    if (clearanceOnly) {
+      pool = pool.filter((item) => clearanceItemIds.includes(item.id));
+    }
+    if (dailyDealsOnly) {
+      pool = pool.filter((item) => getActiveMenuDiscount(item, storeWeekday) !== undefined);
+    }
+
+    return sortItems(pool.filter((item) => itemMatchesCriteria(item, criteria, maxAvailablePrice, cannabinoidBounds)), sortBy, shuffleRanks);
+  }, [cannabinoidBounds, clearanceOnly, criteria, dailyDealsOnly, initialSpecial?.itemIds, items, maxAvailablePrice, shuffleRanks, sortBy, storeWeekday]);
 
   const categoryOptions = useMemo(() => {
     const optionItems = items.filter((item) => itemMatchesCriteria(item, criteriaWithout(criteria, "selectedCategories"), maxAvailablePrice, cannabinoidBounds));
@@ -795,6 +823,18 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
     setMaxCbd(maxAvailableCbd);
     setMaxPrice(maxAvailablePrice);
     setSortBy("featured-shuffle");
+    setClearanceOnly(false);
+    setDailyDealsOnly(false);
+  };
+
+  // Specials toggles are mutually exclusive — picking one clears the other.
+  const toggleClearance = () => {
+    setClearanceOnly((current) => !current);
+    setDailyDealsOnly(false);
+  };
+  const toggleDailyDeals = () => {
+    setDailyDealsOnly((current) => !current);
+    setClearanceOnly(false);
   };
 
   const strainTagLabel = (strain: string) => (strain === HIGH_CBD_VALUE ? "CBD" : strain.charAt(0).toUpperCase() + strain.slice(1));
@@ -886,6 +926,10 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
       strainOptions={strainOptions}
       brandOptions={brandOptions}
       weightOptions={weightOptions}
+      clearanceActive={clearanceOnly}
+      dailyDealsActive={dailyDealsOnly}
+      onClearanceToggle={toggleClearance}
+      onDailyDealsToggle={toggleDailyDeals}
     />
   );
 
@@ -903,7 +947,6 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
             <div className="mt-2 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
               <div>
                 <h2 className="text-xl font-black uppercase tracking-tight text-white md:text-2xl">{initialSpecial.label}</h2>
-                <p className="mt-2 text-sm leading-6 text-zinc-300">{initialSpecial.helper}</p>
               </div>
               <span className="w-fit rounded-full border border-white/10 bg-black/35 px-4 py-2 text-[0.68rem] font-black uppercase tracking-[0.14em] text-zinc-300">
                 Shop eligible items
@@ -912,21 +955,16 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
           </div>
         ) : null}
 
-        <div className="rounded-[1.35rem] border border-white/10 bg-black/45 p-3 shadow-xl shadow-black/20 md:p-4 lg:grid lg:grid-cols-[1fr_minmax(220px,0.85fr)_minmax(250px,0.75fr)] lg:items-end lg:gap-4 lg:rounded-3xl">
-          <div className="hidden lg:block">
-            <p className="text-sm font-black text-white">Showing {filteredItems.length} of {items.length} POS products</p>
-            <p className="mt-1 text-xs text-zinc-400">Filters use POS inventory type + category classification.</p>
-          </div>
-          <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_12rem] lg:contents">
-            <label className="grid gap-1.5 text-[0.62rem] font-black uppercase tracking-[0.14em] text-zinc-300 lg:gap-2 lg:text-xs">
-              Search
-              <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search products, brands, POS categories"
-                className="h-12 w-full rounded-full border border-white/10 bg-zinc-950 px-4 text-sm font-bold normal-case tracking-normal text-white outline-none transition placeholder:text-zinc-600 hover:border-[var(--greenway)]/45 focus:border-[var(--greenway)] focus:ring-2 focus:ring-[var(--greenway)]/20"
-              />
-            </label>
+        {/* Inline search + sort, right-aligned above the cards (no box). */}
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end sm:gap-3">
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search products, brands, categories"
+            aria-label="Search products"
+            className="h-11 w-full rounded-full border border-white/10 bg-zinc-950 px-4 text-sm font-bold text-white outline-none transition placeholder:text-zinc-600 hover:border-[var(--greenway)]/45 focus:border-[var(--greenway)] focus:ring-2 focus:ring-[var(--greenway)]/20 sm:max-w-[22rem]"
+          />
+          <div className="w-full sm:w-auto sm:min-w-[15rem]">
             <SortDropdown value={sortBy} onChange={setSortBy} />
           </div>
         </div>
@@ -945,13 +983,8 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
       <div className="lg:col-start-2 lg:row-start-3">
         {showAccessorySections ? (
           <section id="accessories" className="scroll-mt-32">
-            <div className="mb-4 flex min-w-0 flex-wrap items-end justify-between gap-3">
-              <div>
-                <p className="text-xs font-black uppercase tracking-[0.2em] text-[var(--greenway)]">Static shopping guide</p>
-                <h2 className="mt-1 text-3xl font-black text-white">Accessories</h2>
-                <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-400">These cards are broad in-store accessory sections, not POS-mapped cannabis products. They keep Accessories browseable without changing raw spreadsheet category mapping.</p>
-              </div>
-              <span className="text-xs font-black uppercase tracking-[0.16em] text-zinc-500">{accessorySectionCards.length} sections</span>
+            <div className="mb-4 min-w-0">
+              <h2 className="text-3xl font-black text-white">Accessories</h2>
             </div>
             <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
               {accessorySectionCards.map((card) => <AccessoryCard key={card.key} card={card} />)}
@@ -959,20 +992,15 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
           </section>
         ) : filteredItems.length === 0 ? (
           <div className="rounded-3xl border border-dashed border-white/20 bg-zinc-950 p-10 text-center">
-            <p className="text-2xl font-black text-white">No preview products match those filters.</p>
-            <p className="mt-3 text-sm text-zinc-400">Try widening THC, CBD, price, search, or checkbox selections.</p>
+            <p className="text-2xl font-black text-white">No products match those filters.</p>
             <button onClick={resetFilters} className="mt-6 rounded-full bg-[var(--orange)] px-6 py-3 text-xs font-black uppercase tracking-[0.16em] text-black">Reset filters</button>
           </div>
         ) : (
           <div className="space-y-10">
             {groupedItems.map((group) => (
               <section key={group.key} id={group.id} className="scroll-mt-32">
-                <div className="mb-4 flex min-w-0 flex-wrap items-end justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-black uppercase tracking-[0.2em] text-[var(--greenway)]">{group.eyebrow}</p>
-                    <h2 className="mt-1 text-3xl font-black text-white">{group.label}</h2>
-                  </div>
-                  <span className="text-xs font-black uppercase tracking-[0.16em] text-zinc-500">{group.items.length} items</span>
+                <div className="mb-4 min-w-0">
+                  <h2 className="text-3xl font-black text-white">{group.label}</h2>
                 </div>
                 <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
                   {group.items.map((item) => <ProductCard key={item.id} item={item} />)}
