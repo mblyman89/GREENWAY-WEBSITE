@@ -5,7 +5,7 @@ import crypto from "node:crypto";
 import * as XLSX from "xlsx";
 
 type GreenwayCategory =
-  | "flower" | "popcorn-bud" | "infused-flower" | "paraphernalia" | "preroll-pack" | "cartridge" | "disposable-cartridge"
+  | "flower" | "popcorn-bud" | "infused-flower" | "blunt" | "infused-blunt" | "tincture" | "rso" | "paraphernalia" | "preroll-pack" | "cartridge" | "disposable-cartridge"
   | "edible-solid" | "concentrate" | "infused-preroll" | "infused-preroll-pack"
   | "preroll" | "edible-liquid" | "topical" | "trim";
 
@@ -96,7 +96,7 @@ function addDiagnostic(severity: Severity, code: string, message: string, contex
 }
 
 const VALID_CATEGORIES = new Set<GreenwayCategory>([
-  "flower", "popcorn-bud", "infused-flower", "paraphernalia", "preroll-pack", "cartridge", "disposable-cartridge", "edible-solid", "concentrate", "infused-preroll", "infused-preroll-pack", "preroll", "edible-liquid", "topical", "trim",
+  "flower", "popcorn-bud", "infused-flower", "blunt", "infused-blunt", "tincture", "rso", "paraphernalia", "preroll-pack", "cartridge", "disposable-cartridge", "edible-solid", "concentrate", "infused-preroll", "infused-preroll-pack", "preroll", "edible-liquid", "topical", "trim",
 ]);
 
 const CATEGORY_MAP: Record<string, GreenwayCategory> = {
@@ -165,7 +165,8 @@ const STRAIN_MAP: Record<string, GreenwayStrainType> = {
   "50/50 hybrid": "hybrid",
 };
 
-const THC_TOTAL_ALLOWED_TYPES = new Set(["Concentrate for Inhalation", "Usable Marijuana"]);
+const THC_TOTAL_ALLOWED_TYPES = new Set(["Concentrate for Inhalation", "Usable Marijuana", "Solid Edible", "Liquid Edible", "Tincture"]);
+const MG_CANNABINOID_TYPES = new Set(["Solid Edible", "Liquid Edible", "Tincture"]);
 
 function ensureDir(dir: string) { fs.mkdirSync(dir, { recursive: true }); }
 function normalizeWhitespace(value: unknown) { return String(value ?? "").replace(/\u0000/g, "").replace(/\s+/g, " ").trim(); }
@@ -289,7 +290,7 @@ function detectInfusedFlower(productName: string, currentCategory: GreenwayCateg
 }
 
 function normalizeStrainType(value: string, category: GreenwayCategory): GreenwayStrainType {
-  if (["edible-solid", "edible-liquid", "topical", "paraphernalia"].includes(category)) return "unknown";
+  if (["topical", "paraphernalia"].includes(category)) return "unknown";
   const mapped = STRAIN_MAP[comparableName(value)];
   if (!mapped) {
     addDiagnostic("warning", "unknown_strain_type", `Unknown strain type '${value}', defaulting to unknown.`, { value, category });
@@ -303,7 +304,13 @@ function parsePackageSize(rawPackage: string, fallbackSize?: string, fallbackUni
   const match = raw.match(/(-?\d+(?:\.\d+)?)\s*([a-zA-Z ]+)?/);
   const quantity = match ? Number(match[1]) : 1;
   const unitRaw = normalizeWhitespace(match?.[2] ?? fallbackUnit ?? "each").toLowerCase();
-  let unit = unitRaw.replace(/ounces?/, "oz").replace(/grams?/, "g").replace(/milligrams?/, "mg").replace(/milliliters?/, "ml").replace(/fluid\s*ounces?/, "floz").replace(/fluidounce/, "floz").replace(/each|units?/, "ea");
+  let unit = unitRaw
+    .replace(/fluid\s*ounces?|fluidounce|fl\.?\s*oz/, "floz")
+    .replace(/milligrams?/, "mg")
+    .replace(/milliliters?/, "ml")
+    .replace(/grams?/, "g")
+    .replace(/ounces?/, "oz")
+    .replace(/each|units?/, "ea");
   if (!unit) unit = "ea";
   const gramsEquivalent = unit === "g" ? quantity : unit === "oz" ? quantity * 28 : undefined;
   let label: string;
@@ -322,6 +329,71 @@ function parsePackageSize(rawPackage: string, fallbackSize?: string, fallbackUni
   return { quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : 1, unit, gramsEquivalent, label, sortValue: (Number.isFinite(quantity) ? quantity : 1) * sortUnitWeight, raw };
 }
 
+function packageFromParts(quantity: number, unit: string, raw: string): ParsedPackage {
+  const normalizedUnit = unit.toLowerCase()
+    .replace(/fluid\s*ounces?|fluidounce|fl\.?\s*oz/, "oz")
+    .replace(/milligrams?/, "mg")
+    .replace(/milliliters?/, "ml")
+    .replace(/grams?/, "g")
+    .replace(/ounces?/, "oz")
+    .replace(/packs?|pk/, "pk");
+  const safeQuantity = Number.isFinite(quantity) && quantity > 0 ? quantity : 1;
+  const label = normalizedUnit === "pk" ? `${formatNumber(safeQuantity)}pk` : `${formatNumber(safeQuantity)}${normalizedUnit}`;
+  const gramsEquivalent = normalizedUnit === "g" ? safeQuantity : normalizedUnit === "oz" ? safeQuantity * 28 : undefined;
+  const sortUnitWeight = normalizedUnit === "mg" ? 0.001 : normalizedUnit === "g" ? 1 : normalizedUnit === "oz" ? 28 : normalizedUnit === "ml" ? 0.01 : normalizedUnit === "pk" ? 100 : 10000;
+  return { quantity: safeQuantity, unit: normalizedUnit, gramsEquivalent, label, sortValue: safeQuantity * sortUnitWeight, raw };
+}
+
+function packageCandidateFromProductName(productName: string, category: string, inventoryType: string): ParsedPackage | null {
+  const name = normalizeWhitespace(productName);
+  if (!name) return null;
+  const rawCategory = normalizeWhitespace(category);
+  const rawType = normalizeWhitespace(inventoryType);
+  const eligible = ["Edible", "Gummies", "Chocolate", "Fruit Chews", "Chewees", "Mints", "Capsule", "Beverage", "Shots", "Soda", "Liquid Infused Edible", "Tincture", "Other Liquid Edible", "Panda Candies", "Balls", "Minis"].includes(rawCategory)
+    || ["Solid Edible", "Liquid Edible", "Tincture"].includes(rawType);
+  if (!eligible) return null;
+
+  const volume = name.match(/\b(\d+(?:\.\d+)?)\s*(fl\.?\s*oz|fluid\s*ounces?|fluidounce|oz|ml|milliliters?)\b/i);
+  if (volume && (rawType !== "Solid Edible" || /\b(?:drink|beverage|lemonade|shot|soda|can|tincture|drops?|sorbet)\b/i.test(name))) {
+    return packageFromParts(Number(volume[1]), volume[2], volume[0]);
+  }
+
+  const pack = name.match(/\b(\d+)\s*(?:pk|pack|packs)\b/i);
+  if (pack) return packageFromParts(Number(pack[1]), "pk", pack[0]);
+
+  const dosePack = name.match(/\b(\d+)\s*x\s*\d+(?:\.\d+)?\s*mg\b/i);
+  if (dosePack) return packageFromParts(Number(dosePack[1]), "pk", dosePack[0]);
+
+  const parentheticalWeight = name.match(/\((\d+(?:\.\d+)?)\s*(g|grams?|oz|ounces?|ml|milliliters?)\)/i);
+  if (parentheticalWeight) return packageFromParts(Number(parentheticalWeight[1]), parentheticalWeight[2], parentheticalWeight[0]);
+
+  const weight = name.match(/\b(\d+(?:\.\d+)?)\s*(g|grams?)\b/i);
+  if (weight && !/\bmg\b/i.test(weight[0])) return packageFromParts(Number(weight[1]), weight[2], weight[0]);
+
+  const potency = name.match(/\b(\d+(?:\.\d+)?)\s*mg\b/i);
+  if (potency) return packageFromParts(Number(potency[1]), "mg", potency[0]);
+
+  return null;
+}
+
+function validatedPackageSize(productName: string, rawPackage: string, category: string, inventoryType: string): ParsedPackage {
+  const packageColumn = parsePackageSize(rawPackage);
+  const fromName = packageCandidateFromProductName(productName, category, inventoryType);
+  if (!fromName) return packageColumn;
+  if (fromName.label !== packageColumn.label) {
+    addDiagnostic("info", "package_size_name_override", "Product-name package size used as source of truth over Package Size column for edible/liquid/tincture item.", {
+      productName,
+      rawCategory: category,
+      inventoryType,
+      packageColumn: packageColumn.label,
+      packageName: fromName.label,
+      rawPackage,
+      nameMatch: fromName.raw,
+    });
+  }
+  return fromName;
+}
+
 function statusForInventory(level: number): Exclude<InventoryStatus, "mock"> {
   if (level <= 0) return "unavailable";
   if (level <= 3) return "low-stock";
@@ -331,16 +403,16 @@ function statusForInventory(level: number): Exclude<InventoryStatus, "mock"> {
 function genericDescription(group: ProductGroup) { return `${group.displayName} from ${group.brand}. Browse current availability, package options, and pricing at Greenway Marijuana in Port Orchard.`; }
 
 function shouldDisplayThcTotal(inventoryType: string) { return THC_TOTAL_ALLOWED_TYPES.has(normalizeWhitespace(inventoryType)); }
-function thcTotalString(totalRaw: number | null, inventoryType: string): string | null {
-  if (!shouldDisplayThcTotal(inventoryType)) return null;
-  if (totalRaw === null || totalRaw <= 0) return "N/A";
-  return `${formatNumber(totalRaw, 2)}%`;
+function cannabinoidUnitForInventoryType(inventoryType: string): CannabinoidUnit {
+  return MG_CANNABINOID_TYPES.has(normalizeWhitespace(inventoryType)) ? "mg" : "%";
 }
-function cbdString(cbdRaw: number | null, inventoryType: string): string | null {
+function cannabinoidString(raw: number | null, inventoryType: string): string | null {
   if (!shouldDisplayThcTotal(inventoryType)) return null;
-  if (cbdRaw === null || cbdRaw <= 0) return "N/A";
-  return `${formatNumber(cbdRaw, 2)}%`;
+  if (raw === null || raw <= 0) return "N/A";
+  return `${formatNumber(raw, 2)}${cannabinoidUnitForInventoryType(inventoryType)}`;
 }
+function thcTotalString(totalRaw: number | null, inventoryType: string): string | null { return cannabinoidString(totalRaw, inventoryType); }
+function cbdString(cbdRaw: number | null, inventoryType: string): string | null { return cannabinoidString(cbdRaw, inventoryType); }
 
 function productRowsByName(products: ProductRow[]) {
   const byName = new Map<string, ProductRow[]>();
@@ -369,7 +441,7 @@ function collapseInventoryRows(inventories: InventoryRow[]): Map<string, Collaps
       continue;
     }
     const productKey = comparableName(productName);
-    const pkg = parsePackageSize(row["Package Size"]);
+    const pkg = validatedPackageSize(productName, row["Package Size"], row.Category, row.InventoryType);
     const priceMinorUnits = priceToMinorUnits(row["Product Price"]);
     const collapseKey = [productKey, pkg.label, priceMinorUnits, toBool(row["Is Medical"]) ? "medical" : "adult"].join("|");
     const units = Math.max(0, Math.floor(toNumber(row["Units Available For Sale"]) ?? 0));
@@ -424,7 +496,8 @@ function stripVariantNoise(value: string, brand: string, category: string): stri
     .replace(/\b(?:single|pack|packs|pouch|jar|tin|unit|each)\b/gi, " ")
     .replace(/\b(?:pre[- ]?rolls?|infused|blunt|flower|cartridge|disposable|vape|rosin|resin|bho|badder|hash|gummies|edible|beverage|shot|topical)\b/gi, " ")
     .replace(/[()\[\]]/g, " ")
-    .replace(/\s*[-:|/]\s*/g, " ")
+    .replace(/\s*[-|/]\s*/g, " ")
+    .replace(/\s*:\s*/g, ":")
     .replace(/\s+/g, " ")
     .trim();
   if (!s || s.length < 3) s = normalizeWhitespace(value.replace(brand, ""));
@@ -566,8 +639,9 @@ function mergeVariantDuplicates(group: ProductGroup): CollapsedInventory[] {
 function cannabinoidCompounds(base: CollapsedInventory | undefined): GreenwayCannabinoid[] {
   if (!base || !shouldDisplayThcTotal(base.inventoryType)) return [];
   const compounds: GreenwayCannabinoid[] = [];
+  const unit = cannabinoidUnitForInventoryType(base.inventoryType);
   const push = (type: GreenwayCannabinoid["type"], raw: number | null) => {
-    if (raw !== null && raw > 0) compounds.push({ type, value: formatNumber(raw, 2), unit: "%" });
+    if (raw !== null && raw > 0) compounds.push({ type, value: formatNumber(raw, 2), unit });
   };
   push("thc", base.thcRaw);
   push("thca", base.thcaRaw);
@@ -576,12 +650,17 @@ function cannabinoidCompounds(base: CollapsedInventory | undefined): GreenwayCan
   return compounds;
 }
 
-function filterCategoriesFor(item: Pick<GreenwayMenuItem, "category" | "posInventoryType">): GreenwayCategory[] {
+function filterCategoriesFor(item: Pick<GreenwayMenuItem, "category" | "posInventoryType" | "posInventoryCategory">): GreenwayCategory[] {
   const cats = new Set<GreenwayCategory>([item.category]);
+  const rawCategory = normalizeWhitespace(item.posInventoryCategory);
   if (["cartridge", "disposable-cartridge"].includes(item.category)) cats.add("concentrate");
-  if (["infused-preroll", "infused-preroll-pack", "preroll-pack"].includes(item.category)) cats.add("preroll");
+  if (item.category === "preroll-pack") cats.add("preroll");
   if (item.category === "popcorn-bud") cats.add("flower");
   if (item.category === "infused-flower") { cats.add("concentrate"); cats.add("flower"); }
+  if (rawCategory === "Blunt") cats.add("blunt");
+  if (rawCategory === "Infused Blunt") cats.add("infused-blunt");
+  if (rawCategory === "Tincture") cats.add("tincture");
+  if (rawCategory === "RSO") cats.add("rso");
   return [...cats];
 }
 
@@ -619,15 +698,20 @@ function toMenuItem(group: ProductGroup): GreenwayMenuItem {
 
   const menuVariants: GreenwayMenuVariant[] = variants.map((variant) => ({
     id: `${itemId}-${stableId(variant.package.label, variant.priceMinorUnits, variant.medical ? "medical" : "adult")}`,
-    label: variant.package.label,
+    label: variant.package.label === "each" ? "" : variant.package.label,
     priceMinorUnits: variant.priceMinorUnits,
     inventoryLevel: variant.totalUnits,
     medical: variant.medical,
   }));
   const totalUnits = menuVariants.reduce((sum, variant) => sum + variant.inventoryLevel, 0);
-  const thc = thcTotalString(firstAvailable?.totalRaw ?? null, firstAvailable?.inventoryType ?? group.posInventoryType);
-  const cbd = cbdString(firstAvailable?.cbdRaw ?? null, firstAvailable?.inventoryType ?? group.posInventoryType);
-  const unit: CannabinoidUnit = "%";
+  const inventoryType = firstAvailable?.inventoryType ?? group.posInventoryType;
+  const thc = thcTotalString(firstAvailable?.totalRaw ?? null, inventoryType);
+  const cbd = cbdString(firstAvailable?.cbdRaw ?? null, inventoryType);
+  const unit = cannabinoidUnitForInventoryType(inventoryType);
+  const unitPattern = unit === "%" ? /%$/ : /mg$/;
+  const packageLabel = firstAvailable?.package.label ?? "each";
+  const displayPackageLabel = packageLabel === "each" ? "" : packageLabel;
+  const priceLabel = [formatCurrency(firstPrice), displayPackageLabel].filter(Boolean).join(" ");
   const item: GreenwayMenuItem = {
     id: itemId,
     name: group.displayName,
@@ -641,11 +725,11 @@ function toMenuItem(group: ProductGroup): GreenwayMenuItem {
     strainName: group.strainName,
     thc,
     cbd,
-    totalThc: shouldDisplayThcTotal(firstAvailable?.inventoryType ?? group.posInventoryType) ? { type: "thc", value: thc?.replace(/%$/, "") ?? null, unit } : null,
-    totalCbd: shouldDisplayThcTotal(firstAvailable?.inventoryType ?? group.posInventoryType) ? { type: "cbd", value: cbd?.replace(/%$/, "") ?? null, unit } : null,
+    totalThc: shouldDisplayThcTotal(inventoryType) ? { type: "thc", value: thc?.replace(unitPattern, "") ?? null, unit } : null,
+    totalCbd: shouldDisplayThcTotal(inventoryType) ? { type: "cbd", value: cbd?.replace(unitPattern, "") ?? null, unit } : null,
     compounds: cannabinoidCompounds(firstAvailable),
     description: group.descriptions.sort((a, b) => b.length - a.length)[0] ?? genericDescription(group),
-    priceLabel: `${formatCurrency(firstPrice)} ${firstAvailable?.package.label ?? "each"}`,
+    priceLabel,
     priceMinorUnits: firstPrice,
     inventoryStatus: statusForInventory(totalUnits),
     hidden: group.hidden,
