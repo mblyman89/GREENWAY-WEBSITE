@@ -168,6 +168,64 @@ const STRAIN_MAP: Record<string, GreenwayStrainType> = {
 const THC_TOTAL_ALLOWED_TYPES = new Set(["Concentrate for Inhalation", "Usable Marijuana", "Solid Edible", "Liquid Edible", "Tincture"]);
 const MG_CANNABINOID_TYPES = new Set(["Solid Edible", "Liquid Edible", "Tincture"]);
 
+// --- Bug 3: sanity caps on cannabinoid values ---------------------------------------------
+// Percent-based values (flower, concentrate, cartridge, etc.) can never exceed 100%. mg-based
+// values (edibles/tinctures) get a generous-but-finite ceiling per form so that corrupt source
+// rows (e.g. a tincture whose Total column reads 15,000,000) cannot render an absurd potency.
+// Ceilings are derived from observed maxima in the raw INVENTORIES Total column plus headroom:
+//   Solid Edible observed max 600mg, Liquid Edible 230mg, Tincture legit ~500mg.
+const CANNABINOID_PERCENT_CAP = 100;
+const CANNABINOID_MG_CAP: Record<string, number> = {
+  "Solid Edible": 2000,
+  "Liquid Edible": 1000,
+  "Tincture": 5000,
+};
+const DEFAULT_CANNABINOID_MG_CAP = 5000;
+
+// --- Section G: THC/CBD average fallback table --------------------------------------------
+// When a product has no usable THC/CBD value in its source columns, we display a category-level
+// AVERAGE so every product card shows a value. Averages blend the raw-spreadsheet medians (from
+// the INVENTORIES Total column) with public dispensary/lab potency research:
+//   * Frontiers 2024 (ElSohly et al.): dispensary flower ~20-25% THC (we use 22%).
+//   * Kootenay Botanicals / industry: vape carts ~80-85%, concentrates ~85-90%, flower 15-30%.
+//   * Raw INVENTORIES Total medians: Usable Marijuana 23.7%, Concentrate 74.2%, Liquid Edible
+//     100mg, Solid Edible 10mg.
+// Values are intentionally approximate; batch-to-batch variance makes an average fair. Every
+// fallback application is logged via the "cannabinoid_average_fallback" diagnostic for audit.
+const THC_FALLBACK_BY_CATEGORY: Partial<Record<GreenwayCategory, number>> = {
+  "flower": 22,
+  "popcorn-bud": 20,
+  "infused-flower": 35,
+  "preroll": 22,
+  "infused-preroll": 35,
+  "blunt": 22,
+  "infused-blunt": 35,
+  "trim": 15,
+  "concentrate": 80,
+  "rso": 75,
+  "cartridge": 85,
+  "disposable-cartridge": 85,
+  "edible-solid": 10,
+  "edible-liquid": 100,
+  "tincture": 300,
+};
+const CBD_FALLBACK_BY_CATEGORY: Partial<Record<GreenwayCategory, number>> = {
+  // Most products are THC-dominant; CBD averages are intentionally low. Edible/tincture CBD is
+  // left to source data (no blanket mg fallback) since CBD content varies wildly by SKU.
+  "flower": 0.5,
+  "popcorn-bud": 0.5,
+  "infused-flower": 0.5,
+  "preroll": 0.5,
+  "infused-preroll": 0.5,
+  "blunt": 0.5,
+  "infused-blunt": 0.5,
+  "trim": 0.5,
+  "concentrate": 1,
+  "rso": 1,
+  "cartridge": 1,
+  "disposable-cartridge": 1,
+};
+
 function ensureDir(dir: string) { fs.mkdirSync(dir, { recursive: true }); }
 function normalizeWhitespace(value: unknown) { return String(value ?? "").replace(/\u0000/g, "").replace(/\s+/g, " ").trim(); }
 function comparableName(value: unknown) { return normalizeWhitespace(value).toLowerCase(); }
@@ -200,11 +258,33 @@ function requireColumns(rows: Row[], columns: string[], workbookName: string) {
   }
 }
 
+// Tracks categories already flagged so we emit exactly one anomaly per new/unknown category.
+const flaggedNewCategories = new Set<string>();
+
+// Section F: industry-standard handling for a previously-unseen POS category. Rather than crash
+// the entire build for a single new spreadsheet value, we (1) flag it once as a clearly-visible
+// anomaly in the generated report and (2) route it to the best-guess fallback category so the
+// menu still builds. Operators review the flagged anomaly and add an explicit CATEGORY_MAP entry.
+function flagNewCategory(category: string, where: string): GreenwayCategory {
+  const key = normalizeWhitespace(category);
+  const lowered = key.toLowerCase();
+  let fallback: GreenwayCategory = "concentrate";
+  for (const [keyword, cat] of Object.entries(CATEGORY_FALLBACK)) {
+    if (lowered.includes(keyword)) { fallback = cat; break; }
+  }
+  if (!flaggedNewCategories.has(key)) {
+    flaggedNewCategories.add(key);
+    addDiagnostic("warning", "new_unmapped_category", `New/unmapped POS category encountered: "${key}". Routed to fallback "${fallback}". Add an explicit CATEGORY_MAP entry to control its placement.`, {
+      category: key, fallbackCategory: fallback, source: where,
+    });
+  }
+  return fallback;
+}
+
 function normalizeCategory(category: string): GreenwayCategory {
   const exact = CATEGORY_MAP[normalizeWhitespace(category)];
   if (exact) return exact;
-  addDiagnostic("error", "unmapped_category", `Unmapped POS category: ${category}`, { category });
-  throw new Error(`Unmapped POS category: ${category}`);
+  return flagNewCategory(category, "visible-product");
 }
 
 function tryNormalizeCategory(category: string): GreenwayCategory | null {
@@ -344,53 +424,113 @@ function packageFromParts(quantity: number, unit: string, raw: string): ParsedPa
   return { quantity: safeQuantity, unit: normalizedUnit, gramsEquivalent, label, sortValue: safeQuantity * sortUnitWeight, raw };
 }
 
-function packageCandidateFromProductName(productName: string, category: string, inventoryType: string): ParsedPackage | null {
+// InventoryType is the authoritative signal for whether a product is an edible/liquid/tincture
+// whose name may legitimately encode package size. Driving eligibility off InventoryType (rather
+// than the free-text Category column) prevents non-edible products that happen to land in an
+// edible-sounding category (e.g. "Panda Candies" rows that are actually Usable Marijuana
+// pre-rolls, or "Edible" rows that are Usable Marijuana) from having their real weight/pack
+// overwritten by a name-derived value. (Bug 2)
+const NAME_PACKAGE_ELIGIBLE_TYPES = new Set(["Solid Edible", "Liquid Edible", "Tincture"]);
+
+// Units that represent a real physical package measurement (volume or weight). A bare "mg"
+// figure in a product name is almost always a POTENCY/dose, not a package size, so it must
+// never outrank one of these. (Bug 1)
+const REAL_MEASURE_UNITS = new Set(["g", "oz", "floz", "ml"]);
+
+type NamePackageCandidate = { pkg: ParsedPackage; source: "volume" | "pack" | "dosePack" | "parentheticalWeight" | "weight" | "potency" };
+
+function packageCandidateFromProductName(productName: string, category: string, inventoryType: string): NamePackageCandidate | null {
   const name = normalizeWhitespace(productName);
   if (!name) return null;
-  const rawCategory = normalizeWhitespace(category);
   const rawType = normalizeWhitespace(inventoryType);
-  const eligible = ["Edible", "Gummies", "Chocolate", "Fruit Chews", "Chewees", "Mints", "Capsule", "Beverage", "Shots", "Soda", "Liquid Infused Edible", "Tincture", "Other Liquid Edible", "Panda Candies", "Balls", "Minis"].includes(rawCategory)
-    || ["Solid Edible", "Liquid Edible", "Tincture"].includes(rawType);
-  if (!eligible) return null;
+  // Authoritative eligibility: only true edibles/liquids/tinctures (by InventoryType). This
+  // excludes Usable Marijuana, Concentrate for Inhalation (incl. RSO), and Topical Ointment,
+  // all of which carry a correct weight/volume in the Package Size column already.
+  if (!NAME_PACKAGE_ELIGIBLE_TYPES.has(rawType)) return null;
 
+  // PRIORITY ORDER (Bug 1): real volume/weight first, packs next, and bare mg potency LAST.
+  // A volume measurement always wins over a dose, regardless of edible form.
   const volume = name.match(/\b(\d+(?:\.\d+)?)\s*(fl\.?\s*oz|fluid\s*ounces?|fluidounce|oz|ml|milliliters?)\b/i);
   if (volume && (rawType !== "Solid Edible" || /\b(?:drink|beverage|lemonade|shot|soda|can|tincture|drops?|sorbet)\b/i.test(name))) {
-    return packageFromParts(Number(volume[1]), volume[2], volume[0]);
+    return { pkg: packageFromParts(Number(volume[1]), volume[2], volume[0]), source: "volume" };
   }
 
   const pack = name.match(/\b(\d+)\s*(?:pk|pack|packs)\b/i);
-  if (pack) return packageFromParts(Number(pack[1]), "pk", pack[0]);
+  if (pack) return { pkg: packageFromParts(Number(pack[1]), "pk", pack[0]), source: "pack" };
 
   const dosePack = name.match(/\b(\d+)\s*x\s*\d+(?:\.\d+)?\s*mg\b/i);
-  if (dosePack) return packageFromParts(Number(dosePack[1]), "pk", dosePack[0]);
+  if (dosePack) return { pkg: packageFromParts(Number(dosePack[1]), "pk", dosePack[0]), source: "dosePack" };
 
   const parentheticalWeight = name.match(/\((\d+(?:\.\d+)?)\s*(g|grams?|oz|ounces?|ml|milliliters?)\)/i);
-  if (parentheticalWeight) return packageFromParts(Number(parentheticalWeight[1]), parentheticalWeight[2], parentheticalWeight[0]);
+  if (parentheticalWeight) return { pkg: packageFromParts(Number(parentheticalWeight[1]), parentheticalWeight[2], parentheticalWeight[0]), source: "parentheticalWeight" };
 
   const weight = name.match(/\b(\d+(?:\.\d+)?)\s*(g|grams?)\b/i);
-  if (weight && !/\bmg\b/i.test(weight[0])) return packageFromParts(Number(weight[1]), weight[2], weight[0]);
+  if (weight && !/\bmg\b/i.test(weight[0])) return { pkg: packageFromParts(Number(weight[1]), weight[2], weight[0]), source: "weight" };
 
+  // Bare mg potency: lowest-priority signal. Only meaningful when nothing better exists AND the
+  // Package Size column has no real measurement (handled in validatedPackageSize).
   const potency = name.match(/\b(\d+(?:\.\d+)?)\s*mg\b/i);
-  if (potency) return packageFromParts(Number(potency[1]), "mg", potency[0]);
+  if (potency) return { pkg: packageFromParts(Number(potency[1]), "mg", potency[0]), source: "potency" };
 
   return null;
 }
 
 function validatedPackageSize(productName: string, rawPackage: string, category: string, inventoryType: string): ParsedPackage {
   const packageColumn = parsePackageSize(rawPackage);
-  const fromName = packageCandidateFromProductName(productName, category, inventoryType);
-  if (!fromName) return packageColumn;
-  if (fromName.label !== packageColumn.label) {
-    addDiagnostic("info", "package_size_name_override", "Product-name package size used as source of truth over Package Size column for edible/liquid/tincture item.", {
+  const candidate = packageCandidateFromProductName(productName, category, inventoryType);
+  if (!candidate) return packageColumn;
+  const fromName = candidate.pkg;
+  if (fromName.label === packageColumn.label) return packageColumn;
+
+  const columnHasRealMeasure = REAL_MEASURE_UNITS.has(packageColumn.unit);
+
+  // Bug 1: a name-derived bare-mg potency must NEVER override a Package Size column that already
+  // carries a real physical measurement (fl oz / ml / oz / g). The column wins.
+  if (candidate.source === "potency" && columnHasRealMeasure) {
+    addDiagnostic("info", "package_size_potency_rejected", "Rejected name-derived mg potency as package size; kept real measured Package Size column value.", {
       productName,
       rawCategory: category,
       inventoryType,
       packageColumn: packageColumn.label,
-      packageName: fromName.label,
+      rejectedName: fromName.label,
       rawPackage,
       nameMatch: fromName.raw,
     });
+    return packageColumn;
   }
+
+  // For any other source where the column already has a real measurement, only let the name win
+  // when it adds genuinely package-relevant information the column lacks: a multi-pack count
+  // (pack/dosePack) the column does not express. Real volume/weight from the column is otherwise
+  // the source of truth.
+  if (columnHasRealMeasure && candidate.source !== "pack" && candidate.source !== "dosePack") {
+    // Name found a different real measure than the column (rare). Trust the column to avoid
+    // double-counting; log for review.
+    if (candidate.source === "volume" || candidate.source === "weight" || candidate.source === "parentheticalWeight") {
+      addDiagnostic("info", "package_size_measure_conflict", "Name and Package Size column both encode a measurement; kept Package Size column value.", {
+        productName,
+        rawCategory: category,
+        inventoryType,
+        packageColumn: packageColumn.label,
+        nameValue: fromName.label,
+        rawPackage,
+      });
+      return packageColumn;
+    }
+  }
+
+  // Otherwise the name is the better source of truth (column was blank / "each" / unitless, or the
+  // name expresses a pack count). Use the name value.
+  addDiagnostic("info", "package_size_name_override", "Product-name package size used as source of truth over Package Size column for edible/liquid/tincture item.", {
+    productName,
+    rawCategory: category,
+    inventoryType,
+    packageColumn: packageColumn.label,
+    packageName: fromName.label,
+    source: candidate.source,
+    rawPackage,
+    nameMatch: fromName.raw,
+  });
   return fromName;
 }
 
@@ -406,13 +546,73 @@ function shouldDisplayThcTotal(inventoryType: string) { return THC_TOTAL_ALLOWED
 function cannabinoidUnitForInventoryType(inventoryType: string): CannabinoidUnit {
   return MG_CANNABINOID_TYPES.has(normalizeWhitespace(inventoryType)) ? "mg" : "%";
 }
-function cannabinoidString(raw: number | null, inventoryType: string): string | null {
-  if (!shouldDisplayThcTotal(inventoryType)) return null;
-  if (raw === null || raw <= 0) return "N/A";
-  return `${formatNumber(raw, 2)}${cannabinoidUnitForInventoryType(inventoryType)}`;
+// Apply the Bug 3 sanity cap to a single cannabinoid figure. Returns the (possibly clamped)
+// value and whether a cap was applied. mg ceilings are per inventory type; percent is hard 100.
+function capCannabinoidValue(raw: number, inventoryType: string): { value: number; capped: boolean } {
+  const unit = cannabinoidUnitForInventoryType(inventoryType);
+  if (unit === "%") {
+    if (raw > CANNABINOID_PERCENT_CAP) return { value: CANNABINOID_PERCENT_CAP, capped: true };
+    return { value: raw, capped: false };
+  }
+  const ceiling = CANNABINOID_MG_CAP[normalizeWhitespace(inventoryType)] ?? DEFAULT_CANNABINOID_MG_CAP;
+  if (raw > ceiling) return { value: ceiling, capped: true };
+  return { value: raw, capped: false };
 }
-function thcTotalString(totalRaw: number | null, inventoryType: string): string | null { return cannabinoidString(totalRaw, inventoryType); }
-function cbdString(cbdRaw: number | null, inventoryType: string): string | null { return cannabinoidString(cbdRaw, inventoryType); }
+
+type CannabinoidResolution = { display: string | null; rawUsed: number | null; fallback: boolean };
+
+// Resolve a cannabinoid display value with Bug 3 capping and Section G average fallback.
+//   primaryRaw  : the value normally displayed (THC: Total column; CBD: Cbd column)
+//   siblingRaw  : a sane alternative from a sibling column (e.g. the Thc column) used when the
+//                 primary value is corrupt/over the cap. Optional.
+//   fallbackAvg : category-level average to use when no usable source value exists. Optional.
+function resolveCannabinoid(
+  primaryRaw: number | null,
+  inventoryType: string,
+  opts: { siblingRaw?: number | null; fallbackAvg?: number; kind: "thc" | "cbd"; productName?: string; category?: string },
+): CannabinoidResolution {
+  if (!shouldDisplayThcTotal(inventoryType)) return { display: null, rawUsed: null, fallback: false };
+  const unit = cannabinoidUnitForInventoryType(inventoryType);
+
+  // 1) Try the primary value, capping absurd figures (Bug 3).
+  if (primaryRaw !== null && primaryRaw > 0) {
+    const { value, capped } = capCannabinoidValue(primaryRaw, inventoryType);
+    if (capped) {
+      // The primary value was garbage. Prefer a sane sibling column value if available before
+      // resorting to the clamp/average, so corruption in one column doesn't degrade display.
+      const sibling = opts.siblingRaw ?? null;
+      if (sibling !== null && sibling > 0) {
+        const sib = capCannabinoidValue(sibling, inventoryType);
+        if (!sib.capped) {
+          addDiagnostic("warning", "cannabinoid_value_capped", "Primary cannabinoid value exceeded sanity cap; substituted sane sibling column value.", {
+            productName: opts.productName, category: opts.category, inventoryType, kind: opts.kind, rejected: primaryRaw, used: sib.value,
+          });
+          return { display: `${formatNumber(sib.value, 2)}${unit}`, rawUsed: sib.value, fallback: false };
+        }
+      }
+      addDiagnostic("warning", "cannabinoid_value_capped", "Cannabinoid value exceeded sanity cap and was clamped.", {
+        productName: opts.productName, category: opts.category, inventoryType, kind: opts.kind, original: primaryRaw, clamped: value,
+      });
+    }
+    return { display: `${formatNumber(value, 2)}${unit}`, rawUsed: value, fallback: false };
+  }
+
+  // 2) No usable primary value — try a sane sibling column.
+  if (opts.siblingRaw !== null && opts.siblingRaw !== undefined && opts.siblingRaw > 0) {
+    const sib = capCannabinoidValue(opts.siblingRaw, inventoryType);
+    return { display: `${formatNumber(sib.value, 2)}${unit}`, rawUsed: sib.value, fallback: false };
+  }
+
+  // 3) Section G: category-level average fallback so the card never shows "N/A" where we have one.
+  if (opts.fallbackAvg !== undefined && opts.fallbackAvg > 0) {
+    addDiagnostic("info", "cannabinoid_average_fallback", "No source cannabinoid value; applied category-average fallback for display.", {
+      productName: opts.productName, category: opts.category, inventoryType, kind: opts.kind, fallback: opts.fallbackAvg, unit,
+    });
+    return { display: `~${formatNumber(opts.fallbackAvg, 2)}${unit}`, rawUsed: opts.fallbackAvg, fallback: true };
+  }
+
+  return { display: "N/A", rawUsed: null, fallback: false };
+}
 
 function productRowsByName(products: ProductRow[]) {
   const byName = new Map<string, ProductRow[]>();
@@ -488,7 +688,11 @@ function collapseInventoryRows(inventories: InventoryRow[]): Map<string, Collaps
 }
 
 function stripVariantNoise(value: string, brand: string, category: string): string {
-  let s = normalizeWhitespace(value);
+  // Section E: convert underscores to spaces up front so machine-style names like
+  // "Bite_ind_peanut_butter_chip_1:1_10pk" or "Chew_sat_..." read as normal words. Done before
+  // brand stripping and tokenization so the rest of the pipeline sees clean word boundaries; the
+  // colon in ratios like "1:1" is preserved because only underscores are touched here.
+  let s = normalizeWhitespace(value).replace(/_+/g, " ").replace(/\s+/g, " ").trim();
   const brandComparable = normalizeWhitespace(brand).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   if (brandComparable) s = s.replace(new RegExp(`^${brandComparable}\\s*[-:|]?\\s*`, "i"), "");
   s = s
@@ -506,8 +710,10 @@ function stripVariantNoise(value: string, brand: string, category: string): stri
 }
 
 function deriveDisplayName(product: ProductRow | undefined, inv: CollapsedInventory, category: GreenwayCategory): { displayName: string; strainName: string } {
-  const productStrain = normalizeWhitespace(product?.Strain);
-  const invStrain = normalizeWhitespace(inv.strain);
+  // Section E: normalize underscores in raw strain values too (some POS strains arrive as
+  // "Blue_Dream"); convert to spaces so flower/concentrate display names are clean.
+  const productStrain = normalizeWhitespace(product?.Strain).replace(/_+/g, " ").replace(/\s+/g, " ").trim();
+  const invStrain = normalizeWhitespace(inv.strain).replace(/_+/g, " ").replace(/\s+/g, " ").trim();
   const strain = firstNonBlank(productStrain, invStrain);
   if (["flower", "popcorn-bud", "infused-flower", "preroll", "preroll-pack", "infused-preroll", "infused-preroll-pack", "concentrate", "cartridge", "disposable-cartridge", "trim"].includes(category)) {
     const displayName = strain || stripVariantNoise(firstNonBlank(product?.["Product Name"], inv.productName), firstNonBlank(product?.Brand, inv.brand), inv.category);
@@ -705,8 +911,24 @@ function toMenuItem(group: ProductGroup): GreenwayMenuItem {
   }));
   const totalUnits = menuVariants.reduce((sum, variant) => sum + variant.inventoryLevel, 0);
   const inventoryType = firstAvailable?.inventoryType ?? group.posInventoryType;
-  const thc = thcTotalString(firstAvailable?.totalRaw ?? null, inventoryType);
-  const cbd = cbdString(firstAvailable?.cbdRaw ?? null, inventoryType);
+  // THC displays from the Total column (totalRaw); the Thc column (thcRaw) is the sane sibling used
+  // when Total is corrupt/over-cap. CBD displays from the Cbd column with Cbda as sibling.
+  const thcResolved = resolveCannabinoid(firstAvailable?.totalRaw ?? null, inventoryType, {
+    siblingRaw: firstAvailable?.thcRaw ?? null,
+    fallbackAvg: THC_FALLBACK_BY_CATEGORY[group.category],
+    kind: "thc",
+    productName: group.displayName,
+    category: group.category,
+  });
+  const cbdResolved = resolveCannabinoid(firstAvailable?.cbdRaw ?? null, inventoryType, {
+    siblingRaw: firstAvailable?.cbdaRaw ?? null,
+    fallbackAvg: CBD_FALLBACK_BY_CATEGORY[group.category],
+    kind: "cbd",
+    productName: group.displayName,
+    category: group.category,
+  });
+  const thc = thcResolved.display;
+  const cbd = cbdResolved.display;
   const unit = cannabinoidUnitForInventoryType(inventoryType);
   const unitPattern = unit === "%" ? /%$/ : /mg$/;
   const packageLabel = firstAvailable?.package.label ?? "each";
@@ -725,8 +947,8 @@ function toMenuItem(group: ProductGroup): GreenwayMenuItem {
     strainName: group.strainName,
     thc,
     cbd,
-    totalThc: shouldDisplayThcTotal(inventoryType) ? { type: "thc", value: thc?.replace(unitPattern, "") ?? null, unit } : null,
-    totalCbd: shouldDisplayThcTotal(inventoryType) ? { type: "cbd", value: cbd?.replace(unitPattern, "") ?? null, unit } : null,
+    totalThc: shouldDisplayThcTotal(inventoryType) ? { type: "thc", value: thc && thc !== "N/A" ? thc.replace(/^~/, "").replace(unitPattern, "") : null, unit } : null,
+    totalCbd: shouldDisplayThcTotal(inventoryType) ? { type: "cbd", value: cbd && cbd !== "N/A" ? cbd.replace(/^~/, "").replace(unitPattern, "") : null, unit } : null,
     compounds: cannabinoidCompounds(firstAvailable),
     description: group.descriptions.sort((a, b) => b.length - a.length)[0] ?? genericDescription(group),
     priceLabel,
@@ -863,6 +1085,9 @@ function main() {
   requireColumns(products, ["Product Name", "Inventory Type", "Category", "Brand", "Type", "Strain", "UOM", "Package Size", "Price", "Description"], "PRODUCTS.xlsx");
   requireColumns(inventories, ["Product", "Category", "InventoryType", "Strain", "Brand", "Product Price", "Units Available For Sale", "Package Size", "Is Medical", "Cbd", "Cbda", "Thc", "Thca", "Total"], "INVENTORIES.xlsx");
 
+  // Section F: pre-scan every distinct POS category up front. Unmapped categories are flagged
+  // as anomalies (and routed to a safe fallback) rather than crashing the build, so a single new
+  // spreadsheet value is surfaced for review without taking the whole menu offline.
   const allCategories = new Set([...products.map((row) => normalizeWhitespace(row.Category)).filter(Boolean), ...inventories.map((row) => normalizeWhitespace(row.Category)).filter(Boolean)]);
   for (const category of allCategories) normalizeCategory(category);
 
