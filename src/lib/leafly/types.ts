@@ -2,6 +2,8 @@ export type LeaflyEnvironment = "sandbox" | "production";
 
 export type GreenwayCategory =
   | "flower"
+  | "popcorn-bud"
+  | "infused-flower"
   | "paraphernalia"
   | "preroll-pack"
   | "cartridge"
@@ -51,6 +53,8 @@ export type GreenwayMenuItem = {
   priceLabel: string;
   priceMinorUnits: number;
   inventoryStatus: "mock" | "in-stock" | "low-stock" | "unavailable";
+  hidden?: boolean;
+  hiddenReason?: string;
   variants: GreenwayMenuVariant[];
 };
 

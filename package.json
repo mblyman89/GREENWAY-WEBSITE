@@ -4,9 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "npm run transform:pos && next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "transform:pos": "tsx scripts/pos/transform_pos_data.ts"
   },
   "dependencies": {
     "next": "16.2.9",
@@ -21,6 +22,8 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "tsx": "^4.22.4",
+    "typescript": "^5",
+    "xlsx": "^0.18.5"
   }
 }
