@@ -49,7 +49,7 @@
 - [x] Review git diff for scope control and remove temporary scripts
 
 ## G. GitHub / Vercel
-- [ ] Commit changes with descriptive messages
-- [ ] Push branch with token-safe GitHub push command
-- [ ] Create or update PR for Vercel preview
-- [ ] Report PR and Vercel preview/deployment status; merge only if checks are clearly healthy or explicitly appropriate
+- [x] Commit changes with descriptive messages
+- [x] Push branch with token-safe GitHub push command
+- [x] Create or update PR for Vercel preview
+- [x] Report PR and Vercel preview/deployment status; merge only if checks are clearly healthy or explicitly appropriate
