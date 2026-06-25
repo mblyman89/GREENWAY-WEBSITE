@@ -103,6 +103,15 @@ function categoryLabel(item: GreenwayMenuItem) {
   return categoryAliases[item.category] ?? formatWebsiteCategory(item.category);
 }
 
+function productCardDisplayName(item: GreenwayMenuItem) {
+  const rawCategory = item.posInventoryCategory?.trim();
+  if (!rawCategory || rawCategory.toLowerCase() === "flower") return item.name;
+  const normalizedName = item.name.trim().toLowerCase();
+  const normalizedCategory = rawCategory.toLowerCase();
+  if (normalizedName.endsWith(normalizedCategory)) return item.name;
+  return `${item.name} ${rawCategory}`;
+}
+
 function brandInitials(brand: string) {
   return (
     brand
@@ -171,6 +180,7 @@ type ProductCardVisualProps = {
 export function ProductCardVisual({ item, salePriceMinorUnits, saleBadgeLabel, ctaLabel = "ADD TO CART", className = "" }: ProductCardVisualProps) {
   const showCannabinoids = isCannabisItem(item);
   const tone = cardToneForItem(item);
+  const displayName = productCardDisplayName(item);
 
   return (
     <article
@@ -194,7 +204,7 @@ export function ProductCardVisual({ item, salePriceMinorUnits, saleBadgeLabel, c
           href={`/menu/products/${item.id}`}
           className="mx-auto mt-4 line-clamp-2 block min-h-[2.45rem] text-center text-[1.08rem] font-black leading-[1.12] text-white transition group-hover:text-white md:text-[1.18rem]"
         >
-          {item.name}
+          {displayName}
         </Link>
 
         <div className="mt-3 grid gap-2 text-center">
