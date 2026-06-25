@@ -1,50 +1,65 @@
-# Transformer Final Hardening Todo
+# Shop Page Cosmetic Overhaul — Handoff-Ready Plan
 
-## Context / logic map (verified this session)
-- POS data: `pos-data/raw/PRODUCTS.xlsx` + `pos-data/raw/INVENTORIES.xlsx`.
-- `scripts/pos/transform_pos_data.ts` builds `src/data/pos-menu-preview.json` (+ sample) during `npm run transform:pos` and `npm run build`.
-- THC displayed from `Total` column (`totalRaw`); CBD from `Cbd` column (`cbdRaw`). mg units for Solid/Liquid Edible + Tincture; `%` otherwise.
-- Package logic: `packageCandidateFromProductName` (name) vs `parsePackageSize` (column), reconciled in `validatedPackageSize`.
-- Display names cleaned in `stripVariantNoise`. Category mapping in `normalizeCategory` (hard-throws on unmapped).
-- UI reads `item.thc`/`item.cbd` strings + `item.totalThc`/`item.totalCbd` (% slider only filters unit==="%").
+Branch: `feature/shop-page-cosmetic-overhaul` (based on `main` @ 9add48c)
+Goal: Make the shop page (`/menu`) cleaner, wider, 4-column, with smart data-derived filters,
+target-style filter pills, fixed desktop filter scroll, high-CBD filter, and aligned product cards.
+Visual target: Uncle Oke's dispensary screenshot (clean hero, left-aligned breadcrumb + pills below, 4 columns).
 
-## A. Full context tracing
-- [x] Re-read transformer end-to-end and trace UI data flow
-- [x] Analyze raw INVENTORIES THC/CBD distributions by InventoryType
-- [x] Deep internet research on average THC/CBD by product type
+## Data-derived constants (verified from src/data/pos-menu-preview.json, visible items n=2325)
+- Variant weight labels actually present: 0.5g, 1g, 1.5g, 2g, 2.5g, 3g, 3.5g, 5g, 7g, 14g, 1oz, 10pk, plus oz/fl oz/ml/mg
+- Price: min $3, max $320, median $24  -> price slider 3 -> 320
+- THC%: min 0.3, max 99.0, median 37.4 -> THC slider max ~99 (data-derived)
+- CBD%: min 0.0, max 72.0, median 0.2  -> CBD slider max ~72 (data-derived)
+- strainType counts: hybrid 1953, sativa 170, indica 170, unknown 32, cbd 0
+  -> High-CBD must be threshold-based on totalCbd (unit %), NOT strainType.
+- High-CBD threshold: CBD >= 4% (industry "CBD-rich" / Dutch Passion). Yields ~31 items.
 
-## B. Bug 1 — Volume must win over potency (mg) for tinctures/shots/edibles/RSO
-- [x] Reorder/guard `packageCandidateFromProductName` so a real volume (fl oz/ml/oz) or weight (g) always wins over bare mg potency
-- [x] In `validatedPackageSize`, make column volume win over name-derived mg potency
-- [x] Treat RSO and all edible weight types (solid mg-grams, liquid ml/floz) correctly; never use a potency mg figure as the package size
-- [x] Add diagnostic when a name-derived mg figure is rejected in favor of a volume/weight package
+## Tasks
 
-## C. Bug 2 — Exclude ineligible InventoryTypes from name override
-- [x] Exclude `Usable Marijuana`, `Topical Ointment`, `Concentrate for Inhalation` from edible/liquid package-name override
-- [x] Drive eligibility from InventoryType (authoritative) not just raw Category strings
-- [x] Add expert-judgment robustness: guard against pack/dose patterns hijacking flower/preroll weights
+### A. Top section cleanup (src/app/menu/page.tsx)
+- [x] Remove badges, long description (totalInventoryUnits), disclaimer box, 3 buttons
+- [x] Remove `<MenuCollectionShell>` desktop block (stats + SHOP BY CATEGORY clutter)
+- [x] Drop unused imports (Link, MenuCollectionShell, totalInventoryUnits helper)
 
-## D. Bug 3 — Sanity cap on absurd cannabinoid values
-- [x] Add data-derived caps: THC% ≤ 100; edible/tincture mg ≤ sensible ceiling
-- [x] Emit `cannabinoid_value_capped` diagnostic when capping
-- [x] Prefer a sane sibling value (e.g. `Thc` column) before falling back when `Total` is garbage
+### B. Hero banner — wide + short (src/app/menu/page.tsx)
+- [x] Wide, short banner: "SHOP OUR MENU" left-aligned + one short subtitle line
+- [x] Keep a tasteful illustration on the right, NO logo icon
+- [x] Reduce vertical height vs current
 
-## E. Remove underscores from display names
-- [x] Strip/normalize underscores to spaces in `stripVariantNoise`/name cleanup
-- [x] Regenerate and verify `Bite_ind_...`, `Chew_sat_...` style names are clean (0 underscores remain)
+### C. Wider page + 4th column (InteractiveMenuBrowser.tsx)
+- [x] Increase shop max width beyond max-w-7xl (max-w-[88rem])
+- [x] Product grids: sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4
+- [x] Adjust sidebar grid lg:grid-cols-[280px_1fr]
 
-## F. New-category detection flag
-- [x] Make unmapped category log to anomaly report as a clear flagged anomaly (industry-standard) while keeping a safe outcome
-- [x] Confirm anomaly report captures the flag (`new_unmapped_category`; 0 currently, all mapped)
+### D. Desktop filter scroll/pin fix (InteractiveMenuBrowser.tsx aside)
+- [x] Sticky aside scrollable: lg:sticky lg:top-24 + max-h + overflow-y-auto. Mobile unchanged.
 
-## G. THC/CBD average fallback (every card shows a value)
-- [x] Build fallback table keyed by category/inventory type from raw medians + internet research
-- [x] When raw THC/CBD missing/zero, apply average fallback (auditable via diagnostic)
-- [x] Mark fallback values so they're auditable (`~` prefix + diagnostic); ensure no card shows N/A/-- for THC where a fallback exists
-- [x] Decide CBD fallback approach (low % for flower-type/concentrate; source-only for edibles)
+### E. High-CBD "CBD" strain filter
+- [x] Add synthetic strain option value "cbd" labeled "CBD" to strainOptions
+- [x] itemMatchesCriteria: selected "cbd" => totalCbd unit % value >= 4
+- [x] Count = items meeting threshold
 
-## H. Verification & delivery
-- [x] Run `npm run transform:pos`; inspect diagnostics + outputs with targeted checks
-- [x] Run `npm run build` (typecheck) clean (tsc 0 errors; build generated 2334 pages, 0 errors)
-- [x] Review git diff for scope; remove temp scripts (256/-31 in transformer + regenerated JSON only; no temp files)
-- [ ] Commit, push branch `feature/transformer-final-hardening`, open/update PR; report status
+### F. Smart filter values
+- [x] Replace hardcoded requestedWeights with weights derived from actual variant labels
+- [x] Price slider min=3, max=data max; THC max=data max; CBD max=data max
+- [x] Pass min/max props to MenuFilterControls; update sentinel logic
+
+### G. Product card box alignment (ProductCardVisual.tsx)
+- [x] Move strain pill + THC/CBD grid into the BOTTOM group (above price/cart)
+- [x] Boxes align across cards regardless of name length
+
+### H. Filter pills target-style (FilterTags.tsx)
+- [x] Remove "No active filters" empty box (render nothing when none)
+- [x] Clean horizontal pill row (value + x)
+
+### I. Search NOT a pill (InteractiveMenuBrowser.tsx)
+- [x] Remove "search" entry from activeFilterTags; verify search still composes
+
+### J. Layout/breadcrumb
+- [x] HOME > SHOP left-aligned, widen to shop width
+- [x] Filter pills horizontal line below breadcrumb area
+
+### K. Verification & delivery
+- [x] npx tsc --noEmit clean
+- [x] npm run build succeeds
+- [x] Commit + push; open PR -> Vercel preview

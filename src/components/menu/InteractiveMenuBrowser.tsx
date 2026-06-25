@@ -8,7 +8,22 @@ import { FilterTags } from "./FilterTags";
 import { ProductCard } from "./ProductCard";
 import { SortDropdown, type SortOption } from "./SortDropdown";
 
-const requestedWeights = ["1g", "2g", "3.5g", "7g", "14g", "28g"];
+// Canonical gram-weight order. Only weights actually present in the data are shown (see deriveWeightOptions).
+const weightDisplayOrder = ["0.5g", "0.7g", "0.75g", "1g", "1.2g", "1.5g", "2g", "2.5g", "3g", "3.5g", "4g", "5g", "7g", "14g", "28g", "1oz", "10pk"];
+
+// Industry "CBD-rich" threshold (Dutch Passion): >= 4% CBD. Special strain-filter value.
+const HIGH_CBD_THRESHOLD = 4;
+const HIGH_CBD_VALUE = "cbd";
+
+function normalizeWeightLabel(label: string) {
+  return label.trim().toLowerCase();
+}
+
+// Extract a canonical weight token from a variant label, if it maps to one we display.
+function weightTokenFromLabel(label: string) {
+  const normalized = normalizeWeightLabel(label);
+  return weightDisplayOrder.find((weight) => normalized === weight.toLowerCase() || normalized.includes(weight.toLowerCase())) ?? null;
+}
 
 type PreviewSpecialCollection = {
   label: string;
@@ -368,14 +383,13 @@ function isWebsiteCategory(value: string): value is GreenwayCategory {
 }
 
 function itemWeightLabels(item: GreenwayMenuItem) {
-  return item.variants.flatMap((variant) => {
-    const normalizedLabel = variant.label.toLowerCase();
-    return requestedWeights.filter((weight) => normalizedLabel.includes(weight.toLowerCase()));
-  });
+  return item.variants
+    .map((variant) => weightTokenFromLabel(variant.label))
+    .filter((weight): weight is string => weight !== null);
 }
 
-function matchesCannabinoidSlider(value: number | null, maxValue: number) {
-  if (maxValue === 100) return true;
+function matchesCannabinoidSlider(value: number | null, maxValue: number, maxAvailable: number) {
+  if (maxValue >= maxAvailable) return true;
   return value !== null && value <= maxValue;
 }
 
@@ -384,14 +398,33 @@ function matchesPriceSlider(priceMinorUnits: number, maxPrice: number, maxAvaila
   return priceMinorUnits <= maxPrice * 100;
 }
 
-function itemMatchesCriteria(item: GreenwayMenuItem, criteria: FilterCriteria, maxAvailablePrice: number) {
+// True when an item qualifies as high-CBD ("CBD-rich") per the industry >= 4% threshold.
+function isHighCbdItem(item: GreenwayMenuItem) {
+  const cbd = cannabinoidPercentageValue(item.totalCbd);
+  return cbd !== null && cbd >= HIGH_CBD_THRESHOLD;
+}
+
+type CannabinoidBounds = {
+  maxAvailableThc: number;
+  maxAvailableCbd: number;
+};
+
+function matchesStrainSelection(item: GreenwayMenuItem, selectedStrains: string[]) {
+  if (selectedStrains.length === 0) return true;
+  return selectedStrains.some((strain) => {
+    if (strain === HIGH_CBD_VALUE) return isHighCbdItem(item);
+    return item.strainType === strain;
+  });
+}
+
+function itemMatchesCriteria(item: GreenwayMenuItem, criteria: FilterCriteria, maxAvailablePrice: number, bounds: CannabinoidBounds) {
   const itemCategories = item.filterCategories?.length ? item.filterCategories : [item.category];
   const categoryOk = criteria.selectedCategories.length === 0 || criteria.selectedCategories.some((category) => itemCategories.includes(category));
-  const strainOk = criteria.selectedStrains.length === 0 || criteria.selectedStrains.includes(item.strainType);
+  const strainOk = matchesStrainSelection(item, criteria.selectedStrains);
   const brandOk = criteria.selectedBrands.length === 0 || criteria.selectedBrands.includes(item.brand);
   const weightOk = criteria.selectedWeights.length === 0 || criteria.selectedWeights.some((weight) => itemWeightLabels(item).includes(weight));
-  const thcOk = matchesCannabinoidSlider(cannabinoidPercentageValue(item.totalThc), criteria.maxThc);
-  const cbdOk = matchesCannabinoidSlider(cannabinoidPercentageValue(item.totalCbd), criteria.maxCbd);
+  const thcOk = matchesCannabinoidSlider(cannabinoidPercentageValue(item.totalThc), criteria.maxThc, bounds.maxAvailableThc);
+  const cbdOk = matchesCannabinoidSlider(cannabinoidPercentageValue(item.totalCbd), criteria.maxCbd, bounds.maxAvailableCbd);
   const priceOk = matchesPriceSlider(item.priceMinorUnits, criteria.maxPrice, maxAvailablePrice);
   const searchOk = matchesSearch(item, criteria.query);
 
@@ -416,14 +449,16 @@ function buildOptions(baseValues: string[], selectedValues: string[] = [], label
   }));
 }
 
-function buildRequestedWeightOptions(items: GreenwayMenuItem[], selectedWeights: string[]) {
+// Derive weight options from the actual variant labels in the data (no hardcoded list of values).
+function buildWeightOptionsFromData(items: GreenwayMenuItem[], selectedWeights: string[]) {
   const counts = countValues(items.flatMap(itemWeightLabels));
-  return requestedWeights.map((weight) => ({
-    value: weight,
-    label: weight,
-    count: counts[weight] ?? 0,
-  })).filter((option) => option.count > 0 || selectedWeights.includes(option.value) || requestedWeights.includes(option.value));
+  return weightDisplayOrder
+    .map((weight) => ({ value: weight, label: weight, count: counts[weight] ?? 0 }))
+    .filter((option) => option.count > 0 || selectedWeights.includes(option.value));
 }
+
+// A value safely above any cannabinoid/price data max, used as the "no constraint" sentinel.
+const UNBOUNDED = Number.POSITIVE_INFINITY;
 
 function criteriaWithout(criteria: FilterCriteria, key: keyof FilterCriteria): FilterCriteria {
   if (key === "query") return { ...criteria, query: "" };
@@ -431,9 +466,9 @@ function criteriaWithout(criteria: FilterCriteria, key: keyof FilterCriteria): F
   if (key === "selectedStrains") return { ...criteria, selectedStrains: [] };
   if (key === "selectedBrands") return { ...criteria, selectedBrands: [] };
   if (key === "selectedWeights") return { ...criteria, selectedWeights: [] };
-  if (key === "maxThc") return { ...criteria, maxThc: 100 };
-  if (key === "maxCbd") return { ...criteria, maxCbd: 100 };
-  if (key === "maxPrice") return { ...criteria, maxPrice: 100 };
+  if (key === "maxThc") return { ...criteria, maxThc: UNBOUNDED };
+  if (key === "maxCbd") return { ...criteria, maxCbd: UNBOUNDED };
+  if (key === "maxPrice") return { ...criteria, maxPrice: UNBOUNDED };
   return criteria;
 }
 
@@ -463,10 +498,30 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
   const [selectedStrains, setSelectedStrains] = useState<string[]>([]);
   const [selectedBrands, setSelectedBrands] = useState<string[]>(initialBrand ? [initialBrand] : []);
   const [selectedWeights, setSelectedWeights] = useState<string[]>([]);
-  const [maxThc, setMaxThc] = useState(100);
-  const [maxCbd, setMaxCbd] = useState(100);
-  const maxAvailablePrice = Math.max(100, Math.ceil(Math.max(...items.map((item) => item.priceMinorUnits), 0) / 100));
+  // Data-derived bounds for sliders (no hardcoded ceilings).
+  const maxAvailablePrice = useMemo(
+    () => Math.max(10, Math.ceil(Math.max(...items.map((item) => item.priceMinorUnits), 0) / 100)),
+    [items],
+  );
+  const maxAvailableThc = useMemo(
+    () => Math.max(1, Math.ceil(Math.max(0, ...items.map((item) => cannabinoidPercentageValue(item.totalThc) ?? 0)))),
+    [items],
+  );
+  const maxAvailableCbd = useMemo(
+    () => Math.max(1, Math.ceil(Math.max(0, ...items.map((item) => cannabinoidPercentageValue(item.totalCbd) ?? 0)))),
+    [items],
+  );
+  const minAvailablePrice = useMemo(
+    () => Math.max(0, Math.floor(Math.min(...items.map((item) => item.priceMinorUnits), 0) / 100)),
+    [items],
+  );
+  const [maxThc, setMaxThc] = useState(maxAvailableThc);
+  const [maxCbd, setMaxCbd] = useState(maxAvailableCbd);
   const [maxPrice, setMaxPrice] = useState(initialSpecial?.maxPrice ?? maxAvailablePrice);
+  const cannabinoidBounds = useMemo<CannabinoidBounds>(
+    () => ({ maxAvailableThc, maxAvailableCbd }),
+    [maxAvailableThc, maxAvailableCbd],
+  );
   const shuffleSignature = useMemo(() => items.map((item) => item.id).join("|"), [items]);
   const shuffleRanks = useSyncExternalStore(
     subscribeToShuffleStore,
@@ -491,29 +546,38 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
     const specialItemIds = initialSpecial?.itemIds;
     const specialItems = specialItemIds ? items.filter((item) => specialItemIds.includes(item.id)) : items;
 
-    return sortItems(specialItems.filter((item) => itemMatchesCriteria(item, criteria, maxAvailablePrice)), sortBy, shuffleRanks);
-  }, [criteria, initialSpecial?.itemIds, items, maxAvailablePrice, shuffleRanks, sortBy]);
+    return sortItems(specialItems.filter((item) => itemMatchesCriteria(item, criteria, maxAvailablePrice, cannabinoidBounds)), sortBy, shuffleRanks);
+  }, [cannabinoidBounds, criteria, initialSpecial?.itemIds, items, maxAvailablePrice, shuffleRanks, sortBy]);
 
   const categoryOptions = useMemo(() => {
-    const optionItems = items.filter((item) => itemMatchesCriteria(item, criteriaWithout(criteria, "selectedCategories"), maxAvailablePrice));
+    const optionItems = items.filter((item) => itemMatchesCriteria(item, criteriaWithout(criteria, "selectedCategories"), maxAvailablePrice, cannabinoidBounds));
     const categoryValues = optionItems.flatMap((item) => item.filterCategories?.length ? item.filterCategories : [item.category]);
     return buildOptions([...categoryValues, ...Array(accessorySectionCards.length).fill("accessories")], selectedCategories, formatWebsiteCategory);
-  }, [criteria, items, maxAvailablePrice, selectedCategories]);
+  }, [cannabinoidBounds, criteria, items, maxAvailablePrice, selectedCategories]);
 
   const strainOptions = useMemo(() => {
-    const optionItems = items.filter((item) => itemMatchesCriteria(item, criteriaWithout(criteria, "selectedStrains"), maxAvailablePrice));
-    return buildOptions(optionItems.map((item) => item.strainType).filter((strainType) => strainType !== "unknown"), selectedStrains.filter((strainType) => strainType !== "unknown"));
-  }, [criteria, items, maxAvailablePrice, selectedStrains]);
+    const optionItems = items.filter((item) => itemMatchesCriteria(item, criteriaWithout(criteria, "selectedStrains"), maxAvailablePrice, cannabinoidBounds));
+    const baseOptions = buildOptions(
+      optionItems.map((item) => item.strainType).filter((strainType) => strainType !== "unknown" && strainType !== HIGH_CBD_VALUE),
+      selectedStrains.filter((strainType) => strainType !== "unknown" && strainType !== HIGH_CBD_VALUE),
+    );
+    // Inject the high-CBD ("CBD") option, threshold-based on totalCbd >= 4%.
+    const highCbdCount = optionItems.filter(isHighCbdItem).length;
+    if (highCbdCount > 0 || selectedStrains.includes(HIGH_CBD_VALUE)) {
+      baseOptions.push({ value: HIGH_CBD_VALUE, label: "CBD", count: highCbdCount });
+    }
+    return baseOptions;
+  }, [cannabinoidBounds, criteria, items, maxAvailablePrice, selectedStrains]);
 
   const brandOptions = useMemo(() => {
-    const optionItems = items.filter((item) => itemMatchesCriteria(item, criteriaWithout(criteria, "selectedBrands"), maxAvailablePrice));
+    const optionItems = items.filter((item) => itemMatchesCriteria(item, criteriaWithout(criteria, "selectedBrands"), maxAvailablePrice, cannabinoidBounds));
     return buildOptions(optionItems.map((item) => item.brand), selectedBrands);
-  }, [criteria, items, maxAvailablePrice, selectedBrands]);
+  }, [cannabinoidBounds, criteria, items, maxAvailablePrice, selectedBrands]);
 
   const weightOptions = useMemo(() => {
-    const optionItems = items.filter((item) => itemMatchesCriteria(item, criteriaWithout(criteria, "selectedWeights"), maxAvailablePrice));
-    return buildRequestedWeightOptions(optionItems, selectedWeights);
-  }, [criteria, items, maxAvailablePrice, selectedWeights]);
+    const optionItems = items.filter((item) => itemMatchesCriteria(item, criteriaWithout(criteria, "selectedWeights"), maxAvailablePrice, cannabinoidBounds));
+    return buildWeightOptionsFromData(optionItems, selectedWeights);
+  }, [cannabinoidBounds, criteria, items, maxAvailablePrice, selectedWeights]);
 
   const activeSectionCategory = selectedCategories.length === 1 ? selectedCategories[0] : null;
   const usesFilteredSections = activeSectionCategory !== null && [
@@ -551,23 +615,16 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
     setSelectedStrains([]);
     setSelectedBrands([]);
     setSelectedWeights([]);
-    setMaxThc(100);
-    setMaxCbd(100);
+    setMaxThc(maxAvailableThc);
+    setMaxCbd(maxAvailableCbd);
     setMaxPrice(maxAvailablePrice);
     setSortBy("featured-shuffle");
   };
 
+  const strainTagLabel = (strain: string) => (strain === HIGH_CBD_VALUE ? "CBD" : strain.charAt(0).toUpperCase() + strain.slice(1));
+
+  // NOTE: The search query is intentionally NOT shown as a filter pill — it just filters live.
   const activeFilterTags = [
-    ...(query.trim()
-      ? [
-          {
-            key: "search",
-            label: "Search",
-            value: query.trim(),
-            onRemove: () => setQuery(""),
-          },
-        ]
-      : []),
     ...selectedCategories.map((category) => ({
       key: `category-${category}`,
       label: "Category",
@@ -583,7 +640,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
     ...selectedStrains.map((strain) => ({
       key: `strain-${strain}`,
       label: "Strain",
-      value: strain,
+      value: strainTagLabel(strain),
       onRemove: () => setSelectedStrains((current) => current.filter((value) => value !== strain)),
     })),
     ...selectedWeights.map((weight) => ({
@@ -592,23 +649,23 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
       value: weight,
       onRemove: () => setSelectedWeights((current) => current.filter((value) => value !== weight)),
     })),
-    ...(maxThc !== 100
+    ...(maxThc < maxAvailableThc
       ? [
           {
             key: "thc",
             label: "Max THC",
             value: `${maxThc}%`,
-            onRemove: () => setMaxThc(100),
+            onRemove: () => setMaxThc(maxAvailableThc),
           },
         ]
       : []),
-    ...(maxCbd !== 100
+    ...(maxCbd < maxAvailableCbd
       ? [
           {
             key: "cbd",
             label: "Max CBD",
             value: `${maxCbd}%`,
-            onRemove: () => setMaxCbd(100),
+            onRemove: () => setMaxCbd(maxAvailableCbd),
           },
         ]
       : []),
@@ -645,7 +702,10 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
       onMaxCbdChange={setMaxCbd}
       onMaxPriceChange={setMaxPrice}
       onReset={resetFilters}
+      minAvailablePrice={minAvailablePrice}
       maxAvailablePrice={maxAvailablePrice}
+      maxAvailableThc={maxAvailableThc}
+      maxAvailableCbd={maxAvailableCbd}
       categoryOptions={categoryOptions}
       strainOptions={strainOptions}
       brandOptions={brandOptions}
@@ -654,8 +714,13 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
   );
 
   return (
-    <section className="mx-auto grid max-w-7xl gap-5 overflow-x-clip px-3 py-5 sm:px-4 md:px-8 md:py-10 lg:grid-cols-[300px_1fr] lg:gap-8">
-      <div className="space-y-3 lg:col-start-2 lg:space-y-5">
+    <section className="mx-auto grid max-w-[88rem] gap-5 overflow-x-clip px-3 py-5 sm:px-4 md:px-8 md:py-8 lg:grid-cols-[280px_1fr] lg:gap-8">
+      {/* Active filter pills — horizontal row directly below the breadcrumb, spanning full width. */}
+      <div className="lg:col-span-2">
+        <FilterTags tags={activeFilterTags} onClearAll={resetFilters} />
+      </div>
+
+      <div className="space-y-3 lg:col-start-2 lg:row-start-2 lg:space-y-5">
         {initialSpecial ? (
           <div className="rounded-3xl border border-[var(--gold)]/30 bg-[var(--gold)]/10 p-4 md:p-5">
             <p className="text-xs font-black uppercase tracking-[0.2em] text-[var(--gold)]">Special collection</p>
@@ -697,13 +762,11 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
         </FilterMobile>
       </div>
 
-      <aside className="hidden rounded-3xl border border-white/10 bg-zinc-950 p-5 lg:col-start-1 lg:row-start-1 lg:row-span-2 lg:sticky lg:top-28 lg:block lg:self-start">
+      <aside className="hidden rounded-3xl border border-white/10 bg-zinc-950 p-5 lg:col-start-1 lg:row-start-2 lg:row-span-2 lg:sticky lg:top-6 lg:block lg:self-start lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto">
         {filterControls}
       </aside>
 
-      <div className="lg:col-start-2">
-        <FilterTags tags={activeFilterTags} onClearAll={resetFilters} />
-
+      <div className="lg:col-start-2 lg:row-start-3">
         {showAccessorySections ? (
           <section id="accessories" className="scroll-mt-32">
             <div className="mb-4 flex min-w-0 flex-wrap items-end justify-between gap-3">
@@ -714,7 +777,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
               </div>
               <span className="text-xs font-black uppercase tracking-[0.16em] text-zinc-500">{accessorySectionCards.length} sections</span>
             </div>
-            <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
               {accessorySectionCards.map((card) => <AccessoryCard key={card.key} card={card} />)}
             </div>
           </section>
@@ -735,7 +798,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
                   </div>
                   <span className="text-xs font-black uppercase tracking-[0.16em] text-zinc-500">{group.items.length} items</span>
                 </div>
-                <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
                   {group.items.map((item) => <ProductCard key={item.id} item={item} />)}
                 </div>
               </section>
