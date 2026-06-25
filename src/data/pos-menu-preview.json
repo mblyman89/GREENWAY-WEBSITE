@@ -26583,352 +26583,6 @@
     ]
   },
   {
-    "id": "pos-26bf15f38140",
-    "name": "Apple Mochi",
-    "productName": "Legacy Truffles - - DOH Compliant - White Truffle - Apple Mochi - 3.5g",
-    "brand": "Legacy Organics",
-    "category": "concentrate",
-    "filterCategories": [
-      "concentrate"
-    ],
-    "posInventoryType": "Concentrate for Inhalation",
-    "posInventoryCategory": "Moon Rocks",
-    "strainType": "hybrid",
-    "strainName": "Apple Mochi",
-    "thc": "53.5%",
-    "cbd": "N/A",
-    "totalThc": {
-      "type": "thc",
-      "value": "53.5",
-      "unit": "%"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "N/A",
-      "unit": "%"
-    },
-    "compounds": [
-      {
-        "type": "thca",
-        "value": "61",
-        "unit": "%"
-      }
-    ],
-    "description": "Cannabis caviar made from Apple Mochi: dense hybrid flower hand-dipped in oil, then dusted in a glittering coat of kief for a seriously strong, special-occasion smoke. Decadent and potent, a crisp, sweet apple flavor, leading into a smooth, well-rounded vibe.",
-    "priceLabel": "$60.00 3.5g",
-    "priceMinorUnits": 6000,
-    "inventoryStatus": "low-stock",
-    "variants": [
-      {
-        "id": "pos-26bf15f38140-4225c5f7ce68",
-        "label": "3.5g",
-        "priceMinorUnits": 6000,
-        "inventoryLevel": 1,
-        "medical": false
-      }
-    ]
-  },
-  {
-    "id": "pos-1a6e0f5994b8",
-    "name": "Candy Crush",
-    "productName": "Legacy Truffles - Golden Truffle - Candy Crush - 1g",
-    "brand": "Legacy Organics",
-    "category": "concentrate",
-    "filterCategories": [
-      "concentrate"
-    ],
-    "posInventoryType": "Concentrate for Inhalation",
-    "posInventoryCategory": "Moon Rocks",
-    "strainType": "hybrid",
-    "strainName": "Candy Crush",
-    "thc": "35.74%",
-    "cbd": "N/A",
-    "totalThc": {
-      "type": "thc",
-      "value": "35.74",
-      "unit": "%"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "N/A",
-      "unit": "%"
-    },
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "1.1",
-        "unit": "%"
-      },
-      {
-        "type": "thca",
-        "value": "39.5",
-        "unit": "%"
-      }
-    ],
-    "description": "Decadent hybrid moon rocks built from Candy Crush — a fat nug dipped in cannabis oil and rolled in kief, three layers of potency stacked into one slow-burning powerhouse. Break it up, take it slow — a balanced, sweet-earthy profile, with a smooth, well-rounded vibe.",
-    "priceLabel": "$15.00 1g",
-    "priceMinorUnits": 1500,
-    "inventoryStatus": "in-stock",
-    "variants": [
-      {
-        "id": "pos-1a6e0f5994b8-97cde9376ab1",
-        "label": "1g",
-        "priceMinorUnits": 1500,
-        "inventoryLevel": 4,
-        "medical": false
-      },
-      {
-        "id": "pos-1a6e0f5994b8-446d7a568497",
-        "label": "3.5g",
-        "priceMinorUnits": 4000,
-        "inventoryLevel": 10,
-        "medical": false
-      }
-    ]
-  },
-  {
-    "id": "pos-6794dcca6e8a",
-    "name": "Larry Bird Kush",
-    "productName": "Legacy Truffles - DOH Compliant - Double Truffle - Larry Bird Kush - 3.5g",
-    "brand": "Legacy Organics",
-    "category": "concentrate",
-    "filterCategories": [
-      "concentrate"
-    ],
-    "posInventoryType": "Concentrate for Inhalation",
-    "posInventoryCategory": "Moon Rocks",
-    "strainType": "hybrid",
-    "strainName": "Larry Bird Kush",
-    "thc": "30.7%",
-    "cbd": "N/A",
-    "totalThc": {
-      "type": "thc",
-      "value": "30.7",
-      "unit": "%"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "N/A",
-      "unit": "%"
-    },
-    "compounds": [
-      {
-        "type": "thca",
-        "value": "35",
-        "unit": "%"
-      }
-    ],
-    "description": "Cannabis caviar made from Larry Bird Kush: dense hybrid flower hand-dipped in oil, then dusted in a glittering coat of kief for a seriously strong, special-occasion smoke. Decadent and potent, with notes of apricot, earthy, and grape, leading into a versatile, anytime balance.",
-    "priceLabel": "$50.00 3.5g",
-    "priceMinorUnits": 5000,
-    "inventoryStatus": "in-stock",
-    "variants": [
-      {
-        "id": "pos-6794dcca6e8a-d7a3e360d748",
-        "label": "3.5g",
-        "priceMinorUnits": 5000,
-        "inventoryLevel": 8,
-        "medical": false
-      }
-    ]
-  },
-  {
-    "id": "pos-2dc9bdd0663a",
-    "name": "Larry Bird Kush",
-    "productName": "Legacy Truffles - DOH Compliant - Double Truffle - Larry Bird Kush - 1g",
-    "brand": "Legacy Organics",
-    "category": "concentrate",
-    "filterCategories": [
-      "concentrate"
-    ],
-    "posInventoryType": "Concentrate for Inhalation",
-    "posInventoryCategory": "Moon Rocks",
-    "strainType": "hybrid",
-    "strainName": "Larry Bird Kush",
-    "thc": "30.7%",
-    "cbd": "N/A",
-    "totalThc": {
-      "type": "thc",
-      "value": "30.7",
-      "unit": "%"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "N/A",
-      "unit": "%"
-    },
-    "compounds": [
-      {
-        "type": "thca",
-        "value": "35",
-        "unit": "%"
-      }
-    ],
-    "description": "These hybrid moon rocks take Larry Bird Kush to another orbit — bud, oil, and kief layered together for a rich, slow-burning, top-of-the-menu treat. Break it up, take it slow — with notes of apricot, earthy, and grape, with a versatile, anytime balance.",
-    "priceLabel": "$20.00 1g",
-    "priceMinorUnits": 2000,
-    "inventoryStatus": "low-stock",
-    "variants": [
-      {
-        "id": "pos-2dc9bdd0663a-ab742ed781a2",
-        "label": "1g",
-        "priceMinorUnits": 2000,
-        "inventoryLevel": 2,
-        "medical": true
-      }
-    ]
-  },
-  {
-    "id": "pos-310f1d724054",
-    "name": "Legacy Loco",
-    "productName": "Legacy Truffles - Golden Truffle - Legacy Loco - 1g",
-    "brand": "Legacy Organics",
-    "category": "concentrate",
-    "filterCategories": [
-      "concentrate"
-    ],
-    "posInventoryType": "Concentrate for Inhalation",
-    "posInventoryCategory": "Mix Infused Flower",
-    "strainType": "hybrid",
-    "strainName": "Legacy Loco",
-    "thc": "35.74%",
-    "cbd": "N/A",
-    "totalThc": {
-      "type": "thc",
-      "value": "35.74",
-      "unit": "%"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "N/A",
-      "unit": "%"
-    },
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "1.1",
-        "unit": "%"
-      },
-      {
-        "type": "thca",
-        "value": "39.5",
-        "unit": "%"
-      }
-    ],
-    "description": "This hybrid infused flower takes Legacy Loco and boosts it with potent extract for a noticeably stronger, more intense experience. More potent than flower alone, with more intense effects — a balanced, sweet-earthy profile, delivering an even, best-of-both-worlds feel. Pace yourself.",
-    "priceLabel": "$15.00 1g",
-    "priceMinorUnits": 1500,
-    "inventoryStatus": "low-stock",
-    "variants": [
-      {
-        "id": "pos-310f1d724054-97cde9376ab1",
-        "label": "1g",
-        "priceMinorUnits": 1500,
-        "inventoryLevel": 2,
-        "medical": false
-      },
-      {
-        "id": "pos-310f1d724054-446d7a568497",
-        "label": "3.5g",
-        "priceMinorUnits": 4000,
-        "inventoryLevel": 1,
-        "medical": false
-      }
-    ]
-  },
-  {
-    "id": "pos-4277a9346baf",
-    "name": "Mochi Cake",
-    "productName": "Legacy Truffles - DOH Compliant - Triple Truffle - Mochi Cake - 3.5g",
-    "brand": "Legacy Organics",
-    "category": "concentrate",
-    "filterCategories": [
-      "concentrate"
-    ],
-    "posInventoryType": "Concentrate for Inhalation",
-    "posInventoryCategory": "Moon Rocks",
-    "strainType": "hybrid",
-    "strainName": "Mochi Cake",
-    "thc": "31.57%",
-    "cbd": "N/A",
-    "totalThc": {
-      "type": "thc",
-      "value": "31.57",
-      "unit": "%"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "N/A",
-      "unit": "%"
-    },
-    "compounds": [
-      {
-        "type": "thca",
-        "value": "36",
-        "unit": "%"
-      }
-    ],
-    "description": "Cannabis caviar made from Mochi Cake: dense hybrid flower hand-dipped in oil, then dusted in a glittering coat of kief for a seriously strong, special-occasion smoke. A slow-burning powerhouse, a sweet, vanilla, earthy aroma with a relaxing, euphoric feel, delivering a smooth, well-rounded vibe.",
-    "priceLabel": "$60.00 3.5g",
-    "priceMinorUnits": 6000,
-    "inventoryStatus": "low-stock",
-    "variants": [
-      {
-        "id": "pos-4277a9346baf-4225c5f7ce68",
-        "label": "3.5g",
-        "priceMinorUnits": 6000,
-        "inventoryLevel": 2,
-        "medical": false
-      }
-    ]
-  },
-  {
-    "id": "pos-ee447c608ecc",
-    "name": "Mochi Cake",
-    "productName": "Legacy Truffles - DOH Compliant - Triple Truffle - Mochi Cake - 1g",
-    "brand": "Legacy Organics",
-    "category": "concentrate",
-    "filterCategories": [
-      "concentrate"
-    ],
-    "posInventoryType": "Concentrate for Inhalation",
-    "posInventoryCategory": "Moon Rocks",
-    "strainType": "hybrid",
-    "strainName": "Mochi Cake",
-    "thc": "31.57%",
-    "cbd": "N/A",
-    "totalThc": {
-      "type": "thc",
-      "value": "31.57",
-      "unit": "%"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "N/A",
-      "unit": "%"
-    },
-    "compounds": [
-      {
-        "type": "thca",
-        "value": "36",
-        "unit": "%"
-      }
-    ],
-    "description": "Decadent hybrid moon rocks built from Mochi Cake — a fat nug dipped in cannabis oil and rolled in kief, three layers of potency stacked into one slow-burning powerhouse. Break it up, take it slow — a sweet, vanilla, earthy aroma with a relaxing, euphoric feel, with an even, best-of-both-worlds feel.",
-    "priceLabel": "$25.00 3.5g",
-    "priceMinorUnits": 2500,
-    "inventoryStatus": "low-stock",
-    "variants": [
-      {
-        "id": "pos-ee447c608ecc-f97a3321446c",
-        "label": "3.5g",
-        "priceMinorUnits": 2500,
-        "inventoryLevel": 1,
-        "medical": true
-      }
-    ]
-  },
-  {
     "id": "pos-8bc4734ea936",
     "name": "Banana Pop Rocks",
     "productName": "Banana Pop Rocks Sugar Crystals [1g] [Lifted] [D.O.H. COMPLIANT]",
@@ -33590,330 +33244,6 @@
     ]
   },
   {
-    "id": "pos-fad716d7bde5",
-    "name": "Amarelo",
-    "productName": "THC Iceberg - Amarelo - 3.5g",
-    "brand": "Suspended",
-    "category": "concentrate",
-    "filterCategories": [
-      "concentrate"
-    ],
-    "posInventoryType": "Concentrate for Inhalation",
-    "posInventoryCategory": "Moon Rocks",
-    "strainType": "hybrid",
-    "strainName": "Amarelo",
-    "thc": "56%",
-    "cbd": "0.48%",
-    "totalThc": {
-      "type": "thc",
-      "value": "56",
-      "unit": "%"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "0.48",
-      "unit": "%"
-    },
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "0.53",
-        "unit": "%"
-      },
-      {
-        "type": "thca",
-        "value": "53.49",
-        "unit": "%"
-      },
-      {
-        "type": "cbd",
-        "value": "0.48",
-        "unit": "%"
-      },
-      {
-        "type": "cbda",
-        "value": "0.04",
-        "unit": "%"
-      }
-    ],
-    "description": "These hybrid moon rocks take Amarelo to another orbit — bud, oil, and kief layered together for a rich, slow-burning, top-of-the-menu treat. Break it up, take it slow — with notes of blueberry and apple, with a balanced head-and-body experience.",
-    "priceLabel": "$60.00 3.5g",
-    "priceMinorUnits": 6000,
-    "inventoryStatus": "low-stock",
-    "variants": [
-      {
-        "id": "pos-fad716d7bde5-4225c5f7ce68",
-        "label": "3.5g",
-        "priceMinorUnits": 6000,
-        "inventoryLevel": 1,
-        "medical": false
-      }
-    ]
-  },
-  {
-    "id": "pos-74f06b76b921",
-    "name": "Black Koffee",
-    "productName": "Suspended THC ICEBERG Black Koffee - 1g",
-    "brand": "Suspended",
-    "category": "concentrate",
-    "filterCategories": [
-      "concentrate"
-    ],
-    "posInventoryType": "Concentrate for Inhalation",
-    "posInventoryCategory": "Mix Infused Flower",
-    "strainType": "hybrid",
-    "strainName": "Black Koffee",
-    "thc": "54.39%",
-    "cbd": "N/A",
-    "totalThc": {
-      "type": "thc",
-      "value": "54.39",
-      "unit": "%"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "N/A",
-      "unit": "%"
-    },
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "0.3",
-        "unit": "%"
-      },
-      {
-        "type": "thca",
-        "value": "54.03",
-        "unit": "%"
-      },
-      {
-        "type": "cbda",
-        "value": "0.05",
-        "unit": "%"
-      }
-    ],
-    "description": "Concentrate-enhanced hybrid flower of Black Koffee, layered with extract for bigger aroma and a serious step up in potency. Built for a stronger, longer session and more intense effects — a balanced, sweet-earthy profile, with a smooth, well-rounded vibe. A little goes a long way.",
-    "priceLabel": "$25.00 1g",
-    "priceMinorUnits": 2500,
-    "inventoryStatus": "in-stock",
-    "variants": [
-      {
-        "id": "pos-74f06b76b921-fb04f61de5ae",
-        "label": "1g",
-        "priceMinorUnits": 2500,
-        "inventoryLevel": 4,
-        "medical": true
-      }
-    ]
-  },
-  {
-    "id": "pos-7860e584224c",
-    "name": "GMO",
-    "productName": "Suspended Brands Iceberg GMO - 1g",
-    "brand": "Suspended",
-    "category": "concentrate",
-    "filterCategories": [
-      "concentrate"
-    ],
-    "posInventoryType": "Concentrate for Inhalation",
-    "posInventoryCategory": "Moon Rocks",
-    "strainType": "unknown",
-    "strainName": "GMO",
-    "thc": "62.97%",
-    "cbd": "N/A",
-    "totalThc": {
-      "type": "thc",
-      "value": "62.97",
-      "unit": "%"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "N/A",
-      "unit": "%"
-    },
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "0.45",
-        "unit": "%"
-      },
-      {
-        "type": "thca",
-        "value": "62.48",
-        "unit": "%"
-      },
-      {
-        "type": "cbda",
-        "value": "0.04",
-        "unit": "%"
-      }
-    ],
-    "description": "GMO from Suspended. Browse current availability, package options, and pricing at Greenway Marijuana in Port Orchard.",
-    "priceLabel": "$20.00 1g",
-    "priceMinorUnits": 2000,
-    "inventoryStatus": "low-stock",
-    "hidden": true,
-    "hiddenReason": "no_product_master",
-    "variants": [
-      {
-        "id": "pos-7860e584224c-ab742ed781a2",
-        "label": "1g",
-        "priceMinorUnits": 2000,
-        "inventoryLevel": 1,
-        "medical": true
-      }
-    ]
-  },
-  {
-    "id": "pos-a4c35161c060",
-    "name": "GMO",
-    "productName": "Suspended Brands Iceberg GMO - 1g",
-    "brand": "Suspended",
-    "category": "concentrate",
-    "filterCategories": [
-      "concentrate"
-    ],
-    "posInventoryType": "Concentrate for Inhalation",
-    "posInventoryCategory": "Moon Rocks",
-    "strainType": "unknown",
-    "strainName": "GMO",
-    "thc": "N/A",
-    "cbd": "N/A",
-    "totalThc": {
-      "type": "thc",
-      "value": "N/A",
-      "unit": "%"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "N/A",
-      "unit": "%"
-    },
-    "compounds": [],
-    "description": "GMO from Suspended. Browse current availability, package options, and pricing at Greenway Marijuana in Port Orchard.",
-    "priceLabel": "$20.00 1g",
-    "priceMinorUnits": 2000,
-    "inventoryStatus": "low-stock",
-    "hidden": true,
-    "hiddenReason": "no_product_master",
-    "variants": [
-      {
-        "id": "pos-a4c35161c060-bc5ec5515fd0",
-        "label": "1g",
-        "priceMinorUnits": 2000,
-        "inventoryLevel": 2,
-        "medical": false
-      }
-    ]
-  },
-  {
-    "id": "pos-a3b2cfa30092",
-    "name": "lost og",
-    "productName": "Suspended THC ICEBERG Lost OG - 1g",
-    "brand": "Suspended",
-    "category": "concentrate",
-    "filterCategories": [
-      "concentrate"
-    ],
-    "posInventoryType": "Usable Marijuana",
-    "posInventoryCategory": "Mix Infused Flower",
-    "strainType": "hybrid",
-    "strainName": "lost og",
-    "thc": "55.12%",
-    "cbd": "N/A",
-    "totalThc": {
-      "type": "thc",
-      "value": "55.12",
-      "unit": "%"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "N/A",
-      "unit": "%"
-    },
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "0.3",
-        "unit": "%"
-      },
-      {
-        "type": "thca",
-        "value": "54.77",
-        "unit": "%"
-      },
-      {
-        "type": "cbda",
-        "value": "0.06",
-        "unit": "%"
-      }
-    ],
-    "description": "A hybrid infused flower product built on Lost OG and enhanced with concentrate for extra strength and a louder, more flavorful smoke. Boosted for extra strength and more intense effects — a pungent earthy-pine and fuel aroma with a strong, classic, relaxing feel, with a smooth, well-rounded vibe. A little goes a long way.",
-    "priceLabel": "$25.00 1g",
-    "priceMinorUnits": 2500,
-    "inventoryStatus": "low-stock",
-    "variants": [
-      {
-        "id": "pos-a3b2cfa30092-fb04f61de5ae",
-        "label": "1g",
-        "priceMinorUnits": 2500,
-        "inventoryLevel": 2,
-        "medical": true
-      }
-    ]
-  },
-  {
-    "id": "pos-0f956739f0bf",
-    "name": "Super Boof",
-    "productName": "Suspended THC ICEBERG Superboof- 1g",
-    "brand": "Suspended",
-    "category": "concentrate",
-    "filterCategories": [
-      "concentrate"
-    ],
-    "posInventoryType": "Usable Marijuana",
-    "posInventoryCategory": "Moon Rocks",
-    "strainType": "hybrid",
-    "strainName": "Super Boof",
-    "thc": "46.73%",
-    "cbd": "N/A",
-    "totalThc": {
-      "type": "thc",
-      "value": "46.73",
-      "unit": "%"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "N/A",
-      "unit": "%"
-    },
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "0.32",
-        "unit": "%"
-      },
-      {
-        "type": "thca",
-        "value": "46.41",
-        "unit": "%"
-      }
-    ],
-    "description": "These hybrid moon rocks take Super Boof to another orbit — bud, oil, and kief layered together for a rich, slow-burning, top-of-the-menu treat. Break it up, take it slow — a balanced, sweet-earthy profile, with a smooth, well-rounded vibe.",
-    "priceLabel": "$25.00 1g",
-    "priceMinorUnits": 2500,
-    "inventoryStatus": "in-stock",
-    "variants": [
-      {
-        "id": "pos-0f956739f0bf-fb04f61de5ae",
-        "label": "1g",
-        "priceMinorUnits": 2500,
-        "inventoryLevel": 14,
-        "medical": true
-      }
-    ]
-  },
-  {
     "id": "pos-1721020f5d87",
     "name": "Animal Mints",
     "productName": "Terp Dough - Animal Mints BX1#3 - 1g",
@@ -36253,64 +35583,6 @@
     ]
   },
   {
-    "id": "pos-3c2ad2ec43a1",
-    "name": "Alien Tangie",
-    "productName": "Walden infused flower Alien Tangie 1g",
-    "brand": "Walden",
-    "category": "concentrate",
-    "filterCategories": [
-      "concentrate"
-    ],
-    "posInventoryType": "Concentrate for Inhalation",
-    "posInventoryCategory": "Moon Rocks",
-    "strainType": "unknown",
-    "strainName": "Alien Tangie",
-    "thc": "44%",
-    "cbd": "4%",
-    "totalThc": {
-      "type": "thc",
-      "value": "44",
-      "unit": "%"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "4",
-      "unit": "%"
-    },
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "0.6",
-        "unit": "%"
-      },
-      {
-        "type": "thca",
-        "value": "38",
-        "unit": "%"
-      },
-      {
-        "type": "cbd",
-        "value": "4",
-        "unit": "%"
-      }
-    ],
-    "description": "Alien Tangie from Walden. Browse current availability, package options, and pricing at Greenway Marijuana in Port Orchard.",
-    "priceLabel": "$12.00 1g",
-    "priceMinorUnits": 1200,
-    "inventoryStatus": "in-stock",
-    "hidden": true,
-    "hiddenReason": "no_product_master",
-    "variants": [
-      {
-        "id": "pos-3c2ad2ec43a1-28e453b71118",
-        "label": "1g",
-        "priceMinorUnits": 1200,
-        "inventoryLevel": 11,
-        "medical": false
-      }
-    ]
-  },
-  {
     "id": "pos-6c5d4b76e43c",
     "name": "Mimosa",
     "productName": "BWX BOX 1g WALFREE - Mimosa Runtz Sugar Wax",
@@ -36576,57 +35848,6 @@
         "label": "1g",
         "priceMinorUnits": 6000,
         "inventoryLevel": 1,
-        "medical": false
-      }
-    ]
-  },
-  {
-    "id": "pos-81b3b9e3057a",
-    "name": "Super Boof",
-    "productName": "Walden infused flower super boof 1g",
-    "brand": "Walden",
-    "category": "concentrate",
-    "filterCategories": [
-      "concentrate"
-    ],
-    "posInventoryType": "Usable Marijuana",
-    "posInventoryCategory": "Moon Rocks",
-    "strainType": "hybrid",
-    "strainName": "Super Boof",
-    "thc": "41%",
-    "cbd": "6%",
-    "totalThc": {
-      "type": "thc",
-      "value": "41",
-      "unit": "%"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "6",
-      "unit": "%"
-    },
-    "compounds": [
-      {
-        "type": "thca",
-        "value": "34.5",
-        "unit": "%"
-      },
-      {
-        "type": "cbd",
-        "value": "6",
-        "unit": "%"
-      }
-    ],
-    "description": "These hybrid moon rocks take Super Boof to another orbit — bud, oil, and kief layered together for a rich, slow-burning, top-of-the-menu treat. Decadent and potent, a balanced, sweet-earthy profile, leading into a versatile, anytime balance.",
-    "priceLabel": "$12.00 1g",
-    "priceMinorUnits": 1200,
-    "inventoryStatus": "in-stock",
-    "variants": [
-      {
-        "id": "pos-81b3b9e3057a-28e453b71118",
-        "label": "1g",
-        "priceMinorUnits": 1200,
-        "inventoryLevel": 6,
         "medical": false
       }
     ]
@@ -73628,62 +72849,6 @@
     ]
   },
   {
-    "id": "pos-c5665348244e",
-    "name": "Blueberry Jaeger",
-    "productName": "Heavenly Buds Full Flower Little Snappers - Blueberry Jaeger - 10pk (10x0.5g)",
-    "brand": "Heavenly Buds",
-    "category": "flower",
-    "filterCategories": [
-      "flower"
-    ],
-    "posInventoryType": "Usable Marijuana",
-    "posInventoryCategory": "Flower",
-    "strainType": "hybrid",
-    "strainName": "Blueberry Jaeger",
-    "thc": "19.26%",
-    "cbd": "N/A",
-    "totalThc": {
-      "type": "thc",
-      "value": "19.26",
-      "unit": "%"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "N/A",
-      "unit": "%"
-    },
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "0.39",
-        "unit": "%"
-      },
-      {
-        "type": "thca",
-        "value": "18.82",
-        "unit": "%"
-      },
-      {
-        "type": "cbda",
-        "value": "0.04",
-        "unit": "%"
-      }
-    ],
-    "description": "Blueberry Jaeger is a hybrid flower with a sweet, ripe blueberry flavor and balanced, well-rounded effects.",
-    "priceLabel": "$35.00 5g",
-    "priceMinorUnits": 3500,
-    "inventoryStatus": "low-stock",
-    "variants": [
-      {
-        "id": "pos-c5665348244e-f9ba68290a1a",
-        "label": "5g",
-        "priceMinorUnits": 3500,
-        "inventoryLevel": 1,
-        "medical": true
-      }
-    ]
-  },
-  {
     "id": "pos-7f9111ea3f20",
     "name": "Grapple Pie",
     "productName": "Heavenly Buds Flower Grapple Pie - 3.5g",
@@ -73977,69 +73142,6 @@
         "label": "7g",
         "priceMinorUnits": 6500,
         "inventoryLevel": 1,
-        "medical": true
-      }
-    ]
-  },
-  {
-    "id": "pos-d0a516290f26",
-    "name": "Papaya Melonz #7",
-    "productName": "Heavenly Buds - Full Flower .5g Little Snappers - Papaya Melonz #7 DOH - 10g",
-    "brand": "Heavenly Buds",
-    "category": "flower",
-    "filterCategories": [
-      "flower"
-    ],
-    "posInventoryType": "Usable Marijuana",
-    "posInventoryCategory": "Flower",
-    "strainType": "hybrid",
-    "strainName": "Papaya Melonz #7",
-    "thc": "26.47%",
-    "cbd": "N/A",
-    "totalThc": {
-      "type": "thc",
-      "value": "26.47",
-      "unit": "%"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "N/A",
-      "unit": "%"
-    },
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "0.29",
-        "unit": "%"
-      },
-      {
-        "type": "thca",
-        "value": "26.11",
-        "unit": "%"
-      },
-      {
-        "type": "cbda",
-        "value": "0.07",
-        "unit": "%"
-      }
-    ],
-    "description": "Papaya Melonz #7 is a hybrid flower with a light, refreshing melon flavor and balanced, well-rounded effects.",
-    "priceLabel": "$35.00 5g",
-    "priceMinorUnits": 3500,
-    "inventoryStatus": "in-stock",
-    "variants": [
-      {
-        "id": "pos-d0a516290f26-f9ba68290a1a",
-        "label": "5g",
-        "priceMinorUnits": 3500,
-        "inventoryLevel": 2,
-        "medical": true
-      },
-      {
-        "id": "pos-d0a516290f26-f0570f61e388",
-        "label": "10g",
-        "priceMinorUnits": 6500,
-        "inventoryLevel": 2,
         "medical": true
       }
     ]
@@ -74746,62 +73848,6 @@
     ]
   },
   {
-    "id": "pos-12c15eb2555c",
-    "name": "Kimber Slice",
-    "productName": "High Tide: Kimber Slice - 3.5g Snappers",
-    "brand": "High Tide",
-    "category": "flower",
-    "filterCategories": [
-      "flower"
-    ],
-    "posInventoryType": "Usable Marijuana",
-    "posInventoryCategory": "Flower",
-    "strainType": "hybrid",
-    "strainName": "Kimber Slice",
-    "thc": "18.61%",
-    "cbd": "N/A",
-    "totalThc": {
-      "type": "thc",
-      "value": "18.61",
-      "unit": "%"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "N/A",
-      "unit": "%"
-    },
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "1.01",
-        "unit": "%"
-      },
-      {
-        "type": "thca",
-        "value": "20.02",
-        "unit": "%"
-      },
-      {
-        "type": "cbda",
-        "value": "0.04",
-        "unit": "%"
-      }
-    ],
-    "description": "Kimber Slice is a hybrid flower with a sweet, balanced earthy-fruity aroma and balanced, well-rounded effects.",
-    "priceLabel": "$26.00 3.5g",
-    "priceMinorUnits": 2600,
-    "inventoryStatus": "low-stock",
-    "variants": [
-      {
-        "id": "pos-12c15eb2555c-f6251e4ad208",
-        "label": "3.5g",
-        "priceMinorUnits": 2600,
-        "inventoryLevel": 3,
-        "medical": true
-      }
-    ]
-  },
-  {
     "id": "pos-f97f90e9df10",
     "name": "Pink Runtz",
     "productName": "High Tide Flower Pink Runtz - 1g",
@@ -75188,17 +74234,10 @@
       }
     ],
     "description": "Zeaweed is a hybrid flower with a sweet, balanced earthy-fruity aroma and balanced, well-rounded effects.",
-    "priceLabel": "$26.00 3.5g",
-    "priceMinorUnits": 2600,
-    "inventoryStatus": "in-stock",
+    "priceLabel": "$45.00 3.5g",
+    "priceMinorUnits": 4500,
+    "inventoryStatus": "low-stock",
     "variants": [
-      {
-        "id": "pos-ee3bd2bc2f46-f6251e4ad208",
-        "label": "3.5g",
-        "priceMinorUnits": 2600,
-        "inventoryLevel": 4,
-        "medical": true
-      },
       {
         "id": "pos-ee3bd2bc2f46-b48959cc45d0",
         "label": "3.5g",
@@ -79473,118 +78512,6 @@
     ]
   },
   {
-    "id": "pos-4293fce4c2ab",
-    "name": "Gusherlicious",
-    "productName": "Ooowee - *B Buds 14G Flower - Gusherlicious - 14g",
-    "brand": "Ooowee",
-    "category": "flower",
-    "filterCategories": [
-      "flower"
-    ],
-    "posInventoryType": "Usable Marijuana",
-    "posInventoryCategory": "Flower",
-    "strainType": "hybrid",
-    "strainName": "Gusherlicious",
-    "thc": "13.79%",
-    "cbd": "N/A",
-    "totalThc": {
-      "type": "thc",
-      "value": "13.79",
-      "unit": "%"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "N/A",
-      "unit": "%"
-    },
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "1.05",
-        "unit": "%"
-      },
-      {
-        "type": "thca",
-        "value": "14.49",
-        "unit": "%"
-      },
-      {
-        "type": "cbda",
-        "value": "0.04",
-        "unit": "%"
-      }
-    ],
-    "description": "Gusherlicious is a hybrid flower with a sweet, balanced earthy-fruity aroma, with smooth, well-rounded flavor. Expect balanced, well-rounded effects.",
-    "priceLabel": "$80.00 14g",
-    "priceMinorUnits": 8000,
-    "inventoryStatus": "low-stock",
-    "variants": [
-      {
-        "id": "pos-4293fce4c2ab-459e1cda4572",
-        "label": "14g",
-        "priceMinorUnits": 8000,
-        "inventoryLevel": 1,
-        "medical": false
-      }
-    ]
-  },
-  {
-    "id": "pos-b7515973b25f",
-    "name": "Pink Zaza",
-    "productName": "Ooowee - *B Buds 14G Flower - Pink Zaza - 14g",
-    "brand": "Ooowee",
-    "category": "flower",
-    "filterCategories": [
-      "flower"
-    ],
-    "posInventoryType": "Usable Marijuana",
-    "posInventoryCategory": "Flower",
-    "strainType": "hybrid",
-    "strainName": "Pink Zaza",
-    "thc": "21.53%",
-    "cbd": "N/A",
-    "totalThc": {
-      "type": "thc",
-      "value": "21.53",
-      "unit": "%"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "N/A",
-      "unit": "%"
-    },
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "0.65",
-        "unit": "%"
-      },
-      {
-        "type": "thca",
-        "value": "23.74",
-        "unit": "%"
-      },
-      {
-        "type": "cbda",
-        "value": "0.06",
-        "unit": "%"
-      }
-    ],
-    "description": "Pink Zaza is a hybrid flower with a sweet, balanced earthy-fruity aroma, with smooth, well-rounded flavor. Expect balanced, well-rounded effects.",
-    "priceLabel": "$80.00 14g",
-    "priceMinorUnits": 8000,
-    "inventoryStatus": "in-stock",
-    "variants": [
-      {
-        "id": "pos-b7515973b25f-459e1cda4572",
-        "label": "14g",
-        "priceMinorUnits": 8000,
-        "inventoryLevel": 10,
-        "medical": false
-      }
-    ]
-  },
-  {
     "id": "pos-550dd90bbace",
     "name": "Alley Cat",
     "productName": "Alley Cat - 3.5g",
@@ -80288,57 +79215,6 @@
     ]
   },
   {
-    "id": "pos-4a1f542bfcf6",
-    "name": "Candy Gas",
-    "productName": "Candy Gas Bong Buddies",
-    "brand": "Phat Panda",
-    "category": "flower",
-    "filterCategories": [
-      "flower"
-    ],
-    "posInventoryType": "Usable Marijuana",
-    "posInventoryCategory": "Flower",
-    "strainType": "hybrid",
-    "strainName": "Candy Gas",
-    "thc": "34%",
-    "cbd": "N/A",
-    "totalThc": {
-      "type": "thc",
-      "value": "34",
-      "unit": "%"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "N/A",
-      "unit": "%"
-    },
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "0.31",
-        "unit": "%"
-      },
-      {
-        "type": "thca",
-        "value": "34",
-        "unit": "%"
-      }
-    ],
-    "description": "Candy Gas is a hybrid flower with a pungent fuel flavor and balanced, well-rounded effects.",
-    "priceLabel": "$12.00 2g",
-    "priceMinorUnits": 1200,
-    "inventoryStatus": "low-stock",
-    "variants": [
-      {
-        "id": "pos-4a1f542bfcf6-2c050d9f9033",
-        "label": "2g",
-        "priceMinorUnits": 1200,
-        "inventoryLevel": 1,
-        "medical": true
-      }
-    ]
-  },
-  {
     "id": "pos-09920d16c348",
     "name": "Chicken & Wafflez",
     "productName": "Platinum Flower (Chicken & Waffles - Platinum Line/3.5g)",
@@ -80397,7 +79273,7 @@
   {
     "id": "pos-13abaec74e40",
     "name": "Golden Pineapple",
-    "productName": "Golden Pineapple Bong Buddies 2g",
+    "productName": "Phat Panda Flower Golden Pineapple - 3.5g",
     "brand": "Phat Panda",
     "category": "flower",
     "filterCategories": [
@@ -80407,11 +79283,11 @@
     "posInventoryCategory": "Flower",
     "strainType": "hybrid",
     "strainName": "Golden Pineapple",
-    "thc": "23%",
+    "thc": "25%",
     "cbd": "N/A",
     "totalThc": {
       "type": "thc",
-      "value": "23",
+      "value": "25",
       "unit": "%"
     },
     "totalCbd": {
@@ -80422,27 +79298,20 @@
     "compounds": [
       {
         "type": "thc",
-        "value": "1.3",
+        "value": "1.4",
         "unit": "%"
       },
       {
         "type": "thca",
-        "value": "22",
+        "value": "24",
         "unit": "%"
       }
     ],
     "description": "Golden Pineapple is a hybrid flower with notes of tropical, pineapple, and citrus, with smooth, well-rounded flavor. Expect balanced, well-rounded effects.",
-    "priceLabel": "$12.00 2g",
-    "priceMinorUnits": 1200,
-    "inventoryStatus": "in-stock",
+    "priceLabel": "$30.00 3.5g",
+    "priceMinorUnits": 3000,
+    "inventoryStatus": "low-stock",
     "variants": [
-      {
-        "id": "pos-13abaec74e40-2c050d9f9033",
-        "label": "2g",
-        "priceMinorUnits": 1200,
-        "inventoryLevel": 15,
-        "medical": true
-      },
       {
         "id": "pos-13abaec74e40-f51b9c8536de",
         "label": "3.5g",
@@ -80504,57 +79373,6 @@
         "label": "3.5g",
         "priceMinorUnits": 3000,
         "inventoryLevel": 3,
-        "medical": true
-      }
-    ]
-  },
-  {
-    "id": "pos-c8b936e07ca6",
-    "name": "Hawk Tuah",
-    "productName": "Phat Panda Bong Buddies Hawk Tuah",
-    "brand": "Phat Panda",
-    "category": "flower",
-    "filterCategories": [
-      "flower"
-    ],
-    "posInventoryType": "Usable Marijuana",
-    "posInventoryCategory": "Flower",
-    "strainType": "hybrid",
-    "strainName": "Hawk Tuah",
-    "thc": "35%",
-    "cbd": "N/A",
-    "totalThc": {
-      "type": "thc",
-      "value": "35",
-      "unit": "%"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "N/A",
-      "unit": "%"
-    },
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "1.9",
-        "unit": "%"
-      },
-      {
-        "type": "thca",
-        "value": "33",
-        "unit": "%"
-      }
-    ],
-    "description": "Hawk Tuah is a hybrid flower with a sweet, balanced earthy-fruity aroma and balanced, well-rounded effects.",
-    "priceLabel": "$12.00 2g",
-    "priceMinorUnits": 1200,
-    "inventoryStatus": "in-stock",
-    "variants": [
-      {
-        "id": "pos-c8b936e07ca6-2c050d9f9033",
-        "label": "2g",
-        "priceMinorUnits": 1200,
-        "inventoryLevel": 5,
         "medical": true
       }
     ]
@@ -80718,62 +79536,6 @@
         "label": "3.5g",
         "priceMinorUnits": 4000,
         "inventoryLevel": 4,
-        "medical": true
-      }
-    ]
-  },
-  {
-    "id": "pos-62224bc2dc6b",
-    "name": "OG Chem",
-    "productName": "Phat Panda Bong Buddies OG Chem",
-    "brand": "Phat Panda",
-    "category": "flower",
-    "filterCategories": [
-      "flower"
-    ],
-    "posInventoryType": "Usable Marijuana",
-    "posInventoryCategory": "Flower",
-    "strainType": "hybrid",
-    "strainName": "OG Chem",
-    "thc": "25%",
-    "cbd": "N/A",
-    "totalThc": {
-      "type": "thc",
-      "value": "25",
-      "unit": "%"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "N/A",
-      "unit": "%"
-    },
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "1.2",
-        "unit": "%"
-      },
-      {
-        "type": "thca",
-        "value": "22",
-        "unit": "%"
-      },
-      {
-        "type": "cbda",
-        "value": "0.06",
-        "unit": "%"
-      }
-    ],
-    "description": "OG Chem is a hybrid flower with notes of chemical, diesel, and pine, with smooth, well-rounded flavor. Expect balanced, well-rounded effects.",
-    "priceLabel": "$12.00 2g",
-    "priceMinorUnits": 1200,
-    "inventoryStatus": "in-stock",
-    "variants": [
-      {
-        "id": "pos-62224bc2dc6b-2c050d9f9033",
-        "label": "2g",
-        "priceMinorUnits": 1200,
-        "inventoryLevel": 34,
         "medical": true
       }
     ]
@@ -81109,13 +79871,6 @@
         "label": "7g",
         "priceMinorUnits": 8000,
         "inventoryLevel": 5,
-        "medical": true
-      },
-      {
-        "id": "pos-6fcfc057b8a0-ba16e8d72024",
-        "label": "14g",
-        "priceMinorUnits": 7500,
-        "inventoryLevel": 1,
         "medical": true
       }
     ]
@@ -83897,7 +82652,7 @@
   {
     "id": "pos-d7a142fef6c7",
     "name": "Divine Kush Breath",
-    "productName": "Skord Flower - Divine Kush Breath Small Buds- 07g",
+    "productName": "Skord Flower - Divine Kush Breath- 03.5g",
     "brand": "Skord",
     "category": "flower",
     "filterCategories": [
@@ -83939,20 +82694,13 @@
     "description": "Divine Kush Breath is a hybrid flower with notes of diesel, nutty, and blue cheese, with smooth, well-rounded flavor. Expect balanced, well-rounded effects.",
     "priceLabel": "$50.00 3.5g",
     "priceMinorUnits": 5000,
-    "inventoryStatus": "in-stock",
+    "inventoryStatus": "low-stock",
     "variants": [
       {
         "id": "pos-d7a142fef6c7-7c6570f0cc8c",
         "label": "3.5g",
         "priceMinorUnits": 5000,
         "inventoryLevel": 3,
-        "medical": true
-      },
-      {
-        "id": "pos-d7a142fef6c7-b419491ad8ca",
-        "label": "7g",
-        "priceMinorUnits": 9500,
-        "inventoryLevel": 2,
         "medical": true
       }
     ]
@@ -84121,62 +82869,6 @@
         "label": "3.5g",
         "priceMinorUnits": 5000,
         "inventoryLevel": 11,
-        "medical": true
-      }
-    ]
-  },
-  {
-    "id": "pos-c654a2ff307e",
-    "name": "Tk Lime",
-    "productName": "Flower - 07g - TK Lime Small Buds",
-    "brand": "Skord",
-    "category": "flower",
-    "filterCategories": [
-      "flower"
-    ],
-    "posInventoryType": "Usable Marijuana",
-    "posInventoryCategory": "Flower",
-    "strainType": "hybrid",
-    "strainName": "Tk Lime",
-    "thc": "17.17%",
-    "cbd": "N/A",
-    "totalThc": {
-      "type": "thc",
-      "value": "17.17",
-      "unit": "%"
-    },
-    "totalCbd": {
-      "type": "cbd",
-      "value": "N/A",
-      "unit": "%"
-    },
-    "compounds": [
-      {
-        "type": "thc",
-        "value": "0.35",
-        "unit": "%"
-      },
-      {
-        "type": "thca",
-        "value": "16.78",
-        "unit": "%"
-      },
-      {
-        "type": "cbda",
-        "value": "0.04",
-        "unit": "%"
-      }
-    ],
-    "description": "Tk Lime is a hybrid flower with a tart, crisp lime flavor and balanced, well-rounded effects.",
-    "priceLabel": "$95.00 7g",
-    "priceMinorUnits": 9500,
-    "inventoryStatus": "low-stock",
-    "variants": [
-      {
-        "id": "pos-c654a2ff307e-b419491ad8ca",
-        "label": "7g",
-        "priceMinorUnits": 9500,
-        "inventoryLevel": 1,
         "medical": true
       }
     ]
@@ -86686,52 +85378,40 @@
     "posInventoryCategory": "Flower",
     "strainType": "hybrid",
     "strainName": "Amarelo",
-    "thc": "56%",
-    "cbd": "0.48%",
+    "thc": "30%",
+    "cbd": "N/A",
     "totalThc": {
       "type": "thc",
-      "value": "56",
+      "value": "30",
       "unit": "%"
     },
     "totalCbd": {
       "type": "cbd",
-      "value": "0.48",
+      "value": "N/A",
       "unit": "%"
     },
     "compounds": [
       {
         "type": "thc",
-        "value": "0.53",
+        "value": "0.59",
         "unit": "%"
       },
       {
         "type": "thca",
-        "value": "53.49",
-        "unit": "%"
-      },
-      {
-        "type": "cbd",
-        "value": "0.48",
+        "value": "27.3",
         "unit": "%"
       },
       {
         "type": "cbda",
-        "value": "0.04",
+        "value": "0.06",
         "unit": "%"
       }
     ],
     "description": "Amarelo is a hybrid flower with notes of blueberry and apple, with smooth, well-rounded flavor. Expect balanced, well-rounded effects.",
-    "priceLabel": "$24.00 1g",
-    "priceMinorUnits": 2400,
-    "inventoryStatus": "in-stock",
+    "priceLabel": "$30.00 3.5g",
+    "priceMinorUnits": 3000,
+    "inventoryStatus": "low-stock",
     "variants": [
-      {
-        "id": "pos-2252dfad42e9-aefee1c8a927",
-        "label": "1g",
-        "priceMinorUnits": 2400,
-        "inventoryLevel": 3,
-        "medical": false
-      },
       {
         "id": "pos-2252dfad42e9-0a54f08093d8",
         "label": "3.5g",
@@ -87010,13 +85690,6 @@
         "label": "1g",
         "priceMinorUnits": 1000,
         "inventoryLevel": 6,
-        "medical": true
-      },
-      {
-        "id": "pos-ee7fdb7cc002-fb04f61de5ae",
-        "label": "1g",
-        "priceMinorUnits": 2500,
-        "inventoryLevel": 3,
         "medical": true
       },
       {
@@ -87423,13 +86096,6 @@
         "label": "3.5g",
         "priceMinorUnits": 3000,
         "inventoryLevel": 6,
-        "medical": true
-      },
-      {
-        "id": "pos-227b1b1a636e-968111fb60c7",
-        "label": "3.5g",
-        "priceMinorUnits": 6000,
-        "inventoryLevel": 2,
         "medical": true
       },
       {
@@ -93429,6 +92095,887 @@
         "priceMinorUnits": 4000,
         "inventoryLevel": 2,
         "medical": true
+      }
+    ]
+  },
+  {
+    "id": "pos-8e374efdf0be",
+    "name": "Apple Mochi",
+    "productName": "Legacy Truffles - - DOH Compliant - White Truffle - Apple Mochi - 3.5g",
+    "brand": "Legacy Organics",
+    "category": "infused-flower",
+    "filterCategories": [
+      "infused-flower",
+      "concentrate",
+      "flower"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Moon Rocks",
+    "strainType": "hybrid",
+    "strainName": "Apple Mochi",
+    "thc": "53.5%",
+    "cbd": "N/A",
+    "totalThc": {
+      "type": "thc",
+      "value": "53.5",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "N/A",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thca",
+        "value": "61",
+        "unit": "%"
+      }
+    ],
+    "description": "Cannabis caviar made from Apple Mochi: dense hybrid flower hand-dipped in oil, then dusted in a glittering coat of kief for a seriously strong, special-occasion smoke. Decadent and potent, a crisp, sweet apple flavor, leading into a smooth, well-rounded vibe.",
+    "priceLabel": "$60.00 3.5g",
+    "priceMinorUnits": 6000,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-8e374efdf0be-4225c5f7ce68",
+        "label": "3.5g",
+        "priceMinorUnits": 6000,
+        "inventoryLevel": 1,
+        "medical": false
+      }
+    ]
+  },
+  {
+    "id": "pos-cdbcbc24c26f",
+    "name": "Candy Crush",
+    "productName": "Legacy Truffles - Golden Truffle - Candy Crush - 1g",
+    "brand": "Legacy Organics",
+    "category": "infused-flower",
+    "filterCategories": [
+      "infused-flower",
+      "concentrate",
+      "flower"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Moon Rocks",
+    "strainType": "hybrid",
+    "strainName": "Candy Crush",
+    "thc": "35.74%",
+    "cbd": "N/A",
+    "totalThc": {
+      "type": "thc",
+      "value": "35.74",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "N/A",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "1.1",
+        "unit": "%"
+      },
+      {
+        "type": "thca",
+        "value": "39.5",
+        "unit": "%"
+      }
+    ],
+    "description": "Decadent hybrid moon rocks built from Candy Crush — a fat nug dipped in cannabis oil and rolled in kief, three layers of potency stacked into one slow-burning powerhouse. Break it up, take it slow — a balanced, sweet-earthy profile, with a smooth, well-rounded vibe.",
+    "priceLabel": "$15.00 1g",
+    "priceMinorUnits": 1500,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-cdbcbc24c26f-97cde9376ab1",
+        "label": "1g",
+        "priceMinorUnits": 1500,
+        "inventoryLevel": 4,
+        "medical": false
+      },
+      {
+        "id": "pos-cdbcbc24c26f-446d7a568497",
+        "label": "3.5g",
+        "priceMinorUnits": 4000,
+        "inventoryLevel": 10,
+        "medical": false
+      }
+    ]
+  },
+  {
+    "id": "pos-07253512ab2d",
+    "name": "Larry Bird Kush",
+    "productName": "Legacy Truffles - DOH Compliant - Double Truffle - Larry Bird Kush - 3.5g",
+    "brand": "Legacy Organics",
+    "category": "infused-flower",
+    "filterCategories": [
+      "infused-flower",
+      "concentrate",
+      "flower"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Moon Rocks",
+    "strainType": "hybrid",
+    "strainName": "Larry Bird Kush",
+    "thc": "30.7%",
+    "cbd": "N/A",
+    "totalThc": {
+      "type": "thc",
+      "value": "30.7",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "N/A",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thca",
+        "value": "35",
+        "unit": "%"
+      }
+    ],
+    "description": "Cannabis caviar made from Larry Bird Kush: dense hybrid flower hand-dipped in oil, then dusted in a glittering coat of kief for a seriously strong, special-occasion smoke. Decadent and potent, with notes of apricot, earthy, and grape, leading into a versatile, anytime balance.",
+    "priceLabel": "$50.00 3.5g",
+    "priceMinorUnits": 5000,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-07253512ab2d-d7a3e360d748",
+        "label": "3.5g",
+        "priceMinorUnits": 5000,
+        "inventoryLevel": 8,
+        "medical": false
+      }
+    ]
+  },
+  {
+    "id": "pos-5d633c93bab4",
+    "name": "Larry Bird Kush",
+    "productName": "Legacy Truffles - DOH Compliant - Double Truffle - Larry Bird Kush - 1g",
+    "brand": "Legacy Organics",
+    "category": "infused-flower",
+    "filterCategories": [
+      "infused-flower",
+      "concentrate",
+      "flower"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Moon Rocks",
+    "strainType": "hybrid",
+    "strainName": "Larry Bird Kush",
+    "thc": "30.7%",
+    "cbd": "N/A",
+    "totalThc": {
+      "type": "thc",
+      "value": "30.7",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "N/A",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thca",
+        "value": "35",
+        "unit": "%"
+      }
+    ],
+    "description": "These hybrid moon rocks take Larry Bird Kush to another orbit — bud, oil, and kief layered together for a rich, slow-burning, top-of-the-menu treat. Break it up, take it slow — with notes of apricot, earthy, and grape, with a versatile, anytime balance.",
+    "priceLabel": "$20.00 1g",
+    "priceMinorUnits": 2000,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-5d633c93bab4-ab742ed781a2",
+        "label": "1g",
+        "priceMinorUnits": 2000,
+        "inventoryLevel": 2,
+        "medical": true
+      }
+    ]
+  },
+  {
+    "id": "pos-227121538c63",
+    "name": "Legacy Loco",
+    "productName": "Legacy Truffles - Golden Truffle - Legacy Loco - 1g",
+    "brand": "Legacy Organics",
+    "category": "infused-flower",
+    "filterCategories": [
+      "infused-flower",
+      "concentrate",
+      "flower"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Mix Infused Flower",
+    "strainType": "hybrid",
+    "strainName": "Legacy Loco",
+    "thc": "35.74%",
+    "cbd": "N/A",
+    "totalThc": {
+      "type": "thc",
+      "value": "35.74",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "N/A",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "1.1",
+        "unit": "%"
+      },
+      {
+        "type": "thca",
+        "value": "39.5",
+        "unit": "%"
+      }
+    ],
+    "description": "This hybrid infused flower takes Legacy Loco and boosts it with potent extract for a noticeably stronger, more intense experience. More potent than flower alone, with more intense effects — a balanced, sweet-earthy profile, delivering an even, best-of-both-worlds feel. Pace yourself.",
+    "priceLabel": "$15.00 1g",
+    "priceMinorUnits": 1500,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-227121538c63-97cde9376ab1",
+        "label": "1g",
+        "priceMinorUnits": 1500,
+        "inventoryLevel": 2,
+        "medical": false
+      },
+      {
+        "id": "pos-227121538c63-446d7a568497",
+        "label": "3.5g",
+        "priceMinorUnits": 4000,
+        "inventoryLevel": 1,
+        "medical": false
+      }
+    ]
+  },
+  {
+    "id": "pos-aa97a8ed8c39",
+    "name": "Mochi Cake",
+    "productName": "Legacy Truffles - DOH Compliant - Triple Truffle - Mochi Cake - 3.5g",
+    "brand": "Legacy Organics",
+    "category": "infused-flower",
+    "filterCategories": [
+      "infused-flower",
+      "concentrate",
+      "flower"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Moon Rocks",
+    "strainType": "hybrid",
+    "strainName": "Mochi Cake",
+    "thc": "31.57%",
+    "cbd": "N/A",
+    "totalThc": {
+      "type": "thc",
+      "value": "31.57",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "N/A",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thca",
+        "value": "36",
+        "unit": "%"
+      }
+    ],
+    "description": "Cannabis caviar made from Mochi Cake: dense hybrid flower hand-dipped in oil, then dusted in a glittering coat of kief for a seriously strong, special-occasion smoke. A slow-burning powerhouse, a sweet, vanilla, earthy aroma with a relaxing, euphoric feel, delivering a smooth, well-rounded vibe.",
+    "priceLabel": "$60.00 3.5g",
+    "priceMinorUnits": 6000,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-aa97a8ed8c39-4225c5f7ce68",
+        "label": "3.5g",
+        "priceMinorUnits": 6000,
+        "inventoryLevel": 2,
+        "medical": false
+      }
+    ]
+  },
+  {
+    "id": "pos-1f529b33c62c",
+    "name": "Mochi Cake",
+    "productName": "Legacy Truffles - DOH Compliant - Triple Truffle - Mochi Cake - 1g",
+    "brand": "Legacy Organics",
+    "category": "infused-flower",
+    "filterCategories": [
+      "infused-flower",
+      "concentrate",
+      "flower"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Moon Rocks",
+    "strainType": "hybrid",
+    "strainName": "Mochi Cake",
+    "thc": "31.57%",
+    "cbd": "N/A",
+    "totalThc": {
+      "type": "thc",
+      "value": "31.57",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "N/A",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thca",
+        "value": "36",
+        "unit": "%"
+      }
+    ],
+    "description": "Decadent hybrid moon rocks built from Mochi Cake — a fat nug dipped in cannabis oil and rolled in kief, three layers of potency stacked into one slow-burning powerhouse. Break it up, take it slow — a sweet, vanilla, earthy aroma with a relaxing, euphoric feel, with an even, best-of-both-worlds feel.",
+    "priceLabel": "$25.00 3.5g",
+    "priceMinorUnits": 2500,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-1f529b33c62c-f97a3321446c",
+        "label": "3.5g",
+        "priceMinorUnits": 2500,
+        "inventoryLevel": 1,
+        "medical": true
+      }
+    ]
+  },
+  {
+    "id": "pos-ab2a8b27c1ca",
+    "name": "Amarelo",
+    "productName": "THC Iceberg - Amarelo - 1.0g",
+    "brand": "Suspended",
+    "category": "infused-flower",
+    "filterCategories": [
+      "infused-flower",
+      "concentrate",
+      "flower"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Moon Rocks",
+    "strainType": "hybrid",
+    "strainName": "Amarelo",
+    "thc": "56%",
+    "cbd": "0.48%",
+    "totalThc": {
+      "type": "thc",
+      "value": "56",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "0.48",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "0.53",
+        "unit": "%"
+      },
+      {
+        "type": "thca",
+        "value": "53.49",
+        "unit": "%"
+      },
+      {
+        "type": "cbd",
+        "value": "0.48",
+        "unit": "%"
+      },
+      {
+        "type": "cbda",
+        "value": "0.04",
+        "unit": "%"
+      }
+    ],
+    "description": "These hybrid moon rocks take Amarelo to another orbit — bud, oil, and kief layered together for a rich, slow-burning, top-of-the-menu treat. Break it up, take it slow — with notes of blueberry and apple, with a balanced head-and-body experience.",
+    "priceLabel": "$24.00 1g",
+    "priceMinorUnits": 2400,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-ab2a8b27c1ca-aefee1c8a927",
+        "label": "1g",
+        "priceMinorUnits": 2400,
+        "inventoryLevel": 3,
+        "medical": false
+      },
+      {
+        "id": "pos-ab2a8b27c1ca-4225c5f7ce68",
+        "label": "3.5g",
+        "priceMinorUnits": 6000,
+        "inventoryLevel": 1,
+        "medical": false
+      }
+    ]
+  },
+  {
+    "id": "pos-82569249a84c",
+    "name": "Black Koffee",
+    "productName": "Suspended THC ICEBERG Black Koffee - 1g",
+    "brand": "Suspended",
+    "category": "infused-flower",
+    "filterCategories": [
+      "infused-flower",
+      "concentrate",
+      "flower"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Mix Infused Flower",
+    "strainType": "hybrid",
+    "strainName": "Black Koffee",
+    "thc": "54.39%",
+    "cbd": "N/A",
+    "totalThc": {
+      "type": "thc",
+      "value": "54.39",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "N/A",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "0.3",
+        "unit": "%"
+      },
+      {
+        "type": "thca",
+        "value": "54.03",
+        "unit": "%"
+      },
+      {
+        "type": "cbda",
+        "value": "0.05",
+        "unit": "%"
+      }
+    ],
+    "description": "Concentrate-enhanced hybrid flower of Black Koffee, layered with extract for bigger aroma and a serious step up in potency. Built for a stronger, longer session and more intense effects — a balanced, sweet-earthy profile, with a smooth, well-rounded vibe. A little goes a long way.",
+    "priceLabel": "$25.00 1g",
+    "priceMinorUnits": 2500,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-82569249a84c-fb04f61de5ae",
+        "label": "1g",
+        "priceMinorUnits": 2500,
+        "inventoryLevel": 4,
+        "medical": true
+      }
+    ]
+  },
+  {
+    "id": "pos-51a3a8e71a00",
+    "name": "Commando #7",
+    "productName": "Suspended THC Iceberg - Commando #7 - 1g",
+    "brand": "Suspended",
+    "category": "infused-flower",
+    "filterCategories": [
+      "infused-flower",
+      "concentrate",
+      "flower"
+    ],
+    "posInventoryType": "Usable Marijuana",
+    "posInventoryCategory": "Flower",
+    "strainType": "hybrid",
+    "strainName": "Commando #7",
+    "thc": "55.83%",
+    "cbd": "N/A",
+    "totalThc": {
+      "type": "thc",
+      "value": "55.83",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "N/A",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "0.29",
+        "unit": "%"
+      },
+      {
+        "type": "thca",
+        "value": "55.49",
+        "unit": "%"
+      },
+      {
+        "type": "cbda",
+        "value": "0.05",
+        "unit": "%"
+      }
+    ],
+    "description": "Commando #7 is a hybrid flower with notes of diesel, lemon, and mango, with smooth, well-rounded flavor. Expect balanced, well-rounded effects.",
+    "priceLabel": "$25.00 1g",
+    "priceMinorUnits": 2500,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-51a3a8e71a00-fb04f61de5ae",
+        "label": "1g",
+        "priceMinorUnits": 2500,
+        "inventoryLevel": 3,
+        "medical": true
+      }
+    ]
+  },
+  {
+    "id": "pos-1b9a80dd9576",
+    "name": "GMO",
+    "productName": "Suspended Brands Iceberg GMO - 1g",
+    "brand": "Suspended",
+    "category": "infused-flower",
+    "filterCategories": [
+      "infused-flower",
+      "concentrate",
+      "flower"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Moon Rocks",
+    "strainType": "unknown",
+    "strainName": "GMO",
+    "thc": "62.97%",
+    "cbd": "N/A",
+    "totalThc": {
+      "type": "thc",
+      "value": "62.97",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "N/A",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "0.45",
+        "unit": "%"
+      },
+      {
+        "type": "thca",
+        "value": "62.48",
+        "unit": "%"
+      },
+      {
+        "type": "cbda",
+        "value": "0.04",
+        "unit": "%"
+      }
+    ],
+    "description": "GMO from Suspended. Browse current availability, package options, and pricing at Greenway Marijuana in Port Orchard.",
+    "priceLabel": "$20.00 1g",
+    "priceMinorUnits": 2000,
+    "inventoryStatus": "low-stock",
+    "hidden": true,
+    "hiddenReason": "no_product_master",
+    "variants": [
+      {
+        "id": "pos-1b9a80dd9576-ab742ed781a2",
+        "label": "1g",
+        "priceMinorUnits": 2000,
+        "inventoryLevel": 1,
+        "medical": true
+      }
+    ]
+  },
+  {
+    "id": "pos-8eb413a0376c",
+    "name": "GMO",
+    "productName": "Suspended Brands Iceberg GMO - 1g",
+    "brand": "Suspended",
+    "category": "infused-flower",
+    "filterCategories": [
+      "infused-flower",
+      "concentrate",
+      "flower"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Moon Rocks",
+    "strainType": "unknown",
+    "strainName": "GMO",
+    "thc": "N/A",
+    "cbd": "N/A",
+    "totalThc": {
+      "type": "thc",
+      "value": "N/A",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "N/A",
+      "unit": "%"
+    },
+    "compounds": [],
+    "description": "GMO from Suspended. Browse current availability, package options, and pricing at Greenway Marijuana in Port Orchard.",
+    "priceLabel": "$20.00 1g",
+    "priceMinorUnits": 2000,
+    "inventoryStatus": "low-stock",
+    "hidden": true,
+    "hiddenReason": "no_product_master",
+    "variants": [
+      {
+        "id": "pos-8eb413a0376c-bc5ec5515fd0",
+        "label": "1g",
+        "priceMinorUnits": 2000,
+        "inventoryLevel": 2,
+        "medical": false
+      }
+    ]
+  },
+  {
+    "id": "pos-4a57d0c552ca",
+    "name": "lost og",
+    "productName": "Suspended THC ICEBERG Lost OG - 1g",
+    "brand": "Suspended",
+    "category": "infused-flower",
+    "filterCategories": [
+      "infused-flower",
+      "concentrate",
+      "flower"
+    ],
+    "posInventoryType": "Usable Marijuana",
+    "posInventoryCategory": "Mix Infused Flower",
+    "strainType": "hybrid",
+    "strainName": "lost og",
+    "thc": "55.12%",
+    "cbd": "N/A",
+    "totalThc": {
+      "type": "thc",
+      "value": "55.12",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "N/A",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "0.3",
+        "unit": "%"
+      },
+      {
+        "type": "thca",
+        "value": "54.77",
+        "unit": "%"
+      },
+      {
+        "type": "cbda",
+        "value": "0.06",
+        "unit": "%"
+      }
+    ],
+    "description": "A hybrid infused flower product built on Lost OG and enhanced with concentrate for extra strength and a louder, more flavorful smoke. Boosted for extra strength and more intense effects — a pungent earthy-pine and fuel aroma with a strong, classic, relaxing feel, with a smooth, well-rounded vibe. A little goes a long way.",
+    "priceLabel": "$25.00 1g",
+    "priceMinorUnits": 2500,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-4a57d0c552ca-fb04f61de5ae",
+        "label": "1g",
+        "priceMinorUnits": 2500,
+        "inventoryLevel": 2,
+        "medical": true
+      }
+    ]
+  },
+  {
+    "id": "pos-77202fc6b5e0",
+    "name": "Super Boof",
+    "productName": "Suspended THC ICEBERG Superboof- 1g",
+    "brand": "Suspended",
+    "category": "infused-flower",
+    "filterCategories": [
+      "infused-flower",
+      "concentrate",
+      "flower"
+    ],
+    "posInventoryType": "Usable Marijuana",
+    "posInventoryCategory": "Flower",
+    "strainType": "hybrid",
+    "strainName": "Super Boof",
+    "thc": "46.73%",
+    "cbd": "N/A",
+    "totalThc": {
+      "type": "thc",
+      "value": "46.73",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "N/A",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "0.32",
+        "unit": "%"
+      },
+      {
+        "type": "thca",
+        "value": "46.41",
+        "unit": "%"
+      }
+    ],
+    "description": "These hybrid moon rocks take Super Boof to another orbit — bud, oil, and kief layered together for a rich, slow-burning, top-of-the-menu treat. Break it up, take it slow — a balanced, sweet-earthy profile, with a smooth, well-rounded vibe.",
+    "priceLabel": "$25.00 1g",
+    "priceMinorUnits": 2500,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-77202fc6b5e0-fb04f61de5ae",
+        "label": "1g",
+        "priceMinorUnits": 2500,
+        "inventoryLevel": 14,
+        "medical": true
+      },
+      {
+        "id": "pos-77202fc6b5e0-968111fb60c7",
+        "label": "3.5g",
+        "priceMinorUnits": 6000,
+        "inventoryLevel": 2,
+        "medical": true
+      }
+    ]
+  },
+  {
+    "id": "pos-0b8c151a5f19",
+    "name": "Alien Tangie",
+    "productName": "Walden infused flower Alien Tangie 1g",
+    "brand": "Walden",
+    "category": "infused-flower",
+    "filterCategories": [
+      "infused-flower",
+      "concentrate",
+      "flower"
+    ],
+    "posInventoryType": "Concentrate for Inhalation",
+    "posInventoryCategory": "Moon Rocks",
+    "strainType": "unknown",
+    "strainName": "Alien Tangie",
+    "thc": "44%",
+    "cbd": "4%",
+    "totalThc": {
+      "type": "thc",
+      "value": "44",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "4",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "0.6",
+        "unit": "%"
+      },
+      {
+        "type": "thca",
+        "value": "38",
+        "unit": "%"
+      },
+      {
+        "type": "cbd",
+        "value": "4",
+        "unit": "%"
+      }
+    ],
+    "description": "Alien Tangie from Walden. Browse current availability, package options, and pricing at Greenway Marijuana in Port Orchard.",
+    "priceLabel": "$12.00 1g",
+    "priceMinorUnits": 1200,
+    "inventoryStatus": "in-stock",
+    "hidden": true,
+    "hiddenReason": "no_product_master",
+    "variants": [
+      {
+        "id": "pos-0b8c151a5f19-28e453b71118",
+        "label": "1g",
+        "priceMinorUnits": 1200,
+        "inventoryLevel": 11,
+        "medical": false
+      }
+    ]
+  },
+  {
+    "id": "pos-ec329191aa51",
+    "name": "Super Boof",
+    "productName": "Walden infused flower super boof 1g",
+    "brand": "Walden",
+    "category": "infused-flower",
+    "filterCategories": [
+      "infused-flower",
+      "concentrate",
+      "flower"
+    ],
+    "posInventoryType": "Usable Marijuana",
+    "posInventoryCategory": "Moon Rocks",
+    "strainType": "hybrid",
+    "strainName": "Super Boof",
+    "thc": "41%",
+    "cbd": "6%",
+    "totalThc": {
+      "type": "thc",
+      "value": "41",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "6",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thca",
+        "value": "34.5",
+        "unit": "%"
+      },
+      {
+        "type": "cbd",
+        "value": "6",
+        "unit": "%"
+      }
+    ],
+    "description": "These hybrid moon rocks take Super Boof to another orbit — bud, oil, and kief layered together for a rich, slow-burning, top-of-the-menu treat. Decadent and potent, a balanced, sweet-earthy profile, leading into a versatile, anytime balance.",
+    "priceLabel": "$12.00 1g",
+    "priceMinorUnits": 1200,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-ec329191aa51-28e453b71118",
+        "label": "1g",
+        "priceMinorUnits": 1200,
+        "inventoryLevel": 6,
+        "medical": false
       }
     ]
   },
@@ -122117,6 +121664,241 @@
     ]
   },
   {
+    "id": "pos-a503dda52eb0",
+    "name": "Blueberry Jaeger",
+    "productName": "Heavenly Buds Full Flower Little Snappers - Blueberry Jaeger - 10pk (10x0.5g)",
+    "brand": "Heavenly Buds",
+    "category": "popcorn-bud",
+    "filterCategories": [
+      "popcorn-bud",
+      "flower"
+    ],
+    "posInventoryType": "Usable Marijuana",
+    "posInventoryCategory": "Flower",
+    "strainType": "hybrid",
+    "strainName": "Blueberry Jaeger",
+    "thc": "19.26%",
+    "cbd": "N/A",
+    "totalThc": {
+      "type": "thc",
+      "value": "19.26",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "N/A",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "0.39",
+        "unit": "%"
+      },
+      {
+        "type": "thca",
+        "value": "18.82",
+        "unit": "%"
+      },
+      {
+        "type": "cbda",
+        "value": "0.04",
+        "unit": "%"
+      }
+    ],
+    "description": "Blueberry Jaeger is a hybrid flower with a sweet, ripe blueberry flavor and balanced, well-rounded effects.",
+    "priceLabel": "$35.00 5g",
+    "priceMinorUnits": 3500,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-a503dda52eb0-f9ba68290a1a",
+        "label": "5g",
+        "priceMinorUnits": 3500,
+        "inventoryLevel": 1,
+        "medical": true
+      }
+    ]
+  },
+  {
+    "id": "pos-6316d141bc34",
+    "name": "Papaya Melonz #7",
+    "productName": "Heavenly Buds - Full Flower .5g Little Snappers - Papaya Melonz #7 DOH - 10g",
+    "brand": "Heavenly Buds",
+    "category": "popcorn-bud",
+    "filterCategories": [
+      "popcorn-bud",
+      "flower"
+    ],
+    "posInventoryType": "Usable Marijuana",
+    "posInventoryCategory": "Flower",
+    "strainType": "hybrid",
+    "strainName": "Papaya Melonz #7",
+    "thc": "26.47%",
+    "cbd": "N/A",
+    "totalThc": {
+      "type": "thc",
+      "value": "26.47",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "N/A",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "0.29",
+        "unit": "%"
+      },
+      {
+        "type": "thca",
+        "value": "26.11",
+        "unit": "%"
+      },
+      {
+        "type": "cbda",
+        "value": "0.07",
+        "unit": "%"
+      }
+    ],
+    "description": "Papaya Melonz #7 is a hybrid flower with a light, refreshing melon flavor and balanced, well-rounded effects.",
+    "priceLabel": "$35.00 5g",
+    "priceMinorUnits": 3500,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-6316d141bc34-f9ba68290a1a",
+        "label": "5g",
+        "priceMinorUnits": 3500,
+        "inventoryLevel": 2,
+        "medical": true
+      },
+      {
+        "id": "pos-6316d141bc34-f0570f61e388",
+        "label": "10g",
+        "priceMinorUnits": 6500,
+        "inventoryLevel": 2,
+        "medical": true
+      }
+    ]
+  },
+  {
+    "id": "pos-36a38cabad9b",
+    "name": "Kimber Slice",
+    "productName": "High Tide: Kimber Slice - 3.5g Snappers",
+    "brand": "High Tide",
+    "category": "popcorn-bud",
+    "filterCategories": [
+      "popcorn-bud",
+      "flower"
+    ],
+    "posInventoryType": "Usable Marijuana",
+    "posInventoryCategory": "Flower",
+    "strainType": "hybrid",
+    "strainName": "Kimber Slice",
+    "thc": "18.61%",
+    "cbd": "N/A",
+    "totalThc": {
+      "type": "thc",
+      "value": "18.61",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "N/A",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "1.01",
+        "unit": "%"
+      },
+      {
+        "type": "thca",
+        "value": "20.02",
+        "unit": "%"
+      },
+      {
+        "type": "cbda",
+        "value": "0.04",
+        "unit": "%"
+      }
+    ],
+    "description": "Kimber Slice is a hybrid flower with a sweet, balanced earthy-fruity aroma and balanced, well-rounded effects.",
+    "priceLabel": "$26.00 3.5g",
+    "priceMinorUnits": 2600,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-36a38cabad9b-f6251e4ad208",
+        "label": "3.5g",
+        "priceMinorUnits": 2600,
+        "inventoryLevel": 3,
+        "medical": true
+      }
+    ]
+  },
+  {
+    "id": "pos-fe6066136378",
+    "name": "Zeaweed",
+    "productName": "High Tide: Zeaweed - 3.5g Snappers",
+    "brand": "High Tide",
+    "category": "popcorn-bud",
+    "filterCategories": [
+      "popcorn-bud",
+      "flower"
+    ],
+    "posInventoryType": "Usable Marijuana",
+    "posInventoryCategory": "Flower",
+    "strainType": "hybrid",
+    "strainName": "Zeaweed",
+    "thc": "18.57%",
+    "cbd": "N/A",
+    "totalThc": {
+      "type": "thc",
+      "value": "18.57",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "N/A",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "0.99",
+        "unit": "%"
+      },
+      {
+        "type": "thca",
+        "value": "20",
+        "unit": "%"
+      },
+      {
+        "type": "cbda",
+        "value": "0.04",
+        "unit": "%"
+      }
+    ],
+    "description": "Zeaweed is a hybrid flower with a sweet, balanced earthy-fruity aroma and balanced, well-rounded effects.",
+    "priceLabel": "$26.00 3.5g",
+    "priceMinorUnits": 2600,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-fe6066136378-f6251e4ad208",
+        "label": "3.5g",
+        "priceMinorUnits": 2600,
+        "inventoryLevel": 4,
+        "medical": true
+      }
+    ]
+  },
+  {
     "id": "pos-d463f6e1f700",
     "name": "Gumbo",
     "productName": "Popcorn - Gumbo - 28g",
@@ -122278,6 +122060,333 @@
     ]
   },
   {
+    "id": "pos-3fca4c28eafd",
+    "name": "Gusherlicious",
+    "productName": "Ooowee - *B Buds 14G Flower - Gusherlicious - 14g",
+    "brand": "Ooowee",
+    "category": "popcorn-bud",
+    "filterCategories": [
+      "popcorn-bud",
+      "flower"
+    ],
+    "posInventoryType": "Usable Marijuana",
+    "posInventoryCategory": "Flower",
+    "strainType": "hybrid",
+    "strainName": "Gusherlicious",
+    "thc": "13.79%",
+    "cbd": "N/A",
+    "totalThc": {
+      "type": "thc",
+      "value": "13.79",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "N/A",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "1.05",
+        "unit": "%"
+      },
+      {
+        "type": "thca",
+        "value": "14.49",
+        "unit": "%"
+      },
+      {
+        "type": "cbda",
+        "value": "0.04",
+        "unit": "%"
+      }
+    ],
+    "description": "Gusherlicious is a hybrid flower with a sweet, balanced earthy-fruity aroma, with smooth, well-rounded flavor. Expect balanced, well-rounded effects.",
+    "priceLabel": "$80.00 14g",
+    "priceMinorUnits": 8000,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-3fca4c28eafd-459e1cda4572",
+        "label": "14g",
+        "priceMinorUnits": 8000,
+        "inventoryLevel": 1,
+        "medical": false
+      }
+    ]
+  },
+  {
+    "id": "pos-024ffc69d3fb",
+    "name": "Pink Zaza",
+    "productName": "Ooowee - *B Buds 14G Flower - Pink Zaza - 14g",
+    "brand": "Ooowee",
+    "category": "popcorn-bud",
+    "filterCategories": [
+      "popcorn-bud",
+      "flower"
+    ],
+    "posInventoryType": "Usable Marijuana",
+    "posInventoryCategory": "Flower",
+    "strainType": "hybrid",
+    "strainName": "Pink Zaza",
+    "thc": "21.53%",
+    "cbd": "N/A",
+    "totalThc": {
+      "type": "thc",
+      "value": "21.53",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "N/A",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "0.65",
+        "unit": "%"
+      },
+      {
+        "type": "thca",
+        "value": "23.74",
+        "unit": "%"
+      },
+      {
+        "type": "cbda",
+        "value": "0.06",
+        "unit": "%"
+      }
+    ],
+    "description": "Pink Zaza is a hybrid flower with a sweet, balanced earthy-fruity aroma, with smooth, well-rounded flavor. Expect balanced, well-rounded effects.",
+    "priceLabel": "$80.00 14g",
+    "priceMinorUnits": 8000,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-024ffc69d3fb-459e1cda4572",
+        "label": "14g",
+        "priceMinorUnits": 8000,
+        "inventoryLevel": 10,
+        "medical": false
+      }
+    ]
+  },
+  {
+    "id": "pos-0ca226c18d72",
+    "name": "Candy Gas",
+    "productName": "Candy Gas Bong Buddies",
+    "brand": "Phat Panda",
+    "category": "popcorn-bud",
+    "filterCategories": [
+      "popcorn-bud",
+      "flower"
+    ],
+    "posInventoryType": "Usable Marijuana",
+    "posInventoryCategory": "Flower",
+    "strainType": "hybrid",
+    "strainName": "Candy Gas",
+    "thc": "34%",
+    "cbd": "N/A",
+    "totalThc": {
+      "type": "thc",
+      "value": "34",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "N/A",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "0.31",
+        "unit": "%"
+      },
+      {
+        "type": "thca",
+        "value": "34",
+        "unit": "%"
+      }
+    ],
+    "description": "Candy Gas is a hybrid flower with a pungent fuel flavor and balanced, well-rounded effects.",
+    "priceLabel": "$12.00 2g",
+    "priceMinorUnits": 1200,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-0ca226c18d72-2c050d9f9033",
+        "label": "2g",
+        "priceMinorUnits": 1200,
+        "inventoryLevel": 1,
+        "medical": true
+      }
+    ]
+  },
+  {
+    "id": "pos-de57a6439cee",
+    "name": "Golden Pineapple",
+    "productName": "Golden Pineapple Bong Buddies 2g",
+    "brand": "Phat Panda",
+    "category": "popcorn-bud",
+    "filterCategories": [
+      "popcorn-bud",
+      "flower"
+    ],
+    "posInventoryType": "Usable Marijuana",
+    "posInventoryCategory": "Flower",
+    "strainType": "hybrid",
+    "strainName": "Golden Pineapple",
+    "thc": "23%",
+    "cbd": "N/A",
+    "totalThc": {
+      "type": "thc",
+      "value": "23",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "N/A",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "1.3",
+        "unit": "%"
+      },
+      {
+        "type": "thca",
+        "value": "22",
+        "unit": "%"
+      }
+    ],
+    "description": "Golden Pineapple is a hybrid flower with notes of tropical, pineapple, and citrus, with smooth, well-rounded flavor. Expect balanced, well-rounded effects.",
+    "priceLabel": "$12.00 2g",
+    "priceMinorUnits": 1200,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-de57a6439cee-2c050d9f9033",
+        "label": "2g",
+        "priceMinorUnits": 1200,
+        "inventoryLevel": 15,
+        "medical": true
+      }
+    ]
+  },
+  {
+    "id": "pos-f682017b8b7d",
+    "name": "Hawk Tuah",
+    "productName": "Phat Panda Bong Buddies Hawk Tuah",
+    "brand": "Phat Panda",
+    "category": "popcorn-bud",
+    "filterCategories": [
+      "popcorn-bud",
+      "flower"
+    ],
+    "posInventoryType": "Usable Marijuana",
+    "posInventoryCategory": "Flower",
+    "strainType": "hybrid",
+    "strainName": "Hawk Tuah",
+    "thc": "35%",
+    "cbd": "N/A",
+    "totalThc": {
+      "type": "thc",
+      "value": "35",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "N/A",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "1.9",
+        "unit": "%"
+      },
+      {
+        "type": "thca",
+        "value": "33",
+        "unit": "%"
+      }
+    ],
+    "description": "Hawk Tuah is a hybrid flower with a sweet, balanced earthy-fruity aroma and balanced, well-rounded effects.",
+    "priceLabel": "$12.00 2g",
+    "priceMinorUnits": 1200,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-f682017b8b7d-2c050d9f9033",
+        "label": "2g",
+        "priceMinorUnits": 1200,
+        "inventoryLevel": 5,
+        "medical": true
+      }
+    ]
+  },
+  {
+    "id": "pos-30aca442874f",
+    "name": "OG Chem",
+    "productName": "Phat Panda Bong Buddies OG Chem",
+    "brand": "Phat Panda",
+    "category": "popcorn-bud",
+    "filterCategories": [
+      "popcorn-bud",
+      "flower"
+    ],
+    "posInventoryType": "Usable Marijuana",
+    "posInventoryCategory": "Flower",
+    "strainType": "hybrid",
+    "strainName": "OG Chem",
+    "thc": "25%",
+    "cbd": "N/A",
+    "totalThc": {
+      "type": "thc",
+      "value": "25",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "N/A",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "1.2",
+        "unit": "%"
+      },
+      {
+        "type": "thca",
+        "value": "22",
+        "unit": "%"
+      },
+      {
+        "type": "cbda",
+        "value": "0.06",
+        "unit": "%"
+      }
+    ],
+    "description": "OG Chem is a hybrid flower with notes of chemical, diesel, and pine, with smooth, well-rounded flavor. Expect balanced, well-rounded effects.",
+    "priceLabel": "$12.00 2g",
+    "priceMinorUnits": 1200,
+    "inventoryStatus": "in-stock",
+    "variants": [
+      {
+        "id": "pos-30aca442874f-2c050d9f9033",
+        "label": "2g",
+        "priceMinorUnits": 1200,
+        "inventoryLevel": 34,
+        "medical": true
+      }
+    ]
+  },
+  {
     "id": "pos-d27a1f50fb2c",
     "name": "Trophy wife",
     "productName": "Phat Panda bong buddies Trophy wife - 2g",
@@ -122331,6 +122440,177 @@
         "id": "pos-d27a1f50fb2c-2c050d9f9033",
         "label": "2g",
         "priceMinorUnits": 1200,
+        "inventoryLevel": 1,
+        "medical": true
+      }
+    ]
+  },
+  {
+    "id": "pos-d2d7aae94c12",
+    "name": "Trophy wife",
+    "productName": "Trophy Wife 14g Bong Buddies",
+    "brand": "Phat Panda",
+    "category": "popcorn-bud",
+    "filterCategories": [
+      "popcorn-bud",
+      "flower"
+    ],
+    "posInventoryType": "Usable Marijuana",
+    "posInventoryCategory": "Flower",
+    "strainType": "hybrid",
+    "strainName": "Trophy wife",
+    "thc": "28%",
+    "cbd": "0.3%",
+    "totalThc": {
+      "type": "thc",
+      "value": "28",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "0.3",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "0.7",
+        "unit": "%"
+      },
+      {
+        "type": "thca",
+        "value": "27",
+        "unit": "%"
+      },
+      {
+        "type": "cbd",
+        "value": "0.3",
+        "unit": "%"
+      }
+    ],
+    "description": "Trophy wife is a hybrid flower with notes of pineapple, rose, and diesel, with smooth, well-rounded flavor. Expect balanced, well-rounded effects.",
+    "priceLabel": "$75.00 14g",
+    "priceMinorUnits": 7500,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-d2d7aae94c12-ba16e8d72024",
+        "label": "14g",
+        "priceMinorUnits": 7500,
+        "inventoryLevel": 1,
+        "medical": true
+      }
+    ]
+  },
+  {
+    "id": "pos-9a6759cfb18b",
+    "name": "Divine Kush Breath",
+    "productName": "Skord Flower - Divine Kush Breath Small Buds- 07g",
+    "brand": "Skord",
+    "category": "popcorn-bud",
+    "filterCategories": [
+      "popcorn-bud",
+      "flower"
+    ],
+    "posInventoryType": "Usable Marijuana",
+    "posInventoryCategory": "Flower",
+    "strainType": "hybrid",
+    "strainName": "Divine Kush Breath",
+    "thc": "20.44%",
+    "cbd": "N/A",
+    "totalThc": {
+      "type": "thc",
+      "value": "20.44",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "N/A",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "0.54",
+        "unit": "%"
+      },
+      {
+        "type": "thca",
+        "value": "19.85",
+        "unit": "%"
+      },
+      {
+        "type": "cbda",
+        "value": "0.05",
+        "unit": "%"
+      }
+    ],
+    "description": "Divine Kush Breath is a hybrid flower with notes of diesel, nutty, and blue cheese, with smooth, well-rounded flavor. Expect balanced, well-rounded effects.",
+    "priceLabel": "$95.00 7g",
+    "priceMinorUnits": 9500,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-9a6759cfb18b-b419491ad8ca",
+        "label": "7g",
+        "priceMinorUnits": 9500,
+        "inventoryLevel": 2,
+        "medical": true
+      }
+    ]
+  },
+  {
+    "id": "pos-1b58722c5239",
+    "name": "Tk Lime",
+    "productName": "Flower - 07g - TK Lime Small Buds",
+    "brand": "Skord",
+    "category": "popcorn-bud",
+    "filterCategories": [
+      "popcorn-bud",
+      "flower"
+    ],
+    "posInventoryType": "Usable Marijuana",
+    "posInventoryCategory": "Flower",
+    "strainType": "hybrid",
+    "strainName": "Tk Lime",
+    "thc": "17.17%",
+    "cbd": "N/A",
+    "totalThc": {
+      "type": "thc",
+      "value": "17.17",
+      "unit": "%"
+    },
+    "totalCbd": {
+      "type": "cbd",
+      "value": "N/A",
+      "unit": "%"
+    },
+    "compounds": [
+      {
+        "type": "thc",
+        "value": "0.35",
+        "unit": "%"
+      },
+      {
+        "type": "thca",
+        "value": "16.78",
+        "unit": "%"
+      },
+      {
+        "type": "cbda",
+        "value": "0.04",
+        "unit": "%"
+      }
+    ],
+    "description": "Tk Lime is a hybrid flower with a tart, crisp lime flavor and balanced, well-rounded effects.",
+    "priceLabel": "$95.00 7g",
+    "priceMinorUnits": 9500,
+    "inventoryStatus": "low-stock",
+    "variants": [
+      {
+        "id": "pos-1b58722c5239-b419491ad8ca",
+        "label": "7g",
+        "priceMinorUnits": 9500,
         "inventoryLevel": 1,
         "medical": true
       }

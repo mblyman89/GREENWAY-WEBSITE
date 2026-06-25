@@ -3,6 +3,7 @@ export type LeaflyEnvironment = "sandbox" | "production";
 export type GreenwayCategory =
   | "flower"
   | "popcorn-bud"
+  | "infused-flower"
   | "paraphernalia"
   | "preroll-pack"
   | "cartridge"

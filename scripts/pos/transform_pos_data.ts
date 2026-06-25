@@ -5,7 +5,7 @@ import crypto from "node:crypto";
 import * as XLSX from "xlsx";
 
 type GreenwayCategory =
-  | "flower" | "popcorn-bud" | "paraphernalia" | "preroll-pack" | "cartridge" | "disposable-cartridge"
+  | "flower" | "popcorn-bud" | "infused-flower" | "paraphernalia" | "preroll-pack" | "cartridge" | "disposable-cartridge"
   | "edible-solid" | "concentrate" | "infused-preroll" | "infused-preroll-pack"
   | "preroll" | "edible-liquid" | "topical" | "trim";
 
@@ -96,7 +96,7 @@ function addDiagnostic(severity: Severity, code: string, message: string, contex
 }
 
 const VALID_CATEGORIES = new Set<GreenwayCategory>([
-  "flower", "popcorn-bud", "paraphernalia", "preroll-pack", "cartridge", "disposable-cartridge", "edible-solid", "concentrate", "infused-preroll", "infused-preroll-pack", "preroll", "edible-liquid", "topical", "trim",
+  "flower", "popcorn-bud", "infused-flower", "paraphernalia", "preroll-pack", "cartridge", "disposable-cartridge", "edible-solid", "concentrate", "infused-preroll", "infused-preroll-pack", "preroll", "edible-liquid", "topical", "trim",
 ]);
 
 const CATEGORY_MAP: Record<string, GreenwayCategory> = {
@@ -117,7 +117,7 @@ const CATEGORY_MAP: Record<string, GreenwayCategory> = {
   "Shatter": "concentrate",
   "Sugar": "concentrate",
   "Distillate": "concentrate",
-  "Moon Rocks": "concentrate",
+  "Moon Rocks": "infused-flower",
   "RSO": "concentrate",
   "Edible": "edible-solid",
   "Gummies": "edible-solid",
@@ -149,7 +149,7 @@ const CATEGORY_MAP: Record<string, GreenwayCategory> = {
   "Terp Crystals": "concentrate",
   "Terp Sauce": "concentrate",
   "THCa": "concentrate",
-  "Mix Infused Flower": "concentrate",
+  "Mix Infused Flower": "infused-flower",
   "Live Resin Cartridge": "cartridge",
   "Pod": "cartridge",
   "Other Liquid Edible": "edible-liquid",
@@ -214,7 +214,8 @@ function tryNormalizeCategory(category: string): GreenwayCategory | null {
 }
 
 const CATEGORY_FALLBACK: Record<string, GreenwayCategory> = {
-  "flower": "flower", "popcorn": "popcorn-bud", "preroll": "preroll", "cartridge": "cartridge", "concentrate": "concentrate",
+  "flower": "flower", "popcorn": "popcorn-bud", "infused-flower": "infused-flower",
+  "preroll": "preroll", "cartridge": "cartridge", "concentrate": "concentrate",
   "edible-solid": "edible-solid", "edible-liquid": "edible-liquid", "topical": "topical", "trim": "trim",
 };
 
@@ -232,19 +233,57 @@ function categoryWithFallback(rawCategory: string): GreenwayCategory {
  * Detect popcorn bud from product name keywords.
  * Popcorn bud is a distinct product tier (small/budget buds) that should be
  * separated from regular premium flower. The POS Category column often says
- * "Flower" for these products, but the product name contains "popcorn",
- * "popcorn flower", "popcorn bud", or "indoor popcorn flower".
+ * "Flower" for these products, but the product name contains keywords that
+ * identify them as budget/small-bud tier.
  *
- * This detection runs AFTER category normalization but BEFORE grouping,
- * so popcorn products get their own product cards instead of merging
- * into regular flower cards as confusingly-priced variants.
+ * Keywords detected:
+ * - "popcorn", "popcorn bud", "popcorn flower" — standard popcorn bud naming
+ * - "bong buddies", "b-bud", "b bud" — Phat Panda and Ooowee small-bud lines
+ * - "littles" — Heavenly Buds "Little Snappers" flower items
+ * - "snappers" — Heavenly Buds and High Tide budget flower lines
+ * - "small bud", "small buds" — Skord and other budget flower lines
+ *
+ * IMPORTANT: Only detects on flower-category items. Preroll and infused-preroll
+ * products with these keywords (e.g., "Little Snappers" prerolls) are NOT
+ * reclassified — they remain in their POS-assigned category.
  */
-const POPCORN_KEYWORDS = /\b(popcorn\s*(?:bud|flower)?)\b/i;
+const POPCORN_KEYWORDS = /\b(popcorn\s*(?:bud|flower)?|bong\s*buddies|b[- ]?buds?\b|littles|snappers|small\s*buds?)\b/i;
 
 function detectPopcornBud(productName: string, currentCategory: GreenwayCategory): GreenwayCategory {
   if (currentCategory !== "flower") return currentCategory;
   if (POPCORN_KEYWORDS.test(normalizeWhitespace(productName))) {
     return "popcorn-bud";
+  }
+  return currentCategory;
+}
+
+/**
+ * Detect infused flower from product name keywords.
+ * Infused flower products (moon rocks, caviar, THC Iceberg, etc.) are flower
+ * buds that have been coated or mixed with concentrate. They should be
+ * separated from both regular flower AND concentrate into their own category.
+ *
+ * The POS system sometimes categorizes these as "Flower" or "Moon Rocks" or
+ * "Mix Infused Flower". The CATEGORY_MAP handles Moon Rocks and Mix Infused
+ * Flower directly. This function catches products whose POS Category says
+ * "Flower" but whose name clearly identifies them as infused flower.
+ *
+ * Keywords detected:
+ * - "iceberg" — Suspended "THC Iceberg" infused flower line
+ * - "moon rock", "moon rocks" — general infused flower naming
+ * - "caviar" — infused flower naming
+ * - "infused flower" — Walden and other brand naming
+ *
+ * Only detects on flower-category items. Concentrate-category items with these
+ * keywords in their name (which are already correctly mapped via CATEGORY_MAP)
+ * are left unchanged.
+ */
+const INFUSED_FLOWER_KEYWORDS = /\b(iceberg|moon\s*rocks?|caviar|infused\s*flower)\b/i;
+
+function detectInfusedFlower(productName: string, currentCategory: GreenwayCategory): GreenwayCategory {
+  if (currentCategory !== "flower") return currentCategory;
+  if (INFUSED_FLOWER_KEYWORDS.test(normalizeWhitespace(productName))) {
+    return "infused-flower";
   }
   return currentCategory;
 }
@@ -397,7 +436,7 @@ function deriveDisplayName(product: ProductRow | undefined, inv: CollapsedInvent
   const productStrain = normalizeWhitespace(product?.Strain);
   const invStrain = normalizeWhitespace(inv.strain);
   const strain = firstNonBlank(productStrain, invStrain);
-  if (["flower", "popcorn-bud", "preroll", "preroll-pack", "infused-preroll", "infused-preroll-pack", "concentrate", "cartridge", "disposable-cartridge", "trim"].includes(category)) {
+  if (["flower", "popcorn-bud", "infused-flower", "preroll", "preroll-pack", "infused-preroll", "infused-preroll-pack", "concentrate", "cartridge", "disposable-cartridge", "trim"].includes(category)) {
     const displayName = strain || stripVariantNoise(firstNonBlank(product?.["Product Name"], inv.productName), firstNonBlank(product?.Brand, inv.brand), inv.category);
     return { displayName, strainName: displayName };
   }
@@ -424,7 +463,8 @@ function buildGroups(products: ProductRow[], inventories: InventoryRow[]) {
     if (matchingRows.length === 0) {
       addDiagnostic("warning", "inventory_without_product_master", "Inventory item has no Products workbook match; including as hidden menu item for review.", { product: inv.productName, inventoryType: inv.inventoryType, category: inv.category, units: inv.totalUnits });
       const rawCategory = categoryWithFallback(inv.category);
-      const category = detectPopcornBud(inv.productName, rawCategory);
+      const afterPopcorn = detectPopcornBud(inv.productName, rawCategory);
+      const category = detectInfusedFlower(inv.productName, afterPopcorn);
       const brand = firstNonBlank(inv.brand, "Greenway");
       const { displayName, strainName } = deriveDisplayName(undefined, inv, category);
       const identity = groupingIdentity(undefined, inv, category, displayName) + "|no-product-master";
@@ -449,7 +489,8 @@ function buildGroups(products: ProductRow[], inventories: InventoryRow[]) {
     matchedProductKeys.add(inv.productKey);
     const product = matchingRows[0];
     const rawCategory = normalizeCategory(firstNonBlank(product.Category, inv.category));
-    const category = detectPopcornBud(firstNonBlank(product["Product Name"], inv.productName), rawCategory);
+    const afterPopcorn = detectPopcornBud(firstNonBlank(product["Product Name"], inv.productName), rawCategory);
+    const category = detectInfusedFlower(firstNonBlank(product["Product Name"], inv.productName), afterPopcorn);
     const brand = firstNonBlank(product.Brand, inv.brand, "Greenway");
     const { displayName, strainName } = deriveDisplayName(product, inv, category);
     const identity = groupingIdentity(product, inv, category, displayName);
@@ -478,7 +519,8 @@ function buildGroups(products: ProductRow[], inventories: InventoryRow[]) {
       const product = rows[0];
       addDiagnostic("warning", "product_without_inventory", "Products workbook item has no matching inventory; including as hidden menu item for review.", { product: product["Product Name"], brand: product.Brand, category: product.Category });
       const rawCategory = categoryWithFallback(firstNonBlank(product.Category));
-      const category = detectPopcornBud(firstNonBlank(product["Product Name"]), rawCategory);
+      const afterPopcorn = detectPopcornBud(firstNonBlank(product["Product Name"]), rawCategory);
+      const category = detectInfusedFlower(firstNonBlank(product["Product Name"]), afterPopcorn);
       const brand = firstNonBlank(product.Brand, "Greenway");
       const displayName = stripVariantNoise(firstNonBlank(product["Product Name"]), brand, product.Category ?? "");
       const strainName = firstNonBlank(normalizeWhitespace(product.Strain), displayName);
@@ -539,6 +581,7 @@ function filterCategoriesFor(item: Pick<GreenwayMenuItem, "category" | "posInven
   if (["cartridge", "disposable-cartridge"].includes(item.category)) cats.add("concentrate");
   if (["infused-preroll", "infused-preroll-pack", "preroll-pack"].includes(item.category)) cats.add("preroll");
   if (item.category === "popcorn-bud") cats.add("flower");
+  if (item.category === "infused-flower") { cats.add("concentrate"); cats.add("flower"); }
   return [...cats];
 }
 
@@ -548,11 +591,11 @@ function toMenuItem(group: ProductGroup): GreenwayMenuItem {
   const firstPrice = firstAvailable?.priceMinorUnits ?? 0;
   const itemId = `pos-${stableId(group.identityKey)}`;
 
-  // Diagnostic: detect same-size variants with very different prices on flower cards.
+  // Diagnostic: detect same-size variants with very different prices on flower/popcorn-bud cards.
   // This is a strong indicator that popcorn bud and premium flower are incorrectly
-  // grouped together. The popcorn-bud keyword detection should prevent this, but
-  // the heuristic catches any cases that slip through.
-  if (group.category === "flower" && variants.length >= 2) {
+  // grouped together. The keyword detection should prevent this, but the heuristic
+  // catches any cases that slip through.
+  if (["flower", "popcorn-bud"].includes(group.category) && variants.length >= 2) {
     const bySize = new Map<string, number[]>();
     for (const v of variants) {
       const sizeKey = v.package.label;

@@ -1,18 +1,25 @@
-## Phase 1: Popcorn Bud Category Fix (current slice)
-- [x] Read and trace the current transformer code flow
-- [x] Identify where popcorn bud products get grouped with regular flower
-- [x] Add `popcorn-bud` GreenwayCategory to types.ts and category-taxonomy.ts
-- [x] Add popcorn keyword detection in transformer (name-based override)
-- [x] Add variant price-heuristic diagnostic (same size, very different price)
-- [x] Update CATEGORY_MAP to map "Popcorn Bud" → "popcorn-bud"
-- [x] Test the fix against current data — 13 popcorn-bud items separated, 3 price-heuristic warnings caught
-- [x] Investigate edge cases and false positives
-  - Phat Panda "bong buddies Trophy wife" = POS Category column says "Popcorn Bud" (data entry issue, not regex false positive)
-  - Suspended "THC Iceberg" = infused/mixed flower products miscategorized as "Flower" in POS (not popcorn bud)
-  - High Tide "Zeaweed Snappers" = budget small-bud line similar to popcorn (not detected by keyword)
-  - Viking Cannabis "Old School Lemons" = has "Popcorn" in product name, correctly detected
-- [ ] Verify the Next.js build compiles successfully
-- [ ] Commit and push branch to GitHub for user inspection
+## Phase 1.5: Additional Popcorn Keywords + Infused Flower Category
+
+### A. Expand popcorn-bud keyword detection
+- [ ] Add "bong buddies", "b-bud"/"b bud", "littles", "snappers" to POPCORN_KEYWORDS regex
+- [ ] Only detect popcorn-bud for FLOWER category items (not prerolls, infused prerolls)
+- [ ] Handle "Small Buds" keyword as well (Skord products)
+
+### B. Add "infused-flower" GreenwayCategory
+- [ ] Add `"infused-flower"` to GreenwayCategory union in types.ts
+- [ ] Add `"infused-flower"` to VALID_CATEGORIES in transformer
+- [ ] Add `"infused-flower"` to category taxonomy with label + helper
+- [ ] Map "Moon Rocks" → "infused-flower" (was "concentrate")
+- [ ] Map "Mix Infused Flower" → "infused-flower" (was "concentrate")
+- [ ] Add infused-flower keyword detection (detect "iceberg", "moon rock", "caviar", "infused flower" in names when POS cat = Flower)
+- [ ] Add `"infused-flower"` to deriveDisplayName strain-display list
+- [ ] Add filterCategories: infused-flower maps to both "infused-flower" AND "concentrate"
+- [ ] Add filterCategories: infused-flower also maps to "flower" (like popcorn-bud)
+
+### C. Verify and push
+- [ ] Run transformer and verify output
+- [ ] Verify Next.js build compiles
+- [ ] Commit and push branch to GitHub
 
 ## Phase 2: Product Name Parser + Catalog (future slice)
 - [ ] Build product name parser (dash-delimited format parsing)
