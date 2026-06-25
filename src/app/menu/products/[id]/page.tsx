@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { RelatedProductCard } from "@/components/menu/RelatedProductCard";
+import { BackToMenuLink } from "@/components/menu/BackToMenuLink";
 import { ProductDetailPurchasePanel } from "@/components/menu/ProductDetailPurchasePanel";
 import { Footer } from "@/components/site/Footer";
 import { Header } from "@/components/site/Header";
@@ -190,14 +191,14 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
       <Header />
 
       <section className="mx-auto w-full max-w-[430px] px-4 pb-10 pt-4 md:max-w-5xl md:px-8 md:pt-8">
-        <Link href="/menu" className="inline-flex items-center text-[0.68rem] font-black uppercase tracking-[0.18em] text-white transition hover:text-[var(--greenway)]">
+        <BackToMenuLink className="inline-flex items-center text-[0.68rem] font-black uppercase tracking-[0.18em] text-white transition hover:text-[var(--greenway)]">
           ← Back
-        </Link>
+        </BackToMenuLink>
 
         <nav className="mt-4 flex flex-wrap items-center gap-2 text-[0.7rem] font-black uppercase tracking-[0.08em] text-zinc-500" aria-label="Breadcrumb">
           <Link href="/" className="text-zinc-300 hover:text-white">Home</Link>
           <span>›</span>
-          <Link href="/menu" className="text-zinc-300 hover:text-white">Menu</Link>
+          <BackToMenuLink className="text-zinc-300 hover:text-white">Menu</BackToMenuLink>
           <span>›</span>
           <span className="line-clamp-1 text-zinc-400">{item.name}</span>
         </nav>

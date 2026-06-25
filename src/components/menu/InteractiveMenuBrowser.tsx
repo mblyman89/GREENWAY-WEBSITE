@@ -516,13 +516,50 @@ function parsePersistedSort(raw: string | undefined): SortOption | null {
   return raw && SORT_OPTION_VALUES.includes(raw as SortOption) ? (raw as SortOption) : null;
 }
 
+// Merge the server-forwarded params with the LIVE browser URL params.
+//
+// Why: when the shopper returns to /menu via browser back / "← Back" /
+// breadcrumb, the Next.js App Router may serve a cached render whose
+// server-forwarded searchParams are EMPTY (they were empty at push time).
+// Reading window.location.search on the client guarantees we rehydrate from the
+// address bar that the browser restored, so filters survive every return path.
+// The live URL takes precedence; the server params are the SSR/first-paint
+// source so server and first client paint still match (no hydration mismatch,
+// because on first paint window.location.search equals the server URL).
+function resolveInitialParams(serverParams: InitialMenuSearchParams): InitialMenuSearchParams {
+  if (typeof window === "undefined") return serverParams;
+  const live = new URLSearchParams(window.location.search);
+  const pick = (key: keyof InitialMenuSearchParams) => {
+    const liveValue = live.get(key as string);
+    if (liveValue !== null && liveValue !== "") return liveValue;
+    return serverParams[key];
+  };
+  return {
+    search: pick("search") ?? undefined,
+    category: pick("category") ?? undefined,
+    brand: pick("brand") ?? undefined,
+    special: pick("special") ?? undefined,
+    categories: pick("categories") ?? undefined,
+    strains: pick("strains") ?? undefined,
+    brands: pick("brands") ?? undefined,
+    weights: pick("weights") ?? undefined,
+    maxThc: pick("maxThc") ?? undefined,
+    maxCbd: pick("maxCbd") ?? undefined,
+    maxPrice: pick("maxPrice") ?? undefined,
+    sort: pick("sort") ?? undefined,
+  };
+}
+
 type InteractiveMenuBrowserProps = {
   items: GreenwayMenuItem[];
   initialSearchParams?: InitialMenuSearchParams;
 };
 
 export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: InteractiveMenuBrowserProps) {
-  const [initialParams] = useState(initialSearchParams);
+  // Lazy initializer reads the LIVE browser URL (merged with server params) so a
+  // cache-restored return navigation rehydrates every filter. On first paint the
+  // live URL equals the server URL, so server and client agree (no mismatch).
+  const [initialParams] = useState(() => resolveInitialParams(initialSearchParams));
   const initialSearchQuery = initialParams.search ?? "";
   const initialCategoryParam = initialParams.category ?? "";
   const initialCategory = isWebsiteCategory(initialCategoryParam) ? initialCategoryParam : "";
@@ -624,6 +661,51 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
     maxAvailableCbd,
     maxAvailablePrice,
   ]);
+
+  // Safety net for browser back/forward (popstate). If React keeps this component
+  // mounted across a back/forward navigation to /menu (App Router cache reuse),
+  // the lazy state initializers above do NOT re-run, so we must re-sync every
+  // filter from the URL the browser restored. This is what makes the browser
+  // back button reliably restore filters.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const syncFromUrl = () => {
+      const params = new URLSearchParams(window.location.search);
+      const list = (key: string) => parsePersistedList(params.get(key) ?? undefined);
+      const num = (key: string) => parsePersistedNumber(params.get(key) ?? undefined);
+
+      const nextCategories = (list("categories").filter(isWebsiteCategory) as GreenwayCategory[]);
+      const singleCategory = params.get("category") ?? "";
+      setSelectedCategories(
+        nextCategories.length
+          ? nextCategories
+          : isWebsiteCategory(singleCategory)
+            ? [singleCategory]
+            : [],
+      );
+
+      setSelectedStrains(list("strains"));
+
+      const nextBrands = list("brands");
+      const singleBrand = params.get("brand") ?? "";
+      setSelectedBrands(nextBrands.length ? nextBrands : singleBrand ? [singleBrand] : []);
+
+      setSelectedWeights(list("weights"));
+      setQuery(params.get("search") ?? "");
+
+      setMaxThc(num("maxThc") ?? maxAvailableThc);
+      setMaxCbd(num("maxCbd") ?? maxAvailableCbd);
+      setMaxPrice(num("maxPrice") ?? maxAvailablePrice);
+
+      setSortBy(parsePersistedSort(params.get("sort") ?? undefined) ?? "featured-shuffle");
+
+      // The next URL-write effect run must not clobber what we just restored.
+      firstWriteRef.current = true;
+    };
+
+    window.addEventListener("popstate", syncFromUrl);
+    return () => window.removeEventListener("popstate", syncFromUrl);
+  }, [maxAvailableThc, maxAvailableCbd, maxAvailablePrice]);
 
   const criteria = useMemo<FilterCriteria>(() => ({
     query,

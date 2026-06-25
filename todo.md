@@ -1,50 +1,41 @@
-# Shop Page Enhancement — PR #18 (feature/shop-page-cosmetic-overhaul)
+# FIX: Filter persistence on return to /menu — PR #18 (feature/shop-page-cosmetic-overhaul)
 
-Handoff plan for the 7-part enhancement request. All tasks complete & verified.
+## Problem (was confirmed empirically)
+Returning to /menu from a product detail page did NOT restore filters:
+- Page "← Back" button was `<Link href="/menu">` (no params) → reset to 2325 of 2325
+- Breadcrumb "Menu" was `<Link href="/menu">` (no params) → reset filters
+- Browser back was unreliable (App Router RSC cache served the empty-param render)
 
-## A. Sidebar in-flow scroll (FIX prior sticky)
-- [x] Remove `lg:sticky lg:top-6 lg:max-h-[...] lg:overflow-y-auto` from `<aside>`
-- [x] Keep `lg:self-start` so sidebar is tied to its top position and scrolls with the page
-- [x] Verified: sidebar scrolls together with product cards, stops once past last filter
+## Fix (implemented + verified)
+- [x] Read & trace all relevant files
+- [x] Reproduce the bug in the production build via browser automation
+- [x] A. Created `src/components/menu/BackToMenuLink.tsx` — client component that
+      calls `router.back()` (returns to the EXACT prior filtered URL + router state)
+      with a safe fallback to `<Link href="/menu">` for direct landings (no
+      same-origin history). Respects modifier/middle clicks.
+- [x] B. Product page "← Back" now uses `BackToMenuLink`.
+- [x] C. Breadcrumb "Menu" now uses `BackToMenuLink`.
+- [x] D. `InteractiveMenuBrowser` lazy state init now reads the LIVE
+      `window.location.search` (merged with server params via `resolveInitialParams`)
+      so cache-restored renders rehydrate every filter.
+- [x] E. Kept the replaceState URL-write effect (URL always reflects state).
+- [x] F. Added a `popstate` listener safety net that re-syncs ALL filters from the
+      URL on browser back/forward (sets firstWriteRef so the write effect won't
+      clobber the restored state).
 
-## B. Remove helper text under filter labels
-- [x] Removed `helper=` from Strains, Weights, Price, THC, CBD FilterSections
-- [x] Kept Categories ("Shop by product type") and Brands helper text
-- [x] Applies to both desktop + mobile (shared `MenuFilterControls`)
-
-## C. Remove preview-only paragraph
-- [x] Removed "Preview-only filters use exact-match POS product data..." block
-
-## D. Fix Shop dropdown navigation
-- [x] navigation-data.ts: 20 real categories mirroring `websiteCategoryDefinitions`
-- [x] Each href `/menu?category=<value>` pre-filters the shop page
-- [x] NavLink.tsx: dropdown scrollable (`max-h-[70vh] overflow-y-auto`)
-- [x] MobileNavigation.tsx: same category list with `?category=<value>`
-- [x] Verified: dropdown shows all 20 categories w/ customer-friendly helpers
-
-## E. Fix daily-deals → product card mapping (CRITICAL BUG)
-- [x] daily-deals.ts rewritten: `getStoreWeekday()` via Intl America/Los_Angeles
-- [x] All 7 days implemented (Mon Munchie, Tue Doobie, Wed Wax, Thu Top Shelf,
-      Fri Ounce, Sat Super, Sun Ice Cream) with category gating + bonus notes
-- [x] useStoreWeekday.ts hook (useSyncExternalStore, hydration-safe)
-- [x] ProductCard / RelatedProductCard / ProductDetailPurchasePanel resolve client-side
-- [x] Verified LIVE: badge reads "Top Shelf Thursday · 25% off" (today=Thursday) — bug fixed
-
-## F. Accessories images + descriptions
-- [x] 14 professional WebP images on dark theme in public/accessories/ (516K total)
-- [x] Rewrote all 14 accessory descriptions as compelling sales copy
-- [x] Verified: 14/14 images load, descriptions render
-
-## G. Filter persistence on back/breadcrumb
-- [x] menu/page.tsx forwards categories/strains/brands/weights/maxThc/maxCbd/maxPrice/sort
-- [x] InteractiveMenuBrowser lazy-inits state from persisted params (hydration-safe)
-- [x] URL-write effect (replaceState) gated by firstWriteRef
-- [x] Verified: product → back restores URL, pills, sort
-
-## H. Verify & deliver
+## Verify & deliver
 - [x] tsc --noEmit: 0 errors
-- [x] eslint changed files: 0 errors (1 pre-existing <img> warning)
-- [x] npm run build: success, 2366 pages, /menu Dynamic, BUILD_ID qcpeTe04ev_kNl9kuo4JS
-- [x] Live browser verification of A–G
+- [x] eslint changed files: 0 errors (1 pre-existing <img> warning only)
+- [x] npm run build: success (2366 pages, /menu dynamic)
+- [x] Browser verify ALL THREE return methods restore filters AND product count:
+      baseline flower+indica+price-low = "Showing 30 of 2325"
+      - [x] Browser back button → 30 of 2325 ✓
+      - [x] Page "← Back" button → 30 of 2325 ✓
+      - [x] Breadcrumb "Menu" → 30 of 2325 ✓
+- [x] Complex combo (flower+indica+maxPrice=40+sort=price-high = 25 items):
+      product → Back restored URL, count=25, sort, and $40 price pill ✓
+- [x] Direct-landing fallback: Back still navigates to a valid /menu (not stuck) ✓
+- [x] Visual proof screenshot: pills FLOWER/INDICA/$40, "Showing 25 of 2325",
+      sort Price High-Low, indica flower products shown ✓
 - [ ] Commit + push to feature/shop-page-cosmetic-overhaul
-- [ ] Confirm PR #18 updates + Vercel preview
+- [ ] Confirm PR #18 + Vercel preview
