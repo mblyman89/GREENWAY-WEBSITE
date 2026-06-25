@@ -3,4 +3,4 @@
 - [x] Add POS raw category suffix to displayed card product name except for flower
 - [x] Rebuild variant selector UI to mimic uploaded compact dropdown design
 - [x] Verify menu page build and generated data still work
-- [ ] Commit and push branch for Vercel inspection
+- [x] Commit and push branch for Vercel inspection
