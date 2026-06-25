@@ -4,14 +4,18 @@ import { useMemo, useState } from "react";
 import { useMockCart } from "@/components/cart/CartProvider";
 import { formatMinorCurrency } from "@/lib/leafly/format";
 import type { GreenwayMenuItem } from "@/lib/leafly/types";
+import { getActiveMenuDiscount } from "@/lib/specials/daily-deals";
+import { useStoreWeekday } from "@/lib/specials/useStoreWeekday";
 
 type ProductDetailPurchasePanelProps = {
   item: GreenwayMenuItem;
-  salePriceMinorUnits?: number;
 };
 
-export function ProductDetailPurchasePanel({ item, salePriceMinorUnits }: ProductDetailPurchasePanelProps) {
+export function ProductDetailPurchasePanel({ item }: ProductDetailPurchasePanelProps) {
   const { addItem } = useMockCart();
+  // Resolve today's deal on the client so prices stay accurate despite SSG.
+  const weekday = useStoreWeekday();
+  const salePriceMinorUnits = weekday ? getActiveMenuDiscount(item, weekday)?.salePriceMinorUnits : undefined;
   const variants = useMemo(
     () =>
       item.variants.length > 0

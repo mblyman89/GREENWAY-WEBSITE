@@ -206,8 +206,11 @@ export function ProductCardVisual({ item, salePriceMinorUnits, saleBadgeLabel, c
         >
           {displayName}
         </Link>
+      </div>
 
-        <div className="mt-3 grid gap-2 text-center">
+      {/* Bottom group: strain + THC/CBD + price + cart all hug the bottom so boxes align across cards regardless of name length. */}
+      <div className="pt-4 text-center">
+        <div className="mb-3 grid gap-2 text-center">
           <span
             className="flex min-h-9 w-full items-center justify-center rounded-md px-3 py-2 text-sm font-black uppercase leading-none text-white"
             style={{ backgroundColor: tone.pill, color: isNonCannabisItem(item) ? "#111" : "#fff" }}
@@ -221,9 +224,6 @@ export function ProductCardVisual({ item, salePriceMinorUnits, saleBadgeLabel, c
             </div>
           ) : null}
         </div>
-      </div>
-
-      <div className="pt-4 text-center">
         {saleBadgeLabel ? (
           <div className="mb-2 rounded-full border border-[var(--greenway)]/55 bg-black/60 px-3 py-1.5 text-[0.66rem] font-black uppercase leading-tight tracking-[0.08em] text-[var(--greenway)] shadow-[0_0_18px_rgba(126,217,87,0.18)]">
             {saleBadgeLabel}

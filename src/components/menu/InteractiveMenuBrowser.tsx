@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { GreenwayCategory, GreenwayMenuItem } from "@/lib/leafly/types";
 import { formatWebsiteCategory, websiteCategories } from "@/lib/pos/category-taxonomy";
 import { FilterMobile, MenuFilterControls } from "./FilterMobile";
@@ -8,7 +8,22 @@ import { FilterTags } from "./FilterTags";
 import { ProductCard } from "./ProductCard";
 import { SortDropdown, type SortOption } from "./SortDropdown";
 
-const requestedWeights = ["1g", "2g", "3.5g", "7g", "14g", "28g"];
+// Canonical gram-weight order. Only weights actually present in the data are shown (see deriveWeightOptions).
+const weightDisplayOrder = ["0.5g", "0.7g", "0.75g", "1g", "1.2g", "1.5g", "2g", "2.5g", "3g", "3.5g", "4g", "5g", "7g", "14g", "28g", "1oz", "10pk"];
+
+// Industry "CBD-rich" threshold (Dutch Passion): >= 4% CBD. Special strain-filter value.
+const HIGH_CBD_THRESHOLD = 4;
+const HIGH_CBD_VALUE = "cbd";
+
+function normalizeWeightLabel(label: string) {
+  return label.trim().toLowerCase();
+}
+
+// Extract a canonical weight token from a variant label, if it maps to one we display.
+function weightTokenFromLabel(label: string) {
+  const normalized = normalizeWeightLabel(label);
+  return weightDisplayOrder.find((weight) => normalized === weight.toLowerCase() || normalized.includes(weight.toLowerCase())) ?? null;
+}
 
 type PreviewSpecialCollection = {
   label: string;
@@ -99,20 +114,20 @@ type AccessorySectionCard = {
 };
 
 const accessorySectionCards: AccessorySectionCard[] = [
-  { key: "bongs", label: "Bongs", description: "Water pipes for cooler, smoother flower sessions, including beaker, straight-tube, and compact tabletop styles.", imageUrl: "https://images.unsplash.com/photo-1603909223429-69bb7101f420?auto=format&fit=crop&w=900&q=80" },
-  { key: "pipes", label: "Pipes", description: "Hand pipes, spoons, and everyday dry pieces for simple flower use without extra accessories.", imageUrl: "https://images.unsplash.com/photo-1603908125839-742cbace1c26?auto=format&fit=crop&w=900&q=80" },
-  { key: "papers", label: "Papers", description: "Rolling papers, cones, wraps, tips, and paper accessories for classic hand-rolled sessions.", imageUrl: "https://images.unsplash.com/photo-1605792657660-596af9009e82?auto=format&fit=crop&w=900&q=80" },
-  { key: "bowl-pieces", label: "Bowl Pieces", description: "Replacement and upgrade bowls for glass water pipes, with common glass-on-glass joint sizes and styles.", imageUrl: "https://images.unsplash.com/photo-1589401806207-2381455bce23?auto=format&fit=crop&w=900&q=80" },
-  { key: "rolling-trays", label: "Rolling Trays", description: "Trays that keep flower, papers, filters, grinders, and tools organized while rolling or packing.", imageUrl: "https://images.unsplash.com/photo-1615485290382-441e4d049cb5?auto=format&fit=crop&w=900&q=80" },
-  { key: "grinders", label: "Grinders", description: "Two-piece, four-piece, and kief-catching grinders for breaking flower down evenly before use.", imageUrl: "https://images.unsplash.com/photo-1590114538379-8aeb2c34f856?auto=format&fit=crop&w=900&q=80" },
-  { key: "vape-batteries", label: "Vape Batteries", description: "510-thread and compatible batteries for cartridges, with simple draw-activated and variable-voltage options.", imageUrl: "https://images.unsplash.com/photo-1627123424574-724758594e93?auto=format&fit=crop&w=900&q=80" },
-  { key: "dab-tools", label: "Dab Tools", description: "Tools, carb caps, containers, and handling accessories for concentrates, rosin, resin, and extracts.", imageUrl: "https://images.unsplash.com/photo-1517157837591-031d016b67e8?auto=format&fit=crop&w=900&q=80" },
-  { key: "dab-rigs", label: "Dab Rigs", description: "Glass rigs and concentrate pieces built for vaporizing extracts with bangers, nails, or e-rig accessories.", imageUrl: "https://images.unsplash.com/photo-1616699002805-0741e1e4a9c5?auto=format&fit=crop&w=900&q=80" },
-  { key: "down-stems", label: "Down Stems", description: "Replacement down stems and adapters for matching compatible water-pipe joint sizes and lengths.", imageUrl: "https://images.unsplash.com/photo-1598300188904-6287d52746ad?auto=format&fit=crop&w=900&q=80" },
-  { key: "bubblers", label: "Bubblers", description: "Portable water-filtered pieces that sit between hand pipes and full-size bongs for smoother flower sessions.", imageUrl: "https://images.unsplash.com/photo-1603909223429-69bb7101f420?auto=format&fit=crop&w=900&q=80" },
-  { key: "sherlocks", label: "Sherlocks", description: "Curved Sherlock-style hand pipes with a classic profile and comfortable grip for dry flower.", imageUrl: "https://images.unsplash.com/photo-1603908125839-742cbace1c26?auto=format&fit=crop&w=900&q=80" },
-  { key: "chillums", label: "Chillums", description: "Compact one-hitters and straight glass pieces for quick, low-profile flower sessions.", imageUrl: "https://images.unsplash.com/photo-1589401806207-2381455bce23?auto=format&fit=crop&w=900&q=80" },
-  { key: "lighters", label: "Lighters", description: "Everyday lighters, torches, hemp wick, and ignition essentials for flower, prerolls, and concentrate gear.", imageUrl: "https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=900&q=80" },
+  { key: "bongs", label: "Bongs", description: "Big, smooth, water-cooled hits without the harshness. Premium borosilicate beakers and straight tubes with built-in percs filter every pull so your flower tastes cleaner and hits easier — the centerpiece your sessions deserve.", imageUrl: "/accessories/bongs.webp" },
+  { key: "pipes", label: "Pipes", description: "Grab, pack, and go. Hand-blown glass spoons in bold colors that fit perfectly in your palm and your pocket — the everyday classic that's ready whenever you are, no water or setup required.", imageUrl: "/accessories/pipes.webp" },
+  { key: "papers", label: "Papers", description: "Roll the perfect joint every time. Slow-burning papers, ready-to-fill cones, and tips that keep ash even and flavor pure. Stock up — the difference between a good roll and a great one starts here.", imageUrl: "/accessories/papers.webp" },
+  { key: "bowl-pieces", label: "Bowl Pieces", description: "Upgrade your rip or replace a lost slide in seconds. Thick glass bowls in standard joint sizes with easy-grip handles and built-in screens — pack bigger, pull cleaner, and breathe new life into the piece you already love.", imageUrl: "/accessories/bowl-pieces.webp" },
+  { key: "rolling-trays", label: "Rolling Trays", description: "Keep every session tidy and stash-free. Sleek metal trays with raised edges corral your flower, papers, and grinder so nothing spills and nothing's lost — the clean, organized home base every roller wants on the table.", imageUrl: "/accessories/rolling-trays.webp" },
+  { key: "grinders", label: "Grinders", description: "Fluffy, even grind and zero waste. Precision-milled aluminum teeth break down flower effortlessly while the mesh screen collects every speck of potent kief in the bottom chamber — more flavor, easier packing, nothing left behind.", imageUrl: "/accessories/grinders.webp" },
+  { key: "vape-batteries", label: "Vape Batteries", description: "Power any 510-thread cart with one reliable click. Long-lasting batteries with draw-activated ease or adjustable voltage to dial in your hit, plus fast USB charging — consistent clouds, pocket-ready, all day long.", imageUrl: "/accessories/vape-batteries.webp" },
+  { key: "dab-tools", label: "Dab Tools", description: "Handle your concentrates like a pro. Rust-proof stainless steel tools, precision carb caps, and a non-stick silicone container keep every dab clean, mess-free, and exactly where it belongs — no sticky fingers, no wasted wax.", imageUrl: "/accessories/dab-tools.webp" },
+  { key: "dab-rigs", label: "Dab Rigs", description: "Flavor-first dabs with maximum vapor. Compact glass rigs paired with quartz bangers and water percolation deliver smooth, terpene-rich hits that hit hard and taste incredible — built for concentrate lovers who want every drop to count.", imageUrl: "/accessories/dab-rigs.webp" },
+  { key: "down-stems", label: "Down Stems", description: "The perfect-fit upgrade your bong's been missing. Diffused glass down stems in multiple lengths break smoke into tiny bubbles for cooler, smoother pulls — match your joint size and instantly level up filtration.", imageUrl: "/accessories/down-stems.webp" },
+  { key: "bubblers", label: "Bubblers", description: "Bong-smooth hits in a piece that fits your hand. Hand-held glass bubblers add water filtration and a built-in perc to a portable frame — the best of both worlds for sessions that travel without sacrificing a single smooth pull.", imageUrl: "/accessories/bubblers.webp" },
+  { key: "sherlocks", label: "Sherlocks", description: "Timeless style meets a cooler hit. The signature gooseneck curve on these striped glass Sherlocks keeps smoke away from your hand and the flame at a comfortable distance — a collector-worthy classic that feels as good as it looks.", imageUrl: "/accessories/sherlocks.webp" },
+  { key: "chillums", label: "Chillums", description: "One-hit, one-and-done discretion. Slim swirl-glass chillums load a quick bowl and stash anywhere — the low-profile, easy-to-clean pick for a fast, flavorful pull on the move with zero fuss.", imageUrl: "/accessories/chillums.webp" },
+  { key: "lighters", label: "Lighters", description: "Never get caught without a flame. Refillable torches that fire up dabs and bowls, classic flip lighters for everyday carry, and natural hemp wick for a cleaner-tasting light — the dependable essentials no session should start without.", imageUrl: "/accessories/lighters.webp" },
 ];
 
 function safeSectionId(value: string) {
@@ -368,14 +383,13 @@ function isWebsiteCategory(value: string): value is GreenwayCategory {
 }
 
 function itemWeightLabels(item: GreenwayMenuItem) {
-  return item.variants.flatMap((variant) => {
-    const normalizedLabel = variant.label.toLowerCase();
-    return requestedWeights.filter((weight) => normalizedLabel.includes(weight.toLowerCase()));
-  });
+  return item.variants
+    .map((variant) => weightTokenFromLabel(variant.label))
+    .filter((weight): weight is string => weight !== null);
 }
 
-function matchesCannabinoidSlider(value: number | null, maxValue: number) {
-  if (maxValue === 100) return true;
+function matchesCannabinoidSlider(value: number | null, maxValue: number, maxAvailable: number) {
+  if (maxValue >= maxAvailable) return true;
   return value !== null && value <= maxValue;
 }
 
@@ -384,14 +398,33 @@ function matchesPriceSlider(priceMinorUnits: number, maxPrice: number, maxAvaila
   return priceMinorUnits <= maxPrice * 100;
 }
 
-function itemMatchesCriteria(item: GreenwayMenuItem, criteria: FilterCriteria, maxAvailablePrice: number) {
+// True when an item qualifies as high-CBD ("CBD-rich") per the industry >= 4% threshold.
+function isHighCbdItem(item: GreenwayMenuItem) {
+  const cbd = cannabinoidPercentageValue(item.totalCbd);
+  return cbd !== null && cbd >= HIGH_CBD_THRESHOLD;
+}
+
+type CannabinoidBounds = {
+  maxAvailableThc: number;
+  maxAvailableCbd: number;
+};
+
+function matchesStrainSelection(item: GreenwayMenuItem, selectedStrains: string[]) {
+  if (selectedStrains.length === 0) return true;
+  return selectedStrains.some((strain) => {
+    if (strain === HIGH_CBD_VALUE) return isHighCbdItem(item);
+    return item.strainType === strain;
+  });
+}
+
+function itemMatchesCriteria(item: GreenwayMenuItem, criteria: FilterCriteria, maxAvailablePrice: number, bounds: CannabinoidBounds) {
   const itemCategories = item.filterCategories?.length ? item.filterCategories : [item.category];
   const categoryOk = criteria.selectedCategories.length === 0 || criteria.selectedCategories.some((category) => itemCategories.includes(category));
-  const strainOk = criteria.selectedStrains.length === 0 || criteria.selectedStrains.includes(item.strainType);
+  const strainOk = matchesStrainSelection(item, criteria.selectedStrains);
   const brandOk = criteria.selectedBrands.length === 0 || criteria.selectedBrands.includes(item.brand);
   const weightOk = criteria.selectedWeights.length === 0 || criteria.selectedWeights.some((weight) => itemWeightLabels(item).includes(weight));
-  const thcOk = matchesCannabinoidSlider(cannabinoidPercentageValue(item.totalThc), criteria.maxThc);
-  const cbdOk = matchesCannabinoidSlider(cannabinoidPercentageValue(item.totalCbd), criteria.maxCbd);
+  const thcOk = matchesCannabinoidSlider(cannabinoidPercentageValue(item.totalThc), criteria.maxThc, bounds.maxAvailableThc);
+  const cbdOk = matchesCannabinoidSlider(cannabinoidPercentageValue(item.totalCbd), criteria.maxCbd, bounds.maxAvailableCbd);
   const priceOk = matchesPriceSlider(item.priceMinorUnits, criteria.maxPrice, maxAvailablePrice);
   const searchOk = matchesSearch(item, criteria.query);
 
@@ -416,14 +449,16 @@ function buildOptions(baseValues: string[], selectedValues: string[] = [], label
   }));
 }
 
-function buildRequestedWeightOptions(items: GreenwayMenuItem[], selectedWeights: string[]) {
+// Derive weight options from the actual variant labels in the data (no hardcoded list of values).
+function buildWeightOptionsFromData(items: GreenwayMenuItem[], selectedWeights: string[]) {
   const counts = countValues(items.flatMap(itemWeightLabels));
-  return requestedWeights.map((weight) => ({
-    value: weight,
-    label: weight,
-    count: counts[weight] ?? 0,
-  })).filter((option) => option.count > 0 || selectedWeights.includes(option.value) || requestedWeights.includes(option.value));
+  return weightDisplayOrder
+    .map((weight) => ({ value: weight, label: weight, count: counts[weight] ?? 0 }))
+    .filter((option) => option.count > 0 || selectedWeights.includes(option.value));
 }
+
+// A value safely above any cannabinoid/price data max, used as the "no constraint" sentinel.
+const UNBOUNDED = Number.POSITIVE_INFINITY;
 
 function criteriaWithout(criteria: FilterCriteria, key: keyof FilterCriteria): FilterCriteria {
   if (key === "query") return { ...criteria, query: "" };
@@ -431,9 +466,9 @@ function criteriaWithout(criteria: FilterCriteria, key: keyof FilterCriteria): F
   if (key === "selectedStrains") return { ...criteria, selectedStrains: [] };
   if (key === "selectedBrands") return { ...criteria, selectedBrands: [] };
   if (key === "selectedWeights") return { ...criteria, selectedWeights: [] };
-  if (key === "maxThc") return { ...criteria, maxThc: 100 };
-  if (key === "maxCbd") return { ...criteria, maxCbd: 100 };
-  if (key === "maxPrice") return { ...criteria, maxPrice: 100 };
+  if (key === "maxThc") return { ...criteria, maxThc: UNBOUNDED };
+  if (key === "maxCbd") return { ...criteria, maxCbd: UNBOUNDED };
+  if (key === "maxPrice") return { ...criteria, maxPrice: UNBOUNDED };
   return criteria;
 }
 
@@ -442,7 +477,78 @@ type InitialMenuSearchParams = {
   category?: string;
   brand?: string;
   special?: string;
+  // Richer persisted filter params (Task G).
+  categories?: string;
+  strains?: string;
+  brands?: string;
+  weights?: string;
+  maxThc?: string;
+  maxCbd?: string;
+  maxPrice?: string;
+  sort?: string;
 };
+
+const SORT_OPTION_VALUES: SortOption[] = [
+  "featured-shuffle",
+  "best-sellers",
+  "price-low",
+  "price-high",
+  "potency-high",
+  "category",
+];
+
+// Parse a comma-separated persisted param into a clean string list.
+function parsePersistedList(raw: string | undefined): string[] {
+  return (raw ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
+// Parse a numeric persisted param, returning null when absent/invalid.
+function parsePersistedNumber(raw: string | undefined): number | null {
+  if (raw === undefined || raw === "") return null;
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : null;
+}
+
+function parsePersistedSort(raw: string | undefined): SortOption | null {
+  return raw && SORT_OPTION_VALUES.includes(raw as SortOption) ? (raw as SortOption) : null;
+}
+
+// Merge the server-forwarded params with the LIVE browser URL params.
+//
+// Why: when the shopper returns to /menu via browser back / "← Back" /
+// breadcrumb, the Next.js App Router may serve a cached render whose
+// server-forwarded searchParams are EMPTY (they were empty at push time).
+// Reading window.location.search on the client guarantees we rehydrate from the
+// address bar that the browser restored, so filters survive every return path.
+// The live URL takes precedence; the server params are the SSR/first-paint
+// source so server and first client paint still match (no hydration mismatch,
+// because on first paint window.location.search equals the server URL).
+function resolveInitialParams(serverParams: InitialMenuSearchParams): InitialMenuSearchParams {
+  if (typeof window === "undefined") return serverParams;
+  const live = new URLSearchParams(window.location.search);
+  const pick = (key: keyof InitialMenuSearchParams) => {
+    const liveValue = live.get(key as string);
+    if (liveValue !== null && liveValue !== "") return liveValue;
+    return serverParams[key];
+  };
+  return {
+    search: pick("search") ?? undefined,
+    category: pick("category") ?? undefined,
+    brand: pick("brand") ?? undefined,
+    special: pick("special") ?? undefined,
+    categories: pick("categories") ?? undefined,
+    strains: pick("strains") ?? undefined,
+    brands: pick("brands") ?? undefined,
+    weights: pick("weights") ?? undefined,
+    maxThc: pick("maxThc") ?? undefined,
+    maxCbd: pick("maxCbd") ?? undefined,
+    maxPrice: pick("maxPrice") ?? undefined,
+    sort: pick("sort") ?? undefined,
+  };
+}
 
 type InteractiveMenuBrowserProps = {
   items: GreenwayMenuItem[];
@@ -450,7 +556,10 @@ type InteractiveMenuBrowserProps = {
 };
 
 export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: InteractiveMenuBrowserProps) {
-  const [initialParams] = useState(initialSearchParams);
+  // Lazy initializer reads the LIVE browser URL (merged with server params) so a
+  // cache-restored return navigation rehydrates every filter. On first paint the
+  // live URL equals the server URL, so server and client agree (no mismatch).
+  const [initialParams] = useState(() => resolveInitialParams(initialSearchParams));
   const initialSearchQuery = initialParams.search ?? "";
   const initialCategoryParam = initialParams.category ?? "";
   const initialCategory = isWebsiteCategory(initialCategoryParam) ? initialCategoryParam : "";
@@ -458,23 +567,145 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
   const initialSpecialKey = initialParams.special as PreviewSpecialCollectionKey | undefined;
   const initialSpecial = initialSpecialKey && initialSpecialKey in previewSpecialCollections ? previewSpecialCollections[initialSpecialKey] : null;
   const initialSpecialCategories = initialSpecial?.categories ?? [];
+
+  // Richer persisted filter params (Task G). When present they take precedence
+  // so the menu restores the shopper's exact state on return from a product page.
+  const persistedCategories = parsePersistedList(initialParams.categories).filter(isWebsiteCategory) as GreenwayCategory[];
+  const persistedStrains = parsePersistedList(initialParams.strains);
+  const persistedBrands = parsePersistedList(initialParams.brands);
+  const persistedWeights = parsePersistedList(initialParams.weights);
+  const persistedMaxThc = parsePersistedNumber(initialParams.maxThc);
+  const persistedMaxCbd = parsePersistedNumber(initialParams.maxCbd);
+  const persistedMaxPrice = parsePersistedNumber(initialParams.maxPrice);
+  const persistedSort = parsePersistedSort(initialParams.sort);
+
   const [query, setQuery] = useState(initialSearchQuery);
-  const [selectedCategories, setSelectedCategories] = useState<GreenwayCategory[]>(initialCategory ? [initialCategory] : initialSpecialCategories);
-  const [selectedStrains, setSelectedStrains] = useState<string[]>([]);
-  const [selectedBrands, setSelectedBrands] = useState<string[]>(initialBrand ? [initialBrand] : []);
-  const [selectedWeights, setSelectedWeights] = useState<string[]>([]);
-  const [maxThc, setMaxThc] = useState(100);
-  const [maxCbd, setMaxCbd] = useState(100);
-  const maxAvailablePrice = Math.max(100, Math.ceil(Math.max(...items.map((item) => item.priceMinorUnits), 0) / 100));
-  const [maxPrice, setMaxPrice] = useState(initialSpecial?.maxPrice ?? maxAvailablePrice);
+  const [selectedCategories, setSelectedCategories] = useState<GreenwayCategory[]>(
+    persistedCategories.length ? persistedCategories : initialCategory ? [initialCategory] : initialSpecialCategories,
+  );
+  const [selectedStrains, setSelectedStrains] = useState<string[]>(persistedStrains);
+  const [selectedBrands, setSelectedBrands] = useState<string[]>(
+    persistedBrands.length ? persistedBrands : initialBrand ? [initialBrand] : [],
+  );
+  const [selectedWeights, setSelectedWeights] = useState<string[]>(persistedWeights);
+  // Data-derived bounds for sliders (no hardcoded ceilings).
+  const maxAvailablePrice = useMemo(
+    () => Math.max(10, Math.ceil(Math.max(...items.map((item) => item.priceMinorUnits), 0) / 100)),
+    [items],
+  );
+  const maxAvailableThc = useMemo(
+    () => Math.max(1, Math.ceil(Math.max(0, ...items.map((item) => cannabinoidPercentageValue(item.totalThc) ?? 0)))),
+    [items],
+  );
+  const maxAvailableCbd = useMemo(
+    () => Math.max(1, Math.ceil(Math.max(0, ...items.map((item) => cannabinoidPercentageValue(item.totalCbd) ?? 0)))),
+    [items],
+  );
+  const minAvailablePrice = useMemo(
+    () => Math.max(0, Math.floor(Math.min(...items.map((item) => item.priceMinorUnits), 0) / 100)),
+    [items],
+  );
+  const [maxThc, setMaxThc] = useState(persistedMaxThc ?? maxAvailableThc);
+  const [maxCbd, setMaxCbd] = useState(persistedMaxCbd ?? maxAvailableCbd);
+  const [maxPrice, setMaxPrice] = useState(persistedMaxPrice ?? initialSpecial?.maxPrice ?? maxAvailablePrice);
+  const cannabinoidBounds = useMemo<CannabinoidBounds>(
+    () => ({ maxAvailableThc, maxAvailableCbd }),
+    [maxAvailableThc, maxAvailableCbd],
+  );
   const shuffleSignature = useMemo(() => items.map((item) => item.id).join("|"), [items]);
   const shuffleRanks = useSyncExternalStore(
     subscribeToShuffleStore,
     () => getBrowserShuffleRanks(items, shuffleSignature),
     getServerShuffleRanks,
   );
-  const [sortBy, setSortBy] = useState<SortOption>(initialSpecial?.sortBy ?? "featured-shuffle");
+  const [sortBy, setSortBy] = useState<SortOption>(persistedSort ?? initialSpecial?.sortBy ?? "featured-shuffle");
 
+  // --- Filter persistence (Task G) ---------------------------------------
+  // State is hydrated from forwarded URL params above (server + client agree,
+  // so no hydration mismatch). Here we write the current state BACK to the URL
+  // (replaceState — no history spam) so returning from a product page restores
+  // everything. We skip the very first paint to avoid rewriting the URL before
+  // it differs from the hydrated state.
+  const firstWriteRef = useRef(true);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (firstWriteRef.current) {
+      firstWriteRef.current = false;
+      return;
+    }
+    const params = new URLSearchParams();
+    if (query.trim()) params.set("search", query.trim());
+    if (selectedCategories.length) params.set("categories", selectedCategories.join(","));
+    if (selectedStrains.length) params.set("strains", selectedStrains.join(","));
+    if (selectedBrands.length) params.set("brands", selectedBrands.join(","));
+    if (selectedWeights.length) params.set("weights", selectedWeights.join(","));
+    if (maxThc < maxAvailableThc) params.set("maxThc", String(maxThc));
+    if (maxCbd < maxAvailableCbd) params.set("maxCbd", String(maxCbd));
+    if (maxPrice < maxAvailablePrice) params.set("maxPrice", String(maxPrice));
+    if (sortBy !== "featured-shuffle") params.set("sort", sortBy);
+    const queryString = params.toString();
+    const newUrl = `${window.location.pathname}${queryString ? `?${queryString}` : ""}${window.location.hash}`;
+    window.history.replaceState(window.history.state, "", newUrl);
+  }, [
+    query,
+    selectedCategories,
+    selectedStrains,
+    selectedBrands,
+    selectedWeights,
+    maxThc,
+    maxCbd,
+    maxPrice,
+    sortBy,
+    maxAvailableThc,
+    maxAvailableCbd,
+    maxAvailablePrice,
+  ]);
+
+  // Safety net for browser back/forward (popstate). If React keeps this component
+  // mounted across a back/forward navigation to /menu (App Router cache reuse),
+  // the lazy state initializers above do NOT re-run, so we must re-sync every
+  // filter from the URL the browser restored. This is what makes the browser
+  // back button reliably restore filters.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const syncFromUrl = () => {
+      const params = new URLSearchParams(window.location.search);
+      const list = (key: string) => parsePersistedList(params.get(key) ?? undefined);
+      const num = (key: string) => parsePersistedNumber(params.get(key) ?? undefined);
+
+      const nextCategories = (list("categories").filter(isWebsiteCategory) as GreenwayCategory[]);
+      const singleCategory = params.get("category") ?? "";
+      setSelectedCategories(
+        nextCategories.length
+          ? nextCategories
+          : isWebsiteCategory(singleCategory)
+            ? [singleCategory]
+            : [],
+      );
+
+      setSelectedStrains(list("strains"));
+
+      const nextBrands = list("brands");
+      const singleBrand = params.get("brand") ?? "";
+      setSelectedBrands(nextBrands.length ? nextBrands : singleBrand ? [singleBrand] : []);
+
+      setSelectedWeights(list("weights"));
+      setQuery(params.get("search") ?? "");
+
+      setMaxThc(num("maxThc") ?? maxAvailableThc);
+      setMaxCbd(num("maxCbd") ?? maxAvailableCbd);
+      setMaxPrice(num("maxPrice") ?? maxAvailablePrice);
+
+      setSortBy(parsePersistedSort(params.get("sort") ?? undefined) ?? "featured-shuffle");
+
+      // The next URL-write effect run must not clobber what we just restored.
+      firstWriteRef.current = true;
+    };
+
+    window.addEventListener("popstate", syncFromUrl);
+    return () => window.removeEventListener("popstate", syncFromUrl);
+  }, [maxAvailableThc, maxAvailableCbd, maxAvailablePrice]);
 
   const criteria = useMemo<FilterCriteria>(() => ({
     query,
@@ -491,29 +722,38 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
     const specialItemIds = initialSpecial?.itemIds;
     const specialItems = specialItemIds ? items.filter((item) => specialItemIds.includes(item.id)) : items;
 
-    return sortItems(specialItems.filter((item) => itemMatchesCriteria(item, criteria, maxAvailablePrice)), sortBy, shuffleRanks);
-  }, [criteria, initialSpecial?.itemIds, items, maxAvailablePrice, shuffleRanks, sortBy]);
+    return sortItems(specialItems.filter((item) => itemMatchesCriteria(item, criteria, maxAvailablePrice, cannabinoidBounds)), sortBy, shuffleRanks);
+  }, [cannabinoidBounds, criteria, initialSpecial?.itemIds, items, maxAvailablePrice, shuffleRanks, sortBy]);
 
   const categoryOptions = useMemo(() => {
-    const optionItems = items.filter((item) => itemMatchesCriteria(item, criteriaWithout(criteria, "selectedCategories"), maxAvailablePrice));
+    const optionItems = items.filter((item) => itemMatchesCriteria(item, criteriaWithout(criteria, "selectedCategories"), maxAvailablePrice, cannabinoidBounds));
     const categoryValues = optionItems.flatMap((item) => item.filterCategories?.length ? item.filterCategories : [item.category]);
     return buildOptions([...categoryValues, ...Array(accessorySectionCards.length).fill("accessories")], selectedCategories, formatWebsiteCategory);
-  }, [criteria, items, maxAvailablePrice, selectedCategories]);
+  }, [cannabinoidBounds, criteria, items, maxAvailablePrice, selectedCategories]);
 
   const strainOptions = useMemo(() => {
-    const optionItems = items.filter((item) => itemMatchesCriteria(item, criteriaWithout(criteria, "selectedStrains"), maxAvailablePrice));
-    return buildOptions(optionItems.map((item) => item.strainType).filter((strainType) => strainType !== "unknown"), selectedStrains.filter((strainType) => strainType !== "unknown"));
-  }, [criteria, items, maxAvailablePrice, selectedStrains]);
+    const optionItems = items.filter((item) => itemMatchesCriteria(item, criteriaWithout(criteria, "selectedStrains"), maxAvailablePrice, cannabinoidBounds));
+    const baseOptions = buildOptions(
+      optionItems.map((item) => item.strainType).filter((strainType) => strainType !== "unknown" && strainType !== HIGH_CBD_VALUE),
+      selectedStrains.filter((strainType) => strainType !== "unknown" && strainType !== HIGH_CBD_VALUE),
+    );
+    // Inject the high-CBD ("CBD") option, threshold-based on totalCbd >= 4%.
+    const highCbdCount = optionItems.filter(isHighCbdItem).length;
+    if (highCbdCount > 0 || selectedStrains.includes(HIGH_CBD_VALUE)) {
+      baseOptions.push({ value: HIGH_CBD_VALUE, label: "CBD", count: highCbdCount });
+    }
+    return baseOptions;
+  }, [cannabinoidBounds, criteria, items, maxAvailablePrice, selectedStrains]);
 
   const brandOptions = useMemo(() => {
-    const optionItems = items.filter((item) => itemMatchesCriteria(item, criteriaWithout(criteria, "selectedBrands"), maxAvailablePrice));
+    const optionItems = items.filter((item) => itemMatchesCriteria(item, criteriaWithout(criteria, "selectedBrands"), maxAvailablePrice, cannabinoidBounds));
     return buildOptions(optionItems.map((item) => item.brand), selectedBrands);
-  }, [criteria, items, maxAvailablePrice, selectedBrands]);
+  }, [cannabinoidBounds, criteria, items, maxAvailablePrice, selectedBrands]);
 
   const weightOptions = useMemo(() => {
-    const optionItems = items.filter((item) => itemMatchesCriteria(item, criteriaWithout(criteria, "selectedWeights"), maxAvailablePrice));
-    return buildRequestedWeightOptions(optionItems, selectedWeights);
-  }, [criteria, items, maxAvailablePrice, selectedWeights]);
+    const optionItems = items.filter((item) => itemMatchesCriteria(item, criteriaWithout(criteria, "selectedWeights"), maxAvailablePrice, cannabinoidBounds));
+    return buildWeightOptionsFromData(optionItems, selectedWeights);
+  }, [cannabinoidBounds, criteria, items, maxAvailablePrice, selectedWeights]);
 
   const activeSectionCategory = selectedCategories.length === 1 ? selectedCategories[0] : null;
   const usesFilteredSections = activeSectionCategory !== null && [
@@ -551,23 +791,16 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
     setSelectedStrains([]);
     setSelectedBrands([]);
     setSelectedWeights([]);
-    setMaxThc(100);
-    setMaxCbd(100);
+    setMaxThc(maxAvailableThc);
+    setMaxCbd(maxAvailableCbd);
     setMaxPrice(maxAvailablePrice);
     setSortBy("featured-shuffle");
   };
 
+  const strainTagLabel = (strain: string) => (strain === HIGH_CBD_VALUE ? "CBD" : strain.charAt(0).toUpperCase() + strain.slice(1));
+
+  // NOTE: The search query is intentionally NOT shown as a filter pill — it just filters live.
   const activeFilterTags = [
-    ...(query.trim()
-      ? [
-          {
-            key: "search",
-            label: "Search",
-            value: query.trim(),
-            onRemove: () => setQuery(""),
-          },
-        ]
-      : []),
     ...selectedCategories.map((category) => ({
       key: `category-${category}`,
       label: "Category",
@@ -583,7 +816,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
     ...selectedStrains.map((strain) => ({
       key: `strain-${strain}`,
       label: "Strain",
-      value: strain,
+      value: strainTagLabel(strain),
       onRemove: () => setSelectedStrains((current) => current.filter((value) => value !== strain)),
     })),
     ...selectedWeights.map((weight) => ({
@@ -592,23 +825,23 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
       value: weight,
       onRemove: () => setSelectedWeights((current) => current.filter((value) => value !== weight)),
     })),
-    ...(maxThc !== 100
+    ...(maxThc < maxAvailableThc
       ? [
           {
             key: "thc",
             label: "Max THC",
             value: `${maxThc}%`,
-            onRemove: () => setMaxThc(100),
+            onRemove: () => setMaxThc(maxAvailableThc),
           },
         ]
       : []),
-    ...(maxCbd !== 100
+    ...(maxCbd < maxAvailableCbd
       ? [
           {
             key: "cbd",
             label: "Max CBD",
             value: `${maxCbd}%`,
-            onRemove: () => setMaxCbd(100),
+            onRemove: () => setMaxCbd(maxAvailableCbd),
           },
         ]
       : []),
@@ -645,7 +878,10 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
       onMaxCbdChange={setMaxCbd}
       onMaxPriceChange={setMaxPrice}
       onReset={resetFilters}
+      minAvailablePrice={minAvailablePrice}
       maxAvailablePrice={maxAvailablePrice}
+      maxAvailableThc={maxAvailableThc}
+      maxAvailableCbd={maxAvailableCbd}
       categoryOptions={categoryOptions}
       strainOptions={strainOptions}
       brandOptions={brandOptions}
@@ -654,8 +890,13 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
   );
 
   return (
-    <section className="mx-auto grid max-w-7xl gap-5 overflow-x-clip px-3 py-5 sm:px-4 md:px-8 md:py-10 lg:grid-cols-[300px_1fr] lg:gap-8">
-      <div className="space-y-3 lg:col-start-2 lg:space-y-5">
+    <section className="mx-auto grid max-w-[88rem] gap-5 overflow-x-clip px-3 py-5 sm:px-4 md:px-8 md:py-8 lg:grid-cols-[280px_1fr] lg:gap-8">
+      {/* Active filter pills — horizontal row directly below the breadcrumb, spanning full width. */}
+      <div className="lg:col-span-2">
+        <FilterTags tags={activeFilterTags} onClearAll={resetFilters} />
+      </div>
+
+      <div className="space-y-3 lg:col-start-2 lg:row-start-2 lg:space-y-5">
         {initialSpecial ? (
           <div className="rounded-3xl border border-[var(--gold)]/30 bg-[var(--gold)]/10 p-4 md:p-5">
             <p className="text-xs font-black uppercase tracking-[0.2em] text-[var(--gold)]">Special collection</p>
@@ -697,13 +938,11 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
         </FilterMobile>
       </div>
 
-      <aside className="hidden rounded-3xl border border-white/10 bg-zinc-950 p-5 lg:col-start-1 lg:row-start-1 lg:row-span-2 lg:sticky lg:top-28 lg:block lg:self-start">
+      <aside className="hidden rounded-3xl border border-white/10 bg-zinc-950 p-5 lg:col-start-1 lg:row-start-2 lg:row-span-2 lg:block lg:self-start">
         {filterControls}
       </aside>
 
-      <div className="lg:col-start-2">
-        <FilterTags tags={activeFilterTags} onClearAll={resetFilters} />
-
+      <div className="lg:col-start-2 lg:row-start-3">
         {showAccessorySections ? (
           <section id="accessories" className="scroll-mt-32">
             <div className="mb-4 flex min-w-0 flex-wrap items-end justify-between gap-3">
@@ -714,7 +953,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
               </div>
               <span className="text-xs font-black uppercase tracking-[0.16em] text-zinc-500">{accessorySectionCards.length} sections</span>
             </div>
-            <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
               {accessorySectionCards.map((card) => <AccessoryCard key={card.key} card={card} />)}
             </div>
           </section>
@@ -735,7 +974,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
                   </div>
                   <span className="text-xs font-black uppercase tracking-[0.16em] text-zinc-500">{group.items.length} items</span>
                 </div>
-                <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
                   {group.items.map((item) => <ProductCard key={item.id} item={item} />)}
                 </div>
               </section>

@@ -64,9 +64,6 @@ export function FilterMobile({ activeCount, resultCount, children }: FilterMobil
 
             <div className="flex-1 overflow-y-auto px-4 py-5">
               {children}
-              <p className="mt-6 rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-xs leading-5 text-zinc-400">
-                Preview-only filters use exact-match POS product data. They do not reserve inventory, collect payment, create orders, or publish to Leafly/POS services.
-              </p>
             </div>
 
             <footer className="sticky bottom-0 border-t border-white/10 bg-zinc-950/95 p-4 backdrop-blur">
@@ -93,7 +90,10 @@ export type MenuFilterControlsProps = {
   maxThc: number;
   maxCbd: number;
   maxPrice: number;
+  minAvailablePrice?: number;
   maxAvailablePrice?: number;
+  maxAvailableThc?: number;
+  maxAvailableCbd?: number;
   onCategoryToggle: (category: string) => void;
   onStrainToggle: (strain: string) => void;
   onBrandToggle: (brand: string) => void;
@@ -116,7 +116,10 @@ export function MenuFilterControls({
   maxThc,
   maxCbd,
   maxPrice,
+  minAvailablePrice = 0,
   maxAvailablePrice = 100,
+  maxAvailableThc = 100,
+  maxAvailableCbd = 100,
   onCategoryToggle,
   onStrainToggle,
   onBrandToggle,
@@ -150,63 +153,63 @@ export function MenuFilterControls({
         <FilterCheckboxGroup name="brands" options={brandOptions} selectedValues={selectedBrands} onToggle={onBrandToggle} searchable searchPlaceholder="Search brands..." />
       </FilterSection>
 
-      <FilterSection title="Strains" helper="Available profiles update with other filters">
+      <FilterSection title="Strains">
         <FilterCheckboxGroup name="strains" options={strainOptions} selectedValues={selectedStrains} onToggle={onStrainToggle} />
       </FilterSection>
 
-      <FilterSection title="Weights" helper="Requested gram weights mapped to variants" defaultOpen={false}>
+      <FilterSection title="Weights" defaultOpen={false}>
         <FilterCheckboxGroup name="weights" options={weightOptions} selectedValues={selectedWeights} onToggle={onWeightToggle} />
       </FilterSection>
 
-      <FilterSection title="Price" helper="Maximum preview product price">
+      <FilterSection title="Price">
         <label className="block">
           <span className="text-xs font-black uppercase tracking-[0.16em] text-[var(--greenway)]">Max Price: {maxPrice >= maxAvailablePrice ? `$${maxAvailablePrice}+` : `$${maxPrice}`}</span>
           <input
             type="range"
-            min="5"
+            min={minAvailablePrice}
             max={maxAvailablePrice}
             step="1"
             value={maxPrice}
             onChange={(event) => onMaxPriceChange(Number(event.target.value))}
             className="mt-4 w-full accent-[var(--orange)]"
           />
-          <span className="mt-2 flex justify-between text-xs text-zinc-500"><span>$5</span><span>${maxAvailablePrice}+</span></span>
+          <span className="mt-2 flex justify-between text-xs text-zinc-500"><span>${minAvailablePrice}</span><span>${maxAvailablePrice}+</span></span>
         </label>
       </FilterSection>
 
-      <FilterSection title="THC" helper="THC potency ceiling">
+      <FilterSection title="THC">
         <label className="block">
           <span className="flex items-center justify-between gap-3 text-xs font-black uppercase tracking-[0.16em] text-[var(--greenway)]">
-            THC Percentage <span className="text-white">Up to {maxThc}%</span>
+            THC Percentage <span className="text-white">{maxThc >= maxAvailableThc ? `Up to ${maxAvailableThc}%` : `Up to ${maxThc}%`}</span>
           </span>
           <input
             type="range"
             min="0"
-            max="100"
+            max={maxAvailableThc}
             step="1"
             value={maxThc}
             onChange={(event) => onMaxThcChange(Number(event.target.value))}
             className="mt-4 w-full accent-[var(--orange)]"
           />
-          <span className="mt-2 flex justify-between text-xs text-zinc-500"><span>0%</span><span>100%</span></span>
+          <span className="mt-2 flex justify-between text-xs text-zinc-500"><span>0%</span><span>{maxAvailableThc}%</span></span>
         </label>
       </FilterSection>
 
-      <FilterSection title="CBD" helper="CBD potency ceiling">
+      <FilterSection title="CBD">
         <label className="block">
           <span className="flex items-center justify-between gap-3 text-xs font-black uppercase tracking-[0.16em] text-[var(--greenway)]">
-            CBD Percentage <span className="text-white">Up to {maxCbd}%</span>
+            CBD Percentage <span className="text-white">{maxCbd >= maxAvailableCbd ? `Up to ${maxAvailableCbd}%` : `Up to ${maxCbd}%`}</span>
           </span>
           <input
             type="range"
             min="0"
-            max="100"
+            max={maxAvailableCbd}
             step="1"
             value={maxCbd}
             onChange={(event) => onMaxCbdChange(Number(event.target.value))}
             className="mt-4 w-full accent-[var(--orange)]"
           />
-          <span className="mt-2 flex justify-between text-xs text-zinc-500"><span>0%</span><span>100%</span></span>
+          <span className="mt-2 flex justify-between text-xs text-zinc-500"><span>0%</span><span>{maxAvailableCbd}%</span></span>
         </label>
       </FilterSection>
     </>

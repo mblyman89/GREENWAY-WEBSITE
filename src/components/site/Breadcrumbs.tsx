@@ -12,7 +12,7 @@ type BreadcrumbsProps = {
 export function Breadcrumbs({ items }: BreadcrumbsProps) {
   return (
     <nav aria-label="Breadcrumb" className="relative border-b border-white/10 bg-black/80 px-4 py-3 md:px-8">
-      <ol className="mx-auto flex max-w-7xl flex-wrap items-center gap-2 text-xs font-black uppercase tracking-[0.16em]">
+      <ol className="mx-auto flex max-w-[88rem] flex-wrap items-center gap-2 text-xs font-black uppercase tracking-[0.16em]">
         <li>
           <Link href="/" className="text-zinc-500 transition hover:text-[var(--greenway)]">
             Home
