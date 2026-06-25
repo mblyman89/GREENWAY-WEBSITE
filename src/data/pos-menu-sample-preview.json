@@ -232,7 +232,7 @@
     "strainType": "hybrid",
     "strainName": "Grape Stomper",
     "thc": "92%",
-    "cbd": "N/A",
+    "cbd": "~1%",
     "totalThc": {
       "type": "thc",
       "value": "92",
@@ -240,7 +240,7 @@
     },
     "totalCbd": {
       "type": "cbd",
-      "value": "N/A",
+      "value": "1",
       "unit": "%"
     },
     "compounds": [
@@ -502,7 +502,7 @@
     "strainType": "hybrid",
     "strainName": "Carbon Fiber",
     "thc": "77%",
-    "cbd": "N/A",
+    "cbd": "~1%",
     "totalThc": {
       "type": "thc",
       "value": "77",
@@ -510,7 +510,7 @@
     },
     "totalCbd": {
       "type": "cbd",
-      "value": "N/A",
+      "value": "1",
       "unit": "%"
     },
     "compounds": [
@@ -606,7 +606,7 @@
     "strainType": "hybrid",
     "strainName": "Lavender Trainwreck",
     "thc": "75%",
-    "cbd": "N/A",
+    "cbd": "0.1%",
     "totalThc": {
       "type": "thc",
       "value": "75",
@@ -614,7 +614,7 @@
     },
     "totalCbd": {
       "type": "cbd",
-      "value": "N/A",
+      "value": "0.1",
       "unit": "%"
     },
     "compounds": [
@@ -714,16 +714,16 @@
     "posInventoryCategory": "Cartridge",
     "strainType": "unknown",
     "strainName": "Orange Push Pop",
-    "thc": "N/A",
-    "cbd": "N/A",
+    "thc": "~85%",
+    "cbd": "~1%",
     "totalThc": {
       "type": "thc",
-      "value": "N/A",
+      "value": "85",
       "unit": "%"
     },
     "totalCbd": {
       "type": "cbd",
-      "value": "N/A",
+      "value": "1",
       "unit": "%"
     },
     "compounds": [],
@@ -757,16 +757,16 @@
     "posInventoryCategory": "Live Resin Cartridge",
     "strainType": "unknown",
     "strainName": "Platinum Kush Mints",
-    "thc": "N/A",
-    "cbd": "N/A",
+    "thc": "~85%",
+    "cbd": "~1%",
     "totalThc": {
       "type": "thc",
-      "value": "N/A",
+      "value": "85",
       "unit": "%"
     },
     "totalCbd": {
       "type": "cbd",
-      "value": "N/A",
+      "value": "1",
       "unit": "%"
     },
     "compounds": [],
@@ -801,7 +801,7 @@
     "strainType": "hybrid",
     "strainName": "Presidential Kush",
     "thc": "85%",
-    "cbd": "N/A",
+    "cbd": "~1%",
     "totalThc": {
       "type": "thc",
       "value": "85",
@@ -809,7 +809,7 @@
     },
     "totalCbd": {
       "type": "cbd",
-      "value": "N/A",
+      "value": "1",
       "unit": "%"
     },
     "compounds": [
@@ -848,7 +848,7 @@
     "strainType": "hybrid",
     "strainName": "road rage",
     "thc": "82%",
-    "cbd": "N/A",
+    "cbd": "~1%",
     "totalThc": {
       "type": "thc",
       "value": "82",
@@ -856,7 +856,7 @@
     },
     "totalCbd": {
       "type": "cbd",
-      "value": "N/A",
+      "value": "1",
       "unit": "%"
     },
     "compounds": [
@@ -962,7 +962,7 @@
     "strainType": "hybrid",
     "strainName": "Tropical Runtz",
     "thc": "84%",
-    "cbd": "N/A",
+    "cbd": "~1%",
     "totalThc": {
       "type": "thc",
       "value": "84",
@@ -970,7 +970,7 @@
     },
     "totalCbd": {
       "type": "cbd",
-      "value": "N/A",
+      "value": "1",
       "unit": "%"
     },
     "compounds": [
@@ -1066,7 +1066,7 @@
     "strainType": "hybrid",
     "strainName": "Baby Shark",
     "thc": "84%",
-    "cbd": "N/A",
+    "cbd": "~1%",
     "totalThc": {
       "type": "thc",
       "value": "84",
@@ -1074,7 +1074,7 @@
     },
     "totalCbd": {
       "type": "cbd",
-      "value": "N/A",
+      "value": "1",
       "unit": "%"
     },
     "compounds": [
@@ -1118,7 +1118,7 @@
     "strainType": "indica",
     "strainName": "Blue Ox",
     "thc": "92%",
-    "cbd": "N/A",
+    "cbd": "~1%",
     "totalThc": {
       "type": "thc",
       "value": "92",
@@ -1126,7 +1126,7 @@
     },
     "totalCbd": {
       "type": "cbd",
-      "value": "N/A",
+      "value": "1",
       "unit": "%"
     },
     "compounds": [
@@ -1165,7 +1165,7 @@
     "strainType": "unknown",
     "strainName": "Forum Cut GSC",
     "thc": "95%",
-    "cbd": "N/A",
+    "cbd": "~1%",
     "totalThc": {
       "type": "thc",
       "value": "95",
@@ -1173,7 +1173,7 @@
     },
     "totalCbd": {
       "type": "cbd",
-      "value": "N/A",
+      "value": "1",
       "unit": "%"
     },
     "compounds": [
@@ -1219,7 +1219,7 @@
     "strainType": "hybrid",
     "strainName": "GG4",
     "thc": "82%",
-    "cbd": "N/A",
+    "cbd": "0.1%",
     "totalThc": {
       "type": "thc",
       "value": "82",
@@ -1227,7 +1227,7 @@
     },
     "totalCbd": {
       "type": "cbd",
-      "value": "N/A",
+      "value": "0.1",
       "unit": "%"
     },
     "compounds": [
@@ -1328,7 +1328,7 @@
     "strainType": "hybrid",
     "strainName": "Marcel Clementine",
     "thc": "88%",
-    "cbd": "N/A",
+    "cbd": "~1%",
     "totalThc": {
       "type": "thc",
       "value": "88",
@@ -1336,7 +1336,7 @@
     },
     "totalCbd": {
       "type": "cbd",
-      "value": "N/A",
+      "value": "1",
       "unit": "%"
     },
     "compounds": [
@@ -1380,7 +1380,7 @@
     "strainType": "indica",
     "strainName": "Northern Lights",
     "thc": "87%",
-    "cbd": "N/A",
+    "cbd": "~1%",
     "totalThc": {
       "type": "thc",
       "value": "87",
@@ -1388,7 +1388,7 @@
     },
     "totalCbd": {
       "type": "cbd",
-      "value": "N/A",
+      "value": "1",
       "unit": "%"
     },
     "compounds": [
@@ -1432,7 +1432,7 @@
     "strainType": "hybrid",
     "strainName": "OZ Kush",
     "thc": "87%",
-    "cbd": "N/A",
+    "cbd": "~1%",
     "totalThc": {
       "type": "thc",
       "value": "87",
@@ -1440,7 +1440,7 @@
     },
     "totalCbd": {
       "type": "cbd",
-      "value": "N/A",
+      "value": "1",
       "unit": "%"
     },
     "compounds": [
@@ -1588,7 +1588,7 @@
     "strainType": "unknown",
     "strainName": "sherbanger",
     "thc": "78%",
-    "cbd": "N/A",
+    "cbd": "~1%",
     "totalThc": {
       "type": "thc",
       "value": "78",
@@ -1596,7 +1596,7 @@
     },
     "totalCbd": {
       "type": "cbd",
-      "value": "N/A",
+      "value": "1",
       "unit": "%"
     },
     "compounds": [
@@ -1694,7 +1694,7 @@
     "strainType": "sativa",
     "strainName": "Strawberry Mango Haze",
     "thc": "86%",
-    "cbd": "N/A",
+    "cbd": "~1%",
     "totalThc": {
       "type": "thc",
       "value": "86",
@@ -1702,7 +1702,7 @@
     },
     "totalCbd": {
       "type": "cbd",
-      "value": "N/A",
+      "value": "1",
       "unit": "%"
     },
     "compounds": [
@@ -1746,7 +1746,7 @@
     "strainType": "hybrid",
     "strainName": "Watermelon Yuzu Dragon fruit",
     "thc": "87%",
-    "cbd": "N/A",
+    "cbd": "~1%",
     "totalThc": {
       "type": "thc",
       "value": "87",
@@ -1754,7 +1754,7 @@
     },
     "totalCbd": {
       "type": "cbd",
-      "value": "N/A",
+      "value": "1",
       "unit": "%"
     },
     "compounds": [
@@ -1798,7 +1798,7 @@
     "strainType": "indica",
     "strainName": "Zazul",
     "thc": "83%",
-    "cbd": "N/A",
+    "cbd": "~1%",
     "totalThc": {
       "type": "thc",
       "value": "83",
@@ -1806,7 +1806,7 @@
     },
     "totalCbd": {
       "type": "cbd",
-      "value": "N/A",
+      "value": "1",
       "unit": "%"
     },
     "compounds": [
@@ -2006,7 +2006,7 @@
     "strainType": "hybrid",
     "strainName": "Caprizun",
     "thc": "86.48%",
-    "cbd": "N/A",
+    "cbd": "~1%",
     "totalThc": {
       "type": "thc",
       "value": "86.48",
@@ -2014,7 +2014,7 @@
     },
     "totalCbd": {
       "type": "cbd",
-      "value": "N/A",
+      "value": "1",
       "unit": "%"
     },
     "compounds": [
@@ -2162,7 +2162,7 @@
     "strainType": "hybrid",
     "strainName": "Laffy Taffy",
     "thc": "84.5%",
-    "cbd": "N/A",
+    "cbd": "~1%",
     "totalThc": {
       "type": "thc",
       "value": "84.5",
@@ -2170,7 +2170,7 @@
     },
     "totalCbd": {
       "type": "cbd",
-      "value": "N/A",
+      "value": "1",
       "unit": "%"
     },
     "compounds": [
@@ -2417,7 +2417,7 @@
     "strainType": "sativa",
     "strainName": "Strawberry Ice",
     "thc": "80.3%",
-    "cbd": "N/A",
+    "cbd": "~1%",
     "totalThc": {
       "type": "thc",
       "value": "80.3",
@@ -2425,7 +2425,7 @@
     },
     "totalCbd": {
       "type": "cbd",
-      "value": "N/A",
+      "value": "1",
       "unit": "%"
     },
     "compounds": [
@@ -2469,7 +2469,7 @@
     "strainType": "hybrid",
     "strainName": "Amarelo",
     "thc": "72.04%",
-    "cbd": "N/A",
+    "cbd": "0.15%",
     "totalThc": {
       "type": "thc",
       "value": "72.04",
@@ -2477,7 +2477,7 @@
     },
     "totalCbd": {
       "type": "cbd",
-      "value": "N/A",
+      "value": "0.15",
       "unit": "%"
     },
     "compounds": [
@@ -2526,7 +2526,7 @@
     "strainType": "indica",
     "strainName": "Black Domina",
     "thc": "78.95%",
-    "cbd": "N/A",
+    "cbd": "0.19%",
     "totalThc": {
       "type": "thc",
       "value": "78.95",
@@ -2534,7 +2534,7 @@
     },
     "totalCbd": {
       "type": "cbd",
-      "value": "N/A",
+      "value": "0.19",
       "unit": "%"
     },
     "compounds": [
@@ -2583,7 +2583,7 @@
     "strainType": "hybrid",
     "strainName": "Cali Swiss",
     "thc": "78.13%",
-    "cbd": "N/A",
+    "cbd": "0.2%",
     "totalThc": {
       "type": "thc",
       "value": "78.13",
@@ -2591,7 +2591,7 @@
     },
     "totalCbd": {
       "type": "cbd",
-      "value": "N/A",
+      "value": "0.2",
       "unit": "%"
     },
     "compounds": [
@@ -2640,7 +2640,7 @@
     "strainType": "hybrid",
     "strainName": "Dulce de uva",
     "thc": "74.4%",
-    "cbd": "N/A",
+    "cbd": "0.15%",
     "totalThc": {
       "type": "thc",
       "value": "74.4",
@@ -2648,7 +2648,7 @@
     },
     "totalCbd": {
       "type": "cbd",
-      "value": "N/A",
+      "value": "0.15",
       "unit": "%"
     },
     "compounds": [
@@ -2697,7 +2697,7 @@
     "strainType": "hybrid",
     "strainName": "Kosher Headband",
     "thc": "75.25%",
-    "cbd": "N/A",
+    "cbd": "0.18%",
     "totalThc": {
       "type": "thc",
       "value": "75.25",
@@ -2705,7 +2705,7 @@
     },
     "totalCbd": {
       "type": "cbd",
-      "value": "N/A",
+      "value": "0.18",
       "unit": "%"
     },
     "compounds": [
@@ -2754,7 +2754,7 @@
     "strainType": "hybrid",
     "strainName": "Moroccan Peaches",
     "thc": "73.09%",
-    "cbd": "N/A",
+    "cbd": "0.13%",
     "totalThc": {
       "type": "thc",
       "value": "73.09",
@@ -2762,7 +2762,7 @@
     },
     "totalCbd": {
       "type": "cbd",
-      "value": "N/A",
+      "value": "0.13",
       "unit": "%"
     },
     "compounds": [
@@ -2811,7 +2811,7 @@
     "strainType": "unknown",
     "strainName": "Orange Peel",
     "thc": "75.7%",
-    "cbd": "N/A",
+    "cbd": "0.16%",
     "totalThc": {
       "type": "thc",
       "value": "75.7",
@@ -2819,7 +2819,7 @@
     },
     "totalCbd": {
       "type": "cbd",
-      "value": "N/A",
+      "value": "0.16",
       "unit": "%"
     },
     "compounds": [
@@ -2870,7 +2870,7 @@
     "strainType": "hybrid",
     "strainName": "Pie Hoe",
     "thc": "74.22%",
-    "cbd": "N/A",
+    "cbd": "0.15%",
     "totalThc": {
       "type": "thc",
       "value": "74.22",
@@ -2878,7 +2878,7 @@
     },
     "totalCbd": {
       "type": "cbd",
-      "value": "N/A",
+      "value": "0.15",
       "unit": "%"
     },
     "compounds": [
@@ -2927,7 +2927,7 @@
     "strainType": "hybrid",
     "strainName": "Smackles",
     "thc": "73.92%",
-    "cbd": "N/A",
+    "cbd": "~1%",
     "totalThc": {
       "type": "thc",
       "value": "73.92",
@@ -2935,7 +2935,7 @@
     },
     "totalCbd": {
       "type": "cbd",
-      "value": "N/A",
+      "value": "1",
       "unit": "%"
     },
     "compounds": [
@@ -2979,7 +2979,7 @@
     "strainType": "unknown",
     "strainName": "Strawnana x Lem OG",
     "thc": "71.17%",
-    "cbd": "N/A",
+    "cbd": "0.18%",
     "totalThc": {
       "type": "thc",
       "value": "71.17",
@@ -2987,7 +2987,7 @@
     },
     "totalCbd": {
       "type": "cbd",
-      "value": "N/A",
+      "value": "0.18",
       "unit": "%"
     },
     "compounds": [
@@ -3038,7 +3038,7 @@
     "strainType": "hybrid",
     "strainName": "Hollywood",
     "thc": "90.87%",
-    "cbd": "N/A",
+    "cbd": "~1%",
     "totalThc": {
       "type": "thc",
       "value": "90.87",
@@ -3046,7 +3046,7 @@
     },
     "totalCbd": {
       "type": "cbd",
-      "value": "N/A",
+      "value": "1",
       "unit": "%"
     },
     "compounds": [
