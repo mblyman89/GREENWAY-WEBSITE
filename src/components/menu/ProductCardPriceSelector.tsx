@@ -9,12 +9,10 @@ type ProductCardPriceSelectorProps = {
   salePriceMinorUnits?: number;
 };
 
-type PriceOptionProps = {
+type PriceLineProps = {
   variant: GreenwayMenuVariant;
   itemPriceMinorUnits: number;
   salePriceMinorUnits?: number;
-  selected?: boolean;
-  compact?: boolean;
 };
 
 function priceParts(variant: GreenwayMenuVariant, itemPriceMinorUnits: number, salePriceMinorUnits?: number) {
@@ -30,22 +28,16 @@ function priceParts(variant: GreenwayMenuVariant, itemPriceMinorUnits: number, s
   };
 }
 
-function PriceOption({ variant, itemPriceMinorUnits, salePriceMinorUnits, selected = false, compact = false }: PriceOptionProps) {
+function PriceLine({ variant, itemPriceMinorUnits, salePriceMinorUnits }: PriceLineProps) {
   const { regularPrice, displayPrice, hasSalePrice, unitLabel } = priceParts(variant, itemPriceMinorUnits, salePriceMinorUnits);
   return (
-    <div
-      className={`flex min-h-[3.05rem] w-full items-center justify-center gap-2 rounded-[0.72rem] px-3 text-center leading-none transition ${
-        selected
-          ? "border border-[#b9864f] bg-[#21170f] shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]"
-          : "border border-white/10 bg-black/35 hover:border-[#b9864f]/80 hover:bg-[#21170f]/70"
-      } ${compact ? "min-h-[2.9rem]" : ""}`}
-    >
+    <span className="flex min-h-[3.35rem] w-full items-center justify-center gap-2 px-3 text-center leading-none">
       {hasSalePrice ? (
         <span className="text-[0.9rem] font-black text-zinc-400 line-through md:text-[0.95rem]">{formatMinorCurrency(regularPrice)}</span>
       ) : null}
-      <span className="text-[1.5rem] font-black text-[var(--orange)] md:text-[1.72rem]">{formatMinorCurrency(displayPrice)}</span>
+      <span className="text-[1.55rem] font-black text-[var(--orange)] md:text-[1.72rem]">{formatMinorCurrency(displayPrice)}</span>
       {unitLabel ? <span className="text-sm font-black text-white/95 md:text-base">{unitLabel}</span> : null}
-    </div>
+    </span>
   );
 }
 
@@ -84,44 +76,46 @@ export function ProductCardPriceSelector({ item, salePriceMinorUnits }: ProductC
   if (!selectedVariant) return null;
 
   return (
-    <div className="relative rounded-[0.95rem] bg-black/30 text-center">
+    <div className="relative text-center">
+      {showDropdown && isOpen ? (
+        <div className="absolute inset-x-0 bottom-[calc(100%-1px)] z-30 overflow-hidden rounded-t-[0.95rem] border border-[#b9864f]/75 border-b-0 bg-[#0f0a07] shadow-[0_18px_34px_rgba(0,0,0,0.58)]">
+          {variants.map((variant) => {
+            const selected = variant.id === selectedVariant.id;
+            return (
+              <button
+                key={variant.id}
+                type="button"
+                onClick={() => {
+                  setSelectedVariantId(variant.id);
+                  setIsOpen(false);
+                }}
+                className={`w-full border-b border-white/10 text-white outline-none transition last:border-b-0 hover:bg-[#21170f] focus-visible:bg-[#21170f] focus-visible:ring-2 focus-visible:ring-[var(--orange)] focus-visible:ring-inset ${selected ? "bg-[#1b120c]" : "bg-transparent"}`}
+                aria-pressed={selected}
+              >
+                <PriceLine variant={variant} itemPriceMinorUnits={item.priceMinorUnits} salePriceMinorUnits={salePriceMinorUnits} />
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+
       <button
         type="button"
         onClick={() => setIsOpen((current) => (showDropdown ? !current : current))}
-        className="grid w-full grid-cols-[1fr_auto] items-center gap-2 rounded-[0.95rem] border border-white/12 bg-black/58 p-1.5 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.1),0_10px_22px_rgba(0,0,0,0.24)] backdrop-blur-sm transition hover:border-[#b9864f]/80"
+        className={`grid min-h-[3.35rem] w-full grid-cols-[minmax(0,1fr)_2.35rem] items-center overflow-hidden border bg-black/58 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.1),0_10px_22px_rgba(0,0,0,0.24)] backdrop-blur-sm transition hover:border-[#b9864f]/80 ${isOpen && showDropdown ? "rounded-b-[0.95rem] rounded-t-none border-[#b9864f]/75" : "rounded-[0.95rem] border-white/12"}`}
         aria-label={`Choose package size for ${item.name}`}
         aria-expanded={showDropdown ? isOpen : undefined}
+        disabled={!showDropdown}
       >
-        <PriceOption variant={selectedVariant} itemPriceMinorUnits={item.priceMinorUnits} salePriceMinorUnits={salePriceMinorUnits} selected compact />
+        <PriceLine variant={selectedVariant} itemPriceMinorUnits={item.priceMinorUnits} salePriceMinorUnits={salePriceMinorUnits} />
         {showDropdown ? (
-          <span className="grid h-10 w-8 place-items-center rounded-lg text-white/90">
+          <span className="grid h-full min-h-[3.35rem] place-items-center border-l border-white/10 bg-white/[0.03] text-white/90">
             <ChevronIcon open={isOpen} />
           </span>
-        ) : null}
+        ) : (
+          <span aria-hidden="true" />
+        )}
       </button>
-
-      {showDropdown && isOpen ? (
-        <div className="absolute inset-x-0 bottom-[calc(100%+0.35rem)] z-30 rounded-[0.95rem] border border-[#b9864f]/70 bg-[#0f0a07] p-1.5 shadow-[0_18px_34px_rgba(0,0,0,0.58)]">
-          <div className="grid gap-1.5">
-            {variants.map((variant) => {
-              const selected = variant.id === selectedVariant.id;
-              return (
-                <button
-                  key={variant.id}
-                  type="button"
-                  onClick={() => {
-                    setSelectedVariantId(variant.id);
-                    setIsOpen(false);
-                  }}
-                  className="w-full text-white outline-none focus-visible:ring-2 focus-visible:ring-[var(--orange)] focus-visible:ring-offset-2 focus-visible:ring-offset-black"
-                >
-                  <PriceOption variant={variant} itemPriceMinorUnits={item.priceMinorUnits} salePriceMinorUnits={salePriceMinorUnits} selected={selected} />
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }

@@ -82,6 +82,25 @@ type FilterOption = {
   count: number;
 };
 
+
+type MenuItemGroup = {
+  key: string;
+  id: string;
+  eyebrow: string;
+  label: string;
+  items: GreenwayMenuItem[];
+};
+
+function safeSectionId(value: string) {
+  return value.toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "section";
+}
+
+function rawCategorySectionLabel(item: GreenwayMenuItem) {
+  const sourceText = `${item.posInventoryCategory ?? ""} ${item.productName ?? ""} ${item.name}`.toLowerCase();
+  if (item.category === "cartridge" && sourceText.includes("live resin cartridge")) return "Live Resin Cartridge";
+  return item.posInventoryCategory?.trim() || formatWebsiteCategory(item.category);
+}
+
 type FilterCriteria = {
   query: string;
   selectedCategories: GreenwayCategory[];
@@ -320,11 +339,37 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
     return buildRequestedWeightOptions(optionItems, selectedWeights);
   }, [criteria, items, maxAvailablePrice, selectedWeights]);
 
-  const groupedItems = useMemo(() => {
+  const groupedItems = useMemo<MenuItemGroup[]>(() => {
+    const onlyConcentrateSelected = selectedCategories.length === 1 && selectedCategories[0] === "concentrate";
+
+    if (onlyConcentrateSelected) {
+      const byRawCategory = new Map<string, GreenwayMenuItem[]>();
+      for (const item of filteredItems) {
+        const label = rawCategorySectionLabel(item);
+        byRawCategory.set(label, [...(byRawCategory.get(label) ?? []), item]);
+      }
+
+      return [...byRawCategory.entries()]
+        .sort(([labelA], [labelB]) => labelA.localeCompare(labelB))
+        .map(([label, groupItems]) => ({
+          key: `concentrate-${safeSectionId(label)}`,
+          id: `concentrate-${safeSectionId(label)}`,
+          eyebrow: "POS category",
+          label,
+          items: groupItems,
+        }));
+    }
+
     return websiteCategories
-      .map((category) => ({ category, items: filteredItems.filter((item) => item.category === category) }))
+      .map((category) => ({
+        key: category,
+        id: category,
+        eyebrow: "Category",
+        label: formatWebsiteCategory(category),
+        items: filteredItems.filter((item) => item.category === category),
+      }))
       .filter((group) => group.items.length > 0);
-  }, [filteredItems]);
+  }, [filteredItems, selectedCategories]);
 
   const resetFilters = () => {
     setQuery("");
@@ -494,11 +539,11 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
         ) : (
           <div className="space-y-10">
             {groupedItems.map((group) => (
-              <section key={group.category} id={group.category} className="scroll-mt-32">
+              <section key={group.key} id={group.id} className="scroll-mt-32">
                 <div className="mb-4 flex min-w-0 flex-wrap items-end justify-between gap-3">
                   <div>
-                    <p className="text-xs font-black uppercase tracking-[0.2em] text-[var(--greenway)]">Category</p>
-                    <h2 className="mt-1 text-3xl font-black text-white">{formatWebsiteCategory(group.category)}</h2>
+                    <p className="text-xs font-black uppercase tracking-[0.2em] text-[var(--greenway)]">{group.eyebrow}</p>
+                    <h2 className="mt-1 text-3xl font-black text-white">{group.label}</h2>
                   </div>
                   <span className="text-xs font-black uppercase tracking-[0.16em] text-zinc-500">{group.items.length} items</span>
                 </div>
