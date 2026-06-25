@@ -59,7 +59,7 @@
 - [x] Review git diff for scope control
 
 ## H. GitHub / Vercel
-- [ ] Commit changes with descriptive message
-- [ ] Push branch with token-safe GitHub push command
-- [ ] Create or update PR for Vercel preview
-- [ ] If user asked for production Vercel update, merge after build/PR verification or report preview URL/status for inspection
+- [x] Commit changes with descriptive message
+- [x] Push branch with token-safe GitHub push command
+- [x] Create or update PR for Vercel preview
+- [x] If user asked for production Vercel update, merge after build/PR verification or report preview URL/status for inspection
