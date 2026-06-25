@@ -1,105 +1,77 @@
 import Link from "next/link";
-import { HomeProductCard } from "@/components/home/HomeProductCard";
-import { mockMenuItems, menuCategories } from "@/lib/leafly/mock-menu";
-import type { GreenwayCategory, GreenwayMenuItem } from "@/lib/leafly/types";
-import { formatWebsiteCategory } from "@/lib/pos/category-taxonomy";
+import { HomeBrands } from "@/components/home/HomeBrands";
+import { SectionBanner } from "@/components/home/SectionBanner";
+import { posMenuPreviewItems } from "@/lib/pos/preview-menu";
+import { categoryLanes } from "@/lib/specials/daily-deal-presentation";
 
-function firstProductForCategory(category: GreenwayCategory) {
-  return mockMenuItems.find((item) => item.category === category);
-}
+// Accent gradient per category tile (cycled in lane order).
+const LANE_ACCENTS: Record<string, string> = {
+  flower: "from-[var(--greenway)] to-emerald-700",
+  prerolls: "from-amber-400 to-[var(--orange)]",
+  concentrates: "from-[var(--gold)] to-[var(--orange)]",
+  edibles: "from-rose-400 to-rose-700",
+  liquids: "from-sky-400 to-blue-700",
+  topicals: "from-fuchsia-400 to-purple-700",
+};
 
-function uniqueBrandProducts() {
-  const seen = new Set<string>();
-
-  return mockMenuItems
-    .filter((item) => {
-      if (seen.has(item.brand)) return false;
-      seen.add(item.brand);
-      return true;
-    })
-    .slice(0, 6);
-}
-
-function ShoppingSection({
-  id,
-  title,
-  accent,
-  products,
-  getHref,
-  getLabel,
-  getLinkText,
-  discount,
-}: {
-  id: string;
-  title: string;
-  accent: string;
-  products: GreenwayMenuItem[];
-  getHref: (item: GreenwayMenuItem) => string;
-  getLabel: (item: GreenwayMenuItem) => string;
-  getLinkText: (item: GreenwayMenuItem) => string;
-  discount: number;
-}) {
-  const visibleProducts = products.slice(0, 6);
-
-  return (
-    <section id={id} className="bg-black text-white">
-      <div className={`bg-gradient-to-r ${accent} px-4 py-8 text-black md:mx-[calc(50%-50vw)] md:min-h-[220px] md:px-8 md:py-12 lg:min-h-[260px] lg:py-16 xl:px-[calc((100vw-80rem)/2+2rem)]`}>
-        <div className="mx-auto flex h-full max-w-7xl items-center">
-          <h2 className="max-w-5xl text-3xl font-black uppercase leading-[0.88] tracking-tight md:text-6xl lg:text-7xl">
-            {title}
-          </h2>
-        </div>
-      </div>
-
-      <div className="mx-auto max-w-7xl px-4 pb-10 pt-4 md:px-8 md:pb-14 md:pt-6">
-        <div className="grid grid-cols-2 items-start gap-x-3 gap-y-6 sm:gap-x-4 sm:gap-y-7 md:grid-cols-3 md:gap-x-5 md:gap-y-8 lg:gap-x-6">
-          {visibleProducts.map((item) => (
-            <div key={`${id}-${item.id}`} className="flex flex-col gap-2.5 md:gap-3">
-              <HomeProductCard item={item} discount={discount} />
-              <Link
-                href={getHref(item)}
-                className="self-start text-[0.72rem] font-black uppercase tracking-[0.12em] text-zinc-300 underline-offset-4 transition hover:text-[var(--gold)] hover:underline md:text-xs"
-                aria-label={`Shop all ${getLabel(item)} products`}
-              >
-                {getLinkText(item)}
-              </Link>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
+/**
+ * Home "Shop by Category" + "Shop by Brand" sections.
+ *
+ * Category: a wide/short SectionBanner header followed by the six fixed
+ * customer-facing lanes (Flower, Prerolls, Concentrates, Edibles, Liquids,
+ * Topicals). Each tile links to the pre-filtered menu via the lane's
+ * /menu?categories=a,b,c href.
+ *
+ * Brand: delegated to the client HomeBrands component, which rotates through
+ * brands (feature-shuffle style) into a 4x4 grid.
+ */
 export function PromoGrid() {
-  const categoryProducts = menuCategories
-    .filter((category) => category !== "paraphernalia")
-    .map(firstProductForCategory)
-    .filter((item): item is GreenwayMenuItem => Boolean(item));
-  const brandProducts = uniqueBrandProducts();
-
   return (
     <>
-      <ShoppingSection
+      <section
         id="shop-by-category"
-        title="SHOP BY CATEGORY"
-        accent="from-[var(--greenway)] via-emerald-300 to-[var(--gold)]"
-        products={categoryProducts}
-        discount={25}
-        getHref={(item) => `/menu?category=${encodeURIComponent(item.category)}`}
-        getLabel={(item) => formatWebsiteCategory(item.category)}
-        getLinkText={(item) => `Shop all ${formatWebsiteCategory(item.category).toLowerCase()}`}
-      />
-      <ShoppingSection
-        id="shop-by-brand"
-        title="SHOP BY BRAND"
-        accent="from-[var(--gold)] via-[#ffb000] to-[var(--orange)]"
-        products={brandProducts}
-        discount={20}
-        getHref={(item) => `/menu?brand=${encodeURIComponent(item.brand)}`}
-        getLabel={(item) => item.brand}
-        getLinkText={() => "Shop all ..."}
-      />
+        className="bg-black px-4 py-6 md:px-8 md:py-8"
+        aria-label="Shop by category"
+      >
+        <div className="mx-auto max-w-[88rem] space-y-4 md:space-y-6">
+          <SectionBanner
+            imageSrc="/home/category-banner.webp"
+            imageAlt="Greenway cannabis product categories"
+            eyebrow="Browse the Menu"
+            title="Shop by Category"
+            subtitle="Jump straight into the products you want — every tile opens a pre-filtered menu."
+          />
+
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4 lg:grid-cols-6">
+            {categoryLanes.map((lane) => (
+              <Link
+                key={lane.key}
+                href={lane.href}
+                className="group relative isolate flex aspect-[4/3] flex-col justify-end overflow-hidden rounded-2xl border border-white/10 bg-[var(--charcoal)] p-4 shadow-lg shadow-black/30 transition hover:-translate-y-0.5 hover:border-white/25 lg:aspect-[3/4]"
+              >
+                <div
+                  className={`absolute inset-0 bg-gradient-to-br ${LANE_ACCENTS[lane.key] ?? "from-[var(--greenway)] to-emerald-700"} opacity-80 transition group-hover:opacity-95`}
+                  aria-hidden="true"
+                />
+                <div
+                  className="absolute inset-0 bg-[radial-gradient(circle_at_78%_18%,rgba(255,255,255,0.3),transparent_55%),linear-gradient(180deg,rgba(0,0,0,0.06)_0%,rgba(0,0,0,0.72)_100%)]"
+                  aria-hidden="true"
+                />
+                <div className="relative">
+                  <p className="text-base font-black uppercase leading-tight tracking-tight text-white drop-shadow md:text-lg lg:text-xl">
+                    {lane.label}
+                  </p>
+                  <p className="mt-0.5 text-[0.6rem] font-black uppercase tracking-[0.16em] text-white/80 md:text-[0.62rem]">
+                    Shop now →
+                  </p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <HomeBrands items={posMenuPreviewItems} />
     </>
   );
 }
