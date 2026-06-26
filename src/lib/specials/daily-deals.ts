@@ -6,6 +6,14 @@ export type ActiveMenuDiscount = {
   multiItemDiscountPercent?: number;
   bonusNote?: string;
   salePriceMinorUnits: number;
+  /**
+   * When true, the card may show a genuine struck "before" price and the
+   * discounted per-item price (the deal applies cleanly to the listed price).
+   * When false, the deal varies by weight / spend-threshold / storewide and
+   * cannot be expressed as an accurate single per-item sale price, so the card
+   * shows ONLY an informational badge (no fake struck price).
+   */
+  perItemSalePrice: boolean;
 };
 
 // ---------------------------------------------------------------------------
@@ -132,11 +140,19 @@ export function discountPrice(priceMinorUnits: number, discountPercent: number) 
 
 function buildDiscount(
   item: GreenwayMenuItem,
-  config: Omit<ActiveMenuDiscount, "salePriceMinorUnits">,
+  config: Omit<ActiveMenuDiscount, "salePriceMinorUnits" | "perItemSalePrice"> & {
+    perItemSalePrice?: boolean;
+  },
 ): ActiveMenuDiscount {
+  const perItemSalePrice = config.perItemSalePrice ?? true;
   return {
     ...config,
-    salePriceMinorUnits: discountPrice(item.priceMinorUnits, config.discountPercent),
+    perItemSalePrice,
+    // Only compute a struck/sale price when the deal applies cleanly per item.
+    // Otherwise keep the regular price so no inaccurate discount is shown.
+    salePriceMinorUnits: perItemSalePrice
+      ? discountPrice(item.priceMinorUnits, config.discountPercent)
+      : item.priceMinorUnits,
   };
 }
 
@@ -179,37 +195,39 @@ export function getActiveMenuDiscount(
     }
     case "friday": {
       if (!itemMatchesCategories(item, ounceFridayCategories)) return undefined;
-      // Flower scales 30% (oz) / 20% (half) / 15% (quarter) by weight in store.
-      // Cards show the headline ounce rate.
+      // Ounce Friday scales by WEIGHT in store: 30% (oz) / 20% (half) / 15%
+      // (quarter). Because the discount depends on the weight purchased, we
+      // cannot show an accurate per-item struck price on the listed unit.
+      // Show an informational badge only (no fake discount on every flower item).
       return buildDiscount(item, {
         label: "Ounce Friday",
         discountPercent: 30,
-        bonusNote: "half 20% · quarter 15%",
+        bonusNote: "up to 30% off by weight",
+        perItemSalePrice: false,
       });
     }
-    case "saturday": {
-      // Super Saturday: 30% one item + 15% everything else storewide.
-      // Cards display the storewide baseline (15%).
-      return buildDiscount(item, {
-        label: "Super Saturday",
-        discountPercent: 15,
-        bonusNote: "30% off one item",
-      });
-    }
-    case "sunday": {
-      // Ice Cream Sunday: buy 3 for the price of 2 storewide (~33%).
-      return buildDiscount(item, {
-        label: "Ice Cream Sunday",
-        discountPercent: 33,
-        bonusNote: "buy 3 for 2",
-      });
-    }
+    case "saturday":
+      // Super Saturday: 30% off ONE item + 15% everything else storewide. The
+      // exact savings are determined at checkout (which item / how many), so we
+      // do not stamp a fake per-item discount on every card.
+      return undefined;
+    case "sunday":
+      // Ice Cream Sunday: buy 3 for the price of 2 (a basket-level deal). It is
+      // not a per-item price cut, so cards show no struck price.
+      return undefined;
     default:
       return undefined;
   }
 }
 
 export function formatActiveDiscountBadge(discount: ActiveMenuDiscount) {
+  // Weight-based / non-per-item deals (e.g. Ounce Friday): show ONLY the
+  // informational note — never a flat "X% off" implying a per-unit price cut.
+  if (!discount.perItemSalePrice) {
+    return discount.bonusNote
+      ? `${discount.label} · ${discount.bonusNote}`
+      : discount.label;
+  }
   if (discount.multiItemDiscountPercent) {
     return `${discount.label} · ${discount.discountPercent}% off · 4+ get ${discount.multiItemDiscountPercent}%`;
   }

@@ -33,18 +33,34 @@ const PLACEHOLDER_DESCRIPTION =
   "A trusted Greenway Marijuana partner growing and crafting premium cannabis for the Port Orchard community. Their mission: deliver consistent, lab-tested, top-shelf product our budtenders are proud to recommend.";
 
 const EMAIL_SUBJECT = "Vendor partnership inquiry — Greenway Marijuana";
-const EMAIL_BODY =
-  "Hi Greenway team,%0D%0A%0D%0AWe'd love to introduce our products and explore working together. We can send samples and schedule a vendor day at your convenience.%0D%0A%0D%0AThank you!";
+// Per request: the email body must be BLANK so it opens an empty draft.
+const EMAIL_BODY = "";
+
+// The whole name renders on one line (whitespace-nowrap), so the TOTAL
+// character count drives how small we must go to fit the narrow 2-up MOBILE
+// card. We only shrink as far as needed; short names keep the default size.
+function mobileNameSizeClass(name: string): string {
+  const total = name.trim().length;
+  if (total >= 33) return "text-[0.4rem]";
+  if (total >= 30) return "text-[0.46rem]";
+  if (total >= 25) return "text-[0.52rem]";
+  if (total >= 22) return "text-[0.56rem]";
+  if (total >= 18) return "text-[0.66rem]";
+  if (total >= 15) return "text-[0.74rem]";
+  if (total >= 12) return "text-[0.82rem]";
+  return "text-sm";
+}
 
 function VendorCard({ vendor, index }: { vendor: Vendor; index: number }) {
   const [expanded, setExpanded] = useState(false);
+  const nameSize = mobileNameSizeClass(vendor.name);
 
   return (
     <button
       type="button"
       onClick={() => setExpanded((value) => !value)}
       aria-expanded={expanded}
-      className="group relative isolate flex aspect-[5/3] w-full flex-col justify-end overflow-hidden rounded-2xl border border-white/10 bg-[var(--charcoal)] text-left shadow-lg shadow-black/30 transition hover:-translate-y-0.5 hover:border-white/25"
+      className="group relative isolate flex aspect-[5/3] w-full flex-col justify-start overflow-hidden rounded-2xl border border-white/10 bg-[var(--charcoal)] text-left shadow-lg shadow-black/30 transition hover:-translate-y-0.5 hover:border-white/25"
     >
       {/* Accent gradient base. */}
       <div
@@ -57,13 +73,14 @@ function VendorCard({ vendor, index }: { vendor: Vendor; index: number }) {
         aria-hidden="true"
       />
 
-      {/* Collapsed state: logo + name only, centered at the top. */}
-      <div
-        className={`absolute inset-x-0 top-0 flex flex-col items-center gap-2 px-4 pt-4 transition-opacity duration-300 ${
-          expanded ? "opacity-0" : "opacity-100"
-        }`}
-      >
-        <span className="relative h-12 w-12 overflow-hidden rounded-full ring-2 ring-white/40 md:h-14 md:w-14">
+      {/* Name + logo at the very TOP (both mobile & desktop). On mobile the
+          name is forced onto ONE line with a size that scales down only when
+          needed so it never overflows the narrow card. */}
+      <div className="relative z-10 flex w-full flex-col items-center gap-2 px-3 pt-3 md:px-4 md:pt-4">
+        <p className={`w-full whitespace-nowrap text-center font-black uppercase leading-tight tracking-tight text-white drop-shadow md:text-base ${nameSize}`}>
+          {vendor.name}
+        </p>
+        <span className="relative h-11 w-11 overflow-hidden rounded-full ring-2 ring-white/40 md:h-14 md:w-14">
           <Image
             src={PLACEHOLDER_LOGO}
             alt={`${vendor.name} logo`}
@@ -72,26 +89,22 @@ function VendorCard({ vendor, index }: { vendor: Vendor; index: number }) {
             className="object-cover"
           />
         </span>
-        <p className="text-center text-sm font-black uppercase leading-tight tracking-tight text-white drop-shadow md:text-base">
-          {vendor.name}
-        </p>
       </div>
 
-      {/* Collapsed footer: product count + tap hint. */}
+      {/* Collapsed footer: product count (no "tap" hint text). */}
       <div
-        className={`relative px-4 pb-3 transition-opacity duration-300 ${
+        className={`relative mt-auto px-4 pb-3 transition-opacity duration-300 ${
           expanded ? "opacity-0" : "opacity-100"
         }`}
       >
         <p className="text-[0.58rem] font-black uppercase tracking-[0.18em] text-white/80 md:text-[0.62rem]">
-          {vendor.productCount} {vendor.productCount === 1 ? "product" : "products"} · tap to learn more
+          {vendor.productCount} {vendor.productCount === 1 ? "product" : "products"}
         </p>
       </div>
 
-      {/* Expanded overlay: description text shares the same space as the art —
-          seamless, no separate box. */}
+      {/* Expanded description — DESKTOP ONLY (mobile has no text overlay). */}
       <div
-        className={`absolute inset-0 flex flex-col justify-center gap-2 px-4 py-4 transition-opacity duration-300 md:px-5 ${
+        className={`absolute inset-0 hidden flex-col justify-center gap-2 px-4 py-4 transition-opacity duration-300 md:flex md:px-5 ${
           expanded ? "opacity-100" : "pointer-events-none opacity-0"
         }`}
       >
@@ -112,9 +125,6 @@ function VendorCard({ vendor, index }: { vendor: Vendor; index: number }) {
         </div>
         <p className="relative text-[0.72rem] font-medium leading-snug text-white/95 drop-shadow md:text-xs">
           {PLACEHOLDER_DESCRIPTION}
-        </p>
-        <p className="relative text-[0.56rem] font-black uppercase tracking-[0.18em] text-white/70">
-          Tap to close
         </p>
       </div>
     </button>
@@ -149,9 +159,9 @@ export function VendorDirectory() {
               team would love to hear from you.
             </p>
             <a
-              href={`${greenwayBusiness.emailHref}?subject=${encodeURIComponent(
-                EMAIL_SUBJECT,
-              )}&body=${EMAIL_BODY}`}
+              href={`${greenwayBusiness.emailHref}?subject=${encodeURIComponent(EMAIL_SUBJECT)}${
+                EMAIL_BODY ? `&body=${EMAIL_BODY}` : ""
+              }`}
               className="mt-6 inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[var(--orange)] to-[var(--gold)] px-7 py-3 text-sm font-black uppercase tracking-wide text-black shadow-lg shadow-black/40 transition hover:brightness-110 md:text-base"
             >
               <EmailIcon />
@@ -169,7 +179,7 @@ export function VendorDirectory() {
           imageAlt="A grid of partner cannabis brand emblems"
           eyebrow="Our Partners"
           title="Brands We Carry"
-          subtitle="The producers and processors stocking Greenway shelves today. Tap any partner to learn more about who they are and what they grow."
+          subtitle="The producers and processors stocking Greenway shelves today."
         />
 
         {/* Vendor directory — HomeBrands-style cards, logo + name, tap to expand. */}

@@ -168,8 +168,11 @@ export function MenuFilterControls({
                   value="clearance"
                   checked={clearanceActive}
                   onChange={onClearanceToggle}
-                  className="h-4 w-4 shrink-0 accent-[var(--greenway)]"
+                  className="peer sr-only"
                 />
+                <span className="grid h-5 w-5 shrink-0 place-items-center rounded border-2 border-zinc-500 bg-transparent text-[0.7rem] font-black leading-none text-black transition peer-focus-visible:ring-2 peer-focus-visible:ring-[var(--greenway)]/35 peer-checked:border-[var(--orange)] peer-checked:bg-[var(--orange)] peer-checked:text-black" aria-hidden="true">
+                  ✓
+                </span>
                 <span className="truncate font-bold">50% Off</span>
               </span>
             </label>
@@ -185,8 +188,11 @@ export function MenuFilterControls({
                   value="daily-deals"
                   checked={dailyDealsActive}
                   onChange={onDailyDealsToggle}
-                  className="h-4 w-4 shrink-0 accent-[var(--greenway)]"
+                  className="peer sr-only"
                 />
+                <span className="grid h-5 w-5 shrink-0 place-items-center rounded border-2 border-zinc-500 bg-transparent text-[0.7rem] font-black leading-none text-black transition peer-focus-visible:ring-2 peer-focus-visible:ring-[var(--greenway)]/35 peer-checked:border-[var(--orange)] peer-checked:bg-[var(--orange)] peer-checked:text-black" aria-hidden="true">
+                  ✓
+                </span>
                 <span className="truncate font-bold">Daily Deals</span>
               </span>
             </label>

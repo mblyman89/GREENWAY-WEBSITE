@@ -13,11 +13,13 @@ export function BlogContent() {
             The Blog
           </p>
           <h1 className="mt-3 text-4xl font-black uppercase leading-[0.95] tracking-tight text-white sm:text-5xl md:whitespace-nowrap md:text-6xl lg:text-7xl">
-            {/* Mobile: two lines. Desktop: single line. */}
+            {/* Mobile: two lines with the second line pushed DOWN so the "|"
+                separator never bleeds into the Newsletters text. */}
             <span className="md:hidden">
-              Stories <span className="text-[var(--orange)]">|</span> Culture
-              <br />
-              Newsletters
+              <span className="block">
+                Stories <span className="text-[var(--orange)]">|</span> Culture
+              </span>
+              <span className="mt-2 block">Newsletters</span>
             </span>
             <span className="hidden md:inline">
               Stories <span className="text-[var(--orange)]">|</span> Culture{" "}

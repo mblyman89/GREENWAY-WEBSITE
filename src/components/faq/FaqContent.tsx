@@ -19,7 +19,7 @@ export function FaqContent() {
           <h1 className="text-4xl font-black leading-tight tracking-tight text-white sm:text-5xl md:whitespace-nowrap md:text-5xl lg:text-6xl">
             Frequently Asked Questions
           </h1>
-          <p className="mx-auto mt-4 max-w-2xl text-sm font-semibold leading-6 text-zinc-400 md:text-base md:leading-7">
+          <p className="mx-auto mt-4 max-w-2xl whitespace-nowrap text-[0.74rem] font-semibold leading-6 text-zinc-400 sm:text-sm md:text-base md:leading-7">
             Everything you need to know about shopping with us.
           </p>
         </div>

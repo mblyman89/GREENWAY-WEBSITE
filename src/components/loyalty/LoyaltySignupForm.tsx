@@ -101,7 +101,7 @@ export function LoyaltySignupForm() {
             fill
             priority
             sizes="(min-width: 1408px) 1408px, calc(100vw - 2rem)"
-            className="object-cover object-center md:object-[center_30%]"
+            className="object-cover object-center"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/10 via-transparent to-transparent" />
         </div>

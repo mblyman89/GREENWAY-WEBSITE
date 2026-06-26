@@ -51,7 +51,7 @@ function MobileFooter() {
           {greenwayBusiness.address.full}
         </Link>
         <a href={`tel:${greenwayBusiness.phone.tel}`} className="mt-3 inline-flex rounded-full bg-[var(--greenway)] px-5 py-2 text-sm font-black text-black transition hover:bg-white">
-          {greenwayBusiness.phone.formatted}
+          {greenwayBusiness.phone.display}
         </a>
       </div>
 
@@ -124,7 +124,7 @@ function DesktopFooter() {
           <p className="text-sm font-black uppercase tracking-[0.2em] text-[var(--greenway)]">Hours</p>
           <p className="mt-2 text-lg font-black text-white">{greenwayBusiness.hours.short}</p>
           <a href={`tel:${greenwayBusiness.phone.tel}`} className="mt-2 text-sm font-bold text-zinc-300 transition hover:text-[var(--greenway)]">
-            {greenwayBusiness.phone.formatted}
+            {greenwayBusiness.phone.display}
           </a>
 
           <div className="mt-6 w-full max-w-xs rounded-2xl border border-white/10 bg-white/[0.03] p-4">
