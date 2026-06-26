@@ -34,7 +34,7 @@ function FieldError({ message }: { message?: string }) {
   return <p className="mt-2 text-xs font-bold text-red-300">{message}</p>;
 }
 
-export function LoyaltySignupPreview() {
+export function LoyaltySignupForm() {
   const [values, setValues] = useState<FormValues>(defaultValues);
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);

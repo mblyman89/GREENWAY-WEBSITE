@@ -7,10 +7,12 @@ import { BackToMenuLink } from "@/components/menu/BackToMenuLink";
 import { ProductDetailPurchasePanel } from "@/components/menu/ProductDetailPurchasePanel";
 import { Footer } from "@/components/site/Footer";
 import { Header } from "@/components/site/Header";
+import { JsonLd } from "@/components/seo/JsonLd";
 import { getMockMenuItemById, mockMenuItems } from "@/lib/leafly/mock-menu";
 import type { GreenwayMenuItem } from "@/lib/leafly/types";
 import { formatWebsiteCategory } from "@/lib/pos/category-taxonomy";
 import { getPosPreviewMenuItemById, posMenuPreviewItems } from "@/lib/pos/preview-menu";
+import { breadcrumbSchema, pageMetadata, productSchema } from "@/lib/seo/seo";
 
 type ProductTone = {
   border: string;
@@ -164,14 +166,20 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
   if (!item) {
     return {
-      title: "Product Not Found | Greenway Marijuana",
+      title: "Product Not Found",
+      robots: { index: false, follow: true },
     };
   }
 
-  return {
-    title: `${item.name} | Greenway Marijuana Menu`,
-    description: item.description,
-  };
+  const description =
+    item.description?.trim() ||
+    `${item.name} by ${item.brand} — ${formatWebsiteCategory(item.category)} available at Greenway Marijuana in Port Orchard, WA.`;
+
+  return pageMetadata({
+    title: `${item.name} — ${item.brand}`,
+    description,
+    path: `/menu/products/${item.id}`,
+  });
 }
 
 export default async function ProductDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -188,6 +196,27 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
 
   return (
     <main id="top" className="min-h-screen bg-black text-white">
+      <JsonLd
+        data={[
+          productSchema({
+            id: item.id,
+            name: item.name,
+            description: item.description,
+            brand: item.brand,
+            category: formatWebsiteCategory(item.category),
+            priceMinorUnits: item.priceMinorUnits,
+            inStock:
+              item.inventoryStatus !== "unavailable" &&
+              (item.variants?.reduce((sum, variant) => sum + (variant.inventoryLevel ?? 0), 0) ?? 1) > 0,
+          }),
+          breadcrumbSchema([
+            { name: "Home", path: "/" },
+            { name: "Shop", path: "/menu" },
+            { name: item.name, path: `/menu/products/${item.id}` },
+          ]),
+        ]}
+        id="product"
+      />
       <Header />
 
       <section className="mx-auto w-full max-w-[430px] px-4 pb-10 pt-4 md:max-w-5xl md:px-8 md:pt-8">

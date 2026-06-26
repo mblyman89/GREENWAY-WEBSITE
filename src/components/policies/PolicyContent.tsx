@@ -5,7 +5,7 @@ type PolicyPreviewProps = {
   policy: PolicyPreviewRecord;
 };
 
-export function PolicyPreview({ policy }: PolicyPreviewProps) {
+export function PolicyContent({ policy }: PolicyPreviewProps) {
   return (
     <section className="relative overflow-hidden bg-black text-white">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(126,217,87,0.16),transparent_30rem),radial-gradient(circle_at_top_right,rgba(255,215,0,0.1),transparent_28rem),radial-gradient(circle_at_bottom_right,rgba(255,127,0,0.13),transparent_30rem)]" />

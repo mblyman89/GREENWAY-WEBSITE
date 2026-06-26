@@ -1,13 +1,14 @@
-import type { Metadata } from "next";
 import { Breadcrumbs } from "@/components/site/Breadcrumbs";
 import { Footer } from "@/components/site/Footer";
 import { Header } from "@/components/site/Header";
 import { privacyPolicyParagraphs } from "@/content/privacy-policy";
+import { pageMetadata } from "@/lib/seo/seo";
 
-export const metadata: Metadata = {
-  title: "Privacy Policy | Greenway Marijuana",
-  description: "Read the Greenway Marijuana privacy policy.",
-};
+export const metadata = pageMetadata({
+  title: "Privacy Policy",
+  description: "Read the Greenway Marijuana privacy policy covering how we collect, use, and protect customer information.",
+  path: "/privacy-policy",
+});
 
 function isPolicyHeading(text: string) {
   return /^(?:[IVX]+\.|\d+\.|[a-z]\.)\s/.test(text) || text === "IX. Contact Us";

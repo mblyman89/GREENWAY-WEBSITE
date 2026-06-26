@@ -20,7 +20,8 @@ export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Loyalty Signup Review | Greenway Marijuana",
-  description: "Internal preview review page for Greenway loyalty signup submissions.",
+  description: "Internal review page for Greenway loyalty signup submissions.",
+  robots: { index: false, follow: false },
 };
 
 async function readSignups(): Promise<SignupRecord[]> {

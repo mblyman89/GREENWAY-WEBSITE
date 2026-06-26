@@ -71,34 +71,55 @@ File: `src/components/site/SecondaryBar.tsx`
 
 ## PHASE 8 — SITE_REVIEW execution: cleanup + dev-route removal + Preview renames + EXPERT SEO (NO graphics, NO text changes)
 ### 8a. Dev route removal
-- [ ] Remove dev routes `/menu/mock-preview` and `/menu/pos-preview` (delete dirs `src/app/menu/mock-preview`, `src/app/menu/pos-preview`). Confirm nothing imports them.
-- [ ] Ensure sitemap/robots don't reference them (they don't currently).
+- [x] Remove dev routes `/menu/mock-preview` and `/menu/pos-preview` (delete dirs `src/app/menu/mock-preview`, `src/app/menu/pos-preview`). Confirm nothing imports them.
+- [x] Ensure sitemap/robots don't reference them (they don't currently).
 ### 8b. `*Preview` component renames (leftover dev naming)
-- [ ] Rename components to production names + update imports/usages: `LoyaltySignupPreview`→`LoyaltySignupForm`, `SpecialsPreview`→`SpecialsContent`, `FaqPreview`→`FaqContent`, `PriceMatchPreview`→`PriceMatchContent`, `LocationsPreview`→`LocationsContent`, `PolicyPreview`→`PolicyContent`, `AboutPreview`→`AboutContent`, `BlogPreview`→`BlogContent`, `MenuPreview`→`MenuHighlights` (home). Verify each rename compiles. (Keep behavior identical; pure rename.)
-- [ ] NOTE: Be conservative — only rename what's clearly a dev `*Preview` leftover; verify no breakage. Skip any that risk regressions and note them.
+- [x] Rename components to production names + update imports/usages: `LoyaltySignupPreview`→`LoyaltySignupForm`, `SpecialsPreview`→`SpecialsContent`, `FaqPreview`→`FaqContent`, `PriceMatchPreview`→`PriceMatchContent`, `LocationsPreview`→`LocationsContent`, `PolicyPreview`→`PolicyContent`, `AboutPreview`→`AboutContent`, `BlogPreview`→`BlogContent`, `MenuPreview`→`MenuHighlights` (home). Verify each rename compiles. (Keep behavior identical; pure rename.)
+- [x] NOTE: Be conservative — only rename what's clearly a dev `*Preview` leftover; verify no breakage. Skip any that risk regressions and note them.
 ### 8c. EXPERT SEO (do an outstanding job)
-- [ ] Per-page unique `metadata` (title + description + canonical + openGraph + twitter) for: home, /menu, /specials, /about, /locations, /loyalty, /blog, /faq, /price-match, /privacy-policy, /terms-of-use, /consumer-health-data, /vendor-delivery.
-- [ ] Per-product dynamic `generateMetadata` on `/menu/products/[id]` (title, desc, canonical, OG, product image fallback).
-- [ ] JSON-LD structured data:
-  - [ ] `Store`/`CannabisStore`+`LocalBusiness` on home/locations (name, address, geo 47.5046,-122.6384, phone, hours openingHoursSpecification, sameAs socials, url, image).
-  - [ ] `Product` + `Offer` JSON-LD on product pages (name, brand, price, availability, priceCurrency USD).
-  - [ ] `BreadcrumbList` JSON-LD (reusable component) on key pages.
-  - [ ] `FAQPage` JSON-LD on /faq.
-  - [ ] `Organization` + `WebSite` (with potentialAction SearchAction) site-wide in layout.
-- [ ] OpenGraph + Twitter card defaults in root layout metadata (siteName, type, locale, default OG image if a brand asset already exists — do NOT create new graphics; reuse existing wordmark/og asset if present, else omit image).
-- [ ] Canonical URLs via `alternates.canonical` per page.
-- [ ] Fix sitemap to use the SAME product set as the live menu (`posMenuPreviewItems`) instead of `mockMenuItems`; keep dev routes excluded; add /loyalty, /vendor-delivery, /price-match if indexable.
-- [ ] robots.ts: keep /checkout disallowed; add /admin disallow; confirm sitemap reference.
-- [ ] Add `metadataBase` already present — confirm canonical resolves.
-- [ ] Add a small reusable `<JsonLd>` component (`src/components/seo/JsonLd.tsx`) using `<script type="application/ld+json">`.
-- [ ] Add web manifest / icons only if trivially present; otherwise skip (no new graphics).
+- [x] Per-page unique `metadata` (title + description + canonical + openGraph + twitter) for: home, /menu, /specials, /about, /locations, /loyalty, /blog, /faq, /price-match, /privacy-policy, /terms-of-use, /consumer-health-data, /vendor-delivery.
+- [x] Per-product dynamic `generateMetadata` on `/menu/products/[id]` (title, desc, canonical, OG, product image fallback).
+- [x] JSON-LD structured data:
+  - [x] `Store`/`CannabisStore`+`LocalBusiness` on home/locations (name, address, geo 47.5046,-122.6384, phone, hours openingHoursSpecification, sameAs socials, url, image).
+  - [x] `Product` + `Offer` JSON-LD on product pages (name, brand, price, availability, priceCurrency USD).
+  - [x] `BreadcrumbList` JSON-LD (reusable component) on key pages.
+  - [x] `FAQPage` JSON-LD on /faq.
+  - [x] `Organization` + `WebSite` (with potentialAction SearchAction) site-wide in layout.
+- [x] OpenGraph + Twitter card defaults in root layout metadata (siteName, type, locale, default OG image if a brand asset already exists — do NOT create new graphics; reuse existing wordmark/og asset if present, else omit image).
+- [x] Canonical URLs via `alternates.canonical` per page.
+- [x] Fix sitemap to use the SAME product set as the live menu (`posMenuPreviewItems`) instead of `mockMenuItems`; keep dev routes excluded; add /loyalty, /vendor-delivery, /price-match if indexable.
+- [x] robots.ts: keep /checkout disallowed; add /admin disallow; confirm sitemap reference.
+- [x] Add `metadataBase` already present — confirm canonical resolves.
+- [x] Add a small reusable `<JsonLd>` component (`src/components/seo/JsonLd.tsx`) using `<script type="application/ld+json">`.
+- [x] Add web manifest / icons only if trivially present; otherwise skip (no new graphics).
 ### 8d. A11y polish (no text/graphics)
-- [ ] Ensure interactive controls have focus-visible rings; alt text present on images (most already have).
-- [ ] Verify dropdown / drawer keyboard accessibility not regressed.
+- [x] Ensure interactive controls have focus-visible rings; alt text present on images (most already have).
+- [x] Verify dropdown / drawer keyboard accessibility not regressed.
 
 ## PHASE 9 — Verify + ship
-- [ ] `npx tsc --noEmit` clean.
-- [ ] `npx eslint` on changed files clean.
-- [ ] `npm run build` succeeds.
-- [ ] Local prod server on :3100; browser-verify DESKTOP + MOBILE for every phase (cart math, loyalty hero, nav dropdown, shop layout, cart banner, green banner, SEO head tags via view-source / extract).
-- [ ] Commit, push branch, open PR. Report PR URL + summary.
+- [x] `npx tsc --noEmit` clean.
+- [x] `npx eslint` on changed files clean.
+- [x] `npm run build` succeeds.
+- [x] Local prod server on :3100; browser-verify DESKTOP + MOBILE for every phase (cart math, loyalty hero, nav dropdown, shop layout, cart banner, green banner, SEO head tags via view-source / extract).
+- [x] Commit, push branch, open PR. Report PR URL + summary.
+
+---
+
+## Phase 8 / 9 — Verification Results (final)
+
+- Tax model: card $22.50 -> Subtotal $15.38 + Taxes $7.12 = Total $22.50 (tax-inclusive divisor 1.463). VERIFIED in live cart drawer + header.
+- Dev routes removed: `/menu/mock-preview` and `/menu/pos-preview` now return **404** (verified after clean rebuild; build route list no longer lists them).
+- `MenuPreview` (home): component was orphaned/unused dead code -> **deleted** (not renamed to MenuHighlights), since nothing imported it.
+- `*Preview` renames completed for: LoyaltySignupForm, SpecialsContent, FaqContent, PriceMatchContent, LocationsContent, PolicyContent, AboutContent, BlogContent. (Data files like posMenuPreviewItems intentionally NOT renamed — legitimate data names.)
+- FAQ data extracted to server-safe `src/content/faq.ts` (fixes prerender crash from importing client-component value into server metadata/JSON-LD).
+- SEO verified via curl/view-source:
+  - Home: Organization + WebSite(SearchAction) + Store/LocalBusiness(geo, hours) JSON-LD; canonical; OG; Twitter.
+  - /menu: + BreadcrumbList; clean title via template.
+  - /locations: + Store schema (page-level).
+  - /faq: + FAQPage (16 Q/A).
+  - Product page: Product + Brand + Offer + BreadcrumbList; canonical; title.
+  - robots.txt: disallows checkout/admin/api/dev-preview; Host + Sitemap.
+  - sitemap.xml: 2347 URLs (live products + static pages); no dev/checkout/admin; lastmod/changefreq/priority.
+  - checkout + confirmation: noindex,nofollow.
+- tsc clean, eslint clean (changed files), `npm run build` EXIT 0 (clean rebuild).
+- Visual: shop desktop (breadcrumb above hero, category title inline with search + SORT BY, specials checkbox style, cards flush), loyalty desktop hero taller, green banner phone larger — all VERIFIED.

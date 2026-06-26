@@ -56,7 +56,7 @@ export function getStoreWeekday(reference: Date = new Date()): StoreWeekday {
 }
 
 // ---------------------------------------------------------------------------
-// Per-deal category targeting (mirrors SpecialsPreview + previewSpecialCollections)
+// Per-deal category targeting (mirrors SpecialsContent + previewSpecialCollections)
 // ---------------------------------------------------------------------------
 
 // Monday — Munchie Monday: edibles, RSO, drinks, tinctures.

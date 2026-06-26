@@ -1,15 +1,17 @@
 import { Suspense } from "react";
-import type { Metadata } from "next";
 import { Header } from "@/components/site/Header";
 import { Breadcrumbs } from "@/components/site/Breadcrumbs";
 import { Footer } from "@/components/site/Footer";
 import { InteractiveMenuBrowser } from "@/components/menu/InteractiveMenuBrowser";
+import { pageMetadata } from "@/lib/seo/seo";
 import { posMenuPreviewItems } from "@/lib/pos/preview-menu";
 
-export const metadata: Metadata = {
-  title: "Shop Menu | Greenway Marijuana",
-  description: "Shop Greenway Marijuana's menu using exact-match POS inventory data with real product names, brands, prices, package labels, potency values, and stock levels.",
-};
+export const metadata = pageMetadata({
+  title: "Shop Cannabis Menu — Flower, Vapes, Edibles & More",
+  description:
+    "Shop Greenway Marijuana's full Port Orchard cannabis menu: flower, prerolls, cartridges, concentrates, edibles, tinctures, topicals, and accessories with live prices and stock.",
+  path: "/menu",
+});
 
 type MenuPageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
@@ -41,8 +43,9 @@ export default async function MenuPage({ searchParams }: MenuPageProps) {
     <main id="top">
       <Header />
 
-      {/* Breadcrumb sits ABOVE the hero, consistent with every other page. */}
-      <Breadcrumbs items={[{ label: "Shop" }]} />
+      {/* Breadcrumb sits ABOVE the hero, consistent with every other page.
+          (BreadcrumbList JSON-LD is emitted automatically by <Breadcrumbs>.) */}
+      <Breadcrumbs items={[{ label: "Shop", href: "/menu" }]} />
 
       {/* Wide, short hero banner — clean, left-aligned title with a single subtitle line */}
       <section className="border-b border-white/10 bg-black px-4 py-4 md:px-8 md:py-5">

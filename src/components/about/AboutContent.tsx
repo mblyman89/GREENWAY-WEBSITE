@@ -23,7 +23,7 @@ const values = [
   },
 ];
 
-export function AboutPreview() {
+export function AboutContent() {
   return (
     <section className="relative overflow-hidden bg-black text-white">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_10%,rgba(255,127,0,0.13),transparent_18rem),radial-gradient(circle_at_88%_18%,rgba(255,215,0,0.11),transparent_22rem),radial-gradient(circle_at_52%_88%,rgba(126,217,87,0.08),transparent_24rem)]" />
