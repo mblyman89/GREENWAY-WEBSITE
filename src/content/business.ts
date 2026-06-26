@@ -15,7 +15,8 @@ export const greenwayBusiness = {
     directionsUrl: "https://www.google.com/maps/search/?api=1&query=4851%20Geiger%20Rd%20SE%2C%20Port%20Orchard%2C%20WA%2098367",
   },
   phone: {
-    display: "360-443-6988",
+    display: "360-BUY-WEED",
+    numeric: "360-443-6988",
     formatted: "(360) 443-6988",
     tel: "+13604436988",
   },

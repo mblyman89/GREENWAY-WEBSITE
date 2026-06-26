@@ -31,12 +31,18 @@ function priceParts(variant: GreenwayMenuVariant, itemPriceMinorUnits: number, s
 function PriceLine({ variant, itemPriceMinorUnits, salePriceMinorUnits }: PriceLineProps) {
   const { regularPrice, displayPrice, hasSalePrice, unitLabel } = priceParts(variant, itemPriceMinorUnits, salePriceMinorUnits);
   return (
-    <span className="flex min-h-[3.35rem] w-full items-center justify-center gap-1.5 px-2.5 text-center leading-none md:gap-2 md:px-3">
+    <span className="flex min-h-[3.35rem] w-full flex-col items-center justify-center px-2.5 text-center leading-none md:px-3">
+      {/* "Before" (regular) price — TOP aligned, struck through */}
       {hasSalePrice ? (
-        <span className="text-[0.72rem] font-black text-zinc-400 line-through md:text-[0.95rem]">{formatMinorCurrency(regularPrice)}</span>
+        <span className="mb-0.5 text-[0.72rem] font-black text-zinc-400 line-through md:text-[0.95rem]">
+          {formatMinorCurrency(regularPrice)}
+        </span>
       ) : null}
-      <span className="text-[1.18rem] font-black text-[var(--orange)] md:text-[1.72rem]">{formatMinorCurrency(displayPrice)}</span>
-      {unitLabel ? <span className="text-[0.78rem] font-black text-white/95 md:text-base">{unitLabel}</span> : null}
+      {/* Discounted price-per-unit — BOTTOM aligned */}
+      <span className="flex items-baseline justify-center gap-1">
+        <span className="text-[1.18rem] font-black text-[var(--orange)] md:text-[1.72rem]">{formatMinorCurrency(displayPrice)}</span>
+        {unitLabel ? <span className="text-[0.78rem] font-black text-white/95 md:text-base">{unitLabel}</span> : null}
+      </span>
     </span>
   );
 }

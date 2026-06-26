@@ -105,7 +105,7 @@ export function LocationsContent() {
               </DetailRow>
               <DetailRow label="Phone">
                 <a href={`tel:${greenwayBusiness.phone.tel}`} className="transition hover:text-[var(--greenway)]">
-                  {greenwayBusiness.phone.formatted}
+                  {greenwayBusiness.phone.display}
                 </a>
               </DetailRow>
               <DetailRow label="Hours">{greenwayBusiness.hours.display}</DetailRow>

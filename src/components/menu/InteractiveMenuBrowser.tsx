@@ -956,6 +956,20 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
         </div>
       ) : null}
 
+      {/* MOBILE: search + sort row ABOVE the Filters & Categories dropdown. */}
+      <div className="flex flex-row items-center gap-2.5 lg:hidden">
+        <input
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Search products, brands..."
+          aria-label="Search products"
+          className="h-11 min-w-0 flex-1 rounded-full border border-white/10 bg-zinc-950 px-4 text-sm font-bold text-white outline-none transition placeholder:text-zinc-600 hover:border-[var(--greenway)]/45 focus:border-[var(--greenway)] focus:ring-2 focus:ring-[var(--greenway)]/20"
+        />
+        <div className="w-[8.5rem] shrink-0">
+          <SortDropdown value={sortBy} onChange={setSortBy} />
+        </div>
+      </div>
+
       <div className="lg:hidden">
         <FilterMobile activeCount={activeFilterCount} resultCount={filteredItems.length}>
           {filterControls}
@@ -972,7 +986,8 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
           <h2 className="min-w-0 truncate text-2xl font-black text-white md:text-3xl">
             {toolbarTitle}
           </h2>
-          <div className="flex flex-row items-center gap-2.5 sm:shrink-0 sm:gap-3">
+          {/* DESKTOP search + sort (mobile renders these above the filters dropdown). */}
+          <div className="hidden flex-row items-center gap-2.5 sm:shrink-0 sm:gap-3 lg:flex">
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}

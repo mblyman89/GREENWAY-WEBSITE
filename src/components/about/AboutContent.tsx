@@ -44,7 +44,7 @@ export function AboutContent() {
 
         <div className="mt-10 grid gap-5 lg:mt-16 lg:grid-cols-2 lg:items-stretch lg:gap-7">
           <article className="rounded-[1.35rem] border border-white/10 bg-zinc-950/90 p-5 shadow-2xl shadow-black/35 md:rounded-[2rem] md:p-8 lg:p-10">
-            <h2 className="text-[1.55rem] font-black uppercase leading-tight tracking-tight text-[var(--orange)] sm:text-3xl md:text-[1.72rem] lg:text-[1.72rem] xl:text-[1.9rem]">
+            <h2 className="text-center text-[1.55rem] font-black uppercase leading-tight tracking-tight text-[var(--orange)] sm:text-3xl md:text-[1.72rem] lg:text-[1.72rem] xl:text-[1.9rem]">
               <span className="md:hidden">
                 <span className="block whitespace-nowrap">Your Most Trusted</span>
                 <span className="block whitespace-nowrap">Cannabis Dispensary</span>
