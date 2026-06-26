@@ -10,6 +10,7 @@ export type GreenwayCategory =
   | "rso"
   | "paraphernalia"
   | "accessories"
+  | "merch"
   | "preroll-pack"
   | "cartridge"
   | "disposable-cartridge"

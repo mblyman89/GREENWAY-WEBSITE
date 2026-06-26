@@ -30,15 +30,27 @@ function priceParts(variant: GreenwayMenuVariant, itemPriceMinorUnits: number, s
 
 function PriceLine({ variant, itemPriceMinorUnits, salePriceMinorUnits }: PriceLineProps) {
   const { regularPrice, displayPrice, hasSalePrice, unitLabel } = priceParts(variant, itemPriceMinorUnits, salePriceMinorUnits);
+
+  // No active sale: single centered price + unit.
+  if (!hasSalePrice) {
+    return (
+      <span className="flex min-h-[3.35rem] w-full items-center justify-center gap-1 px-2.5 text-center leading-none md:px-3">
+        <span className="text-[1.18rem] font-black text-[var(--orange)] md:text-[1.72rem]">{formatMinorCurrency(displayPrice)}</span>
+        {unitLabel ? <span className="text-[0.78rem] font-black text-white/95 md:text-base">{unitLabel}</span> : null}
+      </span>
+    );
+  }
+
+  // Active sale:
+  //  - MOBILE  -> struck "before" price stacked ABOVE the discounted price/unit
+  //  - DESKTOP -> struck "before" price to the LEFT, discounted price/unit to the RIGHT
   return (
-    <span className="flex min-h-[3.35rem] w-full flex-col items-center justify-center px-2.5 text-center leading-none md:px-3">
-      {/* "Before" (regular) price — TOP aligned, struck through */}
-      {hasSalePrice ? (
-        <span className="mb-0.5 text-[0.72rem] font-black text-zinc-400 line-through md:text-[0.95rem]">
-          {formatMinorCurrency(regularPrice)}
-        </span>
-      ) : null}
-      {/* Discounted price-per-unit — BOTTOM aligned */}
+    <span className="flex min-h-[3.35rem] w-full flex-col items-center justify-center gap-0.5 px-2.5 text-center leading-none md:flex-row md:items-baseline md:gap-2 md:px-3">
+      {/* "Before" (regular) price — struck through */}
+      <span className="text-[0.72rem] font-black text-zinc-400 line-through md:text-[1.05rem]">
+        {formatMinorCurrency(regularPrice)}
+      </span>
+      {/* Discounted price-per-unit */}
       <span className="flex items-baseline justify-center gap-1">
         <span className="text-[1.18rem] font-black text-[var(--orange)] md:text-[1.72rem]">{formatMinorCurrency(displayPrice)}</span>
         {unitLabel ? <span className="text-[0.78rem] font-black text-white/95 md:text-base">{unitLabel}</span> : null}

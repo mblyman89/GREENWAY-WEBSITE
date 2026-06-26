@@ -7,10 +7,10 @@ export function SecondaryBar() {
       <div className="mx-auto grid max-w-7xl grid-cols-[minmax(0,34vw)_minmax(3.5rem,1fr)_auto] items-center gap-[clamp(0.12rem,0.5vw,0.5rem)] px-[clamp(0.18rem,0.75vw,0.8rem)] py-1 md:flex md:max-w-none md:flex-nowrap md:justify-between md:px-5 lg:px-6 xl:px-8">
         <Link
           href="/locations"
-          className="inline-flex h-[clamp(1.95rem,8.1vw,2.45rem)] min-w-0 items-center rounded-full bg-black px-[clamp(0.42rem,1.55vw,1.15rem)] text-[var(--greenway)] transition hover:bg-white hover:text-black md:h-10 md:max-w-none"
+          className="inline-flex h-[clamp(1.95rem,8.1vw,2.45rem)] min-w-0 items-center justify-center rounded-full bg-black px-[clamp(0.42rem,1.55vw,1.15rem)] text-[var(--greenway)] transition hover:bg-white hover:text-black md:h-10 md:max-w-none md:justify-start"
           aria-label={`View Greenway location details for ${greenwayBusiness.address.full}`}
         >
-          <span className="min-w-0 leading-[0.98]">
+          <span className="min-w-0 text-center leading-[0.98] md:text-left">
             <span className="block truncate text-[clamp(0.52rem,2.45vw,0.82rem)] font-black uppercase tracking-[-0.025em] sm:tracking-[0.005em] md:text-[0.82rem] md:tracking-[0.03em] lg:text-[0.88rem]">
               {greenwayBusiness.address.line1}
             </span>

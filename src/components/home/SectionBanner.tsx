@@ -11,6 +11,7 @@ export function SectionBanner({
   imageAlt,
   eyebrow,
   title,
+  titleClassName = "text-white",
   subtitle,
   priority = false,
 }: {
@@ -18,6 +19,7 @@ export function SectionBanner({
   imageAlt: string;
   eyebrow?: string;
   title: string;
+  titleClassName?: string;
   subtitle?: string;
   priority?: boolean;
 }) {
@@ -42,7 +44,7 @@ export function SectionBanner({
             {eyebrow}
           </p>
         ) : null}
-        <h2 className="mt-1 text-2xl font-black uppercase leading-none tracking-tight text-white md:text-4xl lg:text-5xl">
+        <h2 className={`mt-1 text-2xl font-black uppercase leading-none tracking-tight md:text-4xl lg:text-5xl ${titleClassName}`}>
           {title}
         </h2>
         {subtitle ? (

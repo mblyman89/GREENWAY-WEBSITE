@@ -145,6 +145,37 @@ const accessorySectionCards: AccessorySectionCard[] = [
   { key: "lighters", label: "Lighters", description: "Never get caught without a flame. Refillable torches that fire up dabs and bowls, classic flip lighters for everyday carry, and natural hemp wick for a cleaner-tasting light — the dependable essentials no session should start without.", imageUrl: "/accessories/lighters.webp" },
 ];
 
+function MenuSearchIcon({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="m21 21-4.3-4.3M10.8 18.2a7.4 7.4 0 1 1 0-14.8 7.4 7.4 0 0 1 0 14.8Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+type MerchSectionCard = {
+  key: string;
+  label: string;
+  description: string;
+  imageUrl: string;
+  mensSizes: string[];
+  womensSizes: string[];
+};
+
+const MENS_APPAREL_SIZES = ["S", "M", "L", "XL", "2XL"];
+const WOMENS_APPAREL_SIZES = ["XS", "S", "M", "L", "XL"];
+const ONE_SIZE = ["One Size"];
+
+const merchSectionCards: MerchSectionCard[] = [
+  { key: "tshirt", label: "Logo Tee", description: "Soft, heavyweight cotton with the classic Greenway leaf on the chest. Your everyday go-to.", imageUrl: "/merch/tshirt.webp", mensSizes: MENS_APPAREL_SIZES, womensSizes: WOMENS_APPAREL_SIZES },
+  { key: "sweatshirt", label: "Pullover Hoodie", description: "Cozy fleece-lined hoodie built for chilly Kitsap evenings. Warm, durable, and clean.", imageUrl: "/merch/sweatshirt.webp", mensSizes: MENS_APPAREL_SIZES, womensSizes: WOMENS_APPAREL_SIZES },
+  { key: "zip-hoodie", label: "Zip-Up Hoodie", description: "Full-zip comfort with embroidered Greenway branding. Layer up your style anytime.", imageUrl: "/merch/zip-hoodie.webp", mensSizes: MENS_APPAREL_SIZES, womensSizes: WOMENS_APPAREL_SIZES },
+  { key: "hat", label: "Dad Hat", description: "Structured cotton cap with an embroidered leaf and adjustable strap back. Fits everyone.", imageUrl: "/merch/hat.webp", mensSizes: ONE_SIZE, womensSizes: ONE_SIZE },
+  { key: "beanie", label: "Knit Beanie", description: "Warm cuffed knit beanie with a woven Greenway tag. Cold-weather essential.", imageUrl: "/merch/beanie.webp", mensSizes: ONE_SIZE, womensSizes: ONE_SIZE },
+  { key: "socks", label: "Crew Socks", description: "Cushioned crew socks with green-and-gold stripes. Comfy, bold, and built to last.", imageUrl: "/merch/socks.webp", mensSizes: ["M (7-10)", "L (10-13)"], womensSizes: ["S (5-8)", "M (8-11)"] },
+  { key: "lanyard", label: "Logo Lanyard", description: "Woven neck lanyard with a metal clip and quick-release buckle. Keys and ID, sorted.", imageUrl: "/merch/lanyard.webp", mensSizes: ONE_SIZE, womensSizes: ONE_SIZE },
+];
+
 function safeSectionId(value: string) {
   return value.toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "section";
 }
@@ -301,6 +332,80 @@ function AccessoryCard({ card }: { card: AccessorySectionCard }) {
         <p className="text-[0.62rem] font-black uppercase tracking-[0.18em] text-[var(--greenway)]">Accessory section</p>
         <h3 className="mt-2 text-2xl font-black text-white">{card.label}</h3>
         <p className="mt-3 text-sm leading-6 text-zinc-300">{card.description}</p>
+      </div>
+    </article>
+  );
+}
+
+function MerchCard({ card }: { card: MerchSectionCard }) {
+  const isOneSize = card.mensSizes.length === 1 && card.mensSizes[0] === "One Size" && card.womensSizes.length === 1 && card.womensSizes[0] === "One Size";
+  const [fit, setFit] = useState<"mens" | "womens">("mens");
+  const sizes = fit === "mens" ? card.mensSizes : card.womensSizes;
+  const [selectedSize, setSelectedSize] = useState(sizes[0]);
+
+  function changeFit(nextFit: "mens" | "womens") {
+    setFit(nextFit);
+    const nextSizes = nextFit === "mens" ? card.mensSizes : card.womensSizes;
+    setSelectedSize(nextSizes[0]);
+  }
+
+  return (
+    <article className="group flex flex-col overflow-hidden rounded-[1.35rem] border border-white/10 bg-zinc-950 shadow-xl shadow-black/25 transition hover:-translate-y-1 hover:border-[var(--greenway)]/45">
+      <div className="aspect-[4/3] overflow-hidden bg-white">
+        <img src={card.imageUrl} alt={card.label} className="h-full w-full object-contain transition duration-500 group-hover:scale-105" loading="lazy" />
+      </div>
+      <div className="flex flex-1 flex-col p-5">
+        <p className="text-[0.62rem] font-black uppercase tracking-[0.18em] text-[var(--greenway)]">Greenway Merch</p>
+        <h3 className="mt-2 text-2xl font-black text-white">{card.label}</h3>
+        <p className="mt-2 text-sm leading-6 text-zinc-300">{card.description}</p>
+
+        <div className="mt-auto pt-4">
+          {isOneSize ? (
+            <p className="text-xs font-black uppercase tracking-[0.12em] text-zinc-400">One size fits most</p>
+          ) : (
+            <>
+              {/* Fit toggle: Men's / Women's */}
+              <div className="grid grid-cols-2 gap-2" role="group" aria-label={`Select fit for ${card.label}`}>
+                {(["mens", "womens"] as const).map((value) => {
+                  const active = fit === value;
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => changeFit(value)}
+                      aria-pressed={active}
+                      className={`rounded-full border px-3 py-2 text-[0.7rem] font-black uppercase tracking-[0.08em] transition ${
+                        active ? "border-[var(--orange)] bg-[var(--orange)] text-black" : "border-white/15 bg-black/40 text-white hover:border-white/45"
+                      }`}
+                    >
+                      {value === "mens" ? "Men's" : "Women's"}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Size selector */}
+              <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label={`Select size for ${card.label}`}>
+                {sizes.map((size) => {
+                  const active = size === selectedSize;
+                  return (
+                    <button
+                      key={size}
+                      type="button"
+                      onClick={() => setSelectedSize(size)}
+                      aria-pressed={active}
+                      className={`min-w-10 rounded-md border px-2.5 py-1.5 text-xs font-black uppercase transition ${
+                        active ? "border-[var(--greenway)] bg-[var(--greenway)] text-black" : "border-white/15 bg-black/40 text-white hover:border-white/45"
+                      }`}
+                    >
+                      {size}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </article>
   );
@@ -756,7 +861,15 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
   const categoryOptions = useMemo(() => {
     const optionItems = items.filter((item) => itemMatchesCriteria(item, criteriaWithout(criteria, "selectedCategories"), maxAvailablePrice, cannabinoidBounds));
     const categoryValues = optionItems.flatMap((item) => item.filterCategories?.length ? item.filterCategories : [item.category]);
-    return buildOptions([...categoryValues, ...Array(accessorySectionCards.length).fill("accessories")], selectedCategories, formatWebsiteCategory);
+    return buildOptions(
+      [
+        ...categoryValues,
+        ...Array(accessorySectionCards.length).fill("accessories"),
+        ...Array(merchSectionCards.length).fill("merch"),
+      ],
+      selectedCategories,
+      formatWebsiteCategory,
+    );
   }, [cannabinoidBounds, criteria, items, maxAvailablePrice, selectedCategories]);
 
   const strainOptions = useMemo(() => {
@@ -798,6 +911,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
     "infused-preroll-pack",
   ].includes(activeSectionCategory);
   const showAccessorySections = selectedCategories.length === 1 && selectedCategories[0] === "accessories";
+  const showMerchSections = selectedCategories.length === 1 && selectedCategories[0] === "merch";
 
   const groupedItems = useMemo<MenuItemGroup[]>(() => {
     if (activeSectionCategory && usesFilteredSections) return groupedByActiveFilter(activeSectionCategory, filteredItems);
@@ -817,7 +931,9 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
   // first product section label, falling back to a sensible default.
   const toolbarTitle = showAccessorySections
     ? "Accessories"
-    : initialSpecial?.label ?? groupedItems[0]?.label ?? "All Products";
+    : showMerchSections
+      ? "Greenway Merch"
+      : initialSpecial?.label ?? groupedItems[0]?.label ?? "All Products";
 
   const resetFilters = () => {
     setQuery("");
@@ -958,13 +1074,18 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
 
       {/* MOBILE: search + sort row ABOVE the Filters & Categories dropdown. */}
       <div className="flex flex-row items-center gap-2.5 lg:hidden">
-        <input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search products, brands..."
-          aria-label="Search products"
-          className="h-11 min-w-0 flex-1 rounded-full border border-white/10 bg-zinc-950 px-4 text-sm font-bold text-white outline-none transition placeholder:text-zinc-600 hover:border-[var(--greenway)]/45 focus:border-[var(--greenway)] focus:ring-2 focus:ring-[var(--greenway)]/20"
-        />
+        <div className="relative min-w-0 flex-1">
+          <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500">
+            <MenuSearchIcon />
+          </span>
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search strains, products..."
+            aria-label="Search products"
+            className="h-11 w-full rounded-full border border-white/10 bg-zinc-950 pl-11 pr-4 text-sm font-bold text-white outline-none transition placeholder:text-zinc-600 hover:border-[var(--greenway)]/45 focus:border-[var(--greenway)] focus:ring-2 focus:ring-[var(--greenway)]/20"
+          />
+        </div>
         <div className="w-[8.5rem] shrink-0">
           <SortDropdown value={sortBy} onChange={setSortBy} />
         </div>
@@ -988,13 +1109,18 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
           </h2>
           {/* DESKTOP search + sort (mobile renders these above the filters dropdown). */}
           <div className="hidden flex-row items-center gap-2.5 sm:shrink-0 sm:gap-3 lg:flex">
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search products, brands, categories"
-              aria-label="Search products"
-              className="h-11 w-full rounded-full border border-white/10 bg-zinc-950 px-4 text-sm font-bold text-white outline-none transition placeholder:text-zinc-600 hover:border-[var(--greenway)]/45 focus:border-[var(--greenway)] focus:ring-2 focus:ring-[var(--greenway)]/20 sm:w-[18rem] lg:w-[22rem]"
-            />
+            <div className="relative w-full sm:w-[18rem] lg:w-[22rem]">
+              <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500">
+                <MenuSearchIcon />
+              </span>
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search strains, products..."
+                aria-label="Search products"
+                className="h-11 w-full rounded-full border border-white/10 bg-zinc-950 pl-11 pr-4 text-sm font-bold text-white outline-none transition placeholder:text-zinc-600 hover:border-[var(--greenway)]/45 focus:border-[var(--greenway)] focus:ring-2 focus:ring-[var(--greenway)]/20"
+              />
+            </div>
             <div className="w-[8.5rem] shrink-0 sm:w-[11rem]">
               <SortDropdown value={sortBy} onChange={setSortBy} />
             </div>
@@ -1005,6 +1131,12 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
           <section id="accessories" className="scroll-mt-32">
             <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
               {accessorySectionCards.map((card) => <AccessoryCard key={card.key} card={card} />)}
+            </div>
+          </section>
+        ) : showMerchSections ? (
+          <section id="merch" className="scroll-mt-32">
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+              {merchSectionCards.map((card) => <MerchCard key={card.key} card={card} />)}
             </div>
           </section>
         ) : filteredItems.length === 0 ? (

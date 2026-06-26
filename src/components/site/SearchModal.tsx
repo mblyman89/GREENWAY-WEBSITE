@@ -84,17 +84,17 @@ export function SearchModal() {
               }}
             >
               <label className="sr-only" htmlFor="site-product-search">Search products</label>
+              <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" aria-hidden="true">
+                <SearchIcon />
+              </span>
               <input
                 id="site-product-search"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search products, brands..."
+                placeholder="Search strains, products..."
                 autoFocus
-                className="w-full rounded-sm border border-white/10 bg-[#1a1a1a] px-4 py-3.5 pr-12 text-base font-semibold text-white outline-none transition placeholder:text-zinc-500 focus:border-[var(--orange)] focus:ring-2 focus:ring-[var(--orange)]/20 sm:py-4"
+                className="w-full rounded-full border border-white/10 bg-[#1a1a1a] py-3.5 pl-11 pr-5 text-base font-semibold text-white outline-none transition placeholder:text-zinc-500 focus:border-[var(--orange)] focus:ring-2 focus:ring-[var(--orange)]/20 sm:py-4"
               />
-              <button type="submit" className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-300 transition hover:text-[var(--orange)]" aria-label="Search menu products">
-                <SearchIcon />
-              </button>
             </form>
           </div>
         </div>

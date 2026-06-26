@@ -46,7 +46,7 @@ export function PriceMatchContent() {
           <p className="text-[0.68rem] font-black uppercase tracking-[0.24em] text-[var(--gold)] md:text-xs">
             Guaranteed savings
           </p>
-          <h2 className="mt-3 text-3xl font-black uppercase leading-[0.95] tracking-tight text-white md:text-6xl">
+          <h2 className="mt-3 text-center text-3xl font-black uppercase leading-[0.95] tracking-tight text-[var(--orange)] md:text-6xl">
             Our Price Match Promise
           </h2>
           <p className="mt-5 text-sm font-semibold leading-7 text-zinc-200 md:max-w-5xl md:text-lg md:leading-8">

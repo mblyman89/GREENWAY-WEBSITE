@@ -41,7 +41,8 @@ export const greenwayBusiness = {
     blackGoldLogo: "/brand/greenway-black-gold-logo.png",
     blackGoldLogoTransparent: "/brand/greenway-black-gold-logo-transparent.png",
     storefront: "/brand/greenway-front-of-store.webp",
-    loyaltyHero: "/brand/greenway-loyalty-points-hero.png",
+    loyaltyHero: "/brand/greenway-loyalty-points-hero-desktop.png",
+    loyaltyHeroMobile: "/brand/greenway-loyalty-points-hero-mobile.png",
   },
   social: {
     facebook: {

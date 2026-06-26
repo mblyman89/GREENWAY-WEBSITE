@@ -112,7 +112,7 @@ export function ProductDetailPurchasePanel({ item }: ProductDetailPurchasePanelP
             quantity,
           });
         }}
-        className="mt-3 flex h-14 w-full items-center justify-center bg-white px-5 text-[0.82rem] font-black uppercase tracking-[0.12em] text-black transition hover:bg-[var(--orange)] disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
+        className="mt-3 flex h-14 w-full items-center justify-center rounded-md bg-[#d8e6c4] px-5 text-[0.82rem] font-black uppercase tracking-[0.12em] text-black transition hover:bg-[var(--greenway)] disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
       >
         Add to Cart - {formatMinorCurrency(subtotal)}
       </button>

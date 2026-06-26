@@ -252,15 +252,17 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
             </div>
 
             <ProductDetailPurchasePanel item={item} />
+
+            {/* Description tab (lab results intentionally omitted). Sits in the
+                right column under the purchase panel to mirror the reference. */}
+            <section className="mt-7 border-t border-white/15 pt-5">
+              <div className="border-b border-white/15">
+                <button type="button" className="border-b-2 border-[var(--orange)] pb-3 text-[0.76rem] font-black uppercase tracking-[0.2em] text-white">Description</button>
+              </div>
+              <p className="mt-5 text-[0.95rem] leading-7 text-zinc-300">{productDescription}</p>
+            </section>
           </article>
         </div>
-
-        <section className="mt-8 border-t border-white/15 pt-5">
-          <div className="border-b border-white/15">
-            <button type="button" className="border-b-2 border-white pb-3 text-[0.76rem] font-black uppercase tracking-[0.2em] text-white">Description</button>
-          </div>
-          <p className="mt-5 text-[0.95rem] leading-7 text-zinc-300">{productDescription}</p>
-        </section>
 
         <section className="mt-11 pb-2">
           <div className="flex items-end justify-between gap-4">

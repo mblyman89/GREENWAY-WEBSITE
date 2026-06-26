@@ -174,18 +174,19 @@ export function getActiveMenuDiscount(
     }
     case "tuesday": {
       if (!isTuesdayDoobieItem(item)) return undefined;
+      // Highest available discount a customer can take advantage of is 25% (4+).
       return buildDiscount(item, {
         label: "Doobie Tuesday",
-        discountPercent: 20,
+        discountPercent: 25,
         multiItemDiscountPercent: 25,
       });
     }
     case "wednesday": {
       if (!itemMatchesCategories(item, waxWednesdayCategories)) return undefined;
+      // Highest available discount is 30% (at $150+); show the best-case rate.
       return buildDiscount(item, {
         label: "Wax Wednesday",
-        discountPercent: 20,
-        bonusNote: "30% at $150+",
+        discountPercent: 30,
       });
     }
     case "thursday": {
@@ -196,24 +197,23 @@ export function getActiveMenuDiscount(
     case "friday": {
       if (!itemMatchesCategories(item, ounceFridayCategories)) return undefined;
       // Ounce Friday scales by WEIGHT in store: 30% (oz) / 20% (half) / 15%
-      // (quarter). Because the discount depends on the weight purchased, we
-      // cannot show an accurate per-item struck price on the listed unit.
-      // Show an informational badge only (no fake discount on every flower item).
+      // (quarter). Customers can always reach the 30% (ounce) tier, which is the
+      // HIGHEST available discount, so we show every flower card as 30% off with
+      // a genuine struck "before" price and discounted price.
       return buildDiscount(item, {
         label: "Ounce Friday",
         discountPercent: 30,
-        bonusNote: "up to 30% off by weight",
-        perItemSalePrice: false,
       });
     }
     case "saturday":
-      // Super Saturday: 30% off ONE item + 15% everything else storewide. The
-      // exact savings are determined at checkout (which item / how many), so we
-      // do not stamp a fake per-item discount on every card.
-      return undefined;
+      // Super Saturday: 30% off ONE item + 15% off everything else storewide.
+      // The HIGHEST available discount a customer can get is 30%, and it applies
+      // storewide, so every card shows a genuine 30%-off struck price.
+      return buildDiscount(item, { label: "Super Saturday", discountPercent: 30 });
     case "sunday":
-      // Ice Cream Sunday: buy 3 for the price of 2 (a basket-level deal). It is
-      // not a per-item price cut, so cards show no struck price.
+      // Ice Cream Sunday: buy 3 for the price of 2 (a basket-level deal). The
+      // effective savings depend on basket composition and are finalized in
+      // store, so cards show no struck per-item price.
       return undefined;
     default:
       return undefined;

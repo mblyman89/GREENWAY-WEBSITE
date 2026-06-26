@@ -92,6 +92,7 @@ export function CheckoutFlow() {
         variantLabel: item.variantLabel,
         quantity: item.quantity,
         priceMinorUnits: item.priceMinorUnits,
+        regularPriceMinorUnits: item.regularPriceMinorUnits,
       })),
       subtotalMinorUnits,
       estimatedTaxMinorUnits,

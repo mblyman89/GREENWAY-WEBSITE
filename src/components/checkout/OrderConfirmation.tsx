@@ -58,9 +58,16 @@ export function OrderConfirmation() {
                         {line.brand} · Qty {line.quantity}{line.variantLabel ? ` · ${line.variantLabel}` : ""}
                       </p>
                     </div>
-                    <p className="shrink-0 text-sm font-black text-[var(--orange)]">
-                      {formatMinorCurrency(line.priceMinorUnits * line.quantity)}
-                    </p>
+                    <div className="shrink-0 text-right leading-tight">
+                      {typeof line.regularPriceMinorUnits === "number" && line.regularPriceMinorUnits > line.priceMinorUnits ? (
+                        <p className="text-[0.7rem] font-black text-zinc-500 line-through">
+                          {formatMinorCurrency(line.regularPriceMinorUnits * line.quantity)}
+                        </p>
+                      ) : null}
+                      <p className="text-sm font-black text-[var(--orange)]">
+                        {formatMinorCurrency(line.priceMinorUnits * line.quantity)}
+                      </p>
+                    </div>
                   </div>
                 ))}
               </div>
