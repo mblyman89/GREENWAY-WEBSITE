@@ -93,15 +93,15 @@ export function LoyaltySignupPreview() {
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_16%_8%,rgba(126,217,87,0.12),transparent_18rem),radial-gradient(circle_at_84%_10%,rgba(255,127,0,0.12),transparent_21rem),radial-gradient(circle_at_50%_88%,rgba(255,215,0,0.08),transparent_24rem)]" />
       <div className="noise-overlay" />
 
-      <div className="relative mx-auto max-w-7xl px-4 pt-8 md:px-8 md:pt-12 lg:px-10">
-        <div className="relative aspect-[3/1] overflow-hidden rounded-[1.35rem] border border-white/10 bg-zinc-950 shadow-2xl shadow-black/40 md:aspect-auto md:min-h-[27rem] md:rounded-[2rem] lg:min-h-[31rem]">
+      <div className="relative mx-auto max-w-[88rem] px-4 pt-5 md:px-8 md:pt-8">
+        <div className="relative min-h-[8.5rem] overflow-hidden rounded-2xl border border-white/10 bg-zinc-950 shadow-2xl shadow-black/40 md:min-h-[10.5rem]">
           <Image
             src={greenwayBusiness.assets.loyaltyHero}
             alt="Greenway Loyalty Points promotional banner"
             fill
             priority
-            sizes="(min-width: 1280px) 1216px, (min-width: 768px) calc(100vw - 4rem), calc(100vw - 2rem)"
-            className="object-contain object-center md:object-cover"
+            sizes="(min-width: 1408px) 1408px, calc(100vw - 2rem)"
+            className="object-cover object-center"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/10 via-transparent to-transparent" />
         </div>

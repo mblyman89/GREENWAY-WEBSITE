@@ -43,6 +43,7 @@ export type GreenwayMenuItem = {
   name: string;
   productName?: string;
   brand: string;
+  vendor?: string;
   category: GreenwayCategory;
   filterCategories?: GreenwayCategory[];
   posInventoryType?: string;

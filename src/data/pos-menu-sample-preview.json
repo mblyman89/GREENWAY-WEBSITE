@@ -4,6 +4,7 @@
     "name": "Blueberry Pancakes",
     "productName": "2727 - Vape Cart - 2727 - Blueberry Pancakes - 1g",
     "brand": "2727",
+    "vendor": "2727",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -56,6 +57,7 @@
     "name": "Lemon Meringue",
     "productName": "2727 - Vape Cart - 2727 - Lemon Meringue - 1g",
     "brand": "2727",
+    "vendor": "2727",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -113,6 +115,7 @@
     "name": "Purple Punch",
     "productName": "2727 - Vape Cart - 2727 - Purple Punch - 1g",
     "brand": "2727",
+    "vendor": "2727",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -170,6 +173,7 @@
     "name": "Black & Blueberry",
     "productName": "GE - Blackberry Cobbler - 1g Indica Vape Cartridge",
     "brand": "Agro Couture",
+    "vendor": "AGRO COUTURE",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -222,6 +226,7 @@
     "name": "Grape Stomper",
     "productName": "GE - Grape Stomper - 1g Sativa Vape Cartridge",
     "brand": "Agro Couture",
+    "vendor": "AGRO COUTURE",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -269,6 +274,7 @@
     "name": "Green Zkittlez",
     "productName": "GE - Green Zkittlez - 1g Sativa Vape Cartridge",
     "brand": "Agro Couture",
+    "vendor": "AGRO COUTURE",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -321,6 +327,7 @@
     "name": "Sherbet",
     "productName": "GE - Sherbet - 1g Indica Vape Cartridge",
     "brand": "Agro Couture",
+    "vendor": "AGRO COUTURE",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -373,6 +380,7 @@
     "name": "Blueberry Haze",
     "productName": "Bodhi Original Vape - Blueberry Haze 1g",
     "brand": "Bodhi High",
+    "vendor": "CONSCIOUS CANNABIS",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -430,6 +438,7 @@
     "name": "Bubba Kush",
     "productName": "Honey Tree Vape - Bubba Kush",
     "brand": "Bodhi High",
+    "vendor": "CONSCIOUS CANNABIS",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -492,6 +501,7 @@
     "name": "Carbon Fiber",
     "productName": "Pure Vape - Carbon Fiber",
     "brand": "Bodhi High",
+    "vendor": "CONSCIOUS CANNABIS",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -539,6 +549,7 @@
     "name": "Durban Poison",
     "productName": "Pure - Live Resin 510 Vape - Liquid Diamonds - Durban Poison - Sativa - 1mL",
     "brand": "Bodhi High",
+    "vendor": "CONSCIOUS CANNABIS",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -596,6 +607,7 @@
     "name": "Lavender Trainwreck",
     "productName": "Bodhi High Ultra Pure Cartridge Lavender Trainwrecks- 1g",
     "brand": "Bodhi High",
+    "vendor": "CONSCIOUS CANNABIS",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -653,6 +665,7 @@
     "name": "NYC Diesel",
     "productName": "Bodhi Original Vape - NYC Diesel",
     "brand": "Bodhi High",
+    "vendor": "CONSCIOUS CANNABIS",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -705,6 +718,7 @@
     "name": "Orange Push Pop",
     "productName": "Bodhi High Cartridge Orange Push Pop - 1g",
     "brand": "Bodhi High",
+    "vendor": "CONSCIOUS CANNABIS",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -748,6 +762,7 @@
     "name": "Platinum Kush Mints",
     "productName": "Bodhi High Live Resin Cartridge Platinum Kush Mints - 1g",
     "brand": "Bodhi High",
+    "vendor": "CONSCIOUS CANNABIS",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -791,6 +806,7 @@
     "name": "Presidential Kush",
     "productName": "Original - Live Resin 510 Vape - High Potency - Presidential Kush",
     "brand": "Bodhi High",
+    "vendor": "CONSCIOUS CANNABIS",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -838,6 +854,7 @@
     "name": "road rage",
     "productName": "Ultra Pure - Live Resin 510 Vape - Liquid Diamonds - Road Rage OG - Indica - 1mL",
     "brand": "Bodhi High",
+    "vendor": "CONSCIOUS CANNABIS",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -890,6 +907,7 @@
     "name": "Tropic Truffle",
     "productName": "Pure - Live Resin 510 Vape - Liquid Diamonds - Tropic Truffle",
     "brand": "Bodhi High",
+    "vendor": "CONSCIOUS CANNABIS",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -952,6 +970,7 @@
     "name": "Tropical Runtz",
     "productName": "Ultra Pure - Live Resin 510 Vape - Liquid Diamonds - Tropical Runtz - Hybrid - 1mL",
     "brand": "Bodhi High",
+    "vendor": "CONSCIOUS CANNABIS",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -1004,6 +1023,7 @@
     "name": "Apple Fritter",
     "productName": "Buddies cart Apple Fritter",
     "brand": "Buddies",
+    "vendor": "BOTANICAL ARTS",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -1056,6 +1076,7 @@
     "name": "Baby Shark",
     "productName": "BFF Flavored Live Resin Vape Cart - BS - Baby Shark - 1g - (I) - DOH",
     "brand": "Buddies",
+    "vendor": "BOTANICAL ARTS",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -1108,6 +1129,7 @@
     "name": "Blue Ox",
     "productName": "Buddies Flavored Vape Cart - Blue Ox - 1g",
     "brand": "Buddies",
+    "vendor": "BOTANICAL ARTS",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -1155,6 +1177,7 @@
     "name": "Forum Cut GSC",
     "productName": "buddies legacy cartridge forum cut gsc 1g",
     "brand": "Buddies",
+    "vendor": "BOTANICAL ARTS",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -1209,6 +1232,7 @@
     "name": "GG4",
     "productName": "Mindmelt Live Resin Vape Cart - GG4 - 1g - (H) - DOH",
     "brand": "Buddies",
+    "vendor": "BOTANICAL ARTS",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -1266,6 +1290,7 @@
     "name": "Grape Ape",
     "productName": "Buddies Flavored Vape Cart - Grape Ape - 1g",
     "brand": "Buddies",
+    "vendor": "BOTANICAL ARTS",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -1318,6 +1343,7 @@
     "name": "Marcel Clementine",
     "productName": "Mindmelt Live Resin Vape Cart - Marcel Clementine - 1g - (S) - DOH",
     "brand": "Buddies",
+    "vendor": "BOTANICAL ARTS",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -1370,6 +1396,7 @@
     "name": "Northern Lights",
     "productName": "Buddies Legacy Vape Cart - Northern Lights - 1g - (I)",
     "brand": "Buddies",
+    "vendor": "BOTANICAL ARTS",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -1422,6 +1449,7 @@
     "name": "OZ Kush",
     "productName": "Buddies Live Resin Vape Cart - OZ Kush - 1g",
     "brand": "Buddies",
+    "vendor": "BOTANICAL ARTS",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -1474,6 +1502,7 @@
     "name": "Pineapple Express",
     "productName": "Buddies Flavored Vape Cart - Pineapple Express - 1g",
     "brand": "Buddies",
+    "vendor": "BOTANICAL ARTS",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -1526,6 +1555,7 @@
     "name": "Raspberry Parfait",
     "productName": "Buddies Flavored Vape Cart - Raspberry Parfait - 1g",
     "brand": "Buddies",
+    "vendor": "BOTANICAL ARTS",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -1578,6 +1608,7 @@
     "name": "sherbanger",
     "productName": "Buddies live resin cartridge Sherbanger 1g",
     "brand": "Buddies",
+    "vendor": "BOTANICAL ARTS",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -1632,6 +1663,7 @@
     "name": "Strawberry Cough",
     "productName": "Buddies Flavored Vape Cart - Strawberry Cough - 1g",
     "brand": "Buddies",
+    "vendor": "BOTANICAL ARTS",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -1684,6 +1716,7 @@
     "name": "Strawberry Mango Haze",
     "productName": "BFF Flavored Live Resin Vape Cart - SMH - Strawberry Mango Haze - 1g - (S) - DOH",
     "brand": "Buddies",
+    "vendor": "BOTANICAL ARTS",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -1736,6 +1769,7 @@
     "name": "Watermelon Yuzu Dragon fruit",
     "productName": "BFF Flavored Live Resin Vape Cart - WYD - Watermelon Yuzu Dragon fruit - 1g - (H) - DOH",
     "brand": "Buddies",
+    "vendor": "BOTANICAL ARTS",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -1788,6 +1822,7 @@
     "name": "Zazul",
     "productName": "Buddies Live Resin Vape Cart - Zazul - 1g",
     "brand": "Buddies",
+    "vendor": "BOTANICAL ARTS",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -1840,6 +1875,7 @@
     "name": "Amnesia Haze",
     "productName": "Incredibulk - IB CART 1g - Amnesia Haze - 1g",
     "brand": "Clarity Farms",
+    "vendor": "CLARITY FARMS",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -1892,6 +1928,7 @@
     "name": "Blood Orange",
     "productName": "Kelso Kandy - KK CART 1g - Blood Orange - 1g",
     "brand": "Clarity Farms",
+    "vendor": "CLARITY FARMS",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -1944,6 +1981,7 @@
     "name": "Blueberry Yum Yum",
     "productName": "Tasty Terps - TC CART 1g - Blueberry Yum Yum - 1g",
     "brand": "Clarity Farms",
+    "vendor": "CLARITY FARMS",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -1996,6 +2034,7 @@
     "name": "Caprizun",
     "productName": "Tasty Terps - TC CART 1g - Caprizun - 1g",
     "brand": "Clarity Farms",
+    "vendor": "CLARITY FARMS",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -2048,6 +2087,7 @@
     "name": "Grape Slushie",
     "productName": "Kelso Kandy - KK CART 1g - Grape Slushie - 1g",
     "brand": "Clarity Farms",
+    "vendor": "CLARITY FARMS",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -2100,6 +2140,7 @@
     "name": "Kiwi Hi-Chewz",
     "productName": "Tasty Terps - TC CART 1g - Kiwi Hi-Chewz - 1g",
     "brand": "Clarity Farms",
+    "vendor": "CLARITY FARMS",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -2152,6 +2193,7 @@
     "name": "Laffy Taffy",
     "productName": "Tasty Terps - TC CART 1g - Laffy Taffy - 1g",
     "brand": "Clarity Farms",
+    "vendor": "CLARITY FARMS",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -2199,6 +2241,7 @@
     "name": "Lime Sorbet",
     "productName": "Kelso Kandy - KK CART 1g - Lime Sorbet - 1g",
     "brand": "Clarity Farms",
+    "vendor": "CLARITY FARMS",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -2251,6 +2294,7 @@
     "name": "Pineapple Express",
     "productName": "O' Geez - OG CART 1g - Pineapple Express - 1g",
     "brand": "Clarity Farms",
+    "vendor": "CLARITY FARMS",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -2303,6 +2347,7 @@
     "name": "Rocket Pop",
     "productName": "Tasty Terps - TC CART 1g - Rocket Pop - 1g",
     "brand": "Clarity Farms",
+    "vendor": "CLARITY FARMS",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -2355,6 +2400,7 @@
     "name": "Sour Blueberry",
     "productName": "Incredibulk - IB CART 1g - Sour Blueberry - 1g",
     "brand": "Clarity Farms",
+    "vendor": "CLARITY FARMS",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -2407,6 +2453,7 @@
     "name": "Strawberry Ice",
     "productName": "Tasty Terps - TC ICE CART 1g - Strawberry Ice - 1g",
     "brand": "Clarity Farms",
+    "vendor": "CLARITY FARMS",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -2459,6 +2506,7 @@
     "name": "Amarelo",
     "productName": "Rosin Vape Cart 0.5g - Amarelo- DOH",
     "brand": "Constellation",
+    "vendor": "Alpha Crux Llc",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -2516,6 +2564,7 @@
     "name": "Black Domina",
     "productName": "Constellation Cold Cure 1g - Black Domina",
     "brand": "Constellation",
+    "vendor": "Alpha Crux Llc",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -2573,6 +2622,7 @@
     "name": "Cali Swiss",
     "productName": "Constellation Cold Cure 1g - Cali Swiss",
     "brand": "Constellation",
+    "vendor": "Alpha Crux Llc",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -2630,6 +2680,7 @@
     "name": "Dulce de uva",
     "productName": "Constellation Cold Cure 1g - Dulce De Uva",
     "brand": "Constellation",
+    "vendor": "Alpha Crux Llc",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -2687,6 +2738,7 @@
     "name": "Kosher Headband",
     "productName": "Const Rosin Vape Cart 0.5g - Kosher Headband",
     "brand": "Constellation",
+    "vendor": "Alpha Crux Llc",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -2744,6 +2796,7 @@
     "name": "Moroccan Peaches",
     "productName": "Constellation Cannabis Cartridge - Moroccan Peaches .5g",
     "brand": "Constellation",
+    "vendor": "Alpha Crux Llc",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -2801,6 +2854,7 @@
     "name": "Orange Peel",
     "productName": "Constellation Cartridge Orange Peel - 0.5g",
     "brand": "Constellation",
+    "vendor": "Alpha Crux Llc",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -2860,6 +2914,7 @@
     "name": "Pie Hoe",
     "productName": "Const Rosin Vape Cart 0.5g - Pie Hoe",
     "brand": "Constellation",
+    "vendor": "Alpha Crux Llc",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -2917,6 +2972,7 @@
     "name": "Smackles",
     "productName": "Rosin Vape Cart 0.5g - Smackles",
     "brand": "Constellation",
+    "vendor": "Alpha Crux Llc",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -2969,6 +3025,7 @@
     "name": "Strawnana x Lem OG",
     "productName": "Constellation Cartridge Strawnana - 0.5g",
     "brand": "Constellation",
+    "vendor": "Alpha Crux Llc",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -3028,6 +3085,7 @@
     "name": "Hollywood",
     "productName": "Cookies - Cannabis Terps - Cartridge - 1g - Hollywood",
     "brand": "Cookies",
+    "vendor": "EDGEMONT GROUP LLC",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -3080,6 +3138,7 @@
     "name": "Bubblegum Runtz",
     "productName": "RPG - 510 Cartridge - Cured Resin - Bubblegum Runtz - 1g",
     "brand": "Cormorant Edibles",
+    "vendor": "GEORGETOWN BOTTLING SPC",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",
@@ -3132,6 +3191,7 @@
     "name": "Gushers",
     "productName": "RPG - 510 Cartridge - Cured Resin - Gushers - 1g",
     "brand": "Cormorant Edibles",
+    "vendor": "GEORGETOWN BOTTLING SPC",
     "category": "cartridge",
     "filterCategories": [
       "cartridge",

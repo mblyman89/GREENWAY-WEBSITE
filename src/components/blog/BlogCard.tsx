@@ -28,6 +28,9 @@ export function BlogCard({ post }: BlogCardProps) {
             className="object-cover object-top transition duration-500 group-hover:scale-[1.02]"
             priority={false}
           />
+          <span className={`absolute left-5 top-5 rounded-full border px-4 py-2 text-[0.68rem] font-black uppercase tracking-[0.18em] shadow-xl shadow-black/20 ${categoryStyles[post.category]}`}>
+            {post.category}
+          </span>
         </div>
 
         <div className="flex items-center justify-between gap-4 border-t border-white/10 bg-zinc-950 p-5 md:p-6">

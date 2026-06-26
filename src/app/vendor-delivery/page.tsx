@@ -2,20 +2,20 @@ import type { Metadata } from "next";
 import { Breadcrumbs } from "@/components/site/Breadcrumbs";
 import { Footer } from "@/components/site/Footer";
 import { Header } from "@/components/site/Header";
-import { VendorDeliveryPreview } from "@/components/vendors/VendorDeliveryPreview";
+import { VendorDirectory } from "@/components/vendors/VendorDirectory";
 
 export const metadata: Metadata = {
-  title: "Vendor Delivery Preview | Greenway Marijuana",
+  title: "Vendors & Partners | Greenway Marijuana",
   description:
-    "Greenway Marijuana vendor delivery information preview for future licensed vendor coordination and staff review.",
+    "Meet the licensed Washington cannabis producers and processors stocking Greenway Marijuana shelves in Port Orchard — and learn how to become a vendor partner.",
 };
 
 export default function VendorDeliveryPage() {
   return (
     <main id="top" className="min-h-screen bg-black text-white">
       <Header />
-      <Breadcrumbs items={[{ label: "Vendor Delivery" }]} />
-      <VendorDeliveryPreview />
+      <Breadcrumbs items={[{ label: "Vendors & Partners" }]} />
+      <VendorDirectory />
       <Footer />
     </main>
   );

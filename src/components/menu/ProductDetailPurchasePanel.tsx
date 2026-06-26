@@ -107,6 +107,8 @@ export function ProductDetailPurchasePanel({ item }: ProductDetailPurchasePanelP
             variantId: selectedVariant.id,
             variantLabel: selectedVariant.label,
             priceMinorUnits: activeUnitPrice,
+            regularPriceMinorUnits: basePrice,
+            inventoryLevel: selectedVariant.inventoryLevel,
             quantity,
           });
         }}

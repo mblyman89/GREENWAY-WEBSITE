@@ -20,6 +20,7 @@ type GreenwayMenuItem = {
   name: string;
   productName?: string;
   brand: string;
+  vendor?: string;
   category: GreenwayCategory;
   filterCategories?: GreenwayCategory[];
   posInventoryType?: string;
@@ -57,6 +58,7 @@ type CollapsedInventory = {
   category: string;
   inventoryType: string;
   brand: string;
+  vendor: string;
   strain: string;
   totalRaw: number | null;
   cbdRaw: number | null;
@@ -89,6 +91,7 @@ const PRODUCTS_PATH = path.join(RAW_DIR, "PRODUCTS.xlsx");
 const INVENTORIES_PATH = path.join(RAW_DIR, "INVENTORIES.xlsx");
 const OUT_FULL = path.join(ROOT, "src", "data", "pos-menu-preview.json");
 const OUT_SAMPLE = path.join(ROOT, "src", "data", "pos-menu-sample-preview.json");
+const OUT_VENDORS = path.join(ROOT, "src", "data", "vendors.json");
 
 const diagnostics: Diagnostic[] = [];
 function addDiagnostic(severity: Severity, code: string, message: string, context?: Record<string, unknown>) {
@@ -663,6 +666,7 @@ function collapseInventoryRows(inventories: InventoryRow[]): Map<string, Collaps
         category: normalizeWhitespace(row.Category),
         inventoryType: normalizeWhitespace(row.InventoryType),
         brand: normalizeWhitespace(row.Brand),
+        vendor: normalizeWhitespace(row.Vendor),
         strain: normalizeWhitespace(row.Strain),
         totalRaw: toNumber(row.Total),
         cbdRaw: toNumber(row.Cbd),
@@ -803,7 +807,7 @@ function buildGroups(products: ProductRow[], inventories: InventoryRow[]) {
       const brand = firstNonBlank(product.Brand, "Greenway");
       const displayName = stripVariantNoise(firstNonBlank(product["Product Name"]), brand, product.Category ?? "");
       const strainName = firstNonBlank(normalizeWhitespace(product.Strain), displayName);
-      const identity = groupingIdentity(product, { brand, category: product.Category ?? "", inventoryType: product["Inventory Type"] ?? "", medical: false, strain: strainName, productKey, productName: product["Product Name"] ?? "", rows: [], totalUnits: 0, package: parsePackageSize(product["Package Size"] ?? ""), priceMinorUnits: priceToMinorUnits(product.Price), totalRaw: null, cbdRaw: null, thcRaw: null, cbdaRaw: null, thcaRaw: null } as CollapsedInventory, category, displayName) + "|no-inventory";
+      const identity = groupingIdentity(product, { brand, vendor: "", category: product.Category ?? "", inventoryType: product["Inventory Type"] ?? "", medical: false, strain: strainName, productKey, productName: product["Product Name"] ?? "", rows: [], totalUnits: 0, package: parsePackageSize(product["Package Size"] ?? ""), priceMinorUnits: priceToMinorUnits(product.Price), totalRaw: null, cbdRaw: null, thcRaw: null, cbdaRaw: null, thcaRaw: null } as CollapsedInventory, category, displayName) + "|no-inventory";
       const group: ProductGroup = {
         identityKey: identity,
         brand,
@@ -934,11 +938,15 @@ function toMenuItem(group: ProductGroup): GreenwayMenuItem {
   const packageLabel = firstAvailable?.package.label ?? "each";
   const displayPackageLabel = packageLabel === "each" ? "" : packageLabel;
   const priceLabel = [formatCurrency(firstPrice), displayPackageLabel].filter(Boolean).join(" ");
+  // Vendor comes from the inventory Vendor column (distinct from Brand). Use the first
+  // variant that carries a non-blank vendor so vendor-grouped pages can list suppliers.
+  const vendor = firstNonBlank(...variants.map((variant) => variant.vendor));
   const item: GreenwayMenuItem = {
     id: itemId,
     name: group.displayName,
     productName: [...group.productNames].sort()[0],
     brand: group.brand,
+    vendor: vendor || undefined,
     category: group.category,
     filterCategories: [],
     posInventoryType: group.posInventoryType,
@@ -1063,6 +1071,29 @@ function summary(products: ProductRow[], inventories: InventoryRow[], groups: Pr
   };
 }
 
+type VendorEntry = { name: string; slug: string; productCount: number };
+
+/**
+ * Distinct vendor directory built from the inventory Vendor column. Vendors that
+ * are blank or that exactly equal a generic placeholder are skipped. Sorted by
+ * product count (desc) then name so the vendors page leads with active suppliers.
+ */
+function buildVendorList(items: GreenwayMenuItem[]): VendorEntry[] {
+  const counts = new Map<string, { name: string; count: number }>();
+  for (const item of items) {
+    if (item.hidden) continue;
+    const vendor = normalizeWhitespace(item.vendor);
+    if (!vendor) continue;
+    const key = vendor.toLowerCase();
+    const existing = counts.get(key);
+    if (existing) existing.count += 1;
+    else counts.set(key, { name: vendor, count: 1 });
+  }
+  return [...counts.values()]
+    .map((entry) => ({ name: entry.name, slug: collapseKeyPart(entry.name), productCount: entry.count }))
+    .sort((a, b) => b.productCount - a.productCount || a.name.localeCompare(b.name));
+}
+
 function rawWorkbooksAvailable() {
   return fs.existsSync(PRODUCTS_PATH) && fs.existsSync(INVENTORIES_PATH);
 }
@@ -1104,6 +1135,9 @@ function main() {
   }
   writeJson(OUT_FULL, items);
   writeJson(OUT_SAMPLE, items.slice(0, 60));
+  const vendors = buildVendorList(items);
+  writeJson(OUT_VENDORS, vendors);
+  console.log(`Wrote ${vendors.length} distinct vendors to ${path.relative(ROOT, OUT_VENDORS)}.`);
   const hiddenCount = items.filter((i) => i.hidden).length;
   console.log(`Generated ${items.length} menu items with ${items.reduce((sum, item) => sum + item.variants.length, 0)} variants (${hiddenCount} hidden).`);
   console.log(`Diagnostics: ${diagnostics.length} total (${diagnostics.filter((d) => d.severity === "warning").length} warnings, ${diagnostics.filter((d) => d.severity === "info").length} info).`);
