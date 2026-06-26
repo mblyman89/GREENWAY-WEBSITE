@@ -18,27 +18,30 @@ type SortDropdownProps = {
 };
 
 export function SortDropdown({ value, onChange }: SortDropdownProps) {
+  // The control ALWAYS reads "SORT BY" (no separate label above it). The native
+  // <select> still lists every option — including "Featured Shuffle" — and keeps
+  // its full behavior; we just overlay the fixed "SORT BY" text so the closed
+  // control communicates its purpose instead of the current sort value.
   return (
-    <label className="grid gap-1.5 text-[0.62rem] font-black uppercase tracking-[0.14em] text-zinc-300 sm:min-w-64 lg:gap-2 lg:text-xs">
-      <span className="flex items-center justify-between gap-3">
-        Sort by
+    <label className="relative block h-11 w-full">
+      <span className="sr-only">Sort products</span>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value as SortOption)}
+        className="h-11 w-full cursor-pointer appearance-none rounded-full border border-white/10 bg-zinc-950 pl-4 pr-10 text-sm font-black uppercase tracking-[0.12em] text-transparent outline-none transition hover:border-[var(--greenway)]/45 focus:border-[var(--greenway)] focus:ring-2 focus:ring-[var(--greenway)]/20"
+        aria-label="Sort products"
+      >
+        {sortOptions.map((option) => (
+          <option key={option.value} value={option.value} className="text-white">
+            {option.label}
+          </option>
+        ))}
+      </select>
+      <span className="pointer-events-none absolute inset-y-0 left-4 flex items-center text-sm font-black uppercase tracking-[0.12em] text-white" aria-hidden="true">
+        Sort By
       </span>
-      <span className="relative block">
-        <select
-          value={value}
-          onChange={(event) => onChange(event.target.value as SortOption)}
-          className="h-12 w-full appearance-none rounded-full border border-white/10 bg-zinc-950 px-3 pr-8 text-xs font-black uppercase tracking-[0.08em] text-white outline-none transition hover:border-[var(--greenway)]/45 focus:border-[var(--greenway)] focus:ring-2 focus:ring-[var(--greenway)]/20 sm:px-4 sm:pr-10 sm:text-sm sm:normal-case sm:tracking-normal"
-          aria-label="Sort preview products"
-        >
-          {sortOptions.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[var(--greenway)] sm:right-4" aria-hidden="true">
-          ⌄
-        </span>
+      <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[var(--greenway)]" aria-hidden="true">
+        ⌄
       </span>
     </label>
   );

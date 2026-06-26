@@ -1,13 +1,14 @@
-import type { Metadata } from "next";
 import { Breadcrumbs } from "@/components/site/Breadcrumbs";
 import { Footer } from "@/components/site/Footer";
 import { Header } from "@/components/site/Header";
 import { consumerHealthDataParagraphs } from "@/content/consumer-health-data";
+import { pageMetadata } from "@/lib/seo/seo";
 
-export const metadata: Metadata = {
-  title: "Washington Consumer Health Data Privacy Policy | Greenway Marijuana",
-  description: "Read the Greenway Marijuana Washington consumer health data privacy policy.",
-};
+export const metadata = pageMetadata({
+  title: "Washington Consumer Health Data Privacy Policy",
+  description: "Read the Greenway Marijuana Washington Consumer Health Data Privacy Policy as required under the My Health My Data Act.",
+  path: "/consumer-health-data",
+});
 
 function isPolicyHeading(text: string) {
   return /^(?:[IVX]+\.|\d+\.|[a-z]\.)\s/.test(text) || text === "IX. Contact Us";

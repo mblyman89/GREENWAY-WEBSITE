@@ -33,7 +33,7 @@ function DetailRow({ label, children }: { label: string; children: ReactNode }) 
   );
 }
 
-export function LocationsPreview() {
+export function LocationsContent() {
   return (
     <section className="overflow-hidden bg-black text-white">
       <div className="mx-auto max-w-7xl px-4 pt-8 md:px-8 md:pt-12 lg:px-10">

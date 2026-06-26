@@ -8,9 +8,18 @@ export default function robots(): MetadataRoute.Robots {
       {
         userAgent: "*",
         allow: "/",
-        disallow: ["/checkout", "/checkout/confirmation"],
+        disallow: [
+          "/checkout",
+          "/checkout/confirmation",
+          "/admin",
+          "/admin/loyalty-signups",
+          "/api/",
+          "/menu/mock-preview",
+          "/menu/pos-preview",
+        ],
       },
     ],
     sitemap: `${baseUrl}/sitemap.xml`,
+    host: baseUrl,
   };
 }

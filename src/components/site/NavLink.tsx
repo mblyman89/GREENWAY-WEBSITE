@@ -29,8 +29,10 @@ export function NavLink({ item }: NavLinkProps) {
         </span>
       </Link>
 
-      <div className="pointer-events-none absolute left-1/2 top-full z-[70] mt-2 w-[22rem] max-h-[70vh] -translate-x-1/2 translate-y-2 overflow-y-auto rounded-[1.5rem] border border-white/10 bg-zinc-950/98 p-3 text-white opacity-0 shadow-2xl shadow-black/60 backdrop-blur transition group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:translate-y-0 group-focus-within:opacity-100">
-        <div className="absolute -top-8 left-0 h-8 w-full" aria-hidden="true" />
+      <div className="pointer-events-none absolute left-1/2 top-full z-[70] w-[22rem] max-h-[70vh] -translate-x-1/2 translate-y-2 overflow-y-auto rounded-[1.5rem] border border-white/10 bg-zinc-950/98 p-3 text-white opacity-0 shadow-2xl shadow-black/60 backdrop-blur transition group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:translate-y-0 group-focus-within:opacity-100">
+        {/* Transparent hover bridge: spans the gap between the trigger and the
+            panel so dragging the cursor down keeps group-hover active. */}
+        <div className="absolute -top-4 left-0 h-4 w-full" aria-hidden="true" />
         <div className="grid gap-1">
           {item.children?.map((child) => (
             <Link

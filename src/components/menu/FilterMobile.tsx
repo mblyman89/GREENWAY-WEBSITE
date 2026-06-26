@@ -153,31 +153,43 @@ export function MenuFilterControls({
 
       {specialsEnabled ? (
         <FilterSection title="Specials">
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={onClearanceToggle}
-              aria-pressed={clearanceActive}
-              className={`rounded-full border px-3 py-2.5 text-[0.68rem] font-black uppercase tracking-[0.12em] transition ${
-                clearanceActive
-                  ? "border-[var(--orange)] bg-[var(--orange)] text-black"
-                  : "border-white/15 bg-black/40 text-zinc-200 hover:border-[var(--orange)]/60 hover:text-white"
+          {/* Styled to match the other filter sections (same checkbox-row look as
+              Categories / Brands / Strains) instead of standalone pill buttons. */}
+          <div className="grid gap-2">
+            <label
+              className={`flex min-h-12 cursor-pointer items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-sm transition ${
+                clearanceActive ? "border-[var(--greenway)] bg-[var(--greenway)]/10 text-white" : "border-white/10 bg-white/[0.03] text-zinc-300 hover:border-white/20 hover:text-white"
               }`}
             >
-              50% Off
-            </button>
-            <button
-              type="button"
-              onClick={onDailyDealsToggle}
-              aria-pressed={dailyDealsActive}
-              className={`rounded-full border px-3 py-2.5 text-[0.68rem] font-black uppercase tracking-[0.12em] transition ${
-                dailyDealsActive
-                  ? "border-[var(--greenway)] bg-[var(--greenway)] text-black"
-                  : "border-white/15 bg-black/40 text-zinc-200 hover:border-[var(--greenway)]/60 hover:text-white"
+              <span className="flex min-w-0 items-center gap-3">
+                <input
+                  type="checkbox"
+                  name="specials"
+                  value="clearance"
+                  checked={clearanceActive}
+                  onChange={onClearanceToggle}
+                  className="h-4 w-4 shrink-0 accent-[var(--greenway)]"
+                />
+                <span className="truncate font-bold">50% Off</span>
+              </span>
+            </label>
+            <label
+              className={`flex min-h-12 cursor-pointer items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-sm transition ${
+                dailyDealsActive ? "border-[var(--greenway)] bg-[var(--greenway)]/10 text-white" : "border-white/10 bg-white/[0.03] text-zinc-300 hover:border-white/20 hover:text-white"
               }`}
             >
-              Daily Deals
-            </button>
+              <span className="flex min-w-0 items-center gap-3">
+                <input
+                  type="checkbox"
+                  name="specials"
+                  value="daily-deals"
+                  checked={dailyDealsActive}
+                  onChange={onDailyDealsToggle}
+                  className="h-4 w-4 shrink-0 accent-[var(--greenway)]"
+                />
+                <span className="truncate font-bold">Daily Deals</span>
+              </span>
+            </label>
           </div>
         </FilterSection>
       ) : null}

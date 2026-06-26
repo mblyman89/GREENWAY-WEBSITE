@@ -251,7 +251,7 @@ function DailyDealCard({ deal }: { deal: DailyDeal }) {
   );
 }
 
-export function SpecialsPreview() {
+export function SpecialsContent() {
   return (
     <section className="relative overflow-hidden bg-black text-white">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_10%,rgba(255,215,0,0.13),transparent_18rem),radial-gradient(circle_at_86%_12%,rgba(255,127,0,0.14),transparent_20rem),radial-gradient(circle_at_70%_88%,rgba(126,217,87,0.12),transparent_24rem)]" />

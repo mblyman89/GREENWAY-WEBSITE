@@ -1,13 +1,14 @@
-import type { Metadata } from "next";
 import { Breadcrumbs } from "@/components/site/Breadcrumbs";
 import { Footer } from "@/components/site/Footer";
 import { Header } from "@/components/site/Header";
 import { termsOfUseParagraphs } from "@/content/terms-of-use";
+import { pageMetadata } from "@/lib/seo/seo";
 
-export const metadata: Metadata = {
-  title: "Terms of Use | Greenway Marijuana",
-  description: "Read the Greenway Marijuana terms of use.",
-};
+export const metadata = pageMetadata({
+  title: "Terms of Use",
+  description: "Read the Greenway Marijuana terms of use governing access to and use of our website and services.",
+  path: "/terms-of-use",
+});
 
 function isPolicyHeading(text: string) {
   return /^(?:[IVX]+\.|\d+\.|[a-z]\.)\s/.test(text) || text === "IX. Contact Us";

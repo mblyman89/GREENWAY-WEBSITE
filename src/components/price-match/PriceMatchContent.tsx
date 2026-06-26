@@ -33,7 +33,7 @@ function PriceMatchArtwork() {
   );
 }
 
-export function PriceMatchPreview() {
+export function PriceMatchContent() {
   return (
     <section className="relative overflow-hidden bg-black text-white">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_8%,rgba(126,217,87,0.14),transparent_18rem),radial-gradient(circle_at_84%_16%,rgba(255,127,0,0.12),transparent_20rem),radial-gradient(circle_at_50%_74%,rgba(255,215,0,0.08),transparent_24rem)]" />

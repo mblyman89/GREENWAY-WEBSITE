@@ -4,10 +4,10 @@ import { greenwayBusiness } from "@/content/business";
 export function SecondaryBar() {
   return (
     <div className="border-t border-black/10 bg-[var(--greenway)] text-black">
-      <div className="mx-auto grid max-w-7xl grid-cols-[minmax(0,36vw)_minmax(5.25rem,1fr)_auto] items-center gap-[clamp(0.14rem,0.55vw,0.5rem)] px-[clamp(0.18rem,0.75vw,0.8rem)] py-1 md:flex md:max-w-none md:flex-nowrap md:justify-between md:px-5 lg:px-6 xl:px-8">
+      <div className="mx-auto grid max-w-7xl grid-cols-[minmax(0,29vw)_minmax(3.5rem,1fr)_auto] items-center gap-[clamp(0.12rem,0.5vw,0.5rem)] px-[clamp(0.18rem,0.75vw,0.8rem)] py-1 md:flex md:max-w-none md:flex-nowrap md:justify-between md:px-5 lg:px-6 xl:px-8">
         <Link
           href="/locations"
-          className="inline-flex h-[clamp(1.85rem,7.65vw,2.32rem)] min-w-0 items-center rounded-full bg-black px-[clamp(0.42rem,1.55vw,1.15rem)] text-[var(--greenway)] transition hover:bg-white hover:text-black md:h-9 md:max-w-none"
+          className="inline-flex h-[clamp(1.95rem,8.1vw,2.45rem)] min-w-0 items-center rounded-full bg-black px-[clamp(0.42rem,1.55vw,1.15rem)] text-[var(--greenway)] transition hover:bg-white hover:text-black md:h-10 md:max-w-none"
           aria-label={`View Greenway location details for ${greenwayBusiness.address.full}`}
         >
           <span className="min-w-0 leading-[0.98]">
@@ -26,7 +26,7 @@ export function SecondaryBar() {
 
         <a
           href={`tel:${greenwayBusiness.phone.tel}`}
-          className="inline-flex h-[clamp(1.85rem,7.65vw,2.32rem)] shrink-0 items-center rounded-full bg-black px-[clamp(0.6rem,2.05vw,1.25rem)] text-[clamp(0.57rem,2.45vw,0.94rem)] font-black uppercase tracking-[-0.025em] text-[var(--greenway)] transition hover:bg-white hover:text-black md:h-9 md:text-[1rem] md:tracking-[0.035em]"
+          className="inline-flex h-[clamp(1.95rem,8.1vw,2.45rem)] shrink-0 items-center rounded-full bg-black px-[clamp(0.6rem,2.05vw,1.25rem)] text-[clamp(0.92rem,4.2vw,1.22rem)] font-black uppercase tracking-[-0.02em] text-[var(--greenway)] transition hover:bg-white hover:text-black md:h-10 md:text-[1.18rem] md:tracking-[0.03em] lg:text-[1.24rem]"
           aria-label={`Call Greenway at ${greenwayBusiness.phone.display}`}
         >
           {greenwayBusiness.phone.display}
