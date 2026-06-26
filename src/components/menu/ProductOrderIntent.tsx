@@ -105,6 +105,8 @@ export function ProductOrderIntent({ item }: { item: GreenwayMenuItem }) {
             variantId: selectedVariant.id,
             variantLabel: selectedVariant.label,
             priceMinorUnits: selectedVariant.priceMinorUnits,
+            regularPriceMinorUnits: selectedVariant.priceMinorUnits,
+            inventoryLevel: selectedVariant.inventoryLevel,
             quantity,
           });
         }}

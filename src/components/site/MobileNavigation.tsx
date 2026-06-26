@@ -43,7 +43,7 @@ const primaryMenuItems: SiteMenuItem[] = [
   { label: "Blog", href: "/blog" },
   { label: "FAQs", href: "/faq" },
   { label: "Price Match", href: "/price-match" },
-  { label: "Vendor Delivery", href: "/vendor-delivery" },
+  { label: "Vendors & Partners", href: "/vendor-delivery" },
 ];
 
 const socialLinks = [
@@ -312,7 +312,7 @@ export function MobileNavigation() {
                 <DesktopSectionTitle>Vendors</DesktopSectionTitle>
                 <div className="grid gap-1.5">
                   <Link href="/vendor-delivery" onClick={closeDrawer} className="text-[0.98rem] font-semibold leading-6 text-white/92 transition hover:text-[var(--orange)]">
-                    Vendor Delivery
+                    Vendors &amp; Partners
                   </Link>
                 </div>
               </section>

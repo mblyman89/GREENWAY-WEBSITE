@@ -1,60 +1,66 @@
-# Refinements: Age Gate, Mobile Price, Shop Page, Specials Cards, Loyalty/Blog/FAQ
+# Greenway — Checkout Overhaul + Vendors Page + Full Site Review
 
-Branch: `feature/refinements-agegate-shop-specials` (off updated `main`, PR #19 merged).
-Data: `posMenuPreviewItems` (~2325 items). Cursive wordmark: `/brand/greenway-marijuana-wordmark-transparent.png`.
-Tokens: `--greenway #7ed957`, `--gold #ffd700`, `--orange #ff7f00`, `--charcoal #1a1a1a`, `--greenway-dark #12351f`.
-Site container width standard: `max-w-[88rem]` (home/shop/specials).
+Branch: `feature/checkout-vendors-overhaul` (based off `feature/refinements-agegate-shop-specials` head `bf45327`, which is PR #20 — NOT yet merged to main).
+Contact email for vendors button: `contact@greenwaymarijuana.com` (already in `src/content/business.ts` as `greenwayBusiness.emailHref`).
 
-## A. Age Gate — simplify & match target (Uncle Ike's style) ✅
-File: `src/components/age-gate/AgeGate.tsx`
-- [x] Clean centered card: cursive wordmark image top, "AGE VERIFICATION" orange, 2 text lines, one orange "YES, I AM 21+" button, small "NO, I AM UNDER 21" link, footer "PLEASE CONSUME RESPONSIBLY"
-- [x] Remove the 3-col grid + 21+ circle + long disclaimer
-- [x] Keep localStorage confirm logic intact
+## CONTEXT / KEY FILES (read & understood)
+- Cart state: `src/components/cart/CartProvider.tsx` — in-memory `useState`, NO persistence, NO qty stepper, NO tax/savings. Items: {productId,productName,brand,category,strainType,variantId,variantLabel,priceMinorUnits,quantity,lineId}.
+- Add-to-cart entry points: `src/components/menu/ProductDetailPurchasePanel.tsx` (real one used on product page) + `ProductOrderIntent.tsx` (legacy?). They call `addItem(...)`.
+- Checkout page: `src/app/checkout/page.tsx` -> `src/components/checkout/CheckoutPreview.tsx` (FULL of preview cruft — replace).
+- Confirmation: `src/app/checkout/confirmation/page.tsx` -> `src/components/checkout/CheckoutConfirmationPreview.tsx` (FULL of mock/preview cruft — replace).
+- Vendors page: `src/app/vendor-delivery/page.tsx` -> `src/components/vendors/VendorDeliveryPreview.tsx` (preview cruft — overhaul). Route stays `/vendor-delivery`. Nav label in `MobileNavigation.tsx` (line 46, 312-315) + maybe DesktopMenu.
+- Card style reference: `src/components/home/HomeBrands.tsx` (aspect cards w/ gradient + glow). Hero band style: `src/components/home/SectionBanner.tsx` (wide+short).
+- Data: `src/data/pos-menu-preview.json` (3005 items). Item.variants[].inventoryLevel = the COUNT to decrement. NO vendor field currently.
+- Transformer: `scripts/pos/transform_pos_data.ts`. Reads `pos-data/raw/INVENTORIES.xlsx` (has **Vendor** column!) + PRODUCTS.xlsx. `collapseInventoryRows` line ~635 captures `brand: row.Brand` — ADD `vendor: row.Vendor` here. Thread through ProductGroup + toMenuItem (line ~937). Build runs `transform:pos` then `next build`.
+- Format helper: `src/lib/leafly/format.ts` formatMinorCurrency. Types: `src/lib/leafly/types.ts`.
 
-## B. Mobile price-per-unit text too big / cut off (mobile only) ✅
-File: `src/components/menu/ProductCardPriceSelector.tsx`
-- [x] Shrink mobile price/strikethrough/unit; keep md: desktop sizes unchanged
+## TARGET DESIGN (from uploaded screenshots — Uncle Ike's style)
+- **Cart** (My_cart already close): add qty stepper (− n +) + trash on item card, discount badge if on sale, full breakdown (Subtotal / Taxes Est. / Savings / Total). Keep store card.
+- **Secure Checkout** (Target_example_of_secure_check): "Secure Checkout" title, "Customer Information" section: First Name, Last Name, Email, Phone, Birthday (MM/DD/YYYY) inputs -> orange "Save Information". Then "Order Summary" card (line items + Subtotal/Taxes/Savings/Total). Orange "PLACE ORDER" button. Small legal disclaimer footer. NO preview/readiness/compliance-preview cruft.
+- **Order Confirmed** (Example_of_target_order_complete): centered card, circular checkmark, "ORDER CONFIRMED" orange heading, real order # (e.g. GWY-XXXXXX), "Email confirmation has been sent..." note, WA cannabis disclaimer, orange "CONTINUE SHOPPING". NO mock/preview/leafly cruft.
 
-## C. Shop page — search/sort inline above cards, cards flush with filters top ✅
-File: `src/components/menu/InteractiveMenuBrowser.tsx`
-- [x] Remove boxed search/sort container + "Showing X of Y POS products" + "Filters use POS..." helper
-- [x] Search + SORT BY inline, right-aligned, ABOVE cards, no box
-- [x] Cards flush with TOP of filters box; group label sits ABOVE cards
-- [x] Remove per-group "X items" + eyebrow helper; remove special/accessory helper text
+## BEHAVIOR REQUIRED (user explicit)
+- Full REAL experience now. Completion need not call external services yet, but NO "preview" language.
+- On PLACE ORDER: generate a real-looking order number, **decrement the product variant inventoryLevel count as if one sold** (client-side runtime state; next fresh spreadsheet upload resets). Clear cart. Go to confirmation showing the order #.
+- Future (note only, do NOT build): alert to store + print receipt for sales team = third-party integration later.
 
-## D. Shop filters — add "Specials" section at top ✅
-Files: `FilterMobile.tsx` (MenuFilterControls) + InteractiveMenuBrowser
-- [x] "Specials" section top of filters: "50% OFF" + "Daily Deals" toggle buttons
-- [x] 50% OFF → clearance collection (empty state for now)
-- [x] Daily Deals → current day's on-deal items (day engine)
+## TASKS
 
-## E. Thursday deal → brand-based (5 brands) ✅
-File: `src/lib/specials/daily-deals.ts` (+ daily-deal-presentation.ts)
-- [x] Thursday matches by BRAND list: Lifted, Phat Panda, Buddies, Clarity Farms, Constellation (export const)
-- [x] Update Thursday menu lane href to brands filter; keep 25%
+### Phase 1 — Data/transformer: vendor extraction ✅ DONE
+- [x] Add `vendor` to `CollapsedInventory` (from `row.Vendor`) in transformer.
+- [x] Thread `vendor` through `toMenuItem` -> output `GreenwayMenuItem.vendor`.
+- [x] Add `vendor` to `src/lib/leafly/types.ts` GreenwayMenuItem.
+- [x] Write distinct vendor list -> `src/data/vendors.json` (112 vendors, name/slug/productCount).
+- [x] Re-ran transform: 2964/3005 items carry vendor; vendors.json created.
 
-## F. Remove ALL helper text everywhere ✅ (shop/filters scope)
-- [x] FilterSection helper usages + MenuFilterControls subtext
-- [x] Shop group/accessory/special helper text; no counts/totals on shop
+### Phase 2 — Cart: inventory engine + qty + breakdown ✅ DONE
+- [x] Inventory ledger (localStorage) tracking sold counts by variantId. `remainingInventory()` + `recordSale()`.
+- [x] CartProvider: qty +/- per line (capped at inventoryLevel), trash remove. Cart persisted to localStorage.
+- [x] Cart drawer: Subtotal / Taxes (Est. 9% Port Orchard) / Savings / Total. Disclaimer footer.
+- [x] Sale % off badge + struck regular price on cart line. addItem callers pass regularPriceMinorUnits + inventoryLevel. tsc clean.
 
-## G. Specials daily-deal cards → product-card palette ✅
-File: `src/components/specials/SpecialsPreview.tsx`
-- [x] Restyle cards to resemble ProductCardVisual (tone gradients, glow borders, charcoal, orange price); keep info
+### Phase 3 — Secure Checkout page ✅ DONE
+- [x] New `CheckoutFlow.tsx`: Customer Info form (First/Last/Email/Phone/Birthday) + validation + Save Information. Order Summary card. PLACE ORDER -> generateOrderNumber, recordSale per line, persistCompletedOrder, clearCart, route to confirmation?order=GWY-XXXXXX.
+- [x] Clean empty-cart state. Legal disclaimer footer. Metadata cleaned. Helper `src/lib/checkout/order.ts`. Old CheckoutPreview deleted.
 
-## H. Loyalty hero shorter + wider ✅
-File: `src/components/loyalty/LoyaltySignupPreview.tsx`
-- [x] max-w-[88rem]; reduce height so form is visible
+### Phase 4 — Order Confirmed page ✅ DONE
+- [x] New `OrderConfirmation.tsx`: checkmark, ORDER CONFIRMED (orange), order #, email note, receipt, disclaimer, CONTINUE SHOPPING. Suspense-wrapped useSearchParams. Metadata cleaned. Old CheckoutConfirmationPreview deleted. tsc clean.
 
-## I. Blog newsletter badge + new title ✅
-Files: `BlogCard.tsx`, `BlogPreview.tsx`
-- [x] Newsletter card: add NEWSLETTER (gold) badge
-- [x] Title "STORIES | CULTURE | NEWSLETTERS"; desktop 1 line, mobile 2 lines; keep subtitle
+### Phase 5 — Vendors page overhaul (`/vendor-delivery`)
+- [ ] Hero banner wide+short, creative image, professional text.
+- [ ] Second hero banner introducing content below.
+- [ ] Professional concise statement + email button -> contact@greenwaymarijuana.com.
+- [ ] Vendor cards (HomeBrands style) from vendors.json: logo + name only; click -> seamless expand overlay with description (placeholder for now).
+- [ ] Remove preview cruft. Sexy desktop. Update nav label if needed (keep route).
 
-## J. FAQ title one line on desktop ✅
-File: `src/components/faq/FaqPreview.tsx`
-- [x] Widen title container so it fits one line desktop
+### Phase 6 — Verify + ship
+- [ ] tsc, eslint, build clean.
+- [ ] Browser verify mobile+desktop: cart, checkout, place order, confirmation, vendors, inventory decrement works.
+- [ ] Commit + push + PR (Vercel auto-deploys). Report URLs.
 
-## K. Verify + ship
-- [x] tsc, eslint, build clean (build3 EXIT 0, 2366 pages; eslint clean except 1 pre-existing img warning)
-- [x] Browser verify mobile+desktop for every touched page (desktop verified visually; mobile price fix verified at source/breakpoint level)
-- [x] Commit + push + PR (Vercel auto-deploys) — PR #20: https://github.com/mblyman89/GREENWAY-WEBSITE/pull/20
+### Phase 7 — Full-site review report
+- [ ] Full review: UX, design, content, compliance, performance, a11y, SEO, code health, conversion. Report + TLDR. Attach markdown.
+
+## NOTES
+- Tax est: label "Taxes (Est.)" with a sane Port Orchard rate note; honest, not "preview". Final tax confirmed in-store.
+- Inventory decrement is runtime/client only; fresh spreadsheet upload resets (matches user plan).
