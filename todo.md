@@ -47,19 +47,19 @@ Contact email for vendors button: `contact@greenwaymarijuana.com` (already in `s
 - [x] New `OrderConfirmation.tsx`: checkmark, ORDER CONFIRMED (orange), order #, email note, receipt, disclaimer, CONTINUE SHOPPING. Suspense-wrapped useSearchParams. Metadata cleaned. Old CheckoutConfirmationPreview deleted. tsc clean.
 
 ### Phase 5 — Vendors page overhaul (`/vendor-delivery`)
-- [ ] Hero banner wide+short, creative image, professional text.
-- [ ] Second hero banner introducing content below.
-- [ ] Professional concise statement + email button -> contact@greenwaymarijuana.com.
-- [ ] Vendor cards (HomeBrands style) from vendors.json: logo + name only; click -> seamless expand overlay with description (placeholder for now).
-- [ ] Remove preview cruft. Sexy desktop. Update nav label if needed (keep route).
+- [x] Hero banner wide+short, creative image, professional text.
+- [x] Second hero banner introducing content below.
+- [x] Professional concise statement + email button -> contact@greenwaymarijuana.com.
+- [x] Vendor cards (HomeBrands style) from vendors.json: logo + name only; click -> seamless expand overlay with description (placeholder for now).
+- [x] Remove preview cruft. Sexy desktop. Nav label -> Vendors & Partners (route kept).
 
 ### Phase 6 — Verify + ship
-- [ ] tsc, eslint, build clean.
-- [ ] Browser verify mobile+desktop: cart, checkout, place order, confirmation, vendors, inventory decrement works.
-- [ ] Commit + push + PR (Vercel auto-deploys). Report URLs.
+- [x] tsc, eslint, build clean (2366 routes).
+- [x] Browser-verified: vendor cards+expand, cart, checkout, place order, confirmation, cart cleared, inventory ledger decremented.
+- [x] Committed + pushed feature/checkout-vendors-overhaul + PR #21 (Vercel auto-deploys).
 
 ### Phase 7 — Full-site review report
-- [ ] Full review: UX, design, content, compliance, performance, a11y, SEO, code health, conversion. Report + TLDR. Attach markdown.
+- [x] Full review written to SITE_REVIEW.md (UX, design, content, compliance, performance, a11y, SEO, code health, conversion) + TLDR.
 
 ## NOTES
 - Tax est: label "Taxes (Est.)" with a sane Port Orchard rate note; honest, not "preview". Final tax confirmed in-store.
