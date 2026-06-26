@@ -813,6 +813,12 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
       .filter((group) => group.items.length > 0);
   }, [activeSectionCategory, filteredItems, usesFilteredSections]);
 
+  // Inline toolbar title: prefers the active special collection name, then the
+  // first product section label, falling back to a sensible default.
+  const toolbarTitle = showAccessorySections
+    ? "Accessories"
+    : initialSpecial?.label ?? groupedItems[0]?.label ?? "All Products";
+
   const resetFilters = () => {
     setQuery("");
     setSelectedCategories([]);
@@ -940,35 +946,15 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
         <FilterTags tags={activeFilterTags} onClearAll={resetFilters} />
       </div>
 
-      <div className="space-y-3 lg:col-start-2 lg:row-start-2 lg:space-y-5">
-        {initialSpecial ? (
-          <div className="rounded-3xl border border-[var(--gold)]/30 bg-[var(--gold)]/10 p-4 md:p-5">
-            <p className="text-xs font-black uppercase tracking-[0.2em] text-[var(--gold)]">Special collection</p>
-            <div className="mt-2 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-              <div>
-                <h2 className="text-xl font-black uppercase tracking-tight text-white md:text-2xl">{initialSpecial.label}</h2>
-              </div>
-              <span className="w-fit rounded-full border border-white/10 bg-black/35 px-4 py-2 text-[0.68rem] font-black uppercase tracking-[0.14em] text-zinc-300">
-                Shop eligible items
-              </span>
-            </div>
-          </div>
-        ) : null}
-
-        {/* Inline search + sort, right-aligned above the cards (no box). */}
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end sm:gap-3">
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search products, brands, categories"
-            aria-label="Search products"
-            className="h-11 w-full rounded-full border border-white/10 bg-zinc-950 px-4 text-sm font-bold text-white outline-none transition placeholder:text-zinc-600 hover:border-[var(--greenway)]/45 focus:border-[var(--greenway)] focus:ring-2 focus:ring-[var(--greenway)]/20 sm:max-w-[22rem]"
-          />
-          <div className="w-full sm:w-auto sm:min-w-[15rem]">
-            <SortDropdown value={sortBy} onChange={setSortBy} />
+      {/* Mobile-only special collection banner (desktop heading is rendered inline in the toolbar). */}
+      {initialSpecial ? (
+        <div className="rounded-3xl border border-[var(--gold)]/30 bg-[var(--gold)]/10 p-4 lg:col-start-2 lg:row-start-2 lg:hidden md:p-5">
+          <p className="text-xs font-black uppercase tracking-[0.2em] text-[var(--gold)]">Special collection</p>
+          <div className="mt-2 flex flex-col gap-3">
+            <h2 className="text-xl font-black uppercase tracking-tight text-white md:text-2xl">{initialSpecial.label}</h2>
           </div>
         </div>
-      </div>
+      ) : null}
 
       <div className="lg:hidden">
         <FilterMobile activeCount={activeFilterCount} resultCount={filteredItems.length}>
@@ -980,12 +966,28 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
         {filterControls}
       </aside>
 
-      <div className="lg:col-start-2 lg:row-start-3">
+      <div className="lg:col-start-2 lg:row-start-2 lg:space-y-6">
+        {/* Toolbar row: category/collection title on the left, search + sort inline on the right. */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+          <h2 className="min-w-0 truncate text-2xl font-black text-white md:text-3xl">
+            {toolbarTitle}
+          </h2>
+          <div className="flex flex-row items-center gap-2.5 sm:shrink-0 sm:gap-3">
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search products, brands, categories"
+              aria-label="Search products"
+              className="h-11 w-full rounded-full border border-white/10 bg-zinc-950 px-4 text-sm font-bold text-white outline-none transition placeholder:text-zinc-600 hover:border-[var(--greenway)]/45 focus:border-[var(--greenway)] focus:ring-2 focus:ring-[var(--greenway)]/20 sm:w-[18rem] lg:w-[22rem]"
+            />
+            <div className="w-[8.5rem] shrink-0 sm:w-[11rem]">
+              <SortDropdown value={sortBy} onChange={setSortBy} />
+            </div>
+          </div>
+        </div>
+
         {showAccessorySections ? (
           <section id="accessories" className="scroll-mt-32">
-            <div className="mb-4 min-w-0">
-              <h2 className="text-3xl font-black text-white">Accessories</h2>
-            </div>
             <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
               {accessorySectionCards.map((card) => <AccessoryCard key={card.key} card={card} />)}
             </div>
@@ -997,11 +999,15 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
           </div>
         ) : (
           <div className="space-y-10">
-            {groupedItems.map((group) => (
+            {groupedItems.map((group, index) => (
               <section key={group.key} id={group.id} className="scroll-mt-32">
-                <div className="mb-4 min-w-0">
-                  <h2 className="text-3xl font-black text-white">{group.label}</h2>
-                </div>
+                {/* The first section's title is shown inline in the toolbar above, so
+                    skip its duplicate heading and let the cards sit flush. */}
+                {index === 0 ? null : (
+                  <div className="mb-4 min-w-0">
+                    <h2 className="text-3xl font-black text-white">{group.label}</h2>
+                  </div>
+                )}
                 <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
                   {group.items.map((item) => <ProductCard key={item.id} item={item} />)}
                 </div>

@@ -41,6 +41,9 @@ export default async function MenuPage({ searchParams }: MenuPageProps) {
     <main id="top">
       <Header />
 
+      {/* Breadcrumb sits ABOVE the hero, consistent with every other page. */}
+      <Breadcrumbs items={[{ label: "Shop" }]} />
+
       {/* Wide, short hero banner — clean, left-aligned title with a single subtitle line */}
       <section className="border-b border-white/10 bg-black px-4 py-4 md:px-8 md:py-5">
         <div className="mx-auto max-w-[88rem]">
@@ -68,9 +71,6 @@ export default async function MenuPage({ searchParams }: MenuPageProps) {
           </div>
         </div>
       </section>
-
-      {/* Breadcrumb (left-aligned). Active filter pills render directly below it inside the browser. */}
-      <Breadcrumbs items={[{ label: "Shop" }]} />
 
       <section id="products">
         <Suspense fallback={<div className="mx-auto max-w-[88rem] px-4 py-10 text-sm font-bold text-zinc-400 md:px-8">Loading menu filters...</div>}>

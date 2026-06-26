@@ -15,15 +15,28 @@ import { formatMinorCurrency } from "@/lib/leafly/format";
 // product left the shelf. The next fresh spreadsheet upload through the
 // transformer resets all counts to source-of-truth POS values.
 //
-// Tax: WA cannabis retail prices already include the 37% excise tax. What is
-// added at the register is local sales tax. Port Orchard's combined sales tax
-// rate is ~9.0%, so we surface an honest "Taxes (Est.)" line at that rate and
-// note final tax is confirmed in store.
+// Tax model (tax-INCLUSIVE pricing):
+// The price shown on every product card IS the final out-the-door price the
+// customer pays at pickup. That displayed price already bakes in all taxes:
+//   - 37.0% WSLCB cannabis excise tax
+//   - 9.3% combined WA state + local (Port Orchard) sales tax
+//   => 46.3% combined effective tax that is INCLUDED in the card price.
+// So we work BACKWARDS from the card price to show an honest breakdown:
+//   total    = sum of card prices (what the customer actually pays)
+//   subtotal = total / 1.463            (the pre-tax portion)
+//   tax      = total - subtotal         (the included tax portion)
+// This guarantees subtotal + tax === total exactly (no rounding drift) and the
+// Total always equals the listed card price(s). Final tax/limits confirmed in store.
 // ---------------------------------------------------------------------------
 
 const CART_STORAGE_KEY = "greenway-cart-v1";
 const INVENTORY_STORAGE_KEY = "greenway-inventory-ledger-v1";
-export const ESTIMATED_SALES_TAX_RATE = 0.09;
+// Combined effective tax already INCLUDED in the displayed card price.
+export const CANNABIS_EXCISE_TAX_RATE = 0.37; // WSLCB excise
+export const LOCAL_SALES_TAX_RATE = 0.093; // WA state + Port Orchard local
+export const COMBINED_INCLUSIVE_TAX_RATE = CANNABIS_EXCISE_TAX_RATE + LOCAL_SALES_TAX_RATE; // 0.463
+// Back-out divisor: card price (tax-inclusive) / (1 + 0.463) => pre-tax subtotal.
+export const TAX_INCLUSIVE_DIVISOR = 1 + COMBINED_INCLUSIVE_TAX_RATE; // 1.463
 
 type CartItemInput = {
   productId: string;
@@ -120,14 +133,19 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   }, [soldLedger, hydrated]);
 
   const itemCount = items.reduce((total, item) => total + item.quantity, 0);
-  const subtotalMinorUnits = items.reduce((total, item) => total + item.priceMinorUnits * item.quantity, 0);
+  // Card prices are tax-INCLUSIVE out-the-door prices, so the cart total is the
+  // straight sum of card prices. We then back out the pre-tax subtotal + the
+  // included tax so subtotal + tax === total exactly.
+  const totalMinorUnits = items.reduce((total, item) => total + item.priceMinorUnits * item.quantity, 0);
+  const subtotalMinorUnits = Math.round(totalMinorUnits / TAX_INCLUSIVE_DIVISOR);
+  const estimatedTaxMinorUnits = totalMinorUnits - subtotalMinorUnits;
+  // Regular (pre-discount) prices are also tax-inclusive card prices; savings is
+  // the difference between regular and sale card prices.
   const regularSubtotalMinorUnits = items.reduce(
     (total, item) => total + item.regularPriceMinorUnits * item.quantity,
     0,
   );
-  const savingsMinorUnits = Math.max(0, regularSubtotalMinorUnits - subtotalMinorUnits);
-  const estimatedTaxMinorUnits = Math.round(subtotalMinorUnits * ESTIMATED_SALES_TAX_RATE);
-  const totalMinorUnits = subtotalMinorUnits + estimatedTaxMinorUnits;
+  const savingsMinorUnits = Math.max(0, regularSubtotalMinorUnits - totalMinorUnits);
 
   const remainingInventory = useCallback(
     (variantId: string, baseLevel: number) => Math.max(0, baseLevel - (soldLedger[variantId] ?? 0)),
@@ -278,27 +296,27 @@ function DrawerHeader({ itemCount, onClose }: { itemCount: number; onClose: () =
 function StoreCard() {
   return (
     <section className="-mx-4 overflow-hidden bg-[#4a2c18] shadow-[0_10px_28px_rgba(0,0,0,0.38)] sm:mx-0" aria-label="Greenway Marijuana store details">
-      <div className="flex h-[5rem] w-[calc(100%+2rem)] items-stretch bg-[#4a2c18] sm:w-full">
-        <div className="relative w-[6rem] shrink-0 overflow-hidden bg-transparent sm:w-[5.1rem]">
+      <div className="flex h-[5rem] w-[calc(100%+2rem)] items-stretch bg-[#4a2c18] sm:h-[6.25rem] sm:w-full">
+        <div className="relative w-[6rem] shrink-0 overflow-hidden bg-transparent sm:w-[7.25rem]">
           <Image
             src={greenwayBusiness.assets.blackGoldLogoTransparent}
             alt={`${greenwayBusiness.name} logo`}
             fill
-            sizes="82px"
-            className="translate-x-3 object-contain p-1 sm:translate-x-0 sm:p-2"
+            sizes="116px"
+            className="translate-x-3 object-contain p-1 sm:translate-x-0 sm:p-2.5"
             priority
           />
         </div>
 
-        <div className="flex min-w-0 flex-1 items-center px-3 py-2 text-white">
-          <div className="grid gap-1.5 text-[0.66rem] font-extrabold uppercase leading-none tracking-[0.018em] text-white/92 min-[390px]:text-[0.7rem] sm:text-[0.55rem]">
+        <div className="flex min-w-0 flex-1 items-center px-3 py-2 text-white sm:px-4">
+          <div className="grid gap-1.5 text-[0.66rem] font-extrabold uppercase leading-none tracking-[0.018em] text-white/92 min-[390px]:text-[0.7rem] sm:gap-2 sm:text-[0.8rem] sm:tracking-[0.02em]">
             <p className="whitespace-nowrap">{greenwayBusiness.address.full}</p>
             <p className="flex items-center gap-1.5 whitespace-nowrap text-white">
-              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#18a957] shadow-[0_0_0_2px_rgba(24,169,87,0.18)]" aria-hidden="true" />
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#18a957] shadow-[0_0_0_2px_rgba(24,169,87,0.18)] sm:h-2 sm:w-2" aria-hidden="true" />
               Open until 11:00 PM
             </p>
             <p className="flex items-center gap-1.5 whitespace-nowrap text-white">
-              <svg className="h-2.5 w-2.5 shrink-0 text-white/80" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <svg className="h-2.5 w-2.5 shrink-0 text-white/80 sm:h-3.5 sm:w-3.5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path d="M6.6 3.7 9 3.1a1.5 1.5 0 0 1 1.7.86l1 2.35a1.5 1.5 0 0 1-.38 1.7L10.15 9.1a10.2 10.2 0 0 0 4.78 4.78l1.1-1.17a1.5 1.5 0 0 1 1.7-.38l2.35 1a1.5 1.5 0 0 1 .86 1.7l-.6 2.4a2.35 2.35 0 0 1-2.28 1.78A14.95 14.95 0 0 1 4.82 5.98 2.35 2.35 0 0 1 6.6 3.7Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
               {greenwayBusiness.phone.display}
