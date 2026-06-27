@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { usePathname } from "next/navigation";
 import { useSyncExternalStore } from "react";
 
 const STORAGE_KEY = "greenway-age-confirmed-v1";
@@ -25,6 +26,7 @@ function getServerAgeConfirmationSnapshot() {
 }
 
 export function AgeGate() {
+  const pathname = usePathname();
   const isConfirmed = useSyncExternalStore(
     subscribeToAgeConfirmation,
     getAgeConfirmationSnapshot,
@@ -35,6 +37,9 @@ export function AgeGate() {
     window.localStorage.setItem(STORAGE_KEY, "true");
     window.dispatchEvent(new Event(STORAGE_EVENT));
   }
+
+  // The age gate is for customers only — never block the staff back office.
+  if (pathname?.startsWith("/admin")) return null;
 
   if (isConfirmed) return null;
 
