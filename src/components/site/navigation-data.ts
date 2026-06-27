@@ -78,4 +78,9 @@ export const primaryNavigationItems: NavigationItem[] = [
     href: "/faq",
     helper: "Read ordering, compliance, and visit-planning answers.",
   },
+  {
+    label: "Vendors",
+    href: "/vendor-delivery",
+    helper: "Meet the licensed Washington cannabis brands on our shelves and learn how to become a vendor partner.",
+  },
 ];

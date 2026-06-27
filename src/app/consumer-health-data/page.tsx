@@ -2,6 +2,7 @@ import { Breadcrumbs } from "@/components/site/Breadcrumbs";
 import { Footer } from "@/components/site/Footer";
 import { Header } from "@/components/site/Header";
 import { consumerHealthDataParagraphs } from "@/content/consumer-health-data";
+import { renderPolicyParagraph } from "@/lib/policies/renderPolicyParagraph";
 import { pageMetadata } from "@/lib/seo/seo";
 
 export const metadata = pageMetadata({
@@ -24,8 +25,8 @@ export default function ConsumerHealthDataPage() {
         <div className="noise-overlay" />
 
         <div className="relative mx-auto max-w-7xl px-4 py-10 md:px-8 md:py-16 lg:py-20">
-          <h1 className="text-center text-5xl font-black uppercase leading-[0.9] tracking-tight text-[var(--orange)] md:text-7xl lg:text-8xl">
-            <span className="block">Washington Consumer Health Data</span>
+          <h1 className="text-center text-[1.85rem] font-black uppercase leading-[0.98] tracking-tight text-[var(--orange)] sm:text-[2.5rem] md:text-5xl lg:text-[3.4rem] xl:text-[3.9rem]">
+            <span className="block whitespace-nowrap">Washington Consumer Health Data</span>
             <span className="block">Privacy Policy</span>
           </h1>
 
@@ -37,7 +38,7 @@ export default function ConsumerHealthDataPage() {
                     {paragraph}
                   </h2>
                 ) : (
-                  <p key={paragraph}>{paragraph}</p>
+                  <p key={paragraph}>{renderPolicyParagraph(paragraph, "consumer-health-data", paragraph)}</p>
                 ),
               )}
             </div>

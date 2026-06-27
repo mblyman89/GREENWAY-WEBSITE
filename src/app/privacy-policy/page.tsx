@@ -2,6 +2,7 @@ import { Breadcrumbs } from "@/components/site/Breadcrumbs";
 import { Footer } from "@/components/site/Footer";
 import { Header } from "@/components/site/Header";
 import { privacyPolicyParagraphs } from "@/content/privacy-policy";
+import { renderPolicyParagraph } from "@/lib/policies/renderPolicyParagraph";
 import { pageMetadata } from "@/lib/seo/seo";
 
 export const metadata = pageMetadata({
@@ -36,7 +37,7 @@ export default function PrivacyPolicyPage() {
                     {paragraph}
                   </h2>
                 ) : (
-                  <p key={paragraph}>{paragraph}</p>
+                  <p key={paragraph}>{renderPolicyParagraph(paragraph, "privacy-policy", paragraph)}</p>
                 ),
               )}
             </div>
