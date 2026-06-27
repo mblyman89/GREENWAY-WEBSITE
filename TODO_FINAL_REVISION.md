@@ -81,4 +81,4 @@ Rules per day (highest reachable tier based on cart contents):
 - [x] `rm -rf .next && npm run build` clean
 - [x] Visual verify desktop (browser-tool) + mobile (Playwright CDP): search bar height, nav menus (3 places) w/ merch, shop mixed/unfiltered merch+accessories at bottom, merch price ranges+colors, merch PDP + add-to-cart + checkout + confirmation, cannabis card centered price, cart address spacing, wide desktop PDP huge image, AND smart-cart discount cases (single 3.5g = none, 2×3.5g = 15%, 8×3.5g = 30%).
 - [x] Clean up scratch files (screenshots, helper .py). Do NOT commit them.
-- [ ] Commit + push branch (PR #24 updates). Confirm Vercel checks pass.
+- [x] Commit + push branch (PR #24 updates). Confirm Vercel checks pass.
