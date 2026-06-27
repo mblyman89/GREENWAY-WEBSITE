@@ -5,9 +5,13 @@
  * Seed the `vendors`, `vendor_aliases`, `brands`, `brand_aliases` tables from the
  * Slice 0 folder database (back-office/GREENWAY WEBSITE/database/vendors/**).
  *
- * Idempotent: upserts by slug, so re-running updates rather than duplicates.
- * Profiles are imported with status 'draft' (staff review/publish them later).
- * POS source strings become aliases so the importer can map labels to records.
+ * Idempotent: upserts by slug (PostgREST on_conflict + merge-duplicates), so
+ * re-running updates rather than duplicates. Profiles are imported with status
+ * 'draft' (staff review/publish them later). POS source strings become aliases
+ * so the importer can map labels to records.
+ *
+ * Uses the PostgREST REST API directly (no @supabase/supabase-js) to stay
+ * dependency-free and avoid the realtime WebSocket init that fails on Node 20.
  *
  * Requires NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY in the env.
  *
@@ -15,7 +19,6 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import { createClient } from "@supabase/supabase-js";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -25,9 +28,12 @@ if (!SUPABASE_URL || !SERVICE_KEY) {
   process.exit(1);
 }
 
-const admin = createClient(SUPABASE_URL, SERVICE_KEY, {
-  auth: { autoRefreshToken: false, persistSession: false },
-});
+const REST = `${SUPABASE_URL}/rest/v1`;
+const BASE_HEADERS = {
+  apikey: SERVICE_KEY,
+  Authorization: `Bearer ${SERVICE_KEY}`,
+  "Content-Type": "application/json",
+};
 
 const VENDORS_DIR = path.join(process.cwd(), "back-office", "GREENWAY WEBSITE", "database", "vendors");
 
@@ -79,6 +85,30 @@ function social(instagram?: string, facebook?: string): Record<string, string> {
   return s;
 }
 
+/** Upsert a single row and return the created/updated row(s). */
+async function upsert<T = Record<string, unknown>>(
+  table: string,
+  row: Record<string, unknown>,
+  onConflict: string,
+  returning = false,
+): Promise<T[] | null> {
+  const url = `${REST}/${table}?on_conflict=${encodeURIComponent(onConflict)}`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      ...BASE_HEADERS,
+      Prefer: returning ? "resolution=merge-duplicates,return=representation" : "resolution=merge-duplicates,return=minimal",
+    },
+    body: JSON.stringify(row),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`${table} upsert failed (${res.status}): ${text}`);
+  }
+  if (!returning) return null;
+  return (await res.json()) as T[];
+}
+
 async function main() {
   if (!fs.existsSync(VENDORS_DIR)) {
     throw new Error(`Vendors folder DB not found at ${VENDORS_DIR}`);
@@ -99,10 +129,10 @@ async function main() {
     const v = readJson<VendorJson>(path.join(vendorDir, "vendor.json"));
     if (!v) continue;
 
-    // Upsert vendor by slug.
-    const { data: vendorRow, error: vErr } = await admin
-      .from("vendors")
-      .upsert(
+    let vendorRows: { id: string }[] | null = null;
+    try {
+      vendorRows = await upsert<{ id: string }>(
+        "vendors",
         {
           display_name: v.displayName,
           slug: v.slug,
@@ -119,26 +149,29 @@ async function main() {
           brand_count: v.brandCount ?? 0,
           status: "draft",
         },
-        { onConflict: "slug" },
-      )
-      .select("id")
-      .single();
-    if (vErr || !vendorRow) {
-      console.error(`Vendor upsert failed for ${vendorSlug}: ${vErr?.message}`);
+        "slug",
+        true,
+      );
+    } catch (err) {
+      console.error(`Vendor upsert failed for ${vendorSlug}: ${(err as Error).message}`);
+      continue;
+    }
+    const vendorId = vendorRows?.[0]?.id;
+    if (!vendorId) {
+      console.error(`Vendor upsert returned no id for ${vendorSlug}`);
       continue;
     }
     vendorCount += 1;
-    const vendorId = (vendorRow as { id: string }).id;
 
-    // Vendor aliases.
     for (const alias of v.posAliases ?? []) {
-      const { error } = await admin
-        .from("vendor_aliases")
-        .upsert({ vendor_id: vendorId, source_name: alias, source_system: "pos" }, { onConflict: "source_system,source_name" });
-      if (!error) vendorAliasCount += 1;
+      try {
+        await upsert("vendor_aliases", { vendor_id: vendorId, source_name: alias, source_system: "pos" }, "source_system,source_name");
+        vendorAliasCount += 1;
+      } catch {
+        /* ignore alias conflicts */
+      }
     }
 
-    // Brands under this vendor.
     const brandsDir = path.join(vendorDir, "brands");
     if (!fs.existsSync(brandsDir)) continue;
     const brandSlugs = fs
@@ -150,9 +183,10 @@ async function main() {
       const b = readJson<BrandJson>(path.join(brandsDir, brandSlug, "brand.json"));
       if (!b) continue;
 
-      const { data: brandRow, error: bErr } = await admin
-        .from("brands")
-        .upsert(
+      let brandRows: { id: string }[] | null = null;
+      try {
+        brandRows = await upsert<{ id: string }>(
+          "brands",
           {
             display_name: b.displayName,
             slug: b.slug,
@@ -165,22 +199,27 @@ async function main() {
             product_count: b.productCount ?? 0,
             status: "draft",
           },
-          { onConflict: "slug" },
-        )
-        .select("id")
-        .single();
-      if (bErr || !brandRow) {
-        console.error(`Brand upsert failed for ${brandSlug}: ${bErr?.message}`);
+          "slug",
+          true,
+        );
+      } catch (err) {
+        console.error(`Brand upsert failed for ${brandSlug}: ${(err as Error).message}`);
+        continue;
+      }
+      const brandId = brandRows?.[0]?.id;
+      if (!brandId) {
+        console.error(`Brand upsert returned no id for ${brandSlug}`);
         continue;
       }
       brandCount += 1;
-      const brandId = (brandRow as { id: string }).id;
 
       for (const alias of b.posAliases ?? []) {
-        const { error } = await admin
-          .from("brand_aliases")
-          .upsert({ brand_id: brandId, source_name: alias, source_system: "pos" }, { onConflict: "source_system,source_name" });
-        if (!error) brandAliasCount += 1;
+        try {
+          await upsert("brand_aliases", { brand_id: brandId, source_name: alias, source_system: "pos" }, "source_system,source_name");
+          brandAliasCount += 1;
+        } catch {
+          /* ignore alias conflicts */
+        }
       }
     }
   }
