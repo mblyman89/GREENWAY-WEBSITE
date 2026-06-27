@@ -26,7 +26,11 @@ Each "slice" is independently shippable so the owner can inspect before continui
 - **Slice 7 — Real order management** (server orders, status workflow, tickets, notifications).
 - **Slice 8 — Loyalty management** (DB-backed queue, CSV export, dedupe).
 - **Slice 9 — Reports & analytics** (import diagnostics, inventory health, orders, promos).
-- **Slice 10 — Future automation** (scheduled POS fetch, AI copy drafts, enrichment bots).
+- **Slice 10 — Future automation** (scheduled POS fetch, enrichment bots).
+
+> **Cross-cutting capability — AI Enrichment Engine (NEW):** AI is woven into Slices 3b/4/5 rather than deferred. Every AI output is a **draft suggestion** an employee approves before it touches the public site — same staged-publish gate as the menu. See the dedicated "AI Enrichment Engine" section below.
+
+> **Cross-cutting capability — Smart Spreadsheet Auto-Ingest (NEW):** Extends the Slice 2 POS pipeline so employees can simply drop the raw `PRODUCTS.xlsx` / `INVENTORIES.xlsx` into a watched intake folder (or upload in admin); the system ingests, auto-detects new vendors/brands/strains as drafts, then rotates the raw files into a size-capped `backups/` folder. See the "Smart Spreadsheet Auto-Ingest" section below.
 
 ---
 
@@ -84,9 +88,11 @@ Each "slice" is independently shippable so the owner can inspect before continui
 - [ ] Front end: replace placeholder vendor cards with DB-driven profiles + real logos; brand logos on product cards.
 - [ ] **Deliverable PR + owner inspect.** *(PR #33 open; awaiting owner migration run + review)*
 
-## SLICE 4 — Product enrichment (Phase 3b)
+## SLICE 4 — Product enrichment + AI assist (Phase 3b)
 - [ ] DB table `product_enrichments` keyed by POS product key (separate from POS truth).
 - [ ] Editor: display-name override, description override, image gallery, brand/vendor link, tags (new arrival/best seller/staff pick/local/high-CBD), staff-pick + featured flags, hide-override + reason, SEO override.
+- [ ] **AI draft descriptions:** "Generate description" button per product → AI proposes a compliant marketing description + tag suggestions using POS metadata (name, category, strain, brand, THC/CBD). Lands in a draft field with **Accept / Edit / Reject**; never auto-published. (Part of AI Enrichment Engine below.)
+- [ ] **AI bulk enrich queue:** select N products missing descriptions → batch-generate drafts → staff review grid (accept/reject each).
 - [ ] Front end merges enrichment over published menu item without touching price/stock.
 - [ ] Gap dashboard: products missing image / description / brand logo / vendor profile.
 - [ ] **Deliverable PR + owner inspect.**
@@ -134,8 +140,35 @@ Each "slice" is independently shippable so the owner can inspect before continui
 
 ## SLICE 10 — Future automation (Phase 7)
 - [ ] Scheduled/auto POS fetch (if Cultivera API available) → staged import queue.
-- [ ] AI-assisted product description drafts (staff review/approve).
-- [ ] Vendor profile enrichment suggestions; image normalization/cropping; advanced analytics.
+- [ ] Smart Spreadsheet Auto-Ingest watcher + backup rotation (see dedicated section — may land earlier as a Slice 2 follow-on).
+- [ ] AI Enrichment Engine background batch jobs (overnight draft generation for new products/vendors/strains; see dedicated section).
+- [ ] Image normalization/cropping/focal-point automation; advanced analytics.
+
+---
+
+## CAPABILITY — AI Enrichment Engine (cross-cutting; built across Slices 3b–5)
+> **Principle:** AI drafts, humans approve. Every AI-generated field is stored as a *suggestion* with provenance (model, prompt version, timestamp, generated_by) and goes through the same employee-validated publish gate as menu data. Nothing AI writes reaches the public site without a staff Accept.
+
+- [ ] **Provider abstraction** (`src/lib/ai/`): single `generate()` interface so the model/provider is swappable; API key in env (`AI_API_KEY`); graceful no-op when unset.
+- [ ] **Compliance guardrails:** prompt templates enforce WA cannabis rules — no health/medical claims, no appeal-to-minors language, no dosing advice; include required disclaimers; profanity/claim filter on output.
+- [ ] **`ai_suggestions` table:** entity_type, entity_id, field_key, suggested_value, status (pending/accepted/rejected/edited), model, prompt_version, generated_by, created_at, reviewed_by, reviewed_at. Full audit trail.
+- [ ] **Product copy:** compliant description + tag suggestions from POS metadata (Slice 4).
+- [ ] **Vendor/brand curation:** draft mission/about/product-philosophy from vendor name + known brands + (optional) website scrape; suggest social links; flag likely-duplicate vendor strings for the alias-merge tool.
+- [ ] **Strain intelligence:** enrich `STRAINS_MASTER` — type (indica/sativa/hybrid), aroma/flavor/effect descriptors, lineage, plain-language summary; cross-reference public strain data; gap-fill missing rows. All staff-validated.
+- [ ] **Image assistance:** AI alt-text generation for media library; (later) image search/normalization suggestions for products missing photos — staff picks the final image.
+- [ ] **Review UX everywhere:** consistent Accept / Edit / Reject control; bulk review grids; "regenerate" with optional steering note; show provenance.
+- [ ] **Cost/safety controls:** per-run limits, dry-run preview, rate limiting, no PII in prompts.
+
+## CAPABILITY — Smart Spreadsheet Auto-Ingest + Backup Rotation (extends Slice 2 pipeline)
+> **Goal:** an employee does as little as possible — drop the raw exports, click one button (or have it auto-detected), review, publish.
+
+- [ ] **Drop-in intake:** admin upload *and* a watched intake folder (`intake/inbound/`) accept `PRODUCTS.xlsx` + `INVENTORIES.xlsx`; detect the pair, validate headers, reject malformed files with a clear message.
+- [ ] **One-click ingest** reuses the Slice 2 transform → staged `menu_version` + diagnostics → employee review → publish.
+- [ ] **New-entity auto-detection:** vendors/brands/strains present in the new sheet but not yet in the DB are created as **drafts** and surfaced in a "New since last import" review list (never auto-published).
+- [ ] **Backup rotation:** after a successful ingest, move raw files to `intake/backups/` renamed with UTC timestamp + import id; keep the most recent **N (default 10)**; auto-delete the oldest beyond the cap.
+- [ ] **Restore:** "restore from backup" lets staff re-run a prior raw export through the pipeline.
+- [ ] **History + audit:** every ingest logged (who, when, file hashes, counts, backups pruned).
+- [ ] **Deliverable PR + owner inspect.**
 
 ---
 
@@ -147,6 +180,8 @@ Each "slice" is independently shippable so the owner can inspect before continui
 - [ ] Compliance: age gate stays, compliance warnings preserved, no-payment language, disclaimers on promos, private order/loyalty data protected, data retention policy.
 - [ ] Accessibility + mobile-responsive admin (staff use phones/tablets at the counter).
 - [ ] Match Greenway visual identity in all admin UI.
+- [ ] **AI = drafts only.** Any AI-generated content is a suggestion with provenance and must be employee-validated (Accept/Edit/Reject) before it reaches the public site. No silent auto-publish.
+- [ ] **Minimal-effort ingest.** Prefer drop-in / one-click flows; new vendors/brands/strains from fresh exports auto-queue as drafts; raw files auto-rotate into capped backups.
 
 ## Definition of done (per slice)
 1. Schema/migrations applied. 2. Feature works end-to-end with real data. 3. Audit + permissions enforced. 4. Front end (if affected) still builds + looks correct. 5. Owner inspected + signed off.
