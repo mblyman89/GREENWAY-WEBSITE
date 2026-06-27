@@ -9,6 +9,7 @@ export const metadata = pageMetadata({
   description:
     "Join Greenway Marijuana loyalty rewards for exclusive offers, member discounts, birthday deals, and promotional updates. For adults 21+ in Port Orchard, WA.",
   path: "/loyalty",
+  image: "/og/loyalty.png",
 });
 
 export default function LoyaltyPage() {

@@ -43,6 +43,12 @@ export const greenwayBusiness = {
     storefront: "/brand/greenway-front-of-store.webp",
     loyaltyHero: "/brand/greenway-loyalty-points-hero-desktop.png",
     loyaltyHeroMobile: "/brand/greenway-loyalty-points-hero-mobile.png",
+    storeHoursImage: "/brand/store-hours-open.png",
+    appDownloadWordmark: "/app-download/app-download-wordmark.png",
+    appGlyphApple: "/app-download/glyph-apple.png",
+    appGlyphGoogle: "/app-download/glyph-google.png",
+    socialGlyphInstagram: "/social/glyph-instagram.png",
+    socialGlyphFacebook: "/social/glyph-facebook.png",
   },
   social: {
     facebook: {
