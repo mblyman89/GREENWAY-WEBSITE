@@ -21,7 +21,7 @@ export function RelatedProductCard({ item, className }: RelatedProductCardProps)
   return (
     <ProductCardVisual
       item={item}
-      salePriceMinorUnits={activeDiscount?.salePriceMinorUnits}
+      salePriceMinorUnits={activeDiscount?.cardPreviewSalePriceMinorUnits}
       saleBadgeLabel={activeDiscount ? formatActiveDiscountBadge(activeDiscount) : undefined}
       className={className}
     />

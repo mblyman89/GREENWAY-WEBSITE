@@ -7,13 +7,21 @@ export type ActiveMenuDiscount = {
   bonusNote?: string;
   salePriceMinorUnits: number;
   /**
-   * When true, the card may show a genuine struck "before" price and the
-   * discounted per-item price (the deal applies cleanly to the listed price).
-   * When false, the deal varies by weight / spend-threshold / storewide and
-   * cannot be expressed as an accurate single per-item sale price, so the card
-   * shows ONLY an informational badge (no fake struck price).
+   * When true, the day's deal applies cleanly to the listed per-item price
+   * (e.g. flat 25% off). When false, the deal varies by weight / spend /
+   * storewide and the AUTHORITATIVE charge is computed in the cart engine.
+   * Either way, the product CARD now shows the headline (best-case) struck
+   * "before" price + discounted price — a standard storefront preview — while
+   * the cart remains the source of truth for the exact amount charged.
    */
   perItemSalePrice: boolean;
+  /**
+   * Best-case (headline) discounted per-item price for CARD display. Always
+   * computed from the deal's top `discountPercent` so every targeted card can
+   * show a struck regular price next to the discounted price. The cart engine
+   * recomputes the precise amount (weight/qty/spend tiers) at checkout.
+   */
+  cardPreviewSalePriceMinorUnits: number;
 };
 
 // ---------------------------------------------------------------------------
@@ -140,18 +148,23 @@ export function discountPrice(priceMinorUnits: number, discountPercent: number) 
 
 function buildDiscount(
   item: GreenwayMenuItem,
-  config: Omit<ActiveMenuDiscount, "salePriceMinorUnits" | "perItemSalePrice"> & {
+  config: Omit<ActiveMenuDiscount, "salePriceMinorUnits" | "perItemSalePrice" | "cardPreviewSalePriceMinorUnits"> & {
     perItemSalePrice?: boolean;
   },
 ): ActiveMenuDiscount {
   const perItemSalePrice = config.perItemSalePrice ?? true;
+  // Headline (best-case) discounted price for the CARD preview — always
+  // computed from the deal's top percentage so the card can show a struck
+  // regular price next to the discounted price for every targeted product.
+  const cardPreviewSalePriceMinorUnits = discountPrice(item.priceMinorUnits, config.discountPercent);
   return {
     ...config,
     perItemSalePrice,
-    // Only compute a struck/sale price when the deal applies cleanly per item.
-    // Otherwise keep the regular price so no inaccurate discount is shown.
+    cardPreviewSalePriceMinorUnits,
+    // salePriceMinorUnits keeps its existing meaning (clean per-item deals
+    // only) for any consumer relying on the exact per-item charge.
     salePriceMinorUnits: perItemSalePrice
-      ? discountPrice(item.priceMinorUnits, config.discountPercent)
+      ? cardPreviewSalePriceMinorUnits
       : item.priceMinorUnits,
   };
 }

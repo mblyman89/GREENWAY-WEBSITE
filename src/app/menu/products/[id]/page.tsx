@@ -13,8 +13,9 @@ import type { GreenwayMenuItem } from "@/lib/leafly/types";
 import { formatWebsiteCategory } from "@/lib/pos/category-taxonomy";
 import { getPosPreviewMenuItemById, posMenuPreviewItems } from "@/lib/pos/preview-menu";
 import { breadcrumbSchema, pageMetadata, productSchema } from "@/lib/seo/seo";
-import { getMerchDefById, getMerchMenuItemById, merchMenuItems } from "@/lib/merch/merch-catalog";
+import { getMerchDefById, getMerchMenuItemById, merchMenuItems, merchProductDefs, merchIdForKey } from "@/lib/merch/merch-catalog";
 import { MerchDetailPanel } from "@/components/merch/MerchDetailPanel";
+import { MerchProductCard } from "@/components/merch/MerchProductCard";
 
 type ProductTone = {
   border: string;
@@ -129,16 +130,16 @@ function ProductHeroArt({ item, tone }: { item: GreenwayMenuItem; tone: ProductT
   if (isMerchItem(item)) {
     const def = getMerchDefById(item.id);
     return (
-      <div className="relative flex h-full min-h-[20rem] items-center justify-center overflow-hidden bg-white md:min-h-[34rem]">
+      <div className="relative flex h-full min-h-[22rem] items-center justify-center overflow-hidden bg-white md:min-h-[44rem]">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={def?.imageUrl ?? "/merch/tshirt.webp"} alt={item.name} className="h-full w-full object-contain p-6 md:p-10" />
+        <img src={def?.imageUrl ?? "/merch/tshirt.webp"} alt={item.name} className="h-full w-full object-contain p-6 md:p-12" />
       </div>
     );
   }
 
   if (nonCannabis) {
     return (
-      <div className="relative flex h-full min-h-[18.5rem] items-center justify-center overflow-hidden bg-white">
+      <div className="relative flex h-full min-h-[20rem] items-center justify-center overflow-hidden bg-white md:min-h-[44rem]">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_52%_45%,rgba(0,0,0,0.06),transparent_35%),linear-gradient(180deg,#fff,#f2f2f2)]" />
         <div className="relative h-64 w-40 rotate-[-8deg]">
           <div className="absolute left-[45%] top-0 h-28 w-4 rounded-full bg-zinc-400 shadow-lg" />
@@ -150,9 +151,9 @@ function ProductHeroArt({ item, tone }: { item: GreenwayMenuItem; tone: ProductT
   }
 
   return (
-    <div className="relative flex h-full min-h-[18.5rem] items-center justify-center overflow-hidden bg-white">
+    <div className="relative flex h-full min-h-[20rem] items-center justify-center overflow-hidden bg-white md:min-h-[44rem]">
       <div className="absolute inset-0" style={{ background: `radial-gradient(circle at 24% 14%, rgba(255,255,255,0.96), transparent 21%), radial-gradient(circle at 75% 74%, ${tone.glowSoft}, transparent 44%), linear-gradient(145deg, #ffffff 0%, #f8f8f8 62%, #ececec 100%)` }} />
-      <div className="relative flex h-[15.8rem] w-[10.6rem] rotate-[-2deg] flex-col items-center justify-between overflow-hidden rounded-[1.12rem] border border-black/15 bg-[#111] p-3 shadow-[0_24px_46px_rgba(0,0,0,0.28)]">
+      <div className="relative flex h-[15.8rem] w-[10.6rem] rotate-[-2deg] flex-col items-center justify-between overflow-hidden rounded-[1.12rem] border border-black/15 bg-[#111] p-3 shadow-[0_24px_46px_rgba(0,0,0,0.28)] md:h-[24rem] md:w-[16rem]">
         <div className="absolute inset-0 opacity-95" style={{ background: tone.packageGradient }} />
         <div className="absolute inset-x-0 top-0 h-12 bg-white/12" />
         <div className="relative z-10 w-full text-center text-[0.54rem] font-black uppercase tracking-[0.22em] text-black/62">{label}</div>
@@ -310,13 +311,29 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
 
           {relatedItems.length > 0 ? (
             <div className="mt-5 -mx-4 flex snap-x gap-4 overflow-x-auto px-4 pb-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {relatedItems.map((related) => (
-                <RelatedProductCard
-                  key={related.id}
-                  item={related}
-                  className="w-[17.25rem] shrink-0 snap-start"
-                />
-              ))}
+              {relatedItems.map((related) => {
+                // Merch related items render the dedicated MERCH card (price
+                // range, colors, no THC/CBD) — never the cannabis card.
+                if (isMerchItem(related)) {
+                  const def =
+                    getMerchDefById(related.id) ??
+                    merchProductDefs.find((candidate) => merchIdForKey(candidate.key) === related.id);
+                  return def ? (
+                    <MerchProductCard
+                      key={related.id}
+                      def={def}
+                      className="w-[17.25rem] shrink-0 snap-start"
+                    />
+                  ) : null;
+                }
+                return (
+                  <RelatedProductCard
+                    key={related.id}
+                    item={related}
+                    className="w-[17.25rem] shrink-0 snap-start"
+                  />
+                );
+              })}
             </div>
           ) : (
             <div className="mt-5 border border-white/10 bg-white/5 p-5 text-sm leading-6 text-zinc-300">No additional products from this brand are available in the current preview menu.</div>

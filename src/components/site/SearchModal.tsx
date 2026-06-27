@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 function SearchIcon() {
@@ -15,6 +15,7 @@ export function SearchModal() {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!isOpen) {
@@ -30,9 +31,18 @@ export function SearchModal() {
     document.body.style.overflow = "hidden";
     window.addEventListener("keydown", onKeyDown);
 
+    // Focus the input WITHOUT letting the browser scroll the fixed panel
+    // up (which on mobile clipped the input behind the status bar/header).
+    // `preventScroll` keeps the panel pinned to the top so the whole input
+    // pill stays visible above the keyboard.
+    const focusTimer = window.setTimeout(() => {
+      inputRef.current?.focus({ preventScroll: true });
+    }, 60);
+
     return () => {
       document.body.style.overflow = "";
       window.removeEventListener("keydown", onKeyDown);
+      window.clearTimeout(focusTimer);
     };
   }, [isOpen]);
 
@@ -56,7 +66,7 @@ export function SearchModal() {
 
       {isOpen ? (
         <div
-          className="fixed inset-x-0 top-0 z-[100] border-b border-white/10 bg-[#111] px-4 pb-6 pt-[max(1.25rem,env(safe-area-inset-top))] text-white shadow-2xl sm:pb-7 sm:pt-6"
+          className="fixed inset-x-0 top-0 z-[100] border-b border-white/10 bg-[#111] px-4 pb-6 pt-[calc(env(safe-area-inset-top)+3.75rem)] text-white shadow-2xl sm:pb-7 sm:pt-6"
           role="dialog"
           aria-modal="true"
           aria-label="Search Greenway products"
@@ -77,7 +87,7 @@ export function SearchModal() {
             </div>
 
             <form
-              className="relative mt-4 block sm:mt-5"
+              className="relative mt-5 block sm:mt-5"
               onSubmit={(event) => {
                 event.preventDefault();
                 submitSearch();
@@ -88,11 +98,11 @@ export function SearchModal() {
                 <SearchIcon />
               </span>
               <input
+                ref={inputRef}
                 id="site-product-search"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search strains, products..."
-                autoFocus
                 className="w-full rounded-full border border-white/10 bg-[#1a1a1a] py-4 pl-11 pr-5 text-base font-semibold text-white outline-none transition placeholder:text-zinc-500 focus:border-[var(--orange)] focus:ring-2 focus:ring-[var(--orange)]/20"
               />
             </form>

@@ -384,8 +384,8 @@ function StoreCard() {
           />
         </div>
 
-        <div className="flex min-w-0 flex-1 items-center px-3 py-2 text-white sm:pl-4 sm:pr-10">
-          <div className="grid gap-1.5 text-[0.66rem] font-extrabold uppercase leading-none tracking-[0.018em] text-white/92 min-[390px]:text-[0.7rem] sm:gap-2 sm:text-[0.8rem] sm:tracking-[0.02em]">
+        <div className="flex min-w-0 flex-1 items-center px-3 py-2 text-white sm:pl-4 sm:pr-7">
+          <div className="grid gap-1.5 text-[0.66rem] font-extrabold uppercase leading-none tracking-[0.018em] text-white/92 min-[390px]:text-[0.7rem] sm:gap-2 sm:text-[0.74rem] sm:tracking-[0.005em]">
             <p className="whitespace-nowrap">{greenwayBusiness.address.full}</p>
             <p className="flex items-center gap-1.5 whitespace-nowrap text-white">
               <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#18a957] shadow-[0_0_0_2px_rgba(24,169,87,0.18)] sm:h-2 sm:w-2" aria-hidden="true" />

@@ -14,7 +14,7 @@ export function ProductCard({ item }: { item: GreenwayMenuItem }) {
   return (
     <ProductCardVisual
       item={item}
-      salePriceMinorUnits={activeDiscount?.salePriceMinorUnits}
+      salePriceMinorUnits={activeDiscount?.cardPreviewSalePriceMinorUnits}
     />
   );
 }
