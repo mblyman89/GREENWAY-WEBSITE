@@ -1,0 +1,278 @@
+[
+  {
+    "posCategory": "Flower",
+    "productsCount": 692,
+    "inventoriesCount": 749,
+    "mappedWebsiteCategory": ""
+  },
+  {
+    "posCategory": "Pre-roll",
+    "productsCount": 531,
+    "inventoriesCount": 626,
+    "mappedWebsiteCategory": ""
+  },
+  {
+    "posCategory": "Infused Pre-roll",
+    "productsCount": 493,
+    "inventoriesCount": 617,
+    "mappedWebsiteCategory": ""
+  },
+  {
+    "posCategory": "Cartridge",
+    "productsCount": 344,
+    "inventoriesCount": 340,
+    "mappedWebsiteCategory": ""
+  },
+  {
+    "posCategory": "Disposable Cartridge",
+    "productsCount": 304,
+    "inventoriesCount": 314,
+    "mappedWebsiteCategory": ""
+  },
+  {
+    "posCategory": "Rosin",
+    "productsCount": 131,
+    "inventoriesCount": 147,
+    "mappedWebsiteCategory": ""
+  },
+  {
+    "posCategory": "Edible",
+    "productsCount": 92,
+    "inventoriesCount": 181,
+    "mappedWebsiteCategory": ""
+  },
+  {
+    "posCategory": "BHO",
+    "productsCount": 84,
+    "inventoriesCount": 82,
+    "mappedWebsiteCategory": ""
+  },
+  {
+    "posCategory": "Gummies",
+    "productsCount": 66,
+    "inventoriesCount": 115,
+    "mappedWebsiteCategory": ""
+  },
+  {
+    "posCategory": "Live Resin",
+    "productsCount": 60,
+    "inventoriesCount": 60,
+    "mappedWebsiteCategory": ""
+  },
+  {
+    "posCategory": "Beverage",
+    "productsCount": 56,
+    "inventoriesCount": 127,
+    "mappedWebsiteCategory": ""
+  },
+  {
+    "posCategory": "Infused Blunt",
+    "productsCount": 48,
+    "inventoriesCount": 44,
+    "mappedWebsiteCategory": ""
+  },
+  {
+    "posCategory": "Chocolate",
+    "productsCount": 40,
+    "inventoriesCount": 64,
+    "mappedWebsiteCategory": ""
+  },
+  {
+    "posCategory": "Badder",
+    "productsCount": 39,
+    "inventoriesCount": 31,
+    "mappedWebsiteCategory": ""
+  },
+  {
+    "posCategory": "Shots",
+    "productsCount": 39,
+    "inventoriesCount": 41,
+    "mappedWebsiteCategory": ""
+  },
+  {
+    "posCategory": "Topical",
+    "productsCount": 34,
+    "inventoriesCount": 45,
+    "mappedWebsiteCategory": ""
+  },
+  {
+    "posCategory": "RSO",
+    "productsCount": 34,
+    "inventoriesCount": 47,
+    "mappedWebsiteCategory": ""
+  },
+  {
+    "posCategory": "Fruit Chews",
+    "productsCount": 28,
+    "inventoriesCount": 51,
+    "mappedWebsiteCategory": ""
+  },
+  {
+    "posCategory": "Hash Rosin",
+    "productsCount": 26,
+    "inventoriesCount": 15,
+    "mappedWebsiteCategory": ""
+  },
+  {
+    "posCategory": "Blunt",
+    "productsCount": 22,
+    "inventoriesCount": 24,
+    "mappedWebsiteCategory": ""
+  },
+  {
+    "posCategory": "Liquid Infused Edible",
+    "productsCount": 20,
+    "inventoriesCount": 21,
+    "mappedWebsiteCategory": ""
+  },
+  {
+    "posCategory": "Tincture",
+    "productsCount": 18,
+    "inventoriesCount": 32,
+    "mappedWebsiteCategory": ""
+  },
+  {
+    "posCategory": "Mints",
+    "productsCount": 16,
+    "inventoriesCount": 17,
+    "mappedWebsiteCategory": ""
+  },
+  {
+    "posCategory": "Moon Rocks",
+    "productsCount": 14,
+    "inventoriesCount": 15,
+    "mappedWebsiteCategory": ""
+  },
+  {
+    "posCategory": "Hash",
+    "productsCount": 10,
+    "inventoriesCount": 8,
+    "mappedWebsiteCategory": ""
+  },
+  {
+    "posCategory": "Bubble Hash",
+    "productsCount": 8,
+    "inventoriesCount": 5,
+    "mappedWebsiteCategory": ""
+  },
+  {
+    "posCategory": "THCa",
+    "productsCount": 7,
+    "inventoriesCount": 5,
+    "mappedWebsiteCategory": ""
+  },
+  {
+    "posCategory": "Mix Infused Flower",
+    "productsCount": 7,
+    "inventoriesCount": 4,
+    "mappedWebsiteCategory": ""
+  },
+  {
+    "posCategory": "Chewees",
+    "productsCount": 7,
+    "inventoriesCount": 16,
+    "mappedWebsiteCategory": ""
+  },
+  {
+    "posCategory": "Shatter",
+    "productsCount": 6,
+    "inventoriesCount": 4,
+    "mappedWebsiteCategory": ""
+  },
+  {
+    "posCategory": "Sugar",
+    "productsCount": 5,
+    "inventoriesCount": 5,
+    "mappedWebsiteCategory": ""
+  },
+  {
+    "posCategory": "Distillate",
+    "productsCount": 5,
+    "inventoriesCount": 10,
+    "mappedWebsiteCategory": ""
+  },
+  {
+    "posCategory": "Soda",
+    "productsCount": 4,
+    "inventoriesCount": 4,
+    "mappedWebsiteCategory": ""
+  },
+  {
+    "posCategory": "Capsule",
+    "productsCount": 3,
+    "inventoriesCount": 7,
+    "mappedWebsiteCategory": ""
+  },
+  {
+    "posCategory": "Crumble",
+    "productsCount": 3,
+    "inventoriesCount": 2,
+    "mappedWebsiteCategory": ""
+  },
+  {
+    "posCategory": "Balls",
+    "productsCount": 2,
+    "inventoriesCount": 5,
+    "mappedWebsiteCategory": ""
+  },
+  {
+    "posCategory": "Terp Crystals",
+    "productsCount": 2,
+    "inventoriesCount": 3,
+    "mappedWebsiteCategory": ""
+  },
+  {
+    "posCategory": "Loud Resin",
+    "productsCount": 2,
+    "inventoriesCount": 1,
+    "mappedWebsiteCategory": ""
+  },
+  {
+    "posCategory": "Live Resin Cartridge",
+    "productsCount": 2,
+    "inventoriesCount": 4,
+    "mappedWebsiteCategory": ""
+  },
+  {
+    "posCategory": "Minis",
+    "productsCount": 1,
+    "inventoriesCount": 3,
+    "mappedWebsiteCategory": ""
+  },
+  {
+    "posCategory": "Terp Sauce",
+    "productsCount": 1,
+    "inventoriesCount": 1,
+    "mappedWebsiteCategory": ""
+  },
+  {
+    "posCategory": "Diamonds",
+    "productsCount": 1,
+    "inventoriesCount": 2,
+    "mappedWebsiteCategory": ""
+  },
+  {
+    "posCategory": "Bath Salts",
+    "productsCount": 1,
+    "inventoriesCount": 3,
+    "mappedWebsiteCategory": ""
+  },
+  {
+    "posCategory": "Other Liquid Edible",
+    "productsCount": 1,
+    "inventoriesCount": 3,
+    "mappedWebsiteCategory": ""
+  },
+  {
+    "posCategory": "Pod",
+    "productsCount": 1,
+    "inventoriesCount": 1,
+    "mappedWebsiteCategory": ""
+  },
+  {
+    "posCategory": "Panda Candies",
+    "productsCount": 1,
+    "inventoriesCount": 1,
+    "mappedWebsiteCategory": ""
+  }
+]

@@ -1,0 +1,494 @@
+[
+  {
+    "slug": "kelso-kandy-kk-cart-1g-lime-sorbet-1g",
+    "name": "Kelso Kandy - KK CART 1g - Lime Sorbet - 1g",
+    "category": "Cartridge",
+    "strain": "Lime Sorbet"
+  },
+  {
+    "slug": "loconut-lo-topical-1-000mg-thc-indica-20mg",
+    "name": "Loconut - LO TOPICAL (1,000mg THC) - Indica - 20mg",
+    "category": "Topical",
+    "strain": "Indica"
+  },
+  {
+    "slug": "tasty-terps-tt-bho-1g-strawberry-kiwi-dum-dum-1g",
+    "name": "Tasty Terps - TT BHO 1g - Strawberry Kiwi Dum Dum - 1g",
+    "category": "BHO",
+    "strain": "Strawberry Kiwi Dum Dum"
+  },
+  {
+    "slug": "kelso-kandy-kk-terp-inf-pr-8g-single-blue-hawaiian-8g",
+    "name": "Kelso Kandy - KK TERP+INF PR .8g (Single) - Blue Hawaiian - .8g",
+    "category": "Infused Pre-roll",
+    "strain": "Blue Hawaiian"
+  },
+  {
+    "slug": "loconut-lo-topical-500mg-thc-indica-10mg",
+    "name": "Loconut - LO TOPICAL (500mg THC) - Indica - 10mg",
+    "category": "Topical",
+    "strain": "Indica"
+  },
+  {
+    "slug": "jelly-gems-jg-jelly-gems-600mg-total-indica-sootheberry-chill",
+    "name": "Jelly Gems - JG Jelly Gems 600mg Total - INDICA - Sootheberry (CHILL)",
+    "category": "Edible",
+    "strain": "Sootheberry"
+  },
+  {
+    "slug": "tasty-terps-tt-diamond-badder-1g-maui-mango-1g",
+    "name": "Tasty Terps - TT Diamond Badder 1g - Maui Mango - 1g",
+    "category": "BHO",
+    "strain": "Maui Mango"
+  },
+  {
+    "slug": "incredibulk-ib-pho-1g-strawberry-kush-1g",
+    "name": "Incredibulk - IB PHO 1g - Strawberry Kush - 1g",
+    "category": "BHO",
+    "strain": "Strawberry Kush"
+  },
+  {
+    "slug": "incredibulk-ib-pho-1g-sativa-ghost-train-haze-1g",
+    "name": "Incredibulk - IB PHO 1g - SATIVA - Ghost Train Haze - 1g",
+    "category": "BHO",
+    "strain": "Ghost Train Haze"
+  },
+  {
+    "slug": "tasty-terps-tc-cart-1g-blueberry-yum-yum-1g",
+    "name": "Tasty Terps - TC CART 1g - Blueberry Yum Yum - 1g",
+    "category": "Cartridge",
+    "strain": "Blueberry Yum Yum"
+  },
+  {
+    "slug": "kelso-kandy-kk-cart-1g-blood-orange-1g",
+    "name": "Kelso Kandy - KK CART 1g - Blood Orange - 1g",
+    "category": "Cartridge",
+    "strain": "Blood Orange"
+  },
+  {
+    "slug": "gummy-bombs-gb-huckleberry-lemonade-100mg-huckleberry-100mg",
+    "name": "Gummy Bombs - GB HUCKLEBERRY LEMONADE 100mg - Huckleberry - 100mg",
+    "category": "Edible",
+    "strain": "Huckleberry"
+  },
+  {
+    "slug": "terpnado-tn-bar-1g-yeti-fruit-og-1g",
+    "name": "Terpnado - TN BAR 1g - Yeti Fruit OG - 1g",
+    "category": "Disposable Cartridge",
+    "strain": "Yeti Fruit OG"
+  },
+  {
+    "slug": "tasty-terps-tc-ice-cart-1g-strawberry-ice-1g",
+    "name": "Tasty Terps - TC ICE CART 1g - Strawberry Ice - 1g",
+    "category": "Cartridge",
+    "strain": "Strawberry Ice"
+  },
+  {
+    "slug": "tasty-terps-tt-bho-1g-strawberry-cheesecake-1g",
+    "name": "Tasty Terps - TT BHO 1g - Strawberry Cheesecake - 1g",
+    "category": "BHO",
+    "strain": "Strawberry Cheesecake"
+  },
+  {
+    "slug": "incredibulk-ib-pho-1g-northern-lights-1g",
+    "name": "Incredibulk - IB PHO 1g - Northern Lights - 1g",
+    "category": "BHO",
+    "strain": "Northern Lights"
+  },
+  {
+    "slug": "tasty-terps-tt-bho-1g-rocket-pop-1g",
+    "name": "Tasty Terps - TT BHO 1g - Rocket Pop - 1g",
+    "category": "BHO",
+    "strain": "Rocket Pop"
+  },
+  {
+    "slug": "jelly-gems-jg-jelly-gems-300mg-total-hybrid-blissberry-happy",
+    "name": "Jelly Gems - JG Jelly Gems 300mg Total - HYBRID - Blissberry (HAPPY)",
+    "category": "Edible",
+    "strain": "Blissberry"
+  },
+  {
+    "slug": "loconut-lo-topical-1-000mg-thc-hybrid-20mg",
+    "name": "Loconut - LO TOPICAL (1,000mg THC) - Hybrid - 20mg",
+    "category": "Topical",
+    "strain": "Hybrid"
+  },
+  {
+    "slug": "loconut-lo-topical-1-000mg-thc-indica-20mg",
+    "name": "Loconut - LO TOPICAL (1,000mg THC) - Indica - 20mg",
+    "category": "Topical",
+    "strain": "Indica"
+  },
+  {
+    "slug": "loconut-lo-topical-1-000mg-thc-sativa-20mg",
+    "name": "Loconut - LO TOPICAL (1,000mg THC) - Sativa - 20mg",
+    "category": "Topical",
+    "strain": "Sativa"
+  },
+  {
+    "slug": "loconut-lo-topical-500mg-thc-hybrid-10mg",
+    "name": "Loconut - LO TOPICAL (500mg THC) - Hybrid - 10mg",
+    "category": "Topical",
+    "strain": "Hybrid"
+  },
+  {
+    "slug": "loconut-lo-topical-500mg-thc-indica-10mg",
+    "name": "Loconut - LO TOPICAL (500mg THC) - Indica - 10mg",
+    "category": "Topical",
+    "strain": "Indica"
+  },
+  {
+    "slug": "loconut-lo-topical-500mg-thc-sativa-10mg",
+    "name": "Loconut - LO TOPICAL (500mg THC) - Sativa - 10mg",
+    "category": "Topical",
+    "strain": "Sativa"
+  },
+  {
+    "slug": "tasty-terps-tt-bho-1g-blueberry-yum-yum-1g",
+    "name": "Tasty Terps - TT BHO 1g - Blueberry Yum Yum - 1g",
+    "category": "BHO",
+    "strain": "Blueberry Yum Yum"
+  },
+  {
+    "slug": "tasty-terps-tt-bho-1g-strawberry-kiwi-dum-dum-1g",
+    "name": "Tasty Terps - TT BHO 1g - Strawberry Kiwi Dum Dum - 1g",
+    "category": "BHO",
+    "strain": "Strawberry Kiwi Dum Dum"
+  },
+  {
+    "slug": "gummy-bombs-gb-dragon-berry-100mg-dragon-berry-100mg",
+    "name": "Gummy Bombs - GB DRAGON BERRY 100mg - Dragon Berry - 100mg",
+    "category": "Edible",
+    "strain": "Dragon Berry"
+  },
+  {
+    "slug": "gummy-bombs-gb-huckleberry-lemonade-100mg-huckleberry-100mg",
+    "name": "Gummy Bombs - GB HUCKLEBERRY LEMONADE 100mg - Huckleberry - 100mg",
+    "category": "Edible",
+    "strain": "Huckleberry"
+  },
+  {
+    "slug": "gummy-bombs-gb-mountain-peach-100mg-mountain-peach-100mg",
+    "name": "Gummy Bombs - GB MOUNTAIN PEACH 100mg - Mountain Peach - 100mg",
+    "category": "Edible",
+    "strain": "Mountain Peach"
+  },
+  {
+    "slug": "incredibulk-ib-cart-1g-amnesia-haze-1g",
+    "name": "Incredibulk - IB CART 1g - Amnesia Haze - 1g",
+    "category": "Cartridge",
+    "strain": "Amnesia Haze"
+  },
+  {
+    "slug": "incredibulk-ib-cart-1g-sour-blueberry-1g",
+    "name": "Incredibulk - IB CART 1g - Sour Blueberry - 1g",
+    "category": "Cartridge",
+    "strain": "Sour Blueberry"
+  },
+  {
+    "slug": "kelso-kandy-kk-cart-1g-lime-sorbet-1g",
+    "name": "Kelso Kandy - KK CART 1g - Lime Sorbet - 1g",
+    "category": "Cartridge",
+    "strain": "Lime Sorbet"
+  },
+  {
+    "slug": "tasty-terps-tc-cart-1g-caprizun-1g",
+    "name": "Tasty Terps - TC CART 1g - Caprizun - 1g",
+    "category": "Cartridge",
+    "strain": "Caprizun"
+  },
+  {
+    "slug": "tasty-terps-tc-ice-cart-1g-strawberry-ice-1g",
+    "name": "Tasty Terps - TC ICE CART 1g - Strawberry Ice - 1g",
+    "category": "Cartridge",
+    "strain": "Strawberry Ice"
+  },
+  {
+    "slug": "tasty-terps-tt-bho-1g-caprizun-1g",
+    "name": "Tasty Terps - TT BHO 1g - Caprizun - 1g",
+    "category": "BHO",
+    "strain": "Caprizun"
+  },
+  {
+    "slug": "tasty-terps-tt-bho-1g-red-zkittlez-1g",
+    "name": "Tasty Terps - TT BHO 1g - Red Zkittlez - 1g",
+    "category": "BHO",
+    "strain": "Red Zkittlez"
+  },
+  {
+    "slug": "tasty-terps-tt-bho-1g-rocket-pop-1g",
+    "name": "Tasty Terps - TT BHO 1g - Rocket Pop - 1g",
+    "category": "BHO",
+    "strain": "Rocket Pop"
+  },
+  {
+    "slug": "gummy-bombs-gb-luau-punch-100mg-luau-punch-100mg",
+    "name": "Gummy Bombs - GB LUAU PUNCH 100mg - Luau Punch - 100mg",
+    "category": "Edible",
+    "strain": "Luau Punch"
+  },
+  {
+    "slug": "gummy-bombs-gb-pink-razz-100mg",
+    "name": "Gummy Bombs - GB PINK RAZZ 100mg",
+    "category": "Edible",
+    "strain": "Pink Razz"
+  },
+  {
+    "slug": "kelso-kandy-kk-cart-1g-blood-orange-1g",
+    "name": "Kelso Kandy - KK CART 1g - Blood Orange - 1g",
+    "category": "Cartridge",
+    "strain": "Blood Orange"
+  },
+  {
+    "slug": "kelso-kandy-kk-cart-1g-grape-slushie-1g",
+    "name": "Kelso Kandy - KK CART 1g - Grape Slushie - 1g",
+    "category": "Cartridge",
+    "strain": "Grape Slushie"
+  },
+  {
+    "slug": "tasty-terps-tc-cart-1g-laffy-taffy-1g",
+    "name": "Tasty Terps - TC CART 1g - Laffy Taffy - 1g",
+    "category": "Cartridge",
+    "strain": "Laffy Taffy"
+  },
+  {
+    "slug": "terpnado-tn-bar-1g-blueberry-express-1g",
+    "name": "Terpnado - TN BAR 1g - Blueberry Express - 1g",
+    "category": "Disposable Cartridge",
+    "strain": "Blueberry Express"
+  },
+  {
+    "slug": "tasty-terps-tt-bho-1g-laffy-taffy-1g",
+    "name": "Tasty Terps - TT BHO 1g - Laffy Taffy - 1g",
+    "category": "BHO",
+    "strain": "Laffy Taffy"
+  },
+  {
+    "slug": "eagle-ea-pr-5g-10pk-i-indica-fucking-incredible-5g",
+    "name": "Eagle - EA PR 5g (10pk) (I) - INDICA - Fucking Incredible - 5g",
+    "category": "Pre-roll",
+    "strain": "Fucking Incredible"
+  },
+  {
+    "slug": "eagle-ea-pr-5g-10pk-i-indica-grape-runtz-5g",
+    "name": "Eagle - EA PR 5g (10pk) (I) - INDICA - Grape Runtz - 5g",
+    "category": "Pre-roll",
+    "strain": "Grape Runtz"
+  },
+  {
+    "slug": "eagle-ea-pr-5g-10pk-i-indica-wedding-cake-5g",
+    "name": "Eagle - EA PR 5g (10pk) (I) - INDICA - Wedding Cake - 5g",
+    "category": "Pre-roll",
+    "strain": "Wedding Cake"
+  },
+  {
+    "slug": "incredibulk-ib-bho-1g-panama-red-1g",
+    "name": "Incredibulk - IB BHO 1g - Panama Red - 1g",
+    "category": "BHO",
+    "strain": "Panama Red"
+  },
+  {
+    "slug": "incredibulk-ib-bho-1g-amnesia-haze-1g",
+    "name": "Incredibulk - IB BHO 1g - Amnesia Haze - 1g",
+    "category": "BHO",
+    "strain": "Amnesia Haze"
+  },
+  {
+    "slug": "o-geez-og-cart-1g-pineapple-express-1g",
+    "name": "O' Geez - OG CART 1g - Pineapple Express - 1g",
+    "category": "Cartridge",
+    "strain": "Pineapple Express"
+  },
+  {
+    "slug": "tasty-terps-tc-cart-1g-blueberry-yum-yum-1g",
+    "name": "Tasty Terps - TC CART 1g - Blueberry Yum Yum - 1g",
+    "category": "Cartridge",
+    "strain": "Blueberry Yum Yum"
+  },
+  {
+    "slug": "tasty-terps-tc-cart-1g-kiwi-hi-chewz-1g",
+    "name": "Tasty Terps - TC CART 1g - Kiwi Hi-Chewz - 1g",
+    "category": "Cartridge",
+    "strain": "Kiwi Hi-Chewz"
+  },
+  {
+    "slug": "tasty-terps-tc-cart-1g-rocket-pop-1g",
+    "name": "Tasty Terps - TC CART 1g - Rocket Pop - 1g",
+    "category": "Cartridge",
+    "strain": "Rocket Pop"
+  },
+  {
+    "slug": "terpnado-tn-bar-1g-golden-peach-1g",
+    "name": "Terpnado - TN BAR 1g - Golden Peach - 1g",
+    "category": "Disposable Cartridge",
+    "strain": "Golden Peach"
+  },
+  {
+    "slug": "terpnado-tn-bar-1g-tropical-tripper-1g",
+    "name": "Terpnado - TN BAR 1g - Tropical Tripper - 1g",
+    "category": "Disposable Cartridge",
+    "strain": "Tropical Tripper"
+  },
+  {
+    "slug": "terpnado-tn-bar-1g-yeti-fruit-og-1g",
+    "name": "Terpnado - TN BAR 1g - Yeti Fruit OG - 1g",
+    "category": "Disposable Cartridge",
+    "strain": "Yeti Fruit OG"
+  },
+  {
+    "slug": "tasty-terps-tt-bho-1g-cranberry-pomegranate-1g",
+    "name": "Tasty Terps - TT BHO 1g - Cranberry Pomegranate - 1g",
+    "category": "BHO",
+    "strain": "Cranberry Pomegranate"
+  },
+  {
+    "slug": "tasty-terps-tt-bho-1g-gummy-bears-1g",
+    "name": "Tasty Terps - TT BHO 1g - Gummy Bears - 1g",
+    "category": "BHO",
+    "strain": "Gummy Bears"
+  },
+  {
+    "slug": "tasty-terps-tt-bho-1g-strawberry-cheesecake-1g",
+    "name": "Tasty Terps - TT BHO 1g - Strawberry Cheesecake - 1g",
+    "category": "BHO",
+    "strain": "Strawberry Cheesecake"
+  },
+  {
+    "slug": "gummy-bombs-gb-strawberry-guava-100mg-strawberry-guava",
+    "name": "Gummy Bombs - GB STRAWBERRY GUAVA 100mg - Strawberry Guava",
+    "category": "Edible",
+    "strain": "Strawberry Guava"
+  },
+  {
+    "slug": "jelly-gems-jg-jelly-gems-200mg-total-sativa-tangelo-flow",
+    "name": "Jelly Gems - JG Jelly Gems 200mg Total - SATIVA - Tangelo (FLOW)",
+    "category": "Edible",
+    "strain": "Tangelo"
+  },
+  {
+    "slug": "jelly-gems-jg-jelly-gems-300mg-total-hybrid-blissberry-happy",
+    "name": "Jelly Gems - JG Jelly Gems 300mg Total - HYBRID - Blissberry (HAPPY)",
+    "category": "Edible",
+    "strain": "Blissberry"
+  },
+  {
+    "slug": "jelly-gems-jg-jelly-gems-300mg-total-sativa-pomegranate-punch-party",
+    "name": "Jelly Gems - JG Jelly Gems 300mg Total - SATIVA - Pomegranate Punch (PARTY)",
+    "category": "Edible",
+    "strain": "Pomegranate Punch"
+  },
+  {
+    "slug": "jelly-gems-jg-jelly-gems-300mg-total-indica-peaches-dreams-night",
+    "name": "Jelly Gems - JG Jelly Gems 300mg Total - INDICA - Peaches & Dreams (NIGHT)",
+    "category": "Edible",
+    "strain": "Peaches & Dreams"
+  },
+  {
+    "slug": "jelly-gems-jg-jelly-gems-300mg-total-indica-key-lime-unwind-night",
+    "name": "Jelly Gems - JG Jelly Gems 300mg Total - INDICA - Key Lime Unwind (NIGHT)",
+    "category": "Edible",
+    "strain": "Key Lime"
+  },
+  {
+    "slug": "jelly-gems-jg-jelly-gems-300mg-total-sativa-chuckleberry-happy",
+    "name": "Jelly Gems - JG Jelly Gems 300mg Total - SATIVA - Chuckleberry (HAPPY)",
+    "category": "Edible",
+    "strain": "Chuckleberry"
+  },
+  {
+    "slug": "jelly-gems-jg-jelly-gems-400mg-total-hybrid-tropical-trip-chill",
+    "name": "Jelly Gems - JG Jelly Gems 400mg Total - HYBRID - Tropical Trip (CHILL)",
+    "category": "Edible",
+    "strain": "Tropical Trip"
+  },
+  {
+    "slug": "jelly-gems-jg-jelly-gems-400mg-total-indica-slumberberry-night",
+    "name": "Jelly Gems - JG Jelly Gems 400mg Total - INDICA - Slumberberry (NIGHT)",
+    "category": "Edible",
+    "strain": "Slumberberry"
+  },
+  {
+    "slug": "jelly-gems-jg-jelly-gems-600mg-total-indica-sootheberry-chill",
+    "name": "Jelly Gems - JG Jelly Gems 600mg Total - INDICA - Sootheberry (CHILL)",
+    "category": "Edible",
+    "strain": "Sootheberry"
+  },
+  {
+    "slug": "incredibulk-ib-pho-1g-cheese-quake-1g",
+    "name": "Incredibulk - IB PHO 1g - Cheese Quake - 1g",
+    "category": "BHO",
+    "strain": "Cheese Quake"
+  },
+  {
+    "slug": "incredibulk-ib-pho-1g-ewok-1g",
+    "name": "Incredibulk - IB PHO 1g - Ewok - 1g",
+    "category": "BHO",
+    "strain": "Ewok"
+  },
+  {
+    "slug": "incredibulk-ib-pho-1g-strawberry-kush-1g",
+    "name": "Incredibulk - IB PHO 1g - Strawberry Kush - 1g",
+    "category": "BHO",
+    "strain": "Strawberry Kush"
+  },
+  {
+    "slug": "kelso-kandy-kk-terp-inf-pr-8g-single-berry-gelato-8g",
+    "name": "Kelso Kandy - KK TERP+INF PR .8g (Single) - Berry Gelato - .8g",
+    "category": "Infused Pre-roll",
+    "strain": "Berry Gelato"
+  },
+  {
+    "slug": "kelso-kandy-kk-terp-inf-pr-8g-single-blood-orange-8g",
+    "name": "Kelso Kandy - KK TERP+INF PR .8g (Single) - Blood Orange - .8g",
+    "category": "Infused Pre-roll",
+    "strain": "Blood Orange"
+  },
+  {
+    "slug": "kelso-kandy-kk-terp-inf-pr-8g-single-blue-hawaiian-8g",
+    "name": "Kelso Kandy - KK TERP+INF PR .8g (Single) - Blue Hawaiian - .8g",
+    "category": "Infused Pre-roll",
+    "strain": "Blue Hawaiian"
+  },
+  {
+    "slug": "kelso-kandy-kk-terp-inf-pr-8g-single-blue-razzberry-8g",
+    "name": "Kelso Kandy - KK TERP+INF PR .8g (Single) - Blue Razzberry - .8g",
+    "category": "Infused Pre-roll",
+    "strain": "Blue Razz"
+  },
+  {
+    "slug": "kelso-kandy-kk-terp-inf-pr-8g-single-lime-sorbet-8g",
+    "name": "Kelso Kandy - KK TERP+INF PR .8g (Single) - Lime Sorbet - .8g",
+    "category": "Infused Pre-roll",
+    "strain": "Lime Sorbet"
+  },
+  {
+    "slug": "incredibulk-ib-pho-1g-dolato-1g",
+    "name": "Incredibulk - IB PHO 1g - Dolato - 1g",
+    "category": "BHO",
+    "strain": "Dolato"
+  },
+  {
+    "slug": "incredibulk-ib-pho-1g-sativa-ghost-train-haze-1g",
+    "name": "Incredibulk - IB PHO 1g - SATIVA - Ghost Train Haze - 1g",
+    "category": "BHO",
+    "strain": "Ghost Train Haze"
+  },
+  {
+    "slug": "incredibulk-ib-pho-1g-northern-lights-1g",
+    "name": "Incredibulk - IB PHO 1g - Northern Lights - 1g",
+    "category": "BHO",
+    "strain": "Northern Lights"
+  },
+  {
+    "slug": "incredibulk-ib-pho-1g-og-cookies-1g",
+    "name": "Incredibulk - IB PHO 1g - OG Cookies - 1g",
+    "category": "BHO",
+    "strain": "OG Cookies"
+  },
+  {
+    "slug": "tasty-terps-tt-diamond-badder-1g-maui-mango-1g",
+    "name": "Tasty Terps - TT Diamond Badder 1g - Maui Mango - 1g",
+    "category": "BHO",
+    "strain": "Maui Mango"
+  }
+]

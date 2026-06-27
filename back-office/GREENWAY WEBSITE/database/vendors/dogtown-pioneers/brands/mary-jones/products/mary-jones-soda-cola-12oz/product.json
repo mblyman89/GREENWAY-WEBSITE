@@ -1,0 +1,13 @@
+{
+  "productName": "Mary Jones Soda - Cola- 12oz",
+  "inventoryType": "Liquid Edible",
+  "category": "Liquid Infused Edible",
+  "strainType": "Indica",
+  "strain": "Cola",
+  "packageSize": 12.0,
+  "uom": "FluidOunce",
+  "price": 21.0,
+  "cannabis": true,
+  "description": "A refreshing chef-inspired infused beverage with bright caf\u00e9-style flavor, smooth sweetness, and an easy-drinking cannabis finish. A refreshing indica option for customers who prefer their cannabis in a drinkable format.",
+  "imageFile": ""
+}

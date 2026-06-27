@@ -2,15 +2,6 @@
 
 > **Purpose:** A complete, self-contained execution roadmap for building the Greenway Marijuana back office. Any agent or developer can pick this up mid-stream. Tasks are grouped by phase and chunk. Mark `[x]` when complete with concrete evidence. **Never delete tasks — only check them off.**
 
-## ⛳ STANDING PROCESS RULES (apply automatically every session — do not wait to be told)
-1. **At the start of every work session/chat, re-read this file, `todo.md`, and `DATABASE_SCHEMA.md`** to re-establish exactly where the build is and what's next.
-2. **Continuously consult these checklists while working** — pick the next unchecked task in the current slice, do it, then check it off with evidence.
-3. **Mark `[x]` only with concrete proof** (file created, migration applied, screenshot, passing build). Never delete tasks.
-4. **Confirmed decisions (locked):** Backend stack = **Supabase** (Postgres + Auth + Storage + RLS). Orders = email alerts + dashboard + printable tickets. Build all 5 roles.
-5. **Work in slices**, open a PR per slice, and pause for owner inspection between slices.
-6. **Always honor the cross-cutting requirements** (audit log, noindex admin, perf, POS-truth separation, compliance, mobile-first, brand identity).
-7. Keep this file and `todo.md` in sync after every meaningful step.
-
 ## Project context (read first)
 - **Repo:** `mblyman89/GREENWAY-WEBSITE`, branch `main`.
 - **Stack:** Next.js 16 (App Router) · React 19 · TypeScript · Tailwind CSS v4 · Vercel.
@@ -18,7 +9,7 @@
 - **Data source of truth:** Cultivera POS exports `PRODUCTS.xlsx` (3,311 rows, master metadata) + `INVENTORIES.xlsx` (3,917 rows, live price/stock/THC). POS = truth for price/inventory; enrichment layered on top.
 - **Transformer:** `scripts/pos/transform_pos_data.ts` (active) → writes `src/data/pos-menu-preview.json`, `pos-menu-sample-preview.json`, `src/data/vendors.json`. Build runs `npm run transform:pos && next build`.
 - **Existing partial backend:** loyalty signup API (`src/app/api/loyalty-signup/route.ts`) appends JSONL; unprotected admin preview page at `src/app/admin/loyalty-signups`. Orders are client-side only (sessionStorage). No DB/auth yet.
-- **Backend stack (LOCKED):** **Supabase** — Postgres + Auth + Storage + Row-Level Security. Admin UI stays inside the existing Next.js app under `/admin`.
+- **Decision pending from owner:** backend stack. Recommended default: **Supabase** (Postgres + Auth + Storage + RLS). Alternative: Neon + Auth.js + R2/Vercel Blob.
 
 ---
 
@@ -56,18 +47,18 @@ Each "slice" is independently shippable so the owner can inspect before continui
 ---
 
 ## SLICE 1 — Admin foundation (Phase 1)
-- [x] Confirm + install backend stack (Supabase client, or Neon+Drizzle/Prisma + Auth.js).
-- [x] Add `.env` keys (DB URL, auth secrets, storage keys) to `.env.example`.
-- [x] Create DB schema/migrations: `users`, `roles`, `audit_logs`, `media_assets`, `media_usages`, `site_settings`.
-- [x] Implement auth + protected `/admin` route group (middleware; admin routes `noindex`).
-- [x] Build admin layout shell matching Greenway branding (dark + green/gold/orange, script logo header).
-- [x] Sidebar nav with placeholders: Dashboard, Menu Imports, Orders, Promotions, Media, Vendors & Brands, Products, Content, Blog, Loyalty, Reports, Users, Settings.
-- [x] Roles & permission matrix: Owner/Admin, Manager, Content Editor, Budtender/Staff, Read-only.
-- [x] Audit-log middleware/util: record actor, action, entity, before/after, timestamp.
-- [x] Dashboard skeleton with command-center cards (placeholder data wired to real later).
-- [x] User management screen (invite, set role, deactivate).
-- [x] Migrate `admin/loyalty-signups` behind auth (stop unprotected exposure).
-- [x] **Deliverable PR + owner inspect.**
+- [ ] Confirm + install backend stack (Supabase client, or Neon+Drizzle/Prisma + Auth.js).
+- [ ] Add `.env` keys (DB URL, auth secrets, storage keys) to `.env.example`.
+- [ ] Create DB schema/migrations: `users`, `roles`, `audit_logs`, `media_assets`, `media_usages`, `site_settings`.
+- [ ] Implement auth + protected `/admin` route group (middleware; admin routes `noindex`).
+- [ ] Build admin layout shell matching Greenway branding (dark + green/gold/orange, script logo header).
+- [ ] Sidebar nav with placeholders: Dashboard, Menu Imports, Orders, Promotions, Media, Vendors & Brands, Products, Content, Blog, Loyalty, Reports, Users, Settings.
+- [ ] Roles & permission matrix: Owner/Admin, Manager, Content Editor, Budtender/Staff, Read-only.
+- [ ] Audit-log middleware/util: record actor, action, entity, before/after, timestamp.
+- [ ] Dashboard skeleton with command-center cards (placeholder data wired to real later).
+- [ ] User management screen (invite, set role, deactivate).
+- [ ] Migrate `admin/loyalty-signups` behind auth (stop unprotected exposure).
+- [ ] **Deliverable PR + owner inspect.**
 
 ## SLICE 2 — POS upload / import / staged publish (Phase 2)
 - [ ] Refactor `transform_pos_data.ts` into reusable library functions (`src/lib/pos/transform.ts`) callable from CLI **and** server.
@@ -142,20 +133,20 @@ Each "slice" is independently shippable so the owner can inspect before continui
 - [ ] **Deliverable PR + owner inspect.**
 
 ## SLICE 10 — Future automation (Phase 7)
-- [x] Scheduled/auto POS fetch (if Cultivera API available) → staged import queue.
-- [x] AI-assisted product description drafts (staff review/approve).
-- [x] Vendor profile enrichment suggestions; image normalization/cropping; advanced analytics.
+- [ ] Scheduled/auto POS fetch (if Cultivera API available) → staged import queue.
+- [ ] AI-assisted product description drafts (staff review/approve).
+- [ ] Vendor profile enrichment suggestions; image normalization/cropping; advanced analytics.
 
 ---
 
 ## Cross-cutting requirements (apply to every slice)
-- [x] Every write action → audit log entry.
-- [x] All `/admin` routes `noindex` + role-gated.
-- [x] Preserve front-end performance: published snapshots + caching + revalidation, not all-dynamic.
-- [x] Keep POS truth (price/stock) separate from marketing enrichment.
-- [x] Compliance: age gate stays, compliance warnings preserved, no-payment language, disclaimers on promos, private order/loyalty data protected, data retention policy.
-- [x] Accessibility + mobile-responsive admin (staff use phones/tablets at the counter).
-- [x] Match Greenway visual identity in all admin UI.
+- [ ] Every write action → audit log entry.
+- [ ] All `/admin` routes `noindex` + role-gated.
+- [ ] Preserve front-end performance: published snapshots + caching + revalidation, not all-dynamic.
+- [ ] Keep POS truth (price/stock) separate from marketing enrichment.
+- [ ] Compliance: age gate stays, compliance warnings preserved, no-payment language, disclaimers on promos, private order/loyalty data protected, data retention policy.
+- [ ] Accessibility + mobile-responsive admin (staff use phones/tablets at the counter).
+- [ ] Match Greenway visual identity in all admin UI.
 
 ## Definition of done (per slice)
 1. Schema/migrations applied. 2. Feature works end-to-end with real data. 3. Audit + permissions enforced. 4. Front end (if affected) still builds + looks correct. 5. Owner inspected + signed off.

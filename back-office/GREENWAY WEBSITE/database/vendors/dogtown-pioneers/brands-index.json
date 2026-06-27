@@ -1,0 +1,37 @@
+[
+  {
+    "slug": "lil-rays",
+    "name": "Lil Rays",
+    "productCount": 5
+  },
+  {
+    "slug": "lil-rays",
+    "name": "Lil' Rays",
+    "productCount": 1
+  },
+  {
+    "slug": "mary-jones",
+    "name": "Mary Jones",
+    "productCount": 5
+  },
+  {
+    "slug": "ray-s",
+    "name": "Ray's",
+    "productCount": 9
+  },
+  {
+    "slug": "ray-s-lemonade",
+    "name": "Ray's Lemonade",
+    "productCount": 2
+  },
+  {
+    "slug": "rays-lemonade",
+    "name": "Rays Lemonade",
+    "productCount": 7
+  },
+  {
+    "slug": "vice",
+    "name": "Vice",
+    "productCount": 8
+  }
+]

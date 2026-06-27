@@ -1,0 +1,26 @@
+[
+  {
+    "slug": "major-shot-gingerade-sugar-free",
+    "name": "Major Shot Gingerade sugar free",
+    "category": "Shots",
+    "strain": "Gingerade"
+  },
+  {
+    "slug": "major-beverage-pink-lemonade-6-7oz",
+    "name": "Major Beverage Pink Lemonade - 6.7oz",
+    "category": "Beverage",
+    "strain": "Pink Lemonade"
+  },
+  {
+    "slug": "major-shot-blackberry-lemonade-2oz",
+    "name": "Major Shot Blackberry Lemonade - 2oz",
+    "category": "Beverage",
+    "strain": "Blackberry Lemonade"
+  },
+  {
+    "slug": "major-shot-2oz-sf-gingerade",
+    "name": "MAJOR Shot - 2oz - SF Gingerade",
+    "category": "Shots",
+    "strain": "Gingerade"
+  }
+]

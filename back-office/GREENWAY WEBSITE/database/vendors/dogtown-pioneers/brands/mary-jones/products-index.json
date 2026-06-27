@@ -1,0 +1,32 @@
+[
+  {
+    "slug": "mary-jones-soda-orange-cream-12oz",
+    "name": "Mary Jones Soda Orange & Cream - 12oz",
+    "category": "Soda",
+    "strain": "Orange & Cream"
+  },
+  {
+    "slug": "mary-jones-beverage-berry-lemonade-soda-12oz",
+    "name": "Mary Jones Beverage Berry Lemonade Soda - 12oz",
+    "category": "Beverage",
+    "strain": "Berry Lemonade Soda"
+  },
+  {
+    "slug": "mary-jones-soda-cola-12oz",
+    "name": "Mary Jones Soda - Cola- 12oz",
+    "category": "Liquid Infused Edible",
+    "strain": "Cola"
+  },
+  {
+    "slug": "mary-jones-12oz-zero-sugar-berry-lemonade-soda",
+    "name": "Mary Jones - 12oz - Zero Sugar Berry Lemonade Soda",
+    "category": "Beverage",
+    "strain": "Berry Lemonade"
+  },
+  {
+    "slug": "mary-jones-12oz-mf-grape-soda-100mg",
+    "name": "Mary Jones - 12oz - MF Grape Soda - 100mg",
+    "category": "Beverage",
+    "strain": "Grape Soda"
+  }
+]

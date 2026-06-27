@@ -1,0 +1,272 @@
+[
+  {
+    "slug": "walbold-pink-lemonade-sugar-wax",
+    "name": "WALBOLD - Pink Lemonade Sugar Wax",
+    "category": "BHO",
+    "strain": "Pink Lemonade"
+  },
+  {
+    "slug": "fl-jar4-3-5g-resbold-super-boof",
+    "name": "FL JAR4 3.5g RESBOLD - Super Boof",
+    "category": "Flower",
+    "strain": "Super Boof"
+  },
+  {
+    "slug": "bwx-box-1g-walfree-mimosa-runtz-sugar-wax",
+    "name": "BWX BOX 1g WALFREE - Mimosa Runtz Sugar Wax",
+    "category": "BHO",
+    "strain": "Mimosa"
+  },
+  {
+    "slug": "dst-cart-1g-walfree-trainwreck-doh",
+    "name": "DST CART 1g WALFREE - Trainwreck DOH",
+    "category": "Cartridge",
+    "strain": "Trainwreck"
+  },
+  {
+    "slug": "walden-infused-flower-super-boof-1g",
+    "name": "Walden infused flower super boof 1g",
+    "category": "Moon Rocks",
+    "strain": "Super Boof"
+  },
+  {
+    "slug": "walden-infused-pre-roll-morning-yoga-1-1-1g",
+    "name": "Walden Infused Pre-roll Morning Yoga 1:1 - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Morning Yoga"
+  },
+  {
+    "slug": "shotski-peach-mango",
+    "name": "SHOTSKI - Peach Mango",
+    "category": "Shots",
+    "strain": "Peach Mango"
+  },
+  {
+    "slug": "hsr-box-1g-resfree-orange-cream-pie",
+    "name": "HSR BOX 1g RESFREE - Orange Cream Pie",
+    "category": "Rosin",
+    "strain": "Orange Cream Pie"
+  },
+  {
+    "slug": "fl-jar4-3-5g-reswild-apple-slapz-doh",
+    "name": "FL JAR4 3.5g RESWILD - Apple Slapz DOH",
+    "category": "Flower",
+    "strain": "Apple Slapz"
+  },
+  {
+    "slug": "dst-cart-1g-walcozy-northern-lights-5-doh",
+    "name": "DST CART 1g WALCOZY - Northern Lights #5 DOH",
+    "category": "Cartridge",
+    "strain": "North Light #5"
+  },
+  {
+    "slug": "walden-sweetheart-six-pack-fan-6-x-5g",
+    "name": "WALDEN - SWEETHEART SIX PACK FAN 6 X .5g",
+    "category": "Pre-roll",
+    "strain": "Mixed"
+  },
+  {
+    "slug": "ryo-jar6-14g-walcalm-key-lime-tart",
+    "name": "RYO JAR6 14g WALCALM - Key Lime Tart",
+    "category": "Flower",
+    "strain": "Key Lime Tart"
+  },
+  {
+    "slug": "lvr-box-1g-reswild-mimosa-live-res",
+    "name": "LVR BOX 1g RESWILD - Mimosa Live Res",
+    "category": "Live Resin",
+    "strain": "Mimosa"
+  },
+  {
+    "slug": "shotski-dragon-fruit",
+    "name": "SHOTSKI - Dragon Fruit",
+    "category": "Shots",
+    "strain": "Dragon Fruit"
+  },
+  {
+    "slug": "shotski-peach-mango",
+    "name": "SHOTSKI - Peach Mango",
+    "category": "Shots",
+    "strain": "Peach Mango"
+  },
+  {
+    "slug": "shotski-strawberry-lemonade",
+    "name": "SHOTSKI - Strawberry Lemonade",
+    "category": "Shots",
+    "strain": "Strawberrry Lemonade"
+  },
+  {
+    "slug": "walbold-pink-lemonade-sugar-wax",
+    "name": "WALBOLD - Pink Lemonade Sugar Wax",
+    "category": "BHO",
+    "strain": "Pink Lemonade"
+  },
+  {
+    "slug": "edb-gmy-100mg-thcv-blue-raspberry-1-1-10pk-doh",
+    "name": "EDB GMY 100mg THCV - Blue Raspberry 1:1 10pk DOH",
+    "category": "Fruit Chews",
+    "strain": "Blue Raspberry"
+  },
+  {
+    "slug": "dst-cart-1g-walbold-dutch-treat-doh",
+    "name": "DST CART 1g WALBOLD - Dutch Treat DOH",
+    "category": "Cartridge",
+    "strain": "Dutch Treat"
+  },
+  {
+    "slug": "dst-cart-1g-walcalm-sunset-sherbet-doh",
+    "name": "DST CART 1g WALCALM - Sunset Sherbet DOH",
+    "category": "Cartridge",
+    "strain": "Sunset Sherbert"
+  },
+  {
+    "slug": "dst-cart-1g-walfree-trainwreck-doh",
+    "name": "DST CART 1g WALFREE - Trainwreck DOH",
+    "category": "Cartridge",
+    "strain": "Trainwreck"
+  },
+  {
+    "slug": "dst-cart-1g-waljust-naked-doh",
+    "name": "DST CART 1g WALJUST - Naked DOH",
+    "category": "Cartridge",
+    "strain": "Naked"
+  },
+  {
+    "slug": "hsr-box-1g-resfree-orange-cream-pie",
+    "name": "HSR BOX 1g RESFREE - Orange Cream Pie",
+    "category": "Rosin",
+    "strain": "Orange Cream Pie"
+  },
+  {
+    "slug": "hsr-box-1g-rescozy-og-kush",
+    "name": "HSR BOX 1g RESCOZY - OG Kush",
+    "category": "Rosin",
+    "strain": "OG Kush"
+  },
+  {
+    "slug": "bwx-box-1g-walbold-pink-lemonade-sugar-wax",
+    "name": "BWX BOX 1g WALBOLD - Pink Lemonade Sugar Wax",
+    "category": "BHO",
+    "strain": "Pink Lemonade"
+  },
+  {
+    "slug": "bwx-box-1g-walfree-mimosa-runtz-sugar-wax",
+    "name": "BWX BOX 1g WALFREE - Mimosa Runtz Sugar Wax",
+    "category": "BHO",
+    "strain": "Mimosa"
+  },
+  {
+    "slug": "iso-box-1g-resfree-thca-isolate-doh",
+    "name": "ISO BOX 1g RESFREE - THCa Isolate DOH",
+    "category": "THCa",
+    "strain": "THCA"
+  },
+  {
+    "slug": "jt-jar6-28-x-5g-sunshine-orange-creamsicle",
+    "name": "JT JAR6 28 x .5g SUNSHINE - Orange Creamsicle",
+    "category": "Pre-roll",
+    "strain": "Orange Creamsicle"
+  },
+  {
+    "slug": "jt-jar6-28-x-5g-sunshine-northern-lights-5",
+    "name": "JT JAR6 28 x .5g SUNSHINE - Northern Lights #5",
+    "category": "Pre-roll",
+    "strain": "North Light #5"
+  },
+  {
+    "slug": "walden-sweetheart-six-pack-fan-6-x-5g",
+    "name": "WALDEN - SWEETHEART SIX PACK FAN 6 X .5g",
+    "category": "Pre-roll",
+    "strain": "Mixed"
+  },
+  {
+    "slug": "fl-jar4-3-5g-resbold-super-boof",
+    "name": "FL JAR4 3.5g RESBOLD - Super Boof",
+    "category": "Flower",
+    "strain": "Super Boof"
+  },
+  {
+    "slug": "fl-jar4-3-5g-reswild-apple-slapz-doh",
+    "name": "FL JAR4 3.5g RESWILD - Apple Slapz DOH",
+    "category": "Flower",
+    "strain": "Apple Slapz"
+  },
+  {
+    "slug": "dst-cart-1g-walwell-hurkle-cbd-3-1-doh",
+    "name": "DST CART 1g WALWELL - Hurkle CBD 3:1 DOH",
+    "category": "Cartridge",
+    "strain": "Hurkle"
+  },
+  {
+    "slug": "dst-cart-1g-walcozy-northern-lights-5-doh",
+    "name": "DST CART 1g WALCOZY - Northern Lights #5 DOH",
+    "category": "Cartridge",
+    "strain": "North Light #5"
+  },
+  {
+    "slug": "dst-cart-1g-walwild-green-crack-doh",
+    "name": "DST CART 1g WALWILD - Green Crack DOH",
+    "category": "Cartridge",
+    "strain": "Green Crack"
+  },
+  {
+    "slug": "ryo-jar6-14g-walbold-jack-47",
+    "name": "RYO JAR6 14g WALBOLD - Jack 47",
+    "category": "Flower",
+    "strain": "Jack 47"
+  },
+  {
+    "slug": "ryo-jar6-14g-walcalm-key-lime-tart",
+    "name": "RYO JAR6 14g WALCALM - Key Lime Tart",
+    "category": "Flower",
+    "strain": "Key Lime Tart"
+  },
+  {
+    "slug": "ryo-jar6-14g-walwild-lemon-jack",
+    "name": "RYO JAR6 14g WALWILD - Lemon Jack",
+    "category": "Flower",
+    "strain": "Lemon Jack"
+  },
+  {
+    "slug": "trm-jar8-28g-walfree-honey-runtz",
+    "name": "TRM JAR8 28g WALFREE - Honey Runtz",
+    "category": "Flower",
+    "strain": "Honey Runtz"
+  },
+  {
+    "slug": "jt-jar6-28-x-5g-walbold-sr-71",
+    "name": "JT JAR6 28 X .5g WALBOLD - SR-71",
+    "category": "Pre-roll",
+    "strain": "SR-71"
+  },
+  {
+    "slug": "jt-jar6-28-x-5g-walcalm-rozay",
+    "name": "JT JAR6 28 x .5g WALCALM - Rozay",
+    "category": "Pre-roll",
+    "strain": "Rozay"
+  },
+  {
+    "slug": "jt-jar6-28-x-5g-walwild-lemon-jack",
+    "name": "JT JAR6 28 x .5g WALWILD - Lemon Jack",
+    "category": "Pre-roll",
+    "strain": "Lemon Jack"
+  },
+  {
+    "slug": "jt-jar6-28-x-5g-hcrest-curacao",
+    "name": "JT JAR6 28 x .5g hCrest - Curacao",
+    "category": "Pre-roll",
+    "strain": "Curacao"
+  },
+  {
+    "slug": "jt-jar6-28-x-5g-icrest-oaksterdam-og",
+    "name": "JT JAR6 28 x .5g iCrest - Oaksterdam OG",
+    "category": "Pre-roll",
+    "strain": "Oaksterdam OG"
+  },
+  {
+    "slug": "jt-jar6-28-x-5g-screst-dutchberry",
+    "name": "JT JAR6 28 x .5g sCrest - Dutchberry",
+    "category": "Pre-roll",
+    "strain": "Dutchberry"
+  }
+]
