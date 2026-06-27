@@ -1,0 +1,42 @@
+[
+  {
+    "slug": "4-20",
+    "name": "4.20",
+    "productCount": 4
+  },
+  {
+    "slug": "4-20-bar",
+    "name": "4.20 Bar",
+    "productCount": 1
+  },
+  {
+    "slug": "4-20-minis",
+    "name": "4.20 Minis",
+    "productCount": 2
+  },
+  {
+    "slug": "420-bar",
+    "name": "420 Bar",
+    "productCount": 2
+  },
+  {
+    "slug": "blaze",
+    "name": "Blaze",
+    "productCount": 6
+  },
+  {
+    "slug": "evergreen-herbal",
+    "name": "Evergreen Herbal",
+    "productCount": 19
+  },
+  {
+    "slug": "major",
+    "name": "Major",
+    "productCount": 4
+  },
+  {
+    "slug": "sinner-saints",
+    "name": "Sinner & Saints",
+    "productCount": 3
+  }
+]

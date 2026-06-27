@@ -1,0 +1,56 @@
+[
+  {
+    "slug": "lil-rays-raspberry-lemonade-2oz",
+    "name": "Lil Rays Raspberry Lemonade - 2oz",
+    "category": "Beverage",
+    "strain": "Lil Rays Raspberry Lemonade"
+  },
+  {
+    "slug": "ray-s-beverage-lil-rays-mango-lemonade-1-75oz",
+    "name": "Ray's Beverage Lil Rays Mango Lemonade - 1.75oz",
+    "category": "Beverage",
+    "strain": "Lil Rays Mango Lemonade"
+  },
+  {
+    "slug": "vice-raspberry-tea-100mg-thc-doh",
+    "name": "VICE - Raspberry Tea - 100mg THC - DOH",
+    "category": "Beverage",
+    "strain": "Raspberry"
+  },
+  {
+    "slug": "vice-raspberry-tea-100mg-thc-doh",
+    "name": "VICE - Raspberry Tea - 100mg THC - DOH",
+    "category": "Beverage",
+    "strain": "Raspberry"
+  },
+  {
+    "slug": "vice-hash-rosin-lemon-tea-100mg-thc-doh",
+    "name": "VICE - Hash Rosin Lemon Tea - 100mg THC - DOH",
+    "category": "Beverage",
+    "strain": "lemon"
+  },
+  {
+    "slug": "vice-hash-rosin-peach-tea-100mg-thc-100mg-cbg-doh",
+    "name": "VICE - Hash Rosin Peach Tea - 100mg THC : 100mg CBG - DOH",
+    "category": "Beverage",
+    "strain": "Peach"
+  },
+  {
+    "slug": "lil-rays-hash-rosin-tiger-s-blood-lemonade-100mg-doh",
+    "name": "lil' Rays - Hash Rosin Tiger's Blood Lemonade - 100mg - DOH",
+    "category": "Shots",
+    "strain": "Tigers Blood"
+  },
+  {
+    "slug": "lil-rays-hash-rosin-raspberry-lemonade-100mg-doh",
+    "name": "lil' Rays - Hash Rosin Raspberry Lemonade - 100mg - DOH",
+    "category": "Shots",
+    "strain": "Raspberry"
+  },
+  {
+    "slug": "rays-hash-rosin-huckleberry-lemonade-12oz",
+    "name": "Rays Hash Rosin Huckleberry Lemonade - 12oz",
+    "category": "Liquid Infused Edible",
+    "strain": "Huckleberry"
+  }
+]

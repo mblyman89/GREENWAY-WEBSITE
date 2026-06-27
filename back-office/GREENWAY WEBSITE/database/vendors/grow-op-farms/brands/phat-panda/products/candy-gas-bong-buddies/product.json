@@ -1,0 +1,13 @@
+{
+  "productName": "Candy Gas Bong Buddies",
+  "inventoryType": "Usable Marijuana",
+  "category": "Flower",
+  "strainType": "Hybrid",
+  "strain": "Candy Gas",
+  "packageSize": 2.0,
+  "uom": "Grams",
+  "price": 12.0,
+  "cannabis": true,
+  "description": "Candy Gas is a hybrid flower with a pungent fuel flavor and balanced, well-rounded effects.",
+  "imageFile": ""
+}

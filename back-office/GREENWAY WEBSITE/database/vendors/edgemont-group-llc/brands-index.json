@@ -1,0 +1,22 @@
+[
+  {
+    "slug": "cookies",
+    "name": "Cookies",
+    "productCount": 5
+  },
+  {
+    "slug": "leafwerx",
+    "name": "Leafwerx",
+    "productCount": 8
+  },
+  {
+    "slug": "solr-bear",
+    "name": "Solr Bear",
+    "productCount": 9
+  },
+  {
+    "slug": "thrills",
+    "name": "Thrills",
+    "productCount": 9
+  }
+]

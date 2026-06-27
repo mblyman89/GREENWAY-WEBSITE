@@ -1,0 +1,620 @@
+[
+  {
+    "slug": "truffle-cake-cured-cart-1g",
+    "name": "Truffle Cake Cured Cart [1g]",
+    "category": "Cartridge",
+    "strain": "Truffle Cake"
+  },
+  {
+    "slug": "blue-razz-slush-1g",
+    "name": "Blue Razz Slush [1g]",
+    "category": "Cartridge",
+    "strain": "Blue Raspberry"
+  },
+  {
+    "slug": "cherry-ztripez-pre-roll-1g-d-o-h-compliant",
+    "name": "Cherry Ztripez Pre-Roll [1g] [D.O.H. COMPLIANT]",
+    "category": "Pre-roll",
+    "strain": "Cherry Ztripez"
+  },
+  {
+    "slug": "lifted-cannabis-flower-malibu-marker-3-5g",
+    "name": "Lifted Cannabis Flower Malibu Marker 3.5g",
+    "category": "Flower",
+    "strain": "Malibu Marker"
+  },
+  {
+    "slug": "lifted-flower-blue-lobster-3-5g",
+    "name": "Lifted Flower Blue Lobster [3.5g]",
+    "category": "Flower",
+    "strain": "Blue Lobster"
+  },
+  {
+    "slug": "lifted-flower-burnout-33-7g",
+    "name": "Lifted Flower Burnout #33 [7g]",
+    "category": "Flower",
+    "strain": "Burnout OG #33"
+  },
+  {
+    "slug": "banana-pop-rocks-sugar-crystals-1g-lifted-d-o-h-compliant",
+    "name": "Banana Pop Rocks Sugar Crystals [1g] [Lifted] [D.O.H. COMPLIANT]",
+    "category": "BHO",
+    "strain": "Banana Pop Rocks"
+  },
+  {
+    "slug": "lifted-flower-metaverse-7g",
+    "name": "Lifted Flower Metaverse - 7g",
+    "category": "Flower",
+    "strain": "Metaverse"
+  },
+  {
+    "slug": "25-eyes-sugarstix-1g",
+    "name": "25 Eyes SugarStix [1g]",
+    "category": "Infused Pre-roll",
+    "strain": "25 Eyes"
+  },
+  {
+    "slug": "metaverse-3-5g-luxury-line-d-o-h-compliant",
+    "name": "Metaverse [3.5g] [Luxury Line] [D.O.H. COMPLIANT]",
+    "category": "Flower",
+    "strain": "Metaverse"
+  },
+  {
+    "slug": "creamsicle-slush-1g-all-in-one",
+    "name": "Creamsicle Slush [1g] [All-In-One]",
+    "category": "Disposable Cartridge",
+    "strain": "Creamsicle"
+  },
+  {
+    "slug": "permanent-push-pop-sugarstix-1g",
+    "name": "Permanent Push Pop SugarStix [1g]",
+    "category": "Infused Pre-roll",
+    "strain": "Permanent Push Pop"
+  },
+  {
+    "slug": "lifted-flower-wedding-cake-3-5g",
+    "name": "Lifted Flower Wedding Cake - 3.5g",
+    "category": "Flower",
+    "strain": "Wedding Cake"
+  },
+  {
+    "slug": "moroccan-peaches-live-resin-1g-all-in-one",
+    "name": "Moroccan Peaches Live Resin [1g] [All-In-One]",
+    "category": "Disposable Cartridge",
+    "strain": "Moroccan Peaches"
+  },
+  {
+    "slug": "lifted-flower-wedding-cake-28g",
+    "name": "Lifted Flower wedding cake 28g",
+    "category": "Flower",
+    "strain": "Wedding Cake"
+  },
+  {
+    "slug": "lifted-infused-pre-roll-coffee-creamer",
+    "name": "Lifted Infused Pre-roll Coffee Creamer",
+    "category": "Infused Pre-roll",
+    "strain": "Coffee Creamer"
+  },
+  {
+    "slug": "wedding-cake-3-5g-signature-line-d-o-h-compliant",
+    "name": "Wedding Cake [3.5g] [Signature Line] [D.O.H. COMPLIANT]",
+    "category": "Flower",
+    "strain": "Wedding Cake"
+  },
+  {
+    "slug": "creamsicle-slush-1g",
+    "name": "Creamsicle Slush [1g]",
+    "category": "Cartridge",
+    "strain": "Creamsicle"
+  },
+  {
+    "slug": "lifted-strawberry-lobster-3-5g",
+    "name": "Lifted Strawberry Lobster 3.5g",
+    "category": "Flower",
+    "strain": "Strawberry Lobster"
+  },
+  {
+    "slug": "pink-lobster-sugarstix-1g",
+    "name": "Pink Lobster SugarStix 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Pink Lobster"
+  },
+  {
+    "slug": "designer-runtz-sugarstix-1g",
+    "name": "Designer Runtz SugarStix [1g]",
+    "category": "Infused Pre-roll",
+    "strain": "Designer Runtz"
+  },
+  {
+    "slug": "metaverse-cured-1g-all-in-one",
+    "name": "Metaverse Cured [1g] [All-In-One]",
+    "category": "Disposable Cartridge",
+    "strain": "Metaverse"
+  },
+  {
+    "slug": "lifted-sugarstix-malibu-marker-1g",
+    "name": "Lifted SugarStix Malibu Marker - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Mandarin Butter"
+  },
+  {
+    "slug": "lifted-pre-roll-malibu-marker-1g",
+    "name": "Lifted Pre-Roll Malibu Marker - 1g",
+    "category": "Pre-roll",
+    "strain": "Malibu Marker"
+  },
+  {
+    "slug": "lifted-all-in-one-white-truffle-cured-1g",
+    "name": "Lifted All-in-one White Truffle Cured - 1g",
+    "category": "Disposable Cartridge",
+    "strain": "White Truffle"
+  },
+  {
+    "slug": "lifted-flower-blue-lobster-3-5g",
+    "name": "Lifted Flower Blue Lobster [3.5g]",
+    "category": "Flower",
+    "strain": "Blue Lobster"
+  },
+  {
+    "slug": "coffee-creamer-cured-1g-all-in-one",
+    "name": "Coffee Creamer Cured [1g] [All-In-One]",
+    "category": "Disposable Cartridge",
+    "strain": "Coffee Creamer"
+  },
+  {
+    "slug": "blue-razz-slush-1g-all-in-one",
+    "name": "Blue Razz Slush [1g] [All-In-One]",
+    "category": "Disposable Cartridge",
+    "strain": "Blue Raspberry"
+  },
+  {
+    "slug": "creamsicle-slush-1g-all-in-one",
+    "name": "Creamsicle Slush [1g] [All-In-One]",
+    "category": "Disposable Cartridge",
+    "strain": "Creamsicle"
+  },
+  {
+    "slug": "mango-punch-slush-1g-all-in-one",
+    "name": "Mango Punch Slush [1g] [All-In-One]",
+    "category": "Disposable Cartridge",
+    "strain": "Mango Punch"
+  },
+  {
+    "slug": "peach-ringz-slush-1g-all-in-one",
+    "name": "Peach Ringz Slush [1g] [All-In-One]",
+    "category": "Disposable Cartridge",
+    "strain": "Peach"
+  },
+  {
+    "slug": "raspberry-lemonade-slush-1g-all-in-one",
+    "name": "Raspberry Lemonade Slush [1g] [All-In-One]",
+    "category": "Disposable Cartridge",
+    "strain": "Raspberry"
+  },
+  {
+    "slug": "strawberry-burst-slush-1g-all-in-one",
+    "name": "Strawberry Burst Slush [1g] [All-In-One]",
+    "category": "Disposable Cartridge",
+    "strain": "Strawberry"
+  },
+  {
+    "slug": "tigers-blood-slush-1g-all-in-one",
+    "name": "Tigers Blood Slush [1g] [All-In-One]",
+    "category": "Disposable Cartridge",
+    "strain": "Tigers Blood"
+  },
+  {
+    "slug": "watermelon-wave-slush-1g-all-in-one",
+    "name": "Watermelon Wave Slush [1g] [All-In-One]",
+    "category": "Disposable Cartridge",
+    "strain": "Watermelon"
+  },
+  {
+    "slug": "blue-razz-slush-1g",
+    "name": "Blue Razz Slush [1g]",
+    "category": "Cartridge",
+    "strain": "Blue Raspberry"
+  },
+  {
+    "slug": "creamsicle-slush-1g",
+    "name": "Creamsicle Slush [1g]",
+    "category": "Cartridge",
+    "strain": "Creamsicle"
+  },
+  {
+    "slug": "peach-ringz-slush-1g",
+    "name": "Peach Ringz Slush [1g]",
+    "category": "Cartridge",
+    "strain": "Peach"
+  },
+  {
+    "slug": "25-eyes-sugarstix-1g",
+    "name": "25 Eyes SugarStix [1g]",
+    "category": "Infused Pre-roll",
+    "strain": "25 Eyes"
+  },
+  {
+    "slug": "permanent-punch-sugarstix-1g",
+    "name": "Permanent Punch SugarStix [1g]",
+    "category": "Infused Pre-roll",
+    "strain": "Permanent Punch"
+  },
+  {
+    "slug": "25-eyes-1g-pre-roll",
+    "name": "25 Eyes [1g] Pre-Roll",
+    "category": "Pre-roll",
+    "strain": "25 Eyes"
+  },
+  {
+    "slug": "lifted-flower-wedding-cake-28g",
+    "name": "Lifted Flower wedding cake 28g",
+    "category": "Flower",
+    "strain": "Wedding Cake"
+  },
+  {
+    "slug": "lifted-flower-rizz-3-5g",
+    "name": "Lifted flower rizz 3.5g",
+    "category": "Flower",
+    "strain": "Rizz"
+  },
+  {
+    "slug": "lychee-sugar-crystals-1g",
+    "name": "Lychee Sugar Crystals [1g]",
+    "category": "Live Resin",
+    "strain": "Lychee"
+  },
+  {
+    "slug": "lifted-wedding-cake-sugar-crystals-1g",
+    "name": "Lifted Wedding Cake Sugar Crystals [1g]",
+    "category": "Sugar",
+    "strain": "Wedding Cake"
+  },
+  {
+    "slug": "lifted-flower-burnout-33-7g",
+    "name": "Lifted Flower Burnout #33 [7g]",
+    "category": "Flower",
+    "strain": "Burnout OG #33"
+  },
+  {
+    "slug": "lifted-wedding-cake-cured-1g-all-in-one",
+    "name": "Lifted Wedding Cake Cured [1g] [All-In-One]",
+    "category": "Disposable Cartridge",
+    "strain": "Wedding Cake"
+  },
+  {
+    "slug": "blue-lobster-sugar-crystals-1g-lifted-d-o-h-compliant",
+    "name": "Blue Lobster Sugar Crystals [1g] [Lifted] [D.O.H. COMPLIANT]",
+    "category": "Live Resin",
+    "strain": "Blue Lobster"
+  },
+  {
+    "slug": "designer-runtz-sugarstix-1g",
+    "name": "Designer Runtz SugarStix [1g]",
+    "category": "Infused Pre-roll",
+    "strain": "Designer Runtz"
+  },
+  {
+    "slug": "lifted-pre-roll-off-gas",
+    "name": "Lifted Pre-roll Off Gas",
+    "category": "Pre-roll",
+    "strain": "Off Gas"
+  },
+  {
+    "slug": "biscotti-sugarstix-1g",
+    "name": "Biscotti SugarStix [1g]",
+    "category": "Infused Pre-roll",
+    "strain": "Biscotti"
+  },
+  {
+    "slug": "lifted-luxor-sugarstix-1g-d-o-h-compliant",
+    "name": "Lifted Luxor SugarStix [1g] [D.O.H. COMPLIANT]",
+    "category": "Infused Pre-roll",
+    "strain": "Luxor"
+  },
+  {
+    "slug": "oil-tanker-live-resin-1g-all-in-one",
+    "name": "Oil Tanker Live Resin [1g] [All-In-One]",
+    "category": "Disposable Cartridge",
+    "strain": "Oil Tanker"
+  },
+  {
+    "slug": "lifted-pre-roll-rainbow-marker-1g",
+    "name": "Lifted Pre-roll Rainbow Marker [1g]",
+    "category": "Pre-roll",
+    "strain": "Rainbow Marker"
+  },
+  {
+    "slug": "blue-lobster-sugarstix-1g",
+    "name": "Blue Lobster SugarStix [1g]",
+    "category": "Infused Pre-roll",
+    "strain": "Blue Lobster"
+  },
+  {
+    "slug": "white-cherries-live-resin-cart-1g",
+    "name": "White Cherries Live Resin Cart [1g]",
+    "category": "Cartridge",
+    "strain": "White Cherries"
+  },
+  {
+    "slug": "scented-marker-sugarstix-1g",
+    "name": "Scented Marker SugarStix [1g]",
+    "category": "Infused Pre-roll",
+    "strain": "Scented Marker"
+  },
+  {
+    "slug": "permanent-push-pop-sugarstix-1g",
+    "name": "Permanent Push Pop SugarStix [1g]",
+    "category": "Infused Pre-roll",
+    "strain": "Permanent Push Pop"
+  },
+  {
+    "slug": "burnout-33-3-5g",
+    "name": "Burnout #33 [3.5g]",
+    "category": "Flower",
+    "strain": "Burnout OG #33"
+  },
+  {
+    "slug": "rizz-pre-roll-1g",
+    "name": "RIZZ Pre-Roll [1g]",
+    "category": "Pre-roll",
+    "strain": "Rizz"
+  },
+  {
+    "slug": "cherry-ztripez-pre-roll-1g-d-o-h-compliant",
+    "name": "Cherry Ztripez Pre-Roll [1g] [D.O.H. COMPLIANT]",
+    "category": "Pre-roll",
+    "strain": "Cherry Ztripez"
+  },
+  {
+    "slug": "boysenberry-creme-brulee-1g-luxury-line-d-o-h-compliant",
+    "name": "Boysenberry Creme Brulee [1g] [Luxury Line] [D.O.H. COMPLIANT]",
+    "category": "Flower",
+    "strain": "Boysenberry Creme Brulee"
+  },
+  {
+    "slug": "boysenberry-creme-brulee-3-5g-luxury-line-d-o-h-compliant",
+    "name": "Boysenberry Creme Brulee [3.5g] [Luxury Line] [D.O.H. COMPLIANT]",
+    "category": "Flower",
+    "strain": "Boysenberry Creme Brulee"
+  },
+  {
+    "slug": "metaverse-3-5g-luxury-line-d-o-h-compliant",
+    "name": "Metaverse [3.5g] [Luxury Line] [D.O.H. COMPLIANT]",
+    "category": "Flower",
+    "strain": "Metaverse"
+  },
+  {
+    "slug": "grape-soda-slush-1g-all-in-one-d-o-h-compliant",
+    "name": "Grape Soda Slush [1g] [All-In-One] [D.O.H. COMPLIANT]",
+    "category": "Disposable Cartridge",
+    "strain": "Grape Soda"
+  },
+  {
+    "slug": "lychee-boba-slush-1g-all-in-one",
+    "name": "Lychee Boba Slush [1g] [All-In-One]",
+    "category": "Disposable Cartridge",
+    "strain": "Lychee"
+  },
+  {
+    "slug": "gas-face-cured-1g-all-in-one",
+    "name": "Gas Face Cured [1g] [All-In-One]",
+    "category": "Disposable Cartridge",
+    "strain": "Gas Face"
+  },
+  {
+    "slug": "blue-lobster-cured-1g-all-in-one",
+    "name": "Blue Lobster Cured [1g] [All-In-One]",
+    "category": "Disposable Cartridge",
+    "strain": "Blue Lobster"
+  },
+  {
+    "slug": "burnout-33-live-resin-1g-all-in-one",
+    "name": "Burnout #33 Live Resin [1g] [All-In-One]",
+    "category": "Disposable Cartridge",
+    "strain": "Burnout #33"
+  },
+  {
+    "slug": "moroccan-peaches-live-resin-1g-all-in-one",
+    "name": "Moroccan Peaches Live Resin [1g] [All-In-One]",
+    "category": "Disposable Cartridge",
+    "strain": "Moroccan Peaches"
+  },
+  {
+    "slug": "permanent-gas-sugarstix-1g",
+    "name": "Permanent Gas SugarStix [1g]",
+    "category": "Infused Pre-roll",
+    "strain": "Permanent Gas"
+  },
+  {
+    "slug": "ztrufflez-sugarstix-1g",
+    "name": "Ztrufflez SugarStix [1g]",
+    "category": "Infused Pre-roll",
+    "strain": "ZTRUFFLEZ"
+  },
+  {
+    "slug": "permanent-gas-pre-roll",
+    "name": "Permanent Gas Pre-Roll",
+    "category": "Pre-roll",
+    "strain": "Permanent Gas"
+  },
+  {
+    "slug": "old-school-lemons-cured-cart-1g",
+    "name": "Old School Lemons Cured Cart [1g]",
+    "category": "Cartridge",
+    "strain": "Old School Lemons"
+  },
+  {
+    "slug": "durban-poison-hte-cart-1g",
+    "name": "Durban Poison HTE Cart [1g]",
+    "category": "Cartridge",
+    "strain": "Durban Poison"
+  },
+  {
+    "slug": "cherry-ztripez-cured-cart-1g",
+    "name": "Cherry Ztripez Cured Cart [1g]",
+    "category": "Cartridge",
+    "strain": "Cherry Ztripez"
+  },
+  {
+    "slug": "truffle-cake-cured-cart-1g",
+    "name": "Truffle Cake Cured Cart [1g]",
+    "category": "Cartridge",
+    "strain": "Truffle Cake"
+  },
+  {
+    "slug": "lobster-og-sugarstix-1g",
+    "name": "Lobster OG Sugarstix 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Lobster OG"
+  },
+  {
+    "slug": "grape-lobster-flower-3-5g",
+    "name": "Grape Lobster Flower 3.5g",
+    "category": "Flower",
+    "strain": "Grape Lobster"
+  },
+  {
+    "slug": "lifted-strawberry-lobster-3-5g",
+    "name": "Lifted Strawberry Lobster 3.5g",
+    "category": "Flower",
+    "strain": "Strawberry Lobster"
+  },
+  {
+    "slug": "lobster-box-3-lifted-flower-3-5g",
+    "name": "Lobster Box #3 Lifted Flower 3.5g",
+    "category": "Flower",
+    "strain": "Losbter"
+  },
+  {
+    "slug": "luxor-pre-roll-1g-d-o-h-compliant",
+    "name": "Luxor Pre-Roll [1g] [D.O.H. COMPLIANT]",
+    "category": "Pre-roll",
+    "strain": "Luxor"
+  },
+  {
+    "slug": "pink-lobster-sugarstix-1g",
+    "name": "Pink Lobster SugarStix 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Pink Lobster"
+  },
+  {
+    "slug": "twinkiez-live-resin-cart-1g-ceramic-d-o-h-compliant",
+    "name": "Twinkiez Live Resin Cart [1g] [CERAMIC] [D.O.H. COMPLIANT]",
+    "category": "Cartridge",
+    "strain": "Twinkies"
+  },
+  {
+    "slug": "banana-pop-rocks-sugar-crystals-1g-lifted-d-o-h-compliant",
+    "name": "Banana Pop Rocks Sugar Crystals [1g] [Lifted] [D.O.H. COMPLIANT]",
+    "category": "BHO",
+    "strain": "Banana Pop Rocks"
+  },
+  {
+    "slug": "oil-tanker-sugar-crystals-1g-lifted-d-o-h-compliant",
+    "name": "Oil Tanker Sugar Crystals [1g] [Lifted] [D.O.H. COMPLIANT]",
+    "category": "BHO",
+    "strain": "Oil Tanker"
+  },
+  {
+    "slug": "violet-fog-cured-cart-1g-ceramic-d-o-h-compliant",
+    "name": "Violet Fog Cured Cart [1g] [CERAMIC] [D.O.H. COMPLIANT]",
+    "category": "Disposable Cartridge",
+    "strain": "Violet Fog"
+  },
+  {
+    "slug": "wedding-cake-3-5g-signature-line-d-o-h-compliant",
+    "name": "Wedding Cake [3.5g] [Signature Line] [D.O.H. COMPLIANT]",
+    "category": "Flower",
+    "strain": "Wedding Cake"
+  },
+  {
+    "slug": "wedding-cake-7g-signature-line-d-o-h-compliant",
+    "name": "Wedding Cake [7g] [Signature Line] [D.O.H. COMPLIANT]",
+    "category": "Flower",
+    "strain": "Wedding Cake"
+  },
+  {
+    "slug": "wedding-cake-pre-roll-1g-d-o-h-compliant",
+    "name": "Wedding Cake Pre-Roll [1g] [D.O.H. COMPLIANT]",
+    "category": "Pre-roll",
+    "strain": "Wedding Cake"
+  },
+  {
+    "slug": "apple-tarte-live-resin-1g-all-in-one-d-o-h-compliant",
+    "name": "Apple Tarte Live Resin [1g] [All-In-One] [D.O.H. COMPLIANT]",
+    "category": "Disposable Cartridge",
+    "strain": "Apple Tarts"
+  },
+  {
+    "slug": "jealousy-live-resin-cart-1g-ceramic-d-o-h-compliant",
+    "name": "Jealousy Live Resin Cart [1g] [CERAMIC] [D.O.H. COMPLIANT]",
+    "category": "Cartridge",
+    "strain": "Jealousy"
+  },
+  {
+    "slug": "black-maple-live-resin-cart-1g-ceramic-d-o-h-compliant",
+    "name": "Black Maple Live Resin Cart [1g] [CERAMIC] [D.O.H. COMPLIANT]",
+    "category": "Cartridge",
+    "strain": "Black Maple"
+  },
+  {
+    "slug": "rizz-cured-cart-1g-ceramic-d-o-h-compliant",
+    "name": "RIZZ Cured Cart [1g] [CERAMIC] [D.O.H. COMPLIANT]",
+    "category": "Cartridge",
+    "strain": "Rizz"
+  },
+  {
+    "slug": "luxor-cured-1g-all-in-one",
+    "name": "Luxor Cured [1g] [All-In-One]",
+    "category": "Disposable Cartridge",
+    "strain": "Luxor"
+  },
+  {
+    "slug": "lifted-sugarstix-grape-thorn-rose",
+    "name": "Lifted SugarStix Grape Thorn Rose",
+    "category": "Infused Pre-roll",
+    "strain": "Grape Thron Rose"
+  },
+  {
+    "slug": "lifted-pre-roll-malibu-marker",
+    "name": "Lifted Pre-roll Malibu Marker",
+    "category": "Pre-roll",
+    "strain": "Malibu Marker"
+  },
+  {
+    "slug": "lifted-sugarstix-grape-thorn-rose",
+    "name": "Lifted SugarStix Grape Thorn Rose",
+    "category": "Infused Pre-roll",
+    "strain": "Grape Thron Rose"
+  },
+  {
+    "slug": "luxor-cured-1g-all-in-one",
+    "name": "Luxor Cured [1g] [All-In-One]",
+    "category": "Disposable Cartridge",
+    "strain": "Luxor"
+  },
+  {
+    "slug": "honeydew-highchew-slush-1g-510",
+    "name": "Honeydew HighChew Slush [1g] [510]",
+    "category": "Cartridge",
+    "strain": "Honeydew"
+  },
+  {
+    "slug": "lychee-boba-slush-1g-510",
+    "name": "Lychee Boba Slush [1g] [510]",
+    "category": "Cartridge",
+    "strain": "Lychee Boba"
+  },
+  {
+    "slug": "scented-cherries-sugar-crystals-1g",
+    "name": "Scented Cherries Sugar Crystals [1g]",
+    "category": "Live Resin",
+    "strain": "Scented Cherries"
+  },
+  {
+    "slug": "stardawg-inferno-sugar-crystals-1g",
+    "name": "Stardawg Inferno Sugar Crystals [1g]",
+    "category": "Live Resin",
+    "strain": "Stardawg Inferno"
+  }
+]

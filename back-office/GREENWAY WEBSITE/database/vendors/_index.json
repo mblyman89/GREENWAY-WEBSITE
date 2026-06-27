@@ -1,0 +1,632 @@
+[
+  {
+    "slug": "evergreen-hydro-farms",
+    "name": "EVERGREEN HYDRO FARMS",
+    "brandCount": 1,
+    "productCount": 136
+  },
+  {
+    "slug": "independent-unlisted-vendor",
+    "name": "INDEPENDENT / UNLISTED VENDOR",
+    "brandCount": 12,
+    "productCount": 133
+  },
+  {
+    "slug": "klaritie-farms-inc",
+    "name": "KLARITIE FARMS INC",
+    "brandCount": 4,
+    "productCount": 103
+  },
+  {
+    "slug": "lifted-cannabis",
+    "name": "LIFTED CANNABIS",
+    "brandCount": 1,
+    "productCount": 103
+  },
+  {
+    "slug": "alpha-crux-llc",
+    "name": "Alpha Crux  Llc",
+    "brandCount": 1,
+    "productCount": 95
+  },
+  {
+    "slug": "grow-op-farms",
+    "name": "GROW OP FARMS",
+    "brandCount": 4,
+    "productCount": 90
+  },
+  {
+    "slug": "heavenly-buds",
+    "name": "HEAVENLY BUDS",
+    "brandCount": 1,
+    "productCount": 88
+  },
+  {
+    "slug": "clarity-farms",
+    "name": "CLARITY FARMS",
+    "brandCount": 1,
+    "productCount": 82
+  },
+  {
+    "slug": "quality-green-trees",
+    "name": "QUALITY GREEN TREES",
+    "brandCount": 1,
+    "productCount": 72
+  },
+  {
+    "slug": "cassidy-cannabis-llc",
+    "name": "Cassidy Cannabis LLC",
+    "brandCount": 3,
+    "productCount": 68
+  },
+  {
+    "slug": "firebros",
+    "name": "FIREBROS",
+    "brandCount": 1,
+    "productCount": 67
+  },
+  {
+    "slug": "botanical-arts",
+    "name": "BOTANICAL ARTS",
+    "brandCount": 1,
+    "productCount": 65
+  },
+  {
+    "slug": "virtual-services",
+    "name": "VIRTUAL SERVICES",
+    "brandCount": 1,
+    "productCount": 64
+  },
+  {
+    "slug": "alpenglow-extracts",
+    "name": "ALPENGLOW EXTRACTS",
+    "brandCount": 1,
+    "productCount": 63
+  },
+  {
+    "slug": "canna-pacific",
+    "name": "CANNA PACIFIC",
+    "brandCount": 1,
+    "productCount": 63
+  },
+  {
+    "slug": "r-b-group",
+    "name": "R&B GROUP",
+    "brandCount": 1,
+    "productCount": 61
+  },
+  {
+    "slug": "conscious-cannabis",
+    "name": "CONSCIOUS CANNABIS",
+    "brandCount": 3,
+    "productCount": 59
+  },
+  {
+    "slug": "mountain-hi",
+    "name": "MOUNTAIN HI",
+    "brandCount": 3,
+    "productCount": 58
+  },
+  {
+    "slug": "suspended-brands",
+    "name": "SUSPENDED BRANDS",
+    "brandCount": 1,
+    "productCount": 55
+  },
+  {
+    "slug": "mfused",
+    "name": "MFUSED",
+    "brandCount": 2,
+    "productCount": 52
+  },
+  {
+    "slug": "subx",
+    "name": "SUBX",
+    "brandCount": 1,
+    "productCount": 47
+  },
+  {
+    "slug": "bellevue-cannabis-company",
+    "name": "BELLEVUE CANNABIS COMPANY",
+    "brandCount": 1,
+    "productCount": 46
+  },
+  {
+    "slug": "my-weed-bunny",
+    "name": "MY WEED BUNNY",
+    "brandCount": 1,
+    "productCount": 46
+  },
+  {
+    "slug": "seattle-bubble-works",
+    "name": "Seattle Bubble Works",
+    "brandCount": 1,
+    "productCount": 45
+  },
+  {
+    "slug": "walden",
+    "name": "WALDEN",
+    "brandCount": 1,
+    "productCount": 45
+  },
+  {
+    "slug": "canna-organix",
+    "name": "CANNA ORGANIX",
+    "brandCount": 1,
+    "productCount": 44
+  },
+  {
+    "slug": "everigreene",
+    "name": "Everigreene",
+    "brandCount": 1,
+    "productCount": 43
+  },
+  {
+    "slug": "northwest-harvesting-co",
+    "name": "NORTHWEST HARVESTING CO",
+    "brandCount": 5,
+    "productCount": 42
+  },
+  {
+    "slug": "evergreen-herbal",
+    "name": "EVERGREEN HERBAL",
+    "brandCount": 8,
+    "productCount": 41
+  },
+  {
+    "slug": "ceres",
+    "name": "CERES",
+    "brandCount": 1,
+    "productCount": 40
+  },
+  {
+    "slug": "downtown-cannabis-company",
+    "name": "DOWNTOWN CANNABIS COMPANY",
+    "brandCount": 2,
+    "productCount": 40
+  },
+  {
+    "slug": "sky-high-gardens",
+    "name": "SKY HIGH GARDENS",
+    "brandCount": 1,
+    "productCount": 40
+  },
+  {
+    "slug": "agro-couture",
+    "name": "AGRO COUTURE",
+    "brandCount": 1,
+    "productCount": 37
+  },
+  {
+    "slug": "dogtown-pioneers",
+    "name": "DOGTOWN PIONEERS",
+    "brandCount": 7,
+    "productCount": 37
+  },
+  {
+    "slug": "spark-industries",
+    "name": "SPARK INDUSTRIES",
+    "brandCount": 2,
+    "productCount": 37
+  },
+  {
+    "slug": "wamsterdam-farms",
+    "name": "WAMSTERDAM FARMS",
+    "brandCount": 1,
+    "productCount": 37
+  },
+  {
+    "slug": "xtracted-labs",
+    "name": "XTRACTED LABS",
+    "brandCount": 2,
+    "productCount": 35
+  },
+  {
+    "slug": "translucency-llc",
+    "name": "TRANSLUCENCY LLC",
+    "brandCount": 2,
+    "productCount": 34
+  },
+  {
+    "slug": "alki-herbal",
+    "name": "ALKI HERBAL",
+    "brandCount": 1,
+    "productCount": 33
+  },
+  {
+    "slug": "botanica-seattle",
+    "name": "BOTANICA SEATTLE",
+    "brandCount": 2,
+    "productCount": 32
+  },
+  {
+    "slug": "green-revolution",
+    "name": "GREEN REVOLUTION",
+    "brandCount": 4,
+    "productCount": 32
+  },
+  {
+    "slug": "edgemont-group-llc",
+    "name": "EDGEMONT GROUP LLC",
+    "brandCount": 4,
+    "productCount": 31
+  },
+  {
+    "slug": "legacy-organics",
+    "name": "Legacy Organics",
+    "brandCount": 1,
+    "productCount": 31
+  },
+  {
+    "slug": "skagit-organics",
+    "name": "SKAGIT ORGANICS",
+    "brandCount": 2,
+    "productCount": 31
+  },
+  {
+    "slug": "green-adventures",
+    "name": "GREEN ADVENTURES",
+    "brandCount": 1,
+    "productCount": 30
+  },
+  {
+    "slug": "1937-farms",
+    "name": "1937 FARMS",
+    "brandCount": 1,
+    "productCount": 29
+  },
+  {
+    "slug": "washington-packaging-and-processing",
+    "name": "WASHINGTON PACKAGING AND PROCESSING",
+    "brandCount": 2,
+    "productCount": 28
+  },
+  {
+    "slug": "edgemont-group",
+    "name": "EDGEMONT GROUP",
+    "brandCount": 1,
+    "productCount": 27
+  },
+  {
+    "slug": "jms-consultants",
+    "name": "JMS. CONSULTANTS",
+    "brandCount": 1,
+    "productCount": 27
+  },
+  {
+    "slug": "pacific-northwest-consulting",
+    "name": "PACIFIC NORTHWEST CONSULTING",
+    "brandCount": 2,
+    "productCount": 27
+  },
+  {
+    "slug": "cannasol-farms",
+    "name": "CANNASOL FARMS",
+    "brandCount": 1,
+    "productCount": 26
+  },
+  {
+    "slug": "hang-roots",
+    "name": "HANG ROOTS",
+    "brandCount": 1,
+    "productCount": 26
+  },
+  {
+    "slug": "joint-ventures",
+    "name": "JOINT VENTURES",
+    "brandCount": 2,
+    "productCount": 26
+  },
+  {
+    "slug": "2727",
+    "name": "2727",
+    "brandCount": 1,
+    "productCount": 25
+  },
+  {
+    "slug": "fireline-cannabis",
+    "name": "FIRELINE CANNABIS",
+    "brandCount": 1,
+    "productCount": 23
+  },
+  {
+    "slug": "skord",
+    "name": "SKORD",
+    "brandCount": 1,
+    "productCount": 23
+  },
+  {
+    "slug": "cannabis-northwest-c-m-inc",
+    "name": "CANNABIS NORTHWEST C-M, INC",
+    "brandCount": 3,
+    "productCount": 21
+  },
+  {
+    "slug": "hometown-herbs",
+    "name": "HOMETOWN HERBS",
+    "brandCount": 2,
+    "productCount": 21
+  },
+  {
+    "slug": "limelight",
+    "name": "LIMELIGHT",
+    "brandCount": 1,
+    "productCount": 21
+  },
+  {
+    "slug": "alphapheno",
+    "name": "ALPHAPHENO",
+    "brandCount": 1,
+    "productCount": 20
+  },
+  {
+    "slug": "greenleaf-growers",
+    "name": "GREENLEAF GROWERS",
+    "brandCount": 1,
+    "productCount": 20
+  },
+  {
+    "slug": "blue-roots",
+    "name": "Blue Roots",
+    "brandCount": 1,
+    "productCount": 19
+  },
+  {
+    "slug": "cultivar-farms",
+    "name": "CULTIVAR FARMS",
+    "brandCount": 4,
+    "productCount": 18
+  },
+  {
+    "slug": "klaritie-farms",
+    "name": "Klaritie Farms",
+    "brandCount": 1,
+    "productCount": 18
+  },
+  {
+    "slug": "avitas",
+    "name": "AVITAS",
+    "brandCount": 2,
+    "productCount": 17
+  },
+  {
+    "slug": "prince-farms",
+    "name": "PRINCE FARMS",
+    "brandCount": 1,
+    "productCount": 17
+  },
+  {
+    "slug": "rgl-industries",
+    "name": "RGL INDUSTRIES",
+    "brandCount": 1,
+    "productCount": 17
+  },
+  {
+    "slug": "canna-processing",
+    "name": "CANNA PROCESSING",
+    "brandCount": 1,
+    "productCount": 14
+  },
+  {
+    "slug": "hesperides",
+    "name": "HESPERIDES",
+    "brandCount": 1,
+    "productCount": 14
+  },
+  {
+    "slug": "kohl-processing-enterprises",
+    "name": "KOHL PROCESSING ENTERPRISES",
+    "brandCount": 1,
+    "productCount": 14
+  },
+  {
+    "slug": "pinnacle-green",
+    "name": "Pinnacle Green",
+    "brandCount": 1,
+    "productCount": 14
+  },
+  {
+    "slug": "prismatic",
+    "name": "Prismatic",
+    "brandCount": 1,
+    "productCount": 14
+  },
+  {
+    "slug": "big-city-sasquatch-llc",
+    "name": "Big City Sasquatch LLC",
+    "brandCount": 1,
+    "productCount": 13
+  },
+  {
+    "slug": "georgetown-bottling-spc",
+    "name": "GEORGETOWN BOTTLING SPC",
+    "brandCount": 1,
+    "productCount": 13
+  },
+  {
+    "slug": "seattles-private-reserve",
+    "name": "SEATTLES PRIVATE RESERVE",
+    "brandCount": 1,
+    "productCount": 13
+  },
+  {
+    "slug": "top-shelf",
+    "name": "TOP SHELF",
+    "brandCount": 1,
+    "productCount": 13
+  },
+  {
+    "slug": "budz-bud",
+    "name": "Budz Bud",
+    "brandCount": 1,
+    "productCount": 12
+  },
+  {
+    "slug": "green-labs",
+    "name": "GREEN LABS",
+    "brandCount": 1,
+    "productCount": 12
+  },
+  {
+    "slug": "sitka-packaging",
+    "name": "SITKA PACKAGING",
+    "brandCount": 1,
+    "productCount": 12
+  },
+  {
+    "slug": "cannaseurs-choice",
+    "name": "CANNASEURS CHOICE",
+    "brandCount": 1,
+    "productCount": 11
+  },
+  {
+    "slug": "dynamic-processors",
+    "name": "DYNAMIC PROCESSORS",
+    "brandCount": 1,
+    "productCount": 11
+  },
+  {
+    "slug": "frosted-cannabis",
+    "name": "FROSTED CANNABIS",
+    "brandCount": 1,
+    "productCount": 11
+  },
+  {
+    "slug": "green-research-network-llc",
+    "name": "GREEN RESEARCH NETWORK, LLC",
+    "brandCount": 1,
+    "productCount": 11
+  },
+  {
+    "slug": "mas-farms",
+    "name": "MAS FARMS",
+    "brandCount": 1,
+    "productCount": 11
+  },
+  {
+    "slug": "phdc2",
+    "name": "PHDC2",
+    "brandCount": 1,
+    "productCount": 10
+  },
+  {
+    "slug": "ncmx-llc",
+    "name": "NCMX, LLC",
+    "brandCount": 1,
+    "productCount": 9
+  },
+  {
+    "slug": "coastal-growers",
+    "name": "COASTAL GROWERS",
+    "brandCount": 1,
+    "productCount": 7
+  },
+  {
+    "slug": "walden-cannabis",
+    "name": "WALDEN CANNABIS",
+    "brandCount": 2,
+    "productCount": 7
+  },
+  {
+    "slug": "default-vendor",
+    "name": "Default Vendor",
+    "brandCount": 2,
+    "productCount": 5
+  },
+  {
+    "slug": "ev-enterprises",
+    "name": "EV ENTERPRISES",
+    "brandCount": 1,
+    "productCount": 5
+  },
+  {
+    "slug": "craft-elixirs",
+    "name": "CRAFT ELIXIRS",
+    "brandCount": 2,
+    "productCount": 4
+  },
+  {
+    "slug": "free-rain-farms-inc",
+    "name": "FREE RAIN FARMS, INC.",
+    "brandCount": 1,
+    "productCount": 3
+  },
+  {
+    "slug": "nalley-valley-partners-llc",
+    "name": "NALLEY VALLEY PARTNERS LLC",
+    "brandCount": 1,
+    "productCount": 3
+  },
+  {
+    "slug": "northwest-cannabis-solutions",
+    "name": "NORTHWEST CANNABIS SOLUTIONS",
+    "brandCount": 2,
+    "productCount": 2
+  },
+  {
+    "slug": "olympus-horticulture-llc",
+    "name": "OLYMPUS HORTICULTURE, LLC",
+    "brandCount": 1,
+    "productCount": 2
+  },
+  {
+    "slug": "royal-tree-gardens",
+    "name": "ROYAL TREE GARDENS",
+    "brandCount": 1,
+    "productCount": 2
+  },
+  {
+    "slug": "starleaf",
+    "name": "STARLEAF",
+    "brandCount": 1,
+    "productCount": 2
+  },
+  {
+    "slug": "farmwest-2",
+    "name": "FARMWEST 2",
+    "brandCount": 1,
+    "productCount": 1
+  },
+  {
+    "slug": "forbidden-farms",
+    "name": "FORBIDDEN FARMS",
+    "brandCount": 1,
+    "productCount": 1
+  },
+  {
+    "slug": "green-beard-co",
+    "name": "GREEN BEARD & CO",
+    "brandCount": 1,
+    "productCount": 1
+  },
+  {
+    "slug": "grow-bros",
+    "name": "GROW BROS",
+    "brandCount": 1,
+    "productCount": 1
+  },
+  {
+    "slug": "harmony-farms",
+    "name": "HARMONY FARMS",
+    "brandCount": 1,
+    "productCount": 1
+  },
+  {
+    "slug": "new-leaf-enterprises",
+    "name": "NEW LEAF ENTERPRISES",
+    "brandCount": 1,
+    "productCount": 1
+  },
+  {
+    "slug": "tumbleweed-farm",
+    "name": "TUMBLEWEED FARM",
+    "brandCount": 1,
+    "productCount": 1
+  },
+  {
+    "slug": "wild-mint",
+    "name": "WILD MINT",
+    "brandCount": 1,
+    "productCount": 1
+  }
+]

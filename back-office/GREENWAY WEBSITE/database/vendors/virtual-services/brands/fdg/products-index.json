@@ -1,0 +1,386 @@
+[
+  {
+    "slug": "fdg-pre-rolls-purple-diesel-4pk-0-5g-x-4",
+    "name": "FDG Pre-Rolls - Purple Diesel - 4pk (0.5g x 4)",
+    "category": "Pre-roll",
+    "strain": "Purple Diesel"
+  },
+  {
+    "slug": "fdg-pre-rolls-gg-4-2pk-0-5g-x-2",
+    "name": "FDG Pre-Rolls - GG #4 - 2pk (0.5g x 2)",
+    "category": "Pre-roll",
+    "strain": "GG4"
+  },
+  {
+    "slug": "packaged-flower-peach-ringz-3-5g",
+    "name": "Packaged Flower - Peach Ringz - 3.5g",
+    "category": "Flower",
+    "strain": "Peach Ringz"
+  },
+  {
+    "slug": "fdg-pre-rolls-chem-trailz-2pk-0-5g-x-2",
+    "name": "FDG Pre-Rolls - Chem Trailz - 2pk (0.5g x 2)",
+    "category": "Pre-roll",
+    "strain": "Chem Trailz"
+  },
+  {
+    "slug": "packaged-flower-purple-diesel-3-5g",
+    "name": "Packaged Flower - Purple Diesel - 3.5g",
+    "category": "Flower",
+    "strain": "Purple Diesel"
+  },
+  {
+    "slug": "fdg-pre-rolls-sour-kush-14pk-0-5g-x-14",
+    "name": "FDG Pre-Rolls - Sour Kush - 14pk (0.5g x 14)",
+    "category": "Pre-roll",
+    "strain": "Sour Kush"
+  },
+  {
+    "slug": "fdg-pre-rolls-gg-4-4pk-0-5g-x-4",
+    "name": "FDG Pre-Rolls - GG #4 - 4pk (0.5g x 4)",
+    "category": "Pre-roll",
+    "strain": "GG4"
+  },
+  {
+    "slug": "atticus-capsule-indica",
+    "name": "Atticus Capsule Indica",
+    "category": "Capsule",
+    "strain": "Indica"
+  },
+  {
+    "slug": "fdg-pre-rolls-blueberry-banana-butter-2pk-0-5g-x-2",
+    "name": "FDG Pre-Rolls - Blueberry Banana Butter - 2pk (0.5g x 2)",
+    "category": "Pre-roll",
+    "strain": "Blueberry Buttered Banana"
+  },
+  {
+    "slug": "fdg-flower-chem-trailz-7g",
+    "name": "FDG Flower Chem Trailz - 7g",
+    "category": "Flower",
+    "strain": "Chem Trailz"
+  },
+  {
+    "slug": "packaged-flower-gg-4-3-5g",
+    "name": "Packaged Flower - GG #4 - 3.5g",
+    "category": "Flower",
+    "strain": "GG # 4"
+  },
+  {
+    "slug": "fdg-pre-rolls-lime-slapz-2pk-0-5g-x-2",
+    "name": "FDG Pre-Rolls - Lime Slapz - 2pk (0.5g x 2)",
+    "category": "Pre-roll",
+    "strain": "Lime Slapz"
+  },
+  {
+    "slug": "fdg-pre-rolls-lemonheads-2pk-0-5g-x-2",
+    "name": "FDG Pre-Rolls - Lemonheads - 2pk (0.5g x 2)",
+    "category": "Pre-roll",
+    "strain": "Lemonheads"
+  },
+  {
+    "slug": "packaged-flower-lazy-llama-3-5g",
+    "name": "Packaged Flower - Lazy Llama - 3.5g",
+    "category": "Flower",
+    "strain": "Lazy Llama"
+  },
+  {
+    "slug": "fdg-pre-rolls-purple-diesel-2pk-0-5g-x-2",
+    "name": "FDG Pre-Rolls - Purple Diesel - 2pk (0.5g x 2)",
+    "category": "Pre-roll",
+    "strain": "Purple Diesel"
+  },
+  {
+    "slug": "pre-rolls-peach-ringz-2pk-0-5g-x-2",
+    "name": "Pre-Rolls - Peach Ringz - 2pk (0.5g x 2)",
+    "category": "Pre-roll",
+    "strain": "Peach Ringz"
+  },
+  {
+    "slug": "fdg-pre-rolls-blueberry-banana-butter-2pk-0-5g-x-2",
+    "name": "FDG Pre-Rolls - Blueberry Banana Butter - 2pk (0.5g x 2)",
+    "category": "Pre-roll",
+    "strain": "Blueberry Buttered Banana"
+  },
+  {
+    "slug": "fdg-pre-rolls-blueberry-banana-butter-7pk-0-5g-x-7",
+    "name": "FDG Pre-Rolls - Blueberry Banana Butter - 7pk (0.5g x 7)",
+    "category": "Pre-roll",
+    "strain": "Blueberry Buttered Banana"
+  },
+  {
+    "slug": "fdg-pre-rolls-blueberry-banana-butter-14pk-0-5g-x-14",
+    "name": "FDG Pre-Rolls - Blueberry Banana Butter - 14pk (0.5g x 14)",
+    "category": "Pre-roll",
+    "strain": "Blueberry Buttered Banana"
+  },
+  {
+    "slug": "fdg-pre-rolls-chem-trailz-2pk-0-5g-x-2",
+    "name": "FDG Pre-Rolls - Chem Trailz - 2pk (0.5g x 2)",
+    "category": "Pre-roll",
+    "strain": "Chem Trailz"
+  },
+  {
+    "slug": "fdg-pre-rolls-chem-trailz-7pk-0-5g-x-7",
+    "name": "FDG Pre-Rolls - Chem Trailz - 7pk (0.5g x 7)",
+    "category": "Pre-roll",
+    "strain": "Chem Trailz"
+  },
+  {
+    "slug": "fdg-pre-rolls-gg-4-2pk-0-5g-x-2",
+    "name": "FDG Pre-Rolls - GG #4 - 2pk (0.5g x 2)",
+    "category": "Pre-roll",
+    "strain": "GG4"
+  },
+  {
+    "slug": "fdg-pre-rolls-lemonheads-2pk-0-5g-x-2",
+    "name": "FDG Pre-Rolls - Lemonheads - 2pk (0.5g x 2)",
+    "category": "Pre-roll",
+    "strain": "Lemonheads"
+  },
+  {
+    "slug": "fdg-pre-rolls-lemonheads-7pk-0-5g-x-7",
+    "name": "FDG Pre-Rolls - Lemonheads - 7pk (0.5g x 7)",
+    "category": "Pre-roll",
+    "strain": "Lemonheads"
+  },
+  {
+    "slug": "fdg-pre-rolls-lime-slapz-2pk-0-5g-x-2",
+    "name": "FDG Pre-Rolls - Lime Slapz - 2pk (0.5g x 2)",
+    "category": "Pre-roll",
+    "strain": "Lime Slapz"
+  },
+  {
+    "slug": "pre-rolls-lime-slapz-7pk-0-5g-x-7",
+    "name": "Pre-Rolls - Lime Slapz - 7pk (0.5g x 7)",
+    "category": "Pre-roll",
+    "strain": "Lime Slapz"
+  },
+  {
+    "slug": "fdg-pre-rolls-purple-diesel-2pk-0-5g-x-2",
+    "name": "FDG Pre-Rolls - Purple Diesel - 2pk (0.5g x 2)",
+    "category": "Pre-roll",
+    "strain": "Purple Diesel"
+  },
+  {
+    "slug": "fdg-pre-rolls-purple-diesel-7pk-0-5g-x-7",
+    "name": "FDG Pre-Rolls - Purple Diesel - 7pk (0.5g x 7)",
+    "category": "Pre-roll",
+    "strain": "Purple Diesel"
+  },
+  {
+    "slug": "fdg-pre-rolls-satsuma-haze-2pk-0-5g-x-2",
+    "name": "FDG Pre-Rolls - Satsuma Haze - 2pk (0.5g x 2)",
+    "category": "Pre-roll",
+    "strain": "Satsuma"
+  },
+  {
+    "slug": "fdg-pre-rolls-satsuma-haze-7pk-0-5g-x-7",
+    "name": "FDG Pre-Rolls - Satsuma Haze - 7pk (0.5g x 7)",
+    "category": "Pre-roll",
+    "strain": "Satsuma Haze"
+  },
+  {
+    "slug": "pre-rolls-sour-kush-2pk-0-5g-x-2",
+    "name": "Pre-Rolls - Sour Kush - 2pk (0.5g x 2)",
+    "category": "Pre-roll",
+    "strain": "Sour Kush"
+  },
+  {
+    "slug": "fdg-pre-rolls-sour-kush-7pk-0-5g-x-7",
+    "name": "FDG Pre-Rolls - Sour Kush - 7pk (0.5g x 7)",
+    "category": "Pre-roll",
+    "strain": "Sour Kush"
+  },
+  {
+    "slug": "fdg-pre-rolls-sour-kush-14pk-0-5g-x-14",
+    "name": "FDG Pre-Rolls - Sour Kush - 14pk (0.5g x 14)",
+    "category": "Pre-roll",
+    "strain": "Sour Kush"
+  },
+  {
+    "slug": "fdg-pre-rolls-the-cats-pajamas-2pk-0-5g-x-2",
+    "name": "FDG Pre-Rolls - The Cats Pajamas - 2pk (0.5g x 2)",
+    "category": "Pre-roll",
+    "strain": "The Cats Pajamas"
+  },
+  {
+    "slug": "fdg-pre-rolls-the-cats-pajamas-7pk-0-5g-x-7",
+    "name": "FDG Pre-Rolls - The Cats Pajamas - 7pk (0.5g x 7)",
+    "category": "Pre-roll",
+    "strain": "The Cats Pajamas"
+  },
+  {
+    "slug": "fdg-pre-rolls-time-wreck-2pk-0-5g-x-2",
+    "name": "FDG Pre-Rolls - Time Wreck - 2pk (0.5g x 2)",
+    "category": "Pre-roll",
+    "strain": "Time Wreck"
+  },
+  {
+    "slug": "fdg-pre-rolls-time-wreck-7pk-0-5g-x-7",
+    "name": "FDG Pre-Rolls - Time Wreck - 7pk (0.5g x 7)",
+    "category": "Pre-roll",
+    "strain": "Time Wreck"
+  },
+  {
+    "slug": "packaged-flower-lime-slapz-3-5g",
+    "name": "Packaged Flower - Lime Slapz - 3.5g",
+    "category": "Flower",
+    "strain": "Lime Slapz"
+  },
+  {
+    "slug": "fdg-packaged-flower-lime-slapz-7g",
+    "name": "FDG Packaged Flower - Lime Slapz - 7g",
+    "category": "Flower",
+    "strain": "Lime Slapz"
+  },
+  {
+    "slug": "fdg-packaged-flower-lemonheads-3-5g",
+    "name": "FDG Packaged Flower - Lemonheads - 3.5g",
+    "category": "Flower",
+    "strain": "Lemonheads"
+  },
+  {
+    "slug": "fdg-packaged-flower-blueberry-banana-butter-3-5g",
+    "name": "FDG Packaged Flower - Blueberry Banana Butter - 3.5g",
+    "category": "Flower",
+    "strain": "Blueberry Buttered Banana"
+  },
+  {
+    "slug": "packaged-flower-blueberry-banana-butter-14g",
+    "name": "Packaged Flower - Blueberry Banana Butter - 14g",
+    "category": "Flower",
+    "strain": "Blueberry Buttered Banana"
+  },
+  {
+    "slug": "fdg-pre-rolls-the-cats-pajamas-4pk-0-5g-x-4",
+    "name": "FDG Pre-Rolls - The Cats Pajamas - 4pk (0.5g x 4)",
+    "category": "Pre-roll",
+    "strain": "The Cats Pajamas"
+  },
+  {
+    "slug": "fdg-pre-rolls-purple-diesel-4pk-0-5g-x-4",
+    "name": "FDG Pre-Rolls - Purple Diesel - 4pk (0.5g x 4)",
+    "category": "Pre-roll",
+    "strain": "Purple Diesel"
+  },
+  {
+    "slug": "fdg-pre-rolls-lemonheads-4pk-0-5g-x-4",
+    "name": "FDG Pre-Rolls - Lemonheads - 4pk (0.5g x 4)",
+    "category": "Pre-roll",
+    "strain": "Lemonheads"
+  },
+  {
+    "slug": "fdg-pre-rolls-gg-4-4pk-0-5g-x-4",
+    "name": "FDG Pre-Rolls - GG #4 - 4pk (0.5g x 4)",
+    "category": "Pre-roll",
+    "strain": "GG4"
+  },
+  {
+    "slug": "fdg-pre-rolls-chem-trailz-4pk-0-5g-x-4",
+    "name": "FDG Pre-Rolls - Chem Trailz - 4pk (0.5g x 4)",
+    "category": "Pre-roll",
+    "strain": "Chem Trailz"
+  },
+  {
+    "slug": "fdg-pre-rolls-blueberry-banana-butter-4pk-0-5g-x-4",
+    "name": "FDG Pre-Rolls - Blueberry Banana Butter - 4pk (0.5g x 4)",
+    "category": "Pre-roll",
+    "strain": "Blueberry Buttered Banana"
+  },
+  {
+    "slug": "fdg-packaged-flower-melonoz-3-5g",
+    "name": "FDG Packaged Flower - Melonoz - 3.5g",
+    "category": "Flower",
+    "strain": "Melonoz"
+  },
+  {
+    "slug": "fdg-packaged-flower-melonoz-7g",
+    "name": "FDG Packaged Flower - Melonoz - 7g",
+    "category": "Flower",
+    "strain": "Melonoz"
+  },
+  {
+    "slug": "packaged-flower-hashplant-14g",
+    "name": "Packaged Flower - Hashplant - 14g",
+    "category": "Flower",
+    "strain": "Hashplant"
+  },
+  {
+    "slug": "packaged-flower-hashplant-7g",
+    "name": "Packaged Flower - Hashplant - 7g",
+    "category": "Flower",
+    "strain": "Hashplant"
+  },
+  {
+    "slug": "packaged-flower-peach-ringz-3-5g",
+    "name": "Packaged Flower - Peach Ringz - 3.5g",
+    "category": "Flower",
+    "strain": "Peach Ringz"
+  },
+  {
+    "slug": "fdg-packaged-flower-peach-ringz-7g",
+    "name": "FDG Packaged Flower - Peach Ringz - 7g",
+    "category": "Flower",
+    "strain": "Peach Ringz"
+  },
+  {
+    "slug": "fdg-packaged-flower-purple-diesel-14g",
+    "name": "FDG Packaged Flower - Purple Diesel - 14g",
+    "category": "Flower",
+    "strain": "Purple Diesel"
+  },
+  {
+    "slug": "packaged-flower-purple-diesel-3-5g",
+    "name": "Packaged Flower - Purple Diesel - 3.5g",
+    "category": "Flower",
+    "strain": "Purple Diesel"
+  },
+  {
+    "slug": "packaged-flower-purple-diesel-7g",
+    "name": "Packaged Flower - Purple Diesel - 7g",
+    "category": "Flower",
+    "strain": "Purple Diesel"
+  },
+  {
+    "slug": "pre-rolls-melonoz-2pk-0-5g-x-2",
+    "name": "Pre-Rolls - Melonoz - 2pk (0.5g x 2)",
+    "category": "Pre-roll",
+    "strain": "Melonoz"
+  },
+  {
+    "slug": "pre-rolls-peach-ringz-2pk-0-5g-x-2",
+    "name": "Pre-Rolls - Peach Ringz - 2pk (0.5g x 2)",
+    "category": "Pre-roll",
+    "strain": "Peach Ringz"
+  },
+  {
+    "slug": "pre-rolls-hashplant-2pk-0-5g-x-2",
+    "name": "Pre-Rolls - Hashplant - 2pk (0.5g x 2)",
+    "category": "Pre-roll",
+    "strain": "Hashplant"
+  },
+  {
+    "slug": "packaged-flower-gg-4-3-5g",
+    "name": "Packaged Flower - GG #4 - 3.5g",
+    "category": "Flower",
+    "strain": "GG # 4"
+  },
+  {
+    "slug": "packaged-flower-gg-4-7g",
+    "name": "Packaged Flower - GG #4 - 7g",
+    "category": "Flower",
+    "strain": "GG # 4"
+  },
+  {
+    "slug": "packaged-flower-lazy-llama-3-5g",
+    "name": "Packaged Flower - Lazy Llama - 3.5g",
+    "category": "Flower",
+    "strain": "Lazy Llama"
+  },
+  {
+    "slug": "pre-rolls-lazy-llama-2pk-0-5g-x-2",
+    "name": "Pre-Rolls - Lazy Llama - 2pk (0.5g x 2)",
+    "category": "Pre-roll",
+    "strain": "Lazy Llama"
+  }
+]
