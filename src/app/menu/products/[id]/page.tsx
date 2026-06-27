@@ -253,8 +253,11 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
           <span className="line-clamp-1 text-zinc-400">{item.name}</span>
         </nav>
 
-        <div className="mt-5 grid gap-6 md:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] md:items-start md:gap-10">
-          <div className="overflow-hidden border bg-white md:sticky md:top-28" style={imageShellStyle(tone)}>
+        <div className="mt-5 grid gap-6 md:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] md:items-stretch md:gap-10">
+          {/* Image column stretches to the full height of the info column (md:items-stretch
+              + h-full) so the picture is flush with the bottom of the description and stays
+              completely fixed in place — it does NOT scroll/float with the user. */}
+          <div className="overflow-hidden border bg-white md:h-full" style={imageShellStyle(tone)}>
             <ProductHeroArt item={item} tone={tone} />
           </div>
 
