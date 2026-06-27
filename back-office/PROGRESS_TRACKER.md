@@ -38,8 +38,20 @@
 - [x] Soft-disable fallback (setup notice) when env missing
 - [x] Supabase setup guide (docs/BACK_OFFICE_SETUP.md)
 - [x] Verify full build passes (2373 pages) + deploy UI preview
-- [ ] Owner: connect Supabase (follow BACK_OFFICE_SETUP.md) + inspect → start Slice 2
-- [ ] Slice 2 — POS upload/import/staged publish
+- [ ] Owner: connect Supabase (follow BACK_OFFICE_SETUP.md) + inspect
+
+### Slice 2 — POS upload/import/staged publish (COMPLETE — PR #32, stacked on Slice 1)
+- [x] Re-read roadmap + schema (standing rule)
+- [x] Refactor transformer → FS-free `src/lib/pos/transform.ts` (verified BYTE-IDENTICAL output)
+- [x] Migration `0002`: pos_imports, pos_import_diagnostics, menu_versions, menu_items, menu_variants (+RLS, single-published index, public read of published snapshot, pos-raw bucket, atomic publish fn)
+- [x] Server services: import-service (upload→transform→stage→publish), menu-version (read + diff)
+- [x] `/admin/menu-imports` upload + history; `/admin/menu-imports/[id]` review (diff vs live, diagnostics, hidden items, gated publish)
+- [x] Publish blocked on errors; gated on menu.publish; revalidates /menu /shop /; full audit logging
+- [x] Dashboard wired to live menu/import stats; setup doc updated for migration 0002
+- [x] tsc + eslint clean; production build succeeds; PR opened for owner inspect
+- [ ] Owner: run migration 0002 + inspect Menu Imports screen
+- [ ] (Deferred to Slice 3) Public site reads DB published snapshot; vendor alias suggestions; admin-side report downloads
+
 - [ ] Slice 3 — Media library + Vendor/Brand DB
 - [ ] Slice 4 — Product enrichment
 - [ ] Slice 5 — Blog/newsletter CMS + site-text editor
