@@ -16,8 +16,11 @@ const appStores = [
 
 // Social glyphs (steel-blue circular badges, matching brand reference).
 const socialGlyphs = [
-  { ...greenwayBusiness.social.instagram, src: greenwayBusiness.assets.socialGlyphInstagram },
   { ...greenwayBusiness.social.facebook, src: greenwayBusiness.assets.socialGlyphFacebook },
+  { ...greenwayBusiness.social.instagram, src: greenwayBusiness.assets.socialGlyphInstagram },
+  { ...greenwayBusiness.social.google, src: greenwayBusiness.assets.socialGlyphGoogle },
+  { ...greenwayBusiness.social.yelp, src: greenwayBusiness.assets.socialGlyphYelp },
+  { ...greenwayBusiness.social.leafly, src: greenwayBusiness.assets.socialGlyphLeafly },
 ];
 
 const copyrightYear = new Date().getFullYear();
@@ -46,17 +49,23 @@ function PolicyLinks({ compact = false }: { compact?: boolean }) {
   );
 }
 
-/** Store hours graphic ("OPEN / 8am-11:45pm"). Shared by mobile + desktop. */
+/**
+ * Store hours graphic ("OPEN / 8am-11:45pm"). Shared by mobile + desktop.
+ * The artwork is now transparent (no background box), so it blends with the
+ * black footer and is free to scale up and fill its column. We let it grow to
+ * the full width of its container rather than capping it with a small box, so
+ * it fills the available space without forcing layout shifts on siblings.
+ */
 function HoursImage({ align = "center" }: { align?: "center" | "end" }) {
   return (
-    <div className={`flex ${align === "end" ? "justify-end" : "justify-center"}`}>
+    <div className={`flex w-full ${align === "end" ? "justify-end" : "justify-center"}`}>
       <Image
         src={greenwayBusiness.assets.storeHoursImage}
         alt="Greenway Marijuana store hours: open daily 8am to 11:45pm"
-        width={600}
-        height={320}
-        className="h-auto w-full max-w-[18rem] object-contain"
-        sizes="(min-width: 1024px) 18rem, 18rem"
+        width={580}
+        height={360}
+        className="h-auto w-full max-w-[20rem] object-contain lg:max-w-none"
+        sizes="(min-width: 1024px) 20rem, 18rem"
         priority={false}
       />
     </div>
@@ -96,11 +105,13 @@ function AppDownload({ align = "center" }: { align?: "center" | "end" }) {
 }
 
 /** Follow-Greenway block: steel-blue circular social glyphs. Identical on mobile + desktop. */
-function FollowGreenway({ align = "center" }: { align?: "center" | "end" }) {
+function FollowGreenway() {
+  // Title and glyph row are always centered (per request). With five glyphs we
+  // let the row wrap and center so it never overflows its column.
   return (
-    <div className={`flex flex-col gap-3 ${align === "end" ? "items-end text-right" : "items-center text-center"}`}>
+    <div className="flex w-full flex-col items-center gap-3 text-center">
       <p className="text-[0.68rem] font-black uppercase tracking-[0.18em] text-zinc-400">Follow Greenway</p>
-      <div className={`flex items-center gap-3 ${align === "end" ? "justify-end" : "justify-center"}`}>
+      <div className="flex flex-wrap items-center justify-center gap-3">
         {socialGlyphs.map((social) => (
           <a
             key={social.url}
@@ -159,7 +170,7 @@ function MobileFooter() {
 
       {/* Follow Greenway: circular social glyphs. */}
       <div className="mt-4 rounded-[1.4rem] border border-white/10 bg-white/[0.03] px-4 py-5">
-        <FollowGreenway align="center" />
+        <FollowGreenway />
       </div>
 
       <div className="mt-7 rounded-[1.25rem] border border-[var(--gold)]/30 bg-[#090909] p-4">
@@ -213,7 +224,7 @@ function DesktopFooter() {
 
           {/* Follow Greenway — identical to mobile, in the desktop spot. */}
           <div className="w-full max-w-xs rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-5">
-            <FollowGreenway align="end" />
+            <FollowGreenway />
           </div>
         </div>
       </div>
