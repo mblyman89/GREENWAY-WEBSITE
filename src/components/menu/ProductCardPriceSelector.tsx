@@ -44,15 +44,17 @@ function PriceLine({ variant, itemPriceMinorUnits, salePriceMinorUnits }: PriceL
   // Active sale (BOTH mobile + desktop): struck "before" (regular) price to the
   // LEFT of the discounted price/unit, in a single centered row. Fonts are kept
   // compact so every price point (e.g. "$160.00  $112.00 /14g") fits on one row
-  // without wrapping. Centered horizontally and vertically in the box.
+  // without wrapping. Centered horizontally AND vertically in the box: the outer
+  // span fills the full height and uses items-center so the row sits dead-center
+  // (the struck price + discounted price share a baseline within an inline row).
   return (
-    <span className="flex min-h-[3.35rem] w-full flex-wrap items-baseline justify-center gap-x-1.5 gap-y-0.5 px-2 text-center leading-none md:gap-x-2 md:px-3">
+    <span className="flex min-h-[3.35rem] w-full flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5 px-2 text-center leading-none md:gap-x-2 md:px-3">
       {/* "Before" (regular) price — struck through, smaller */}
       <span className="text-[0.66rem] font-black text-zinc-400 line-through md:text-[0.95rem]">
         {formatMinorCurrency(regularPrice)}
       </span>
       {/* Discounted price-per-unit */}
-      <span className="flex items-baseline justify-center gap-0.5">
+      <span className="inline-flex items-baseline justify-center gap-0.5">
         <span className="text-[0.98rem] font-black text-[var(--orange)] md:text-[1.5rem]">{formatMinorCurrency(displayPrice)}</span>
         {unitLabel ? <span className="text-[0.66rem] font-black text-white/95 md:text-[0.92rem]">{unitLabel}</span> : null}
       </span>
