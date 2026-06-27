@@ -88,13 +88,13 @@ Each "slice" is independently shippable so the owner can inspect before continui
 - [ ] Front end: replace placeholder vendor cards with DB-driven profiles + real logos; brand logos on product cards.
 - [ ] **Deliverable PR + owner inspect.** *(PR #33 open; awaiting owner migration run + review)*
 
-## SLICE 4 — Product enrichment + AI assist (Phase 3b)
-- [ ] DB table `product_enrichments` keyed by POS product key (separate from POS truth).
-- [ ] Editor: display-name override, description override, image gallery, brand/vendor link, tags (new arrival/best seller/staff pick/local/high-CBD), staff-pick + featured flags, hide-override + reason, SEO override.
-- [ ] **AI draft descriptions:** "Generate description" button per product → AI proposes a compliant marketing description + tag suggestions using POS metadata (name, category, strain, brand, THC/CBD). Lands in a draft field with **Accept / Edit / Reject**; never auto-published. (Part of AI Enrichment Engine below.)
-- [ ] **AI bulk enrich queue:** select N products missing descriptions → batch-generate drafts → staff review grid (accept/reject each).
-- [ ] Front end merges enrichment over published menu item without touching price/stock.
-- [ ] Gap dashboard: products missing image / description / brand logo / vendor profile.
+## SLICE 4 — Product enrichment + AI assist (Phase 3b)  *(PR pending)*
+- [x] DB table `product_enrichments` keyed by POS product key (separate from POS truth). *(migration 0004; also `ai_suggestions`)*
+- [x] Editor: display-name override, description override, image gallery, brand/vendor link, tags, staff-pick + featured flags, hide-override + reason, SEO override. *(`/admin/products/[key]`)*
+- [x] **AI draft descriptions:** "Draft description" + "Suggest tags" per product → compliant draft from POS metadata, **Accept / Reject** in a review panel with compliance flags; never auto-published. *(`src/lib/ai/*` + product actions)*
+- [~] **AI bulk enrich queue:** single-product generate done; batch grid deferred to AI Engine follow-on (single-item flow covers the need for now).
+- [x] Front end merge helper (`mergeForDisplay`) for enrichment over published menu item without touching price/stock. *(public-page swap activates once a menu version is published via Slice 2 flow)*
+- [x] Gap dashboard: products missing image / description / brand link. *(stat cards + gap filters on `/admin/products`)*
 - [ ] **Deliverable PR + owner inspect.**
 
 ## SLICE 5 — Blog/newsletter CMS + site-text editor (Phase 3c)
