@@ -208,3 +208,28 @@ export async function diffVersions(stagedId: string, baseId: string | null): Pro
 
   return { added, removed, priceChanged, unchangedCount };
 }
+
+/**
+ * Fetch a single menu item (with variants) from a version by its stable POS
+ * source key. Used by the product enrichment editor.
+ */
+export async function getItemBySourceKey(
+  versionId: string,
+  sourceItemId: string,
+): Promise<MenuItemWithVariants | null> {
+  const admin = createSupabaseAdminClient();
+  const { data: item } = await admin
+    .from("menu_items")
+    .select("*")
+    .eq("menu_version_id", versionId)
+    .eq("source_item_id", sourceItemId)
+    .maybeSingle();
+  if (!item) return null;
+  const row = item as MenuItemRow;
+  const { data: variants } = await admin
+    .from("menu_variants")
+    .select("*")
+    .eq("menu_item_id", row.id)
+    .order("sort_order", { ascending: true });
+  return { ...row, variants: (variants as MenuVariantRow[] | null) ?? [] };
+}

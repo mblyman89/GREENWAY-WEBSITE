@@ -80,6 +80,14 @@ export async function getBrandById(id: string): Promise<Brand | null> {
   return (data as Brand | null) ?? null;
 }
 
+/** All brands (id, name, vendor_id), for link dropdowns in the product editor. */
+export async function listAllBrands(): Promise<Pick<Brand, "id" | "display_name" | "vendor_id">[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  const admin = createSupabaseAdminClient();
+  const { data } = await admin.from("brands").select("id, display_name, vendor_id").order("display_name");
+  return (data as Pick<Brand, "id" | "display_name" | "vendor_id">[] | null) ?? [];
+}
+
 async function resolveMediaKey(mediaId: string | null): Promise<string | null> {
   if (!mediaId || !isSupabaseServiceConfigured) return null;
   const admin = createSupabaseAdminClient();
