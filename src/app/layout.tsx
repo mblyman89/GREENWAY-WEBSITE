@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Analytics } from "@/components/analytics/Analytics";
 import { AgeGate } from "@/components/age-gate/AgeGate";
 import { CartProvider } from "@/components/cart/CartProvider";
 import { ScrollToTopButton } from "@/components/site/ScrollToTopButton";
@@ -62,6 +63,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <CartProvider>{children}</CartProvider>
         <ScrollToTopButton />
         <AgeGate />
+        <Analytics />
       </body>
     </html>
   );

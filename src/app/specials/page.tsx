@@ -9,6 +9,7 @@ export const metadata = pageMetadata({
   description:
     "See Greenway Marijuana's cannabis specials: daily discounts, top-shelf deals, and 50% off clearance on flower, vapes, edibles, and more in Port Orchard, WA.",
   path: "/specials",
+  image: "/og/specials.png",
 });
 
 export default function SpecialsPage() {

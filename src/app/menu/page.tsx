@@ -11,6 +11,7 @@ export const metadata = pageMetadata({
   description:
     "Shop Greenway Marijuana's full Port Orchard cannabis menu: flower, prerolls, cartridges, concentrates, edibles, tinctures, topicals, and accessories with live prices and stock.",
   path: "/menu",
+  image: "/og/menu.png",
 });
 
 type MenuPageProps = {

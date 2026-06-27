@@ -8,8 +8,18 @@ const policyLinks = [
   { label: "Consumer Health Data", href: "/consumer-health-data" },
 ];
 
-const appPlaceholders = ["Apple", "Google"];
-const socialLinks = [greenwayBusiness.social.instagram, greenwayBusiness.social.facebook];
+// App store glyphs (steel-blue circular badges, matching brand reference).
+const appStores = [
+  { key: "apple", label: "Apple App Store", src: greenwayBusiness.assets.appGlyphApple, href: "#" },
+  { key: "google", label: "Google Play", src: greenwayBusiness.assets.appGlyphGoogle, href: "#" },
+];
+
+// Social glyphs (steel-blue circular badges, matching brand reference).
+const socialGlyphs = [
+  { ...greenwayBusiness.social.instagram, src: greenwayBusiness.assets.socialGlyphInstagram },
+  { ...greenwayBusiness.social.facebook, src: greenwayBusiness.assets.socialGlyphFacebook },
+];
+
 const copyrightYear = new Date().getFullYear();
 
 function CopyrightLine({ className = "" }: { className?: string }) {
@@ -32,6 +42,78 @@ function PolicyLinks({ compact = false }: { compact?: boolean }) {
           {compact && index < policyLinks.length - 1 ? <span className="text-[0.62rem] font-black text-zinc-600">|</span> : null}
         </span>
       ))}
+    </div>
+  );
+}
+
+/** Store hours graphic ("OPEN / 8am-11:45pm"). Shared by mobile + desktop. */
+function HoursImage({ align = "center" }: { align?: "center" | "end" }) {
+  return (
+    <div className={`flex ${align === "end" ? "justify-end" : "justify-center"}`}>
+      <Image
+        src={greenwayBusiness.assets.storeHoursImage}
+        alt="Greenway Marijuana store hours: open daily 8am to 11:45pm"
+        width={600}
+        height={320}
+        className="h-auto w-full max-w-[18rem] object-contain"
+        sizes="(min-width: 1024px) 18rem, 18rem"
+        priority={false}
+      />
+    </div>
+  );
+}
+
+/**
+ * App-download block: the "App / DOWNLOAD" wordmark to the LEFT of two
+ * steel-blue circular store glyphs (Apple + Google Play). Identical markup on
+ * mobile and desktop. `align` controls horizontal placement of the whole row.
+ */
+function AppDownload({ align = "center" }: { align?: "center" | "end" }) {
+  return (
+    <div className={`flex flex-wrap items-center gap-x-5 gap-y-3 ${align === "end" ? "justify-end" : "justify-center"}`}>
+      <Image
+        src={greenwayBusiness.assets.appDownloadWordmark}
+        alt="App download"
+        width={420}
+        height={420}
+        className="h-14 w-auto object-contain"
+        sizes="140px"
+      />
+      <div className="flex items-center gap-3">
+        {appStores.map((store) => (
+          <a
+            key={store.key}
+            href={store.href}
+            aria-label={`${store.label} — app coming soon`}
+            className="inline-flex h-11 w-11 items-center justify-center rounded-full transition duration-200 hover:scale-105 hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--greenway)]"
+          >
+            <Image src={store.src} alt={store.label} width={88} height={88} className="h-11 w-11 object-contain" sizes="44px" />
+          </a>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Follow-Greenway block: steel-blue circular social glyphs. Identical on mobile + desktop. */
+function FollowGreenway({ align = "center" }: { align?: "center" | "end" }) {
+  return (
+    <div className={`flex flex-col gap-3 ${align === "end" ? "items-end text-right" : "items-center text-center"}`}>
+      <p className="text-[0.68rem] font-black uppercase tracking-[0.18em] text-zinc-400">Follow Greenway</p>
+      <div className={`flex items-center gap-3 ${align === "end" ? "justify-end" : "justify-center"}`}>
+        {socialGlyphs.map((social) => (
+          <a
+            key={social.url}
+            href={social.url}
+            target="_blank"
+            rel="noreferrer"
+            aria-label={`Open Greenway on ${social.label}`}
+            className="inline-flex h-11 w-11 items-center justify-center rounded-full transition duration-200 hover:scale-105 hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--greenway)]"
+          >
+            <Image src={social.src} alt={social.label} width={88} height={88} className="h-11 w-11 object-contain" sizes="44px" />
+          </a>
+        ))}
+      </div>
     </div>
   );
 }
@@ -65,32 +147,19 @@ function MobileFooter() {
         </a>
       </div>
 
-      <div className="mt-6 rounded-[1.6rem] border border-[var(--greenway)]/30 bg-[var(--greenway)] px-5 py-5 text-black">
-        <p className="text-[0.7rem] font-black uppercase tracking-[0.22em]">Store Hours</p>
-        <p className="mt-1 text-3xl font-black uppercase leading-none tracking-tight">8am-11pm</p>
-        <p className="mt-2 text-xs font-black uppercase tracking-[0.14em] text-black/70">Open daily</p>
+      {/* Store hours graphic (replaces the former green hours box). */}
+      <div className="mt-7">
+        <HoursImage align="center" />
       </div>
 
-      <div className="mt-7 rounded-[1.4rem] border border-white/10 bg-white/[0.03] p-4">
-        <p className="text-[0.68rem] font-black uppercase tracking-[0.18em] text-zinc-500">App downloads coming soon</p>
-        <div className="mt-3 flex justify-center gap-2">
-          {appPlaceholders.map((label) => (
-            <span key={label} className="inline-flex h-9 min-w-20 items-center justify-center rounded-full border border-white/10 bg-zinc-900 px-3 text-[0.68rem] font-black uppercase tracking-[0.12em] text-zinc-500" title="App link coming later">
-              {label}
-            </span>
-          ))}
-        </div>
+      {/* App download: wordmark left of the two circular store glyphs. */}
+      <div className="mt-7 rounded-[1.4rem] border border-white/10 bg-white/[0.03] px-4 py-5">
+        <AppDownload align="center" />
       </div>
 
-      <div className="mt-4 rounded-[1.4rem] border border-white/10 bg-white/[0.03] p-4">
-        <p className="text-[0.68rem] font-black uppercase tracking-[0.18em] text-zinc-500">Follow Greenway</p>
-        <div className="mt-3 flex justify-center gap-2">
-          {socialLinks.map((social) => (
-            <a key={social.url} href={social.url} target="_blank" rel="noreferrer" className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-zinc-900 text-[0.68rem] font-black uppercase tracking-[0.08em] text-zinc-300 transition hover:border-[var(--greenway)] hover:text-[var(--greenway)]" aria-label={`Open Greenway on ${social.label}`}>
-              {social.shortLabel}
-            </a>
-          ))}
-        </div>
+      {/* Follow Greenway: circular social glyphs. */}
+      <div className="mt-4 rounded-[1.4rem] border border-white/10 bg-white/[0.03] px-4 py-5">
+        <FollowGreenway align="center" />
       </div>
 
       <div className="mt-7 rounded-[1.25rem] border border-[var(--gold)]/30 bg-[#090909] p-4">
@@ -133,33 +202,18 @@ function DesktopFooter() {
           <PolicyLinks />
         </div>
 
-        <div className="flex flex-col items-end text-right">
-          <p className="text-sm font-black uppercase tracking-[0.2em] text-[var(--greenway)]">Hours</p>
-          <p className="mt-2 text-lg font-black text-white">{greenwayBusiness.hours.short}</p>
-          <a href={`tel:${greenwayBusiness.phone.tel}`} className="mt-2 text-sm font-bold text-zinc-300 transition hover:text-[var(--greenway)]">
-            {greenwayBusiness.phone.display}
-          </a>
+        <div className="flex flex-col items-end gap-6 text-right">
+          {/* Store hours graphic (replaces the former Hours / phone text block). */}
+          <HoursImage align="end" />
 
-          <div className="mt-6 w-full max-w-xs rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-            <p className="text-[0.68rem] font-black uppercase tracking-[0.18em] text-zinc-500">App downloads</p>
-            <div className="mt-3 flex justify-end gap-2">
-              {appPlaceholders.map((label) => (
-                <span key={label} className="inline-flex h-9 min-w-20 items-center justify-center rounded-full border border-white/10 bg-zinc-900 px-3 text-[0.68rem] font-black uppercase tracking-[0.12em] text-zinc-500" title="App link coming later">
-                  {label}
-                </span>
-              ))}
-            </div>
+          {/* App download — identical to mobile, in the desktop spot. */}
+          <div className="w-full max-w-xs rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-5">
+            <AppDownload align="end" />
           </div>
 
-          <div className="mt-4 w-full max-w-xs rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-            <p className="text-[0.68rem] font-black uppercase tracking-[0.18em] text-zinc-500">Follow Greenway</p>
-            <div className="mt-3 flex justify-end gap-2">
-              {socialLinks.map((social) => (
-                <a key={social.url} href={social.url} target="_blank" rel="noreferrer" className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-zinc-900 text-[0.68rem] font-black uppercase tracking-[0.08em] text-zinc-300 transition hover:border-[var(--greenway)] hover:text-[var(--greenway)]" aria-label={`Open Greenway on ${social.label}`}>
-                  {social.shortLabel}
-                </a>
-              ))}
-            </div>
+          {/* Follow Greenway — identical to mobile, in the desktop spot. */}
+          <div className="w-full max-w-xs rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-5">
+            <FollowGreenway align="end" />
           </div>
         </div>
       </div>

@@ -10,6 +10,7 @@ export const metadata = pageMetadata({
   title: "Location, Hours & Directions — Port Orchard, WA",
   description: `Visit Greenway Marijuana at ${greenwayBusiness.address.full}. Store hours, phone, directions, and map for our Port Orchard cannabis dispensary — open daily 8am-11pm.`,
   path: "/locations",
+  image: "/og/locations.png",
 });
 
 export default function LocationsPage() {
