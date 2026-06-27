@@ -4,12 +4,28 @@ import { ROLE_LABELS } from "@/lib/auth/roles";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { StatCard } from "@/components/admin/StatCard";
 import { countLoyaltySignups } from "@/lib/loyalty/store";
+import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import { getPublishedVersion, listImports } from "@/lib/pos/menu-version";
+import { formatDateTime } from "@/lib/pos/format";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminDashboardPage() {
   const session = await requireStaff();
   const loyaltyCount = await countLoyaltySignups();
+
+  // POS menu status (gracefully degrades when Supabase isn't configured yet).
+  let publishedItems: number | null = null;
+  let lastImportLabel = "—";
+  if (isSupabaseServiceConfigured) {
+    try {
+      const [published, imports] = await Promise.all([getPublishedVersion(), listImports(1)]);
+      publishedItems = published?.item_count ?? null;
+      lastImportLabel = imports[0] ? formatDateTime(imports[0].created_at) : "No imports yet";
+    } catch {
+      // leave defaults
+    }
+  }
 
   const firstName =
     (session.profile.full_name ?? session.email).split(/[\s@]/)[0] || "there";
@@ -29,8 +45,19 @@ export default async function AdminDashboardPage() {
           </h2>
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             <StatCard label="Open orders" value="—" hint="Live in Slice 7" accent="orange" />
-            <StatCard label="Live menu version" value="—" hint="Live in Slice 2" accent="green" />
-            <StatCard label="Last POS import" value="—" hint="Live in Slice 2" />
+            <StatCard
+              label="Live menu items"
+              value={publishedItems ?? "—"}
+              hint={publishedItems !== null ? "Currently published" : "No menu published yet"}
+              accent="green"
+              href="/admin/menu-imports"
+            />
+            <StatCard
+              label="Last POS import"
+              value={lastImportLabel === "—" || lastImportLabel === "No imports yet" ? lastImportLabel : "✓"}
+              hint={lastImportLabel !== "—" && lastImportLabel !== "No imports yet" ? lastImportLabel : "Upload to begin"}
+              href="/admin/menu-imports"
+            />
             <StatCard
               label="Loyalty signups"
               value={loyaltyCount}
@@ -48,7 +75,7 @@ export default async function AdminDashboardPage() {
           </h2>
           <div className="grid gap-3 sm:grid-cols-2">
             <ProgressRow done label="Slice 1 — Foundation" detail="Auth, roles, audit log, media storage, dashboard shell" />
-            <ProgressRow label="Slice 2 — POS import & staged publish" detail="Upload spreadsheets → review → publish menu" />
+            <ProgressRow done label="Slice 2 — POS import & staged publish" detail="Upload spreadsheets → review → publish menu" />
             <ProgressRow label="Slice 3 — Media library + Vendors/Brands" detail="Logos, profiles, asset manager" />
             <ProgressRow label="Slice 4 — Product enrichment" detail="Photos, descriptions, staff picks" />
             <ProgressRow label="Slice 5 — Blog & site content" detail="CMS + controlled text editor" />
