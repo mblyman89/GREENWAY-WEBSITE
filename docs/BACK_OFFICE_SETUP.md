@@ -12,6 +12,14 @@ This guide connects the back office to Supabase. ~10 minutes, one-time.
 3. Click **Run**. This creates the staff/roles, audit log, media, and settings
    tables, the security policies (RLS), the auto-profile trigger, and the
    private `media` storage bucket.
+4. Open **SQL Editor → New query** again, paste the entire contents of
+   `supabase/migrations/0002_slice2_pos_import.sql`, and click **Run**. This adds
+   the POS import + menu-version tables (`pos_imports`, `pos_import_diagnostics`,
+   `menu_versions`, `menu_items`, `menu_variants`), their RLS policies, the
+   private `pos-raw` upload bucket, and the atomic `publish_menu_version()`
+   function that powers the Menu Imports screen.
+
+> Run migrations in numeric order (0001 before 0002). Each is safe to re-run.
 
 ## 3. Get your keys
 In Supabase: **Settings → API**. Copy:
