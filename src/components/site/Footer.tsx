@@ -10,6 +10,16 @@ const policyLinks = [
 
 const appPlaceholders = ["Apple", "Google"];
 const socialLinks = [greenwayBusiness.social.instagram, greenwayBusiness.social.facebook];
+const copyrightYear = new Date().getFullYear();
+
+function CopyrightLine({ className = "" }: { className?: string }) {
+  return (
+    <p className={`text-[0.7rem] font-semibold leading-5 text-zinc-500 ${className}`}>
+      <span className="block">&copy; {copyrightYear} LYMAN&rsquo;S MARIJUANA, Inc., dba Greenway Marijuana.</span>
+      <span className="block">All rights reserved.</span>
+    </p>
+  );
+}
 
 function PolicyLinks({ compact = false }: { compact?: boolean }) {
   return (
@@ -61,10 +71,6 @@ function MobileFooter() {
         <p className="mt-2 text-xs font-black uppercase tracking-[0.14em] text-black/70">Open daily</p>
       </div>
 
-      <div className="mt-7">
-        <PolicyLinks compact />
-      </div>
-
       <div className="mt-7 rounded-[1.4rem] border border-white/10 bg-white/[0.03] p-4">
         <p className="text-[0.68rem] font-black uppercase tracking-[0.18em] text-zinc-500">App downloads coming soon</p>
         <div className="mt-3 flex justify-center gap-2">
@@ -91,6 +97,12 @@ function MobileFooter() {
         <p className="text-[0.62rem] font-black uppercase tracking-[0.2em] text-[var(--gold)]">Washington Cannabis Warning</p>
         <p className="mt-3 text-[0.72rem] font-semibold leading-5 text-zinc-300">{requiredComplianceWarning}</p>
       </div>
+
+      <div className="mt-7">
+        <PolicyLinks compact />
+      </div>
+
+      <CopyrightLine className="mt-4 text-center" />
     </div>
   );
 }
@@ -112,6 +124,7 @@ function DesktopFooter() {
           </Link>
           <p className="mt-4 text-xs font-black uppercase tracking-[0.22em] text-[var(--gold)]">Port Orchard, WA</p>
           <p className="mt-2 max-w-xs text-sm leading-6 text-zinc-400">{greenwayBusiness.address.full}</p>
+          <CopyrightLine className="mt-5 max-w-xs" />
         </div>
 
         <div className="rounded-[1.5rem] border border-[var(--gold)]/35 bg-[#090909] p-6 shadow-2xl shadow-black/35">
