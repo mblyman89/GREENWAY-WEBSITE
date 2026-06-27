@@ -1,0 +1,86 @@
+[
+  {
+    "value": "flower",
+    "label": "Flower"
+  },
+  {
+    "value": "popcorn-bud",
+    "label": "Popcorn Bud"
+  },
+  {
+    "value": "infused-flower",
+    "label": "Infused Flower"
+  },
+  {
+    "value": "accessories",
+    "label": "Accessories"
+  },
+  {
+    "value": "merch",
+    "label": "Greenway Merch"
+  },
+  {
+    "value": "paraphernalia",
+    "label": "Paraphernalia"
+  },
+  {
+    "value": "preroll",
+    "label": "Preroll"
+  },
+  {
+    "value": "blunt",
+    "label": "Blunt"
+  },
+  {
+    "value": "preroll-pack",
+    "label": "Preroll Pack"
+  },
+  {
+    "value": "infused-preroll",
+    "label": "Infused Preroll"
+  },
+  {
+    "value": "infused-blunt",
+    "label": "Infused Blunt"
+  },
+  {
+    "value": "infused-preroll-pack",
+    "label": "Infused Preroll Pack"
+  },
+  {
+    "value": "cartridge",
+    "label": "Cartridge"
+  },
+  {
+    "value": "disposable-cartridge",
+    "label": "Disposable Cartridge"
+  },
+  {
+    "value": "concentrate",
+    "label": "Concentrate"
+  },
+  {
+    "value": "rso",
+    "label": "RSO"
+  },
+  {
+    "value": "edible-solid",
+    "label": "Edible (Solid)"
+  },
+  {
+    "value": "edible-liquid",
+    "label": "Edible (Liquid)"
+  },
+  {
+    "value": "tincture",
+    "label": "Tincture"
+  },
+  {
+    "value": "topical",
+    "label": "Topical"
+  },
+  {
+    "value": "trim",
+    "label": "Trim"
+  }
+]

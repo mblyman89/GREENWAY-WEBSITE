@@ -1,0 +1,13 @@
+{
+  "productName": "Packaged Flower - Lemon Beltz - 1g",
+  "inventoryType": "Usable Marijuana",
+  "category": "Flower",
+  "strainType": "Hybrid",
+  "strain": "Lemon Beltz",
+  "packageSize": 1.0,
+  "uom": "Grams",
+  "price": 10.0,
+  "cannabis": true,
+  "description": "Lemon Beltz is a hybrid flower with a bright, zesty lemon flavor and balanced, well-rounded effects.",
+  "imageFile": ""
+}

@@ -1,0 +1,404 @@
+[
+  {
+    "slug": "cured-resin-blunt-jack-black-2g",
+    "name": "Cured Resin Blunt - Jack Black - 2g",
+    "category": "Blunt",
+    "strain": "Jack Black"
+  },
+  {
+    "slug": "fire-bros-disposable-squeezy",
+    "name": "Fire Bros Disposable Squeezy",
+    "category": "Disposable Cartridge",
+    "strain": "Squeezy"
+  },
+  {
+    "slug": "fire-bros-pre-roll-2-pack-mosaic-1g",
+    "name": "Fire Bros Pre-Roll 2-Pack - Mosaic - 1g",
+    "category": "Pre-roll",
+    "strain": "Mosaic"
+  },
+  {
+    "slug": "fire-bros-all-in-one-cart-the-zest-1g",
+    "name": "FIRE BROS All-In-One Cart - The Zest - 1g",
+    "category": "Disposable Cartridge",
+    "strain": "The Zest"
+  },
+  {
+    "slug": "fire-bros-pre-roll-mexican-flan-2pk-1g",
+    "name": "Fire Bros Pre-roll Mexican Flan|2pk - 1g",
+    "category": "Pre-roll",
+    "strain": "Mexican Flan"
+  },
+  {
+    "slug": "fire-bros-flower-yuzu-sour-3-5g",
+    "name": "Fire Bros Flower Yuzu Sour - 3.5g",
+    "category": "Flower",
+    "strain": "Yuzu Sour"
+  },
+  {
+    "slug": "fire-bros-live-resin-cbd-black-magic-woman-1g",
+    "name": "Fire Bros Live Resin CBD Black Magic Woman - 1g",
+    "category": "Live Resin",
+    "strain": "CBD Black Magic Woman"
+  },
+  {
+    "slug": "pre-roll-2-pack-mexican-flan-1g",
+    "name": "Pre-Roll 2-Pack - Mexican Flan - 1g",
+    "category": "Pre-roll",
+    "strain": "Mexican Flan"
+  },
+  {
+    "slug": "cbdabs-viva-pi-ata-1g",
+    "name": "CBDabs - Viva Pi\u00f1ata - 1g",
+    "category": "Live Resin",
+    "strain": "Viva Pi\u00f1ata"
+  },
+  {
+    "slug": "fire-bros-live-resin-cbd-mexican-flan-1g",
+    "name": "Fire Bros Live Resin CBD Mexican Flan - 1g",
+    "category": "Live Resin",
+    "strain": "CBD Mexican Flan"
+  },
+  {
+    "slug": "cured-resin-blunt-tamalez-2g",
+    "name": "Cured Resin Blunt - Tamalez - 2g",
+    "category": "Infused Blunt",
+    "strain": "Tamalez"
+  },
+  {
+    "slug": "fire-bros-pre-roll-variety-pack-2-5g",
+    "name": "Fire Bros Pre-roll Variety Pack 2.5g",
+    "category": "Pre-roll",
+    "strain": "Variety Pack #1"
+  },
+  {
+    "slug": "pre-roll-2-pack-boofscotti-1g",
+    "name": "Pre-Roll 2-Pack - Boofscotti - 1g",
+    "category": "Pre-roll",
+    "strain": "Boofscotti"
+  },
+  {
+    "slug": "fire-bros-live-resin-dixie-kong-cbdabs-2g",
+    "name": "Fire Bros Live Resin Dixie Kong CBDabs - 2g",
+    "category": "BHO",
+    "strain": "Dixie Kong"
+  },
+  {
+    "slug": "silver-tier-brew-ha-ha-1g",
+    "name": "Silver Tier - Brew Ha Ha - 1g",
+    "category": "Live Resin",
+    "strain": "Brew Ha Ha"
+  },
+  {
+    "slug": "cured-resin-blunt-umami-bomb-2g",
+    "name": "Cured Resin Blunt - Umami Bomb - 2g",
+    "category": "Infused Blunt",
+    "strain": "Umami Bomb"
+  },
+  {
+    "slug": "pre-roll-5-pack-danny-deweedo-2-5",
+    "name": "Pre-Roll 5-Pack - Danny DeWeedo - 2.5",
+    "category": "Pre-roll",
+    "strain": "Danny DeWeedo"
+  },
+  {
+    "slug": "cbdabs-texas-toazt-1g",
+    "name": "CBDabs - Texas Toazt - 1g",
+    "category": "Live Resin",
+    "strain": "Texas Toazt"
+  },
+  {
+    "slug": "cbdabs-lemon-crepe-1g",
+    "name": "CBDabs - Lemon Crepe - 1g",
+    "category": "Live Resin",
+    "strain": "Lemon Crepe"
+  },
+  {
+    "slug": "pre-roll-2-pack-cthulu-1g",
+    "name": "Pre-Roll 2-Pack - Cthulu - 1g",
+    "category": "Pre-roll",
+    "strain": "cthulhu"
+  },
+  {
+    "slug": "pre-roll-2-pack-tamalez-1g",
+    "name": "Pre-Roll 2-Pack - Tamalez - 1g",
+    "category": "Pre-roll",
+    "strain": "Tamalez"
+  },
+  {
+    "slug": "silver-tier-lemon-slushee-1g",
+    "name": "Silver Tier - Lemon Slushee - 1g",
+    "category": "Live Resin",
+    "strain": "Lemon Slushee"
+  },
+  {
+    "slug": "cbdabs-peanut-butter-crunch-1g",
+    "name": "CBDabs - Peanut Butter Crunch - 1g",
+    "category": "Live Resin",
+    "strain": "Peanut Butter Crunch"
+  },
+  {
+    "slug": "cbdabs-viva-pi-ata-1g",
+    "name": "CBDabs - Viva Pi\u00f1ata - 1g",
+    "category": "Live Resin",
+    "strain": "Viva Pi\u00f1ata"
+  },
+  {
+    "slug": "cbdabs-jack-black-1g",
+    "name": "CBDabs - Jack Black - 1g",
+    "category": "Live Resin",
+    "strain": "Jack Black"
+  },
+  {
+    "slug": "gold-tier-puft-party-1g",
+    "name": "Gold Tier - Puft Party - 1g",
+    "category": "Live Resin",
+    "strain": "Puft Party"
+  },
+  {
+    "slug": "pre-roll-2-pack-boofscotti-1g",
+    "name": "Pre-Roll 2-Pack - Boofscotti - 1g",
+    "category": "Pre-roll",
+    "strain": "Boofscotti"
+  },
+  {
+    "slug": "pre-roll-2-pack-cherry-biscotti-1g",
+    "name": "Pre-Roll 2-Pack - Cherry Biscotti - 1g",
+    "category": "Pre-roll",
+    "strain": "Cherry Biscotti"
+  },
+  {
+    "slug": "pre-roll-5-pack-yuzu-sour-2-5g",
+    "name": "Pre-Roll 5-Pack - Yuzu Sour - 2.5g",
+    "category": "Pre-roll",
+    "strain": "Yuzu Sour"
+  },
+  {
+    "slug": "fire-bros-flower-yuzu-sour-3-5g",
+    "name": "Fire Bros Flower Yuzu Sour - 3.5g",
+    "category": "Flower",
+    "strain": "Yuzu Sour"
+  },
+  {
+    "slug": "fire-bros-flower-old-money-14g",
+    "name": "Fire Bros Flower Old Money - 14g",
+    "category": "Flower",
+    "strain": "Old Money"
+  },
+  {
+    "slug": "cured-resin-blunt-umami-bomb-2g",
+    "name": "Cured Resin Blunt - Umami Bomb - 2g",
+    "category": "Infused Blunt",
+    "strain": "Umami Bomb"
+  },
+  {
+    "slug": "fire-bros-pre-roll-2-pack-yuzu-sour-1g",
+    "name": "Fire Bros Pre-Roll 2-Pack - Yuzu Sour - 1g",
+    "category": "Pre-roll",
+    "strain": "Yuzu Sour"
+  },
+  {
+    "slug": "cured-resin-blunt-tamalez-2g",
+    "name": "Cured Resin Blunt - Tamalez - 2g",
+    "category": "Infused Blunt",
+    "strain": "Tamalez"
+  },
+  {
+    "slug": "cured-resin-blunt-purple-milk-2g",
+    "name": "Cured Resin Blunt - Purple Milk - 2g",
+    "category": "Infused Blunt",
+    "strain": "Purple Milk"
+  },
+  {
+    "slug": "fire-bros-pre-roll-lemon-slushee-2-5g",
+    "name": "Fire Bros Pre-Roll Lemon Slushee - 2.5g",
+    "category": "Disposable Cartridge",
+    "strain": "Lemon Slushee"
+  },
+  {
+    "slug": "fire-bros-pav-14g",
+    "name": "Fire Bros. - Pav\u00e9 - 14g",
+    "category": "Disposable Cartridge",
+    "strain": "Pave"
+  },
+  {
+    "slug": "fire-bros-pre-roll-5-pack-boofscotti-2-5g",
+    "name": "Fire Bros Pre-Roll 5-Pack - Boofscotti - 2.5g",
+    "category": "Pre-roll",
+    "strain": "Boofscotti"
+  },
+  {
+    "slug": "fire-bros-pre-roll-2-pack-cough-trop-1g",
+    "name": "Fire Bros Pre-Roll 2-Pack - Cough Trop - 1g",
+    "category": "Flower",
+    "strain": "Cough Trop"
+  },
+  {
+    "slug": "fire-bros-all-in-one-cart-medellin-1g",
+    "name": "Fire bros All-In-One Cart - Medellin - 1g",
+    "category": "Disposable Cartridge",
+    "strain": "Medellin"
+  },
+  {
+    "slug": "fire-bros-all-in-one-cart-the-zest-1g",
+    "name": "FIRE BROS All-In-One Cart - The Zest - 1g",
+    "category": "Disposable Cartridge",
+    "strain": "The Zest"
+  },
+  {
+    "slug": "all-in-one-artist-series-orange-julius-1g",
+    "name": "All-In-One Artist Series - Orange Julius - 1g",
+    "category": "Disposable Cartridge",
+    "strain": "Orange Julius"
+  },
+  {
+    "slug": "fire-bros-rah-tah-tah-1g",
+    "name": "Fire Bros. - Rah Tah Tah - 1g",
+    "category": "Flower",
+    "strain": "Rah Tah Tah"
+  },
+  {
+    "slug": "live-rosin-blunt-cherry-biscotti-2g",
+    "name": "Live Rosin Blunt - Cherry Biscotti - 2g",
+    "category": "Infused Blunt",
+    "strain": "Cherry Biscotti"
+  },
+  {
+    "slug": "all-in-one-cart-daiquiri-1g",
+    "name": "All-In-One Cart - Daiquiri - 1g",
+    "category": "Disposable Cartridge",
+    "strain": "Daiquiri"
+  },
+  {
+    "slug": "flavored-all-in-one-banana-trip-1g",
+    "name": "Flavored All-In-One - Banana Trip - 1g",
+    "category": "Disposable Cartridge",
+    "strain": "Banana Trip"
+  },
+  {
+    "slug": "silver-tier-brew-ha-ha-1g",
+    "name": "Silver Tier - Brew Ha Ha - 1g",
+    "category": "Live Resin",
+    "strain": "Brew Ha Ha"
+  },
+  {
+    "slug": "cbdabs-umami-bomb-1g",
+    "name": "CBDabs - Umami Bomb - 1g",
+    "category": "Live Resin",
+    "strain": "Umami Bomb"
+  },
+  {
+    "slug": "cbdabs-yuzu-sour-1g",
+    "name": "CBDabs - Yuzu Sour - 1g",
+    "category": "Live Resin",
+    "strain": "Yuzu Sour"
+  },
+  {
+    "slug": "cbdabs-sour-bomb-1g",
+    "name": "CBDabs - Sour Bomb - 1g",
+    "category": "Live Resin",
+    "strain": "Sour Bomb"
+  },
+  {
+    "slug": "fire-bros-disposable-squeezy",
+    "name": "Fire Bros Disposable Squeezy",
+    "category": "Disposable Cartridge",
+    "strain": "Squeezy"
+  },
+  {
+    "slug": "fire-bros-pre-roll-2-pack-mosaic-1g",
+    "name": "Fire Bros Pre-Roll 2-Pack - Mosaic - 1g",
+    "category": "Pre-roll",
+    "strain": "Mosaic"
+  },
+  {
+    "slug": "fire-bros-pre-roll-2-pack-rah-tah-tah-1g",
+    "name": "Fire Bros Pre-Roll 2-Pack - Rah Tah Tah - 1g",
+    "category": "Pre-roll",
+    "strain": "Rah Tah Tah"
+  },
+  {
+    "slug": "all-in-one-pearl-giggin-grapes-1g",
+    "name": "All-In-One Pearl - Giggin' Grapes - 1g",
+    "category": "Disposable Cartridge",
+    "strain": "Giggin' Grapes"
+  },
+  {
+    "slug": "fire-bros-pre-roll-2-pack-purple-milk-1g",
+    "name": "Fire Bros Pre-Roll 2-Pack - Purple Milk - 1g",
+    "category": "Pre-roll",
+    "strain": "Purple Milk"
+  },
+  {
+    "slug": "fire-bros-all-in-one-cart-chrome-gnome-1g",
+    "name": "Fire Bros All-In-One Cart - Chrome Gnome - 1g",
+    "category": "Disposable Cartridge",
+    "strain": "Chrome Gnome"
+  },
+  {
+    "slug": "fire-bros-all-in-one-artist-series-lobster-roll-1g",
+    "name": "Fire Bros All-In-One Artist Series - Lobster Roll - 1g",
+    "category": "Disposable Cartridge",
+    "strain": "Lobster Roll"
+  },
+  {
+    "slug": "fire-bros-all-in-one-cart-mongo",
+    "name": "Fire Bros All-In-One Cart - Mongo",
+    "category": "Disposable Cartridge",
+    "strain": "Mongo"
+  },
+  {
+    "slug": "fire-bros-pre-roll-5-pack-grape-lobster-2-5g",
+    "name": "Fire Bros Pre-Roll 5-Pack - Grape Lobster - 2.5g",
+    "category": "Pre-roll",
+    "strain": "Grape Lobster"
+  },
+  {
+    "slug": "fire-bros-silver-live-resin-lemon-slushee-1g",
+    "name": "fire bros silver Live Resin Lemon Slushee - 1g",
+    "category": "Live Resin",
+    "strain": "Lemon Slushee"
+  },
+  {
+    "slug": "live-rosin-blunt-boofscotti-2g",
+    "name": "Live Rosin Blunt - Boofscotti - 2g",
+    "category": "Infused Blunt",
+    "strain": "Boofscotti"
+  },
+  {
+    "slug": "all-in-one-cart-grimace-shake-1g",
+    "name": "All-In-One Cart - Grimace Shake - 1g",
+    "category": "Disposable Cartridge",
+    "strain": "Grimace Shake"
+  },
+  {
+    "slug": "live-rosin-blunt-boofscotti-2g",
+    "name": "Live Rosin Blunt - Boofscotti - 2g",
+    "category": "Infused Blunt",
+    "strain": "Boofscotti"
+  },
+  {
+    "slug": "all-in-one-artist-series-dulce-de-uva-1g",
+    "name": "All-In-One Artist Series - Dulce de Uva - 1g",
+    "category": "Disposable Cartridge",
+    "strain": "Dulce de uva"
+  },
+  {
+    "slug": "all-in-one-cart-grimace-shake-1g",
+    "name": "All-In-One Cart - Grimace Shake - 1g",
+    "category": "Disposable Cartridge",
+    "strain": "Grimace Shake"
+  },
+  {
+    "slug": "fire-bros-showcase-chrome-dome-3-5g",
+    "name": "Fire Bros. Showcase - Chrome Dome - 3.5g",
+    "category": "Flower",
+    "strain": "Chrome Dome"
+  },
+  {
+    "slug": "pre-roll-2-pack-lemon-pastries-1g",
+    "name": "Pre-Roll 2-Pack - Lemon Pastries - 1g",
+    "category": "Pre-roll",
+    "strain": "Lemon Pastries"
+  }
+]
