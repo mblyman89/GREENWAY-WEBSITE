@@ -120,19 +120,17 @@ export function ProductCardPriceSelector({ item, salePriceMinorUnits }: ProductC
       <button
         type="button"
         onClick={() => setIsOpen((current) => (showDropdown ? !current : current))}
-        className={`grid min-h-[3.35rem] w-full grid-cols-[minmax(0,1fr)_2.35rem] items-center overflow-hidden border bg-black/58 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.1),0_10px_22px_rgba(0,0,0,0.24)] backdrop-blur-sm transition hover:border-[#b9864f]/80 ${isOpen && showDropdown ? "rounded-b-[0.95rem] rounded-t-none border-[#b9864f]/75" : "rounded-[0.95rem] border-white/12"}`}
+        className={`relative grid min-h-[3.35rem] w-full place-items-center overflow-hidden border bg-black/58 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.1),0_10px_22px_rgba(0,0,0,0.24)] backdrop-blur-sm transition hover:border-[#b9864f]/80 ${isOpen && showDropdown ? "rounded-b-[0.95rem] rounded-t-none border-[#b9864f]/75" : "rounded-[0.95rem] border-white/12"}`}
         aria-label={`Choose package size for ${item.name}`}
         aria-expanded={showDropdown ? isOpen : undefined}
         disabled={!showDropdown}
       >
         <PriceLine variant={selectedVariant} itemPriceMinorUnits={item.priceMinorUnits} salePriceMinorUnits={salePriceMinorUnits} />
         {showDropdown ? (
-          <span className="grid h-full min-h-[3.35rem] place-items-center border-l border-white/10 bg-white/[0.03] text-white/90">
+          <span className="pointer-events-none absolute inset-y-0 right-0 grid w-[2.35rem] place-items-center border-l border-white/10 bg-white/[0.03] text-white/90">
             <ChevronIcon open={isOpen} />
           </span>
-        ) : (
-          <span aria-hidden="true" />
-        )}
+        ) : null}
       </button>
     </div>
   );

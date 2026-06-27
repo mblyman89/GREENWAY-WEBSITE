@@ -31,6 +31,7 @@ const shopCategoryItems: SiteMenuItem[] = [
   { label: "Tincture", href: "/menu?category=tincture" },
   { label: "Topical", href: "/menu?category=topical" },
   { label: "Accessories", href: "/menu?category=accessories" },
+  { label: "Greenway Merch", href: "/menu?category=merch" },
 ];
 
 const primaryMenuItems: SiteMenuItem[] = [
@@ -235,16 +236,8 @@ export function MobileNavigation() {
         </div>
 
         <div className="grid grid-cols-[1.05fr_1fr_1fr] gap-x-9 gap-y-6" aria-label="Site navigation links">
+          {/* Column 1: Shop by Category moved to the top for prominence. */}
           <nav className="grid content-start gap-6">
-            <section>
-              <DesktopSectionTitle>Specials</DesktopSectionTitle>
-              <div className="grid gap-1.5">
-                <Link href="/specials" onClick={closeDrawer} className="text-[0.98rem] font-semibold leading-6 text-white/92 transition hover:text-[var(--orange)]">
-                  Current Specials
-                </Link>
-              </div>
-            </section>
-
             <section>
               <DesktopSectionTitle>Shop by Category</DesktopSectionTitle>
               <div className="grid gap-1.5">
@@ -257,7 +250,17 @@ export function MobileNavigation() {
             </section>
           </nav>
 
+          {/* Column 2: Specials sits ABOVE Location, then Loyalty + Social. */}
           <nav className="grid content-start gap-6">
+            <section>
+              <DesktopSectionTitle>Specials</DesktopSectionTitle>
+              <div className="grid gap-1.5">
+                <Link href="/specials" onClick={closeDrawer} className="text-[0.98rem] font-semibold leading-6 text-white/92 transition hover:text-[var(--orange)]">
+                  Current Specials
+                </Link>
+              </div>
+            </section>
+
             <section>
               <DesktopSectionTitle>Location</DesktopSectionTitle>
               <div className="grid gap-1.5">

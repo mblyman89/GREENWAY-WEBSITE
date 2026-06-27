@@ -103,10 +103,13 @@ export function ProductDetailPurchasePanel({ item }: ProductDetailPurchasePanelP
             productName: item.name,
             brand: item.brand,
             category: item.category,
+            filterCategories: item.filterCategories,
             strainType: item.strainType,
             variantId: selectedVariant.id,
             variantLabel: selectedVariant.label,
-            priceMinorUnits: activeUnitPrice,
+            // Pass the TRUE regular price; the smart cart applies the accurate
+            // threshold-based daily-deal discount based on full cart contents.
+            priceMinorUnits: basePrice,
             regularPriceMinorUnits: basePrice,
             inventoryLevel: selectedVariant.inventoryLevel,
             quantity,

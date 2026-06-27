@@ -101,6 +101,7 @@ export function ProductOrderIntent({ item }: { item: GreenwayMenuItem }) {
             productName: item.name,
             brand: item.brand,
             category: item.category,
+            filterCategories: item.filterCategories,
             strainType: item.strainType,
             variantId: selectedVariant.id,
             variantLabel: selectedVariant.label,

@@ -56,7 +56,7 @@ export function SearchModal() {
 
       {isOpen ? (
         <div
-          className="fixed inset-x-0 top-0 z-[100] border-b border-white/10 bg-[#111] px-4 py-4 text-white shadow-2xl sm:py-6"
+          className="fixed inset-x-0 top-0 z-[100] border-b border-white/10 bg-[#111] px-4 pb-6 pt-[max(1.25rem,env(safe-area-inset-top))] text-white shadow-2xl sm:pb-7 sm:pt-6"
           role="dialog"
           aria-modal="true"
           aria-label="Search Greenway products"
@@ -93,7 +93,7 @@ export function SearchModal() {
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search strains, products..."
                 autoFocus
-                className="w-full rounded-full border border-white/10 bg-[#1a1a1a] py-3.5 pl-11 pr-5 text-base font-semibold text-white outline-none transition placeholder:text-zinc-500 focus:border-[var(--orange)] focus:ring-2 focus:ring-[var(--orange)]/20 sm:py-4"
+                className="w-full rounded-full border border-white/10 bg-[#1a1a1a] py-4 pl-11 pr-5 text-base font-semibold text-white outline-none transition placeholder:text-zinc-500 focus:border-[var(--orange)] focus:ring-2 focus:ring-[var(--orange)]/20"
               />
             </form>
           </div>

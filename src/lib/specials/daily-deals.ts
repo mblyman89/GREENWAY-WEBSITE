@@ -68,7 +68,7 @@ export function getStoreWeekday(reference: Date = new Date()): StoreWeekday {
 // ---------------------------------------------------------------------------
 
 // Monday — Munchie Monday: edibles, RSO, drinks, tinctures.
-const munchieMondayCategories: GreenwayCategory[] = [
+export const munchieMondayCategories: GreenwayCategory[] = [
   "edible-solid",
   "edible-liquid",
   "rso",
@@ -86,7 +86,7 @@ export const tuesdayDoobieCategories: GreenwayCategory[] = [
 ];
 
 // Wednesday — Wax Wednesday: concentrates + vapes.
-const waxWednesdayCategories: GreenwayCategory[] = [
+export const waxWednesdayCategories: GreenwayCategory[] = [
   "cartridge",
   "disposable-cartridge",
   "concentrate",
@@ -94,7 +94,7 @@ const waxWednesdayCategories: GreenwayCategory[] = [
 ];
 
 // Friday — Ounce Friday: flower families (priced per weight in store).
-const ounceFridayCategories: GreenwayCategory[] = [
+export const ounceFridayCategories: GreenwayCategory[] = [
   "flower",
   "popcorn-bud",
   "infused-flower",
@@ -174,42 +174,57 @@ export function getActiveMenuDiscount(
     }
     case "tuesday": {
       if (!isTuesdayDoobieItem(item)) return undefined;
-      // Highest available discount a customer can take advantage of is 25% (4+).
+      // Quantity-tiered (2+ = 15%, 4+ = 25%): a single preroll earns nothing, so
+      // the card shows ONLY an informational note — the real discount is applied
+      // in the cart once the qty threshold is reached.
       return buildDiscount(item, {
         label: "Doobie Tuesday",
         discountPercent: 25,
         multiItemDiscountPercent: 25,
+        bonusNote: "buy 2+ to save",
+        perItemSalePrice: false,
       });
     }
     case "wednesday": {
       if (!itemMatchesCategories(item, waxWednesdayCategories)) return undefined;
-      // Highest available discount is 30% (at $150+); show the best-case rate.
+      // Spend-tiered (up to 30% at $150+): a single item may not hit the tier, so
+      // the card shows an informational note; the cart applies the real rate.
       return buildDiscount(item, {
         label: "Wax Wednesday",
         discountPercent: 30,
+        bonusNote: "up to 30% off",
+        perItemSalePrice: false,
       });
     }
     case "thursday": {
       // Top Shelf Thursday is brand-based: only the featured brands are on deal.
+      // This is a clean flat per-item 25%, so a genuine struck price is honest.
       if (!isTopShelfThursdayItem(item)) return undefined;
       return buildDiscount(item, { label: "Top Shelf Thursday", discountPercent: 25 });
     }
     case "friday": {
       if (!itemMatchesCategories(item, ounceFridayCategories)) return undefined;
       // Ounce Friday scales by WEIGHT in store: 30% (oz) / 20% (half) / 15%
-      // (quarter). Customers can always reach the 30% (ounce) tier, which is the
-      // HIGHEST available discount, so we show every flower card as 30% off with
-      // a genuine struck "before" price and discounted price.
+      // (quarter). A single 3.5g/1g bag earns NOTHING — only quantities that add
+      // up to a quarter ounce or more qualify. So cards show an informational
+      // note (no fake struck price); the cart engine applies the real tier.
       return buildDiscount(item, {
         label: "Ounce Friday",
         discountPercent: 30,
+        bonusNote: "up to 30% by the ounce",
+        perItemSalePrice: false,
       });
     }
     case "saturday":
       // Super Saturday: 30% off ONE item + 15% off everything else storewide.
-      // The HIGHEST available discount a customer can get is 30%, and it applies
-      // storewide, so every card shows a genuine 30%-off struck price.
-      return buildDiscount(item, { label: "Super Saturday", discountPercent: 30 });
+      // Because the 30% only applies to a single item, the per-item card shows an
+      // informational note; the cart applies 30% to the top item + 15% to the rest.
+      return buildDiscount(item, {
+        label: "Super Saturday",
+        discountPercent: 30,
+        bonusNote: "30% one item + 15% storewide",
+        perItemSalePrice: false,
+      });
     case "sunday":
       // Ice Cream Sunday: buy 3 for the price of 2 (a basket-level deal). The
       // effective savings depend on basket composition and are finalized in

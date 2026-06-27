@@ -91,7 +91,8 @@ export function CheckoutFlow() {
         brand: item.brand,
         variantLabel: item.variantLabel,
         quantity: item.quantity,
-        priceMinorUnits: item.priceMinorUnits,
+        // Use the authoritative engine-discounted unit price.
+        priceMinorUnits: item.effectivePriceMinorUnits,
         regularPriceMinorUnits: item.regularPriceMinorUnits,
       })),
       subtotalMinorUnits,
@@ -194,7 +195,7 @@ export function CheckoutFlow() {
 
           <div className="grid gap-3 px-5 py-5 md:px-7">
             {items.map((item) => {
-              const hasSale = item.regularPriceMinorUnits > item.priceMinorUnits;
+              const hasSale = item.regularPriceMinorUnits > item.effectivePriceMinorUnits;
               return (
                 <div key={item.lineId} className="flex items-start justify-between gap-4 rounded-2xl bg-black/40 p-4">
                   <div className="min-w-0">
@@ -208,7 +209,7 @@ export function CheckoutFlow() {
                     {hasSale ? (
                       <p className="text-xs font-black text-zinc-500 line-through">{formatMinorCurrency(item.regularPriceMinorUnits * item.quantity)}</p>
                     ) : null}
-                    <p className="text-lg font-black text-[var(--orange)]">{formatMinorCurrency(item.priceMinorUnits * item.quantity)}</p>
+                    <p className="text-lg font-black text-[var(--orange)]">{formatMinorCurrency(item.effectivePriceMinorUnits * item.quantity)}</p>
                   </div>
                 </div>
               );

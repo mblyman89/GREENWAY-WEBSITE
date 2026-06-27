@@ -13,6 +13,8 @@ import type { GreenwayMenuItem } from "@/lib/leafly/types";
 import { formatWebsiteCategory } from "@/lib/pos/category-taxonomy";
 import { getPosPreviewMenuItemById, posMenuPreviewItems } from "@/lib/pos/preview-menu";
 import { breadcrumbSchema, pageMetadata, productSchema } from "@/lib/seo/seo";
+import { getMerchDefById, getMerchMenuItemById, merchMenuItems } from "@/lib/merch/merch-catalog";
+import { MerchDetailPanel } from "@/components/merch/MerchDetailPanel";
 
 type ProductTone = {
   border: string;
@@ -73,11 +75,15 @@ const categoryAliases: Partial<Record<GreenwayMenuItem["category"], string>> = {
 };
 
 function getMenuItemById(id: string) {
-  return getPosPreviewMenuItemById(id) ?? getMockMenuItemById(id);
+  return getMerchMenuItemById(id) ?? getPosPreviewMenuItemById(id) ?? getMockMenuItemById(id);
+}
+
+function isMerchItem(item: GreenwayMenuItem) {
+  return item.category === "merch";
 }
 
 function isNonCannabisItem(item: GreenwayMenuItem) {
-  return item.category === "paraphernalia";
+  return item.category === "paraphernalia" || item.category === "merch";
 }
 
 function toneForItem(item: GreenwayMenuItem) {
@@ -119,6 +125,17 @@ function ProductHeroArt({ item, tone }: { item: GreenwayMenuItem; tone: ProductT
   const initials = brandInitials(item.brand);
   const label = categoryLabel(item).toUpperCase();
 
+  // Merch shows the real product photograph (large, on white).
+  if (isMerchItem(item)) {
+    const def = getMerchDefById(item.id);
+    return (
+      <div className="relative flex h-full min-h-[20rem] items-center justify-center overflow-hidden bg-white md:min-h-[34rem]">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={def?.imageUrl ?? "/merch/tshirt.webp"} alt={item.name} className="h-full w-full object-contain p-6 md:p-10" />
+      </div>
+    );
+  }
+
   if (nonCannabis) {
     return (
       <div className="relative flex h-full min-h-[18.5rem] items-center justify-center overflow-hidden bg-white">
@@ -149,6 +166,9 @@ function ProductHeroArt({ item, tone }: { item: GreenwayMenuItem; tone: ProductT
 }
 
 function relatedItemsFor(item: GreenwayMenuItem) {
+  if (isMerchItem(item)) {
+    return merchMenuItems.filter((candidate) => candidate.id !== item.id).slice(0, 8);
+  }
   const allItems = [...posMenuPreviewItems, ...mockMenuItems];
   const sameBrand = allItems.filter((candidate) => candidate.brand === item.brand && candidate.id !== item.id);
   const fallback = allItems.filter((candidate) => candidate.id !== item.id && candidate.category === item.category);
@@ -157,7 +177,7 @@ function relatedItemsFor(item: GreenwayMenuItem) {
 }
 
 export function generateStaticParams() {
-  return [...posMenuPreviewItems, ...mockMenuItems].map((item) => ({ id: item.id }));
+  return [...posMenuPreviewItems, ...mockMenuItems, ...merchMenuItems].map((item) => ({ id: item.id }));
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
@@ -219,7 +239,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
       />
       <Header />
 
-      <section className="mx-auto w-full max-w-[430px] px-4 pb-10 pt-4 md:max-w-5xl md:px-8 md:pt-8">
+      <section className="mx-auto w-full max-w-[430px] px-4 pb-10 pt-4 md:max-w-[88rem] md:px-8 md:pt-8">
         <BackToMenuLink className="inline-flex items-center text-[0.68rem] font-black uppercase tracking-[0.18em] text-white transition hover:text-[var(--greenway)]">
           ← Back
         </BackToMenuLink>
@@ -232,8 +252,8 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
           <span className="line-clamp-1 text-zinc-400">{item.name}</span>
         </nav>
 
-        <div className="mt-5 grid gap-6 md:grid-cols-[minmax(0,0.96fr)_minmax(0,1.04fr)] md:items-start">
-          <div className="overflow-hidden border bg-white" style={imageShellStyle(tone)}>
+        <div className="mt-5 grid gap-6 md:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] md:items-start md:gap-10">
+          <div className="overflow-hidden border bg-white md:sticky md:top-28" style={imageShellStyle(tone)}>
             <ProductHeroArt item={item} tone={tone} />
           </div>
 
@@ -244,14 +264,27 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
             <h1 className="mt-2 text-[2.15rem] font-black leading-[0.96] tracking-[-0.045em] text-white md:text-6xl">{item.name}</h1>
 
             <div className="mt-3 flex flex-wrap items-center gap-2">
-              <span className="inline-flex min-h-7 items-center px-2.5 py-1 text-[0.72rem] font-black uppercase leading-none text-white" style={{ backgroundColor: tone.pill, color: isNonCannabisItem(item) ? "#111" : "#fff" }}>
-                {displayStrain(item)}
-              </span>
+              {!isMerchItem(item) ? (
+                <span className="inline-flex min-h-7 items-center px-2.5 py-1 text-[0.72rem] font-black uppercase leading-none text-white" style={{ backgroundColor: tone.pill, color: isNonCannabisItem(item) ? "#111" : "#fff" }}>
+                  {displayStrain(item)}
+                </span>
+              ) : (
+                <span className="inline-flex min-h-7 items-center bg-[var(--greenway)] px-2.5 py-1 text-[0.72rem] font-black uppercase leading-none text-black">
+                  Greenway Merch
+                </span>
+              )}
               {showCannabinoids ? <span className="inline-flex min-h-7 items-center bg-white px-2.5 py-1 text-[0.72rem] font-black uppercase leading-none text-black">THC: {item.thc ?? "--"}</span> : null}
               {showCannabinoids ? <span className="inline-flex min-h-7 items-center bg-white px-2.5 py-1 text-[0.72rem] font-black uppercase leading-none text-black">CBD: {item.cbd ?? "--"}</span> : null}
             </div>
 
-            <ProductDetailPurchasePanel item={item} />
+            {isMerchItem(item) ? (
+              (() => {
+                const def = getMerchDefById(item.id);
+                return def ? <MerchDetailPanel def={def} /> : <ProductDetailPurchasePanel item={item} />;
+              })()
+            ) : (
+              <ProductDetailPurchasePanel item={item} />
+            )}
 
             {/* Description tab (lab results intentionally omitted). Sits in the
                 right column under the purchase panel to mirror the reference. */}

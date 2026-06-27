@@ -9,6 +9,9 @@ import { ProductCard } from "./ProductCard";
 import { SortDropdown, type SortOption } from "./SortDropdown";
 import { getActiveMenuDiscount } from "@/lib/specials/daily-deals";
 import { useStoreWeekday } from "@/lib/specials/useStoreWeekday";
+import Link from "next/link";
+import { formatMinorCurrency } from "@/lib/leafly/format";
+import { merchProductDefs, merchPriceRange, merchIdForKey } from "@/lib/merch/merch-catalog";
 
 // Item IDs eligible for the 50% Off clearance lane. These are placeholder IDs
 // (no live 50%-off inventory yet), so selecting "50% OFF" shows the empty state.
@@ -152,29 +155,6 @@ function MenuSearchIcon({ className = "h-4 w-4" }: { className?: string }) {
     </svg>
   );
 }
-
-type MerchSectionCard = {
-  key: string;
-  label: string;
-  description: string;
-  imageUrl: string;
-  mensSizes: string[];
-  womensSizes: string[];
-};
-
-const MENS_APPAREL_SIZES = ["S", "M", "L", "XL", "2XL"];
-const WOMENS_APPAREL_SIZES = ["XS", "S", "M", "L", "XL"];
-const ONE_SIZE = ["One Size"];
-
-const merchSectionCards: MerchSectionCard[] = [
-  { key: "tshirt", label: "Logo Tee", description: "Soft, heavyweight cotton with the classic Greenway leaf on the chest. Your everyday go-to.", imageUrl: "/merch/tshirt.webp", mensSizes: MENS_APPAREL_SIZES, womensSizes: WOMENS_APPAREL_SIZES },
-  { key: "sweatshirt", label: "Pullover Hoodie", description: "Cozy fleece-lined hoodie built for chilly Kitsap evenings. Warm, durable, and clean.", imageUrl: "/merch/sweatshirt.webp", mensSizes: MENS_APPAREL_SIZES, womensSizes: WOMENS_APPAREL_SIZES },
-  { key: "zip-hoodie", label: "Zip-Up Hoodie", description: "Full-zip comfort with embroidered Greenway branding. Layer up your style anytime.", imageUrl: "/merch/zip-hoodie.webp", mensSizes: MENS_APPAREL_SIZES, womensSizes: WOMENS_APPAREL_SIZES },
-  { key: "hat", label: "Dad Hat", description: "Structured cotton cap with an embroidered leaf and adjustable strap back. Fits everyone.", imageUrl: "/merch/hat.webp", mensSizes: ONE_SIZE, womensSizes: ONE_SIZE },
-  { key: "beanie", label: "Knit Beanie", description: "Warm cuffed knit beanie with a woven Greenway tag. Cold-weather essential.", imageUrl: "/merch/beanie.webp", mensSizes: ONE_SIZE, womensSizes: ONE_SIZE },
-  { key: "socks", label: "Crew Socks", description: "Cushioned crew socks with green-and-gold stripes. Comfy, bold, and built to last.", imageUrl: "/merch/socks.webp", mensSizes: ["M (7-10)", "L (10-13)"], womensSizes: ["S (5-8)", "M (8-11)"] },
-  { key: "lanyard", label: "Logo Lanyard", description: "Woven neck lanyard with a metal clip and quick-release buckle. Keys and ID, sorted.", imageUrl: "/merch/lanyard.webp", mensSizes: ONE_SIZE, womensSizes: ONE_SIZE },
-];
 
 function safeSectionId(value: string) {
   return value.toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "section";
@@ -326,6 +306,7 @@ function AccessoryCard({ card }: { card: AccessorySectionCard }) {
   return (
     <article className="group overflow-hidden rounded-[1.35rem] border border-white/10 bg-zinc-950 shadow-xl shadow-black/25 transition hover:-translate-y-1 hover:border-[var(--greenway)]/45">
       <div className="aspect-[4/3] overflow-hidden bg-zinc-900">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={card.imageUrl} alt="" className="h-full w-full object-cover opacity-82 transition duration-500 group-hover:scale-105 group-hover:opacity-100" loading="lazy" />
       </div>
       <div className="p-5">
@@ -337,74 +318,48 @@ function AccessoryCard({ card }: { card: AccessorySectionCard }) {
   );
 }
 
-function MerchCard({ card }: { card: MerchSectionCard }) {
-  const isOneSize = card.mensSizes.length === 1 && card.mensSizes[0] === "One Size" && card.womensSizes.length === 1 && card.womensSizes[0] === "One Size";
-  const [fit, setFit] = useState<"mens" | "womens">("mens");
-  const sizes = fit === "mens" ? card.mensSizes : card.womensSizes;
-  const [selectedSize, setSelectedSize] = useState(sizes[0]);
-
-  function changeFit(nextFit: "mens" | "womens") {
-    setFit(nextFit);
-    const nextSizes = nextFit === "mens" ? card.mensSizes : card.womensSizes;
-    setSelectedSize(nextSizes[0]);
-  }
+function MerchCard({ def }: { def: (typeof merchProductDefs)[number] }) {
+  const range = merchPriceRange(def);
+  const priceLabel =
+    range.min === range.max
+      ? formatMinorCurrency(range.min)
+      : `${formatMinorCurrency(range.min)}–${formatMinorCurrency(range.max)}`;
+  const href = `/menu/products/${merchIdForKey(def.key)}`;
 
   return (
     <article className="group flex flex-col overflow-hidden rounded-[1.35rem] border border-white/10 bg-zinc-950 shadow-xl shadow-black/25 transition hover:-translate-y-1 hover:border-[var(--greenway)]/45">
-      <div className="aspect-[4/3] overflow-hidden bg-white">
-        <img src={card.imageUrl} alt={card.label} className="h-full w-full object-contain transition duration-500 group-hover:scale-105" loading="lazy" />
-      </div>
+      <Link href={href} className="block aspect-[4/3] overflow-hidden bg-white" aria-label={`View ${def.name}`}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={def.imageUrl} alt={def.name} className="h-full w-full object-contain transition duration-500 group-hover:scale-105" loading="lazy" />
+      </Link>
       <div className="flex flex-1 flex-col p-5">
         <p className="text-[0.62rem] font-black uppercase tracking-[0.18em] text-[var(--greenway)]">Greenway Merch</p>
-        <h3 className="mt-2 text-2xl font-black text-white">{card.label}</h3>
-        <p className="mt-2 text-sm leading-6 text-zinc-300">{card.description}</p>
+        <Link href={href} className="mt-2 text-2xl font-black text-white transition hover:text-[var(--greenway)]">
+          {def.name}
+        </Link>
+        <p className="mt-2 text-sm leading-6 text-zinc-300">{def.blurb}</p>
 
-        <div className="mt-auto pt-4">
-          {isOneSize ? (
-            <p className="text-xs font-black uppercase tracking-[0.12em] text-zinc-400">One size fits most</p>
-          ) : (
-            <>
-              {/* Fit toggle: Men's / Women's */}
-              <div className="grid grid-cols-2 gap-2" role="group" aria-label={`Select fit for ${card.label}`}>
-                {(["mens", "womens"] as const).map((value) => {
-                  const active = fit === value;
-                  return (
-                    <button
-                      key={value}
-                      type="button"
-                      onClick={() => changeFit(value)}
-                      aria-pressed={active}
-                      className={`rounded-full border px-3 py-2 text-[0.7rem] font-black uppercase tracking-[0.08em] transition ${
-                        active ? "border-[var(--orange)] bg-[var(--orange)] text-black" : "border-white/15 bg-black/40 text-white hover:border-white/45"
-                      }`}
-                    >
-                      {value === "mens" ? "Men's" : "Women's"}
-                    </button>
-                  );
-                })}
-              </div>
+        {/* Color swatches */}
+        <div className="mt-3 flex items-center gap-2" aria-label="Available colors">
+          {def.colors.map((color) => (
+            <span
+              key={color.name}
+              title={color.name}
+              className="h-5 w-5 rounded-full border border-white/30"
+              style={{ backgroundColor: color.swatch }}
+            />
+          ))}
+          <span className="ml-1 text-[0.66rem] font-bold uppercase tracking-[0.1em] text-zinc-500">{def.colors.length} colors</span>
+        </div>
 
-              {/* Size selector */}
-              <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label={`Select size for ${card.label}`}>
-                {sizes.map((size) => {
-                  const active = size === selectedSize;
-                  return (
-                    <button
-                      key={size}
-                      type="button"
-                      onClick={() => setSelectedSize(size)}
-                      aria-pressed={active}
-                      className={`min-w-10 rounded-md border px-2.5 py-1.5 text-xs font-black uppercase transition ${
-                        active ? "border-[var(--greenway)] bg-[var(--greenway)] text-black" : "border-white/15 bg-black/40 text-white hover:border-white/45"
-                      }`}
-                    >
-                      {size}
-                    </button>
-                  );
-                })}
-              </div>
-            </>
-          )}
+        <div className="mt-auto flex items-center justify-between gap-3 pt-4">
+          <span className="text-lg font-black text-[var(--orange)]">{priceLabel}</span>
+          <Link
+            href={href}
+            className="rounded-full bg-[#d8e6c4] px-4 py-2 text-[0.72rem] font-black uppercase tracking-[0.1em] text-black transition hover:bg-[var(--greenway)]"
+          >
+            View
+          </Link>
         </div>
       </div>
     </article>
@@ -865,7 +820,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
       [
         ...categoryValues,
         ...Array(accessorySectionCards.length).fill("accessories"),
-        ...Array(merchSectionCards.length).fill("merch"),
+        ...Array(merchProductDefs.length).fill("merch"),
       ],
       selectedCategories,
       formatWebsiteCategory,
@@ -912,6 +867,37 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
   ].includes(activeSectionCategory);
   const showAccessorySections = selectedCategories.length === 1 && selectedCategories[0] === "accessories";
   const showMerchSections = selectedCategories.length === 1 && selectedCategories[0] === "merch";
+
+  // Non-cannabis collections (accessories + merch) should ALSO appear grouped at
+  // the BOTTOM of the grid when (a) the list is unfiltered, or (b) they are
+  // multi-selected alongside other categories — not just when each is the lone
+  // selection. This prevents the "No products match" dead-end on mixed selects.
+  const noCategoryFilter = selectedCategories.length === 0;
+  const hasOtherFiltersActive =
+    query.trim().length > 0 ||
+    selectedStrains.length > 0 ||
+    selectedBrands.length > 0 ||
+    selectedWeights.length > 0 ||
+    clearanceOnly ||
+    dailyDealsOnly;
+  // Accessories/merch are catalog collections (not filterable by THC/strain/etc),
+  // so only surface them at the bottom when no narrowing filters are applied.
+  const surfaceBottomCollections = !hasOtherFiltersActive;
+  const accessoriesSelectedWithOthers = selectedCategories.includes("accessories") && selectedCategories.length > 1;
+  const merchSelectedWithOthers = selectedCategories.includes("merch") && selectedCategories.length > 1;
+  const showAccessoryBottom =
+    surfaceBottomCollections && !showAccessorySections && !showMerchSections && (noCategoryFilter || accessoriesSelectedWithOthers);
+  const showMerchBottom =
+    surfaceBottomCollections && !showAccessorySections && !showMerchSections && (noCategoryFilter || merchSelectedWithOthers);
+
+  // The empty state should ONLY show when there are truly no products to render
+  // anywhere — including the bottom accessory/merch collections.
+  const showEmptyState =
+    !showAccessorySections &&
+    !showMerchSections &&
+    filteredItems.length === 0 &&
+    !showAccessoryBottom &&
+    !showMerchBottom;
 
   const groupedItems = useMemo<MenuItemGroup[]>(() => {
     if (activeSectionCategory && usesFilteredSections) return groupedByActiveFilter(activeSectionCategory, filteredItems);
@@ -1136,10 +1122,10 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
         ) : showMerchSections ? (
           <section id="merch" className="scroll-mt-32">
             <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
-              {merchSectionCards.map((card) => <MerchCard key={card.key} card={card} />)}
+              {merchProductDefs.map((def) => <MerchCard key={def.key} def={def} />)}
             </div>
           </section>
-        ) : filteredItems.length === 0 ? (
+        ) : showEmptyState ? (
           <div className="rounded-3xl border border-dashed border-white/20 bg-zinc-950 p-10 text-center">
             <p className="text-2xl font-black text-white">No products match those filters.</p>
             <button onClick={resetFilters} className="mt-6 rounded-full bg-[var(--orange)] px-6 py-3 text-xs font-black uppercase tracking-[0.16em] text-black">Reset filters</button>
@@ -1160,6 +1146,31 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
                 </div>
               </section>
             ))}
+
+            {/* Accessories grouped at the BOTTOM when mixed with other categories
+                or when the list is unfiltered. */}
+            {showAccessoryBottom ? (
+              <section id="accessories" className="scroll-mt-32">
+                <div className="mb-4 min-w-0">
+                  <h2 className="text-3xl font-black text-white">Accessories</h2>
+                </div>
+                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+                  {accessorySectionCards.map((card) => <AccessoryCard key={card.key} card={card} />)}
+                </div>
+              </section>
+            ) : null}
+
+            {/* Greenway Merch grouped at the BOTTOM under the same conditions. */}
+            {showMerchBottom ? (
+              <section id="merch" className="scroll-mt-32">
+                <div className="mb-4 min-w-0">
+                  <h2 className="text-3xl font-black text-white">Greenway Merch</h2>
+                </div>
+                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+                  {merchProductDefs.map((def) => <MerchCard key={def.key} def={def} />)}
+                </div>
+              </section>
+            ) : null}
           </div>
         )}
       </div>

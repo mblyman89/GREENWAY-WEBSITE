@@ -2,21 +2,15 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
 import { greenwayBusiness } from "@/content/business";
 import { formatMinorCurrency } from "@/lib/leafly/format";
 import { readCompletedOrder, type CompletedOrder } from "@/lib/checkout/order";
+import { useHydratedValue } from "@/lib/hooks/useHydratedValue";
 
 export function OrderConfirmation() {
   const searchParams = useSearchParams();
   const orderFromUrl = searchParams.get("order") ?? undefined;
-  const [order, setOrder] = useState<CompletedOrder | null>(null);
-  const [hydrated, setHydrated] = useState(false);
-
-  useEffect(() => {
-    setOrder(readCompletedOrder());
-    setHydrated(true);
-  }, []);
+  const { value: order, hydrated } = useHydratedValue<CompletedOrder | null>(readCompletedOrder, null);
 
   const orderNumber = order?.orderNumber ?? orderFromUrl;
 
