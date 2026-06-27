@@ -1,0 +1,380 @@
+[
+  {
+    "slug": "pre-rolls-tangerine-borealis-2x-5g",
+    "name": "Pre-Rolls - Tangerine Borealis - 2x.5g",
+    "category": "Pre-roll",
+    "strain": "Tangerine Borealis #1"
+  },
+  {
+    "slug": "pre-rolls-one-piece-2x-5g",
+    "name": "Pre-Rolls -One Piece - 2x.5g",
+    "category": "Pre-roll",
+    "strain": "One Piece"
+  },
+  {
+    "slug": "svin-pre-rolls-unit-b-1x1g",
+    "name": "Svin Pre-Rolls - Unit B - 1x1g",
+    "category": "Pre-roll",
+    "strain": "Unit B"
+  },
+  {
+    "slug": "pre-rolls-jacuzzi-2x-5g",
+    "name": "Pre-Rolls - Jacuzzi - 2x.5g",
+    "category": "Pre-roll",
+    "strain": "Jacuzzi"
+  },
+  {
+    "slug": "live-resin-disposables-spooky-z-1g",
+    "name": "Live Resin Disposables - Spooky Z - 1g",
+    "category": "Disposable Cartridge",
+    "strain": "Spooky Z"
+  },
+  {
+    "slug": "flower-cosmic-gelato-3-5g",
+    "name": "Flower - Cosmic Gelato - 3.5g",
+    "category": "Flower",
+    "strain": "Cosmic Gelato"
+  },
+  {
+    "slug": "terp-dough-one-piece-1g",
+    "name": "Terp Dough - One Piece - 1g",
+    "category": "Badder",
+    "strain": "One Piece"
+  },
+  {
+    "slug": "select-series-london-marker-9-3-5g",
+    "name": "Select Series - London Marker #9 - 3.5g",
+    "category": "Flower",
+    "strain": "London Marker #9"
+  },
+  {
+    "slug": "packaged-flower-one-piece-3-5g",
+    "name": "Packaged Flower - One Piece - 3.5g",
+    "category": "Flower",
+    "strain": "One Piece"
+  },
+  {
+    "slug": "svin-garden-liquid-diamonds-510-cart-jacuzzi-1g",
+    "name": "Svin Garden Liquid Diamonds 510 Cart - Jacuzzi - 1g",
+    "category": "Cartridge",
+    "strain": "Jacuzzi"
+  },
+  {
+    "slug": "liquid-diamond-disposables-jacuzzi-1g",
+    "name": "Liquid Diamond Disposables - Jacuzzi - 1g",
+    "category": "Disposable Cartridge",
+    "strain": "Jacuzzi"
+  },
+  {
+    "slug": "svin-garden-flower-diamond-runtz-3-5g",
+    "name": "Svin Garden Flower - Diamond Runtz - 3.5g",
+    "category": "Flower",
+    "strain": "Diamond Runtz"
+  },
+  {
+    "slug": "svin-garden-pre-rolls-amaretto-sour-2x-5g",
+    "name": "Svin Garden Pre-Rolls - Amaretto Sour - 2x.5g",
+    "category": "Pre-roll",
+    "strain": "Amaretto Sour"
+  },
+  {
+    "slug": "packaged-flower-fluff-fumez-1-3-5g",
+    "name": "Packaged Flower - Fluff Fumez #1 - 3.5g",
+    "category": "Flower",
+    "strain": "Fluff Fumez #1"
+  },
+  {
+    "slug": "packaged-flower-lemon-cherry-dosi-7-3-5g",
+    "name": "Packaged Flower - Lemon Cherry Dosi #7 - 3.5g",
+    "category": "Flower",
+    "strain": "Lemon Cherry Dosi #7"
+  },
+  {
+    "slug": "packaged-flower-one-piece-3-5g",
+    "name": "Packaged Flower - One Piece - 3.5g",
+    "category": "Flower",
+    "strain": "One Piece"
+  },
+  {
+    "slug": "packaged-flower-unit-b-3-5g",
+    "name": "Packaged Flower - Unit B - 3.5g",
+    "category": "Flower",
+    "strain": "Unit B"
+  },
+  {
+    "slug": "terp-dough-one-piece-1g",
+    "name": "Terp Dough - One Piece - 1g",
+    "category": "Badder",
+    "strain": "One Piece"
+  },
+  {
+    "slug": "rosin-one-piece-1g",
+    "name": "Rosin- One Piece - 1g",
+    "category": "Rosin",
+    "strain": "One Piece"
+  },
+  {
+    "slug": "rosin-puro-loco-1g",
+    "name": "Rosin - Puro Loco - 1g",
+    "category": "Badder",
+    "strain": "Puro Loco"
+  },
+  {
+    "slug": "pre-rolls-one-piece-2x-5g",
+    "name": "Pre-Rolls -One Piece - 2x.5g",
+    "category": "Pre-roll",
+    "strain": "One Piece"
+  },
+  {
+    "slug": "pre-rolls-puro-loco-2x-5g",
+    "name": "Pre-Rolls -Puro Loco - 2x.5g",
+    "category": "Pre-roll",
+    "strain": "Puro Loco"
+  },
+  {
+    "slug": "pre-rolls-rainbow-zoap-2x-5g",
+    "name": "Pre-Rolls - Rainbow Zoap - 2x.5g",
+    "category": "Pre-roll",
+    "strain": "Rainbow Zoap"
+  },
+  {
+    "slug": "packaged-flower-jacuzzi-3-5g",
+    "name": "Packaged Flower - Jacuzzi - 3.5g",
+    "category": "Flower",
+    "strain": "Jacuzzi"
+  },
+  {
+    "slug": "rosin-infused-joint-box-jacuzzi-x-lc-dosi",
+    "name": "Rosin Infused Joint Box - Jacuzzi x LC Dosi",
+    "category": "Infused Pre-roll",
+    "strain": "Jacuzzi"
+  },
+  {
+    "slug": "rosin-infused-joint-box-jacuzzi-x-one-piece-1g",
+    "name": "Rosin Infused Joint Box - Jacuzzi x One Piece - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "One Piece"
+  },
+  {
+    "slug": "rosin-infused-joint-box-the-menage-5-x-one-piece-1g",
+    "name": "Rosin Infused Joint Box - The Menage #5 x One Piece - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "The Menage"
+  },
+  {
+    "slug": "rosin-infused-joint-box-the-menage-x-puro-loco-1g",
+    "name": "Rosin Infused Joint Box - The Menage X Puro Loco - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Puro Loco"
+  },
+  {
+    "slug": "packaged-flower-lemon-cherry-garlic-3-5g",
+    "name": "Packaged Flower - Lemon Cherry Garlic - 3.5g",
+    "category": "Flower",
+    "strain": "Lemon Cherry Garlic"
+  },
+  {
+    "slug": "svin-terp-dough-tangerine-borealis-1-1g",
+    "name": "Svin Terp Dough - Tangerine Borealis #1 - 1g",
+    "category": "Badder",
+    "strain": "Tangerine Borealis #1"
+  },
+  {
+    "slug": "svin-rosin-lemon-cherry-dosi-1g",
+    "name": "Svin Rosin - Lemon Cherry Dosi - 1g",
+    "category": "Rosin",
+    "strain": "Lemon Cherry Dosi #7"
+  },
+  {
+    "slug": "svin-diamond-drip-infused-joints-menage-x-golden-lemons",
+    "name": "Svin Diamond Drip Infused Joints - Menage x Golden Lemons",
+    "category": "Infused Pre-roll",
+    "strain": "Menage x Golden Lemons"
+  },
+  {
+    "slug": "pre-rolls-tangerine-borealis-2x-5g",
+    "name": "Pre-Rolls - Tangerine Borealis - 2x.5g",
+    "category": "Pre-roll",
+    "strain": "Tangerine Borealis #1"
+  },
+  {
+    "slug": "svin-pre-rolls-unit-b-2x-5g",
+    "name": "Svin Pre-Rolls - Unit B - 2x.5g",
+    "category": "Pre-roll",
+    "strain": "Unit B"
+  },
+  {
+    "slug": "svin-pre-rolls-one-piece-1x1g",
+    "name": "Svin Pre-Rolls -One Piece - 1x1g",
+    "category": "Pre-roll",
+    "strain": "One Piece"
+  },
+  {
+    "slug": "svin-pre-rolls-unit-b-1x1g",
+    "name": "Svin Pre-Rolls - Unit B - 1x1g",
+    "category": "Pre-roll",
+    "strain": "Unit B"
+  },
+  {
+    "slug": "pre-rolls-jacuzzi-2x-5g",
+    "name": "Pre-Rolls - Jacuzzi - 2x.5g",
+    "category": "Pre-roll",
+    "strain": "Jacuzzi"
+  },
+  {
+    "slug": "pre-rolls-krumblez-2x-5g",
+    "name": "Pre-Rolls - Krumblez - 2x.5g",
+    "category": "Pre-roll",
+    "strain": "Krumblez"
+  },
+  {
+    "slug": "pre-rolls-cat-nip-2x-5g",
+    "name": "Pre-Rolls - Cat Nip - 2x.5g",
+    "category": "Pre-roll",
+    "strain": "cat nip"
+  },
+  {
+    "slug": "packaged-flower-puro-loco-3-5g",
+    "name": "Packaged Flower - Puro Loco - 3.5g",
+    "category": "Flower",
+    "strain": "Puro Loco"
+  },
+  {
+    "slug": "svin-gardens-liquid-diamonds-510-cart-golden-lemons-1g",
+    "name": "Svin Gardens Liquid Diamonds 510 Cart - Golden Lemons - 1g",
+    "category": "Cartridge",
+    "strain": "Golden Lemons"
+  },
+  {
+    "slug": "svin-gardens-liquid-diamonds-510-cart-puro-loco-1g",
+    "name": "Svin Gardens Liquid Diamonds 510 Cart - Puro Loco - 1g",
+    "category": "Cartridge",
+    "strain": "Puro Loco"
+  },
+  {
+    "slug": "svin-garden-liquid-diamonds-510-cart-jacuzzi-1g",
+    "name": "Svin Garden Liquid Diamonds 510 Cart - Jacuzzi - 1g",
+    "category": "Cartridge",
+    "strain": "Jacuzzi"
+  },
+  {
+    "slug": "svin-gardens-liquid-diamonds-510-cart-magic-pop-rocks-1g",
+    "name": "Svin Gardens Liquid Diamonds 510 Cart - Magic Pop Rocks - 1g",
+    "category": "Cartridge",
+    "strain": "Magic Pop Rocks #3"
+  },
+  {
+    "slug": "svin-garden-pre-rolls-amaretto-sour-2x-5g",
+    "name": "Svin Garden Pre-Rolls - Amaretto Sour - 2x.5g",
+    "category": "Pre-roll",
+    "strain": "Amaretto Sour"
+  },
+  {
+    "slug": "svin-gardens-packaged-flower-animal-mints-3-5g",
+    "name": "Svin Gardens Packaged Flower - Animal Mints - 3.5g",
+    "category": "Flower",
+    "strain": "Animal Mints"
+  },
+  {
+    "slug": "svin-gardens-flower-birthday-cake-3-5g",
+    "name": "Svin Gardens Flower - Birthday Cake - 3.5g",
+    "category": "Flower",
+    "strain": "Birthday Cake"
+  },
+  {
+    "slug": "flower-cosmic-gelato-3-5g",
+    "name": "Flower - Cosmic Gelato - 3.5g",
+    "category": "Flower",
+    "strain": "Cosmic Gelato"
+  },
+  {
+    "slug": "svin-garden-flower-birthday-cake-14g",
+    "name": "Svin Garden Flower - Birthday Cake - 14g",
+    "category": "Flower",
+    "strain": "Birthday Cake"
+  },
+  {
+    "slug": "svin-garden-flower-amaretto-sour-3-5g",
+    "name": "Svin Garden Flower - Amaretto Sour - 3.5g",
+    "category": "Flower",
+    "strain": "Amaretto Sour"
+  },
+  {
+    "slug": "svin-garden-flower-diamond-runtz-3-5g",
+    "name": "Svin Garden Flower - Diamond Runtz - 3.5g",
+    "category": "Flower",
+    "strain": "Diamond Runtz"
+  },
+  {
+    "slug": "svin-garden-flower-london-lobster-3-5g",
+    "name": "Svin Garden Flower - London Lobster - 3.5g",
+    "category": "Flower",
+    "strain": "London Lobster"
+  },
+  {
+    "slug": "svin-gardens-flower-london-lobster-14g",
+    "name": "Svin Gardens Flower - London Lobster - 14g",
+    "category": "Flower",
+    "strain": "London Lobster"
+  },
+  {
+    "slug": "liquid-diamond-disposables-magic-pop-rocks-3-1g",
+    "name": "Liquid Diamond Disposables - Magic Pop Rocks #3 - 1g",
+    "category": "Disposable Cartridge",
+    "strain": "Magic Pop Rocks #3"
+  },
+  {
+    "slug": "select-series-london-marker-9-3-5g",
+    "name": "Select Series - London Marker #9 - 3.5g",
+    "category": "Flower",
+    "strain": "London Marker #9"
+  },
+  {
+    "slug": "select-series-diamond-runtz-2-3-5g",
+    "name": "Select Series - Diamond Runtz #2 - 3.5g",
+    "category": "Flower",
+    "strain": "Diamond Runtz"
+  },
+  {
+    "slug": "signature-series-krumblez-3-5g",
+    "name": "Signature Series - Krumblez - 3.5g",
+    "category": "Flower",
+    "strain": "Krumblez"
+  },
+  {
+    "slug": "liquid-diamond-disposables-jacuzzi-1g",
+    "name": "Liquid Diamond Disposables - Jacuzzi - 1g",
+    "category": "Disposable Cartridge",
+    "strain": "Jacuzzi"
+  },
+  {
+    "slug": "liquid-diamond-disposables-one-piece-1g",
+    "name": "Liquid Diamond Disposables - One Piece - 1g",
+    "category": "Disposable Cartridge",
+    "strain": "One Piece"
+  },
+  {
+    "slug": "select-series-crunch-berries-3-5g",
+    "name": "Select Series - Crunch Berries - 3.5g",
+    "category": "Flower",
+    "strain": "Crunch Berriez"
+  },
+  {
+    "slug": "live-resin-disposables-spooky-z-1g",
+    "name": "Live Resin Disposables - Spooky Z - 1g",
+    "category": "Disposable Cartridge",
+    "strain": "Spooky Z"
+  },
+  {
+    "slug": "terp-dough-animal-mints-bx1-3-1g",
+    "name": "Terp Dough - Animal Mints BX1#3 - 1g",
+    "category": "BHO",
+    "strain": "Animal Mints"
+  },
+  {
+    "slug": "terp-dough-krumblez-1g",
+    "name": "Terp Dough - Krumblez - 1g",
+    "category": "BHO",
+    "strain": "Krumblez"
+  }
+]

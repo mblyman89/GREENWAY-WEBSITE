@@ -1,0 +1,368 @@
+[
+  {
+    "slug": "ooowee-5-1g-pre-roll-white-peach-5g",
+    "name": "Ooowee - 5/1G Pre-Roll - White Peach - 5g",
+    "category": "Pre-roll",
+    "strain": "White Peach"
+  },
+  {
+    "slug": "ooowee-5-1g-pre-roll-wedding-cake-5g",
+    "name": "Ooowee - 5/1G Pre-Roll - Wedding Cake - 5g",
+    "category": "Pre-roll",
+    "strain": "Wedding Cake"
+  },
+  {
+    "slug": "ooowee-juiced-1g-hydrocarbon-concentrate-cherry-gelato-saint-lauruntz-1g",
+    "name": "Ooowee - JUICED 1G Hydrocarbon Concentrate - Cherry Gelato - Saint Lauruntz - 1g",
+    "category": "BHO",
+    "strain": "Cherry Gelato"
+  },
+  {
+    "slug": "ooowee-juiced-hydrocarbon-concentrate-orange-sunrise-mr-bad-1g",
+    "name": "Ooowee - JUICED Hydrocarbon Concentrate - Orange Sunrise - Mr. Bad - 1g",
+    "category": "BHO",
+    "strain": "Mr. Bad"
+  },
+  {
+    "slug": "ooowee-1g-cartridge-platinum-pineapple-1g",
+    "name": "Ooowee - 1G Cartridge - Platinum Pineapple - 1g",
+    "category": "Cartridge",
+    "strain": "Platinum Pineapple"
+  },
+  {
+    "slug": "ooowee-juiced-1g-infused-preroll-grape-a-licious-sunset-lemonade-1g",
+    "name": "Ooowee - JUICED 1G Infused PreRoll - Grape-A-Licious - Sunset Lemonade - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Sunset Lemonade"
+  },
+  {
+    "slug": "ooowee-juiced-5-1g-infused-preroll-raspberry-mimosa-key-bump-5g",
+    "name": "Ooowee - JUICED 5/1G Infused PreRoll - Raspberry Mimosa - Key Bump - 5g",
+    "category": "Infused Pre-roll",
+    "strain": "Key Bump"
+  },
+  {
+    "slug": "ooowee-bho-juiced-orange-sunrise-mr-bad",
+    "name": "Ooowee bho Juiced Orange Sunrise - Mr.Bad",
+    "category": "BHO",
+    "strain": "Mr. Bad"
+  },
+  {
+    "slug": "ooowee-1g-hydrocarbon-concentrate-ooowee-late-bloomer-1g",
+    "name": "Ooowee - 1g Hydrocarbon Concentrate - Ooowee - Late Bloomer - 1g",
+    "category": "BHO",
+    "strain": "Late Bloomer"
+  },
+  {
+    "slug": "ooowee-juiced-1g-infused-preroll-baby-yoda-ooowee-marker-1g",
+    "name": "Ooowee - JUICED 1G Infused PreRoll - Baby Yoda - Ooowee Marker - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Ooowee Marker"
+  },
+  {
+    "slug": "ooowee-live-resin-b-1g-disposable-late-bloomer-1g",
+    "name": "Ooowee - Live Resin - B - 1G Disposable - Late Bloomer - 1g",
+    "category": "Disposable Cartridge",
+    "strain": "Late Bloomer"
+  },
+  {
+    "slug": "ooowee-5-1g-pre-roll-ooowee-sunset-lemonade-5g",
+    "name": "Ooowee - 5/1g Pre-Roll - Ooowee - Sunset Lemonade - 5g",
+    "category": "Pre-roll",
+    "strain": "Sunset Lemonade"
+  },
+  {
+    "slug": "ooowee-live-resin-b-1g-disposable-truffle-oreos-1g",
+    "name": "Ooowee - Live Resin - B - 1G Disposable - Truffle Oreos - 1g",
+    "category": "Disposable Cartridge",
+    "strain": "Truffle Oreos"
+  },
+  {
+    "slug": "ooowee-5-1g-pre-roll-ooowee-trophy-runtz-5g",
+    "name": "Ooowee - 5/1g Pre-Roll - Ooowee - Trophy Runtz - 5g",
+    "category": "Pre-roll",
+    "strain": "Trophy Runtz"
+  },
+  {
+    "slug": "ooowee-juiced-5-1g-infused-preroll-ghost-berry-crunch-berries-5g",
+    "name": "Ooowee - JUICED 5/1G Infused PreRoll - Ghost Berry - Crunch Berries - 5g",
+    "category": "Infused Pre-roll",
+    "strain": "Crunch Berriez"
+  },
+  {
+    "slug": "ooowee-1g-hydrocarbon-concentrate-ooowee-gusherlicious-1g",
+    "name": "Ooowee - 1g Hydrocarbon Concentrate - Ooowee - Gusherlicious - 1g",
+    "category": "BHO",
+    "strain": "Gusherlicious"
+  },
+  {
+    "slug": "ooowee-juiced-1g-infused-preroll-khalifa-kiwi-late-bloomer-1g",
+    "name": "Ooowee - JUICED 1G Infused PreRoll - Khalifa Kiwi - Late Bloomer - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Khalifa Kiwi"
+  },
+  {
+    "slug": "ooowee-bho-trophy-runtz-1g",
+    "name": "Ooowee BHO Trophy Runtz 1g",
+    "category": "BHO",
+    "strain": "Trophy Runtz"
+  },
+  {
+    "slug": "ooowee-juiced-1g-infused-preroll-peach-passion-truffle-oreos-1g",
+    "name": "Ooowee - JUICED 1G Infused PreRoll - Peach Passion - Truffle Oreos - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Truffle Oreos"
+  },
+  {
+    "slug": "ooowee-1g-cartridge-washington-peach-1g",
+    "name": "Ooowee - 1G Cartridge - Washington Peach - 1g",
+    "category": "Cartridge",
+    "strain": "Washington Peach"
+  },
+  {
+    "slug": "ooowee-juiced-1g-infused-preroll-sticky-melon-gusherlicious-1g",
+    "name": "Ooowee - JUICED 1G Infused PreRoll - Sticky Melon - Gusherlicious - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Gusherlicious"
+  },
+  {
+    "slug": "ooowee-live-resin-b-1g-disposable-late-bloomer-1g",
+    "name": "Ooowee - Live Resin - B - 1G Disposable - Late Bloomer - 1g",
+    "category": "Disposable Cartridge",
+    "strain": "Late Bloomer"
+  },
+  {
+    "slug": "ooowee-1g-cartridge-washington-peach-1g",
+    "name": "Ooowee - 1G Cartridge - Washington Peach - 1g",
+    "category": "Cartridge",
+    "strain": "Washington Peach"
+  },
+  {
+    "slug": "ooowee-1g-cartridge-cereal-milk-1g",
+    "name": "Ooowee - 1G Cartridge - Cereal Milk - 1g",
+    "category": "Cartridge",
+    "strain": "Cereal Milk"
+  },
+  {
+    "slug": "ooowee-1g-cartridge-platinum-pineapple-1g",
+    "name": "Ooowee - 1G Cartridge - Platinum Pineapple - 1g",
+    "category": "Cartridge",
+    "strain": "Platinum Pineapple"
+  },
+  {
+    "slug": "ooowee-1g-cartridge-strawberry-gelato-1g",
+    "name": "Ooowee - 1G Cartridge - Strawberry Gelato - 1g",
+    "category": "Cartridge",
+    "strain": "Strawberry Gelato"
+  },
+  {
+    "slug": "ooowee-1g-hydrocarbon-concentrate-facelock-1g",
+    "name": "Ooowee - 1G Hydrocarbon Concentrate - FaceLock - 1g",
+    "category": "BHO",
+    "strain": "Facelock"
+  },
+  {
+    "slug": "ooowee-1g-hydrocarbon-concentrate-sour-gum-1g",
+    "name": "Ooowee - 1G Hydrocarbon Concentrate - Sour Gum - 1g",
+    "category": "BHO",
+    "strain": "Sour Gum"
+  },
+  {
+    "slug": "ooowee-1g-hydrocarbon-concentrate-pink-zaza-1g",
+    "name": "Ooowee - 1G Hydrocarbon Concentrate - Pink Zaza - 1g",
+    "category": "BHO",
+    "strain": "Pink Zaza"
+  },
+  {
+    "slug": "ooowee-1g-cartridge-super-raspberry-boof-1g",
+    "name": "Ooowee - 1G Cartridge - Super Raspberry Boof - 1g",
+    "category": "Cartridge",
+    "strain": "Super Boof"
+  },
+  {
+    "slug": "ooowee-juiced-1g-hydrocarbon-concentrate-peach-passion-truffle-oreos-1g",
+    "name": "Ooowee - JUICED 1G Hydrocarbon Concentrate - Peach Passion - Truffle Oreos - 1g",
+    "category": "BHO",
+    "strain": "Truffle Oreos"
+  },
+  {
+    "slug": "ooowee-bho-juiced-orange-sunrise-mr-bad",
+    "name": "Ooowee bho Juiced Orange Sunrise - Mr.Bad",
+    "category": "BHO",
+    "strain": "Mr. Bad"
+  },
+  {
+    "slug": "ooowee-juiced-hydrocarbon-concentrate-seattle-strawberry-cough-seattle-strawberr",
+    "name": "Ooowee - JUICED Hydrocarbon Concentrate - Seattle Strawberry Cough - Seattle Strawberry Cough - 1g",
+    "category": "BHO",
+    "strain": "Seattle Strawberry Cough"
+  },
+  {
+    "slug": "ooowee-1g-pre-roll-lemon-cherry-gelato-1g",
+    "name": "Ooowee - 1G Pre-Roll - Lemon Cherry Gelato - 1g",
+    "category": "Pre-roll",
+    "strain": "Lemon Cherry Gelato"
+  },
+  {
+    "slug": "ooowee-1g-cartridge-bubblegum-runtz-1g",
+    "name": "Ooowee - 1G Cartridge - Bubblegum Runtz - 1g",
+    "category": "Cartridge",
+    "strain": "Bubblegum Runtz"
+  },
+  {
+    "slug": "ooowee-5-1g-pre-roll-lemon-cherry-gelato-5g",
+    "name": "Ooowee - 5/1G Pre-Roll - Lemon Cherry Gelato - 5g",
+    "category": "Pre-roll",
+    "strain": "Lemon Cherry Gelato"
+  },
+  {
+    "slug": "ooowee-5-1g-pre-roll-wedding-cake-5g",
+    "name": "Ooowee - 5/1G Pre-Roll - Wedding Cake - 5g",
+    "category": "Pre-roll",
+    "strain": "Wedding Cake"
+  },
+  {
+    "slug": "ooowee-live-resin-a-1g-disposable-gusherlicious-1g",
+    "name": "Ooowee - Live Resin - A - 1G Disposable - Gusherlicious - 1g",
+    "category": "Disposable Cartridge",
+    "strain": "Gusherlicious"
+  },
+  {
+    "slug": "ooowee-live-resin-b-1g-disposable-truffle-oreos-1g",
+    "name": "Ooowee - Live Resin - B - 1G Disposable - Truffle Oreos - 1g",
+    "category": "Disposable Cartridge",
+    "strain": "Truffle Oreos"
+  },
+  {
+    "slug": "ooowee-b-buds-14g-flower-gusherlicious-14g",
+    "name": "Ooowee - *B Buds 14G Flower - Gusherlicious - 14g",
+    "category": "Flower",
+    "strain": "Gusherlicious"
+  },
+  {
+    "slug": "ooowee-5-1g-infused-preroll-wedding-cake-5g",
+    "name": "Ooowee - 5/1G Infused PreRoll - Wedding Cake - 5g",
+    "category": "Infused Pre-roll",
+    "strain": "Wedding Cake"
+  },
+  {
+    "slug": "ooowee-b-buds-14g-flower-pink-zaza-14g",
+    "name": "Ooowee - *B Buds 14G Flower - Pink Zaza - 14g",
+    "category": "Flower",
+    "strain": "Pink Zaza"
+  },
+  {
+    "slug": "ooowee-5-1g-infused-preroll-mango-haze-5g",
+    "name": "Ooowee - 5/1G Infused PreRoll - Mango Haze - 5g",
+    "category": "Infused Pre-roll",
+    "strain": "Mango Haze"
+  },
+  {
+    "slug": "ooowee-juiced-hydrocarbon-concentrate-raspberry-mimosa-key-bump-1g",
+    "name": "Ooowee - JUICED Hydrocarbon Concentrate - Raspberry Mimosa - Key Bump - 1g",
+    "category": "BHO",
+    "strain": "Key Bump"
+  },
+  {
+    "slug": "ooowee-juiced-hydrocarbon-concentrate-khalifa-kiwi-late-bloomer-1g",
+    "name": "Ooowee - JUICED Hydrocarbon Concentrate - Khalifa Kiwi - Late Bloomer - 1g",
+    "category": "BHO",
+    "strain": "Late Bloomer"
+  },
+  {
+    "slug": "ooowee-juiced-hydrocarbon-concentrate-orange-sunrise-mr-bad-1g",
+    "name": "Ooowee - JUICED Hydrocarbon Concentrate - Orange Sunrise - Mr. Bad - 1g",
+    "category": "BHO",
+    "strain": "Mr. Bad"
+  },
+  {
+    "slug": "ooowee-1g-infused-pre-roll-mango-haze-1g",
+    "name": "Ooowee - 1G Infused Pre-Roll - Mango Haze - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Mango Haze"
+  },
+  {
+    "slug": "ooowee-1g-pre-roll-ice-cream-cake-8-1g",
+    "name": "Ooowee - 1G Pre-Roll - Ice Cream Cake #8 - 1g",
+    "category": "Pre-roll",
+    "strain": "Ice Cream Cake"
+  },
+  {
+    "slug": "ooowee-juiced-5-1g-infused-preroll-purple-rain-facelock-5g",
+    "name": "Ooowee - JUICED 5/1G Infused PreRoll - Purple Rain - FaceLock - 5g",
+    "category": "Infused Pre-roll",
+    "strain": "Facelock"
+  },
+  {
+    "slug": "ooowee-1g-hydrocarbon-concentrate-sunset-lemonade-1g",
+    "name": "Ooowee - 1G Hydrocarbon Concentrate - Sunset Lemonade - 1g",
+    "category": "BHO",
+    "strain": "Sunset Lemonade"
+  },
+  {
+    "slug": "ooowee-juiced-1g-hydrocarbon-concentrate-cherry-gelato-saint-lauruntz-1g",
+    "name": "Ooowee - JUICED 1G Hydrocarbon Concentrate - Cherry Gelato - Saint Lauruntz - 1g",
+    "category": "BHO",
+    "strain": "Cherry Gelato"
+  },
+  {
+    "slug": "ooowee-5-1g-pre-roll-cheat-code-5g",
+    "name": "Ooowee - 5/1G Pre-Roll - Cheat Code - 5g",
+    "category": "Pre-roll",
+    "strain": "Cheat Code"
+  },
+  {
+    "slug": "ooowee-5-1g-pre-roll-white-peach-5g",
+    "name": "Ooowee - 5/1G Pre-Roll - White Peach - 5g",
+    "category": "Pre-roll",
+    "strain": "White Peach"
+  },
+  {
+    "slug": "ooowee-5-1g-pre-roll-ooowee-marker-5g",
+    "name": "Ooowee - 5/1G Pre-Roll - Ooowee Marker - 5g",
+    "category": "Pre-roll",
+    "strain": "Ooowee Marker"
+  },
+  {
+    "slug": "ooowee-juiced-1g-hydrocarbon-concentrate-blueberry-dream-sour-gum-1g",
+    "name": "Ooowee - JUICED 1G Hydrocarbon Concentrate - Blueberry Dream - Sour Gum - 1g",
+    "category": "BHO",
+    "strain": "blueberry dream"
+  },
+  {
+    "slug": "ooowee-juiced-1g-hydrocarbon-concentrate-orange-sunrise-mr-bad-1g",
+    "name": "Ooowee - JUICED 1G Hydrocarbon Concentrate - Orange Sunrise - Mr. Bad - 1g",
+    "category": "BHO",
+    "strain": "orange sunrise"
+  },
+  {
+    "slug": "ooowee-juiced-1g-infused-preroll-ghost-berry-crunch-berries-1g",
+    "name": "Ooowee - JUICED 1G Infused PreRoll - Ghost Berry - Crunch Berries - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Crunch Berriez"
+  },
+  {
+    "slug": "ooowee-juiced-5-1g-infused-preroll-ghost-berry-crunch-berries-5g",
+    "name": "Ooowee - JUICED 5/1G Infused PreRoll - Ghost Berry - Crunch Berries - 5g",
+    "category": "Infused Pre-roll",
+    "strain": "Crunch Berriez"
+  },
+  {
+    "slug": "ooowee-live-resin-a-1g-disposable-mr-bad-1g",
+    "name": "Ooowee - Live Resin - A - 1G Disposable - Mr. Bad - 1g",
+    "category": "Disposable Cartridge",
+    "strain": "Mr. Bad"
+  },
+  {
+    "slug": "ooowee-live-resin-b-1g-disposable-facelock-1g",
+    "name": "Ooowee - Live Resin - B - 1G Disposable - FaceLock - 1g",
+    "category": "Disposable Cartridge",
+    "strain": "Facelock"
+  },
+  {
+    "slug": "ooowee-1g-hydrocarbon-concentrate-blueberry-dream",
+    "name": "Ooowee - 1G Hydrocarbon Concentrate - Blueberry Dream",
+    "category": "BHO",
+    "strain": "Blueberry Dream*"
+  }
+]

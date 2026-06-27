@@ -1,0 +1,266 @@
+[
+  {
+    "slug": "canna-organix-flower-pink-certz-1g",
+    "name": "Canna Organix Flower Pink Certz - 1g",
+    "category": "Flower",
+    "strain": "Pink Certz"
+  },
+  {
+    "slug": "canna-organix-flower-forbidden-fruit-3-5g",
+    "name": "Canna Organix Flower Forbidden Fruit - 3.5g",
+    "category": "Flower",
+    "strain": "Forbidden Fruit"
+  },
+  {
+    "slug": "canna-organix-custard-forbidden-fruit-1g",
+    "name": "Canna Organix - Custard - Forbidden Fruit - 1g",
+    "category": "Badder",
+    "strain": "Forbidden Fruit"
+  },
+  {
+    "slug": "headshots-sunset-zkittlez-1g",
+    "name": "Headshots - Sunset Zkittlez - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Sunset Zkittlez"
+  },
+  {
+    "slug": "canna-organix-nectar-terp-sauce-jokerz-1g",
+    "name": "Canna Organix Nectar Terp Sauce Jokerz - 1g",
+    "category": "Terp Sauce",
+    "strain": "Jokerz"
+  },
+  {
+    "slug": "canna-organix-sauced-tossed-zkittlez-1g",
+    "name": "Canna Organix Sauced & Tossed Zkittlez - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Zkittlez"
+  },
+  {
+    "slug": "canna-organix-custard-lemon-cherry-gelato-1g",
+    "name": "Canna Organix - Custard - Lemon Cherry Gelato - 1g",
+    "category": "BHO",
+    "strain": "Lemon Cherry Gelato"
+  },
+  {
+    "slug": "canna-organix-5g-2-pack-preroll-tube-forbidden-fruit-1g",
+    "name": "Canna Organix - .5g 2-Pack Preroll Tube - Forbidden Fruit - 1g",
+    "category": "Pre-roll",
+    "strain": "Forbidden Fruit"
+  },
+  {
+    "slug": "canna-organix-sauced-tossed-cereal-milk-1g",
+    "name": "Canna Organix Sauced & Tossed Cereal Milk - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Cereal Milk"
+  },
+  {
+    "slug": "sixers-lemon-burger-3-6g",
+    "name": "Sixers - Lemon Burger - 3.6g",
+    "category": "Infused Pre-roll",
+    "strain": "Lemon Burger"
+  },
+  {
+    "slug": "canna-organix-custard-durban-poison-1g",
+    "name": "Canna Organix Custard - Durban Poison - 1g",
+    "category": "Live Resin",
+    "strain": "Durban Poison"
+  },
+  {
+    "slug": "canna-organix-infused-pre-roll-headshots-donny-tsunami-1g",
+    "name": "Canna Organix Infused Pre-roll Headshots - Donny Tsunami - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Donny Tsunami"
+  },
+  {
+    "slug": "sauced-tossed-plu-dough-1g",
+    "name": "Sauced & Tossed - Plu-Dough - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "plu-dough"
+  },
+  {
+    "slug": "sauced-tossed-forbidden-fruit-1g",
+    "name": "Sauced & Tossed - Forbidden Fruit - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Forbidden Fruit"
+  },
+  {
+    "slug": "canna-organix-infused-pre-roll-sauced-tossed-jealousy-1g",
+    "name": "Canna Organix Infused Pre-roll Sauced & Tossed - Jealousy - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Jealousy"
+  },
+  {
+    "slug": "canna-organix-infused-pre-roll-sauced-tossed-starkiller-1g",
+    "name": "Canna Organix Infused Pre-roll Sauced & Tossed - Starkiller - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Starkiller"
+  },
+  {
+    "slug": "canna-organix-infused-pre-roll-headshots-donny-tsunami-1g",
+    "name": "Canna Organix Infused Pre-roll Headshots - Donny Tsunami - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Donny Tsunami"
+  },
+  {
+    "slug": "canna-organix-infused-pre-roll-headshots-snow-break-1g",
+    "name": "Canna Organix Infused Pre-roll Headshots - Snow Break - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Snow Break"
+  },
+  {
+    "slug": "canna-organix-flower-forbidden-fruit-3-5g",
+    "name": "Canna Organix Flower Forbidden Fruit - 3.5g",
+    "category": "Flower",
+    "strain": "Forbidden Fruit"
+  },
+  {
+    "slug": "headshots-sunset-zkittlez-1g",
+    "name": "Headshots - Sunset Zkittlez - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Sunset Zkittlez"
+  },
+  {
+    "slug": "sauced-tossed-the-glue-1g",
+    "name": "Sauced & Tossed - The Glue - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "The Glue"
+  },
+  {
+    "slug": "sauced-tossed-pink-certz-1g",
+    "name": "Sauced & Tossed - Pink Certz - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Pink Certz"
+  },
+  {
+    "slug": "sixers-lemon-burger-3-6g",
+    "name": "Sixers - Lemon Burger - 3.6g",
+    "category": "Infused Pre-roll",
+    "strain": "Lemon Burger"
+  },
+  {
+    "slug": "headshots-forbidden-fruit-1g",
+    "name": "Headshots - Forbidden Fruit - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Forbidden Fruit"
+  },
+  {
+    "slug": "sauced-tossed-banana-runtz-1g",
+    "name": "Sauced & Tossed - Banana Runtz - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "banana runtz"
+  },
+  {
+    "slug": "canna-organix-custard-durban-poison-1g",
+    "name": "Canna Organix Custard - Durban Poison - 1g",
+    "category": "Live Resin",
+    "strain": "Durban Poison"
+  },
+  {
+    "slug": "sauced-tossed-gluelato-1g",
+    "name": "Sauced & Tossed - Gluelato - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Gluelato"
+  },
+  {
+    "slug": "sauced-tossed-headbanger-2-1g",
+    "name": "Sauced & Tossed - Headbanger #2 - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Headbanger"
+  },
+  {
+    "slug": "sauced-tossed-plu-dough-1g",
+    "name": "Sauced & Tossed - Plu-Dough - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "plu-dough"
+  },
+  {
+    "slug": "headshots-zkittlez-pie-1g",
+    "name": "Headshots - Zkittlez Pie - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Zkittlez Pie"
+  },
+  {
+    "slug": "headshots-berry-pie-1g",
+    "name": "Headshots - Berry Pie - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Berry Bliss"
+  },
+  {
+    "slug": "custard-blue-dream-1g",
+    "name": "Custard - Blue Dream - 1g",
+    "category": "Live Resin",
+    "strain": "Blue Dream"
+  },
+  {
+    "slug": "sauced-tossed-forbidden-fruit-1g",
+    "name": "Sauced & Tossed - Forbidden Fruit - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Forbidden Fruit"
+  },
+  {
+    "slug": "sauced-tossed-blue-dream-1g",
+    "name": "Sauced & Tossed - Blue Dream - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Blue Dream"
+  },
+  {
+    "slug": "canna-organix-premium-flower-zkittlez-3-5g",
+    "name": "Canna Organix - Premium Flower Zkittlez - 3.5g",
+    "category": "Flower",
+    "strain": "Zkittlez"
+  },
+  {
+    "slug": "canna-organix-custard-the-glue-1g",
+    "name": "Canna Organix - Custard - The Glue - 1g",
+    "category": "Badder",
+    "strain": "The Glue"
+  },
+  {
+    "slug": "canna-organix-custard-red-dragon-1g",
+    "name": "Canna Organix - Custard - Red Dragon - 1g",
+    "category": "Badder",
+    "strain": "Red Dragon"
+  },
+  {
+    "slug": "canna-organix-custard-forbidden-fruit-1g",
+    "name": "Canna Organix - Custard - Forbidden Fruit - 1g",
+    "category": "Badder",
+    "strain": "Forbidden Fruit"
+  },
+  {
+    "slug": "canna-organix-sauced-tossed-cereal-milk-1g",
+    "name": "Canna Organix - Sauced & Tossed - Cereal Milk - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Cereal Milk"
+  },
+  {
+    "slug": "canna-organix-sauced-tossed-offendo-21-1g",
+    "name": "Canna Organix - Sauced & Tossed - Offendo #21 - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Offendo #21"
+  },
+  {
+    "slug": "canna-organix-custard-lemon-cherry-gelato-1g",
+    "name": "Canna Organix - Custard - Lemon Cherry Gelato - 1g",
+    "category": "BHO",
+    "strain": "Lemon Cherry Gelato"
+  },
+  {
+    "slug": "canna-organix-5g-2-pack-preroll-tube-tokyo-snow-1g",
+    "name": "Canna Organix - .5g 2-Pack Preroll Tube - Tokyo Snow - 1g",
+    "category": "Pre-roll",
+    "strain": "Tokyo Snow"
+  },
+  {
+    "slug": "canna-organix-5g-2-pack-preroll-tube-super-silver-haze-1g",
+    "name": "Canna Organix - .5g 2-Pack Preroll Tube - Super Silver Haze - 1g",
+    "category": "Pre-roll",
+    "strain": "Super Silver Haze"
+  },
+  {
+    "slug": "canna-organix-5g-2-pack-preroll-tube-forbidden-fruit-1g",
+    "name": "Canna Organix - .5g 2-Pack Preroll Tube - Forbidden Fruit - 1g",
+    "category": "Pre-roll",
+    "strain": "Forbidden Fruit"
+  }
+]

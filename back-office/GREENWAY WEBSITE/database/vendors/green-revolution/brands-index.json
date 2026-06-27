@@ -1,0 +1,22 @@
+[
+  {
+    "slug": "doozies",
+    "name": "Doozies",
+    "productCount": 5
+  },
+  {
+    "slug": "green-revolution",
+    "name": "Green Revolution",
+    "productCount": 24
+  },
+  {
+    "slug": "green-revolution",
+    "name": "Green Revolution:",
+    "productCount": 1
+  },
+  {
+    "slug": "wildside",
+    "name": "Wildside",
+    "productCount": 2
+  }
+]

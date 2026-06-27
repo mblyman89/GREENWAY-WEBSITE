@@ -1,0 +1,13 @@
+{
+  "_comment": "Copy this next to any asset as '<filename>.meta.json'. The back office media library seeds media_assets from these sidecars.",
+  "filename": "",
+  "altText": "",
+  "title": "",
+  "description": "",
+  "source": "",
+  "license": "",
+  "usageType": "home-banner | category-banner | brand-logo | vendor-logo | product-image | blog | newsletter | merch | social | compliance | storefront",
+  "focalPoint": { "x": 0.5, "y": 0.5 },
+  "tags": [],
+  "status": "draft"
+}

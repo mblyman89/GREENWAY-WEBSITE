@@ -1,0 +1,332 @@
+[
+  {
+    "slug": "suspended-pre-roll-maui-wowie-1g",
+    "name": "Suspended Pre Roll Maui Wowie 1g",
+    "category": "Pre-roll",
+    "strain": "Maui Wowie"
+  },
+  {
+    "slug": "suspended-flower-commando-7-1g",
+    "name": "Suspended Flower Commando #7 - 1g",
+    "category": "Flower",
+    "strain": "Commando #7"
+  },
+  {
+    "slug": "suspended-disposable-strawberry-ice-1g",
+    "name": "SusPENded Disposable, Strawberry Ice - 1g",
+    "category": "Disposable Cartridge",
+    "strain": "Strawberry Ice"
+  },
+  {
+    "slug": "suspended-thc-iceberg-lost-og-1g",
+    "name": "Suspended THC ICEBERG Lost OG - 1g",
+    "category": "Mix Infused Flower",
+    "strain": "lost og"
+  },
+  {
+    "slug": "suspended-disposable-grape-galaxy-1g",
+    "name": "SusPENded Disposable Grape Galaxy 1g",
+    "category": "Disposable Cartridge",
+    "strain": "Grape"
+  },
+  {
+    "slug": "suspended-flower-commando-7-3-5g",
+    "name": "Suspended Flower Commando #7 - 3.5g",
+    "category": "Flower",
+    "strain": "Commando #7"
+  },
+  {
+    "slug": "suspended-flower-triple-burger-1g",
+    "name": "Suspended Flower Triple Burger- 1g",
+    "category": "Flower",
+    "strain": "Triple Burger"
+  },
+  {
+    "slug": "suspended-disposable-tiger-s-blood-1g",
+    "name": "SusPENded Disposable, Tiger's Blood - 1g",
+    "category": "Disposable Cartridge",
+    "strain": "Tigers Blood"
+  },
+  {
+    "slug": "suspended-signature-resin-disposable-amarelo-1g",
+    "name": "SusPENded Signature Resin Disposable, Amarelo - 1g",
+    "category": "Disposable Cartridge",
+    "strain": "Amarelo"
+  },
+  {
+    "slug": "suspended-flower-super-boof-7g",
+    "name": "Suspended Flower Super Boof -7g",
+    "category": "Flower",
+    "strain": "Super Boof"
+  },
+  {
+    "slug": "suspended-thc-iceberg-superboof-1g",
+    "name": "Suspended THC ICEBERG Superboof- 1g",
+    "category": "Moon Rocks",
+    "strain": "Super Boof"
+  },
+  {
+    "slug": "suspended-pre-roll-triple-burger-1g",
+    "name": "Suspended Pre Roll Triple Burger 1g",
+    "category": "Pre-roll",
+    "strain": "Triple Burger"
+  },
+  {
+    "slug": "suspended-thc-iceberg-commando-7-1g",
+    "name": "Suspended THC Iceberg - Commando #7 - 1g",
+    "category": "Flower",
+    "strain": "Commando #7"
+  },
+  {
+    "slug": "suspended-thc-iceberg-black-koffee-1g",
+    "name": "Suspended THC ICEBERG Black Koffee - 1g",
+    "category": "Mix Infused Flower",
+    "strain": "Black Koffee"
+  },
+  {
+    "slug": "suspended-brands-flower-melted-strawberry-01-0-gram",
+    "name": "Suspended Brands Flower - Melted Strawberry - 01.0 Gram",
+    "category": "Flower",
+    "strain": "Melted Strawberries"
+  },
+  {
+    "slug": "suspended-flower-triple-burger-1g",
+    "name": "Suspended Flower Triple Burger- 1g",
+    "category": "Flower",
+    "strain": "Triple Burger"
+  },
+  {
+    "slug": "suspended-flower-black-koffee-1g",
+    "name": "Suspended Flower Black Koffee - 1g",
+    "category": "Flower",
+    "strain": "Black Koffee"
+  },
+  {
+    "slug": "suspended-flower-black-koffee-3-5g",
+    "name": "Suspended Flower Black Koffee - 3.5g",
+    "category": "Flower",
+    "strain": "Black Koffee"
+  },
+  {
+    "slug": "suspended-thc-iceberg-black-koffee-1g",
+    "name": "Suspended THC ICEBERG Black Koffee - 1g",
+    "category": "Mix Infused Flower",
+    "strain": "Black Koffee"
+  },
+  {
+    "slug": "suspended-thc-iceberg-lost-og-1g",
+    "name": "Suspended THC ICEBERG Lost OG - 1g",
+    "category": "Mix Infused Flower",
+    "strain": "lost og"
+  },
+  {
+    "slug": "suspended-flower-star-pebbles-1g",
+    "name": "Suspended Flower Star Pebbles- 1g",
+    "category": "Flower",
+    "strain": "Star Pebbles"
+  },
+  {
+    "slug": "suspended-flower-triple-burger-1g",
+    "name": "Suspended Flower Triple Burger - 1g",
+    "category": "Flower",
+    "strain": "Triple Burger"
+  },
+  {
+    "slug": "suspended-flower-commando-7-1g",
+    "name": "Suspended Flower Commando #7 - 1g",
+    "category": "Flower",
+    "strain": "Commando #7"
+  },
+  {
+    "slug": "suspended-flower-commando-7-3-5g",
+    "name": "Suspended Flower Commando #7 - 3.5g",
+    "category": "Flower",
+    "strain": "Commando #7"
+  },
+  {
+    "slug": "suspended-flower-lost-og-1g",
+    "name": "Suspended Flower Lost OG - 1g",
+    "category": "Flower",
+    "strain": "lost og"
+  },
+  {
+    "slug": "suspended-flower-super-boof-1g",
+    "name": "Suspended Flower Super Boof -1g",
+    "category": "Flower",
+    "strain": "Super Boof"
+  },
+  {
+    "slug": "suspended-flower-super-boof-7g",
+    "name": "Suspended Flower Super Boof -7g",
+    "category": "Flower",
+    "strain": "Super Boof"
+  },
+  {
+    "slug": "suspended-flower-super-boof-3-5g",
+    "name": "Suspended Flower Super Boof -3.5g",
+    "category": "Flower",
+    "strain": "Super Boof"
+  },
+  {
+    "slug": "suspended-thc-iceberg-commando-7-1g",
+    "name": "Suspended THC Iceberg - Commando #7 - 1g",
+    "category": "Flower",
+    "strain": "Commando #7"
+  },
+  {
+    "slug": "suspended-infused-pre-roll-commando-7-2-5g",
+    "name": "Suspended Infused Pre-roll Commando #7 -2.5g",
+    "category": "Infused Pre-roll",
+    "strain": "Commando #7"
+  },
+  {
+    "slug": "suspended-disposable-electric-green-apple-1g",
+    "name": "SusPENded Disposable Electric Green Apple 1g",
+    "category": "Disposable Cartridge",
+    "strain": "Green Apple"
+  },
+  {
+    "slug": "suspended-disposable-grape-galaxy-1g",
+    "name": "SusPENded Disposable Grape Galaxy 1g",
+    "category": "Disposable Cartridge",
+    "strain": "Grape"
+  },
+  {
+    "slug": "suspended-disposable-tiger-s-blood-1g",
+    "name": "SusPENded Disposable, Tiger's Blood - 1g",
+    "category": "Disposable Cartridge",
+    "strain": "Tigers Blood"
+  },
+  {
+    "slug": "suspended-disposable-raspberry-crave-1g",
+    "name": "SusPENded Disposable, Raspberry Crave - 1g",
+    "category": "Disposable Cartridge",
+    "strain": "Raspberry"
+  },
+  {
+    "slug": "suspended-thc-iceberg-superboof-1g",
+    "name": "Suspended THC ICEBERG Superboof- 1g",
+    "category": "Moon Rocks",
+    "strain": "Super Boof"
+  },
+  {
+    "slug": "suspended-thc-iceberg-super-boof-3-5g-mix",
+    "name": "Suspended THC Iceberg -Super Boof - 3.5g mix",
+    "category": "Flower",
+    "strain": "Super Boof"
+  },
+  {
+    "slug": "suspended-brands-flower-melted-strawberry-01-0-gram",
+    "name": "Suspended Brands Flower - Melted Strawberry - 01.0 Gram",
+    "category": "Flower",
+    "strain": "Melted Strawberries"
+  },
+  {
+    "slug": "suspended-brands-flower-amarelo-01-0-gram",
+    "name": "Suspended Brands Flower - Amarelo - 01.0 Gram",
+    "category": "Flower",
+    "strain": "Amarelo"
+  },
+  {
+    "slug": "suspended-brands-flower-amarelo-3-5g",
+    "name": "Suspended Brands Flower - Amarelo - 3.5g",
+    "category": "Flower",
+    "strain": "Amarelo"
+  },
+  {
+    "slug": "suspended-disposable-strawberry-ice-1g",
+    "name": "SusPENded Disposable, Strawberry Ice - 1g",
+    "category": "Disposable Cartridge",
+    "strain": "Strawberry Ice"
+  },
+  {
+    "slug": "suspended-disposable-sour-watermelonade-1g",
+    "name": "Suspended Disposable, Sour Watermelonade - 1g",
+    "category": "Disposable Cartridge",
+    "strain": "Sour Watermelonade"
+  },
+  {
+    "slug": "suspended-disposable-peaches-cream-1g",
+    "name": "Suspended Disposable, Peaches & Cream - 1g",
+    "category": "Disposable Cartridge",
+    "strain": "Peaches and Cream"
+  },
+  {
+    "slug": "thc-iceberg-amarelo-1-0g",
+    "name": "THC Iceberg - Amarelo - 1.0g",
+    "category": "Flower",
+    "strain": "Amarelo"
+  },
+  {
+    "slug": "thc-iceberg-amarelo-3-5g",
+    "name": "THC Iceberg - Amarelo - 3.5g",
+    "category": "Moon Rocks",
+    "strain": "Amarelo"
+  },
+  {
+    "slug": "suspended-pre-roll-commando-7-1g",
+    "name": "Suspended Pre Roll Commando #7 1g",
+    "category": "Pre-roll",
+    "strain": "Commando #7"
+  },
+  {
+    "slug": "suspended-pre-roll-lost-og-1g",
+    "name": "Suspended Pre Roll Lost OG 1g",
+    "category": "Pre-roll",
+    "strain": "lost og"
+  },
+  {
+    "slug": "suspended-pre-roll-maui-wowie-1g",
+    "name": "Suspended Pre Roll Maui Wowie 1g",
+    "category": "Pre-roll",
+    "strain": "Maui Wowie"
+  },
+  {
+    "slug": "suspended-pre-roll-melted-strawberry-1g",
+    "name": "Suspended Pre Roll Melted Strawberry 1g",
+    "category": "Pre-roll",
+    "strain": "Melted Strawberries"
+  },
+  {
+    "slug": "suspended-pre-roll-star-pebbles-1g",
+    "name": "Suspended Pre Roll Star Pebbles 1g",
+    "category": "Pre-roll",
+    "strain": "Star Pebbles"
+  },
+  {
+    "slug": "suspended-pre-roll-triple-burger-1g",
+    "name": "Suspended Pre Roll Triple Burger 1g",
+    "category": "Pre-roll",
+    "strain": "Triple Burger"
+  },
+  {
+    "slug": "suspended-flower-gmo-3-5g",
+    "name": "Suspended Flower GMO 3.5g",
+    "category": "Flower",
+    "strain": "GMO"
+  },
+  {
+    "slug": "suspended-signature-resin-disposable-amarelo-1g",
+    "name": "SusPENded Signature Resin Disposable, Amarelo - 1g",
+    "category": "Disposable Cartridge",
+    "strain": "Amarelo"
+  },
+  {
+    "slug": "suspended-signature-resin-disposable-super-boof-1g",
+    "name": "SusPENded Signature Resin Disposable, Super Boof - 1g",
+    "category": "Disposable Cartridge",
+    "strain": "Super Boof"
+  },
+  {
+    "slug": "suspended-signature-resin-disposable-lost-og-1g",
+    "name": "SusPENded Signature Resin Disposable, Lost OG - 1g",
+    "category": "Disposable Cartridge",
+    "strain": "lost og"
+  },
+  {
+    "slug": "suspended-signature-resin-disposable-maui-wowie-1g",
+    "name": "SusPENded Signature Resin Disposable, Maui Wowie - 1g",
+    "category": "Disposable Cartridge",
+    "strain": "Maui Wowie"
+  }
+]

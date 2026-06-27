@@ -1,0 +1,13 @@
+{
+  "productName": "Mama J's Flower (Jack and Coke/7g)",
+  "inventoryType": "Usable Marijuana",
+  "category": "Flower",
+  "strainType": "Sativa",
+  "strain": "Jack and Coke",
+  "packageSize": 7.0,
+  "uom": "Grams",
+  "price": 65.0,
+  "cannabis": true,
+  "description": "Jack and Coke is a sativa flower with a spicy, piney, citrus aroma with a clear-headed, creative feel.",
+  "imageFile": ""
+}

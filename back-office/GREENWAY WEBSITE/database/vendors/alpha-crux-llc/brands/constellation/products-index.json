@@ -1,0 +1,572 @@
+[
+  {
+    "slug": "const-moonshot-green-apple-100mg",
+    "name": "Const Moonshot Green Apple 100mg",
+    "category": "Shots",
+    "strain": "Green Apple"
+  },
+  {
+    "slug": "constellation-cold-cure-1g-dulce-de-uva",
+    "name": "Constellation Cold Cure 1g - Dulce De Uva",
+    "category": "Cartridge",
+    "strain": "Dulce de uva"
+  },
+  {
+    "slug": "cold-cure-medellin-1g",
+    "name": "Cold Cure - Medellin 1g",
+    "category": "Rosin",
+    "strain": "Medellin"
+  },
+  {
+    "slug": "wook-tea-raspberry-hibiscus-100mg",
+    "name": "Wook Tea - Raspberry Hibiscus 100mg",
+    "category": "Beverage",
+    "strain": "Raspberry"
+  },
+  {
+    "slug": "const-cold-cure-1g-pie-hoe",
+    "name": "Const Cold Cure 1g - Pie Hoe",
+    "category": "Rosin",
+    "strain": "Pie Hoe"
+  },
+  {
+    "slug": "rosin-vape-cart-0-5g-smackles",
+    "name": "Rosin Vape Cart 0.5g - Smackles",
+    "category": "Cartridge",
+    "strain": "Smackles"
+  },
+  {
+    "slug": "constellation-infused-pre-roll-14pk-7g-tea-time",
+    "name": "Constellation infused pre-roll 14pk 7g - Tea Time",
+    "category": "Infused Pre-roll",
+    "strain": "Tea Time"
+  },
+  {
+    "slug": "const-rosin-aio-hype-2-0-device-rambutan-1g",
+    "name": "Const Rosin AIO Hype 2.0 Device Rambutan 1g",
+    "category": "Disposable Cartridge",
+    "strain": "Rambutan"
+  },
+  {
+    "slug": "const-hrg-efct-1-1-watermelon-lime-ashwagandha-100-cbn-10-pack-i",
+    "name": "Const HRG EFCT 1:1 Watermelon Lime + Ashwagandha (100 CBN) 10 Pack (I)",
+    "category": "Gummies",
+    "strain": "1:1 Watermelon Lime + Ashwagandha"
+  },
+  {
+    "slug": "const-cold-cure-1g-tea-time",
+    "name": "Const Cold Cure 1g - Tea Time",
+    "category": "Rosin",
+    "strain": "Tea Time"
+  },
+  {
+    "slug": "canna-cantina-shot-lime-100mg-doh",
+    "name": "Canna Cantina Shot - Lime - 100mg - DOH",
+    "category": "Shots",
+    "strain": "Lime"
+  },
+  {
+    "slug": "const-inf-2pk-1g-coffee-creamer",
+    "name": "Const INF 2pk 1g - Coffee Creamer",
+    "category": "Pre-roll",
+    "strain": "Coffee Creamer"
+  },
+  {
+    "slug": "const-cold-cure-1g-gmo-pie",
+    "name": "Const Cold Cure 1g - GMO Pie",
+    "category": "Rosin",
+    "strain": "GMO Pie"
+  },
+  {
+    "slug": "moonshot-tropical-punch-100mg-thc",
+    "name": "Moonshot - Tropical Punch 100mg THC",
+    "category": "Shots",
+    "strain": "Tropic Shuffle"
+  },
+  {
+    "slug": "const-inf-2pk-1g-georgia-pie",
+    "name": "Const INF 2pk 1g - Georgia Pie",
+    "category": "Pre-roll",
+    "strain": "Georgia Pie"
+  },
+  {
+    "slug": "constellation-cold-cure-puro-loco-1g",
+    "name": "Constellation Cold Cure - Puro Loco 1g",
+    "category": "Rosin",
+    "strain": "Puro Loco"
+  },
+  {
+    "slug": "canna-cantina-gummies-10-pack-mango-chili",
+    "name": "Canna Cantina Gummies 10 Pack - Mango Chili",
+    "category": "Edible",
+    "strain": "mango chili"
+  },
+  {
+    "slug": "const-inf-2pk-1g-the-soap",
+    "name": "Const INF 2pk 1g - The Soap",
+    "category": "Infused Pre-roll",
+    "strain": "The Soap"
+  },
+  {
+    "slug": "const-moonshot-strawberry-kiwi-200mg-cbg-1-1",
+    "name": "Const Moonshot Strawberry Kiwi 200mg CBG 1:1",
+    "category": "Shots",
+    "strain": "Strawberry Kiwi"
+  },
+  {
+    "slug": "const-hrg-efct-1-2-2-pineapple-passion-fruit-guava-green-tea-extract-200-cbc-200",
+    "name": "Const HRG EFCT 1:2:2 Pineapple Passion Fruit Guava + Green Tea extract (200 CBC, 200 CBG) 10 Pack (S)",
+    "category": "Gummies",
+    "strain": "1:2:2 Pineapple Passion Fruit Guava + Green Tea"
+  },
+  {
+    "slug": "cold-cure-rambutan-1g-doh",
+    "name": "Cold Cure - Rambutan - 1g DOH",
+    "category": "Rosin",
+    "strain": "Rambutan"
+  },
+  {
+    "slug": "cold-cure-super-boof-1g",
+    "name": "Cold Cure -Super Boof 1g",
+    "category": "Rosin",
+    "strain": "Super Boof"
+  },
+  {
+    "slug": "const-rosin-aio-hype-2-0-the-soap-1g",
+    "name": "Const Rosin AIO Hype 2.0 The Soap 1g",
+    "category": "Disposable Cartridge",
+    "strain": "The Soap"
+  },
+  {
+    "slug": "const-hrg-cbg-1-1-1-watermelon-10-pack-300mg",
+    "name": "Const HRG CBG 1:1:1 Watermelon 10 Pack 300mg",
+    "category": "Gummies",
+    "strain": "Watermelon"
+  },
+  {
+    "slug": "canna-cantina-gummies-10-pack-mango-chili",
+    "name": "Canna Cantina Gummies 10 Pack - Mango Chili",
+    "category": "Edible",
+    "strain": "mango chili"
+  },
+  {
+    "slug": "canna-cantina-gummies-10-pack-mandarin",
+    "name": "Canna Cantina Gummies 10 Pack - Mandarin",
+    "category": "Edible",
+    "strain": "Mandarin"
+  },
+  {
+    "slug": "moonshot-tropical-punch-100mg-thc",
+    "name": "Moonshot - Tropical Punch 100mg THC",
+    "category": "Shots",
+    "strain": "Tropic Shuffle"
+  },
+  {
+    "slug": "rosin-vape-cart-0-5g-amarelo-doh",
+    "name": "Rosin Vape Cart 0.5g - Amarelo- DOH",
+    "category": "Cartridge",
+    "strain": "Amarelo"
+  },
+  {
+    "slug": "constellation-cold-cure-puro-loco-1g",
+    "name": "Constellation Cold Cure - Puro Loco 1g",
+    "category": "Rosin",
+    "strain": "Puro Loco"
+  },
+  {
+    "slug": "constellation-cold-cure-mint-condition-1g",
+    "name": "Constellation Cold Cure - Mint Condition 1g",
+    "category": "Rosin",
+    "strain": "Mint Condition"
+  },
+  {
+    "slug": "cold-cure-medellin-1g",
+    "name": "Cold Cure - Medellin 1g",
+    "category": "Rosin",
+    "strain": "Medellin"
+  },
+  {
+    "slug": "cold-cure-the-soap",
+    "name": "Cold Cure - The Soap",
+    "category": "Rosin",
+    "strain": "The Soap"
+  },
+  {
+    "slug": "cold-cure-mint-condition-1g",
+    "name": "Cold Cure - Mint Condition 1g",
+    "category": "Rosin",
+    "strain": "Mint Condition"
+  },
+  {
+    "slug": "cold-cure-grape-lyfe-1g-doh",
+    "name": "Cold Cure - Grape Lyfe 1g - DOH",
+    "category": "Rosin",
+    "strain": "Grape Lyfe"
+  },
+  {
+    "slug": "cold-cure-moroccan-peaches-1g-doh",
+    "name": "Cold Cure - Moroccan Peaches 1g - DOH",
+    "category": "Rosin",
+    "strain": "Moroccan Peaches"
+  },
+  {
+    "slug": "wook-tea-peach-100mg",
+    "name": "Wook Tea - Peach 100mg",
+    "category": "Beverage",
+    "strain": "Peach"
+  },
+  {
+    "slug": "wook-tea-raspberry-hibiscus-100mg",
+    "name": "Wook Tea - Raspberry Hibiscus 100mg",
+    "category": "Beverage",
+    "strain": "Raspberry"
+  },
+  {
+    "slug": "wook-tea-larry-palmer-100mg",
+    "name": "Wook Tea - Larry Palmer 100mg",
+    "category": "Beverage",
+    "strain": "Lemonade"
+  },
+  {
+    "slug": "cold-cure-rambutan-1g-doh",
+    "name": "Cold Cure - Rambutan - 1g DOH",
+    "category": "Rosin",
+    "strain": "Rambutan"
+  },
+  {
+    "slug": "cold-cure-cali-swiss-1g-doh",
+    "name": "Cold Cure - Cali Swiss 1g - DOH",
+    "category": "Rosin",
+    "strain": "Cali Swiss"
+  },
+  {
+    "slug": "2-pack-infused-coffee-creamer",
+    "name": "2 Pack Infused - Coffee Creamer",
+    "category": "Infused Pre-roll",
+    "strain": "Coffee Creamer"
+  },
+  {
+    "slug": "canna-cantina-shot-lime-100mg-doh",
+    "name": "Canna Cantina Shot - Lime - 100mg - DOH",
+    "category": "Shots",
+    "strain": "Lime"
+  },
+  {
+    "slug": "canna-cantina-shot-dankchata-100mg",
+    "name": "Canna Cantina Shot - Dankchata - 100mg",
+    "category": "Shots",
+    "strain": "Dankchata"
+  },
+  {
+    "slug": "cold-cure-purple-milk-1g",
+    "name": "Cold Cure - Purple Milk 1g",
+    "category": "Rosin",
+    "strain": "Purple Milk"
+  },
+  {
+    "slug": "cold-cure-super-boof-1g",
+    "name": "Cold Cure -Super Boof 1g",
+    "category": "Rosin",
+    "strain": "Super Boof"
+  },
+  {
+    "slug": "rosin-vape-cart-0-5g-smackles",
+    "name": "Rosin Vape Cart 0.5g - Smackles",
+    "category": "Cartridge",
+    "strain": "Smackles"
+  },
+  {
+    "slug": "const-cold-cure-1g-gmo",
+    "name": "Const Cold Cure 1g - GMO",
+    "category": "Rosin",
+    "strain": "GMO"
+  },
+  {
+    "slug": "const-cold-cure-1g-tea-time",
+    "name": "Const Cold Cure 1g - Tea Time",
+    "category": "Rosin",
+    "strain": "Tea Time"
+  },
+  {
+    "slug": "wook-gone-wild-tea-mango-lemonade-400mg",
+    "name": "Wook Gone Wild Tea Mango Lemonade - 400mg",
+    "category": "Beverage",
+    "strain": "Mango Lemonade"
+  },
+  {
+    "slug": "const-flower-jar-3-5g-permanent-marker",
+    "name": "Const Flower Jar 3.5g - Permanent Marker",
+    "category": "Flower",
+    "strain": "Permanent Marker"
+  },
+  {
+    "slug": "const-flower-jar-3-5g-gelato-cookies",
+    "name": "Const Flower Jar 3.5g - Gelato Cookies",
+    "category": "Flower",
+    "strain": "Gelato Cookies"
+  },
+  {
+    "slug": "const-hrg-cbg-1-1-1-watermelon-10-pack-300mg",
+    "name": "Const HRG CBG 1:1:1 Watermelon 10 Pack 300mg",
+    "category": "Gummies",
+    "strain": "Watermelon"
+  },
+  {
+    "slug": "const-hrg-cbn-1-1-1-blueberry-10-pack-300mg",
+    "name": "Const HRG CBN 1:1:1 Blueberry 10 Pack 300mg",
+    "category": "Gummies",
+    "strain": "Blueberry"
+  },
+  {
+    "slug": "moonshot-blue-raspberry-100mg-cbn-100mg-thc",
+    "name": "Moonshot Blue Raspberry - 100mg CBN/100mg THC",
+    "category": "Shots",
+    "strain": "Blue Raspberry"
+  },
+  {
+    "slug": "const-moonshot-strawberry-kiwi-200mg-cbg-1-1",
+    "name": "Const Moonshot Strawberry Kiwi 200mg CBG 1:1",
+    "category": "Shots",
+    "strain": "Strawberry Kiwi"
+  },
+  {
+    "slug": "const-moonshot-grape-100mg",
+    "name": "Const Moonshot Grape 100mg",
+    "category": "Shots",
+    "strain": "Grape"
+  },
+  {
+    "slug": "const-moonshot-green-apple-100mg",
+    "name": "Const Moonshot Green Apple 100mg",
+    "category": "Shots",
+    "strain": "Green Apple"
+  },
+  {
+    "slug": "const-moonshot-blue-raspberry-100mg",
+    "name": "Const Moonshot Blue Raspberry 100mg",
+    "category": "Shots",
+    "strain": "Blue Raspberry"
+  },
+  {
+    "slug": "const-rosin-aio-hype-2-0-device-rambutan-1g",
+    "name": "Const Rosin AIO Hype 2.0 Device Rambutan 1g",
+    "category": "Disposable Cartridge",
+    "strain": "Rambutan"
+  },
+  {
+    "slug": "const-inf-2pk-1g-coffee-creamer",
+    "name": "Const INF 2pk 1g - Coffee Creamer",
+    "category": "Pre-roll",
+    "strain": "Coffee Creamer"
+  },
+  {
+    "slug": "const-inf-2pk-1g-super-boof",
+    "name": "Const INF 2pk 1g - Super Boof",
+    "category": "Pre-roll",
+    "strain": "Super Boof"
+  },
+  {
+    "slug": "const-inf-2pk-1g-gary-payton",
+    "name": "Const INF 2pk 1g - Gary Payton",
+    "category": "Pre-roll",
+    "strain": "Gary Payton"
+  },
+  {
+    "slug": "const-inf-2pk-1g-georgia-pie",
+    "name": "Const INF 2pk 1g - Georgia Pie",
+    "category": "Pre-roll",
+    "strain": "Georgia Pie"
+  },
+  {
+    "slug": "const-inf-14pk-7g-coffee-creamer",
+    "name": "Const INF 14pk 7g - Coffee Creamer",
+    "category": "Infused Pre-roll",
+    "strain": "Coffee Creamer"
+  },
+  {
+    "slug": "const-cold-cure-1g-pie-hoe",
+    "name": "Const Cold Cure 1g - Pie Hoe",
+    "category": "Rosin",
+    "strain": "Pie Hoe"
+  },
+  {
+    "slug": "const-hrg-efct-1-2-2-pineapple-passion-fruit-guava-green-tea-extract-200-cbc-200",
+    "name": "Const HRG EFCT 1:2:2 Pineapple Passion Fruit Guava + Green Tea extract (200 CBC, 200 CBG) 10 Pack (S)",
+    "category": "Gummies",
+    "strain": "1:2:2 Pineapple Passion Fruit Guava + Green Tea"
+  },
+  {
+    "slug": "const-hrg-efct-1-2-strawberry-lychee-magnesium-l-threonate-200-cbn-10-pack-i",
+    "name": "Const HRG EFCT 1:2 Strawberry Lychee + Magnesium L-Threonate (200 CBN) 10 Pack (I)",
+    "category": "Gummies",
+    "strain": "1:2 Strawberry Lychee + Magnesium L-Threonate"
+  },
+  {
+    "slug": "const-hrg-efct-1-1-watermelon-lime-ashwagandha-100-cbn-10-pack-i",
+    "name": "Const HRG EFCT 1:1 Watermelon Lime + Ashwagandha (100 CBN) 10 Pack (I)",
+    "category": "Gummies",
+    "strain": "1:1 Watermelon Lime + Ashwagandha"
+  },
+  {
+    "slug": "const-hrg-efct-2-1-1-yuzu-blackberry-lemon-balm-50-cbn-50mg-cbd-10-pack-i",
+    "name": "Const HRG EFCT 2:1:1 Yuzu Blackberry + Lemon Balm (50 CBN, 50mg CBD) 10 Pack (I)",
+    "category": "Gummies",
+    "strain": "Yuzu Blackberry + Lemon Balm"
+  },
+  {
+    "slug": "const-hrg-cbn-1-1-1-berry-blast-10-pack-300mg",
+    "name": "Const HRG CBN 1:1:1 Berry Blast 10 Pack 300mg",
+    "category": "Edible",
+    "strain": "Berry Blast"
+  },
+  {
+    "slug": "cantina-gummies-cbd-cbc-cbg-guava-10-pack-400mg",
+    "name": "Cantina Gummies - CBD:CBC:CBG Guava 10 Pack 400mg",
+    "category": "Gummies",
+    "strain": "Guava"
+  },
+  {
+    "slug": "const-inf-2pk-1g-the-soap",
+    "name": "Const INF 2pk 1g - The Soap",
+    "category": "Infused Pre-roll",
+    "strain": "The Soap"
+  },
+  {
+    "slug": "const-inf-2pk-1g-medellin",
+    "name": "Const INF 2pk 1g - Medellin",
+    "category": "Infused Pre-roll",
+    "strain": "Medellin"
+  },
+  {
+    "slug": "const-inf-2pk-1g-souped-up",
+    "name": "Const INF 2pk 1g - Souped Up",
+    "category": "Infused Pre-roll",
+    "strain": "Souped Up"
+  },
+  {
+    "slug": "const-rosin-aio-hype-2-0-device-honey-combz-1g",
+    "name": "Const Rosin AIO Hype 2.0 Device Honey Combz 1g",
+    "category": "Disposable Cartridge",
+    "strain": "Honey Combz"
+  },
+  {
+    "slug": "const-rosin-aio-hype-2-0-device-gmo-1g",
+    "name": "Const Rosin AIO Hype 2.0 Device GMO 1g",
+    "category": "Disposable Cartridge",
+    "strain": "GMO"
+  },
+  {
+    "slug": "const-cold-cure-1g-georgia-pie",
+    "name": "Const Cold Cure 1g - Georgia Pie",
+    "category": "Rosin",
+    "strain": "Georgia Pie"
+  },
+  {
+    "slug": "const-cold-cure-1g-gmo-pie",
+    "name": "Const Cold Cure 1g - GMO Pie",
+    "category": "Rosin",
+    "strain": "GMO Pie"
+  },
+  {
+    "slug": "const-cold-cure-1g-pruno",
+    "name": "Const Cold Cure 1g - Pruno",
+    "category": "Rosin",
+    "strain": "Pruno"
+  },
+  {
+    "slug": "living-soil-cold-cure-1g-wild-thornberry",
+    "name": "Living Soil Cold Cure 1g - Wild Thornberry",
+    "category": "Rosin",
+    "strain": "Wildthornberry"
+  },
+  {
+    "slug": "const-rosin-aio-hype-2-0-tea-time-1g",
+    "name": "Const Rosin AIO Hype 2.0 Tea Time 1g",
+    "category": "Disposable Cartridge",
+    "strain": "Tea Time"
+  },
+  {
+    "slug": "const-rosin-aio-hype-2-0-device-black-domina-1g",
+    "name": "Const Rosin AIO Hype 2.0 Device Black Domina 1g",
+    "category": "Disposable Cartridge",
+    "strain": "Black Domina"
+  },
+  {
+    "slug": "const-rosin-aio-hype-2-0-device-dulce-de-uva-1g",
+    "name": "Const Rosin AIO Hype 2.0 Device Dulce De Uva 1g",
+    "category": "Disposable Cartridge",
+    "strain": "Dulce de uva"
+  },
+  {
+    "slug": "const-rosin-aio-hype-2-0-device-pie-hoe-1g",
+    "name": "Const Rosin AIO Hype 2.0 Device Pie Hoe 1g",
+    "category": "Disposable Cartridge",
+    "strain": "Pie Hoe"
+  },
+  {
+    "slug": "const-rosin-aio-hype-2-0-the-soap-1g",
+    "name": "Const Rosin AIO Hype 2.0 The Soap 1g",
+    "category": "Disposable Cartridge",
+    "strain": "The Soap"
+  },
+  {
+    "slug": "constellation-infused-pre-roll-14pk-7g-lemon-riviera",
+    "name": "Constellation infused pre-roll 14pk 7g - Lemon Riviera",
+    "category": "Infused Pre-roll",
+    "strain": "Lemon Riviera"
+  },
+  {
+    "slug": "constellation-infused-pre-roll-14pk-7g-tea-time",
+    "name": "Constellation infused pre-roll 14pk 7g - Tea Time",
+    "category": "Infused Pre-roll",
+    "strain": "Tea Time"
+  },
+  {
+    "slug": "constellation-cold-cure-1g-black-domina",
+    "name": "Constellation Cold Cure 1g - Black Domina",
+    "category": "Cartridge",
+    "strain": "Black Domina"
+  },
+  {
+    "slug": "constellation-cold-cure-1g-cali-swiss",
+    "name": "Constellation Cold Cure 1g - Cali Swiss",
+    "category": "Cartridge",
+    "strain": "Cali Swiss"
+  },
+  {
+    "slug": "constellation-cold-cure-1g-dulce-de-uva",
+    "name": "Constellation Cold Cure 1g - Dulce De Uva",
+    "category": "Cartridge",
+    "strain": "Dulce de uva"
+  },
+  {
+    "slug": "const-rosin-vape-cart-0-5g-kosher-headband",
+    "name": "Const Rosin Vape Cart 0.5g - Kosher Headband",
+    "category": "Cartridge",
+    "strain": "Kosher Headband"
+  },
+  {
+    "slug": "const-rosin-vape-cart-0-5g-pie-hoe",
+    "name": "Const Rosin Vape Cart 0.5g - Pie Hoe",
+    "category": "Cartridge",
+    "strain": "Pie Hoe"
+  },
+  {
+    "slug": "constellation-cannabis-cartridge-moroccan-peaches-5g",
+    "name": "Constellation Cannabis Cartridge - Moroccan Peaches .5g",
+    "category": "Cartridge",
+    "strain": "Moroccan Peaches"
+  },
+  {
+    "slug": "constellation-cannabis-cartridge-moroccan-peaches-5g",
+    "name": "Constellation Cannabis Cartridge - Moroccan Peaches .5g",
+    "category": "Cartridge",
+    "strain": "Moroccan Peaches"
+  },
+  {
+    "slug": "wook-tea-blackberry-lemonade-100mg",
+    "name": "Wook Tea - Blackberry Lemonade 100mg",
+    "category": "Beverage",
+    "strain": "Blackberry Lemonade"
+  }
+]

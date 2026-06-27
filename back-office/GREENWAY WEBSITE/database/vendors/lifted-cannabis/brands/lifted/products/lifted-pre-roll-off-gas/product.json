@@ -1,0 +1,13 @@
+{
+  "productName": "Lifted Pre-roll Off Gas",
+  "inventoryType": "Usable Marijuana",
+  "category": "Pre-roll",
+  "strainType": "Hybrid",
+  "strain": "Off Gas",
+  "packageSize": 1.0,
+  "uom": "Grams",
+  "price": 15.0,
+  "cannabis": true,
+  "description": "Off Gas is a hybrid pre-roll with notes of diesel and pungent, with smooth, well-rounded flavor. Expect balanced, well-rounded effects.",
+  "imageFile": ""
+}

@@ -1,0 +1,818 @@
+[
+  {
+    "slug": "hashbreak-rosin-vape-gmo-1g",
+    "name": "hashbreak - - Rosin Vape - GMO - 1g",
+    "category": "Rosin",
+    "strain": "GMO"
+  },
+  {
+    "slug": "torus-pre-rolls-perzimmon-1g",
+    "name": "Torus - Pre-Rolls - Perzimmon - 1g",
+    "category": "Pre-roll",
+    "strain": "Perzimmon"
+  },
+  {
+    "slug": "torus-infused-glass-tip-raspberry-smoothie-x-ginger-pop-1g",
+    "name": "Torus - Infused Glass Tip - Raspberry Smoothie x Ginger Pop - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Raspberry Smoothie x Ginger Pop"
+  },
+  {
+    "slug": "hashbreak-pre-rolls-infused-lava-berry-1g",
+    "name": "hashbreak - Pre Rolls (Infused) - Lava Berry - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Lava Berry"
+  },
+  {
+    "slug": "torus-pre-rolls-windu-1-1g",
+    "name": "Torus - Pre-Rolls - Windu 1 - 1g",
+    "category": "Pre-roll",
+    "strain": "windu"
+  },
+  {
+    "slug": "hashbreak-hashbreak-2-pack-suga-berry-1g",
+    "name": "HashBreak - Hashbreak 2 Pack - Suga Berry - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Suga Berry"
+  },
+  {
+    "slug": "torus-pre-rolls-purple-octane-1g",
+    "name": "Torus - Pre-Rolls - Purple Octane - 1g",
+    "category": "Pre-roll",
+    "strain": "Purple Octane"
+  },
+  {
+    "slug": "hashbreak-pre-rolls-infused-monster-mash-1g",
+    "name": "hashbreak - Pre Rolls (Infused) - Monster Mash - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Monster Mash"
+  },
+  {
+    "slug": "t2-flower-kool-whip-3-5g",
+    "name": "T2 Flower Kool Whip 3.5g",
+    "category": "Flower",
+    "strain": "Kool Whip"
+  },
+  {
+    "slug": "torus-rosin-cold-cure-k2-1-1g",
+    "name": "Torus - Rosin Cold Cure - K2 #1 - 1g",
+    "category": "Rosin",
+    "strain": "K2 #1"
+  },
+  {
+    "slug": "t2-flower-lava-cake-3-5g",
+    "name": "T2 - Flower - Lava Cake - 3.5g",
+    "category": "Flower",
+    "strain": "Lava Cake"
+  },
+  {
+    "slug": "hashbreak-infused-pre-rolls-tigers-blood-1g",
+    "name": "hashbreak - - Infused Pre Rolls - Tigers Blood - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Tigers Blood"
+  },
+  {
+    "slug": "torus-pre-rolls-hyphy-1g",
+    "name": "Torus Pre-Rolls Hyphy - 1g",
+    "category": "Pre-roll",
+    "strain": "Hyphy"
+  },
+  {
+    "slug": "hashbreak-pre-rolls-infused-peanut-butter-fudge-1g",
+    "name": "hashbreak - Pre Rolls (Infused) - Peanut Butter Fudge - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Peanut Butter"
+  },
+  {
+    "slug": "hashbreak-hashbreak-2-pack-halo-kitty-1g",
+    "name": "HashBreak - Hashbreak 2 Pack - Halo Kitty - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Halo Kitty"
+  },
+  {
+    "slug": "hashbreak-pre-rolls-infused-candy-corn-1g",
+    "name": "hashbreak - Pre Rolls (Infused) - Candy Corn - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Candy Corn"
+  },
+  {
+    "slug": "hashbreak-pre-rolls-infused-berry-banana-1g",
+    "name": "hashbreak - Pre Rolls (Infused) - Berry Banana - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "berry"
+  },
+  {
+    "slug": "t2hydro-flower-blue-powerade-3-5g",
+    "name": "t2Hydro - Flower - Blue Powerade - 3.5g",
+    "category": "Flower",
+    "strain": "Blue Powerade"
+  },
+  {
+    "slug": "torus-flower-permanent-marker-3-5g",
+    "name": "Torus - Flower - Permanent Marker - 3.5g",
+    "category": "Flower",
+    "strain": "Permanent Marker"
+  },
+  {
+    "slug": "torus-flower-cherry-amaretto-3-5g",
+    "name": "Torus Flower Cherry Amaretto 3.5g",
+    "category": "Flower",
+    "strain": "Cherry Amaretto"
+  },
+  {
+    "slug": "hashbreak-pre-rolls-infused-wild-berry-punch-1g",
+    "name": "hashbreak - Pre Rolls (Infused) - Wild Berry Punch - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Wild Berry Punch"
+  },
+  {
+    "slug": "torus-rosin-cantucci-1g",
+    "name": "Torus Rosin cantucci - 1g",
+    "category": "Rosin",
+    "strain": "cantucci"
+  },
+  {
+    "slug": "torus-flower-guava-tart-3-5g",
+    "name": "Torus - Flower - Guava Tart - 3.5g",
+    "category": "Flower",
+    "strain": "Guava Tart"
+  },
+  {
+    "slug": "torus-flower-cereal-milk-6-28g",
+    "name": "Torus - Flower - Cereal Milk #6 - 28g",
+    "category": "Flower",
+    "strain": "Cereal Milk"
+  },
+  {
+    "slug": "torus-pre-rolls-lemon-heads-3-1g",
+    "name": "Torus - Pre-Rolls - Lemon Heads #3 - 1g",
+    "category": "Pre-roll",
+    "strain": "Lemon Heads"
+  },
+  {
+    "slug": "torus-infused-pre-roll-hashbreak-pancake-syrup-1g",
+    "name": "Torus Infused Pre-roll Hashbreak Pancake Syrup 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Pancake Syrup"
+  },
+  {
+    "slug": "hashbreak-pre-rolls-infused-white-cherry-truffle-1g",
+    "name": "hashbreak - Pre Rolls (Infused) - White Cherry Truffle - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "White Cherry Truffle"
+  },
+  {
+    "slug": "torus-flower-trop-cherry-strawberry-7g",
+    "name": "Torus - Flower - Trop Cherry Strawberry - 7g",
+    "category": "Flower",
+    "strain": "Trop Cherry Strawberry"
+  },
+  {
+    "slug": "torus-flower-guava-peach-3-5g",
+    "name": "Torus - Flower - Guava Peach - 3.5g",
+    "category": "Flower",
+    "strain": "Guava Peach"
+  },
+  {
+    "slug": "t2-flower-cherry-cookie-cake-3-5g",
+    "name": "T2 - Flower - Cherry Cookie Cake - 3.5g",
+    "category": "Flower",
+    "strain": "Cherry Cookie Cake"
+  },
+  {
+    "slug": "hashbreak-pre-rolls-infused-candy-apple-1g",
+    "name": "hashbreak - Pre Rolls (Infused) - Candy Apple- 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Candy Apple"
+  },
+  {
+    "slug": "hashbreak-hb-vape-grape-icee-1g",
+    "name": "HashBreak - HB Vape - Grape Icee - 1g",
+    "category": "Disposable Cartridge",
+    "strain": "Grape Ice"
+  },
+  {
+    "slug": "hashbreak-hb-multi-sour-cherries-3-5g",
+    "name": "HashBreak - HB Multi - Sour Cherries - 3.5g",
+    "category": "Infused Pre-roll",
+    "strain": "Sour Cherries"
+  },
+  {
+    "slug": "hashbreak-pre-rolls-infused-funk-a-delic-1g",
+    "name": "hashbreak - Pre Rolls (Infused) - Funk-A-Delic - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Funkadelic"
+  },
+  {
+    "slug": "torus-pre-rolls-gastro-pop-s1-1-1g",
+    "name": "Torus - Pre-Rolls - Gastro Pop S1 #1 - 1g",
+    "category": "Pre-roll",
+    "strain": "Gastro Pop"
+  },
+  {
+    "slug": "torus-rosin-cold-cure-da-funk-7-1g",
+    "name": "Torus - ROSIN COLD CURE - da FUNK 7 - 1g",
+    "category": "Rosin",
+    "strain": "da FUNK 7"
+  },
+  {
+    "slug": "torus-flower-watermelon-martini-3-5g",
+    "name": "Torus - Flower - Watermelon Martini - 3.5g",
+    "category": "Flower",
+    "strain": "Watermelon Martini"
+  },
+  {
+    "slug": "torus-pre-roll-permanent-marker-1g",
+    "name": "Torus - Pre Roll - Permanent Marker - 1g",
+    "category": "Pre-roll",
+    "strain": "Permanent Marker"
+  },
+  {
+    "slug": "torus-pre-roll-pinnacle-1g",
+    "name": "Torus Pre-roll Pinnacle 1g",
+    "category": "Pre-roll",
+    "strain": "Pinnacle"
+  },
+  {
+    "slug": "hashbreak-pre-rolls-infused-cherry-bomb-1g",
+    "name": "hashbreak - Pre Rolls (Infused) - Cherry Bomb - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Cherry Bomb"
+  },
+  {
+    "slug": "hashbreak-2-pack-peanut-butter-fudge-1g",
+    "name": "HashBreak 2 Pack Peanut Butter Fudge 1g",
+    "category": "Pre-roll",
+    "strain": "Peanut Butter"
+  },
+  {
+    "slug": "torus-flower-blue-zoap-3-5g",
+    "name": "Torus - Flower - Blue Zoap - 3.5g",
+    "category": "Flower",
+    "strain": "Blue Zoap"
+  },
+  {
+    "slug": "torus-pre-rolls-zour-beltz-1g",
+    "name": "Torus - Pre-Rolls - Zour Beltz - 1g",
+    "category": "Pre-roll",
+    "strain": "Zour Beltz"
+  },
+  {
+    "slug": "torus-flower-guava-tart-3-5g",
+    "name": "Torus - Flower - Guava Tart - 3.5g",
+    "category": "Flower",
+    "strain": "Guava Tart"
+  },
+  {
+    "slug": "hashbreak-infused-pre-roll-frosted-cookies-1g",
+    "name": "HashBreak Infused pre-roll - Frosted Cookies - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Frosted Cookies"
+  },
+  {
+    "slug": "hashbreak-2-pack-peanut-butter-fudge-1g",
+    "name": "HashBreak 2 Pack Peanut Butter Fudge 1g",
+    "category": "Pre-roll",
+    "strain": "Peanut Butter"
+  },
+  {
+    "slug": "t2-flower-true-purple-berry-1-3-5g",
+    "name": "T2 Flower True Purple Berry 1- 3.5g",
+    "category": "Flower",
+    "strain": "True Purple Berry 1"
+  },
+  {
+    "slug": "torus-pre-rolls-hyphy-1g",
+    "name": "Torus Pre-Rolls Hyphy - 1g",
+    "category": "Pre-roll",
+    "strain": "Hyphy"
+  },
+  {
+    "slug": "t2-flower-breakfast-toast-3-5g",
+    "name": "T2 Flower Breakfast Toast - 3.5g",
+    "category": "Flower",
+    "strain": "Breakfast Toast"
+  },
+  {
+    "slug": "torus-flower-cherry-amaretto-3-5g",
+    "name": "Torus Flower Cherry Amaretto 3.5g",
+    "category": "Flower",
+    "strain": "Cherry Amaretto"
+  },
+  {
+    "slug": "torus-pre-rolls-cherry-amaretto-1g",
+    "name": "Torus  Pre-Rolls Cherry Amaretto 1g",
+    "category": "Flower",
+    "strain": "Cherry Amaretto"
+  },
+  {
+    "slug": "hashbreak-2-pack-a-la-mode-1g",
+    "name": "HashBreak 2 Pack - A la Mode - 1g",
+    "category": "Pre-roll",
+    "strain": "A La Mode"
+  },
+  {
+    "slug": "torus-pre-rolls-k2-1-1g",
+    "name": "Torus Pre-Rolls K2 #1-1g",
+    "category": "Pre-roll",
+    "strain": "K2 #1"
+  },
+  {
+    "slug": "torus-rosin-strawberry-fritter-f2-4-1g",
+    "name": "Torus ROSIN Strawberry Fritter F2 #4 - 1g",
+    "category": "Rosin",
+    "strain": "Strawberry Fritter"
+  },
+  {
+    "slug": "torus-rosin-do-si-g-1g",
+    "name": "Torus ROSIN Do-Si-G - 1g",
+    "category": "Rosin",
+    "strain": "Do Si Do"
+  },
+  {
+    "slug": "torus-pre-rolls-pinnacle-1g",
+    "name": "Torus - Pre-Rolls - Pinnacle - 1g",
+    "category": "Pre-roll",
+    "strain": "Pinnacle"
+  },
+  {
+    "slug": "torus-flower-permanent-marker-3-5g",
+    "name": "Torus - Flower - Permanent Marker - 3.5g",
+    "category": "Flower",
+    "strain": "Permanent Marker"
+  },
+  {
+    "slug": "torus-pre-rolls-mclaren-1g",
+    "name": "Torus - Pre-Rolls - Mclaren - 1g",
+    "category": "Pre-roll",
+    "strain": "Mclaren"
+  },
+  {
+    "slug": "hashbreak-hb-multi-sour-cherries-3-5g",
+    "name": "HashBreak - HB Multi - Sour Cherries - 3.5g",
+    "category": "Infused Pre-roll",
+    "strain": "Sour Cherries"
+  },
+  {
+    "slug": "hashbreak-hashbreak-2-pack-sour-cherries-1g",
+    "name": "HashBreak - Hashbreak 2 Pack - Sour Cherries - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Sour Cherries"
+  },
+  {
+    "slug": "torus-pre-rolls-watermelon-martini-1g",
+    "name": "Torus - Pre-Rolls - Watermelon Martini - 1g",
+    "category": "Pre-roll",
+    "strain": "Watermelon Martini"
+  },
+  {
+    "slug": "torus-flower-cereal-milk-6-28g",
+    "name": "Torus - Flower - Cereal Milk #6 - 28g",
+    "category": "Flower",
+    "strain": "Cereal Milk"
+  },
+  {
+    "slug": "torus-pre-rolls-guava-peach-1g",
+    "name": "Torus - Pre-Rolls - Guava Peach - 1g",
+    "category": "Pre-roll",
+    "strain": "Guava Peach"
+  },
+  {
+    "slug": "hashbreak-hashbreak-2-pack-suga-berry-1g",
+    "name": "HashBreak - Hashbreak 2 Pack - Suga Berry - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Suga Berry"
+  },
+  {
+    "slug": "torus-pre-rolls-train-wreck-1g",
+    "name": "Torus - Pre-Rolls - Train Wreck - 1g",
+    "category": "Pre-roll",
+    "strain": "Trainwreck"
+  },
+  {
+    "slug": "hashbreak-hashbreak-2-pack-lava-pie-1g",
+    "name": "HashBreak - Hashbreak 2 Pack - Lava Pie - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Lava Pie"
+  },
+  {
+    "slug": "torus-pre-rolls-chai-latte-1g",
+    "name": "Torus - Pre-Rolls - Chai Latte - 1g",
+    "category": "Flower",
+    "strain": "Chai Latte"
+  },
+  {
+    "slug": "hashbreak-hashbreak-2-pack-red-cream-soda-1g",
+    "name": "HashBreak - Hashbreak 2 Pack - Red Cream Soda - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Red Cream Soda"
+  },
+  {
+    "slug": "torus-infused-ceramic-chai-latte-x-paradise-pop-1g",
+    "name": "Torus - Infused Ceramic - Chai Latte x Paradise Pop - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Chai Latte x Paradise Pop"
+  },
+  {
+    "slug": "hashbreak-hashbreak-2-pack-halo-kitty-1g",
+    "name": "HashBreak - Hashbreak 2 Pack - Halo Kitty - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Halo Kitty"
+  },
+  {
+    "slug": "torus-pre-rolls-91-octane-1g",
+    "name": "Torus - Pre-Rolls - 91 Octane - 1g",
+    "category": "Pre-roll",
+    "strain": "91 Octane"
+  },
+  {
+    "slug": "torus-pre-rolls-k2-1-1g",
+    "name": "Torus - Pre-Rolls - K2 #1 - 1g",
+    "category": "Pre-roll",
+    "strain": "K2 #1"
+  },
+  {
+    "slug": "hashbreak-hashbreak-2-pack-root-beer-float-1g",
+    "name": "HashBreak - Hashbreak 2 Pack - Root Beer Float - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Root Beer Float"
+  },
+  {
+    "slug": "torus-pre-rolls-lemon-cherry-pastry-1-1g",
+    "name": "Torus - Pre-Rolls - Lemon Cherry Pastry #1 - 1g",
+    "category": "Pre-roll",
+    "strain": "Lemon Cherry Pastry"
+  },
+  {
+    "slug": "hashbreak-hb-vape-grape-icee-1g",
+    "name": "HashBreak - HB Vape - Grape Icee - 1g",
+    "category": "Disposable Cartridge",
+    "strain": "Grape Ice"
+  },
+  {
+    "slug": "hashbreak-hb-vape-tokyo-soda-1g",
+    "name": "HashBreak - HB Vape - Tokyo Soda - 1g",
+    "category": "Disposable Cartridge",
+    "strain": "Tokyo Soda"
+  },
+  {
+    "slug": "hashbreak-hb-multi-grape-lemonade-3-5g",
+    "name": "HashBreak - HB Multi - Grape Lemonade - 3.5g",
+    "category": "Infused Pre-roll",
+    "strain": "Grape Lemonade"
+  },
+  {
+    "slug": "hashbreak-hashbreak-2-pack-pink-lemonade-candy-1g",
+    "name": "HashBreak - Hashbreak 2 Pack - Pink Lemonade Candy - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Pink Lemonade"
+  },
+  {
+    "slug": "hashbreak-hb-vape-funk-a-delic-1g",
+    "name": "HashBreak - HB Vape - Funk-A-Delic - 1g",
+    "category": "Disposable Cartridge",
+    "strain": "Funkadelic"
+  },
+  {
+    "slug": "torus-flower-lemon-cherry-pastry-1-3-5g",
+    "name": "Torus - Flower - Lemon Cherry Pastry #1 - 3.5g",
+    "category": "Flower",
+    "strain": "Lemon Cherry Pastry"
+  },
+  {
+    "slug": "torus-infused-glass-tip-raspberry-smoothie-x-ginger-pop-1g",
+    "name": "Torus - Infused Glass Tip - Raspberry Smoothie x Ginger Pop - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Raspberry Smoothie x Ginger Pop"
+  },
+  {
+    "slug": "hashbreak-infused-pre-rolls-candy-apple-3-5g",
+    "name": "hashbreak - - Infused Pre Rolls - Candy Apple - 3.5g",
+    "category": "Infused Pre-roll",
+    "strain": "Candy Apple"
+  },
+  {
+    "slug": "hashbreak-infused-pre-rolls-tigers-blood-1g",
+    "name": "hashbreak - - Infused Pre Rolls - Tigers Blood - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Tigers Blood"
+  },
+  {
+    "slug": "hashbreak-pre-rolls-infused-candy-apple-1g",
+    "name": "hashbreak - Pre Rolls (Infused) - Candy Apple- 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Candy Apple"
+  },
+  {
+    "slug": "hashbreak-pre-rolls-infused-pb-j-3-5g",
+    "name": "hashbreak - Pre Rolls (Infused) - PB&J - 3.5g",
+    "category": "Infused Pre-roll",
+    "strain": "PB&J"
+  },
+  {
+    "slug": "hashbreak-pre-rolls-infused-marshmallow-fluff-1g",
+    "name": "hashbreak - Pre Rolls (Infused) - Marshmallow Fluff - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Marshmallow Fluff"
+  },
+  {
+    "slug": "hashbreak-pre-rolls-infused-pb-j-1g",
+    "name": "hashbreak - Pre Rolls (Infused) - PB&J - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "PB&J"
+  },
+  {
+    "slug": "hashbreak-pre-rolls-infused-lemon-cherry-punch-1g",
+    "name": "hashbreak - Pre Rolls (Infused) - Lemon Cherry Punch - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Lemon Cherry Punch"
+  },
+  {
+    "slug": "torus-pre-rolls-flower-mint-milkshake-1g",
+    "name": "Torus - - Pre Rolls (Flower) - Mint Milkshake - 1g",
+    "category": "Pre-roll",
+    "strain": "Mint Milkshake"
+  },
+  {
+    "slug": "torus-pre-roll-pinalada-1g",
+    "name": "Torus - Pre Roll - Pinalada - 1g",
+    "category": "Pre-roll",
+    "strain": "Pinalada"
+  },
+  {
+    "slug": "hashbreak-pre-rolls-infused-berry-banana-1g",
+    "name": "hashbreak - Pre Rolls (Infused) - Berry Banana - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "berry"
+  },
+  {
+    "slug": "hashbreak-pre-rolls-infused-cherry-bomb-1g",
+    "name": "hashbreak - Pre Rolls (Infused) - Cherry Bomb - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Cherry Bomb"
+  },
+  {
+    "slug": "hashbreak-pre-rolls-infused-cherry-bomb-3-5g",
+    "name": "hashbreak - Pre Rolls (Infused) - Cherry Bomb - 3.5g",
+    "category": "Infused Pre-roll",
+    "strain": "Cherry Bomb"
+  },
+  {
+    "slug": "hashbreak-pre-rolls-infused-pillow-talk-1g",
+    "name": "hashbreak - Pre Rolls (Infused) - Pillow Talk - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "pillow talk"
+  },
+  {
+    "slug": "hashbreak-pre-rolls-infused-sweet-potato-pie-1g",
+    "name": "hashbreak - Pre Rolls (Infused) - Sweet Potato Pie - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Sweet Potato Chips"
+  },
+  {
+    "slug": "torus-pre-roll-snowcaine-2-1g",
+    "name": "Torus - Pre Roll - Snowcaine #2 - 1g",
+    "category": "Pre-roll",
+    "strain": "Snow Cone"
+  },
+  {
+    "slug": "hashbreak-pre-rolls-infused-peanut-butter-fudge-1g",
+    "name": "hashbreak - Pre Rolls (Infused) - Peanut Butter Fudge - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Peanut Butter"
+  },
+  {
+    "slug": "hashbreak-rosin-vape-gmo-1g",
+    "name": "hashbreak - - Rosin Vape - GMO - 1g",
+    "category": "Rosin",
+    "strain": "GMO"
+  },
+  {
+    "slug": "torus-flower-gmo-bx-3-5g",
+    "name": "Torus - Flower - GMO BX - 3.5g",
+    "category": "Flower",
+    "strain": "GMO BX"
+  },
+  {
+    "slug": "torus-ceramic-tip-infused-key-lime-cookies-x-boston-cream-pie-1g",
+    "name": "Torus - Ceramic Tip (Infused) - Key Lime Cookies x Boston Cream Pie - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Key Lime Pie"
+  },
+  {
+    "slug": "torus-pre-roll-hyphy-1g",
+    "name": "Torus - Pre Roll - Hyphy - 1g",
+    "category": "Pre-roll",
+    "strain": "Hyphy"
+  },
+  {
+    "slug": "torus-rosin-cold-cure-permanent-marker-1g",
+    "name": "Torus - ROSIN COLD CURE - Permanent Marker - 1g",
+    "category": "Rosin",
+    "strain": "Permanent Marker"
+  },
+  {
+    "slug": "torus-rosin-cold-cure-da-funk-7-1g",
+    "name": "Torus - ROSIN COLD CURE - da FUNK 7 - 1g",
+    "category": "Rosin",
+    "strain": "da FUNK 7"
+  },
+  {
+    "slug": "torus-rosin-cold-cure-cereal-milk-6-1g",
+    "name": "Torus - ROSIN COLD CURE - Cereal Milk #6 - 1g",
+    "category": "Rosin",
+    "strain": "Cereal Milk"
+  },
+  {
+    "slug": "hashbreak-pre-rolls-infused-candy-corn-1g",
+    "name": "hashbreak - Pre Rolls (Infused) - Candy Corn - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Candy Corn"
+  },
+  {
+    "slug": "hashbreak-pre-rolls-infused-monster-mash-1g",
+    "name": "hashbreak - Pre Rolls (Infused) - Monster Mash - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Monster Mash"
+  },
+  {
+    "slug": "torus-flower-snowcaine-3-5g",
+    "name": "Torus - Flower - Snowcaine - 3.5g",
+    "category": "Flower",
+    "strain": "Snowcaine"
+  },
+  {
+    "slug": "hashbreak-pre-rolls-infused-sticky-buns-1g",
+    "name": "hashbreak - Pre Rolls (Infused) - Sticky Buns - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Sticky Buns"
+  },
+  {
+    "slug": "hashbreak-pre-rolls-infused-sour-blue-mintz-1g",
+    "name": "hashbreak - Pre Rolls (Infused) - Sour Blue Mintz - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Sour Blue Mintz"
+  },
+  {
+    "slug": "hashbreak-pre-rolls-infused-peppermint-patty-3-5g",
+    "name": "hashbreak - Pre Rolls (Infused) - Peppermint Patty - 3.5g",
+    "category": "Infused Pre-roll",
+    "strain": "Peppermint Patty"
+  },
+  {
+    "slug": "torus-pre-roll-gas-face-1g",
+    "name": "Torus - Pre Roll - Gas Face - 1g",
+    "category": "Pre-roll",
+    "strain": "Gas Face"
+  },
+  {
+    "slug": "hashbreak-pre-rolls-infused-berry-streusel-1g",
+    "name": "hashbreak - Pre Rolls (Infused) - Berry Streusel - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Berry Streusel"
+  },
+  {
+    "slug": "hashbreak-pre-rolls-infused-suga-berry-3-5g",
+    "name": "hashbreak - Pre Rolls (Infused) - Suga Berry - 3.5g",
+    "category": "Infused Pre-roll",
+    "strain": "Suga Berry"
+  },
+  {
+    "slug": "hashbreak-pre-rolls-infused-suga-berry-1g",
+    "name": "hashbreak - Pre Rolls (Infused) - Suga Berry - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Suga Berry"
+  },
+  {
+    "slug": "torus-flower-white-lobster-3-5g",
+    "name": "Torus - Flower - White Lobster - 3.5g",
+    "category": "Flower",
+    "strain": "white lobster"
+  },
+  {
+    "slug": "hashbreak-pre-rolls-infused-lemon-drop-3-5g",
+    "name": "hashbreak - Pre Rolls (Infused) - Lemon Drop - 3.5g",
+    "category": "Infused Pre-roll",
+    "strain": "Lemon Drop"
+  },
+  {
+    "slug": "hashbreak-pre-rolls-infused-lemon-drop-1g",
+    "name": "hashbreak - Pre Rolls (Infused) - Lemon Drop - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Lemon Drop"
+  },
+  {
+    "slug": "hashbreak-pre-rolls-infused-cookies-cream-1g",
+    "name": "hashbreak - Pre Rolls (Infused) - Cookies & Cream - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Cookies & Cream"
+  },
+  {
+    "slug": "torus-flower-blue-zoap-3-5g",
+    "name": "Torus - Flower - Blue Zoap - 3.5g",
+    "category": "Flower",
+    "strain": "Blue Zoap"
+  },
+  {
+    "slug": "torus-flower-pink-runtz-3-5g",
+    "name": "Torus - Flower - Pink Runtz - 3.5g",
+    "category": "Flower",
+    "strain": "Pink Runtz"
+  },
+  {
+    "slug": "hashbreak-pre-rolls-infused-funk-a-delic-1g",
+    "name": "hashbreak - Pre Rolls (Infused) - Funk-A-Delic - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Funkadelic"
+  },
+  {
+    "slug": "hashbreak-pre-rolls-infused-white-cherry-truffle-1g",
+    "name": "hashbreak - Pre Rolls (Infused) - White Cherry Truffle - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "White Cherry Truffle"
+  },
+  {
+    "slug": "hashbreak-pre-rolls-infused-wild-berry-punch-1g",
+    "name": "hashbreak - Pre Rolls (Infused) - Wild Berry Punch - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Wild Berry Punch"
+  },
+  {
+    "slug": "hashbreak-pre-rolls-infused-lava-berry-1g",
+    "name": "hashbreak - Pre Rolls (Infused) - Lava Berry - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Lava Berry"
+  },
+  {
+    "slug": "hashbreak-pre-rolls-infused-strawberry-shortcake-1g",
+    "name": "hashbreak - Pre Rolls (Infused) - Strawberry Shortcake - 1g",
+    "category": "Infused Pre-roll",
+    "strain": "Strawberry Shortcake"
+  },
+  {
+    "slug": "torus-glass-tip-blunt-snowcaine-2g",
+    "name": "Torus - Glass Tip Blunt - Snowcaine - 2g",
+    "category": "Blunt",
+    "strain": "Snowcaine"
+  },
+  {
+    "slug": "torus-flower-strawberry-push-pop-3-5g",
+    "name": "Torus - Flower - Strawberry Push Pop - 3.5g",
+    "category": "Flower",
+    "strain": "Strawberry Push Pop"
+  },
+  {
+    "slug": "torus-pre-roll-biscotti-chunks-1g",
+    "name": "Torus - Pre Roll - Biscotti Chunks - 1g",
+    "category": "Pre-roll",
+    "strain": "Biscotti Chunk"
+  },
+  {
+    "slug": "torus-flower-biscotti-chunks-3-5g",
+    "name": "Torus - Flower - Biscotti Chunks - 3.5g",
+    "category": "Flower",
+    "strain": "Biscotti Chunk"
+  },
+  {
+    "slug": "torus-pre-roll-black-truffle-1g",
+    "name": "Torus - Pre Roll - Black Truffle - 1g",
+    "category": "Pre-roll",
+    "strain": "Black Truffle"
+  },
+  {
+    "slug": "torus-pre-roll-permanent-marker-1g",
+    "name": "Torus - Pre Roll - Permanent Marker - 1g",
+    "category": "Pre-roll",
+    "strain": "Permanent Marker"
+  },
+  {
+    "slug": "torus-pre-roll-gastro-pop-1g",
+    "name": "Torus - Pre Roll - Gastro Pop - 1g",
+    "category": "Pre-roll",
+    "strain": "Gastro Pop"
+  },
+  {
+    "slug": "torus-rosin-cold-cure-chem-de-la-sour-1g",
+    "name": "Torus - Rosin Cold Cure - Chem De La Sour - 1g",
+    "category": "Rosin",
+    "strain": "Chem De La Sour"
+  },
+  {
+    "slug": "torus-glass-tip-blunt-papaya-runtz-2g",
+    "name": "Torus - Glass Tip Blunt - Papaya Runtz - 2g",
+    "category": "Blunt",
+    "strain": "Papaya Runtz"
+  },
+  {
+    "slug": "torus-rosin-cold-cure-k2-1-1g",
+    "name": "Torus - Rosin Cold Cure - K2 #1 - 1g",
+    "category": "Rosin",
+    "strain": "K2 #1"
+  },
+  {
+    "slug": "t2hydro-flower-blue-powerade-3-5g",
+    "name": "t2Hydro - Flower - Blue Powerade - 3.5g",
+    "category": "Flower",
+    "strain": "Blue Powerade"
+  }
+]

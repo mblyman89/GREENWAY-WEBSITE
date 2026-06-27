@@ -1,0 +1,13 @@
+{
+  "productName": "Alley Cat - 3.5g",
+  "inventoryType": "Usable Marijuana",
+  "category": "Flower",
+  "strainType": "Hybrid",
+  "strain": "Alley Cat",
+  "packageSize": 3.5,
+  "uom": "Grams",
+  "price": 42.0,
+  "cannabis": true,
+  "description": "Alley Cat is a hybrid flower with notes of ammonia, chemical, and skunk, with smooth, well-rounded flavor. Expect balanced, well-rounded effects.",
+  "imageFile": ""
+}

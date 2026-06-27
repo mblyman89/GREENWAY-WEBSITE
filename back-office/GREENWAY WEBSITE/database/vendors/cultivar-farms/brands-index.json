@@ -1,0 +1,22 @@
+[
+  {
+    "slug": "colors-by-cultivar",
+    "name": "Colors by Cultivar",
+    "productCount": 4
+  },
+  {
+    "slug": "grand-cru",
+    "name": "Grand Cru",
+    "productCount": 4
+  },
+  {
+    "slug": "house-of-cultivar",
+    "name": "House of Cultivar",
+    "productCount": 5
+  },
+  {
+    "slug": "house-of-cultivar-grand-cru",
+    "name": "House of Cultivar Grand Cru",
+    "productCount": 5
+  }
+]
