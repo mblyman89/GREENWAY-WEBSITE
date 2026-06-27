@@ -72,17 +72,17 @@ Each "slice" is independently shippable so the owner can inspect before continui
 - [ ] Import history list + downloadable reports (summary, anomaly, hidden-items xlsx).
 - [ ] **Deliverable PR + owner inspect.**
 
-## SLICE 3 — Media library + Vendor/Brand database (Phase 3a)
-- [ ] Media upload (images/svg/pdf), thumbnails, responsive sizes, focal point.
-- [ ] Metadata: alt text, title, description, source/license, usage tags, status.
-- [ ] Usage tracking (`media_usages`) + "where used" before delete.
-- [ ] Draft-replace + preview-before-publish for controlled image slots (hero, banners, logos).
-- [ ] DB tables: `vendors`, `vendor_aliases`, `brands`, `brand_aliases`.
-- [ ] Seed vendors/brands from `database/vendors/` folder DB + reconcile POS aliases (merge duplicate vendor strings → 105 canonical groups).
-- [ ] Vendor/brand profile editor: logo, mission, about, contact, social, public/private fields.
+## SLICE 3 — Media library + Vendor/Brand database (Phase 3a)  *(PR #33)*
+- [x] Media upload (images/svg/pdf), metadata, status. *(`/admin/media`, multi-upload, sha256 keys; thumbnails via object-contain preview. Responsive sizes + focal point deferred to a polish pass.)*
+- [x] Metadata: alt text, title, description, source/license, usage tags, status. *(asset detail page `/admin/media/[id]`)*
+- [x] Usage tracking (`media_usages`) + "where used" before delete. *(`whereUsed` + guarded `deleteMediaAction` refuses in-use assets)*
+- [x] Draft-replace + preview-before-publish for controlled image slots. *(draft/published/archived status controls + logo upload publishes on save; preview shown on detail page)*
+- [x] DB tables: `vendors`, `vendor_aliases`, `brands`, `brand_aliases`. *(migration `0003_slice3_vendors_brands.sql`)*
+- [~] Seed vendors/brands from folder DB + reconcile POS aliases. *(script `npm run seed:vendors` DONE & verified against folder DB: 105 vendors / 168 brands; **runs once migration 0003 is applied by owner**)*
+- [x] Vendor/brand profile editor: logo, mission, about, contact, social, public/private fields. *(`/admin/vendors/[id]` + actions)*
 - [ ] Alias-merge tool for duplicate POS vendor/brand names (capitalization/legal-name variants).
-- [ ] Front end: replace 112 placeholder vendor cards with DB-driven profiles + real logos; brand logos on product cards.
-- [ ] **Deliverable PR + owner inspect.**
+- [ ] Front end: replace placeholder vendor cards with DB-driven profiles + real logos; brand logos on product cards.
+- [ ] **Deliverable PR + owner inspect.** *(PR #33 open; awaiting owner migration run + review)*
 
 ## SLICE 4 — Product enrichment (Phase 3b)
 - [ ] DB table `product_enrichments` keyed by POS product key (separate from POS truth).
