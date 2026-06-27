@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "transform:pos": "tsx scripts/pos/transform_pos_data.ts",
+    "seed:vendors": "tsx scripts/seed/seed_vendors_brands.ts",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui"
   },
