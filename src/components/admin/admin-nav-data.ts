@@ -16,11 +16,11 @@ export const adminNav: AdminNavItem[] = [
   { label: "Orders", href: "/admin/orders", permission: "orders.view", icon: "🧾", group: "Operations", comingSoon: true },
   { label: "Loyalty", href: "/admin/loyalty-signups", permission: "loyalty.view", icon: "★", group: "Operations" },
 
-  { label: "Vendors & Brands", href: "/admin/vendors", permission: "vendors.manage", icon: "🏷", group: "Catalog", comingSoon: true },
+  { label: "Vendors & Brands", href: "/admin/vendors", permission: "vendors.manage", icon: "🏷", group: "Catalog" },
   { label: "Products", href: "/admin/products", permission: "products.enrich", icon: "📦", group: "Catalog", comingSoon: true },
   { label: "Promotions", href: "/admin/promotions", permission: "promotions.manage", icon: "%", group: "Catalog", comingSoon: true },
 
-  { label: "Media Library", href: "/admin/media", permission: "media.manage", icon: "🖼", group: "Content", comingSoon: true },
+  { label: "Media Library", href: "/admin/media", permission: "media.manage", icon: "🖼", group: "Content" },
   { label: "Blog & Newsletter", href: "/admin/blog", permission: "blog.manage", icon: "✎", group: "Content", comingSoon: true },
   { label: "Site Content", href: "/admin/content", permission: "content.edit", icon: "❡", group: "Content", comingSoon: true },
 
