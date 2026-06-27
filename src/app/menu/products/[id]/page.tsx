@@ -13,6 +13,9 @@ import type { GreenwayMenuItem } from "@/lib/leafly/types";
 import { formatWebsiteCategory } from "@/lib/pos/category-taxonomy";
 import { getPosPreviewMenuItemById, posMenuPreviewItems } from "@/lib/pos/preview-menu";
 import { breadcrumbSchema, pageMetadata, productSchema } from "@/lib/seo/seo";
+import { getMerchDefById, getMerchMenuItemById, merchMenuItems, merchProductDefs, merchIdForKey } from "@/lib/merch/merch-catalog";
+import { MerchDetailPanel } from "@/components/merch/MerchDetailPanel";
+import { MerchProductCard } from "@/components/merch/MerchProductCard";
 
 type ProductTone = {
   border: string;
@@ -73,11 +76,15 @@ const categoryAliases: Partial<Record<GreenwayMenuItem["category"], string>> = {
 };
 
 function getMenuItemById(id: string) {
-  return getPosPreviewMenuItemById(id) ?? getMockMenuItemById(id);
+  return getMerchMenuItemById(id) ?? getPosPreviewMenuItemById(id) ?? getMockMenuItemById(id);
+}
+
+function isMerchItem(item: GreenwayMenuItem) {
+  return item.category === "merch";
 }
 
 function isNonCannabisItem(item: GreenwayMenuItem) {
-  return item.category === "paraphernalia";
+  return item.category === "paraphernalia" || item.category === "merch";
 }
 
 function toneForItem(item: GreenwayMenuItem) {
@@ -119,9 +126,20 @@ function ProductHeroArt({ item, tone }: { item: GreenwayMenuItem; tone: ProductT
   const initials = brandInitials(item.brand);
   const label = categoryLabel(item).toUpperCase();
 
+  // Merch shows the real product photograph (large, on white).
+  if (isMerchItem(item)) {
+    const def = getMerchDefById(item.id);
+    return (
+      <div className="relative flex h-full min-h-[22rem] items-center justify-center overflow-hidden bg-white md:min-h-[44rem]">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={def?.imageUrl ?? "/merch/tshirt.webp"} alt={item.name} className="h-full w-full object-contain p-6 md:p-12" />
+      </div>
+    );
+  }
+
   if (nonCannabis) {
     return (
-      <div className="relative flex h-full min-h-[18.5rem] items-center justify-center overflow-hidden bg-white">
+      <div className="relative flex h-full min-h-[20rem] items-center justify-center overflow-hidden bg-white md:min-h-[44rem]">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_52%_45%,rgba(0,0,0,0.06),transparent_35%),linear-gradient(180deg,#fff,#f2f2f2)]" />
         <div className="relative h-64 w-40 rotate-[-8deg]">
           <div className="absolute left-[45%] top-0 h-28 w-4 rounded-full bg-zinc-400 shadow-lg" />
@@ -133,9 +151,9 @@ function ProductHeroArt({ item, tone }: { item: GreenwayMenuItem; tone: ProductT
   }
 
   return (
-    <div className="relative flex h-full min-h-[18.5rem] items-center justify-center overflow-hidden bg-white">
+    <div className="relative flex h-full min-h-[20rem] items-center justify-center overflow-hidden bg-white md:min-h-[44rem]">
       <div className="absolute inset-0" style={{ background: `radial-gradient(circle at 24% 14%, rgba(255,255,255,0.96), transparent 21%), radial-gradient(circle at 75% 74%, ${tone.glowSoft}, transparent 44%), linear-gradient(145deg, #ffffff 0%, #f8f8f8 62%, #ececec 100%)` }} />
-      <div className="relative flex h-[15.8rem] w-[10.6rem] rotate-[-2deg] flex-col items-center justify-between overflow-hidden rounded-[1.12rem] border border-black/15 bg-[#111] p-3 shadow-[0_24px_46px_rgba(0,0,0,0.28)]">
+      <div className="relative flex h-[15.8rem] w-[10.6rem] rotate-[-2deg] flex-col items-center justify-between overflow-hidden rounded-[1.12rem] border border-black/15 bg-[#111] p-3 shadow-[0_24px_46px_rgba(0,0,0,0.28)] md:h-[24rem] md:w-[16rem]">
         <div className="absolute inset-0 opacity-95" style={{ background: tone.packageGradient }} />
         <div className="absolute inset-x-0 top-0 h-12 bg-white/12" />
         <div className="relative z-10 w-full text-center text-[0.54rem] font-black uppercase tracking-[0.22em] text-black/62">{label}</div>
@@ -149,6 +167,9 @@ function ProductHeroArt({ item, tone }: { item: GreenwayMenuItem; tone: ProductT
 }
 
 function relatedItemsFor(item: GreenwayMenuItem) {
+  if (isMerchItem(item)) {
+    return merchMenuItems.filter((candidate) => candidate.id !== item.id).slice(0, 8);
+  }
   const allItems = [...posMenuPreviewItems, ...mockMenuItems];
   const sameBrand = allItems.filter((candidate) => candidate.brand === item.brand && candidate.id !== item.id);
   const fallback = allItems.filter((candidate) => candidate.id !== item.id && candidate.category === item.category);
@@ -157,7 +178,7 @@ function relatedItemsFor(item: GreenwayMenuItem) {
 }
 
 export function generateStaticParams() {
-  return [...posMenuPreviewItems, ...mockMenuItems].map((item) => ({ id: item.id }));
+  return [...posMenuPreviewItems, ...mockMenuItems, ...merchMenuItems].map((item) => ({ id: item.id }));
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
@@ -219,7 +240,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
       />
       <Header />
 
-      <section className="mx-auto w-full max-w-[430px] px-4 pb-10 pt-4 md:max-w-5xl md:px-8 md:pt-8">
+      <section className="mx-auto w-full max-w-[430px] px-4 pb-10 pt-4 md:max-w-[88rem] md:px-8 md:pt-8">
         <BackToMenuLink className="inline-flex items-center text-[0.68rem] font-black uppercase tracking-[0.18em] text-white transition hover:text-[var(--greenway)]">
           ← Back
         </BackToMenuLink>
@@ -232,8 +253,8 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
           <span className="line-clamp-1 text-zinc-400">{item.name}</span>
         </nav>
 
-        <div className="mt-5 grid gap-6 md:grid-cols-[minmax(0,0.96fr)_minmax(0,1.04fr)] md:items-start">
-          <div className="overflow-hidden border bg-white" style={imageShellStyle(tone)}>
+        <div className="mt-5 grid gap-6 md:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] md:items-start md:gap-10">
+          <div className="overflow-hidden border bg-white md:sticky md:top-28" style={imageShellStyle(tone)}>
             <ProductHeroArt item={item} tone={tone} />
           </div>
 
@@ -244,23 +265,38 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
             <h1 className="mt-2 text-[2.15rem] font-black leading-[0.96] tracking-[-0.045em] text-white md:text-6xl">{item.name}</h1>
 
             <div className="mt-3 flex flex-wrap items-center gap-2">
-              <span className="inline-flex min-h-7 items-center px-2.5 py-1 text-[0.72rem] font-black uppercase leading-none text-white" style={{ backgroundColor: tone.pill, color: isNonCannabisItem(item) ? "#111" : "#fff" }}>
-                {displayStrain(item)}
-              </span>
+              {!isMerchItem(item) ? (
+                <span className="inline-flex min-h-7 items-center px-2.5 py-1 text-[0.72rem] font-black uppercase leading-none text-white" style={{ backgroundColor: tone.pill, color: isNonCannabisItem(item) ? "#111" : "#fff" }}>
+                  {displayStrain(item)}
+                </span>
+              ) : (
+                <span className="inline-flex min-h-7 items-center bg-[var(--greenway)] px-2.5 py-1 text-[0.72rem] font-black uppercase leading-none text-black">
+                  Greenway Merch
+                </span>
+              )}
               {showCannabinoids ? <span className="inline-flex min-h-7 items-center bg-white px-2.5 py-1 text-[0.72rem] font-black uppercase leading-none text-black">THC: {item.thc ?? "--"}</span> : null}
               {showCannabinoids ? <span className="inline-flex min-h-7 items-center bg-white px-2.5 py-1 text-[0.72rem] font-black uppercase leading-none text-black">CBD: {item.cbd ?? "--"}</span> : null}
             </div>
 
-            <ProductDetailPurchasePanel item={item} />
+            {isMerchItem(item) ? (
+              (() => {
+                const def = getMerchDefById(item.id);
+                return def ? <MerchDetailPanel def={def} /> : <ProductDetailPurchasePanel item={item} />;
+              })()
+            ) : (
+              <ProductDetailPurchasePanel item={item} />
+            )}
+
+            {/* Description tab (lab results intentionally omitted). Sits in the
+                right column under the purchase panel to mirror the reference. */}
+            <section className="mt-7 border-t border-white/15 pt-5">
+              <div className="border-b border-white/15">
+                <button type="button" className="border-b-2 border-[var(--orange)] pb-3 text-[0.76rem] font-black uppercase tracking-[0.2em] text-white">Description</button>
+              </div>
+              <p className="mt-5 text-[0.95rem] leading-7 text-zinc-300">{productDescription}</p>
+            </section>
           </article>
         </div>
-
-        <section className="mt-8 border-t border-white/15 pt-5">
-          <div className="border-b border-white/15">
-            <button type="button" className="border-b-2 border-white pb-3 text-[0.76rem] font-black uppercase tracking-[0.2em] text-white">Description</button>
-          </div>
-          <p className="mt-5 text-[0.95rem] leading-7 text-zinc-300">{productDescription}</p>
-        </section>
 
         <section className="mt-11 pb-2">
           <div className="flex items-end justify-between gap-4">
@@ -275,13 +311,29 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
 
           {relatedItems.length > 0 ? (
             <div className="mt-5 -mx-4 flex snap-x gap-4 overflow-x-auto px-4 pb-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {relatedItems.map((related) => (
-                <RelatedProductCard
-                  key={related.id}
-                  item={related}
-                  className="w-[17.25rem] shrink-0 snap-start"
-                />
-              ))}
+              {relatedItems.map((related) => {
+                // Merch related items render the dedicated MERCH card (price
+                // range, colors, no THC/CBD) — never the cannabis card.
+                if (isMerchItem(related)) {
+                  const def =
+                    getMerchDefById(related.id) ??
+                    merchProductDefs.find((candidate) => merchIdForKey(candidate.key) === related.id);
+                  return def ? (
+                    <MerchProductCard
+                      key={related.id}
+                      def={def}
+                      className="w-[17.25rem] shrink-0 snap-start"
+                    />
+                  ) : null;
+                }
+                return (
+                  <RelatedProductCard
+                    key={related.id}
+                    item={related}
+                    className="w-[17.25rem] shrink-0 snap-start"
+                  />
+                );
+              })}
             </div>
           ) : (
             <div className="mt-5 border border-white/10 bg-white/5 p-5 text-sm leading-6 text-zinc-300">No additional products from this brand are available in the current preview menu.</div>

@@ -5,6 +5,9 @@ import Link from "next/link";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { greenwayBusiness } from "@/content/business";
 import { formatMinorCurrency } from "@/lib/leafly/format";
+import type { GreenwayCategory } from "@/lib/leafly/types";
+import { computeCartDiscounts } from "@/lib/specials/cart-discount";
+import { useStoreWeekday } from "@/lib/specials/useStoreWeekday";
 
 // ---------------------------------------------------------------------------
 // Cart + runtime inventory store
@@ -37,12 +40,19 @@ export const LOCAL_SALES_TAX_RATE = 0.093; // WA state + Port Orchard local
 export const COMBINED_INCLUSIVE_TAX_RATE = CANNABIS_EXCISE_TAX_RATE + LOCAL_SALES_TAX_RATE; // 0.463
 // Back-out divisor: card price (tax-inclusive) / (1 + 0.463) => pre-tax subtotal.
 export const TAX_INCLUSIVE_DIVISOR = 1 + COMBINED_INCLUSIVE_TAX_RATE; // 1.463
+// Non-cannabis goods (merch, accessories, paraphernalia) carry only the local
+// retail sales tax — NO cannabis excise — so they back out at a different rate.
+export const NON_CANNABIS_TAX_INCLUSIVE_DIVISOR = 1 + LOCAL_SALES_TAX_RATE; // 1.093
+// Categories that are NOT subject to the WSLCB cannabis excise tax.
+const NON_CANNABIS_TAX_CATEGORIES = new Set(["merch", "accessories", "accessory", "paraphernalia"]);
 
 type CartItemInput = {
   productId: string;
   productName: string;
   brand: string;
   category: string;
+  /** Synthetic browse categories for accurate daily-deal matching. */
+  filterCategories?: GreenwayCategory[];
   strainType: string;
   variantId: string;
   variantLabel: string;
@@ -58,8 +68,11 @@ type CartItem = CartItemInput & {
   inventoryLevel: number;
 };
 
+/** A cart item with its authoritative (cart-engine) discounted unit price. */
+type PricedCartItem = CartItem & { effectivePriceMinorUnits: number };
+
 type CartContextValue = {
-  items: CartItem[];
+  items: PricedCartItem[];
   itemCount: number;
   subtotalMinorUnits: number;
   regularSubtotalMinorUnits: number;
@@ -106,11 +119,20 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
   const [hydrated, setHydrated] = useState(false);
 
-  // Hydrate from localStorage once on mount (after first paint to avoid SSR mismatch).
+  // Hydrate from localStorage once on mount (after first paint to avoid SSR
+  // mismatch). Deferred to a microtask so this is not a synchronous setState
+  // within the effect body (satisfies react-hooks/set-state-in-effect).
   useEffect(() => {
-    setItems(readJson<CartItem[]>(CART_STORAGE_KEY, []));
-    setSoldLedger(readJson<Record<string, number>>(INVENTORY_STORAGE_KEY, {}));
-    setHydrated(true);
+    let cancelled = false;
+    Promise.resolve().then(() => {
+      if (cancelled) return;
+      setItems(readJson<CartItem[]>(CART_STORAGE_KEY, []));
+      setSoldLedger(readJson<Record<string, number>>(INVENTORY_STORAGE_KEY, {}));
+      setHydrated(true);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Persist cart + ledger whenever they change (post-hydration only).
@@ -132,20 +154,67 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     }
   }, [soldLedger, hydrated]);
 
+  const weekday = useStoreWeekday();
   const itemCount = items.reduce((total, item) => total + item.quantity, 0);
-  // Card prices are tax-INCLUSIVE out-the-door prices, so the cart total is the
-  // straight sum of card prices. We then back out the pre-tax subtotal + the
-  // included tax so subtotal + tax === total exactly.
-  const totalMinorUnits = items.reduce((total, item) => total + item.priceMinorUnits * item.quantity, 0);
-  const subtotalMinorUnits = Math.round(totalMinorUnits / TAX_INCLUSIVE_DIVISOR);
-  const estimatedTaxMinorUnits = totalMinorUnits - subtotalMinorUnits;
-  // Regular (pre-discount) prices are also tax-inclusive card prices; savings is
-  // the difference between regular and sale card prices.
-  const regularSubtotalMinorUnits = items.reduce(
-    (total, item) => total + item.regularPriceMinorUnits * item.quantity,
-    0,
+
+  // SMART CART: the authoritative discount is computed at the cart level from
+  // the active day's deal rules (weight/qty/spend tiers, storewide best-item,
+  // etc.). This is what makes a single 3.5g flower bag earn NOTHING on Friday
+  // while 2×3.5g (a quarter ounce) earns 15%, 8×3.5g (an ounce) earns 30%.
+  const discount = useMemo(
+    () =>
+      computeCartDiscounts(
+        items.map((item) => ({
+          lineId: item.lineId,
+          regularPriceMinorUnits: item.regularPriceMinorUnits,
+          quantity: item.quantity,
+          category: item.category as GreenwayCategory,
+          filterCategories: item.filterCategories,
+          variantLabel: item.variantLabel,
+          brand: item.brand,
+        })),
+        // Until the client resolves the store weekday, fall back to no discount.
+        weekday ?? ("__none__" as never),
+      ),
+    [items, weekday],
   );
-  const savingsMinorUnits = Math.max(0, regularSubtotalMinorUnits - totalMinorUnits);
+
+  const effectivePriceByLine = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const line of discount.lines) map.set(line.lineId, line.unitPriceMinorUnits);
+    return map;
+  }, [discount]);
+
+  // Items carrying their authoritative (engine) per-unit price.
+  const pricedItems = useMemo<PricedCartItem[]>(
+    () =>
+      items.map((item) => ({
+        ...item,
+        effectivePriceMinorUnits: effectivePriceByLine.get(item.lineId) ?? item.regularPriceMinorUnits,
+      })),
+    [items, effectivePriceByLine],
+  );
+
+  // Card prices are tax-INCLUSIVE out-the-door prices, so the cart total is the
+  // straight sum of the (engine-discounted) prices. We then back out the
+  // pre-tax subtotal + the included tax so subtotal + tax === total exactly.
+  const totalMinorUnits = discount.totalDiscountedMinorUnits;
+  // Back out the pre-tax subtotal PER ITEM using the correct divisor for each
+  // category: cannabis goods include the 46.3% excise+sales bundle, while merch
+  // and accessories only include the 9.3% local retail sales tax.
+  const subtotalMinorUnits = useMemo(() => {
+    const sum = pricedItems.reduce((acc, item) => {
+      const lineTotal = item.effectivePriceMinorUnits * item.quantity;
+      const divisor = NON_CANNABIS_TAX_CATEGORIES.has((item.category ?? "").toLowerCase())
+        ? NON_CANNABIS_TAX_INCLUSIVE_DIVISOR
+        : TAX_INCLUSIVE_DIVISOR;
+      return acc + lineTotal / divisor;
+    }, 0);
+    return Math.round(sum);
+  }, [pricedItems]);
+  const estimatedTaxMinorUnits = totalMinorUnits - subtotalMinorUnits;
+  const regularSubtotalMinorUnits = discount.totalRegularMinorUnits;
+  const savingsMinorUnits = discount.totalSavingsMinorUnits;
 
   const remainingInventory = useCallback(
     (variantId: string, baseLevel: number) => Math.max(0, baseLevel - (soldLedger[variantId] ?? 0)),
@@ -164,7 +233,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<CartContextValue>(
     () => ({
-      items,
+      items: pricedItems,
       itemCount,
       subtotalMinorUnits,
       regularSubtotalMinorUnits,
@@ -172,7 +241,14 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       estimatedTaxMinorUnits,
       totalMinorUnits,
       addItem: (nextItem) => {
-        const regular = nextItem.regularPriceMinorUnits ?? nextItem.priceMinorUnits;
+        // Store the TRUE regular (pre-discount) price as the source of truth so
+        // the smart-cart engine can recompute the accurate threshold discount.
+        // If a caller still passes a pre-discounted priceMinorUnits, prefer the
+        // explicit regularPriceMinorUnits when it is higher.
+        const regular = Math.max(
+          nextItem.regularPriceMinorUnits ?? 0,
+          nextItem.priceMinorUnits,
+        );
         const baseLevel = nextItem.inventoryLevel ?? 99;
         setItems((currentItems) => {
           const existingItem = currentItems.find((item) => item.variantId === nextItem.variantId);
@@ -212,7 +288,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       recordSale,
     }),
     [
-      items,
+      pricedItems,
       itemCount,
       subtotalMinorUnits,
       regularSubtotalMinorUnits,
@@ -308,8 +384,8 @@ function StoreCard() {
           />
         </div>
 
-        <div className="flex min-w-0 flex-1 items-center px-3 py-2 text-white sm:px-4">
-          <div className="grid gap-1.5 text-[0.66rem] font-extrabold uppercase leading-none tracking-[0.018em] text-white/92 min-[390px]:text-[0.7rem] sm:gap-2 sm:text-[0.8rem] sm:tracking-[0.02em]">
+        <div className="flex min-w-0 flex-1 items-center px-3 py-2 text-white sm:pl-4 sm:pr-7">
+          <div className="grid gap-1.5 text-[0.66rem] font-extrabold uppercase leading-none tracking-[0.018em] text-white/92 min-[390px]:text-[0.7rem] sm:gap-2 sm:text-[0.74rem] sm:tracking-[0.005em]">
             <p className="whitespace-nowrap">{greenwayBusiness.address.full}</p>
             <p className="flex items-center gap-1.5 whitespace-nowrap text-white">
               <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#18a957] shadow-[0_0_0_2px_rgba(24,169,87,0.18)] sm:h-2 sm:w-2" aria-hidden="true" />
@@ -370,10 +446,11 @@ function QuantityStepper({ item }: { item: CartItem }) {
   );
 }
 
-function CartLine({ item, onRemove }: { item: CartItem; onRemove: (lineId: string) => void }) {
-  const hasSale = item.regularPriceMinorUnits > item.priceMinorUnits;
+function CartLine({ item, onRemove }: { item: PricedCartItem; onRemove: (lineId: string) => void }) {
+  const effectivePrice = item.effectivePriceMinorUnits;
+  const hasSale = item.regularPriceMinorUnits > effectivePrice;
   const savedPercent = hasSale
-    ? Math.round(((item.regularPriceMinorUnits - item.priceMinorUnits) / item.regularPriceMinorUnits) * 100)
+    ? Math.round(((item.regularPriceMinorUnits - effectivePrice) / item.regularPriceMinorUnits) * 100)
     : 0;
   return (
     <article className="rounded-[1.15rem] border border-white/10 bg-[#111] p-4">
@@ -381,7 +458,15 @@ function CartLine({ item, onRemove }: { item: CartItem; onRemove: (lineId: strin
         <div className="min-w-0">
           <p className="text-xs font-black uppercase tracking-[0.16em] text-zinc-500">{item.brand}</p>
           <h3 className="mt-1 text-lg font-black leading-tight text-white">{item.productName}</h3>
-          <p className="mt-2 text-xs font-bold uppercase tracking-[0.12em] text-[var(--greenway)]">{item.category} · {item.strainType}</p>
+          <p className="mt-2 text-xs font-bold uppercase tracking-[0.12em] text-[var(--greenway)]">
+            {(() => {
+              const cat = (item.category ?? "").toLowerCase();
+              if (cat === "merch") return "Greenway Merch";
+              const strain = (item.strainType ?? "").trim();
+              const hasStrain = strain.length > 0 && strain.toLowerCase() !== "unknown" && strain.toLowerCase() !== "n/a";
+              return hasStrain ? `${item.category} · ${item.strainType}` : item.category;
+            })()}
+          </p>
           {hasSale ? (
             <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-[var(--orange)]/15 px-2.5 py-1 text-[0.64rem] font-black uppercase tracking-[0.1em] text-[var(--orange)]">
               {savedPercent}% off
@@ -403,7 +488,7 @@ function CartLine({ item, onRemove }: { item: CartItem; onRemove: (lineId: strin
           {hasSale ? (
             <p className="text-xs font-black text-zinc-500 line-through">{formatMinorCurrency(item.regularPriceMinorUnits * item.quantity)}</p>
           ) : null}
-          <p className="text-lg font-black text-[var(--orange)]">{formatMinorCurrency(item.priceMinorUnits * item.quantity)}</p>
+          <p className="text-lg font-black text-[var(--orange)]">{formatMinorCurrency(effectivePrice * item.quantity)}</p>
           <p className="text-[0.62rem] font-bold uppercase tracking-[0.08em] text-zinc-500">{item.variantLabel || "each"}</p>
         </div>
       </div>

@@ -7,13 +7,21 @@ export type ActiveMenuDiscount = {
   bonusNote?: string;
   salePriceMinorUnits: number;
   /**
-   * When true, the card may show a genuine struck "before" price and the
-   * discounted per-item price (the deal applies cleanly to the listed price).
-   * When false, the deal varies by weight / spend-threshold / storewide and
-   * cannot be expressed as an accurate single per-item sale price, so the card
-   * shows ONLY an informational badge (no fake struck price).
+   * When true, the day's deal applies cleanly to the listed per-item price
+   * (e.g. flat 25% off). When false, the deal varies by weight / spend /
+   * storewide and the AUTHORITATIVE charge is computed in the cart engine.
+   * Either way, the product CARD now shows the headline (best-case) struck
+   * "before" price + discounted price — a standard storefront preview — while
+   * the cart remains the source of truth for the exact amount charged.
    */
   perItemSalePrice: boolean;
+  /**
+   * Best-case (headline) discounted per-item price for CARD display. Always
+   * computed from the deal's top `discountPercent` so every targeted card can
+   * show a struck regular price next to the discounted price. The cart engine
+   * recomputes the precise amount (weight/qty/spend tiers) at checkout.
+   */
+  cardPreviewSalePriceMinorUnits: number;
 };
 
 // ---------------------------------------------------------------------------
@@ -68,7 +76,7 @@ export function getStoreWeekday(reference: Date = new Date()): StoreWeekday {
 // ---------------------------------------------------------------------------
 
 // Monday — Munchie Monday: edibles, RSO, drinks, tinctures.
-const munchieMondayCategories: GreenwayCategory[] = [
+export const munchieMondayCategories: GreenwayCategory[] = [
   "edible-solid",
   "edible-liquid",
   "rso",
@@ -86,7 +94,7 @@ export const tuesdayDoobieCategories: GreenwayCategory[] = [
 ];
 
 // Wednesday — Wax Wednesday: concentrates + vapes.
-const waxWednesdayCategories: GreenwayCategory[] = [
+export const waxWednesdayCategories: GreenwayCategory[] = [
   "cartridge",
   "disposable-cartridge",
   "concentrate",
@@ -94,7 +102,7 @@ const waxWednesdayCategories: GreenwayCategory[] = [
 ];
 
 // Friday — Ounce Friday: flower families (priced per weight in store).
-const ounceFridayCategories: GreenwayCategory[] = [
+export const ounceFridayCategories: GreenwayCategory[] = [
   "flower",
   "popcorn-bud",
   "infused-flower",
@@ -140,18 +148,23 @@ export function discountPrice(priceMinorUnits: number, discountPercent: number) 
 
 function buildDiscount(
   item: GreenwayMenuItem,
-  config: Omit<ActiveMenuDiscount, "salePriceMinorUnits" | "perItemSalePrice"> & {
+  config: Omit<ActiveMenuDiscount, "salePriceMinorUnits" | "perItemSalePrice" | "cardPreviewSalePriceMinorUnits"> & {
     perItemSalePrice?: boolean;
   },
 ): ActiveMenuDiscount {
   const perItemSalePrice = config.perItemSalePrice ?? true;
+  // Headline (best-case) discounted price for the CARD preview — always
+  // computed from the deal's top percentage so the card can show a struck
+  // regular price next to the discounted price for every targeted product.
+  const cardPreviewSalePriceMinorUnits = discountPrice(item.priceMinorUnits, config.discountPercent);
   return {
     ...config,
     perItemSalePrice,
-    // Only compute a struck/sale price when the deal applies cleanly per item.
-    // Otherwise keep the regular price so no inaccurate discount is shown.
+    cardPreviewSalePriceMinorUnits,
+    // salePriceMinorUnits keeps its existing meaning (clean per-item deals
+    // only) for any consumer relying on the exact per-item charge.
     salePriceMinorUnits: perItemSalePrice
-      ? discountPrice(item.priceMinorUnits, config.discountPercent)
+      ? cardPreviewSalePriceMinorUnits
       : item.priceMinorUnits,
   };
 }
@@ -174,46 +187,61 @@ export function getActiveMenuDiscount(
     }
     case "tuesday": {
       if (!isTuesdayDoobieItem(item)) return undefined;
+      // Quantity-tiered (2+ = 15%, 4+ = 25%): a single preroll earns nothing, so
+      // the card shows ONLY an informational note — the real discount is applied
+      // in the cart once the qty threshold is reached.
       return buildDiscount(item, {
         label: "Doobie Tuesday",
-        discountPercent: 20,
+        discountPercent: 25,
         multiItemDiscountPercent: 25,
+        bonusNote: "buy 2+ to save",
+        perItemSalePrice: false,
       });
     }
     case "wednesday": {
       if (!itemMatchesCategories(item, waxWednesdayCategories)) return undefined;
+      // Spend-tiered (up to 30% at $150+): a single item may not hit the tier, so
+      // the card shows an informational note; the cart applies the real rate.
       return buildDiscount(item, {
         label: "Wax Wednesday",
-        discountPercent: 20,
-        bonusNote: "30% at $150+",
+        discountPercent: 30,
+        bonusNote: "up to 30% off",
+        perItemSalePrice: false,
       });
     }
     case "thursday": {
       // Top Shelf Thursday is brand-based: only the featured brands are on deal.
+      // This is a clean flat per-item 25%, so a genuine struck price is honest.
       if (!isTopShelfThursdayItem(item)) return undefined;
       return buildDiscount(item, { label: "Top Shelf Thursday", discountPercent: 25 });
     }
     case "friday": {
       if (!itemMatchesCategories(item, ounceFridayCategories)) return undefined;
       // Ounce Friday scales by WEIGHT in store: 30% (oz) / 20% (half) / 15%
-      // (quarter). Because the discount depends on the weight purchased, we
-      // cannot show an accurate per-item struck price on the listed unit.
-      // Show an informational badge only (no fake discount on every flower item).
+      // (quarter). A single 3.5g/1g bag earns NOTHING — only quantities that add
+      // up to a quarter ounce or more qualify. So cards show an informational
+      // note (no fake struck price); the cart engine applies the real tier.
       return buildDiscount(item, {
         label: "Ounce Friday",
         discountPercent: 30,
-        bonusNote: "up to 30% off by weight",
+        bonusNote: "up to 30% by the ounce",
         perItemSalePrice: false,
       });
     }
     case "saturday":
-      // Super Saturday: 30% off ONE item + 15% everything else storewide. The
-      // exact savings are determined at checkout (which item / how many), so we
-      // do not stamp a fake per-item discount on every card.
-      return undefined;
+      // Super Saturday: 30% off ONE item + 15% off everything else storewide.
+      // Because the 30% only applies to a single item, the per-item card shows an
+      // informational note; the cart applies 30% to the top item + 15% to the rest.
+      return buildDiscount(item, {
+        label: "Super Saturday",
+        discountPercent: 30,
+        bonusNote: "30% one item + 15% storewide",
+        perItemSalePrice: false,
+      });
     case "sunday":
-      // Ice Cream Sunday: buy 3 for the price of 2 (a basket-level deal). It is
-      // not a per-item price cut, so cards show no struck price.
+      // Ice Cream Sunday: buy 3 for the price of 2 (a basket-level deal). The
+      // effective savings depend on basket composition and are finalized in
+      // store, so cards show no struck per-item price.
       return undefined;
     default:
       return undefined;

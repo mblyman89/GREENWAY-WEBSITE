@@ -141,6 +141,7 @@ export function VendorDirectory() {
           imageAlt="Premium cannabis products against a Pacific Northwest forest backdrop"
           eyebrow="Vendors & Partners"
           title="Grow With Greenway"
+          titleClassName="text-[var(--orange)]"
           subtitle="We partner with licensed Washington producers and processors who share our commitment to quality, consistency, and craft."
           priority
         />

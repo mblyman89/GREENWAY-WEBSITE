@@ -103,16 +103,19 @@ export function ProductDetailPurchasePanel({ item }: ProductDetailPurchasePanelP
             productName: item.name,
             brand: item.brand,
             category: item.category,
+            filterCategories: item.filterCategories,
             strainType: item.strainType,
             variantId: selectedVariant.id,
             variantLabel: selectedVariant.label,
-            priceMinorUnits: activeUnitPrice,
+            // Pass the TRUE regular price; the smart cart applies the accurate
+            // threshold-based daily-deal discount based on full cart contents.
+            priceMinorUnits: basePrice,
             regularPriceMinorUnits: basePrice,
             inventoryLevel: selectedVariant.inventoryLevel,
             quantity,
           });
         }}
-        className="mt-3 flex h-14 w-full items-center justify-center bg-white px-5 text-[0.82rem] font-black uppercase tracking-[0.12em] text-black transition hover:bg-[var(--orange)] disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
+        className="mt-3 flex h-14 w-full items-center justify-center rounded-md bg-[#d8e6c4] px-5 text-[0.82rem] font-black uppercase tracking-[0.12em] text-black transition hover:bg-[var(--greenway)] disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
       >
         Add to Cart - {formatMinorCurrency(subtotal)}
       </button>

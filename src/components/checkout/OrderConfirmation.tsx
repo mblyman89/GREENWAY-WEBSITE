@@ -2,21 +2,15 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
 import { greenwayBusiness } from "@/content/business";
 import { formatMinorCurrency } from "@/lib/leafly/format";
 import { readCompletedOrder, type CompletedOrder } from "@/lib/checkout/order";
+import { useHydratedValue } from "@/lib/hooks/useHydratedValue";
 
 export function OrderConfirmation() {
   const searchParams = useSearchParams();
   const orderFromUrl = searchParams.get("order") ?? undefined;
-  const [order, setOrder] = useState<CompletedOrder | null>(null);
-  const [hydrated, setHydrated] = useState(false);
-
-  useEffect(() => {
-    setOrder(readCompletedOrder());
-    setHydrated(true);
-  }, []);
+  const { value: order, hydrated } = useHydratedValue<CompletedOrder | null>(readCompletedOrder, null);
 
   const orderNumber = order?.orderNumber ?? orderFromUrl;
 
@@ -58,9 +52,16 @@ export function OrderConfirmation() {
                         {line.brand} · Qty {line.quantity}{line.variantLabel ? ` · ${line.variantLabel}` : ""}
                       </p>
                     </div>
-                    <p className="shrink-0 text-sm font-black text-[var(--orange)]">
-                      {formatMinorCurrency(line.priceMinorUnits * line.quantity)}
-                    </p>
+                    <div className="shrink-0 text-right leading-tight">
+                      {typeof line.regularPriceMinorUnits === "number" && line.regularPriceMinorUnits > line.priceMinorUnits ? (
+                        <p className="text-[0.7rem] font-black text-zinc-500 line-through">
+                          {formatMinorCurrency(line.regularPriceMinorUnits * line.quantity)}
+                        </p>
+                      ) : null}
+                      <p className="text-sm font-black text-[var(--orange)]">
+                        {formatMinorCurrency(line.priceMinorUnits * line.quantity)}
+                      </p>
+                    </div>
                   </div>
                 ))}
               </div>

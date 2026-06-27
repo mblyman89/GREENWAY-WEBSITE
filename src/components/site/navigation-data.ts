@@ -41,6 +41,7 @@ export const primaryNavigationItems: NavigationItem[] = [
       { label: "Tincture", href: "/menu?category=tincture", helper: "Dropper tinctures for precise dosing." },
       { label: "Topical", href: "/menu?category=topical", helper: "Balms, lotions, salves, and transdermals." },
       { label: "Accessories", href: "/menu?category=accessories", helper: "Glass, rolling gear, batteries, dab tools, and lighters." },
+      { label: "Greenway Merch", href: "/menu?category=merch", helper: "Official Greenway apparel and gear — tees, hoodies, hats, and more." },
     ],
   },
   {

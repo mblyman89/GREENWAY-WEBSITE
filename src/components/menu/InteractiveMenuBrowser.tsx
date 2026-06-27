@@ -9,6 +9,8 @@ import { ProductCard } from "./ProductCard";
 import { SortDropdown, type SortOption } from "./SortDropdown";
 import { getActiveMenuDiscount } from "@/lib/specials/daily-deals";
 import { useStoreWeekday } from "@/lib/specials/useStoreWeekday";
+import { merchProductDefs } from "@/lib/merch/merch-catalog";
+import { MerchProductCard } from "@/components/merch/MerchProductCard";
 
 // Item IDs eligible for the 50% Off clearance lane. These are placeholder IDs
 // (no live 50%-off inventory yet), so selecting "50% OFF" shows the empty state.
@@ -144,6 +146,14 @@ const accessorySectionCards: AccessorySectionCard[] = [
   { key: "chillums", label: "Chillums", description: "One-hit, one-and-done discretion. Slim swirl-glass chillums load a quick bowl and stash anywhere — the low-profile, easy-to-clean pick for a fast, flavorful pull on the move with zero fuss.", imageUrl: "/accessories/chillums.webp" },
   { key: "lighters", label: "Lighters", description: "Never get caught without a flame. Refillable torches that fire up dabs and bowls, classic flip lighters for everyday carry, and natural hemp wick for a cleaner-tasting light — the dependable essentials no session should start without.", imageUrl: "/accessories/lighters.webp" },
 ];
+
+function MenuSearchIcon({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="m21 21-4.3-4.3M10.8 18.2a7.4 7.4 0 1 1 0-14.8 7.4 7.4 0 0 1 0 14.8Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
 
 function safeSectionId(value: string) {
   return value.toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "section";
@@ -295,6 +305,7 @@ function AccessoryCard({ card }: { card: AccessorySectionCard }) {
   return (
     <article className="group overflow-hidden rounded-[1.35rem] border border-white/10 bg-zinc-950 shadow-xl shadow-black/25 transition hover:-translate-y-1 hover:border-[var(--greenway)]/45">
       <div className="aspect-[4/3] overflow-hidden bg-zinc-900">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={card.imageUrl} alt="" className="h-full w-full object-cover opacity-82 transition duration-500 group-hover:scale-105 group-hover:opacity-100" loading="lazy" />
       </div>
       <div className="p-5">
@@ -304,6 +315,12 @@ function AccessoryCard({ card }: { card: AccessorySectionCard }) {
       </div>
     </article>
   );
+}
+
+function MerchCard({ def }: { def: (typeof merchProductDefs)[number] }) {
+  // Delegates to the shared MerchProductCard so the shop page and the PDP
+  // "More from" rail render identical merch cards.
+  return <MerchProductCard def={def} />;
 }
 
 type FilterCriteria = {
@@ -756,7 +773,15 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
   const categoryOptions = useMemo(() => {
     const optionItems = items.filter((item) => itemMatchesCriteria(item, criteriaWithout(criteria, "selectedCategories"), maxAvailablePrice, cannabinoidBounds));
     const categoryValues = optionItems.flatMap((item) => item.filterCategories?.length ? item.filterCategories : [item.category]);
-    return buildOptions([...categoryValues, ...Array(accessorySectionCards.length).fill("accessories")], selectedCategories, formatWebsiteCategory);
+    return buildOptions(
+      [
+        ...categoryValues,
+        ...Array(accessorySectionCards.length).fill("accessories"),
+        ...Array(merchProductDefs.length).fill("merch"),
+      ],
+      selectedCategories,
+      formatWebsiteCategory,
+    );
   }, [cannabinoidBounds, criteria, items, maxAvailablePrice, selectedCategories]);
 
   const strainOptions = useMemo(() => {
@@ -798,6 +823,38 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
     "infused-preroll-pack",
   ].includes(activeSectionCategory);
   const showAccessorySections = selectedCategories.length === 1 && selectedCategories[0] === "accessories";
+  const showMerchSections = selectedCategories.length === 1 && selectedCategories[0] === "merch";
+
+  // Non-cannabis collections (accessories + merch) should ALSO appear grouped at
+  // the BOTTOM of the grid when (a) the list is unfiltered, or (b) they are
+  // multi-selected alongside other categories — not just when each is the lone
+  // selection. This prevents the "No products match" dead-end on mixed selects.
+  const noCategoryFilter = selectedCategories.length === 0;
+  const hasOtherFiltersActive =
+    query.trim().length > 0 ||
+    selectedStrains.length > 0 ||
+    selectedBrands.length > 0 ||
+    selectedWeights.length > 0 ||
+    clearanceOnly ||
+    dailyDealsOnly;
+  // Accessories/merch are catalog collections (not filterable by THC/strain/etc),
+  // so only surface them at the bottom when no narrowing filters are applied.
+  const surfaceBottomCollections = !hasOtherFiltersActive;
+  const accessoriesSelectedWithOthers = selectedCategories.includes("accessories") && selectedCategories.length > 1;
+  const merchSelectedWithOthers = selectedCategories.includes("merch") && selectedCategories.length > 1;
+  const showAccessoryBottom =
+    surfaceBottomCollections && !showAccessorySections && !showMerchSections && (noCategoryFilter || accessoriesSelectedWithOthers);
+  const showMerchBottom =
+    surfaceBottomCollections && !showAccessorySections && !showMerchSections && (noCategoryFilter || merchSelectedWithOthers);
+
+  // The empty state should ONLY show when there are truly no products to render
+  // anywhere — including the bottom accessory/merch collections.
+  const showEmptyState =
+    !showAccessorySections &&
+    !showMerchSections &&
+    filteredItems.length === 0 &&
+    !showAccessoryBottom &&
+    !showMerchBottom;
 
   const groupedItems = useMemo<MenuItemGroup[]>(() => {
     if (activeSectionCategory && usesFilteredSections) return groupedByActiveFilter(activeSectionCategory, filteredItems);
@@ -817,7 +874,9 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
   // first product section label, falling back to a sensible default.
   const toolbarTitle = showAccessorySections
     ? "Accessories"
-    : initialSpecial?.label ?? groupedItems[0]?.label ?? "All Products";
+    : showMerchSections
+      ? "Greenway Merch"
+      : initialSpecial?.label ?? groupedItems[0]?.label ?? "All Products";
 
   const resetFilters = () => {
     setQuery("");
@@ -958,13 +1017,18 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
 
       {/* MOBILE: search + sort row ABOVE the Filters & Categories dropdown. */}
       <div className="flex flex-row items-center gap-2.5 lg:hidden">
-        <input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search products, brands..."
-          aria-label="Search products"
-          className="h-11 min-w-0 flex-1 rounded-full border border-white/10 bg-zinc-950 px-4 text-sm font-bold text-white outline-none transition placeholder:text-zinc-600 hover:border-[var(--greenway)]/45 focus:border-[var(--greenway)] focus:ring-2 focus:ring-[var(--greenway)]/20"
-        />
+        <div className="relative min-w-0 flex-1">
+          <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500">
+            <MenuSearchIcon />
+          </span>
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search strains, products..."
+            aria-label="Search products"
+            className="h-11 w-full rounded-full border border-white/10 bg-zinc-950 pl-11 pr-4 text-sm font-bold text-white outline-none transition placeholder:text-zinc-600 hover:border-[var(--greenway)]/45 focus:border-[var(--greenway)] focus:ring-2 focus:ring-[var(--greenway)]/20"
+          />
+        </div>
         <div className="w-[8.5rem] shrink-0">
           <SortDropdown value={sortBy} onChange={setSortBy} />
         </div>
@@ -988,13 +1052,18 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
           </h2>
           {/* DESKTOP search + sort (mobile renders these above the filters dropdown). */}
           <div className="hidden flex-row items-center gap-2.5 sm:shrink-0 sm:gap-3 lg:flex">
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search products, brands, categories"
-              aria-label="Search products"
-              className="h-11 w-full rounded-full border border-white/10 bg-zinc-950 px-4 text-sm font-bold text-white outline-none transition placeholder:text-zinc-600 hover:border-[var(--greenway)]/45 focus:border-[var(--greenway)] focus:ring-2 focus:ring-[var(--greenway)]/20 sm:w-[18rem] lg:w-[22rem]"
-            />
+            <div className="relative w-full sm:w-[18rem] lg:w-[22rem]">
+              <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500">
+                <MenuSearchIcon />
+              </span>
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search strains, products..."
+                aria-label="Search products"
+                className="h-11 w-full rounded-full border border-white/10 bg-zinc-950 pl-11 pr-4 text-sm font-bold text-white outline-none transition placeholder:text-zinc-600 hover:border-[var(--greenway)]/45 focus:border-[var(--greenway)] focus:ring-2 focus:ring-[var(--greenway)]/20"
+              />
+            </div>
             <div className="w-[8.5rem] shrink-0 sm:w-[11rem]">
               <SortDropdown value={sortBy} onChange={setSortBy} />
             </div>
@@ -1007,7 +1076,13 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
               {accessorySectionCards.map((card) => <AccessoryCard key={card.key} card={card} />)}
             </div>
           </section>
-        ) : filteredItems.length === 0 ? (
+        ) : showMerchSections ? (
+          <section id="merch" className="scroll-mt-32">
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+              {merchProductDefs.map((def) => <MerchCard key={def.key} def={def} />)}
+            </div>
+          </section>
+        ) : showEmptyState ? (
           <div className="rounded-3xl border border-dashed border-white/20 bg-zinc-950 p-10 text-center">
             <p className="text-2xl font-black text-white">No products match those filters.</p>
             <button onClick={resetFilters} className="mt-6 rounded-full bg-[var(--orange)] px-6 py-3 text-xs font-black uppercase tracking-[0.16em] text-black">Reset filters</button>
@@ -1028,6 +1103,31 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
                 </div>
               </section>
             ))}
+
+            {/* Accessories grouped at the BOTTOM when mixed with other categories
+                or when the list is unfiltered. */}
+            {showAccessoryBottom ? (
+              <section id="accessories" className="scroll-mt-32">
+                <div className="mb-4 min-w-0">
+                  <h2 className="text-3xl font-black text-white">Accessories</h2>
+                </div>
+                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+                  {accessorySectionCards.map((card) => <AccessoryCard key={card.key} card={card} />)}
+                </div>
+              </section>
+            ) : null}
+
+            {/* Greenway Merch grouped at the BOTTOM under the same conditions. */}
+            {showMerchBottom ? (
+              <section id="merch" className="scroll-mt-32">
+                <div className="mb-4 min-w-0">
+                  <h2 className="text-3xl font-black text-white">Greenway Merch</h2>
+                </div>
+                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+                  {merchProductDefs.map((def) => <MerchCard key={def.key} def={def} />)}
+                </div>
+              </section>
+            ) : null}
           </div>
         )}
       </div>

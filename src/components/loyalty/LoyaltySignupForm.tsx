@@ -94,16 +94,27 @@ export function LoyaltySignupForm() {
       <div className="noise-overlay" />
 
       <div className="relative mx-auto max-w-[88rem] px-4 pt-5 md:px-8 md:pt-8">
-        <div className="relative min-h-[8.5rem] overflow-hidden rounded-2xl border border-white/10 bg-zinc-950 shadow-2xl shadow-black/40 md:min-h-[14rem] lg:min-h-[16rem]">
+        {/* MOBILE banner (own art, ~3:1) */}
+        <div className="relative aspect-[3/1] overflow-hidden rounded-2xl border border-white/10 bg-zinc-950 shadow-2xl shadow-black/40 md:hidden">
+          <Image
+            src={greenwayBusiness.assets.loyaltyHeroMobile}
+            alt="Greenway Loyalty Points promotional banner"
+            fill
+            priority
+            sizes="calc(100vw - 2rem)"
+            className="object-cover object-center"
+          />
+        </div>
+        {/* DESKTOP banner (own art, wide) */}
+        <div className="relative hidden aspect-[3200/563] overflow-hidden rounded-2xl border border-white/10 bg-zinc-950 shadow-2xl shadow-black/40 md:block">
           <Image
             src={greenwayBusiness.assets.loyaltyHero}
             alt="Greenway Loyalty Points promotional banner"
             fill
             priority
-            sizes="(min-width: 1408px) 1408px, calc(100vw - 2rem)"
+            sizes="(min-width: 1408px) 1408px, calc(100vw - 4rem)"
             className="object-cover object-center"
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/10 via-transparent to-transparent" />
         </div>
       </div>
 

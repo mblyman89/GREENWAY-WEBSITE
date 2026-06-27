@@ -15,6 +15,8 @@ export type CompletedOrderLine = {
   variantLabel: string;
   quantity: number;
   priceMinorUnits: number;
+  /** Pre-discount per-item price (tax-inclusive). Equals priceMinorUnits when no sale. */
+  regularPriceMinorUnits?: number;
 };
 
 export type CompletedOrder = {

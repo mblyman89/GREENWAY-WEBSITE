@@ -30,18 +30,31 @@ function priceParts(variant: GreenwayMenuVariant, itemPriceMinorUnits: number, s
 
 function PriceLine({ variant, itemPriceMinorUnits, salePriceMinorUnits }: PriceLineProps) {
   const { regularPrice, displayPrice, hasSalePrice, unitLabel } = priceParts(variant, itemPriceMinorUnits, salePriceMinorUnits);
-  return (
-    <span className="flex min-h-[3.35rem] w-full flex-col items-center justify-center px-2.5 text-center leading-none md:px-3">
-      {/* "Before" (regular) price — TOP aligned, struck through */}
-      {hasSalePrice ? (
-        <span className="mb-0.5 text-[0.72rem] font-black text-zinc-400 line-through md:text-[0.95rem]">
-          {formatMinorCurrency(regularPrice)}
-        </span>
-      ) : null}
-      {/* Discounted price-per-unit — BOTTOM aligned */}
-      <span className="flex items-baseline justify-center gap-1">
+
+  // No active sale: single centered price + unit.
+  if (!hasSalePrice) {
+    return (
+      <span className="flex min-h-[3.35rem] w-full items-center justify-center gap-1 px-2.5 text-center leading-none md:px-3">
         <span className="text-[1.18rem] font-black text-[var(--orange)] md:text-[1.72rem]">{formatMinorCurrency(displayPrice)}</span>
         {unitLabel ? <span className="text-[0.78rem] font-black text-white/95 md:text-base">{unitLabel}</span> : null}
+      </span>
+    );
+  }
+
+  // Active sale (BOTH mobile + desktop): struck "before" (regular) price to the
+  // LEFT of the discounted price/unit, in a single centered row. Fonts are kept
+  // compact so every price point (e.g. "$160.00  $112.00 /14g") fits on one row
+  // without wrapping. Centered horizontally and vertically in the box.
+  return (
+    <span className="flex min-h-[3.35rem] w-full flex-wrap items-baseline justify-center gap-x-1.5 gap-y-0.5 px-2 text-center leading-none md:gap-x-2 md:px-3">
+      {/* "Before" (regular) price — struck through, smaller */}
+      <span className="text-[0.66rem] font-black text-zinc-400 line-through md:text-[0.95rem]">
+        {formatMinorCurrency(regularPrice)}
+      </span>
+      {/* Discounted price-per-unit */}
+      <span className="flex items-baseline justify-center gap-0.5">
+        <span className="text-[0.98rem] font-black text-[var(--orange)] md:text-[1.5rem]">{formatMinorCurrency(displayPrice)}</span>
+        {unitLabel ? <span className="text-[0.66rem] font-black text-white/95 md:text-[0.92rem]">{unitLabel}</span> : null}
       </span>
     </span>
   );
@@ -108,19 +121,17 @@ export function ProductCardPriceSelector({ item, salePriceMinorUnits }: ProductC
       <button
         type="button"
         onClick={() => setIsOpen((current) => (showDropdown ? !current : current))}
-        className={`grid min-h-[3.35rem] w-full grid-cols-[minmax(0,1fr)_2.35rem] items-center overflow-hidden border bg-black/58 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.1),0_10px_22px_rgba(0,0,0,0.24)] backdrop-blur-sm transition hover:border-[#b9864f]/80 ${isOpen && showDropdown ? "rounded-b-[0.95rem] rounded-t-none border-[#b9864f]/75" : "rounded-[0.95rem] border-white/12"}`}
+        className={`relative grid min-h-[3.35rem] w-full place-items-center overflow-hidden border bg-black/58 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.1),0_10px_22px_rgba(0,0,0,0.24)] backdrop-blur-sm transition hover:border-[#b9864f]/80 ${isOpen && showDropdown ? "rounded-b-[0.95rem] rounded-t-none border-[#b9864f]/75" : "rounded-[0.95rem] border-white/12"}`}
         aria-label={`Choose package size for ${item.name}`}
         aria-expanded={showDropdown ? isOpen : undefined}
         disabled={!showDropdown}
       >
         <PriceLine variant={selectedVariant} itemPriceMinorUnits={item.priceMinorUnits} salePriceMinorUnits={salePriceMinorUnits} />
         {showDropdown ? (
-          <span className="grid h-full min-h-[3.35rem] place-items-center border-l border-white/10 bg-white/[0.03] text-white/90">
+          <span className="pointer-events-none absolute inset-y-0 right-0 grid w-[2.35rem] place-items-center border-l border-white/10 bg-white/[0.03] text-white/90">
             <ChevronIcon open={isOpen} />
           </span>
-        ) : (
-          <span aria-hidden="true" />
-        )}
+        ) : null}
       </button>
     </div>
   );

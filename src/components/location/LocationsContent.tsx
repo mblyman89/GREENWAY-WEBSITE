@@ -72,7 +72,7 @@ export function LocationsContent() {
       <div className="mx-auto max-w-7xl px-4 py-10 md:px-8 md:py-14 lg:px-10 lg:py-16">
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_24rem] lg:items-start lg:gap-7 xl:grid-cols-[minmax(0,1fr)_27rem]">
           <article className="rounded-[1.35rem] border border-white/10 bg-zinc-950/92 p-5 shadow-2xl shadow-black/35 md:rounded-[2rem] md:p-8 lg:p-10">
-            <h2 className="text-left text-3xl font-black uppercase leading-tight tracking-tight text-[var(--greenway)] md:text-5xl">
+            <h2 className="text-center text-3xl font-black uppercase leading-tight tracking-tight text-[var(--orange)] md:text-5xl">
               About Greenway Marijuana
             </h2>
             <p className="mt-6 text-base font-medium leading-8 text-zinc-300 md:mt-8 md:text-lg md:leading-9">

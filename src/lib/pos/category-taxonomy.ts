@@ -11,6 +11,7 @@ export const websiteCategoryDefinitions = [
   { value: "popcorn-bud", label: "Popcorn Bud", helper: "Popcorn bud, small bud, b-bud, snappers, bong buddies, and budget flower categories" },
   { value: "infused-flower", label: "Infused Flower", helper: "Moon rocks, caviar, THC Iceberg, and other infused/coated flower products" },
   { value: "accessories", label: "Accessories", helper: "Browse broad accessory sections like glass, rolling gear, batteries, dab tools, and lighters" },
+  { value: "merch", label: "Greenway Merch", helper: "Official Greenway apparel and gear — tees, hoodies, hats, beanies, socks, and lanyards" },
   { value: "paraphernalia", label: "Paraphernalia", helper: "POS-sourced accessories, devices, glass, pipes, batteries, wraps, and non-cannabis gear" },
   { value: "preroll", label: "Preroll", helper: "Single non-infused prerolls" },
   { value: "blunt", label: "Blunt", helper: "Raw POS Blunt rows, kept separate from standard prerolls for focused browsing" },
