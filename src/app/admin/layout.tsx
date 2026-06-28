@@ -5,6 +5,9 @@ import { AdminSidebar } from "@/components/admin/AdminSidebar";
 import { AdminSetupNotice } from "@/components/admin/AdminSetupNotice";
 import { ToastProvider } from "@/components/admin/ux";
 import { HelpLauncher } from "@/components/admin/HelpLauncher";
+import { CommandPalette } from "@/components/admin/CommandPalette";
+import { adminNav } from "@/components/admin/admin-nav-data";
+import { can, type Permission } from "@/lib/auth/roles";
 
 // Admin must never be indexed.
 export const metadata: Metadata = {
@@ -35,6 +38,16 @@ export default async function AdminLayout({
     return <div className="min-h-screen bg-black text-white">{children}</div>;
   }
 
+  // Build the command-palette targets, filtered by what this role can open.
+  const paletteItems = adminNav
+    .filter((item) => !item.comingSoon && can(session.profile.role, item.permission as Permission))
+    .map((item) => ({
+      label: item.label,
+      href: item.href,
+      icon: item.icon,
+      group: item.group,
+    }));
+
   return (
     <div className="min-h-screen bg-black text-white lg:flex">
       <div className="admin-chrome contents">
@@ -49,6 +62,7 @@ export default async function AdminLayout({
       </main>
       <div className="admin-chrome">
         <HelpLauncher />
+        <CommandPalette items={paletteItems} />
       </div>
     </div>
   );

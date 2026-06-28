@@ -17,6 +17,8 @@ import {
   getInventoryHealthReport,
   getPromotionsReport,
 } from "@/lib/reports/analytics";
+import { isAiConfigured } from "@/lib/reports/ai-insights";
+import { ReportInsightsPanel } from "@/components/admin/reports/ReportInsightsPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -127,6 +129,9 @@ export default async function ReportsPage({
             </Link>
           ))}
         </div>
+
+        {/* AI insights briefing */}
+        <ReportInsightsPanel days={days} aiEnabled={isAiConfigured} />
 
         {/* KPI row */}
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
