@@ -60,3 +60,30 @@
 - [ ] Slice 8 — Loyalty management
 - [ ] Slice 9 — Reports & analytics
 - [ ] Slice 10 — Future automation
+
+## Site Content Editor Enhancements (3-slice set — ALL COMPLETE, merged to main)
+Goal: make every homepage banner editable, fix the editor's edit-jump, harden the snag error, give full carousel control, and add a font picker. Drafts-only, one PR per slice.
+
+### Slice A — Editable banner images + smart edit-jump + stale-action recovery (PR #62, merged)
+- [x] New "image" content field type (ContentImageField): Media Library picker, paste URL, live thumbnail, clear
+- [x] Editable image blocks: loyalty hero (desktop+mobile), "Shop by Category" + "Shop by Brand" banners (image+eyebrow+title+subtitle), wired into LoyaltySignupForm / SectionBanner (PromoGrid/HomeBrands) with data-gw-block attrs
+- [x] Edit-jump fix: ContentEditorShell lifts shared page filter + preview path; ✎ Edit auto-switches page → scrolls → highlights → focuses (queued retry)
+- [x] "This page hit a snag" hardening: admin error boundary detects stale Server-Action errors after a deploy and auto-reloads once (one-shot guard) + friendly "Reload page"
+- [x] VALUE-ADD: unsaved-edits guard (beforeunload) + per-block dirty badges
+- [x] next.config remotePatterns for Supabase Storage images; tsc/eslint/build clean
+
+### Slice B — Staff-managed home hero carousel (PR #63, merged)
+- [x] Migration 0011 home_carousel_slides (published + draft_* mirror cols, ctas jsonb, image_focus/text_align, enabled, sort_order, status; RLS staff-all + public read published+enabled)  ← OWNER: run in Supabase SQL editor
+- [x] carousel-store (draft-aware getCarouselForRender + seed fallback + CRUD + reorder + lazy seed); carousel actions
+- [x] Home Carousel manager (/admin/content/carousel): add (cap 6), per-slide editor (image picker + copy + layout + 2 CTAs), enable toggle, reorder ↑/↓, delete, Save draft / Publish; dirty/live/hidden badges; new nav item
+- [x] Hero.tsx now DB-driven (auto-rotate, hover-pause, arrows/dots when >1); removed orphaned home.hero.* seed blocks
+- [x] tsc/eslint/build clean (route compiled)
+- [ ] Owner: run migration 0011, then Home Carousel → "Load starter slides" once
+
+### Slice C — Curated font library + in-editor font picker (PR #64, merged)
+- [x] fonts.ts registry: 10 Google Fonts + System default, grouped by category; fonts-loader.ts loads all via next/font/google (self-hosted, swap)
+- [x] New "font" field type + ContentFontField (grouped dropdown + live preview)
+- [x] site.font.heading + site.font.body blocks; layout.tsx → --font-heading/--font-body (draft-aware); globals.css applies to body + h1–h6
+- [x] tsc/eslint/build clean (fonts self-hosted at build, no warnings)
+
+OWNER TO-DO after deploy: (1) run migration 0011 in Supabase; (2) open Admin → Content → Home Carousel → "Load starter slides"; (3) the font + carousel + banner blocks seed on the next Site Content visit (default font = System, so no visual change until chosen).
