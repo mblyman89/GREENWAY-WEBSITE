@@ -8,8 +8,7 @@
  * endpoint — same action, nicer experience.
  */
 import { useRef, useState } from "react";
-
-const USAGE_TYPES = ["vendor-logo", "brand-logo", "hero", "banner", "product", "blog", "icon", "other"];
+import { MEDIA_PURPOSES, PLACEMENT_SUGGESTIONS } from "@/lib/media/taxonomy";
 
 type Preview = { name: string; url: string; isImage: boolean };
 
@@ -110,36 +109,33 @@ export function MediaDropzone({
         </div>
       )}
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      {/* Smart metadata: WHAT / WHY / WHERE so the library stays organised. */}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="block sm:col-span-2">
+          <span className="mb-1 block text-xs font-medium text-white/50">
+            What is it? <span className="text-white/30">(title)</span>
+          </span>
+          <input
+            name="title"
+            placeholder="e.g. Spring Sale Hero, Sticky Lemon Brand Logo"
+            className="w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#7ed957]"
+          />
+        </label>
         <label className="block">
-          <span className="mb-1 block text-xs font-medium text-white/50">Usage type</span>
+          <span className="mb-1 block text-xs font-medium text-white/50">
+            Why / purpose <span className="text-white/30">(category)</span>
+          </span>
           <select
             name="usage_type"
             className="w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#7ed957]"
           >
-            <option value="">— none —</option>
-            {USAGE_TYPES.map((u) => (
-              <option key={u} value={u}>
-                {u}
+            <option value="">— choose a purpose —</option>
+            {MEDIA_PURPOSES.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.label}
               </option>
             ))}
           </select>
-        </label>
-        <label className="block">
-          <span className="mb-1 block text-xs font-medium text-white/50">Tags (comma separated)</span>
-          <input
-            name="tags"
-            placeholder="logo, dark, square"
-            className="w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#7ed957]"
-          />
-        </label>
-        <label className="block">
-          <span className="mb-1 block text-xs font-medium text-white/50">Alt text</span>
-          <input
-            name="alt_text"
-            placeholder="Describe the image"
-            className="w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#7ed957]"
-          />
         </label>
         <label className="block">
           <span className="mb-1 block text-xs font-medium text-white/50">Status</span>
@@ -151,6 +147,32 @@ export function MediaDropzone({
             <option value="draft">Draft (staff only)</option>
             <option value="published">Published (public)</option>
           </select>
+        </label>
+        <label className="block sm:col-span-2">
+          <span className="mb-1 block text-xs font-medium text-white/50">
+            Where will it go? <span className="text-white/30">(placement tags, comma separated)</span>
+          </span>
+          <input
+            name="tags"
+            list="placement-suggestions"
+            placeholder="home-hero, menu-banner"
+            className="w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#7ed957]"
+          />
+          <datalist id="placement-suggestions">
+            {PLACEMENT_SUGGESTIONS.map((p) => (
+              <option key={p} value={p} />
+            ))}
+          </datalist>
+        </label>
+        <label className="block sm:col-span-2">
+          <span className="mb-1 block text-xs font-medium text-white/50">
+            Alt text <span className="text-white/30">(accessibility — describe the image)</span>
+          </span>
+          <input
+            name="alt_text"
+            placeholder="Describe what's in the image"
+            className="w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#7ed957]"
+          />
         </label>
       </div>
       <button

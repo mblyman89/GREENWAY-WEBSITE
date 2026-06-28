@@ -4,14 +4,16 @@ import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { getMedia, whereUsed, publicUrlForKey } from "@/lib/media/store";
 import { isAiConfigured } from "@/lib/ai/provider";
-import { MediaAltField } from "@/components/admin/media/MediaAltField";
-import { updateMediaMetaAction, setMediaStatusAction, deleteMediaAction } from "../actions";
+import { MediaMetaEditor } from "@/components/admin/media/MediaMetaEditor";
+import {
+  updateMediaMetaAction,
+  setMediaStatusAction,
+  deleteMediaAction,
+  suggestMediaAltAction,
+  suggestMediaMetaAction,
+} from "../actions";
 
 export const dynamic = "force-dynamic";
-
-const field =
-  "w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#7ed957]";
-const label = "mb-1 block text-xs font-medium text-white/50";
 
 function isImage(mime: string | null): boolean {
   return Boolean(mime && mime.startsWith("image/"));
@@ -81,6 +83,9 @@ export default async function MediaDetailPage({
               <div className="flex justify-between"><dt>Filename</dt><dd className="truncate pl-2 text-white/80">{asset.filename}</dd></div>
               <div className="flex justify-between"><dt>Type</dt><dd className="text-white/80">{asset.mime_type ?? "—"}</dd></div>
               <div className="flex justify-between"><dt>Size</dt><dd className="text-white/80">{prettyBytes(asset.size_bytes)}</dd></div>
+              {asset.width && asset.height ? (
+                <div className="flex justify-between"><dt>Dimensions</dt><dd className="text-white/80">{asset.width} × {asset.height}px</dd></div>
+              ) : null}
               <div className="flex justify-between"><dt>Status</dt><dd className="font-semibold text-white/80">{asset.status}</dd></div>
               {url && (
                 <div className="pt-2">
@@ -102,38 +107,22 @@ export default async function MediaDetailPage({
 
           {/* Metadata form */}
           <div className="space-y-6">
-            <form action={updateMediaMetaAction} className="space-y-4 rounded-xl border border-white/10 bg-[#0a0a0a] p-5">
-              <input type="hidden" name="id" value={asset.id} />
-              <p className="text-sm font-semibold text-white">Metadata</p>
-              <label className="block">
-                <span className={label}>Title</span>
-                <input name="title" defaultValue={asset.title ?? ""} className={field} />
-              </label>
-              <MediaAltField
-                id={asset.id}
-                initial={asset.alt_text ?? ""}
-                aiEnabled={isAiConfigured}
-                fieldClassName={field}
-                labelClassName={label}
-              />
-              <label className="block">
-                <span className={label}>Description</span>
-                <textarea name="description" defaultValue={asset.description ?? ""} rows={3} className={field} />
-              </label>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <label className="block">
-                  <span className={label}>Usage type</span>
-                  <input name="usage_type" defaultValue={asset.usage_type ?? ""} placeholder="vendor-logo, hero…" className={field} />
-                </label>
-                <label className="block">
-                  <span className={label}>Tags (comma separated)</span>
-                  <input name="tags" defaultValue={(asset.tags ?? []).join(", ")} className={field} />
-                </label>
-              </div>
-              <button type="submit" className="rounded-full bg-[#7ed957] px-5 py-2 text-sm font-semibold text-black hover:bg-[#6cc746]">
-                Save metadata
-              </button>
-            </form>
+            <MediaMetaEditor
+              id={asset.id}
+              initial={{
+                title: asset.title ?? "",
+                description: asset.description ?? "",
+                alt_text: asset.alt_text ?? "",
+                usage_type: asset.usage_type ?? "",
+                tags: (asset.tags ?? []).join(", "),
+              }}
+              mimeType={asset.mime_type}
+              filename={asset.filename}
+              aiEnabled={isAiConfigured}
+              formAction={updateMediaMetaAction}
+              suggestAlt={suggestMediaAltAction}
+              suggestMeta={suggestMediaMetaAction}
+            />
 
             {/* Where used */}
             <div className="rounded-xl border border-white/10 bg-[#0a0a0a] p-5">

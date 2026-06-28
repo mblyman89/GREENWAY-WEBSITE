@@ -8,6 +8,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { uploadMedia, updateMediaMeta, setMediaStatus, whereUsed, getMedia, publicUrlForKey } from "@/lib/media/store";
 import { generate, generateVision, isAiConfigured } from "@/lib/ai/provider";
 import { COMPLIANCE_SYSTEM, checkCompliance } from "@/lib/ai/compliance";
+import { normalizeTags } from "@/lib/media/taxonomy";
 
 const MAX_BYTES = 10 * 1024 * 1024; // 10 MB ceiling for the library
 const ALLOWED_MIME = new Set([
@@ -25,10 +26,8 @@ function orNull(v: FormDataEntryValue | null): string | null {
 }
 
 function tagsFromForm(v: FormDataEntryValue | null): string[] {
-  return String(v ?? "")
-    .split(",")
-    .map((t) => t.trim())
-    .filter(Boolean);
+  // Normalise to our kebab-case placement convention + de-dupe + cap.
+  return normalizeTags(String(v ?? ""));
 }
 
 /** Upload one or more files into the media library. */
@@ -46,6 +45,9 @@ export async function uploadMediaAction(formData: FormData): Promise<void> {
   const usageType = orNull(formData.get("usage_type")) ?? undefined;
   const tags = tagsFromForm(formData.get("tags"));
   const altText = orNull(formData.get("alt_text")) ?? undefined;
+  // A single shared title only makes sense for one file; for batches let each
+  // asset default to its filename (staff rename per-asset afterward).
+  const sharedTitle = files.length === 1 ? orNull(formData.get("title")) ?? undefined : undefined;
   const status = String(formData.get("status") ?? "draft") === "published" ? "published" : "draft";
 
   let uploaded = 0;
@@ -61,6 +63,7 @@ export async function uploadMediaAction(formData: FormData): Promise<void> {
       buffer,
       filename: file.name,
       mimeType: file.type,
+      title: sharedTitle,
       usageType,
       tags,
       altText,
@@ -241,6 +244,94 @@ export async function suggestMediaAltAction(id: string): Promise<MediaAltResult>
       after: { complianceFlags: flags, method },
     });
     return { ok: true, value: clean, complianceFlags: flags, method };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "AI suggestion failed." };
+  }
+}
+
+/**
+ * Client-callable: auto-fetch a suggested TITLE + DESCRIPTION for an asset.
+ * Uses true image vision when the asset is a fetchable raster; otherwise falls
+ * back to a context-based suggestion from filename / usage / tags. Drafts-only:
+ * the staffer reviews/edits before saving. Returns both fields plus the method.
+ */
+export type MediaMetaResult =
+  | { ok: true; title: string; description: string; method: "vision" | "context" }
+  | { ok: false; error: string };
+
+export async function suggestMediaMetaAction(id: string): Promise<MediaMetaResult> {
+  const session = await requirePermission("media.manage");
+  if (!isAiConfigured) {
+    return { ok: false, error: "AI is not configured. Set AI_API_KEY to enable suggestions." };
+  }
+  const asset = await getMedia(id);
+  if (!asset) return { ok: false, error: "Asset not found." };
+
+  const context = [
+    asset.filename ? `Filename: ${asset.filename}` : null,
+    asset.usage_type ? `Purpose: ${asset.usage_type}` : null,
+    asset.tags && asset.tags.length ? `Placement tags: ${asset.tags.join(", ")}` : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const imageUrl = asset.public_url ?? publicUrlForKey(asset.storage_key);
+  const canUseVision = Boolean(imageUrl) && VISION_MIME.has((asset.mime_type ?? "").toLowerCase());
+  const ctx = { entityType: "media", entityId: id, actorId: session.userId, actorEmail: session.email };
+
+  const instruction =
+    `For an image in a licensed Washington cannabis retailer's media library, return STRICT JSON ` +
+    `{"title": "...", "description": "..."} and nothing else. ` +
+    `title = a short human-friendly label (2-6 words, Title Case, NOT a filename). ` +
+    `description = one tasteful sentence about what the asset is and where it would be used. ` +
+    `Follow all compliance rules. Context:\n${context || "(none provided)"}`;
+
+  try {
+    let raw: string;
+    let method: "vision" | "context";
+    if (canUseVision) {
+      method = "vision";
+      raw = await generateVision({
+        system: COMPLIANCE_SYSTEM,
+        user: instruction,
+        imageUrl: imageUrl!,
+        temperature: 0.5,
+        maxTokens: 160,
+        context: { ...ctx, feature: "media.meta" },
+      });
+    } else {
+      method = "context";
+      raw = await generate({
+        system: COMPLIANCE_SYSTEM,
+        user: instruction,
+        temperature: 0.5,
+        maxTokens: 160,
+        context: { ...ctx, feature: "media.meta" },
+      });
+    }
+
+    let title = "";
+    let description = "";
+    try {
+      const jsonStart = raw.indexOf("{");
+      const jsonEnd = raw.lastIndexOf("}");
+      const parsed = JSON.parse(jsonStart >= 0 ? raw.slice(jsonStart, jsonEnd + 1) : raw);
+      title = String(parsed.title ?? "").trim();
+      description = String(parsed.description ?? "").trim();
+    } catch {
+      // If the model didn't return JSON, treat the whole thing as a description.
+      description = raw.trim().replace(/\s+/g, " ");
+    }
+
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "media.ai_meta",
+      entityType: "media_asset",
+      entityId: id,
+      after: { method },
+    });
+    return { ok: true, title, description, method };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "AI suggestion failed." };
   }

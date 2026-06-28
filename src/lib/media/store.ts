@@ -16,6 +16,7 @@ import crypto from "node:crypto";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured, supabaseUrl } from "@/lib/supabase/env";
 import type { MediaAsset } from "@/lib/supabase/types";
+import { probeImageDimensions } from "./image-dimensions";
 
 /** Public bucket for site imagery (public = true after migration 0012). */
 const MEDIA_BUCKET = "media";
@@ -60,7 +61,8 @@ export type UploadMediaInput = {
   mimeType: string;
   altText?: string;
   title?: string;
-  usageType?: string; // e.g. "vendor-logo", "brand-logo", "hero", "banner"
+  description?: string;
+  usageType?: string; // canonical purpose id (see taxonomy.ts)
   tags?: string[];
   uploadedBy: string | null;
   status?: "draft" | "published";
@@ -79,6 +81,11 @@ export async function uploadMedia(input: UploadMediaInput): Promise<MediaAsset> 
   });
   if (upErr) throw new Error(`Storage upload failed: ${upErr.message}`);
 
+  // Probe pixel dimensions for raster images (dependency-free header parse).
+  const dims = input.mimeType.startsWith("image/")
+    ? probeImageDimensions(input.buffer, input.mimeType)
+    : null;
+
   const { data, error } = await admin
     .from("media_assets")
     .insert({
@@ -87,8 +94,11 @@ export async function uploadMedia(input: UploadMediaInput): Promise<MediaAsset> 
       filename: input.filename,
       mime_type: input.mimeType,
       size_bytes: input.buffer.length,
+      width: dims?.width ?? null,
+      height: dims?.height ?? null,
       alt_text: input.altText ?? null,
       title: input.title ?? input.filename,
+      description: input.description ?? null,
       usage_type: input.usageType ?? null,
       tags: input.tags ?? [],
       status: input.status ?? "draft",
