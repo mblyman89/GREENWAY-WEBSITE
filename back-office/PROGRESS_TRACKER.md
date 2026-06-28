@@ -139,7 +139,7 @@ OWNER TO-DO after deploy: (1) run migration 0011 in Supabase; (2) open Admin →
 - [x] tsc / eslint / build clean.
 - OWNER ACTION: apply migration 0015.
 
-### Slice 6 — Media library upgrade (PR pending) — NO migration (reused existing columns)
+### Slice 6 — Media library upgrade (PR #70, merged) — NO migration (reused existing columns)
 - [x] Smart metadata model (taxonomy.ts): WHAT=title/description, WHY=canonical purpose (usage_type), WHERE=placement tags (tags) + "Where used".
 - [x] Canonical MEDIA_PURPOSES dropdown everywhere (upload, edit, filter) — replaces fragmented free-text usage_type.
 - [x] Placement tag convention + normalizeTags() (kebab-case, de-dupe, cap 12); datalist suggestions.
@@ -150,7 +150,7 @@ OWNER TO-DO after deploy: (1) run migration 0011 in Supabase; (2) open Admin →
 - [x] tsc / eslint / build clean.
 - OWNER ACTION: none (no migration).
 
-### Slice 7 — Newsletter Send Center (PR pending) — migration 0016 (apply manually)
+### Slice 7 — Newsletter Send Center (PR #71, merged) — migration 0016 (apply manually)
 - [x] HYBRID model (owner-approved): design in Canva → upload PDF via Blog & Newsletter (kind=newsletter) → Send Center emails a branded HTML announcement via Resend.
 - [x] Migration 0016 newsletter_sends (campaign record: post_id, subject snapshot, pdf_url, send_kind test|broadcast, status, recipient/delivered/failed counts, sent_by, timestamps; RLS staff-only).
 - [x] newsletter-send-store: listSendableNewsletters (published + has PDF + lastSentAt), getNewsletterRecipients (loyalty_signups w/ email+consent, status new|entered, de-duped), buildNewsletterEmail (brand-token HTML, Read button → public newsletter page + direct PDF link, 21+ footer), sendNewsletter (one private message per recipient, concurrency 5, records outcome), listSendHistory.
