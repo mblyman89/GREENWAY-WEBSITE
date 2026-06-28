@@ -110,14 +110,17 @@ Each "slice" is independently shippable so the owner can inspect before continui
 - [x] Un-hid Blog & Newsletter + Site Content nav items. *(removed `comingSoon`)*
 - [ ] **Deliverable PR + owner inspect.** *(PR open; awaiting owner to run migration 0005 + review)*
 
-## SLICE 6 — Promotions / specials manager (Phase 4)
-- [ ] DB tables: `promotions`, `promotion_targets`, `promotion_exclusions`, `promotion_audit_snapshots`.
-- [ ] Migrate hardcoded `src/lib/specials/daily-deals.ts` (Mon–Sun rules + Thursday brands).
-- [ ] Editors: daily-deal schedule, **Thursday brand selector** (pick 4–5 from live menu + preview affected products), category/product/clearance (50% off) targeting.
-- [ ] Discount types: %, fixed, BOGO, threshold/spend, multi-item tier; start/end + recurrence; store timezone `America/Los_Angeles`.
-- [ ] Conflict detection (product in multiple specials); preview affected products before publish.
-- [ ] Front-end sale badges/pricing read published promotion rules; cart engine remains source of truth for exact charge.
-- [ ] **Deliverable PR + owner inspect.**
+## SLICE 6 — Promotions / specials manager (Phase 4)  *(PR pending)*
+- [x] DB tables: `promotions`, `promotion_targets`, `promotion_exclusions`, `promotion_audit_snapshots`. *(migration `0006_slice6_promotions.sql`; adds `discount_type` + `promo_scope` enums, reuses `post_status` lifecycle + `set_updated_at` + `is_staff`; RLS staff-all + public-read-published; idempotent)*
+- [x] Migrate hardcoded `src/lib/specials/daily-deals.ts` (Mon–Sun rules + Thursday brands). *(`src/lib/promotions/daily-deal-seed.ts` mirrors all 7 days + the 5 Thursday brands exactly; doubles as the public static FALLBACK so the storefront never loses its deals — non-destructive, same pattern as the blog)*
+- [x] Editors: daily-deal schedule, **Thursday brand selector** (pick 4–5 from live menu + preview affected products), category/product/clearance targeting. *(`/admin/promotions/new` + `/admin/promotions/[id]`; brand picker reads distinct brands from the published menu version via `listMenuBrands()`; category checkbox grid; storewide toggle for clearance/Super-Saturday)*
+- [x] Discount types: %, fixed, BOGO, threshold/spend, multi-item tier, weight tier, basket; start/end + weekly recurrence; store timezone `America/Los_Angeles`. *(`discount_type` enum + form fields; weekday OR date-window scheduling)*
+- [x] Conflict detection (product in multiple specials); preview affected products before publish. *(`detectConflicts()` flags products under >1 published promo on the list page; `previewAffectedProducts()` resolves targets−exclusions against the live menu in the editor right-rail before publishing; publish writes a `promotion_audit_snapshots` row)*
+- [~] Front-end sale badges/pricing read published promotion rules; cart engine remains source of truth for exact charge. *(reader `getPublishedPromotions()` + `getPublishedPromotionForWeekday()` return normalized `PublishedPromotion` rules with static fallback; wiring the existing `daily-deals.ts` consumers to read these is a thin follow-on — see note)*
+- [x] Un-hide Promotions in admin nav. *(removed `comingSoon` flag)*
+- [ ] **Deliverable PR + owner inspect.** *(manual step: run migration `0006_slice6_promotions.sql` in Supabase)*
+
+> **Slice 6 follow-on (small):** the storefront currently still reads the hardcoded `src/lib/specials/daily-deals.ts`. The DB-backed reader (`getPublishedPromotions`) returns the exact same rules via fallback, so behaviour is identical today. Swapping the menu/specials/cart consumers to call the reader is a low-risk follow-on PR (keeps this slice focused on the admin + data layer, mirroring how Slice 5 shipped the blog reader then swapped consumers).
 
 ## SLICE 7 — Real order management (Phase 5)
 - [ ] DB tables: `orders`, `order_lines`, `order_events`.
