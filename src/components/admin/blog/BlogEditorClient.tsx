@@ -17,9 +17,10 @@
  * holds the editable fields in local state purely to drive the live preview.
  */
 import { useMemo, useRef, useState, useTransition } from "react";
-import Image from "next/image";
 import { useToast } from "@/components/admin/ux";
 import { suggestHeroAltAction } from "@/app/admin/blog/actions";
+import { FONT_OPTIONS } from "@/lib/cms/fonts";
+import { TITLE_SIZE_OPTIONS } from "@/lib/blog/title-style";
 
 export type BlogEditorInitial = {
   id: string;
@@ -34,6 +35,9 @@ export type BlogEditorInitial = {
   heroImageAlt: string;
   dateLabel: string;
   publishDate: string; // datetime-local value or ""
+  titleFont: string; // font id from registry, or "" / "inherit" for site default
+  titleSize: string; // "sm" | "md" | "lg" | "xl"
+  titleColor: string; // hex or ""
   seoTitle: string;
   seoDescription: string;
   canonicalPath: string;
@@ -101,6 +105,9 @@ export function BlogEditorClient({ initial, categories, aiEnabled, updateAction 
   const [excerpt, setExcerpt] = useState(initial.excerpt);
   const [body, setBody] = useState(initial.body);
   const [dateLabel, setDateLabel] = useState(initial.dateLabel);
+  const [titleFont, setTitleFont] = useState(initial.titleFont || "inherit");
+  const [titleSize, setTitleSize] = useState(initial.titleSize || "md");
+  const [titleColor, setTitleColor] = useState(initial.titleColor || "");
   const [heroAlt, setHeroAlt] = useState(initial.heroImageAlt);
   const [seoTitle, setSeoTitle] = useState(initial.seoTitle);
   const [seoDescription, setSeoDescription] = useState(initial.seoDescription);
@@ -296,6 +303,77 @@ export function BlogEditorClient({ initial, categories, aiEnabled, updateAction 
               onChange={(e) => setDateLabel(e.target.value)}
               className={fieldCls}
             />
+            <p className="mt-1 text-[0.65rem] text-white/40">
+              Shown as a full date on the site, e.g. “June 20, 2026”.
+            </p>
+          </div>
+        </div>
+
+        {/* Title styling — editable headline typography */}
+        <div className="rounded-xl border border-white/10 bg-[#0a0a0a] p-4">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-white/50">
+            Title styling
+          </h3>
+          <p className="mt-1 text-[0.65rem] text-white/40">
+            Style the headline on the blog card + article. Leave font on “Site
+            default” to match the rest of the site.
+          </p>
+          <input type="hidden" name="title_font" value={titleFont} />
+          <input type="hidden" name="title_size" value={titleSize} />
+          <input type="hidden" name="title_color" value={titleColor} />
+          <div className="mt-3 grid gap-4 sm:grid-cols-3">
+            <div>
+              <label className={labelCls}>Font</label>
+              <select
+                value={titleFont}
+                onChange={(e) => setTitleFont(e.target.value)}
+                className={fieldCls}
+              >
+                <option value="inherit">Site default</option>
+                {FONT_OPTIONS.filter((f) => f.id !== "system").map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className={labelCls}>Size</label>
+              <select
+                value={titleSize}
+                onChange={(e) => setTitleSize(e.target.value)}
+                className={fieldCls}
+              >
+                {TITLE_SIZE_OPTIONS.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className={labelCls}>Color (optional)</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={titleColor || "#ffffff"}
+                  onChange={(e) => setTitleColor(e.target.value)}
+                  className="h-9 w-10 shrink-0 cursor-pointer rounded border border-white/15 bg-black"
+                  aria-label="Title color"
+                />
+                {titleColor ? (
+                  <button
+                    type="button"
+                    onClick={() => setTitleColor("")}
+                    className="rounded-lg border border-white/15 px-2 py-1.5 text-xs font-semibold text-white/60 hover:bg-white/10"
+                  >
+                    Reset
+                  </button>
+                ) : (
+                  <span className="text-[0.65rem] text-white/40">Default (white)</span>
+                )}
+              </div>
+            </div>
           </div>
         </div>
 

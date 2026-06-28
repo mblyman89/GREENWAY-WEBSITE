@@ -6,6 +6,8 @@ import { Breadcrumbs } from "@/components/site/Breadcrumbs";
 import { Footer } from "@/components/site/Footer";
 import { Header } from "@/components/site/Header";
 import { getPublicPost, getPublishedSlugs } from "@/lib/cms/blog-store";
+import { formatBlogDate } from "@/lib/blog/format-date";
+import { resolveTitleStyle } from "@/lib/blog/title-style";
 
 type BlogArticlePageProps = {
   params: Promise<{
@@ -45,6 +47,8 @@ export default async function BlogArticlePage({ params }: BlogArticlePageProps) 
   if (!post) notFound();
 
   const isNewsletter = post.kind === "newsletter";
+  const dateText = formatBlogDate(post.publishDate, post.dateLabel);
+  const heroTitleStyle = resolveTitleStyle(post.titleStyle, "hero");
 
   return (
     <main id="top" className="min-h-screen bg-black text-white">
@@ -96,16 +100,19 @@ export default async function BlogArticlePage({ params }: BlogArticlePageProps) 
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black via-black/15 to-black/20" />
                 <div className="absolute bottom-0 left-0 right-0 p-5 md:p-8 lg:p-10">
-                  <p className="text-[0.7rem] font-black uppercase tracking-[0.18em] text-[var(--orange)] md:text-xs">
-                    {post.dateLabel}
+                  <p className="text-[0.7rem] font-black uppercase tracking-[0.14em] text-[var(--orange)] md:text-xs">
+                    {dateText}
                   </p>
-                  <h1 className="mt-3 max-w-5xl text-3xl font-black leading-tight tracking-tight text-white md:text-5xl lg:text-6xl">
+                  <h1
+                    className={`mt-3 max-w-5xl font-black leading-tight tracking-tight text-white ${heroTitleStyle.className}`}
+                    style={heroTitleStyle.style}
+                  >
                     {post.title}
                   </h1>
                   <div className="mt-4 flex flex-wrap items-center gap-3 text-xs font-black uppercase tracking-[0.14em] text-zinc-300 md:text-sm">
                     <span>{post.author}</span>
                     <span className="h-1.5 w-1.5 rounded-full bg-[var(--greenway)]" aria-hidden="true" />
-                    <time dateTime={post.publishDate}>{post.dateLabel}</time>
+                    <time dateTime={post.publishDate}>{dateText}</time>
                   </div>
                 </div>
               </div>
