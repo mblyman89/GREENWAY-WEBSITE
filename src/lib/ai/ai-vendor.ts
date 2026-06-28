@@ -18,7 +18,7 @@
  * tool / web fetch (tracked in the roadmap).
  */
 import "server-only";
-import { generate, isAiConfigured, aiModelId } from "@/lib/ai/provider";
+import { generate, isAiConfigured, aiModelId, type AiContext } from "@/lib/ai/provider";
 import { COMPLIANCE_SYSTEM, PROMPT_VERSION, checkCompliance } from "@/lib/ai/compliance";
 
 export { isAiConfigured };
@@ -108,12 +108,20 @@ function parseOutput(raw: string): { mission: string; about: string; philosophy:
  * vendor or brand. Throws AiNotConfiguredError when no key is set so the caller
  * can show a friendly "AI not set up" message.
  */
-export async function generateVendorProfile(brief: VendorBrief): Promise<VendorProfileSuggestion> {
+export async function generateVendorProfile(
+  brief: VendorBrief,
+  context?: AiContext,
+): Promise<VendorProfileSuggestion> {
   const raw = await generate({
     system: COMPLIANCE_SYSTEM,
     user: buildPrompt(brief),
     temperature: 0.7,
     maxTokens: brief.kind === "brand" ? 420 : 320,
+    context: {
+      feature: brief.kind === "brand" ? "brand.profile" : "vendor.profile",
+      entityType: brief.kind,
+      ...context,
+    },
   });
   const { mission, about, philosophy } = parseOutput(raw);
   const { flags } = checkCompliance(`${mission}\n${about}\n${philosophy}`);

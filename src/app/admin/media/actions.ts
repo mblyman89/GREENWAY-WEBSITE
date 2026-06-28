@@ -5,8 +5,8 @@ import { redirect } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { uploadMedia, updateMediaMeta, setMediaStatus, whereUsed, getMedia } from "@/lib/media/store";
-import { generate, isAiConfigured } from "@/lib/ai/provider";
+import { uploadMedia, updateMediaMeta, setMediaStatus, whereUsed, getMedia, publicUrlForKey } from "@/lib/media/store";
+import { generate, generateVision, isAiConfigured } from "@/lib/ai/provider";
 import { COMPLIANCE_SYSTEM, checkCompliance } from "@/lib/ai/compliance";
 
 const MAX_BYTES = 10 * 1024 * 1024; // 10 MB ceiling for the library
@@ -169,16 +169,18 @@ export async function deleteMediaAction(formData: FormData): Promise<void> {
 }
 
 /**
- * Client-callable: suggest descriptive alt text for an asset based on its
- * title / filename / usage / tags context. Drafts-only — returns a suggestion
- * the staffer accepts/edits before saving via updateMediaMetaAction.
- *
- * Note: this is a context-based suggestion (not image vision); it gives a solid
- * starting point that the human refines for accuracy.
+ * Client-callable: suggest descriptive alt text for an asset. When the image is
+ * a publicly-reachable raster (the AI provider can fetch it), this uses true
+ * IMAGE VISION — the model actually looks at the picture. Otherwise (SVG, or no
+ * public URL yet) it falls back to a context-based suggestion from the title /
+ * filename / usage / tags. Drafts-only — the staffer accepts/edits before
+ * saving via updateMediaMetaAction. The result reports which method was used.
  */
 export type MediaAltResult =
-  | { ok: true; value: string; complianceFlags: string[] }
+  | { ok: true; value: string; complianceFlags: string[]; method: "vision" | "context" }
   | { ok: false; error: string };
+
+const VISION_MIME = new Set(["image/png", "image/jpeg", "image/jpg", "image/webp", "image/gif"]);
 
 export async function suggestMediaAltAction(id: string): Promise<MediaAltResult> {
   const session = await requirePermission("media.manage");
@@ -197,11 +199,38 @@ export async function suggestMediaAltAction(id: string): Promise<MediaAltResult>
     .filter(Boolean)
     .join("\n");
 
-  const user = `Write ALT TEXT for an image used on a licensed Washington cannabis retailer's website, following all rules. Alt text describes the image for screen-reader users and SEO. Return ONE plain sentence, 8-16 words, no quotes, no "image of"/"photo of" prefix, tasteful and adult-oriented. Base it on this context:\n\n${context || "A brand image for the website."}`;
+  // Decide whether we can use true vision: a fetchable URL + a raster mime type.
+  const imageUrl = asset.public_url ?? publicUrlForKey(asset.storage_key);
+  const canUseVision = Boolean(imageUrl) && VISION_MIME.has((asset.mime_type ?? "").toLowerCase());
+
+  const ctx = { entityType: "media", entityId: id, actorId: session.userId, actorEmail: session.email };
 
   try {
-    const text = await generate({ system: COMPLIANCE_SYSTEM, user, temperature: 0.5, maxTokens: 60 });
-    const clean = text.trim().replace(/^["'`]+|["'`]+$/g, "").replace(/\s+/g, " ").trim();
+    let raw: string;
+    let method: "vision" | "context";
+
+    if (canUseVision) {
+      method = "vision";
+      raw = await generateVision({
+        system: COMPLIANCE_SYSTEM,
+        user: `Look at this image used on a licensed Washington cannabis retailer's website and write ALT TEXT for it, following all rules. Alt text describes the image for screen-reader users and SEO. Return ONE plain sentence, 8-16 words, no quotes, no "image of"/"photo of" prefix, tasteful and adult-oriented. Describe what is actually visible (subject, setting, colors, mood). Extra context if helpful:\n${context || "(none provided)"}`,
+        imageUrl: imageUrl!,
+        temperature: 0.5,
+        maxTokens: 80,
+        context: { ...ctx, feature: "media.alt_text" },
+      });
+    } else {
+      method = "context";
+      raw = await generate({
+        system: COMPLIANCE_SYSTEM,
+        user: `Write ALT TEXT for an image used on a licensed Washington cannabis retailer's website, following all rules. Alt text describes the image for screen-reader users and SEO. Return ONE plain sentence, 8-16 words, no quotes, no "image of"/"photo of" prefix, tasteful and adult-oriented. Base it on this context:\n\n${context || "A brand image for the website."}`,
+        temperature: 0.5,
+        maxTokens: 60,
+        context: { ...ctx, feature: "media.alt_text" },
+      });
+    }
+
+    const clean = raw.trim().replace(/^["'`]+|["'`]+$/g, "").replace(/\s+/g, " ").trim();
     const flags = checkCompliance(clean).flags;
     await recordAudit({
       actorId: session.userId,
@@ -209,9 +238,9 @@ export async function suggestMediaAltAction(id: string): Promise<MediaAltResult>
       action: "media.ai_alt_text",
       entityType: "media_asset",
       entityId: id,
-      after: { complianceFlags: flags },
+      after: { complianceFlags: flags, method },
     });
-    return { ok: true, value: clean, complianceFlags: flags };
+    return { ok: true, value: clean, complianceFlags: flags, method };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "AI suggestion failed." };
   }

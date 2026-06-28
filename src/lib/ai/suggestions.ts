@@ -69,7 +69,13 @@ export async function generateProductDescription(
   generatedBy: string | null,
 ): Promise<GeneratedSuggestion> {
   const { system, user, inputSummary } = productDescriptionPrompt(facts);
-  const text = await generate({ system, user, temperature: 0.7, maxTokens: 200 });
+  const text = await generate({
+    system,
+    user,
+    temperature: 0.7,
+    maxTokens: 200,
+    context: { feature: "product.description", entityType: "product", entityId: posProductKey, actorId: generatedBy },
+  });
   const compliance = checkCompliance(text);
   const suggestion = await persistSuggestion({
     entity_type: "product",
@@ -89,7 +95,13 @@ export async function generateProductTags(
   generatedBy: string | null,
 ): Promise<GeneratedSuggestion> {
   const { system, user, inputSummary } = productTagsPrompt(facts);
-  const text = await generate({ system, user, temperature: 0.3, maxTokens: 40 });
+  const text = await generate({
+    system,
+    user,
+    temperature: 0.3,
+    maxTokens: 40,
+    context: { feature: "product.tags", entityType: "product", entityId: posProductKey, actorId: generatedBy },
+  });
   const cleaned = text
     .split(",")
     .map((t) => t.trim().toLowerCase())

@@ -32,12 +32,13 @@ export function MediaAltField({
       const res = await suggestMediaAltAction(id);
       if (res.ok) {
         setValue(res.value);
+        const how = res.method === "vision" ? "AI looked at the image" : "AI used the image's details";
         toast({
           tone: res.complianceFlags.length > 0 ? "warning" : "success",
           message:
             res.complianceFlags.length > 0
-              ? `Alt text suggested — ${res.complianceFlags.length} compliance flag(s) to review.`
-              : "Alt text suggested — review and save.",
+              ? `${how} — ${res.complianceFlags.length} compliance flag(s) to review.`
+              : `${how} — review and save.`,
         });
       } else {
         toast({ tone: "error", message: res.error });
