@@ -69,3 +69,55 @@ body {
   mix-blend-mode: screen;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 160 160' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.45'/%3E%3C/svg%3E");
 }
+
+/* ---------------------------------------------------------------------------
+ * Print: pick-ticket / receipt printing.
+ * When an admin page is printed (the order pick-ticket especially), strip all
+ * admin chrome (sidebar, mobile bar, help launcher, toasts) and let the ticket
+ * fill the page in crisp black-on-white. Thermal-printer friendly.
+ * ------------------------------------------------------------------------- */
+@media print {
+  /* Hide admin navigation chrome + floating helpers. */
+  .admin-chrome,
+  .print\:hidden {
+    display: none !important;
+  }
+
+  /* Let the main content occupy the full printable area. */
+  .admin-main {
+    flex: 1 1 100% !important;
+    width: 100% !important;
+  }
+
+  /* Force pure black-on-white regardless of the dark admin theme. */
+  html,
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  /* The ticket wrapper: full width, no shadows, avoid awkward page breaks. */
+  .ticket-print {
+    margin: 0 !important;
+    max-width: 100% !important;
+    box-shadow: none !important;
+  }
+
+  .ticket-print table {
+    page-break-inside: auto;
+  }
+
+  .ticket-print tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+
+  /* A dotted "cut here" line that only shows on paper. */
+  .ticket-cut-line {
+    display: block !important;
+  }
+
+  @page {
+    margin: 8mm;
+  }
+}

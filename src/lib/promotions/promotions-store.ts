@@ -17,6 +17,7 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { getPublishedVersion, getVersionItems } from "@/lib/pos/menu-version";
+import { getEnrichmentsForKeys, mediaUrlsForIds } from "@/lib/enrichment/store";
 import type { GreenwayCategory } from "@/lib/leafly/types";
 import { DAILY_DEAL_SEEDS } from "./daily-deal-seed";
 import type {
@@ -226,6 +227,8 @@ export type AffectedProduct = {
   name: string;
   brand: string;
   priceMinorUnits: number;
+  /** Resolved enrichment thumbnail URL when available (image-aware preview). */
+  imageUrl?: string | null;
 };
 
 /** Products in the published menu a promotion would apply to (targets minus exclusions). */
@@ -244,6 +247,48 @@ export async function previewAffectedProducts(
       brand: item.brand,
       priceMinorUnits: item.priceMinorUnits,
     }));
+}
+
+/**
+ * Like previewAffectedProducts, but batch-resolves each product's enrichment
+ * thumbnail so the affected-products preview can show real photos instead of a
+ * placeholder. Two extra batched queries total (enrichments-by-key, then
+ * media-by-id) — no N+1. Falls back to imageUrl=null when a product has no
+ * enrichment image yet.
+ */
+export async function previewAffectedProductsWithImages(
+  promo: PromotionWithRules,
+  limit = 60,
+): Promise<AffectedProduct[]> {
+  const base = await previewAffectedProducts(promo);
+  if (base.length === 0) return base;
+
+  // Only resolve images for the slice we'll actually render (keeps it cheap).
+  const slice = base.slice(0, limit);
+  const keys = slice.map((p) => p.key);
+  const enrichments = await getEnrichmentsForKeys(keys);
+
+  // Collect the primary media id per product (primary_media_id or first image).
+  const primaryIdByKey = new Map<string, string>();
+  const mediaIds = new Set<string>();
+  for (const p of slice) {
+    const e = enrichments.get(p.key);
+    if (!e) continue;
+    const primaryId = e.primary_media_id ?? e.image_media_ids?.[0] ?? null;
+    if (primaryId) {
+      primaryIdByKey.set(p.key, primaryId);
+      mediaIds.add(primaryId);
+    }
+  }
+
+  const urlById = await mediaUrlsForIds(Array.from(mediaIds));
+
+  const withImages = base.map((p, i) => {
+    if (i >= limit) return p;
+    const mid = primaryIdByKey.get(p.key);
+    return { ...p, imageUrl: mid ? urlById.get(mid) ?? null : null };
+  });
+  return withImages;
 }
 
 export type PromotionConflict = {

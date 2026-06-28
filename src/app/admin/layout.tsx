@@ -37,15 +37,19 @@ export default async function AdminLayout({
 
   return (
     <div className="min-h-screen bg-black text-white lg:flex">
-      <AdminSidebar
-        role={session.profile.role}
-        fullName={session.profile.full_name ?? ""}
-        email={session.email}
-      />
-      <main className="min-w-0 flex-1">
+      <div className="admin-chrome contents">
+        <AdminSidebar
+          role={session.profile.role}
+          fullName={session.profile.full_name ?? ""}
+          email={session.email}
+        />
+      </div>
+      <main className="admin-main min-w-0 flex-1">
         <ToastProvider>{children}</ToastProvider>
       </main>
-      <HelpLauncher />
+      <div className="admin-chrome">
+        <HelpLauncher />
+      </div>
     </div>
   );
 }

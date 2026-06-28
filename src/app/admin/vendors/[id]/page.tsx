@@ -9,6 +9,7 @@ import { vendorCompleteness } from "@/lib/vendors/completeness";
 import { CompletenessMeter } from "@/components/admin/vendors/CompletenessMeter";
 import { VendorCardPreview } from "@/components/admin/vendors/VendorCardPreview";
 import { listSuggestions, isAiConfigured } from "@/lib/ai/suggestions";
+import type { AiSuggestion } from "@/lib/enrichment/types";
 import {
   updateVendor,
   setVendorStatus,
@@ -16,6 +17,9 @@ import {
   researchVendorAction,
   acceptVendorSuggestionAction,
   rejectVendorSuggestionAction,
+  researchBrandAction,
+  acceptBrandSuggestionAction,
+  rejectBrandSuggestionAction,
 } from "../actions";
 
 export const dynamic = "force-dynamic";
@@ -26,6 +30,7 @@ const label = "text-xs font-medium text-white/60";
 const FIELD_LABELS: Record<string, string> = {
   mission_statement: "Mission statement",
   about: "About",
+  product_philosophy: "Product philosophy",
 };
 
 async function logoUrlForMediaId(mediaId: string | null): Promise<string | null> {
@@ -56,6 +61,14 @@ export default async function VendorEditPage({
 
   const brandLogos = new Map<string, string | null>();
   for (const b of brands) brandLogos.set(b.id, await logoUrlForMediaId(b.logo_media_id));
+
+  // Pending AI drafts per brand (so each brand card can show its own review list).
+  const brandSuggestions = new Map<string, AiSuggestion[]>();
+  await Promise.all(
+    brands.map(async (b) => {
+      brandSuggestions.set(b.id, await listSuggestions("brand", b.id, "pending"));
+    }),
+  );
 
   const completeness = vendorCompleteness(vendor, Boolean(vendorLogo));
 
@@ -235,9 +248,69 @@ export default async function VendorEditPage({
                     <label className="flex flex-col gap-1"><span className={label}>Website</span><input name="website" defaultValue={b.website ?? ""} className={field} /></label>
                     <label className="flex flex-col gap-1"><span className={label}>Brand logo</span><input name="logo" type="file" accept="image/*" className={`${field} file:mr-2 file:rounded file:border-0 file:bg-[#7ed957] file:px-2 file:py-1 file:text-xs file:font-bold file:text-black`} /></label>
                   </div>
+                  <label className="flex flex-col gap-1"><span className={label}>Mission statement</span><textarea name="mission_statement" defaultValue={b.mission_statement ?? ""} rows={2} className={field} /></label>
                   <label className="flex flex-col gap-1"><span className={label}>About</span><textarea name="about" defaultValue={b.about ?? ""} rows={2} className={field} /></label>
                   <label className="flex flex-col gap-1"><span className={label}>Product philosophy</span><textarea name="product_philosophy" defaultValue={b.product_philosophy ?? ""} rows={2} className={field} /></label>
                   <button type="submit" className="rounded-full border border-white/20 px-5 py-2 text-sm font-bold text-white transition hover:border-[#7ed957]">Save brand</button>
+
+                  {/* Brand-level Research with AI */}
+                  <div className="mt-2 space-y-3 rounded-lg border border-[#7ed957]/20 bg-[#7ed957]/[0.03] p-4">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-white">✨ Research this brand with AI</span>
+                      {!isAiConfigured && (
+                        <span className="rounded-full border border-[#ffd700]/40 bg-[#ffd700]/10 px-2 py-0.5 text-[10px] font-semibold text-[#ffd700]">Not set up</span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-white/45">
+                      Drafts a mission, about, and product-philosophy paragraph as <strong>suggestions</strong>. Nothing
+                      saves until you Accept. Always read and edit before publishing.
+                    </p>
+                    {isAiConfigured && (
+                      <div className="flex flex-wrap items-end gap-2">
+                        <input form={`brand-ai-${b.id}`} name="instruction" placeholder="Optional hint (e.g. organic outdoor flower)" className={`${field} min-w-[14rem] flex-1`} />
+                        <button form={`brand-ai-${b.id}`} type="submit" className="rounded-full bg-[#7ed957] px-4 py-2 text-xs font-bold text-black transition hover:brightness-110">
+                          ✨ Draft brand profile
+                        </button>
+                      </div>
+                    )}
+                    {(brandSuggestions.get(b.id)?.length ?? 0) > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-white/40">
+                          {brandSuggestions.get(b.id)!.length} draft{brandSuggestions.get(b.id)!.length === 1 ? "" : "s"} awaiting review
+                        </p>
+                        {brandSuggestions.get(b.id)!.map((s) => (
+                          <div key={s.id} className="rounded-lg border border-white/10 bg-black/40 p-3">
+                            <div className="mb-1 flex items-center justify-between">
+                              <span className="text-[11px] font-semibold text-[#7ed957]">{FIELD_LABELS[s.field_key] ?? s.field_key}</span>
+                              <span className="text-[10px] text-white/30">{s.model ?? "ai"}</span>
+                            </div>
+                            <p className="whitespace-pre-wrap text-xs text-white/80">{s.suggested_value}</p>
+                            <div className="mt-2 flex gap-2">
+                              <form action={acceptBrandSuggestionAction}>
+                                <input type="hidden" name="suggestionId" value={s.id} />
+                                <input type="hidden" name="brandId" value={b.id} />
+                                <input type="hidden" name="vendorId" value={vendor.id} />
+                                <button type="submit" className="rounded-full bg-[#7ed957] px-3 py-1 text-[11px] font-bold text-black transition hover:brightness-110">✓ Accept</button>
+                              </form>
+                              <form action={rejectBrandSuggestionAction}>
+                                <input type="hidden" name="suggestionId" value={s.id} />
+                                <input type="hidden" name="brandId" value={b.id} />
+                                <input type="hidden" name="vendorId" value={vendor.id} />
+                                <button type="submit" className="rounded-full border border-white/20 px-3 py-1 text-[11px] font-semibold text-white/70 transition hover:border-red-400 hover:text-red-300">✕ Reject</button>
+                              </form>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </form>
+              ))}
+              {/* Standalone forms for the brand-AI buttons (can't nest <form> inside the brand <form>). */}
+              {brands.map((b: Brand) => (
+                <form key={`brand-ai-${b.id}`} id={`brand-ai-${b.id}`} action={researchBrandAction} className="hidden">
+                  <input type="hidden" name="brandId" value={b.id} />
+                  <input type="hidden" name="vendorId" value={vendor.id} />
                 </form>
               ))}
               {brands.length === 0 && <p className="text-sm text-white/50">No brands linked to this vendor.</p>}

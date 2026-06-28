@@ -5,7 +5,7 @@ import { PromotionForm } from "@/components/admin/promotions/PromotionForm";
 import {
   getPromotion,
   listMenuBrands,
-  previewAffectedProducts,
+  previewAffectedProductsWithImages,
 } from "@/lib/promotions/promotions-store";
 import { formatMinorCurrency } from "@/lib/leafly/format";
 import { SaleBadgePreview } from "@/components/admin/promotions/SaleBadgePreview";
@@ -42,7 +42,7 @@ export default async function EditPromotionPage({
 
   const [brands, affected] = await Promise.all([
     listMenuBrands(),
-    previewAffectedProducts(promotion),
+    previewAffectedProductsWithImages(promotion),
   ]);
 
   // Pick a representative product (or a sensible default) for the live badge preview.
@@ -114,6 +114,7 @@ export default async function EditPromotionPage({
               sampleName={sample?.name ?? "Sample product"}
               sampleBrand={sample?.brand ?? "Brand"}
               samplePriceMinorUnits={samplePrice}
+              sampleImageUrl={sample?.imageUrl ?? null}
               discountType={promotion.discount_type}
               discountPercent={promotion.discount_percent}
               discountFixed={promotion.discount_fixed}
@@ -147,9 +148,19 @@ export default async function EditPromotionPage({
                       key={p.key}
                       className="flex items-center justify-between gap-2 rounded-md bg-black/40 px-2 py-1 text-xs"
                     >
-                      <span className="truncate text-white/70">
-                        {p.brand ? `${p.brand} · ` : ""}
-                        {p.name}
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded border border-white/10 bg-black">
+                          {p.imageUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={p.imageUrl} alt="" className="h-full w-full object-cover" />
+                          ) : (
+                            <span className="text-[11px] text-white/30">🌿</span>
+                          )}
+                        </span>
+                        <span className="truncate text-white/70">
+                          {p.brand ? `${p.brand} · ` : ""}
+                          {p.name}
+                        </span>
                       </span>
                       <span className="flex shrink-0 items-baseline gap-1.5">
                         {d.showsPrice ? (

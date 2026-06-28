@@ -7,7 +7,7 @@ import { recordAudit } from "@/lib/auth/audit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { uploadMedia, recordUsage } from "@/lib/media/store";
 import type { SocialLinks } from "@/lib/vendors/types";
-import { getVendorById } from "@/lib/vendors/store";
+import { getVendorById, getBrandById } from "@/lib/vendors/store";
 import { generateVendorProfile } from "@/lib/ai/ai-vendor";
 import { persistSuggestion, reviewSuggestion, getSuggestion } from "@/lib/ai/suggestions";
 import { AiNotConfiguredError } from "@/lib/ai/provider";
@@ -298,4 +298,136 @@ export async function rejectVendorSuggestionAction(formData: FormData): Promise<
   });
   revalidatePath(`/admin/vendors/${vendorId}`);
   redirect(`/admin/vendors/${vendorId}?saved=1#ai-drafts`);
+}
+
+/* ------------------------------------------------------------------ *
+ * BRAND-level "Research with AI" (parallel to the vendor lifecycle).
+ * Brands have three drafted fields: mission_statement, about, and
+ * product_philosophy. Drafts-only: nothing is written until Accept.
+ * ------------------------------------------------------------------ */
+
+/** Brand fields the AI is allowed to draft + the human can accept. */
+const BRAND_AI_FIELDS = new Set(["mission_statement", "about", "product_philosophy"]);
+
+/** "Research with AI" for a brand → up to 3 pending suggestions. */
+export async function researchBrandAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("vendors.manage");
+  const brandId = String(formData.get("brandId") ?? "");
+  const vendorId = String(formData.get("vendorId") ?? "");
+  if (!brandId || !vendorId) {
+    redirect(`/admin/vendors/${vendorId}?error=` + encodeURIComponent("Missing brand id."));
+  }
+
+  const brand = await getBrandById(brandId);
+  if (!brand) {
+    redirect(`/admin/vendors/${vendorId}?error=` + encodeURIComponent("Brand not found."));
+  }
+
+  const instruction = orNull(formData.get("instruction"));
+
+  try {
+    const draft = await generateVendorProfile({
+      kind: "brand",
+      displayName: brand!.display_name,
+      currentMission: brand!.mission_statement,
+      currentAbout: brand!.about,
+      currentPhilosophy: brand!.product_philosophy,
+      website: brand!.website,
+      instruction,
+    });
+
+    const toPersist: { field: string; value: string }[] = [];
+    if (draft.mission) toPersist.push({ field: "mission_statement", value: draft.mission });
+    if (draft.about) toPersist.push({ field: "about", value: draft.about });
+    if (draft.philosophy) toPersist.push({ field: "product_philosophy", value: draft.philosophy });
+
+    for (const p of toPersist) {
+      await persistSuggestion({
+        entity_type: "brand",
+        entity_id: brandId,
+        field_key: p.field,
+        suggested_value: p.value,
+        input_summary: `${brand!.display_name} · ${p.field}${instruction ? " · " + instruction : ""}`,
+        generated_by: session.userId,
+      });
+    }
+
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "brand.ai_drafted",
+      entityType: "brand",
+      entityId: brandId,
+      after: { fields: toPersist.map((p) => p.field), flags: draft.complianceFlags },
+    });
+  } catch (err) {
+    const msg =
+      err instanceof AiNotConfiguredError
+        ? "AI isn't set up yet. Add an AI_API_KEY to enable drafting."
+        : "Couldn't draft a brand profile right now. Please try again.";
+    redirect(`/admin/vendors/${vendorId}?error=` + encodeURIComponent(msg));
+  }
+
+  revalidatePath(`/admin/vendors/${vendorId}`);
+  redirect(`/admin/vendors/${vendorId}?saved=1#brand-${brandId}`);
+}
+
+/** Accept an AI brand-profile suggestion: write the value, mark accepted. */
+export async function acceptBrandSuggestionAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("vendors.manage");
+  const suggestionId = String(formData.get("suggestionId") ?? "");
+  const brandId = String(formData.get("brandId") ?? "");
+  const vendorId = String(formData.get("vendorId") ?? "");
+  if (!suggestionId || !brandId || !vendorId) {
+    redirect(`/admin/vendors/${vendorId}?error=` + encodeURIComponent("Missing suggestion."));
+  }
+
+  const suggestion = await getSuggestion(suggestionId);
+  if (!suggestion || suggestion.entity_type !== "brand" || suggestion.entity_id !== brandId) {
+    redirect(`/admin/vendors/${vendorId}?error=` + encodeURIComponent("Suggestion not found."));
+  }
+  if (!BRAND_AI_FIELDS.has(suggestion!.field_key)) {
+    redirect(`/admin/vendors/${vendorId}?error=` + encodeURIComponent("Unsupported field."));
+  }
+
+  const admin = createSupabaseAdminClient();
+  const { error } = await admin
+    .from("brands")
+    .update({ [suggestion!.field_key]: suggestion!.suggested_value, updated_by: session.userId })
+    .eq("id", brandId);
+  if (error) redirect(`/admin/vendors/${vendorId}?error=` + encodeURIComponent(error.message));
+
+  await reviewSuggestion(suggestionId, "accepted", session.userId);
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "brand.ai_accepted",
+    entityType: "brand",
+    entityId: brandId,
+    after: { field: suggestion!.field_key },
+  });
+
+  revalidatePath(`/admin/vendors/${vendorId}`);
+  redirect(`/admin/vendors/${vendorId}?saved=1#brand-${brandId}`);
+}
+
+/** Reject an AI brand-profile suggestion (no write to the brand). */
+export async function rejectBrandSuggestionAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("vendors.manage");
+  const suggestionId = String(formData.get("suggestionId") ?? "");
+  const brandId = String(formData.get("brandId") ?? "");
+  const vendorId = String(formData.get("vendorId") ?? "");
+  if (!suggestionId || !brandId || !vendorId) {
+    redirect(`/admin/vendors/${vendorId}?error=` + encodeURIComponent("Missing suggestion."));
+  }
+  await reviewSuggestion(suggestionId, "rejected", session.userId);
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "brand.ai_rejected",
+    entityType: "brand",
+    entityId: brandId,
+  });
+  revalidatePath(`/admin/vendors/${vendorId}`);
+  redirect(`/admin/vendors/${vendorId}?saved=1#brand-${brandId}`);
 }
