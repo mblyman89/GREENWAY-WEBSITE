@@ -150,6 +150,22 @@ export async function getBlogSuggestion(id: string): Promise<AiSuggestion | null
   return (data as AiSuggestion | null) ?? null;
 }
 
+/**
+ * Draft concise, descriptive alt text for a post's hero image. Returns a plain
+ * suggestion (not persisted) for the editor to accept/edit before saving.
+ * Drafts-only: never written to the post automatically.
+ */
+export async function generateHeroAltText(
+  title: string,
+  category: string,
+): Promise<{ value: string; complianceFlags: string[]; model: string }> {
+  const user = `Write ALT TEXT for the hero image of a blog post on a licensed Washington cannabis retailer's website, following all rules. The alt text describes the image for screen-reader users and SEO. Return ONE plain sentence, 8-16 words, no quotes, no "image of"/"photo of" prefix, tasteful and adult-oriented.\n\nPost title: ${title}\nCategory: ${category}`;
+  const text = await generate({ system: COMPLIANCE_SYSTEM, user, temperature: 0.5, maxTokens: 60 });
+  const clean = text.trim().replace(/^["'`]+|["'`]+$/g, "").replace(/\s+/g, " ").trim();
+  const compliance = checkCompliance(clean);
+  return { value: clean, complianceFlags: compliance.flags, model: aiModelId };
+}
+
 /** Parse a "TITLE: ...\nDESCRIPTION: ..." SEO suggestion into parts. */
 export function parseSeoSuggestion(value: string): { title: string; description: string } {
   const titleMatch = value.match(/TITLE:\s*(.+)/i);

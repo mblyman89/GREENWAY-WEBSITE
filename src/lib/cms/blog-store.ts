@@ -42,6 +42,14 @@ async function resolveMediaSrc(
   return rawPath ?? null;
 }
 
+/** Public wrapper: resolve a displayable hero image URL for the editor preview. */
+export async function resolveHeroSrc(
+  mediaId: string | null,
+  rawPath: string | null,
+): Promise<string | null> {
+  return resolveMediaSrc(mediaId, rawPath);
+}
+
 // ---------------------------------------------------------------------------
 // Staff CRUD
 // ---------------------------------------------------------------------------
