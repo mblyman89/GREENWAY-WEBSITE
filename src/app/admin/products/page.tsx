@@ -6,17 +6,20 @@ import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
 import { getPublishedVersion, getVersionItems } from "@/lib/pos/menu-version";
 import { getEnrichmentsForKeys, computeGaps, type GapFlags } from "@/lib/enrichment/store";
+import { resolveMediaUrls } from "@/lib/media/store";
 import { isAiConfigured } from "@/lib/ai/provider";
+import { ProductGrid, type ProductGridCard } from "@/components/admin/products/ProductGrid";
 
 export const dynamic = "force-dynamic";
 
 export default async function ProductsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; gap?: string; category?: string }>;
+  searchParams: Promise<{ q?: string; gap?: string; category?: string; view?: string }>;
 }) {
   await requirePermission("products.enrich");
-  const { q, gap, category } = await searchParams;
+  const { q, gap, category, view } = await searchParams;
+  const isTable = view === "table";
 
   if (!isSupabaseServiceConfigured) {
     return (
@@ -71,6 +74,40 @@ export default async function ProductsPage({
   const missingImg = gaps.filter((g) => !g.hasImage).length;
   const enriched = gaps.filter((g) => g.enrichmentStatus === "published").length;
   const categories = Array.from(new Set(gaps.map((g) => g.category))).sort();
+
+  // Resolve thumbnails for the visual grid (batch — no N+1).
+  const shown = filtered.slice(0, 300);
+  const thumbIds: string[] = [];
+  for (const g of shown) {
+    const e = enrichments.get(g.posKey);
+    const id = e?.primary_media_id ?? e?.image_media_ids?.[0];
+    if (id) thumbIds.push(id);
+  }
+  const thumbMap = await resolveMediaUrls(thumbIds);
+  const gridCards: ProductGridCard[] = shown.map((g) => {
+    const e = enrichments.get(g.posKey);
+    const id = e?.primary_media_id ?? e?.image_media_ids?.[0] ?? null;
+    return {
+      posKey: g.posKey,
+      name: g.name,
+      brand: g.brand,
+      category: g.category,
+      hasDescription: g.hasDescription,
+      hasImage: g.hasImage,
+      hasBrandLink: g.hasBrandLink,
+      enrichmentStatus: g.enrichmentStatus,
+      thumbnailUrl: id ? thumbMap.get(id) ?? null : null,
+    };
+  });
+
+  const baseQs = new URLSearchParams();
+  if (q) baseQs.set("q", q);
+  if (category) baseQs.set("category", category);
+  if (gap) baseQs.set("gap", gap);
+  const gridHref = `/admin/products?${baseQs.toString()}`;
+  const tableQs = new URLSearchParams(baseQs);
+  tableQs.set("view", "table");
+  const tableHref = `/admin/products?${tableQs.toString()}`;
 
   return (
     <div>
@@ -138,9 +175,45 @@ export default async function ProductsPage({
           <button type="submit" className="rounded-full border border-white/15 px-4 py-2 text-sm text-white/80 hover:border-[#7ed957] hover:text-white">
             Filter
           </button>
+          {view && <input type="hidden" name="view" value={view} />}
+          {/* Grid / Table view toggle */}
+          <div className="ml-auto inline-flex overflow-hidden rounded-lg border border-white/15">
+            <Link
+              href={gridHref}
+              className={`px-3 py-2 text-xs font-bold ${!isTable ? "bg-[#7ed957] text-black" : "text-white/60 hover:bg-white/10"}`}
+            >
+              ▦ Grid
+            </Link>
+            <Link
+              href={tableHref}
+              className={`px-3 py-2 text-xs font-bold ${isTable ? "bg-[#7ed957] text-black" : "text-white/60 hover:bg-white/10"}`}
+            >
+              ☰ Table
+            </Link>
+          </div>
         </form>
 
-        {/* Table */}
+        {/* Bulk AI entry point */}
+        {isAiConfigured && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#ffd700]/25 bg-[#ffd700]/5 px-4 py-3">
+            <p className="text-sm text-white/70">
+              <span className="font-bold text-[#ffd700]">✨ Bulk AI:</span> draft descriptions for many
+              products at once, then review & approve them in a grid.
+            </p>
+            <Link
+              href="/admin/products/bulk-ai"
+              className="rounded-lg bg-[#ffd700] px-4 py-2 text-xs font-bold text-black hover:bg-[#e6c200]"
+            >
+              Open bulk AI review →
+            </Link>
+          </div>
+        )}
+
+        {/* Visual grid (default) */}
+        {!isTable && <ProductGrid cards={gridCards} />}
+
+        {/* Table (power-user view) */}
+        {isTable && (
         <div className="overflow-hidden rounded-xl border border-white/10">
           <table className="w-full text-sm">
             <thead className="bg-[#0a0a0a] text-left text-xs uppercase tracking-wide text-white/40">
@@ -177,10 +250,11 @@ export default async function ProductsPage({
             </tbody>
           </table>
         </div>
+        )}
         {filtered.length > 300 && (
           <p className="text-xs text-white/40">Showing first 300 of {filtered.length}. Use search/filters to narrow.</p>
         )}
-        {filtered.length === 0 && <p className="text-sm text-white/50">No products match your filter.</p>}
+        {isTable && filtered.length === 0 && <p className="text-sm text-white/50">No products match your filter.</p>}
       </div>
     </div>
   );

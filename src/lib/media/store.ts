@@ -76,6 +76,27 @@ export async function listMedia(opts?: { usageType?: string; status?: string; li
   return (data as MediaAsset[] | null) ?? [];
 }
 
+/**
+ * Batch-resolve a set of media asset ids to their public URLs. Returns a Map
+ * keyed by media id; ids without a published/known asset are simply absent.
+ * Used by visual grids (products) to render thumbnails without N+1 queries.
+ */
+export async function resolveMediaUrls(ids: string[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  const unique = Array.from(new Set(ids.filter(Boolean)));
+  if (unique.length === 0 || !isSupabaseServiceConfigured) return out;
+  const admin = createSupabaseAdminClient();
+  const { data } = await admin
+    .from("media_assets")
+    .select("id, storage_key")
+    .in("id", unique);
+  for (const row of (data as { id: string; storage_key: string }[] | null) ?? []) {
+    const url = publicUrlForKey(row.storage_key);
+    if (url) out.set(row.id, url);
+  }
+  return out;
+}
+
 export async function getMedia(id: string): Promise<MediaAsset | null> {
   if (!isSupabaseServiceConfigured) return null;
   const admin = createSupabaseAdminClient();
