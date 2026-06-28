@@ -231,7 +231,20 @@ New **"Pages" group** (or expand "Content"):
 - No schema change (or a tiny storage policy migration if we choose public bucket).
 - **Owner-visible outcome:** thumbnails show, homepage cards show, publish reflects live.
 
-### Slice 2 — `page_sections` foundation + generic Section editor  *(PR, migration 0012)*
+> **PROGRESS LOG**
+> - **Slice 1 — DONE (PR #65, merged).** Media public bucket (migration 0012),
+>   homepage Sunday grey-card fallback, reliable publish (layout revalidate).
+> - **Slice 2 — IN PROGRESS.** Migration **0013** `page_sections`; generic
+>   types/seed/store; `SectionCard` (with add/delete/style/label buttons, up to 4);
+>   `/admin/pages/[slug]` route with the Home **2-tab** layout (Carousel | Sections);
+>   nav reorganized into a new **Pages** group (Home/Menu/Loyalty/Specials/Vendors/
+>   FAQ/About/Locations/Price Match); old `/admin/content/carousel` → redirect to
+>   `/admin/pages/home?tab=carousel`; Preview link points at the Site Content preview
+>   screen. **Public-page wiring of page_sections is deferred to Slice 3** to avoid
+>   any visual regression — the homepage still renders via the existing
+>   PromoGrid/HomeBrands until Slice 3 swaps them to `<PageSection>`.
+
+### Slice 2 — `page_sections` foundation + generic Section editor  *(PR, migration 0013)*
 - Migration 0012 `page_sections` (idempotent, RLS).
 - Generic types/seed/store/actions + `SectionCard` + `ButtonListField` + `<PageSection>`.
 - Seed home's editable sections (Category + Brand banners) into `page_sections` so the
