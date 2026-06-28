@@ -15,6 +15,8 @@ import { listSections } from "@/lib/cms/page-sections-store";
 import { seedsForPage } from "@/lib/cms/page-sections-seed";
 import { listCarouselSlides } from "@/lib/cms/carousel-store";
 import { MAX_CAROUSEL_SLIDES } from "@/lib/cms/carousel-types";
+import { listFaqItems } from "@/lib/cms/faq-store";
+import { FaqItemCard } from "@/components/admin/FaqItemCard";
 import {
   seedSectionsAction,
   addSectionAction,
@@ -31,6 +33,14 @@ import {
   deleteCarouselSlideAction,
   moveCarouselSlideAction,
 } from "../../content/carousel/actions";
+import {
+  seedFaqAction,
+  addFaqAction,
+  saveFaqAction,
+  publishFaqAction,
+  deleteFaqAction,
+  moveFaqAction,
+} from "../faq-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -62,8 +72,12 @@ export default async function PageBuilderPage({
   if (!isValidPageSlug(slug)) notFound();
   const config = PAGE_SECTION_CONFIG[slug];
   const isHome = slug === "home";
-  // Home has two tabs (carousel | sections); other pages only show sections.
-  const tab = isHome && sp.tab === "carousel" ? "carousel" : "sections";
+  const isFaq = slug === "faq";
+  // Home has two tabs (carousel | sections); FAQ has (sections | qanda);
+  // other pages only show sections.
+  let tab: "carousel" | "sections" | "qanda" = "sections";
+  if (isHome && sp.tab === "carousel") tab = "carousel";
+  else if (isFaq && sp.tab === "qanda") tab = "qanda";
 
   if (!isSupabaseServiceConfigured) {
     return (
@@ -121,7 +135,7 @@ export default async function PageBuilderPage({
           </div>
         ) : null}
 
-        {/* Tab bar (home only) */}
+        {/* Tab bar (home: Carousel|Sections; faq: Sections|Q&A) */}
         {isHome ? (
           <div className="flex gap-1 rounded-xl border border-white/10 bg-[#0f0f0f] p-1">
             <a
@@ -147,6 +161,31 @@ export default async function PageBuilderPage({
           </div>
         ) : null}
 
+        {isFaq ? (
+          <div className="flex gap-1 rounded-xl border border-white/10 bg-[#0f0f0f] p-1">
+            <a
+              href={`/admin/pages/faq?tab=sections`}
+              className={
+                tab === "sections"
+                  ? "flex-1 rounded-lg bg-[#7ed957] px-4 py-2 text-center text-sm font-semibold text-black"
+                  : "flex-1 rounded-lg px-4 py-2 text-center text-sm font-medium text-white/70 transition hover:bg-white/5"
+              }
+            >
+              Banners
+            </a>
+            <a
+              href={`/admin/pages/faq?tab=qanda`}
+              className={
+                tab === "qanda"
+                  ? "flex-1 rounded-lg bg-[#7ed957] px-4 py-2 text-center text-sm font-semibold text-black"
+                  : "flex-1 rounded-lg px-4 py-2 text-center text-sm font-medium text-white/70 transition hover:bg-white/5"
+              }
+            >
+              Questions &amp; Answers
+            </a>
+          </div>
+        ) : null}
+
         {/* Preview link → Site Content preview screen */}
         <p className="text-sm text-white/60">
           <a
@@ -160,6 +199,8 @@ export default async function PageBuilderPage({
 
         {isHome && tab === "carousel" ? (
           <CarouselTab mediaChoices={mediaChoices} />
+        ) : isFaq && tab === "qanda" ? (
+          <QandaTab />
         ) : (
           <SectionsTab
             slug={slug}
@@ -307,6 +348,67 @@ async function SectionsTab({
               publishAction={publishSectionAction}
               deleteAction={deleteSectionAction}
               moveAction={moveSectionAction}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Q&A tab (FAQ page only) — add/remove/reorder questions with draft+publish
+// ---------------------------------------------------------------------------
+
+async function QandaTab() {
+  const items = await listFaqItems();
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-white/60">
+          {items.length} question{items.length === 1 ? "" : "s"}. Edit a draft,
+          then publish to update the public FAQ page.
+        </p>
+        <div className="flex items-center gap-2">
+          {items.length === 0 ? (
+            <form action={seedFaqAction}>
+              <button
+                type="submit"
+                className="rounded-lg border border-white/15 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/5"
+              >
+                Load starter Q&amp;A
+              </button>
+            </form>
+          ) : null}
+          <form action={addFaqAction}>
+            <button
+              type="submit"
+              className="rounded-lg bg-[#7ed957] px-4 py-2 text-sm font-semibold text-black transition hover:bg-[#94e570]"
+            >
+              + Add question
+            </button>
+          </form>
+        </div>
+      </div>
+
+      {items.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-white/15 bg-[#0f0f0f] p-10 text-center text-sm text-white/70">
+          No questions yet. Click <strong>Load starter Q&amp;A</strong> to import
+          your current FAQ, or <strong>+ Add question</strong> to write a new one.
+        </div>
+      ) : (
+        <div className="space-y-5">
+          {items.map((item, index) => (
+            <FaqItemCard
+              key={item.id}
+              item={item}
+              index={index}
+              total={items.length}
+              saveAction={saveFaqAction}
+              publishAction={publishFaqAction}
+              deleteAction={deleteFaqAction}
+              moveAction={moveFaqAction}
             />
           ))}
         </div>

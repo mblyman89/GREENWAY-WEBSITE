@@ -6,6 +6,7 @@ import { Breadcrumbs } from "@/components/site/Breadcrumbs";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { faqSchema, pageMetadata } from "@/lib/seo/seo";
 import { getContentValues, isPreviewActive } from "@/lib/cms/render-content";
+import { getFaqForRender } from "@/lib/cms/faq-store";
 
 export const metadata = pageMetadata({
   title: "Frequently Asked Questions — Hours, ID, Payment & Limits",
@@ -15,15 +16,22 @@ export const metadata = pageMetadata({
 });
 
 export default async function FaqPage() {
-  const [copy, preview] = await Promise.all([
+  const [copy, preview, dbFaq] = await Promise.all([
     getContentValues(["faq.hero.title", "faq.hero.subtitle"]),
     isPreviewActive(),
+    getFaqForRender(),
   ]);
+
+  // DB-backed Q&A when present; otherwise the committed static list.
+  const items =
+    dbFaq.length > 0
+      ? dbFaq.map((i) => ({ question: i.question, answer: i.answer }))
+      : faqItems.map((i) => ({ question: i.question, answer: i.answer }));
 
   return (
     <main id="top" className="min-h-screen bg-black text-white">
       <JsonLd
-        data={faqSchema(faqItems.map((item) => ({ question: item.question, answer: item.answer })))}
+        data={faqSchema(items.map((item) => ({ question: item.question, answer: item.answer })))}
         id="faq"
       />
       <Header />
@@ -34,6 +42,7 @@ export default async function FaqPage() {
           subtitle: copy["faq.hero.subtitle"],
           editable: preview,
         }}
+        items={items}
       />
       <Footer />
     </main>

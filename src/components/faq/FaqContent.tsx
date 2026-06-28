@@ -4,16 +4,25 @@ import { useState } from "react";
 
 import { faqItems } from "@/content/faq";
 
-
-
 type FaqHeroContent = {
   title?: string;
   subtitle?: string;
   editable?: boolean;
 };
 
-export function FaqContent({ content }: { content?: FaqHeroContent } = {}) {
+type FaqDisplayItem = { question: string; answer: string };
+
+export function FaqContent({
+  content,
+  items,
+}: {
+  content?: FaqHeroContent;
+  /** DB-backed Q&A; falls back to the committed static list when omitted/empty. */
+  items?: FaqDisplayItem[];
+} = {}) {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const faqs: readonly FaqDisplayItem[] =
+    items && items.length > 0 ? items : faqItems;
 
   return (
     <section className="relative overflow-hidden bg-black text-white">
@@ -41,7 +50,7 @@ export function FaqContent({ content }: { content?: FaqHeroContent } = {}) {
         </div>
 
         <div className="mx-auto mt-8 max-w-4xl space-y-3 md:mt-12 md:space-y-4">
-          {faqItems.map((item, index) => {
+          {faqs.map((item, index) => {
             const isOpen = openIndex === index;
 
             return (
