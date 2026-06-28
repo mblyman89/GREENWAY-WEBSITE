@@ -75,6 +75,28 @@ These are intentional, honest deferrals — each is a small, isolated add, none 
 - **Media AI alt-text is context-based, not vision.** (From UX-4.) Text model only. A vision-model upgrade for true image-aware alt text fits in UX-7.
 - **New-order chime needs one prior page interaction** (browser autoplay policy). The visual "🔔 N new orders" banner always works regardless; the chime is a bonus once the staffer clicks anything.
 
+## Heavyweight Batch — owner authorized "go full power" ✅ (PRs #54–#58)
+Owner: *"continue building… make any lightweight thing heavyweight… proceed with
+slice 7… really ship hardcore AI features."* Delivered as five squash-merged PRs;
+full detail + evidence in `HEAVYWEIGHT_BATCH_TODO.md`.
+- **PR #54 (b42de90)** — resolved the four UX-5/UX-6 follow-ups below to heavyweight:
+  brand-level "Research with AI", promotion affected-product **thumbnails** (batched,
+  no N+1), dedicated print **ticket** stylesheet, new-order **chime** test+volume.
+- **PR #55 (32bde1b)** — AI infra: `generateJSON` / `generateStream` / `generateVision`,
+  **vision** alt-text (resolves the context-only deferral), `ai_usage` ledger
+  (migration **0009**) + `/admin/ai-usage` dashboard, reusable AI components.
+- **PR #56 (24dee6d)** — UX-7 AI everywhere: **SEO** meta AI (live Google preview) +
+  **Promotions** copy AI (name/announcement/badge). Blog/content/products already had AI.
+- **PR #57 (23fb4f9)** — UX-7 **Getting-Started wizard** (`/admin/getting-started`)
+  reusing UX-0 setup-status + an **AI setup concierge** grounded in SETUP_GUIDE.
+- **PR #58 (442019b)** — heavyweight upgrades: **Reports AI insights** briefing,
+  **⌘K command palette**, **Activity-log filters + search**.
+
+> All UX-5/UX-6 deferrals listed below are now **resolved** (brand AI, promo
+> thumbnails, print ticket, vision alt-text, chime). The only remaining honest
+> deferral is the public `/vendors` storefront route (a storefront task, not
+> back-office), so the in-admin `VendorCardPreview` remains a faithful mock.
+
 ## Definition of done (per UX slice)
 1. Shared components reused (no one-off styling).
 2. Every new/changed page has: friendly empty state, caught/ friendly error state, tooltips/help, loading skeleton, consistent status pills.
