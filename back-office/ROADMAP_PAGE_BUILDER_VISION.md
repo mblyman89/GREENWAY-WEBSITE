@@ -317,10 +317,32 @@ building Slice 7.**
 
 ---
 
-## 7. Open questions for the owner (to confirm before/at Slice 7)
-1. Newsletter: OK with the **hybrid** (design in Canva → upload PDF → one-click branded email
-   to the loyalty list), instead of a full in-app designer? (See §6.)
-2. Media bucket: OK to make the `media` bucket **public-read for published assets** (simplest
-   reliable thumbnails + fast delivery), or prefer **signed URLs** everywhere?
-3. "About" and "Location" pages: confirm their routes exist (so we add the right page tabs).
-4. Homepage section cap is **4 total** including the locked daily-special — confirm.
+## 7. Owner decisions — CONFIRMED
+1. **Newsletter: HYBRID — APPROVED.** Design in Canva → upload PDF → one-click branded email
+   to the loyalty list. No full in-app designer. (See §6.)
+2. **Media bucket: SPLIT MODEL — DECIDED (industry standard).**
+   - **Public `media` bucket** for website-facing imagery (logos, banners, hero/carousel,
+     blog covers, product images). Public, CDN-cacheable, stable URLs = fast pages. This is
+     how Wix/Squarespace/Shopify serve site imagery.
+   - **Private storage + short-lived signed URLs** for restricted documents — specifically
+     **newsletter PDFs** (and any future private docs). Served via `createSignedUrl`.
+   - Rationale: match each asset to the correct delivery mechanism. Public-read is the
+     standard for content meant to be displayed; signed URLs are the standard for restricted
+     files. Not the "easy route" — the *correct* route.
+3. **Public page routes — VERIFIED from the file tree** (all fully built, ready for back end):
+   `/` (home), `/menu`, `/loyalty`, `/specials`, `/vendor-delivery`, `/faq`, `/about`,
+   `/locations` (NOTE: **plural** — not "location"), `/price-match`, `/blog`.
+   Legal pages (`/privacy-policy`, `/terms-of-use`, `/consumer-health-data`) + checkout are
+   out of scope for banner editing.
+   Page → Content component map (banners live inside these):
+   - home → `Hero` + `HomeDailyDeals` (locked) + `PromoGrid` (Category banner) + `HomeBrands` (Brand banner)
+   - menu → inline `<section>` + `InteractiveMenuBrowser` (has a `SiteText` header band)
+   - loyalty → `LoyaltySignupForm` (hero image already wired)
+   - specials → `SpecialsContent`
+   - vendor-delivery → `VendorDirectory`
+   - faq → `FaqContent` (static `@/content/faq` today → DB in Slice 5)
+   - about → `AboutContent`
+   - locations → `LocationsContent`
+   - price-match → `PriceMatchContent`
+4. **Homepage section cap: 4 total — CONFIRMED.** The locked daily-special counts as 1, so up
+   to 3 editable banners can be added below it.
