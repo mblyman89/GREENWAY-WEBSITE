@@ -16,6 +16,7 @@ import {
   deletePromotionAction,
 } from "../actions";
 import type { PostStatus } from "@/lib/promotions/types";
+import { isAiConfigured } from "@/lib/promotions/ai-copy";
 
 export const dynamic = "force-dynamic";
 
@@ -79,6 +80,7 @@ export default async function EditPromotionPage({
               promotion={promotion}
               brands={brands}
               submitLabel="Save changes"
+              aiEnabled={isAiConfigured}
             />
           </div>
 

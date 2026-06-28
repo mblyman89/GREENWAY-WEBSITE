@@ -18,17 +18,20 @@ import {
   type Weekday,
 } from "@/lib/promotions/types";
 import { GREENWAY_CATEGORY_VALUES } from "@/lib/promotions/category-values";
+import { PromotionAiCopy } from "@/components/admin/promotions/PromotionAiCopy";
 
 type Props = {
   action: (formData: FormData) => void | Promise<void>;
   promotion?: PromotionWithRules | null;
   brands: string[];
   submitLabel: string;
+  /** Whether the AI copy writer is available (AI_API_KEY present). */
+  aiEnabled?: boolean;
 };
 
 const DISCOUNT_TYPES = Object.keys(DISCOUNT_TYPE_LABELS) as (keyof typeof DISCOUNT_TYPE_LABELS)[];
 
-export function PromotionForm({ action, promotion, brands, submitLabel }: Props) {
+export function PromotionForm({ action, promotion, brands, submitLabel, aiEnabled = false }: Props) {
   const selectedBrands = new Set(
     promotion?.targets.filter((t) => t.scope === "brand").map((t) => t.value ?? "") ?? [],
   );
@@ -86,6 +89,8 @@ export function PromotionForm({ action, promotion, brands, submitLabel }: Props)
             placeholder='e.g. "buy 2+ to save"'
           />
         </label>
+
+        <PromotionAiCopy aiEnabled={aiEnabled} />
       </section>
 
       {/* Discount */}
