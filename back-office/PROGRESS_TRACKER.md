@@ -87,3 +87,38 @@ Goal: make every homepage banner editable, fix the editor's edit-jump, harden th
 - [x] tsc/eslint/build clean (fonts self-hosted at build, no warnings)
 
 OWNER TO-DO after deploy: (1) run migration 0011 in Supabase; (2) open Admin → Content → Home Carousel → "Load starter slides"; (3) the font + carousel + banner blocks seed on the next Site Content visit (default font = System, so no visual change until chosen).
+
+---
+
+## PAGE BUILDER VISION (see ROADMAP_PAGE_BUILDER_VISION.md)
+
+### Slice 1 — 3 bug fixes (PR #65, merged) — migration 0012 applied by owner
+- [x] Media thumbnails: media bucket flipped public + private media-private bucket
+- [x] Homepage Sunday grey cards: HomeDailyDeals fallback pool when no discount
+- [x] Content publish reliability: revalidatePath('/', 'layout') safety net
+
+### Slice 2 — page_sections foundation + Home 2-tab + Pages nav (PR #66, merged) — migration 0013 applied by owner
+- [x] Migration 0013 page_sections (gold-standard carousel pattern, cap 4, RLS)
+- [x] Generic SectionCard banner editor + page-sections-store + per-page actions
+- [x] /admin/pages/[slug] builder; Home gets Carousel | Sections tabs
+- [x] Pages nav group (Home..Price Match); Home Carousel → redirect to new page
+
+### Slice 3 — hotfixes + home banner wiring (PR #67, merged) — NO migration
+- [x] FIX: section save/publish silently failed — SectionCard forms were missing
+      the required page_slug hidden input (actions bounced to /admin/content).
+      Added page_slug to save/publish/delete/move forms.
+- [x] FIX: Sections tab broken banner image — seed used non-existent /brand/*.png;
+      corrected to /home/category-banner.webp + /home/brand-banner.webp; added
+      idempotent healLegacySeedImages() to self-heal already-seeded rows.
+- [x] FIX: Media Library upload "gone" — long Pages group pushed Content group
+      below the fold; moved Content group above Pages.
+- [x] Home Category + Brand banners now driven by getSectionsForRender('home')
+      with content_blocks + hardcoded fallbacks (live look preserved).
+- [x] tsc / eslint / next build all clean.
+- OWNER ACTION: none (no new migration). Already-seeded rows auto-correct on next
+  /admin/pages/home visit.
+
+### Slice 3b — per-page banner seeding/wiring (PLANNED)
+- [ ] Each non-home page's banner is bespoke markup; faithfully seed + wire one
+      page at a time (about, locations, vendors, specials, loyalty, menu, faq,
+      price-match) using PAGE_SECTION_SEEDS + getSectionsForRender(slug).
