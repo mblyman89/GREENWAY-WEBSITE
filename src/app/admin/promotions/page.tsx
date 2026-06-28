@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
 import { listPromotions, detectConflicts } from "@/lib/promotions/promotions-store";
 import { WEEKDAY_LABELS, DISCOUNT_TYPE_LABELS } from "@/lib/promotions/types";
@@ -47,6 +48,24 @@ export default async function PromotionsAdminPage() {
       <AdminPageHeader
         title="Promotions & Specials"
         subtitle="Daily deals, the Thursday brand selector, and clearance — all with a preview-before-publish gate."
+        breadcrumbs={<Breadcrumbs items={[{ label: "Promotions" }]} />}
+        help={
+          <HelpPanel
+            id="promotions"
+            title="How promotions work"
+            steps={[
+              "Create a promotion and pick the products or brands.",
+              "Set the discount and the start/end dates.",
+              "Preview how the sale badge looks on the site.",
+              "Publish — it goes live automatically on the dates you set.",
+            ]}
+          >
+            <p>
+              If two promotions overlap on the same products, you&apos;ll get a
+              friendly warning before publishing so there are no surprises.
+            </p>
+          </HelpPanel>
+        }
         action={
           <Link
             href="/admin/promotions/new"

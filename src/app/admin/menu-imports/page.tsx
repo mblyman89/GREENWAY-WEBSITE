@@ -4,6 +4,7 @@ import { can } from "@/lib/auth/roles";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { StatCard } from "@/components/admin/StatCard";
+import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { listImports, listVersions, getPublishedVersion } from "@/lib/pos/menu-version";
 import { formatDateTime } from "@/lib/pos/format";
 import type { PosImportStatus, MenuVersionStatus } from "@/lib/pos/db-types";
@@ -73,6 +74,26 @@ export default async function MenuImportsPage({
       <AdminPageHeader
         title="Menu Imports"
         subtitle="Upload PRODUCTS.xlsx + INVENTORIES.xlsx, review the staged menu, then publish it live."
+        breadcrumbs={<Breadcrumbs items={[{ label: "Menu Imports" }]} />}
+        help={
+          <HelpPanel
+            id="menu-imports"
+            title="How menu uploads work"
+            steps={[
+              "In your POS, export your PRODUCTS and INVENTORIES lists as spreadsheet files (.xlsx or .csv).",
+              "Upload both files below — we stage them so nothing changes on your site yet.",
+              "Open the staged version and review the changes (new items, price changes, removals).",
+              "Click Publish when it looks right. Your public menu updates with the new items and prices.",
+            ]}
+          >
+            <p>
+              Your menu always comes from your point-of-sale system, so prices
+              and stock stay accurate. If an upload fails, re-export the files
+              straight from your POS (don&apos;t rename a .csv to .xlsx) and try
+              again.
+            </p>
+          </HelpPanel>
+        }
       />
 
       <div className="space-y-8 px-5 py-6 sm:px-8">

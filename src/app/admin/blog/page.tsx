@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
 import { listPosts } from "@/lib/cms/blog-store";
 import { isAiConfigured } from "@/lib/ai/provider";
@@ -54,6 +55,24 @@ export default async function BlogAdminPage({
       <AdminPageHeader
         title="Blog & Newsletter"
         subtitle={`Drafts, scheduling, categories, hero images, SEO${isAiConfigured ? ", and AI-drafted copy" : ""}. Public blog falls back to built-in posts until you publish your own.`}
+        breadcrumbs={<Breadcrumbs items={[{ label: "Blog" }]} />}
+        help={
+          <HelpPanel
+            id="blog"
+            title="How blogging works"
+            steps={[
+              "Start a new post and give it a title.",
+              "Write it yourself, or use the AI helper to draft sections.",
+              "Add a hero image and fill in the SEO fields.",
+              "Save as a draft, preview, then Publish when ready.",
+            ]}
+          >
+            <p>
+              Posts stay drafts until you publish, so you can take your time. The
+              AI helper only writes drafts for you to review and edit.
+            </p>
+          </HelpPanel>
+        }
         action={
           <Link
             href="/admin/blog/new"

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
 import { listVendors, vendorLogoUrls } from "@/lib/vendors/store";
 
@@ -42,6 +43,24 @@ export default async function VendorsPage({
       <AdminPageHeader
         title="Vendors & Brands"
         subtitle="Build out vendor profiles — logo, mission, contact — then publish them to the public vendors page."
+        breadcrumbs={<Breadcrumbs items={[{ label: "Vendors & Brands" }]} />}
+        help={
+          <HelpPanel
+            id="vendors"
+            title="How vendor profiles work"
+            steps={[
+              "Open a vendor or brand.",
+              "Add a logo, short mission, and contact details.",
+              "Preview the public card.",
+              "Publish so it appears on your vendors page.",
+            ]}
+          >
+            <p>
+              Complete profiles make your vendors page look professional. A
+              completeness meter shows what&apos;s still missing for each one.
+            </p>
+          </HelpPanel>
+        }
       />
 
       <div className="space-y-6 px-5 py-6 sm:px-8">

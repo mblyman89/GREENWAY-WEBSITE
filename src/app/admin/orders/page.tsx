@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
 import { formatMinorCurrency } from "@/lib/leafly/format";
 import { listOrders, getOrderStatusCounts } from "@/lib/orders/orders-store";
@@ -84,6 +85,24 @@ export default async function OrdersAdminPage({
       <AdminPageHeader
         title="Orders"
         subtitle="Live pickup orders — acknowledge, prepare, and complete from any device."
+        breadcrumbs={<Breadcrumbs items={[{ label: "Orders" }]} />}
+        help={
+          <HelpPanel
+            id="orders"
+            title="How to handle orders"
+            steps={[
+              "New online orders appear here automatically.",
+              "Open an order to see the items and customer info.",
+              "Move it through the stages as you prepare it.",
+              "Print the ticket if you need a paper copy.",
+            ]}
+          >
+            <p>
+              The big touch-friendly cards work on a phone or tablet at the
+              counter. Each order&apos;s status flow shows exactly where it is.
+            </p>
+          </HelpPanel>
+        }
       />
 
       <div className="px-5 py-6 sm:px-8">

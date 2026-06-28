@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
 import { getPublishedVersion, getVersionItems } from "@/lib/pos/menu-version";
 import { getEnrichmentsForKeys, computeGaps, type GapFlags } from "@/lib/enrichment/store";
@@ -76,6 +77,25 @@ export default async function ProductsPage({
       <AdminPageHeader
         title="Products"
         subtitle={`Enrich the ${gaps.length} products in the live menu — descriptions, images, tags, staff picks${isAiConfigured ? ", and AI-drafted copy" : ""}. Price & stock stay POS-controlled.`}
+        breadcrumbs={<Breadcrumbs items={[{ label: "Products" }]} />}
+        help={
+          <HelpPanel
+            id="products"
+            title="How product enrichment works"
+            steps={[
+              "Products come in automatically from your POS menu upload.",
+              "Open a product to add a photo, description, and tags.",
+              "Use the AI helper to draft a description or alt-text, then edit it.",
+              "Save — the richer info shows on your public product page.",
+            ]}
+          >
+            <p>
+              Your POS only provides names and prices. Everything that makes a
+              product look great online — photos, descriptions, tags — is added
+              here. The AI helper only writes drafts; you always approve.
+            </p>
+          </HelpPanel>
+        }
       />
 
       <div className="space-y-6 px-5 py-6 sm:px-8">

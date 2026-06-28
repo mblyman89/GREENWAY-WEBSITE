@@ -2,6 +2,7 @@ import { requirePermission } from "@/lib/auth/session";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { Breadcrumbs } from "@/components/admin/ux";
 import type { AuditLog } from "@/lib/supabase/types";
 
 export const dynamic = "force-dynamic";
@@ -37,6 +38,7 @@ export default async function AuditLogPage() {
       <AdminPageHeader
         title="Audit Log"
         subtitle="Every write action across the back office is recorded here."
+        breadcrumbs={<Breadcrumbs items={[{ label: "Audit Log" }]} />}
       />
       <div className="px-5 py-6 sm:px-8">
         <div className="overflow-hidden rounded-xl border border-white/10 bg-[#0a0a0a]">
