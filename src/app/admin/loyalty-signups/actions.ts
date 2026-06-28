@@ -6,6 +6,7 @@
  * records an audit log entry.
  */
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import {
@@ -98,4 +99,6 @@ export async function importLegacyLoyaltyAction(): Promise<void> {
   });
 
   revalidatePath("/admin/loyalty-signups");
+  // Surface a clear result so a 0-row import isn't a silent no-op.
+  redirect(`/admin/loyalty-signups?imported=${imported}&found=${legacy.length}`);
 }

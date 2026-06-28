@@ -48,7 +48,7 @@ function formatDate(value: string) {
 export default async function LoyaltySignupReviewPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; q?: string }>;
+  searchParams: Promise<{ status?: string; q?: string; imported?: string; found?: string }>;
 }) {
   await requirePermission("loyalty.view");
   const session = await getStaffSession();
@@ -56,6 +56,8 @@ export default async function LoyaltySignupReviewPage({
   const sp = await searchParams;
   const status = (sp.status as LoyaltyStatus | "all" | undefined) ?? "new";
   const search = sp.q ?? "";
+  const importedCount = sp.imported != null ? Number(sp.imported) : null;
+  const foundCount = sp.found != null ? Number(sp.found) : null;
 
   // ----- Fallback path: Supabase not configured -> read the legacy JSONL -----
   if (!isSupabaseServiceConfigured) {
@@ -161,6 +163,21 @@ export default async function LoyaltySignupReviewPage({
       />
 
       <div className="px-5 py-6 sm:px-8">
+        {importedCount != null && (
+          <div
+            className={`mb-4 rounded-lg border px-4 py-3 text-sm ${
+              foundCount === 0
+                ? "border-white/15 bg-white/5 text-white/70"
+                : "border-[#7ed957]/40 bg-[#7ed957]/10 text-[#7ed957]"
+            }`}
+          >
+            {foundCount === 0
+              ? "Legacy import: the legacy file (storage/loyalty-signups.jsonl) was empty — nothing to import. New signups go straight to this queue."
+              : `Legacy import complete: imported ${importedCount} of ${foundCount} legacy signup${
+                  foundCount === 1 ? "" : "s"
+                } (duplicates skipped automatically).`}
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <StatCard label="New" value={counts.new} accent="gold" hint="Awaiting POS entry" />
           <StatCard label="Entered" value={counts.entered} accent="green" />

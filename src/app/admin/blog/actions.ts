@@ -18,9 +18,11 @@ import type { BlogPostRow } from "@/lib/cms/types";
 import {
   generateBlogBody,
   generateBlogSeo,
+  generateHeroAltText,
   reviewBlogSuggestion,
   getBlogSuggestion,
   parseSeoSuggestion,
+  isAiConfigured,
 } from "@/lib/cms/ai-blog";
 import type { BlogKind } from "@/lib/cms/types";
 import { BLOG_CATEGORIES } from "@/lib/cms/types";
@@ -323,6 +325,46 @@ export async function acceptBlogSuggestionAction(formData: FormData): Promise<vo
 
   revalidatePath(`/admin/blog/${id}`);
   redirect(`/admin/blog/${id}?saved=1`);
+}
+
+/**
+ * Client-callable: suggest hero-image alt text. Returns the suggestion to the
+ * editor (drafts-only) — never writes to the post. The author accepts/edits it
+ * and saves via updatePostAction as normal.
+ */
+export type AltSuggestResult =
+  | { ok: true; value: string; complianceFlags: string[]; model: string }
+  | { ok: false; error: string };
+
+export async function suggestHeroAltAction(
+  postId: string,
+  title: string,
+  category: string,
+): Promise<AltSuggestResult> {
+  const session = await requirePermission("blog.manage");
+  if (!isAiConfigured) {
+    return { ok: false, error: "AI is not configured. Set AI_API_KEY to enable suggestions." };
+  }
+  const cleanTitle = (title ?? "").trim();
+  if (!cleanTitle) return { ok: false, error: "Add a title first so the suggestion has context." };
+
+  try {
+    const { value, complianceFlags, model } = await generateHeroAltText(
+      cleanTitle,
+      (category ?? "").trim() || "CULTURE",
+    );
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "blog.ai.alt_text",
+      entityType: "blog_post",
+      entityId: postId,
+      after: { complianceFlags },
+    });
+    return { ok: true, value, complianceFlags, model };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "AI suggestion failed." };
+  }
 }
 
 export async function rejectBlogSuggestionAction(formData: FormData): Promise<void> {
