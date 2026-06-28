@@ -134,10 +134,12 @@ Each "slice" is independently shippable so the owner can inspect before continui
 
 > **Slice 7 owner manual step:** apply migration `0007_slice7_orders.sql` in Supabase. Until then `/admin/orders` shows a "not configured" notice and checkout falls back to the local confirmation. Optional: set `ORDER_EMAIL_FROM` + `ORDER_STAFF_EMAILS` (+ existing `RESEND_API_KEY`) to turn on order emails.
 
-## SLICE 8 — Loyalty management (Phase 3/5 adjacent)
-- [ ] DB table `loyalty_signups`; migrate from `storage/loyalty-signups.jsonl`.
-- [ ] Admin queue: new signups, mark-entered-into-POS, dedupe by email/phone, consent/signature record, notes, CSV export, search/filter.
-- [ ] **Deliverable PR + owner inspect.**
+## SLICE 8 — Loyalty management (Phase 3/5 adjacent)  *(PR #40)*
+- [x] DB table `loyalty_signups` (migration `0008_slice8_loyalty.sql`; `loyalty_status` + `loyalty_notify_status` enums; `phone_normalized` + `lower(email)` indexes for dedupe; `dedupe_of` self-FK; RLS staff-all + public-insert). Public write path (`signup.ts`) now writes to the DB when configured, with the JSONL append kept as a durable fallback. One-click **Import legacy file** action migrates remaining `storage/loyalty-signups.jsonl` rows (idempotent on `legacy_id`).
+- [x] Admin queue (`/admin/loyalty-signups`): status tabs (new/entered/duplicate/archived/all) + counts, search (name/email/phone), **dedupe flag** ("Possible duplicate" by email/phone), mark-entered (stamps `entered_by`/`entered_at`) / duplicate / archive / reopen, consent + notification-status shown, per-row staff **notes**, and **CSV export** (`/admin/loyalty-signups/export`, honors filters). Audit log on every status/note change + import. Falls back to the JSONL reader when Supabase isn't configured.
+- [x] **Deliverable PR + owner inspect.**
+
+> **Slice 8 owner manual step:** apply migration `0008_slice8_loyalty.sql` in Supabase. Then open `/admin/loyalty-signups` and click **Import legacy file** once to bring any existing JSONL signups into the DB queue (safe to re-run). New signups flow into the queue automatically.
 
 ## SLICE 9 — Reports & analytics (Phase 6)
 - [ ] Import diagnostics report; inventory health (OOS/low/zero-price/no-desc/suspicious potency).

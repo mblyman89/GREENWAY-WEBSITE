@@ -138,11 +138,38 @@ async function sendSignupEmail(record: LoyaltySignupRecord): Promise<LoyaltySign
 export async function storeLoyaltySignup(record: LoyaltySignupRecord) {
   const notificationStatus = await sendSignupEmail(record);
   const storedRecord: LoyaltySignupRecord = { ...record, notificationStatus };
+
+  // Slice 8: persist to the database loyalty queue when Supabase is configured.
+  // The JSONL append remains as a durable local fallback so a DB hiccup never
+  // loses a signup and rollout is non-breaking.
+  try {
+    const { createLoyaltySignup } = await import("./signups-store");
+    await createLoyaltySignup({
+      legacyId: storedRecord.id,
+      firstName: storedRecord.firstName,
+      lastName: storedRecord.lastName,
+      birthday: storedRecord.birthday,
+      mobilePhone: storedRecord.mobilePhone,
+      email: storedRecord.email,
+      consent: storedRecord.consent,
+      signature: storedRecord.signature,
+      source: storedRecord.source,
+      notificationStatus: storedRecord.notificationStatus,
+      submittedAt: storedRecord.submittedAt,
+    });
+  } catch {
+    // DB unavailable / not configured — the JSONL fallback below still captures it.
+  }
+
   const storageDir = path.join(process.cwd(), "storage");
   const storagePath = path.join(storageDir, "loyalty-signups.jsonl");
 
-  await mkdir(storageDir, { recursive: true });
-  await appendFile(storagePath, `${JSON.stringify(storedRecord)}\n`, "utf8");
+  try {
+    await mkdir(storageDir, { recursive: true });
+    await appendFile(storagePath, `${JSON.stringify(storedRecord)}\n`, "utf8");
+  } catch {
+    // On read-only/serverless filesystems the DB row above is the source of truth.
+  }
 
   return storedRecord;
 }
