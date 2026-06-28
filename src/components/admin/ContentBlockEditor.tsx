@@ -16,6 +16,10 @@
 import { useState, useTransition } from "react";
 import { useToast } from "@/components/admin/ux";
 import { suggestContentAction, type AiSuggestResult } from "@/app/admin/content/actions";
+import {
+  ContentRevisionHistory,
+  type RevisionItem,
+} from "@/components/admin/ContentRevisionHistory";
 
 export type EditableBlock = {
   block_key: string;
@@ -35,6 +39,10 @@ type Props = {
   publishAction: (formData: FormData) => void;
   /** Public path to "View on site" (e.g. "/menu"); optional. */
   publicPath?: string | null;
+  /** Past published versions of this block (newest first). */
+  revisions?: RevisionItem[];
+  /** Permission-gated server action to restore a revision into the draft. */
+  restoreAction?: (formData: FormData) => void;
 };
 
 // Soft SEO length windows (chars). Used only for friendly guidance, not blocking.
@@ -51,6 +59,8 @@ export function ContentBlockEditor({
   saveDraftAction,
   publishAction,
   publicPath,
+  revisions = [],
+  restoreAction,
 }: Props) {
   const { toast } = useToast();
   const [value, setValue] = useState(block.draft_value ?? "");
@@ -280,6 +290,16 @@ export function ContentBlockEditor({
         <p className="mt-2 text-xs text-white/35">
           <span className="font-semibold text-white/45">Live:</span> {block.published_value}
         </p>
+      )}
+
+      {restoreAction && (
+        <ContentRevisionHistory
+          blockKey={block.block_key}
+          liveValue={block.published_value ?? ""}
+          draftValue={value}
+          revisions={revisions}
+          restoreAction={restoreAction}
+        />
       )}
     </div>
   );
