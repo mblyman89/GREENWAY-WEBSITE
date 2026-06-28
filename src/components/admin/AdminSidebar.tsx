@@ -40,14 +40,16 @@ export function AdminSidebar({ role, fullName, email }: Props) {
       <aside
         className={`${
           open ? "block" : "hidden"
-        } w-full shrink-0 border-b border-white/10 bg-[#0a0a0a] lg:block lg:h-screen lg:w-64 lg:border-b-0 lg:border-r lg:sticky lg:top-0`}
+        } w-full shrink-0 border-b border-white/10 bg-[#0a0a0a] lg:flex lg:h-screen lg:w-64 lg:flex-col lg:border-b-0 lg:border-r lg:sticky lg:top-0`}
       >
-        <div className="hidden items-center gap-2 border-b border-white/10 px-5 py-5 lg:flex">
+        <div className="hidden shrink-0 items-center gap-2 border-b border-white/10 px-5 py-5 lg:flex">
           <span className="font-[cursive] text-2xl text-[#7ed957]">Greenway</span>
           <span className="text-xs uppercase tracking-widest text-[#ffd700]">Admin</span>
         </div>
 
-        <nav className="flex flex-col gap-4 px-3 py-4">
+        {/* Scrollable nav region — grows/shrinks between header + footer so every
+            group stays reachable no matter how long the menu gets. */}
+        <nav className="flex flex-col gap-4 px-3 py-4 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
           {navGroups.map((group) => {
             const items = visible.filter((i) => i.group === group);
             if (items.length === 0) return null;
@@ -71,7 +73,7 @@ export function AdminSidebar({ role, fullName, email }: Props) {
           })}
         </nav>
 
-        <div className="border-t border-white/10 px-5 py-4 text-xs lg:absolute lg:bottom-0 lg:w-64">
+        <div className="shrink-0 border-t border-white/10 px-5 py-4 text-xs lg:w-64">
           <p className="truncate font-medium text-white">{fullName || email}</p>
           <p className="truncate text-white/40">{email}</p>
           <form action="/admin/logout" method="post" className="mt-2">
