@@ -149,3 +149,12 @@ OWNER TO-DO after deploy: (1) run migration 0011 in Supabase; (2) open Admin →
 - [x] Thumbnail fix confirmed (public bucket from Slice 1 PR #65); detail page shows dimensions.
 - [x] tsc / eslint / build clean.
 - OWNER ACTION: none (no migration).
+
+### Slice 7 — Newsletter Send Center (PR pending) — migration 0016 (apply manually)
+- [x] HYBRID model (owner-approved): design in Canva → upload PDF via Blog & Newsletter (kind=newsletter) → Send Center emails a branded HTML announcement via Resend.
+- [x] Migration 0016 newsletter_sends (campaign record: post_id, subject snapshot, pdf_url, send_kind test|broadcast, status, recipient/delivered/failed counts, sent_by, timestamps; RLS staff-only).
+- [x] newsletter-send-store: listSendableNewsletters (published + has PDF + lastSentAt), getNewsletterRecipients (loyalty_signups w/ email+consent, status new|entered, de-duped), buildNewsletterEmail (brand-token HTML, Read button → public newsletter page + direct PDF link, 21+ footer), sendNewsletter (one private message per recipient, concurrency 5, records outcome), listSendHistory.
+- [x] /admin/newsletter Send Center: picker, audience stat, Test send (single address) → Broadcast (explicit confirm checkbox, "already sent on" guard), flash + send-history table. Env-gated config banner when RESEND not set.
+- [x] Nav: "Newsletter Send" added under Content group.
+- [x] tsc / eslint / build clean.
+- OWNER ACTION: apply migration 0016; set RESEND_API_KEY + NEWSLETTER_FROM_EMAIL (verified Resend sender) once DNS verifies.
