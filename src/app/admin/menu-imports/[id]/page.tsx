@@ -39,15 +39,33 @@ export default async function ImportReviewPage({
   const imp = await getImport(id);
   if (!imp) notFound();
 
-  const [versions, published, diagnostics] = await Promise.all([
-    listVersions(50),
-    getPublishedVersion(),
-    getImportDiagnostics(id, { limit: 2000 }),
-  ]);
+  // All helpers below self-protect (return safe defaults on failure), but we
+  // still guard the orchestration so the review screen never white-screens.
+  let versions: Awaited<ReturnType<typeof listVersions>> = [];
+  let published: Awaited<ReturnType<typeof getPublishedVersion>> = null;
+  let diagnostics: Awaited<ReturnType<typeof getImportDiagnostics>> = [];
+  let diff: Awaited<ReturnType<typeof diffVersions>> | null = null;
+  let items: Awaited<ReturnType<typeof getVersionItems>> = [];
+
+  try {
+    [versions, published, diagnostics] = await Promise.all([
+      listVersions(50),
+      getPublishedVersion(),
+      getImportDiagnostics(id, { limit: 2000 }),
+    ]);
+  } catch (err) {
+    console.error("[menu-imports/:id] load error:", err);
+  }
   const version = versions.find((v) => v.import_id === id) ?? null;
 
   // Diff this staged version against the currently-published one.
-  const diff = version ? await diffVersions(version.id, published?.id ?? null) : null;
+  if (version) {
+    try {
+      diff = await diffVersions(version.id, published?.id ?? null);
+    } catch (err) {
+      console.error("[menu-imports/:id] diff error:", err);
+    }
+  }
 
   // Group diagnostics by severity, then by code (collapse repetitive codes).
   const errors = diagnostics.filter((d) => d.severity === "error");
@@ -57,7 +75,13 @@ export default async function ImportReviewPage({
   const codeSummary = summarizeByCode(diagnostics);
 
   // Hidden items (first 100) for review.
-  const items = version ? await getVersionItems(version.id) : [];
+  if (version) {
+    try {
+      items = await getVersionItems(version.id);
+    } catch (err) {
+      console.error("[menu-imports/:id] items error:", err);
+    }
+  }
   const hiddenItems = items.filter((i) => i.hidden).slice(0, 100);
   const hiddenTotal = items.filter((i) => i.hidden).length;
 

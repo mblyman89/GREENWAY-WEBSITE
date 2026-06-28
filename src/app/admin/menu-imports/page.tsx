@@ -49,11 +49,24 @@ export default async function MenuImportsPage({
     );
   }
 
-  const [published, versions, imports] = await Promise.all([
-    getPublishedVersion(),
-    listVersions(30),
-    listImports(30),
-  ]);
+  // Load page data defensively. Each helper already returns safe defaults on
+  // failure, but we wrap the whole load so a single unexpected throw renders a
+  // friendly diagnostic card instead of the full-page "did not load" error.
+  let published: Awaited<ReturnType<typeof getPublishedVersion>> = null;
+  let versions: Awaited<ReturnType<typeof listVersions>> = [];
+  let imports: Awaited<ReturnType<typeof listImports>> = [];
+  let loadError: string | null = null;
+
+  try {
+    [published, versions, imports] = await Promise.all([
+      getPublishedVersion(),
+      listVersions(30),
+      listImports(30),
+    ]);
+  } catch (err) {
+    loadError = err instanceof Error ? err.message : "Could not load menu data.";
+    console.error("[menu-imports] page load error:", err);
+  }
 
   return (
     <div>
@@ -63,6 +76,15 @@ export default async function MenuImportsPage({
       />
 
       <div className="space-y-8 px-5 py-6 sm:px-8">
+        {loadError && (
+          <div className="rounded-xl border border-[#ffd700]/30 bg-[#ffd700]/5 p-5 text-sm text-[#ffd700]">
+            <p className="font-semibold">We couldn&apos;t load your existing menu history just now.</p>
+            <p className="mt-1 text-[#ffd700]/80">
+              This is usually a brief connection hiccup — your data is safe. You can still upload below,
+              or reload the page in a moment. (Technical detail: {loadError})
+            </p>
+          </div>
+        )}
         {params.error && (
           <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
             {decodeURIComponent(params.error)}
@@ -160,11 +182,11 @@ export default async function MenuImportsPage({
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className={`rounded px-2 py-0.5 text-[10px] font-semibold uppercase ${IMPORT_STATUS_STYLE[imp.status]}`}>
+                    <span className={`rounded px-2 py-0.5 text-[10px] font-semibold uppercase ${IMPORT_STATUS_STYLE[imp.status] ?? "bg-white/10 text-white/70"}`}>
                       {imp.status}
                     </span>
                     {version && (
-                      <span className={`rounded px-2 py-0.5 text-[10px] font-semibold uppercase ${VERSION_STATUS_STYLE[version.status]}`}>
+                      <span className={`rounded px-2 py-0.5 text-[10px] font-semibold uppercase ${VERSION_STATUS_STYLE[version.status] ?? "bg-white/10 text-white/50"}`}>
                         v: {version.status}
                       </span>
                     )}
