@@ -20,13 +20,16 @@ Standing rule: re-read roadmap/checklists + walk file tree each session. AI outp
 - [x] tsc clean + eslint clean + build clean (~2374 pages)
 - [ ] PR; update tracker
 
-## SLICE B — Full carousel management (add/edit/delete slides, max 6)
-- [ ] Re-read roadmap (standing rule)
-- [ ] Migration 0011: `home_carousel_slides` table (or JSON content block) — image, eyebrow, title, subtitle, ctas[], sort_order, enabled (+RLS, public read)
-- [ ] Carousel manager UI: add slide, edit each (image+text+2 CTAs), reorder (up/down), enable/disable, delete; cap 6
-- [ ] Migrate existing 3 hardcoded slides as seed
-- [ ] Hero.tsx reads slides from DB (draft-aware); fallback to seed if empty
-- [ ] tsc + eslint + build clean; PR; update tracker
+## SLICE B — Full carousel management (add/edit/delete slides, max 6) — ✅ DONE (PR pending)
+- [x] Re-read roadmap (standing rule)
+- [x] Migration 0011: `home_carousel_slides` table — image, eyebrow, title, description, ctas[] (jsonb), image_focus, text_align, sort_order, enabled + draft_* mirror columns, status (+RLS, public read published+enabled)
+- [x] Carousel store (draft-aware getCarouselForRender + CRUD + reorder + lazy seed) + actions
+- [x] Carousel manager UI (/admin/content/carousel): add slide, edit each (image picker + eyebrow/title/desc + layout + 2 CTAs), reorder (↑/↓), enable/disable, delete, Save draft / Publish; cap 6; unsaved-edits guard + dirty badges
+- [x] Nav entry "Home Carousel" under Content
+- [x] Existing 3 slides as seed (CAROUSEL_SEEDS) + fallback so hero never blanks
+- [x] Hero.tsx reads slides from DB (draft-aware); removed orphaned home.hero.* blocks from seed
+- [x] tsc + eslint + build clean (route /admin/content/carousel compiled)
+- [ ] PR; update tracker
 
 ## SLICE C — Font library + font picker
 - [ ] Re-read roadmap (standing rule)
