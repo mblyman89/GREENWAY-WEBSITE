@@ -189,14 +189,17 @@ export async function researchVendorAction(formData: FormData): Promise<void> {
   const instruction = orNull(formData.get("instruction"));
 
   try {
-    const draft = await generateVendorProfile({
-      kind: "vendor",
-      displayName: vendor.display_name,
-      currentMission: vendor.mission_statement,
-      currentAbout: vendor.about,
-      website: vendor.website,
-      instruction,
-    });
+    const draft = await generateVendorProfile(
+      {
+        kind: "vendor",
+        displayName: vendor.display_name,
+        currentMission: vendor.mission_statement,
+        currentAbout: vendor.about,
+        website: vendor.website,
+        instruction,
+      },
+      { entityId: id, actorId: session.userId, actorEmail: session.email },
+    );
 
     if (draft.mission) {
       await persistSuggestion({
@@ -326,15 +329,18 @@ export async function researchBrandAction(formData: FormData): Promise<void> {
   const instruction = orNull(formData.get("instruction"));
 
   try {
-    const draft = await generateVendorProfile({
-      kind: "brand",
-      displayName: brand!.display_name,
-      currentMission: brand!.mission_statement,
-      currentAbout: brand!.about,
-      currentPhilosophy: brand!.product_philosophy,
-      website: brand!.website,
-      instruction,
-    });
+    const draft = await generateVendorProfile(
+      {
+        kind: "brand",
+        displayName: brand!.display_name,
+        currentMission: brand!.mission_statement,
+        currentAbout: brand!.about,
+        currentPhilosophy: brand!.product_philosophy,
+        website: brand!.website,
+        instruction,
+      },
+      { entityId: brandId, actorId: session.userId, actorEmail: session.email },
+    );
 
     const toPersist: { field: string; value: string }[] = [];
     if (draft.mission) toPersist.push({ field: "mission_statement", value: draft.mission });
