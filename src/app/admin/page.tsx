@@ -139,6 +139,12 @@ function GettingStarted({
         </div>
         <div className="text-right">
           <span className="text-2xl font-semibold text-[#7ed957]">{pct}%</span>
+          <Link
+            href="/admin/getting-started"
+            className="mt-1 block text-xs font-semibold text-[#7ed957] hover:underline"
+          >
+            Open full walkthrough →
+          </Link>
         </div>
       </div>
 

@@ -184,6 +184,105 @@ export async function getSetupStatus(): Promise<SetupStatus> {
 }
 
 /**
+ * Rich, plain-language guidance for each setup step — used by the dedicated
+ * Getting Started wizard (/admin/getting-started). Keyed by the same check id
+ * as getSetupStatus().checks so the wizard can pair live status with how-to.
+ */
+export type SetupGuide = {
+  /** Big-picture "why this matters" sentence. */
+  why: string;
+  /** Step-by-step instructions, written for a non-technical owner. */
+  how: string[];
+  /** Rough time to complete. */
+  time: string;
+  /** Primary call-to-action label + where it goes (when applicable). */
+  ctaLabel?: string;
+  ctaHref?: string;
+  /** Optional secondary tip. */
+  tip?: string;
+};
+
+export const SETUP_GUIDE: Record<string, SetupGuide> = {
+  supabase: {
+    why: "Supabase is the secure database that stores your menu, orders, customers, and content. Nothing in the back office works until it's connected.",
+    how: [
+      "Create a free project at supabase.com.",
+      "Open Settings → API and copy the Project URL and the two keys (anon + service role).",
+      "Paste them into your hosting environment variables: NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY.",
+      "Set ADMIN_BOOTSTRAP_EMAILS to your email so your first login becomes the Owner.",
+      "Redeploy the site.",
+    ],
+    time: "~10 minutes",
+    tip: "Keep the service-role key secret — it bypasses all security rules and should only ever live in server environment variables.",
+  },
+  migrations: {
+    why: "The database needs its tables created before you can import a menu or take orders. This is a one-time setup that runs a set of prepared SQL files.",
+    how: [
+      "Open your Supabase project → SQL Editor.",
+      "Open each file in supabase/migrations/ in order (0001, 0002, … through the newest).",
+      "Paste each file's contents and click Run. Run them in number order.",
+      "Don't skip the newest one (0009_ai_usage_ledger.sql) — it powers the AI Usage dashboard.",
+      "When all have run with no errors, this step turns green automatically.",
+    ],
+    time: "~10 minutes",
+    ctaLabel: "Go to Menu Imports",
+    ctaHref: "/admin/menu-imports",
+    tip: "Running a migration twice is safe — they're written to skip anything that already exists.",
+  },
+  import: {
+    why: "Your live product menu comes straight from your POS export. Upload it here and the back office stages it for review before anything goes public.",
+    how: [
+      "In your POS, export the PRODUCTS and INVENTORIES spreadsheets (CSV or Excel).",
+      "Open Menu Imports and upload both files.",
+      "The system matches and stages them into a draft menu version for you to review.",
+      "Nothing is public yet — that happens at the Publish step.",
+    ],
+    time: "~5 minutes",
+    ctaLabel: "Upload your menu",
+    ctaHref: "/admin/menu-imports",
+    tip: "Re-upload anytime your POS changes — each upload creates a new staged version you can review before publishing.",
+  },
+  publish: {
+    why: "Publishing takes your reviewed, staged menu and makes it live on the public website. Until you publish, customers won't see products.",
+    how: [
+      "Open Menu Imports and review the staged version's product counts and any warnings.",
+      "Spot-check a few products look right (names, categories, prices).",
+      "Click Publish to push it live.",
+      "Visit the public /menu page to confirm it looks great.",
+    ],
+    time: "~5 minutes",
+    ctaLabel: "Review & publish",
+    ctaHref: "/admin/menu-imports",
+    tip: "You can always roll back to a previous published version if something looks off.",
+  },
+  smtp: {
+    why: "Email sending powers teammate invites and order/loyalty notifications. Without it, those messages may not arrive reliably.",
+    how: [
+      "Create a free account at resend.com.",
+      "Verify your sending domain (greenwaymarijuana.com) in Resend.",
+      "Create an API key and add it to your environment as RESEND_API_KEY.",
+      "Optionally set up the orders@ and loyalty@ aliases so notifications come from a friendly address.",
+      "Redeploy, then send yourself a test invite from Users.",
+    ],
+    time: "~15 minutes",
+    tip: "If you previously shared a Resend key in chat, rotate it (create a new one and delete the old) before going live.",
+  },
+  team: {
+    why: "Invite your staff so the right people can manage the menu, content, and orders — each with a role that limits what they can change.",
+    how: [
+      "Open Users and click to invite a teammate by email.",
+      "Pick a role: Manager (most things), Content/Editor (content only), or Read-only (view).",
+      "They'll get an email invite to set their password and sign in.",
+      "You can change or remove roles anytime.",
+    ],
+    time: "~3 minutes",
+    ctaLabel: "Invite your team",
+    ctaHref: "/admin/users",
+    tip: "Start least-privilege: give the smallest role that lets someone do their job, then expand if needed.",
+  },
+};
+
+/**
  * Build-progress slices. Marked done as each ships. Keep this as the single
  * source for the dashboard's progress section (no scattered hardcoding).
  */

@@ -12,6 +12,7 @@ export type AdminNavItem = {
 
 export const adminNav: AdminNavItem[] = [
   { label: "Dashboard", href: "/admin", permission: "dashboard.view", icon: "▦", group: "Operations" },
+  { label: "Getting Started", href: "/admin/getting-started", permission: "dashboard.view", icon: "🚀", group: "Operations" },
   { label: "Menu Imports", href: "/admin/menu-imports", permission: "menu.import", icon: "⬆", group: "Operations" },
   { label: "Orders", href: "/admin/orders", permission: "orders.view", icon: "🧾", group: "Operations" },
   { label: "Loyalty", href: "/admin/loyalty-signups", permission: "loyalty.view", icon: "★", group: "Operations" },
