@@ -47,11 +47,11 @@
 - [x] `tsc` + `build` clean. **PR #46 — `tsc --noEmit` EXIT 0; `next build` "Compiled successfully in 10.0s", `/admin/help` generated. Owner inspect.**
 
 ## UX-2 — Live preview engine
-- [ ] Implement Next.js **Draft Mode** enable/disable routes (`/api/admin/preview/...`).
-- [ ] `PreviewFrame` component (iframe of public page in draft perspective, with device-size toggles desktop/tablet/mobile).
-- [ ] Click-to-edit overlay system for controlled content blocks (data-attribute → deep-link to field editor). Start with seeded blocks (home hero, menu hero, loyalty hero, footer warning, business hours).
-- [ ] Wire live preview into Content editor (`/admin/content`) + SEO editor first.
-- [ ] `tsc` + `build` clean. **PR + owner inspect.**
+- [x] Implement Next.js **Draft Mode** enable/disable routes (`/api/admin/preview/enable|disable`). Enable is staff-gated; both validate same-site redirect paths (no open redirect). *(PR #47)*
+- [x] `PreviewFrame` component — iframe of the public page in draft perspective, device-size toggles (desktop/tablet/phone), refresh, open-in-tab, listens for edit messages. *(PR #47)*
+- [x] Click-to-edit overlay system: `<SiteText>` tags blocks with `data-gw-block` in preview; `PreviewEditOverlay` (mounted on public site only in Draft Mode) draws "✎ Edit" hotspots + a preview banner, postMessages the block key to the admin frame. Proof-of-concept wired on the **footer compliance warning** (a real seeded block; Footer made async). *(PR #47)*
+- [x] Wire live preview into Content editor (`/admin/content`): `ContentPreviewPanel` hosts the frame with a page selector; clicking a hotspot scrolls to + focuses that block's form (anchor `block-<key>`). *(PR #47.)* Remaining seeded blocks (home/menu/loyalty heros, business hours) adopt `<SiteText>` as their public surfaces are visually reworked in UX-3. SEO editor live-preview also folds into UX-3's visual-content pass.
+- [x] `tsc` + `build` clean. **PR #47 — `tsc --noEmit` EXIT 0; `next build` "Compiled successfully in 10.2s", preview API routes present, public pages still static. Owner inspect.**
 
 ## UX-3 — Visual content & blog editing
 - [ ] Blog editor: side-by-side `PreviewFrame`, click-to-edit, AI "Write post/section/SEO" with Accept/Edit/Reject diff + compliance flags, image picker w/ thumbnails + AI alt-text.
