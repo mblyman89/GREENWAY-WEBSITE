@@ -21,6 +21,8 @@ export type CompletedOrderLine = {
 
 export type CompletedOrder = {
   orderNumber: string;
+  /** Private token to look the order up from the server (Slice 7). */
+  publicToken?: string;
   placedAt: string;
   customerFirstName: string;
   lines: CompletedOrderLine[];
