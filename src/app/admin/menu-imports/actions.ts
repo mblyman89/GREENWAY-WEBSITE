@@ -22,6 +22,9 @@ function looksLikeXlsx(file: File): boolean {
 export async function uploadAndStageImport(formData: FormData): Promise<void> {
   const session = await requirePermission("menu.import");
 
+  // Validate inputs. These redirect() calls throw NEXT_REDIRECT internally,
+  // which is expected control flow — they are intentionally outside the
+  // try/catch below so Next.js can perform the redirect.
   const productsFile = formData.get("products");
   const inventoriesFile = formData.get("inventories");
 
@@ -29,24 +32,27 @@ export async function uploadAndStageImport(formData: FormData): Promise<void> {
     redirect("/admin/menu-imports?error=" + encodeURIComponent("Both PRODUCTS and INVENTORIES files are required."));
   }
   if (productsFile.size === 0 || inventoriesFile.size === 0) {
-    redirect("/admin/menu-imports?error=" + encodeURIComponent("One of the uploaded files is empty."));
+    redirect("/admin/menu-imports?error=" + encodeURIComponent("One of the uploaded files is empty. Re-export from your POS and try again."));
   }
   if (productsFile.size > MAX_BYTES || inventoriesFile.size > MAX_BYTES) {
     redirect("/admin/menu-imports?error=" + encodeURIComponent("A file exceeds the 25 MB limit."));
   }
   if (!looksLikeXlsx(productsFile) || !looksLikeXlsx(inventoriesFile)) {
-    redirect("/admin/menu-imports?error=" + encodeURIComponent("Both files must be .xlsx spreadsheets."));
+    redirect("/admin/menu-imports?error=" + encodeURIComponent("Both files must be .xlsx spreadsheets. (Tip: don't rename a .csv to .xlsx — export the real Excel file.)"));
   }
 
-  const productsBuffer = Buffer.from(await productsFile.arrayBuffer());
-  const inventoriesBuffer = Buffer.from(await inventoriesFile.arrayBuffer());
-
-  // Friendly guard: if these exact two files were already imported, warn but
-  // allow re-import (POS can re-export identical files; the manager decides).
-  const dup = await findDuplicateImport(sha256(productsBuffer), sha256(inventoriesBuffer));
-
+  // Everything from reading the buffers onward is wrapped so ANY failure
+  // surfaces as a friendly message on the imports page rather than the
+  // full-page "did not load correctly" error screen.
   let importId: string;
   try {
+    const productsBuffer = Buffer.from(await productsFile.arrayBuffer());
+    const inventoriesBuffer = Buffer.from(await inventoriesFile.arrayBuffer());
+
+    // Friendly guard: if these exact two files were already imported, warn but
+    // allow re-import (POS can re-export identical files; the manager decides).
+    const dup = await findDuplicateImport(sha256(productsBuffer), sha256(inventoriesBuffer));
+
     const result = await runImport({
       productsBuffer,
       inventoriesBuffer,
@@ -72,7 +78,8 @@ export async function uploadAndStageImport(formData: FormData): Promise<void> {
       },
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Import failed.";
+    const message = err instanceof Error ? err.message : "Import failed. Please re-check your files and try again.";
+    console.error("[menu-imports] upload/stage failed:", err);
     redirect("/admin/menu-imports?error=" + encodeURIComponent(message));
   }
 
