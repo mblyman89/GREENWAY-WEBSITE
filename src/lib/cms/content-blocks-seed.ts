@@ -26,6 +26,27 @@ export type ContentBlockSeed = {
 };
 
 export const CONTENT_BLOCK_SEEDS: ContentBlockSeed[] = [
+  // ---- Site-wide typography ------------------------------------------------
+  {
+    block_key: "site.font.heading",
+    page: "business",
+    section: "typography",
+    label: "Heading font (titles & headlines)",
+    help_text:
+      "The font used for big titles and headlines across the whole site. Pick from the curated library — changes apply everywhere once published.",
+    field_type: "font",
+    defaultValue: "system",
+  },
+  {
+    block_key: "site.font.body",
+    page: "business",
+    section: "typography",
+    label: "Body font (paragraphs & general text)",
+    help_text:
+      "The font used for regular paragraph and interface text across the whole site. Pick from the curated library.",
+    field_type: "font",
+    defaultValue: "system",
+  },
   // ---- Home ----------------------------------------------------------------
   // NOTE: The homepage hero carousel (first banner + its slides) is managed in
   // Admin → Content → Home Carousel (table home_carousel_slides), NOT here, so

@@ -7,6 +7,13 @@ import { CartProvider } from "@/components/cart/CartProvider";
 import { ScrollToTopButton } from "@/components/site/ScrollToTopButton";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { SITE_NAME, SITE_URL, DEFAULT_OG_IMAGE, organizationSchema, websiteSchema, storeSchema } from "@/lib/seo/seo";
+import { getContentValues } from "@/lib/cms/render-content";
+import { fontVariablesClassName } from "@/lib/cms/fonts-loader";
+import {
+  fontStack,
+  DEFAULT_HEADING_FONT_ID,
+  DEFAULT_BODY_FONT_ID,
+} from "@/lib/cms/fonts";
 import "./globals.css";
 
 const ogImageUrl = `${SITE_URL}${DEFAULT_OG_IMAGE}`;
@@ -67,8 +74,30 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
     isPreview = false;
   }
 
+  // Site-wide typography: staff pick heading + body fonts from the curated
+  // library in Admin → Site Content. Resolve them (draft-aware) to CSS font
+  // stacks and bind them to --font-heading / --font-body for globals.css.
+  const fonts = await getContentValues([
+    "site.font.heading",
+    "site.font.body",
+  ]);
+  const headingStack = fontStack(
+    fonts["site.font.heading"],
+    DEFAULT_HEADING_FONT_ID,
+  );
+  const bodyStack = fontStack(fonts["site.font.body"], DEFAULT_BODY_FONT_ID);
+
   return (
-    <html lang="en">
+    <html
+      lang="en"
+      className={fontVariablesClassName}
+      style={
+        {
+          "--font-heading": headingStack,
+          "--font-body": bodyStack,
+        } as React.CSSProperties
+      }
+    >
       <body>
         <JsonLd data={[organizationSchema(), websiteSchema(), storeSchema()]} id="site" />
         <CartProvider>{children}</CartProvider>
