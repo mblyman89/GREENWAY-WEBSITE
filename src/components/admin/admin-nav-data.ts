@@ -29,6 +29,7 @@ export const adminNav: AdminNavItem[] = [
   { label: "Users", href: "/admin/users", permission: "users.manage", icon: "👥", group: "Admin" },
   { label: "Settings", href: "/admin/settings", permission: "settings.manage", icon: "⚙", group: "Admin", comingSoon: true },
   { label: "Audit Log", href: "/admin/audit", permission: "users.manage", icon: "⧗", group: "Admin" },
+  { label: "Help & FAQ", href: "/admin/help", permission: "dashboard.view", icon: "?", group: "Admin" },
 ];
 
 export const navGroups: AdminNavItem["group"][] = [

@@ -4,6 +4,7 @@ import { can } from "@/lib/auth/roles";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { StatCard } from "@/components/admin/StatCard";
+import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { readLoyaltySignups } from "@/lib/loyalty/store";
 import {
   listLoyaltySignups,
@@ -118,6 +119,24 @@ export default async function LoyaltySignupReviewPage({
       <AdminPageHeader
         title="Loyalty Signups"
         subtitle="Database-backed queue — dedupe, mark-as-entered, notes, and CSV export."
+        breadcrumbs={<Breadcrumbs items={[{ label: "Loyalty" }]} />}
+        help={
+          <HelpPanel
+            id="loyalty"
+            title="How loyalty signups work"
+            steps={[
+              "Customers who sign up on your site appear in this queue.",
+              "Review each one and add them to your POS loyalty program.",
+              "Mark them as entered so you don't double-enter.",
+              "Export the list as a CSV any time.",
+            ]}
+          >
+            <p>
+              We flag likely duplicates so you don&apos;t add the same person
+              twice. Add a note on any signup that needs follow-up.
+            </p>
+          </HelpPanel>
+        }
         action={
           <div className="flex items-center gap-2">
             <a

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
 import { formatMinorCurrency } from "@/lib/leafly/format";
 import { BarList, DayBarChart, StatusBar, REPORT_COLORS } from "@/components/admin/reports/Charts";
@@ -75,6 +76,24 @@ export default async function ReportsPage({
       <AdminPageHeader
         title="Reports & Analytics"
         subtitle="Sales, loyalty, inventory health, and promotions."
+        breadcrumbs={<Breadcrumbs items={[{ label: "Reports" }]} />}
+        help={
+          <HelpPanel
+            id="reports"
+            title="How to read your reports"
+            steps={[
+              "Pick a date range at the top.",
+              "Charts show inventory health, loyalty, and sales-style summaries.",
+              "Hover any chart to see exact numbers.",
+              "Use Export to download the data as a CSV for spreadsheets.",
+            ]}
+          >
+            <p>
+              These charts update from your live menu and orders. If a chart is
+              empty, you likely just need to publish a menu or wait for activity.
+            </p>
+          </HelpPanel>
+        }
         action={
           <a
             href={`/admin/reports/export?range=${days}`}

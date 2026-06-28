@@ -3,6 +3,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { ALL_ROLES, ROLE_LABELS, ROLE_DESCRIPTIONS } from "@/lib/auth/roles";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import type { StaffProfile } from "@/lib/supabase/types";
 import { updateUserRole, setUserActive, inviteUser } from "./actions";
 
@@ -27,6 +28,24 @@ export default async function UsersPage() {
       <AdminPageHeader
         title="Staff Users"
         subtitle="Invite employees and control their roles. The last owner is protected from lockout."
+        breadcrumbs={<Breadcrumbs items={[{ label: "Users" }]} />}
+        help={
+          <HelpPanel
+            id="users"
+            title="How team access works"
+            steps={[
+              "Enter a teammate's email and choose their role.",
+              "Send the invite — they get an email to set a password.",
+              "Roles control what each person can see and change.",
+              "Change or remove access any time from this page.",
+            ]}
+          >
+            <p>
+              Give people the lowest role that still lets them do their job. The
+              last owner account is protected so you can never lock yourself out.
+            </p>
+          </HelpPanel>
+        }
       />
 
       <div className="space-y-8 px-5 py-6 sm:px-8">

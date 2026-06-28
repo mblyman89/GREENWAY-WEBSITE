@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { listContentBlocks } from "@/lib/cms/content-store";
 import { CONTENT_BLOCK_SEEDS } from "@/lib/cms/content-blocks-seed";
 import {
@@ -45,6 +46,24 @@ export default async function SiteContentPage({
       <AdminPageHeader
         title="Site Content"
         subtitle={`Controlled text blocks for ${CONTENT_BLOCK_SEEDS.length} approved slots. Edit a draft, then Publish to push it live. This is intentionally not a free-form page builder.`}
+        breadcrumbs={<Breadcrumbs items={[{ label: "Site Content" }]} />}
+        help={
+          <HelpPanel
+            id="content"
+            title="How to edit your site text"
+            steps={[
+              "Pick the text block you want to change (e.g. homepage headline).",
+              "Edit the draft — your changes don't go live yet.",
+              "Preview how it will look.",
+              "Click Publish to update the public site.",
+            ]}
+          >
+            <p>
+              You can only edit specific approved spots, which keeps your site
+              looking right. There&apos;s no way to accidentally break the layout.
+            </p>
+          </HelpPanel>
+        }
         action={
           <Link href="/admin/content/seo" className="rounded-lg border border-white/15 px-4 py-2 text-sm font-bold text-white/80 hover:bg-white/10">
             SEO editor →

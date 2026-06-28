@@ -38,13 +38,13 @@
 - [x] `tsc` + `build` clean. **PR #45 — `tsc --noEmit` EXIT 0; `next build` "Compiled successfully in 9.7s", 2374 pages. Owner inspect.**
 
 ## UX-1 — Global shell & wayfinding
-- [ ] Sidebar: current-section highlight + icons + grouped sections; mobile drawer.
-- [ ] `AdminPageHeader`: add optional help toggle (mounts `HelpPanel`) + breadcrumbs slot.
-- [ ] Apply `HelpPanel` + tooltips to each section's main page.
-- [ ] `/admin/help` page: searchable FAQ per section (mirrors `BACK_OFFICE_USER_GUIDE.md`).
-- [ ] Global "?" help launcher in the shell.
-- [ ] Mobile-responsive pass on shell + tables (counter staff on phones).
-- [ ] `tsc` + `build` clean. **PR + owner inspect.**
+- [x] Sidebar: current-section highlight + icons + grouped sections; mobile drawer. *(Already in `AdminSidebar`/`admin-nav-data`; added a "Help & FAQ" nav item, visible to all roles via `dashboard.view`. PR #46.)*
+- [x] `AdminPageHeader`: optional `help` slot (mounts `HelpPanel`) + `breadcrumbs` slot. *(PR #46 — rewrote header with both slots.)*
+- [x] Apply `HelpPanel` + breadcrumbs to each section's main page. *(PR #46 — menu-imports, products, promotions, reports, orders, blog, content, vendors, media, loyalty-signups, users; audit gets breadcrumbs.)*
+- [x] `/admin/help` page: searchable FAQ per section. *(PR #46 — `src/app/admin/help/page.tsx` + `HelpSearch` client UI, content in `src/lib/admin/help-content.ts`. Live full-text search across every Q&A.)*
+- [x] Global "?" help launcher in the shell. *(PR #46 — `HelpLauncher` floating button (bottom-left) + slide-over quick search, mounted in `layout.tsx`.)*
+- [x] Mobile-responsive pass on shell + headers (sidebar drawer already responsive; headers/help stack on small screens). *(PR #46. Deeper table responsiveness continues in later visual slices.)*
+- [x] `tsc` + `build` clean. **PR #46 — `tsc --noEmit` EXIT 0; `next build` "Compiled successfully in 10.0s", `/admin/help` generated. Owner inspect.**
 
 ## UX-2 — Live preview engine
 - [ ] Implement Next.js **Draft Mode** enable/disable routes (`/api/admin/preview/...`).

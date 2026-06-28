@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
 import { listMedia, countMedia, publicUrlForKey } from "@/lib/media/store";
 import type { MediaAsset } from "@/lib/supabase/types";
@@ -60,6 +61,24 @@ export default async function MediaPage({
       <AdminPageHeader
         title="Media Library"
         subtitle="One home for every logo, banner, and image. Upload, tag, and publish — published assets serve publicly."
+        breadcrumbs={<Breadcrumbs items={[{ label: "Media Library" }]} />}
+        help={
+          <HelpPanel
+            id="media"
+            title="How the media library works"
+            steps={[
+              "Upload images (logos, banners, product photos).",
+              "Add a short tag or description so they're easy to find.",
+              "Publish an image to use it on the public site.",
+              "Reuse the same image anywhere — no need to upload twice.",
+            ]}
+          >
+            <p>
+              Keeping images here means you upload once and reuse everywhere.
+              Before deleting an image, we&apos;ll warn you if it&apos;s in use.
+            </p>
+          </HelpPanel>
+        }
       />
 
       <div className="space-y-6 px-5 py-6 sm:px-8">

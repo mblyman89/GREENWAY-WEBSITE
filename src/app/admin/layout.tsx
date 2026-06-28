@@ -4,6 +4,7 @@ import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { AdminSidebar } from "@/components/admin/AdminSidebar";
 import { AdminSetupNotice } from "@/components/admin/AdminSetupNotice";
 import { ToastProvider } from "@/components/admin/ux";
+import { HelpLauncher } from "@/components/admin/HelpLauncher";
 
 // Admin must never be indexed.
 export const metadata: Metadata = {
@@ -44,6 +45,7 @@ export default async function AdminLayout({
       <main className="min-w-0 flex-1">
         <ToastProvider>{children}</ToastProvider>
       </main>
+      <HelpLauncher />
     </div>
   );
 }
