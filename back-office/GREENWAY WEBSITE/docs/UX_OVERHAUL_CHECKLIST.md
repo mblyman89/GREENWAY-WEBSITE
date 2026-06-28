@@ -59,9 +59,11 @@
 - [x] `tsc` + `build` clean (PR #49: tsc exit 0; `next build` ✓ Compiled successfully, 2374/2374 pages). **PR + owner inspect.**
 
 ## UX-4 — Visual product & media enrichment (AI-heavy)
-- [ ] Products: thumbnail grid, gap charts, live product-card preview, AI description/tags/alt-text front-and-center, **bulk AI review grid**.
-- [ ] Media: drag-drop dropzone, visual grid, AI alt-text, where-used visual, safe-delete confirm.
-- [ ] `tsc` + `build` clean. **PR + owner inspect.**
+- [x] Products: **visual thumbnail grid** (default) with per-card gap badges (Photo/Copy/Brand) + status pill + thumbnail (batch-resolved via new `resolveMediaUrls`), Grid/Table toggle (table kept for power users), stat cards + filters retained. *(PR #51.)*
+- [x] **Bulk AI review grid** (`/admin/products/bulk-ai`): pre-lists products missing descriptions, select + "✨ Draft selected (up to 25)" generates compliant drafts (drafts-only, persisted as pending `ai_suggestions`), review grid with compliance flags + Accept/Reject per product; audited `product.bulk_ai_generated/accepted`. New helper `listPendingByType`. *(PR #51.)*
+- [x] Media: **drag-drop dropzone** (`MediaDropzone`, with thumbnail previews before upload, wraps existing `uploadMediaAction`); visual grid + where-used + safe-delete already existed and retained; **✨ Suggest alt text** AI on the media detail page (`MediaAltField` + `suggestMediaAltAction`, context-based drafts-only, audited `media.ai_alt_text`). *(PR #51.)*
+- [x] `tsc` + `build` clean (tsc exit 0; build ✓ 2374 static pages + new dynamic `/admin/products/bulk-ai`). **PR + owner inspect.**
+- NOTE (handoff): media AI alt-text is **context-based** (title/filename/usage/tags), not image vision — honest starting point the human edits. A future enhancement could add a vision model for true image-aware alt text (see UX-7 / roadmap).
 
 ## UX-5 — Visual vendors/brands + promotions
 - [ ] Vendors/Brands: logo thumbnails, completeness meter, live public-card preview, "Research with AI" enqueue button.

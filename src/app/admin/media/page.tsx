@@ -6,6 +6,7 @@ import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
 import { listMedia, countMedia, publicUrlForKey } from "@/lib/media/store";
 import type { MediaAsset } from "@/lib/supabase/types";
+import { MediaDropzone } from "@/components/admin/media/MediaDropzone";
 import { uploadMediaAction } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -100,71 +101,8 @@ export default async function MediaPage({
           <StatCard label="Drafts" value={counts.total - counts.published} accent="orange" />
         </div>
 
-        {/* Upload */}
-        <form
-          action={uploadMediaAction}
-          encType="multipart/form-data"
-          className="space-y-4 rounded-xl border border-white/10 bg-[#0a0a0a] p-5"
-        >
-          <p className="text-sm font-semibold text-white">Upload media</p>
-          <input
-            type="file"
-            name="files"
-            multiple
-            accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml,application/pdf"
-            className="block w-full text-sm text-white/70 file:mr-3 file:rounded-lg file:border-0 file:bg-[#7ed957] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-black hover:file:bg-[#6cc746]"
-          />
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <label className="block">
-              <span className="mb-1 block text-xs font-medium text-white/50">Usage type</span>
-              <select
-                name="usage_type"
-                className="w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#7ed957]"
-              >
-                <option value="">— none —</option>
-                {USAGE_TYPES.map((u) => (
-                  <option key={u} value={u}>
-                    {u}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="block">
-              <span className="mb-1 block text-xs font-medium text-white/50">Tags (comma separated)</span>
-              <input
-                name="tags"
-                placeholder="logo, dark, square"
-                className="w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#7ed957]"
-              />
-            </label>
-            <label className="block">
-              <span className="mb-1 block text-xs font-medium text-white/50">Alt text</span>
-              <input
-                name="alt_text"
-                placeholder="Describe the image"
-                className="w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#7ed957]"
-              />
-            </label>
-            <label className="block">
-              <span className="mb-1 block text-xs font-medium text-white/50">Status</span>
-              <select
-                name="status"
-                defaultValue="draft"
-                className="w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#7ed957]"
-              >
-                <option value="draft">Draft (staff only)</option>
-                <option value="published">Published (public)</option>
-              </select>
-            </label>
-          </div>
-          <button
-            type="submit"
-            className="rounded-full bg-[#7ed957] px-5 py-2 text-sm font-semibold text-black hover:bg-[#6cc746]"
-          >
-            Upload
-          </button>
-          <p className="text-xs text-white/35">PNG, JPG, WEBP, GIF, SVG, or PDF · up to 10 MB each.</p>
-        </form>
+        {/* Upload (drag & drop) */}
+        <MediaDropzone uploadAction={uploadMediaAction} />
 
         {/* Filters */}
         {counts.total > 0 && (

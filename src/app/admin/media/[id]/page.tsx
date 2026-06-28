@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { getMedia, whereUsed, publicUrlForKey } from "@/lib/media/store";
+import { isAiConfigured } from "@/lib/ai/provider";
+import { MediaAltField } from "@/components/admin/media/MediaAltField";
 import { updateMediaMetaAction, setMediaStatusAction, deleteMediaAction } from "../actions";
 
 export const dynamic = "force-dynamic";
@@ -107,10 +109,13 @@ export default async function MediaDetailPage({
                 <span className={label}>Title</span>
                 <input name="title" defaultValue={asset.title ?? ""} className={field} />
               </label>
-              <label className="block">
-                <span className={label}>Alt text (for accessibility & SEO)</span>
-                <input name="alt_text" defaultValue={asset.alt_text ?? ""} className={field} />
-              </label>
+              <MediaAltField
+                id={asset.id}
+                initial={asset.alt_text ?? ""}
+                aiEnabled={isAiConfigured}
+                fieldClassName={field}
+                labelClassName={label}
+              />
               <label className="block">
                 <span className={label}>Description</span>
                 <textarea name="description" defaultValue={asset.description ?? ""} rows={3} className={field} />

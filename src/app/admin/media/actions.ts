@@ -6,6 +6,8 @@ import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { uploadMedia, updateMediaMeta, setMediaStatus, whereUsed, getMedia } from "@/lib/media/store";
+import { generate, isAiConfigured } from "@/lib/ai/provider";
+import { COMPLIANCE_SYSTEM, checkCompliance } from "@/lib/ai/compliance";
 
 const MAX_BYTES = 10 * 1024 * 1024; // 10 MB ceiling for the library
 const ALLOWED_MIME = new Set([
@@ -164,4 +166,53 @@ export async function deleteMediaAction(formData: FormData): Promise<void> {
 
   revalidatePath("/admin/media");
   redirect("/admin/media?deleted=1");
+}
+
+/**
+ * Client-callable: suggest descriptive alt text for an asset based on its
+ * title / filename / usage / tags context. Drafts-only — returns a suggestion
+ * the staffer accepts/edits before saving via updateMediaMetaAction.
+ *
+ * Note: this is a context-based suggestion (not image vision); it gives a solid
+ * starting point that the human refines for accuracy.
+ */
+export type MediaAltResult =
+  | { ok: true; value: string; complianceFlags: string[] }
+  | { ok: false; error: string };
+
+export async function suggestMediaAltAction(id: string): Promise<MediaAltResult> {
+  const session = await requirePermission("media.manage");
+  if (!isAiConfigured) {
+    return { ok: false, error: "AI is not configured. Set AI_API_KEY to enable suggestions." };
+  }
+  const asset = await getMedia(id);
+  if (!asset) return { ok: false, error: "Asset not found." };
+
+  const context = [
+    asset.title ? `Title: ${asset.title}` : null,
+    asset.filename ? `Filename: ${asset.filename}` : null,
+    asset.usage_type ? `Used as: ${asset.usage_type}` : null,
+    asset.tags && asset.tags.length ? `Tags: ${asset.tags.join(", ")}` : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const user = `Write ALT TEXT for an image used on a licensed Washington cannabis retailer's website, following all rules. Alt text describes the image for screen-reader users and SEO. Return ONE plain sentence, 8-16 words, no quotes, no "image of"/"photo of" prefix, tasteful and adult-oriented. Base it on this context:\n\n${context || "A brand image for the website."}`;
+
+  try {
+    const text = await generate({ system: COMPLIANCE_SYSTEM, user, temperature: 0.5, maxTokens: 60 });
+    const clean = text.trim().replace(/^["'`]+|["'`]+$/g, "").replace(/\s+/g, " ").trim();
+    const flags = checkCompliance(clean).flags;
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "media.ai_alt_text",
+      entityType: "media_asset",
+      entityId: id,
+      after: { complianceFlags: flags },
+    });
+    return { ok: true, value: clean, complianceFlags: flags };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "AI suggestion failed." };
+  }
 }

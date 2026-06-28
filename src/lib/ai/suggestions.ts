@@ -155,6 +155,27 @@ export async function listSuggestions(
   return (data as AiSuggestion[] | null) ?? [];
 }
 
+/**
+ * List pending suggestions for a whole entity type (e.g. all products), newest
+ * first. Used by the bulk AI review grid so reviewers see every draft awaiting
+ * approval in one place.
+ */
+export async function listPendingByType(
+  entityType: string,
+  limit = 200,
+): Promise<AiSuggestion[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  const admin = createSupabaseAdminClient();
+  const { data } = await admin
+    .from("ai_suggestions")
+    .select("*")
+    .eq("entity_type", entityType)
+    .eq("status", "pending")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  return (data as AiSuggestion[] | null) ?? [];
+}
+
 /** Count pending suggestions (for dashboards/badges). */
 export async function countPendingSuggestions(): Promise<number> {
   if (!isSupabaseServiceConfigured) return 0;
