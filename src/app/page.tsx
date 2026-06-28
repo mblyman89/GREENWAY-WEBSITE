@@ -7,6 +7,7 @@ import { Header } from "@/components/site/Header";
 import { StaffShortcut } from "@/components/site/StaffShortcut";
 import { posMenuPreviewItems } from "@/lib/pos/preview-menu";
 import { getContentValues, isPreviewActive } from "@/lib/cms/render-content";
+import { getCarouselForRender } from "@/lib/cms/carousel-store";
 
 export const metadata: Metadata = {
   // The root layout supplies the default title; we only set the canonical here so
@@ -18,13 +19,11 @@ export const metadata: Metadata = {
 };
 
 export default async function Home() {
-  // Site Content: homepage hero copy (editable from Admin → Site Content).
-  const [copy, preview] = await Promise.all([
+  // Hero slides come from the staff-managed Home Carousel (draft-aware).
+  // Section-banner copy/images are editable from Admin → Site Content.
+  const [slides, copy, preview] = await Promise.all([
+    getCarouselForRender(),
     getContentValues([
-      "home.hero.image",
-      "home.hero.eyebrow",
-      "home.hero.title",
-      "home.hero.subtitle",
       "home.category.image",
       "home.category.eyebrow",
       "home.category.title",
@@ -40,15 +39,7 @@ export default async function Home() {
   return (
     <main>
       <Header />
-      <Hero
-        content={{
-          image: copy["home.hero.image"],
-          eyebrow: copy["home.hero.eyebrow"],
-          title: copy["home.hero.title"],
-          subtitle: copy["home.hero.subtitle"],
-          editable: preview,
-        }}
-      />
+      <Hero slides={slides} />
       <HomeDailyDeals items={posMenuPreviewItems} />
       <PromoGrid
         content={{

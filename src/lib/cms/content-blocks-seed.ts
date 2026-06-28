@@ -27,45 +27,10 @@ export type ContentBlockSeed = {
 
 export const CONTENT_BLOCK_SEEDS: ContentBlockSeed[] = [
   // ---- Home ----------------------------------------------------------------
-  {
-    block_key: "home.hero.image",
-    page: "home",
-    section: "hero",
-    label: "Home hero — background image (first slide)",
-    help_text:
-      "The wide background photo behind the first homepage banner. Use a textless image (~2400×900). Text is added as a separate layer so it stays crisp and editable.",
-    field_type: "image",
-    defaultValue: "/home/hero-banner.webp",
-  },
-  {
-    block_key: "home.hero.eyebrow",
-    page: "home",
-    section: "hero",
-    label: "Home hero — eyebrow (small label)",
-    help_text: "The little uppercase label above the homepage headline.",
-    field_type: "plain",
-    defaultValue: "Greenway Marijuana",
-  },
-  {
-    block_key: "home.hero.title",
-    page: "home",
-    section: "hero",
-    label: "Home hero — title",
-    help_text: "The big headline on the homepage hero (first slide).",
-    field_type: "plain",
-    seo_impact: true,
-    defaultValue: "Premium Cannabis, Everyday Deals",
-  },
-  {
-    block_key: "home.hero.subtitle",
-    page: "home",
-    section: "hero",
-    label: "Home hero — subtitle",
-    help_text: "Supporting line under the homepage headline (first slide).",
-    field_type: "plain",
-    defaultValue:
-      "Fresh daily discounts, top brands, and the full menu — all in one place.",
-  },
+  // NOTE: The homepage hero carousel (first banner + its slides) is managed in
+  // Admin → Content → Home Carousel (table home_carousel_slides), NOT here, so
+  // staff can add/edit/delete/reorder slides with images + buttons. The blocks
+  // below cover the static section banners further down the homepage.
   // ---- Home: "Shop by Category" section banner -----------------------------
   {
     block_key: "home.category.image",
