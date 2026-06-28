@@ -11,6 +11,69 @@ import {
   ensureContentBlocksSeeded,
   upsertSeoEntry,
 } from "@/lib/cms/content-store";
+import {
+  generateContentSuggestion,
+  isAiConfigured,
+} from "@/lib/cms/ai-content";
+
+export type AiSuggestResult =
+  | { ok: true; value: string; complianceFlags: string[]; model: string }
+  | { ok: false; error: string };
+
+/**
+ * Generate an AI DRAFT suggestion for a single content block. Returns the
+ * suggestion to the client for Accept / Edit / Reject — it never writes the
+ * draft or publishes. Drafts-only, same gate as menu + blog AI.
+ */
+export async function suggestContentAction(
+  blockKey: string,
+  instruction: string,
+): Promise<AiSuggestResult> {
+  const session = await requirePermission("content.edit");
+
+  if (!isAiConfigured) {
+    return {
+      ok: false,
+      error:
+        "AI isn't set up yet. Add an AI_API_KEY in your environment to enable “Write with AI.”",
+    };
+  }
+
+  const block = await getContentBlock(blockKey);
+  if (!block) return { ok: false, error: "That content block no longer exists." };
+
+  try {
+    const suggestion = await generateContentSuggestion({
+      blockKey: block.block_key,
+      label: block.label,
+      fieldType: block.field_type,
+      seoImpact: block.seo_impact,
+      current: block.draft_value ?? block.published_value ?? null,
+      instruction: instruction.trim() || null,
+    });
+
+    // Provenance only — the suggestion is NOT saved; staff must Accept first.
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "content.ai_suggest",
+      entityType: "content_block",
+      entityId: block.block_key,
+      after: { model: suggestion.model, flags: suggestion.complianceFlags },
+    });
+
+    return {
+      ok: true,
+      value: suggestion.value,
+      complianceFlags: suggestion.complianceFlags,
+      model: suggestion.model,
+    };
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : "AI request failed. Please try again.";
+    return { ok: false, error: message };
+  }
+}
 
 /** Lazily seed the controlled block set (idempotent) — used on first visit. */
 export async function seedContentBlocksAction(): Promise<void> {

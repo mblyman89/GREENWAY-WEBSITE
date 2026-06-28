@@ -3,6 +3,7 @@ import { Header } from "@/components/site/Header";
 import { Breadcrumbs } from "@/components/site/Breadcrumbs";
 import { Footer } from "@/components/site/Footer";
 import { InteractiveMenuBrowser } from "@/components/menu/InteractiveMenuBrowser";
+import { SiteText } from "@/components/site/SiteText";
 import { pageMetadata } from "@/lib/seo/seo";
 import { posMenuPreviewItems } from "@/lib/pos/preview-menu";
 
@@ -65,12 +66,19 @@ export default async function MenuPage({ searchParams }: MenuPageProps) {
               </div>
             </div>
             <div className="relative max-w-[78%] md:max-w-[60%]">
-              <h1 className="text-3xl font-black uppercase leading-none tracking-tight text-white md:text-5xl">
-                Shop Our Menu
-              </h1>
-              <p className="mt-2 text-xs font-semibold leading-5 text-zinc-300 md:mt-3 md:text-base">
-                Explore Greenway&apos;s full selection of premium cannabis products. Use the filters to find your perfect match.
-              </p>
+              {/* Editable from Admin → Site Content (menu.hero.*). Falls back to
+                  the seeded copy, so there is no visible change until staff
+                  edit + publish. Shows the draft value live in staff preview. */}
+              <SiteText
+                blockKey="menu.hero.title"
+                as="h1"
+                className="text-3xl font-black uppercase leading-none tracking-tight text-white md:text-5xl"
+              />
+              <SiteText
+                blockKey="menu.hero.subtitle"
+                as="p"
+                className="mt-2 text-xs font-semibold leading-5 text-zinc-300 md:mt-3 md:text-base"
+              />
             </div>
           </div>
         </div>

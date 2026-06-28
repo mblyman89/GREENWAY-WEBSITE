@@ -51,7 +51,9 @@ export const CONTENT_BLOCK_SEEDS: ContentBlockSeed[] = [
     label: "Menu hero — title",
     field_type: "plain",
     seo_impact: true,
-    defaultValue: "The Greenway Menu",
+    // Matches the current live menu hero copy so wiring <SiteText> causes no
+    // visible change until staff edit + publish.
+    defaultValue: "Shop Our Menu",
   },
   {
     block_key: "menu.hero.subtitle",
@@ -59,7 +61,8 @@ export const CONTENT_BLOCK_SEEDS: ContentBlockSeed[] = [
     section: "hero",
     label: "Menu hero — subtitle",
     field_type: "plain",
-    defaultValue: "Live inventory updated from our point-of-sale system.",
+    defaultValue:
+      "Explore Greenway's full selection of premium cannabis products. Use the filters to find your perfect match.",
   },
   // ---- Loyalty -------------------------------------------------------------
   {
