@@ -4,7 +4,10 @@ import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { ContentPreviewPanel } from "@/components/admin/ContentPreviewPanel";
-import { ContentBlockEditor } from "@/components/admin/ContentBlockEditor";
+import {
+  ContentBlocksBrowser,
+  type BlockVM,
+} from "@/components/admin/ContentBlocksBrowser";
 import { ContentBulkBar } from "@/components/admin/ContentBulkBar";
 import { listContentBlocks, listContentRevisions } from "@/lib/cms/content-store";
 import { CONTENT_BLOCK_SEEDS } from "@/lib/cms/content-blocks-seed";
@@ -89,13 +92,28 @@ export default async function SiteContentPage({
     }),
   );
 
-  // Group by page.
-  const byPage = new Map<string, typeof blocks>();
-  for (const b of blocks) {
-    const arr = byPage.get(b.page) ?? [];
-    arr.push(b);
-    byPage.set(b.page, arr);
-  }
+  // Build the view-models the client browser renders (search/filter/cards).
+  const blockVMs: BlockVM[] = blocks.map((b) => ({
+    block_key: b.block_key,
+    label: b.label,
+    field_type: b.field_type,
+    help_text: b.help_text,
+    seo_impact: b.seo_impact,
+    draft_value: b.draft_value,
+    published_value: b.published_value,
+    updated_at: b.updated_at,
+    page: b.page,
+    status: b.status,
+    last_edited_by: b.last_edited_by,
+    publicPath: publicPathForPage(b.page),
+    revisions: (revisionsByKey.get(b.block_key) ?? []).map((r) => ({
+      id: r.id,
+      value: r.value,
+      note: r.note,
+      actor_email: r.actor_email,
+      created_at: r.created_at,
+    })),
+  }));
 
   return (
     <div>
@@ -164,39 +182,13 @@ export default async function SiteContentPage({
             discardAllAction={discardAllDraftsAction}
           />
           <ContentPreviewPanel />
-          {Array.from(byPage.entries()).map(([page, items]) => (
-            <div key={page}>
-              <h2 className="mb-3 text-sm font-bold uppercase tracking-wider text-[#7ed957]">{page}</h2>
-              <div className="space-y-4">
-                {items.map((b) => (
-                  <ContentBlockEditor
-                    key={b.id}
-                    block={{
-                      block_key: b.block_key,
-                      label: b.label,
-                      field_type: b.field_type,
-                      help_text: b.help_text,
-                      seo_impact: b.seo_impact,
-                      draft_value: b.draft_value,
-                      published_value: b.published_value,
-                    }}
-                    aiEnabled={aiEnabled}
-                    saveDraftAction={saveContentDraftAction}
-                    publishAction={publishContentBlockAction}
-                    publicPath={publicPathForPage(b.page)}
-                    revisions={(revisionsByKey.get(b.block_key) ?? []).map((r) => ({
-                      id: r.id,
-                      value: r.value,
-                      note: r.note,
-                      actor_email: r.actor_email,
-                      created_at: r.created_at,
-                    }))}
-                    restoreAction={restoreContentRevisionAction}
-                  />
-                ))}
-              </div>
-            </div>
-          ))}
+          <ContentBlocksBrowser
+            blocks={blockVMs}
+            aiEnabled={aiEnabled}
+            saveDraftAction={saveContentDraftAction}
+            publishAction={publishContentBlockAction}
+            restoreAction={restoreContentRevisionAction}
+          />
           </>
         )}
       </div>

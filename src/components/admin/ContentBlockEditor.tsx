@@ -29,6 +29,8 @@ export type EditableBlock = {
   seo_impact: boolean;
   draft_value: string | null;
   published_value: string | null;
+  /** ISO timestamp of the last edit (optional metadata for the card footer). */
+  updated_at?: string | null;
 };
 
 type Props = {
@@ -44,6 +46,20 @@ type Props = {
   /** Permission-gated server action to restore a revision into the draft. */
   restoreAction?: (formData: FormData) => void;
 };
+
+function relTime(iso?: string | null): string | null {
+  if (!iso) return null;
+  const diff = Date.now() - new Date(iso).getTime();
+  if (Number.isNaN(diff)) return null;
+  const mins = Math.round(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.round(hrs / 24);
+  if (days < 30) return `${days}d ago`;
+  return new Date(iso).toLocaleDateString();
+}
 
 // Soft SEO length windows (chars). Used only for friendly guidance, not blocking.
 function seoTarget(blockKey: string): { min: number; max: number; what: string } | null {
@@ -289,6 +305,12 @@ export function ContentBlockEditor({
       {block.published_value != null && (
         <p className="mt-2 text-xs text-white/35">
           <span className="font-semibold text-white/45">Live:</span> {block.published_value}
+        </p>
+      )}
+
+      {relTime(block.updated_at) && (
+        <p className="mt-1 text-[0.65rem] text-white/30">
+          Last edited {relTime(block.updated_at)}
         </p>
       )}
 
