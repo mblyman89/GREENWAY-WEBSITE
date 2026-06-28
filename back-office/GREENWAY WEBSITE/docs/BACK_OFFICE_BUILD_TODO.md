@@ -32,6 +32,8 @@ Each "slice" is independently shippable so the owner can inspect before continui
 
 > **Cross-cutting capability — Smart Spreadsheet Auto-Ingest (NEW):** Extends the Slice 2 POS pipeline so employees can simply drop the raw `PRODUCTS.xlsx` / `INVENTORIES.xlsx` into a watched intake folder (or upload in admin); the system ingests, auto-detects new vendors/brands/strains as drafts, then rotates the raw files into a size-capped `backups/` folder. See the "Smart Spreadsheet Auto-Ingest" section below.
 
+> **Cross-cutting capability — Web Intelligence Pipeline: Crawl4AI + GPT-4o (NEW, owner-requested):** A stealthy, production-grade research engine that *feeds* the AI Enrichment Engine. **Crawl4AI** (open-source, free, Python — works like Firecrawl) gathers raw web content (vendor sites, brand pages, strain databases, social posts from dummy accounts) using stealth/undetected browsing, virtual scrolling for infinite feeds, rotating residential proxies (Bright Data / Oxylabs), and injected session/JWT tokens; **GPT-4o** then structures and enriches that content into compliant **draft suggestions**. Runs as a **separate Python worker service** (NOT inside the Next.js/Vercel runtime) that writes drafts into `ai_suggestions` via the DB/API. Every output stays drafts-only behind the employee Accept/Reject gate. Slotted for **Slice 10 (Future automation)**. See the dedicated **"Web Intelligence Pipeline — Crawl4AI Expert Playbook"** section below.
+
 ---
 
 ## SLICE 0 — Organized folder database + documentation
@@ -144,6 +146,7 @@ Each "slice" is independently shippable so the owner can inspect before continui
 - [ ] Scheduled/auto POS fetch (if Cultivera API available) → staged import queue.
 - [ ] Smart Spreadsheet Auto-Ingest watcher + backup rotation (see dedicated section — may land earlier as a Slice 2 follow-on).
 - [ ] AI Enrichment Engine background batch jobs (overnight draft generation for new products/vendors/strains; see dedicated section).
+- [ ] **Web Intelligence Pipeline (Crawl4AI + GPT-4o)** — stand up the standalone Python worker service that crawls vendor/brand/strain/social sources with stealth + proxies + session injection and feeds compliant drafts into `ai_suggestions` (see dedicated "Web Intelligence Pipeline — Crawl4AI Expert Playbook" section).
 - [ ] Image normalization/cropping/focal-point automation; advanced analytics.
 
 ---
@@ -160,6 +163,143 @@ Each "slice" is independently shippable so the owner can inspect before continui
 - [ ] **Image assistance:** AI alt-text generation for media library; (later) image search/normalization suggestions for products missing photos — staff picks the final image.
 - [ ] **Review UX everywhere:** consistent Accept / Edit / Reject control; bulk review grids; "regenerate" with optional steering note; show provenance.
 - [ ] **Cost/safety controls:** per-run limits, dry-run preview, rate limiting, no PII in prompts.
+- [ ] **Data source = Web Intelligence Pipeline (Crawl4AI + GPT-4o):** the vendor/brand/strain/image research above is *fed* by the Crawl4AI worker (stealth crawling + GPT-4o structuring). All crawled output enters here as `ai_suggestions` drafts with source-URL provenance and flows through the same Accept/Edit/Reject gate. See the dedicated "Web Intelligence Pipeline — Crawl4AI Expert Playbook" section.
+
+## CAPABILITY — Web Intelligence Pipeline: Crawl4AI Expert Playbook (feeds the AI Enrichment Engine)
+> **What this is:** the owner wants a "powerhouse AI agent feedback loop." This pipeline pairs **Crawl4AI** (free, open-source Python crawler — the Firecrawl alternative) as the *gatherer* with **GPT-4o** as the *structurer/enricher*. Crawl4AI is the eyes (stealthily reads the web); GPT-4o is the brain (turns messy HTML/markdown into clean, compliant draft fields). Output is always a **draft suggestion** in `ai_suggestions` — employees Accept/Edit/Reject before anything is published.
+>
+> **Architecture rule (non-negotiable):** Crawl4AI is **Python** and drives a real (Playwright) browser; the Greenway site is **Next.js on Vercel**. They do NOT run in the same process. Crawl4AI runs as a **separate long-lived Python worker / microservice** (own container/VM/cron, e.g. a small Fly.io / Railway / Render box or a self-hosted runner). It talks to the app only through the database (`ai_suggestions`) or a thin authenticated internal API. Never try to `pip install crawl4ai` into the Vercel build.
+>
+> **The feedback loop (target design):**
+> 1. **Trigger** — overnight cron, or "Research this vendor/brand/strain" button in admin enqueues a job (vendor id, brand id, strain name, or a URL/social handle) into a `research_jobs` table/queue.
+> 2. **Gather (Crawl4AI)** — worker picks up the job, crawls the target with the right stealth/proxy/scroll profile, returns clean markdown + extracted media URLs.
+> 3. **Structure (GPT-4o)** — either Crawl4AI's built-in `LLMExtractionStrategy(provider="openai/gpt-4o")` with a JSON schema, OR pass the markdown to our existing `src/lib/ai/` provider for the compliant-draft prompt templates (preferred, since the WA-cannabis guardrails already live there).
+> 4. **Persist as drafts** — write each field as a row in `ai_suggestions` (entity_type vendor/brand/strain/product/blog, field_key, suggested_value, **provenance**: model, prompt_version, source_url, crawl_timestamp, generated_by="crawl4ai-worker").
+> 5. **Human gate** — the existing Accept/Edit/Reject review UX surfaces these exactly like our other AI drafts. Nothing reaches the public site without a staff Accept.
+
+### Install & environment
+- [ ] **Install (separate Python env):** `pip install -U crawl4ai` then `crawl4ai-setup` (installs/patches Playwright Chromium). Pin a recent version — **0.6.3 had a proxy bug (GitHub #1174: `net::ERR_NO_SUPPORTED_PROXIES`)**; use a current 0.7.x+/0.9.x line. Verify with `crawl4ai-doctor`.
+- [ ] **Secrets/env (worker only, never in the Next.js repo):** `OPENAI_API_KEY` (GPT-4o); proxy creds for Bright Data / Oxylabs; optional `PROXIES` env (comma-separated `ip:port:user:pass,...`) for `ProxyConfig.from_env()`.
+- [ ] **Core objects to learn:** `AsyncWebCrawler`, `BrowserConfig`, `CrawlerRunConfig`, `CacheMode`, `arun()` / `arun_many()`.
+
+### Stealth ladder — match the tool to the target's defenses
+> Crawl4AI offers four escalating levels. Use the *lightest* one that works (heavier = slower) and only climb when blocked.
+- [ ] **Level 1 — Base (no protection):** plain `AsyncWebCrawler()` — fastest, for open vendor/brand sites and most strain databases.
+- [ ] **Level 2 — Magic Mode (light anti-bot):** `CrawlerRunConfig(magic=True, remove_overlay_elements=True, page_timeout=60000)`. One flag that auto-handles cookie/consent popups, simulates basic human-ish interaction, and removes overlays. Good first escalation.
+- [ ] **Level 3 — Stealth Mode (moderate anti-bot):** `BrowserConfig(enable_stealth=True)` — applies playwright-stealth patches (masks `navigator.webdriver`, plugins, WebGL, etc.). Combine with Magic Mode for stubborn sites.
+- [ ] **Level 4 — Undetected Browser (advanced anti-bot, e.g. Cloudflare/DataDome):** use the `UndetectedAdapter` with `AsyncPlaywrightCrawlerStrategy`:
+  ```python
+  from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig
+  from crawl4ai.async_crawler_strategy import AsyncPlaywrightCrawlerStrategy
+  from crawl4ai.browser_adapter import UndetectedAdapter
+
+  adapter = UndetectedAdapter()
+  strategy = AsyncPlaywrightCrawlerStrategy(browser_config=BrowserConfig(headless=True), browser_adapter=adapter)
+  async with AsyncWebCrawler(crawler_strategy=strategy) as crawler:
+      result = await crawler.arun("https://target", config=CrawlerRunConfig(magic=True))
+  ```
+- [ ] **Decision table (bake into worker logic):**
+
+  | Site defense level | Recommended setting |
+  |---|---|
+  | None | Base crawler |
+  | Basic | `magic=True` (Magic Mode) |
+  | Moderate | `enable_stealth=True` (Stealth) |
+  | Advanced | `UndetectedAdapter` |
+  | Maximum | Undetected + Stealth + proxies + realistic geolocation/locale |
+
+### Virtual Scroll — capture infinite feeds (Twitter/X, Instagram, LinkedIn, Reddit, TikTok)
+> Critical for the dummy-social-account research. Sites that *replace* DOM content as you scroll (virtualized lists) only give you ~the first screen of content without this. Crawl4AI's `VirtualScrollConfig` captures **20–83× more content**.
+- [ ] Configure per-platform:
+  ```python
+  from crawl4ai import VirtualScrollConfig, CrawlerRunConfig
+
+  vs = VirtualScrollConfig(
+      container_selector="[data-testid='primaryColumn']",  # the scrolling container
+      scroll_count=30,              # how many scroll steps
+      scroll_by="container_height", # or a pixel int, or "page_height"
+      wait_after_scroll=1.0,        # seconds for lazy content to load
+  )
+  config = CrawlerRunConfig(virtual_scroll_config=vs)
+  ```
+- [ ] **Selector cheatsheet to start from (verify live, they drift):** X/Twitter `[data-testid='primaryColumn']`; Instagram `article` / main feed container; Reddit `.scrollerItem`/feed container; LinkedIn `.scaffold-finite-scroll`. Tune `scroll_count` + `wait_after_scroll` per target.
+- [ ] **Know the difference:** Virtual Scroll = content is *replaced* (use `VirtualScrollConfig`). Infinite scroll that *appends* content can instead use a `scan_full_page`/JS scroll approach. Pick correctly or you lose data.
+
+### Proxies — Bright Data / Oxylabs rotating residential IPs
+> Hide origin IP, rotate per request, geo-target. **Prefer per-request `CrawlerRunConfig.proxy_config`** over the older `BrowserConfig.proxy_config` (per-request is the supported, flexible path).
+- [ ] **Single proxy:**
+  ```python
+  from crawl4ai import ProxyConfig, CrawlerRunConfig
+  proxy = ProxyConfig(server="http://gw.dc.brightdata.com:22225", username="USER", password="PASS")
+  config = CrawlerRunConfig(proxy_config=proxy)
+  ```
+- [ ] **From string / env helpers:** `ProxyConfig.from_string("http://user:pass@ip:port")` (also supports `socks5://...` and the `ip:port:user:pass` shorthand); `ProxyConfig.from_env()` reads the `PROXIES` env var (`ip:port:user:pass,ip:port:user:pass,...`).
+- [ ] **Rotation:** build a list of `ProxyConfig` and rotate with `RoundRobinProxyStrategy`:
+  ```python
+  from crawl4ai.proxy_strategy import RoundRobinProxyStrategy
+  strategy = RoundRobinProxyStrategy(proxies=[p1, p2, p3])
+  config = CrawlerRunConfig(proxy_rotation_strategy=strategy)
+  ```
+- [ ] **Bright Data / Oxylabs notes:** both expose an auth gateway host:port with username/password (Bright Data zones encode country/session in the username, e.g. `brd-customer-...-zone-...-country-us`; Oxylabs uses `customer-USER-cc-us` style). Use the gateway endpoint as `server`. Rotation can be provider-side (sticky vs rotating sessions via username flags) **or** client-side via `RoundRobinProxyStrategy`. Start with a small pool, watch for `ERR_NO_SUPPORTED_PROXIES` (version/format bug) and CAPTCHA rates.
+- [ ] **Combine proxy + geolocation + locale + timezone** so the IP and the browser fingerprint agree (a US IP with `en-US` + a US timezone + US geo looks human; mismatches get flagged).
+
+### Identity-based crawling — session / JWT injection for dummy accounts
+> The owner specifically wants to inject Session IDs / JWT tokens for dummy social accounts so the crawler reads logged-in content. Two supported mechanisms:
+- [ ] **A) `storage_state` (cookies + localStorage):** capture a logged-in session once, then replay it. Pass either a path to a JSON file or a dict:
+  ```python
+  config = CrawlerRunConfig(storage_state="x_dummy_account_state.json")
+  # storage_state JSON holds cookies + localStorage origins — this is where session
+  # cookies and JWTs in localStorage live, so the crawl is authenticated.
+  ```
+  - [ ] Generate it with `BrowserProfiler` or by exporting Playwright's `context.storage_state(path=...)` after a manual login, or via the CLI (below).
+- [ ] **B) Managed Browser + persistent profile:** `BrowserConfig(use_managed_browser=True, user_data_dir="/profiles/x_dummy")` keeps a real Chrome profile (cookies/localStorage persist across runs — closest to "just stay logged in").
+- [ ] **CLI profile workflow:** `crwl profiles` → create/list/use named profiles; created profiles live at `~/.crawl4ai/profiles/<name>/` with a `storage_state.json` you can point `storage_state` at. `BrowserProfiler.create_profile()` does the same programmatically (opens a window, you log in, it saves state).
+- [ ] **Security/ops:** store these state files like secrets (they ARE live sessions). Encrypt at rest, scope to the worker, rotate when accounts get challenged. Keep dummy accounts plausibly human (profile pics, age, occasional activity) so they survive longer. **Compliance/ToS note for the owner:** scraping logged-in social platforms with dummy accounts can violate those platforms' Terms of Service — flag this so the owner decides scope; default the pipeline to public sources first.
+
+### Geolocation / locale / timezone (fingerprint realism)
+- [ ] ```python
+  from crawl4ai import GeolocationConfig, CrawlerRunConfig
+  config = CrawlerRunConfig(
+      geolocation=GeolocationConfig(latitude=47.65, longitude=-122.30, accuracy=50.0),  # Seattle-ish
+      locale="en-US",
+      timezone_id="America/Los_Angeles",
+  )
+  ```
+- [ ] Keep geo/locale/timezone consistent with the chosen proxy country (WA-local where it makes sense for Greenway's market).
+
+### Extraction — GPT-4o structuring (the "brain")
+- [ ] **Option A — Crawl4AI built-in LLM extraction (schema-first):**
+  ```python
+  from crawl4ai import LLMExtractionStrategy, LLMConfig, CrawlerRunConfig
+  strat = LLMExtractionStrategy(
+      llm_config=LLMConfig(provider="openai/gpt-4o", api_token="env:OPENAI_API_KEY"),
+      schema=VendorProfile.model_json_schema(),   # pydantic schema -> structured JSON
+      extraction_type="schema",
+      instruction="Extract the brand mission, about, product categories, and social links. "
+                  "WA cannabis compliance: no health/medical claims, no minor-appeal language, no dosing advice.",
+  )
+  config = CrawlerRunConfig(extraction_strategy=strat)
+  ```
+  Use a cheaper model (`openai/gpt-4o-mini`) for bulk/first-pass extraction; reserve full `gpt-4o` for the high-value enrichment writeups.
+- [ ] **Option B (preferred for compliance) — hand Crawl4AI's clean markdown to our existing `src/lib/ai/` provider** so the WA-cannabis guardrail prompt templates and provenance logic are reused in ONE place. The worker calls our internal AI endpoint with the crawled markdown; the draft comes back already compliance-checked.
+- [ ] **Cost controls:** chunk long pages, cap tokens, prefer `fit_markdown`/pruned content over raw HTML, batch with `arun_many()` + a `MemoryAdaptiveDispatcher`, cache with `CacheMode.ENABLED` during dev.
+
+### Other production knobs to use
+- [ ] **Robots/ethics:** `CrawlerRunConfig(check_robots_txt=True)`; throttle with delays/semaphores; identify a sane user agent; respect rate limits — be a polite crawler on public sites.
+- [ ] **Media/screenshots/PDF:** `screenshot=True`, `pdf=True`, and `result.media["images"]` to harvest candidate product/brand images (which then become *draft* media-library suggestions — staff still pick the final).
+- [ ] **Reliability:** retries with backoff, per-job timeouts, structured logging, dead-letter for failed jobs, idempotency by (entity, source_url).
+
+### Build checklist (Slice 10 deliverable for this pipeline)
+- [ ] Stand up the standalone Python worker repo/dir (`crawl4ai-worker/`) — its own deps, Dockerfile, README; explicitly documented as separate from the Vercel app.
+- [ ] `research_jobs` table/queue + an admin "Research this {vendor|brand|strain}" button that enqueues jobs.
+- [ ] Worker: stealth-ladder selector logic, proxy pool (Bright Data/Oxylabs) + round-robin, virtual-scroll profiles per social platform, `storage_state` session injection for dummy accounts, geo/locale alignment.
+- [ ] GPT-4o structuring → write rows to `ai_suggestions` with full provenance (model, prompt_version, source_url, crawl_timestamp, generated_by).
+- [ ] Reuse the existing Accept/Edit/Reject review UX so crawled drafts flow through the same human gate.
+- [ ] Cost/safety: per-run token/proxy budgets, dry-run mode, rate limiting, no PII in prompts, encrypted session-state storage.
+- [ ] Compliance review with owner on logged-in social scraping (ToS) + WA cannabis guardrails on all generated copy.
+- [ ] **Deliverable PR + owner inspect.**
+
+---
 
 ## CAPABILITY — Smart Spreadsheet Auto-Ingest + Backup Rotation (extends Slice 2 pipeline)
 > **Goal:** an employee does as little as possible — drop the raw exports, click one button (or have it auto-detected), review, publish.

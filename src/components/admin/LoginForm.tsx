@@ -6,13 +6,13 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type Mode = "password" | "magic";
 
-export function LoginForm() {
+export function LoginForm({ initialError }: { initialError?: string | null }) {
   const router = useRouter();
   const [mode, setMode] = useState<Mode>("password");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "sent">("idle");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(initialError ?? null);
 
   const supabase = createSupabaseBrowserClient();
 
@@ -36,7 +36,11 @@ export function LoginForm() {
     setStatus("loading");
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: `${window.location.origin}/admin` },
+      options: {
+        // Send the email link through the callback route so the session is
+        // actually established (PKCE code exchange) before landing on /admin.
+        emailRedirectTo: `${window.location.origin}/auth/callback?next=/admin`,
+      },
     });
     if (error) {
       setError(error.message);

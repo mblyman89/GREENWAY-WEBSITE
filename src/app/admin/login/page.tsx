@@ -2,9 +2,14 @@ import { redirect } from "next/navigation";
 import { getStaffSession } from "@/lib/auth/session";
 import { LoginForm } from "@/components/admin/LoginForm";
 
-export default async function AdminLoginPage() {
+export default async function AdminLoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
   const session = await getStaffSession();
   if (session) redirect("/admin");
+  const { error } = await searchParams;
 
   return (
     <div className="flex min-h-screen items-center justify-center px-6 py-16">
@@ -18,7 +23,7 @@ export default async function AdminLoginPage() {
             Staff sign-in. Authorized employees only.
           </p>
         </div>
-        <LoginForm />
+        <LoginForm initialError={error ?? null} />
         <p className="mt-6 text-center text-xs text-white/40">
           This is a private system. All activity is logged.
         </p>
