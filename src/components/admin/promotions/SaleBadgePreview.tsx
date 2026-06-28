@@ -19,6 +19,7 @@ export function SaleBadgePreview({
   sampleName,
   sampleBrand,
   samplePriceMinorUnits,
+  sampleImageUrl,
   discountType,
   discountPercent,
   discountFixed,
@@ -29,6 +30,8 @@ export function SaleBadgePreview({
   sampleName: string;
   sampleBrand: string;
   samplePriceMinorUnits: number;
+  /** Optional real product photo from the representative affected product. */
+  sampleImageUrl?: string | null;
   discountType: DiscountType;
   discountPercent: number;
   discountFixed: number;
@@ -54,8 +57,15 @@ export function SaleBadgePreview({
             {d.badge}
           </div>
 
-          {/* Image placeholder */}
-          <div className="flex h-24 items-center justify-center bg-black/40 text-2xl">🌿</div>
+          {/* Product image (real photo when available, else leaf placeholder) */}
+          <div className="flex h-24 items-center justify-center overflow-hidden bg-black/40 text-2xl">
+            {sampleImageUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={sampleImageUrl} alt="" className="h-full w-full object-cover" />
+            ) : (
+              "🌿"
+            )}
+          </div>
 
           <div className="space-y-1 p-3">
             <p className="text-[10px] uppercase tracking-wide text-white/40">{sampleBrand || "Brand"}</p>
