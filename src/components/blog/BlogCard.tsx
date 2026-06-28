@@ -1,6 +1,8 @@
 import Image from "next/image";
 import Link from "next/link";
 import type { BlogPost } from "@/lib/blog/posts";
+import { formatBlogDate } from "@/lib/blog/format-date";
+import { resolveTitleStyle } from "@/lib/blog/title-style";
 
 const categoryStyles: Record<BlogPost["category"], string> = {
   PRODUCTS: "border-[var(--greenway)]/45 bg-[var(--greenway)] text-black",
@@ -15,6 +17,12 @@ type BlogCardProps = {
 
 export function BlogCard({ post }: BlogCardProps) {
   const isNewsletter = post.kind === "newsletter";
+  const dateText = formatBlogDate(post.publishDate, post.dateLabel);
+  // Newsletter cards open the uploaded PDF directly (in a new tab); regular
+  // articles open the full article page. Falls back to the article page if a
+  // newsletter has no PDF yet.
+  const newsletterPdf = post.newsletter?.pdfSrc?.trim();
+  const titleStyle = resolveTitleStyle(post.titleStyle, "card");
 
   if (isNewsletter) {
     return (
@@ -34,15 +42,26 @@ export function BlogCard({ post }: BlogCardProps) {
         </div>
 
         <div className="flex items-center justify-between gap-4 border-t border-white/10 bg-zinc-950 p-5 md:p-6">
-          <p className="text-[0.7rem] font-black uppercase tracking-[0.18em] text-zinc-300">
-            {post.dateLabel}
+          <p className="text-[0.7rem] font-black uppercase tracking-[0.14em] text-zinc-300">
+            {dateText}
           </p>
-          <Link
-            href={`/blog/${post.slug}`}
-            className="shrink-0 rounded-full bg-[var(--orange)] px-5 py-3 text-[0.68rem] font-black uppercase tracking-[0.16em] text-black transition hover:bg-[var(--gold)]"
-          >
-            Read article
-          </Link>
+          {newsletterPdf ? (
+            <a
+              href={newsletterPdf}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="shrink-0 rounded-full bg-[var(--orange)] px-5 py-3 text-[0.68rem] font-black uppercase tracking-[0.16em] text-black transition hover:bg-[var(--gold)]"
+            >
+              Read article
+            </a>
+          ) : (
+            <Link
+              href={`/blog/${post.slug}`}
+              className="shrink-0 rounded-full bg-[var(--orange)] px-5 py-3 text-[0.68rem] font-black uppercase tracking-[0.16em] text-black transition hover:bg-[var(--gold)]"
+            >
+              Read article
+            </Link>
+          )}
         </div>
       </article>
     );
@@ -66,10 +85,13 @@ export function BlogCard({ post }: BlogCardProps) {
       </div>
 
       <div className="flex flex-1 flex-col p-5 md:p-6">
-        <p className="text-[0.7rem] font-black uppercase tracking-[0.18em] text-zinc-500">
-          {post.dateLabel}
+        <p className="text-[0.7rem] font-black uppercase tracking-[0.14em] text-zinc-500">
+          {dateText}
         </p>
-        <h2 className="mt-3 text-2xl font-black leading-tight tracking-tight text-white md:text-[1.7rem]">
+        <h2
+          className={`mt-3 font-black leading-tight tracking-tight text-white ${titleStyle.className}`}
+          style={titleStyle.style}
+        >
           {post.title}
         </h2>
         <p className="mt-4 flex-1 text-sm font-medium leading-6 text-zinc-400 md:text-base md:leading-7">

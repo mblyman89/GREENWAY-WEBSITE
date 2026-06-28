@@ -61,6 +61,21 @@ function revalidateBlog(slug?: string) {
   if (slug) revalidatePath(`/blog/${slug}`);
 }
 
+/** Validate the bounded title-typography inputs (defensive; matches schema). */
+function titleTypographyFromForm(formData: FormData): {
+  title_font: string | null;
+  title_size: string;
+  title_color: string | null;
+} {
+  const fontRaw = String(formData.get("title_font") ?? "").trim();
+  const font = fontRaw && fontRaw !== "inherit" ? fontRaw : null;
+  const sizeRaw = String(formData.get("title_size") ?? "md").trim();
+  const size = ["sm", "md", "lg", "xl"].includes(sizeRaw) ? sizeRaw : "md";
+  const colorRaw = String(formData.get("title_color") ?? "").trim();
+  const color = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(colorRaw) ? colorRaw : null;
+  return { title_font: font, title_size: size, title_color: color };
+}
+
 // ---------------------------------------------------------------------------
 // Create
 // ---------------------------------------------------------------------------
@@ -165,6 +180,7 @@ export async function updatePostAction(formData: FormData): Promise<void> {
     hero_image_alt: orNull(formData.get("hero_image_alt")),
     publish_date: orNull(formData.get("publish_date")),
     date_label: orNull(formData.get("date_label")),
+    ...titleTypographyFromForm(formData),
     seo_title: orNull(formData.get("seo_title")),
     seo_description: orNull(formData.get("seo_description")),
     canonical_path: orNull(formData.get("canonical_path")),

@@ -28,6 +28,9 @@ export type BlogPostRow = {
   hero_image_alt: string | null;
   publish_date: string | null;
   date_label: string | null;
+  title_font: string | null;
+  title_size: string | null;
+  title_color: string | null;
   published_at: string | null;
   seo_title: string | null;
   seo_description: string | null;
@@ -126,4 +129,6 @@ export type PublicBlogPost = {
   image: { src: string; alt: string };
   content: string[];
   newsletter?: { pdfSrc: string; pages: string[] };
+  /** Editable headline typography (font id / size token / optional hex color). */
+  titleStyle?: { font: string | null; size: string; color: string | null };
 };

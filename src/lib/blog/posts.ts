@@ -18,6 +18,7 @@ export type BlogPost = {
     pdfSrc: string;
     pages: string[];
   };
+  titleStyle?: { font: string | null; size: string; color: string | null };
 };
 
 /*

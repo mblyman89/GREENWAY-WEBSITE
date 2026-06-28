@@ -108,6 +108,9 @@ export type CreatePostInput = {
   hero_image_alt?: string | null;
   publish_date?: string | null;
   date_label?: string | null;
+  title_font?: string | null;
+  title_size?: string | null;
+  title_color?: string | null;
   seo_title?: string | null;
   seo_description?: string | null;
   canonical_path?: string | null;
@@ -133,6 +136,9 @@ export async function createPost(input: CreatePostInput): Promise<BlogPostRow> {
       hero_image_alt: input.hero_image_alt ?? null,
       publish_date: input.publish_date ?? null,
       date_label: input.date_label ?? null,
+      title_font: input.title_font ?? null,
+      title_size: input.title_size ?? "md",
+      title_color: input.title_color ?? null,
       seo_title: input.seo_title ?? null,
       seo_description: input.seo_description ?? null,
       canonical_path: input.canonical_path ?? null,
@@ -169,6 +175,9 @@ export async function updatePost(id: string, input: UpdatePostInput): Promise<vo
     "hero_image_alt",
     "publish_date",
     "date_label",
+    "title_font",
+    "title_size",
+    "title_color",
     "seo_title",
     "seo_description",
     "canonical_path",
@@ -251,6 +260,11 @@ async function rowToPublic(row: BlogPostRow): Promise<PublicBlogPost> {
     excerpt: row.excerpt ?? "",
     image: { src, alt: row.hero_image_alt ?? row.title },
     content: row.body ?? [],
+    titleStyle: {
+      font: row.title_font ?? null,
+      size: row.title_size ?? "md",
+      color: row.title_color ?? null,
+    },
   };
   if (row.kind === "newsletter") {
     const asset = await getNewsletterAsset(row.id);
