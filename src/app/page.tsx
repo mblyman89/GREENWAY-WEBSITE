@@ -4,6 +4,7 @@ import { HomeDailyDeals } from "@/components/home/HomeDailyDeals";
 import { PromoGrid } from "@/components/home/PromoGrid";
 import { Footer } from "@/components/site/Footer";
 import { Header } from "@/components/site/Header";
+import { StaffShortcut } from "@/components/site/StaffShortcut";
 import { posMenuPreviewItems } from "@/lib/pos/preview-menu";
 
 export const metadata: Metadata = {
@@ -23,6 +24,7 @@ export default function Home() {
       <HomeDailyDeals items={posMenuPreviewItems} />
       <PromoGrid />
       <Footer />
+      <StaffShortcut />
     </main>
   );
 }
