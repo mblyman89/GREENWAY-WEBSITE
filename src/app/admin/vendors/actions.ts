@@ -7,6 +7,10 @@ import { recordAudit } from "@/lib/auth/audit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { uploadMedia, recordUsage } from "@/lib/media/store";
 import type { SocialLinks } from "@/lib/vendors/types";
+import { getVendorById } from "@/lib/vendors/store";
+import { generateVendorProfile } from "@/lib/ai/ai-vendor";
+import { persistSuggestion, reviewSuggestion, getSuggestion } from "@/lib/ai/suggestions";
+import { AiNotConfiguredError } from "@/lib/ai/provider";
 
 const MAX_LOGO_BYTES = 5 * 1024 * 1024;
 const IMAGE_MIME = new Set(["image/png", "image/jpeg", "image/webp", "image/svg+xml", "image/gif"]);
@@ -166,4 +170,132 @@ export async function updateBrand(formData: FormData): Promise<void> {
 function orNull(v: FormDataEntryValue | null): string | null {
   const s = String(v ?? "").trim();
   return s || null;
+}
+
+/**
+ * "Research with AI" — draft a compliant mission + about for a vendor and
+ * persist them as PENDING suggestions (drafts-only). Nothing is written to the
+ * vendor record until staff click Accept. Honest: the model writes a tasteful
+ * starting draft from the name + hints, it does not browse the web.
+ */
+export async function researchVendorAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("vendors.manage");
+  const id = String(formData.get("id") ?? "");
+  if (!id) redirect("/admin/vendors?error=" + encodeURIComponent("Missing vendor id."));
+
+  const vendor = await getVendorById(id);
+  if (!vendor) redirect("/admin/vendors?error=" + encodeURIComponent("Vendor not found."));
+
+  const instruction = orNull(formData.get("instruction"));
+
+  try {
+    const draft = await generateVendorProfile({
+      kind: "vendor",
+      displayName: vendor.display_name,
+      currentMission: vendor.mission_statement,
+      currentAbout: vendor.about,
+      website: vendor.website,
+      instruction,
+    });
+
+    if (draft.mission) {
+      await persistSuggestion({
+        entity_type: "vendor",
+        entity_id: id,
+        field_key: "mission_statement",
+        suggested_value: draft.mission,
+        input_summary: `${vendor.display_name} · mission${instruction ? " · " + instruction : ""}`,
+        generated_by: session.userId,
+      });
+    }
+    if (draft.about) {
+      await persistSuggestion({
+        entity_type: "vendor",
+        entity_id: id,
+        field_key: "about",
+        suggested_value: draft.about,
+        input_summary: `${vendor.display_name} · about${instruction ? " · " + instruction : ""}`,
+        generated_by: session.userId,
+      });
+    }
+
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "vendor.ai_drafted",
+      entityType: "vendor",
+      entityId: id,
+      after: { fields: ["mission_statement", "about"], flags: draft.complianceFlags },
+    });
+  } catch (err) {
+    const msg =
+      err instanceof AiNotConfiguredError
+        ? "AI isn't set up yet. Add an AI_API_KEY to enable drafting."
+        : "Couldn't draft a profile right now. Please try again.";
+    redirect(`/admin/vendors/${id}?error=` + encodeURIComponent(msg));
+  }
+
+  revalidatePath(`/admin/vendors/${id}`);
+  redirect(`/admin/vendors/${id}?saved=1#ai-drafts`);
+}
+
+/** Accept an AI vendor-profile suggestion: write the value, mark accepted. */
+export async function acceptVendorSuggestionAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("vendors.manage");
+  const suggestionId = String(formData.get("suggestionId") ?? "");
+  const vendorId = String(formData.get("vendorId") ?? "");
+  if (!suggestionId || !vendorId) {
+    redirect(`/admin/vendors/${vendorId}?error=` + encodeURIComponent("Missing suggestion."));
+  }
+
+  const suggestion = await getSuggestion(suggestionId);
+  if (!suggestion || suggestion.entity_type !== "vendor" || suggestion.entity_id !== vendorId) {
+    redirect(`/admin/vendors/${vendorId}?error=` + encodeURIComponent("Suggestion not found."));
+  }
+
+  // Only allow writing the two known profile fields.
+  const allowed = new Set(["mission_statement", "about"]);
+  if (!allowed.has(suggestion!.field_key)) {
+    redirect(`/admin/vendors/${vendorId}?error=` + encodeURIComponent("Unsupported field."));
+  }
+
+  const admin = createSupabaseAdminClient();
+  const { error } = await admin
+    .from("vendors")
+    .update({ [suggestion!.field_key]: suggestion!.suggested_value, updated_by: session.userId })
+    .eq("id", vendorId);
+  if (error) redirect(`/admin/vendors/${vendorId}?error=` + encodeURIComponent(error.message));
+
+  await reviewSuggestion(suggestionId, "accepted", session.userId);
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "vendor.ai_accepted",
+    entityType: "vendor",
+    entityId: vendorId,
+    after: { field: suggestion!.field_key },
+  });
+
+  revalidatePath(`/admin/vendors/${vendorId}`);
+  redirect(`/admin/vendors/${vendorId}?saved=1#ai-drafts`);
+}
+
+/** Reject an AI vendor-profile suggestion (no write to the vendor). */
+export async function rejectVendorSuggestionAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("vendors.manage");
+  const suggestionId = String(formData.get("suggestionId") ?? "");
+  const vendorId = String(formData.get("vendorId") ?? "");
+  if (!suggestionId || !vendorId) {
+    redirect(`/admin/vendors/${vendorId}?error=` + encodeURIComponent("Missing suggestion."));
+  }
+  await reviewSuggestion(suggestionId, "rejected", session.userId);
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "vendor.ai_rejected",
+    entityType: "vendor",
+    entityId: vendorId,
+  });
+  revalidatePath(`/admin/vendors/${vendorId}`);
+  redirect(`/admin/vendors/${vendorId}?saved=1#ai-drafts`);
 }

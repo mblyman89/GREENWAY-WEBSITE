@@ -115,7 +115,11 @@ type PersistInput = {
   generated_by: string | null;
 };
 
-async function persistSuggestion(input: PersistInput): Promise<AiSuggestion> {
+/**
+ * Persist an already-generated draft as a pending suggestion with provenance.
+ * Exported so other AI helpers (vendors, etc.) can reuse the same lifecycle.
+ */
+export async function persistSuggestion(input: PersistInput): Promise<AiSuggestion> {
   const admin = createSupabaseAdminClient();
   const { data, error } = await admin
     .from("ai_suggestions")

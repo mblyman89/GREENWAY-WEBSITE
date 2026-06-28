@@ -5,6 +5,8 @@ import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
 import { listVendors, vendorLogoUrls } from "@/lib/vendors/store";
+import { vendorCompleteness } from "@/lib/vendors/completeness";
+import { CompletenessMeter } from "@/components/admin/vendors/CompletenessMeter";
 
 export const dynamic = "force-dynamic";
 
@@ -105,33 +107,38 @@ export default async function VendorsPage({
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((v) => {
             const logo = logos.get(v.id);
-            const hasProfile = Boolean(v.about || v.mission_statement || v.website);
+            const completeness = vendorCompleteness(v, Boolean(logo));
             return (
               <Link
                 key={v.id}
                 href={`/admin/vendors/${v.id}`}
-                className="group flex items-center gap-3 rounded-xl border border-white/10 bg-[#0a0a0a] p-4 transition hover:border-[#7ed957]/50"
+                className="group flex flex-col gap-3 rounded-xl border border-white/10 bg-[#0a0a0a] p-4 transition hover:border-[#7ed957]/50"
               >
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-white/10 bg-black">
-                  {logo ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={logo} alt="" className="h-full w-full object-contain" />
-                  ) : (
-                    <span className="text-lg font-bold text-white/30">{v.display_name.charAt(0)}</span>
-                  )}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-white group-hover:text-[#7ed957]">{v.display_name}</p>
-                  <p className="text-xs text-white/40">
-                    {v.brand_count} brand{v.brand_count === 1 ? "" : "s"} · {v.product_count} products
-                  </p>
-                </div>
-                <div className="flex flex-col items-end gap-1">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-white/10 bg-black">
+                    {logo ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={logo} alt="" className="h-full w-full object-contain" />
+                    ) : (
+                      <span className="text-lg font-bold text-white/30">{v.display_name.charAt(0)}</span>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-white group-hover:text-[#7ed957]">{v.display_name}</p>
+                    <p className="text-xs text-white/40">
+                      {v.brand_count} brand{v.brand_count === 1 ? "" : "s"} · {v.product_count} products
+                    </p>
+                  </div>
                   <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${v.status === "published" ? "bg-[#7ed957]/15 text-[#7ed957]" : "bg-white/10 text-white/50"}`}>
                     {v.status}
                   </span>
-                  {!hasProfile && <span className="text-[10px] text-[#ff7f00]">needs info</span>}
                 </div>
+                <CompletenessMeter result={completeness} variant="compact" />
+                {completeness.nextUp && (
+                  <p className="text-[10px] text-white/40">
+                    Next: add {completeness.nextUp.label.toLowerCase()}
+                  </p>
+                )}
               </Link>
             );
           })}

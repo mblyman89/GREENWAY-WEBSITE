@@ -8,6 +8,8 @@ import {
   previewAffectedProducts,
 } from "@/lib/promotions/promotions-store";
 import { formatMinorCurrency } from "@/lib/leafly/format";
+import { SaleBadgePreview } from "@/components/admin/promotions/SaleBadgePreview";
+import { sampleDiscount } from "@/lib/promotions/sample-discount";
 import {
   updatePromotionAction,
   setPromotionStatusAction,
@@ -42,6 +44,10 @@ export default async function EditPromotionPage({
     listMenuBrands(),
     previewAffectedProducts(promotion),
   ]);
+
+  // Pick a representative product (or a sensible default) for the live badge preview.
+  const sample = affected[0] ?? null;
+  const samplePrice = sample?.priceMinorUnits ?? 3500; // $35.00 default illustration
 
   return (
     <div>
@@ -103,6 +109,18 @@ export default async function EditPromotionPage({
               </p>
             </div>
 
+            <SaleBadgePreview
+              title={promotion.title}
+              sampleName={sample?.name ?? "Sample product"}
+              sampleBrand={sample?.brand ?? "Brand"}
+              samplePriceMinorUnits={samplePrice}
+              discountType={promotion.discount_type}
+              discountPercent={promotion.discount_percent}
+              discountFixed={promotion.discount_fixed}
+              multiItemPercent={promotion.multi_item_percent}
+              bonusNote={promotion.bonus_note}
+            />
+
             <div className="rounded-xl border border-white/10 bg-[#0a0a0a] p-4">
               <h3 className="text-sm font-semibold uppercase tracking-wide text-white/40">
                 Affected products ({affected.length})
@@ -117,20 +135,35 @@ export default async function EditPromotionPage({
                     once matching products are live.
                   </p>
                 )}
-                {affected.slice(0, 60).map((p) => (
-                  <div
-                    key={p.key}
-                    className="flex items-center justify-between gap-2 rounded-md bg-black/40 px-2 py-1 text-xs"
-                  >
-                    <span className="truncate text-white/70">
-                      {p.brand ? `${p.brand} · ` : ""}
-                      {p.name}
-                    </span>
-                    <span className="shrink-0 text-white/40">
-                      {formatMinorCurrency(p.priceMinorUnits)}
-                    </span>
-                  </div>
-                ))}
+                {affected.slice(0, 60).map((p) => {
+                  const d = sampleDiscount(p.priceMinorUnits, {
+                    discountType: promotion.discount_type,
+                    discountPercent: promotion.discount_percent,
+                    discountFixed: promotion.discount_fixed,
+                    multiItemPercent: promotion.multi_item_percent,
+                  });
+                  return (
+                    <div
+                      key={p.key}
+                      className="flex items-center justify-between gap-2 rounded-md bg-black/40 px-2 py-1 text-xs"
+                    >
+                      <span className="truncate text-white/70">
+                        {p.brand ? `${p.brand} · ` : ""}
+                        {p.name}
+                      </span>
+                      <span className="flex shrink-0 items-baseline gap-1.5">
+                        {d.showsPrice ? (
+                          <>
+                            <span className="text-[#7ed957]">{formatMinorCurrency(d.saleMinorUnits)}</span>
+                            <span className="text-white/30 line-through">{formatMinorCurrency(p.priceMinorUnits)}</span>
+                          </>
+                        ) : (
+                          <span className="text-white/40">{formatMinorCurrency(p.priceMinorUnits)}</span>
+                        )}
+                      </span>
+                    </div>
+                  );
+                })}
                 {affected.length > 60 && (
                   <p className="text-xs text-white/40">…and {affected.length - 60} more.</p>
                 )}

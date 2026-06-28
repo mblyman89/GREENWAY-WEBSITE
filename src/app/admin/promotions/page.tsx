@@ -7,6 +7,7 @@ import { StatCard } from "@/components/admin/StatCard";
 import { listPromotions, detectConflicts } from "@/lib/promotions/promotions-store";
 import { WEEKDAY_LABELS, DISCOUNT_TYPE_LABELS } from "@/lib/promotions/types";
 import type { PostStatus, Weekday } from "@/lib/promotions/types";
+import { WeeklyScheduleStrip } from "@/components/admin/promotions/WeeklyScheduleStrip";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +43,11 @@ export default async function PromotionsAdminPage() {
   const published = promos.filter((p) => p.status === "published").length;
   const drafts = promos.filter((p) => p.status === "draft").length;
   const scheduled = promos.filter((p) => p.status === "scheduled").length;
+
+  const scheduleItems = promos
+    .filter((p) => p.status !== "archived")
+    .map((p) => ({ id: p.id, title: p.title, status: p.status, weekday: p.weekday }));
+  const todayWeekday = new Date().getDay() as Weekday;
 
   return (
     <div>
@@ -83,6 +89,12 @@ export default async function PromotionsAdminPage() {
           <StatCard label="Drafts" value={drafts} accent="muted" />
           <StatCard label="Scheduled" value={scheduled} accent="gold" />
         </div>
+
+        {scheduleItems.length > 0 && (
+          <div className="mt-6">
+            <WeeklyScheduleStrip items={scheduleItems} todayWeekday={todayWeekday} />
+          </div>
+        )}
 
         {conflicts.length > 0 && (
           <div className="mt-6 rounded-xl border border-[#ff7f00]/40 bg-[#ff7f00]/10 p-4 text-sm text-[#ffb066]">
