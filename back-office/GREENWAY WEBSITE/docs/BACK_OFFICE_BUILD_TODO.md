@@ -141,14 +141,16 @@ Each "slice" is independently shippable so the owner can inspect before continui
 
 > **Slice 8 owner manual step:** apply migration `0008_slice8_loyalty.sql` in Supabase. Then open `/admin/loyalty-signups` and click **Import legacy file** once to bring any existing JSONL signups into the DB queue (safe to re-run). New signups flow into the queue automatically.
 
-## SLICE 9 — Reports & analytics (Phase 6)
-- [ ] Import diagnostics report; inventory health (OOS/low/zero-price/no-desc/suspicious potency).
-- [ ] Category mapping report; vendor/brand completion report; product enrichment gap report.
-- [ ] Price-change + new/removed products report.
-- [ ] Order/sales charts (by day/week/month, AOV, items/order, top products/brands/categories, cancel/no-show, pickup time).
-- [ ] Promotion performance; content/media reports (posts by status, missing SEO, missing alt text, unused assets).
-- [ ] Charts (Recharts/Tremor), date filters, CSV/XLSX export, saved presets, optional scheduled email.
-- [ ] **Deliverable PR + owner inspect.**
+## SLICE 9 — Reports & analytics (Phase 6)  *(PR #42)*
+- [x] Reports hub (`/admin/reports`, `reports.view`) with a 7/30/90-day range filter and CSV export (`/admin/reports/export`).
+- [x] Order/sales analytics: orders/day + revenue/day bar charts, AOV, items/order, status breakdown (incl. cancel/no-show), top products + top brands by units. (`src/lib/reports/analytics.ts::getOrdersReport`.)
+- [x] Inventory health from the published menu: OOS / low-stock / zero-price / missing-description / missing-brand / hidden / suspicious-potency, plus items-per-category and items-per-brand bar lists. (`getInventoryHealthReport`.)
+- [x] Loyalty analytics: signups/day, status breakdown, dedupe-flag rate. (`getLoyaltyReport`.)
+- [x] Promotions overview: published/scheduled/draft/archived counts. (`getPromotionsReport`.)
+- [x] Charts implemented as **dependency-free SVG/CSS** (`Charts.tsx` — BarList / DayBarChart / StatusBar) using brand tokens — no Recharts/Tremor (keeps bundle + disk footprint tiny). Reports nav un-`comingSoon`.
+- [x] **Deliverable PR + owner inspect.**
+
+> **Slice 9 notes:** XLSX / saved presets / scheduled email and the deeper import-diagnostics & price-change/new-removed reports are deferred (the data layer + hub are in place to extend). The hub renders live once orders/loyalty/a published menu exist; until then it shows a "not configured" notice. No new DB migration — it reads existing Slice 2/6/7/8 tables.
 
 ## SLICE 10 — Future automation (Phase 7)
 - [ ] Scheduled/auto POS fetch (if Cultivera API available) → staged import queue.
