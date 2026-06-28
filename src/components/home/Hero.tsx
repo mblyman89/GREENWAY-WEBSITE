@@ -74,6 +74,8 @@ const AUTOPLAY_MS = 6000;
  * click-to-edit overlay when a staff member is previewing.
  */
 type HeroContent = {
+  /** Background image for slide 1, editable from Admin → Site Content. */
+  image?: string;
   eyebrow?: string;
   title?: string;
   subtitle?: string;
@@ -124,6 +126,8 @@ export function Hero({ content }: { content?: HeroContent } = {}) {
               isEditable && content?.subtitle
                 ? content.subtitle
                 : slide.description;
+            const image =
+              isEditable && content?.image ? content.image : slide.image;
             const previewProps =
               isEditable && content?.editable
                 ? { "data-gw-editable": "true" as const }
@@ -139,12 +143,15 @@ export function Hero({ content }: { content?: HeroContent } = {}) {
                 aria-label={`${index + 1} of ${SLIDES.length}: ${slide.title}`}
               >
                 <Image
-                  src={slide.image}
+                  src={image}
                   alt={slide.imageAlt}
                   fill
                   priority={index === 0}
                   sizes="(max-width: 768px) 100vw, 1408px"
                   className={slide.objectClass}
+                  {...(isEditable && content?.editable
+                    ? { "data-gw-block": "home.hero.image", "data-gw-editable": "true" }
+                    : {})}
                 />
                 <div className={`absolute inset-0 ${slide.gradientClass}`} aria-hidden="true" />
                 <div

@@ -13,13 +13,17 @@
  * permission-gated server actions; AI output is a suggestion the human must
  * accept. This component only improves the editing experience.
  */
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useToast } from "@/components/admin/ux";
 import { suggestContentAction, type AiSuggestResult } from "@/app/admin/content/actions";
 import {
   ContentRevisionHistory,
   type RevisionItem,
 } from "@/components/admin/ContentRevisionHistory";
+import {
+  ContentImageField,
+  type MediaChoice,
+} from "@/components/admin/ContentImageField";
 
 export type EditableBlock = {
   block_key: string;
@@ -45,6 +49,8 @@ type Props = {
   revisions?: RevisionItem[];
   /** Permission-gated server action to restore a revision into the draft. */
   restoreAction?: (formData: FormData) => void;
+  /** Published media library images, for the "image" field-type picker. */
+  mediaChoices?: MediaChoice[];
 };
 
 function relTime(iso?: string | null): string | null {
@@ -77,6 +83,7 @@ export function ContentBlockEditor({
   publicPath,
   revisions = [],
   restoreAction,
+  mediaChoices = [],
 }: Props) {
   const { toast } = useToast();
   const [value, setValue] = useState(block.draft_value ?? "");
@@ -87,8 +94,25 @@ export function ContentBlockEditor({
   >(null);
   const [pending, startTransition] = useTransition();
 
+  const isImage = block.field_type === "image";
   const isRich = block.field_type === "rich" || block.field_type === "markdown";
   const dirty = (value ?? "") !== (block.published_value ?? "");
+  // VALUE-ADD: an "unsaved edits" indicator. `savedValue` tracks what's been
+  // committed to the draft via Save; if the textarea differs, we nudge the user
+  // so they don't lose work by navigating away.
+  const [savedValue, setSavedValue] = useState(block.draft_value ?? "");
+  const unsaved = (value ?? "") !== (savedValue ?? "");
+
+  // Warn before leaving the page (tab close / reload) with unsaved edits.
+  useEffect(() => {
+    if (!unsaved) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [unsaved]);
   const target = block.seo_impact ? seoTarget(block.block_key) : null;
   const len = value.length;
   const lenTone =
@@ -148,7 +172,12 @@ export function ContentBlockEditor({
           <span className="rounded-full border border-white/15 px-2 py-0.5 text-[0.65rem] font-semibold text-white/50">
             {block.field_type}
           </span>
-          {dirty && (
+          {unsaved && (
+            <span className="rounded-full border border-[#ffd700]/50 bg-[#ffd700]/10 px-2 py-0.5 text-[0.65rem] font-semibold text-[#ffd700]">
+              ● unsaved edits
+            </span>
+          )}
+          {!unsaved && dirty && (
             <span className="rounded-full border border-[#ff7f00]/40 bg-[#ff7f00]/10 px-2 py-0.5 text-[0.65rem] font-semibold text-[#ff7f00]">
               unpublished draft
             </span>
@@ -161,35 +190,46 @@ export function ContentBlockEditor({
       <form action={saveDraftAction} className="mt-3 space-y-2">
         <input type="hidden" name="block_key" value={block.block_key} />
         <input type="hidden" name="draft_value" value={value} />
-        <textarea
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          rows={isRich ? 4 : 2}
-          className="w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#7ed957]"
-          placeholder={`Type the ${block.label.toLowerCase()}…`}
-        />
 
-        {/* Meta row: length + AI toggle */}
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className={`text-[0.7rem] ${lenTone}`}>
-            {len} characters
-            {target && (
-              <span className="ml-1 text-white/35">
-                · aim for {target.min}–{target.max} for a strong {target.what}
-              </span>
-            )}
+        {isImage ? (
+          <ContentImageField
+            value={value}
+            onChange={setValue}
+            mediaChoices={mediaChoices}
+          />
+        ) : (
+          <textarea
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            rows={isRich ? 4 : 2}
+            className="w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#7ed957]"
+            placeholder={`Type the ${block.label.toLowerCase()}…`}
+          />
+        )}
+
+        {/* Meta row: length + AI toggle (text blocks only) */}
+        {!isImage && (
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className={`text-[0.7rem] ${lenTone}`}>
+              {len} characters
+              {target && (
+                <span className="ml-1 text-white/35">
+                  · aim for {target.min}–{target.max} for a strong {target.what}
+                </span>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => setAiPanelOpen((o) => !o)}
+              className="rounded-lg border border-[#7ed957]/40 bg-[#7ed957]/10 px-3 py-1.5 text-xs font-bold text-[#7ed957] transition hover:bg-[#7ed957]/20"
+            >
+              ✨ Write with AI
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={() => setAiPanelOpen((o) => !o)}
-            className="rounded-lg border border-[#7ed957]/40 bg-[#7ed957]/10 px-3 py-1.5 text-xs font-bold text-[#7ed957] transition hover:bg-[#7ed957]/20"
-          >
-            ✨ Write with AI
-          </button>
-        </div>
+        )}
 
         {/* AI panel */}
-        {aiPanelOpen && (
+        {!isImage && aiPanelOpen && (
           <div className="rounded-lg border border-[#7ed957]/25 bg-[#7ed957]/[0.04] p-3">
             {!aiEnabled ? (
               <p className="text-xs text-[#ffd700]">
@@ -275,9 +315,14 @@ export function ContentBlockEditor({
         <div className="flex flex-wrap items-center gap-2 pt-1">
           <button
             type="submit"
-            className="rounded-lg border border-white/15 px-3 py-1.5 text-xs font-bold text-white/80 hover:bg-white/10"
+            onClick={() => setSavedValue(value)}
+            className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${
+              unsaved
+                ? "bg-[#ffd700] text-black hover:bg-[#e6c200]"
+                : "border border-white/15 text-white/80 hover:bg-white/10"
+            }`}
           >
-            Save draft
+            {unsaved ? "Save draft ●" : "Save draft"}
           </button>
           {publicPath && (
             <a

@@ -42,6 +42,8 @@ function FieldError({ message }: { message?: string }) {
 type LoyaltyContent = {
   title?: string;
   subtitle?: string;
+  heroImage?: string;
+  heroImageMobile?: string;
   editable?: boolean;
 };
 
@@ -108,9 +110,14 @@ export function LoyaltySignupForm({
 
       <div className="relative mx-auto max-w-[88rem] px-4 pt-5 md:px-8 md:pt-8">
         {/* MOBILE banner (own art, ~3:1) */}
-        <div className="relative aspect-[3/1] overflow-hidden rounded-2xl border border-white/10 bg-zinc-950 shadow-2xl shadow-black/40 md:hidden">
+        <div
+          className="relative aspect-[3/1] overflow-hidden rounded-2xl border border-white/10 bg-zinc-950 shadow-2xl shadow-black/40 md:hidden"
+          {...(content?.editable
+            ? { "data-gw-block": "loyalty.hero.image_mobile", "data-gw-editable": "true" }
+            : {})}
+        >
           <Image
-            src={greenwayBusiness.assets.loyaltyHeroMobile}
+            src={content?.heroImageMobile || greenwayBusiness.assets.loyaltyHeroMobile}
             alt="Greenway Loyalty Points promotional banner"
             fill
             priority
@@ -119,9 +126,14 @@ export function LoyaltySignupForm({
           />
         </div>
         {/* DESKTOP banner (own art, wide) */}
-        <div className="relative hidden aspect-[3200/563] overflow-hidden rounded-2xl border border-white/10 bg-zinc-950 shadow-2xl shadow-black/40 md:block">
+        <div
+          className="relative hidden aspect-[3200/563] overflow-hidden rounded-2xl border border-white/10 bg-zinc-950 shadow-2xl shadow-black/40 md:block"
+          {...(content?.editable
+            ? { "data-gw-block": "loyalty.hero.image", "data-gw-editable": "true" }
+            : {})}
+        >
           <Image
-            src={greenwayBusiness.assets.loyaltyHero}
+            src={content?.heroImage || greenwayBusiness.assets.loyaltyHero}
             alt="Greenway Loyalty Points promotional banner"
             fill
             priority

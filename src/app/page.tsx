@@ -21,9 +21,18 @@ export default async function Home() {
   // Site Content: homepage hero copy (editable from Admin → Site Content).
   const [copy, preview] = await Promise.all([
     getContentValues([
+      "home.hero.image",
       "home.hero.eyebrow",
       "home.hero.title",
       "home.hero.subtitle",
+      "home.category.image",
+      "home.category.eyebrow",
+      "home.category.title",
+      "home.category.subtitle",
+      "home.brand.image",
+      "home.brand.eyebrow",
+      "home.brand.title",
+      "home.brand.subtitle",
     ]),
     isPreviewActive(),
   ]);
@@ -33,6 +42,7 @@ export default async function Home() {
       <Header />
       <Hero
         content={{
+          image: copy["home.hero.image"],
           eyebrow: copy["home.hero.eyebrow"],
           title: copy["home.hero.title"],
           subtitle: copy["home.hero.subtitle"],
@@ -40,7 +50,19 @@ export default async function Home() {
         }}
       />
       <HomeDailyDeals items={posMenuPreviewItems} />
-      <PromoGrid />
+      <PromoGrid
+        content={{
+          categoryImage: copy["home.category.image"],
+          categoryEyebrow: copy["home.category.eyebrow"],
+          categoryTitle: copy["home.category.title"],
+          categorySubtitle: copy["home.category.subtitle"],
+          brandImage: copy["home.brand.image"],
+          brandEyebrow: copy["home.brand.eyebrow"],
+          brandTitle: copy["home.brand.title"],
+          brandSubtitle: copy["home.brand.subtitle"],
+          editable: preview,
+        }}
+      />
       <Footer />
       <StaffShortcut />
     </main>

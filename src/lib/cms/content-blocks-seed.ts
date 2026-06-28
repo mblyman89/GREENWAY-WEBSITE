@@ -28,6 +28,16 @@ export type ContentBlockSeed = {
 export const CONTENT_BLOCK_SEEDS: ContentBlockSeed[] = [
   // ---- Home ----------------------------------------------------------------
   {
+    block_key: "home.hero.image",
+    page: "home",
+    section: "hero",
+    label: "Home hero — background image (first slide)",
+    help_text:
+      "The wide background photo behind the first homepage banner. Use a textless image (~2400×900). Text is added as a separate layer so it stays crisp and editable.",
+    field_type: "image",
+    defaultValue: "/home/hero-banner.webp",
+  },
+  {
     block_key: "home.hero.eyebrow",
     page: "home",
     section: "hero",
@@ -56,6 +66,80 @@ export const CONTENT_BLOCK_SEEDS: ContentBlockSeed[] = [
     defaultValue:
       "Fresh daily discounts, top brands, and the full menu — all in one place.",
   },
+  // ---- Home: "Shop by Category" section banner -----------------------------
+  {
+    block_key: "home.category.image",
+    page: "home",
+    section: "category-banner",
+    label: "Category banner — background image",
+    help_text:
+      "Background art for the \"Shop by Category\" band on the homepage. Use a wide, short, textless image. The dark gradient and text are layered on top automatically.",
+    field_type: "image",
+    defaultValue: "/home/category-banner.webp",
+  },
+  {
+    block_key: "home.category.eyebrow",
+    page: "home",
+    section: "category-banner",
+    label: "Category banner — eyebrow (small label)",
+    help_text: "The little uppercase label above the \"Shop by Category\" title.",
+    field_type: "plain",
+    defaultValue: "Browse the Menu",
+  },
+  {
+    block_key: "home.category.title",
+    page: "home",
+    section: "category-banner",
+    label: "Category banner — title",
+    field_type: "plain",
+    defaultValue: "Shop by Category",
+  },
+  {
+    block_key: "home.category.subtitle",
+    page: "home",
+    section: "category-banner",
+    label: "Category banner — subtitle",
+    field_type: "plain",
+    defaultValue:
+      "Jump straight into the products you want — every tile opens a pre-filtered menu.",
+  },
+  // ---- Home: "Shop by Brand" section banner --------------------------------
+  {
+    block_key: "home.brand.image",
+    page: "home",
+    section: "brand-banner",
+    label: "Brand banner — background image",
+    help_text:
+      "Background art for the \"Shop by Brand\" band on the homepage. Use a wide, short, textless image. The dark gradient and text are layered on top automatically.",
+    field_type: "image",
+    defaultValue: "/home/brand-banner.webp",
+  },
+  {
+    block_key: "home.brand.eyebrow",
+    page: "home",
+    section: "brand-banner",
+    label: "Brand banner — eyebrow (small label)",
+    help_text: "The little uppercase label above the \"Shop by Brand\" title.",
+    field_type: "plain",
+    defaultValue: "Featured Brands",
+  },
+  {
+    block_key: "home.brand.title",
+    page: "home",
+    section: "brand-banner",
+    label: "Brand banner — title",
+    field_type: "plain",
+    defaultValue: "Shop by Brand",
+  },
+  {
+    block_key: "home.brand.subtitle",
+    page: "home",
+    section: "brand-banner",
+    label: "Brand banner — subtitle",
+    field_type: "plain",
+    defaultValue:
+      "A fresh lineup of our favorite brands every visit — tap any to shop their full menu.",
+  },
   // ---- Menu ----------------------------------------------------------------
   {
     block_key: "menu.hero.title",
@@ -76,6 +160,26 @@ export const CONTENT_BLOCK_SEEDS: ContentBlockSeed[] = [
       "Explore Greenway's full selection of premium cannabis products. Use the filters to find your perfect match.",
   },
   // ---- Loyalty -------------------------------------------------------------
+  {
+    block_key: "loyalty.hero.image",
+    page: "loyalty",
+    section: "hero",
+    label: "Loyalty hero — banner image (desktop)",
+    help_text:
+      "The wide promotional banner at the top of the Loyalty page on desktop (very wide, ~3200×563). Use a textless image; the form sits below it.",
+    field_type: "image",
+    defaultValue: "/brand/greenway-loyalty-points-hero-desktop.png",
+  },
+  {
+    block_key: "loyalty.hero.image_mobile",
+    page: "loyalty",
+    section: "hero",
+    label: "Loyalty hero — banner image (mobile)",
+    help_text:
+      "The banner shown on phones (roughly 3:1, e.g. ~1200×400). A separate, taller crop reads better on small screens.",
+    field_type: "image",
+    defaultValue: "/brand/greenway-loyalty-points-hero-mobile.png",
+  },
   {
     block_key: "loyalty.hero.title",
     page: "loyalty",

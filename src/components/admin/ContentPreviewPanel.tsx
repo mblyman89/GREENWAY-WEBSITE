@@ -3,38 +3,34 @@
 /**
  * ContentPreviewPanel — wraps PreviewFrame for the Site Content editor.
  *
- * Lets the editor pick which public page to preview, and when they click an
- * "✎ Edit" hotspot inside the preview, scrolls the editor to that block's form
- * and flashes it. Bridges the iframe's postMessage to the editor DOM.
+ * Lets the editor pick which public page to preview. The selected page is
+ * CONTROLLED by the parent shell so it stays in sync with the editor's page
+ * filter below — that's what makes "click ✎ Edit in the preview → jump to the
+ * field" work reliably regardless of which page was showing in the list.
  */
-import { useCallback, useState } from "react";
 import { PreviewFrame } from "@/components/admin/PreviewFrame";
 
-const PAGES = [
-  { label: "Homepage", path: "/" },
-  { label: "Menu", path: "/menu" },
-  { label: "Loyalty", path: "/loyalty" },
-  { label: "Specials", path: "/specials" },
-  { label: "Vendors", path: "/vendor-delivery" },
-  { label: "FAQ", path: "/faq" },
+export type PreviewPage = { label: string; path: string; page: string };
+
+/** Public pages that have editable content, mapped to their content `page` key. */
+export const PREVIEW_PAGES: PreviewPage[] = [
+  { label: "Homepage", path: "/", page: "home" },
+  { label: "Menu", path: "/menu", page: "menu" },
+  { label: "Loyalty", path: "/loyalty", page: "loyalty" },
+  { label: "Specials", path: "/specials", page: "specials" },
+  { label: "Vendors", path: "/vendor-delivery", page: "vendors" },
+  { label: "FAQ", path: "/faq", page: "faq" },
 ];
 
-export function ContentPreviewPanel() {
-  const [path, setPath] = useState(PAGES[0].path);
-
-  const handleEditBlock = useCallback((blockKey: string) => {
-    const el = document.getElementById(`block-${blockKey}`);
-    if (!el) return;
-    el.scrollIntoView({ behavior: "smooth", block: "center" });
-    // Brief highlight so the user sees which field opened.
-    el.classList.add("ring-2", "ring-[#7ed957]");
-    const ta = el.querySelector("textarea");
-    if (ta) (ta as HTMLTextAreaElement).focus();
-    setTimeout(() => {
-      el.classList.remove("ring-2", "ring-[#7ed957]");
-    }, 2000);
-  }, []);
-
+export function ContentPreviewPanel({
+  activePath,
+  onSelectPath,
+  onEditBlock,
+}: {
+  activePath: string;
+  onSelectPath: (path: string) => void;
+  onEditBlock: (blockKey: string) => void;
+}) {
   return (
     <div className="rounded-xl border border-white/10 bg-[#0a0a0a] p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
@@ -43,17 +39,17 @@ export function ContentPreviewPanel() {
           <p className="text-xs text-white/50">
             See your draft changes exactly as visitors will. Click{" "}
             <span className="text-[#7ed957]">✎ Edit</span> on any highlighted
-            text to jump to it.
+            text or image to jump straight to it below.
           </p>
         </div>
-        <div className="flex overflow-hidden rounded-lg border border-white/15">
-          {PAGES.map((p) => (
+        <div className="flex flex-wrap overflow-hidden rounded-lg border border-white/15">
+          {PREVIEW_PAGES.map((p) => (
             <button
               key={p.path}
               type="button"
-              onClick={() => setPath(p.path)}
+              onClick={() => onSelectPath(p.path)}
               className={`px-3 py-1.5 text-xs transition ${
-                path === p.path
+                activePath === p.path
                   ? "bg-[#7ed957] text-black"
                   : "text-white/60 hover:bg-white/5"
               }`}
@@ -63,7 +59,7 @@ export function ContentPreviewPanel() {
           ))}
         </div>
       </div>
-      <PreviewFrame path={path} onEditBlock={handleEditBlock} height={560} />
+      <PreviewFrame path={activePath} onEditBlock={onEditBlock} height={560} />
     </div>
   );
 }

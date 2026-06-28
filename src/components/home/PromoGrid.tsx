@@ -25,7 +25,19 @@ const LANE_ACCENTS: Record<string, string> = {
  * Brand: delegated to the client HomeBrands component, which rotates through
  * brands (feature-shuffle style) into a 4x4 grid.
  */
-export function PromoGrid() {
+export type PromoBannerContent = {
+  categoryImage?: string;
+  categoryEyebrow?: string;
+  categoryTitle?: string;
+  categorySubtitle?: string;
+  brandImage?: string;
+  brandEyebrow?: string;
+  brandTitle?: string;
+  brandSubtitle?: string;
+  editable?: boolean;
+};
+
+export function PromoGrid({ content }: { content?: PromoBannerContent } = {}) {
   return (
     <>
       <section
@@ -35,11 +47,16 @@ export function PromoGrid() {
       >
         <div className="mx-auto max-w-[88rem] space-y-4 md:space-y-6">
           <SectionBanner
-            imageSrc="/home/category-banner.webp"
+            imageSrc={content?.categoryImage || "/home/category-banner.webp"}
             imageAlt="Greenway cannabis product categories"
-            eyebrow="Browse the Menu"
-            title="Shop by Category"
-            subtitle="Jump straight into the products you want — every tile opens a pre-filtered menu."
+            eyebrow={content?.categoryEyebrow || "Browse the Menu"}
+            title={content?.categoryTitle || "Shop by Category"}
+            subtitle={
+              content?.categorySubtitle ||
+              "Jump straight into the products you want — every tile opens a pre-filtered menu."
+            }
+            editable={content?.editable}
+            blockKeyPrefix="home.category"
           />
 
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4 lg:grid-cols-6">
@@ -71,7 +88,7 @@ export function PromoGrid() {
         </div>
       </section>
 
-      <HomeBrands items={posMenuPreviewItems} />
+      <HomeBrands items={posMenuPreviewItems} content={content} />
     </>
   );
 }

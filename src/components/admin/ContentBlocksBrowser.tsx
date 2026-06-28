@@ -19,6 +19,7 @@ import {
   type EditableBlock,
 } from "@/components/admin/ContentBlockEditor";
 import type { RevisionItem } from "@/components/admin/ContentRevisionHistory";
+import type { MediaChoice } from "@/components/admin/ContentImageField";
 
 export type BlockVM = EditableBlock & {
   page: string;
@@ -35,6 +36,11 @@ type Props = {
   saveDraftAction: (formData: FormData) => void;
   publishAction: (formData: FormData) => void;
   restoreAction: (formData: FormData) => void;
+  /** Published media library images for image-block pickers. */
+  mediaChoices?: MediaChoice[];
+  /** Controlled page filter (synced with the live preview selector). */
+  pageFilter?: string;
+  onPageFilterChange?: (page: string) => void;
 };
 
 type Filter = "all" | "attention" | "seo" | string; // string = a page name
@@ -52,9 +58,26 @@ export function ContentBlocksBrowser({
   saveDraftAction,
   publishAction,
   restoreAction,
+  mediaChoices = [],
+  pageFilter,
+  onPageFilterChange,
 }: Props) {
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<Filter>("all");
+  const [internalFilter, setInternalFilter] = useState<Filter>("all");
+  // When a parent controls the page filter (to sync with the live preview),
+  // honour it; otherwise fall back to local state.
+  const filter: Filter = pageFilter ?? internalFilter;
+  const setFilter = (next: Filter) => {
+    setInternalFilter(next);
+    // Only page filters are mirrored to the parent (preview selector).
+    if (
+      onPageFilterChange &&
+      next !== "attention" &&
+      next !== "seo"
+    ) {
+      onPageFilterChange(next);
+    }
+  };
 
   const pages = useMemo(
     () => Array.from(new Set(blocks.map((b) => b.page))),
@@ -199,6 +222,7 @@ export function ContentBlocksBrowser({
                   publicPath={b.publicPath}
                   revisions={b.revisions}
                   restoreAction={restoreAction}
+                  mediaChoices={mediaChoices}
                 />
               ))}
             </div>
