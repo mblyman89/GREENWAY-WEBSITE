@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { greenwayBusiness } from "@/content/business";
 import { formatMinorCurrency } from "@/lib/leafly/format";
@@ -10,8 +11,48 @@ import { useHydratedValue } from "@/lib/hooks/useHydratedValue";
 export function OrderConfirmation() {
   const searchParams = useSearchParams();
   const orderFromUrl = searchParams.get("order") ?? undefined;
-  const { value: order, hydrated } = useHydratedValue<CompletedOrder | null>(readCompletedOrder, null);
+  const tokenFromUrl = searchParams.get("t") ?? undefined;
+  const { value: localOrder, hydrated } = useHydratedValue<CompletedOrder | null>(
+    readCompletedOrder,
+    null,
+  );
 
+  // If the customer revisits the link in a fresh session (no sessionStorage),
+  // fetch a customer-safe copy of the order from the server by its token.
+  const [fetchedOrder, setFetchedOrder] = useState<CompletedOrder | null>(null);
+  const [statusLabel, setStatusLabel] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!hydrated || localOrder || !tokenFromUrl) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/orders/${encodeURIComponent(tokenFromUrl)}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (cancelled) return;
+        setStatusLabel(data.statusLabel ?? null);
+        setFetchedOrder({
+          orderNumber: data.orderNumber,
+          publicToken: tokenFromUrl,
+          placedAt: data.placedAt,
+          customerFirstName: data.customerFirstName ?? "",
+          lines: data.lines ?? [],
+          subtotalMinorUnits: data.subtotalMinorUnits ?? 0,
+          estimatedTaxMinorUnits: data.estimatedTaxMinorUnits ?? 0,
+          savingsMinorUnits: data.savingsMinorUnits ?? 0,
+          totalMinorUnits: data.totalMinorUnits ?? 0,
+        });
+      } catch {
+        /* offline / not found — fall back to the URL order number */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [hydrated, localOrder, tokenFromUrl]);
+
+  const order = localOrder ?? fetchedOrder;
   const orderNumber = order?.orderNumber ?? orderFromUrl;
 
   return (
@@ -32,6 +73,12 @@ export function OrderConfirmation() {
           {orderNumber ? (
             <p className="mt-3 text-base font-bold text-white">
               Order <span className="text-white">#{orderNumber}</span>
+            </p>
+          ) : null}
+
+          {statusLabel ? (
+            <p className="mt-2 inline-flex items-center gap-2 rounded-full border border-[var(--greenway)]/40 bg-[var(--greenway)]/10 px-3 py-1 text-[0.7rem] font-black uppercase tracking-[0.14em] text-[var(--greenway)]">
+              {statusLabel}
             </p>
           ) : null}
 

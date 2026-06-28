@@ -122,14 +122,17 @@ Each "slice" is independently shippable so the owner can inspect before continui
 
 > **Slice 6 follow-on (small):** the storefront currently still reads the hardcoded `src/lib/specials/daily-deals.ts`. The DB-backed reader (`getPublishedPromotions`) returns the exact same rules via fallback, so behaviour is identical today. Swapping the menu/specials/cart consumers to call the reader is a low-risk follow-on PR (keeps this slice focused on the admin + data layer, mirroring how Slice 5 shipped the blog reader then swapped consumers).
 
-## SLICE 7 — Real order management (Phase 5)
-- [ ] DB tables: `orders`, `order_lines`, `order_events`.
-- [ ] Server-side order creation API; DB-backed order numbers (keep `GWY-XXXXXX` format).
-- [ ] Replace client `sessionStorage` order persistence; confirmation page reads order by token/id.
-- [ ] Staff order dashboard: large cards, status buttons (new→acknowledged→preparing→ready→completed; cancel/no-show), search by name/phone/order#, filters, print pick-ticket.
-- [ ] Email notifications (Resend) to customer + staff; optional sound alert; optional SMS later.
-- [ ] Soft inventory reservation w/ expiration. **No online payment** — pickup reservation only; final price/tax/limits confirmed in store.
-- [ ] **Deliverable PR + owner inspect.**
+## SLICE 7 — Real order management (Phase 5)  *(PR #39)*
+- [x] DB tables: `orders`, `order_lines`, `order_events` (migration `0007_slice7_orders.sql`; `order_status` enum; DB `generate_order_number()` keeps `GWY-XXXXXX`; private `public_token` for guest reads; RLS staff-all + public-insert).
+- [x] Server-side order creation API (`POST /api/orders`); DB-backed order numbers; service-role `orders-store.ts`.
+- [x] Replace client `sessionStorage` order persistence (CheckoutFlow now POSTs to the API, keeps sessionStorage as instant fallback); confirmation page reads order by token via `GET /api/orders/[token]` and shows live status.
+- [x] Staff order dashboard (`/admin/orders`): large cards, status buttons (new→acknowledged→preparing→ready→completed; cancel/no-show), search by name/phone/order#, status filters, detail page + print pick-ticket (`/admin/orders/[id]/ticket`).
+- [x] Email notifications (Resend, env-gated best-effort no-op) to customer + staff (`notify.ts`). Sound alert / SMS deferred.
+- [x] Soft inventory reservation w/ 24h expiry (advisory `reservation_expires_at`). **No online payment** — pickup reservation only; final price/tax/limits confirmed in store.
+- [x] Audit log on every status change + note (`order.status_changed`, `order.note_updated`); permissions `orders.view`/`orders.manage`; Orders nav un-`comingSoon`.
+- [x] **Deliverable PR + owner inspect.**
+
+> **Slice 7 owner manual step:** apply migration `0007_slice7_orders.sql` in Supabase. Until then `/admin/orders` shows a "not configured" notice and checkout falls back to the local confirmation. Optional: set `ORDER_EMAIL_FROM` + `ORDER_STAFF_EMAILS` (+ existing `RESEND_API_KEY`) to turn on order emails.
 
 ## SLICE 8 — Loyalty management (Phase 3/5 adjacent)
 - [ ] DB table `loyalty_signups`; migrate from `storage/loyalty-signups.jsonl`.

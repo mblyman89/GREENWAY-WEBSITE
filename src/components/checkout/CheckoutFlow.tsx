@@ -71,7 +71,7 @@ export function CheckoutFlow() {
     setInfoSaved(true);
   }
 
-  function handlePlaceOrder() {
+  async function handlePlaceOrder() {
     if (!valid) {
       setShowErrors(true);
       return;
@@ -79,11 +79,55 @@ export function CheckoutFlow() {
     if (items.length === 0 || submitting) return;
     setSubmitting(true);
 
-    const orderNumber = generateOrderNumber();
+    const lines = items.map((item) => ({
+      productId: item.productId,
+      variantId: item.variantId,
+      productName: item.productName,
+      brand: item.brand,
+      variantLabel: item.variantLabel,
+      quantity: item.quantity,
+      // Use the authoritative engine-discounted unit price.
+      priceMinorUnits: item.effectivePriceMinorUnits,
+      regularPriceMinorUnits: item.regularPriceMinorUnits,
+    }));
+
+    // Attempt server-side persistence (Slice 7). The DB generates the order
+    // number + a private token. If the server is unavailable (e.g. Supabase not
+    // configured yet during rollout) we fall back to a locally generated number
+    // so checkout always succeeds for the customer.
+    let orderNumber = generateOrderNumber();
+    let publicToken: string | undefined;
+    try {
+      const res = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          customerFirstName: info.firstName.trim(),
+          customerLastName: info.lastName.trim(),
+          customerEmail: info.email.trim(),
+          customerPhone: info.phone.trim(),
+          customerBirthday: info.birthday.trim(),
+          subtotalMinorUnits,
+          estimatedTaxMinorUnits,
+          savingsMinorUnits,
+          totalMinorUnits,
+          lines,
+        }),
+      });
+      if (res.ok) {
+        const data = (await res.json()) as { orderNumber?: string; publicToken?: string };
+        if (data.orderNumber) orderNumber = data.orderNumber;
+        if (data.publicToken) publicToken = data.publicToken;
+      }
+    } catch {
+      // network error — keep the locally generated number
+    }
+
     // Decrement on-page inventory as if these units left the shelf.
     recordSale(items.map((item) => ({ variantId: item.variantId, quantity: item.quantity })));
     persistCompletedOrder({
       orderNumber,
+      publicToken,
       placedAt: new Date().toISOString(),
       customerFirstName: info.firstName.trim(),
       lines: items.map((item) => ({
@@ -91,7 +135,6 @@ export function CheckoutFlow() {
         brand: item.brand,
         variantLabel: item.variantLabel,
         quantity: item.quantity,
-        // Use the authoritative engine-discounted unit price.
         priceMinorUnits: item.effectivePriceMinorUnits,
         regularPriceMinorUnits: item.regularPriceMinorUnits,
       })),
@@ -101,7 +144,9 @@ export function CheckoutFlow() {
       totalMinorUnits,
     });
     clearCart();
-    router.push(`/checkout/confirmation?order=${encodeURIComponent(orderNumber)}`);
+    const params = new URLSearchParams({ order: orderNumber });
+    if (publicToken) params.set("t", publicToken);
+    router.push(`/checkout/confirmation?${params.toString()}`);
   }
 
   if (items.length === 0 && !submitting) {
