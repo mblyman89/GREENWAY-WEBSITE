@@ -3,6 +3,7 @@ import { Footer } from "@/components/site/Footer";
 import { Header } from "@/components/site/Header";
 import { Breadcrumbs } from "@/components/site/Breadcrumbs";
 import { pageMetadata } from "@/lib/seo/seo";
+import { getThursdayBrands } from "@/lib/promotions/storefront-bridge";
 
 export const metadata = pageMetadata({
   title: "Cannabis Specials & Daily Deals — Port Orchard",
@@ -12,12 +13,15 @@ export const metadata = pageMetadata({
   image: "/og/specials.png",
 });
 
-export default function SpecialsPage() {
+export default async function SpecialsPage() {
+  // DB-published Thursday brands (back-office promotions) with static fallback.
+  const thursdayBrands = await getThursdayBrands();
+
   return (
     <main id="top" className="min-h-screen bg-black text-white">
       <Header />
       <Breadcrumbs items={[{ label: "Specials" }]} />
-      <SpecialsContent />
+      <SpecialsContent thursdayBrands={thursdayBrands} />
       <Footer />
     </main>
   );
