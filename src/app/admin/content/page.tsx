@@ -4,13 +4,33 @@ import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { ContentPreviewPanel } from "@/components/admin/ContentPreviewPanel";
+import { ContentBlockEditor } from "@/components/admin/ContentBlockEditor";
 import { listContentBlocks } from "@/lib/cms/content-store";
 import { CONTENT_BLOCK_SEEDS } from "@/lib/cms/content-blocks-seed";
+import { isAiConfigured } from "@/lib/cms/ai-content";
 import {
   seedContentBlocksAction,
   saveContentDraftAction,
   publishContentBlockAction,
 } from "./actions";
+
+/** Map a content block's page group to a public URL for "View on site". */
+function publicPathForPage(page: string): string | null {
+  switch (page) {
+    case "home":
+      return "/";
+    case "menu":
+      return "/menu";
+    case "loyalty":
+      return "/loyalty";
+    case "vendors":
+      return "/vendors";
+    case "specials":
+      return "/specials";
+    default:
+      return null;
+  }
+}
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +53,7 @@ export default async function SiteContentPage({
 
   const blocks = await listContentBlocks();
   const notSeeded = blocks.length === 0;
+  const aiEnabled = isAiConfigured;
 
   // Group by page.
   const byPage = new Map<string, typeof blocks>();
@@ -98,66 +119,24 @@ export default async function SiteContentPage({
             <div key={page}>
               <h2 className="mb-3 text-sm font-bold uppercase tracking-wider text-[#7ed957]">{page}</h2>
               <div className="space-y-4">
-                {items.map((b) => {
-                  const dirty = (b.draft_value ?? "") !== (b.published_value ?? "");
-                  return (
-                    <div
-                      key={b.id}
-                      id={`block-${b.block_key}`}
-                      className="scroll-mt-24 rounded-xl border border-white/10 bg-[#0a0a0a] p-4"
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div>
-                          <div className="text-sm font-semibold text-white">{b.label}</div>
-                          <div className="font-mono text-xs text-white/35">{b.block_key}</div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {b.seo_impact && (
-                            <span className="rounded-full border border-[#ffd700]/40 bg-[#ffd700]/10 px-2 py-0.5 text-[0.65rem] font-semibold text-[#ffd700]">
-                              SEO impact
-                            </span>
-                          )}
-                          <span className="rounded-full border border-white/15 px-2 py-0.5 text-[0.65rem] font-semibold text-white/50">
-                            {b.field_type}
-                          </span>
-                          {dirty && (
-                            <span className="rounded-full border border-[#ff7f00]/40 bg-[#ff7f00]/10 px-2 py-0.5 text-[0.65rem] font-semibold text-[#ff7f00]">
-                              unpublished draft
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      {b.help_text && <p className="mt-1 text-xs text-white/45">{b.help_text}</p>}
-
-                      <form action={saveContentDraftAction} className="mt-3 space-y-2">
-                        <input type="hidden" name="block_key" value={b.block_key} />
-                        <textarea
-                          name="draft_value"
-                          rows={b.field_type === "rich" || b.field_type === "markdown" ? 4 : 2}
-                          defaultValue={b.draft_value ?? ""}
-                          className="w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#7ed957]"
-                        />
-                        <div className="flex flex-wrap gap-2">
-                          <button type="submit" className="rounded-lg border border-white/15 px-3 py-1.5 text-xs font-bold text-white/80 hover:bg-white/10">
-                            Save draft
-                          </button>
-                        </div>
-                      </form>
-                      <form action={publishContentBlockAction} className="mt-2">
-                        <input type="hidden" name="block_key" value={b.block_key} />
-                        <button type="submit" className="rounded-lg bg-[#7ed957] px-3 py-1.5 text-xs font-bold text-black hover:bg-[#6bc746]">
-                          Publish live
-                        </button>
-                      </form>
-
-                      {b.published_value != null && (
-                        <p className="mt-2 text-xs text-white/35">
-                          <span className="font-semibold text-white/45">Live:</span> {b.published_value}
-                        </p>
-                      )}
-                    </div>
-                  );
-                })}
+                {items.map((b) => (
+                  <ContentBlockEditor
+                    key={b.id}
+                    block={{
+                      block_key: b.block_key,
+                      label: b.label,
+                      field_type: b.field_type,
+                      help_text: b.help_text,
+                      seo_impact: b.seo_impact,
+                      draft_value: b.draft_value,
+                      published_value: b.published_value,
+                    }}
+                    aiEnabled={aiEnabled}
+                    saveDraftAction={saveContentDraftAction}
+                    publishAction={publishContentBlockAction}
+                    publicPath={publicPathForPage(b.page)}
+                  />
+                ))}
               </div>
             </div>
           ))}
