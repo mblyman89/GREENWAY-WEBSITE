@@ -1,7 +1,8 @@
 import { BlogGrid } from "@/components/blog/BlogGrid";
 import { blogPosts } from "@/lib/blog/posts";
+import type { BlogPost } from "@/lib/blog/posts";
 
-export function BlogContent() {
+export function BlogContent({ posts = blogPosts }: { posts?: BlogPost[] }) {
   return (
     <section className="relative overflow-hidden bg-black text-white">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_8%,rgba(126,217,87,0.14),transparent_18rem),radial-gradient(circle_at_82%_12%,rgba(255,127,0,0.13),transparent_22rem),radial-gradient(circle_at_50%_78%,rgba(255,215,0,0.08),transparent_24rem)]" />
@@ -32,7 +33,7 @@ export function BlogContent() {
         </div>
 
         <div className="mt-9 md:mt-12 lg:mt-16">
-          <BlogGrid posts={blogPosts} />
+          <BlogGrid posts={posts} />
         </div>
       </div>
     </section>

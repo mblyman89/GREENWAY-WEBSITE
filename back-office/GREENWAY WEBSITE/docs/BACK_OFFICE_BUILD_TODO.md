@@ -97,14 +97,16 @@ Each "slice" is independently shippable so the owner can inspect before continui
 - [x] Gap dashboard: products missing image / description / brand link. *(stat cards + gap filters on `/admin/products`)*
 - [ ] **Deliverable PR + owner inspect.**
 
-## SLICE 5 — Blog/newsletter CMS + site-text editor (Phase 3c)
-- [ ] DB tables: `blog_posts`, `newsletter_assets`, `content_blocks`, `seo_entries`.
-- [ ] Migrate existing `src/lib/blog/posts.ts` into `blog_posts`.
-- [ ] Blog editor: draft/scheduled/published/archived, slug uniqueness, excerpt, author, hero image, rich text/markdown + preview, SEO fields, categories (Products/Deals/Culture/Newsletter).
-- [ ] Newsletter mode: PDF upload + page images, first page as preview.
-- [ ] Controlled site-text editor (content blocks by key — NOT a free-form page builder). Keys per strategy report §4.4.
-- [ ] SEO editor with Google-style preview + length validation; sitemap auto-update on publish.
-- [ ] **Deliverable PR + owner inspect.**
+## SLICE 5 — Blog/newsletter CMS + site-text editor (Phase 3c)  *(PR pending)*
+- [x] DB tables: `blog_posts`, `newsletter_assets`, `content_blocks`, `seo_entries`. *(migration `0005_slice5_cms.sql`; adds `post_status` enum; RLS staff-all + public-read-published; reuses `set_updated_at` + `is_staff()`)*
+- [x] Migrate existing `src/lib/blog/posts.ts` into `blog_posts`. *(public blog now reads DB via `getPublicPosts/getPublicPost` with automatic fallback to the committed static `blogPosts` when DB is empty/unconfigured — zero-blank guarantee; no destructive migration needed)*
+- [x] Blog editor: draft/scheduled/published/archived, slug uniqueness, excerpt, author, hero image, rich text/markdown + preview, SEO fields, categories (Products/Deals/Culture/Newsletter). *(`/admin/blog`, `/admin/blog/new`, `/admin/blog/[id]`; paragraph-block body; hero upload→media library; status controls; Google-style SEO preview)*
+- [x] Newsletter mode: PDF upload + page images, first page as preview. *(`kind=newsletter`; `newsletter_assets` PDF upload + page paths; first page = preview on public article page)*
+- [x] Controlled site-text editor (content blocks by key — NOT a free-form page builder). Keys per strategy report §4.4. *(`/admin/content`; seeded set in `content-blocks-seed.ts`: home.hero.title/subtitle, menu.hero.title/subtitle, loyalty.hero.title/subtitle, vendors.outreach.heading, specials.hero.subtitle, footer.compliance.warning, business.hours.display; draft→publish per block; `getPublishedContent()` reader with default fallback)*
+- [x] SEO editor with Google-style preview + length validation; sitemap auto-update on publish. *(`/admin/content/seo`; per-path title/desc/canonical/noindex/sitemap-include; live char counters w/ 50–60 / 140–160 targets; `seo_entries` table; revalidates path on save)*
+- [x] **AI woven in (per owner request):** "Draft body" + "Suggest SEO" buttons on the blog editor → compliant drafts via `src/lib/ai/`, persisted as `ai_suggestions` (entity_type `blog`), shown with compliance flags + Accept/Reject. Never auto-published. *(`src/lib/cms/ai-blog.ts` + blog actions)*
+- [x] Un-hid Blog & Newsletter + Site Content nav items. *(removed `comingSoon`)*
+- [ ] **Deliverable PR + owner inspect.** *(PR open; awaiting owner to run migration 0005 + review)*
 
 ## SLICE 6 — Promotions / specials manager (Phase 4)
 - [ ] DB tables: `promotions`, `promotion_targets`, `promotion_exclusions`, `promotion_audit_snapshots`.

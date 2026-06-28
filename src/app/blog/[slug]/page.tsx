@@ -5,7 +5,7 @@ import type { Metadata } from "next";
 import { Breadcrumbs } from "@/components/site/Breadcrumbs";
 import { Footer } from "@/components/site/Footer";
 import { Header } from "@/components/site/Header";
-import { blogPosts, getBlogPost } from "@/lib/blog/posts";
+import { getPublicPost, getPublishedSlugs } from "@/lib/cms/blog-store";
 
 type BlogArticlePageProps = {
   params: Promise<{
@@ -13,13 +13,18 @@ type BlogArticlePageProps = {
   }>;
 };
 
-export function generateStaticParams() {
-  return blogPosts.map((post) => ({ slug: post.slug }));
+// Allow slugs created in the CMS that weren't known at build time.
+export const dynamicParams = true;
+export const revalidate = 300;
+
+export async function generateStaticParams() {
+  const slugs = await getPublishedSlugs();
+  return slugs.map((slug) => ({ slug }));
 }
 
 export async function generateMetadata({ params }: BlogArticlePageProps): Promise<Metadata> {
   const { slug } = await params;
-  const post = getBlogPost(slug);
+  const post = await getPublicPost(slug);
 
   if (!post) {
     return {
@@ -35,7 +40,7 @@ export async function generateMetadata({ params }: BlogArticlePageProps): Promis
 
 export default async function BlogArticlePage({ params }: BlogArticlePageProps) {
   const { slug } = await params;
-  const post = getBlogPost(slug);
+  const post = await getPublicPost(slug);
 
   if (!post) notFound();
 

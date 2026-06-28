@@ -21,8 +21,8 @@ export const adminNav: AdminNavItem[] = [
   { label: "Promotions", href: "/admin/promotions", permission: "promotions.manage", icon: "%", group: "Catalog", comingSoon: true },
 
   { label: "Media Library", href: "/admin/media", permission: "media.manage", icon: "🖼", group: "Content" },
-  { label: "Blog & Newsletter", href: "/admin/blog", permission: "blog.manage", icon: "✎", group: "Content", comingSoon: true },
-  { label: "Site Content", href: "/admin/content", permission: "content.edit", icon: "❡", group: "Content", comingSoon: true },
+  { label: "Blog & Newsletter", href: "/admin/blog", permission: "blog.manage", icon: "✎", group: "Content" },
+  { label: "Site Content", href: "/admin/content", permission: "content.edit", icon: "❡", group: "Content" },
 
   { label: "Reports", href: "/admin/reports", permission: "reports.view", icon: "📊", group: "Insights", comingSoon: true },
 
