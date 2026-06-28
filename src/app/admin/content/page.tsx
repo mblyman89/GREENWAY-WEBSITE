@@ -3,13 +3,12 @@ import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
-import { ContentPreviewPanel } from "@/components/admin/ContentPreviewPanel";
-import {
-  ContentBlocksBrowser,
-  type BlockVM,
-} from "@/components/admin/ContentBlocksBrowser";
+import { ContentEditorShell } from "@/components/admin/ContentEditorShell";
+import { type BlockVM } from "@/components/admin/ContentBlocksBrowser";
+import type { MediaChoice } from "@/components/admin/ContentImageField";
 import { ContentBulkBar } from "@/components/admin/ContentBulkBar";
 import { listContentBlocks, listContentRevisions } from "@/lib/cms/content-store";
+import { listMedia } from "@/lib/media/store";
 import { CONTENT_BLOCK_SEEDS } from "@/lib/cms/content-blocks-seed";
 import { isAiConfigured } from "@/lib/cms/ai-content";
 import {
@@ -75,6 +74,17 @@ export default async function SiteContentPage({
   const blocks = await listContentBlocks();
   const notSeeded = blocks.length === 0;
   const aiEnabled = isAiConfigured;
+
+  // Published media images for the image-block picker (banners, hero photos).
+  const mediaAssets = await listMedia({ status: "published", limit: 200 });
+  const mediaChoices: MediaChoice[] = mediaAssets
+    .filter((m) => (m.mime_type ?? "").startsWith("image/") && m.public_url)
+    .map((m) => ({
+      id: m.id,
+      url: m.public_url as string,
+      title: m.title ?? m.filename ?? "Image",
+      usageType: m.usage_type ?? null,
+    }));
 
   // How many blocks have an unpublished draft (a draft != live, or not yet published)?
   const pendingCount = blocks.filter(
@@ -181,10 +191,10 @@ export default async function SiteContentPage({
             publishAllAction={publishAllDraftsAction}
             discardAllAction={discardAllDraftsAction}
           />
-          <ContentPreviewPanel />
-          <ContentBlocksBrowser
+          <ContentEditorShell
             blocks={blockVMs}
             aiEnabled={aiEnabled}
+            mediaChoices={mediaChoices}
             saveDraftAction={saveContentDraftAction}
             publishAction={publishContentBlockAction}
             restoreAction={restoreContentRevisionAction}

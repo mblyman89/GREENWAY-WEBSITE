@@ -2,6 +2,19 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   allowedDevOrigins: ["127.0.0.1"],
+  images: {
+    // Banner/hero images chosen in the Site Content editor can come from the
+    // Supabase Storage public bucket (media library). Allow next/image to
+    // optimize those remote URLs. Site-relative paths under /public still work
+    // as before. The pattern matches any Supabase project storage object.
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "*.supabase.co",
+        pathname: "/storage/v1/object/public/**",
+      },
+    ],
+  },
   experimental: {
     serverActions: {
       // POS exports (PRODUCTS.xlsx + INVENTORIES.xlsx) are uploaded together via

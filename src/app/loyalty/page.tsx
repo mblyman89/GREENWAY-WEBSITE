@@ -15,7 +15,12 @@ export const metadata = pageMetadata({
 
 export default async function LoyaltyPage() {
   const [copy, preview] = await Promise.all([
-    getContentValues(["loyalty.hero.title", "loyalty.hero.subtitle"]),
+    getContentValues([
+      "loyalty.hero.title",
+      "loyalty.hero.subtitle",
+      "loyalty.hero.image",
+      "loyalty.hero.image_mobile",
+    ]),
     isPreviewActive(),
   ]);
 
@@ -27,6 +32,8 @@ export default async function LoyaltyPage() {
         content={{
           title: copy["loyalty.hero.title"],
           subtitle: copy["loyalty.hero.subtitle"],
+          heroImage: copy["loyalty.hero.image"],
+          heroImageMobile: copy["loyalty.hero.image_mobile"],
           editable: preview,
         }}
       />

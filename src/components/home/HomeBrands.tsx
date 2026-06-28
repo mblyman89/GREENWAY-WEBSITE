@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo } from "react";
 import { SectionBanner } from "@/components/home/SectionBanner";
+import type { PromoBannerContent } from "@/components/home/PromoGrid";
 import type { GreenwayMenuItem } from "@/lib/leafly/types";
 import { useShuffleOrder } from "@/lib/home/useShuffleOrder";
 
@@ -43,7 +44,13 @@ function buildBrandEntries(items: GreenwayMenuItem[]): BrandEntry[] {
  * a 4x4 grid on desktop / 2-up on mobile, each linking to the brand-filtered
  * menu (/menu?brands=<brand>).
  */
-export function HomeBrands({ items }: { items: GreenwayMenuItem[] }) {
+export function HomeBrands({
+  items,
+  content,
+}: {
+  items: GreenwayMenuItem[];
+  content?: PromoBannerContent;
+}) {
   const allBrands = useMemo(() => buildBrandEntries(items), [items]);
   const shuffle = useShuffleOrder(
     "home-brands",
@@ -61,11 +68,16 @@ export function HomeBrands({ items }: { items: GreenwayMenuItem[] }) {
     <section id="shop-by-brand" className="bg-black px-4 py-6 md:px-8 md:py-8" aria-label="Shop by brand">
       <div className="mx-auto max-w-[88rem] space-y-4 md:space-y-6">
         <SectionBanner
-          imageSrc="/home/brand-banner.webp"
+          imageSrc={content?.brandImage || "/home/brand-banner.webp"}
           imageAlt="Greenway featured cannabis brands"
-          eyebrow="Featured Brands"
-          title="Shop by Brand"
-          subtitle="A fresh lineup of our favorite brands every visit — tap any to shop their full menu."
+          eyebrow={content?.brandEyebrow || "Featured Brands"}
+          title={content?.brandTitle || "Shop by Brand"}
+          subtitle={
+            content?.brandSubtitle ||
+            "A fresh lineup of our favorite brands every visit — tap any to shop their full menu."
+          }
+          editable={content?.editable}
+          blockKeyPrefix="home.brand"
         />
 
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4 lg:grid-cols-4">
