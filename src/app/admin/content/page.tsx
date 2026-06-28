@@ -3,6 +3,7 @@ import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
+import { ContentPreviewPanel } from "@/components/admin/ContentPreviewPanel";
 import { listContentBlocks } from "@/lib/cms/content-store";
 import { CONTENT_BLOCK_SEEDS } from "@/lib/cms/content-blocks-seed";
 import {
@@ -91,14 +92,20 @@ export default async function SiteContentPage({
             </form>
           </div>
         ) : (
-          Array.from(byPage.entries()).map(([page, items]) => (
+          <>
+          <ContentPreviewPanel />
+          {Array.from(byPage.entries()).map(([page, items]) => (
             <div key={page}>
               <h2 className="mb-3 text-sm font-bold uppercase tracking-wider text-[#7ed957]">{page}</h2>
               <div className="space-y-4">
                 {items.map((b) => {
                   const dirty = (b.draft_value ?? "") !== (b.published_value ?? "");
                   return (
-                    <div key={b.id} className="rounded-xl border border-white/10 bg-[#0a0a0a] p-4">
+                    <div
+                      key={b.id}
+                      id={`block-${b.block_key}`}
+                      className="scroll-mt-24 rounded-xl border border-white/10 bg-[#0a0a0a] p-4"
+                    >
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div>
                           <div className="text-sm font-semibold text-white">{b.label}</div>
@@ -153,7 +160,8 @@ export default async function SiteContentPage({
                 })}
               </div>
             </div>
-          ))
+          ))}
+          </>
         )}
       </div>
     </div>

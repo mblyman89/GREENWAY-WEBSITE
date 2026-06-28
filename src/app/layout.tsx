@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import { draftMode } from "next/headers";
 import { Analytics } from "@/components/analytics/Analytics";
+import { PreviewEditOverlay } from "@/components/site/PreviewEditOverlay";
 import { AgeGate } from "@/components/age-gate/AgeGate";
 import { CartProvider } from "@/components/cart/CartProvider";
 import { ScrollToTopButton } from "@/components/site/ScrollToTopButton";
@@ -55,7 +57,16 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  // When a staff member is previewing drafts (Draft Mode on), mount the
+  // click-to-edit overlay + preview banner over the public site.
+  let isPreview = false;
+  try {
+    isPreview = (await draftMode()).isEnabled;
+  } catch {
+    isPreview = false;
+  }
+
   return (
     <html lang="en">
       <body>
@@ -64,6 +75,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <ScrollToTopButton />
         <AgeGate />
         <Analytics />
+        {isPreview && <PreviewEditOverlay />}
       </body>
     </html>
   );
