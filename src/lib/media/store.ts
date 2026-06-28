@@ -1,11 +1,15 @@
 /**
  * src/lib/media/store.ts
  *
- * Server-side media library service: upload assets to the private `media`
- * bucket, create/update media_assets rows, track usage, and publish/archive.
+ * Server-side media library service (split delivery model — migration 0012):
+ *   • PUBLIC `media` bucket  → website-facing imagery (logos, banners, hero /
+ *     carousel, blog covers, product images). Served via the public CDN
+ *     endpoint with stable, cacheable URLs.
+ *   • PRIVATE `media-private` bucket → restricted documents (newsletter PDFs and
+ *     any future private files). Served ONLY through short-lived signed URLs.
  *
- * Published assets are publicly readable (RLS in migration 0003) so they can be
- * served as logos/banners; drafts stay staff-only.
+ * This is the industry-standard approach (Wix / Squarespace / Shopify): public
+ * read for content meant to be displayed, signed URLs for restricted files.
  */
 import "server-only";
 import crypto from "node:crypto";
@@ -13,11 +17,41 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured, supabaseUrl } from "@/lib/supabase/env";
 import type { MediaAsset } from "@/lib/supabase/types";
 
+/** Public bucket for site imagery (public = true after migration 0012). */
 const MEDIA_BUCKET = "media";
+/** Private bucket for restricted documents (newsletter PDFs, etc.). */
+export const MEDIA_PRIVATE_BUCKET = "media-private";
 
+/**
+ * Stable public CDN URL for an image stored in the public `media` bucket. Only
+ * valid once the bucket is public (migration 0012); before that the endpoint
+ * 400s, which is exactly the blank-thumbnail bug this migration fixes.
+ */
 export function publicUrlForKey(storageKey: string): string | null {
   if (!supabaseUrl) return null;
   return `${supabaseUrl}/storage/v1/object/public/${MEDIA_BUCKET}/${storageKey}`;
+}
+
+/**
+ * Mint a short-lived signed URL for a restricted file in the PRIVATE bucket
+ * (e.g. a newsletter PDF). Default expiry 1 hour. Returns null if storage is
+ * not configured or signing fails.
+ */
+export async function signedUrlForPrivateKey(
+  storageKey: string,
+  expiresInSeconds = 60 * 60,
+): Promise<string | null> {
+  if (!isSupabaseServiceConfigured) return null;
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin.storage
+      .from(MEDIA_PRIVATE_BUCKET)
+      .createSignedUrl(storageKey, expiresInSeconds);
+    if (error || !data) return null;
+    return data.signedUrl;
+  } catch {
+    return null;
+  }
 }
 
 export type UploadMediaInput = {

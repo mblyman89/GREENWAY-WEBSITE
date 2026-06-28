@@ -26,31 +26,35 @@ import { generateSeoMeta } from "@/lib/cms/ai-seo";
  * Footer (compliance) + business hours render in the shared footer on EVERY
  * page, so those revalidate the whole root layout.
  */
+const PAGE_TO_PATH: Record<string, string> = {
+  home: "/",
+  menu: "/menu",
+  loyalty: "/loyalty",
+  vendors: "/vendor-delivery",
+  specials: "/specials",
+  faq: "/faq",
+  about: "/about",
+  locations: "/locations",
+  "price-match": "/price-match",
+};
+
 function revalidatePublicForPage(page: string): void {
-  switch (page) {
-    case "home":
-      revalidatePath("/");
-      break;
-    case "menu":
-      revalidatePath("/menu");
-      break;
-    case "loyalty":
-      revalidatePath("/loyalty");
-      break;
-    case "vendors":
-      revalidatePath("/vendor-delivery");
-      break;
-    case "specials":
-      revalidatePath("/specials");
-      break;
-    case "faq":
-      revalidatePath("/faq");
-      break;
-    case "footer":
-    case "business":
-      revalidatePath("/", "layout");
-      break;
+  // Footer (compliance) + business hours render in the shared footer on EVERY
+  // page, so those must revalidate the whole root layout.
+  if (page === "footer" || page === "business") {
+    revalidatePath("/", "layout");
+    return;
   }
+
+  const path = PAGE_TO_PATH[page];
+  if (path) revalidatePath(path);
+
+  // Safety net: the root layout hosts shared chrome (header/footer, fonts) and
+  // public pages are force-dynamic, so revalidating the layout guarantees the
+  // newly published value is visible on the next non-preview load even if a
+  // block surfaces in more than one place. This is what makes "Publish" reliably
+  // update the live site (the previously reported bug).
+  revalidatePath("/", "layout");
 }
 
 export type AiSuggestResult =
