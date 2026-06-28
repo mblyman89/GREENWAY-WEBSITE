@@ -2,6 +2,13 @@
 
 > **Purpose:** A complete, self-contained execution roadmap for building the Greenway Marijuana back office. Any agent or developer can pick this up mid-stream. Tasks are grouped by phase and chunk. Mark `[x]` when complete with concrete evidence. **Never delete tasks — only check them off.**
 
+## 🔶 ACTIVE PHASE — USER-FRIENDLINESS OVERHAUL (read first, every session)
+> The build (Slices 1–9) is functionally complete. The current focus is a **UX overhaul** to make the back office Squarespace/Wix-grade: visual see-what-you-edit editing, helper-rich, AI-first (AI does the work, humans review), and bulletproof. **Before any work, re-read these three docs in `docs/` + walk the project tree:**
+> - `UX_OVERHAUL_ROADMAP.md` — the slice plan (UX-0 … UX-7) + standing rules.
+> - `UX_OVERHAUL_CHECKLIST.md` — granular check-off tasks.
+> - `UX_OVERHAUL_RESEARCH.md` — research-backed design principles.
+> Also see the owner-facing `BACK_OFFICE_USER_GUIDE.md` (root) for "what's built / how to use it."
+
 ## Project context (read first)
 - **Repo:** `mblyman89/GREENWAY-WEBSITE`, branch `main`.
 - **Stack:** Next.js 16 (App Router) · React 19 · TypeScript · Tailwind CSS v4 · Vercel.
