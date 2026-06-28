@@ -27,6 +27,7 @@ function withIds(buttons: SectionButton[]): DraftButton[] {
 
 export function SectionCard({
   section,
+  pageSlug,
   index,
   total,
   mediaChoices,
@@ -36,6 +37,7 @@ export function SectionCard({
   moveAction,
 }: {
   section: SectionAdminVM;
+  pageSlug: string;
   index: number;
   total: number;
   mediaChoices: MediaChoice[];
@@ -169,6 +171,7 @@ export function SectionCard({
         {!locked ? (
           <div className="flex items-center gap-1.5">
             <form action={moveAction}>
+              <input type="hidden" name="page_slug" value={pageSlug} />
               <input type="hidden" name="section_id" value={section.id} />
               <input type="hidden" name="direction" value="up" />
               <button
@@ -181,6 +184,7 @@ export function SectionCard({
               </button>
             </form>
             <form action={moveAction}>
+              <input type="hidden" name="page_slug" value={pageSlug} />
               <input type="hidden" name="section_id" value={section.id} />
               <input type="hidden" name="direction" value="down" />
               <button
@@ -204,6 +208,7 @@ export function SectionCard({
                 }
               }}
             >
+              <input type="hidden" name="page_slug" value={pageSlug} />
               <input type="hidden" name="section_id" value={section.id} />
               <button
                 type="submit"
@@ -225,6 +230,7 @@ export function SectionCard({
         <>
           {/* Editor form */}
           <form action={saveAction} className="space-y-4">
+            <input type="hidden" name="page_slug" value={pageSlug} />
             <input type="hidden" name="section_id" value={section.id} />
             <input type="hidden" name="image" value={image} />
             <input type="hidden" name="image_focus" value={imageFocus} />
@@ -441,6 +447,7 @@ export function SectionCard({
 
           {/* Publish */}
           <form action={publishAction} className="mt-3 border-t border-white/10 pt-3">
+            <input type="hidden" name="page_slug" value={pageSlug} />
             <input type="hidden" name="section_id" value={section.id} />
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-xs text-white/50">

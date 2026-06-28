@@ -8,6 +8,7 @@ import { StaffShortcut } from "@/components/site/StaffShortcut";
 import { posMenuPreviewItems } from "@/lib/pos/preview-menu";
 import { getContentValues, isPreviewActive } from "@/lib/cms/render-content";
 import { getCarouselForRender } from "@/lib/cms/carousel-store";
+import { getSectionsForRender } from "@/lib/cms/page-sections-store";
 
 export const metadata: Metadata = {
   // The root layout supplies the default title; we only set the canonical here so
@@ -21,7 +22,7 @@ export const metadata: Metadata = {
 export default async function Home() {
   // Hero slides come from the staff-managed Home Carousel (draft-aware).
   // Section-banner copy/images are editable from Admin → Site Content.
-  const [slides, copy, preview] = await Promise.all([
+  const [slides, copy, sections, preview] = await Promise.all([
     getCarouselForRender(),
     getContentValues([
       "home.category.image",
@@ -33,8 +34,16 @@ export default async function Home() {
       "home.brand.title",
       "home.brand.subtitle",
     ]),
+    // New per-page sections (Pages → Home → Sections). When present, these are
+    // the source of truth for the Category + Brand banners; otherwise we fall
+    // back to the legacy content_blocks copy, then to hardcoded defaults.
+    getSectionsForRender("home"),
     isPreviewActive(),
   ]);
+
+  // Map the new page_sections rows (by section_key) onto the banner content.
+  const category = sections.find((s) => s.key === "home.category");
+  const brand = sections.find((s) => s.key === "home.brand");
 
   return (
     <main>
@@ -43,14 +52,15 @@ export default async function Home() {
       <HomeDailyDeals items={posMenuPreviewItems} />
       <PromoGrid
         content={{
-          categoryImage: copy["home.category.image"],
-          categoryEyebrow: copy["home.category.eyebrow"],
-          categoryTitle: copy["home.category.title"],
-          categorySubtitle: copy["home.category.subtitle"],
-          brandImage: copy["home.brand.image"],
-          brandEyebrow: copy["home.brand.eyebrow"],
-          brandTitle: copy["home.brand.title"],
-          brandSubtitle: copy["home.brand.subtitle"],
+          categoryImage: category?.image || copy["home.category.image"],
+          categoryEyebrow: category?.eyebrow || copy["home.category.eyebrow"],
+          categoryTitle: category?.title || copy["home.category.title"],
+          categorySubtitle:
+            category?.subtitle || copy["home.category.subtitle"],
+          brandImage: brand?.image || copy["home.brand.image"],
+          brandEyebrow: brand?.eyebrow || copy["home.brand.eyebrow"],
+          brandTitle: brand?.title || copy["home.brand.title"],
+          brandSubtitle: brand?.subtitle || copy["home.brand.subtitle"],
           editable: preview,
         }}
       />

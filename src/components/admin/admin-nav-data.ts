@@ -6,7 +6,7 @@ export type AdminNavItem = {
   href: string;
   permission: Permission;
   icon: string; // simple emoji/glyph for now; swap for SVG icons later
-  group: "Operations" | "Catalog" | "Pages" | "Content" | "Insights" | "Admin";
+  group: "Operations" | "Catalog" | "Content" | "Pages" | "Insights" | "Admin";
   comingSoon?: boolean;
 };
 
@@ -48,8 +48,8 @@ export const adminNav: AdminNavItem[] = [
 export const navGroups: AdminNavItem["group"][] = [
   "Operations",
   "Catalog",
-  "Pages",
   "Content",
+  "Pages",
   "Insights",
   "Admin",
 ];

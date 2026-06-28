@@ -97,6 +97,8 @@ function isDirty(row: PageSectionRow): boolean {
 
 export async function listSections(pageSlug: string): Promise<SectionAdminVM[]> {
   if (!isSupabaseServiceConfigured) return [];
+  // Self-heal any rows seeded with the old (non-existent) image paths.
+  await healLegacySeedImages(pageSlug);
   const admin = createSupabaseAdminClient();
   const { data } = await admin
     .from("page_sections")
@@ -184,8 +186,40 @@ export async function getSectionsForRender(
 // Lazy seed
 // ---------------------------------------------------------------------------
 
+/**
+ * One-time, idempotent self-heal for rows seeded with image paths that were
+ * later corrected in the seed file. Maps a known-bad legacy path to the real
+ * public asset. Updates BOTH published + draft image columns when they still
+ * hold the bad value. Safe to call repeatedly; no-op once healed.
+ */
+const LEGACY_IMAGE_FIXES: Record<string, string> = {
+  "/brand/greenway-shop-by-category-banner.png": "/home/category-banner.webp",
+  "/brand/greenway-shop-by-brand-banner.png": "/home/brand-banner.webp",
+};
+
+export async function healLegacySeedImages(pageSlug: string): Promise<void> {
+  if (!isSupabaseServiceConfigured) return;
+  const admin = createSupabaseAdminClient();
+  for (const [bad, good] of Object.entries(LEGACY_IMAGE_FIXES)) {
+    // Fix published image column.
+    await admin
+      .from("page_sections")
+      .update({ image: good })
+      .eq("page_slug", pageSlug)
+      .eq("image", bad);
+    // Fix draft image column.
+    await admin
+      .from("page_sections")
+      .update({ draft_image: good })
+      .eq("page_slug", pageSlug)
+      .eq("draft_image", bad);
+  }
+}
+
 export async function ensureSectionsSeeded(pageSlug: string): Promise<number> {
   if (!isSupabaseServiceConfigured) return 0;
+  // Correct any rows seeded before the image-path fix.
+  await healLegacySeedImages(pageSlug);
   const seeds = seedsForPage(pageSlug);
   if (seeds.length === 0) return 0;
 
