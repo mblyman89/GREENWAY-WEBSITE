@@ -204,13 +204,20 @@ export async function publishContentBlockAction(formData: FormData): Promise<voi
     after: { published_value: block.draft_value ?? block.published_value },
   });
 
-  // Revalidate the affected public page heuristically.
+  // Revalidate the affected public page(s). The footer + business blocks appear
+  // on every page, so revalidate the whole layout for those.
   revalidatePath("/admin/content");
-  revalidatePath("/");
+  if (block.page === "home") revalidatePath("/");
   if (block.page === "menu") revalidatePath("/menu");
   if (block.page === "loyalty") revalidatePath("/loyalty");
-  if (block.page === "vendors") revalidatePath("/vendors");
+  if (block.page === "vendors") revalidatePath("/vendor-delivery");
   if (block.page === "specials") revalidatePath("/specials");
+  if (block.page === "faq") revalidatePath("/faq");
+  // Footer (compliance) + business hours render in the shared footer on every
+  // page — revalidate the root layout so the change shows everywhere.
+  if (block.page === "footer" || block.page === "business") {
+    revalidatePath("/", "layout");
+  }
   redirect("/admin/content?published=1");
 }
 

@@ -66,7 +66,21 @@ const SLIDES: HeroSlide[] = [
 
 const AUTOPLAY_MS = 6000;
 
-export function Hero() {
+/**
+ * The first ("welcome") slide's copy is editable from Admin → Site Content.
+ * The server page fetches the published (or draft, in staff preview) values and
+ * passes them here. Falling back to the hardcoded SLIDES copy keeps the hero
+ * working if the blocks are unseeded. `editable` tags the elements for the
+ * click-to-edit overlay when a staff member is previewing.
+ */
+type HeroContent = {
+  eyebrow?: string;
+  title?: string;
+  subtitle?: string;
+  editable?: boolean;
+};
+
+export function Hero({ content }: { content?: HeroContent } = {}) {
   const [active, setActive] = useState(0);
   const [paused, setPaused] = useState(false);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -100,6 +114,20 @@ export function Hero() {
         >
           {SLIDES.map((slide, index) => {
             const isActive = index === active;
+            // The first slide ("welcome") is the one wired to Site Content.
+            const isEditable = slide.key === "welcome";
+            const eyebrow =
+              isEditable && content?.eyebrow ? content.eyebrow : slide.eyebrow;
+            const title =
+              isEditable && content?.title ? content.title : slide.title;
+            const description =
+              isEditable && content?.subtitle
+                ? content.subtitle
+                : slide.description;
+            const previewProps =
+              isEditable && content?.editable
+                ? { "data-gw-editable": "true" as const }
+                : {};
             return (
               <div
                 key={slide.key}
@@ -124,14 +152,29 @@ export function Hero() {
                     slide.key === "daily-deal" ? "ml-auto text-right md:pr-14" : ""
                   }`}
                 >
-                  <p className="inline-flex rounded-full border border-white/20 bg-black/40 px-3 py-1 text-[0.6rem] font-black uppercase tracking-[0.2em] text-[var(--greenway)] backdrop-blur md:text-xs">
-                    {slide.eyebrow}
+                  <p
+                    className="inline-flex rounded-full border border-white/20 bg-black/40 px-3 py-1 text-[0.6rem] font-black uppercase tracking-[0.2em] text-[var(--greenway)] backdrop-blur md:text-xs"
+                    {...(isEditable && content?.editable
+                      ? { "data-gw-block": "home.hero.eyebrow", ...previewProps }
+                      : {})}
+                  >
+                    {eyebrow}
                   </p>
-                  <h1 className="mt-2 text-3xl font-black uppercase leading-none tracking-tight text-white md:mt-3 md:text-5xl lg:text-6xl">
-                    {slide.title}
+                  <h1
+                    className="mt-2 text-3xl font-black uppercase leading-none tracking-tight text-white md:mt-3 md:text-5xl lg:text-6xl"
+                    {...(isEditable && content?.editable
+                      ? { "data-gw-block": "home.hero.title", ...previewProps }
+                      : {})}
+                  >
+                    {title}
                   </h1>
-                  <p className="mt-2 max-w-md text-xs font-semibold leading-5 text-zinc-300 md:mt-3 md:text-base">
-                    {slide.description}
+                  <p
+                    className="mt-2 max-w-md text-xs font-semibold leading-5 text-zinc-300 md:mt-3 md:text-base"
+                    {...(isEditable && content?.editable
+                      ? { "data-gw-block": "home.hero.subtitle", ...previewProps }
+                      : {})}
+                  >
+                    {description}
                   </p>
                   <div
                     className={`mt-4 flex flex-wrap gap-3 md:mt-5 ${

@@ -7,6 +7,10 @@
  *
  * `defaultValue` mirrors the copy currently shipped on the live site so that
  * seeding produces no visible change until a staff member edits a block.
+ *
+ * IMPORTANT: keep every defaultValue byte-for-byte identical to the live copy
+ * the page renders. The public pages now read these blocks via <SiteText>, so
+ * any drift here would change the live site the moment a block is seeded.
  */
 import type { ContentFieldType } from "./types";
 
@@ -24,24 +28,33 @@ export type ContentBlockSeed = {
 export const CONTENT_BLOCK_SEEDS: ContentBlockSeed[] = [
   // ---- Home ----------------------------------------------------------------
   {
+    block_key: "home.hero.eyebrow",
+    page: "home",
+    section: "hero",
+    label: "Home hero — eyebrow (small label)",
+    help_text: "The little uppercase label above the homepage headline.",
+    field_type: "plain",
+    defaultValue: "Greenway Marijuana",
+  },
+  {
     block_key: "home.hero.title",
     page: "home",
     section: "hero",
     label: "Home hero — title",
-    help_text: "The big headline on the homepage hero.",
+    help_text: "The big headline on the homepage hero (first slide).",
     field_type: "plain",
     seo_impact: true,
-    defaultValue: "Port Orchard's Favorite Cannabis Dispensary",
+    defaultValue: "Premium Cannabis, Everyday Deals",
   },
   {
     block_key: "home.hero.subtitle",
     page: "home",
     section: "hero",
     label: "Home hero — subtitle",
-    help_text: "Supporting line under the homepage headline.",
+    help_text: "Supporting line under the homepage headline (first slide).",
     field_type: "plain",
     defaultValue:
-      "Premium flower, edibles, concentrates, and more — curated by the Greenway team for adults 21+.",
+      "Fresh daily discounts, top brands, and the full menu — all in one place.",
   },
   // ---- Menu ----------------------------------------------------------------
   {
@@ -51,8 +64,6 @@ export const CONTENT_BLOCK_SEEDS: ContentBlockSeed[] = [
     label: "Menu hero — title",
     field_type: "plain",
     seo_impact: true,
-    // Matches the current live menu hero copy so wiring <SiteText> causes no
-    // visible change until staff edit + publish.
     defaultValue: "Shop Our Menu",
   },
   {
@@ -72,7 +83,7 @@ export const CONTENT_BLOCK_SEEDS: ContentBlockSeed[] = [
     label: "Loyalty hero — title",
     field_type: "plain",
     seo_impact: true,
-    defaultValue: "Join Greenway Rewards",
+    defaultValue: "Signup to get offers and discounts from Greenway Marijuana",
   },
   {
     block_key: "loyalty.hero.subtitle",
@@ -80,7 +91,7 @@ export const CONTENT_BLOCK_SEEDS: ContentBlockSeed[] = [
     section: "hero",
     label: "Loyalty hero — subtitle",
     field_type: "plain",
-    defaultValue: "Earn points on every visit and unlock member-only savings.",
+    defaultValue: "Get updates on our promotions tailored to you.",
   },
   // ---- Vendors -------------------------------------------------------------
   {
@@ -90,16 +101,52 @@ export const CONTENT_BLOCK_SEEDS: ContentBlockSeed[] = [
     label: "Vendor outreach — heading",
     help_text: "Heading on the vendor partnership / outreach section.",
     field_type: "plain",
-    defaultValue: "Partner With Greenway",
+    defaultValue: "Let's Work Together",
   },
   // ---- Specials ------------------------------------------------------------
+  {
+    block_key: "specials.hero.eyebrow",
+    page: "specials",
+    section: "hero",
+    label: "Specials hero — eyebrow (small label)",
+    field_type: "plain",
+    defaultValue: "Deals every day",
+  },
+  {
+    block_key: "specials.hero.title",
+    page: "specials",
+    section: "hero",
+    label: "Specials hero — title",
+    field_type: "plain",
+    seo_impact: true,
+    defaultValue: "Cannabis Specials",
+  },
   {
     block_key: "specials.hero.subtitle",
     page: "specials",
     section: "hero",
     label: "Specials hero — subtitle",
     field_type: "plain",
-    defaultValue: "Daily deals, Thursday Top Shelf brands, and clearance picks.",
+    defaultValue:
+      "Check out our latest deals and save on premium cannabis products. New specials added regularly.",
+  },
+  // ---- FAQ -----------------------------------------------------------------
+  {
+    block_key: "faq.hero.title",
+    page: "faq",
+    section: "hero",
+    label: "FAQ hero — title",
+    field_type: "plain",
+    seo_impact: true,
+    defaultValue: "Frequently Asked Questions",
+  },
+  {
+    block_key: "faq.hero.subtitle",
+    page: "faq",
+    section: "hero",
+    label: "FAQ hero — subtitle",
+    field_type: "plain",
+    defaultValue: "Everything you need to know about shopping with us.",
   },
   // ---- Footer / compliance -------------------------------------------------
   {
@@ -122,6 +169,6 @@ export const CONTENT_BLOCK_SEEDS: ContentBlockSeed[] = [
     label: "Business — hours display",
     help_text: "Plain-text hours shown in the footer / contact areas.",
     field_type: "plain",
-    defaultValue: "Open Daily 8:00 AM – 11:00 PM",
+    defaultValue: "Open Daily 8:00 AM – 11:45 PM",
   },
 ];

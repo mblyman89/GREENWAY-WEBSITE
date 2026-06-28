@@ -131,7 +131,9 @@ function VendorCard({ vendor, index }: { vendor: Vendor; index: number }) {
   );
 }
 
-export function VendorDirectory() {
+type VendorContent = { heading?: string; editable?: boolean };
+
+export function VendorDirectory({ content }: { content?: VendorContent } = {}) {
   return (
     <div className="bg-black px-4 py-6 text-white md:px-8 md:py-8">
       <div className="mx-auto max-w-[88rem] space-y-6 md:space-y-8">
@@ -149,8 +151,13 @@ export function VendorDirectory() {
         {/* Outreach statement + email button. */}
         <section className="rounded-2xl border border-white/10 bg-[var(--charcoal)] px-5 py-6 shadow-xl shadow-black/30 md:px-9 md:py-8">
           <div className="mx-auto max-w-3xl text-center">
-            <h2 className="text-xl font-black uppercase tracking-tight text-white md:text-2xl">
-              Let&apos;s Work Together
+            <h2
+              className="text-xl font-black uppercase tracking-tight text-white md:text-2xl"
+              {...(content?.editable
+                ? { "data-gw-block": "vendors.outreach.heading", "data-gw-editable": "true" }
+                : {})}
+            >
+              {content?.heading || "Let's Work Together"}
             </h2>
             <p className="mt-3 text-sm leading-relaxed text-zinc-300 md:text-base">
               Greenway Marijuana is an independent, locally owned cannabis shop in Port Orchard, Washington,

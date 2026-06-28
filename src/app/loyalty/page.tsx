@@ -3,6 +3,7 @@ import { Footer } from "@/components/site/Footer";
 import { Header } from "@/components/site/Header";
 import { LoyaltySignupForm } from "@/components/loyalty/LoyaltySignupForm";
 import { pageMetadata } from "@/lib/seo/seo";
+import { getContentValues, isPreviewActive } from "@/lib/cms/render-content";
 
 export const metadata = pageMetadata({
   title: "Loyalty Rewards & Sign-Up — Greenway Points",
@@ -12,12 +13,23 @@ export const metadata = pageMetadata({
   image: "/og/loyalty.png",
 });
 
-export default function LoyaltyPage() {
+export default async function LoyaltyPage() {
+  const [copy, preview] = await Promise.all([
+    getContentValues(["loyalty.hero.title", "loyalty.hero.subtitle"]),
+    isPreviewActive(),
+  ]);
+
   return (
     <main id="top" className="min-h-screen bg-black text-white">
       <Header />
       <Breadcrumbs items={[{ label: "Loyalty" }]} />
-      <LoyaltySignupForm />
+      <LoyaltySignupForm
+        content={{
+          title: copy["loyalty.hero.title"],
+          subtitle: copy["loyalty.hero.subtitle"],
+          editable: preview,
+        }}
+      />
       <Footer />
     </main>
   );
