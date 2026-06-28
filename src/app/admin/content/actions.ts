@@ -11,12 +11,47 @@ import {
   ensureContentBlocksSeeded,
   upsertSeoEntry,
   listSeoEntries,
+  restoreContentRevisionToDraft,
+  publishAllDrafts,
+  discardAllDrafts,
 } from "@/lib/cms/content-store";
 import {
   generateContentSuggestion,
   isAiConfigured,
 } from "@/lib/cms/ai-content";
 import { generateSeoMeta } from "@/lib/cms/ai-seo";
+
+/**
+ * Revalidate the public page(s) affected by a content block on a given `page`.
+ * Footer (compliance) + business hours render in the shared footer on EVERY
+ * page, so those revalidate the whole root layout.
+ */
+function revalidatePublicForPage(page: string): void {
+  switch (page) {
+    case "home":
+      revalidatePath("/");
+      break;
+    case "menu":
+      revalidatePath("/menu");
+      break;
+    case "loyalty":
+      revalidatePath("/loyalty");
+      break;
+    case "vendors":
+      revalidatePath("/vendor-delivery");
+      break;
+    case "specials":
+      revalidatePath("/specials");
+      break;
+    case "faq":
+      revalidatePath("/faq");
+      break;
+    case "footer":
+    case "business":
+      revalidatePath("/", "layout");
+      break;
+  }
+}
 
 export type AiSuggestResult =
   | { ok: true; value: string; complianceFlags: string[]; model: string }
@@ -193,7 +228,9 @@ export async function publishContentBlockAction(formData: FormData): Promise<voi
   const block = await getContentBlock(blockKey);
   if (!block) redirect("/admin/content");
 
-  await publishContentBlock(blockKey, session.userId);
+  await publishContentBlock(blockKey, session.userId, {
+    actorEmail: session.email,
+  });
   await recordAudit({
     actorId: session.userId,
     actorEmail: session.email,
@@ -204,20 +241,8 @@ export async function publishContentBlockAction(formData: FormData): Promise<voi
     after: { published_value: block.draft_value ?? block.published_value },
   });
 
-  // Revalidate the affected public page(s). The footer + business blocks appear
-  // on every page, so revalidate the whole layout for those.
   revalidatePath("/admin/content");
-  if (block.page === "home") revalidatePath("/");
-  if (block.page === "menu") revalidatePath("/menu");
-  if (block.page === "loyalty") revalidatePath("/loyalty");
-  if (block.page === "vendors") revalidatePath("/vendor-delivery");
-  if (block.page === "specials") revalidatePath("/specials");
-  if (block.page === "faq") revalidatePath("/faq");
-  // Footer (compliance) + business hours render in the shared footer on every
-  // page — revalidate the root layout so the change shows everywhere.
-  if (block.page === "footer" || block.page === "business") {
-    revalidatePath("/", "layout");
-  }
+  revalidatePublicForPage(block.page);
   redirect("/admin/content?published=1");
 }
 
@@ -245,4 +270,76 @@ export async function saveSeoEntryAction(formData: FormData): Promise<void> {
   revalidatePath("/admin/content/seo");
   revalidatePath(path);
   redirect("/admin/content/seo?saved=1");
+}
+
+// ---------------------------------------------------------------------------
+// Revision history + bulk actions (Slice 2)
+// ---------------------------------------------------------------------------
+
+/**
+ * Restore a previous published value back into the block's DRAFT, then send the
+ * editor to that block so they can review + publish. Keeps a human in the loop.
+ */
+export async function restoreContentRevisionAction(
+  formData: FormData,
+): Promise<void> {
+  const session = await requirePermission("content.edit");
+  const revisionId = String(formData.get("revision_id") ?? "");
+  if (!revisionId) redirect("/admin/content");
+
+  const result = await restoreContentRevisionToDraft(revisionId, session.userId);
+  if (!result) redirect("/admin/content?error=restore");
+
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "content.restore",
+    entityType: "content_block",
+    entityId: result.blockKey,
+    after: { restored_from_revision: revisionId },
+  });
+  revalidatePath("/admin/content");
+  redirect(`/admin/content?restored=1#block-${result.blockKey}`);
+}
+
+/** Publish EVERY block that currently has an unpublished draft. */
+export async function publishAllDraftsAction(): Promise<void> {
+  const session = await requirePermission("content.edit");
+  const published = await publishAllDrafts(session.userId, session.email);
+
+  if (published.length > 0) {
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "content.publish_all",
+      entityType: "content_block",
+      after: { count: published.length, blocks: published },
+    });
+    // Revalidate every distinct page touched (look each block up cheaply).
+    const pages = new Set<string>();
+    for (const key of published) {
+      const b = await getContentBlock(key);
+      if (b) pages.add(b.page);
+    }
+    for (const page of pages) revalidatePublicForPage(page);
+  }
+  revalidatePath("/admin/content");
+  redirect(`/admin/content?published_all=${published.length}`);
+}
+
+/** Discard EVERY unpublished draft (reset draft back to the live value). */
+export async function discardAllDraftsAction(): Promise<void> {
+  const session = await requirePermission("content.edit");
+  const reset = await discardAllDrafts(session.userId);
+  if (reset.length > 0) {
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "content.discard_all",
+      entityType: "content_block",
+      after: { count: reset.length, blocks: reset },
+    });
+  }
+  revalidatePath("/admin/content");
+  redirect(`/admin/content?discarded=${reset.length}`);
 }

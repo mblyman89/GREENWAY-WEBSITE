@@ -8,7 +8,12 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
-import type { ContentBlockRow, SeoEntryRow, PostStatus } from "./types";
+import type {
+  ContentBlockRow,
+  ContentRevisionRow,
+  SeoEntryRow,
+  PostStatus,
+} from "./types";
 import { CONTENT_BLOCK_SEEDS } from "./content-blocks-seed";
 
 const SEED_DEFAULTS = new Map(CONTENT_BLOCK_SEEDS.map((s) => [s.block_key, s.defaultValue]));
@@ -74,10 +79,16 @@ export async function saveContentDraft(
   if (error) throw new Error(error.message);
 }
 
-/** Publish the current draft value of a content block. */
+/**
+ * Publish the current draft value of a content block and snapshot the
+ * published value into content_revisions (migration 0010) so it can be
+ * reviewed or restored later. The snapshot is best-effort — a failure to log
+ * history must never block the publish itself.
+ */
 export async function publishContentBlock(
   blockKey: string,
   actorId: string | null,
+  options?: { actorEmail?: string | null; note?: string | null },
 ): Promise<void> {
   const admin = createSupabaseAdminClient();
   const block = await getContentBlock(blockKey);
@@ -93,6 +104,127 @@ export async function publishContentBlock(
     })
     .eq("block_key", blockKey);
   if (error) throw new Error(error.message);
+
+  // Snapshot the now-live value into the revision history (best-effort).
+  try {
+    await admin.from("content_revisions").insert({
+      block_key: blockKey,
+      value,
+      field_type: block.field_type,
+      label: block.label,
+      note: options?.note ?? null,
+      actor_id: actorId,
+      actor_email: options?.actorEmail ?? null,
+    });
+  } catch {
+    // History is non-critical; ignore failures (e.g. migration not yet run).
+  }
+}
+
+/** List the published-value history for a block, newest first. */
+export async function listContentRevisions(
+  blockKey: string,
+  limit = 20,
+): Promise<ContentRevisionRow[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  const admin = createSupabaseAdminClient();
+  const { data } = await admin
+    .from("content_revisions")
+    .select("*")
+    .eq("block_key", blockKey)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  return (data as ContentRevisionRow[] | null) ?? [];
+}
+
+/** Fetch a single revision by id (used to restore its value into the draft). */
+export async function getContentRevision(
+  revisionId: string,
+): Promise<ContentRevisionRow | null> {
+  if (!isSupabaseServiceConfigured) return null;
+  const admin = createSupabaseAdminClient();
+  const { data } = await admin
+    .from("content_revisions")
+    .select("*")
+    .eq("id", revisionId)
+    .maybeSingle();
+  return (data as ContentRevisionRow | null) ?? null;
+}
+
+/**
+ * Restore a revision's value into a block's DRAFT (does not auto-publish).
+ * Staff then review the draft and publish when ready — keeps a human in the
+ * loop and reuses the normal publish→snapshot path.
+ */
+export async function restoreContentRevisionToDraft(
+  revisionId: string,
+  actorId: string | null,
+): Promise<{ blockKey: string; value: string } | null> {
+  const revision = await getContentRevision(revisionId);
+  if (!revision) return null;
+  await saveContentDraft(revision.block_key, revision.value, actorId);
+  return { blockKey: revision.block_key, value: revision.value };
+}
+
+/**
+ * Publish ALL blocks that currently have an unpublished draft (draft_value
+ * differs from published_value). Returns the list of block_keys published.
+ * Snapshots each one into history via publishContentBlock.
+ */
+export async function publishAllDrafts(
+  actorId: string | null,
+  actorEmail: string | null,
+): Promise<string[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  const blocks = await listContentBlocks();
+  const pending = blocks.filter(
+    (b) =>
+      (b.draft_value ?? "") !== (b.published_value ?? "") ||
+      b.status !== "published",
+  );
+  const published: string[] = [];
+  for (const b of pending) {
+    await publishContentBlock(b.block_key, actorId, {
+      actorEmail,
+      note: "Bulk publish",
+    });
+    published.push(b.block_key);
+  }
+  return published;
+}
+
+/**
+ * Discard ALL drafts: reset every block's draft_value back to its currently
+ * published value. Returns the list of block_keys reset.
+ */
+export async function discardAllDrafts(
+  actorId: string | null,
+): Promise<string[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  const blocks = await listContentBlocks();
+  const dirty = blocks.filter(
+    (b) => (b.draft_value ?? "") !== (b.published_value ?? ""),
+  );
+  const admin = createSupabaseAdminClient();
+  const reset: string[] = [];
+  for (const b of dirty) {
+    const { error } = await admin
+      .from("content_blocks")
+      .update({ draft_value: b.published_value, last_edited_by: actorId })
+      .eq("block_key", b.block_key);
+    if (!error) reset.push(b.block_key);
+  }
+  return reset;
+}
+
+/** Count blocks that currently have unpublished changes (a draft != live). */
+export async function countPendingDrafts(): Promise<number> {
+  const blocks = await listContentBlocks();
+  return blocks.filter(
+    (b) =>
+      (b.draft_value ?? "") !== (b.published_value ?? "") ||
+      b.status !== "published",
+  ).length;
 }
 
 /**

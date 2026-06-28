@@ -82,6 +82,19 @@ export type ContentBlockRow = {
   updated_at: string;
 };
 
+/** One published-value snapshot of a content block (migration 0010). */
+export type ContentRevisionRow = {
+  id: string;
+  block_key: string;
+  value: string;
+  field_type: string | null;
+  label: string | null;
+  note: string | null;
+  actor_id: string | null;
+  actor_email: string | null;
+  created_at: string;
+};
+
 export type SeoEntryRow = {
   id: string;
   path: string | null;
