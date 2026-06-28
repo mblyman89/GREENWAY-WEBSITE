@@ -299,6 +299,7 @@ async function SectionsTab({
             <SectionCard
               key={section.id}
               section={section}
+              pageSlug={slug}
               index={index}
               total={sections.length}
               mediaChoices={mediaChoices}
