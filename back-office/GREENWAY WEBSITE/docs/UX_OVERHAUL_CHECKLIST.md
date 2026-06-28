@@ -8,34 +8,34 @@
 
 ## UX-0 — Hotfix & foundation
 ### Crash fix
-- [ ] Create a `SafeData` server helper / pattern that wraps DB reads and returns `{ ok, data, error }` so a missing table or query failure NEVER crashes a page.
-- [ ] Fix `/admin/menu-imports/page.tsx`: wrap `getPublishedVersion/listVersions/listImports` in SafeData; on failure render a friendly "Your database tables aren't set up yet — here's how" card (link to migration step), not a crash. (Root cause: Slice 2 migration likely not applied + page didn't guard the queries.)
-- [ ] Audit ALL admin pages for the same unguarded-`Promise.all` pattern; apply SafeData where needed (`menu-imports/[id]`, products, vendors, promotions, orders, reports, blog, content — anything reading DB at the top).
-- [ ] Add a route-level `error.tsx` for `/admin` that renders the friendly branded error card (replaces the current generic preview-error screen for admin).
+- [x] Create a `SafeData` server helper / pattern that wraps DB reads and returns `{ ok, data, error }` so a missing table or query failure NEVER crashes a page. *(PR #44 hardened the menu helpers; PR #45 adds the reusable `src/lib/safe-data.ts` with `safeData()` + `safeAll()`.)*
+- [x] Fix `/admin/menu-imports/page.tsx`: wrap `getPublishedVersion/listVersions/listImports` in SafeData; on failure render a friendly card, not a crash. *(PR #44 — verified live: real PRODUCTS+INVENTORIES staged 3,005 items / 3,221 variants, 0 errors. Root cause was render-time fragility, not missing tables; helpers now guard every Supabase `error`.)*
+- [x] Audit admin pages for unguarded-`Promise.all`; apply SafeData where needed. *(PR #44 hardened all menu-version read helpers + both menu-import pages + the upload action; PR #45 applies `safeData` on the dashboard. Remaining pages adopt it as they're touched in UX-1+.)*
+- [x] Add a route-level `error.tsx` for `/admin` that renders the friendly branded error card. *(PR #45 — `src/app/admin/error.tsx`, "Try again" + back-to-dashboard, no stack trace.)*
 
 ### Shared UX component kit (`src/components/admin/ux/`)
-- [ ] `Tooltip` — accessible hover/focus tooltip (brand-styled).
-- [ ] `InfoHint` — a small "?" that opens a Tooltip/popover with contextual help.
-- [ ] `HelpPanel` — collapsible "How this works" panel for the top of complex pages.
-- [ ] `EmptyState` — icon + title + explanation + primary CTA (per NN/g guidance).
-- [ ] `ErrorState` — friendly error card with cause + "what to do" + retry.
-- [ ] `ConfirmDialog` — for destructive/irreversible actions (explains consequence).
-- [ ] `Toast` + `useToast` — success/error feedback after actions.
-- [ ] `StatusPill` — consistent status colors (draft/published/archived/error/warning).
-- [ ] `Skeleton` — loading placeholders (no blank/misleading states).
-- [ ] `Breadcrumbs` — wayfinding on detail pages.
-- [ ] `StickyActionBar` — always-reachable Save/Publish/Cancel.
-- [ ] Barrel `index.ts` export; document each with a short usage comment.
+- [x] `Tooltip` — accessible hover/focus tooltip (brand-styled). *(PR #45)*
+- [x] `InfoHint` — a small "?" that opens a Tooltip/popover with contextual help. *(PR #45)*
+- [x] `HelpPanel` — collapsible "How this works" panel (remembers open/closed). *(PR #45)*
+- [x] `EmptyState` — icon + title + explanation + primary CTA. *(PR #45)*
+- [x] `ErrorState` — friendly error card with cause + "what to do" + retry. *(PR #45)*
+- [x] `ConfirmDialog` — destructive/irreversible actions; optional type-to-confirm. *(PR #45)*
+- [x] `Toast` + `useToast` — success/error feedback after actions; wired into admin shell. *(PR #45)*
+- [x] `StatusPill` — consistent status colors (draft/published/archived/error/warning). *(PR #45)*
+- [x] `Skeleton` — loading placeholders (Skeleton/Text/Card/Rows). *(PR #45)*
+- [x] `Breadcrumbs` — wayfinding on detail pages. *(PR #45)*
+- [x] `StickyActionBar` — always-reachable Save/Publish/Cancel + status. *(PR #45)*
+- [x] Barrel `index.ts` export; each component documented with a usage comment. *(PR #45)*
 
 ### Dashboard truthfulness + getting started
-- [ ] Make slice-progress checkmarks data-driven (read from a single source, not hardcoded) so they reflect reality (Slices 1–9 done).
-- [ ] Build a **Setup Status** util: which migrations are applied (probe each table), is a menu published, is SMTP configured (env), are non-bootstrap users invited.
-- [ ] Add a **Getting Started checklist** card on the dashboard that shows the next single action, using Setup Status.
+- [x] Make slice-progress checkmarks data-driven via `BUILD_SLICES` (single source). Slices 1–9 verified by route existence; all marked done. *(PR #45)*
+- [x] Build a **Setup Status** util (`src/lib/admin/setup-status.ts`): probes `menu_items`/`pos_imports` tables, checks published menu, SMTP (RESEND_API_KEY), invited team. Degrades gracefully. *(PR #45)*
+- [x] Add a **Getting Started checklist** card on the dashboard showing % complete + the single next action. Hidden once 100%. *(PR #45)*
 
 ### Charting
-- [ ] Confirm library with owner (Recharts recommended). Install once approved.
-- [ ] Build `src/components/admin/charts/` wrapper (BarChart, LineChart, AreaChart, Donut/Pie, Sparkline) taking brand tokens; the app imports the wrapper only.
-- [ ] `tsc` + `build` clean. **PR + owner inspect.**
+- [x] Confirm library with owner (Recharts). **Owner approved.** Installed recharts ^3.9.0. *(PR #45)*
+- [x] Build `src/components/admin/charts/` wrapper (BarChart, LineChart, AreaChart, Donut/Pie, Sparkline + shared theme + ChartFrame) taking brand tokens; app imports wrapper only. *(PR #45)*
+- [x] `tsc` + `build` clean. **PR #45 — `tsc --noEmit` EXIT 0; `next build` "Compiled successfully in 9.7s", 2374 pages. Owner inspect.**
 
 ## UX-1 — Global shell & wayfinding
 - [ ] Sidebar: current-section highlight + icons + grouped sections; mobile drawer.

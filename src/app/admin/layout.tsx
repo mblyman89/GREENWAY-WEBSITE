@@ -3,6 +3,7 @@ import { getStaffSession } from "@/lib/auth/session";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { AdminSidebar } from "@/components/admin/AdminSidebar";
 import { AdminSetupNotice } from "@/components/admin/AdminSetupNotice";
+import { ToastProvider } from "@/components/admin/ux";
 
 // Admin must never be indexed.
 export const metadata: Metadata = {
@@ -40,7 +41,9 @@ export default async function AdminLayout({
         fullName={session.profile.full_name ?? ""}
         email={session.email}
       />
-      <main className="min-w-0 flex-1">{children}</main>
+      <main className="min-w-0 flex-1">
+        <ToastProvider>{children}</ToastProvider>
+      </main>
     </div>
   );
 }
