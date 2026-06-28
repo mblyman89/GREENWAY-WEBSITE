@@ -3,6 +3,7 @@ import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { PromotionForm } from "@/components/admin/promotions/PromotionForm";
 import { listMenuBrands } from "@/lib/promotions/promotions-store";
+import { isAiConfigured } from "@/lib/promotions/ai-copy";
 import { createPromotionAction } from "../actions";
 
 export const dynamic = "force-dynamic";
@@ -28,7 +29,12 @@ export default async function NewPromotionPage({
             {error}
           </div>
         )}
-        <PromotionForm action={createPromotionAction} brands={brands} submitLabel="Create draft" />
+        <PromotionForm
+          action={createPromotionAction}
+          brands={brands}
+          submitLabel="Create draft"
+          aiEnabled={isAiConfigured}
+        />
       </div>
     </div>
   );

@@ -13,7 +13,95 @@ import {
   type PromotionInput,
   type RuleInput,
 } from "@/lib/promotions/promotions-store";
-import type { DiscountType, PostStatus, PromoScope } from "@/lib/promotions/types";
+import type {
+  DiscountType,
+  PostStatus,
+  PromoScope,
+  Weekday,
+} from "@/lib/promotions/types";
+import {
+  generatePromotionCopy,
+  isAiConfigured as isPromoAiConfigured,
+} from "@/lib/promotions/ai-copy";
+
+export type PromotionCopyResult =
+  | {
+      ok: true;
+      title: string;
+      description: string;
+      badgeNote: string;
+      complianceFlags: string[];
+      model: string;
+    }
+  | { ok: false; error: string };
+
+export type PromotionCopyInput = {
+  discountType: DiscountType;
+  discountPercent?: number | null;
+  discountFixedMinor?: number | null;
+  weekday?: Weekday | null;
+  appliesTo?: string | null;
+  currentTitle?: string | null;
+  currentDescription?: string | null;
+  instruction?: string | null;
+};
+
+/**
+ * Generate an AI DRAFT of a promotion's name + announcement + badge from the
+ * mechanics already chosen on the form. Returns the three pieces to the client
+ * for Use / Edit / Discard — never saves. Drafts-only gate, permission
+ * `promotions.manage`.
+ */
+export async function suggestPromotionCopyAction(
+  input: PromotionCopyInput,
+): Promise<PromotionCopyResult> {
+  const session = await requirePermission("promotions.manage");
+
+  if (!isPromoAiConfigured) {
+    return {
+      ok: false,
+      error:
+        "AI isn't set up yet. Add an AI_API_KEY in your environment to enable “Write the copy with AI.”",
+    };
+  }
+
+  try {
+    const suggestion = await generatePromotionCopy(
+      {
+        discountType: input.discountType,
+        discountPercent: input.discountPercent ?? null,
+        discountFixedMinor: input.discountFixedMinor ?? null,
+        weekday: input.weekday ?? null,
+        appliesTo: input.appliesTo?.trim() || null,
+        currentTitle: input.currentTitle?.trim() || null,
+        currentDescription: input.currentDescription?.trim() || null,
+        instruction: input.instruction?.trim() || null,
+      },
+      { actorId: session.userId, actorEmail: session.email },
+    );
+
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "promotion.ai_copy",
+      entityType: "promotion",
+      after: { model: suggestion.model, flags: suggestion.complianceFlags },
+    });
+
+    return {
+      ok: true,
+      title: suggestion.title,
+      description: suggestion.description,
+      badgeNote: suggestion.badgeNote,
+      complianceFlags: suggestion.complianceFlags,
+      model: suggestion.model,
+    };
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : "AI request failed. Please try again.";
+    return { ok: false, error: message };
+  }
+}
 
 const DISCOUNT_TYPES: DiscountType[] = [
   "percent",

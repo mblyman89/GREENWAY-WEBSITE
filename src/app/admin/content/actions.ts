@@ -10,14 +10,26 @@ import {
   getContentBlock,
   ensureContentBlocksSeeded,
   upsertSeoEntry,
+  listSeoEntries,
 } from "@/lib/cms/content-store";
 import {
   generateContentSuggestion,
   isAiConfigured,
 } from "@/lib/cms/ai-content";
+import { generateSeoMeta } from "@/lib/cms/ai-seo";
 
 export type AiSuggestResult =
   | { ok: true; value: string; complianceFlags: string[]; model: string }
+  | { ok: false; error: string };
+
+export type AiSeoSuggestResult =
+  | {
+      ok: true;
+      title: string;
+      description: string;
+      complianceFlags: string[];
+      model: string;
+    }
   | { ok: false; error: string };
 
 /**
@@ -65,6 +77,68 @@ export async function suggestContentAction(
     return {
       ok: true,
       value: suggestion.value,
+      complianceFlags: suggestion.complianceFlags,
+      model: suggestion.model,
+    };
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : "AI request failed. Please try again.";
+    return { ok: false, error: message };
+  }
+}
+
+/**
+ * Generate an AI DRAFT suggestion for a page's SEO title + description.
+ * Returns the two fields to the client to Use / Edit / Discard — it never
+ * writes the SEO entry. Drafts-only, same gate as the content-block AI.
+ */
+export async function suggestSeoAction(
+  path: string,
+  instruction: string,
+): Promise<AiSeoSuggestResult> {
+  const session = await requirePermission("content.edit");
+
+  if (!isAiConfigured) {
+    return {
+      ok: false,
+      error:
+        "AI isn't set up yet. Add an AI_API_KEY in your environment to enable “Generate with AI.”",
+    };
+  }
+
+  const cleanPath = path.trim();
+  if (!cleanPath.startsWith("/")) {
+    return { ok: false, error: "That page path looks invalid." };
+  }
+
+  try {
+    const entries = await listSeoEntries();
+    const current = entries.find((e) => (e.path ?? "") === cleanPath);
+
+    const suggestion = await generateSeoMeta(
+      {
+        path: cleanPath,
+        currentTitle: current?.seo_title ?? null,
+        currentDescription: current?.seo_description ?? null,
+        instruction: instruction.trim() || null,
+      },
+      { actorId: session.userId, actorEmail: session.email },
+    );
+
+    // Provenance only — the suggestion is NOT saved; staff must Use + Save.
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "seo.ai_suggest",
+      entityType: "seo_entry",
+      entityId: cleanPath,
+      after: { model: suggestion.model, flags: suggestion.complianceFlags },
+    });
+
+    return {
+      ok: true,
+      title: suggestion.title,
+      description: suggestion.description,
       complianceFlags: suggestion.complianceFlags,
       model: suggestion.model,
     };
