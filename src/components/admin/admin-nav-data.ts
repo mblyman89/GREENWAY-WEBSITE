@@ -24,7 +24,7 @@ export const adminNav: AdminNavItem[] = [
   { label: "Blog & Newsletter", href: "/admin/blog", permission: "blog.manage", icon: "✎", group: "Content" },
   { label: "Site Content", href: "/admin/content", permission: "content.edit", icon: "❡", group: "Content" },
 
-  { label: "Reports", href: "/admin/reports", permission: "reports.view", icon: "📊", group: "Insights", comingSoon: true },
+  { label: "Reports", href: "/admin/reports", permission: "reports.view", icon: "📊", group: "Insights" },
 
   { label: "Users", href: "/admin/users", permission: "users.manage", icon: "👥", group: "Admin" },
   { label: "Settings", href: "/admin/settings", permission: "settings.manage", icon: "⚙", group: "Admin", comingSoon: true },
