@@ -4,11 +4,12 @@ import { can } from "@/lib/auth/roles";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { StatCard } from "@/components/admin/StatCard";
-import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
+import { Breadcrumbs, HelpPanel, EmptyState } from "@/components/admin/ux";
 import { readLoyaltySignups } from "@/lib/loyalty/store";
 import {
   listLoyaltySignups,
   getLoyaltyStatusCounts,
+  getLoyaltySignup,
   LOYALTY_STATUS_LABELS,
   type LoyaltyStatus,
 } from "@/lib/loyalty/signups-store";
@@ -114,6 +115,22 @@ export default async function LoyaltySignupReviewPage({
     getLoyaltyStatusCounts(),
   ]);
 
+  // Resolve the "original" signup each duplicate points at, so staff can see
+  // exactly who it collides with (name + when) rather than a bare flag.
+  const dedupeOriginals = new Map<string, { name: string; submitted_at: string } | null>();
+  await Promise.all(
+    rows
+      .filter((r) => r.dedupe_of)
+      .map(async (r) => {
+        const orig = await getLoyaltySignup(r.dedupe_of as string);
+        dedupeOriginals.set(
+          r.id,
+          orig ? { name: `${orig.first_name} ${orig.last_name}`.trim(), submitted_at: orig.submitted_at } : null,
+        );
+      }),
+  );
+
+  const totalSignups = counts.new + counts.entered + counts.duplicate + counts.archived;
   const exportQs = new URLSearchParams({ status, ...(search ? { q: search } : {}) }).toString();
 
   return (
@@ -219,7 +236,31 @@ export default async function LoyaltySignupReviewPage({
         </form>
 
         {rows.length === 0 ? (
-          <p className="mt-8 text-sm text-white/40">No signups match this view.</p>
+          totalSignups === 0 ? (
+            <div className="mt-8">
+              <EmptyState
+                icon="🎉"
+                title="No loyalty signups yet — that's normal!"
+                description="When a customer fills out the loyalty form on your website, their signup lands right here. You'll review each one, add them to your POS, and mark them as entered. We'll automatically flag likely duplicates so you never add the same person twice."
+                action={
+                  <Link
+                    href="/loyalty"
+                    className="rounded-lg bg-[#7ed957] px-4 py-2 text-sm font-bold text-black transition hover:bg-white"
+                  >
+                    See the signup form
+                  </Link>
+                }
+              />
+              <p className="mt-4 text-center text-xs text-white/40">
+                Have an older list of signups from before this system? Use{" "}
+                <strong className="text-white/60">Import legacy file</strong> above to bring them in.
+              </p>
+            </div>
+          ) : (
+            <p className="mt-8 text-sm text-white/40">
+              No signups match this view. Try the <strong className="text-white/60">All</strong> filter or clear your search.
+            </p>
+          )
         ) : (
           <div className="mt-5 grid gap-3">
             {rows.map((s) => (
@@ -236,11 +277,25 @@ export default async function LoyaltySignupReviewPage({
                         {LOYALTY_STATUS_LABELS[s.status]}
                       </span>
                       {s.dedupe_of ? (
-                        <span className="rounded-full border border-[#ff7f00]/40 bg-[#ff7f00]/10 px-2.5 py-0.5 text-[0.62rem] font-black uppercase tracking-[0.1em] text-[#ff7f00]">
-                          Possible duplicate
+                        <span
+                          className="rounded-full border border-[#ff7f00]/40 bg-[#ff7f00]/10 px-2.5 py-0.5 text-[0.62rem] font-black uppercase tracking-[0.1em] text-[#ff7f00]"
+                          title={
+                            dedupeOriginals.get(s.id)
+                              ? `Matches ${dedupeOriginals.get(s.id)!.name}, submitted ${formatDate(dedupeOriginals.get(s.id)!.submitted_at)}`
+                              : "Matches an earlier signup"
+                          }
+                        >
+                          ⚠ Possible duplicate
                         </span>
                       ) : null}
                     </div>
+                    {s.dedupe_of && dedupeOriginals.get(s.id) ? (
+                      <p className="mt-1 text-[0.7rem] text-[#ff7f00]/80">
+                        Same phone/email as <strong>{dedupeOriginals.get(s.id)!.name}</strong>{" "}
+                        (submitted {formatDate(dedupeOriginals.get(s.id)!.submitted_at)}). Verify before entering to
+                        avoid a double POS entry.
+                      </p>
+                    ) : null}
                     <p className="mt-1 text-sm text-white/70">
                       {s.email ?? "—"}
                       {s.mobile_phone ? ` · ${s.mobile_phone}` : ""}

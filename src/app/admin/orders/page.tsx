@@ -12,6 +12,8 @@ import {
   type OrderStatus,
 } from "@/lib/orders/types";
 import { setOrderStatusAction } from "./actions";
+import { OrderStatusFlow } from "@/components/admin/orders/OrderStatusFlow";
+import { NewOrderAlert } from "@/components/admin/orders/NewOrderAlert";
 
 export const dynamic = "force-dynamic";
 
@@ -106,6 +108,9 @@ export default async function OrdersAdminPage({
       />
 
       <div className="px-5 py-6 sm:px-8">
+        {/* New-order watcher (polls + chimes when new orders arrive) */}
+        <NewOrderAlert initialNew={counts.new} />
+
         {/* Status summary */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <StatCard label="New" value={counts.new} accent="orange" hint="Awaiting acknowledgement" />
@@ -184,6 +189,9 @@ export default async function OrdersAdminPage({
                         {order.item_count} item{order.item_count === 1 ? "" : "s"} ·{" "}
                         {formatMinorCurrency(order.total_minor_units)} · placed {timeAgo(order.placed_at)}
                       </p>
+                      <div className="mt-3">
+                        <OrderStatusFlow status={order.status} />
+                      </div>
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2">

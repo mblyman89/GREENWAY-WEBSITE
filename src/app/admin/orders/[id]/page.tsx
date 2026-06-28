@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { OrderStatusFlow } from "@/components/admin/orders/OrderStatusFlow";
 import { formatMinorCurrency } from "@/lib/leafly/format";
 import { getOrder } from "@/lib/orders/orders-store";
 import {
@@ -62,6 +63,13 @@ export default async function OrderDetailPage({
           </div>
         }
       />
+
+      <div className="px-5 pt-6 sm:px-8">
+        <div className="rounded-2xl border border-white/10 bg-[#0d0d0d] p-5">
+          <p className="mb-3 text-xs font-black uppercase tracking-[0.14em] text-white/40">Status flow</p>
+          <OrderStatusFlow status={order.status} size="md" />
+        </div>
+      </div>
 
       <div className="grid gap-5 px-5 py-6 sm:px-8 lg:grid-cols-3">
         {/* Main: items + workflow */}

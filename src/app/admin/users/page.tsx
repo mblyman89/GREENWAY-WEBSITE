@@ -1,9 +1,10 @@
 import { requirePermission } from "@/lib/auth/session";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
-import { ALL_ROLES, ROLE_LABELS, ROLE_DESCRIPTIONS } from "@/lib/auth/roles";
+import { ALL_ROLES, ROLE_LABELS, ROLE_DESCRIPTIONS, ROLE_RANK } from "@/lib/auth/roles";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
+import { PermissionMatrix } from "@/components/admin/users/PermissionMatrix";
 import type { StaffProfile } from "@/lib/supabase/types";
 import { updateUserRole, setUserActive, inviteUser } from "./actions";
 
@@ -155,17 +156,33 @@ export default async function UsersPage() {
           </div>
         </section>
 
-        {/* Role reference */}
+        {/* Role reference — plain-language explainer, ordered by privilege */}
         <section className="rounded-xl border border-white/10 bg-[#0a0a0a] p-5">
-          <h2 className="text-sm font-semibold text-white">Role reference</h2>
+          <h2 className="text-sm font-semibold text-white">What each role means</h2>
+          <p className="mt-1 text-xs text-white/40">
+            Ordered from most access (top) to least. Give people the lowest role that still lets them do their job.
+          </p>
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
-            {ALL_ROLES.map((r) => (
-              <div key={r} className="rounded-lg border border-white/10 p-3">
-                <p className="text-sm font-medium text-[#7ed957]">{ROLE_LABELS[r]}</p>
-                <p className="text-xs text-white/50">{ROLE_DESCRIPTIONS[r]}</p>
-              </div>
-            ))}
+            {[...ALL_ROLES]
+              .sort((a, b) => ROLE_RANK[b] - ROLE_RANK[a])
+              .map((r) => (
+                <div key={r} className="flex items-start gap-3 rounded-lg border border-white/10 p-3">
+                  <span className="mt-0.5 inline-flex h-6 shrink-0 items-center rounded-full bg-[#7ed957]/10 px-2 text-[10px] font-bold uppercase tracking-wide text-[#7ed957]">
+                    {ROLE_LABELS[r]}
+                  </span>
+                  <p className="text-xs leading-relaxed text-white/55">{ROLE_DESCRIPTIONS[r]}</p>
+                </div>
+              ))}
           </div>
+        </section>
+
+        {/* Visual permission matrix */}
+        <section className="rounded-xl border border-white/10 bg-[#0a0a0a] p-5">
+          <h2 className="text-sm font-semibold text-white">Who can do what</h2>
+          <p className="mt-1 mb-3 text-xs text-white/40">
+            The exact permissions behind each role. This is the live source of truth the system enforces on every page.
+          </p>
+          <PermissionMatrix />
         </section>
       </div>
     </div>
