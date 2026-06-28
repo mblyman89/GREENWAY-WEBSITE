@@ -251,7 +251,23 @@ function DailyDealCard({ deal }: { deal: DailyDeal }) {
   );
 }
 
-export function SpecialsContent() {
+export function SpecialsContent({ thursdayBrands }: { thursdayBrands?: string[] } = {}) {
+  // When DB-published Thursday brands are supplied, override the static Thursday
+  // card's menu link so the storefront reflects the back-office promotion.
+  const deals: DailyDeal[] =
+    thursdayBrands && thursdayBrands.length > 0
+      ? dailyDeals.map((deal) =>
+          deal.day === "Thursday"
+            ? {
+                ...deal,
+                href: `/menu?brands=${thursdayBrands
+                  .map((b) => encodeURIComponent(b))
+                  .join(",")}`,
+              }
+            : deal,
+        )
+      : dailyDeals;
+
   return (
     <section className="relative overflow-hidden bg-black text-white">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_10%,rgba(255,215,0,0.13),transparent_18rem),radial-gradient(circle_at_86%_12%,rgba(255,127,0,0.14),transparent_20rem),radial-gradient(circle_at_70%_88%,rgba(126,217,87,0.12),transparent_24rem)]" />
@@ -284,7 +300,7 @@ export function SpecialsContent() {
           </div>
 
           <div className="grid items-stretch gap-x-3 gap-y-6 sm:grid-cols-2 md:gap-x-5 md:gap-y-8 xl:grid-cols-4">
-            {dailyDeals.map((deal) => (
+            {deals.map((deal) => (
               <DailyDealCard key={deal.title} deal={deal} />
             ))}
           </div>
