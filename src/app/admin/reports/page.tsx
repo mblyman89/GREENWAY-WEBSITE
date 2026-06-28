@@ -5,7 +5,12 @@ import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
 import { formatMinorCurrency } from "@/lib/leafly/format";
-import { BarList, DayBarChart, StatusBar, REPORT_COLORS } from "@/components/admin/reports/Charts";
+import { BarList, StatusBar, REPORT_COLORS } from "@/components/admin/reports/Charts";
+import {
+  OrdersTrendChart,
+  LoyaltyTrendChart,
+  StatusDonut,
+} from "@/components/admin/reports/InteractiveReportCharts";
 import {
   getOrdersReport,
   getLoyaltyReport,
@@ -135,32 +140,37 @@ export default async function ReportsPage({
           <StatCard label="Avg items / order" value={orders.avgItemsPerOrder} />
         </div>
 
-        {/* Orders charts */}
-        <div className="grid gap-5 lg:grid-cols-2">
-          <Section title="Orders per day">
-            <DayBarChart data={orders.ordersByDay} color={REPORT_COLORS.GREEN} />
-          </Section>
-          <Section title="Revenue per day">
-            <DayBarChart
-              data={orders.revenueByDay}
-              color={REPORT_COLORS.GOLD}
-              valueFormatter={(v) => formatMinorCurrency(v)}
-            />
-          </Section>
-        </div>
+        {/* Orders charts — interactive Recharts time-series */}
+        <OrdersTrendChart
+          ordersByDay={orders.ordersByDay}
+          revenueByDayMajor={orders.revenueByDay.map((p) => ({ date: p.date, value: p.value / 100 }))}
+        />
 
         <Section title="Order status breakdown">
-          <StatusBar
-            segments={[
-              { label: "New", value: orders.statusCounts.new, color: REPORT_COLORS.ORANGE },
-              { label: "Acknowledged", value: orders.statusCounts.acknowledged, color: REPORT_COLORS.GOLD },
-              { label: "Preparing", value: orders.statusCounts.preparing, color: "#9ad97f" },
-              { label: "Ready", value: orders.statusCounts.ready, color: REPORT_COLORS.GREEN },
-              { label: "Completed", value: orders.statusCounts.completed, color: "#4b7a52" },
-              { label: "Cancelled", value: orders.cancelledOrders, color: "#b34b4b" },
-              { label: "No-show", value: orders.noShowOrders, color: "#7a3b3b" },
-            ]}
-          />
+          <div className="grid gap-5 lg:grid-cols-[1.4fr_1fr] lg:items-center">
+            <StatusBar
+              segments={[
+                { label: "New", value: orders.statusCounts.new, color: REPORT_COLORS.ORANGE },
+                { label: "Acknowledged", value: orders.statusCounts.acknowledged, color: REPORT_COLORS.GOLD },
+                { label: "Preparing", value: orders.statusCounts.preparing, color: "#9ad97f" },
+                { label: "Ready", value: orders.statusCounts.ready, color: REPORT_COLORS.GREEN },
+                { label: "Completed", value: orders.statusCounts.completed, color: "#4b7a52" },
+                { label: "Cancelled", value: orders.cancelledOrders, color: "#b34b4b" },
+                { label: "No-show", value: orders.noShowOrders, color: "#7a3b3b" },
+              ]}
+            />
+            <StatusDonut
+              segments={[
+                { name: "New", value: orders.statusCounts.new, color: REPORT_COLORS.ORANGE },
+                { name: "Acknowledged", value: orders.statusCounts.acknowledged, color: REPORT_COLORS.GOLD },
+                { name: "Preparing", value: orders.statusCounts.preparing, color: "#9ad97f" },
+                { name: "Ready", value: orders.statusCounts.ready, color: REPORT_COLORS.GREEN },
+                { name: "Completed", value: orders.statusCounts.completed, color: "#4b7a52" },
+                { name: "Cancelled", value: orders.cancelledOrders, color: "#b34b4b" },
+                { name: "No-show", value: orders.noShowOrders, color: "#7a3b3b" },
+              ]}
+            />
+          </div>
         </Section>
 
         <div className="grid gap-5 lg:grid-cols-2">
@@ -182,7 +192,7 @@ export default async function ReportsPage({
           }
         >
           <div className="grid gap-5 lg:grid-cols-[1.3fr_1fr]">
-            <DayBarChart data={loyalty.signupsByDay} color={REPORT_COLORS.GREEN} />
+            <LoyaltyTrendChart signupsByDay={loyalty.signupsByDay} />
             <div className="space-y-3">
               <StatusBar
                 segments={[

@@ -83,6 +83,54 @@ export function can(role: StaffRole | null | undefined, permission: Permission):
   return MATRIX[permission]?.includes(role) ?? false;
 }
 
+/** Plain-language label for each permission, for the admin permission matrix. */
+export const PERMISSION_LABELS: Record<Permission, string> = {
+  "dashboard.view": "View the dashboard",
+  "menu.import": "Import & stage the menu",
+  "menu.publish": "Publish the menu live",
+  "orders.view": "View orders",
+  "orders.manage": "Update order status",
+  "promotions.manage": "Manage promotions & specials",
+  "media.manage": "Manage the media library",
+  "vendors.manage": "Manage vendors & brands",
+  "products.enrich": "Enrich products (descriptions, photos)",
+  "content.edit": "Edit site content & page text",
+  "blog.manage": "Write & publish blog posts",
+  "loyalty.view": "View loyalty signups",
+  "loyalty.manage": "Process loyalty signups",
+  "reports.view": "View reports & exports",
+  "users.manage": "Manage staff & roles",
+  "settings.manage": "Change settings",
+};
+
+/** Display order for the matrix rows (grouped roughly by area). */
+export const ALL_PERMISSIONS: Permission[] = [
+  "dashboard.view",
+  "orders.view",
+  "orders.manage",
+  "loyalty.view",
+  "loyalty.manage",
+  "menu.import",
+  "menu.publish",
+  "promotions.manage",
+  "products.enrich",
+  "vendors.manage",
+  "content.edit",
+  "blog.manage",
+  "media.manage",
+  "reports.view",
+  "users.manage",
+  "settings.manage",
+];
+
+/**
+ * Read-only snapshot of which roles hold a given permission. Returned as a
+ * copy so callers (e.g. the visual permission matrix) can't mutate the matrix.
+ */
+export function rolesForPermission(permission: Permission): StaffRole[] {
+  return [...(MATRIX[permission] ?? [])];
+}
+
 export function isAdminRole(role: StaffRole | null | undefined): boolean {
   return role === "owner" || role === "admin";
 }

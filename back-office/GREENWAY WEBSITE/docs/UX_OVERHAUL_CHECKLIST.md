@@ -73,11 +73,12 @@
 - NOTE (handoff): "Research with AI" reuses the shared `ai_suggestions` lifecycle (entity_type `vendor`, field_key `mission_statement`/`about`). Accept is whitelisted to only those two fields. Brands don't yet have the AI button — `generateVendorProfile` already supports `kind:"brand"`, so wiring a brand-level button is a small follow-up (roadmap).
 
 ## UX-6 — Operational polish
-- [ ] Orders: big touch cards, visual status flow, new-order alert, ticket polish.
-- [ ] Loyalty: friendly queue + dedupe visual + onboarding empty state.
-- [ ] Reports: rich interactive charts (Recharts wrapper), keep CSV.
-- [ ] Users/Audit: role explainer + permission-matrix visual + friendly audit timeline.
-- [ ] `tsc` + `build` clean. **PR + owner inspect.**
+- [x] Orders: big touch cards (existing, kept) + **visual status flow** (`OrderStatusFlow` stepper New→Ack→Prep→Ready→Done; done=green ✓, current pulses, future dim; cancelled/no-show = red terminal pill; on cards + order detail) + **new-order alert** (`NewOrderAlert` client polls new staff-only `GET /api/admin/orders/count` every 15s; on a rise in NEW orders shows a pulsing "🔔 N new — tap to refresh" banner + a WebAudio chime (no asset; mute remembered in localStorage); silently no-ops on error). *(PR #53.)*
+- [x] Loyalty: friendly queue (existing, kept) + **dedupe visual** (each duplicate now resolves its original via `getLoyaltySignup` and shows "Same phone/email as <Name> (submitted …). Verify before entering" + hover tooltip) + **onboarding empty state** (when zero signups total, a celebratory `EmptyState` explaining how signups arrive + link to the public form + legacy-import hint; filtered-empty stays a neutral message). *(PR #53.)*
+- [x] Reports: **interactive Recharts** time-series — Orders/day + Revenue/day as `AreaChart` (hover tooltips) via new client `InteractiveReportCharts` on the shared `@/components/admin/charts` wrapper; order-status + (kept) loyalty get a `DonutChart` alongside the existing `StatusBar`; loyalty/day → `AreaChart`. BarLists + CSV export kept untouched. *(PR #53.)*
+- [x] Users/Audit: **role explainer** (rewrote "Role reference" → privilege-ordered plain-language cards) + **permission-matrix visual** (`PermissionMatrix` reads the live `MATRIX` via new read-only `rolesForPermission` + `PERMISSION_LABELS`/`ALL_PERMISSIONS` exports — green ✓ grid of role×permission, the actual enforced source of truth) + **friendly audit timeline** (rewrote `/admin/audit` → day-grouped timeline with `humanizeAction` plain-language phrases + tone icons + actor initials + Today/Yesterday headers; raw entity shown subtly; friendly empty state; renamed UI to "Activity Log"). *(PR #53.)*
+- [x] `tsc` + `build` clean. **PR #53 — `tsc --noEmit` EXIT 0; `next build` "✓ Compiled successfully in 16.7s", 2374/2374 static pages, new dynamic `/api/admin/orders/count`. Owner inspect.**
+- NOTE (handoff): order "ticket polish" (a print-optimized ticket layout) was left as-is — the order detail page already prints acceptably; a dedicated `@media print` ticket stylesheet is a small future add (roadmap). The new-order chime requires one prior user interaction on the page (browser autoplay policy) — expected; the visual banner always works regardless.
 
 ## UX-7 — AI everywhere + onboarding wizard
 - [ ] Audit every page; add "let AI do this" wherever a human types from scratch.
