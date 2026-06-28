@@ -6,7 +6,13 @@ import { faqItems } from "@/content/faq";
 
 
 
-export function FaqContent() {
+type FaqHeroContent = {
+  title?: string;
+  subtitle?: string;
+  editable?: boolean;
+};
+
+export function FaqContent({ content }: { content?: FaqHeroContent } = {}) {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
 
   return (
@@ -16,11 +22,21 @@ export function FaqContent() {
 
       <div className="relative mx-auto max-w-6xl px-4 py-10 md:px-8 md:py-16 lg:py-20">
         <div className="mx-auto max-w-5xl text-center">
-          <h1 className="text-4xl font-black leading-tight tracking-tight text-white sm:text-5xl md:whitespace-nowrap md:text-5xl lg:text-6xl">
-            Frequently Asked Questions
+          <h1
+            className="text-4xl font-black leading-tight tracking-tight text-white sm:text-5xl md:whitespace-nowrap md:text-5xl lg:text-6xl"
+            {...(content?.editable
+              ? { "data-gw-block": "faq.hero.title", "data-gw-editable": "true" }
+              : {})}
+          >
+            {content?.title || "Frequently Asked Questions"}
           </h1>
-          <p className="mx-auto mt-4 max-w-2xl whitespace-nowrap text-[0.74rem] font-semibold leading-6 text-zinc-400 sm:text-sm md:text-base md:leading-7">
-            Everything you need to know about shopping with us.
+          <p
+            className="mx-auto mt-4 max-w-2xl whitespace-nowrap text-[0.74rem] font-semibold leading-6 text-zinc-400 sm:text-sm md:text-base md:leading-7"
+            {...(content?.editable
+              ? { "data-gw-block": "faq.hero.subtitle", "data-gw-editable": "true" }
+              : {})}
+          >
+            {content?.subtitle || "Everything you need to know about shopping with us."}
           </p>
         </div>
 

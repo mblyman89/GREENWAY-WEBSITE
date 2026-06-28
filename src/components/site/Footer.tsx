@@ -162,6 +162,12 @@ async function MobileFooter() {
       {/* Store hours graphic (replaces the former green hours box). */}
       <div className="mt-7">
         <HoursImage align="center" />
+        {/* Editable plain-text hours (Admin → Site Content: business.hours.display). */}
+        <SiteText
+          blockKey="business.hours.display"
+          as="p"
+          className="mt-2 text-center text-xs font-black uppercase tracking-[0.18em] text-[var(--greenway)]"
+        />
       </div>
 
       {/* App download: wordmark left of the two circular store glyphs. */}
@@ -225,6 +231,12 @@ async function DesktopFooter() {
         <div className="flex flex-col items-end gap-6 text-right">
           {/* Store hours graphic (replaces the former Hours / phone text block). */}
           <HoursImage align="end" />
+          {/* Editable plain-text hours (Admin → Site Content: business.hours.display). */}
+          <SiteText
+            blockKey="business.hours.display"
+            as="p"
+            className="text-right text-xs font-black uppercase tracking-[0.18em] text-[var(--greenway)]"
+          />
 
           {/* App download — identical to mobile, in the desktop spot. */}
           <div className="w-full max-w-xs rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-5">

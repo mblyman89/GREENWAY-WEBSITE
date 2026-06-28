@@ -68,6 +68,63 @@ export async function getContentForRender(
   }
 }
 
+/**
+ * Resolve several content blocks at once for a server page that needs to pass
+ * the values down to a CLIENT component (e.g. the homepage Hero carousel, the
+ * loyalty signup form). Returns a record keyed by block_key. Uses one round
+ * trip to the DB and honours Draft Mode exactly like `getContentForRender`.
+ *
+ * Usage (server component):
+ *   const copy = await getContentValues(["home.hero.title", "home.hero.subtitle"]);
+ *   return <Hero title={copy["home.hero.title"]} subtitle={copy["home.hero.subtitle"]} />
+ */
+export async function getContentValues(
+  blockKeys: string[],
+): Promise<Record<string, string>> {
+  const result: Record<string, string> = {};
+  for (const key of blockKeys) {
+    result[key] = SEED_DEFAULTS.get(key) ?? "";
+  }
+
+  let isPreview = false;
+  try {
+    const dm = await draftMode();
+    isPreview = dm.isEnabled;
+  } catch {
+    isPreview = false;
+  }
+
+  if (!isSupabaseServiceConfigured) return result;
+
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data } = await admin
+      .from("content_blocks")
+      .select("block_key, published_value, draft_value, status")
+      .in("block_key", blockKeys);
+
+    const rows = (data ?? []) as Array<{
+      block_key: string;
+      published_value: string | null;
+      draft_value: string | null;
+      status: PostStatus;
+    }>;
+
+    for (const row of rows) {
+      const fallback = result[row.block_key] ?? "";
+      if (isPreview) {
+        result[row.block_key] =
+          row.draft_value ?? row.published_value ?? fallback;
+      } else if (row.status === "published" && row.published_value != null) {
+        result[row.block_key] = row.published_value;
+      }
+    }
+    return result;
+  } catch {
+    return result;
+  }
+}
+
 /** Is the current request a staff preview (Draft Mode on)? */
 export async function isPreviewActive(): Promise<boolean> {
   try {

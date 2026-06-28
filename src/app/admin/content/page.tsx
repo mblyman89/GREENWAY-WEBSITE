@@ -24,9 +24,15 @@ function publicPathForPage(page: string): string | null {
     case "loyalty":
       return "/loyalty";
     case "vendors":
-      return "/vendors";
+      return "/vendor-delivery";
     case "specials":
       return "/specials";
+    case "faq":
+      return "/faq";
+    case "footer":
+    case "business":
+      // These render in the shared footer on every page — preview on the home page.
+      return "/";
     default:
       return null;
   }

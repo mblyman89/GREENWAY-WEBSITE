@@ -15,6 +15,8 @@ const PAGES = [
   { label: "Menu", path: "/menu" },
   { label: "Loyalty", path: "/loyalty" },
   { label: "Specials", path: "/specials" },
+  { label: "Vendors", path: "/vendor-delivery" },
+  { label: "FAQ", path: "/faq" },
 ];
 
 export function ContentPreviewPanel() {

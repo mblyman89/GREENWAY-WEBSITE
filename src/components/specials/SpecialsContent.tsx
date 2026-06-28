@@ -251,7 +251,20 @@ function DailyDealCard({ deal }: { deal: DailyDeal }) {
   );
 }
 
-export function SpecialsContent({ thursdayBrands }: { thursdayBrands?: string[] } = {}) {
+type SpecialsHeroContent = {
+  eyebrow?: string;
+  title?: string;
+  subtitle?: string;
+  editable?: boolean;
+};
+
+export function SpecialsContent({
+  thursdayBrands,
+  content,
+}: {
+  thursdayBrands?: string[];
+  content?: SpecialsHeroContent;
+} = {}) {
   // When DB-published Thursday brands are supplied, override the static Thursday
   // card's menu link so the storefront reflects the back-office promotion.
   const deals: DailyDeal[] =
@@ -278,14 +291,30 @@ export function SpecialsContent({ thursdayBrands }: { thursdayBrands?: string[] 
         <div className="relative isolate flex min-h-[8.5rem] items-center overflow-hidden rounded-2xl border border-white/10 bg-[var(--charcoal)] shadow-2xl shadow-black/40 md:min-h-[10.5rem]">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_88%_28%,rgba(255,127,0,0.4),transparent_42%),radial-gradient(circle_at_70%_85%,rgba(126,217,87,0.26),transparent_45%),linear-gradient(100deg,rgba(0,0,0,0.96)_0%,rgba(0,0,0,0.7)_48%,rgba(0,0,0,0.18)_100%)]" aria-hidden="true" />
           <div className="relative max-w-[80%] px-5 py-6 md:max-w-[62%] md:px-10">
-            <p className="inline-flex rounded-full border border-white/20 bg-black/40 px-3 py-1 text-[0.6rem] font-black uppercase tracking-[0.2em] text-[var(--greenway)] backdrop-blur md:text-xs">
-              Deals every day
+            <p
+              className="inline-flex rounded-full border border-white/20 bg-black/40 px-3 py-1 text-[0.6rem] font-black uppercase tracking-[0.2em] text-[var(--greenway)] backdrop-blur md:text-xs"
+              {...(content?.editable
+                ? { "data-gw-block": "specials.hero.eyebrow", "data-gw-editable": "true" }
+                : {})}
+            >
+              {content?.eyebrow || "Deals every day"}
             </p>
-            <h1 className="mt-2 text-3xl font-black uppercase leading-none tracking-tight text-white md:mt-3 md:text-5xl">
-              Cannabis Specials
+            <h1
+              className="mt-2 text-3xl font-black uppercase leading-none tracking-tight text-white md:mt-3 md:text-5xl"
+              {...(content?.editable
+                ? { "data-gw-block": "specials.hero.title", "data-gw-editable": "true" }
+                : {})}
+            >
+              {content?.title || "Cannabis Specials"}
             </h1>
-            <p className="mt-2 max-w-2xl text-xs font-semibold leading-5 text-zinc-300 md:mt-3 md:text-base">
-              Check out our latest deals and save on premium cannabis products. New specials added regularly.
+            <p
+              className="mt-2 max-w-2xl text-xs font-semibold leading-5 text-zinc-300 md:mt-3 md:text-base"
+              {...(content?.editable
+                ? { "data-gw-block": "specials.hero.subtitle", "data-gw-editable": "true" }
+                : {})}
+            >
+              {content?.subtitle ||
+                "Check out our latest deals and save on premium cannabis products. New specials added regularly."}
             </p>
           </div>
         </div>

@@ -34,7 +34,20 @@ function FieldError({ message }: { message?: string }) {
   return <p className="mt-2 text-xs font-bold text-red-300">{message}</p>;
 }
 
-export function LoyaltySignupForm() {
+/**
+ * Hero copy is editable from Admin → Site Content (loyalty.hero.*). The server
+ * page fetches the published (or draft, in staff preview) value and passes it
+ * here; we fall back to the shipped copy if the blocks are unseeded.
+ */
+type LoyaltyContent = {
+  title?: string;
+  subtitle?: string;
+  editable?: boolean;
+};
+
+export function LoyaltySignupForm({
+  content,
+}: { content?: LoyaltyContent } = {}) {
   const [values, setValues] = useState<FormValues>(defaultValues);
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -130,11 +143,21 @@ export function LoyaltySignupForm() {
             />
           </div>
 
-          <h1 className="mx-auto mt-3 max-w-3xl text-3xl font-black leading-tight tracking-tight text-white md:mt-4 md:text-5xl">
-            Signup to get offers and discounts from Greenway Marijuana
+          <h1
+            className="mx-auto mt-3 max-w-3xl text-3xl font-black leading-tight tracking-tight text-white md:mt-4 md:text-5xl"
+            {...(content?.editable
+              ? { "data-gw-block": "loyalty.hero.title", "data-gw-editable": "true" }
+              : {})}
+          >
+            {content?.title || "Signup to get offers and discounts from Greenway Marijuana"}
           </h1>
-          <p className="mx-auto mt-3 max-w-xl text-xs font-semibold leading-5 text-zinc-400 md:text-sm">
-            Get updates on our promotions tailored to you.
+          <p
+            className="mx-auto mt-3 max-w-xl text-xs font-semibold leading-5 text-zinc-400 md:text-sm"
+            {...(content?.editable
+              ? { "data-gw-block": "loyalty.hero.subtitle", "data-gw-editable": "true" }
+              : {})}
+          >
+            {content?.subtitle || "Get updates on our promotions tailored to you."}
           </p>
 
           {success || fallbackSuccess ? (
