@@ -66,6 +66,15 @@
 
 ---
 
+## Discovered while building (UX-5 / UX-6) — small follow-ups for a later pass
+These are intentional, honest deferrals — each is a small, isolated add, none block the current slices:
+- **Public `/vendors` page doesn't exist yet.** The vendor admin revalidates `/vendors`, but there's no public route. UX-5's "live public-card preview" is therefore an in-admin faithful mock (`VendorCardPreview`), not an iframe. Building the real public vendors page is its own (storefront) task; the preview already shows the intended design.
+- **"Research with AI" for brands.** `generateVendorProfile` already supports `kind:"brand"`; only the vendor-level button is wired. Adding a brand-level button reusing the same `ai_suggestions` lifecycle is a ~30-line follow-up.
+- **Promotion affected-products thumbnails.** `MenuLite` (the match shape) carries no image; per-product enrichment-media joins would be N queries per preview. Currently a 🌿 placeholder (consistent with the product grid). Future: extend `loadPublishedMenuLite` to carry the enrichment image key, then batch-resolve with `resolveMediaUrls`.
+- **Order ticket print layout.** The order detail page already prints acceptably (a `PrintButton` exists). A dedicated `@media print` ticket stylesheet (hide chrome, large item list) is a small polish add.
+- **Media AI alt-text is context-based, not vision.** (From UX-4.) Text model only. A vision-model upgrade for true image-aware alt text fits in UX-7.
+- **New-order chime needs one prior page interaction** (browser autoplay policy). The visual "🔔 N new orders" banner always works regardless; the chime is a bonus once the staffer clicks anything.
+
 ## Definition of done (per UX slice)
 1. Shared components reused (no one-off styling).
 2. Every new/changed page has: friendly empty state, caught/ friendly error state, tooltips/help, loading skeleton, consistent status pills.
