@@ -54,9 +54,9 @@
 - [x] `tsc` + `build` clean. **PR #47 — `tsc --noEmit` EXIT 0; `next build` "Compiled successfully in 10.2s", preview API routes present, public pages still static. Owner inspect.**
 
 ## UX-3 — Visual content & blog editing
-- [ ] Blog editor: side-by-side `PreviewFrame`, click-to-edit, AI "Write post/section/SEO" with Accept/Edit/Reject diff + compliance flags, image picker w/ thumbnails + AI alt-text.
-- [ ] Content blocks + SEO: visual editing via overlays; friendly previews.
-- [ ] `tsc` + `build` clean. **PR + owner inspect.**
+- [ ] Blog editor: side-by-side `PreviewFrame`, click-to-edit, AI "Write post/section/SEO" with Accept/Edit/Reject diff + compliance flags, image picker w/ thumbnails + AI alt-text. *(Next UX-3 sub-slice.)*
+- [x] Content blocks + AI: Squarespace-style `ContentBlockEditor` per block — live char count, SEO-length guidance, **✨ Write with AI** (Accept / Try again / Discard) with visible compliance flags, save-draft + publish, "View on site ↗". AI assist (`src/lib/cms/ai-content.ts` + `suggestContentAction`) reuses the shared provider + WA-cannabis compliance scanner; **drafts-only**, audited `content.ai_suggest`, never auto-saves/publishes; gated on `AI_API_KEY`. Public `/menu` hero (title+subtitle) wired to editable `<SiteText>` blocks (`menu.hero.*`); seed defaults = exact current live copy so it's a visual no-op until edited. *(PR #49.)* NOTE: homepage Hero carousel intentionally left untouched (it's a `"use client"` component; refactor is risky/out-of-scope for this slice).
+- [x] `tsc` + `build` clean (PR #49: tsc exit 0; `next build` ✓ Compiled successfully, 2374/2374 pages). **PR + owner inspect.**
 
 ## UX-4 — Visual product & media enrichment (AI-heavy)
 - [ ] Products: thumbnail grid, gap charts, live product-card preview, AI description/tags/alt-text front-and-center, **bulk AI review grid**.
