@@ -122,3 +122,30 @@ OWNER TO-DO after deploy: (1) run migration 0011 in Supabase; (2) open Admin →
 - [ ] Each non-home page's banner is bespoke markup; faithfully seed + wire one
       page at a time (about, locations, vendors, specials, loyalty, menu, faq,
       price-match) using PAGE_SECTION_SEEDS + getSectionsForRender(slug).
+
+### Slice 4 — Blog & Newsletter polish (PR #68, merged) — migration 0014 (apply manually)
+- [x] formatBlogDate(): full-month-name "Month D, YYYY"; TZ-safe ISO parse; expands legacy abbreviated labels.
+- [x] Editable blog title typography (font/size/color) — title-style.ts + editor "Title styling" panel; applied on card + hero.
+- [x] Newsletter cards: "Read Article" opens uploaded PDF in new tab when present.
+- [x] Migration 0014 blog_posts.title_font/title_size/title_color (+ size check constraint).
+- [x] tsc / eslint / build clean.
+- OWNER ACTION: apply migration 0014.
+
+### Slice 5 — FAQ Q&A manager (PR #69, merged) — migration 0015 (apply manually)
+- [x] Migration 0015 faq_items (published+draft mirror cols, enabled/draft_enabled, status, locked, set_updated_at, RLS staff-all + public read).
+- [x] faq-store: draft-aware CRUD, getFaqForRender, ensureFaqSeeded (imports current static FAQ as starter).
+- [x] FAQ admin page: Banners | Questions & Answers tab system; QandaTab + FaqItemCard (add/load-starter, reorder, delete, save draft, publish gated until saved).
+- [x] Public /faq reads DB items (draft-aware) with static fallback; FaqContent accepts items prop; feeds FAQ JSON-LD too.
+- [x] tsc / eslint / build clean.
+- OWNER ACTION: apply migration 0015.
+
+### Slice 6 — Media library upgrade (PR pending) — NO migration (reused existing columns)
+- [x] Smart metadata model (taxonomy.ts): WHAT=title/description, WHY=canonical purpose (usage_type), WHERE=placement tags (tags) + "Where used".
+- [x] Canonical MEDIA_PURPOSES dropdown everywhere (upload, edit, filter) — replaces fragmented free-text usage_type.
+- [x] Placement tag convention + normalizeTags() (kebab-case, de-dupe, cap 12); datalist suggestions.
+- [x] Advisory guardrails (checkMediaMeta): live warnings for missing title/purpose/alt, filename-as-title, WEBP tip, tag convention. Never hard-blocks.
+- [x] Dependency-free image dimension probe (PNG/JPEG/GIF/WEBP) on upload → width/height stored; verified vs `file`.
+- [x] AI auto-fetch extended: suggestMediaMetaAction (title+description via vision/context) + existing alt suggest, wired into new MediaMetaEditor.
+- [x] Thumbnail fix confirmed (public bucket from Slice 1 PR #65); detail page shows dimensions.
+- [x] tsc / eslint / build clean.
+- OWNER ACTION: none (no migration).

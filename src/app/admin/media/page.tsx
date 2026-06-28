@@ -7,11 +7,10 @@ import { StatCard } from "@/components/admin/StatCard";
 import { listMedia, countMedia, publicUrlForKey } from "@/lib/media/store";
 import type { MediaAsset } from "@/lib/supabase/types";
 import { MediaDropzone } from "@/components/admin/media/MediaDropzone";
+import { MEDIA_PURPOSES, purposeLabel } from "@/lib/media/taxonomy";
 import { uploadMediaAction } from "./actions";
 
 export const dynamic = "force-dynamic";
-
-const USAGE_TYPES = ["vendor-logo", "brand-logo", "hero", "banner", "product", "blog", "icon", "other"];
 
 function isImage(mime: string | null): boolean {
   return Boolean(mime && mime.startsWith("image/"));
@@ -118,10 +117,10 @@ export default async function MediaPage({
               defaultValue={usage ?? ""}
               className="rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#7ed957]"
             >
-              <option value="">All usage types</option>
-              {USAGE_TYPES.map((u) => (
-                <option key={u} value={u}>
-                  {u}
+              <option value="">All purposes</option>
+              {MEDIA_PURPOSES.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.label}
                 </option>
               ))}
             </select>
@@ -178,7 +177,7 @@ export default async function MediaPage({
                     {m.title || m.filename}
                   </p>
                   <p className="text-[10px] text-white/35">
-                    {m.usage_type ?? "—"} · {prettyBytes(m.size_bytes)}
+                    {purposeLabel(m.usage_type)} · {prettyBytes(m.size_bytes)}
                   </p>
                 </div>
               </Link>
