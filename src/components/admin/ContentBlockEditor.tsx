@@ -24,6 +24,7 @@ import {
   ContentImageField,
   type MediaChoice,
 } from "@/components/admin/ContentImageField";
+import { ContentFontField } from "@/components/admin/ContentFontField";
 
 export type EditableBlock = {
   block_key: string;
@@ -95,6 +96,7 @@ export function ContentBlockEditor({
   const [pending, startTransition] = useTransition();
 
   const isImage = block.field_type === "image";
+  const isFont = block.field_type === "font";
   const isRich = block.field_type === "rich" || block.field_type === "markdown";
   const dirty = (value ?? "") !== (block.published_value ?? "");
   // VALUE-ADD: an "unsaved edits" indicator. `savedValue` tracks what's been
@@ -197,6 +199,8 @@ export function ContentBlockEditor({
             onChange={setValue}
             mediaChoices={mediaChoices}
           />
+        ) : isFont ? (
+          <ContentFontField value={value} onChange={setValue} />
         ) : (
           <textarea
             value={value}
@@ -208,7 +212,7 @@ export function ContentBlockEditor({
         )}
 
         {/* Meta row: length + AI toggle (text blocks only) */}
-        {!isImage && (
+        {!isImage && !isFont && (
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className={`text-[0.7rem] ${lenTone}`}>
               {len} characters
@@ -229,7 +233,7 @@ export function ContentBlockEditor({
         )}
 
         {/* AI panel */}
-        {!isImage && aiPanelOpen && (
+        {!isImage && !isFont && aiPanelOpen && (
           <div className="rounded-lg border border-[#7ed957]/25 bg-[#7ed957]/[0.04] p-3">
             {!aiEnabled ? (
               <p className="text-xs text-[#ffd700]">

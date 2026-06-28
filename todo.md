@@ -31,17 +31,17 @@ Standing rule: re-read roadmap/checklists + walk file tree each session. AI outp
 - [x] tsc + eslint + build clean (route /admin/content/carousel compiled)
 - [ ] PR; update tracker
 
-## SLICE C — Font library + font picker
-- [ ] Re-read roadmap (standing rule)
-- [ ] Font library: curated Google Fonts + brand fonts (DB-backed list or typed registry + loader)
-- [ ] Load chosen fonts via next/font or <link>; expose CSS vars
-- [ ] Font picker control in editor for heading-bearing blocks; store choice
-- [ ] Public pages apply chosen font to the matching text
-- [ ] tsc + eslint + build clean; PR; update tracker
+## SLICE C — Font library + font picker — ✅ DONE (PR pending)
+- [x] Re-read roadmap (standing rule)
+- [x] Font library: curated registry (fonts.ts) of 10 Google Fonts + System default, grouped by category
+- [x] Load all fonts via next/font/google (self-hosted, swap) → fontVariablesClassName on <html> (fonts-loader.ts)
+- [x] New "font" field type + ContentFontField picker (grouped dropdown + LIVE preview in the chosen font)
+- [x] site.font.heading + site.font.body blocks (page business / section typography), edited from Site Content
+- [x] layout.tsx resolves fonts (draft-aware) → --font-heading / --font-body; globals.css applies to body + h1–h6
+- [x] tsc + eslint + build clean (fonts self-hosted at build, no warnings)
 
-## VALUE-ADD (agent's professional judgement — not explicitly requested)
-- [ ] "Unsaved changes" guard + per-block dirty indicator in editor (prevents losing edits)
-- [ ] Decide + implement during slices where it fits best (likely Slice A editor work)
+## VALUE-ADD (agent's professional judgement — not explicitly requested) — ✅ DONE (Slices A + B)
+- [x] "Unsaved changes" guard + per-block dirty indicator in editor (ContentBlockEditor + CarouselSlideCard): beforeunload warning + gold "● unsaved edits" badges
 
 ## NOTES
 - Disk tight: clear .next before/after builds. Build = ~2374 static pages. Use ./node_modules/.bin/next build.

@@ -60,7 +60,8 @@ export type ContentFieldType =
   | "url"
   | "phone"
   | "email"
-  | "image";
+  | "image"
+  | "font";
 
 export type ContentBlockRow = {
   id: string;

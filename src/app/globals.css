@@ -26,7 +26,15 @@ body {
     radial-gradient(circle at top right, rgba(255, 127, 0, 0.16), transparent 28rem),
     #000000;
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  /* --font-body is set on <html> from the staff-chosen font (Admin → Site
+     Content). Falls back to the system stack when unset. */
+  font-family: var(--font-body, Arial, Helvetica, sans-serif);
+}
+
+/* Headings use the staff-chosen heading font site-wide. Falls back to the body
+   font, then the system stack. */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading, var(--font-body, Arial, Helvetica, sans-serif));
 }
 
 ::selection {
