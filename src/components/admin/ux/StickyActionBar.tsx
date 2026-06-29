@@ -60,7 +60,7 @@ export function StickyActionBar({
         : "justify-end";
 
   return (
-    <div className="sticky bottom-0 left-0 right-0 z-40 -mx-4 mt-8 border-t border-white/10 bg-[#0a0a0a]/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">
+    <div className="sticky bottom-0 left-0 right-0 z-40 -mx-4 mt-8 border-t border-[var(--admin-border)] bg-[var(--admin-surface)]/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">
       <div className="flex flex-wrap items-center gap-3">
         {status && (
           <span className="flex items-center gap-2 text-xs">

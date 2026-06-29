@@ -2,21 +2,14 @@ import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
+import { Breadcrumbs, HelpPanel, StatusPill } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
 import { listPromotions, detectConflicts } from "@/lib/promotions/promotions-store";
 import { WEEKDAY_LABELS, DISCOUNT_TYPE_LABELS } from "@/lib/promotions/types";
-import type { PostStatus, Weekday } from "@/lib/promotions/types";
+import type { Weekday } from "@/lib/promotions/types";
 import { WeeklyScheduleStrip } from "@/components/admin/promotions/WeeklyScheduleStrip";
 
 export const dynamic = "force-dynamic";
-
-const STATUS_STYLES: Record<PostStatus, string> = {
-  draft: "border-white/15 bg-white/5 text-white/60",
-  scheduled: "border-[#ffd700]/40 bg-[#ffd700]/10 text-[#ffd700]",
-  published: "border-[#7ed957]/40 bg-[#7ed957]/10 text-[#7ed957]",
-  archived: "border-white/10 bg-white/5 text-white/35",
-};
 
 export default async function PromotionsAdminPage() {
   await requirePermission("promotions.manage");
@@ -120,55 +113,51 @@ export default async function PromotionsAdminPage() {
           </div>
         )}
 
-        <div className="mt-6 overflow-hidden rounded-xl border border-white/10">
+        <div className="mt-6 overflow-hidden rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)]">
           <table className="w-full text-left text-sm">
-            <thead className="bg-white/5 text-xs uppercase tracking-wide text-white/40">
+            <thead className="sticky top-0 z-10 bg-[var(--admin-surface-2)] text-xs uppercase tracking-wide text-[var(--admin-text-faint)] backdrop-blur">
               <tr>
-                <th className="px-4 py-3">Promotion</th>
-                <th className="px-4 py-3">Schedule</th>
-                <th className="px-4 py-3">Discount</th>
-                <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3 font-semibold">Promotion</th>
+                <th className="px-4 py-3 font-semibold">Schedule</th>
+                <th className="px-4 py-3 font-semibold">Discount</th>
+                <th className="px-4 py-3 font-semibold">Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/5">
+            <tbody className="divide-y divide-[var(--admin-border)]">
               {promos.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="px-4 py-8 text-center text-white/40">
+                  <td colSpan={4} className="px-4 py-8 text-center text-[var(--admin-text-faint)]">
                     No promotions yet. The storefront is currently showing the built-in daily-deal
                     defaults. Create one to override them.
                   </td>
                 </tr>
               )}
               {promos.map((p) => (
-                <tr key={p.id} className="transition hover:bg-white/5">
+                <tr key={p.id} className="odd:bg-[var(--admin-surface)] transition hover:bg-[var(--admin-surface-hover)]">
                   <td className="px-4 py-3">
                     <Link
                       href={`/admin/promotions/${p.id}`}
-                      className="font-medium text-white hover:text-[#7ed957]"
+                      className="font-medium text-[var(--admin-text)] hover:text-[var(--admin-accent)]"
                     >
                       {p.title}
                     </Link>
                     {p.promo_key && (
-                      <span className="ml-2 text-xs text-white/30">{p.promo_key}</span>
+                      <span className="ml-2 text-xs text-[var(--admin-text-faint)]">{p.promo_key}</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-white/60">
+                  <td className="px-4 py-3 text-[var(--admin-text-muted)]">
                     {p.weekday !== null
                       ? `Every ${WEEKDAY_LABELS[p.weekday as Weekday]}`
                       : p.starts_at
                         ? `${p.starts_at.slice(0, 10)} → ${p.ends_at?.slice(0, 10) ?? "…"}`
                         : "—"}
                   </td>
-                  <td className="px-4 py-3 text-white/60">
+                  <td className="px-4 py-3 text-[var(--admin-text-muted)]">
                     {DISCOUNT_TYPE_LABELS[p.discount_type]}
                     {p.discount_percent > 0 ? ` · ${p.discount_percent}%` : ""}
                   </td>
                   <td className="px-4 py-3">
-                    <span
-                      className={`inline-block rounded-full border px-2.5 py-0.5 text-xs font-medium ${STATUS_STYLES[p.status]}`}
-                    >
-                      {p.status}
-                    </span>
+                    <StatusPill status={p.status} />
                   </td>
                 </tr>
               ))}

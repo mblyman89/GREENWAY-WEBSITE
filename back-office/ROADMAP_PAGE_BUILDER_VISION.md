@@ -359,3 +359,56 @@ building Slice 7.**
    - price-match → `PriceMatchContent`
 4. **Homepage section cap: 4 total — CONFIRMED.** The locked daily-special counts as 1, so up
    to 3 editable banners can be added below it.
+
+---
+
+## 8. Receipt / pick-ticket printer integration — RESEARCHED (owner requested)
+
+> Owner ask: "document the site's/back-end's readiness to send a command to my receipt
+> printer in the shop for when an order is placed — print a pick ticket of what to pack
+> AND alert employees. Decide the best industry-best-practice way."
+
+### What already exists today (the foundation is in place)
+- **`/admin/orders/[id]/ticket`** — a print-optimized pick-ticket page (thermal-receipt layout,
+  `.ticket-print` CSS in `globals.css`). An employee can open it and hit Ctrl/Cmd-P to print to
+  any printer the computer/phone can see today (zero hardware integration needed).
+- **`NewOrderAlert`** (in the Orders list) — in-app new-order alerting for employees.
+- **`src/lib/orders/notify.ts`** — server-side order-event hook (already sends order emails). This
+  is the natural place to fan out a "new order → print" trigger.
+
+So the back end is **already structured** to add printing: there is a single order-created code
+path (notify.ts) and a ready-made ticket layout. We are not starting from scratch.
+
+### Industry best practice — the recommendation (cloud-printing, no PC babysitting)
+For an unattended shop counter, the standard pattern used by Square / Toast / Shopify POS is a
+**cloud-pull thermal printer** rather than a browser print dialog:
+
+1. **Recommended hardware:** an Epson **TM-m30**-class or **Star micronics mC-Print / TSP100 series**
+   thermal receipt printer that supports **server-pull printing**:
+   - **Star CloudPRNT** — the printer polls a URL on our site (e.g. `/api/print/queue`) every few
+     seconds and pulls any pending jobs. No local PC, no driver, works over the shop's wifi.
+   - **Epson Server Direct Print (ePOS-Device / Server Direct Print)** — equivalent pull model.
+2. **How it works with our back end (small, safe addition — its own future slice):**
+   - On order-created (inside `notify.ts`), enqueue a **print job** row (Supabase table
+     `print_jobs`: id, order_id, status `pending|printed|failed`, payload, created_at).
+   - Add a tiny endpoint the printer polls: `GET /api/print/queue` returns the next pending job
+     formatted as the printer's markup (Star: CloudPRNT JSON/markup; Epson: ePOS XML), and
+     `POST` back marks it `printed`.
+   - The pick-ticket content is the SAME data we already render at `/admin/orders/[id]/ticket`
+     (items, quantities, customer, pickup notes) — just serialized to the printer's format.
+   - **Employee alert** rides along: the printer's built-in **buzzer/beep** fires on print (a
+     CloudPRNT/ePOS flag), so the physical printout IS the alert. Keep `NewOrderAlert` for the
+     on-screen heads-up too.
+3. **Why pull (CloudPRNT/Server Direct), not a local print server:** no always-on PC, no driver
+   installs, survives wifi reboots, and the printer reconnects itself. It's the lowest-maintenance,
+   most reliable option for a retail counter — the actual industry standard for headless printing.
+4. **Fallback that works TODAY (zero cost):** the existing `/admin/orders/[id]/ticket` browser
+   print. Good for testing the layout now; the cloud printer just automates it later.
+
+### Verdict
+**Yes, this can be built in cleanly**, and the codebase is already shaped for it. Recommended path:
+a **Star CloudPRNT (or Epson Server Direct Print) pull-printer** + a small `print_jobs` queue +
+two tiny API routes, triggered from the existing `notify.ts` order-created hook, reusing the
+existing pick-ticket layout. Scope it as its own focused slice AFTER the owner has done end-to-end
+email/order testing (so we trigger real orders against it). Hardware spend is ~$150–250 one-time
+for the printer; no monthly SaaS required.

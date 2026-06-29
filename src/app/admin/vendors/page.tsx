@@ -2,8 +2,9 @@ import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
+import { Breadcrumbs, HelpPanel, EmptyState } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
+import { Input, Select, Button } from "@/components/admin/ui";
 import { listVendors, vendorLogoUrls } from "@/lib/vendors/store";
 import { vendorCompleteness } from "@/lib/vendors/completeness";
 import { CompletenessMeter } from "@/components/admin/vendors/CompletenessMeter";
@@ -73,33 +74,25 @@ export default async function VendorsPage({
         </div>
 
         {all.length === 0 && (
-          <div className="rounded-xl border border-white/10 bg-[#0a0a0a] p-6 text-sm text-white/60">
-            No vendors yet. Run <code className="rounded bg-black/40 px-1">npm run seed:vendors</code> to import the
-            105 vendors + 168 brands from the folder database, or ask SuperNinja to run the seed for you.
-          </div>
+          <EmptyState
+            icon="🏷️"
+            title="No vendors yet"
+            description="Run “npm run seed:vendors” to import the 105 vendors + 168 brands from the folder database, or ask SuperNinja to run the seed for you."
+          />
         )}
 
         {/* Filters */}
         {all.length > 0 && (
           <form className="flex flex-wrap items-center gap-3" method="get">
-            <input
-              name="q"
-              defaultValue={q ?? ""}
-              placeholder="Search vendors…"
-              className="flex-1 min-w-48 rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#7ed957]"
-            />
-            <select
-              name="status"
-              defaultValue={status ?? ""}
-              className="rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#7ed957]"
-            >
+            <div className="min-w-48 flex-1">
+              <Input name="q" defaultValue={q ?? ""} placeholder="Search vendors…" />
+            </div>
+            <Select name="status" defaultValue={status ?? ""}>
               <option value="">All statuses</option>
               <option value="draft">Draft</option>
               <option value="published">Published</option>
-            </select>
-            <button type="submit" className="rounded-full border border-white/15 px-4 py-2 text-sm text-white/80 hover:border-[#7ed957] hover:text-white">
-              Filter
-            </button>
+            </Select>
+            <Button type="submit" variant="subtle">Filter</Button>
           </form>
         )}
 
@@ -112,7 +105,7 @@ export default async function VendorsPage({
               <Link
                 key={v.id}
                 href={`/admin/vendors/${v.id}`}
-                className="group flex flex-col gap-3 rounded-xl border border-white/10 bg-[#0a0a0a] p-4 transition hover:border-[#7ed957]/50"
+                className="admin-card-interactive group flex flex-col gap-3 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4"
               >
                 <div className="flex items-center gap-3">
                   <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-white/10 bg-black">
