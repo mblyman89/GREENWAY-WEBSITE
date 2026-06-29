@@ -4,6 +4,7 @@ import { StatCard } from "@/components/admin/StatCard";
 import { EmptyState, HelpPanel } from "@/components/admin/ux";
 import { isAiConfigured } from "@/lib/ai/provider";
 import { getAiUsageSummary } from "@/lib/ai/usage";
+import { getBudgetStatus } from "@/lib/ai/router";
 import { AiTokensTrend, AiFeatureDonut } from "@/components/admin/ai/AiUsageCharts";
 
 export const dynamic = "force-dynamic";
@@ -35,6 +36,11 @@ function fmt(n: number) {
 export default async function AiUsagePage() {
   await requirePermission("reports.view");
   const summary = await getAiUsageSummary(30);
+  const budget = await getBudgetStatus();
+
+  const modeLabel = budget.mode === "sprint" ? "Sprint (filling the database)" : "Maintenance (day-to-day)";
+  const pct = budget.usdPct ?? budget.tokenPct;
+  const pctLabel = pct === null ? null : `${Math.min(100, Math.round(pct * 100))}%`;
 
   return (
     <div>
@@ -54,6 +60,21 @@ export default async function AiUsagePage() {
             Token counts are <em>estimated</em> unless your AI provider reports exact numbers. Use
             this to spot which features are most valuable and keep an eye on usage.
           </p>
+          <p className="mt-2">
+            <strong>Two modes.</strong> Set <code className="rounded bg-black/40 px-1">AI_MODE=sprint</code>{" "}
+            while you fill the database (uses the strong model for the best-quality drafts), then switch to{" "}
+            <code className="rounded bg-black/40 px-1">AI_MODE=maintenance</code> for day-to-day work (uses the
+            lighter, cheaper model). New vendors/products still get great drafts in maintenance — just on the
+            efficient model.
+          </p>
+          <p className="mt-2">
+            <strong>Hard budget caps.</strong> Set{" "}
+            <code className="rounded bg-black/40 px-1">AI_MONTHLY_USD_BUDGET</code> (and the per-1k prices{" "}
+            <code className="rounded bg-black/40 px-1">AI_PRICE_PER_1K_PROMPT</code> /{" "}
+            <code className="rounded bg-black/40 px-1">AI_PRICE_PER_1K_COMPLETION</code> so the dollar estimate is
+            accurate), or <code className="rounded bg-black/40 px-1">AI_MONTHLY_TOKEN_BUDGET</code>. When the cap is
+            reached, AI <strong>pauses automatically</strong> until the next month — it can never overspend.
+          </p>
         </HelpPanel>
 
         {!isAiConfigured && (
@@ -61,6 +82,49 @@ export default async function AiUsagePage() {
             AI isn&apos;t set up yet. Add an <code className="rounded bg-black/40 px-1">AI_API_KEY</code> to
             start drafting — usage will appear here automatically.
           </div>
+        )}
+
+        {/* Operating mode + budget */}
+        {isAiConfigured && (
+          <section className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4">
+              <p className="text-xs uppercase tracking-wide text-[var(--admin-text-faint)]">AI mode</p>
+              <p className="mt-1 text-base font-semibold text-[var(--admin-text)]">{modeLabel}</p>
+              <p className="mt-1 text-xs text-[var(--admin-text-muted)]">
+                {budget.mode === "sprint"
+                  ? "Using the strong model to fill gaps with quality data."
+                  : "Using the lighter model to keep costs low."}
+              </p>
+            </div>
+            <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4">
+              <p className="text-xs uppercase tracking-wide text-[var(--admin-text-faint)]">This month&apos;s spend</p>
+              <p className="mt-1 text-base font-semibold text-[var(--admin-text)]">
+                {budget.usdBudget ? `$${budget.monthUsd.toFixed(2)} / $${budget.usdBudget.toFixed(2)}` : `${fmt(budget.monthTokens)} tokens`}
+              </p>
+              {pctLabel && (
+                <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-[var(--admin-surface-2)]">
+                  <div
+                    className={`h-full rounded-full ${budget.blocked ? "bg-[var(--admin-danger)]" : (pct ?? 0) > 0.8 ? "bg-[var(--admin-orange)]" : "bg-[var(--admin-accent)]"}`}
+                    style={{ width: pctLabel }}
+                  />
+                </div>
+              )}
+              {!budget.usdBudget && !budget.tokenBudget && (
+                <p className="mt-1 text-xs text-[var(--admin-text-muted)]">No monthly cap set.</p>
+              )}
+            </div>
+            <div className={`rounded-[var(--admin-radius-lg)] border p-4 ${budget.blocked ? "border-[var(--admin-danger)]/40 bg-[var(--admin-danger-soft)]" : "border-[var(--admin-border)] bg-[var(--admin-surface)]"}`}>
+              <p className="text-xs uppercase tracking-wide text-[var(--admin-text-faint)]">Budget status</p>
+              <p className={`mt-1 text-base font-semibold ${budget.blocked ? "text-[var(--admin-danger)]" : "text-[var(--admin-accent)]"}`}>
+                {budget.blocked ? "Paused — cap reached" : "OK"}
+              </p>
+              <p className="mt-1 text-xs text-[var(--admin-text-muted)]">
+                {budget.blocked
+                  ? budget.reason
+                  : "AI will pause automatically if you hit your monthly cap."}
+              </p>
+            </div>
+          </section>
         )}
 
         {summary.totalCalls === 0 ? (

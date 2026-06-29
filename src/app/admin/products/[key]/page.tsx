@@ -124,8 +124,16 @@ export default async function ProductEditorPage({
                 const flags = s.field_key === "description" ? checkCompliance(s.suggested_value ?? "").flags : [];
                 return (
                   <li key={s.id} className="rounded-lg border border-white/10 bg-black p-3">
-                    <div className="mb-1 flex items-center gap-2 text-[11px] text-white/40">
+                    <div className="mb-1 flex flex-wrap items-center gap-2 text-[11px] text-white/40">
                       <span className="rounded bg-white/10 px-1.5 py-0.5 uppercase">{s.field_key}</span>
+                      {typeof s.confidence === "number" && (
+                        <span
+                          className={`rounded px-1.5 py-0.5 font-semibold ${s.confidence >= 0.75 ? "bg-[var(--admin-accent-soft)] text-[var(--admin-accent)]" : s.confidence >= 0.45 ? "bg-[var(--admin-gold-soft)] text-[var(--admin-gold)]" : "bg-[var(--admin-orange-soft)] text-[var(--admin-orange)]"}`}
+                          title="How well this draft is grounded in the product's facts"
+                        >
+                          {Math.round(s.confidence * 100)}% confident
+                        </span>
+                      )}
                       <span>{s.model}</span>
                       <span>· {new Date(s.created_at).toLocaleString()}</span>
                     </div>
