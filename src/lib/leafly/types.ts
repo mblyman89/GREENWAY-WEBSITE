@@ -63,6 +63,14 @@ export type GreenwayMenuItem = {
   hidden?: boolean;
   hiddenReason?: string;
   variants: GreenwayMenuVariant[];
+  /**
+   * Resolved product image URL (DF-3). Populated at render time by the image
+   * resolver: the product's own approved photo, or an honest approved
+   * substitute. Absent → the card renders the stylized mockup.
+   */
+  imageUrl?: string;
+  /** True when `imageUrl` is a representative substitute, not the exact product. */
+  imageIsFallback?: boolean;
 };
 
 export type LeaflyClientConfig = {

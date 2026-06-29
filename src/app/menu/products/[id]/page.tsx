@@ -12,6 +12,7 @@ import { getMockMenuItemById, mockMenuItems } from "@/lib/leafly/mock-menu";
 import type { GreenwayMenuItem } from "@/lib/leafly/types";
 import { formatWebsiteCategory } from "@/lib/pos/category-taxonomy";
 import { getPosPreviewMenuItemById, posMenuPreviewItems } from "@/lib/pos/preview-menu";
+import { withResolvedImages } from "@/lib/enrichment/image-resolver";
 import { breadcrumbSchema, pageMetadata, productSchema } from "@/lib/seo/seo";
 import { getMerchDefById, getMerchMenuItemById, merchMenuItems, merchProductDefs, merchIdForKey } from "@/lib/merch/merch-catalog";
 import { MerchDetailPanel } from "@/components/merch/MerchDetailPanel";
@@ -126,6 +127,22 @@ function ProductHeroArt({ item, tone }: { item: GreenwayMenuItem; tone: ProductT
   const initials = brandInitials(item.brand);
   const label = categoryLabel(item).toUpperCase();
 
+  // Real / approved-substitute photo (DF-3) takes priority over the stylized
+  // mockup for cannabis + non-cannabis items. Merch keeps its own photo path.
+  if (!isMerchItem(item) && item.imageUrl) {
+    return (
+      <div className="relative flex h-full min-h-[20rem] items-center justify-center overflow-hidden bg-white md:min-h-[44rem]">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={item.imageUrl} alt={item.name} className="h-full w-full object-cover" />
+        {item.imageIsFallback ? (
+          <span className="pointer-events-none absolute bottom-2 right-2 rounded bg-black/55 px-2 py-1 text-[0.62rem] font-semibold uppercase tracking-wide text-white/90 backdrop-blur-sm">
+            Representative image
+          </span>
+        ) : null}
+      </div>
+    );
+  }
+
   // Merch shows the real product photograph (large, on white).
   if (isMerchItem(item)) {
     const def = getMerchDefById(item.id);
@@ -205,9 +222,15 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
 export default async function ProductDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const item = getMenuItemById(id);
+  const baseItem = getMenuItemById(id);
 
-  if (!item) notFound();
+  if (!baseItem) notFound();
+
+  // DF-3: resolve a real/approved-substitute image (non-throwing). Merch keeps
+  // its own photo path, so we only resolve for cannabis + non-cannabis items.
+  const [item] = isMerchItem(baseItem)
+    ? [baseItem]
+    : await withResolvedImages([baseItem]);
 
   const tone = toneForItem(item);
   const relatedItems = relatedItemsFor(item);

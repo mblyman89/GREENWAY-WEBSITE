@@ -8,6 +8,7 @@ import { SectionBanner } from "@/components/home/SectionBanner";
 import { pageMetadata } from "@/lib/seo/seo";
 import { posMenuPreviewItems } from "@/lib/pos/preview-menu";
 import { getPageBanners } from "@/lib/cms/page-sections-store";
+import { withResolvedImages } from "@/lib/enrichment/image-resolver";
 
 export const metadata = pageMetadata({
   title: "Shop Cannabis Menu — Flower, Vapes, Edibles & More",
@@ -27,6 +28,9 @@ function firstSearchParamValue(value: string | string[] | undefined) {
 
 export default async function MenuPage({ searchParams }: MenuPageProps) {
   const resolvedSearchParams = await searchParams;
+  // DF-3: attach resolved product images (exact → brand/vendor → category →
+  // inventory → global). Non-throwing; falls back to the stylized mockup.
+  const menuItems = await withResolvedImages(posMenuPreviewItems);
   // Pages-builder banners for /menu: the primary menu.hero is editable via the
   // existing SiteText hero below; any extra banners staff add render under it.
   const banners = await getPageBanners("menu", ["menu.hero"]);
@@ -134,7 +138,7 @@ export default async function MenuPage({ searchParams }: MenuPageProps) {
 
       <section id="products">
         <Suspense fallback={<div className="mx-auto max-w-[88rem] px-4 py-10 text-sm font-bold text-zinc-400 md:px-8">Loading menu filters...</div>}>
-          <InteractiveMenuBrowser items={posMenuPreviewItems} initialSearchParams={initialSearchParams} />
+          <InteractiveMenuBrowser items={menuItems} initialSearchParams={initialSearchParams} />
         </Suspense>
       </section>
       <Footer />
