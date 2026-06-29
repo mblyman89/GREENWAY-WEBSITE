@@ -102,8 +102,61 @@ export async function researchUrl(input: {
   }
 }
 
-/** Lightweight health probe so the admin UI can show worker status. */
-export async function crawlerHealth(timeoutMs = 5_000): Promise<{ ok: boolean; detail: string }> {
+/**
+ * Ask the worker to research a vendor/brand's PUBLIC Instagram business profile
+ * via the sanctioned Meta Graph Business Discovery API (DF-9). Same drafts-only
+ * lifecycle as researchUrl. Throws if the worker base/secret isn't configured;
+ * the worker itself returns ok:false (or 503) when META_GRAPH_TOKEN is unset.
+ */
+export async function researchSocial(input: {
+  handle: string;
+  entityType: CrawlEntityType;
+  entityId: string;
+  displayName?: string;
+  write?: boolean;
+  timeoutMs?: number;
+}): Promise<CrawlResearchResult> {
+  if (!isCrawlerConfigured()) throw new CrawlerNotConfiguredError();
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), input.timeoutMs ?? 60_000);
+  try {
+    const res = await fetch(`${crawlerBaseUrl}/research-social`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Crawler-Secret": crawlerSecret,
+      },
+      body: JSON.stringify({
+        handle: input.handle,
+        entity_type: input.entityType,
+        entity_id: input.entityId,
+        display_name: input.displayName ?? "",
+        write: input.write ?? true,
+      }),
+      signal: controller.signal,
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      const detail = await safeDetail(res);
+      throw new Error(`Crawler responded ${res.status}: ${detail}`);
+    }
+    return (await res.json()) as CrawlResearchResult;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export type CrawlerHealth = {
+  ok: boolean;
+  detail: string;
+  aiEnabled?: boolean;
+  socialConfigured?: boolean;
+  proxyEnabled?: boolean;
+};
+
+/** Lightweight health probe so the admin UI can show worker status + capabilities. */
+export async function crawlerHealth(timeoutMs = 5_000): Promise<CrawlerHealth> {
   if (!isCrawlerConfigured()) return { ok: false, detail: "not configured" };
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -114,8 +167,19 @@ export async function crawlerHealth(timeoutMs = 5_000): Promise<{ ok: boolean; d
       cache: "no-store",
     });
     if (!res.ok) return { ok: false, detail: `HTTP ${res.status}` };
-    const data = (await res.json()) as { ok?: boolean };
-    return { ok: Boolean(data.ok), detail: "reachable" };
+    const data = (await res.json()) as {
+      ok?: boolean;
+      ai_enabled?: boolean;
+      social_configured?: boolean;
+      proxy_enabled?: boolean;
+    };
+    return {
+      ok: Boolean(data.ok),
+      detail: "reachable",
+      aiEnabled: data.ai_enabled,
+      socialConfigured: data.social_configured,
+      proxyEnabled: data.proxy_enabled,
+    };
   } catch (e) {
     return { ok: false, detail: e instanceof Error ? e.message : "unreachable" };
   } finally {

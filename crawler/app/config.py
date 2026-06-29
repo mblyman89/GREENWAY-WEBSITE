@@ -42,6 +42,39 @@ class Settings(BaseSettings):
     )
     crawl_respect_robots: bool = Field(default=True, alias="CRAWL_RESPECT_ROBOTS")
 
+    # When true (default), the fetcher sends a realistic, rotating modern-browser
+    # User-Agent + full browser headers instead of the bare bot UA. This is NOT
+    # deception of a protection system — it's identifying as a normal browser so
+    # legitimate public pages render the same content a human would see. Set to
+    # false to always send `crawl_user_agent` verbatim (e.g. if a partner asks
+    # you to identify as GreenwayBot).
+    crawl_realistic_headers: bool = Field(default=True, alias="CRAWL_REALISTIC_HEADERS")
+
+    # Retry/backoff for transient failures (429/5xx/network blips). Honors a
+    # server's Retry-After header when present.
+    crawl_max_retries: int = Field(default=3, alias="CRAWL_MAX_RETRIES")
+    crawl_backoff_base_seconds: float = Field(default=1.5, alias="CRAWL_BACKOFF_BASE_SECONDS")
+    crawl_backoff_max_seconds: float = Field(default=30.0, alias="CRAWL_BACKOFF_MAX_SECONDS")
+
+    # Optional transparent egress proxy (e.g. a reputable commercial proxy used
+    # at polite rates). Off by default. Used by BOTH the browser and httpx paths.
+    # Standard HTTP_PROXY/HTTPS_PROXY env vars also work; this is an explicit knob.
+    crawl_proxy_url: str = Field(default="", alias="CRAWL_PROXY_URL")
+
+    # Per-domain allow-list (comma-separated hostnames). Empty = allow any host
+    # the operator submits. When set, only listed domains may be researched.
+    crawl_allow_domains: str = Field(default="", alias="CRAWL_ALLOW_DOMAINS")
+
+    # --- Social (Meta Graph API — sanctioned, DF-9) ---------------------------
+    # A long-lived access token for a Greenway-owned Facebook Page linked to a
+    # Greenway Instagram BUSINESS account. Used ONLY for the sanctioned
+    # Instagram Business Discovery + Facebook Page public-content endpoints.
+    # NEVER a password; generate via the Meta developer console (see
+    # crawler/docs/SOCIAL_SETUP.md). When unset, social features soft-disable.
+    meta_graph_token: str = Field(default="", alias="META_GRAPH_TOKEN")
+    meta_ig_business_id: str = Field(default="", alias="META_IG_BUSINESS_ID")
+    meta_graph_version: str = Field(default="v21.0", alias="META_GRAPH_VERSION")
+
     # --- Service --------------------------------------------------------------
     crawler_port: int = Field(default=8200, alias="CRAWLER_PORT")
     crawl_cache_dir: str = Field(default=".cache", alias="CRAWL_CACHE_DIR")
@@ -55,6 +88,19 @@ class Settings(BaseSettings):
     @property
     def supabase_enabled(self) -> bool:
         return bool(self.supabase_url.strip() and self.supabase_service_role_key.strip())
+
+    @property
+    def social_enabled(self) -> bool:
+        """Sanctioned social features run only when a Meta Graph token is set."""
+        return bool(self.meta_graph_token.strip())
+
+    @property
+    def allow_domains(self) -> list[str]:
+        return [d.strip().lower() for d in self.crawl_allow_domains.split(",") if d.strip()]
+
+    @property
+    def proxy_url(self) -> str:
+        return self.crawl_proxy_url.strip()
 
     @property
     def cache_path(self) -> Path:
