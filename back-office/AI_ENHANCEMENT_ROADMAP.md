@@ -228,18 +228,22 @@ difference between a crawler that produces approvable drafts and one whose outpu
 
 > One PR per slice. Migrations idempotent, applied manually by the owner. AI stays drafts-only.
 
-- **AI-1 — Structured core.** Add `generateStructured<T>(zodSchema)` to `provider.ts` (strict
-  `response_format` + Zod validate + retry-once). Migrate product description/tags to it. No new UI.
-  *Exit:* same drafts, now schema-guaranteed; invalid-JSON failures ~0.
+- **AI-1 — Structured core. ✅ DONE (PR #83).** Added zero-dep schema + `generateStructured<T>` to
+  `provider.ts` (strict `response_format` + validate + retry-once), a model router (sprint/maintenance
+  modes), and hard monthly budget caps. Migrated product description/tags to it. *Exit met:* drafts
+  are schema-guaranteed; invalid-JSON failures ~0.
 
-- **AI-2 — Compliance hardening.** Expand `compliance.ts` (more patterns, severity, blocking flags);
-  surface blocking vs. warning in the reviewer UI. *Exit:* a non-compliant draft can't be accepted
-  un-edited.
+- **AI-2 — Compliance hardening. ✅ MOSTLY DONE (folded into AI-1, finished in AI-3).** `compliance.ts`
+  now has block/warn severity + blocking flags, a grounded system prompt, and (AI-3) an owner-editable
+  extra banned-phrase list layered on top of the regex. *Remaining:* hard accept-gate in the reviewer
+  UI that refuses acceptance while a blocking flag is present.
 
-- **AI-3 — Cannabis knowledge base.** Idempotent migration for strain/terpene/category/brand-fact +
-  banned-phrase tables; owner-editable in admin; retrieval helper that injects relevant KB rows into
-  prompts. Re-prompt descriptions to "use only provided facts". *Exit:* measurably fewer invented
-  facts (track on golden set).
+- **AI-3 — Cannabis knowledge base. ✅ DONE (PR #84).** Idempotent migration `0019` for
+  strain/terpene/category/brand-fact + banned-phrase tables; owner-editable at `/admin/knowledge-base`
+  with a one-click expert starter seed; retrieval helper (`src/lib/ai/kb/`) that injects matching KB
+  rows into the description + new **sensory** (aroma/flavor/terpene) prompts as "the only allowed
+  facts." Falls back to an in-code seed pre-migration. *Exit met:* prompts are grounded in curated
+  facts, so the model fills gaps without inventing strain lineage or terpenes.
 
 - **AI-4 — Provenance + confidence + accept-rate reporting.** Add confidence/source columns to
   `ai_suggestions`; add accept-rate-by-prompt_version to `/admin/ai-usage`. *Exit:* we can prove a

@@ -13,8 +13,10 @@ import { COMPLIANCE_SYSTEM, PROMPT_VERSION, checkCompliance } from "./compliance
 import {
   productDescriptionSchema,
   productTagsSchema,
+  productSensorySchema,
   ALLOWED_PRODUCT_TAGS,
 } from "./schemas/product";
+import { buildGroundedFacts, loadBannedPhrases } from "./kb/retrieval";
 import type { AiSuggestion, AiSuggestionStatus } from "@/lib/enrichment/types";
 
 export { isAiConfigured };
@@ -68,26 +70,100 @@ export async function generateProductDescription(
   generatedBy: string | null,
 ): Promise<GeneratedSuggestion> {
   const { lines, summary } = factLines(facts);
+  // Pull curated, grounded facts (strain family, terpenes, category vocab,
+  // brand notes) so the model can write expert copy even from a thin POS row.
+  const grounded = await buildGroundedFacts(facts);
+  const banned = await loadBannedPhrases();
+
+  const factBlock = [
+    `POS FACTS:\n${lines.map((l) => `- ${l}`).join("\n")}`,
+    grounded.block,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
   const result = await generateStructured({
     system: COMPLIANCE_SYSTEM,
-    user: `Write a product description for this cannabis product using ONLY these facts. Describe aroma, flavor, format, and strain character where the facts support it. If facts are thin, keep it short and generic and set confidence low.\n\n${lines.join("\n")}`,
+    user: `Write a product description for this cannabis product using ONLY the facts below. Describe aroma, flavor, format, and strain character where the facts support it. If facts are thin, keep it short and generic and set confidence low.\n\n${factBlock}`,
     schema: productDescriptionSchema,
     tier: "heavy",
     maxTokens: 320,
     context: { feature: "product.description", entityType: "product", entityId: posProductKey, actorId: generatedBy },
   });
 
-  const compliance = checkCompliance(`${result.description} ${result.short_description}`);
+  const compliance = checkCompliance(`${result.description} ${result.short_description}`, banned);
+  // Provenance: 'kb' when we grounded against curated facts, else 'model'.
+  const source = grounded.sources.length ? `kb:${grounded.sources.length}` : "model";
   const suggestion = await persistSuggestion({
     entity_type: "product",
     entity_id: posProductKey,
     field_key: "description",
     // Store the long description as the primary value; keep the short one + meta in input_summary.
     suggested_value: result.description,
-    input_summary: `${summary} | short: ${result.short_description}`,
+    input_summary: `${summary} | short: ${result.short_description}${grounded.sources.length ? ` | grounded: ${grounded.sources.join(", ")}` : ""}`,
     generated_by: generatedBy,
     confidence: result.confidence,
-    source: "model",
+    source,
+  });
+  return {
+    suggestion,
+    complianceFlags: compliance.flags,
+    blockingFlags: compliance.blockingFlags,
+    confidence: result.confidence,
+  };
+}
+
+/**
+ * Generate SENSORY metadata (aroma notes, flavor notes, dominant terpenes) as a
+ * structured, validated draft grounded in the KB. This is the richest gap-fill:
+ * it turns a bare strain name into the aroma/flavor/terpene data the POS never
+ * had. Stored as a single suggestion with field_key 'sensory' holding compact
+ * JSON the reviewer can accept into the enrichment record.
+ */
+export async function generateProductSensory(
+  posProductKey: string,
+  facts: ProductFacts,
+  generatedBy: string | null,
+): Promise<GeneratedSuggestion> {
+  const { lines, summary } = factLines(facts);
+  const grounded = await buildGroundedFacts(facts);
+  const banned = await loadBannedPhrases();
+
+  const factBlock = [
+    `POS FACTS:\n${lines.map((l) => `- ${l}`).join("\n")}`,
+    grounded.block,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
+  const result = await generateStructured({
+    system: COMPLIANCE_SYSTEM,
+    user: `From ONLY the facts below, extract sensory metadata for this product: aroma notes, flavor notes, and dominant terpenes. Use the knowledge-base descriptors where provided. Include a terpene ONLY if the facts support it; otherwise leave terpenes empty. Sensory language only — never effects or medical claims. Set confidence low if the facts are thin.\n\n${factBlock}`,
+    schema: productSensorySchema,
+    tier: "heavy",
+    maxTokens: 200,
+    context: { feature: "product.sensory", entityType: "product", entityId: posProductKey, actorId: generatedBy },
+  });
+
+  const compliance = checkCompliance(
+    [...result.aroma_notes, ...result.flavor_notes, ...result.terpenes].join(" "),
+    banned,
+  );
+  const value = JSON.stringify({
+    aroma_notes: result.aroma_notes,
+    flavor_notes: result.flavor_notes,
+    terpenes: result.terpenes,
+  });
+  const source = grounded.sources.length ? `kb:${grounded.sources.length}` : "model";
+  const suggestion = await persistSuggestion({
+    entity_type: "product",
+    entity_id: posProductKey,
+    field_key: "sensory",
+    suggested_value: value,
+    input_summary: `${summary}${grounded.sources.length ? ` | grounded: ${grounded.sources.join(", ")}` : ""}`,
+    generated_by: generatedBy,
+    confidence: result.confidence,
+    source,
   });
   return {
     suggestion,

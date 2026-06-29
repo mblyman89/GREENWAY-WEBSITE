@@ -9,6 +9,7 @@ import { ensureEnrichment, updateEnrichment, getEnrichment } from "@/lib/enrichm
 import {
   generateProductDescription,
   generateProductTags,
+  generateProductSensory,
   reviewSuggestion,
   getSuggestion,
   type ProductFacts,
@@ -162,6 +163,8 @@ export async function generateProductAi(formData: FormData): Promise<void> {
   try {
     if (kind === "tags") {
       await generateProductTags(key, facts, session.userId);
+    } else if (kind === "sensory") {
+      await generateProductSensory(key, facts, session.userId);
     } else {
       await generateProductDescription(key, facts, session.userId);
     }
