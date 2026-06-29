@@ -195,8 +195,25 @@ export function ProductCardVisual({ item, salePriceMinorUnits, saleBadgeLabel, c
         <p className="truncate pb-3 text-center text-lg font-black leading-none text-white md:text-xl">{item.brand}</p>
 
         <Link href={`/menu/products/${item.id}`} className="block" aria-label={`View ${item.name}`}>
-          <div className="h-[14.15rem] bg-white p-0 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.1)] md:h-[14.65rem]">
-            <ProductImageMockup item={item} tone={tone} />
+          <div className="relative h-[14.15rem] overflow-hidden bg-white p-0 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.1)] md:h-[14.65rem]">
+            {item.imageUrl ? (
+              <>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={item.imageUrl}
+                  alt={item.name}
+                  loading="lazy"
+                  className="h-full w-full object-cover"
+                />
+                {item.imageIsFallback ? (
+                  <span className="pointer-events-none absolute bottom-1 right-1 rounded bg-black/55 px-1.5 py-0.5 text-[0.6rem] font-semibold uppercase tracking-wide text-white/90 backdrop-blur-sm">
+                    Representative image
+                  </span>
+                ) : null}
+              </>
+            ) : (
+              <ProductImageMockup item={item} tone={tone} />
+            )}
           </div>
         </Link>
 
