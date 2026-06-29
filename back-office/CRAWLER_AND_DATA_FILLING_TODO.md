@@ -42,12 +42,17 @@
 - [x] Brand/vendor generic-shot library (scope=brand/vendor in DF-2 table) — resolver consumes it.
 - [x] tsc/eslint/build. PR #90 merged.
 
-## DF-4 — Vendors & brands data + admin enrichment
-- [ ] Audit vendors/brands tables; migration `0022_*` for draft columns if needed (about, region,
-      website, logo_media_id, brands_carried[], enrichment_status, provenance/confidence).
-- [ ] Admin Vendors/Brands editable forms + AI-draft badges + accept/reject.
-- [ ] Link `kb_brands` house-style/known-for.
-- [ ] tsc/eslint/build. PR. Hand migration to owner.
+## DF-4 — Vendors & brands data + admin enrichment ✅ (PR #91)
+- [x] Audit vendors/brands tables. FINDING: slice 3 tables already have about, mission,
+      website, logo/hero media, social, counts, status; UX-5 already ships the full AI
+      research→draft→accept/reject lifecycle. **No migration needed** — `ai_suggestions`
+      already has confidence/source (0018). Scope tightened to the provenance seam.
+- [x] Admin Vendors/Brands editable forms + AI-draft badges + accept/reject.
+      (Forms + lifecycle pre-existed; added `AiProvenanceBadge` + wired source/confidence
+       through vendor/brand drafts via the shared `AiDraftCard`.)
+- [~] Link `kb_brands` house-style/known-for. (Deferred — `kb_brands` not yet a table;
+      brand house-style will be populated by the crawler in DF-6.)
+- [x] tsc/eslint/build. PR #91 merged. No migration to hand over.
 
 ## DF-5 — AI-4: provenance + confidence + accept-rate reporting
 - [ ] Surface confidence/source in review grid.

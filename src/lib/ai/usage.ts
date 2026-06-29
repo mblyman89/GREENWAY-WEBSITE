@@ -170,3 +170,146 @@ export async function getAiUsageSummary(days = 30): Promise<AiUsageSummary> {
     recent: rows.slice(0, 25),
   };
 }
+
+// ===========================================================================
+// AI-4: Accept-rate + provenance reporting (DF-5)
+//
+// Reads `ai_suggestions` (the drafts-only review queue) and measures how often
+// staff ACCEPT vs REJECT drafts, sliced by the levers we can actually tune:
+//   • prompt_version  — did a prompt change improve/regress acceptance?
+//   • source          — are crawler-grounded drafts (crawl:<url>) accepted more
+//                        than ungrounded model drafts? (closes the loop on DF-4)
+//   • entity_type     — which features (product/vendor/brand) draft best.
+//   • confidence band — is the model's self-reported confidence calibrated?
+//                        (i.e. do high-confidence drafts actually get accepted?)
+//
+// "Reviewed" = accepted | rejected | edited. Pending drafts are excluded from
+// the rate denominator (they're not decided yet) but counted separately so the
+// owner sees the review backlog. Edited counts as a (qualified) accept.
+// ===========================================================================
+
+export type AcceptRateBucket = {
+  key: string;
+  accepted: number;
+  edited: number;
+  rejected: number;
+  pending: number;
+  /** accepted+edited over reviewed (accepted+edited+rejected); null if none reviewed. */
+  acceptRate: number | null;
+};
+
+export type AcceptRateReport = {
+  totals: AcceptRateBucket;
+  byPromptVersion: AcceptRateBucket[];
+  bySource: AcceptRateBucket[];
+  byEntityType: AcceptRateBucket[];
+  /** Confidence calibration: accept-rate within 0-25 / 25-50 / 50-75 / 75-100% bands. */
+  byConfidenceBand: AcceptRateBucket[];
+};
+
+type SuggRow = {
+  status: string | null;
+  prompt_version: string | null;
+  source: string | null;
+  entity_type: string | null;
+  confidence: number | null;
+};
+
+function emptyBucket(key: string): AcceptRateBucket {
+  return { key, accepted: 0, edited: 0, rejected: 0, pending: 0, acceptRate: null };
+}
+
+function tally(bucket: AcceptRateBucket, status: string) {
+  if (status === "accepted") bucket.accepted++;
+  else if (status === "edited") bucket.edited++;
+  else if (status === "rejected") bucket.rejected++;
+  else bucket.pending++;
+}
+
+function finalizeRate(bucket: AcceptRateBucket): AcceptRateBucket {
+  const reviewed = bucket.accepted + bucket.edited + bucket.rejected;
+  bucket.acceptRate = reviewed > 0 ? (bucket.accepted + bucket.edited) / reviewed : null;
+  return bucket;
+}
+
+/** Normalize a raw source string into a coarse provenance label for grouping. */
+function sourceGroup(source: string | null): string {
+  const s = (source ?? "model").trim();
+  if (s.startsWith("crawl:")) return "crawl (researched)";
+  if (s.startsWith("kb")) return "kb (knowledge base)";
+  if (s === "pos") return "pos";
+  return "model";
+}
+
+function confidenceBand(c: number | null): string {
+  if (c == null || Number.isNaN(c)) return "unscored";
+  const pct = Math.max(0, Math.min(1, c));
+  if (pct < 0.25) return "0–25%";
+  if (pct < 0.5) return "25–50%";
+  if (pct < 0.75) return "50–75%";
+  return "75–100%";
+}
+
+/** Build the accept-rate report over the last `days` (default 90 — drafts are
+ *  lower-volume than calls, so a wider window gives meaningful rates). */
+export async function getAcceptRateReport(days = 90): Promise<AcceptRateReport> {
+  const empty: AcceptRateReport = {
+    totals: emptyBucket("all"),
+    byPromptVersion: [],
+    bySource: [],
+    byEntityType: [],
+    byConfidenceBand: [],
+  };
+  if (!isSupabaseServiceConfigured) return empty;
+
+  const admin = createSupabaseAdminClient();
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  const { data, error } = await admin
+    .from("ai_suggestions")
+    .select("status, prompt_version, source, entity_type, confidence")
+    .gte("created_at", since)
+    .limit(10000);
+  // confidence/source may not be migrated on very old rows — Supabase returns
+  // null for missing values, which our grouping handles ("unscored"/"model").
+  if (error || !data) return empty;
+
+  const rows = data as SuggRow[];
+  if (rows.length === 0) return empty;
+
+  const totals = emptyBucket("all");
+  const promptMap = new Map<string, AcceptRateBucket>();
+  const sourceMap = new Map<string, AcceptRateBucket>();
+  const entityMap = new Map<string, AcceptRateBucket>();
+  const bandMap = new Map<string, AcceptRateBucket>();
+
+  const bump = (map: Map<string, AcceptRateBucket>, key: string, status: string) => {
+    const b = map.get(key) ?? emptyBucket(key);
+    tally(b, status);
+    map.set(key, b);
+  };
+
+  for (const r of rows) {
+    const status = (r.status ?? "pending").trim();
+    tally(totals, status);
+    bump(promptMap, r.prompt_version ?? "(none)", status);
+    bump(sourceMap, sourceGroup(r.source), status);
+    bump(entityMap, r.entity_type ?? "(unknown)", status);
+    bump(bandMap, confidenceBand(r.confidence), status);
+  }
+
+  const sortByReviewed = (a: AcceptRateBucket, b: AcceptRateBucket) =>
+    b.accepted + b.edited + b.rejected - (a.accepted + a.edited + a.rejected);
+
+  // Confidence bands sort in a fixed, human order (low → high → unscored).
+  const bandOrder = ["0–25%", "25–50%", "50–75%", "75–100%", "unscored"];
+
+  return {
+    totals: finalizeRate(totals),
+    byPromptVersion: Array.from(promptMap.values()).map(finalizeRate).sort(sortByReviewed),
+    bySource: Array.from(sourceMap.values()).map(finalizeRate).sort(sortByReviewed),
+    byEntityType: Array.from(entityMap.values()).map(finalizeRate).sort(sortByReviewed),
+    byConfidenceBand: Array.from(bandMap.values())
+      .map(finalizeRate)
+      .sort((a, b) => bandOrder.indexOf(a.key) - bandOrder.indexOf(b.key)),
+  };
+}
