@@ -251,6 +251,67 @@ export const CONTENT_BLOCK_SEEDS: ContentBlockSeed[] = [
     defaultValue:
       "This product has intoxicating effects and may be habit forming. Marijuana can impair concentration, coordination, and judgment. Do not operate a vehicle or machinery under the influence of this drug. For use only by adults 21 and older. Keep out of the reach of children.",
   },
+  // ---- About page (bespoke hero — editable copy, distinct design kept) ------
+  {
+    block_key: "about.hero.title",
+    page: "about",
+    section: "hero",
+    label: "About — hero title",
+    help_text:
+      "The big headline on the About page (currently “We Are Greenway.”). Keep it short — it renders in large display type.",
+    field_type: "plain",
+    defaultValue: "We Are Greenway.",
+  },
+  {
+    block_key: "about.hero.subtitle",
+    page: "about",
+    section: "hero",
+    label: "About — hero subtitle",
+    help_text: "The supporting line beneath the About headline.",
+    field_type: "plain",
+    defaultValue:
+      "Founded on the belief that cannabis can enhance everyday life, we are dedicated to providing education, quality, and community.",
+  },
+  // ---- Locations page (bespoke hero) ---------------------------------------
+  {
+    block_key: "locations.hero.title",
+    page: "locations",
+    section: "hero",
+    label: "Locations — hero title",
+    help_text:
+      "The big headline over the storefront photo on the Locations page (currently “Geiger Rd”). Renders in large display type.",
+    field_type: "plain",
+    defaultValue: "Geiger Rd",
+  },
+  {
+    block_key: "locations.hero.image",
+    page: "locations",
+    section: "hero",
+    label: "Locations — storefront photo",
+    help_text:
+      "The wide storefront photo at the top of the Locations page. Pick an image from your Media Library.",
+    field_type: "image",
+    defaultValue: "/brand/greenway-front-of-store.webp",
+  },
+  // ---- Price Match page (bespoke hero) -------------------------------------
+  {
+    block_key: "pricematch.hero.title",
+    page: "price-match",
+    section: "hero",
+    label: "Price Match — hero title",
+    help_text: "The big centered headline on the Price Match page.",
+    field_type: "plain",
+    defaultValue: "Price Match",
+  },
+  {
+    block_key: "pricematch.hero.subtitle",
+    page: "price-match",
+    section: "hero",
+    label: "Price Match — promise headline",
+    help_text: "The orange headline inside the card (currently “Our Price Match Promise”).",
+    field_type: "plain",
+    defaultValue: "Our Price Match Promise",
+  },
   {
     block_key: "footer.hours.image",
     page: "footer",

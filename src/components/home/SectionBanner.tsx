@@ -1,4 +1,28 @@
 import Image from "next/image";
+import Link from "next/link";
+
+/** A call-to-action button rendered inside a SectionBanner. */
+export type SectionBannerButton = {
+  label: string;
+  href: string;
+  variant?: "solid" | "outline" | "ghost";
+  enabled?: boolean;
+};
+
+/**
+ * Resolved data for one page-section banner, passed from a server page down to
+ * client components so they can render builder-managed banners (image, copy,
+ * CTAs) with a static fallback. Shape mirrors RenderSection's relevant fields.
+ */
+export type SectionBannerData = {
+  key: string;
+  image: string;
+  imageAlt: string;
+  eyebrow: string;
+  title: string;
+  subtitle: string;
+  buttons: SectionBannerButton[];
+};
 
 /**
  * SectionBanner — wide, short hero-style band used as a section header on the
@@ -14,6 +38,12 @@ import Image from "next/image";
  * "click ✎ Edit → jump to field" overlay can target it. The wrapper expects the
  * matching seed blocks: `<prefix>.image`, `<prefix>.eyebrow`, `<prefix>.title`,
  * `<prefix>.subtitle`.
+ *
+ * CALL-TO-ACTION BUTTONS
+ * ----------------------
+ * Pass `buttons` (from the page-section builder) to render up to a few CTAs
+ * below the subtitle. Only `enabled !== false` buttons with a label + href show.
+ * When no buttons are supplied the banner renders exactly as before.
  */
 export function SectionBanner({
   imageSrc,
@@ -22,6 +52,7 @@ export function SectionBanner({
   title,
   titleClassName = "text-white",
   subtitle,
+  buttons,
   priority = false,
   editable = false,
   blockKeyPrefix,
@@ -32,10 +63,14 @@ export function SectionBanner({
   title: string;
   titleClassName?: string;
   subtitle?: string;
+  buttons?: SectionBannerButton[];
   priority?: boolean;
   editable?: boolean;
   blockKeyPrefix?: string;
 }) {
+  const visibleButtons = (buttons ?? []).filter(
+    (b) => b.enabled !== false && b.label?.trim() && b.href?.trim(),
+  );
   const editAttrs = (suffix: string) =>
     editable && blockKeyPrefix
       ? {
@@ -83,6 +118,26 @@ export function SectionBanner({
           >
             {subtitle}
           </p>
+        ) : null}
+        {visibleButtons.length ? (
+          <div className="mt-3 flex flex-wrap items-center gap-2 md:mt-4 md:gap-3">
+            {visibleButtons.map((b, i) => {
+              const variant = b.variant ?? "solid";
+              const base =
+                "inline-flex h-9 items-center justify-center whitespace-nowrap rounded-full px-4 text-[0.68rem] font-black uppercase tracking-[0.12em] transition md:h-10 md:px-5 md:text-xs";
+              const styles =
+                variant === "solid"
+                  ? "bg-[var(--greenway)] text-black hover:bg-[#6bc746]"
+                  : variant === "outline"
+                    ? "border border-white/30 text-white hover:border-[var(--orange)] hover:text-[var(--orange)]"
+                    : "text-[var(--greenway)] underline-offset-4 hover:underline";
+              return (
+                <Link key={`${b.href}-${i}`} href={b.href} className={`${base} ${styles}`}>
+                  {b.label}
+                </Link>
+              );
+            })}
+          </div>
         ) : null}
       </div>
     </div>

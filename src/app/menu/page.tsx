@@ -4,8 +4,10 @@ import { Breadcrumbs } from "@/components/site/Breadcrumbs";
 import { Footer } from "@/components/site/Footer";
 import { InteractiveMenuBrowser } from "@/components/menu/InteractiveMenuBrowser";
 import { SiteText } from "@/components/site/SiteText";
+import { SectionBanner } from "@/components/home/SectionBanner";
 import { pageMetadata } from "@/lib/seo/seo";
 import { posMenuPreviewItems } from "@/lib/pos/preview-menu";
+import { getPageBanners } from "@/lib/cms/page-sections-store";
 
 export const metadata = pageMetadata({
   title: "Shop Cannabis Menu — Flower, Vapes, Edibles & More",
@@ -25,6 +27,13 @@ function firstSearchParamValue(value: string | string[] | undefined) {
 
 export default async function MenuPage({ searchParams }: MenuPageProps) {
   const resolvedSearchParams = await searchParams;
+  // Pages-builder banners for /menu: the primary menu.hero is editable via the
+  // existing SiteText hero below; any extra banners staff add render under it.
+  const banners = await getPageBanners("menu", ["menu.hero"]);
+  const menuHero = banners.byKey["menu.hero"];
+  const menuHeroButtons = (menuHero?.buttons ?? []).filter(
+    (b) => b.enabled !== false && b.label?.trim() && b.href?.trim(),
+  );
   const initialSearchParams = {
     search: firstSearchParamValue(resolvedSearchParams?.search),
     category: firstSearchParamValue(resolvedSearchParams?.category),
@@ -79,10 +88,49 @@ export default async function MenuPage({ searchParams }: MenuPageProps) {
                 as="p"
                 className="mt-2 text-xs font-semibold leading-5 text-zinc-300 md:mt-3 md:text-base"
               />
+              {menuHeroButtons.length ? (
+                <div className="mt-3 flex flex-wrap items-center gap-2 md:mt-4 md:gap-3">
+                  {menuHeroButtons.map((b, i) => {
+                    const variant = b.variant ?? "solid";
+                    const base =
+                      "inline-flex h-9 items-center justify-center whitespace-nowrap rounded-full px-4 text-[0.68rem] font-black uppercase tracking-[0.12em] transition md:h-10 md:px-5 md:text-xs";
+                    const styles =
+                      variant === "solid"
+                        ? "bg-[var(--greenway)] text-black hover:bg-[#6bc746]"
+                        : variant === "outline"
+                          ? "border border-white/30 text-white hover:border-[var(--orange)] hover:text-[var(--orange)]"
+                          : "text-[var(--greenway)] underline-offset-4 hover:underline";
+                    return (
+                      <a key={`${b.href}-${i}`} href={b.href} className={`${base} ${styles}`}>
+                        {b.label}
+                      </a>
+                    );
+                  })}
+                </div>
+              ) : null}
             </div>
           </div>
         </div>
       </section>
+
+      {/* Extra banners staff added in the Pages builder render here. */}
+      {banners.extras.length ? (
+        <section className="bg-black px-4 pb-2 md:px-8">
+          <div className="mx-auto max-w-[88rem] space-y-4 md:space-y-6">
+            {banners.extras.map((s) => (
+              <SectionBanner
+                key={s.key}
+                imageSrc={s.image}
+                imageAlt={s.imageAlt}
+                eyebrow={s.eyebrow}
+                title={s.title}
+                subtitle={s.subtitle}
+                buttons={s.buttons}
+              />
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <section id="products">
         <Suspense fallback={<div className="mx-auto max-w-[88rem] px-4 py-10 text-sm font-bold text-zinc-400 md:px-8">Loading menu filters...</div>}>

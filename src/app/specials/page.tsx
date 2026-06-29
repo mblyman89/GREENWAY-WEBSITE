@@ -5,6 +5,7 @@ import { Breadcrumbs } from "@/components/site/Breadcrumbs";
 import { pageMetadata } from "@/lib/seo/seo";
 import { getThursdayBrands } from "@/lib/promotions/storefront-bridge";
 import { getContentValues, isPreviewActive } from "@/lib/cms/render-content";
+import { getPageBanners } from "@/lib/cms/page-sections-store";
 
 export const metadata = pageMetadata({
   title: "Cannabis Specials & Daily Deals — Port Orchard",
@@ -16,7 +17,7 @@ export const metadata = pageMetadata({
 
 export default async function SpecialsPage() {
   // DB-published Thursday brands (back-office promotions) with static fallback.
-  const [thursdayBrands, copy, preview] = await Promise.all([
+  const [thursdayBrands, copy, preview, banners] = await Promise.all([
     getThursdayBrands(),
     getContentValues([
       "specials.hero.eyebrow",
@@ -24,7 +25,12 @@ export default async function SpecialsPage() {
       "specials.hero.subtitle",
     ]),
     isPreviewActive(),
+    getPageBanners("specials", ["specials.hero"]),
   ]);
+
+  // Pages-builder hero (specials.hero) is the source of truth when present;
+  // otherwise fall back to the content-block copy (live look unchanged).
+  const hero = banners.byKey["specials.hero"];
 
   return (
     <main id="top" className="min-h-screen bg-black text-white">
@@ -33,9 +39,11 @@ export default async function SpecialsPage() {
       <SpecialsContent
         thursdayBrands={thursdayBrands}
         content={{
-          eyebrow: copy["specials.hero.eyebrow"],
-          title: copy["specials.hero.title"],
-          subtitle: copy["specials.hero.subtitle"],
+          eyebrow: hero?.eyebrow || copy["specials.hero.eyebrow"],
+          title: hero?.title || copy["specials.hero.title"],
+          subtitle: hero?.subtitle || copy["specials.hero.subtitle"],
+          buttons: hero?.buttons,
+          extraSections: banners.extras,
           editable: preview,
         }}
       />

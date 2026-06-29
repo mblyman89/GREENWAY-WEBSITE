@@ -1,6 +1,11 @@
 import type { CSSProperties } from "react";
 import Link from "next/link";
 import { SpecialsDailyDeals } from "@/components/specials/SpecialsDailyDeals";
+import {
+  SectionBanner,
+  type SectionBannerButton,
+  type SectionBannerData,
+} from "@/components/home/SectionBanner";
 import { posMenuPreviewItems } from "@/lib/pos/preview-menu";
 
 type DealTone = {
@@ -256,6 +261,10 @@ type SpecialsHeroContent = {
   title?: string;
   subtitle?: string;
   editable?: boolean;
+  /** CTA buttons for the primary hero (from the Pages builder). */
+  buttons?: SectionBannerButton[];
+  /** Extra banners staff added in the Pages builder (rendered at the bottom). */
+  extraSections?: SectionBannerData[];
 };
 
 export function SpecialsContent({
@@ -316,6 +325,28 @@ export function SpecialsContent({
               {content?.subtitle ||
                 "Check out our latest deals and save on premium cannabis products. New specials added regularly."}
             </p>
+            {(content?.buttons ?? []).filter((b) => b.enabled !== false && b.label?.trim() && b.href?.trim()).length ? (
+              <div className="mt-4 flex flex-wrap items-center gap-2 md:gap-3">
+                {(content?.buttons ?? [])
+                  .filter((b) => b.enabled !== false && b.label?.trim() && b.href?.trim())
+                  .map((b, i) => {
+                    const variant = b.variant ?? "solid";
+                    const base =
+                      "inline-flex h-9 items-center justify-center whitespace-nowrap rounded-full px-4 text-[0.68rem] font-black uppercase tracking-[0.12em] transition md:h-10 md:px-5 md:text-xs";
+                    const styles =
+                      variant === "solid"
+                        ? "bg-[var(--greenway)] text-black hover:bg-[#6bc746]"
+                        : variant === "outline"
+                          ? "border border-white/30 text-white hover:border-[var(--orange)] hover:text-[var(--orange)]"
+                          : "text-[var(--greenway)] underline-offset-4 hover:underline";
+                    return (
+                      <Link key={`${b.href}-${i}`} href={b.href} className={`${base} ${styles}`}>
+                        {b.label}
+                      </Link>
+                    );
+                  })}
+              </div>
+            ) : null}
           </div>
         </div>
 
@@ -338,6 +369,23 @@ export function SpecialsContent({
         {/* Today's actual on-deal products — standard site-wide card, 16 cards,
             with a wide day banner above the grid. */}
         <SpecialsDailyDeals items={posMenuPreviewItems} />
+
+        {/* Extra banners staff added in the Pages builder render here. */}
+        {(content?.extraSections ?? []).length ? (
+          <div className="mt-8 space-y-4 md:mt-12 md:space-y-6">
+            {(content?.extraSections ?? []).map((s) => (
+              <SectionBanner
+                key={s.key}
+                imageSrc={s.image}
+                imageAlt={s.imageAlt}
+                eyebrow={s.eyebrow}
+                title={s.title}
+                subtitle={s.subtitle}
+                buttons={s.buttons}
+              />
+            ))}
+          </div>
+        ) : null}
       </div>
     </section>
   );
