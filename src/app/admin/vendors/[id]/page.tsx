@@ -10,6 +10,7 @@ import { CompletenessMeter } from "@/components/admin/vendors/CompletenessMeter"
 import { VendorCardPreview } from "@/components/admin/vendors/VendorCardPreview";
 import { listSuggestions, isAiConfigured } from "@/lib/ai/suggestions";
 import type { AiSuggestion } from "@/lib/enrichment/types";
+import { AiDraftCard } from "@/components/admin/ai/AiDraftCard";
 import {
   updateVendor,
   setVendorStatus,
@@ -152,31 +153,17 @@ export default async function VendorEditPage({
                     {pendingSuggestions.length} draft{pendingSuggestions.length === 1 ? "" : "s"} awaiting your review
                   </p>
                   {pendingSuggestions.map((s) => (
-                    <div key={s.id} className="rounded-lg border border-white/10 bg-black/40 p-4">
-                      <div className="mb-2 flex items-center justify-between">
-                        <span className="text-xs font-semibold text-[#7ed957]">
-                          {FIELD_LABELS[s.field_key] ?? s.field_key}
-                        </span>
-                        <span className="text-[10px] text-white/30">{s.model ?? "ai"}</span>
-                      </div>
-                      <p className="whitespace-pre-wrap text-sm text-white/80">{s.suggested_value}</p>
-                      <div className="mt-3 flex gap-2">
-                        <form action={acceptVendorSuggestionAction}>
-                          <input type="hidden" name="suggestionId" value={s.id} />
-                          <input type="hidden" name="vendorId" value={vendor.id} />
-                          <button type="submit" className="rounded-full bg-[#7ed957] px-4 py-1.5 text-xs font-bold text-black transition hover:brightness-110">
-                            ✓ Accept &amp; save
-                          </button>
-                        </form>
-                        <form action={rejectVendorSuggestionAction}>
-                          <input type="hidden" name="suggestionId" value={s.id} />
-                          <input type="hidden" name="vendorId" value={vendor.id} />
-                          <button type="submit" className="rounded-full border border-white/20 px-4 py-1.5 text-xs font-semibold text-white/70 transition hover:border-red-400 hover:text-red-300">
-                            ✕ Reject
-                          </button>
-                        </form>
-                      </div>
-                    </div>
+                    <AiDraftCard
+                      key={s.id}
+                      fieldLabel={FIELD_LABELS[s.field_key] ?? s.field_key}
+                      value={s.suggested_value}
+                      model={s.model}
+                      source={s.source}
+                      confidence={s.confidence}
+                      acceptAction={acceptVendorSuggestionAction}
+                      rejectAction={rejectVendorSuggestionAction}
+                      hiddenFields={{ suggestionId: s.id, vendorId: vendor.id }}
+                    />
                   ))}
                 </div>
               )}
@@ -279,27 +266,18 @@ export default async function VendorEditPage({
                           {brandSuggestions.get(b.id)!.length} draft{brandSuggestions.get(b.id)!.length === 1 ? "" : "s"} awaiting review
                         </p>
                         {brandSuggestions.get(b.id)!.map((s) => (
-                          <div key={s.id} className="rounded-lg border border-white/10 bg-black/40 p-3">
-                            <div className="mb-1 flex items-center justify-between">
-                              <span className="text-[11px] font-semibold text-[#7ed957]">{FIELD_LABELS[s.field_key] ?? s.field_key}</span>
-                              <span className="text-[10px] text-white/30">{s.model ?? "ai"}</span>
-                            </div>
-                            <p className="whitespace-pre-wrap text-xs text-white/80">{s.suggested_value}</p>
-                            <div className="mt-2 flex gap-2">
-                              <form action={acceptBrandSuggestionAction}>
-                                <input type="hidden" name="suggestionId" value={s.id} />
-                                <input type="hidden" name="brandId" value={b.id} />
-                                <input type="hidden" name="vendorId" value={vendor.id} />
-                                <button type="submit" className="rounded-full bg-[#7ed957] px-3 py-1 text-[11px] font-bold text-black transition hover:brightness-110">✓ Accept</button>
-                              </form>
-                              <form action={rejectBrandSuggestionAction}>
-                                <input type="hidden" name="suggestionId" value={s.id} />
-                                <input type="hidden" name="brandId" value={b.id} />
-                                <input type="hidden" name="vendorId" value={vendor.id} />
-                                <button type="submit" className="rounded-full border border-white/20 px-3 py-1 text-[11px] font-semibold text-white/70 transition hover:border-red-400 hover:text-red-300">✕ Reject</button>
-                              </form>
-                            </div>
-                          </div>
+                          <AiDraftCard
+                            key={s.id}
+                            fieldLabel={FIELD_LABELS[s.field_key] ?? s.field_key}
+                            value={s.suggested_value}
+                            model={s.model}
+                            source={s.source}
+                            confidence={s.confidence}
+                            acceptAction={acceptBrandSuggestionAction}
+                            rejectAction={rejectBrandSuggestionAction}
+                            hiddenFields={{ suggestionId: s.id, brandId: b.id, vendorId: vendor.id }}
+                            acceptLabel="✓ Accept"
+                          />
                         ))}
                       </div>
                     )}

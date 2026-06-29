@@ -51,6 +51,15 @@ export type VendorProfileSuggestion = {
   complianceFlags: string[];
   model: string;
   promptVersion: string;
+  /**
+   * 0..1 grounding confidence. The text model does NOT browse the web, so this
+   * is deliberately modest: it's a "tasteful starting point the human verifies",
+   * not researched fact. The DF-6 crawler will override this with a higher,
+   * source-grounded confidence + source="crawl:<url>" when it runs.
+   */
+  confidence: number;
+  /** Provenance: "model" until the crawler grounds it. */
+  source: string;
 };
 
 function buildPrompt(brief: VendorBrief): string {
@@ -89,7 +98,7 @@ function parseOutput(raw: string): { mission: string; about: string; philosophy:
   const philMatch = text.match(/PHILOSOPHY:\s*([\s\S]*)$/i);
   let mission = (missionMatch?.[1] ?? "").trim();
   let about = (aboutMatch?.[1] ?? "").trim();
-  let philosophy = (philMatch?.[1] ?? "").trim();
+  const philosophy = (philMatch?.[1] ?? "").trim();
 
   // If the model ignored the format, fall back: first line = mission, rest = about.
   if (!mission && !about) {
@@ -132,5 +141,8 @@ export async function generateVendorProfile(
     complianceFlags: flags,
     model: aiModelId,
     promptVersion: PROMPT_VERSION,
+    // Ungrounded text draft → modest confidence so the reviewer knows to verify.
+    confidence: 0.4,
+    source: "model",
   };
 }

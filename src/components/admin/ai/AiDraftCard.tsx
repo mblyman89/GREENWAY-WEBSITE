@@ -12,11 +12,14 @@
  */
 import type { ReactNode } from "react";
 import { AiComplianceFlags } from "./AiComplianceFlags";
+import { AiProvenanceBadge } from "./AiProvenanceBadge";
 
 export function AiDraftCard({
   fieldLabel,
   value,
   model,
+  source,
+  confidence,
   flags = [],
   acceptAction,
   rejectAction,
@@ -28,6 +31,10 @@ export function AiDraftCard({
   fieldLabel: string;
   value: string | null;
   model?: string | null;
+  /** Provenance of the facts: model | kb | pos | crawl:<url> (migration 0018). */
+  source?: string | null;
+  /** 0..1 grounding confidence (migration 0018). */
+  confidence?: number | null;
   flags?: string[];
   acceptAction: (formData: FormData) => void | Promise<void>;
   rejectAction: (formData: FormData) => void | Promise<void>;
@@ -40,9 +47,12 @@ export function AiDraftCard({
   const hidden = Object.entries(hiddenFields);
   return (
     <div className="rounded-lg border border-white/10 bg-black/40 p-4">
-      <div className="mb-2 flex items-center justify-between">
+      <div className="mb-2 flex items-center justify-between gap-2">
         <span className="text-xs font-semibold text-[#7ed957]">{fieldLabel}</span>
         <span className="text-[10px] text-white/30">{model ?? "ai"}</span>
+      </div>
+      <div className="mb-2">
+        <AiProvenanceBadge source={source} confidence={confidence} />
       </div>
       <p className="whitespace-pre-wrap text-sm text-white/85">{value}</p>
 

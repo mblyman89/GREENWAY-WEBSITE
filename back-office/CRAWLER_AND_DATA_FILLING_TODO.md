@@ -32,13 +32,15 @@
 - [ ] **Owner action:** apply `supabase/migrations/0021_image_substitutes.sql` in the SQL editor.
 - Note: image *upload* uses the existing Media Library; admin assigns from there (no new bucket).
 
-## DF-3 — Product image resolver + media draft pipeline
-- [ ] `resolveProductImage(posKey)` ladder: exact → brand/vendor generic → honest substitute →
-      category/type fallback. Returns `{url, source, isFallback}`.
-- [ ] Front-end card + PDP use resolver; "representative image" cue on fallback.
-- [ ] Crawler/AI image candidates → draft `image_media_ids` on `product_enrichment` (source-tagged).
-- [ ] Brand/vendor generic-shot library (scope=brand/vendor in DF-2 table).
-- [ ] tsc/eslint/build. PR.
+## DF-3 — Product image resolver + media draft pipeline ✅ (PR #90)
+- [x] `resolveProductImage(posKey)` ladder: exact → brand/vendor generic → honest substitute →
+      category/type fallback. Returns `{url, source, isFallback}`. (+ batch resolve, no N+1)
+- [x] Front-end card + PDP use resolver; "representative image" cue on fallback.
+- [~] Crawler/AI image candidates → draft `image_media_ids` on `product_enrichment` (source-tagged).
+      (Resolver already reads PUBLISHED enrichment images; the crawler that *writes* draft
+       candidates lands in DF-6.)
+- [x] Brand/vendor generic-shot library (scope=brand/vendor in DF-2 table) — resolver consumes it.
+- [x] tsc/eslint/build. PR #90 merged.
 
 ## DF-4 — Vendors & brands data + admin enrichment
 - [ ] Audit vendors/brands tables; migration `0022_*` for draft columns if needed (about, region,
