@@ -118,10 +118,34 @@ OWNER TO-DO after deploy: (1) run migration 0011 in Supabase; (2) open Admin →
 - OWNER ACTION: none (no new migration). Already-seeded rows auto-correct on next
   /admin/pages/home visit.
 
-### Slice 3b — per-page banner seeding/wiring (PLANNED)
-- [ ] Each non-home page's banner is bespoke markup; faithfully seed + wire one
-      page at a time (about, locations, vendors, specials, loyalty, menu, faq,
-      price-match) using PAGE_SECTION_SEEDS + getSectionsForRender(slug).
+### Slice A — AI activation (PR #72, merged) — NO migration
+- [x] provider.ts accepts OPENAI_API_KEY/OPENAI_BASE_URL/OPENAI_MODEL as fallback for AI_*.
+- [x] .env.example documents either key works; default model gpt-4o-mini.
+- OWNER ACTION: ensure OPENAI_API_KEY set on Vercel + redeploy; AI buttons appear automatically (confirm via Admin → AI Usage).
+
+### Slice B — Newsletter unsubscribe / CAN-SPAM (PR #73, merged) — migration 0017 (apply manually)
+- [x] Migration 0017 loyalty_signups.email_opt_out + unsubscribe_token (uuid) + unsubscribed_at + unique index + backfill.
+- [x] signups-store: unsubscribeByToken() idempotent.
+- [x] newsletter-send-store: recipients carry token, exclude opt-outs, per-recipient unsubscribe link in email footer.
+- [x] Public /unsubscribe route (branded, noindex, force-dynamic).
+- OWNER ACTION: apply migration 0017.
+
+### Slice C — editable footer hours image + footer-only Site Content (PR #74, merged) — NO migration
+- [x] footer.hours.image content block (image field_type); Footer HoursImage resolves it (draft-aware) with bundled-asset fallback.
+- [x] Site Content page scoped to footer-only (hours image, hours line, compliance warning); nav + title renamed "Footer Content".
+- [x] Lazy idempotent top-up seed so the new block appears automatically (no owner re-run needed).
+- OWNER ACTION: none (lazy-seeds on next visit to Footer Content).
+
+### Slice 3b — per-page banner seeding/wiring (ON HOLD — needs owner decision)
+- Finding: every target page's hero (menu, loyalty, specials, vendors, faq) is ALREADY
+  fully editable today via content blocks (title/subtitle/image, draft-aware). Home's
+  Category/Brand banners use page_sections.
+- Each non-home hero is BESPOKE markup (not the shared SectionBanner). Migrating them
+  into the page_sections builder would change the live visual layout of 7 customer-facing
+  pages — high risk, low incremental benefit. This is why it was deferred.
+- Awaiting owner: (A) leave heroes on content blocks (recommended — already editable),
+  or (B) rebuild each bespoke hero as a SectionBanner so they're add/reorder/CTA-capable
+  in the Pages builder (accepts minor visual normalization per page).
 
 ### Slice 4 — Blog & Newsletter polish (PR #68, merged) — migration 0014 (apply manually)
 - [x] formatBlogDate(): full-month-name "Month D, YYYY"; TZ-safe ISO parse; expands legacy abbreviated labels.
