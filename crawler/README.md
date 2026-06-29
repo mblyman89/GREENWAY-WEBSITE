@@ -33,6 +33,10 @@ For every target URL:
 
 For a temporary desktop / work-VM test, start with **[`docs/LOCAL_TESTING_GUIDE.md`](docs/LOCAL_TESTING_GUIDE.md)**.
 
+For a proper production deployment on a business VM (Docker + systemd, Cloudflare
+Tunnel, secrets, Vercel wiring), hand your IT person
+**[`docs/IT_DEPLOYMENT_GUIDE.md`](docs/IT_DEPLOYMENT_GUIDE.md)**.
+
 See **[`docs/RUNBOOK.md`](docs/RUNBOOK.md)** for the full production walkthrough.
 The 30-second version:
 
