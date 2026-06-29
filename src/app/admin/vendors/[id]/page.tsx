@@ -23,8 +23,10 @@ import {
   rejectBrandSuggestionAction,
   crawlVendorAction,
   crawlBrandAction,
+  crawlVendorSocialAction,
+  crawlBrandSocialAction,
 } from "../actions";
-import { isCrawlerConfigured } from "@/lib/ai/crawler-client";
+import { isCrawlerConfigured, crawlerHealth } from "@/lib/ai/crawler-client";
 
 export const dynamic = "force-dynamic";
 
@@ -55,6 +57,10 @@ export default async function VendorEditPage({
   const { id } = await params;
   const sp = await searchParams;
   const crawlerOn = isCrawlerConfigured();
+  // Social (DF-9) is enabled only when the worker reports a Meta Graph token.
+  // Probe health once (short timeout); falls back to false if the worker is down.
+  const crawlerStatus = crawlerOn ? await crawlerHealth() : { ok: false, socialConfigured: false };
+  const socialOn = Boolean(crawlerStatus.ok && crawlerStatus.socialConfigured);
 
   const vendor = await getVendorById(id);
   if (!vendor) notFound();
@@ -187,6 +193,43 @@ export default async function VendorEditPage({
                     Set <code className="rounded bg-black/40 px-1">CRAWLER_BASE_URL</code> and{" "}
                     <code className="rounded bg-black/40 px-1">CRAWLER_SHARED_SECRET</code> to enable web research
                     (see <code className="rounded bg-black/40 px-1">crawler/docs/RUNBOOK.md</code>).
+                  </p>
+                )}
+              </div>
+
+              {/* Pull from social (DF-9): sanctioned Instagram Business Discovery */}
+              <div className="rounded-lg border border-fuchsia-400/25 bg-fuchsia-400/[0.04] p-4">
+                <h3 className="flex items-center gap-2 text-xs font-semibold text-fuchsia-200">
+                  <span>📸 Pull from Instagram</span>
+                  {!socialOn && (
+                    <span className="rounded-full border border-[#ffd700]/40 bg-[#ffd700]/10 px-2 py-0.5 text-[10px] font-semibold text-[#ffd700]">
+                      Not set up
+                    </span>
+                  )}
+                </h3>
+                <p className="mt-1 text-[11px] text-white/50">
+                  For vendors that live on social. Reads their <strong>public</strong> Instagram business
+                  profile through Meta&rsquo;s official API and drafts an <strong>about</strong> from their bio +
+                  image candidates — verified and compliance-checked, drafts only. No logins, no fake accounts.
+                </p>
+                {socialOn ? (
+                  <form action={crawlVendorSocialAction} className="mt-3 flex flex-col gap-2 sm:flex-row">
+                    <input type="hidden" name="id" value={vendor.id} />
+                    <input
+                      name="handle"
+                      type="text"
+                      required
+                      placeholder="@vendor_handle"
+                      className={`${field} flex-1`}
+                    />
+                    <button type="submit" className="shrink-0 rounded-full bg-fuchsia-400 px-5 py-2 text-sm font-bold text-black transition hover:brightness-110">
+                      📸 Pull
+                    </button>
+                  </form>
+                ) : (
+                  <p className="mt-2 rounded-lg border border-[#ffd700]/20 bg-[#ffd700]/5 px-3 py-2 text-[11px] text-[#ffd700]">
+                    Set up a Greenway Instagram <strong>Business</strong> account + Meta token to enable
+                    (see <code className="rounded bg-black/40 px-1">crawler/docs/SOCIAL_SETUP.md</code>).
                   </p>
                 )}
               </div>
@@ -363,6 +406,40 @@ export default async function VendorEditPage({
                       </p>
                     )}
                   </div>
+
+                  {/* Brand-level Pull from Instagram (DF-9): sanctioned Business Discovery */}
+                  <div className="mt-2 space-y-3 rounded-lg border border-fuchsia-400/20 bg-fuchsia-400/[0.03] p-4">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-white">📸 Pull this brand from Instagram</span>
+                      {!socialOn && (
+                        <span className="rounded-full border border-[#ffd700]/40 bg-[#ffd700]/10 px-2 py-0.5 text-[10px] font-semibold text-[#ffd700]">Not set up</span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-white/45">
+                      Reads the brand&rsquo;s <strong>public</strong> Instagram business profile via Meta&rsquo;s official
+                      API and drafts an <strong>about</strong> from the bio plus image candidates. Verified +
+                      compliance-checked, drafts only. No logins, no fake accounts.
+                    </p>
+                    {socialOn ? (
+                      <div className="flex flex-wrap items-end gap-2">
+                        <input
+                          form={`brand-social-${b.id}`}
+                          name="handle"
+                          type="text"
+                          placeholder="@brand_handle"
+                          className={`${field} min-w-[14rem] flex-1`}
+                        />
+                        <button form={`brand-social-${b.id}`} type="submit" className="rounded-full bg-fuchsia-400 px-4 py-2 text-xs font-bold text-black transition hover:brightness-110">
+                          📸 Pull
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-white/40">
+                        Needs a Greenway IG <strong>Business</strong> account + Meta token
+                        (see <code className="rounded bg-black/40 px-1">crawler/docs/SOCIAL_SETUP.md</code>).
+                      </p>
+                    )}
+                  </div>
                 </form>
               ))}
               {/* Standalone forms for the brand-AI buttons (can't nest <form> inside the brand <form>). */}
@@ -375,6 +452,13 @@ export default async function VendorEditPage({
               {/* Standalone forms for the brand crawler buttons (can't nest <form> inside the brand <form>). */}
               {crawlerOn && brands.map((b: Brand) => (
                 <form key={`brand-crawl-${b.id}`} id={`brand-crawl-${b.id}`} action={crawlBrandAction} className="hidden">
+                  <input type="hidden" name="brandId" value={b.id} />
+                  <input type="hidden" name="vendorId" value={vendor.id} />
+                </form>
+              ))}
+              {/* Standalone forms for the brand social buttons. */}
+              {socialOn && brands.map((b: Brand) => (
+                <form key={`brand-social-${b.id}`} id={`brand-social-${b.id}`} action={crawlBrandSocialAction} className="hidden">
                   <input type="hidden" name="brandId" value={b.id} />
                   <input type="hidden" name="vendorId" value={vendor.id} />
                 </form>

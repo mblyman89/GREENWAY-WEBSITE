@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 
 from . import __version__
 from .config import get_settings
-from .pipeline import research_target, result_to_draft_rows
+from .pipeline import ResearchResult, research_social, research_target, result_to_draft_rows
 from .store import write_drafts
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -57,6 +57,43 @@ class ResearchResponse(BaseModel):
     error: str = ""
 
 
+class SocialRequest(BaseModel):
+    handle: str = Field(..., description="IG handle, @handle, or instagram.com/<handle> URL.")
+    entity_type: str = Field(..., description="vendor | brand | product")
+    entity_id: str = Field(..., description="The Supabase id of the vendor/brand/product.")
+    display_name: str = Field(default="")
+    write: bool = Field(default=True)
+
+
+def _build_response(result: ResearchResult, *, write: bool) -> ResearchResponse:
+    """Shared response builder for web + social research (DRY, drafts-only)."""
+    fields = [
+        FieldOut(field_key=f.field_key, value=f.value, confidence=f.confidence,
+                 via=f.via, accepted=f.accepted, reason=f.reason, flags=f.flags)
+        for f in result.fields
+    ]
+    written = skipped = 0
+    configured = False
+    if result.fetched_ok and write:
+        summary = write_drafts(result_to_draft_rows(result))
+        written = summary.get("written", 0)
+        skipped = summary.get("skipped", 0)
+        configured = summary.get("configured", False)
+    return ResearchResponse(
+        ok=result.fetched_ok,
+        url=result.url,
+        entity_type=result.entity_type,
+        entity_id=result.entity_id,
+        from_cache=result.from_cache,
+        fields=fields,
+        image_candidates=result.image_candidates,
+        drafts_written=written,
+        drafts_skipped=skipped,
+        supabase_configured=configured,
+        error=result.error,
+    )
+
+
 def _require_secret(provided: str | None) -> None:
     settings = get_settings()
     expected = settings.crawler_shared_secret.strip()
@@ -74,7 +111,10 @@ def health() -> dict:
         "version": __version__,
         "ai_enabled": s.ai_enabled,
         "supabase_configured": s.supabase_enabled,
+        "social_configured": s.social_enabled,
         "respect_robots": s.crawl_respect_robots,
+        "proxy_enabled": bool(s.proxy_url),
+        "allow_domains": s.allow_domains,
     }
 
 
@@ -95,31 +135,30 @@ async def research(
         entity_id=req.entity_id,
         display_name=req.display_name,
     )
+    return _build_response(result, write=req.write)
 
-    fields = [
-        FieldOut(field_key=f.field_key, value=f.value, confidence=f.confidence,
-                 via=f.via, accepted=f.accepted, reason=f.reason, flags=f.flags)
-        for f in result.fields
-    ]
 
-    written = skipped = 0
-    configured = False
-    if result.fetched_ok and req.write:
-        summary = write_drafts(result_to_draft_rows(result))
-        written = summary.get("written", 0)
-        skipped = summary.get("skipped", 0)
-        configured = summary.get("configured", False)
+@app.post("/research-social", response_model=ResearchResponse)
+async def research_social_endpoint(
+    req: SocialRequest,
+    x_crawler_secret: str | None = Header(default=None),
+) -> ResearchResponse:
+    """Sanctioned social research (DF-9): pull a PUBLIC IG business profile via the
+    Meta Graph Business Discovery API → verified, compliance-gated drafts."""
+    _require_secret(x_crawler_secret)
 
-    return ResearchResponse(
-        ok=result.fetched_ok,
-        url=result.url,
-        entity_type=result.entity_type,
-        entity_id=result.entity_id,
-        from_cache=result.from_cache,
-        fields=fields,
-        image_candidates=result.image_candidates,
-        drafts_written=written,
-        drafts_skipped=skipped,
-        supabase_configured=configured,
-        error=result.error,
+    if req.entity_type not in ("vendor", "brand", "product"):
+        raise HTTPException(status_code=422, detail="entity_type must be vendor|brand|product")
+
+    s = get_settings()
+    if not s.social_enabled:
+        raise HTTPException(status_code=503, detail="Social not configured (META_GRAPH_TOKEN unset).")
+
+    log.info("research-social %s %s (@%s)", req.entity_type, req.entity_id, req.handle)
+    result = await research_social(
+        handle=req.handle,
+        entity_type=req.entity_type,
+        entity_id=req.entity_id,
+        display_name=req.display_name,
     )
+    return _build_response(result, write=req.write)

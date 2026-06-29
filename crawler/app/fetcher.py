@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import random
 import time
 import urllib.robotparser as robotparser
 from dataclasses import dataclass, field
@@ -24,6 +25,7 @@ from urllib.parse import urlparse
 import httpx
 
 from .config import Settings, get_settings
+from .http_identity import browser_headers, pick_user_agent
 
 # Per-domain last-fetch timestamps for rate limiting (process-local).
 _last_fetch_at: dict[str, float] = {}
@@ -45,6 +47,58 @@ class FetchResult:
 
 def _domain(url: str) -> str:
     return urlparse(url).netloc.lower()
+
+
+def domain_allowed(settings: Settings, url: str) -> bool:
+    """If an allow-list is configured, only those hosts may be researched.
+
+    Empty allow-list = allow whatever host the operator submits (the operator
+    is a trusted staff member typing a URL into the back office)."""
+    allow = settings.allow_domains
+    if not allow:
+        return True
+    host = _domain(url)
+    return any(host == d or host.endswith("." + d) for d in allow)
+
+
+def _request_headers(settings: Settings) -> dict[str, str]:
+    ua = pick_user_agent(realistic=settings.crawl_realistic_headers, fallback=settings.crawl_user_agent)
+    return browser_headers(ua)
+
+
+def _client_kwargs(settings: Settings, *, timeout: float) -> dict:
+    kwargs: dict = {
+        "timeout": timeout,
+        "follow_redirects": True,
+        "headers": _request_headers(settings),
+    }
+    if settings.proxy_url:
+        kwargs["proxy"] = settings.proxy_url
+    return kwargs
+
+
+def _retry_after_seconds(resp: httpx.Response) -> float | None:
+    """Parse a Retry-After header (seconds form). Returns None if absent/odd."""
+    val = resp.headers.get("retry-after")
+    if not val:
+        return None
+    try:
+        return float(val)
+    except ValueError:
+        return None  # HTTP-date form: fall back to our own backoff
+
+
+def _backoff_sleep(settings: Settings, attempt: int, retry_after: float | None) -> None:
+    """Exponential backoff with jitter; honors Retry-After when the server sets it."""
+    if retry_after is not None:
+        time.sleep(min(retry_after, settings.crawl_backoff_max_seconds))
+        return
+    delay = min(
+        settings.crawl_backoff_base_seconds * (2 ** attempt),
+        settings.crawl_backoff_max_seconds,
+    )
+    # Full jitter: a random fraction of the computed delay (avoids thundering herd).
+    time.sleep(random.uniform(0.0, delay))
 
 
 def _cache_file(settings: Settings, url: str) -> Path:
@@ -94,7 +148,7 @@ def _robots_allows(settings: Settings, url: str) -> bool:
         rp = robotparser.RobotFileParser()
         robots_url = f"{urlparse(url).scheme}://{dom}/robots.txt"
         try:
-            with httpx.Client(timeout=10.0, headers={"User-Agent": settings.crawl_user_agent}) as c:
+            with httpx.Client(**_client_kwargs(settings, timeout=10.0)) as c:
                 r = c.get(robots_url)
                 if r.status_code == 200:
                     rp.parse(r.text.splitlines())
@@ -153,10 +207,18 @@ async def _fetch_with_crawl4ai(settings: Settings, url: str) -> FetchResult | No
     except Exception:
         return None
     try:
-        async with AsyncWebCrawler(headless=True, verbose=False) as crawler:
+        ua = pick_user_agent(
+            realistic=settings.crawl_realistic_headers,
+            fallback=settings.crawl_user_agent,
+        )
+        crawler_kwargs: dict = {"headless": True, "verbose": False}
+        # Route the real browser through the optional egress proxy if configured.
+        if settings.proxy_url:
+            crawler_kwargs["proxy"] = settings.proxy_url
+        async with AsyncWebCrawler(**crawler_kwargs) as crawler:
             result = await crawler.arun(
                 url=url,
-                user_agent=settings.crawl_user_agent,
+                user_agent=ua,
                 # fit_markdown prunes boilerplate to the meaningful content.
                 word_count_threshold=10,
                 bypass_cache=True,
@@ -178,23 +240,39 @@ async def _fetch_with_crawl4ai(settings: Settings, url: str) -> FetchResult | No
         return FetchResult(url=url, ok=False, error=f"crawl4ai: {e}")
 
 
+_RETRYABLE_STATUS = {408, 425, 429, 500, 502, 503, 504}
+
+
 def _fetch_with_httpx(settings: Settings, url: str) -> FetchResult:
-    """Plain HTTP fallback (no browser). Good for static/server-rendered pages."""
-    try:
-        with httpx.Client(
-            timeout=20.0, follow_redirects=True,
-            headers={"User-Agent": settings.crawl_user_agent},
-        ) as c:
-            r = c.get(url)
-        html = r.text if "text/html" in r.headers.get("content-type", "") else ""
-        return FetchResult(
-            url=url, ok=r.status_code == 200 and bool(html), status=r.status_code,
-            html=html, markdown=_html_to_text(html),
-            image_urls=_extract_image_urls(html, url) if html else [],
-            error="" if r.status_code == 200 else f"HTTP {r.status_code}",
-        )
-    except Exception as e:
-        return FetchResult(url=url, ok=False, error=f"httpx: {e}")
+    """Plain HTTP fallback (no browser). Good for static/server-rendered pages.
+
+    Retries transient failures (429/5xx/network blips) with exponential backoff
+    + jitter, honoring a server's Retry-After header. This is polite resilience
+    (riding out a hiccup), not evasion."""
+    last_err = ""
+    last_status = 0
+    for attempt in range(settings.crawl_max_retries + 1):
+        try:
+            with httpx.Client(**_client_kwargs(settings, timeout=20.0)) as c:
+                r = c.get(url)
+            last_status = r.status_code
+            if r.status_code in _RETRYABLE_STATUS and attempt < settings.crawl_max_retries:
+                _backoff_sleep(settings, attempt, _retry_after_seconds(r))
+                last_err = f"HTTP {r.status_code} (retrying)"
+                continue
+            html = r.text if "text/html" in r.headers.get("content-type", "") else ""
+            return FetchResult(
+                url=url, ok=r.status_code == 200 and bool(html), status=r.status_code,
+                html=html, markdown=_html_to_text(html),
+                image_urls=_extract_image_urls(html, url) if html else [],
+                error="" if r.status_code == 200 else f"HTTP {r.status_code}",
+            )
+        except Exception as e:
+            last_err = f"httpx: {e}"
+            if attempt < settings.crawl_max_retries:
+                _backoff_sleep(settings, attempt, None)
+                continue
+    return FetchResult(url=url, ok=False, status=last_status, error=last_err or "fetch failed")
 
 
 def _html_to_text(html: str) -> str:
@@ -212,6 +290,9 @@ def _html_to_text(html: str) -> str:
 async def fetch_page(url: str, *, prefer_browser: bool = True, settings: Settings | None = None) -> FetchResult:
     """Politely fetch a single page. Honors robots + rate limit + cache."""
     settings = settings or get_settings()
+
+    if not domain_allowed(settings, url):
+        return FetchResult(url=url, ok=False, error="domain not in allow-list")
 
     cached = _read_cache(settings, url)
     if cached:

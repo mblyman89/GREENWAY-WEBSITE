@@ -10,6 +10,7 @@ venv/
 
 # Secrets & local state
 .env
+!.env.example
 .cache/
 *.log
 

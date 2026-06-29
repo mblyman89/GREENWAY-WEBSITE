@@ -59,7 +59,7 @@
 - [x] Accept-rate by prompt_version / feature / source / confidence-band on `/admin/ai-usage`.
 - [x] tsc/eslint/build. PR #92 merged.
 
-## DF-6 — crawl4ai work-horse engine ✅ (PR pending)
+## DF-6 — crawl4ai work-horse engine ✅ (PR #94)
 - [x] Runtime decided: **separate Python crawl4ai/Playwright FastAPI worker** under `/crawler`
       (Vercel can't run a headless browser). Provider-agnostic config via pydantic-settings
       (`app/config.py`); soft-disables with no AI key (CSS-first still works for free).
@@ -83,16 +83,78 @@
       connect back office via `CRAWLER_BASE_URL`/`CRAWLER_SHARED_SECRET` → first-run plan →
       cost/safety → troubleshooting). PyCharm run config in `crawler/.run/`. Site `.env.example`
       gained `CRAWLER_BASE_URL` + `CRAWLER_SHARED_SECRET`.
-- [x] tsc + eslint + next build green. Python tests green. PR pending.
+- [x] tsc + eslint + next build green. Python tests green. PR #94 merged.
 - [ ] **Owner action:** deploy the worker (RUNBOOK), set the two CRAWLER_* env vars in Vercel,
       then fine-tune on a few real vendor/brand sites before any batch run.
 
-## DF-7 — Crawl tuning + scale
-- [ ] Per-domain reliability scoring, scheduling/batch, de-dup, vision alt-text, budget alerts.
-- [ ] PR.
+## DF-7 — Legitimate crawler hardening ✅ (PR pending)
+> Audit of the DF-6 crawler found: a single static User-Agent (block-prone), no full request
+> headers, no retry/backoff on transient failures, no page **discovery** (only fetched the exact
+> URL given), basic structured-data coverage, no proxy support, no allow-list. **Owner asked for
+> "every trick" incl. fake accounts / IP masking / anti-bot bypass — DECLINED** (CFAA/ToS/contract
+> risk to the I-502 license, and unnecessary: target data is public marketing content brands
+> *want* indexed). Built the legitimate pro toolkit instead, which the owner approved ("the clean
+> route… I never want to do things the dirty way").
+- [x] **Browser-parity identity** (`app/http_identity.py`): rotating pool of 5 genuine current
+      browser User-Agents + full modern header set (Accept, Accept-Language, Sec-Fetch-*,
+      Upgrade-Insecure-Requests…). This is *parity with a normal visitor*, NOT evasion. Toggle via
+      `CRAWL_REALISTIC_HEADERS` (default on); falls back to an honest bot UA when off.
+- [x] **Resilient fetching** (`app/fetcher.py`): exponential backoff + full jitter on
+      `{408,425,429,500,502,503,504}`, honoring numeric `Retry-After`; `CRAWL_MAX_RETRIES`,
+      `CRAWL_BACKOFF_BASE_SECONDS`, `CRAWL_BACKOFF_MAX_SECONDS`. Optional transparent egress proxy
+      (`CRAWL_PROXY_URL`) wired through crawl4ai + httpx + robots fetch. Per-domain **allow-list**
+      (`CRAWL_ALLOW_DOMAINS`, empty = allow any; supports subdomains) to lock the worker to brands
+      you carry.
+- [x] **Page discovery** (`app/discovery.py` + `pipeline.research_target`): robots.txt `Sitemap:`
+      lines → `/sitemap.xml` (one level of sitemap-index), ranked by interest keywords
+      (about/our-story/mission/…); RSS/Atom feed `<link>` discovery. If a landing page yields no
+      data, the pipeline now follows up to 2 about/story sub-pages and grounds on the richest text.
+- [x] **Expanded structured data** (`app/css_extract.py`): microdata (`itemprop=description|image`)
+      + `twitter:description` fallback, on top of existing JSON-LD arrays/@graph + OpenGraph.
+- [x] 11/11 hardening tests pass (`crawler/tests/test_hardening.py`): allow-list empty/enforced,
+      Retry-After numeric/http-date/absent, UA rotate/fallback, full headers, feed discovery,
+      microdata, social-disabled-without-token.
+- [x] tsc + eslint + next build green. PR pending.
+
+## DF-9 — Sanctioned social connector (Instagram Business Discovery) ✅ (PR pending)
+> Owner: several vendors live on social and have bare websites; "I need this data." The **legit**
+> path: Greenway authenticates as **itself** (its own Facebook Page + Instagram Business account)
+> and uses the Meta Graph API **Instagram Business Discovery** to read ANOTHER business/creator
+> account's PUBLIC profile + media. Uses **ACCESS TOKENS from the Meta developer console — never
+> passwords, never sent to the agent.** Legal safe-zone (Meta v. Bright Data 2024; hiQ/CFAA):
+> reading public data is fine; authenticating-then-circumventing-ToS is the line we do not cross.
+- [x] **Social client** (`app/social.py`): `normalize_handle` (@name / name / instagram.com URL),
+      `fetch_instagram_business` (Graph `business_discovery` for bio, website, followers,
+      profile pic, recent media: type/url/permalink/caption/timestamp), `profile_text_blob` for
+      verify-against-source. **Soft-disables** when `META_GRAPH_TOKEN` unset; clear errors when the
+      target isn't a discoverable business account.
+- [x] **Pipeline** (`pipeline.research_social`): bio → about (vendor/brand) / first long caption →
+      description (product); same verify + compliance gates as web; writes DRAFTS with
+      source `social:ig:<handle>`. `result_to_draft_rows` honors the `social:` source prefix.
+- [x] **Endpoint** (`app/main.py`): `POST /research-social` (auth `X-Crawler-Secret`, 503 when
+      social unconfigured); `/health` now reports `social_configured`, `proxy_enabled`,
+      `allow_domains`.
+- [x] **Site wiring**: `crawler-client.ts` `researchSocial` + `CrawlerHealth`; `actions.ts`
+      `crawlVendorSocialAction` / `crawlBrandSocialAction` (requirePermission `vendors.manage`,
+      audit `*.social_drafted`); `/admin/vendors/[id]` "📸 Pull from Instagram" blocks for the
+      vendor and each brand, gated on `socialOn` (probes `crawlerHealth().socialConfigured`).
+- [x] 6/6 social tests pass (`crawler/tests/test_social.py`): handle variants, soft-disabled,
+      requires-business-id, parses business-discovery (mocked), Graph-error handling, text blob.
+- [x] Owner walkthrough: `crawler/docs/SOCIAL_SETUP.md` (link FB Page + IG Business → create
+      Business app → long-lived Page token via Graph API Explorer → find IG business id → curl
+      test → token hygiene). `crawler/.env.example` gained the DF-7 + social vars.
+- [ ] **Owner action:** create/confirm a Facebook Page + Instagram **Business** account, generate
+      `META_GRAPH_TOKEN` + `META_IG_BUSINESS_ID` per SOCIAL_SETUP.md, drop them in the worker
+      `.env`. (Optional but only-public-data either way.)
 
 ## DF-8 (optional) — AI-5/6 hardening
 - [ ] Golden-set eval harness + model router/budgets gating prompt changes.
+
+## Where to run the crawler
+- [x] `crawler/docs/WHERE_TO_RUN.md`: recommends a dedicated VM on the shop host
+      (2 vCPU / 4 GB / 20 GB Ubuntu) reached via **Cloudflare Tunnel** (no inbound ports opened on
+      the shop firewall) as the best fit for Greenway; cloud VM as alt; NOT Vercel (no headless
+      browser).
 
 ---
 ### Status log

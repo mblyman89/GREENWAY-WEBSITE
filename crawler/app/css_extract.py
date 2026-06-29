@@ -117,6 +117,27 @@ def extract_css(html: str, base_url: str) -> CssExtraction:
     if og_image:
         out.image_urls.append(urljoin(base_url, og_image))
 
+    # --- Microdata (schema.org itemprop) --------------------------------------
+    # Some sites use inline microdata instead of JSON-LD. Cheap to read.
+    if not out.description:
+        ip = soup.find(attrs={"itemprop": "description"})
+        if ip:
+            txt = (ip.get("content") or ip.get_text(" ", strip=True) or "").strip()
+            if txt:
+                out.description = txt
+                out.evidence["description"] = txt
+    for ip_img in soup.find_all(attrs={"itemprop": "image"}):
+        src = ip_img.get("content") or ip_img.get("src")
+        if src:
+            out.image_urls.append(urljoin(base_url, src))
+
+    # --- Twitter card description (fallback for thin pages) -------------------
+    if not out.about:
+        tw = _meta(soup, attrs={"name": "twitter:description"})
+        if tw:
+            out.about = tw
+            out.evidence["about"] = tw
+
     # --- Common about / mission DOM sections ----------------------------------
     for sel in ("#about", ".about", "section.about", "[class*='mission']", "[id*='mission']"):
         node = soup.select_one(sel)
