@@ -20,6 +20,7 @@ export const adminNav: AdminNavItem[] = [
   { label: "Vendors & Brands", href: "/admin/vendors", permission: "vendors.manage", icon: "🏷", group: "Catalog" },
   { label: "Products", href: "/admin/products", permission: "products.enrich", icon: "📦", group: "Catalog" },
   { label: "Promotions", href: "/admin/promotions", permission: "promotions.manage", icon: "%", group: "Catalog" },
+  { label: "Knowledge Base", href: "/admin/knowledge-base", permission: "products.enrich", icon: "📚", group: "Catalog" },
 
   // Per-page builders — each page with banners/sections gets its own tab.
   { label: "Home", href: "/admin/pages/home", permission: "content.edit", icon: "⌂", group: "Pages" },

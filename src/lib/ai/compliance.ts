@@ -77,12 +77,36 @@ export type ComplianceResult = {
   blockingFlags: string[]; // only the must-fix ones
 };
 
-/** Scan generated text for risky language. Does not modify the text. */
-export function checkCompliance(text: string): ComplianceResult {
+/** An owner-editable extra banned phrase, layered on top of the regex. */
+export type ExtraBannedPhrase = { phrase: string; severity: ComplianceSeverity; reason?: string | null };
+
+/** Escape a string for safe use inside a RegExp. */
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Scan generated text for risky language. Does not modify the text.
+ *
+ * `extra` lets callers layer the owner's kb_banned_phrases list on top of the
+ * hardcoded regex without a code change. Each extra phrase is matched
+ * case-insensitively with word-ish boundaries.
+ */
+export function checkCompliance(text: string, extra: ExtraBannedPhrase[] = []): ComplianceResult {
   const flags: string[] = [];
   const blockingFlags: string[] = [];
   for (const { pattern, label, severity } of RISKY_PATTERNS) {
     if (pattern.test(text)) {
+      flags.push(severity === "block" ? `${label} (must fix)` : `${label} (heads-up)`);
+      if (severity === "block") blockingFlags.push(label);
+    }
+  }
+  for (const { phrase, severity } of extra) {
+    const trimmed = phrase.trim();
+    if (!trimmed) continue;
+    const re = new RegExp(`(^|\\W)${escapeRegExp(trimmed)}(\\W|$)`, "i");
+    if (re.test(text)) {
+      const label = `banned phrase: "${trimmed}"`;
       flags.push(severity === "block" ? `${label} (must fix)` : `${label} (heads-up)`);
       if (severity === "block") blockingFlags.push(label);
     }

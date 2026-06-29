@@ -110,6 +110,20 @@ export default async function ProductEditorPage({
                     Suggest tags
                   </button>
                 </form>
+                <form action={generateProductAi}>
+                  <input type="hidden" name="key" value={key} />
+                  <input type="hidden" name="kind" value="sensory" />
+                  <input type="hidden" name="posName" value={item.name} />
+                  <input type="hidden" name="posBrand" value={item.brand_name} />
+                  <input type="hidden" name="posCategory" value={item.category} />
+                  <input type="hidden" name="posStrainType" value={item.strain_type} />
+                  <input type="hidden" name="posStrainName" value={item.strain_name ?? ""} />
+                  <input type="hidden" name="posThc" value={item.thc ?? ""} />
+                  <input type="hidden" name="posCbd" value={item.cbd ?? ""} />
+                  <button className="rounded-full border border-[#ffd700]/50 px-3 py-1.5 text-xs font-semibold text-[#ffd700] hover:bg-[#ffd700]/10">
+                    Draft aroma &amp; flavor
+                  </button>
+                </form>
               </div>
             )}
           </div>
