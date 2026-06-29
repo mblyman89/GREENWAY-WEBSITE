@@ -7,7 +7,11 @@ import { ContentEditorShell } from "@/components/admin/ContentEditorShell";
 import { type BlockVM } from "@/components/admin/ContentBlocksBrowser";
 import type { MediaChoice } from "@/components/admin/ContentImageField";
 import { ContentBulkBar } from "@/components/admin/ContentBulkBar";
-import { listContentBlocks, listContentRevisions } from "@/lib/cms/content-store";
+import {
+  listContentBlocks,
+  listContentRevisions,
+  ensureContentBlocksSeeded,
+} from "@/lib/cms/content-store";
 import { listMedia } from "@/lib/media/store";
 import { CONTENT_BLOCK_SEEDS } from "@/lib/cms/content-blocks-seed";
 import { isAiConfigured } from "@/lib/cms/ai-content";
@@ -71,7 +75,15 @@ export default async function SiteContentPage({
     );
   }
 
-  const allBlocks = await listContentBlocks();
+  // Lazy, idempotent top-up: if new controlled blocks were added in a release
+  // (e.g. the editable footer store-hours image) but the table was seeded in an
+  // earlier version, insert just the missing ones so they appear automatically
+  // without the owner having to do anything. No-op once everything exists.
+  let allBlocks = await listContentBlocks();
+  if (allBlocks.length > 0) {
+    const inserted = await ensureContentBlocksSeeded();
+    if (inserted > 0) allBlocks = await listContentBlocks();
+  }
   // Per owner: this page edits ONLY the footer section. The site header has
   // nothing worth editing, so we scope the editor to the blocks that actually
   // render in the shared footer — the store-hours image, the plain-text hours
