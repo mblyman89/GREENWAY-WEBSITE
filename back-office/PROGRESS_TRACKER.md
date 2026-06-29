@@ -136,16 +136,20 @@ OWNER TO-DO after deploy: (1) run migration 0011 in Supabase; (2) open Admin →
 - [x] Lazy idempotent top-up seed so the new block appears automatically (no owner re-run needed).
 - OWNER ACTION: none (lazy-seeds on next visit to Footer Content).
 
-### Slice 3b — per-page banner seeding/wiring (ON HOLD — needs owner decision)
-- Finding: every target page's hero (menu, loyalty, specials, vendors, faq) is ALREADY
-  fully editable today via content blocks (title/subtitle/image, draft-aware). Home's
-  Category/Brand banners use page_sections.
-- Each non-home hero is BESPOKE markup (not the shared SectionBanner). Migrating them
-  into the page_sections builder would change the live visual layout of 7 customer-facing
-  pages — high risk, low incremental benefit. This is why it was deferred.
-- Awaiting owner: (A) leave heroes on content blocks (recommended — already editable),
-  or (B) rebuild each bespoke hero as a SectionBanner so they're add/reorder/CTA-capable
-  in the Pages builder (accepts minor visual normalization per page).
+### Slice 3b — per-page banners (PR #77, merged) — NO migration
+- Owner chose the "right route" (not the easy one): roll the section builder onto the
+  band-style pages (shared SectionBanner = low visual risk), keep bespoke pages bespoke
+  but make their hero editable via content blocks.
+- [x] SectionBanner extended with optional CTA buttons (SectionBannerButton/Data types).
+- [x] Band pages wired via getPageBanners(slug, keys) + toBannerData/BannerData: Specials
+  (specials.hero), Vendors (vendors.grow + vendors.brands — were HARDCODED, now editable),
+  Menu (menu.hero), Loyalty (loyalty.hero). Each renders builder copy/CTAs + extra banners.
+- [x] Bespoke heroes made editable via NEW content blocks (kept distinct look): About
+  (about.hero.title/.subtitle), Locations (locations.hero.title/.image), Price Match
+  (pricematch.hero.title/.subtitle).
+- [x] Every change falls back to the EXACT current hardcoded value; lazy top-up seed (Slice C)
+  inserts the new blocks/sections on next admin visit. tsc/eslint/build clean.
+- OWNER ACTION: none (page_sections 0013 + content_blocks already exist).
 
 ### Slice 4 — Blog & Newsletter polish (PR #68, merged) — migration 0014 (apply manually)
 - [x] formatBlogDate(): full-month-name "Month D, YYYY"; TZ-safe ISO parse; expands legacy abbreviated labels.
@@ -182,3 +186,27 @@ OWNER TO-DO after deploy: (1) run migration 0011 in Supabase; (2) open Admin →
 - [x] Nav: "Newsletter Send" added under Content group.
 - [x] tsc / eslint / build clean.
 - OWNER ACTION: apply migration 0016; set RESEND_API_KEY + NEWSLETTER_FROM_EMAIL (verified Resend sender) once DNS verifies.
+
+## BACK-OFFICE BEAUTIFICATION (3-slice set — owner wants a gorgeous, presentable admin)
+Standing rule + plan in back-office/SLICE_3B_AND_BEAUTIFY_TODO.md.
+
+### Beautify Slice 1 — Design system + shell foundation (PR #78, merged) — NO migration
+- [x] Audit. FINDINGS: 81 files hardcoded brand hex; :root CSS vars existed but UNUSED in admin; 5 ad-hoc
+  card backgrounds; scattered radii; no shared Button/Card/Input primitives (inputCls/labelCls copy-pasted).
+  Existing ux/ + charts/ kits were solid — kept & built on.
+- [x] ADMIN DESIGN TOKENS in globals.css (--admin-canvas/surface/surface-2/surface-hover, borders, text,
+  accent/gold/orange/danger + -soft, radius scale, shadow scale). `.admin-shell` canvas (quiet brand glow),
+  slim scrollbar, `.admin-focus` ring, `.admin-card-interactive` hover lift. Admin-scoped — public site untouched.
+- [x] Shared primitives `src/components/admin/ui/`: Button (5 variants, 3 sizes, href→Link), Card + CardHeader,
+  Field/Input/Textarea/Select (+ exported controlClassName/labelClassName), Section, Badge. Barrel index.ts.
+- [x] Shell applied: layout.tsx `.admin-shell`; AdminSidebar rebuilt (active accent bar, avatar footer, blur);
+  AdminPageHeader (sticky/blurred); StatCard (token surfaces + accent icons). Dashboard redesigned with primitives.
+  ux EmptyState/Skeleton/StatusPill + SectionCard migrated to tokens.
+- [x] tsc/eslint/build EXIT=0 (~2340 pages). Static preview screenshotted for owner inspection.
+- OWNER ACTION: none (no migration).
+
+### Beautify Slice 2 — Dashboard + high-traffic pages (PLANNED)
+- Beautify Orders, Products, Media, Blog, Newsletter, Content/Footer, Pages builder using the new primitives.
+
+### Beautify Slice 3 — Tables, forms, empty/loading states + final pass (PLANNED)
+- Consistent tables (zebra/hover, sticky headers, status pills), forms, empty/loading/toasts; full visual QA.

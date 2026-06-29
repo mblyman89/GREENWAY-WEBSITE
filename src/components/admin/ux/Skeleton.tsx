@@ -21,7 +21,7 @@ export function SkeletonText({ lines = 3, className = "" }: { lines?: number; cl
 
 export function SkeletonCard({ className = "" }: { className?: string }) {
   return (
-    <div className={`rounded-xl border border-white/10 bg-[#0a0a0a] p-5 ${className}`} aria-hidden="true">
+    <div className={`rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5 ${className}`} aria-hidden="true">
       <Skeleton className="h-3 w-24" />
       <Skeleton className="mt-3 h-8 w-16" />
       <Skeleton className="mt-2 h-3 w-32" />

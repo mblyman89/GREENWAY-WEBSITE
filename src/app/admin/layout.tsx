@@ -24,7 +24,7 @@ export default async function AdminLayout({
   // of crashing — keeps the public site deployable during the build.
   if (!isSupabaseConfigured) {
     return (
-      <div className="min-h-screen bg-black text-white">
+      <div className="admin-shell min-h-screen">
         <AdminSetupNotice />
       </div>
     );
@@ -35,7 +35,7 @@ export default async function AdminLayout({
   // Unauthenticated users (e.g. the login page) render children without the
   // shell. The login route renders its own centered card.
   if (!session) {
-    return <div className="min-h-screen bg-black text-white">{children}</div>;
+    return <div className="admin-shell min-h-screen">{children}</div>;
   }
 
   // Build the command-palette targets, filtered by what this role can open.
@@ -49,7 +49,7 @@ export default async function AdminLayout({
     }));
 
   return (
-    <div className="min-h-screen bg-black text-white lg:flex">
+    <div className="admin-shell min-h-screen lg:flex">
       <div className="admin-chrome contents">
         <AdminSidebar
           role={session.profile.role}

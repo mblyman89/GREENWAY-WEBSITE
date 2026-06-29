@@ -9,6 +9,50 @@
   --orange: #ff7f00;
   --frost: #d1d5db;
   --charcoal: #1a1a1a;
+
+  /* ---------------------------------------------------------------------------
+   * ADMIN DESIGN TOKENS (back-office only)
+   * One source of truth for the back-office look so every page stays consistent.
+   * Primitives in @/components/admin/ui read these. Brand accents reuse the
+   * public palette above. Surfaces are a deliberate, ordered scale (the admin
+   * previously used 5 ad-hoc card backgrounds — these replace them).
+   * ------------------------------------------------------------------------- */
+
+  /* Surfaces — darkest canvas → raised cards → hover. */
+  --admin-canvas: #060807;        /* page background behind everything */
+  --admin-surface: #0c0e0d;       /* default card / panel */
+  --admin-surface-2: #121514;     /* raised card / nested panel / inputs */
+  --admin-surface-hover: #171b19; /* card hover / row hover */
+
+  /* Hairlines & borders. */
+  --admin-border: rgba(255, 255, 255, 0.08);
+  --admin-border-strong: rgba(255, 255, 255, 0.16);
+
+  /* Text. */
+  --admin-text: #f5f7f5;
+  --admin-text-muted: rgba(255, 255, 255, 0.62);
+  --admin-text-faint: rgba(255, 255, 255, 0.4);
+
+  /* Brand accents (mirror public palette). */
+  --admin-accent: var(--greenway);
+  --admin-accent-soft: rgba(126, 217, 87, 0.14);
+  --admin-gold: var(--gold);
+  --admin-gold-soft: rgba(255, 215, 0, 0.14);
+  --admin-orange: var(--orange);
+  --admin-orange-soft: rgba(255, 127, 0, 0.14);
+  --admin-danger: #ff5a5a;
+  --admin-danger-soft: rgba(255, 90, 90, 0.14);
+
+  /* Radius scale. */
+  --admin-radius-sm: 0.5rem;   /* pills, small controls */
+  --admin-radius: 0.75rem;     /* inputs, buttons */
+  --admin-radius-lg: 1rem;     /* cards, panels */
+  --admin-radius-xl: 1.25rem;  /* hero/feature panels */
+
+  /* Elevation. */
+  --admin-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --admin-shadow: 0 8px 24px -12px rgba(0, 0, 0, 0.7);
+  --admin-shadow-lg: 0 24px 60px -24px rgba(0, 0, 0, 0.8);
 }
 
 * {
@@ -76,6 +120,55 @@ h1, h2, h3, h4, h5, h6 {
   opacity: 0.13;
   mix-blend-mode: screen;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 160 160' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.45'/%3E%3C/svg%3E");
+}
+
+/* ---------------------------------------------------------------------------
+ * ADMIN SHELL CANVAS
+ * The back office gets its own quiet, app-like backdrop (a subtle top-of-page
+ * brand glow over near-black) instead of the loud public-site radial gradients.
+ * Scoped to .admin-shell so the public site is untouched.
+ * ------------------------------------------------------------------------- */
+.admin-shell {
+  background:
+    radial-gradient(120% 60% at 50% -10%, rgba(126, 217, 87, 0.08), transparent 60%),
+    var(--admin-canvas);
+  color: var(--admin-text);
+}
+
+/* Custom, slim scrollbar for the admin (sidebar + scroll regions). */
+.admin-shell ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.admin-shell ::-webkit-scrollbar-track {
+  background: transparent;
+}
+.admin-shell ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.admin-shell ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+  background-clip: padding-box;
+}
+
+/* Reusable focus ring so every interactive admin control matches. */
+.admin-focus:focus-visible {
+  outline: 2px solid rgba(126, 217, 87, 0.7);
+  outline-offset: 2px;
+}
+
+/* Card hover lift used by the Card primitive's interactive variant. */
+.admin-card-interactive {
+  transition: border-color 0.18s ease, background-color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
+}
+.admin-card-interactive:hover {
+  border-color: var(--admin-border-strong);
+  background-color: var(--admin-surface-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--admin-shadow);
 }
 
 /* ---------------------------------------------------------------------------
