@@ -3,9 +3,10 @@ import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { StatCard } from "@/components/admin/StatCard";
 import { EmptyState, HelpPanel } from "@/components/admin/ux";
 import { isAiConfigured } from "@/lib/ai/provider";
-import { getAiUsageSummary } from "@/lib/ai/usage";
+import { getAiUsageSummary, getAcceptRateReport } from "@/lib/ai/usage";
 import { getBudgetStatus } from "@/lib/ai/router";
 import { AiTokensTrend, AiFeatureDonut } from "@/components/admin/ai/AiUsageCharts";
+import { AiAcceptRatePanel } from "@/components/admin/ai/AiAcceptRatePanel";
 
 export const dynamic = "force-dynamic";
 
@@ -35,8 +36,11 @@ function fmt(n: number) {
 
 export default async function AiUsagePage() {
   await requirePermission("reports.view");
-  const summary = await getAiUsageSummary(30);
-  const budget = await getBudgetStatus();
+  const [summary, budget, acceptReport] = await Promise.all([
+    getAiUsageSummary(30),
+    getBudgetStatus(),
+    getAcceptRateReport(90),
+  ]);
 
   const modeLabel = budget.mode === "sprint" ? "Sprint (filling the database)" : "Maintenance (day-to-day)";
   const pct = budget.usdPct ?? budget.tokenPct;
@@ -205,6 +209,10 @@ export default async function AiUsagePage() {
             </section>
           </>
         )}
+
+        {/* AI-4 accept-rate report — reads ai_suggestions, so it renders even
+            when the usage ledger is empty. */}
+        <AiAcceptRatePanel report={acceptReport} days={90} />
       </div>
     </div>
   );
