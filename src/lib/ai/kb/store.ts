@@ -177,6 +177,117 @@ export async function listKbStrains(limit = 500): Promise<KbStrainRow[]> {
   }
 }
 
+/**
+ * Full strain row used by the manual add/edit form (every editable column the
+ * kb_strains table holds, after migrations 0019 + 0020). Reads degrade to []
+ * pre-migration like the other list helpers.
+ */
+export type KbStrainFull = {
+  id: string;
+  slug: string;
+  name: string;
+  aliases: string[] | null;
+  strain_type: string | null;
+  lineage: string | null;
+  aroma_notes: string[] | null;
+  flavor_notes: string[] | null;
+  terpenes: string[] | null;
+  summary: string | null;
+  dominant_cannabinoid: string | null;
+  potency_note: string | null;
+  bud_structure: string | null;
+  origin: string | null;
+  sources: string[] | null;
+  confidence: number | null;
+  active: boolean;
+};
+
+const KB_STRAIN_FULL_COLUMNS =
+  "id,slug,name,aliases,strain_type,lineage,aroma_notes,flavor_notes,terpenes,summary," +
+  "dominant_cannabinoid,potency_note,bud_structure,origin,sources,confidence,active";
+
+/** Read full strain rows (all editable fields) for the manage/edit table. */
+export async function listKbStrainsFull(limit = 500): Promise<KbStrainFull[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("kb_strains")
+      .select(KB_STRAIN_FULL_COLUMNS)
+      .order("name", { ascending: true })
+      .limit(limit);
+    if (error || !data) return [];
+    return data as unknown as KbStrainFull[];
+  } catch {
+    return [];
+  }
+}
+
+export type UpsertStrainInput = {
+  slug?: string | null;
+  name: string;
+  aliases?: string[];
+  strain_type: string; // indica | sativa | hybrid | unknown
+  lineage?: string | null;
+  aroma_notes?: string[];
+  flavor_notes?: string[];
+  terpenes?: string[];
+  summary?: string | null;
+  dominant_cannabinoid?: string | null;
+  potency_note?: string | null;
+  bud_structure?: string | null;
+  origin?: string | null;
+  sources?: string[];
+  confidence?: number | null;
+  active?: boolean;
+};
+
+/**
+ * Add or update a single strain row (manual entry by staff). Upserts on the
+ * natural unique key `slug`, so re-saving the same strain updates it. Slug is
+ * derived from the name when not supplied (lowercase, single-spaced) — matching
+ * the generator's slug convention so manual rows interoperate with seeded ones.
+ */
+export async function upsertKbStrain(input: UpsertStrainInput, actorId: string | null): Promise<void> {
+  const name = input.name.trim();
+  const slug = (input.slug?.trim() || name).toLowerCase().replace(/\s+/g, " ");
+  const conf =
+    input.confidence === null || input.confidence === undefined
+      ? null
+      : Math.max(0, Math.min(1, input.confidence));
+  const admin = createSupabaseAdminClient();
+  const { error } = await admin.from("kb_strains").upsert(
+    {
+      slug,
+      name,
+      aliases: input.aliases ?? [],
+      strain_type: input.strain_type,
+      lineage: input.lineage ?? null,
+      aroma_notes: input.aroma_notes ?? [],
+      flavor_notes: input.flavor_notes ?? [],
+      terpenes: input.terpenes ?? [],
+      summary: input.summary ?? null,
+      dominant_cannabinoid: input.dominant_cannabinoid ?? null,
+      potency_note: input.potency_note ?? null,
+      bud_structure: input.bud_structure ?? null,
+      origin: input.origin ?? null,
+      sources: input.sources ?? [],
+      confidence: conf,
+      active: input.active ?? true,
+      updated_by: actorId,
+    },
+    { onConflict: "slug" },
+  );
+  if (error) throw new Error(error.message);
+}
+
+/** Toggle a strain active/inactive. */
+export async function setStrainActive(id: string, active: boolean): Promise<void> {
+  const admin = createSupabaseAdminClient();
+  const { error } = await admin.from("kb_strains").update({ active }).eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
 export type KbBrandRow = {
   id: string; slug: string; name: string; known_for: string | null; active: boolean;
 };

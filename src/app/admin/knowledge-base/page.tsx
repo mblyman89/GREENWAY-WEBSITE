@@ -5,7 +5,7 @@ import { HelpPanel } from "@/components/admin/ux/HelpPanel";
 import { Button } from "@/components/admin/ui/Button";
 import {
   getKbCounts,
-  listKbStrains,
+  listKbStrainsFull,
   listKbBrands,
   listKbBanned,
 } from "@/lib/ai/kb/store";
@@ -15,6 +15,7 @@ import {
   toggleBannedAction,
   upsertBrandAction,
 } from "./actions";
+import { StrainEditor } from "./StrainEditor";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +29,7 @@ export default async function KnowledgeBasePage({
 
   const counts = await getKbCounts();
   const [strains, brands, banned] = await Promise.all([
-    listKbStrains(200),
+    listKbStrainsFull(500),
     listKbBrands(50),
     listKbBanned(200),
   ]);
@@ -111,41 +112,8 @@ export default async function KnowledgeBasePage({
           </form>
         </section>
 
-        {/* Strains preview */}
-        <section className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
-          <h2 className="text-base font-semibold text-[var(--admin-text)]">Strains ({counts.strains})</h2>
-          {strains.length === 0 ? (
-            <p className="mt-2 text-sm text-[var(--admin-text-muted)]">
-              No strains yet. Click <strong>Seed expert starter set</strong> to load the baseline.
-            </p>
-          ) : (
-            <div className="mt-3 overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-[var(--admin-text-muted)]">
-                    <th className="py-2 pr-4 font-medium">Strain</th>
-                    <th className="py-2 pr-4 font-medium">Type</th>
-                    <th className="py-2 pr-4 font-medium">Aroma</th>
-                    <th className="py-2 pr-4 font-medium">Terpenes</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {strains.map((s) => (
-                    <tr key={s.id} className="border-t border-[var(--admin-border)]">
-                      <td className="py-2 pr-4 text-[var(--admin-text)]">{s.name}</td>
-                      <td className="py-2 pr-4 text-[var(--admin-text-muted)]">{s.strain_type ?? "—"}</td>
-                      <td className="py-2 pr-4 text-[var(--admin-text-muted)]">{(s.aroma_notes ?? []).join(", ") || "—"}</td>
-                      <td className="py-2 pr-4 text-[var(--admin-text-muted)]">{(s.terpenes ?? []).join(", ") || "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {counts.strains > strains.length ? (
-                <p className="mt-2 text-xs text-[var(--admin-text-muted)]">Showing first {strains.length} of {counts.strains}.</p>
-              ) : null}
-            </div>
-          )}
-        </section>
+        {/* Strains — full add/edit editor (manual entry of verified strains) */}
+        <StrainEditor strains={strains} migrated={counts.migrated} total={counts.strains} />
 
         {/* Brand facts */}
         <section className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
