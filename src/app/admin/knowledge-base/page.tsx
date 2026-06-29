@@ -16,6 +16,15 @@ import {
   upsertBrandAction,
 } from "./actions";
 import { StrainEditor } from "./StrainEditor";
+import { SubstituteManager } from "./SubstituteManager";
+import {
+  listImageSubstitutes,
+  imageSubstituteCounts,
+  imageSubstitutesMigrated,
+  SEED_CATEGORY_KEYS,
+  SEED_INVENTORY_TYPE_KEYS,
+} from "@/lib/ai/kb/image-substitutes";
+import { listMedia, publicUrlForKey } from "@/lib/media/store";
 
 export const dynamic = "force-dynamic";
 
@@ -28,11 +37,23 @@ export default async function KnowledgeBasePage({
   const { msg, error } = await searchParams;
 
   const counts = await getKbCounts();
-  const [strains, brands, banned] = await Promise.all([
-    listKbStrainsFull(500),
-    listKbBrands(50),
-    listKbBanned(200),
-  ]);
+  const [strains, brands, banned, substitutes, subCounts, subMigrated, mediaAssets] =
+    await Promise.all([
+      listKbStrainsFull(500),
+      listKbBrands(50),
+      listKbBanned(200),
+      listImageSubstitutes(500),
+      imageSubstituteCounts(),
+      imageSubstitutesMigrated(),
+      listMedia({ limit: 200 }),
+    ]);
+
+  // Build lightweight media options (id + label + url) for the substitute picker.
+  const mediaOptions = mediaAssets.map((m) => ({
+    id: m.id,
+    label: m.title || m.filename || m.id,
+    url: publicUrlForKey(m.storage_key) ?? m.public_url ?? null,
+  }));
 
   return (
     <div>
@@ -114,6 +135,19 @@ export default async function KnowledgeBasePage({
 
         {/* Strains — full add/edit editor (manual entry of verified strains) */}
         <StrainEditor strains={strains} migrated={counts.migrated} total={counts.strains} />
+
+        {/* Fallback / substitute images so product cards are never blank */}
+        <SubstituteManager
+          substitutes={substitutes}
+          media={mediaOptions}
+          categoryKeys={SEED_CATEGORY_KEYS}
+          inventoryTypeKeys={SEED_INVENTORY_TYPE_KEYS}
+          coveredCategories={subCounts.coveredCategories}
+          coveredInventoryTypes={subCounts.coveredInventoryTypes}
+          totalCategories={SEED_CATEGORY_KEYS.length}
+          totalInventoryTypes={SEED_INVENTORY_TYPE_KEYS.length}
+          migrated={subMigrated}
+        />
 
         {/* Brand facts */}
         <section className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
