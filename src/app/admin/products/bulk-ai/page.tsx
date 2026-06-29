@@ -164,9 +164,17 @@ export default async function BulkAiPage({
                 const flags = checkCompliance(s.suggested_value ?? "").flags;
                 return (
                   <div key={s.id} className="rounded-xl border border-white/10 bg-[#0a0a0a] p-4">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-semibold text-white">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="flex items-center gap-2 text-sm font-semibold text-white">
                         {nameByKey.get(s.entity_id) ?? s.entity_id}
+                        {typeof s.confidence === "number" && (
+                          <span
+                            className={`rounded px-1.5 py-0.5 text-[0.6rem] font-semibold ${s.confidence >= 0.75 ? "bg-[var(--admin-accent-soft)] text-[var(--admin-accent)]" : s.confidence >= 0.45 ? "bg-[var(--admin-gold-soft)] text-[var(--admin-gold)]" : "bg-[var(--admin-orange-soft)] text-[var(--admin-orange)]"}`}
+                            title="How well this draft is grounded in the product's facts"
+                          >
+                            {Math.round(s.confidence * 100)}%
+                          </span>
+                        )}
                       </span>
                       {flags.length > 0 ? (
                         <span className="rounded-full border border-red-500/40 bg-red-500/10 px-2 py-0.5 text-[0.6rem] font-semibold text-red-400">

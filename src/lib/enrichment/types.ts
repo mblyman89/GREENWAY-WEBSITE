@@ -62,6 +62,10 @@ export type AiSuggestion = {
   reviewed_by: string | null;
   reviewed_at: string | null;
   created_at: string;
+  /** 0..1 grounding confidence (added in migration 0018; null on older rows). */
+  confidence?: number | null;
+  /** Provenance of the facts: model | kb | pos | crawl:<url> (migration 0018). */
+  source?: string | null;
 };
 
 /** A published menu item merged with its enrichment (for the front end). */

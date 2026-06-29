@@ -8,8 +8,13 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
-import { generate, isAiConfigured, aiModelId } from "./provider";
+import { generateStructured, isAiConfigured, aiModelId } from "./provider";
 import { COMPLIANCE_SYSTEM, PROMPT_VERSION, checkCompliance } from "./compliance";
+import {
+  productDescriptionSchema,
+  productTagsSchema,
+  ALLOWED_PRODUCT_TAGS,
+} from "./schemas/product";
 import type { AiSuggestion, AiSuggestionStatus } from "@/lib/enrichment/types";
 
 export { isAiConfigured };
@@ -25,97 +30,101 @@ export type ProductFacts = {
   cbd?: string | null;
 };
 
-/** Build a compliant product-description prompt from POS facts (no PII). */
-function productDescriptionPrompt(facts: ProductFacts): { system: string; user: string; inputSummary: string } {
+/** Build the fact lines + a short PII-free summary from POS facts. */
+function factLines(facts: ProductFacts): { lines: string[]; summary: string } {
   const lines = [
     `Product: ${facts.name}`,
     facts.brand ? `Brand: ${facts.brand}` : null,
+    facts.vendor ? `Vendor: ${facts.vendor}` : null,
     facts.category ? `Category: ${facts.category}` : null,
     facts.strainType && facts.strainType !== "unknown" ? `Strain type: ${facts.strainType}` : null,
     facts.strainName ? `Strain: ${facts.strainName}` : null,
     facts.thc ? `THC: ${facts.thc}` : null,
     facts.cbd ? `CBD: ${facts.cbd}` : null,
-  ].filter(Boolean);
-
-  const user = `Write a 2-3 sentence product description (about 35-60 words) for the following cannabis product, following all rules. Describe format, aroma/flavor, and strain character where relevant. Do not mention price or stock.\n\n${lines.join("\n")}`;
-  return { system: COMPLIANCE_SYSTEM, user, inputSummary: lines.join(" · ") };
-}
-
-/** Build a tag-suggestion prompt; returns a comma list of allowed tags. */
-function productTagsPrompt(facts: ProductFacts): { system: string; user: string; inputSummary: string } {
-  const allowed = "new-arrival, best-seller, staff-pick, local, high-cbd, high-thc, value, limited";
-  const lines = [
-    `Product: ${facts.name}`,
-    facts.category ? `Category: ${facts.category}` : null,
-    facts.thc ? `THC: ${facts.thc}` : null,
-    facts.cbd ? `CBD: ${facts.cbd}` : null,
-  ].filter(Boolean);
-  const user = `From this allowed list ONLY: [${allowed}], choose 0-3 tags that genuinely fit the product below. Reply with a comma-separated list of tag ids and nothing else. If none fit, reply with an empty line.\n\n${lines.join("\n")}`;
-  return { system: COMPLIANCE_SYSTEM, user, inputSummary: lines.join(" · ") };
+  ].filter(Boolean) as string[];
+  return { lines, summary: lines.join(" · ") };
 }
 
 export type GeneratedSuggestion = {
   suggestion: AiSuggestion;
   complianceFlags: string[];
+  /** Only the must-fix flags (a non-empty list blocks acceptance un-edited). */
+  blockingFlags: string[];
+  /** 0..1 grounding confidence reported by the model. */
+  confidence: number;
 };
 
 /**
- * Generate a product DESCRIPTION draft, run compliance scan, persist as a
- * pending suggestion, and return it with any compliance flags for the reviewer.
+ * Generate a product DESCRIPTION draft using STRUCTURED output (validated),
+ * run the compliance scan, persist as a pending suggestion with confidence +
+ * source, and return it with flags for the reviewer.
+ *
+ * Uses the "heavy" tier so SPRINT mode fills gaps with quality copy; in
+ * maintenance mode the router automatically downshifts to the light model.
  */
 export async function generateProductDescription(
   posProductKey: string,
   facts: ProductFacts,
   generatedBy: string | null,
 ): Promise<GeneratedSuggestion> {
-  const { system, user, inputSummary } = productDescriptionPrompt(facts);
-  const text = await generate({
-    system,
-    user,
-    temperature: 0.7,
-    maxTokens: 200,
+  const { lines, summary } = factLines(facts);
+  const result = await generateStructured({
+    system: COMPLIANCE_SYSTEM,
+    user: `Write a product description for this cannabis product using ONLY these facts. Describe aroma, flavor, format, and strain character where the facts support it. If facts are thin, keep it short and generic and set confidence low.\n\n${lines.join("\n")}`,
+    schema: productDescriptionSchema,
+    tier: "heavy",
+    maxTokens: 320,
     context: { feature: "product.description", entityType: "product", entityId: posProductKey, actorId: generatedBy },
   });
-  const compliance = checkCompliance(text);
+
+  const compliance = checkCompliance(`${result.description} ${result.short_description}`);
   const suggestion = await persistSuggestion({
     entity_type: "product",
     entity_id: posProductKey,
     field_key: "description",
-    suggested_value: text,
-    input_summary: inputSummary,
+    // Store the long description as the primary value; keep the short one + meta in input_summary.
+    suggested_value: result.description,
+    input_summary: `${summary} | short: ${result.short_description}`,
     generated_by: generatedBy,
+    confidence: result.confidence,
+    source: "model",
   });
-  return { suggestion, complianceFlags: compliance.flags };
+  return {
+    suggestion,
+    complianceFlags: compliance.flags,
+    blockingFlags: compliance.blockingFlags,
+    confidence: result.confidence,
+  };
 }
 
-/** Generate a product TAGS draft (comma list of allowed tag ids). */
+/** Generate a product TAGS draft (validated against the allowed list). */
 export async function generateProductTags(
   posProductKey: string,
   facts: ProductFacts,
   generatedBy: string | null,
 ): Promise<GeneratedSuggestion> {
-  const { system, user, inputSummary } = productTagsPrompt(facts);
-  const text = await generate({
-    system,
-    user,
-    temperature: 0.3,
-    maxTokens: 40,
+  const { lines, summary } = factLines(facts);
+  const result = await generateStructured({
+    system: COMPLIANCE_SYSTEM,
+    user: `Choose 0-3 merchandising tags that genuinely fit this product, from the allowed list only: [${ALLOWED_PRODUCT_TAGS.join(", ")}]. If none fit, return an empty list.\n\n${lines.join("\n")}`,
+    schema: productTagsSchema,
+    tier: "light",
+    maxTokens: 60,
     context: { feature: "product.tags", entityType: "product", entityId: posProductKey, actorId: generatedBy },
   });
-  const cleaned = text
-    .split(",")
-    .map((t) => t.trim().toLowerCase())
-    .filter(Boolean)
-    .join(", ");
+
+  const cleaned = result.tags.join(", ");
   const suggestion = await persistSuggestion({
     entity_type: "product",
     entity_id: posProductKey,
     field_key: "tags",
     suggested_value: cleaned,
-    input_summary: inputSummary,
+    input_summary: summary,
     generated_by: generatedBy,
+    confidence: result.confidence,
+    source: "model",
   });
-  return { suggestion, complianceFlags: [] };
+  return { suggestion, complianceFlags: [], blockingFlags: [], confidence: result.confidence };
 }
 
 type PersistInput = {
@@ -125,31 +134,46 @@ type PersistInput = {
   suggested_value: string;
   input_summary: string;
   generated_by: string | null;
+  /** 0..1 grounding confidence (optional). */
+  confidence?: number | null;
+  /** Where the facts came from: model | kb | pos | crawl:<url> (optional). */
+  source?: string | null;
 };
 
 /**
  * Persist an already-generated draft as a pending suggestion with provenance.
  * Exported so other AI helpers (vendors, etc.) can reuse the same lifecycle.
+ *
+ * confidence/source are written defensively: if those columns don't exist yet
+ * (migration not applied), the insert is retried without them so the feature
+ * still works. This keeps migrations owner-applied without breaking the app.
  */
 export async function persistSuggestion(input: PersistInput): Promise<AiSuggestion> {
   const admin = createSupabaseAdminClient();
-  const { data, error } = await admin
-    .from("ai_suggestions")
-    .insert({
-      entity_type: input.entity_type,
-      entity_id: input.entity_id,
-      field_key: input.field_key,
-      suggested_value: input.suggested_value,
-      status: "pending",
-      model: aiModelId,
-      prompt_version: PROMPT_VERSION,
-      input_summary: input.input_summary,
-      generated_by: input.generated_by,
-    })
-    .select("*")
-    .single();
-  if (error || !data) throw new Error(`ai_suggestions insert failed: ${error?.message}`);
-  return data as AiSuggestion;
+  const base = {
+    entity_type: input.entity_type,
+    entity_id: input.entity_id,
+    field_key: input.field_key,
+    suggested_value: input.suggested_value,
+    status: "pending" as const,
+    model: aiModelId,
+    prompt_version: PROMPT_VERSION,
+    input_summary: input.input_summary,
+    generated_by: input.generated_by,
+  };
+  const withMeta = {
+    ...base,
+    confidence: input.confidence ?? null,
+    source: input.source ?? "model",
+  };
+
+  let res = await admin.from("ai_suggestions").insert(withMeta).select("*").single();
+  if (res.error && /confidence|source|column/i.test(res.error.message)) {
+    // Columns not migrated yet — fall back to the base shape.
+    res = await admin.from("ai_suggestions").insert(base).select("*").single();
+  }
+  if (res.error || !res.data) throw new Error(`ai_suggestions insert failed: ${res.error?.message}`);
+  return res.data as AiSuggestion;
 }
 
 /** List pending (or any status) suggestions for an entity. */

@@ -22,6 +22,19 @@
  */
 import "server-only";
 import { logAiUsage, estimateTokens } from "./usage";
+import {
+  modelForTask,
+  getBudgetStatus,
+  AiBudgetExceededError,
+  type TaskTier,
+} from "./router";
+import {
+  toResponseFormat,
+  validate,
+  formatErrors,
+  describeShape,
+  type AiSchema,
+} from "./schema";
 
 // Accept BOTH our generic names and the standard OpenAI names so a plain
 // `OPENAI_API_KEY` (the most common thing an owner already has) just works.
@@ -219,6 +232,122 @@ export async function generateJSON<T>(opts: GenerateOptions): Promise<T> {
   const content = (json.choices?.[0]?.message?.content ?? "").trim();
   await record(opts.context, AI_MODEL, promptText, content, json.usage, true);
   return looseJsonParse<T>(content);
+}
+
+// ---------------------------------------------------------------------------
+// STRUCTURED OUTPUTS — the reliable path for enrichment.
+//
+// Sends a strict JSON Schema via response_format so the provider CONSTRAINS the
+// output to our shape (best-practice: constrained decoding ≈ 100% schema
+// adherence). Parses, then VALIDATES with our own schema validator. On a
+// validation/parse failure it RETRIES ONCE with the errors appended, then falls
+// back to looseJsonParse. Picks the model tier (light/heavy) via the router and
+// refuses to spend when a hard budget cap is exceeded.
+// ---------------------------------------------------------------------------
+
+export type StructuredOptions<T> = {
+  system: string;
+  user: string;
+  schema: AiSchema<T>;
+  /** Task weight → model tier. "heavy" uses the strong model in sprint mode. */
+  tier?: TaskTier;
+  temperature?: number;
+  maxTokens?: number;
+  context?: AiContext;
+};
+
+async function chatRaw(
+  model: string,
+  system: string,
+  user: string,
+  opts: { temperature?: number; maxTokens?: number; responseFormat?: unknown },
+): Promise<{ content: string; usage?: ChatUsage }> {
+  const body: Record<string, unknown> = {
+    model,
+    temperature: opts.temperature ?? 0.2,
+    max_tokens: opts.maxTokens ?? 600,
+    messages: [
+      { role: "system", content: system },
+      { role: "user", content: user },
+    ],
+  };
+  if (opts.responseFormat) body.response_format = opts.responseFormat;
+
+  const res = await fetch(`${AI_BASE_URL}/chat/completions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${AI_API_KEY}` },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`AI request failed (${res.status}): ${text.slice(0, 300)}`);
+  }
+  const json = (await res.json()) as {
+    choices?: { message?: { content?: string } }[];
+    usage?: ChatUsage;
+  };
+  return { content: (json.choices?.[0]?.message?.content ?? "").trim(), usage: json.usage };
+}
+
+/**
+ * Generate a VALIDATED, typed result against a schema. Throws
+ * AiNotConfiguredError when no key is set, and AiBudgetExceededError when a
+ * monthly cap is already reached.
+ */
+export async function generateStructured<T>(opts: StructuredOptions<T>): Promise<T> {
+  if (!isAiConfigured) throw new AiNotConfiguredError();
+
+  // Hard budget guard — never spend past the owner's cap.
+  const budget = await getBudgetStatus();
+  if (budget.blocked) throw new AiBudgetExceededError(budget.reason ?? "AI budget exceeded.");
+
+  const tier: TaskTier = opts.tier ?? "light";
+  const model = modelForTask(tier);
+  const responseFormat = toResponseFormat(opts.schema);
+
+  // Strengthen the user message with an explicit shape description as a belt-and-
+  // suspenders fallback for providers that ignore strict json_schema.
+  const shapeHint = `\n\nReturn ONLY a JSON object with this exact shape (no prose, no code fences):\n${describeShape(opts.schema)}`;
+  let userMsg = `${opts.user}${shapeHint}`;
+  const promptText = `${opts.system}\n${userMsg}`;
+
+  let lastErr = "";
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const { content, usage } = await chatRaw(model, opts.system, userMsg, {
+        temperature: opts.temperature ?? (tier === "heavy" ? 0.4 : 0.2),
+        maxTokens: opts.maxTokens ?? 700,
+        responseFormat,
+      });
+
+      let parsed: unknown;
+      try {
+        parsed = looseJsonParse<unknown>(content);
+      } catch {
+        lastErr = "Output was not valid JSON.";
+        await record(opts.context, model, promptText, content, usage, false, lastErr);
+        userMsg = `${opts.user}${shapeHint}\n\nYour previous answer was not valid JSON. Return ONLY the JSON object.`;
+        continue;
+      }
+
+      const result = validate(opts.schema, parsed);
+      if (result.ok) {
+        await record(opts.context, model, promptText, content, usage, true);
+        return result.value;
+      }
+
+      lastErr = formatErrors(result.errors);
+      await record(opts.context, model, promptText, content, usage, false, `validation: ${lastErr.slice(0, 200)}`);
+      userMsg = `${opts.user}${shapeHint}\n\nYour previous answer had these problems:\n${lastErr}\nFix them and return ONLY the corrected JSON object.`;
+    } catch (err) {
+      if (err instanceof AiNotConfiguredError || err instanceof AiBudgetExceededError) throw err;
+      lastErr = String(err).slice(0, 200);
+      await record(opts.context, model, promptText, "", undefined, false, lastErr);
+      // network/HTTP error — retry once
+    }
+  }
+
+  throw new Error(`AI structured generation failed after retry: ${lastErr}`);
 }
 
 export type VisionOptions = {
