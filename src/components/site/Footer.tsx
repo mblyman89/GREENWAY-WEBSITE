@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { greenwayBusiness } from "@/content/business";
 import { SiteText } from "@/components/site/SiteText";
+import { getContentForRender } from "@/lib/cms/render-content";
 
 const policyLinks = [
   { label: "Privacy Policy", href: "/privacy-policy" },
@@ -57,11 +58,19 @@ function PolicyLinks({ compact = false }: { compact?: boolean }) {
  * the full width of its container rather than capping it with a small box, so
  * it fills the available space without forcing layout shifts on siblings.
  */
-function HoursImage({ align = "center" }: { align?: "center" | "end" }) {
+async function HoursImage({ align = "center" }: { align?: "center" | "end" }) {
+  // Resolve the editable store-hours image from the controlled content block
+  // (draft-aware via getContentForRender). Falls back to the bundled asset so
+  // the footer always renders even before the block has been seeded/edited.
+  const resolved = await getContentForRender("footer.hours.image");
+  const src =
+    resolved && resolved.trim().length > 0
+      ? resolved.trim()
+      : greenwayBusiness.assets.storeHoursImage;
   return (
     <div className={`flex w-full ${align === "end" ? "justify-end" : "justify-center"}`}>
       <Image
-        src={greenwayBusiness.assets.storeHoursImage}
+        src={src}
         alt="Greenway Marijuana store hours: open daily 8am to 11:45pm"
         width={580}
         height={360}
