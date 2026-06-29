@@ -148,35 +148,54 @@ export async function getSendableNewsletter(id: string): Promise<SendableNewslet
 // ---------------------------------------------------------------------------
 
 export type RecipientStats = { total: number; sample: string[] };
+export type Recipient = { email: string; token: string | null };
 
-/** Loyalty members eligible for marketing email: have email + consent, not archived/duplicate. */
-export async function getNewsletterRecipients(): Promise<string[]> {
+/**
+ * Loyalty members eligible for marketing email: have a valid email + consent,
+ * status new/entered, AND have NOT opted out (email_opt_out = false). Each
+ * recipient carries their unsubscribe token so we can put a unique one-click
+ * unsubscribe link in their copy (CAN-SPAM). De-duplicated by email.
+ */
+export async function getNewsletterRecipients(): Promise<Recipient[]> {
   if (!isSupabaseServiceConfigured) return [];
   const admin = createSupabaseAdminClient();
   const { data } = await admin
     .from("loyalty_signups")
-    .select("email, consent, status")
+    .select("email, consent, status, email_opt_out, unsubscribe_token")
     .eq("consent", true)
+    .eq("email_opt_out", false)
     .in("status", ["new", "entered"]);
 
-  const seen = new Set<string>();
-  for (const r of (data as { email: string | null }[] | null) ?? []) {
+  const byEmail = new Map<string, Recipient>();
+  for (const r of (data as { email: string | null; unsubscribe_token: string | null }[] | null) ?? []) {
     const email = (r.email ?? "").trim().toLowerCase();
-    if (email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) seen.add(email);
+    if (email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && !byEmail.has(email)) {
+      byEmail.set(email, { email, token: r.unsubscribe_token });
+    }
   }
-  return Array.from(seen);
+  return Array.from(byEmail.values());
 }
 
 export async function getRecipientStats(): Promise<RecipientStats> {
-  const emails = await getNewsletterRecipients();
-  return { total: emails.length, sample: emails.slice(0, 5) };
+  const recipients = await getNewsletterRecipients();
+  return { total: recipients.length, sample: recipients.slice(0, 5).map((r) => r.email) };
 }
 
 // ---------------------------------------------------------------------------
 // Branded email
 // ---------------------------------------------------------------------------
 
-export function buildNewsletterEmail(n: { title: string; publicUrl: string; pdfUrl: string | null }): {
+export function unsubscribeUrl(token: string | null): string | null {
+  if (!token) return null;
+  return `${SITE_URL}/unsubscribe?token=${encodeURIComponent(token)}`;
+}
+
+export function buildNewsletterEmail(n: {
+  title: string;
+  publicUrl: string;
+  pdfUrl: string | null;
+  unsubscribeUrl?: string | null;
+}): {
   subject: string;
   html: string;
 } {
@@ -184,6 +203,9 @@ export function buildNewsletterEmail(n: { title: string; publicUrl: string; pdfU
   const readUrl = n.publicUrl;
   const pdfBtn = n.pdfUrl
     ? `<p style="margin:8px 0 0"><a href="${n.pdfUrl}" style="color:#7ed957;font-size:13px">Or open the PDF directly ↗</a></p>`
+    : "";
+  const unsubLine = n.unsubscribeUrl
+    ? `<br/><a href="${n.unsubscribeUrl}" style="color:#8a8a8a;text-decoration:underline">Unsubscribe from these emails</a>`
     : "";
 
   const html = `<!doctype html>
@@ -209,6 +231,7 @@ export function buildNewsletterEmail(n: { title: string; publicUrl: string; pdfU
               ${greenwayBusiness.name} &middot; ${greenwayBusiness.address?.full ?? "Port Orchard, WA"}<br/>
               You're receiving this because you joined the Greenway loyalty program.
               For adults 21+. Keep out of reach of children.
+              ${unsubLine}
             </p>
           </td></tr>
         </table>
@@ -270,15 +293,17 @@ export async function sendNewsletter(params: {
   }
 
   const isTest = Boolean(params.testEmail);
-  const recipients = isTest
-    ? [String(params.testEmail).trim().toLowerCase()]
+  const recipients: Recipient[] = isTest
+    ? [{ email: String(params.testEmail).trim().toLowerCase(), token: null }]
     : await getNewsletterRecipients();
 
   if (recipients.length === 0) {
     return { ok: false, error: isTest ? "Enter a valid test email." : "No loyalty members with email + consent yet." };
   }
 
-  const { subject, html } = buildNewsletterEmail(n);
+  // Subject is constant; the HTML body varies per recipient (unique unsubscribe
+  // link). We build the subject once and the body inside the send loop.
+  const { subject } = buildNewsletterEmail(n);
   const admin = createSupabaseAdminClient();
 
   // Open a send record.
@@ -309,7 +334,16 @@ export async function sendNewsletter(params: {
   for (let i = 0; i < recipients.length; i += CONCURRENCY) {
     const chunk = recipients.slice(i, i + CONCURRENCY);
     const results = await Promise.all(
-      chunk.map((to) => resendBatch(apiKey, cfg.from!, [to], subject, html)),
+      chunk.map((r) => {
+        // Each recipient gets their own copy with a unique unsubscribe link.
+        const { html } = buildNewsletterEmail({
+          title: n.title,
+          publicUrl: n.publicUrl,
+          pdfUrl: n.pdfUrl,
+          unsubscribeUrl: unsubscribeUrl(r.token),
+        });
+        return resendBatch(apiKey, cfg.from!, [r.email], subject, html);
+      }),
     );
     for (const ok of results) {
       if (ok) delivered += 1;

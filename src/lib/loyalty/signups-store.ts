@@ -45,6 +45,9 @@ export type LoyaltySignupRow = {
   signature: string | null;
   source: string;
   notification_status: LoyaltyNotifyStatus;
+  email_opt_out: boolean;
+  unsubscribe_token: string | null;
+  unsubscribed_at: string | null;
   dedupe_of: string | null;
   staff_note: string | null;
   entered_by: string | null;
@@ -282,4 +285,44 @@ export async function exportLoyaltyCsv(filter: ListLoyaltyFilter = {}): Promise<
     );
   }
   return lines.join("\n");
+}
+
+// ---------------------------------------------------------------------------
+// Email unsubscribe (Slice B — CAN-SPAM compliance, migration 0017)
+// ---------------------------------------------------------------------------
+
+export type UnsubscribeResult =
+  | { ok: true; alreadyOff: boolean; firstName: string | null }
+  | { ok: false; reason: "not-configured" | "not-found" };
+
+/**
+ * Mark a loyalty member as opted-out of marketing email, identified ONLY by
+ * their secret unsubscribe token (no login). Idempotent: re-clicking the link
+ * is fine. Returns the first name for a friendly confirmation page.
+ */
+export async function unsubscribeByToken(token: string): Promise<UnsubscribeResult> {
+  if (!isSupabaseServiceConfigured) return { ok: false, reason: "not-configured" };
+  const clean = String(token ?? "").trim();
+  if (!clean) return { ok: false, reason: "not-found" };
+
+  const admin = createSupabaseAdminClient();
+  const { data: row } = await admin
+    .from("loyalty_signups")
+    .select("id, first_name, email_opt_out")
+    .eq("unsubscribe_token", clean)
+    .maybeSingle();
+
+  const member = row as { id: string; first_name: string | null; email_opt_out: boolean } | null;
+  if (!member) return { ok: false, reason: "not-found" };
+
+  if (member.email_opt_out) {
+    return { ok: true, alreadyOff: true, firstName: member.first_name };
+  }
+
+  await admin
+    .from("loyalty_signups")
+    .update({ email_opt_out: true, unsubscribed_at: new Date().toISOString() })
+    .eq("id", member.id);
+
+  return { ok: true, alreadyOff: false, firstName: member.first_name };
 }
