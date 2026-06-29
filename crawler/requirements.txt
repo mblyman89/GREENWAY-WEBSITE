@@ -1,0 +1,24 @@
+# Greenway crawler — runtime dependencies.
+# Pinned to compatible ranges; the worker is a long-lived service so we want
+# reproducible installs without being so strict that security patches are blocked.
+
+# --- Web service ---------------------------------------------------------------
+fastapi>=0.110,<0.120
+uvicorn[standard]>=0.29,<0.35
+pydantic>=2.6,<3.0
+pydantic-settings>=2.2,<3.0
+
+# --- Crawling / extraction -----------------------------------------------------
+# crawl4ai is the work-horse (Playwright-backed browser crawl + fit_markdown).
+crawl4ai>=0.4.0,<0.8.0
+# Fallback plain-HTTP fetch + HTML parsing when a full browser isn't needed.
+httpx>=0.27,<0.29
+beautifulsoup4>=4.12,<5.0
+lxml>=5.1,<6.0
+
+# --- Supabase (drafts written via PostgREST) -----------------------------------
+supabase>=2.4,<3.0
+
+# --- Misc ----------------------------------------------------------------------
+python-dotenv>=1.0,<2.0
+tenacity>=8.2,<10.0

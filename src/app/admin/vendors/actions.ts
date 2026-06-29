@@ -11,6 +11,7 @@ import { getVendorById, getBrandById } from "@/lib/vendors/store";
 import { generateVendorProfile } from "@/lib/ai/ai-vendor";
 import { persistSuggestion, reviewSuggestion, getSuggestion } from "@/lib/ai/suggestions";
 import { AiNotConfiguredError } from "@/lib/ai/provider";
+import { researchUrl, isCrawlerConfigured, CrawlerNotConfiguredError } from "@/lib/ai/crawler-client";
 
 const MAX_LOGO_BYTES = 5 * 1024 * 1024;
 const IMAGE_MIME = new Set(["image/png", "image/jpeg", "image/webp", "image/svg+xml", "image/gif"]);
@@ -442,4 +443,113 @@ export async function rejectBrandSuggestionAction(formData: FormData): Promise<v
   });
   revalidatePath(`/admin/vendors/${vendorId}`);
   redirect(`/admin/vendors/${vendorId}?saved=1#brand-${brandId}`);
+}
+
+/* ------------------------------------------------------------------ *
+ * DF-6: "Research with the crawler" — delegate to the Python worker.
+ * The worker fetches the URL, extracts honestly (CSS-first → LLM →
+ * verify → compliance), and writes pending drafts into ai_suggestions
+ * with source=crawl:<url>. We just kick it off and report the count.
+ * Drafts-only: nothing is written to the vendor/brand record here.
+ * ------------------------------------------------------------------ */
+
+/** Crawl a URL for a VENDOR → pending drafts in the review queue. */
+export async function crawlVendorAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("vendors.manage");
+  const id = String(formData.get("id") ?? "");
+  const url = String(formData.get("url") ?? "").trim();
+  if (!id) redirect("/admin/vendors?error=" + encodeURIComponent("Missing vendor id."));
+  if (!url || !/^https?:\/\//i.test(url)) {
+    redirect(`/admin/vendors/${id}?error=` + encodeURIComponent("Enter a valid http(s) URL to research."));
+  }
+  if (!isCrawlerConfigured()) {
+    redirect(`/admin/vendors/${id}?error=` + encodeURIComponent("Crawler isn't set up yet (CRAWLER_BASE_URL / CRAWLER_SHARED_SECRET)."));
+  }
+
+  const vendor = await getVendorById(id);
+  if (!vendor) redirect("/admin/vendors?error=" + encodeURIComponent("Vendor not found."));
+
+  try {
+    const result = await researchUrl({
+      url,
+      entityType: "vendor",
+      entityId: id,
+      displayName: vendor!.display_name,
+    });
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "vendor.crawl_drafted",
+      entityType: "vendor",
+      entityId: id,
+      after: { url, written: result.drafts_written, skipped: result.drafts_skipped, fromCache: result.from_cache },
+    });
+    if (!result.ok) {
+      redirect(`/admin/vendors/${id}?error=` + encodeURIComponent(`Couldn't research that page: ${result.error || "unknown error"}`));
+    }
+    const msg =
+      result.drafts_written > 0
+        ? `Researched ${url} — ${result.drafts_written} draft(s) added for review.`
+        : `Researched ${url} — no new drafts (nothing verifiable found, or already pending).`;
+    revalidatePath(`/admin/vendors/${id}`);
+    redirect(`/admin/vendors/${id}?saved=1&note=${encodeURIComponent(msg)}#ai-drafts`);
+  } catch (err) {
+    const msg =
+      err instanceof CrawlerNotConfiguredError
+        ? "Crawler isn't set up yet."
+        : `Crawler error: ${err instanceof Error ? err.message : "please try again"}`;
+    redirect(`/admin/vendors/${id}?error=` + encodeURIComponent(msg));
+  }
+}
+
+/** Crawl a URL for a BRAND → pending drafts in the review queue. */
+export async function crawlBrandAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("vendors.manage");
+  const brandId = String(formData.get("brandId") ?? "");
+  const vendorId = String(formData.get("vendorId") ?? "");
+  const url = String(formData.get("url") ?? "").trim();
+  if (!brandId || !vendorId) {
+    redirect(`/admin/vendors/${vendorId}?error=` + encodeURIComponent("Missing brand id."));
+  }
+  if (!url || !/^https?:\/\//i.test(url)) {
+    redirect(`/admin/vendors/${vendorId}?error=` + encodeURIComponent("Enter a valid http(s) URL to research."));
+  }
+  if (!isCrawlerConfigured()) {
+    redirect(`/admin/vendors/${vendorId}?error=` + encodeURIComponent("Crawler isn't set up yet."));
+  }
+
+  const brand = await getBrandById(brandId);
+  if (!brand) redirect(`/admin/vendors/${vendorId}?error=` + encodeURIComponent("Brand not found."));
+
+  try {
+    const result = await researchUrl({
+      url,
+      entityType: "brand",
+      entityId: brandId,
+      displayName: brand!.display_name,
+    });
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "brand.crawl_drafted",
+      entityType: "brand",
+      entityId: brandId,
+      after: { url, written: result.drafts_written, skipped: result.drafts_skipped, fromCache: result.from_cache },
+    });
+    if (!result.ok) {
+      redirect(`/admin/vendors/${vendorId}?error=` + encodeURIComponent(`Couldn't research that page: ${result.error || "unknown error"}`));
+    }
+    const msg =
+      result.drafts_written > 0
+        ? `Researched ${url} — ${result.drafts_written} brand draft(s) added for review.`
+        : `Researched ${url} — no new drafts (nothing verifiable found, or already pending).`;
+    revalidatePath(`/admin/vendors/${vendorId}`);
+    redirect(`/admin/vendors/${vendorId}?saved=1&note=${encodeURIComponent(msg)}#brand-${brandId}`);
+  } catch (err) {
+    const msg =
+      err instanceof CrawlerNotConfiguredError
+        ? "Crawler isn't set up yet."
+        : `Crawler error: ${err instanceof Error ? err.message : "please try again"}`;
+    redirect(`/admin/vendors/${vendorId}?error=` + encodeURIComponent(msg));
+  }
 }

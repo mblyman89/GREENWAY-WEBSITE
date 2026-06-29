@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Secrets & local state
+.env
+.cache/
+*.log
+
+# PyCharm (keep shared run configs in .run/, ignore per-user state)
+.idea/
