@@ -12,6 +12,12 @@ import {
   upsertKbStrain,
   setStrainActive,
 } from "@/lib/ai/kb/store";
+import {
+  upsertImageSubstitute,
+  setSubstituteActive,
+  deleteImageSubstitute,
+  type SubstituteScope,
+} from "@/lib/ai/kb/image-substitutes";
 
 const PATH = "/admin/knowledge-base";
 
@@ -151,4 +157,64 @@ export async function toggleStrainAction(formData: FormData): Promise<void> {
   await recordAudit({ actorId: session.profile.id, action: "kb.strain.toggle", entityType: "kb_strain", entityId: id, after: { active } }).catch(() => {});
   revalidatePath(PATH);
   back(active ? "Strain re-enabled." : "Strain hidden from the AI.");
+}
+
+const ALLOWED_SUB_SCOPES = new Set<SubstituteScope>([
+  "category",
+  "inventory_type",
+  "brand",
+  "vendor",
+  "global",
+]);
+
+/**
+ * Add or update an approved image substitute (fallback). Staff pick an existing
+ * media asset by id and assign it to a category / inventory type / brand /
+ * vendor / global scope so product cards are never blank.
+ */
+export async function upsertSubstituteAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("products.enrich");
+  const scopeRaw = String(formData.get("scope") ?? "category") as SubstituteScope;
+  const scope = ALLOWED_SUB_SCOPES.has(scopeRaw) ? scopeRaw : "category";
+  const media_id = String(formData.get("media_id") ?? "").trim();
+  const key = scope === "global" ? "*" : String(formData.get("key") ?? "").trim();
+  const label = String(formData.get("label") ?? "").trim() || null;
+  const priorityRaw = String(formData.get("priority") ?? "").trim();
+  const priority = priorityRaw ? Math.max(0, Math.trunc(Number(priorityRaw)) || 100) : 100;
+
+  if (!media_id) back("Please choose an image (media id) for the substitute.", false);
+  if (scope !== "global" && !key) back("Please choose what this fallback applies to.", false);
+
+  await upsertImageSubstitute({ scope, key, media_id, label, priority }, session.profile.id);
+  await recordAudit({
+    actorId: session.profile.id,
+    action: "kb.substitute.upsert",
+    entityType: "kb_image_substitute",
+    entityId: `${scope}:${key}`,
+  }).catch(() => {});
+  revalidatePath(PATH);
+  back(`Saved fallback image for ${scope} "${key}".`);
+}
+
+/** Toggle a substitute active/inactive. */
+export async function toggleSubstituteAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("products.enrich");
+  const id = String(formData.get("id") ?? "");
+  const active = String(formData.get("active") ?? "") === "true";
+  if (!id) back("Missing substitute id.", false);
+  await setSubstituteActive(id, active);
+  await recordAudit({ actorId: session.profile.id, action: "kb.substitute.toggle", entityType: "kb_image_substitute", entityId: id, after: { active } }).catch(() => {});
+  revalidatePath(PATH);
+  back(active ? "Fallback re-enabled." : "Fallback disabled.");
+}
+
+/** Remove a substitute entirely. */
+export async function deleteSubstituteAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("products.enrich");
+  const id = String(formData.get("id") ?? "");
+  if (!id) back("Missing substitute id.", false);
+  await deleteImageSubstitute(id);
+  await recordAudit({ actorId: session.profile.id, action: "kb.substitute.delete", entityType: "kb_image_substitute", entityId: id }).catch(() => {});
+  revalidatePath(PATH);
+  back("Fallback image removed.");
 }

@@ -16,13 +16,21 @@
 - [x] Compliance helper copy (sensory/factual only).
 - [x] tsc + eslint + next build green.
 
-## DF-2 — Image-substitute KB
-- [ ] Migration `0021_image_substitutes.sql` (idempotent): `kb_image_substitutes` table + indexes + RLS.
-- [ ] Store: `listImageSubstitutes`, `upsertImageSubstitute`, `setSubstituteActive`,
-      `resolveSubstituteFor(category, inventoryType)`.
-- [ ] Admin "Fallback images" section/page: upload media, tag scope+key, priority, preview grid.
-- [ ] Seed all 52 categories + 6 inventory types + global with neutral placeholders.
-- [ ] tsc/eslint/build. PR. Hand migration to owner.
+## DF-2 — Image-substitute KB  ✅ DONE (PR pending; migration 0021 owner-applied)
+- [x] Migration `0021_image_substitutes.sql` (idempotent): `kb_image_substitutes` table
+      (scope category|inventory_type|brand|vendor|global, key, media_id→media_assets, label,
+      priority, active, audit) + indexes + staff-only RLS + updated_at trigger.
+- [x] Store `image-substitutes.ts`: `listImageSubstitutes`, `imageSubstituteCounts`,
+      `imageSubstitutesMigrated`, `upsertImageSubstitute`, `setSubstituteActive`,
+      `deleteImageSubstitute`, `resolveSubstituteFor(category, inventoryType)` (category →
+      inventory_type → global), `resolveBrandVendorSubstitute(brand, vendor)`.
+- [x] Taxonomy constants seeded in code: all 52 categories + 6 inventory types (measured from sheets).
+- [x] Admin "Fallback images" section (`SubstituteManager.tsx`): pick from Media Library, tag
+      scope+key (dropdown of categories/types), priority, preview, coverage summary, enable/disable/remove.
+- [x] Server actions `upsertSubstituteAction` / `toggleSubstituteAction` / `deleteSubstituteAction`.
+- [x] tsc/eslint/build green.
+- [ ] **Owner action:** apply `supabase/migrations/0021_image_substitutes.sql` in the SQL editor.
+- Note: image *upload* uses the existing Media Library; admin assigns from there (no new bucket).
 
 ## DF-3 — Product image resolver + media draft pipeline
 - [ ] `resolveProductImage(posKey)` ladder: exact → brand/vendor generic → honest substitute →
