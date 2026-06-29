@@ -205,8 +205,12 @@ Standing rule + plan in back-office/SLICE_3B_AND_BEAUTIFY_TODO.md.
 - [x] tsc/eslint/build EXIT=0 (~2340 pages). Static preview screenshotted for owner inspection.
 - OWNER ACTION: none (no migration).
 
-### Beautify Slice 2 — Dashboard + high-traffic pages (PLANNED)
-- Beautify Orders, Products, Media, Blog, Newsletter, Content/Footer, Pages builder using the new primitives.
+### Beautify Slice 2 — Dashboard + high-traffic pages (PR #79, merged) — NO migration
+- Beautified Orders, Products, Media, Blog, Newsletter, Content/Footer, Pages builder using the new tokens + primitives
+  (Button/Card/Input/Select/StatusPill/EmptyState). Token surfaces, filter controls, token zebra/hover/sticky tables.
+- **Media tiles now display pixel dimensions** (`{w}×{h}` badge + caption) per owner request, so the owner can tell
+  the AI exact sizes to generate art that fits each slot.
+- tsc/eslint clean, `next build` EXIT=0 (~2340 pages).
 
 ### Beautify Slice 3 — Tables, forms, empty/loading states + final pass (PLANNED)
 - Consistent tables (zebra/hover, sticky headers, status pills), forms, empty/loading/toasts; full visual QA.

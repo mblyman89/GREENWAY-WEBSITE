@@ -9,6 +9,9 @@ import type { MediaAsset } from "@/lib/supabase/types";
 import { MediaDropzone } from "@/components/admin/media/MediaDropzone";
 import { MEDIA_PURPOSES, purposeLabel } from "@/lib/media/taxonomy";
 import { uploadMediaAction } from "./actions";
+import { Button } from "@/components/admin/ui/Button";
+import { Input, Select } from "@/components/admin/ui/Field";
+import { EmptyState } from "@/components/admin/ux";
 
 export const dynamic = "force-dynamic";
 
@@ -36,7 +39,7 @@ export default async function MediaPage({
       <div>
         <AdminPageHeader title="Media Library" subtitle="Upload and manage logos, banners, and images." />
         <div className="px-5 py-6 sm:px-8">
-          <div className="rounded-xl border border-[#ffd700]/30 bg-[#ffd700]/5 p-5 text-sm text-[#ffd700]">
+          <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] p-5 text-sm text-[var(--admin-gold)]">
             Supabase is not configured yet. Add the env vars from
             <code className="mx-1 rounded bg-black/40 px-1">docs/BACK_OFFICE_SETUP.md</code>.
           </div>
@@ -83,15 +86,15 @@ export default async function MediaPage({
 
       <div className="space-y-6 px-5 py-6 sm:px-8">
         {saved && (
-          <div className="rounded-lg border border-[#7ed957]/40 bg-[#7ed957]/10 px-4 py-2 text-sm text-[#7ed957]">
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]">
             {saved === "1" ? "Saved." : `Uploaded ${saved} file(s).`}
           </div>
         )}
         {deleted && (
-          <div className="rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-sm text-white/70">Asset deleted.</div>
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-border-strong)] bg-white/5 px-4 py-2 text-sm text-[var(--admin-text-muted)]">Asset deleted.</div>
         )}
         {error && (
-          <div className="rounded-lg border border-[#ff7f00]/40 bg-[#ff7f00]/10 px-4 py-2 text-sm text-[#ff7f00]">{error}</div>
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-orange)]/40 bg-[var(--admin-orange-soft)] px-4 py-2 text-sm text-[var(--admin-orange)]">{error}</div>
         )}
 
         <div className="grid gap-4 sm:grid-cols-3">
@@ -106,40 +109,29 @@ export default async function MediaPage({
         {/* Filters */}
         {counts.total > 0 && (
           <form className="flex flex-wrap items-center gap-3" method="get">
-            <input
+            <Input
               name="q"
               defaultValue={q ?? ""}
               placeholder="Search title, filename, tags…"
-              className="flex-1 min-w-48 rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#7ed957]"
+              className="min-w-48 flex-1"
             />
-            <select
-              name="usage"
-              defaultValue={usage ?? ""}
-              className="rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#7ed957]"
-            >
+            <Select name="usage" defaultValue={usage ?? ""} className="w-auto">
               <option value="">All purposes</option>
               {MEDIA_PURPOSES.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.label}
                 </option>
               ))}
-            </select>
-            <select
-              name="status"
-              defaultValue={status ?? ""}
-              className="rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#7ed957]"
-            >
+            </Select>
+            <Select name="status" defaultValue={status ?? ""} className="w-auto">
               <option value="">All statuses</option>
               <option value="draft">Draft</option>
               <option value="published">Published</option>
               <option value="archived">Archived</option>
-            </select>
-            <button
-              type="submit"
-              className="rounded-full border border-white/15 px-4 py-2 text-sm text-white/80 hover:border-[#7ed957] hover:text-white"
-            >
+            </Select>
+            <Button type="submit" variant="subtle">
               Filter
-            </button>
+            </Button>
           </form>
         )}
 
@@ -151,9 +143,9 @@ export default async function MediaPage({
               <Link
                 key={m.id}
                 href={`/admin/media/${m.id}`}
-                className="group overflow-hidden rounded-xl border border-white/10 bg-[#0a0a0a] transition hover:border-[#7ed957]/50"
+                className="group admin-card-interactive overflow-hidden rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)]"
               >
-                <div className="relative flex aspect-square items-center justify-center bg-[checkerboard] bg-black p-2">
+                <div className="relative flex aspect-square items-center justify-center bg-black p-2">
                   {isImage(m.mime_type) && url ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={url} alt={m.alt_text ?? ""} className="h-full w-full object-contain" />
@@ -163,21 +155,28 @@ export default async function MediaPage({
                   <span
                     className={`absolute right-1.5 top-1.5 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${
                       m.status === "published"
-                        ? "bg-[#7ed957]/20 text-[#7ed957]"
+                        ? "bg-[var(--admin-accent)]/20 text-[var(--admin-accent)]"
                         : m.status === "archived"
-                          ? "bg-white/10 text-white/40"
-                          : "bg-[#ff7f00]/20 text-[#ff7f00]"
+                          ? "bg-white/10 text-[var(--admin-text-faint)]"
+                          : "bg-[var(--admin-orange)]/20 text-[var(--admin-orange)]"
                     }`}
                   >
                     {m.status}
                   </span>
+                  {/* Pixel dimensions — so staff can tell the AI the exact size to make */}
+                  {m.width && m.height ? (
+                    <span className="absolute bottom-1.5 left-1.5 rounded bg-black/70 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-[var(--admin-text)] backdrop-blur">
+                      {m.width}×{m.height}
+                    </span>
+                  ) : null}
                 </div>
                 <div className="p-2">
-                  <p className="truncate text-xs font-medium text-white group-hover:text-[#7ed957]">
+                  <p className="truncate text-xs font-medium text-[var(--admin-text)] group-hover:text-[var(--admin-accent)]">
                     {m.title || m.filename}
                   </p>
-                  <p className="text-[10px] text-white/35">
+                  <p className="text-[10px] text-[var(--admin-text-faint)]">
                     {purposeLabel(m.usage_type)} · {prettyBytes(m.size_bytes)}
+                    {m.width && m.height ? ` · ${m.width}×${m.height}px` : ""}
                   </p>
                 </div>
               </Link>
@@ -186,13 +185,14 @@ export default async function MediaPage({
         </div>
 
         {counts.total === 0 && (
-          <div className="rounded-xl border border-white/10 bg-[#0a0a0a] p-6 text-sm text-white/60">
-            No media yet. Upload logos and banners above, or they&apos;ll appear here automatically when you add vendor/brand
-            logos from the Vendors editor.
-          </div>
+          <EmptyState
+            icon="🖼️"
+            title="No media yet"
+            description="Upload logos and banners above. Vendor and brand logos you add from the Vendors editor will also show up here automatically."
+          />
         )}
         {filtered.length === 0 && counts.total > 0 && (
-          <p className="text-sm text-white/50">No assets match your filter.</p>
+          <p className="text-sm text-[var(--admin-text-muted)]">No assets match your filter.</p>
         )}
       </div>
     </div>

@@ -60,9 +60,24 @@ Goal: a gorgeous, consistent, presentable admin. NOT rushed. Owner: "presentabil
       EmptyState/Skeleton/StatusPill + SectionCard to use tokens.
 - [x] tsc clean, eslint clean, `next build` EXIT=0 (all ~2340 pages). Static preview built + screenshotted for owner.
 
-### Beautify Slice 2 — Dashboard + high-traffic pages
-- [ ] Redesign /admin landing dashboard (at-a-glance cards, recent activity, quick actions).
-- [ ] Beautify the most-used pages: Orders, Products, Media, Blog, Newsletter, Content/Footer, Pages builder.
+### Beautify Slice 2 — Dashboard + high-traffic pages ✅ MERGED (PR #79)
+- [x] Dashboard already redesigned in Slice 1 (Section/Card/Button/StatCard + icons). Kept.
+- [x] **Orders**: STATUS_STYLES→tokens; StatCards w/ icons; filter pills + search Input + Button; order
+      cards `<Card padding="sm">`; "Mark X"→`<Button variant="primary" size="sm">`, "Details"→`<Button href
+      variant="subtle">`; empty view→`<EmptyState icon="🧾">`.
+- [x] **Products**: warning banners→tokens; filters use Input/Select/Button + grid/table toggle; bulk-AI
+      callout→Button variant="save"; table→token zebra/hover + sticky header + `<StatusPill>`; empty/overflow→EmptyState/token.
+- [x] **Media**: flash banners→tokens; filters→primitives; **grid tiles now SHOW pixel dimensions** (owner
+      request): `{w}×{h}` badge bottom-left + `· {w}×{h}px` in caption; tiles use admin-card-interactive; empty→EmptyState.
+- [x] **Blog**: removed local STATUS_STYLES; "+ New post"→Button; empty→EmptyState w/ action; table→token
+      zebra/hover/sticky + `<StatusPill status={p.status}>`.
+- [x] **Newsletter**: all flash/config banners→tokens; empty→EmptyState w/ "Go to Blog & Newsletter" Button;
+      picker cards→tokens; test-send (Input+Button subtle) + broadcast (orange Button) + send-history table (StatusPill)→tokens.
+- [x] **Content/Footer**: not-configured notice, SEO link→Button, flash banner, not-seeded card+Initialize
+      button→tokens/primitives (page body is ContentEditorShell/ContentBulkBar components, already consistent).
+- [x] **Pages builder** (`pages/[slug]`): not-configured notice, flash banner, home/faq tab segmented
+      controls→tokens, preview link→tokens; Carousel/Sections/Q&A tabs: add/seed buttons→Button, empty states→EmptyState.
+- [x] tsc clean, eslint clean, `next build` EXIT=0 (all ~2340 pages).
 
 ### Beautify Slice 3 — Tables, forms, empty/loading states + final pass
 - [ ] Consistent table styling (zebra/hover, sticky headers, status pills).

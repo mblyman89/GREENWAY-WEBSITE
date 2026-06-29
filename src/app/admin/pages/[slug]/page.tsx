@@ -17,6 +17,8 @@ import { listCarouselSlides } from "@/lib/cms/carousel-store";
 import { MAX_CAROUSEL_SLIDES } from "@/lib/cms/carousel-types";
 import { listFaqItems } from "@/lib/cms/faq-store";
 import { FaqItemCard } from "@/components/admin/FaqItemCard";
+import { Button } from "@/components/admin/ui";
+import { EmptyState } from "@/components/admin/ux";
 import {
   seedSectionsAction,
   addSectionAction,
@@ -86,7 +88,7 @@ export default async function PageBuilderPage({
           title={config.label}
           subtitle="Manage this page's banners and sections."
         />
-        <div className="px-5 py-6 text-sm text-[#ffd700] sm:px-8">
+        <div className="px-5 py-6 text-sm text-[var(--admin-gold)] sm:px-8">
           Supabase is not configured yet. Once the database is connected and
           migrations through 0013 are applied, this page&apos;s sections manage here.
         </div>
@@ -127,8 +129,8 @@ export default async function PageBuilderPage({
           <div
             className={
               flash.tone === "ok"
-                ? "rounded-lg border border-[#7ed957]/30 bg-[#7ed957]/10 px-4 py-3 text-sm text-[#7ed957]"
-                : "rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300"
+                ? "rounded-[var(--admin-radius-sm)] border border-[var(--admin-accent)]/30 bg-[var(--admin-accent-soft)] px-4 py-3 text-sm text-[var(--admin-accent)]"
+                : "rounded-[var(--admin-radius-sm)] border border-[var(--admin-danger)]/30 bg-[var(--admin-danger-soft)] px-4 py-3 text-sm text-[var(--admin-danger)]"
             }
           >
             {flash.text}
@@ -137,13 +139,13 @@ export default async function PageBuilderPage({
 
         {/* Tab bar (home: Carousel|Sections; faq: Sections|Q&A) */}
         {isHome ? (
-          <div className="flex gap-1 rounded-xl border border-white/10 bg-[#0f0f0f] p-1">
+          <div className="flex gap-1 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-1">
             <a
               href={`/admin/pages/home?tab=carousel`}
               className={
                 tab === "carousel"
-                  ? "flex-1 rounded-lg bg-[#7ed957] px-4 py-2 text-center text-sm font-semibold text-black"
-                  : "flex-1 rounded-lg px-4 py-2 text-center text-sm font-medium text-white/70 transition hover:bg-white/5"
+                  ? "flex-1 rounded-[var(--admin-radius-sm)] bg-[var(--admin-accent)] px-4 py-2 text-center text-sm font-semibold text-black"
+                  : "flex-1 rounded-[var(--admin-radius-sm)] px-4 py-2 text-center text-sm font-medium text-[var(--admin-text-muted)] transition hover:bg-[var(--admin-surface-hover)]"
               }
             >
               Carousel
@@ -152,8 +154,8 @@ export default async function PageBuilderPage({
               href={`/admin/pages/home?tab=sections`}
               className={
                 tab === "sections"
-                  ? "flex-1 rounded-lg bg-[#7ed957] px-4 py-2 text-center text-sm font-semibold text-black"
-                  : "flex-1 rounded-lg px-4 py-2 text-center text-sm font-medium text-white/70 transition hover:bg-white/5"
+                  ? "flex-1 rounded-[var(--admin-radius-sm)] bg-[var(--admin-accent)] px-4 py-2 text-center text-sm font-semibold text-black"
+                  : "flex-1 rounded-[var(--admin-radius-sm)] px-4 py-2 text-center text-sm font-medium text-[var(--admin-text-muted)] transition hover:bg-[var(--admin-surface-hover)]"
               }
             >
               Sections
@@ -162,13 +164,13 @@ export default async function PageBuilderPage({
         ) : null}
 
         {isFaq ? (
-          <div className="flex gap-1 rounded-xl border border-white/10 bg-[#0f0f0f] p-1">
+          <div className="flex gap-1 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-1">
             <a
               href={`/admin/pages/faq?tab=sections`}
               className={
                 tab === "sections"
-                  ? "flex-1 rounded-lg bg-[#7ed957] px-4 py-2 text-center text-sm font-semibold text-black"
-                  : "flex-1 rounded-lg px-4 py-2 text-center text-sm font-medium text-white/70 transition hover:bg-white/5"
+                  ? "flex-1 rounded-[var(--admin-radius-sm)] bg-[var(--admin-accent)] px-4 py-2 text-center text-sm font-semibold text-black"
+                  : "flex-1 rounded-[var(--admin-radius-sm)] px-4 py-2 text-center text-sm font-medium text-[var(--admin-text-muted)] transition hover:bg-[var(--admin-surface-hover)]"
               }
             >
               Banners
@@ -177,8 +179,8 @@ export default async function PageBuilderPage({
               href={`/admin/pages/faq?tab=qanda`}
               className={
                 tab === "qanda"
-                  ? "flex-1 rounded-lg bg-[#7ed957] px-4 py-2 text-center text-sm font-semibold text-black"
-                  : "flex-1 rounded-lg px-4 py-2 text-center text-sm font-medium text-white/70 transition hover:bg-white/5"
+                  ? "flex-1 rounded-[var(--admin-radius-sm)] bg-[var(--admin-accent)] px-4 py-2 text-center text-sm font-semibold text-black"
+                  : "flex-1 rounded-[var(--admin-radius-sm)] px-4 py-2 text-center text-sm font-medium text-[var(--admin-text-muted)] transition hover:bg-[var(--admin-surface-hover)]"
               }
             >
               Questions &amp; Answers
@@ -187,10 +189,10 @@ export default async function PageBuilderPage({
         ) : null}
 
         {/* Preview link → Site Content preview screen */}
-        <p className="text-sm text-white/60">
+        <p className="text-sm text-[var(--admin-text-muted)]">
           <a
             href={previewHref}
-            className="text-[#7ed957] underline-offset-2 hover:underline"
+            className="text-[var(--admin-accent)] underline-offset-2 hover:underline"
           >
             Open the preview screen ↗
           </a>{" "}
@@ -225,36 +227,27 @@ async function CarouselTab({ mediaChoices }: { mediaChoices: MediaChoice[] }) {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-white/60">
+        <p className="text-sm text-[var(--admin-text-muted)]">
           {slides.length} of {MAX_CAROUSEL_SLIDES} slides
         </p>
         <div className="flex items-center gap-2">
           {slides.length === 0 ? (
             <form action={seedCarouselAction}>
-              <button
-                type="submit"
-                className="rounded-lg border border-white/15 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/5"
-              >
-                Load starter slides
-              </button>
+              <Button type="submit" variant="subtle">Load starter slides</Button>
             </form>
           ) : null}
           <form action={addCarouselSlideAction}>
-            <button
-              type="submit"
-              disabled={atCap}
-              className="rounded-lg bg-[#7ed957] px-4 py-2 text-sm font-semibold text-black transition hover:bg-[#94e570] disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              + Add slide
-            </button>
+            <Button type="submit" variant="primary" disabled={atCap}>+ Add slide</Button>
           </form>
         </div>
       </div>
 
       {slides.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-white/15 bg-[#0f0f0f] p-10 text-center text-sm text-white/70">
-          No slides yet. Load the starter slides or add one to begin.
-        </div>
+        <EmptyState
+          icon="🖼️"
+          title="No slides yet"
+          description="Load the starter slides or add one to begin building your homepage carousel."
+        />
       ) : (
         <div className="space-y-5">
           {slides.map((slide, index) => (
@@ -297,43 +290,40 @@ async function SectionsTab({
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-white/60">
+        <p className="text-sm text-[var(--admin-text-muted)]">
           {sections.length} of {cap} sections
         </p>
         <div className="flex items-center gap-2">
           {sections.length === 0 && hasSeeds ? (
             <form action={seedSectionsAction}>
               <input type="hidden" name="page_slug" value={slug} />
-              <button
-                type="submit"
-                className="rounded-lg border border-white/15 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/5"
-              >
-                Load starter sections
-              </button>
+              <Button type="submit" variant="subtle">Load starter sections</Button>
             </form>
           ) : null}
           <form action={addSectionAction}>
             <input type="hidden" name="page_slug" value={slug} />
-            <button
+            <Button
               type="submit"
+              variant="primary"
               disabled={atCap}
               title={atCap ? `You can have up to ${cap} sections.` : "Add a new section"}
-              className="rounded-lg bg-[#7ed957] px-4 py-2 text-sm font-semibold text-black transition hover:bg-[#94e570] disabled:cursor-not-allowed disabled:opacity-40"
             >
               + Add section
-            </button>
+            </Button>
           </form>
         </div>
       </div>
 
       {sections.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-white/15 bg-[#0f0f0f] p-10 text-center text-sm text-white/70">
-          No editable sections yet.{" "}
-          {hasSeeds
-            ? "Click Load starter sections to bring in this page's current banners, or "
-            : ""}
-          Click <strong>+ Add section</strong> to create one.
-        </div>
+        <EmptyState
+          icon="📄"
+          title="No editable sections yet"
+          description={
+            hasSeeds
+              ? "Click “Load starter sections” to bring in this page's current banners, or “+ Add section” to create one."
+              : "Click “+ Add section” to create one."
+          }
+        />
       ) : (
         <div className="space-y-5">
           {sections.map((section, index) => (
@@ -366,37 +356,28 @@ async function QandaTab() {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-white/60">
+        <p className="text-sm text-[var(--admin-text-muted)]">
           {items.length} question{items.length === 1 ? "" : "s"}. Edit a draft,
           then publish to update the public FAQ page.
         </p>
         <div className="flex items-center gap-2">
           {items.length === 0 ? (
             <form action={seedFaqAction}>
-              <button
-                type="submit"
-                className="rounded-lg border border-white/15 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/5"
-              >
-                Load starter Q&amp;A
-              </button>
+              <Button type="submit" variant="subtle">Load starter Q&amp;A</Button>
             </form>
           ) : null}
           <form action={addFaqAction}>
-            <button
-              type="submit"
-              className="rounded-lg bg-[#7ed957] px-4 py-2 text-sm font-semibold text-black transition hover:bg-[#94e570]"
-            >
-              + Add question
-            </button>
+            <Button type="submit" variant="primary">+ Add question</Button>
           </form>
         </div>
       </div>
 
       {items.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-white/15 bg-[#0f0f0f] p-10 text-center text-sm text-white/70">
-          No questions yet. Click <strong>Load starter Q&amp;A</strong> to import
-          your current FAQ, or <strong>+ Add question</strong> to write a new one.
-        </div>
+        <EmptyState
+          icon="❓"
+          title="No questions yet"
+          description="Click “Load starter Q&A” to import your current FAQ, or “+ Add question” to write a new one."
+        />
       ) : (
         <div className="space-y-5">
           {items.map((item, index) => (

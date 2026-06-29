@@ -154,6 +154,20 @@ h1, h2, h3, h4, h5, h6 {
   background-clip: padding-box;
 }
 
+/* ---------------------------------------------------------------------------
+ * Surface compatibility shim. The admin previously used five ad-hoc card
+ * backgrounds. Until every page is migrated to the Card primitive, normalize
+ * the legacy hexes to the token surfaces so the whole back office matches
+ * instantly. (Pages migrated to <Card> don't rely on this.)
+ * ------------------------------------------------------------------------- */
+.admin-shell .bg-\[\#050505\],
+.admin-shell .bg-\[\#0a0a0a\],
+.admin-shell .bg-\[\#0d0d0d\],
+.admin-shell .bg-\[\#0f0f0f\],
+.admin-shell .bg-\[\#0f1a10\] {
+  background-color: var(--admin-surface) !important;
+}
+
 /* Reusable focus ring so every interactive admin control matches. */
 .admin-focus:focus-visible {
   outline: 2px solid rgba(126, 217, 87, 0.7);

@@ -2,8 +2,11 @@ import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
+import { Breadcrumbs, HelpPanel, EmptyState } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
+import { Card } from "@/components/admin/ui/Card";
+import { Button } from "@/components/admin/ui/Button";
+import { Input } from "@/components/admin/ui/Field";
 import { formatMinorCurrency } from "@/lib/leafly/format";
 import { listOrders, getOrderStatusCounts } from "@/lib/orders/orders-store";
 import {
@@ -18,13 +21,18 @@ import { NewOrderAlert } from "@/components/admin/orders/NewOrderAlert";
 export const dynamic = "force-dynamic";
 
 const STATUS_STYLES: Record<OrderStatus, string> = {
-  new: "border-[#ff7f00]/50 bg-[#ff7f00]/10 text-[#ff7f00]",
-  acknowledged: "border-[#ffd700]/40 bg-[#ffd700]/10 text-[#ffd700]",
-  preparing: "border-[#7ed957]/40 bg-[#7ed957]/10 text-[#7ed957]",
-  ready: "border-[#7ed957]/60 bg-[#7ed957]/20 text-[#7ed957]",
-  completed: "border-white/15 bg-white/5 text-white/60",
-  cancelled: "border-red-500/40 bg-red-500/10 text-red-300",
-  no_show: "border-red-500/30 bg-red-500/5 text-red-300/80",
+  new: "border-[var(--admin-orange)]/50 bg-[var(--admin-orange-soft)] text-[var(--admin-orange)]",
+  acknowledged:
+    "border-[var(--admin-gold)]/40 bg-[var(--admin-gold-soft)] text-[var(--admin-gold)]",
+  preparing:
+    "border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] text-[var(--admin-accent)]",
+  ready:
+    "border-[var(--admin-accent)]/60 bg-[var(--admin-accent)]/20 text-[var(--admin-accent)]",
+  completed: "border-[var(--admin-border-strong)] bg-white/5 text-[var(--admin-text-muted)]",
+  cancelled:
+    "border-[var(--admin-danger)]/40 bg-[var(--admin-danger-soft)] text-[var(--admin-danger)]",
+  no_show:
+    "border-[var(--admin-danger)]/30 bg-[var(--admin-danger-soft)] text-[var(--admin-danger)]",
 };
 
 const FILTERS: { key: string; label: string }[] = [
@@ -65,7 +73,7 @@ export default async function OrdersAdminPage({
           subtitle="Live pickup orders — acknowledge, prepare, and complete from any device."
         />
         <div className="px-5 py-6 sm:px-8">
-          <div className="rounded-xl border border-[#ffd700]/30 bg-[#ffd700]/5 p-5 text-sm text-[#ffd700]">
+          <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] p-5 text-sm text-[var(--admin-gold)]">
             Supabase is not configured yet. Once the database is connected and migration{" "}
             <code>0007_slice7_orders.sql</code> is applied, live orders will appear here. Until
             then the storefront confirms orders locally.
@@ -113,10 +121,10 @@ export default async function OrdersAdminPage({
 
         {/* Status summary */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <StatCard label="New" value={counts.new} accent="orange" hint="Awaiting acknowledgement" />
-          <StatCard label="Preparing" value={counts.preparing} accent="green" />
-          <StatCard label="Ready" value={counts.ready} accent="green" hint="Waiting for pickup" />
-          <StatCard label="Active total" value={activeCount} />
+          <StatCard label="New" value={counts.new} accent="orange" hint="Awaiting acknowledgement" icon="🔔" />
+          <StatCard label="Preparing" value={counts.preparing} accent="green" icon="📦" />
+          <StatCard label="Ready" value={counts.ready} accent="green" hint="Waiting for pickup" icon="✅" />
+          <StatCard label="Active total" value={activeCount} icon="🧾" />
         </div>
 
         {/* Filters + search */}
@@ -126,10 +134,10 @@ export default async function OrdersAdminPage({
               <Link
                 key={f.key}
                 href={`/admin/orders?status=${f.key}${search ? `&q=${encodeURIComponent(search)}` : ""}`}
-                className={`rounded-full border px-3 py-1.5 text-xs font-bold uppercase tracking-[0.08em] transition ${
+                className={`admin-focus rounded-full border px-3 py-1.5 text-xs font-bold uppercase tracking-[0.08em] transition ${
                   status === f.key
-                    ? "border-[#7ed957]/60 bg-[#7ed957]/15 text-[#7ed957]"
-                    : "border-white/15 bg-white/5 text-white/60 hover:text-white"
+                    ? "border-[var(--admin-accent)]/60 bg-[var(--admin-accent-soft)] text-[var(--admin-accent)]"
+                    : "border-[var(--admin-border-strong)] bg-white/5 text-[var(--admin-text-muted)] hover:text-[var(--admin-text)]"
                 }`}
               >
                 {f.label}
@@ -138,39 +146,39 @@ export default async function OrdersAdminPage({
           </div>
           <div className="ml-auto flex items-center gap-2">
             <input type="hidden" name="status" value={status} />
-            <input
+            <Input
               name="q"
               defaultValue={search}
               placeholder="Search name, phone, order #"
-              className="w-56 rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white placeholder:text-white/30 focus:border-[#7ed957]/50 focus:outline-none"
+              className="w-56"
             />
-            <button
-              type="submit"
-              className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm font-bold text-white hover:bg-white/10"
-            >
+            <Button type="submit" variant="subtle">
               Search
-            </button>
+            </Button>
           </div>
         </form>
 
         {/* Order cards */}
         {orders.length === 0 ? (
-          <p className="mt-8 text-sm text-white/40">No orders match this view.</p>
+          <div className="mt-8">
+            <EmptyState
+              icon="🧾"
+              title="No orders match this view"
+              description="When customers place pickup orders online, they'll show up here automatically — newest first."
+            />
+          </div>
         ) : (
           <div className="mt-5 grid gap-3">
             {orders.map((order) => {
               const next = ORDER_FORWARD_TRANSITIONS[order.status];
               return (
-                <div
-                  key={order.id}
-                  className="rounded-2xl border border-white/10 bg-[#0d0d0d] p-4 sm:p-5"
-                >
+                <Card key={order.id} padding="sm" className="sm:p-5">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
                         <Link
                           href={`/admin/orders/${order.id}`}
-                          className="text-lg font-black text-white hover:text-[#7ed957]"
+                          className="text-lg font-black text-[var(--admin-text)] hover:text-[var(--admin-accent)]"
                         >
                           #{order.order_number}
                         </Link>
@@ -180,12 +188,12 @@ export default async function OrdersAdminPage({
                           {ORDER_STATUS_LABELS[order.status]}
                         </span>
                       </div>
-                      <p className="mt-1 text-sm text-white/70">
+                      <p className="mt-1 text-sm text-[var(--admin-text-muted)]">
                         {order.customer_first_name}
                         {order.customer_last_name ? ` ${order.customer_last_name}` : ""}
                         {order.customer_phone ? ` · ${order.customer_phone}` : ""}
                       </p>
-                      <p className="mt-0.5 text-xs text-white/40">
+                      <p className="mt-0.5 text-xs text-[var(--admin-text-faint)]">
                         {order.item_count} item{order.item_count === 1 ? "" : "s"} ·{" "}
                         {formatMinorCurrency(order.total_minor_units)} · placed {timeAgo(order.placed_at)}
                       </p>
@@ -199,23 +207,17 @@ export default async function OrdersAdminPage({
                         <form action={setOrderStatusAction}>
                           <input type="hidden" name="id" value={order.id} />
                           <input type="hidden" name="status" value={next} />
-                          <button
-                            type="submit"
-                            className="rounded-lg bg-[#7ed957] px-3.5 py-2 text-xs font-black uppercase tracking-[0.08em] text-black transition hover:bg-white"
-                          >
+                          <Button type="submit" variant="primary" size="sm">
                             Mark {ORDER_STATUS_LABELS[next]}
-                          </button>
+                          </Button>
                         </form>
                       ) : null}
-                      <Link
-                        href={`/admin/orders/${order.id}`}
-                        className="rounded-lg border border-white/15 bg-white/5 px-3.5 py-2 text-xs font-bold text-white hover:bg-white/10"
-                      >
+                      <Button href={`/admin/orders/${order.id}`} variant="subtle" size="sm">
                         Details
-                      </Link>
+                      </Button>
                     </div>
                   </div>
-                </div>
+                </Card>
               );
             })}
           </div>
