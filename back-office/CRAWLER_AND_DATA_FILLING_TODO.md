@@ -59,13 +59,33 @@
 - [x] Accept-rate by prompt_version / feature / source / confidence-band on `/admin/ai-usage`.
 - [x] tsc/eslint/build. PR #92 merged.
 
-## DF-6 — crawl4ai work-horse engine
-- [ ] Decide runtime (Python crawl4ai worker vs TS bridge); provider-agnostic config.
-- [ ] Pipeline: permission/robots/rate-limit/cache → CSS-first → fit_markdown → schema LLM
-      extraction (Pydantic mirror, temp≈0) → verify-against-source → ground → compliance → POS-key
-      map → `ai_suggestions` (source=crawl:<url>, confidence, image candidates).
-- [ ] On-demand "research this" entry point.
-- [ ] tsc/eslint/build (+ Python lint). PR.
+## DF-6 — crawl4ai work-horse engine ✅ (PR pending)
+- [x] Runtime decided: **separate Python crawl4ai/Playwright FastAPI worker** under `/crawler`
+      (Vercel can't run a headless browser). Provider-agnostic config via pydantic-settings
+      (`app/config.py`); soft-disables with no AI key (CSS-first still works for free).
+- [x] Pipeline (`app/pipeline.py`): permission/robots/rate-limit/disk-cache (`app/fetcher.py`,
+      crawl4ai with httpx fallback) → CSS-first no-LLM extraction (JSON-LD/OpenGraph/DOM,
+      `app/css_extract.py`) → fit_markdown → schema LLM extraction (Pydantic `app/schemas.py`,
+      temp≈0, only when key set, `app/llm_extract.py`) → verify-against-source
+      (`supported_by_source`, substring/≥60% token overlap) → WA I-502 compliance
+      (`app/compliance.py`, faithful mirror of the TS `checkCompliance`) → write DRAFTS to
+      `ai_suggestions` (`app/store.py`, source=`crawl:<url>`, confidence, model `crawler/<model>`
+      or `crawler/css`, dedup of pending, defensive retry). Image candidates collected.
+- [x] On-demand "research this" entry point: `POST /research` (auth `X-Crawler-Secret`) +
+      `GET /health` (`app/main.py`). Site-side server client `src/lib/ai/crawler-client.ts`
+      (`isCrawlerConfigured`, `researchUrl`, `crawlerHealth`). Per-vendor **and** per-brand
+      "🔎 Research with the crawler" buttons on `/admin/vendors/[id]` → `crawlVendorAction` /
+      `crawlBrandAction` (requirePermission `vendors.manage`, validate URL, audit, drafts to queue).
+- [x] 10/10 Python logic tests pass (`crawler/tests/test_pipeline_logic.py`). FastAPI boots,
+      auth returns 503 without secret, full end-to-end mocked flow verified (CSS-first drafted
+      about+mission with ZERO LLM cost; verify+compliance passed; dry-run returned drafts).
+- [x] Production walkthrough: `crawler/docs/RUNBOOK.md` (setup → run → Docker → systemd →
+      connect back office via `CRAWLER_BASE_URL`/`CRAWLER_SHARED_SECRET` → first-run plan →
+      cost/safety → troubleshooting). PyCharm run config in `crawler/.run/`. Site `.env.example`
+      gained `CRAWLER_BASE_URL` + `CRAWLER_SHARED_SECRET`.
+- [x] tsc + eslint + next build green. Python tests green. PR pending.
+- [ ] **Owner action:** deploy the worker (RUNBOOK), set the two CRAWLER_* env vars in Vercel,
+      then fine-tune on a few real vendor/brand sites before any batch run.
 
 ## DF-7 — Crawl tuning + scale
 - [ ] Per-domain reliability scoring, scheduling/batch, de-dup, vision alt-text, budget alerts.

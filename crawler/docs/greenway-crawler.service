@@ -1,0 +1,26 @@
+# systemd unit for running the Greenway crawler on a bare VM.
+# Install:
+#   sudo cp docs/greenway-crawler.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now greenway-crawler
+# Adjust WorkingDirectory / User / paths to match your box.
+
+[Unit]
+Description=Greenway Crawler (research work-horse)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=greenway
+WorkingDirectory=/opt/greenway/crawler
+EnvironmentFile=/opt/greenway/crawler/.env
+ExecStart=/opt/greenway/crawler/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8200
+Restart=on-failure
+RestartSec=5
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

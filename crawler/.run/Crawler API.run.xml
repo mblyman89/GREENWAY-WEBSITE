@@ -1,0 +1,26 @@
+<component name="ProjectRunConfigurationManager">
+  <!-- Shared PyCharm run config: start the crawler API with one click.
+       Run > Edit Configurations should show "Crawler API" after opening the
+       crawler/ folder as a project and selecting the .venv interpreter. -->
+  <configuration default="false" name="Crawler API" type="PythonConfigurationType" factoryName="Python">
+    <module name="crawler" />
+    <option name="INTERPRETER_OPTIONS" value="" />
+    <option name="PARENT_ENVS" value="true" />
+    <envs>
+      <env name="PYTHONUNBUFFERED" value="1" />
+    </envs>
+    <option name="SDK_HOME" value="$PROJECT_DIR$/.venv/bin/python" />
+    <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+    <option name="IS_MODULE_SDK" value="false" />
+    <option name="ADD_CONTENT_ROOTS" value="true" />
+    <option name="ADD_SOURCE_ROOTS" value="true" />
+    <module name="crawler" />
+    <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+    <option name="SCRIPT_NAME" value="uvicorn" />
+    <option name="PARAMETERS" value="app.main:app --host 0.0.0.0 --port 8200 --reload" />
+    <option name="MODULE_MODE" value="true" />
+    <option name="REDIRECT_INPUT" value="false" />
+    <option name="INPUT_FILE" value="" />
+    <method v="2" />
+  </configuration>
+</component>

@@ -21,7 +21,10 @@ import {
   researchBrandAction,
   acceptBrandSuggestionAction,
   rejectBrandSuggestionAction,
+  crawlVendorAction,
+  crawlBrandAction,
 } from "../actions";
+import { isCrawlerConfigured } from "@/lib/ai/crawler-client";
 
 export const dynamic = "force-dynamic";
 
@@ -46,11 +49,12 @@ export default async function VendorEditPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; saved?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; note?: string }>;
 }) {
   await requirePermission("vendors.manage");
   const { id } = await params;
   const sp = await searchParams;
+  const crawlerOn = isCrawlerConfigured();
 
   const vendor = await getVendorById(id);
   if (!vendor) notFound();
@@ -90,7 +94,9 @@ export default async function VendorEditPage({
           <div className="mb-6 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">{decodeURIComponent(sp.error)}</div>
         )}
         {sp.saved && (
-          <div className="mb-6 rounded-lg border border-[#7ed957]/40 bg-[#7ed957]/10 px-4 py-3 text-sm text-[#7ed957]">Saved.</div>
+          <div className="mb-6 rounded-lg border border-[#7ed957]/40 bg-[#7ed957]/10 px-4 py-3 text-sm text-[#7ed957]">
+            {sp.note ? decodeURIComponent(sp.note) : "Saved."}
+          </div>
         )}
 
         <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
@@ -145,6 +151,45 @@ export default async function VendorEditPage({
                   Add an <code className="rounded bg-black/40 px-1">AI_API_KEY</code> to enable AI drafting (see the email/AI setup docs).
                 </p>
               )}
+
+              {/* Research with the crawler (DF-6): grounded drafts from a real page */}
+              <div className="rounded-lg border border-sky-400/25 bg-sky-400/[0.04] p-4">
+                <h3 className="flex items-center gap-2 text-xs font-semibold text-sky-200">
+                  <span>🔎 Research with the crawler</span>
+                  {!crawlerOn && (
+                    <span className="rounded-full border border-[#ffd700]/40 bg-[#ffd700]/10 px-2 py-0.5 text-[10px] font-semibold text-[#ffd700]">
+                      Not set up
+                    </span>
+                  )}
+                </h3>
+                <p className="mt-1 text-[11px] text-white/50">
+                  Paste this vendor&rsquo;s official site (or an about page). The crawler reads the page,
+                  extracts only what it can <strong>verify on the page</strong>, runs the same compliance
+                  checks, and adds <strong>drafts</strong> below for your review. Nothing is published.
+                </p>
+                {crawlerOn ? (
+                  <form action={crawlVendorAction} className="mt-3 flex flex-col gap-2 sm:flex-row">
+                    <input type="hidden" name="id" value={vendor.id} />
+                    <input
+                      name="url"
+                      type="url"
+                      required
+                      placeholder="https://vendor-website.com/about"
+                      className={`${field} flex-1`}
+                      defaultValue={vendor.website ?? ""}
+                    />
+                    <button type="submit" className="shrink-0 rounded-full bg-sky-400 px-5 py-2 text-sm font-bold text-black transition hover:brightness-110">
+                      🔎 Research
+                    </button>
+                  </form>
+                ) : (
+                  <p className="mt-2 rounded-lg border border-[#ffd700]/20 bg-[#ffd700]/5 px-3 py-2 text-[11px] text-[#ffd700]">
+                    Set <code className="rounded bg-black/40 px-1">CRAWLER_BASE_URL</code> and{" "}
+                    <code className="rounded bg-black/40 px-1">CRAWLER_SHARED_SECRET</code> to enable web research
+                    (see <code className="rounded bg-black/40 px-1">crawler/docs/RUNBOOK.md</code>).
+                  </p>
+                )}
+              </div>
 
               {/* Pending AI suggestions to review */}
               {pendingSuggestions.length > 0 && (
@@ -282,11 +327,54 @@ export default async function VendorEditPage({
                       </div>
                     )}
                   </div>
+
+                  {/* Brand-level Research with the crawler (DF-6): grounded drafts from a real page */}
+                  <div className="mt-2 space-y-3 rounded-lg border border-[#5ec1ff]/20 bg-[#5ec1ff]/[0.03] p-4">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-white">🔎 Research this brand with the crawler</span>
+                      {!crawlerOn && (
+                        <span className="rounded-full border border-[#ffd700]/40 bg-[#ffd700]/10 px-2 py-0.5 text-[10px] font-semibold text-[#ffd700]">Not set up</span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-white/45">
+                      Reads the brand&rsquo;s official page and drafts <strong>only</strong> what the page actually says
+                      (about, mission, product philosophy). Every field is verified against the source and
+                      compliance-checked. Nothing saves until you Accept.
+                    </p>
+                    {crawlerOn ? (
+                      <div className="flex flex-wrap items-end gap-2">
+                        <input
+                          form={`brand-crawl-${b.id}`}
+                          name="url"
+                          type="url"
+                          defaultValue={b.website ?? ""}
+                          placeholder="https://brand-official-site.com"
+                          className={`${field} min-w-[16rem] flex-1`}
+                        />
+                        <button form={`brand-crawl-${b.id}`} type="submit" className="rounded-full bg-[#5ec1ff] px-4 py-2 text-xs font-bold text-black transition hover:brightness-110">
+                          🔎 Research
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-white/40">
+                        Set <code className="rounded bg-black/40 px-1">CRAWLER_BASE_URL</code> and{" "}
+                        <code className="rounded bg-black/40 px-1">CRAWLER_SHARED_SECRET</code> to enable
+                        (see <code className="rounded bg-black/40 px-1">crawler/docs/RUNBOOK.md</code>).
+                      </p>
+                    )}
+                  </div>
                 </form>
               ))}
               {/* Standalone forms for the brand-AI buttons (can't nest <form> inside the brand <form>). */}
               {brands.map((b: Brand) => (
                 <form key={`brand-ai-${b.id}`} id={`brand-ai-${b.id}`} action={researchBrandAction} className="hidden">
+                  <input type="hidden" name="brandId" value={b.id} />
+                  <input type="hidden" name="vendorId" value={vendor.id} />
+                </form>
+              ))}
+              {/* Standalone forms for the brand crawler buttons (can't nest <form> inside the brand <form>). */}
+              {crawlerOn && brands.map((b: Brand) => (
+                <form key={`brand-crawl-${b.id}`} id={`brand-crawl-${b.id}`} action={crawlBrandAction} className="hidden">
                   <input type="hidden" name="brandId" value={b.id} />
                   <input type="hidden" name="vendorId" value={vendor.id} />
                 </form>
