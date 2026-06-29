@@ -251,6 +251,17 @@ export const CONTENT_BLOCK_SEEDS: ContentBlockSeed[] = [
     defaultValue:
       "This product has intoxicating effects and may be habit forming. Marijuana can impair concentration, coordination, and judgment. Do not operate a vehicle or machinery under the influence of this drug. For use only by adults 21 and older. Keep out of the reach of children.",
   },
+  {
+    block_key: "footer.hours.image",
+    page: "footer",
+    section: "hours",
+    label: "Footer — store hours image",
+    help_text:
+      "The 'OPEN / hours' graphic shown in the site footer. Use a transparent PNG so it blends with the black footer. Pick an image from your Media Library.",
+    field_type: "image",
+    seo_impact: false,
+    defaultValue: "/brand/store-hours-open-transparent.png",
+  },
   // ---- Business info -------------------------------------------------------
   {
     block_key: "business.hours.display",

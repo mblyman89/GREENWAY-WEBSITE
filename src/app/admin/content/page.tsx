@@ -71,8 +71,20 @@ export default async function SiteContentPage({
     );
   }
 
-  const blocks = await listContentBlocks();
-  const notSeeded = blocks.length === 0;
+  const allBlocks = await listContentBlocks();
+  // Per owner: this page edits ONLY the footer section. The site header has
+  // nothing worth editing, so we scope the editor to the blocks that actually
+  // render in the shared footer — the store-hours image, the plain-text hours
+  // line, and the WA compliance warning.
+  const FOOTER_BLOCK_KEYS = new Set<string>([
+    "footer.hours.image",
+    "footer.compliance.warning",
+    "business.hours.display",
+  ]);
+  const blocks = allBlocks.filter((b) => FOOTER_BLOCK_KEYS.has(b.block_key));
+  // "Not seeded" must reflect the whole table — if nothing exists yet, the
+  // owner still needs the one-click initialize button (which seeds everything).
+  const notSeeded = allBlocks.length === 0;
   const aiEnabled = isAiConfigured;
 
   // Published media images for the image-block picker (banners, hero photos).
@@ -128,15 +140,15 @@ export default async function SiteContentPage({
   return (
     <div>
       <AdminPageHeader
-        title="Site Content"
-        subtitle={`Controlled text blocks for ${CONTENT_BLOCK_SEEDS.length} approved slots. Edit a draft, then Publish to push it live. This is intentionally not a free-form page builder.`}
-        breadcrumbs={<Breadcrumbs items={[{ label: "Site Content" }]} />}
+        title="Footer Content"
+        subtitle="Edit the shared site footer — the store-hours image, the hours line, and the required WA compliance warning. Edit a draft, then Publish to push it live."
+        breadcrumbs={<Breadcrumbs items={[{ label: "Footer Content" }]} />}
         help={
           <HelpPanel
             id="content"
-            title="How to edit your site text"
+            title="How to edit your footer"
             steps={[
-              "Pick the text block you want to change (e.g. homepage headline).",
+              "Pick the footer block you want to change (e.g. the store-hours image).",
               "Edit the draft — your changes don't go live yet.",
               "Preview how it will look.",
               "Click Publish to update the public site.",
