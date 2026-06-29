@@ -30,15 +30,15 @@ export function EmptyState({
   secondary?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-white/15 bg-white/[0.02] px-6 py-12 text-center">
+    <div className="flex flex-col items-center justify-center rounded-[var(--admin-radius-lg)] border border-dashed border-[var(--admin-border-strong)] bg-white/[0.02] px-6 py-12 text-center">
       {icon && (
-        <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-white/5 text-3xl">
+        <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--admin-accent-soft)] text-3xl">
           {icon}
         </div>
       )}
-      <h3 className="text-base font-semibold text-white">{title}</h3>
+      <h3 className="text-base font-semibold text-[var(--admin-text)]">{title}</h3>
       {description && (
-        <p className="mt-2 max-w-md text-sm leading-relaxed text-white/50">{description}</p>
+        <p className="mt-2 max-w-md text-sm leading-relaxed text-[var(--admin-text-muted)]">{description}</p>
       )}
       {(action || secondary) && (
         <div className="mt-6 flex flex-col items-center gap-3 sm:flex-row">

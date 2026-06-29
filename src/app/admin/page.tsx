@@ -3,6 +3,9 @@ import { requireStaff } from "@/lib/auth/session";
 import { ROLE_LABELS } from "@/lib/auth/roles";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { StatCard } from "@/components/admin/StatCard";
+import { Section } from "@/components/admin/ui/Section";
+import { Card } from "@/components/admin/ui/Card";
+import { Button } from "@/components/admin/ui/Button";
 import { countLoyaltySignups } from "@/lib/loyalty/store";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { getPublishedVersion, listImports } from "@/lib/pos/menu-version";
@@ -42,40 +45,58 @@ export default async function AdminDashboardPage() {
   const firstName =
     (session.profile.full_name ?? session.email).split(/[\s@]/)[0] || "there";
 
+  const hasImport =
+    lastImportLabel !== "—" && lastImportLabel !== "No imports yet";
+
   return (
     <div>
       <AdminPageHeader
         title={`Welcome back, ${firstName}`}
-        subtitle={`You are signed in as ${ROLE_LABELS[session.profile.role]}.`}
+        subtitle={`Signed in as ${ROLE_LABELS[session.profile.role]}.`}
+        action={
+          <Button href="/" external variant="subtle" size="sm">
+            View live site ↗
+          </Button>
+        }
       />
 
       <div className="px-5 py-6 sm:px-8">
         {/* Getting started — only while setup is incomplete */}
         {setup.data && setup.data.completed < setup.data.total && (
-          <section className="mb-10">
+          <Section className="mb-10">
             <GettingStarted status={setup.data} />
-          </section>
+          </Section>
         )}
 
         {/* Command center */}
-        <section>
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-white/50">
-            Today at a glance
-          </h2>
+        <Section title="Today at a glance">
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <StatCard label="Open orders" value="—" hint="See orders" accent="orange" href="/admin/orders" />
+            <StatCard
+              label="Open orders"
+              value="—"
+              hint="See orders"
+              accent="orange"
+              href="/admin/orders"
+              icon="🧾"
+            />
             <StatCard
               label="Live menu items"
               value={publishedItems ?? "—"}
-              hint={publishedItems !== null ? "Currently published" : "No menu published yet"}
+              hint={
+                publishedItems !== null
+                  ? "Currently published"
+                  : "No menu published yet"
+              }
               accent="green"
               href="/admin/menu-imports"
+              icon="🌿"
             />
             <StatCard
               label="Last POS import"
-              value={lastImportLabel === "—" || lastImportLabel === "No imports yet" ? lastImportLabel : "✓"}
-              hint={lastImportLabel !== "—" && lastImportLabel !== "No imports yet" ? lastImportLabel : "Upload to begin"}
+              value={hasImport ? "✓" : lastImportLabel}
+              hint={hasImport ? lastImportLabel : "Upload to begin"}
               href="/admin/menu-imports"
+              icon="⬆️"
             />
             <StatCard
               label="Loyalty signups"
@@ -83,15 +104,13 @@ export default async function AdminDashboardPage() {
               hint="Awaiting POS entry"
               accent="gold"
               href="/admin/loyalty-signups"
+              icon="⭐"
             />
           </div>
-        </section>
+        </Section>
 
         {/* Build progress (data-driven) */}
-        <section className="mt-10">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-white/50">
-            Back office build progress
-          </h2>
+        <Section className="mt-10" title="Back office build progress">
           <div className="grid gap-3 sm:grid-cols-2">
             {BUILD_SLICES.map((slice) => (
               <ProgressRow
@@ -102,20 +121,20 @@ export default async function AdminDashboardPage() {
               />
             ))}
           </div>
-        </section>
+        </Section>
 
         {/* Quick links */}
-        <section className="mt-10">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-white/50">
-            Quick links
-          </h2>
-          <div className="flex flex-wrap gap-3">
-            <QuickLink href="/admin/loyalty-signups" label="Review loyalty signups" />
+        <Section className="mt-10" title="Quick links">
+          <div className="flex flex-wrap gap-2.5">
+            <QuickLink
+              href="/admin/loyalty-signups"
+              label="Review loyalty signups"
+            />
             <QuickLink href="/admin/users" label="Manage staff users" />
             <QuickLink href="/admin/audit" label="View audit log" />
-            <QuickLink href="/" label="View live site ↗" external />
+            <QuickLink href="/admin/content" label="Edit site content" />
           </div>
-        </section>
+        </Section>
       </div>
     </div>
   );
@@ -128,20 +147,24 @@ function GettingStarted({
 }) {
   const pct = Math.round((status.completed / status.total) * 100);
   return (
-    <div className="rounded-xl border border-[#7ed957]/25 bg-[#0a0a0a] p-5">
+    <Card padding="lg" accent="green">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-white">Getting started</h2>
-          <p className="mt-0.5 text-sm text-white/60">
+          <h2 className="text-base font-semibold text-[var(--admin-text)]">
+            Getting started
+          </h2>
+          <p className="mt-0.5 text-sm text-[var(--admin-text-muted)]">
             {status.completed} of {status.total} steps complete. Let&apos;s get
             your site fully live.
           </p>
         </div>
         <div className="text-right">
-          <span className="text-2xl font-semibold text-[#7ed957]">{pct}%</span>
+          <span className="text-2xl font-bold text-[var(--admin-accent)]">
+            {pct}%
+          </span>
           <Link
             href="/admin/getting-started"
-            className="mt-1 block text-xs font-semibold text-[#7ed957] hover:underline"
+            className="mt-1 block text-xs font-semibold text-[var(--admin-accent)] hover:underline"
           >
             Open full walkthrough →
           </Link>
@@ -151,30 +174,29 @@ function GettingStarted({
       {/* progress bar */}
       <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-white/10">
         <div
-          className="h-full rounded-full bg-[#7ed957] transition-all"
+          className="h-full rounded-full bg-[var(--admin-accent)] transition-all"
           style={{ width: `${pct}%` }}
         />
       </div>
 
       {/* next action call-out */}
       {status.nextAction && (
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#ffd700]/25 bg-[#ffd700]/[0.05] p-4">
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/25 bg-[var(--admin-gold-soft)] p-4">
           <div>
-            <p className="text-xs uppercase tracking-wide text-[#ffd700]">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--admin-gold)]">
               Next step
             </p>
-            <p className="mt-0.5 text-sm font-medium text-white">
+            <p className="mt-0.5 text-sm font-medium text-[var(--admin-text)]">
               {status.nextAction.label}
             </p>
-            <p className="text-xs text-white/60">{status.nextAction.detail}</p>
+            <p className="text-xs text-[var(--admin-text-muted)]">
+              {status.nextAction.detail}
+            </p>
           </div>
           {status.nextAction.href && (
-            <Link
-              href={status.nextAction.href}
-              className="rounded-lg bg-[#7ed957] px-4 py-2 text-sm font-semibold text-black transition hover:bg-[#94e570]"
-            >
+            <Button href={status.nextAction.href} variant="primary" size="sm">
               Do this now
-            </Link>
+            </Button>
           )}
         </div>
       )}
@@ -184,15 +206,15 @@ function GettingStarted({
         {status.checks.map((check) => (
           <li
             key={check.id}
-            className="flex items-start gap-3 rounded-lg border border-white/10 bg-[#0d0d0d] p-3"
+            className="flex items-start gap-3 rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] p-3"
           >
             <span
               className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs ${
                 check.state === "done"
-                  ? "bg-[#7ed957] text-black"
+                  ? "bg-[var(--admin-accent)] text-black"
                   : check.state === "unknown"
-                    ? "border border-white/20 text-white/30"
-                    : "border border-[#ffd700]/50 text-[#ffd700]"
+                    ? "border border-[var(--admin-border-strong)] text-[var(--admin-text-faint)]"
+                    : "border border-[var(--admin-gold)]/50 text-[var(--admin-gold)]"
               }`}
             >
               {check.state === "done" ? "✓" : ""}
@@ -201,25 +223,29 @@ function GettingStarted({
               {check.href && check.state !== "done" ? (
                 <Link
                   href={check.href}
-                  className="text-sm font-medium text-white hover:text-[#7ed957]"
+                  className="text-sm font-medium text-[var(--admin-text)] hover:text-[var(--admin-accent)]"
                 >
                   {check.label}
                 </Link>
               ) : (
                 <p
                   className={`text-sm font-medium ${
-                    check.state === "done" ? "text-white/70" : "text-white"
+                    check.state === "done"
+                      ? "text-[var(--admin-text-muted)]"
+                      : "text-[var(--admin-text)]"
                   }`}
                 >
                   {check.label}
                 </p>
               )}
-              <p className="text-xs text-white/40">{check.detail}</p>
+              <p className="text-xs text-[var(--admin-text-faint)]">
+                {check.detail}
+              </p>
             </div>
           </li>
         ))}
       </ul>
-    </div>
+    </Card>
   );
 }
 
@@ -233,38 +259,35 @@ function ProgressRow({
   done?: boolean;
 }) {
   return (
-    <div className="flex items-start gap-3 rounded-lg border border-white/10 bg-[#0a0a0a] p-4">
+    <Card padding="sm" className="flex items-start gap-3">
       <span
         className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs ${
-          done ? "bg-[#7ed957] text-black" : "border border-white/20 text-white/30"
+          done
+            ? "bg-[var(--admin-accent)] text-black"
+            : "border border-[var(--admin-border-strong)] text-[var(--admin-text-faint)]"
         }`}
       >
         {done ? "✓" : ""}
       </span>
       <div>
-        <p className={`text-sm font-medium ${done ? "text-white" : "text-white/70"}`}>
+        <p
+          className={`text-sm font-medium ${
+            done ? "text-[var(--admin-text)]" : "text-[var(--admin-text-muted)]"
+          }`}
+        >
           {label}
         </p>
-        <p className="text-xs text-white/40">{detail}</p>
+        <p className="text-xs text-[var(--admin-text-faint)]">{detail}</p>
       </div>
-    </div>
+    </Card>
   );
 }
 
-function QuickLink({
-  href,
-  label,
-  external,
-}: {
-  href: string;
-  label: string;
-  external?: boolean;
-}) {
+function QuickLink({ href, label }: { href: string; label: string }) {
   return (
     <Link
       href={href}
-      target={external ? "_blank" : undefined}
-      className="rounded-full border border-white/15 px-4 py-2 text-sm text-white/80 transition hover:border-[#7ed957] hover:text-white"
+      className="admin-focus rounded-full border border-[var(--admin-border-strong)] px-4 py-2 text-sm text-[var(--admin-text-muted)] transition hover:border-[var(--admin-accent)] hover:text-[var(--admin-text)]"
     >
       {label}
     </Link>

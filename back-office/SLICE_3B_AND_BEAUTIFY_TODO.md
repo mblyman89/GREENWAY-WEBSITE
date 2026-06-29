@@ -41,11 +41,24 @@ make their hero editable via content blocks.
 ## BEAUTIFY — Back-office UI cleanup/beautification (3 focused slices)
 Goal: a gorgeous, consistent, presentable admin. NOT rushed. Owner: "presentability matters."
 
-### Beautify Slice 1 — Design system + shell (foundation)
-- [ ] Audit current admin look (layout.tsx, AdminPageHeader, nav, cards, buttons, inputs).
-- [ ] Establish a small admin design-token set (spacing, radius, shadows, brand accents) + shared primitives
-      (Button, Card, Badge, Input, Section) so every page is consistent.
-- [ ] Polish the sidebar/nav + top bar + page header (active states, icons, grouping, hover).
+### Beautify Slice 1 — Design system + shell (foundation) ✅ MERGED (PR #78)
+- [x] Audit current admin look. FINDINGS: 81 files hardcoded brand hex; CSS vars existed in :root but were
+      UNUSED in admin; 5 ad-hoc card backgrounds (#050505/#0a0a0a/#0d0d0d/#0f0f0f/#0f1a10); scattered radii;
+      no shared Button/Card/Input primitives (inputCls/labelCls copy-pasted everywhere). A solid ux/ kit
+      (StatusPill, EmptyState, Skeleton, Toast…) + charts/ kit already existed — kept & built on.
+- [x] Added ADMIN DESIGN TOKENS to globals.css: --admin-canvas/surface/surface-2/surface-hover, --admin-border(-strong),
+      --admin-text(-muted/-faint), --admin-accent/gold/orange/danger (+ -soft), radius scale (sm/.75/lg/xl),
+      shadow scale. Added `.admin-shell` canvas (quiet brand glow over near-black), slim scrollbar, `.admin-focus`
+      ring, `.admin-card-interactive` hover lift. Scoped to admin — public site untouched.
+- [x] Shared primitives at `src/components/admin/ui/`: Button (primary/save/subtle/ghost/danger; sm/md/lg; href→Link),
+      Card + CardHeader (one surface, accent stripe, interactive), Field/Input/Textarea/Select (+ exported
+      controlClassName/labelClassName), Section (titled block), Badge. Barrel `ui/index.ts`.
+- [x] Applied to shell: `.admin-shell` on layout.tsx wrappers; AdminSidebar rebuilt (premium feel, active accent bar,
+      avatar/profile footer, token surfaces, backdrop blur); AdminPageHeader (sticky, blurred, token-driven);
+      StatCard (token surfaces + optional accent icon).
+- [x] Showcase: redesigned /admin dashboard with the new primitives (Section/Card/Button/StatCard). Updated ux
+      EmptyState/Skeleton/StatusPill + SectionCard to use tokens.
+- [x] tsc clean, eslint clean, `next build` EXIT=0 (all ~2340 pages). Static preview built + screenshotted for owner.
 
 ### Beautify Slice 2 — Dashboard + high-traffic pages
 - [ ] Redesign /admin landing dashboard (at-a-glance cards, recent activity, quick actions).

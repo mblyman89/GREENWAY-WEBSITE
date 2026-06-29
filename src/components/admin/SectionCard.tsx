@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ContentImageField, type MediaChoice } from "./ContentImageField";
+import { controlClassName, labelClassName } from "./ui";
 import type {
   SectionAdminVM,
   SectionButton,
@@ -125,15 +126,13 @@ export function SectionCard({
     );
   }
 
-  const inputCls =
-    "w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white placeholder-white/30 outline-none focus:border-[#7ed957]/60";
-  const labelCls =
-    "mb-1 block text-[0.7rem] font-semibold uppercase tracking-wide text-white/60";
+  const inputCls = controlClassName;
+  const labelCls = labelClassName;
 
   return (
     <div
       id={`section-${section.id}`}
-      className="scroll-mt-24 rounded-2xl border border-white/10 bg-[#0f0f0f] p-5"
+      className="scroll-mt-24 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5"
     >
       {/* Header */}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">

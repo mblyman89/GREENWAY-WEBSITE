@@ -19,15 +19,15 @@ import type { ReactNode } from "react";
 type Tone = "draft" | "published" | "archived" | "error" | "warning" | "info" | "success" | "pending" | "neutral";
 
 const TONE_CLASSES: Record<Tone, string> = {
-  draft: "bg-[#ff7f00]/15 text-[#ff7f00]",
-  published: "bg-[#7ed957]/15 text-[#7ed957]",
-  archived: "bg-white/10 text-white/50",
-  error: "bg-red-500/15 text-red-400",
-  warning: "bg-[#ffd700]/15 text-[#ffd700]",
-  info: "bg-white/10 text-white/70",
-  success: "bg-[#7ed957]/15 text-[#7ed957]",
-  pending: "bg-[#ffd700]/15 text-[#ffd700]",
-  neutral: "bg-white/10 text-white/60",
+  draft: "bg-[var(--admin-orange-soft)] text-[var(--admin-orange)]",
+  published: "bg-[var(--admin-accent-soft)] text-[var(--admin-accent)]",
+  archived: "bg-white/10 text-[var(--admin-text-faint)]",
+  error: "bg-[var(--admin-danger-soft)] text-[var(--admin-danger)]",
+  warning: "bg-[var(--admin-gold-soft)] text-[var(--admin-gold)]",
+  info: "bg-white/10 text-[var(--admin-text-muted)]",
+  success: "bg-[var(--admin-accent-soft)] text-[var(--admin-accent)]",
+  pending: "bg-[var(--admin-gold-soft)] text-[var(--admin-gold)]",
+  neutral: "bg-white/10 text-[var(--admin-text-muted)]",
 };
 
 // Map common raw status strings to a tone so callers can pass DB values directly.
