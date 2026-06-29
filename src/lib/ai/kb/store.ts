@@ -12,11 +12,11 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import {
-  SEED_STRAINS,
   SEED_TERPENES,
   SEED_CATEGORIES,
   SEED_BANNED_PHRASES,
 } from "./seed";
+import { STRAINS_RICH } from "./strains-data";
 
 export type KbCounts = {
   strains: number;
@@ -74,7 +74,7 @@ export async function seedKnowledgeBase(actorId: string | null): Promise<SeedRep
   }
   const admin = createSupabaseAdminClient();
 
-  const strainRows = SEED_STRAINS.map((s) => ({
+  const strainRows = STRAINS_RICH.map((s) => ({
     slug: s.slug,
     name: s.name,
     aliases: s.aliases ?? [],
@@ -84,6 +84,12 @@ export async function seedKnowledgeBase(actorId: string | null): Promise<SeedRep
     flavor_notes: s.flavor_notes,
     terpenes: s.terpenes,
     summary: s.summary,
+    dominant_cannabinoid: s.dominant_cannabinoid ?? null,
+    potency_note: s.potency_note ?? null,
+    bud_structure: s.bud_structure ?? null,
+    origin: s.origin ?? null,
+    sources: s.sources ?? [],
+    confidence: s.confidence ?? null,
     active: true,
     created_by: actorId,
     updated_by: actorId,
