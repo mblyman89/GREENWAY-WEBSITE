@@ -54,10 +54,10 @@
       brand house-style will be populated by the crawler in DF-6.)
 - [x] tsc/eslint/build. PR #91 merged. No migration to hand over.
 
-## DF-5 — AI-4: provenance + confidence + accept-rate reporting
-- [ ] Surface confidence/source in review grid.
-- [ ] Accept-rate-by-prompt_version/feature/source on `/admin/ai-usage`.
-- [ ] tsc/eslint/build. PR.
+## DF-5 — AI-4: provenance + confidence + accept-rate reporting ✅ (PR #92)
+- [x] Surface confidence/source in review grid. (Done in DF-4 via AiProvenanceBadge.)
+- [x] Accept-rate by prompt_version / feature / source / confidence-band on `/admin/ai-usage`.
+- [x] tsc/eslint/build. PR #92 merged.
 
 ## DF-6 — crawl4ai work-horse engine
 - [ ] Decide runtime (Python crawl4ai worker vs TS bridge); provider-agnostic config.
