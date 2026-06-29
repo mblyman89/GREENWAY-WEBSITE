@@ -9,6 +9,11 @@ your work VM / desktop, use [`LOCAL_TESTING_GUIDE.md`](LOCAL_TESTING_GUIDE.md)
 first. PyCharm/local testing is feasible and does **not** require Cloudflare
 Tunnel.
 
+When you're ready to deploy the permanent home with your IT person, the full
+expert, step-by-step build is in
+[`IT_DEPLOYMENT_GUIDE.md`](IT_DEPLOYMENT_GUIDE.md) (VM hardening, Docker/systemd,
+Cloudflare Tunnel, secrets, Vercel wiring, verification, ops).
+
 ## What the worker needs
 - Python 3.11+, ~1–2 GB RAM free (Chromium via Playwright is the heavy part),
   a couple GB disk for the browser + page cache.
