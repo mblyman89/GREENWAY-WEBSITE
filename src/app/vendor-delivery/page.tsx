@@ -4,6 +4,7 @@ import { Header } from "@/components/site/Header";
 import { VendorDirectory } from "@/components/vendors/VendorDirectory";
 import { pageMetadata } from "@/lib/seo/seo";
 import { getContentValues, isPreviewActive } from "@/lib/cms/render-content";
+import { getPageBanners } from "@/lib/cms/page-sections-store";
 
 export const metadata = pageMetadata({
   title: "Vendors & Partners — Washington Cannabis Brands",
@@ -13,9 +14,10 @@ export const metadata = pageMetadata({
 });
 
 export default async function VendorDeliveryPage() {
-  const [copy, preview] = await Promise.all([
+  const [copy, preview, banners] = await Promise.all([
     getContentValues(["vendors.outreach.heading"]),
     isPreviewActive(),
+    getPageBanners("vendors", ["vendors.grow", "vendors.brands"]),
   ]);
 
   return (
@@ -26,6 +28,9 @@ export default async function VendorDeliveryPage() {
         content={{
           heading: copy["vendors.outreach.heading"],
           editable: preview,
+          grow: banners.byKey["vendors.grow"],
+          brands: banners.byKey["vendors.brands"],
+          extraSections: banners.extras,
         }}
       />
       <Footer />

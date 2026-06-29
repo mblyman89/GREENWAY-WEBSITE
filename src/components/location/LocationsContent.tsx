@@ -2,6 +2,8 @@ import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { greenwayBusiness } from "@/content/business";
+import { SiteText } from "@/components/site/SiteText";
+import { getContentForRender } from "@/lib/cms/render-content";
 
 const aboutCopy =
   "Your Most Trusted Cannabis Dispensary Greenway Marijuana provides a diverse range of cannabis products catering to both recreational and medicinal purposes. Our well-trained Budtenders are dedicated to addressing your inquiries and assisting you in selecting the right products tailored to your individual requirements. Our extensive inventory encompasses various offerings, catering to varying budgetary considerations and preferences. Greenway Marijuana prides itself on fostering a contemporary, inviting environment where patrons can comfortably engage. We regularly feature promotions, flash sales, and discounted items. We eagerly anticipate the opportunity to extend our services to you and aspire to become your trusted destination for Cannabis and Cannabis needs.";
@@ -33,13 +35,18 @@ function DetailRow({ label, children }: { label: string; children: ReactNode }) 
   );
 }
 
-export function LocationsContent() {
+export async function LocationsContent() {
+  // Editable from Admin → Site Content (locations.hero.*). Falls back to the
+  // bundled storefront asset so the live look never changes until staff edit.
+  const heroImage =
+    (await getContentForRender("locations.hero.image"))?.trim() ||
+    greenwayBusiness.assets.storefront;
   return (
     <section className="overflow-hidden bg-black text-white">
       <div className="mx-auto max-w-7xl px-4 pt-8 md:px-8 md:pt-12 lg:px-10">
         <div className="relative min-h-[19rem] overflow-hidden rounded-[1.35rem] border border-white/10 bg-zinc-950 shadow-2xl shadow-black/40 md:min-h-[27rem] md:rounded-[2rem] lg:min-h-[31rem]">
           <Image
-            src={greenwayBusiness.assets.storefront}
+            src={heroImage}
             alt="Front of Greenway Marijuana storefront on Geiger Road"
             fill
             priority
@@ -51,9 +58,11 @@ export function LocationsContent() {
 
           <div className="relative flex min-h-[19rem] items-end p-5 md:min-h-[27rem] md:p-8 lg:min-h-[31rem] lg:p-10">
             <div className="max-w-5xl">
-              <h1 className="text-5xl font-black uppercase leading-[0.88] tracking-tight text-white drop-shadow-2xl md:text-7xl lg:text-8xl">
-                Geiger Rd
-              </h1>
+              <SiteText
+                blockKey="locations.hero.title"
+                as="h1"
+                className="text-5xl font-black uppercase leading-[0.88] tracking-tight text-white drop-shadow-2xl md:text-7xl lg:text-8xl"
+              />
               <div className="mt-4 flex flex-col gap-2 text-sm font-black tracking-[0.08em] text-zinc-100 drop-shadow-lg sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-5 md:text-base">
                 <span className="inline-flex items-center gap-2 text-[var(--greenway)]">
                   <MapPinIcon />

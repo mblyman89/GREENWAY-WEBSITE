@@ -1,3 +1,5 @@
+import { SiteText } from "@/components/site/SiteText";
+
 const priceMatchDetails = [
   "Must be a loyalty member. Ask your budtender for more info!",
   "Competitors' items must be regularly priced. Exclusions include happy hour sales, holiday sales, daily specials, and any other specials/promotions.",
@@ -40,15 +42,21 @@ export function PriceMatchContent() {
       <div className="noise-overlay" />
 
       <div className="relative mx-auto max-w-7xl px-4 py-7 md:px-8 md:py-14">
-        <h1 className="text-center text-5xl font-black leading-none tracking-tight text-white md:text-7xl">Price Match</h1>
+        <SiteText
+          blockKey="pricematch.hero.title"
+          as="h1"
+          className="text-center text-5xl font-black leading-none tracking-tight text-white md:text-7xl"
+        />
 
         <article className="mx-auto mt-5 rounded-[1.45rem] border border-white/10 bg-zinc-950/88 p-5 shadow-2xl shadow-black/40 md:mt-8 md:rounded-[2.2rem] md:p-9 lg:p-11">
           <p className="text-[0.68rem] font-black uppercase tracking-[0.24em] text-[var(--gold)] md:text-xs">
             Guaranteed savings
           </p>
-          <h2 className="mt-3 text-center text-3xl font-black uppercase leading-[0.95] tracking-tight text-[var(--orange)] md:text-6xl">
-            Our Price Match Promise
-          </h2>
+          <SiteText
+            blockKey="pricematch.hero.subtitle"
+            as="h2"
+            className="mt-3 text-center text-3xl font-black uppercase leading-[0.95] tracking-tight text-[var(--orange)] md:text-6xl"
+          />
           <p className="mt-5 text-sm font-semibold leading-7 text-zinc-200 md:max-w-5xl md:text-lg md:leading-8">
             Greenway Marijuana now offers a price match promise for our Loyalty members on all regularly priced products from our Port Orchard competitors! We strive to offer the lowest prices in town but now it&apos;s guaranteed. You can now get the lowest price at all Greenway locations.
           </p>

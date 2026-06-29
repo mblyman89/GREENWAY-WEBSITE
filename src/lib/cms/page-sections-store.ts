@@ -182,6 +182,59 @@ export async function getSectionsForRender(
   }
 }
 
+/**
+ * Convenience: fetch a page's sections AND pre-split them into a keyed map plus
+ * an "extras" list, so server pages can wire builder-managed banners with one
+ * call. `primaryKeys` are the section_keys the page renders in bespoke slots
+ * (e.g. ["vendors.grow","vendors.brands"]); everything else is an extra banner.
+ */
+export async function getPageBanners(
+  pageSlug: string,
+  primaryKeys: string[],
+): Promise<{
+  byKey: Record<string, BannerData | undefined>;
+  extras: BannerData[];
+}> {
+  const sections = await getSectionsForRender(pageSlug);
+  const byKey: Record<string, BannerData | undefined> = {};
+  const extras: BannerData[] = [];
+  for (const s of sections) {
+    const data = toBannerData(s);
+    if (primaryKeys.includes(s.key)) byKey[s.key] = data;
+    else extras.push(data);
+  }
+  return { byKey, extras };
+}
+
+/** Plain, client-safe banner shape (mirrors components SectionBannerData). */
+export type BannerData = {
+  key: string;
+  image: string;
+  imageAlt: string;
+  eyebrow: string;
+  title: string;
+  subtitle: string;
+  buttons: { label: string; href: string; variant: SectionButtonVariant; enabled: boolean }[];
+};
+
+/** Map a resolved RenderSection to the client-safe BannerData shape. */
+export function toBannerData(s: RenderSection): BannerData {
+  return {
+    key: s.key,
+    image: s.image,
+    imageAlt: s.imageAlt,
+    eyebrow: s.eyebrow,
+    title: s.title,
+    subtitle: s.subtitle,
+    buttons: (s.buttons ?? []).map((b) => ({
+      label: b.label,
+      href: b.href,
+      variant: b.variant,
+      enabled: b.enabled,
+    })),
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Lazy seed
 // ---------------------------------------------------------------------------

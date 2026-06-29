@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useState } from "react";
-import { SectionBanner } from "@/components/home/SectionBanner";
+import { SectionBanner, type SectionBannerData } from "@/components/home/SectionBanner";
 import { greenwayBusiness } from "@/content/business";
 import vendorsData from "@/data/vendors.json";
 
@@ -131,20 +131,39 @@ function VendorCard({ vendor, index }: { vendor: Vendor; index: number }) {
   );
 }
 
-type VendorContent = { heading?: string; editable?: boolean };
+type VendorContent = {
+  heading?: string;
+  editable?: boolean;
+  /** Builder-managed banners (from page_sections). When present they drive the
+   * two hero banners; otherwise the hardcoded defaults below are used. */
+  grow?: SectionBannerData;
+  brands?: SectionBannerData;
+  /** Any additional banner sections staff added in the Pages builder, rendered
+   * below the vendor directory. */
+  extraSections?: SectionBannerData[];
+};
 
 export function VendorDirectory({ content }: { content?: VendorContent } = {}) {
   return (
     <div className="bg-black px-4 py-6 text-white md:px-8 md:py-8">
       <div className="mx-auto max-w-[88rem] space-y-6 md:space-y-8">
-        {/* Hero banner 1 — wide + short, premium art, professional copy. */}
+        {/* Hero banner 1 — wide + short, premium art, professional copy.
+            Driven by the Pages builder (vendors.grow) when present, else the
+            faithful hardcoded defaults so the live look never changes. */}
         <SectionBanner
-          imageSrc="/vendors/vendor-hero.png"
-          imageAlt="Premium cannabis products against a Pacific Northwest forest backdrop"
-          eyebrow="Vendors & Partners"
-          title="Grow With Greenway"
+          imageSrc={content?.grow?.image || "/vendors/vendor-hero.png"}
+          imageAlt={
+            content?.grow?.imageAlt ||
+            "Premium cannabis products against a Pacific Northwest forest backdrop"
+          }
+          eyebrow={content?.grow?.eyebrow || "Vendors & Partners"}
+          title={content?.grow?.title || "Grow With Greenway"}
           titleClassName="text-[var(--orange)]"
-          subtitle="We partner with licensed Washington producers and processors who share our commitment to quality, consistency, and craft."
+          subtitle={
+            content?.grow?.subtitle ||
+            "We partner with licensed Washington producers and processors who share our commitment to quality, consistency, and craft."
+          }
+          buttons={content?.grow?.buttons}
           priority
         />
 
@@ -181,13 +200,18 @@ export function VendorDirectory({ content }: { content?: VendorContent } = {}) {
           </div>
         </section>
 
-        {/* Hero banner 2 — same size, introduces the vendor directory below. */}
+        {/* Hero banner 2 — same size, introduces the vendor directory below.
+            Driven by the Pages builder (vendors.brands) when present. */}
         <SectionBanner
-          imageSrc="/vendors/vendor-section-banner.png"
-          imageAlt="A grid of partner cannabis brand emblems"
-          eyebrow="Our Partners"
-          title="Brands We Carry"
-          subtitle="The producers and processors stocking Greenway shelves today."
+          imageSrc={content?.brands?.image || "/vendors/vendor-section-banner.png"}
+          imageAlt={content?.brands?.imageAlt || "A grid of partner cannabis brand emblems"}
+          eyebrow={content?.brands?.eyebrow || "Our Partners"}
+          title={content?.brands?.title || "Brands We Carry"}
+          subtitle={
+            content?.brands?.subtitle ||
+            "The producers and processors stocking Greenway shelves today."
+          }
+          buttons={content?.brands?.buttons}
         />
 
         {/* Vendor directory — HomeBrands-style cards, logo + name, tap to expand. */}
@@ -200,6 +224,19 @@ export function VendorDirectory({ content }: { content?: VendorContent } = {}) {
         <p className="pt-2 text-center text-xs font-semibold text-zinc-500">
           Logos and partner descriptions shown are placeholders pending final vendor assets.
         </p>
+
+        {/* Extra banners staff added in the Pages builder render here. */}
+        {(content?.extraSections ?? []).map((s) => (
+          <SectionBanner
+            key={s.key}
+            imageSrc={s.image}
+            imageAlt={s.imageAlt}
+            eyebrow={s.eyebrow}
+            title={s.title}
+            subtitle={s.subtitle}
+            buttons={s.buttons}
+          />
+        ))}
       </div>
     </div>
   );

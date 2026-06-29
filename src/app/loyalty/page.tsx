@@ -4,6 +4,7 @@ import { Header } from "@/components/site/Header";
 import { LoyaltySignupForm } from "@/components/loyalty/LoyaltySignupForm";
 import { pageMetadata } from "@/lib/seo/seo";
 import { getContentValues, isPreviewActive } from "@/lib/cms/render-content";
+import { getPageBanners } from "@/lib/cms/page-sections-store";
 
 export const metadata = pageMetadata({
   title: "Loyalty Rewards & Sign-Up — Greenway Points",
@@ -14,7 +15,7 @@ export const metadata = pageMetadata({
 });
 
 export default async function LoyaltyPage() {
-  const [copy, preview] = await Promise.all([
+  const [copy, preview, banners] = await Promise.all([
     getContentValues([
       "loyalty.hero.title",
       "loyalty.hero.subtitle",
@@ -22,7 +23,13 @@ export default async function LoyaltyPage() {
       "loyalty.hero.image_mobile",
     ]),
     isPreviewActive(),
+    getPageBanners("loyalty", ["loyalty.hero"]),
   ]);
+
+  // The Loyalty hero is image-led (distinct from a SectionBanner), so the
+  // builder section just supplies title/subtitle copy when present; the image
+  // stays driven by the loyalty.hero.image* content blocks. Live look unchanged.
+  const hero = banners.byKey["loyalty.hero"];
 
   return (
     <main id="top" className="min-h-screen bg-black text-white">
@@ -30,8 +37,8 @@ export default async function LoyaltyPage() {
       <Breadcrumbs items={[{ label: "Loyalty" }]} />
       <LoyaltySignupForm
         content={{
-          title: copy["loyalty.hero.title"],
-          subtitle: copy["loyalty.hero.subtitle"],
+          title: hero?.title || copy["loyalty.hero.title"],
+          subtitle: hero?.subtitle || copy["loyalty.hero.subtitle"],
           heroImage: copy["loyalty.hero.image"],
           heroImageMobile: copy["loyalty.hero.image_mobile"],
           editable: preview,

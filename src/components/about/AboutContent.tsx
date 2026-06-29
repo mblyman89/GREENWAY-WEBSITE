@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { SiteText } from "@/components/site/SiteText";
 
 const values = [
   {
@@ -31,15 +32,19 @@ export function AboutContent() {
 
       <div className="relative mx-auto max-w-7xl px-4 py-9 md:px-8 md:py-16 lg:py-20">
         <div className="mx-auto max-w-5xl text-center">
-          <h1 className="text-5xl font-black uppercase leading-[0.9] tracking-tight text-white md:text-7xl lg:text-8xl">
-            <span className="block">We Are</span>
-            <span className="block">Greenway.</span>
-          </h1>
-          <p className="mx-auto mt-5 max-w-full text-center text-[0.78rem] font-semibold leading-6 text-zinc-300 sm:text-sm md:mt-7 md:text-xl md:leading-9 lg:text-2xl">
-            <span className="block whitespace-nowrap">Founded on the belief that cannabis can enhance</span>
-            <span className="block whitespace-nowrap">everyday life, we are dedicated to providing</span>
-            <span className="block whitespace-nowrap">education, quality, and community.</span>
-          </p>
+          {/* Editable from Admin → Site Content (about.hero.*). Keeps the
+              distinct large display styling; falls back to the original copy so
+              there's no visible change until staff edit + publish. */}
+          <SiteText
+            blockKey="about.hero.title"
+            as="h1"
+            className="text-5xl font-black uppercase leading-[0.9] tracking-tight text-white md:text-7xl lg:text-8xl"
+          />
+          <SiteText
+            blockKey="about.hero.subtitle"
+            as="p"
+            className="mx-auto mt-5 max-w-3xl text-center text-[0.78rem] font-semibold leading-6 text-zinc-300 sm:text-sm md:mt-7 md:text-xl md:leading-9 lg:text-2xl"
+          />
         </div>
 
         <div className="mt-10 grid gap-5 lg:mt-16 lg:grid-cols-2 lg:items-stretch lg:gap-7">

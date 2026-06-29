@@ -77,6 +77,102 @@ export const PAGE_SECTION_SEEDS: SectionSeed[] = [
     ],
     settings: { lanes: "brand" },
   },
+
+  // --- Specials --------------------------------------------------------------
+  // Mirrors the existing specials hero (eyebrow/title/subtitle). The public page
+  // keeps its distinct pill-eyebrow styling for this PRIMARY hero; the builder
+  // controls its copy + lets staff add extra banners below it.
+  {
+    page_slug: "specials",
+    section_key: "specials.hero",
+    kind: "banner",
+    sort_order: 0,
+    image: "/home/hero-banner.webp",
+    image_alt: "Greenway Marijuana cannabis specials and daily deals",
+    image_focus: "right",
+    text_align: "left",
+    eyebrow: "Deals every day",
+    title: "Cannabis Specials",
+    subtitle:
+      "Check out our latest deals and save on premium cannabis products. New specials added regularly.",
+    body: null,
+    buttons: [],
+  },
+
+  // --- Vendors --------------------------------------------------------------
+  // The two banners on /vendor-delivery were previously HARDCODED. Seeded here
+  // faithfully so they become editable for the first time (exact current copy).
+  {
+    page_slug: "vendors",
+    section_key: "vendors.grow",
+    kind: "banner",
+    sort_order: 0,
+    image: "/vendors/vendor-hero.png",
+    image_alt:
+      "Premium cannabis products against a Pacific Northwest forest backdrop",
+    image_focus: "right",
+    text_align: "left",
+    eyebrow: "Vendors & Partners",
+    title: "Grow With Greenway",
+    subtitle:
+      "We partner with licensed Washington producers and processors who share our commitment to quality, consistency, and craft.",
+    body: null,
+    buttons: [],
+    settings: { titleClassName: "text-[var(--orange)]" },
+  },
+  {
+    page_slug: "vendors",
+    section_key: "vendors.brands",
+    kind: "banner",
+    sort_order: 1,
+    image: "/vendors/vendor-section-banner.png",
+    image_alt: "A grid of partner cannabis brand emblems",
+    image_focus: "right",
+    text_align: "left",
+    eyebrow: "Our Partners",
+    title: "Brands We Carry",
+    subtitle: "The producers and processors stocking Greenway shelves today.",
+    body: null,
+    buttons: [],
+  },
+
+  // --- Menu -----------------------------------------------------------------
+  // Mirrors menu.hero.* content blocks. Public page keeps its bespoke decorated
+  // hero band for the PRIMARY hero; builder controls copy + extra banners.
+  {
+    page_slug: "menu",
+    section_key: "menu.hero",
+    kind: "banner",
+    sort_order: 0,
+    image: "/home/category-banner.webp",
+    image_alt: "Shop the full Greenway Marijuana cannabis menu",
+    image_focus: "right",
+    text_align: "left",
+    eyebrow: null,
+    title: "Shop the Menu",
+    subtitle: "Flower, prerolls, vapes, edibles, concentrates & more.",
+    body: null,
+    buttons: [],
+  },
+
+  // --- Loyalty --------------------------------------------------------------
+  // Mirrors loyalty.hero.* content blocks. Image-led hero; public page keeps its
+  // distinct full-width image hero for the PRIMARY hero.
+  {
+    page_slug: "loyalty",
+    section_key: "loyalty.hero",
+    kind: "banner",
+    sort_order: 0,
+    image: "/brand/greenway-loyalty-points-hero-desktop.png",
+    image_alt: "Greenway Marijuana loyalty rewards",
+    image_focus: "center",
+    text_align: "left",
+    eyebrow: null,
+    title: "Signup to get offers and discounts from Greenway Marijuana",
+    subtitle: "Get updates on our promotions tailored to you.",
+    body: null,
+    buttons: [],
+  },
 ];
 
 /** Seeds for a given page slug. */
