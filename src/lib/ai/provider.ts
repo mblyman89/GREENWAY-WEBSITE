@@ -23,11 +23,16 @@
 import "server-only";
 import { logAiUsage, estimateTokens } from "./usage";
 
-const AI_API_KEY = process.env.AI_API_KEY ?? "";
-const AI_BASE_URL = process.env.AI_BASE_URL ?? "https://api.openai.com/v1";
-const AI_MODEL = process.env.AI_MODEL ?? "gpt-4o-mini";
+// Accept BOTH our generic names and the standard OpenAI names so a plain
+// `OPENAI_API_KEY` (the most common thing an owner already has) just works.
+// AI_* wins if both are set; otherwise we fall back to OPENAI_*.
+const AI_API_KEY = process.env.AI_API_KEY ?? process.env.OPENAI_API_KEY ?? "";
+const AI_BASE_URL =
+  process.env.AI_BASE_URL ?? process.env.OPENAI_BASE_URL ?? "https://api.openai.com/v1";
+const AI_MODEL = process.env.AI_MODEL ?? process.env.OPENAI_MODEL ?? "gpt-4o-mini";
 // A model capable of vision; defaults to the same family. Override if needed.
-const AI_VISION_MODEL = process.env.AI_VISION_MODEL ?? "gpt-4o-mini";
+const AI_VISION_MODEL =
+  process.env.AI_VISION_MODEL ?? process.env.OPENAI_VISION_MODEL ?? AI_MODEL;
 
 /** True when an AI key is configured. UI should soft-disable AI when false. */
 export const isAiConfigured = Boolean(AI_API_KEY);
@@ -56,7 +61,7 @@ export type GenerateOptions = {
 
 export class AiNotConfiguredError extends Error {
   constructor() {
-    super("AI is not configured. Set AI_API_KEY (and optionally AI_BASE_URL / AI_MODEL).");
+    super("AI is not configured. Set OPENAI_API_KEY (or AI_API_KEY), and optionally AI_MODEL / AI_BASE_URL.");
     this.name = "AiNotConfiguredError";
   }
 }
