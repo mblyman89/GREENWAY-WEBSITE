@@ -168,6 +168,22 @@ STRAINS = [
 ]
 
 
+# Expansion pass 2 — more verified strains with rich aliases for grower-to-grower
+# name variants (loosened name matching per owner request). New strains are
+# appended (skipping slugs already present); ALIAS_MERGES adds variant aliases to
+# strains already in the original list.
+try:
+    from strains_extra import EXTRA_STRAINS, ALIAS_MERGES
+    _existing = {s[0].strip().lower() for s in STRAINS}
+    for _row in EXTRA_STRAINS:
+        if _row[0].strip().lower() not in _existing:
+            STRAINS.append(_row)
+            _existing.add(_row[0].strip().lower())
+except ImportError:
+    EXTRA_STRAINS = []
+    ALIAS_MERGES = {}
+
+
 def slugify(name: str) -> str:
     return name.strip().lower()
 
@@ -179,10 +195,16 @@ def main():
     rows = []
     for (name, stype, lineage, dom_terp, aromas, flavors, terps, cann, potency,
          bud, origin, summary, aliases, sources, conf) in STRAINS:
+        slug = slugify(name)
+        # Merge grower-to-grower variant aliases for existing strains, dedup-safe.
+        merged_aliases = list(aliases)
+        for extra_alias in ALIAS_MERGES.get(slug, []):
+            if extra_alias not in merged_aliases:
+                merged_aliases.append(extra_alias)
         rows.append({
-            "slug": slugify(name),
+            "slug": slug,
             "name": name,
-            "aliases": aliases,
+            "aliases": merged_aliases,
             "strain_type": stype,
             "lineage": lineage or "",
             "dominant_terpene": dom_terp,
