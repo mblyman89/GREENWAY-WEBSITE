@@ -231,7 +231,7 @@ export default async function MenuImportsPage({
                   </div>
                   <Link
                     href={`/admin/menu-imports/${imp.id}`}
-                    className="justify-self-end rounded-md border border-white/15 px-3 py-1.5 text-xs text-white/80 hover:border-[#7ed957] hover:text-white"
+                    className="admin-focus justify-self-end rounded-[var(--admin-radius-sm)] border border-[var(--admin-border-strong)] px-3 py-1.5 text-xs text-[var(--admin-text-muted)] transition hover:border-[var(--admin-accent)] hover:text-[var(--admin-text)]"
                   >
                     Review
                   </Link>
@@ -239,7 +239,7 @@ export default async function MenuImportsPage({
               );
             })}
             {imports.length === 0 && (
-              <p className="px-5 py-8 text-sm text-white/50">
+              <p className="px-5 py-8 text-sm text-[var(--admin-text-faint)]">
                 No imports yet. Upload your first POS export above to stage a menu.
               </p>
             )}

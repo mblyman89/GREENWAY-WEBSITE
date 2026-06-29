@@ -117,7 +117,7 @@ export default async function UsersPage() {
                     <select
                       name="role"
                       defaultValue={u.role}
-                      className="rounded-md border border-white/15 bg-black px-2 py-1.5 text-sm text-white outline-none focus:border-[#7ed957]"
+                      className="admin-focus rounded-[var(--admin-radius-sm)] border border-[var(--admin-border-strong)] bg-[var(--admin-surface-2)] px-2 py-1.5 text-sm text-[var(--admin-text)] outline-none transition focus:border-[var(--admin-accent)]"
                     >
                       {ALL_ROLES.map((r) => (
                         <option key={r} value={r}>
@@ -127,7 +127,7 @@ export default async function UsersPage() {
                     </select>
                     <button
                       type="submit"
-                      className="rounded-md border border-white/15 px-3 py-1.5 text-xs text-white/80 hover:border-[#7ed957] hover:text-white"
+                      className="admin-focus rounded-[var(--admin-radius-sm)] border border-[var(--admin-border-strong)] px-3 py-1.5 text-xs text-[var(--admin-text-muted)] transition hover:border-[var(--admin-accent)] hover:text-[var(--admin-text)]"
                     >
                       Save
                     </button>
@@ -139,7 +139,7 @@ export default async function UsersPage() {
                     <button
                       type="submit"
                       disabled={isSelf}
-                      className="rounded-md px-3 py-1.5 text-xs text-[#ff7f00] hover:underline disabled:opacity-40"
+                      className="rounded-[var(--admin-radius-sm)] px-3 py-1.5 text-xs text-[var(--admin-orange)] hover:underline disabled:opacity-40"
                     >
                       {u.active ? "Deactivate" : "Reactivate"}
                     </button>
@@ -148,7 +148,7 @@ export default async function UsersPage() {
               );
             })}
             {users.length === 0 && (
-              <p className="px-5 py-8 text-sm text-white/50">
+              <p className="px-5 py-8 text-sm text-[var(--admin-text-faint)]">
                 No staff users yet. Sign in once with a bootstrap email to create
                 the first owner, then invite your team here.
               </p>

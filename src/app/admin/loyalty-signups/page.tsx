@@ -81,7 +81,7 @@ export default async function LoyaltySignupReviewPage({
             dedupe, mark-as-entered, notes, and CSV export.
           </div>
           {legacy.length === 0 ? (
-            <p className="rounded-lg border border-white/10 bg-[#0a0a0a] p-8 text-sm text-white/50">
+            <p className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-8 text-sm text-[var(--admin-text-faint)]">
               No loyalty signups stored in this environment yet.
             </p>
           ) : (
@@ -264,7 +264,7 @@ export default async function LoyaltySignupReviewPage({
         ) : (
           <div className="mt-5 grid gap-3">
             {rows.map((s) => (
-              <div key={s.id} className="rounded-2xl border border-white/10 bg-[#0d0d0d] p-4 sm:p-5">
+              <div key={s.id} className="rounded-[var(--admin-radius-xl)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4 sm:p-5">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">

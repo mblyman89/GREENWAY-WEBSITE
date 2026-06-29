@@ -79,11 +79,26 @@ Goal: a gorgeous, consistent, presentable admin. NOT rushed. Owner: "presentabil
       controls→tokens, preview link→tokens; Carousel/Sections/Q&A tabs: add/seed buttons→Button, empty states→EmptyState.
 - [x] tsc clean, eslint clean, `next build` EXIT=0 (all ~2340 pages).
 
-### Beautify Slice 3 — Tables, forms, empty/loading states + final pass
-- [ ] Consistent table styling (zebra/hover, sticky headers, status pills).
-- [ ] Consistent form styling (labels, help text, validation, primary/secondary actions).
-- [ ] Polished empty states, loading skeletons, toasts/flash messages.
-- [ ] Full visual QA pass; screenshots for owner inspection.
+### Beautify Slice 3 — Tables, forms, empty/loading states + final pass ✅ MERGED (PR #80)
+- [x] Shared UX kit tokenized (highest leverage — appears everywhere): Toast tones→tokens,
+      ConfirmDialog modal surface→tokens, StickyActionBar→tokens, charts/ChartFrame surface→tokens.
+- [x] Consistent table styling on secondary list pages: **Promotions** table → token zebra
+      (`odd:bg-surface`) + hover + sticky `backdrop-blur` header + `<StatusPill>` (removed local STATUS_STYLES).
+- [x] **Vendors** → EmptyState for the no-vendors case; filters rebuilt on Input/Select/Button;
+      vendor cards use `admin-card-interactive` + token surfaces.
+- [x] **Users** → token select/save/deactivate controls + token empty text.
+- [x] **Menu-imports** → token Review link + token empty text.
+- [x] **Loyalty-signups** → token empty box + token card surface (primary path already on EmptyState).
+- [x] Backgrounds across ALL remaining pages already unified by the Slice-2 surface shim; brand-accent
+      hexes (#7ed957/#ffd700) already equal the accent tokens so they render correctly — no recolor needed.
+- [x] Full build QA: tsc clean, eslint clean (1 PRE-EXISTING ConfirmDialog effect warning, untouched),
+      `next build` EXIT=0 (~2340 pages).
+
+### DOCS this batch
+- [x] **Receipt/pick-ticket printer** roadmap entry added to ROADMAP_PAGE_BUILDER_VISION.md §8
+      (industry best practice = Star CloudPRNT / Epson Server Direct Print pull-printer + tiny
+      print_jobs queue + 2 API routes off the existing notify.ts hook, reusing the existing
+      /admin/orders/[id]/ticket layout). Owner advised in chat.
 
 ---
 

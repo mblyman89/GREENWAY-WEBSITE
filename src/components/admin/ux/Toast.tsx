@@ -41,10 +41,10 @@ type ToastContextValue = {
 const ToastContext = createContext<ToastContextValue | null>(null);
 
 const TONE_STYLES: Record<Tone, string> = {
-  success: "border-[#7ed957]/40 bg-[#0f1a10] text-[#7ed957]",
-  error: "border-red-500/40 bg-[#1a0f0f] text-red-300",
-  info: "border-white/20 bg-[#161616] text-white/80",
-  warning: "border-[#ffd700]/40 bg-[#1a170f] text-[#ffd700]",
+  success: "border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] text-[var(--admin-accent)]",
+  error: "border-[var(--admin-danger)]/40 bg-[var(--admin-danger-soft)] text-[var(--admin-danger)]",
+  info: "border-[var(--admin-border-strong)] bg-[var(--admin-surface-2)] text-[var(--admin-text)]",
+  warning: "border-[var(--admin-gold)]/40 bg-[var(--admin-gold-soft)] text-[var(--admin-gold)]",
 };
 
 const TONE_ICON: Record<Tone, string> = {

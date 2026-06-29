@@ -23,16 +23,16 @@ export function ChartFrame({
   children: ReactNode;
 }) {
   return (
-    <div className="rounded-xl border border-white/10 bg-[#0a0a0a] p-5">
+    <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
       {(title || subtitle) && (
         <div className="mb-4">
-          {title && <h3 className="text-sm font-semibold text-white">{title}</h3>}
-          {subtitle && <p className="text-xs text-white/50">{subtitle}</p>}
+          {title && <h3 className="text-sm font-semibold text-[var(--admin-text)]">{title}</h3>}
+          {subtitle && <p className="text-xs text-[var(--admin-text-faint)]">{subtitle}</p>}
         </div>
       )}
       {isEmpty ? (
         <div
-          className="flex items-center justify-center rounded-lg border border-dashed border-white/10 text-sm text-white/40"
+          className="flex items-center justify-center rounded-[var(--admin-radius-sm)] border border-dashed border-[var(--admin-border)] text-sm text-[var(--admin-text-faint)]"
           style={{ height }}
         >
           {emptyLabel}

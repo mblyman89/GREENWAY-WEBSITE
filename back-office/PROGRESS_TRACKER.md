@@ -212,5 +212,15 @@ Standing rule + plan in back-office/SLICE_3B_AND_BEAUTIFY_TODO.md.
   the AI exact sizes to generate art that fits each slot.
 - tsc/eslint clean, `next build` EXIT=0 (~2340 pages).
 
-### Beautify Slice 3 — Tables, forms, empty/loading states + final pass (PLANNED)
-- Consistent tables (zebra/hover, sticky headers, status pills), forms, empty/loading/toasts; full visual QA.
+### Beautify Slice 3 — Tables, forms, empty/loading states + final pass (PR #80, merged) — NO migration
+- Tokenized the shared UX kit (Toast tones, ConfirmDialog modal, StickyActionBar, charts/ChartFrame).
+- Promotions table → token zebra/hover/sticky header + StatusPill; Vendors → EmptyState + primitive
+  filters + interactive cards; Users/Menu-imports/Loyalty-signups → token controls/empty states.
+- All other admin backgrounds already unified by the Slice-2 surface shim; brand-accent hexes already
+  equal the accent tokens. tsc/eslint clean, `next build` EXIT=0.
+
+### Receipt / pick-ticket printer — researched & added to ROADMAP §8
+- Foundation already exists (`/admin/orders/[id]/ticket` print page, `.ticket-print` CSS, `NewOrderAlert`,
+  `notify.ts` order-created hook). Recommended: Star CloudPRNT / Epson Server Direct Print **pull**-printer
+  + `print_jobs` queue + 2 small API routes off `notify.ts`, reusing the existing ticket layout. Printer
+  buzzer = the employee alert. Own future slice, after email/order testing.

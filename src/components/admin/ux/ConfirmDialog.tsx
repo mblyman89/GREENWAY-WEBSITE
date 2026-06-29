@@ -126,7 +126,7 @@ export function ConfirmDialog({
         onClick={() => !busy && onCancel()}
       />
       {/* Card */}
-      <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-[#0a0a0a] p-6 shadow-2xl shadow-black/60">
+      <div className="relative w-full max-w-md rounded-[var(--admin-radius-xl)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-6 shadow-[var(--admin-shadow-lg)]">
         <div className="flex items-start gap-3">
           <span className="text-2xl leading-none" aria-hidden>
             {TONE_ICON[tone]}
