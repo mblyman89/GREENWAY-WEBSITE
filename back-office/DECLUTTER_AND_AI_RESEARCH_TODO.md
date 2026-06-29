@@ -69,15 +69,18 @@
 - **Their plain text blocks ALSO surface in Site Content** so the owner edits all site copy in one place. No
   duplication: Site Content shows the content-*block* text fields; PAGES manages the visual banners/section cards.
 
-### AI Research (RESEARCH ONLY — produce docs, no feature code)
-- [ ] Deep web research: LLM product-enrichment best practices, structured outputs / JSON schema / function
-      calling, grounding & RAG, prompt strategy, eval/guardrails, cost control, cannabis-domain specifics &
-      compliance (WA I-502 advertising rules), crawl4ai integration patterns (what to feed the model, how to
-      validate scraped data before enrichment).
-- [ ] Write **AI_ENHANCEMENT_ROADMAP.md**: target architecture (model choice, structured outputs, domain
-      system prompts, retrieval/grounding, validation/guardrails, human-in-the-loop drafts, eval harness,
-      cost/usage controls) + a phased slice plan + how the AI best powers crawl4ai.
-- [ ] Present the plan to the owner; STOP.
+### AI Research (RESEARCH ONLY — produce docs, no feature code) ✅ DONE (PR #82)
+- [x] Deep web research: structured outputs (constrained decoding / response_format / Zod-Pydantic validation),
+      grounding & anti-hallucination (extract-don't-invent, confidence, source), crawl4ai integration patterns
+      (CSS-first → fit_markdown → schema LLM extraction → verify-against-source; LiteLLM provider-agnostic),
+      WA I-502 advertising compliance (RCW 69.50.369 / WAC 314-55-155 / ESB 5206), cannabis taxonomy
+      (terpene→aroma/flavor, strain families, category vocab), evals (golden set + LLM-as-judge + accept-rate
+      by prompt_version), cost control (tiered model router, budgets).
+- [x] Wrote **back-office/AI_ENHANCEMENT_ROADMAP.md** — grounded in the existing AI subsystem (provider.ts,
+      compliance.ts, suggestions.ts, usage.ts, enrichment/*): target architecture, 8-slice phased plan
+      (AI-1 structured core → … → AI-7 crawl4ai foundation → AI-8 tuning), how AI best powers crawl4ai,
+      cost-control summary, DoD gate before crawl4ai, 4 open questions for owner.
+- [x] Present the plan to the owner; STOP. (Presenting via ask now.)
 
 ---
 
