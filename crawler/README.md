@@ -31,6 +31,8 @@ For every target URL:
 
 ## Quick start
 
+For a temporary desktop / work-VM test, start with **[`docs/LOCAL_TESTING_GUIDE.md`](docs/LOCAL_TESTING_GUIDE.md)**.
+
 See **[`docs/RUNBOOK.md`](docs/RUNBOOK.md)** for the full production walkthrough.
 The 30-second version:
 

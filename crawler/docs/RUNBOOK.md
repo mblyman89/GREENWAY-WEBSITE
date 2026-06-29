@@ -6,6 +6,11 @@ Vercel site (Vercel can't run a headless browser), so it lives wherever you can
 run a small always-on Python process: a cheap VM (Fly.io / Render / Railway /
 DigitalOcean / a Raspberry Pi / your own machine for overnight batches).
 
+If you want to test it **right now** on a work VM / desktop without the permanent
+Cloudflare Tunnel setup, use [`LOCAL_TESTING_GUIDE.md`](LOCAL_TESTING_GUIDE.md)
+first. Local testing can run at `http://localhost:8200`; the tunnel is only needed
+when the production Vercel site must reach the worker.
+
 ---
 
 ## 0. What it does (recap)

@@ -4,6 +4,11 @@ Short answer: **your shop's VM host is a good, professional choice** for this, a
 in some ways the *best* one for your situation. Here's the honest trade-off so you
 can decide deliberately.
 
+If you are not ready to build the permanent VM/tunnel yet and just want to test on
+your work VM / desktop, use [`LOCAL_TESTING_GUIDE.md`](LOCAL_TESTING_GUIDE.md)
+first. PyCharm/local testing is feasible and does **not** require Cloudflare
+Tunnel.
+
 ## What the worker needs
 - Python 3.11+, ~1–2 GB RAM free (Chromium via Playwright is the heavy part),
   a couple GB disk for the browser + page cache.
