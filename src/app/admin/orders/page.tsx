@@ -74,9 +74,9 @@ export default async function OrdersAdminPage({
         />
         <div className="px-5 py-6 sm:px-8">
           <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] p-5 text-sm text-[var(--admin-gold)]">
-            Supabase is not configured yet. Once the database is connected and migration{" "}
-            <code>0007_slice7_orders.sql</code> is applied, live orders will appear here. Until
-            then the storefront confirms orders locally.
+            The database isn’t fully set up yet. Once your administrator finishes the one-time
+            setup, live orders will appear here automatically. Until then the storefront confirms
+            orders locally.
           </div>
         </div>
       </div>

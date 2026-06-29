@@ -29,8 +29,9 @@ export default async function BulkAiPage({
       <div>
         <AdminPageHeader title="Bulk AI review" subtitle="Draft product descriptions in bulk." />
         <div className="px-5 py-6 sm:px-8">
-          <div className="rounded-xl border border-[#ffd700]/30 bg-[#ffd700]/5 p-5 text-sm text-[#ffd700]">
-            Supabase is not configured yet.
+          <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] p-5 text-sm text-[var(--admin-gold)]">
+            The database isn&apos;t fully set up yet. Once your administrator
+            finishes the one-time setup, bulk AI review will be ready to use.
           </div>
         </div>
       </div>

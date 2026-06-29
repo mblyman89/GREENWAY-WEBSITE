@@ -22,10 +22,10 @@ export default async function PromotionsAdminPage() {
           subtitle="Daily deals, the Thursday brand selector, and clearance — all with a preview-before-publish gate."
         />
         <div className="px-5 py-6 sm:px-8">
-          <div className="rounded-xl border border-[#ffd700]/30 bg-[#ffd700]/5 p-5 text-sm text-[#ffd700]">
-            Supabase is not configured yet. Once the database is connected and migration{" "}
-            <code>0006_slice6_promotions.sql</code> is applied, promotions will manage here. Until
-            then the storefront uses the built-in daily-deal defaults.
+          <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] p-5 text-sm text-[var(--admin-gold)]">
+            The database isn’t fully set up yet. Once your administrator finishes the one-time
+            setup, you’ll be able to manage promotions here. Until then the storefront uses the
+            built-in daily-deal defaults.
           </div>
         </div>
       </div>

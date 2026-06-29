@@ -62,9 +62,10 @@ export default async function ReportsPage({
       <div>
         <AdminPageHeader title="Reports & Analytics" subtitle="Sales, loyalty, inventory health, and promotions." />
         <div className="px-5 py-6 sm:px-8">
-          <div className="rounded-xl border border-[#ffd700]/30 bg-[#ffd700]/5 p-5 text-sm text-[#ffd700]">
-            Supabase is not configured yet. Once the database is connected and orders, loyalty, and
-            a published menu exist, live reports will render here.
+          <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] p-5 text-sm text-[var(--admin-gold)]">
+            The database isn&apos;t fully set up yet. Once your administrator
+            finishes the one-time setup and you have orders, loyalty signups, and
+            a published menu, live reports will appear here automatically.
           </div>
         </div>
       </div>

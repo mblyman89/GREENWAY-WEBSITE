@@ -24,9 +24,9 @@ export default async function VendorsPage({
       <div>
         <AdminPageHeader title="Vendors & Brands" subtitle="Manage vendor profiles, logos, and brands." />
         <div className="px-5 py-6 sm:px-8">
-          <div className="rounded-xl border border-[#ffd700]/30 bg-[#ffd700]/5 p-5 text-sm text-[#ffd700]">
-            Supabase is not configured yet. Add the env vars from
-            <code className="mx-1 rounded bg-black/40 px-1">docs/BACK_OFFICE_SETUP.md</code>.
+          <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] p-5 text-sm text-[var(--admin-gold)]">
+            The database isn&apos;t fully set up yet. Once your administrator
+            finishes the one-time setup, vendors and brands will appear here.
           </div>
         </div>
       </div>

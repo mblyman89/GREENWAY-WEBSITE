@@ -75,10 +75,10 @@ export default async function LoyaltySignupReviewPage({
           }
         />
         <div className="px-5 py-6 sm:px-8">
-          <div className="mb-4 rounded-lg border border-[#ff7f00]/30 bg-[#ff7f00]/10 p-3 text-xs text-white/70">
-            Supabase is not configured yet — reading from <code>storage/loyalty-signups.jsonl</code>.
-            Apply migration <code>0008_slice8_loyalty.sql</code> to switch on the database queue with
-            dedupe, mark-as-entered, notes, and CSV export.
+          <div className="mb-4 rounded-[var(--admin-radius-sm)] border border-[var(--admin-orange)]/30 bg-[var(--admin-orange-soft)] p-3 text-xs text-[var(--admin-text-muted)]">
+            The database isn’t fully set up yet, so this is showing locally-stored signups. Once your
+            administrator finishes the one-time setup, the full signup queue (dedupe, mark-as-entered,
+            notes, and CSV export) turns on automatically.
           </div>
           {legacy.length === 0 ? (
             <p className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-8 text-sm text-[var(--admin-text-faint)]">

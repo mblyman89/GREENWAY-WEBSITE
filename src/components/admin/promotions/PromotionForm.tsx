@@ -19,6 +19,7 @@ import {
 } from "@/lib/promotions/types";
 import { GREENWAY_CATEGORY_VALUES } from "@/lib/promotions/category-values";
 import { PromotionAiCopy } from "@/components/admin/promotions/PromotionAiCopy";
+import { Button } from "@/components/admin/ui";
 
 type Props = {
   action: (formData: FormData) => void | Promise<void>;
@@ -268,9 +269,10 @@ export function PromotionForm({ action, promotion, brands, submitLabel, aiEnable
             </span>
           </p>
           {brands.length === 0 ? (
-            <p className="rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-xs text-white/40">
-              No published menu brands found yet. Publish a menu version (Slice 2) to populate this
-              list. You can still type brand names via the database seed.
+            <p className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-3 py-2 text-xs text-[var(--admin-text-muted)]">
+              No published menu brands found yet. Import and publish a menu to
+              populate this list. Until then, this promotion will apply across all
+              brands.
             </p>
           ) : (
             <div className="grid max-h-56 grid-cols-2 gap-2 overflow-y-auto rounded-lg border border-white/10 bg-black/40 p-2 sm:grid-cols-3">
@@ -318,15 +320,12 @@ export function PromotionForm({ action, promotion, brands, submitLabel, aiEnable
       </section>
 
       <div className="flex items-center gap-3">
-        <button
-          type="submit"
-          className="rounded-lg bg-[#7ed957] px-5 py-2.5 text-sm font-semibold text-black transition hover:bg-[#6bc945]"
-        >
+        <Button type="submit" variant="save">
           {submitLabel}
-        </button>
-        <a href="/admin/promotions" className="text-sm text-white/50 hover:text-white/80">
+        </Button>
+        <Button href="/admin/promotions" variant="ghost">
           Cancel
-        </a>
+        </Button>
       </div>
     </form>
   );

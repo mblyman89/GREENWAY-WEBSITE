@@ -45,6 +45,25 @@ type Props = {
 
 type Filter = "all" | "attention" | "seo" | string; // string = a page name
 
+/** Friendly, employee-facing labels for the raw page keys on each block. */
+const PAGE_LABELS: Record<string, string> = {
+  footer: "Footer",
+  business: "Business info",
+  about: "About page",
+  locations: "Locations page",
+  "price-match": "Price Match page",
+  home: "Home",
+  menu: "Menu",
+  loyalty: "Loyalty",
+  specials: "Specials",
+  vendors: "Vendors",
+  faq: "FAQ",
+};
+
+function pageLabel(page: string): string {
+  return PAGE_LABELS[page] ?? page.charAt(0).toUpperCase() + page.slice(1);
+}
+
 function isDirty(b: BlockVM): boolean {
   return (
     (b.draft_value ?? "") !== (b.published_value ?? "") ||
@@ -126,10 +145,10 @@ export function ContentBlocksBrowser({
       onClick={() => setFilter(key)}
       className={`whitespace-nowrap rounded-full border px-3 py-1 text-xs font-bold transition ${
         filter === key
-          ? "border-[#7ed957] bg-[#7ed957] text-black"
+          ? "border-[var(--admin-accent)] bg-[var(--admin-accent)] text-black"
           : tone === "warn" && (count ?? 0) > 0
-            ? "border-[#ff7f00]/40 bg-[#ff7f00]/10 text-[#ff7f00] hover:bg-[#ff7f00]/20"
-            : "border-white/15 text-white/60 hover:bg-white/10"
+            ? "border-[var(--admin-orange)]/40 bg-[var(--admin-orange-soft)] text-[var(--admin-orange)] hover:brightness-110"
+            : "border-[var(--admin-border-strong)] text-[var(--admin-text-muted)] hover:bg-[var(--admin-surface-hover)]"
       }`}
     >
       {label}
@@ -142,10 +161,10 @@ export function ContentBlocksBrowser({
   return (
     <div className="space-y-4">
       {/* Toolbar */}
-      <div className="rounded-xl border border-white/10 bg-[#0a0a0a] p-3">
+      <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-3">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div className="relative flex-1 md:max-w-sm">
-            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/35">
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--admin-text-faint)]">
               🔍
             </span>
             <input
@@ -153,7 +172,7 @@ export function ContentBlocksBrowser({
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search content… (headline, page, words on the page)"
-              className="w-full rounded-lg border border-white/15 bg-black py-2 pl-9 pr-3 text-sm text-white outline-none focus:border-[#7ed957]"
+              className="admin-focus w-full rounded-[var(--admin-radius)] border border-[var(--admin-border-strong)] bg-[var(--admin-surface-2)] py-2 pl-9 pr-3 text-sm text-[var(--admin-text)] outline-none transition focus:border-[var(--admin-accent)]"
             />
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -163,11 +182,11 @@ export function ContentBlocksBrowser({
           </div>
         </div>
         {/* Page filter row */}
-        <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-white/5 pt-2">
-          <span className="text-[0.65rem] uppercase tracking-wide text-white/35">
+        <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-[var(--admin-border)] pt-2">
+          <span className="text-[0.65rem] uppercase tracking-wide text-[var(--admin-text-faint)]">
             Pages:
           </span>
-          {pages.map((p) => chip(p, p))}
+          {pages.map((p) => chip(p, pageLabel(p)))}
         </div>
       </div>
 
@@ -188,7 +207,7 @@ export function ContentBlocksBrowser({
                 setQuery("");
                 setFilter("all");
               }}
-              className="rounded-lg bg-[#7ed957] px-4 py-2 text-sm font-bold text-black hover:bg-[#6bc746]"
+              className="rounded-[var(--admin-radius-sm)] bg-[var(--admin-accent)] px-4 py-2 text-sm font-bold text-black hover:brightness-110"
             >
               Clear filters
             </button>
@@ -197,9 +216,9 @@ export function ContentBlocksBrowser({
       ) : (
         byPage.map(([page, items]) => (
           <div key={page}>
-            <h2 className="mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-[#7ed957]">
-              {page}
-              <span className="rounded-full border border-white/10 px-1.5 py-0.5 text-[0.6rem] font-semibold text-white/40">
+            <h2 className="mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-[var(--admin-accent)]">
+              {pageLabel(page)}
+              <span className="rounded-full border border-[var(--admin-border)] px-1.5 py-0.5 text-[0.6rem] font-semibold text-[var(--admin-text-faint)]">
                 {items.length}
               </span>
             </h2>

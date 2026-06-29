@@ -10,7 +10,7 @@ import { countLoyaltySignups } from "@/lib/loyalty/store";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { getPublishedVersion, listImports } from "@/lib/pos/menu-version";
 import { formatDateTime } from "@/lib/pos/format";
-import { getSetupStatus, BUILD_SLICES } from "@/lib/admin/setup-status";
+import { getSetupStatus } from "@/lib/admin/setup-status";
 import { safeData } from "@/lib/safe-data";
 
 export const dynamic = "force-dynamic";
@@ -106,20 +106,6 @@ export default async function AdminDashboardPage() {
               href="/admin/loyalty-signups"
               icon="⭐"
             />
-          </div>
-        </Section>
-
-        {/* Build progress (data-driven) */}
-        <Section className="mt-10" title="Back office build progress">
-          <div className="grid gap-3 sm:grid-cols-2">
-            {BUILD_SLICES.map((slice) => (
-              <ProgressRow
-                key={slice.id}
-                done={slice.done}
-                label={slice.label}
-                detail={slice.detail}
-              />
-            ))}
           </div>
         </Section>
 
@@ -245,40 +231,6 @@ function GettingStarted({
           </li>
         ))}
       </ul>
-    </Card>
-  );
-}
-
-function ProgressRow({
-  label,
-  detail,
-  done,
-}: {
-  label: string;
-  detail: string;
-  done?: boolean;
-}) {
-  return (
-    <Card padding="sm" className="flex items-start gap-3">
-      <span
-        className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs ${
-          done
-            ? "bg-[var(--admin-accent)] text-black"
-            : "border border-[var(--admin-border-strong)] text-[var(--admin-text-faint)]"
-        }`}
-      >
-        {done ? "✓" : ""}
-      </span>
-      <div>
-        <p
-          className={`text-sm font-medium ${
-            done ? "text-[var(--admin-text)]" : "text-[var(--admin-text-muted)]"
-          }`}
-        >
-          {label}
-        </p>
-        <p className="text-xs text-[var(--admin-text-faint)]">{detail}</p>
-      </div>
     </Card>
   );
 }

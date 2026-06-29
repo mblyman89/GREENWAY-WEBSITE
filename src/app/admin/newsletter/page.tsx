@@ -44,7 +44,7 @@ export default async function NewsletterSendPage({
       <div>
         <AdminPageHeader title="Newsletter Send Center" subtitle="Email a published newsletter to your loyalty list." />
         <div className="px-5 py-6 text-sm text-[var(--admin-gold)] sm:px-8">
-          Supabase is not configured yet. Connect the database and apply migrations through 0016.
+          The database isn’t fully set up yet. Once your administrator finishes the one-time setup, the newsletter send center turns on automatically.
         </div>
       </div>
     );
@@ -78,10 +78,16 @@ export default async function NewsletterSendPage({
               "Happy? Tick the confirm box and Send to the loyalty list.",
             ]}
           >
-            <p>
+            <p className="mb-2">
               Members receive a branded email with a “Read the newsletter” button.
               Only members who gave email consent are included, and each person
               gets their own private copy.
+            </p>
+            <p>
+              <strong>About email setup:</strong> your site is configured to <em>send</em> email
+              (newsletters, order &amp; loyalty notices). You do <strong>not</strong> need to turn on
+              “Enable Receiving” in Resend — that’s only for processing inbound mail and can disrupt
+              your normal inbox. Replies route to your store inbox automatically.
             </p>
           </HelpPanel>
         }
