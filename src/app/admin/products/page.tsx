@@ -9,6 +9,9 @@ import { getEnrichmentsForKeys, computeGaps, type GapFlags } from "@/lib/enrichm
 import { resolveMediaUrls } from "@/lib/media/store";
 import { isAiConfigured } from "@/lib/ai/provider";
 import { ProductGrid, type ProductGridCard } from "@/components/admin/products/ProductGrid";
+import { Button } from "@/components/admin/ui/Button";
+import { Input, Select } from "@/components/admin/ui/Field";
+import { StatusPill, EmptyState } from "@/components/admin/ux";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +29,7 @@ export default async function ProductsPage({
       <div>
         <AdminPageHeader title="Products" subtitle="Enrich products with descriptions, images, tags, and AI assist." />
         <div className="px-5 py-6 sm:px-8">
-          <div className="rounded-xl border border-[#ffd700]/30 bg-[#ffd700]/5 p-5 text-sm text-[#ffd700]">
+          <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] p-5 text-sm text-[var(--admin-gold)]">
             Supabase is not configured yet.
           </div>
         </div>
@@ -41,9 +44,9 @@ export default async function ProductsPage({
       <div>
         <AdminPageHeader title="Products" subtitle="Enrich products with descriptions, images, tags, and AI assist." />
         <div className="px-5 py-6 sm:px-8">
-          <div className="rounded-xl border border-white/10 bg-[#0a0a0a] p-6 text-sm text-white/60">
+          <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-6 text-sm text-[var(--admin-text-muted)]">
             No published menu yet. Import and publish a menu version under{" "}
-            <Link href="/admin/menu-imports" className="text-[#7ed957] hover:underline">
+            <Link href="/admin/menu-imports" className="text-[var(--admin-accent)] hover:underline">
               Menu Imports
             </Link>
             , then products will appear here for enrichment.
@@ -144,7 +147,7 @@ export default async function ProductsPage({
         </div>
 
         {!isAiConfigured && (
-          <div className="rounded-lg border border-white/10 bg-[#0a0a0a] px-4 py-2 text-xs text-white/45">
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface)] px-4 py-2 text-xs text-[var(--admin-text-faint)]">
             AI drafting is available but not yet enabled. Add an <code className="rounded bg-black/40 px-1">AI_API_KEY</code> env
             var to turn on one-click description &amp; tag suggestions.
           </div>
@@ -152,41 +155,41 @@ export default async function ProductsPage({
 
         {/* Filters */}
         <form className="flex flex-wrap items-center gap-3" method="get">
-          <input
+          <Input
             name="q"
             defaultValue={q ?? ""}
             placeholder="Search product or brand…"
-            className="flex-1 min-w-48 rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#7ed957]"
+            className="min-w-48 flex-1"
           />
-          <select name="category" defaultValue={category ?? ""} className="rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#7ed957]">
+          <Select name="category" defaultValue={category ?? ""} className="w-auto">
             <option value="">All categories</option>
             {categories.map((c) => (
               <option key={c} value={c}>
                 {c}
               </option>
             ))}
-          </select>
-          <select name="gap" defaultValue={gap ?? ""} className="rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#7ed957]">
+          </Select>
+          <Select name="gap" defaultValue={gap ?? ""} className="w-auto">
             <option value="">All products</option>
             <option value="description">Missing description</option>
             <option value="image">Missing image</option>
             <option value="brand">Missing brand link</option>
-          </select>
-          <button type="submit" className="rounded-full border border-white/15 px-4 py-2 text-sm text-white/80 hover:border-[#7ed957] hover:text-white">
+          </Select>
+          <Button type="submit" variant="subtle">
             Filter
-          </button>
+          </Button>
           {view && <input type="hidden" name="view" value={view} />}
           {/* Grid / Table view toggle */}
-          <div className="ml-auto inline-flex overflow-hidden rounded-lg border border-white/15">
+          <div className="ml-auto inline-flex overflow-hidden rounded-[var(--admin-radius)] border border-[var(--admin-border-strong)]">
             <Link
               href={gridHref}
-              className={`px-3 py-2 text-xs font-bold ${!isTable ? "bg-[#7ed957] text-black" : "text-white/60 hover:bg-white/10"}`}
+              className={`px-3 py-2 text-xs font-bold ${!isTable ? "bg-[var(--admin-accent)] text-black" : "text-[var(--admin-text-muted)] hover:bg-white/10"}`}
             >
               ▦ Grid
             </Link>
             <Link
               href={tableHref}
-              className={`px-3 py-2 text-xs font-bold ${isTable ? "bg-[#7ed957] text-black" : "text-white/60 hover:bg-white/10"}`}
+              className={`px-3 py-2 text-xs font-bold ${isTable ? "bg-[var(--admin-accent)] text-black" : "text-[var(--admin-text-muted)] hover:bg-white/10"}`}
             >
               ☰ Table
             </Link>
@@ -195,17 +198,14 @@ export default async function ProductsPage({
 
         {/* Bulk AI entry point */}
         {isAiConfigured && (
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#ffd700]/25 bg-[#ffd700]/5 px-4 py-3">
-            <p className="text-sm text-white/70">
-              <span className="font-bold text-[#ffd700]">✨ Bulk AI:</span> draft descriptions for many
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--admin-radius-lg)] border border-[var(--admin-gold)]/25 bg-[var(--admin-gold-soft)] px-4 py-3">
+            <p className="text-sm text-[var(--admin-text-muted)]">
+              <span className="font-bold text-[var(--admin-gold)]">✨ Bulk AI:</span> draft descriptions for many
               products at once, then review & approve them in a grid.
             </p>
-            <Link
-              href="/admin/products/bulk-ai"
-              className="rounded-lg bg-[#ffd700] px-4 py-2 text-xs font-bold text-black hover:bg-[#e6c200]"
-            >
+            <Button href="/admin/products/bulk-ai" variant="save" size="sm">
               Open bulk AI review →
-            </Link>
+            </Button>
           </div>
         )}
 
@@ -214,9 +214,9 @@ export default async function ProductsPage({
 
         {/* Table (power-user view) */}
         {isTable && (
-        <div className="overflow-hidden rounded-xl border border-white/10">
+        <div className="overflow-hidden rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)]">
           <table className="w-full text-sm">
-            <thead className="bg-[#0a0a0a] text-left text-xs uppercase tracking-wide text-white/40">
+            <thead className="sticky top-0 bg-[var(--admin-surface-2)] text-left text-xs uppercase tracking-wide text-[var(--admin-text-faint)]">
               <tr>
                 <th className="px-4 py-3">Product</th>
                 <th className="px-4 py-3">Brand</th>
@@ -227,23 +227,23 @@ export default async function ProductsPage({
                 <th className="px-4 py-3 text-center">Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/5">
+            <tbody className="divide-y divide-[var(--admin-border)]">
               {filtered.slice(0, 300).map((g) => (
-                <tr key={g.posKey} className="bg-black hover:bg-white/[0.03]">
+                <tr key={g.posKey} className="bg-[var(--admin-surface)] transition hover:bg-[var(--admin-surface-hover)]">
                   <td className="px-4 py-3">
-                    <Link href={`/admin/products/${encodeURIComponent(g.posKey)}`} className="font-medium text-white hover:text-[#7ed957]">
+                    <Link href={`/admin/products/${encodeURIComponent(g.posKey)}`} className="font-medium text-[var(--admin-text)] hover:text-[var(--admin-accent)]">
                       {g.name}
                     </Link>
                   </td>
-                  <td className="px-4 py-3 text-white/60">{g.brand || "—"}</td>
-                  <td className="px-4 py-3 text-white/50">{g.category}</td>
-                  <td className="px-4 py-3 text-center">{g.hasDescription ? "✅" : <span className="text-[#ff7f00]">—</span>}</td>
-                  <td className="px-4 py-3 text-center">{g.hasImage ? "✅" : <span className="text-[#ff7f00]">—</span>}</td>
-                  <td className="px-4 py-3 text-center">{g.hasBrandLink ? "✅" : <span className="text-white/30">—</span>}</td>
+                  <td className="px-4 py-3 text-[var(--admin-text-muted)]">{g.brand || "—"}</td>
+                  <td className="px-4 py-3 text-[var(--admin-text-faint)]">{g.category}</td>
+                  <td className="px-4 py-3 text-center">{g.hasDescription ? "✅" : <span className="text-[var(--admin-orange)]">—</span>}</td>
+                  <td className="px-4 py-3 text-center">{g.hasImage ? "✅" : <span className="text-[var(--admin-orange)]">—</span>}</td>
+                  <td className="px-4 py-3 text-center">{g.hasBrandLink ? "✅" : <span className="text-[var(--admin-text-faint)]">—</span>}</td>
                   <td className="px-4 py-3 text-center">
-                    <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${g.enrichmentStatus === "published" ? "bg-[#7ed957]/15 text-[#7ed957]" : "bg-white/10 text-white/50"}`}>
+                    <StatusPill status={g.enrichmentStatus ?? undefined}>
                       {g.enrichmentStatus ?? "none"}
-                    </span>
+                    </StatusPill>
                   </td>
                 </tr>
               ))}
@@ -252,9 +252,15 @@ export default async function ProductsPage({
         </div>
         )}
         {filtered.length > 300 && (
-          <p className="text-xs text-white/40">Showing first 300 of {filtered.length}. Use search/filters to narrow.</p>
+          <p className="text-xs text-[var(--admin-text-faint)]">Showing first 300 of {filtered.length}. Use search/filters to narrow.</p>
         )}
-        {isTable && filtered.length === 0 && <p className="text-sm text-white/50">No products match your filter.</p>}
+        {isTable && filtered.length === 0 && (
+          <EmptyState
+            icon="🔍"
+            title="No products match your filter"
+            description="Try clearing the search box or choosing a different category or gap filter."
+          />
+        )}
       </div>
     </div>
   );

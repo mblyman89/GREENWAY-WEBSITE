@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
@@ -7,6 +6,7 @@ import { ContentEditorShell } from "@/components/admin/ContentEditorShell";
 import { type BlockVM } from "@/components/admin/ContentBlocksBrowser";
 import type { MediaChoice } from "@/components/admin/ContentImageField";
 import { ContentBulkBar } from "@/components/admin/ContentBulkBar";
+import { Button } from "@/components/admin/ui";
 import {
   listContentBlocks,
   listContentRevisions,
@@ -70,7 +70,7 @@ export default async function SiteContentPage({
     return (
       <div>
         <AdminPageHeader title="Site Content" subtitle="Edit approved site text blocks safely — no code, no page builder." />
-        <div className="px-5 py-6 sm:px-8 text-sm text-[#ffd700]">Supabase is not configured yet.</div>
+        <div className="px-5 py-6 sm:px-8 text-sm text-[var(--admin-gold)]">Supabase is not configured yet.</div>
       </div>
     );
   }
@@ -173,15 +173,13 @@ export default async function SiteContentPage({
           </HelpPanel>
         }
         action={
-          <Link href="/admin/content/seo" className="rounded-lg border border-white/15 px-4 py-2 text-sm font-bold text-white/80 hover:bg-white/10">
-            SEO editor →
-          </Link>
+          <Button href="/admin/content/seo" variant="subtle">SEO editor →</Button>
         }
       />
 
       <div className="space-y-6 px-5 py-6 sm:px-8">
         {(saved || published || seeded || restored || published_all || discarded) && (
-          <div className="rounded-lg border border-[#7ed957]/40 bg-[#7ed957]/10 px-4 py-2 text-sm text-[#7ed957]">
+          <div className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]">
             {published
               ? "Published live. 🎉"
               : seeded
@@ -197,15 +195,13 @@ export default async function SiteContentPage({
         )}
 
         {notSeeded ? (
-          <div className="rounded-xl border border-white/10 bg-[#0a0a0a] p-6">
-            <p className="text-sm text-white/70">
+          <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-6">
+            <p className="text-sm text-[var(--admin-text-muted)]">
               The controlled content blocks haven&apos;t been initialized yet. Click below to create the {CONTENT_BLOCK_SEEDS.length}{" "}
               approved editable slots (pre-filled with the current live copy — no visible change until you edit).
             </p>
             <form action={seedContentBlocksAction} className="mt-4">
-              <button type="submit" className="rounded-lg bg-[#7ed957] px-5 py-2.5 text-sm font-bold text-black hover:bg-[#6bc746]">
-                Initialize content blocks
-              </button>
+              <Button type="submit" variant="primary">Initialize content blocks</Button>
             </form>
           </div>
         ) : (

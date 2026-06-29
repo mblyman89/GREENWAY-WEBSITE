@@ -12,6 +12,9 @@ import {
   type SendableNewsletter,
 } from "@/lib/cms/newsletter-send-store";
 import { testSendNewsletterAction, broadcastNewsletterAction } from "./actions";
+import { Button } from "@/components/admin/ui/Button";
+import { Input } from "@/components/admin/ui/Field";
+import { StatusPill, EmptyState } from "@/components/admin/ux";
 
 export const dynamic = "force-dynamic";
 
@@ -40,7 +43,7 @@ export default async function NewsletterSendPage({
     return (
       <div>
         <AdminPageHeader title="Newsletter Send Center" subtitle="Email a published newsletter to your loyalty list." />
-        <div className="px-5 py-6 text-sm text-[#ffd700] sm:px-8">
+        <div className="px-5 py-6 text-sm text-[var(--admin-gold)] sm:px-8">
           Supabase is not configured yet. Connect the database and apply migrations through 0016.
         </div>
       </div>
@@ -87,17 +90,17 @@ export default async function NewsletterSendPage({
       <div className="space-y-6 px-5 py-6 sm:px-8">
         {/* Flash */}
         {sp.error ? (
-          <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/30 bg-[var(--admin-danger-soft)] px-4 py-3 text-sm text-[var(--admin-danger)]">
             {decodeURIComponent(sp.error)}
           </div>
         ) : null}
         {sp.tested ? (
-          <div className="rounded-lg border border-[#7ed957]/30 bg-[#7ed957]/10 px-4 py-3 text-sm text-[#7ed957]">
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/30 bg-[var(--admin-accent-soft)] px-4 py-3 text-sm text-[var(--admin-accent)]">
             Test email sent to {decodeURIComponent(sp.tested)} — check your inbox.
           </div>
         ) : null}
         {sp.sent !== undefined ? (
-          <div className="rounded-lg border border-[#7ed957]/30 bg-[#7ed957]/10 px-4 py-3 text-sm text-[#7ed957]">
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/30 bg-[var(--admin-accent-soft)] px-4 py-3 text-sm text-[var(--admin-accent)]">
             Sent to {sp.sent} member(s)
             {sp.failed && sp.failed !== "0" ? ` · ${sp.failed} failed` : ""}.
           </div>
@@ -105,7 +108,7 @@ export default async function NewsletterSendPage({
 
         {/* Config banner */}
         {!cfg.configured ? (
-          <div className="rounded-lg border border-[#ffd700]/30 bg-[#ffd700]/5 px-4 py-3 text-sm text-[#ffd700]">
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] px-4 py-3 text-sm text-[var(--admin-gold)]">
             Email sending isn&apos;t configured yet. Add <code className="rounded bg-black/40 px-1">RESEND_API_KEY</code> and{" "}
             <code className="rounded bg-black/40 px-1">NEWSLETTER_FROM_EMAIL</code> (a verified Resend address). You can still
             pick newsletters and preview the audience below.
@@ -119,32 +122,35 @@ export default async function NewsletterSendPage({
         </div>
 
         {sendable.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-white/15 bg-[#0f0f0f] p-10 text-center text-sm text-white/70">
-            No sendable newsletters yet. Create one under{" "}
-            <Link href="/admin/blog" className="text-[#7ed957] hover:underline">
-              Blog &amp; Newsletter
-            </Link>
-            , upload its PDF, and publish it.
-          </div>
+          <EmptyState
+            icon="✉️"
+            title="No sendable newsletters yet"
+            description="Create one under Blog & Newsletter, upload its PDF, and publish it — then it'll be ready to send here."
+            action={
+              <Button href="/admin/blog" variant="primary">
+                Go to Blog & Newsletter
+              </Button>
+            }
+          />
         ) : (
           <div className="grid gap-6 lg:grid-cols-[300px_1fr]">
             {/* Newsletter picker */}
             <div className="space-y-2">
-              <p className="text-xs font-medium uppercase tracking-wide text-white/40">Choose a newsletter</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-[var(--admin-text-faint)]">Choose a newsletter</p>
               {sendable.map((n) => {
                 const active = selected?.id === n.id;
                 return (
                   <Link
                     key={n.id}
                     href={`/admin/newsletter?selected=${n.id}`}
-                    className={`block rounded-xl border px-4 py-3 text-sm transition ${
+                    className={`block rounded-[var(--admin-radius-lg)] border px-4 py-3 text-sm transition ${
                       active
-                        ? "border-[#7ed957] bg-[#7ed957]/10 text-white"
-                        : "border-white/10 bg-[#0a0a0a] text-white/70 hover:border-white/25"
+                        ? "border-[var(--admin-accent)] bg-[var(--admin-accent-soft)] text-[var(--admin-text)]"
+                        : "border-[var(--admin-border)] bg-[var(--admin-surface)] text-[var(--admin-text-muted)] hover:border-[var(--admin-border-strong)]"
                     }`}
                   >
                     <p className="font-medium">{n.title}</p>
-                    <p className="mt-0.5 text-[11px] text-white/40">
+                    <p className="mt-0.5 text-[11px] text-[var(--admin-text-faint)]">
                       {n.publishDate ? fmtDate(n.publishDate) : "—"}
                       {n.lastSentAt ? ` · last sent ${fmtDate(n.lastSentAt)}` : ""}
                     </p>
@@ -156,19 +162,19 @@ export default async function NewsletterSendPage({
             {/* Send panel */}
             {selected ? (
               <div className="space-y-5">
-                <div className="rounded-2xl border border-white/10 bg-[#0a0a0a] p-5">
-                  <p className="text-sm font-semibold text-white">{selected.title}</p>
-                  <div className="mt-2 flex flex-wrap gap-4 text-xs text-white/50">
-                    <a href={selected.publicUrl} target="_blank" rel="noreferrer" className="text-[#7ed957] hover:underline">
+                <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
+                  <p className="text-sm font-semibold text-[var(--admin-text)]">{selected.title}</p>
+                  <div className="mt-2 flex flex-wrap gap-4 text-xs text-[var(--admin-text-faint)]">
+                    <a href={selected.publicUrl} target="_blank" rel="noreferrer" className="text-[var(--admin-accent)] hover:underline">
                       View public page ↗
                     </a>
                     {selected.pdfUrl ? (
-                      <a href={selected.pdfUrl} target="_blank" rel="noreferrer" className="text-[#7ed957] hover:underline">
+                      <a href={selected.pdfUrl} target="_blank" rel="noreferrer" className="text-[var(--admin-accent)] hover:underline">
                         Open PDF ↗
                       </a>
                     ) : null}
                     {selected.lastSentAt ? (
-                      <span className="text-[#ffd700]">Already broadcast on {fmtDate(selected.lastSentAt)}</span>
+                      <span className="text-[var(--admin-gold)]">Already broadcast on {fmtDate(selected.lastSentAt)}</span>
                     ) : null}
                   </div>
                 </div>
@@ -176,50 +182,46 @@ export default async function NewsletterSendPage({
                 {/* Test send */}
                 <form
                   action={testSendNewsletterAction}
-                  className="space-y-3 rounded-2xl border border-white/10 bg-[#0a0a0a] p-5"
+                  className="space-y-3 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5"
                 >
                   <input type="hidden" name="newsletter_id" value={selected.id} />
-                  <p className="text-sm font-semibold text-white">1 · Send yourself a test</p>
-                  <p className="text-xs text-white/50">Always preview in a real inbox before sending to everyone.</p>
+                  <p className="text-sm font-semibold text-[var(--admin-text)]">1 · Send yourself a test</p>
+                  <p className="text-xs text-[var(--admin-text-faint)]">Always preview in a real inbox before sending to everyone.</p>
                   <div className="flex flex-wrap gap-2">
-                    <input
+                    <Input
                       name="test_email"
                       type="email"
                       placeholder="you@example.com"
-                      className="min-w-56 flex-1 rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#7ed957]"
+                      className="min-w-56 flex-1"
                     />
-                    <button
-                      type="submit"
-                      disabled={!cfg.configured}
-                      className="rounded-full border border-[#7ed957]/40 px-5 py-2 text-sm font-semibold text-[#7ed957] hover:bg-[#7ed957]/10 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
+                    <Button type="submit" variant="subtle" disabled={!cfg.configured}>
                       Send test
-                    </button>
+                    </Button>
                   </div>
                 </form>
 
                 {/* Broadcast */}
                 <form
                   action={broadcastNewsletterAction}
-                  className="space-y-3 rounded-2xl border border-[#ff7f00]/25 bg-[#ff7f00]/5 p-5"
+                  className="space-y-3 rounded-[var(--admin-radius-lg)] border border-[var(--admin-orange)]/25 bg-[var(--admin-orange-soft)] p-5"
                 >
                   <input type="hidden" name="newsletter_id" value={selected.id} />
-                  <p className="text-sm font-semibold text-[#ff7f00]">2 · Send to the loyalty list</p>
-                  <p className="text-xs text-white/60">
+                  <p className="text-sm font-semibold text-[var(--admin-orange)]">2 · Send to the loyalty list</p>
+                  <p className="text-xs text-[var(--admin-text-muted)]">
                     This emails all <strong>{recipients.total}</strong> loyalty member(s) who gave email consent. Each
                     person gets their own private copy. This can&apos;t be undone.
                   </p>
-                  <label className="flex items-center gap-2 text-xs text-white/70">
-                    <input type="checkbox" name="confirm" className="h-4 w-4 accent-[#7ed957]" />
+                  <label className="flex items-center gap-2 text-xs text-[var(--admin-text-muted)]">
+                    <input type="checkbox" name="confirm" className="h-4 w-4 accent-[var(--admin-accent)]" />
                     Yes, send “{selected.title}” to {recipients.total} member(s).
                   </label>
-                  <button
+                  <Button
                     type="submit"
                     disabled={!cfg.configured || recipients.total === 0}
-                    className="rounded-full bg-[#ff7f00] px-5 py-2 text-sm font-semibold text-black hover:bg-[#ff941f] disabled:cursor-not-allowed disabled:opacity-40"
+                    className="bg-[var(--admin-orange)] hover:brightness-110"
                   >
                     Send to {recipients.total} member(s)
-                  </button>
+                  </Button>
                 </form>
               </div>
             ) : null}
@@ -228,11 +230,11 @@ export default async function NewsletterSendPage({
 
         {/* History */}
         {history.length > 0 ? (
-          <div className="rounded-2xl border border-white/10 bg-[#0a0a0a] p-5">
-            <p className="text-sm font-semibold text-white">Send history</p>
+          <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
+            <p className="text-sm font-semibold text-[var(--admin-text)]">Send history</p>
             <div className="mt-3 overflow-x-auto">
               <table className="w-full text-left text-xs">
-                <thead className="text-white/40">
+                <thead className="text-[var(--admin-text-faint)]">
                   <tr>
                     <th className="py-2 pr-4 font-medium">When</th>
                     <th className="py-2 pr-4 font-medium">Newsletter</th>
@@ -242,30 +244,20 @@ export default async function NewsletterSendPage({
                     <th className="py-2 font-medium">By</th>
                   </tr>
                 </thead>
-                <tbody className="text-white/70">
+                <tbody className="text-[var(--admin-text-muted)]">
                   {history.map((h) => (
-                    <tr key={h.id} className="border-t border-white/5">
+                    <tr key={h.id} className="border-t border-[var(--admin-border)]">
                       <td className="py-2 pr-4 whitespace-nowrap">{fmtDate(h.completed_at ?? h.created_at)}</td>
                       <td className="py-2 pr-4">{h.subject}</td>
                       <td className="py-2 pr-4">{h.send_kind === "test" ? "Test" : "Broadcast"}</td>
                       <td className="py-2 pr-4">
                         {h.delivered_count}
-                        {h.failed_count > 0 ? <span className="text-[#ff7f00]"> / {h.failed_count}</span> : ""}
+                        {h.failed_count > 0 ? <span className="text-[var(--admin-orange)]"> / {h.failed_count}</span> : ""}
                       </td>
                       <td className="py-2 pr-4">
-                        <span
-                          className={
-                            h.status === "sent"
-                              ? "text-[#7ed957]"
-                              : h.status === "failed"
-                                ? "text-red-400"
-                                : "text-[#ffd700]"
-                          }
-                        >
-                          {h.status}
-                        </span>
+                        <StatusPill status={h.status} />
                       </td>
-                      <td className="py-2 text-white/40">{h.sent_by_email ?? "—"}</td>
+                      <td className="py-2 text-[var(--admin-text-faint)]">{h.sent_by_email ?? "—"}</td>
                     </tr>
                   ))}
                 </tbody>
