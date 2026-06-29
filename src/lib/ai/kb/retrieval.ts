@@ -20,13 +20,13 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import {
-  SEED_STRAINS,
   SEED_TERPENES,
   SEED_CATEGORIES,
   type SeedStrain,
   type SeedTerpene,
   type SeedCategory,
 } from "./seed";
+import { STRAINS_RICH, type SeedStrainRich } from "./strains-data";
 import type { ProductFacts } from "../suggestions";
 
 // ---------------------------------------------------------------------------
@@ -59,17 +59,21 @@ type StrainRow = {
   slug: string; name: string; aliases: string[] | null; strain_type: string | null;
   lineage: string | null; aroma_notes: string[] | null; flavor_notes: string[] | null;
   terpenes: string[] | null; summary: string | null;
+  dominant_cannabinoid: string | null; potency_note: string | null;
+  bud_structure: string | null; origin: string | null;
 };
 
-async function loadStrains(): Promise<SeedStrain[]> {
-  if (!isSupabaseServiceConfigured) return SEED_STRAINS;
+async function loadStrains(): Promise<SeedStrainRich[]> {
+  if (!isSupabaseServiceConfigured) return STRAINS_RICH;
   try {
     const admin = createSupabaseAdminClient();
     const { data, error } = await admin
       .from("kb_strains")
-      .select("slug,name,aliases,strain_type,lineage,aroma_notes,flavor_notes,terpenes,summary")
+      .select(
+        "slug,name,aliases,strain_type,lineage,aroma_notes,flavor_notes,terpenes,summary,dominant_cannabinoid,potency_note,bud_structure,origin",
+      )
       .eq("active", true);
-    if (error || !data || data.length === 0) return SEED_STRAINS;
+    if (error || !data || data.length === 0) return STRAINS_RICH;
     return (data as StrainRow[]).map((r) => ({
       slug: r.slug,
       name: r.name,
@@ -80,9 +84,13 @@ async function loadStrains(): Promise<SeedStrain[]> {
       flavor_notes: r.flavor_notes ?? [],
       terpenes: r.terpenes ?? [],
       summary: r.summary ?? "",
+      dominant_cannabinoid: r.dominant_cannabinoid ?? undefined,
+      potency_note: r.potency_note ?? undefined,
+      bud_structure: r.bud_structure ?? undefined,
+      origin: r.origin ?? undefined,
     }));
   } catch {
-    return SEED_STRAINS;
+    return STRAINS_RICH;
   }
 }
 
@@ -165,7 +173,7 @@ async function loadBrandFact(brand: string | null | undefined, vendor: string | 
 // ---------------------------------------------------------------------------
 
 /** Find the best strain match from the product name + explicit strain field. */
-function matchStrain(strains: SeedStrain[], facts: ProductFacts): SeedStrain | null {
+function matchStrain(strains: SeedStrainRich[], facts: ProductFacts): SeedStrainRich | null {
   const haystack = `${norm(facts.strainName)} ${norm(facts.name)}`;
   if (!haystack.trim()) return null;
   // Prefer longer names first so "blue dream" wins over a stray "dream".
@@ -183,7 +191,7 @@ export type GroundedFacts = {
   /** Where the facts came from, for provenance (kb:strain, kb:category, …). */
   sources: string[];
   /** Strain match, if any (used to enrich the structured prompt). */
-  strain: SeedStrain | null;
+  strain: SeedStrainRich | null;
   /** Resolved KB category key. */
   category: string;
 };
@@ -211,6 +219,21 @@ export async function buildGroundedFacts(facts: ProductFacts): Promise<GroundedF
     lines.push(`Strain "${strain.name}" (${strain.strain_type})${strain.lineage ? `, lineage ${strain.lineage}` : ""}.`);
     if (strain.aroma_notes.length) lines.push(`${strain.name} typical aroma: ${strain.aroma_notes.join(", ")}.`);
     if (strain.flavor_notes.length) lines.push(`${strain.name} typical flavor: ${strain.flavor_notes.join(", ")}.`);
+    if (strain.dominant_cannabinoid) {
+      const dc = strain.dominant_cannabinoid.toLowerCase();
+      const label =
+        dc === "cbd"
+          ? "a high-CBD cultivar (often low THC)"
+          : dc === "balanced"
+            ? "a balanced THC:CBD cultivar"
+            : dc === "thc"
+              ? "primarily a THC cultivar"
+              : `dominant cannabinoid: ${strain.dominant_cannabinoid}`;
+      lines.push(`${strain.name} is ${label}.`);
+    }
+    if (strain.potency_note) lines.push(`${strain.name} potency profile: ${strain.potency_note}.`);
+    if (strain.bud_structure) lines.push(`${strain.name} typical bud structure: ${strain.bud_structure}.`);
+    if (strain.origin) lines.push(`${strain.name} origin/genetics region: ${strain.origin}.`);
     if (strain.summary) lines.push(`${strain.name}: ${strain.summary}`);
   }
 

@@ -28,7 +28,7 @@ export default async function KnowledgeBasePage({
 
   const counts = await getKbCounts();
   const [strains, brands, banned] = await Promise.all([
-    listKbStrains(50),
+    listKbStrains(200),
     listKbBrands(50),
     listKbBanned(200),
   ]);
