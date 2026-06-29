@@ -28,18 +28,33 @@ export function SpecialsDailyDeals({ items }: { items: GreenwayMenuItem[] }) {
     [items, weekday],
   );
 
+  // Fallback pool for days with NO per-item discount (e.g. Ice Cream Sunday is a
+  // basket-level deal, so getActiveMenuDiscount returns undefined for every item
+  // and `candidates` is empty). Without this the grid would render permanent
+  // grey skeletons. We still want to showcase real products, so we fall back to
+  // a representative cross-section of the menu. (Mirrors HomeDailyDeals.)
+  const pool = useMemo(
+    () => (candidates.length ? candidates : items),
+    [candidates, items],
+  );
+
   const shuffle = useShuffleOrder(
     `specials-deals-${weekday ?? "pending"}`,
-    candidates.map((item) => item.id),
+    pool.map((item) => item.id),
   );
 
   const deals = useMemo(() => {
-    if (!candidates.length) return [];
-    const ordered = [...candidates].sort(
+    if (!pool.length) return [];
+    const ordered = [...pool].sort(
       (a, b) => (shuffle[a.id] ?? 0) - (shuffle[b.id] ?? 0),
     );
     return ordered.slice(0, LIMIT);
-  }, [candidates, shuffle]);
+  }, [pool, shuffle]);
+
+  // Only show skeletons during the brief first paint while the store weekday is
+  // still resolving on the client. Once resolved we always have products to show
+  // (the day's deals or the menu fallback) — never permanent grey tiles.
+  const isResolvingWeekday = weekday === undefined;
 
   const presentation = weekday ? getDailyDealPresentation(weekday) : null;
   const title = presentation?.title ?? DAILY_DEAL_FALLBACK.title;
@@ -58,7 +73,7 @@ export function SpecialsDailyDeals({ items }: { items: GreenwayMenuItem[] }) {
         {title} products
       </h2>
 
-      {deals.length ? (
+      {!isResolvingWeekday && deals.length ? (
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-5 lg:grid-cols-4">
           {deals.map((item) => (
             <ProductCard key={item.id} item={item} />
