@@ -39,6 +39,12 @@ function publicPathForPage(page: string): string | null {
       return "/specials";
     case "faq":
       return "/faq";
+    case "about":
+      return "/about";
+    case "locations":
+      return "/locations";
+    case "price-match":
+      return "/price-match";
     case "footer":
     case "business":
       // These render in the shared footer on every page — preview on the home page.
@@ -70,7 +76,7 @@ export default async function SiteContentPage({
     return (
       <div>
         <AdminPageHeader title="Site Content" subtitle="Edit approved site text blocks safely — no code, no page builder." />
-        <div className="px-5 py-6 sm:px-8 text-sm text-[var(--admin-gold)]">Supabase is not configured yet.</div>
+        <div className="px-5 py-6 sm:px-8 text-sm text-[var(--admin-gold)]">The database isn&apos;t fully set up yet. Once your administrator finishes the one-time setup, your site content will appear here to edit.</div>
       </div>
     );
   }
@@ -84,16 +90,23 @@ export default async function SiteContentPage({
     const inserted = await ensureContentBlocksSeeded();
     if (inserted > 0) allBlocks = await listContentBlocks();
   }
-  // Per owner: this page edits ONLY the footer section. The site header has
-  // nothing worth editing, so we scope the editor to the blocks that actually
-  // render in the shared footer — the store-hours image, the plain-text hours
-  // line, and the WA compliance warning.
-  const FOOTER_BLOCK_KEYS = new Set<string>([
-    "footer.hours.image",
-    "footer.compliance.warning",
-    "business.hours.display",
+  // Site Content is the home for editable SITE-WIDE / cross-page text that
+  // doesn't live inside a single page builder: the shared footer (store-hours
+  // image, hours line, WA compliance warning), business info (hours display,
+  // site fonts), and the simple text pages whose copy isn't managed in the
+  // Pages builder (About, Locations, Price Match heroes). The richer
+  // banner/section pages (Home, Menu, Loyalty, Specials, Vendors, FAQ) are
+  // edited in their own tabs under PAGES, so we exclude them here to avoid
+  // duplicating that work.
+  const PAGE_BUILDER_PAGES = new Set<string>([
+    "home",
+    "menu",
+    "loyalty",
+    "specials",
+    "vendors",
+    "faq",
   ]);
-  const blocks = allBlocks.filter((b) => FOOTER_BLOCK_KEYS.has(b.block_key));
+  const blocks = allBlocks.filter((b) => !PAGE_BUILDER_PAGES.has(b.page));
   // "Not seeded" must reflect the whole table — if nothing exists yet, the
   // owner still needs the one-click initialize button (which seeds everything).
   const notSeeded = allBlocks.length === 0;
@@ -152,23 +165,29 @@ export default async function SiteContentPage({
   return (
     <div>
       <AdminPageHeader
-        title="Footer Content"
-        subtitle="Edit the shared site footer — the store-hours image, the hours line, and the required WA compliance warning. Edit a draft, then Publish to push it live."
-        breadcrumbs={<Breadcrumbs items={[{ label: "Footer Content" }]} />}
+        title="Site Content"
+        subtitle="Edit your site-wide text in one place — the footer (store hours, hours line, the required WA compliance warning), business info, and the wording on your About, Locations, and Price-Match pages. Edit a draft, preview it, then Publish to go live."
+        breadcrumbs={<Breadcrumbs items={[{ label: "Site Content" }]} />}
         help={
           <HelpPanel
             id="content"
-            title="How to edit your footer"
+            title="How Site Content works"
             steps={[
-              "Pick the footer block you want to change (e.g. the store-hours image).",
-              "Edit the draft — your changes don't go live yet.",
-              "Preview how it will look.",
-              "Click Publish to update the public site.",
+              "Use the search box or the page filters to find the wording you want to change.",
+              "Click Edit on a block and change the draft — nothing goes live yet.",
+              "Use the live preview to see exactly how it will look.",
+              "Click Publish (or “Publish all drafts”) to update the public site.",
             ]}
           >
+            <p className="mb-2">
+              You can only edit specific approved spots, which keeps your site looking right —
+              there&apos;s no way to accidentally break the layout.
+            </p>
             <p>
-              You can only edit specific approved spots, which keeps your site
-              looking right. There&apos;s no way to accidentally break the layout.
+              <strong>Where things live:</strong> footer &amp; business info and your simple text
+              pages (About, Locations, Price Match) are edited here. Your richer pages with banners
+              and sections — Home, Menu, Loyalty, Specials, Vendors, FAQ — are edited under{" "}
+              <strong>Pages</strong> in the sidebar.
             </p>
           </HelpPanel>
         }
@@ -176,6 +195,39 @@ export default async function SiteContentPage({
           <Button href="/admin/content/seo" variant="subtle">SEO editor →</Button>
         }
       />
+
+      {/* SEO guidance — baked in so employees learn it in-context. */}
+      <div className="px-5 pt-4 sm:px-8">
+        <HelpPanel
+          id="seo-explainer"
+          title="What is the SEO editor, and how do I use it well?"
+          steps={[
+            "SEO (Search Engine Optimization) controls how each page looks in Google results and when shared on social media.",
+            "Open the SEO editor (button top-right). Pick a page, then set its Title and Description.",
+            "Title: ~50–60 characters. Lead with what the page is + “Greenway Marijuana” + “Port Orchard, WA”. One clear idea per page; make each page’s title unique.",
+            "Description: ~150–160 characters. A friendly, accurate summary with a reason to click (e.g. daily deals, fast pickup). Each page should have its own.",
+            "The social/Open-Graph image is what shows when a page is shared on Facebook/Instagram — use a clean 1200×630px image from your Media library.",
+            "Edit as a draft, preview, then Publish — exactly like the content blocks here.",
+          ]}
+        >
+          <p className="mb-2">
+            <strong>Why it matters:</strong> good titles and descriptions help customers find you
+            on Google and make your links look professional when shared. You don&apos;t need to be
+            technical — just write clear, honest wording about each page.
+          </p>
+          <p className="mb-2">
+            <strong>Cannabis compliance:</strong> Washington I-502 rules apply to how you advertise.
+            Keep wording factual and age-appropriate, never make health/medical claims, and never
+            imply the product is appealing to minors. When in doubt, describe the experience and the
+            deal — not medical benefits.
+          </p>
+          <p>
+            <strong>Best results:</strong> one unique title + description per page, real keywords
+            your customers actually search (your city, “dispensary”, product categories, brands),
+            and keep them fresh when you run a new promotion.
+          </p>
+        </HelpPanel>
+      </div>
 
       <div className="space-y-6 px-5 py-6 sm:px-8">
         {(saved || published || seeded || restored || published_all || discarded) && (

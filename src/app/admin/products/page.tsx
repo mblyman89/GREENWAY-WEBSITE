@@ -30,7 +30,8 @@ export default async function ProductsPage({
         <AdminPageHeader title="Products" subtitle="Enrich products with descriptions, images, tags, and AI assist." />
         <div className="px-5 py-6 sm:px-8">
           <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] p-5 text-sm text-[var(--admin-gold)]">
-            Supabase is not configured yet.
+            The database isn&apos;t fully set up yet. Once your administrator
+            finishes the one-time setup, your products will appear here.
           </div>
         </div>
       </div>

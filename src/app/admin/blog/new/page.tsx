@@ -14,7 +14,7 @@ export default async function NewBlogPostPage() {
     return (
       <div>
         <AdminPageHeader title="New post" />
-        <div className="px-5 py-6 sm:px-8 text-sm text-[#ffd700]">Supabase is not configured yet.</div>
+        <div className="px-5 py-6 sm:px-8 text-sm text-[var(--admin-gold)]">The database isn&apos;t fully set up yet. Once your administrator finishes the one-time setup, you can create posts here.</div>
       </div>
     );
   }

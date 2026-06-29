@@ -1,7 +1,8 @@
-import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { HelpPanel } from "@/components/admin/ux";
+import { Button } from "@/components/admin/ui";
 import { listSeoEntries } from "@/lib/cms/content-store";
 import { isAiConfigured } from "@/lib/cms/ai-seo";
 import { SeoEntryEditor } from "@/components/admin/SeoEntryEditor";
@@ -16,6 +17,7 @@ const KNOWN_PATHS = [
   "/specials",
   "/about",
   "/locations",
+  "/price-match",
   "/loyalty",
   "/blog",
   "/faq",
@@ -34,7 +36,7 @@ export default async function SeoEditorPage({
     return (
       <div>
         <AdminPageHeader title="SEO Editor" />
-        <div className="px-5 py-6 sm:px-8 text-sm text-[#ffd700]">Supabase is not configured yet.</div>
+        <div className="px-5 py-6 sm:px-8 text-sm text-[var(--admin-gold)]">The database isn&apos;t fully set up yet. Once your administrator finishes the one-time setup, the SEO editor will be ready to use.</div>
       </div>
     );
   }
@@ -46,28 +48,53 @@ export default async function SeoEditorPage({
     <div>
       <AdminPageHeader
         title="SEO Editor"
-        subtitle="Per-page title, description, canonical, noindex, and sitemap inclusion with a live Google-style preview — now with one-click AI drafting."
+        subtitle="Control how each page looks on Google and when shared on social media — title, description, and more — with a live Google-style preview."
         action={
-          <Link href="/admin/content" className="text-sm text-white/60 hover:text-white">
-            ← Site content
-          </Link>
+          <Button href="/admin/content" variant="subtle">← Site content</Button>
+        }
+        help={
+          <HelpPanel
+            id="seo-editor"
+            title="How to write great SEO (in plain English)"
+            steps={[
+              "Pick a page below. Each page gets its own Title and Description.",
+              "Title (~50–60 chars): what the page is + “Greenway Marijuana” + “Port Orchard, WA”. Keep each page’s title unique.",
+              "Description (~150–160 chars): a friendly, honest summary with a reason to click (daily deals, fast in-store pickup).",
+              "Watch the live Google-style preview update as you type — that’s roughly what customers will see.",
+              "If AI drafting is on, click it for a starting point, then edit so it sounds like you. Always review before saving.",
+              "Save. Changes apply to the public page right away.",
+            ]}
+          >
+            <p className="mb-2">
+              <strong>What each field does:</strong> <em>Title</em> = the big blue link in Google results.
+              <em> Description</em> = the grey text under it. <em>Canonical</em> = (advanced) the “official”
+              URL when similar pages exist — usually leave blank. <em>No-index</em> = hide a page from
+              Google (rarely needed). <em>Sitemap</em> = include the page in the list we hand to Google
+              (keep on for real pages).
+            </p>
+            <p>
+              <strong>Cannabis compliance (WA I-502):</strong> keep wording factual and age-appropriate,
+              never make health/medical claims, and never word things in a way that would appeal to minors.
+              Describe the experience and the deal, not medical benefits.
+            </p>
+          </HelpPanel>
         }
       />
 
       <div className="space-y-6 px-5 py-6 sm:px-8">
         {saved && (
-          <div className="rounded-lg border border-[#7ed957]/40 bg-[#7ed957]/10 px-4 py-2 text-sm text-[#7ed957]">
+          <div className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]">
             SEO saved.
           </div>
         )}
         {error === "path" && (
-          <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-2 text-sm text-red-400">
+          <div className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger-soft)] px-4 py-2 text-sm text-[var(--admin-danger)]">
             Path must start with “/”.
           </div>
         )}
 
         {!isAiConfigured && (
-          <div className="rounded-lg border border-[#ffd700]/30 bg-[#ffd700]/[0.06] px-4 py-2 text-xs text-[#ffd700]">
+          <div className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] px-4 py-2 text-xs text-[var(--admin-gold)]">
             AI drafting is available on every page below once an <code className="font-mono">AI_API_KEY</code> is set.
             Until then you can still edit titles and descriptions by hand.
           </div>

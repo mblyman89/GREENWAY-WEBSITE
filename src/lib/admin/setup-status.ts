@@ -219,9 +219,9 @@ export const SETUP_GUIDE: Record<string, SetupGuide> = {
     why: "The database needs its tables created before you can import a menu or take orders. This is a one-time setup that runs a set of prepared SQL files.",
     how: [
       "Open your Supabase project → SQL Editor.",
-      "Open each file in supabase/migrations/ in order (0001, 0002, … through the newest).",
-      "Paste each file's contents and click Run. Run them in number order.",
-      "Don't skip the newest one (0009_ai_usage_ledger.sql) — it powers the AI Usage dashboard.",
+      "Open each file in the supabase/migrations/ folder in order, lowest number first.",
+      "Paste each file's contents into the SQL Editor and click Run. Always run them in number order.",
+      "Be sure to run every file, including the newest ones — each adds tables the back office needs.",
       "When all have run with no errors, this step turns green automatically.",
     ],
     time: "~10 minutes",
@@ -259,13 +259,13 @@ export const SETUP_GUIDE: Record<string, SetupGuide> = {
     why: "Email sending powers teammate invites and order/loyalty notifications. Without it, those messages may not arrive reliably.",
     how: [
       "Create a free account at resend.com.",
-      "Verify your sending domain (greenwaymarijuana.com) in Resend.",
+      "Verify your sending domain (greenwaymarijuana.com) in Resend — turn ON “Enable Sending” only.",
       "Create an API key and add it to your environment as RESEND_API_KEY.",
       "Optionally set up the orders@ and loyalty@ aliases so notifications come from a friendly address.",
       "Redeploy, then send yourself a test invite from Users.",
     ],
     time: "~15 minutes",
-    tip: "If you previously shared a Resend key in chat, rotate it (create a new one and delete the old) before going live.",
+    tip: "Leave Resend’s “Enable Receiving” OFF. Your site only needs to SEND email. Turning on Receiving installs mail (MX) records that can hijack your normal inbox (e.g. michael@greenwaymarijuana.com) and stop you receiving email. If you ever truly need inbound processing, do it on a subdomain like inbox.greenwaymarijuana.com. Also: if you previously shared a Resend key in chat, rotate it (create a new one, delete the old) before going live.",
   },
   team: {
     why: "Invite your staff so the right people can manage the menu, content, and orders — each with a role that limits what they can change.",
@@ -282,64 +282,4 @@ export const SETUP_GUIDE: Record<string, SetupGuide> = {
   },
 };
 
-/**
- * Build-progress slices. Marked done as each ships. Keep this as the single
- * source for the dashboard's progress section (no scattered hardcoding).
- */
-export type SliceProgress = {
-  id: string;
-  label: string;
-  detail: string;
-  done: boolean;
-};
 
-export const BUILD_SLICES: SliceProgress[] = [
-  {
-    id: "1",
-    label: "Slice 1 — Foundation",
-    detail: "Auth, roles, audit log, media storage, dashboard shell",
-    done: true,
-  },
-  {
-    id: "2",
-    label: "Slice 2 — POS import & staged publish",
-    detail: "Upload spreadsheets → review → publish menu",
-    done: true,
-  },
-  {
-    id: "3",
-    label: "Slice 3 — Media library + Vendors/Brands",
-    detail: "Logos, profiles, asset manager",
-    done: true,
-  },
-  {
-    id: "4",
-    label: "Slice 4 — Product enrichment",
-    detail: "Photos, descriptions, staff picks",
-    done: true,
-  },
-  {
-    id: "5",
-    label: "Slice 5 — Blog & site content",
-    detail: "CMS + controlled text editor",
-    done: true,
-  },
-  {
-    id: "6",
-    label: "Slice 6 — Promotions",
-    detail: "Daily deals + Thursday brands + clearance",
-    done: true,
-  },
-  {
-    id: "7",
-    label: "Slice 7 — Orders",
-    detail: "Server orders, dashboard, tickets",
-    done: true,
-  },
-  {
-    id: "9",
-    label: "Slice 9 — Reports",
-    detail: "Diagnostics, inventory health, sales",
-    done: true,
-  },
-];

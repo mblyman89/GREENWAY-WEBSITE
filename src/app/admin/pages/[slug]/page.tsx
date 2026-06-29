@@ -89,8 +89,9 @@ export default async function PageBuilderPage({
           subtitle="Manage this page's banners and sections."
         />
         <div className="px-5 py-6 text-sm text-[var(--admin-gold)] sm:px-8">
-          Supabase is not configured yet. Once the database is connected and
-          migrations through 0013 are applied, this page&apos;s sections manage here.
+          The database isn&apos;t fully set up yet. Once your administrator
+          finishes the one-time setup, this page&apos;s banners and sections will
+          appear here for you to edit.
         </div>
       </div>
     );
