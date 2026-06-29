@@ -209,6 +209,8 @@ export async function researchVendorAction(formData: FormData): Promise<void> {
         suggested_value: draft.mission,
         input_summary: `${vendor.display_name} · mission${instruction ? " · " + instruction : ""}`,
         generated_by: session.userId,
+        confidence: draft.confidence,
+        source: draft.source,
       });
     }
     if (draft.about) {
@@ -219,6 +221,8 @@ export async function researchVendorAction(formData: FormData): Promise<void> {
         suggested_value: draft.about,
         input_summary: `${vendor.display_name} · about${instruction ? " · " + instruction : ""}`,
         generated_by: session.userId,
+        confidence: draft.confidence,
+        source: draft.source,
       });
     }
 
@@ -355,6 +359,8 @@ export async function researchBrandAction(formData: FormData): Promise<void> {
         suggested_value: p.value,
         input_summary: `${brand!.display_name} · ${p.field}${instruction ? " · " + instruction : ""}`,
         generated_by: session.userId,
+        confidence: draft.confidence,
+        source: draft.source,
       });
     }
 
