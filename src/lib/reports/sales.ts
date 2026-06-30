@@ -66,12 +66,30 @@ export type SalesReport = {
   avgUnitsPerOrder: number;
   totalDiscountMinorUnits: number;
   byCategory: SalesGroupRow[];
+  /**
+   * Revenue by detailed product TYPE — the granular POS inventory type (e.g.
+   * Rosin, BHO, Live Resin, Gummies, Beverage), as opposed to the high-level
+   * website category (Flower, Concentrate, etc.).
+   */
+  byType: SalesGroupRow[];
+  /** Types nested under their parent category, for a drill-down view. */
+  byTypeWithinCategory: CategoryTypeBreakdown[];
   byVendor: SalesGroupRow[];
   byBrand: SalesGroupRow[];
   byProduct: SalesGroupRow[];
   byDay: DayPoint[];
   byHour: HourPoint[];
   byCustomerType: CustomerTypeRow[];
+};
+
+export type CategoryTypeBreakdown = {
+  /** Parent website category label. */
+  category: string;
+  revenueMinorUnits: number;
+  units: number;
+  revenueShare: number;
+  /** Detailed types within this category, sorted by revenue. */
+  types: SalesGroupRow[];
 };
 
 export const EMPTY_SALES_REPORT: SalesReport = {
@@ -83,6 +101,8 @@ export const EMPTY_SALES_REPORT: SalesReport = {
   avgUnitsPerOrder: 0,
   totalDiscountMinorUnits: 0,
   byCategory: [],
+  byType: [],
+  byTypeWithinCategory: [],
   byVendor: [],
   byBrand: [],
   byProduct: [],
@@ -142,13 +162,18 @@ function emptyDaySeries(fromISO: string, toISO: string): DayPoint[] {
 // Product → category/vendor lookup (from menu snapshots)
 // ---------------------------------------------------------------------------
 
-type ProductMeta = { category: string; vendor: string; brand: string };
+type ProductMeta = { category: string; type: string; vendor: string; brand: string };
 
 /**
- * Build a source_item_id → {category, vendor, brand} map. We pull every
+ * Build a source_item_id → {category, type, vendor, brand} map. We pull every
  * menu_items row ordered by created_at DESC and keep the FIRST (most recent)
  * value seen per source_item_id, so the current catalog wins but historical
  * products still resolve.
+ *
+ * `type` is the granular POS inventory type (pos_inventory_type), falling back
+ * to pos_inventory_category, then to the website category. This is what powers
+ * "revenue by type" (Rosin, BHO, Live Resin, Gummies, …) vs the high-level
+ * website "category" (Concentrate, Edible, …).
  */
 async function buildProductLookup(
   admin: ReturnType<typeof createSupabaseAdminClient>,
@@ -156,7 +181,7 @@ async function buildProductLookup(
   const lookup = new Map<string, ProductMeta>();
   const { data } = await admin
     .from("menu_items")
-    .select("source_item_id, category, vendor_name, brand_name, created_at")
+    .select("source_item_id, category, pos_inventory_type, pos_inventory_category, vendor_name, brand_name, created_at")
     .order("created_at", { ascending: false })
     .limit(20000);
 
@@ -165,6 +190,8 @@ async function buildProductLookup(
       | {
           source_item_id: string;
           category: string | null;
+          pos_inventory_type: string | null;
+          pos_inventory_category: string | null;
           vendor_name: string | null;
           brand_name: string | null;
         }[]
@@ -172,8 +199,14 @@ async function buildProductLookup(
 
   for (const r of rows) {
     if (!r.source_item_id || lookup.has(r.source_item_id)) continue;
+    const type =
+      r.pos_inventory_type?.trim() ||
+      r.pos_inventory_category?.trim() ||
+      r.category?.trim() ||
+      "Untyped";
     lookup.set(r.source_item_id, {
       category: r.category?.trim() || "Uncategorized",
+      type,
       vendor: r.vendor_name?.trim() || "Unknown vendor",
       brand: r.brand_name?.trim() || "Unknown brand",
     });
@@ -232,9 +265,12 @@ export async function getSalesReport(fromISO: string, toISO: string): Promise<Sa
 
   // 4) Accumulators.
   const byCategory = new Map<string, Acc>();
+  const byType = new Map<string, Acc>();
   const byVendor = new Map<string, Acc>();
   const byBrand = new Map<string, Acc>();
   const byProduct = new Map<string, Acc>();
+  // Detailed types nested under their parent category: category -> (type -> Acc).
+  const typesPerCategory = new Map<string, Map<string, Acc>>();
 
   const dayMap = new Map<string, DayPoint>();
   for (const p of emptyDaySeries(fromISO, toISO)) dayMap.set(p.date, p);
@@ -265,14 +301,24 @@ export async function getSalesReport(fromISO: string, toISO: string): Promise<Sa
 
     const meta = (l.product_id && lookup.get(l.product_id)) || null;
     const category = meta?.category ?? "Uncategorized";
+    const type = meta?.type ?? "Untyped";
     const vendor = meta?.vendor ?? "Unknown vendor";
     const brand = l.brand?.trim() || meta?.brand || "Unknown brand";
     const product = l.product_name?.trim() || "Unknown product";
 
     pushAcc(byCategory, category, lineRevenue, qty, lineDiscount, l.order_id);
+    pushAcc(byType, type, lineRevenue, qty, lineDiscount, l.order_id);
     pushAcc(byVendor, vendor, lineRevenue, qty, lineDiscount, l.order_id);
     pushAcc(byBrand, brand, lineRevenue, qty, lineDiscount, l.order_id);
     pushAcc(byProduct, product, lineRevenue, qty, lineDiscount, l.order_id);
+
+    // Nested: type within its parent category.
+    let typeMap = typesPerCategory.get(category);
+    if (!typeMap) {
+      typeMap = new Map<string, Acc>();
+      typesPerCategory.set(category, typeMap);
+    }
+    pushAcc(typeMap, type, lineRevenue, qty, lineDiscount, l.order_id);
 
     orderRevenue.set(l.order_id, (orderRevenue.get(l.order_id) ?? 0) + lineRevenue);
   }
@@ -331,6 +377,25 @@ export async function getSalesReport(fromISO: string, toISO: string): Promise<Sa
 
   const totalOrders = validOrders.length;
 
+  // Build the nested type-within-category breakdown, sorted by category revenue.
+  const byTypeWithinCategory: CategoryTypeBreakdown[] = [...typesPerCategory.entries()]
+    .map(([category, typeMap]) => {
+      let revenue = 0;
+      let units = 0;
+      for (const a of typeMap.values()) {
+        revenue += a.revenue;
+        units += a.units;
+      }
+      return {
+        category,
+        revenueMinorUnits: revenue,
+        units,
+        revenueShare: totalRevenue > 0 ? revenue / totalRevenue : 0,
+        types: finalizeGroups(typeMap, totalRevenue),
+      };
+    })
+    .sort((a, b) => b.revenueMinorUnits - a.revenueMinorUnits);
+
   return {
     hasData: true,
     totalRevenueMinorUnits: totalRevenue,
@@ -340,6 +405,8 @@ export async function getSalesReport(fromISO: string, toISO: string): Promise<Sa
     avgUnitsPerOrder: totalOrders ? Math.round((totalUnits / totalOrders) * 10) / 10 : 0,
     totalDiscountMinorUnits: totalDiscount,
     byCategory: finalizeGroups(byCategory, totalRevenue),
+    byType: finalizeGroups(byType, totalRevenue),
+    byTypeWithinCategory,
     byVendor: finalizeGroups(byVendor, totalRevenue),
     byBrand: finalizeGroups(byBrand, totalRevenue),
     byProduct: finalizeGroups(byProduct, totalRevenue, 25),

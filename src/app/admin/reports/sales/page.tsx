@@ -134,7 +134,7 @@ export default async function SalesReportPage({
         />
       </div>
 
-      {/* Category + Vendor charts side by side */}
+      {/* Category + Type charts side by side */}
       <div className="grid gap-5 lg:grid-cols-2">
         <Section title="Revenue by category" exportHref={`/admin/reports/sales/export?group=category&${qs}`}>
           <BarList
@@ -146,6 +146,22 @@ export default async function SalesReportPage({
             color={REPORT_COLORS.GREEN}
           />
         </Section>
+        <Section
+          title="Revenue by type"
+          subtitle="Detailed product types (Rosin, BHO, Live Resin, Gummies, …)."
+          exportHref={`/admin/reports/sales/export?group=type&${qs}`}
+        >
+          <BarList
+            data={report.byType.slice(0, 10).map((r) => ({ label: r.label, value: r.revenueMinorUnits }))}
+            valueFormatter={formatMinorCurrency}
+            color={REPORT_COLORS.GOLD}
+            emptyLabel="No typed sales yet."
+          />
+        </Section>
+      </div>
+
+      {/* Vendor + Brand charts side by side */}
+      <div className="grid gap-5 lg:grid-cols-2">
         <Section title="Revenue by vendor" exportHref={`/admin/reports/sales/export?group=vendor&${qs}`}>
           <BarList
             data={report.byVendor.slice(0, 10).map((r) => ({ label: r.label, value: r.revenueMinorUnits }))}
@@ -153,10 +169,6 @@ export default async function SalesReportPage({
             color={REPORT_COLORS.GOLD}
           />
         </Section>
-      </div>
-
-      {/* Brand chart + Hour chart */}
-      <div className="grid gap-5 lg:grid-cols-2">
         <Section title="Revenue by brand" exportHref={`/admin/reports/sales/export?group=brand&${qs}`}>
           <BarList
             data={report.byBrand.slice(0, 10).map((r) => ({ label: r.label, value: r.revenueMinorUnits }))}
@@ -164,17 +176,51 @@ export default async function SalesReportPage({
             color={REPORT_COLORS.ORANGE}
           />
         </Section>
-        <Section title="Revenue by hour of day" subtitle="When your customers buy (Pacific time).">
-          <BarList
-            data={report.byHour
-              .filter((h) => h.revenueMinorUnits > 0)
-              .map((h) => ({ label: h.label, value: h.revenueMinorUnits }))}
-            valueFormatter={formatMinorCurrency}
-            color={REPORT_COLORS.GREEN}
-            emptyLabel="No hourly data yet."
-          />
-        </Section>
       </div>
+
+      {/* Hour chart */}
+      <Section title="Revenue by hour of day" subtitle="When your customers buy (Pacific time).">
+        <BarList
+          data={report.byHour
+            .filter((h) => h.revenueMinorUnits > 0)
+            .map((h) => ({ label: h.label, value: h.revenueMinorUnits }))}
+          valueFormatter={formatMinorCurrency}
+          color={REPORT_COLORS.GREEN}
+          emptyLabel="No hourly data yet."
+        />
+      </Section>
+
+      {/* Type within category drill-down */}
+      <Section
+        title="Types within each category"
+        subtitle="How each category breaks down into detailed product types."
+        exportHref={`/admin/reports/sales/export?group=type&${qs}`}
+      >
+        {report.byTypeWithinCategory.length === 0 ? (
+          <p className="text-sm text-white/45">No typed sales yet.</p>
+        ) : (
+          <div className="space-y-4">
+            {report.byTypeWithinCategory.slice(0, 12).map((cat) => (
+              <div key={cat.category} className="rounded-xl border border-white/10 bg-black/30 p-4">
+                <div className="mb-2 flex items-baseline justify-between gap-3">
+                  <span className="text-sm font-bold text-white/80">
+                    {formatWebsiteCategory(cat.category)}
+                  </span>
+                  <span className="text-xs text-white/45">
+                    {formatMinorCurrency(cat.revenueMinorUnits)} · {(cat.revenueShare * 100).toFixed(1)}% ·{" "}
+                    {cat.units.toLocaleString()} units
+                  </span>
+                </div>
+                <BarList
+                  data={cat.types.slice(0, 8).map((t) => ({ label: t.label, value: t.revenueMinorUnits }))}
+                  valueFormatter={formatMinorCurrency}
+                  color={REPORT_COLORS.GOLD}
+                />
+              </div>
+            ))}
+          </div>
+        )}
+      </Section>
 
       {/* Customer type */}
       <Section title="Sales by customer type" subtitle="New vs returning (matched by email).">
@@ -202,6 +248,26 @@ export default async function SalesReportPage({
             revenueShare: "100%",
           }}
           emptyLabel="No category sales."
+        />
+      </Section>
+
+      <Section
+        title="Type detail"
+        subtitle="Detailed product types across all categories."
+        exportHref={`/admin/reports/sales/export?group=type&${qs}`}
+      >
+        <ReportTable
+          columns={groupColumns("Type")}
+          rows={report.byType as (SalesGroupRow & Record<string, unknown>)[]}
+          totals={{
+            label: "Total",
+            revenueMinorUnits: formatMinorCurrency(report.totalRevenueMinorUnits),
+            units: report.totalUnits.toLocaleString(),
+            orders: report.totalOrders.toLocaleString(),
+            discountMinorUnits: `−${formatMinorCurrency(report.totalDiscountMinorUnits)}`,
+            revenueShare: "100%",
+          }}
+          emptyLabel="No typed sales."
         />
       </Section>
 
