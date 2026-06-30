@@ -44,7 +44,7 @@ const summaryColumns: ReportColumn<DayJournalSummary & Record<string, unknown>>[
 export default async function AccountingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string; to?: string; range?: string }>;
+  searchParams: Promise<{ from?: string; to?: string; range?: string; year?: string }>;
 }) {
   const session = await requirePermission("reports.view");
   const canEdit = can(session.profile.role, "settings.manage");

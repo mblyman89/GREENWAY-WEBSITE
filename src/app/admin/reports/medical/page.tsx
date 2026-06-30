@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
 export default async function MedicalReportPage({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string; to?: string; range?: string }>;
+  searchParams: Promise<{ from?: string; to?: string; range?: string; year?: string }>;
 }) {
   await requirePermission("reports.view");
   const sp = await searchParams;

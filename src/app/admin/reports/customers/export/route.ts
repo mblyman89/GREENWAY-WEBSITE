@@ -27,6 +27,7 @@ export async function GET(request: Request) {
     from: url.searchParams.get("from") ?? undefined,
     to: url.searchParams.get("to") ?? undefined,
     range: url.searchParams.get("range") ?? undefined,
+    year: url.searchParams.get("year") ?? undefined,
   });
 
   const report = await getCustomersReport(range.fromISO, range.toISO);

@@ -83,7 +83,7 @@ const groupColumns = (labelHeader: string, prettify?: (s: string) => string): Re
 export default async function SalesReportPage({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string; to?: string; range?: string }>;
+  searchParams: Promise<{ from?: string; to?: string; range?: string; year?: string }>;
 }) {
   await requirePermission("reports.view");
   const sp = await searchParams;
