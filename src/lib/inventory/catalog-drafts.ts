@@ -10,6 +10,12 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { getPublishedVersion, getItemBySourceKey } from "@/lib/pos/menu-version";
+import {
+  getPricingSettings,
+  getVelocityForProduct,
+  suggestPrice,
+  validatePrice,
+} from "@/lib/inventory/pricing";
 
 export type CatalogDraft = {
   id: string;
@@ -29,6 +35,11 @@ export type CatalogDraft = {
   manifest_id: string | null;
   lot_id: string | null;
   lab_result_id: string | null;
+  unit_cost_minor_units: number | null;
+  price_floor_minor_units: number | null;
+  suggested_price_minor_units: number | null;
+  price_minor_units: number | null;
+  price_rationale: string | null;
   status: string; // draft | approved | dismissed
   notes: string | null;
   created_at: string;
@@ -45,6 +56,7 @@ type LotForMatch = {
   inventory_type: string | null;
   strain_name: string | null;
   lab_result_id: string | null;
+  unit_cost_minor_units: number | null;
 };
 
 /**
@@ -77,7 +89,7 @@ export async function seedDraftsForManifest(
   const { data: lotsData } = await admin
     .from("inventory_lots")
     .select(
-      "id, pos_product_key, product_name, brand_id, vendor_id, category, inventory_type, strain_name, lab_result_id",
+      "id, pos_product_key, product_name, brand_id, vendor_id, category, inventory_type, strain_name, lab_result_id, unit_cost_minor_units",
     )
     .eq("manifest_id", manifestId)
     .neq("status", "destroyed");
@@ -96,6 +108,8 @@ export async function seedDraftsForManifest(
       potency_json: Record<string, number> | null;
     }
   >();
+
+  const pricingSettings = await getPricingSettings();
 
   let matched = 0;
   let unmatched = 0;
@@ -158,6 +172,10 @@ export async function seedDraftsForManifest(
       lab = labCache.get(lot.lab_result_id) ?? lab;
     }
 
+    // Pricing: compute the 2× floor + a velocity-aware suggested price.
+    const velocity = await getVelocityForProduct(lot.pos_product_key, 60);
+    const suggestion = suggestPrice(lot.unit_cost_minor_units, velocity, pricingSettings);
+
     // Upsert by open POS key (the partial unique index makes this idempotent).
     await admin
       .from("catalog_product_drafts")
@@ -179,6 +197,10 @@ export async function seedDraftsForManifest(
           manifest_id: manifestId,
           lot_id: lot.id,
           lab_result_id: lot.lab_result_id,
+          unit_cost_minor_units: lot.unit_cost_minor_units,
+          price_floor_minor_units: suggestion.floorMinor,
+          suggested_price_minor_units: suggestion.suggestedMinor,
+          price_rationale: suggestion.rationale,
           status: "draft",
           created_by: actorId,
           updated_by: actorId,
@@ -229,6 +251,40 @@ export async function setCatalogDraftStatus(
   const { error } = await admin
     .from("catalog_product_drafts")
     .update({ status, updated_by: actorId })
+    .eq("id", draftId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/**
+ * Approve a draft with a final price. Enforces the hard 2× cost floor — the
+ * price can never be saved below it. This is the guard rail that guarantees
+ * margin regardless of who's at the keyboard.
+ */
+export async function approveDraftWithPrice(
+  draftId: string,
+  priceMinor: number,
+  actorId: string | null,
+): Promise<{ ok: boolean; error?: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Supabase not configured." };
+  const admin = createSupabaseAdminClient();
+
+  const { data } = await admin
+    .from("catalog_product_drafts")
+    .select("unit_cost_minor_units")
+    .eq("id", draftId)
+    .maybeSingle();
+  const cost = (data as { unit_cost_minor_units: number | null } | null)?.unit_cost_minor_units ?? null;
+
+  const settings = await getPricingSettings();
+  const check = validatePrice(priceMinor, cost, settings);
+  if (!check.ok) {
+    return { ok: false, error: check.error };
+  }
+
+  const { error } = await admin
+    .from("catalog_product_drafts")
+    .update({ price_minor_units: priceMinor, status: "approved", updated_by: actorId })
     .eq("id", draftId);
   if (error) return { ok: false, error: error.message };
   return { ok: true };
