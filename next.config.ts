@@ -2,6 +2,14 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   allowedDevOrigins: ["127.0.0.1"],
+  // The LIQ-1295 excise-return route reads the official .xlsx template at
+  // runtime via fs. Next's tracer doesn't follow that dynamic read, so include
+  // the template explicitly in the route's serverless bundle.
+  outputFileTracingIncludes: {
+    "/admin/reports/compliance/excise-export/route": [
+      "./src/lib/compliance/templates/LIQ-1295-template.xlsx",
+    ],
+  },
   images: {
     // Banner/hero images chosen in the Site Content editor can come from the
     // Supabase Storage public bucket (media library). Allow next/image to
