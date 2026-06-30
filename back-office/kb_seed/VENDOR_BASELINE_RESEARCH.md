@@ -199,3 +199,210 @@ in it, so we verified those via L&I + traceability aggregators instead.
 **Held back pending owner input:** #10, #11, #12 — these are exactly the
 "don't invent" cases. They are listed in the SQL as commented-out stubs so the
 owner can fill the legal entity / UBI and uncomment when known.
+
+---
+
+# Batch 2 — Producer/Processor Research (21 vendors)
+
+**Scope.** Owner-provided list of 21 producer/processors (no retailers). Same
+strict no-guessing rule as the golden set: every fact below is sourced and
+confidence-scored. **15 CONFIRMED** vendors are seeded as `status='draft'` rows in
+`vendors_batch2_seed.sql` (continuing `sort_order` from 10). **6 UNCONFIRMED/LOW**
+vendors are NOT seeded — they are commented-out stubs in the SQL, flagged for the
+owner to supply the exact legal entity / UBI. Nothing is invented for them.
+
+**Data-source note (learned this batch).** The WA LCB "Cannabis Applicants" XLSX is
+RETAILERS ONLY (it does not list producer/processors), and the Socrata renewal
+dataset (`brpd-b6zd`) is only ~348 renewal records. So producer/processors were
+verified primarily via (a) the vendor's own official website, (b) licensee-data
+aggregators that mirror LCB traceability (Top Shelf Data, yourweeddata), and
+(c) WA L&I business lookup. The cached renewal JSON did directly confirm Edgemont
+Group LLC.
+
+## B1. Fire Bros. — CONFIRMED (confidence 0.90)
+
+- **What:** WA I-502 vertically integrated producer/processor. Cultivation in
+  Arlington, WA; extraction/processing operations in Seattle. Product lines span
+  flower, vape cartridges, pre-rolls, and concentrates.
+- **Social:** Instagram @firebros / @firebrosworld.
+- **Sources:** firebros.com (official), Instagram (official).
+
+## B2. Washington Packaging and Processing — UNCONFIRMED (< 0.50) → FLAG
+
+- **Status:** No official website and no clean licensee-aggregator profile found
+  under this exact name; the name is highly generic. NOT seeded.
+- **Action:** Flagged — owner to provide the exact legal entity name / UBI.
+- **Sources:** none reputable/specific.
+
+## B3. Canna Pacific — CONFIRMED (confidence 0.88)
+
+- **What:** WA I-502 Tier II Producer & Processor. DOH-compliant. Maker of
+  "Trichome Extracts." Based in Tacoma, WA 98409.
+- **Sources:** cannapacific.com (official).
+
+## B4. R&B Group — UNCONFIRMED (< 0.50) → FLAG
+
+- **Status:** No official website / no clean licensee profile under this exact
+  name. NOT seeded. Owner to provide legal entity / UBI.
+- **Sources:** none reputable/specific.
+
+## B5. Clarity Farms — CONFIRMED (confidence 0.90)
+
+- **What:** Sungrown / organic-method cultivation in the Columbia Basin. Legal
+  entity "Streamer LLC dba Clarity Farms." Holds a registered trademark.
+- **Contact:** office@clarityfarms.net, ashley@clarityfarms.net.
+- **Sources:** clarityfarms.net (official), USPTO trademark record (secondary).
+
+## B6. Seattle Bubble Works — CONFIRMED (confidence 0.92)
+
+- **What:** Solvent-free ice-water / bubble hash maker, operating since 2016.
+  Based in Seattle, WA. Founder Joby Sewell; head hash maker Justin Boujelle.
+- **Contact:** phone 360-829-8929; support@seattlebubbleworks.com.
+- **Social:** Facebook/Instagram @seattlebubbleworks; Twitter @SeaBubbleWorks;
+  YouTube channel.
+- **Sources:** seattlebubbleworks.com (official), official social profiles.
+
+## B7. Virtual Services — UNCONFIRMED (< 0.50) → FLAG
+
+- **Status:** Name is generic; no official cannabis website / licensee profile
+  located. NOT seeded. Owner to provide legal entity / UBI.
+- **Sources:** none reputable/specific.
+
+## B8. Heavenly Buds — CONFIRMED (confidence 0.88)
+
+- **What:** WA Tier 2 producer/processor based in Longview, WA (with operations
+  noted in East Bremerton). Pesticide-free indoor soil-grown, hand-trimmed flower.
+  Cited as the first WA producer/processor to pass full medical-grade testing.
+  Strains include Yoda OG and Raspberry Kush. Propagation specialist Mike Fujimoto.
+- **Sources:** heavenlybuds.com (official).
+
+## B9. Alpenglow Extracts — LOW (< 0.50) → FLAG
+
+- **Status:** A "Alpenglow Extracts" concentrates brand in Spokane Valley, WA is
+  referenced by a dispensary blog, but no clean official source confirms it.
+  **DISAMBIGUATION:** must NOT be conflated with the California brand "Alpenglow
+  Farms 707" (alpenglowfarms707.com) — different entity, different state. NOT seeded.
+- **Action:** Flagged — owner to confirm the WA entity / UBI.
+- **Sources:** one dispensary blog (single, weak); CA brand explicitly excluded.
+
+## B10. Ceres (Ceres Garden) — CONFIRMED (confidence 0.85)
+
+- **What:** Producer/processor brand "Ceres Garden" by Whidbey Island Cannabis Co.,
+  1860 Scott Road, Freeland, WA 98249. Products include topicals, tinctures, and
+  edibles (e.g., Dragon Balm).
+- **Contact:** (360) 321-6151; whidbeyislandcannabisco@gmail.com.
+- **Sources:** Whidbey Island Cannabis Co. (official), brand listings (secondary).
+
+## B11. Avitas — CONFIRMED (confidence 0.90)
+
+- **What:** "Blazing Trails since 2014." Owned by Holistic Industries. Products
+  include Ultra, Live Resin, and pre-rolls.
+- **Contact:** 1-833-888-1191.
+- **Social:** Instagram @avitas_co / @avitaspnw.
+- **Sources:** avitasgrown.com (official), Holistic Industries (corporate).
+
+## B12. Wamsterdam Farms — UNCONFIRMED (< 0.50) → FLAG
+
+- **Status:** No official website / no clean licensee profile under this exact
+  name. NOT seeded. Owner to provide legal entity / UBI.
+- **Sources:** none reputable/specific.
+
+## B13. Sky High Gardens LLC — CONFIRMED (confidence 0.88)
+
+- **What:** Producer/processor based in Seattle, WA. CEO Phil Seda. Strains include
+  12th Man Haze, Glassworks OG, and Blue Dream.
+- **State:** L&I UBI 603358819.
+- **Social:** Instagram @skyhighgardensseattle; Facebook SkyHighGardens.
+- **Sources:** skyhighgardens.net (official), L&I (state).
+
+## B14. Mfused — CONFIRMED (confidence 0.88)
+
+- **What:** Vape / concentrates producer (products include Super Fog). Reported
+  ~$100M scale; multi-state presence including Arizona (via Flow Distribution).
+- **Sources:** mfused.com (official), trade press (secondary).
+
+## B15. Seattle's Private Reserve — CONFIRMED (confidence 0.85)
+
+- **What:** Small-batch, cold-cured, hand-trimmed craft cannabis. Evergreen Cup
+  winner.
+- **Sources:** seattlesprivatereserve.com (official).
+
+## B16. Quality Green Trees — CONFIRMED (confidence 0.88)
+
+- **What:** WA LCB licensee entity that operates the **Freddy's Fuego** brand.
+  Products: flower, pre-rolls, concentrates, vapes. Owner Tim Haggerty. Brand menu
+  hosted at cultiveramarket.com/bm/market/quality-green-trees/menu (the brand→
+  licensee link that confirms the entity).
+- **Social:** Instagram @freddysfuego / @ffpiratelife.
+- **Sources:** freddysfuego.com (official brand), Cultivera menu link (licensee
+  confirmation).
+
+## B17. Cultivar Farms LLC — CONFIRMED (confidence 0.80)
+
+- **What:** Seattle producer/processor. Packaging/processing associated with Brett
+  Pursley.
+- **State:** L&I UBI 603348577.
+- **Sources:** topshelfdata.com (LCB traceability), L&I (state). No consumer site
+  found.
+
+## B18. Edgemont Group LLC — CONFIRMED (confidence 0.85)
+
+- **What:** WA producer/processor with multiple locations in East Wenatchee, WA
+  (3540 Doneen Rainey Rd; 349 Urban Industrial Way; 730 Urban Industrial Way).
+- **Contact:** phone 707-672-5928. State: UBI base 603313835.
+- **Sources:** cached WA LCB renewal data (directly confirmed this entity), L&I.
+
+## B19. Fireline Cannabis — CONFIRMED (confidence 0.80)
+
+- **What:** WA I-502 production company; flower line includes White Fire OG.
+  Arlington-area, WA.
+- **Sources:** brand listings / traceability (secondary). No clean consumer site;
+  treated as MEDIUM-strength CONFIRMED on the production-company fact.
+
+## B20. Botanical Arts — UNCONFIRMED (< 0.50) → FLAG
+
+- **Status:** No official website / no clean licensee profile under this exact
+  name; generic. NOT seeded. Owner to provide legal entity / UBI.
+- **Sources:** none reputable/specific.
+
+## B21. Botanica Seattle — CONFIRMED (confidence 0.92)
+
+- **What:** Legal entity "Botanical Investment Group, Inc.," founded 2014. CEO/
+  founder Chris Abbott; President Tim Elliott. Makes **Mr. Moxey's** (cited as the
+  #1 cannabis-infused mint nationally, 40M+ sold) and **Journeyman** (drinks/
+  gummies). Raised a $9M Series B in 2023.
+- **Sources:** mrmoxeys.com, lifeisajourneyman.com (official brands), trade press
+  (Series B, secondary).
+
+---
+
+## Batch 2 summary table
+
+| # | Vendor | Verdict | Confidence | Primary source |
+|---|--------|---------|-----------|----------------|
+| B1 | Fire Bros. | CONFIRMED | 0.90 | official site |
+| B2 | Washington Packaging and Processing | UNCONFIRMED | <0.50 | none — flag |
+| B3 | Canna Pacific | CONFIRMED | 0.88 | official site |
+| B4 | R&B Group | UNCONFIRMED | <0.50 | none — flag |
+| B5 | Clarity Farms | CONFIRMED | 0.90 | official site + TM |
+| B6 | Seattle Bubble Works | CONFIRMED | 0.92 | official site + social |
+| B7 | Virtual Services | UNCONFIRMED | <0.50 | none — flag |
+| B8 | Heavenly Buds | CONFIRMED | 0.88 | official site |
+| B9 | Alpenglow Extracts | LOW | <0.50 | weak/ambiguous — flag |
+| B10 | Ceres (Ceres Garden) | CONFIRMED | 0.85 | Whidbey Island Cannabis Co. |
+| B11 | Avitas | CONFIRMED | 0.90 | official site + corporate |
+| B12 | Wamsterdam Farms | UNCONFIRMED | <0.50 | none — flag |
+| B13 | Sky High Gardens LLC | CONFIRMED | 0.88 | official site + L&I |
+| B14 | Mfused | CONFIRMED | 0.88 | official site |
+| B15 | Seattle's Private Reserve | CONFIRMED | 0.85 | official site |
+| B16 | Quality Green Trees | CONFIRMED | 0.88 | brand + Cultivera link |
+| B17 | Cultivar Farms LLC | CONFIRMED | 0.80 | Top Shelf Data + L&I |
+| B18 | Edgemont Group LLC | CONFIRMED | 0.85 | LCB renewal data + L&I |
+| B19 | Fireline Cannabis | CONFIRMED | 0.80 | traceability/listings |
+| B20 | Botanical Arts | UNCONFIRMED | <0.50 | none — flag |
+| B21 | Botanica Seattle | CONFIRMED | 0.92 | official brands |
+
+**Seeded as Batch 2 rows (15):** B1, B3, B5, B6, B8, B10, B11, B13, B14, B15, B16,
+B17, B18, B19, B21 — `sort_order` 10–24, `status='draft'`.
+**Held back pending owner input (6):** B2, B4, B7, B9 (LOW/ambiguous), B12, B20 —
+commented-out stubs in the SQL. Owner supplies legal entity / UBI to uncomment.

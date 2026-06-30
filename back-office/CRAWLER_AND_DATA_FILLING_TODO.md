@@ -155,6 +155,16 @@
       medium confidence, flagged); 3 held back as commented stubs pending owner input
       (Mountain Hi = retailer/producer ambiguity; Evergreen Hydro Farms + Canna
       Processing = unconfirmed). This is the ground truth the crawler is scored against.
+- [x] **Vendor Batch 2 KB seeded** (`back-office/kb_seed/vendors_batch2_seed.sql` +
+      "Batch 2" section of `VENDOR_BASELINE_RESEARCH.md`): 21 producer/processors
+      researched with strict no-guessing. 15 CONFIRMED seeded as `draft` rows
+      (`sort_order` 10–24): Fire Bros., Canna Pacific, Clarity Farms, Seattle Bubble
+      Works, Heavenly Buds, Ceres Garden, Avitas, Sky High Gardens, Mfused, Seattle's
+      Private Reserve, Quality Green Trees (Freddy's Fuego), Cultivar Farms, Edgemont
+      Group, Fireline Cannabis, Botanica Seattle. 6 held back as commented stubs
+      pending owner legal-entity/UBI (Washington Packaging and Processing, R&B Group,
+      Virtual Services, Wamsterdam Farms, Botanical Arts, Alpenglow Extracts — the
+      last flagged LOW to avoid conflation with CA "Alpenglow Farms 707").
 
 ## Where to run the crawler
 - [x] `crawler/docs/WHERE_TO_RUN.md`: recommends a dedicated VM on the shop host
