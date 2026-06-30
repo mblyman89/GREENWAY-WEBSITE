@@ -86,6 +86,14 @@ export async function acceptManifestAction(manifestId: string) {
   );
 }
 
+export async function archiveCoasAction(manifestId: string) {
+  await requirePermission("inventory.manage");
+  const { archiveCoasForManifest } = await import("@/lib/inventory/coa-archive");
+  const count = await archiveCoasForManifest(manifestId);
+  revalidatePath(`/admin/inventory/intake/${manifestId}`);
+  redirect(`/admin/inventory/intake/${manifestId}?archived=${count}`);
+}
+
 export async function rejectManifestAction(manifestId: string) {
   const session = await requirePermission("inventory.manage");
   const result = await rejectManifest(manifestId, session.userId);

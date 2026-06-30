@@ -19,6 +19,7 @@ import type { ParsedManifest } from "@/lib/inventory/intake-parser";
 import { extractCoaLinks } from "@/lib/inventory/intake-parser";
 import type { InboundManifest } from "@/lib/inventory/types";
 import { seedDraftsForManifest } from "@/lib/inventory/catalog-drafts";
+import { archiveCoasForManifest } from "@/lib/inventory/coa-archive";
 
 export async function listManifests(opts?: {
   status?: string;
@@ -253,6 +254,14 @@ export async function acceptManifest(
     draftsCreated = match.unmatched;
   } catch (err) {
     console.error("[intake-store] seedDraftsForManifest failed:", err);
+  }
+
+  // Archive each COA PDF into private storage for our records. Best-effort:
+  // a failed download must never fail the accept.
+  try {
+    await archiveCoasForManifest(manifestId);
+  } catch (err) {
+    console.error("[intake-store] archiveCoasForManifest failed:", err);
   }
 
   return { ok: true, activated, draftsCreated };

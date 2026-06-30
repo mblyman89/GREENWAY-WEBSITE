@@ -188,18 +188,33 @@ export default async function LotDetailPage({
                 />
                 <Row label="COA released" value={lot.lab.coa_release_date ?? "—"} />
                 <Row label="COA expires" value={lot.lab.coa_expire_date ?? "—"} />
-                {lot.lab.coa_url && (
+                {(lot.lab.coa_url || lot.lab.coa_storage_path) && (
                   <div className="flex items-baseline justify-between gap-3 pt-1">
                     <dt className="text-[var(--admin-text-faint)]">COA PDF</dt>
-                    <dd className="text-right">
-                      <a
-                        href={lot.lab.coa_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="font-semibold text-[var(--admin-accent)] hover:underline"
-                      >
-                        Open COA ↗
-                      </a>
+                    <dd className="space-x-3 text-right">
+                      {lot.lab.coa_storage_path ? (
+                        <a
+                          href={`/admin/inventory/coa/${lot.lab.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-semibold text-[var(--admin-accent)] hover:underline"
+                          title="Archived copy in our records"
+                        >
+                          📄 Download (archived)
+                        </a>
+                      ) : (
+                        <span className="text-xs text-[var(--admin-orange)]">not archived yet</span>
+                      )}
+                      {lot.lab.coa_url && (
+                        <a
+                          href={lot.lab.coa_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[var(--admin-text-muted)] hover:underline"
+                        >
+                          vendor link ↗
+                        </a>
+                      )}
                     </dd>
                   </div>
                 )}

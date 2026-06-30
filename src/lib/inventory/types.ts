@@ -51,6 +51,10 @@ export type LabResult = {
   coa_url: string | null;
   coa_release_date: string | null;
   coa_expire_date: string | null;
+  /** Path in the private `coa` storage bucket once the PDF is archived. */
+  coa_storage_path: string | null;
+  coa_archived_at: string | null;
+  coa_file_bytes: number | null;
   raw_payload: unknown | null;
   created_by: string | null;
   updated_by: string | null;
