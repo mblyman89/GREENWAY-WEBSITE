@@ -15,7 +15,7 @@
 
 - [x] **Slice 46 — Revenue by type (sales).** Sales reports. Please add "revenue by type", if revenue by category is just things like flower, joints, etc. please add the more detailed types within each category, like rosin, bho, the other various concentrates, the various edible categories, various liquid categories, etc. _(Done: PR #150 — sales report now resolves each sold line's granular POS type (menu_items.pos_inventory_type → pos_inventory_category → category) and adds byType + byTypeWithinCategory. UI: "Revenue by type" chart, a "Types within each category" drill-down, and a "Type detail" table. CSV export group=type emits category→type rows. AI insights digest now lists revenue by detailed type.)_
 
-- [ ] **Slice 47 — XLSX + clean exports everywhere.** Make all reports .xlsx exportable as well as csv. Plus make sure the csv export and xlsx export have very clean tables of data. Also make any and all relevant things from the entire back office suit to be exportable.
+- [x] **Slice 47 — XLSX + clean exports everywhere.** Make all reports .xlsx exportable as well as csv. Plus make sure the csv export and xlsx export have very clean tables of data. Also make any and all relevant things from the entire back office suit to be exportable. — DONE: shared `src/lib/reports/workbook.ts` renders one table spec to BOTH a clean CSV and a styled .xlsx (frozen brand header, banded rows, currency `$#,##0.00`, percent `0.0%`, auto-width, totals row). `ExportButtons` (CSV + Excel) component wired into every report Section + page-level export (sales, COGS, tax, customers, master report dashboard, loyalty queue). Routes refactored to `format=csv|xlsx`: sales, cogs, tax, customers, master reports/export, loyalty-signups. Customers + master exports are multi-sheet workbooks. CCRS (compliance) + Sage (accounting) exports deliberately STAY CSV-only — those are regulatory/accounting import formats.
 
 - [ ] **Slice 48 — COGS by type + aging + valuation + no-COGS AI.** For COGS reports, I want all the same things from sales reports, cogs by types, etc. please also apply those metrics to the aging products reports, as well as the inventory valuation reporting. I want the table at the bottom that shows products that were sold that have no cogs info to have a dedicated ai assistant to help figure out why and how to resolve the issue.
 
@@ -55,3 +55,7 @@
 (Marked [x] as each slice is merged.)
 
 - 2025 — Slice 43 (report ranges) merged as PR #147. Main advances accordingly.
+- 2025 — Slice 44 (AI insight generator covers the full reporting suite) merged as PR #148.
+- 2025 — Slice 45 (professional AI demand forecaster, Reports → Forecast) merged as PR #149.
+- 2025 — Slice 46 (revenue by detailed product type in sales reports) merged as PR #150.
+- 2025 — Slice 47 (XLSX + clean exports everywhere; shared workbook helper + CSV/Excel buttons) merged as PR #151.

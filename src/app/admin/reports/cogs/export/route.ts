@@ -1,27 +1,49 @@
 /**
- * GET /admin/reports/cogs/export?group=category|vendor|brand&from=&to=
+ * GET /admin/reports/cogs/export?group=category|vendor|brand&format=csv|xlsx&from=&to=
  *
- * CSV export of a COGS/margin breakdown. Staff-gated (reports.view).
+ * Export a COGS / margin breakdown as a clean CSV or styled .xlsx. Staff-gated
+ * (reports.view). Money is emitted as real currency cells (xlsx) or two-decimal
+ * dollars (csv) via the shared workbook helper.
  */
 import { requirePermission } from "@/lib/auth/session";
 import { resolveRange } from "@/lib/reports/range";
 import { getCogsReport, type CogsGroupRow } from "@/lib/reports/cogs";
+import {
+  exportResponse,
+  parseFormat,
+  type TableColumn,
+  type TableRow,
+  type WorkbookSpec,
+} from "@/lib/reports/workbook";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-function cell(v: unknown): string {
-  const s = v == null ? "" : String(v);
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
-function dollars(cents: number): string {
-  return (cents / 100).toFixed(2);
+const COLUMNS = (labelHeader: string): TableColumn[] => [
+  { key: "label", header: labelHeader, type: "text" },
+  { key: "revenue", header: "Revenue", type: "currency" },
+  { key: "cogs", header: "COGS", type: "currency" },
+  { key: "grossProfit", header: "Gross profit", type: "currency" },
+  { key: "margin", header: "Margin", type: "percent" },
+  { key: "units", header: "Units", type: "integer" },
+];
+
+function row(r: CogsGroupRow): TableRow {
+  return {
+    label: r.label,
+    revenue: r.revenueMinorUnits,
+    cogs: r.cogsMinorUnits,
+    grossProfit: r.grossProfitMinorUnits,
+    margin: r.margin,
+    units: r.units,
+  };
 }
 
 export async function GET(request: Request) {
   await requirePermission("reports.view");
   const url = new URL(request.url);
   const group = (url.searchParams.get("group") ?? "category").toLowerCase();
+  const format = parseFormat(url.searchParams.get("format"));
   const range = resolveRange({
     from: url.searchParams.get("from") ?? undefined,
     to: url.searchParams.get("to") ?? undefined,
@@ -36,60 +58,41 @@ export async function GET(request: Request) {
   switch (group) {
     case "vendor":
       rows = report.byVendor;
-      labelHeader = "vendor";
+      labelHeader = "Vendor";
       break;
     case "brand":
       rows = report.byBrand;
-      labelHeader = "brand";
+      labelHeader = "Brand";
       break;
     case "category":
     default:
       rows = report.byCategory;
-      labelHeader = "category";
+      labelHeader = "Category";
       break;
   }
 
-  const lines: string[] = [];
-  lines.push(
-    [labelHeader, "revenue_usd", "cogs_usd", "gross_profit_usd", "margin_pct", "units", "gross_profit_cents"]
-      .map(cell)
-      .join(","),
-  );
-  for (const r of rows) {
-    lines.push(
-      [
-        r.label,
-        dollars(r.revenueMinorUnits),
-        dollars(r.cogsMinorUnits),
-        dollars(r.grossProfitMinorUnits),
-        (r.margin * 100).toFixed(2),
-        r.units,
-        r.grossProfitMinorUnits,
-      ]
-        .map(cell)
-        .join(","),
-    );
-  }
-  lines.push(
-    [
-      "TOTAL",
-      dollars(report.totalRevenueMinorUnits),
-      dollars(report.totalCogsMinorUnits),
-      dollars(report.totalGrossProfitMinorUnits),
-      (report.overallMargin * 100).toFixed(2),
-      report.unitsSold,
-      report.totalGrossProfitMinorUnits,
-    ]
-      .map(cell)
-      .join(","),
-  );
+  const totals: TableRow = {
+    label: "TOTAL",
+    revenue: report.totalRevenueMinorUnits,
+    cogs: report.totalCogsMinorUnits,
+    grossProfit: report.totalGrossProfitMinorUnits,
+    margin: report.overallMargin,
+    units: report.unitsSold,
+  };
 
-  const csv = lines.join("\n");
-  const fname = `greenway_cogs_by_${labelHeader}_${range.fromISO.slice(0, 10)}_${range.toISO.slice(0, 10)}.csv`;
-  return new Response(csv, {
-    headers: {
-      "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="${fname}"`,
-    },
-  });
+  const stamp = `${range.fromISO.slice(0, 10)}_${range.toISO.slice(0, 10)}`;
+  const spec: WorkbookSpec = {
+    filename: `greenway_cogs_by_${labelHeader.toLowerCase()}_${stamp}`,
+    title: `Greenway — COGS by ${labelHeader.toLowerCase()}`,
+    sheets: [
+      {
+        name: `COGS by ${labelHeader.toLowerCase()}`,
+        caption: range.label,
+        columns: COLUMNS(labelHeader),
+        rows: rows.map(row),
+        totals,
+      },
+    ],
+  };
+  return exportResponse(spec, format);
 }

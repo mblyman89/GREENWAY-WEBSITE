@@ -16,6 +16,7 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import type { TableColumn, TableRow, WorkbookSpec } from "@/lib/reports/workbook";
 
 export type LoyaltyStatus = "new" | "entered" | "duplicate" | "archived";
 
@@ -285,6 +286,49 @@ export async function exportLoyaltyCsv(filter: ListLoyaltyFilter = {}): Promise<
     );
   }
   return lines.join("\n");
+}
+
+/**
+ * Build a {@link WorkbookSpec} for the (optionally filtered) loyalty queue so the
+ * export route can render it as either a clean CSV or a styled .xlsx via the
+ * shared workbook helper. No money columns here — it's a member roster.
+ */
+export async function exportLoyaltyWorkbook(filter: ListLoyaltyFilter = {}): Promise<WorkbookSpec> {
+  const rows = await listLoyaltySignups({ ...filter, limit: 10000 });
+  const columns: TableColumn[] = [
+    { key: "submitted_at", header: "Submitted", type: "text" },
+    { key: "status", header: "Status", type: "text" },
+    { key: "first_name", header: "First name", type: "text" },
+    { key: "last_name", header: "Last name", type: "text" },
+    { key: "email", header: "Email", type: "text" },
+    { key: "mobile_phone", header: "Mobile phone", type: "text" },
+    { key: "birthday", header: "Birthday", type: "text" },
+    { key: "consent", header: "Consent", type: "text" },
+    { key: "source", header: "Source", type: "text" },
+    { key: "notification_status", header: "Notification", type: "text" },
+    { key: "is_duplicate", header: "Duplicate", type: "text" },
+    { key: "entered_at", header: "Entered", type: "text" },
+  ];
+  const tableRows: TableRow[] = rows.map((r) => ({
+    submitted_at: r.submitted_at,
+    status: r.status,
+    first_name: r.first_name,
+    last_name: r.last_name,
+    email: r.email ?? "",
+    mobile_phone: r.mobile_phone ?? "",
+    birthday: r.birthday ?? "",
+    consent: r.consent ? "yes" : "no",
+    source: r.source,
+    notification_status: r.notification_status,
+    is_duplicate: r.dedupe_of ? "yes" : "no",
+    entered_at: r.entered_at ?? "",
+  }));
+  const stamp = new Date().toISOString().slice(0, 10);
+  return {
+    filename: `greenway-loyalty-${stamp}`,
+    title: "Greenway — Loyalty signups",
+    sheets: [{ name: "Loyalty signups", columns, rows: tableRows }],
+  };
 }
 
 // ---------------------------------------------------------------------------

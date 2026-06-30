@@ -3,6 +3,7 @@ import { requirePermission, getStaffSession } from "@/lib/auth/session";
 import { can } from "@/lib/auth/roles";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { ExportButtons } from "@/components/admin/reports/ExportButtons";
 import { StatCard } from "@/components/admin/StatCard";
 import { Breadcrumbs, HelpPanel, EmptyState } from "@/components/admin/ux";
 import { readLoyaltySignups } from "@/lib/loyalty/store";
@@ -158,12 +159,7 @@ export default async function LoyaltySignupReviewPage({
         }
         action={
           <div className="flex items-center gap-2">
-            <a
-              href={`/admin/loyalty-signups/export?${exportQs}`}
-              className="rounded-lg border border-white/15 bg-white/5 px-3.5 py-2 text-xs font-bold text-white hover:bg-white/10"
-            >
-              Export CSV
-            </a>
+            <ExportButtons baseHref={`/admin/loyalty-signups/export?${exportQs}`} />
             {canManage ? (
               <form action={importLegacyLoyaltyAction}>
                 <button
