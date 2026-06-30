@@ -18,6 +18,7 @@ import {
   type CogsGroupRow,
   type InventoryValuationRow,
   type AgingBucketRow,
+  type MissingCostRow,
 } from "@/lib/reports/cogs";
 import { formatWebsiteCategory } from "@/lib/pos/category-taxonomy";
 
@@ -82,6 +83,19 @@ const valuationColumns: ReportColumn<InventoryValuationRow & Record<string, unkn
   { key: "costValueMinorUnits", header: "Value at cost", align: "right", emphasis: true, render: (r) => formatMinorCurrency(r.costValueMinorUnits) },
   { key: "onHandUnits", header: "On-hand units", align: "right", render: (r) => r.onHandUnits.toLocaleString() },
   { key: "lots", header: "Lots", align: "right", render: (r) => r.lots.toLocaleString() },
+];
+
+const missingCostColumns: ReportColumn<MissingCostRow & Record<string, unknown>>[] = [
+  { key: "productName", header: "Product", emphasis: true, render: (r) => r.productName },
+  { key: "productId", header: "Product key", render: (r) => r.productId },
+  { key: "units", header: "Units sold", align: "right", render: (r) => r.units.toLocaleString() },
+  {
+    key: "revenueMinorUnits",
+    header: "Revenue",
+    align: "right",
+    render: (r) => formatMinorCurrency(r.revenueMinorUnits),
+  },
+  { key: "reason", header: "Why no cost", render: (r) => r.reason },
 ];
 
 const agingColumns: ReportColumn<AgingBucketRow & Record<string, unknown>>[] = [
@@ -194,6 +208,29 @@ export default async function CogsReportPage({
           emptyLabel="No sales in range."
         />
       </Section>
+
+      {/* Missing-cost diagnostic — explains $0 COGS */}
+      {report.missingCost.length > 0 ? (
+        <section className="rounded-2xl border border-orange-400/30 bg-orange-400/[0.04] p-5">
+          <div className="mb-3">
+            <h2 className="text-sm font-black uppercase tracking-[0.14em] text-orange-200/90">
+              ⚠ Sold items with no cost ({report.missingCost.length})
+            </h2>
+            <p className="mt-1 text-xs text-white/50">
+              These lines counted {formatMinorCurrency(report.missingCostRevenueMinorUnits)} in revenue but $0.00
+              COGS because no unit cost could be resolved. Margins above are overstated by that amount until cost is
+              captured. Fix by receiving the product through Intake with a unit cost, or by setting the lot’s cost so
+              its <code className="text-white/70">pos_product_key</code> matches the sold{" "}
+              <code className="text-white/70">product_id</code>.
+            </p>
+          </div>
+          <ReportTable
+            columns={missingCostColumns}
+            rows={report.missingCost as (MissingCostRow & Record<string, unknown>)[]}
+            emptyLabel="None — every sold item has a cost."
+          />
+        </section>
+      ) : null}
 
       {/* Inventory valuation + aging */}
       <Section title="Inventory valuation by category" subtitle="Current on-hand at cost (not range-bound).">

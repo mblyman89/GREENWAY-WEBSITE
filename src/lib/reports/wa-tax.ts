@@ -32,6 +32,8 @@ import {
   isCannabisCategory,
   computeLineTax,
   applyBps,
+  detectTaxInclusive,
+  normalizeTaxableBase,
   type TaxSettings,
 } from "@/lib/reports/tax";
 
@@ -142,6 +144,7 @@ export async function getWaTaxReport(fromISO: string, toISO: string): Promise<Wa
     stateSalesRateBps: 650,
     localSalesRateBps: 280,
     medicalEndorsement: false,
+    taxBaseMode: "pre_tax" as const,
   };
   const combinedSalesRatePct =
     (resolvedSettings.stateSalesRateBps + resolvedSettings.localSalesRateBps) / 100;
@@ -175,14 +178,36 @@ export async function getWaTaxReport(fromISO: string, toISO: string): Promise<Wa
 
   const { data: ordersData } = await admin
     .from("orders")
-    .select("id, status, placed_at")
+    .select("id, status, placed_at, subtotal_minor_units, estimated_tax_minor_units, total_minor_units")
     .gte("placed_at", fromISO)
     .lte("placed_at", toISO);
-  const orders = (ordersData as { id: string; status: string; placed_at: string }[] | null) ?? [];
+  const orders =
+    (ordersData as
+      | {
+          id: string;
+          status: string;
+          placed_at: string;
+          subtotal_minor_units: number | null;
+          estimated_tax_minor_units: number | null;
+          total_minor_units: number | null;
+        }[]
+      | null) ?? [];
   const valid = orders.filter((o) => o.status !== "cancelled");
   if (valid.length === 0) return empty;
 
   const placedById = new Map(valid.map((o) => [o.id, o.placed_at]));
+  // Per-order tax-inclusive resolution (only consulted in "auto" mode).
+  const inclusiveByOrder = new Map<string, boolean>();
+  if (resolvedSettings.taxBaseMode === "auto") {
+    for (const o of valid) {
+      const det = detectTaxInclusive({
+        subtotalMinor: o.subtotal_minor_units,
+        estimatedTaxMinor: o.estimated_tax_minor_units,
+        totalMinor: o.total_minor_units,
+      });
+      if (det != null) inclusiveByOrder.set(o.id, det);
+    }
+  }
   const orderIds = valid.map((o) => o.id);
 
   const { data: linesData } = await admin
@@ -210,11 +235,18 @@ export async function getWaTaxReport(fromISO: string, toISO: string): Promise<Wa
 
   for (const l of lines) {
     const qty = l.quantity ?? 0;
-    const base = (l.price_minor_units ?? 0) * qty;
-    if (base <= 0) continue;
+    const storedBase = (l.price_minor_units ?? 0) * qty;
+    if (storedBase <= 0) continue;
 
     const category = (l.product_id ? categoryLookup.get(l.product_id) : "") || "";
     const isCannabis = isCannabisCategory(category, cannabisSet);
+
+    // Robustness: if prices are (or look) tax-inclusive, back the tax out so the
+    // reported BASE is always pre-tax — regardless of how the POS stores prices.
+    const base = normalizeTaxableBase(storedBase, resolvedSettings, {
+      isCannabis,
+      resolvedInclusive: inclusiveByOrder.get(l.order_id),
+    });
 
     // Tax engine (recreational; medical exemption handled per-sale elsewhere).
     const tax = computeLineTax({ taxableBaseMinor: base, isCannabis }, resolvedSettings);
