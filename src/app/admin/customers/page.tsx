@@ -44,9 +44,14 @@ export default async function CustomersPage({
         subtitle="Build customer & patient profiles — the foundation for loyalty, history, and (later) purchase-limit enforcement at the register."
         breadcrumbs={<Breadcrumbs items={[{ label: "Customers" }]} />}
         action={
-          <Button href="/admin/customers/new" variant="save" size="sm">
-            + New customer
-          </Button>
+          <div className="flex gap-2">
+            <Button href="/admin/customers/import" variant="subtle" size="sm">
+              ⬆ Import
+            </Button>
+            <Button href="/admin/customers/new" variant="save" size="sm">
+              + New customer
+            </Button>
+          </div>
         }
         help={
           <HelpPanel
