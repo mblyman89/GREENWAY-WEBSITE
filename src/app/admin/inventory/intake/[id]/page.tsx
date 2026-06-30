@@ -118,7 +118,15 @@ export default async function ManifestReviewPage({
                     >
                       {l.product_name ?? "(unnamed)"}
                     </Link>
-                    <div className="text-xs text-[var(--admin-text-faint)]">{l.lot_code ?? "no lot code"}</div>
+                    <div className="text-xs text-[var(--admin-text-faint)]">
+                      {l.lot_code ?? "no lot code"}
+                      {l.strain_name && <span> · {l.strain_name}</span>}
+                      {l.is_sample && (
+                        <span className="ml-2 rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-[var(--admin-text-faint)]">
+                          sample
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-right text-[var(--admin-text-muted)]">{fmtQty(l.received_qty, l.unit)}</td>
                   <td className="px-4 py-3 text-center">

@@ -125,6 +125,17 @@ export default async function LotDetailPage({
             <dl className="space-y-2 text-sm">
               <Row label="Vendor" value={lot.vendor_name ?? "—"} />
               <Row label="Brand" value={lot.brand_name ?? "—"} />
+              <Row label="Strain" value={lot.strain_name ?? "—"} />
+              <Row
+                label="Category"
+                value={[lot.category, lot.inventory_type].filter(Boolean).join(" · ") || "—"}
+              />
+              <Row
+                label="Unit weight"
+                value={lot.unit_weight != null ? `${lot.unit_weight} ${lot.unit_weight_uom ?? ""}`.trim() : "—"}
+              />
+              <Row label="Sample" value={lot.is_sample ? "Yes (vendor sample)" : "No"} />
+              <Row label="Medical" value={lot.is_medical ? "Yes (DOH compliant)" : "No"} />
               <Row label="POS product key" value={lot.pos_product_key ?? "— (not linked)"} />
               <Row
                 label="Expires"
@@ -154,10 +165,17 @@ export default async function LotDetailPage({
                   value={lot.lab.labtest_external_identifier ?? "—"}
                 />
                 <Row label="Lab" value={lot.lab.lab_name ?? "—"} />
-                <Row label="Tested" value={lot.lab.tested_on ?? "—"} />
                 <Row
-                  label="THC"
-                  value={lot.lab.total_thc_pct != null ? `${lot.lab.total_thc_pct}%` : lot.lab.thc_pct != null ? `${lot.lab.thc_pct}%` : "—"}
+                  label="Total THC"
+                  value={lot.lab.total_thc_pct != null ? `${lot.lab.total_thc_pct}%` : "—"}
+                />
+                <Row
+                  label="THCA"
+                  value={lot.lab.thca_pct != null ? `${lot.lab.thca_pct}%` : "—"}
+                />
+                <Row
+                  label="Total cannabinoids"
+                  value={lot.lab.total_cannabinoids_pct != null ? `${lot.lab.total_cannabinoids_pct}%` : "—"}
                 />
                 <Row
                   label="CBD"
@@ -168,6 +186,23 @@ export default async function LotDetailPage({
                   value={lot.lab.passed == null ? "—" : lot.lab.passed ? "PASS" : "FAIL"}
                   danger={lot.lab.passed === false}
                 />
+                <Row label="COA released" value={lot.lab.coa_release_date ?? "—"} />
+                <Row label="COA expires" value={lot.lab.coa_expire_date ?? "—"} />
+                {lot.lab.coa_url && (
+                  <div className="flex items-baseline justify-between gap-3 pt-1">
+                    <dt className="text-[var(--admin-text-faint)]">COA PDF</dt>
+                    <dd className="text-right">
+                      <a
+                        href={lot.lab.coa_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-semibold text-[var(--admin-accent)] hover:underline"
+                      >
+                        Open COA ↗
+                      </a>
+                    </dd>
+                  </div>
+                )}
               </dl>
             ) : (
               <div className="rounded-[var(--admin-radius)] border border-[var(--admin-orange)]/30 bg-[var(--admin-orange-soft)] px-3 py-3 text-sm text-[var(--admin-orange)]">
