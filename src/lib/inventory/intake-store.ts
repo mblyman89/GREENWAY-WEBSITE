@@ -20,6 +20,7 @@ import { extractCoaLinks } from "@/lib/inventory/intake-parser";
 import type { InboundManifest } from "@/lib/inventory/types";
 import { seedDraftsForManifest } from "@/lib/inventory/catalog-drafts";
 import { archiveCoasForManifest } from "@/lib/inventory/coa-archive";
+import { deriveInventoryExternalId } from "@/lib/compliance/ccrs-identifiers";
 
 export async function listManifests(opts?: {
   status?: string;
@@ -181,6 +182,12 @@ export async function stageManifest(
       manifest_id: manifestId,
       lab_result_id: labId,
       pos_product_key: line.pos_product_key,
+      // Canonical CCRS InventoryExternalIdentifier, assigned once and reused
+      // across Inventory/LabTest/Sale/Transfer/Adjustment files (CCRS spec).
+      ccrs_inventory_external_id: deriveInventoryExternalId({
+        pos_product_key: line.pos_product_key,
+        lot_code: line.lot_code,
+      }),
       product_name: line.product_name,
       strain_name: line.strain_name,
       category: line.category,
