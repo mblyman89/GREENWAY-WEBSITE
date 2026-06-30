@@ -66,12 +66,20 @@ export default async function PromotionsAdminPage() {
           </HelpPanel>
         }
         action={
-          <Link
-            href="/admin/promotions/new"
-            className="rounded-lg bg-[#7ed957] px-4 py-2 text-sm font-semibold text-black transition hover:bg-[#6bc945]"
-          >
-            + New promotion
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/admin/promotions/simulator"
+              className="rounded-lg border border-stone-300 px-4 py-2 text-sm font-semibold text-stone-700 transition hover:bg-stone-50"
+            >
+              Discount simulator
+            </Link>
+            <Link
+              href="/admin/promotions/new"
+              className="rounded-lg bg-[#7ed957] px-4 py-2 text-sm font-semibold text-black transition hover:bg-[#6bc945]"
+            >
+              + New promotion
+            </Link>
+          </div>
         }
       />
 
