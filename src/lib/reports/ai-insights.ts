@@ -137,6 +137,14 @@ function buildDigest(input: InsightsInput): string {
             .join(", ")}.`,
         );
       }
+      if (sales.byType?.length) {
+        lines.push(
+          `Revenue by detailed type: ${sales.byType
+            .slice(0, 8)
+            .map((t) => `${t.label} ${money(t.revenueMinorUnits)}`)
+            .join(", ")}.`,
+        );
+      }
       if (sales.byCustomerType?.length) {
         lines.push(
           `Revenue by customer type: ${sales.byCustomerType
