@@ -97,22 +97,30 @@ export default async function IntegrationsPage() {
           <Card>
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-sm font-bold text-[var(--admin-text)]">🗺️ WeedMaps menu integration</h2>
-              <StatusBadge
-                ok={weedmaps.hasWmId && (weedmaps.hasApiKey || weedmaps.hasOAuthCredentials)}
-                label={weedmaps.environment}
-              />
+              <StatusBadge ok={weedmaps.hasAuth && weedmaps.hasMenuId} label={weedmaps.environment} />
             </div>
-            <CredRow label="WM listing id" ok={weedmaps.hasWmId} detail="WEEDMAPS_WM_ID" />
-            <CredRow label="API key" ok={weedmaps.hasApiKey} detail="WEEDMAPS_API_KEY" />
+            <CredRow label="Menu id" ok={weedmaps.hasMenuId} detail="WEEDMAPS_MENU_ID" />
             <CredRow
               label="OAuth client credentials"
               ok={weedmaps.hasOAuthCredentials}
               detail="WEEDMAPS_CLIENT_ID / WEEDMAPS_CLIENT_SECRET"
             />
+            <CredRow
+              label="Token URL or access token"
+              ok={weedmaps.hasTokenUrl || weedmaps.hasAccessToken}
+              detail="WEEDMAPS_TOKEN_URL / WEEDMAPS_ACCESS_TOKEN"
+            />
             <p className="mt-3 text-xs text-[var(--admin-text-muted)]">
-              Base URL: <span className="font-mono">{weedmaps.baseUrl}</span>. Drafts-only until
-              WeedMaps onboarding/certification is confirmed.
+              Base URL: <span className="font-mono">{weedmaps.baseUrl}</span>. Builds the Menu API
+              (2025-07) payload from the published menu. Preview (dry-run) is always safe; live
+              pushes require credentials and explicit confirmation.
             </p>
+            <a
+              href="/admin/integrations/weedmaps"
+              className="mt-3 inline-block rounded-md bg-[var(--admin-accent)] px-3 py-1.5 text-xs font-semibold text-white"
+            >
+              Open WeedMaps push &amp; preview →
+            </a>
           </Card>
 
           {/* Sage 50 */}
