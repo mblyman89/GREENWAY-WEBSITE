@@ -106,6 +106,36 @@ export async function archiveCoasAction(manifestId: string) {
   redirect(`/admin/inventory/intake/${manifestId}?archived=${count}`);
 }
 
+export async function updateManifestTransportAction(
+  manifestId: string,
+  formData: FormData,
+) {
+  const session = await requirePermission("inventory.manage");
+  const { updateManifestTransport } = await import("@/lib/inventory/intake-store");
+  const str = (k: string) => ((formData.get(k) as string | null) ?? "").trim() || null;
+  const result = await updateManifestTransport(
+    manifestId,
+    {
+      transporter_name: str("transporter_name"),
+      transporter_license: str("transporter_license"),
+      driver_name: str("driver_name"),
+      driver_license_number: str("driver_license_number"),
+      vehicle_description: str("vehicle_description"),
+      vehicle_plate: str("vehicle_plate"),
+      vehicle_vin: str("vehicle_vin"),
+      departed_at: str("departed_at"),
+      arrived_at: str("arrived_at"),
+      route_notes: str("route_notes"),
+    },
+    session.userId,
+  );
+  revalidatePath(`/admin/inventory/intake/${manifestId}`);
+  if (!result.ok) {
+    redirect(`/admin/inventory/intake/${manifestId}?error=transport`);
+  }
+  redirect(`/admin/inventory/intake/${manifestId}?transport=1`);
+}
+
 export async function rejectManifestAction(manifestId: string) {
   const session = await requirePermission("inventory.manage");
   const result = await rejectManifest(manifestId, session.userId);
