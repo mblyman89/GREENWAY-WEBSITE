@@ -81,9 +81,16 @@ export default async function IntegrationsPage() {
               detail="LEAFLY_CLIENT_ID / LEAFLY_CLIENT_SECRET"
             />
             <p className="mt-3 text-xs text-[var(--admin-text-muted)]">
-              Base URL: <span className="font-mono">{leafly.baseUrl}</span>. Preview returns mock
-              data until Leafly certification completes.
+              Base URL: <span className="font-mono">{leafly.baseUrl}</span>. Builds the real Menu
+              API v2.0 payload from the published menu. Preview (dry-run) is always safe; live
+              pushes require credentials and explicit confirmation.
             </p>
+            <a
+              href="/admin/integrations/leafly"
+              className="mt-3 inline-block rounded-md bg-[var(--admin-accent)] px-3 py-1.5 text-xs font-semibold text-white"
+            >
+              Open Leafly push &amp; preview →
+            </a>
           </Card>
 
           {/* WeedMaps */}
