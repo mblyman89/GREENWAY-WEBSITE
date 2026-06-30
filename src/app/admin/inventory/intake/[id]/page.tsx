@@ -6,8 +6,14 @@ import { Breadcrumbs } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
 import { Button } from "@/components/admin/ui";
 import { getManifestById } from "@/lib/inventory/store";
-import { listManifestLots } from "@/lib/inventory/intake-store";
-import { acceptManifestAction, rejectManifestAction, archiveCoasAction } from "../actions";
+import { listManifestLots, listManifestEvents } from "@/lib/inventory/intake-store";
+import { ManifestTimeline } from "@/components/admin/inventory/ManifestTimeline";
+import {
+  acceptManifestAction,
+  rejectManifestAction,
+  archiveCoasAction,
+  setManifestLifecycleAction,
+} from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +44,9 @@ export default async function ManifestReviewPage({
   if (!manifest) notFound();
 
   const lots = await listManifestLots(id);
+  const events = await listManifestEvents(id);
   const isPending = manifest.status === "pending";
+  const inProgress = manifest.status === "pending" || manifest.status === "in_transit" || manifest.status === "received";
 
   const withCoa = lots.filter((l) => l.lab_result_id).length;
   const missingCoa = lots.length - withCoa;
@@ -48,6 +56,8 @@ export default async function ManifestReviewPage({
   const acceptAction = acceptManifestAction.bind(null, id);
   const rejectAction = rejectManifestAction.bind(null, id);
   const archiveAction = archiveCoasAction.bind(null, id);
+  const markInTransitAction = setManifestLifecycleAction.bind(null, id, "in_transit");
+  const markReceivedAction = setManifestLifecycleAction.bind(null, id, "received");
 
   return (
     <div>
@@ -232,8 +242,31 @@ export default async function ManifestReviewPage({
           </div>
         )}
 
+        {/* Lifecycle timeline (Cultivera-style) */}
+        <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
+          <h2 className="mb-4 text-sm font-black uppercase tracking-[0.14em] text-[var(--admin-text-muted)]">
+            Manifest status
+          </h2>
+          <ManifestTimeline status={manifest.status} events={events} />
+          {inProgress ? (
+            <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-[var(--admin-border)] pt-4">
+              <span className="text-xs text-[var(--admin-text-faint)]">Update arrival progress:</span>
+              <form action={markInTransitAction}>
+                <Button type="submit" variant="subtle" size="sm">
+                  🚚 Mark in transit
+                </Button>
+              </form>
+              <form action={markReceivedAction}>
+                <Button type="submit" variant="subtle" size="sm">
+                  📦 Mark received
+                </Button>
+              </form>
+            </div>
+          ) : null}
+        </div>
+
         {/* Accept / reject controls */}
-        {isPending ? (
+        {inProgress ? (
           <div className="flex flex-wrap items-center gap-3 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
             <p className="flex-1 text-sm text-[var(--admin-text-muted)]">
               Accepting activates these lots (quarantine → active) and logs a receive adjustment for
