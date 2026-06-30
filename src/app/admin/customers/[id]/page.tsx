@@ -4,9 +4,10 @@ import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
 import { CustomerForm } from "@/components/admin/customers/CustomerForm";
-import { getCustomerById, listPatientAuthorizations, isAtLeast21 } from "@/lib/customers/store";
+import { getCustomerById, isAtLeast21 } from "@/lib/customers/store";
 import { can } from "@/lib/auth/roles";
 import { LoyaltyPanel } from "@/components/admin/loyalty/LoyaltyPanel";
+import { MedicalPanel } from "@/components/admin/medical/MedicalPanel";
 import { updateCustomerAction } from "../actions";
 
 export const dynamic = "force-dynamic";
@@ -25,12 +26,12 @@ export default async function CustomerDetailPage({
   const session = await requirePermission("customers.manage");
   const { id } = await params;
   const canManageLoyalty = can(session.profile.role, "loyalty.manage");
+  const canManageMedical = can(session.profile.role, "medical.manage");
   const { saved, created, error } = await searchParams;
 
   const customer = await getCustomerById(id);
   if (!customer) notFound();
 
-  const auths = await listPatientAuthorizations(id);
   const ageOk = isAtLeast21(customer.birthdate);
 
   // Bind the id into the update action.
@@ -78,25 +79,7 @@ export default async function CustomerDetailPage({
 
         <LoyaltyPanel customerId={id} canManage={canManageLoyalty} />
 
-        <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
-          <h2 className="mb-3 text-sm font-bold text-[var(--admin-text)]">Patient authorizations</h2>
-          {auths.length === 0 ? (
-            <p className="text-sm text-[var(--admin-text-faint)]">
-              No medical authorization on file. (Authorization capture UI arrives with the register slice.)
-            </p>
-          ) : (
-            <ul className="space-y-2 text-sm">
-              {auths.map((a) => (
-                <li key={a.id} className="flex items-center justify-between rounded-[var(--admin-radius)] border border-[var(--admin-border)] px-3 py-2">
-                  <span className="text-[var(--admin-text-muted)]">
-                    {a.authorization_id ?? "(no id)"} · expires {a.expires_on ?? "—"}
-                  </span>
-                  <span className="text-xs uppercase text-[var(--admin-text-faint)]">{a.status}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+        <MedicalPanel customerId={id} canManage={canManageMedical} />
       </div>
     </div>
   );

@@ -1,0 +1,296 @@
+/**
+ * src/lib/medical/store.ts
+ *
+ * Server-side data access for medical endorsement, recognition cards, and the
+ * WAC 314-55-090(2) excise-exempt sale records. Mirrors migration 0040.
+ */
+import "server-only";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import {
+  type RecognitionCard,
+  type FormChecklist,
+  type MedTaxSettings,
+  DEFAULT_MED_TAX_SETTINGS,
+  cardValidity,
+  canIssueCard,
+} from "@/lib/medical/tax";
+
+// ---------------------------------------------------------------------------
+// Row types
+// ---------------------------------------------------------------------------
+export type AuthorizationRow = {
+  id: string;
+  customer_id: string;
+  authorization_id: string | null;
+  unique_patient_identifier: string | null;
+  holder_type: "patient" | "designated_provider";
+  issued_on: string | null;
+  effective_on: string | null;
+  expires_on: string | null;
+  in_doh_database: boolean;
+  status: string;
+  form_complete_signed: boolean;
+  tamper_resistant_verified: boolean;
+  identity_verified: boolean;
+  embossed_seal_verified: boolean;
+  mcr_validated_at: string | null;
+  notes: string | null;
+};
+
+export type ExemptSaleRow = {
+  id: string;
+  order_id: string | null;
+  customer_id: string | null;
+  sale_date: string;
+  unique_patient_identifier: string;
+  card_effective_on: string | null;
+  card_expires_on: string | null;
+  product_sku: string;
+  product_name: string | null;
+  sales_price_minor: number;
+  sales_tax_exempt: boolean;
+  excise_tax_exempt: boolean;
+  excise_amount_exempt_minor: number;
+  created_at: string;
+};
+
+// ---------------------------------------------------------------------------
+// Endorsement config
+// ---------------------------------------------------------------------------
+export async function getMedTaxSettings(): Promise<MedTaxSettings> {
+  if (!isSupabaseServiceConfigured) return DEFAULT_MED_TAX_SETTINGS;
+  const admin = createSupabaseAdminClient();
+  const { data } = await admin
+    .from("medical_endorsement_config")
+    .select("is_medically_endorsed")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return {
+    ...DEFAULT_MED_TAX_SETTINGS,
+    medicallyEndorsed: data ? Boolean(data.is_medically_endorsed) : DEFAULT_MED_TAX_SETTINGS.medicallyEndorsed,
+  };
+}
+
+export async function getEndorsementConfig(): Promise<{
+  isMedicallyEndorsed: boolean;
+  endorsementNumber: string | null;
+  exciseExemptionUntil: string;
+} | null> {
+  if (!isSupabaseServiceConfigured) return null;
+  const admin = createSupabaseAdminClient();
+  const { data } = await admin
+    .from("medical_endorsement_config")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!data) return null;
+  return {
+    isMedicallyEndorsed: Boolean(data.is_medically_endorsed),
+    endorsementNumber: (data.endorsement_number as string | null) ?? null,
+    exciseExemptionUntil: String(data.excise_exemption_until),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Recognition cards (authorizations)
+// ---------------------------------------------------------------------------
+export async function listAuthorizations(customerId: string): Promise<AuthorizationRow[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  const admin = createSupabaseAdminClient();
+  const { data } = await admin
+    .from("patient_authorizations")
+    .select("*")
+    .eq("customer_id", customerId)
+    .order("created_at", { ascending: false });
+  return (data as AuthorizationRow[] | null) ?? [];
+}
+
+export async function getActiveCard(customerId: string): Promise<AuthorizationRow | null> {
+  const all = await listAuthorizations(customerId);
+  const active = all.find((a) => a.status === "active");
+  return active ?? null;
+}
+
+/** Convert an authorization row into the pure-engine RecognitionCard shape. */
+export function toRecognitionCard(row: AuthorizationRow): RecognitionCard {
+  return {
+    uniquePatientIdentifier: row.unique_patient_identifier,
+    effectiveOn: row.effective_on ?? row.issued_on,
+    expiresOn: row.expires_on,
+    inDohDatabase: row.in_doh_database,
+    status: row.status,
+  };
+}
+
+/** Is this customer a valid, in-database medical patient right now? */
+export async function customerMedicalStatus(
+  customerId: string,
+  onDate: Date = new Date(),
+): Promise<{ carded: boolean; card: AuthorizationRow | null; reason: string | null }> {
+  const card = await getActiveCard(customerId);
+  if (!card) return { carded: false, card: null, reason: "No active recognition card" };
+  const v = cardValidity(toRecognitionCard(card), onDate);
+  return { carded: v.valid, card, reason: v.reason };
+}
+
+export type AuthorizationInput = {
+  customerId: string;
+  authorizationId?: string | null;
+  uniquePatientIdentifier?: string | null;
+  holderType: "patient" | "designated_provider";
+  effectiveOn?: string | null;
+  expiresOn?: string | null;
+  inDohDatabase: boolean;
+  checklist: FormChecklist;
+  notes?: string | null;
+};
+
+/**
+ * Create a recognition card. Enforces the DOH 608-048 form checklist: all four
+ * checks must pass before a card may be issued.
+ */
+export async function createAuthorization(
+  input: AuthorizationInput,
+  actorId: string | null,
+): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Supabase not configured" };
+  if (!canIssueCard(input.checklist)) {
+    return {
+      ok: false,
+      error: "All authorization-form checks (complete/signed, tamper-resistant, identity, embossed seal) must be verified before issuing a card.",
+    };
+  }
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("patient_authorizations")
+    .insert({
+      customer_id: input.customerId,
+      authorization_id: input.authorizationId ?? null,
+      unique_patient_identifier: input.uniquePatientIdentifier ?? null,
+      holder_type: input.holderType,
+      effective_on: input.effectiveOn ?? null,
+      issued_on: input.effectiveOn ?? null,
+      expires_on: input.expiresOn ?? null,
+      in_doh_database: input.inDohDatabase,
+      status: "active",
+      form_complete_signed: input.checklist.formCompleteSigned,
+      tamper_resistant_verified: input.checklist.tamperResistantVerified,
+      identity_verified: input.checklist.identityVerified,
+      embossed_seal_verified: input.checklist.embossedSealVerified,
+      mcr_validated_at: input.inDohDatabase ? new Date().toISOString() : null,
+      mcr_validated_by: input.inDohDatabase ? actorId : null,
+      notes: input.notes ?? null,
+      created_by: actorId,
+      updated_by: actorId,
+    })
+    .select("id")
+    .single();
+  if (error || !data) return { ok: false, error: error?.message ?? "Could not create card" };
+
+  // Mark the customer as a medical patient.
+  await admin.from("customers").update({ is_medical_patient: true }).eq("id", input.customerId);
+  return { ok: true, id: (data as { id: string }).id };
+}
+
+export async function setAuthorizationStatus(
+  id: string,
+  status: "active" | "expired" | "revoked",
+  actorId: string | null,
+): Promise<void> {
+  if (!isSupabaseServiceConfigured) return;
+  const admin = createSupabaseAdminClient();
+  await admin
+    .from("patient_authorizations")
+    .update({ status, updated_by: actorId })
+    .eq("id", id);
+}
+
+/** Record a manual MCR validation (consultant looked up the card in the DB). */
+export async function recordMcrValidation(id: string, actorId: string | null): Promise<void> {
+  if (!isSupabaseServiceConfigured) return;
+  const admin = createSupabaseAdminClient();
+  await admin
+    .from("patient_authorizations")
+    .update({ in_doh_database: true, mcr_validated_at: new Date().toISOString(), mcr_validated_by: actorId })
+    .eq("id", id);
+}
+
+// ---------------------------------------------------------------------------
+// Excise-exempt sale records (WAC 314-55-090(2)) — retain 5 years
+// ---------------------------------------------------------------------------
+export type ExemptSaleInput = {
+  orderId?: string | null;
+  customerId?: string | null;
+  authorizationId?: string | null;
+  uniquePatientIdentifier: string;
+  cardEffectiveOn?: string | null;
+  cardExpiresOn?: string | null;
+  productSku: string;
+  productName?: string | null;
+  salesPriceMinor: number;
+  salesTaxExempt: boolean;
+  exciseTaxExempt: boolean;
+  exciseAmountExemptMinor: number;
+};
+
+export async function recordExemptSale(
+  input: ExemptSaleInput,
+  actorId: string | null,
+): Promise<{ ok: boolean; error?: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Supabase not configured" };
+  const admin = createSupabaseAdminClient();
+  const { error } = await admin.from("medical_exempt_sales").insert({
+    order_id: input.orderId ?? null,
+    customer_id: input.customerId ?? null,
+    authorization_id: input.authorizationId ?? null,
+    unique_patient_identifier: input.uniquePatientIdentifier,
+    card_effective_on: input.cardEffectiveOn ?? null,
+    card_expires_on: input.cardExpiresOn ?? null,
+    product_sku: input.productSku,
+    product_name: input.productName ?? null,
+    sales_price_minor: input.salesPriceMinor,
+    sales_tax_exempt: input.salesTaxExempt,
+    excise_tax_exempt: input.exciseTaxExempt,
+    excise_amount_exempt_minor: input.exciseAmountExemptMinor,
+    recorded_by: actorId,
+  });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+export async function listExemptSales(opts?: {
+  from?: string;
+  to?: string;
+  limit?: number;
+}): Promise<ExemptSaleRow[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  const admin = createSupabaseAdminClient();
+  let q = admin.from("medical_exempt_sales").select("*").order("sale_date", { ascending: false });
+  if (opts?.from) q = q.gte("sale_date", opts.from);
+  if (opts?.to) q = q.lte("sale_date", opts.to);
+  q = q.limit(opts?.limit ?? 200);
+  const { data } = await q;
+  return (data as ExemptSaleRow[] | null) ?? [];
+}
+
+export async function medicalSummary(): Promise<{
+  patients: number;
+  activeCards: number;
+  exciseExemptedMinor: number;
+}> {
+  if (!isSupabaseServiceConfigured) return { patients: 0, activeCards: 0, exciseExemptedMinor: 0 };
+  const admin = createSupabaseAdminClient();
+  const [{ count: patients }, { count: activeCards }, { data: exempts }] = await Promise.all([
+    admin.from("customers").select("id", { count: "exact", head: true }).eq("is_medical_patient", true),
+    admin.from("patient_authorizations").select("id", { count: "exact", head: true }).eq("status", "active"),
+    admin.from("medical_exempt_sales").select("excise_amount_exempt_minor"),
+  ]);
+  const exciseExemptedMinor = ((exempts as { excise_amount_exempt_minor: number }[] | null) ?? []).reduce(
+    (acc, r) => acc + (r.excise_amount_exempt_minor ?? 0),
+    0,
+  );
+  return { patients: patients ?? 0, activeCards: activeCards ?? 0, exciseExemptedMinor };
+}
