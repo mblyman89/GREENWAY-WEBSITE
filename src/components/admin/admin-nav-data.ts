@@ -28,6 +28,7 @@ export const adminNav: AdminNavItem[] = [
   { label: "Inventory", href: "/admin/inventory", permission: "inventory.manage", icon: "🧾", group: "Catalog" },
   { label: "Vendor Intake", href: "/admin/inventory/intake", permission: "inventory.manage", icon: "📥", group: "Catalog" },
   { label: "Product Drafts", href: "/admin/inventory/drafts", permission: "inventory.manage", icon: "📝", group: "Catalog" },
+  { label: "Cycle Counts", href: "/admin/inventory/cycle-counts", permission: "inventory.manage", icon: "🔢", group: "Catalog" },
   { label: "Promotions", href: "/admin/promotions", permission: "promotions.manage", icon: "%", group: "Catalog" },
   { label: "Knowledge Base", href: "/admin/knowledge-base", permission: "products.enrich", icon: "📚", group: "Catalog" },
 

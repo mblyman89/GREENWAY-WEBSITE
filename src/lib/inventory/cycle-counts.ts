@@ -1,0 +1,325 @@
+/**
+ * src/lib/inventory/cycle-counts.ts  (Run 6 / Slice 30)
+ *
+ * Server-side helpers for cycle counts (periodic blind physical counts) used
+ * for inventory audit & cleanup (Feature C). A session snapshots system on-hand
+ * per lot, the employee enters a BLIND physical count, and applying the session
+ * posts each non-zero variance as an `inventory_adjustments` row (reason
+ * 'count') so on-hand is corrected and the change is CCRS-reportable.
+ *
+ * Staff-only via the service-role client behind RLS.
+ */
+import "server-only";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+
+export type CycleCountStatus = "open" | "applied" | "cancelled";
+
+export type CycleCount = {
+  id: string;
+  label: string;
+  status: CycleCountStatus;
+  scope_note: string | null;
+  line_count: number;
+  variance_count: number;
+  opened_by: string | null;
+  applied_by: string | null;
+  applied_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CycleCountLine = {
+  id: string;
+  count_id: string;
+  lot_id: string;
+  system_qty: number;
+  counted_qty: number | null;
+  variance_qty: number | null;
+  note: string | null;
+  applied: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CycleCountLineWithLot = CycleCountLine & {
+  lot_code: string | null;
+  product_name: string | null;
+  unit: string | null;
+};
+
+/** List sessions, newest first. */
+export async function listCycleCounts(limit = 50): Promise<CycleCount[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  const admin = createSupabaseAdminClient();
+  const { data } = await admin
+    .from("cycle_counts")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  return (data as CycleCount[] | null) ?? [];
+}
+
+export async function getCycleCount(id: string): Promise<CycleCount | null> {
+  if (!isSupabaseServiceConfigured) return null;
+  const admin = createSupabaseAdminClient();
+  const { data } = await admin.from("cycle_counts").select("*").eq("id", id).maybeSingle();
+  return (data as CycleCount | null) ?? null;
+}
+
+/** Lines for a session, joined with lot identity, with system_qty as baseline. */
+export async function getCycleCountLines(countId: string): Promise<CycleCountLineWithLot[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  const admin = createSupabaseAdminClient();
+  const { data } = await admin
+    .from("cycle_count_lines")
+    .select("*, lot:inventory_lots(lot_code, product_name, unit)")
+    .eq("count_id", countId)
+    .order("created_at", { ascending: true });
+  const rows = (data as unknown as (CycleCountLine & { lot: unknown })[] | null) ?? [];
+  return rows.map((r) => {
+    const lotRel = r.lot;
+    const lot = (Array.isArray(lotRel) ? lotRel[0] : lotRel) as
+      | { lot_code: string | null; product_name: string | null; unit: string | null }
+      | null;
+    return {
+      ...r,
+      lot_code: lot?.lot_code ?? null,
+      product_name: lot?.product_name ?? null,
+      unit: lot?.unit ?? null,
+    };
+  });
+}
+
+/**
+ * Create a new cycle-count session and snapshot the current system on-hand for
+ * the selected lots (or all active lots if none specified). Blind: counted_qty
+ * stays null until the employee enters it.
+ */
+export async function createCycleCount(
+  input: { label: string; scopeNote?: string | null; lotIds?: string[] | null },
+  actorId: string | null,
+): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) {
+    return { ok: false, error: "Supabase service role not configured." };
+  }
+  const admin = createSupabaseAdminClient();
+
+  // Resolve which lots to include.
+  let lotQuery = admin.from("inventory_lots").select("id, on_hand_qty").eq("status", "active");
+  if (input.lotIds && input.lotIds.length > 0) {
+    lotQuery = admin.from("inventory_lots").select("id, on_hand_qty").in("id", input.lotIds);
+  }
+  const { data: lots, error: lotErr } = await lotQuery;
+  if (lotErr) return { ok: false, error: lotErr.message };
+  const lotRows = (lots as { id: string; on_hand_qty: number }[] | null) ?? [];
+  if (lotRows.length === 0) {
+    return { ok: false, error: "No matching lots to count." };
+  }
+
+  const { data: session, error: insErr } = await admin
+    .from("cycle_counts")
+    .insert({
+      label: input.label.trim() || "Cycle count",
+      scope_note: input.scopeNote ?? null,
+      status: "open",
+      line_count: lotRows.length,
+      variance_count: 0,
+      opened_by: actorId,
+    })
+    .select("id")
+    .single();
+  if (insErr || !session) return { ok: false, error: insErr?.message ?? "Could not create session." };
+
+  const countId = (session as { id: string }).id;
+  const lines = lotRows.map((l) => ({
+    count_id: countId,
+    lot_id: l.id,
+    system_qty: l.on_hand_qty ?? 0,
+    counted_qty: null,
+    variance_qty: null,
+    applied: false,
+  }));
+  const { error: lineErr } = await admin.from("cycle_count_lines").insert(lines);
+  if (lineErr) return { ok: false, error: lineErr.message };
+
+  return { ok: true, id: countId };
+}
+
+/** Record a blind physical count for one line; computes the variance. */
+export async function recordLineCount(
+  input: { lineId: string; countedQty: number; note?: string | null },
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) {
+    return { ok: false, error: "Supabase service role not configured." };
+  }
+  const admin = createSupabaseAdminClient();
+
+  const { data: line } = await admin
+    .from("cycle_count_lines")
+    .select("id, count_id, system_qty, applied")
+    .eq("id", input.lineId)
+    .maybeSingle();
+  if (!line) return { ok: false, error: "Count line not found." };
+  if ((line as { applied: boolean }).applied) {
+    return { ok: false, error: "This line has already been applied." };
+  }
+
+  const systemQty = Number((line as { system_qty: number }).system_qty) || 0;
+  const variance = input.countedQty - systemQty;
+
+  const { error } = await admin
+    .from("cycle_count_lines")
+    .update({
+      counted_qty: input.countedQty,
+      variance_qty: variance,
+      note: input.note ?? null,
+    })
+    .eq("id", input.lineId);
+  if (error) return { ok: false, error: error.message };
+
+  // Refresh the session's cached variance count.
+  await refreshVarianceCount((line as { count_id: string }).count_id);
+  return { ok: true };
+}
+
+/** Recompute and cache how many lines have a non-zero variance. */
+async function refreshVarianceCount(countId: string): Promise<void> {
+  if (!isSupabaseServiceConfigured) return;
+  const admin = createSupabaseAdminClient();
+  const { data } = await admin
+    .from("cycle_count_lines")
+    .select("variance_qty")
+    .eq("count_id", countId);
+  const rows = (data as { variance_qty: number | null }[] | null) ?? [];
+  const variances = rows.filter((r) => (r.variance_qty ?? 0) !== 0).length;
+  await admin.from("cycle_counts").update({ variance_count: variances }).eq("id", countId);
+}
+
+/**
+ * Apply a session: for every line with a non-zero variance that has been
+ * counted and not yet applied, write an inventory_adjustments row (reason
+ * 'count', qty_delta = variance) and bump the lot's on-hand. Idempotent —
+ * already-applied lines are skipped, and re-running an applied session is a
+ * no-op. Returns how many adjustments were posted.
+ */
+export async function applyCycleCount(
+  countId: string,
+  actorId: string | null,
+): Promise<{ ok: true; applied: number } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) {
+    return { ok: false, error: "Supabase service role not configured." };
+  }
+  const admin = createSupabaseAdminClient();
+
+  const session = await getCycleCount(countId);
+  if (!session) return { ok: false, error: "Session not found." };
+  if (session.status === "cancelled") {
+    return { ok: false, error: "Cancelled sessions cannot be applied." };
+  }
+
+  const { data: lineData } = await admin
+    .from("cycle_count_lines")
+    .select("id, lot_id, system_qty, counted_qty, variance_qty, note, applied")
+    .eq("count_id", countId);
+  const lines = (lineData as CycleCountLine[] | null) ?? [];
+
+  let applied = 0;
+  for (const line of lines) {
+    if (line.applied) continue;
+    if (line.counted_qty == null) continue; // never counted
+    const variance = Number(line.variance_qty ?? 0);
+    if (variance === 0) {
+      // Nothing to post, but mark counted lines applied so they're final.
+      await admin.from("cycle_count_lines").update({ applied: true }).eq("id", line.id);
+      continue;
+    }
+
+    // Post the variance as a 'count' adjustment and bump on-hand.
+    const { data: lot } = await admin
+      .from("inventory_lots")
+      .select("on_hand_qty")
+      .eq("id", line.lot_id)
+      .maybeSingle();
+    if (!lot) continue;
+
+    const { error: adjErr } = await admin.from("inventory_adjustments").insert({
+      lot_id: line.lot_id,
+      qty_delta: variance,
+      reason: "count",
+      note: line.note ?? `Cycle count: ${session.label}`,
+      actor_id: actorId,
+    });
+    if (adjErr) return { ok: false, error: adjErr.message };
+
+    const current = Number((lot as { on_hand_qty: number }).on_hand_qty) || 0;
+    await admin
+      .from("inventory_lots")
+      .update({ on_hand_qty: current + variance, updated_by: actorId })
+      .eq("id", line.lot_id);
+
+    await admin.from("cycle_count_lines").update({ applied: true }).eq("id", line.id);
+    applied += 1;
+  }
+
+  await admin
+    .from("cycle_counts")
+    .update({ status: "applied", applied_by: actorId, applied_at: new Date().toISOString() })
+    .eq("id", countId);
+
+  return { ok: true, applied };
+}
+
+/** Cancel an open session (no adjustments posted). */
+export async function cancelCycleCount(
+  countId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) {
+    return { ok: false, error: "Supabase service role not configured." };
+  }
+  const admin = createSupabaseAdminClient();
+  const session = await getCycleCount(countId);
+  if (!session) return { ok: false, error: "Session not found." };
+  if (session.status === "applied") {
+    return { ok: false, error: "Applied sessions cannot be cancelled." };
+  }
+  const { error } = await admin.from("cycle_counts").update({ status: "cancelled" }).eq("id", countId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+export type CycleCountSummary = {
+  open: number;
+  appliedLast30: number;
+  totalAdjustmentsLast30: number;
+};
+
+export async function cycleCountSummary(): Promise<CycleCountSummary> {
+  const empty: CycleCountSummary = { open: 0, appliedLast30: 0, totalAdjustmentsLast30: 0 };
+  if (!isSupabaseServiceConfigured) return empty;
+  const admin = createSupabaseAdminClient();
+  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+  const { count: openCount } = await admin
+    .from("cycle_counts")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "open");
+
+  const { count: appliedCount } = await admin
+    .from("cycle_counts")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "applied")
+    .gte("applied_at", since);
+
+  const { count: adjCount } = await admin
+    .from("inventory_adjustments")
+    .select("id", { count: "exact", head: true })
+    .eq("reason", "count")
+    .gte("created_at", since);
+
+  return {
+    open: openCount ?? 0,
+    appliedLast30: appliedCount ?? 0,
+    totalAdjustmentsLast30: adjCount ?? 0,
+  };
+}
