@@ -34,8 +34,9 @@ export default async function ManifestReviewPage({
   const isPending = manifest.status === "pending";
 
   const withCoa = lots.filter((l) => l.lab_result_id).length;
-  const withPosKey = lots.filter((l) => l.pos_product_key).length;
   const missingCoa = lots.length - withCoa;
+  const sampleCount = lots.filter((l) => l.is_sample).length;
+  const coaLinks = Array.isArray(manifest.coa_links) ? manifest.coa_links : [];
 
   const acceptAction = acceptManifestAction.bind(null, id);
   const rejectAction = rejectManifestAction.bind(null, id);
@@ -44,7 +45,9 @@ export default async function ManifestReviewPage({
     <div>
       <AdminPageHeader
         title={manifest.manifest_number ?? "Vendor manifest"}
-        subtitle={`${manifest.vendor_label ?? "Unknown vendor"} · ${manifest.transfer_date ?? "no date"}`}
+        subtitle={`${manifest.vendor_label ?? "Unknown vendor"} · ${manifest.transfer_date ?? "no date"} · ${
+          manifest.source_format === "wcia" ? "WCIA transfer" : "generic JSON"
+        }${manifest.source_url ? " (fetched by link)" : ""}`}
         breadcrumbs={
           <Breadcrumbs
             items={[
@@ -78,10 +81,21 @@ export default async function ManifestReviewPage({
           </div>
         )}
 
-        <div className="grid gap-4 sm:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-5">
           <StatCard label="Lines" value={lots.length} accent="muted" />
           <StatCard label="With COA" value={`${withCoa}/${lots.length}`} accent={missingCoa > 0 ? "orange" : "green"} />
-          <StatCard label="Linked to catalog" value={`${withPosKey}/${lots.length}`} accent="muted" />
+          <StatCard
+            label="COAs captured"
+            value={coaLinks.length}
+            accent={coaLinks.length > 0 ? "green" : "muted"}
+            hint="saved to KB"
+          />
+          <StatCard
+            label="Samples ($0)"
+            value={sampleCount}
+            accent={sampleCount > 0 ? "gold" : "muted"}
+            hint="not for resale"
+          />
           <StatCard
             label="Status"
             value={manifest.status}
@@ -141,6 +155,52 @@ export default async function ManifestReviewPage({
             </tbody>
           </table>
         </div>
+
+        {/* Captured COAs (knowledge-base snapshot) */}
+        {coaLinks.length > 0 && (
+          <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
+            <h2 className="mb-1 text-sm font-bold text-[var(--admin-text)]">
+              Certificates of analysis ({coaLinks.length})
+            </h2>
+            <p className="mb-4 text-xs text-[var(--admin-text-muted)]">
+              Pulled from the single transfer file — no need to open each product&apos;s COA link in the
+              email. These references are saved with the manifest.
+            </p>
+            <div className="overflow-hidden rounded-[var(--admin-radius)] border border-[var(--admin-border)]">
+              <table className="w-full text-sm">
+                <thead className="bg-[var(--admin-surface-2)] text-left text-xs uppercase tracking-wide text-[var(--admin-text-faint)]">
+                  <tr>
+                    <th className="px-4 py-2">Product</th>
+                    <th className="px-4 py-2">Lab result ID</th>
+                    <th className="px-4 py-2">Expires</th>
+                    <th className="px-4 py-2 text-right">COA</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--admin-border)]">
+                  {coaLinks.map((c, i) => (
+                    <tr key={`${c.coa_url}-${i}`} className="bg-[var(--admin-surface)]">
+                      <td className="px-4 py-2 text-[var(--admin-text)]">{c.product_name ?? "—"}</td>
+                      <td className="px-4 py-2 font-mono text-xs text-[var(--admin-text-muted)]">
+                        {c.lab_result_id ?? "—"}
+                      </td>
+                      <td className="px-4 py-2 text-[var(--admin-text-muted)]">{c.expire_date ?? "—"}</td>
+                      <td className="px-4 py-2 text-right">
+                        <a
+                          href={c.coa_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[var(--admin-accent)] hover:underline"
+                        >
+                          Open ↗
+                        </a>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         {/* Accept / reject controls */}
         {isPending ? (

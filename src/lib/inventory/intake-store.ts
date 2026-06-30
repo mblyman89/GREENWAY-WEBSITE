@@ -16,6 +16,7 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import type { ParsedManifest } from "@/lib/inventory/intake-parser";
+import { extractCoaLinks } from "@/lib/inventory/intake-parser";
 import type { InboundManifest } from "@/lib/inventory/types";
 
 export async function listManifests(opts?: {
@@ -89,6 +90,7 @@ export async function stageManifest(
   parsed: ParsedManifest,
   rawPayload: unknown,
   actorId: string | null,
+  meta?: { sourceUrl?: string | null },
 ): Promise<{ ok: true; manifestId: string } | { ok: false; error: string }> {
   if (!isSupabaseServiceConfigured) {
     return { ok: false, error: "Supabase service role not configured." };
@@ -96,6 +98,10 @@ export async function stageManifest(
   const admin = createSupabaseAdminClient();
 
   const vendorId = await resolveVendorId(admin, parsed.vendor_label);
+
+  // Snapshot the COA references so they're preserved in our KB even if the
+  // vendor's links later expire. De-duplicated by coa_url.
+  const coaLinks = extractCoaLinks(parsed);
 
   // 1) manifest (pending)
   const { data: mData, error: mErr } = await admin
@@ -106,6 +112,9 @@ export async function stageManifest(
       vendor_label: parsed.vendor_label,
       transfer_date: parsed.transfer_date,
       raw_payload: rawPayload,
+      source_url: meta?.sourceUrl ?? null,
+      source_format: parsed.source_format,
+      coa_links: coaLinks,
       status: "pending",
       created_by: actorId,
       updated_by: actorId,
