@@ -53,6 +53,7 @@ export type Permission =
   | "blog.manage"
   | "loyalty.view"
   | "loyalty.manage"
+  | "customers.manage"
   | "reports.view"
   | "users.manage"
   | "settings.manage";
@@ -73,6 +74,7 @@ const MATRIX: Record<Permission, StaffRole[]> = {
   "blog.manage": ["owner", "admin", "manager", "content_editor"],
   "loyalty.view": ["owner", "admin", "manager", "staff"],
   "loyalty.manage": ["owner", "admin", "manager", "staff"],
+  "customers.manage": ["owner", "admin", "manager", "staff"],
   "reports.view": ["owner", "admin", "manager", "readonly"],
   "users.manage": ["owner", "admin"],
   "settings.manage": ["owner", "admin"],
@@ -98,6 +100,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   "blog.manage": "Write & publish blog posts",
   "loyalty.view": "View loyalty signups",
   "loyalty.manage": "Process loyalty signups",
+  "customers.manage": "Manage customer & patient records",
   "reports.view": "View reports & exports",
   "users.manage": "Manage staff & roles",
   "settings.manage": "Change settings",
@@ -110,6 +113,7 @@ export const ALL_PERMISSIONS: Permission[] = [
   "orders.manage",
   "loyalty.view",
   "loyalty.manage",
+  "customers.manage",
   "menu.import",
   "menu.publish",
   "promotions.manage",
