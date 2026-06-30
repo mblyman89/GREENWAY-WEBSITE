@@ -22,6 +22,7 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured, supabaseUrl } from "@/lib/supabase/env";
 import { greenwayBusiness } from "@/content/business";
+import { SEND_ID_TAG, POST_ID_TAG } from "@/lib/cms/email-events/normalize-core";
 import type { BlogPostRow } from "./types";
 
 const MEDIA_BUCKET = "media";
@@ -251,7 +252,18 @@ export type SendResult =
   | { ok: true; sendId: string; recipientCount: number; delivered: number; failed: number; status: string }
   | { ok: false; error: string };
 
-async function resendBatch(apiKey: string, from: string, to: string[], subject: string, html: string): Promise<boolean> {
+async function resendBatch(
+  apiKey: string,
+  from: string,
+  to: string[],
+  subject: string,
+  html: string,
+  // Slice 50: tags stamp each message so engagement events (opens, clicks,
+  // bounces) round-trip back with newsletter_send_id / post_id and can be
+  // correlated to the exact campaign in the stats suite. Additive only — does
+  // not change who receives the email or what it looks like.
+  tags?: { name: string; value: string }[],
+): Promise<boolean> {
   try {
     const res = await fetch(RESEND_ENDPOINT, {
       method: "POST",
@@ -261,7 +273,9 @@ async function resendBatch(apiKey: string, from: string, to: string[], subject: 
       // request per recipient batch via the `to` array is visible to all — so we
       // instead loop in small chunks using individual sends would be N calls.
       // Here we use one-recipient-per-call to keep addresses private.
-      body: JSON.stringify({ from, to, subject, html }),
+      body: JSON.stringify(
+        tags && tags.length > 0 ? { from, to, subject, html, tags } : { from, to, subject, html },
+      ),
     });
     return res.ok;
   } catch {
@@ -326,6 +340,16 @@ export async function sendNewsletter(params: {
   }
   const sendId = (created as { id: string }).id;
 
+  // Slice 50: campaign tags so engagement events correlate back to this send.
+  // Only on real broadcasts (test sends are noise for stats). UUID values
+  // satisfy Resend's tag charset (alphanumerics, _ and -).
+  const campaignTags: { name: string; value: string }[] = isTest
+    ? []
+    : [
+        { name: SEND_ID_TAG, value: sendId },
+        ...(n.id ? [{ name: POST_ID_TAG, value: n.id }] : []),
+      ];
+
   // Send one message per recipient (keeps addresses private) with light
   // concurrency to avoid hammering the API.
   let delivered = 0;
@@ -342,7 +366,7 @@ export async function sendNewsletter(params: {
           pdfUrl: n.pdfUrl,
           unsubscribeUrl: unsubscribeUrl(r.token),
         });
-        return resendBatch(apiKey, cfg.from!, [r.email], subject, html);
+        return resendBatch(apiKey, cfg.from!, [r.email], subject, html, campaignTags);
       }),
     );
     for (const ok of results) {

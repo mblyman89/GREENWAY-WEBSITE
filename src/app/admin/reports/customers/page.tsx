@@ -17,6 +17,8 @@ import { ReportTable, type ReportColumn } from "@/components/admin/reports/Repor
 import { DateRangePicker } from "@/components/admin/reports/DateRangePicker";
 import { resolveRange } from "@/lib/reports/range";
 import { getCustomersReport, type TopCustomerRow, type SegmentRow } from "@/lib/reports/customers";
+import { getNewsletterStats } from "@/lib/reports/newsletter-stats";
+import { NewsletterStatsSection } from "@/components/admin/reports/NewsletterStatsSection";
 
 export const dynamic = "force-dynamic";
 
@@ -119,17 +121,25 @@ export default async function CustomersReportPage({
     );
   }
 
-  const report = await getCustomersReport(range.fromISO, range.toISO);
+  const [report, newsletterStats] = await Promise.all([
+    getCustomersReport(range.fromISO, range.toISO),
+    getNewsletterStats(range.fromISO, range.toISO),
+  ]);
   const qs = `from=${range.fromISO.slice(0, 10)}&to=${range.toISO.slice(0, 10)}`;
+  const newsletterExportHref = `/admin/reports/customers/newsletter-export?${qs}`;
 
   if (!report.hasData) {
     return (
-      <div className="space-y-5">
-        <DateRangePicker />
-        <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-8 text-center">
-          <p className="text-sm font-bold text-white/70">No customers in {range.label.toLowerCase()}.</p>
-          <p className="mt-1 text-xs text-white/40">Adjust the date range above to see results.</p>
+      <div className="space-y-8">
+        <div className="space-y-5">
+          <DateRangePicker />
+          <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-8 text-center">
+            <p className="text-sm font-bold text-white/70">No customers in {range.label.toLowerCase()}.</p>
+            <p className="mt-1 text-xs text-white/40">Adjust the date range above to see results.</p>
+          </div>
         </div>
+        {/* Newsletter stats are independent of order data — always show them. */}
+        <NewsletterStatsSection stats={newsletterStats} exportHref={newsletterExportHref} />
       </div>
     );
   }
@@ -211,6 +221,11 @@ export default async function CustomersReportPage({
           emptyLabel="No identified customers."
         />
       </Section>
+
+      {/* Newsletter statistics suite (Slice 50) */}
+      <div className="border-t border-white/10 pt-6">
+        <NewsletterStatsSection stats={newsletterStats} exportHref={newsletterExportHref} />
+      </div>
     </div>
   );
 }
