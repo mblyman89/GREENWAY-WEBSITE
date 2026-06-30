@@ -57,6 +57,7 @@ export const adminNav: AdminNavItem[] = [
   { label: "Types & Categories", href: "/admin/settings/types", permission: "settings.manage", icon: "🏷", group: "Admin" },
   { label: "Sales Limits", href: "/admin/compliance/sales-limits", permission: "settings.manage", icon: "⚖", group: "Admin" },
   { label: "Integrations", href: "/admin/integrations", permission: "settings.manage", icon: "🔌", group: "Admin" },
+  { label: "Receipt Printer", href: "/admin/settings/receipt-printer", permission: "settings.manage", icon: "🧾", group: "Admin" },
   { label: "Settings", href: "/admin/settings", permission: "settings.manage", icon: "⚙", group: "Admin" },
   { label: "Audit Log", href: "/admin/audit", permission: "users.manage", icon: "⧗", group: "Admin" },
   { label: "Help & FAQ", href: "/admin/help", permission: "dashboard.view", icon: "?", group: "Admin" },
