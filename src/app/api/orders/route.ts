@@ -11,6 +11,7 @@
 import { NextResponse } from "next/server";
 import { createOrder } from "@/lib/orders/orders-store";
 import { notifyOrderPlaced } from "@/lib/orders/notify";
+import { queueOrderReceipt } from "@/lib/printing/printer-store";
 import type { NewOrderInput, NewOrderLineInput } from "@/lib/orders/types";
 
 export const runtime = "nodejs";
@@ -92,13 +93,40 @@ export async function POST(request: Request) {
     );
   }
 
+  const itemCount = lines.reduce((sum, l) => sum + l.quantity, 0);
+
   // Best-effort notification; never blocks the customer response.
   notifyOrderPlaced({
     orderNumber: result.orderNumber,
     customerFirstName: input.customerFirstName,
     customerEmail: input.customerEmail ?? null,
-    itemCount: lines.reduce((sum, l) => sum + l.quantity, 0),
+    itemCount,
     totalMinorUnits: input.totalMinorUnits,
+  }).catch(() => {});
+
+  // Best-effort receipt print queue (Slice 37). Only queues if a printer is
+  // configured and auto-print is enabled; never blocks the customer response.
+  queueOrderReceipt({
+    orderNumber: result.orderNumber,
+    orderId: null,
+    placedAt: new Date().toISOString(),
+    customerName: [input.customerFirstName, input.customerLastName ?? ""]
+      .join(" ")
+      .trim(),
+    customerPhone: input.customerPhone ?? null,
+    lines: lines.map((l) => ({
+      productName: l.productName,
+      brand: l.brand ?? null,
+      variantLabel: l.variantLabel ?? null,
+      quantity: l.quantity,
+      priceMinorUnits: l.priceMinorUnits,
+    })),
+    subtotalMinorUnits: input.subtotalMinorUnits,
+    savingsMinorUnits: input.savingsMinorUnits,
+    estimatedTaxMinorUnits: input.estimatedTaxMinorUnits,
+    totalMinorUnits: input.totalMinorUnits,
+    customerNote: input.customerNote ?? null,
+    itemCount,
   }).catch(() => {});
 
   return NextResponse.json(result, { status: 201 });
