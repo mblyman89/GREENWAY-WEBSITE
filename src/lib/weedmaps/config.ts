@@ -5,30 +5,40 @@
  * developer documentation — see docs/weedmaps-menu-api.md.
  *
  * Verified facts:
- *   - Menu API base: https://api-g.weedmaps.com/wm/2025-07/partners
+ *   - Menu API base:   https://api-g.weedmaps.com/wm/2025-07/partners
+ *   - Token endpoint:  https://api-g.weedmaps.com/auth/token  (POST, JSON body,
+ *     grant_type=client_credentials, returns 201 with a 14-day JWT bearer token)
  *   - Auth: OAuth 2.0 Bearer token, HTTPS only.
  *   - Integration target is a MENU (by menu_id), not the legacy WMID listing id.
+ *   - Required scopes: taxonomy:read brands:read products:read menu_items menus:write
  *
- * NOT inlined in the supplied docs (so read from env, do not hardcode/guess):
- *   - The OAuth token endpoint URL + client-credentials params live on the
- *     partner portal page /docs/obtaining-an-access-token. We read the token URL
- *     from env so it can be set once the owner confirms it, and also accept a
- *     directly-provisioned bearer token (WEEDMAPS_ACCESS_TOKEN) for onboarding.
+ * Env overrides are still honored (token URL / scope) so the owner can adjust without a
+ * code change, but the verified defaults mean the integration works out of the box once
+ * client credentials + menu id are set.
  */
 
 export type WeedmapsEnvironment = "sandbox" | "production";
+
+/** Verified default OAuth token endpoint (Obtaining an Access Token). */
+export const WEEDMAPS_TOKEN_URL_DEFAULT = "https://api-g.weedmaps.com/auth/token";
+
+/** Verified default scopes for menu syndication (Obtaining an Access Token). */
+export const WEEDMAPS_DEFAULT_SCOPE =
+  "taxonomy:read brands:read products:read menu_items menus:write";
 
 export type WeedmapsClientConfig = {
   environment: WeedmapsEnvironment;
   /** Weedmaps Menu ID (the 2025-07 integration target). Falls back to WM_ID. */
   menuId?: string;
-  /** OAuth2 client credentials (token obtained at runtime). */
+  /** OAuth2 client credentials (token obtained at runtime via client_credentials). */
   clientId?: string;
   clientSecret?: string;
   /** Optional pre-provisioned bearer token (onboarding shortcut). */
   accessToken?: string;
-  /** OAuth token endpoint URL (not inlined in docs; configured by owner). */
-  tokenUrl?: string;
+  /** OAuth token endpoint URL. Defaults to the verified Weedmaps URL. */
+  tokenUrl: string;
+  /** OAuth scopes requested at token time. Defaults to the verified menu scopes. */
+  scope: string;
 };
 
 export function getWeedmapsConfig(): WeedmapsClientConfig {
@@ -38,14 +48,15 @@ export function getWeedmapsConfig(): WeedmapsClientConfig {
     clientId: process.env.WEEDMAPS_CLIENT_ID,
     clientSecret: process.env.WEEDMAPS_CLIENT_SECRET,
     accessToken: process.env.WEEDMAPS_ACCESS_TOKEN,
-    tokenUrl: process.env.WEEDMAPS_TOKEN_URL,
+    tokenUrl: process.env.WEEDMAPS_TOKEN_URL || WEEDMAPS_TOKEN_URL_DEFAULT,
+    scope: process.env.WEEDMAPS_SCOPE || WEEDMAPS_DEFAULT_SCOPE,
   };
 }
 
 // Verified from the docs: a single api-g host with a versioned partners path.
-// The version segment is 2025-07 (docs note no schema change 2025-01 -> 2025-07).
-// The supplied docs do not describe a separate sandbox host, so the same base URL is
-// used for both environments; the parameter is kept for call-site symmetry with Leafly.
+// The version segment is 2025-07 (supported until July 2027). The supplied docs do not
+// describe a separate sandbox host, so the same base URL is used for both environments;
+// the parameter is kept for call-site symmetry with Leafly.
 export function getWeedmapsBaseUrl(
   environment: WeedmapsClientConfig["environment"] = "production",
 ): string {
