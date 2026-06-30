@@ -22,6 +22,7 @@ export const REPORT_TABS: ReportTab[] = [
   { href: "/admin/reports/employees", label: "Employees", icon: "⏱" },
   { href: "/admin/reports/medical", label: "Medical", icon: "⚕" },
   { href: "/admin/reports/compliance", label: "Compliance (CCRS)", icon: "🛡️" },
+  { href: "/admin/reports/excise", label: "Excise Tax (LIQ-1295)", icon: "🧾" },
   { href: "/admin/reports/accounting", label: "Accounting (Sage 50)", icon: "📒" },
 ];
 
