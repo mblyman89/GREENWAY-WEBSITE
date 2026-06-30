@@ -5,6 +5,8 @@ import { Breadcrumbs } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
 import { CustomerForm } from "@/components/admin/customers/CustomerForm";
 import { getCustomerById, listPatientAuthorizations, isAtLeast21 } from "@/lib/customers/store";
+import { can } from "@/lib/auth/roles";
+import { LoyaltyPanel } from "@/components/admin/loyalty/LoyaltyPanel";
 import { updateCustomerAction } from "../actions";
 
 export const dynamic = "force-dynamic";
@@ -20,8 +22,9 @@ export default async function CustomerDetailPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ saved?: string; created?: string; error?: string }>;
 }) {
-  await requirePermission("customers.manage");
+  const session = await requirePermission("customers.manage");
   const { id } = await params;
+  const canManageLoyalty = can(session.profile.role, "loyalty.manage");
   const { saved, created, error } = await searchParams;
 
   const customer = await getCustomerById(id);
@@ -72,6 +75,8 @@ export default async function CustomerDetailPage({
           <h2 className="mb-4 text-sm font-bold text-[var(--admin-text)]">Edit profile</h2>
           <CustomerForm customer={customer} action={updateAction} submitLabel="Save changes" />
         </div>
+
+        <LoyaltyPanel customerId={id} canManage={canManageLoyalty} />
 
         <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
           <h2 className="mb-3 text-sm font-bold text-[var(--admin-text)]">Patient authorizations</h2>
