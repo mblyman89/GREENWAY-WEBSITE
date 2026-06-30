@@ -1,0 +1,2743 @@
+{
+  "document_name": "WCIA Transfer Schema",
+  "document_schema_version": "2.1.0",
+  "document_origin": "https://files.cultivera.com/435553542D5753353031/Interop/25/10/QZ60727TG6AE020G/Cultivera_ORD-20636_413541.json",
+  "from_license_number": "413632",
+  "from_license_name": "QUALITY GREEN TREES",
+  "to_license_number": "413541",
+  "to_license_name": "GREENWAY MARIJUANA",
+  "to_license_type": null,
+  "transporter_name": null,
+  "transporter_license": null,
+  "manifest_type": "delivery",
+  "created_at": "2025-03-12T15:21:35+00:00",
+  "updated_at": "2025-03-12T15:21:35+00:00",
+  "transferred_at": "2025-03-13T14:00:00+00:00",
+  "external_id": "0000020830",
+  "transfer_id": "15410217973875889",
+  "est_departed_at": "2025-03-13T14:00:00+00:00",
+  "est_arrival_at": "2025-03-13T23:00:00+00:00",
+  "route": "Head west toward 12 Trees Ln NW\nTurn right onto 12 Trees Ln NW\nTurn right onto Pioneer Way NW\nTurn right onto WA-3 S\nContinue onto WA-16\nTake the exit toward WA-160 E\nTurn left onto WA-160 EDestination will be on the right",
+  "inventory_transfer_items": [
+    {
+      "created_at": "2025-03-06T18:13:26+00:00",
+      "updated_at": "2025-03-11T22:01:56+00:00",
+      "integrator_data": "C5011F1F92750000251374",
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Freddy's FUEGO Pack 3 - 3.75g (0.75g x 5)",
+      "qty": 15,
+      "serving_weight": null,
+      "unit_weight": 3.75,
+      "line_price": 199.95,
+      "uom": "ea",
+      "unit_weight_uom": "g",
+      "inventory_id": "15410167200667924",
+      "sample_source_id": "15418385823780348",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "lab_result_passed": "passed",
+      "lab_result_link": "https://files.cultivera.com/https://files.cultivera.com/435553542D5753353031/Interop/24/33/XWSG8Z255900A0RK/C501_qaNQQ2D1WH.json",
+      "lab_result_data": {
+        "lab_result_id": "15418385823780348",
+        "lab_result_status": "passed",
+        "lab_result_detail": "https://files.cultivera.com/https://files.cultivera.com/435553542D5753353031/Interop/24/33/XWSG8Z255900A0RK/C501_qaNQQ2D1WH.json",
+        "coa": "https://files.cultivera.com/435553542D5753353031/Coas/24/08/21/STM9NJFKAX9KZQRJ/COA_15418385823780348.pdf",
+        "potency": [
+          {
+            "type": "cbd",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 0.9,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 25.3,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.1,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 26.3,
+            "unit": "pct"
+          }
+        ],
+        "lab_result_list": [
+          {
+            "coa": "https://files.cultivera.com/435553542D5753353031/Coas/24/08/21/STM9NJFKAX9KZQRJ/COA_15418385823780348.pdf",
+            "lab_result_id": "15418385823780348",
+            "lab_result_status": "passed",
+            "lab_result_link": "https://files.cultivera.com/https://files.cultivera.com/435553542D5753353031/Interop/24/33/XWSG8Z255900A0RK/C501_qaNQQ2D1WH.json",
+            "coa_release_date": null,
+            "coa_amended_date": null,
+            "coa_expire_date": null
+          }
+        ]
+      },
+      "inventory_category": "EndProduct",
+      "inventory_type": "Usable Marijuana",
+      "strain_name": "Lyon King",
+      "product_sku": null
+    },
+    {
+      "created_at": "2025-02-20T15:25:34+00:00",
+      "updated_at": "2025-03-11T14:17:05+00:00",
+      "integrator_data": "C5011U1Y91100000250341",
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Freddy's FUEGO Pack - 3.75g (0.75g x 5)",
+      "qty": 10,
+      "serving_weight": null,
+      "unit_weight": 3.75,
+      "line_price": 133.3,
+      "uom": "ea",
+      "unit_weight_uom": "g",
+      "inventory_id": "15410045233542802",
+      "sample_source_id": "15419139704568250",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "lab_result_passed": "passed",
+      "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/24/11/18/EVRN504914ZTFF6W/C501_LabTestData_7349.json",
+      "lab_result_data": {
+        "lab_result_id": "WA-241114-004",
+        "lab_result_status": "passed",
+        "lab_result_detail": "https://files.cultivera.com/435553542D5753353031/Coas/24/11/18/EVRN504914ZTFF6W/C501_LabTestData_7349.json",
+        "coa": "https://files.cultivera.com/435553542D5753353031/Coas/24/11/18/613J49T65Y090BZH/COA_15419139704568250.pdf",
+        "potency": [
+          {
+            "type": "cbd",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 0.182,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 19.74,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.044,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 19.966,
+            "unit": "pct"
+          }
+        ],
+        "lab_result_list": [
+          {
+            "coa": "https://files.cultivera.com/435553542D5753353031/Coas/24/11/18/613J49T65Y090BZH/COA_15419139704568250.pdf",
+            "lab_result_id": "WA-241114-004",
+            "lab_result_status": "passed",
+            "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/24/11/18/EVRN504914ZTFF6W/C501_LabTestData_7349.json",
+            "coa_release_date": "2024-11-16",
+            "coa_amended_date": null,
+            "coa_expire_date": "2025-11-16"
+          }
+        ]
+      },
+      "inventory_category": "EndProduct",
+      "inventory_type": "Usable Marijuana",
+      "strain_name": "Lyon King",
+      "product_sku": null
+    },
+    {
+      "created_at": "2025-01-28T15:28:09+00:00",
+      "updated_at": "2025-03-12T14:23:53+00:00",
+      "integrator_data": "C5011P1B78230000248438",
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Infused Peg Legs - Permanent Marker - 2 x 0.5g",
+      "qty": 10,
+      "serving_weight": null,
+      "unit_weight": 1,
+      "line_price": 40,
+      "uom": "ea",
+      "unit_weight_uom": "g",
+      "inventory_id": "15419846528960184",
+      "sample_source_id": "15419727631802186",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "lab_result_passed": "passed",
+      "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/20/YQ7N7RQ0E1323QRT/C501_LabTestData_7446.json",
+      "lab_result_data": {
+        "lab_result_id": "WA-250116-063",
+        "lab_result_status": "passed",
+        "lab_result_detail": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/20/YQ7N7RQ0E1323QRT/C501_LabTestData_7446.json",
+        "coa": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/20/SFE3YS3G98CGANMQ/COA_15419727631802186.pdf",
+        "potency": [
+          {
+            "type": "cbd",
+            "value": 0.041,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 2.156,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 36.6,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.088,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 38.886,
+            "unit": "pct"
+          }
+        ],
+        "lab_result_list": [
+          {
+            "coa": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/20/SFE3YS3G98CGANMQ/COA_15419727631802186.pdf",
+            "lab_result_id": "WA-250116-063",
+            "lab_result_status": "passed",
+            "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/20/YQ7N7RQ0E1323QRT/C501_LabTestData_7446.json",
+            "coa_release_date": "2025-01-17",
+            "coa_amended_date": null,
+            "coa_expire_date": "2026-01-17"
+          }
+        ]
+      },
+      "inventory_category": "EndProduct",
+      "inventory_type": "Usable Marijuana",
+      "strain_name": "Permanent Marker ",
+      "product_sku": null
+    },
+    {
+      "created_at": "2025-02-17T22:28:34+00:00",
+      "updated_at": "2025-03-07T15:29:09+00:00",
+      "integrator_data": "C5011U1U92530000250024",
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Infused Peg Legs - Scented Marker - 2 x 0.5g",
+      "qty": 15,
+      "serving_weight": null,
+      "unit_weight": 1,
+      "line_price": 60,
+      "uom": "ea",
+      "unit_weight_uom": "g",
+      "inventory_id": "15410021851532647",
+      "sample_source_id": "15419916741146472",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "lab_result_passed": "passed",
+      "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/25/02/10/26XW7NQTJFPP8955/C501_LabTestData_7499.json",
+      "lab_result_data": {
+        "lab_result_id": "WA-250209-029",
+        "lab_result_status": "passed",
+        "lab_result_detail": "https://files.cultivera.com/435553542D5753353031/Coas/25/02/10/26XW7NQTJFPP8955/C501_LabTestData_7499.json",
+        "coa": "https://files.cultivera.com/435553542D5753353031/Coas/25/02/10/DYVBJD6WDEN56F8H/COA_15419916741146472.pdf",
+        "potency": [
+          {
+            "type": "cbd",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 1.562,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 40.28,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.098,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 41.94,
+            "unit": "pct"
+          }
+        ],
+        "lab_result_list": [
+          {
+            "coa": "https://files.cultivera.com/435553542D5753353031/Coas/25/02/10/DYVBJD6WDEN56F8H/COA_15419916741146472.pdf",
+            "lab_result_id": "WA-250209-029",
+            "lab_result_status": "passed",
+            "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/25/02/10/26XW7NQTJFPP8955/C501_LabTestData_7499.json",
+            "coa_release_date": "2025-02-10",
+            "coa_amended_date": null,
+            "coa_expire_date": "2026-02-10"
+          }
+        ]
+      },
+      "inventory_category": "EndProduct",
+      "inventory_type": "Usable Marijuana",
+      "strain_name": "Scented Marker ",
+      "product_sku": null
+    },
+    {
+      "created_at": "2025-01-22T18:01:59+00:00",
+      "updated_at": "2025-03-12T14:23:53+00:00",
+      "integrator_data": "C5011S1V77360000248110",
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Freddy's Fuego Peg Legs - Blue Slushie - 2 x 0.5g",
+      "qty": 20,
+      "serving_weight": null,
+      "unit_weight": 1,
+      "line_price": 66.6,
+      "uom": "ea",
+      "unit_weight_uom": "g",
+      "inventory_id": "15419795611939696",
+      "sample_source_id": "15419019642257904",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "lab_result_passed": "passed",
+      "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/24/11/04/PFDSRQK5H47PS4H3/C501_LabTestData_7331.json",
+      "lab_result_data": {
+        "lab_result_id": "WA-241031-009",
+        "lab_result_status": "passed",
+        "lab_result_detail": "https://files.cultivera.com/435553542D5753353031/Coas/24/11/04/PFDSRQK5H47PS4H3/C501_LabTestData_7331.json",
+        "coa": "https://files.cultivera.com/435553542D5753353031/Coas/24/11/04/JGW72HF7WG9P7KVN/COA_15419019642257904.pdf",
+        "potency": [
+          {
+            "type": "cbd",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 0.682,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 22.75,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.046,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 23.478,
+            "unit": "pct"
+          }
+        ],
+        "lab_result_list": [
+          {
+            "coa": "https://files.cultivera.com/435553542D5753353031/Coas/24/11/04/JGW72HF7WG9P7KVN/COA_15419019642257904.pdf",
+            "lab_result_id": "WA-241031-009",
+            "lab_result_status": "passed",
+            "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/24/11/04/PFDSRQK5H47PS4H3/C501_LabTestData_7331.json",
+            "coa_release_date": "2024-11-01",
+            "coa_amended_date": null,
+            "coa_expire_date": "2025-11-01"
+          }
+        ]
+      },
+      "inventory_category": "EndProduct",
+      "inventory_type": "Usable Marijuana",
+      "strain_name": "Blue Slushie",
+      "product_sku": null
+    },
+    {
+      "created_at": "2025-03-05T21:07:13+00:00",
+      "updated_at": "2025-03-12T14:23:53+00:00",
+      "integrator_data": "C5011P1V75390000251337",
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Freddy's Fuego Peg Legs - Lemon Shortbread - 2 x 0.5g",
+      "qty": 20,
+      "serving_weight": null,
+      "unit_weight": 1,
+      "line_price": 66.6,
+      "uom": "ea",
+      "unit_weight_uom": "g",
+      "inventory_id": "15410159603427433",
+      "sample_source_id": "15419624775203081",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "lab_result_passed": "passed",
+      "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/13/KMAJ7WMPGQS4MJA6/C501_LabTestData_7434.json",
+      "lab_result_data": {
+        "lab_result_id": "WA-250109-022",
+        "lab_result_status": "passed",
+        "lab_result_detail": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/13/KMAJ7WMPGQS4MJA6/C501_LabTestData_7434.json",
+        "coa": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/13/VQDQAWR40XVMH6NE/COA_15419624775203081.pdf",
+        "potency": [
+          {
+            "type": "cbd",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 0.122,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 26.85,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.058,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 27.03,
+            "unit": "pct"
+          }
+        ],
+        "lab_result_list": [
+          {
+            "coa": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/13/VQDQAWR40XVMH6NE/COA_15419624775203081.pdf",
+            "lab_result_id": "WA-250109-022",
+            "lab_result_status": "passed",
+            "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/13/KMAJ7WMPGQS4MJA6/C501_LabTestData_7434.json",
+            "coa_release_date": "2025-01-11",
+            "coa_amended_date": null,
+            "coa_expire_date": "2026-01-11"
+          }
+        ]
+      },
+      "inventory_category": "EndProduct",
+      "inventory_type": "Usable Marijuana",
+      "strain_name": "Lemon ShortBread",
+      "product_sku": null
+    },
+    {
+      "created_at": "2025-02-05T15:22:06+00:00",
+      "updated_at": "2025-03-12T14:23:53+00:00",
+      "integrator_data": "C5011X1484240000249118",
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Freddy's Fuego Peg Legs - Permanent Marker - 2 x 0.5g",
+      "qty": 20,
+      "serving_weight": null,
+      "unit_weight": 1,
+      "line_price": 66.6,
+      "uom": "ea",
+      "unit_weight_uom": "g",
+      "inventory_id": "15419915612669579",
+      "sample_source_id": "15418887306055562",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "lab_result_passed": "passed",
+      "lab_result_link": "https://files.cultivera.com/https://files.cultivera.com/435553542D5753353031/Interop/24/41/XBQN7YAZG829YW7B/C501_qaCF24NEXA.json",
+      "lab_result_data": {
+        "lab_result_id": "15418887306055562",
+        "lab_result_status": "passed",
+        "lab_result_detail": "https://files.cultivera.com/https://files.cultivera.com/435553542D5753353031/Interop/24/41/XBQN7YAZG829YW7B/C501_qaCF24NEXA.json",
+        "coa": "https://files.cultivera.com/435553542D5753353031/Coas/24/10/22/KK05Q1BNDQCR2ZDR/COA_15418887306055562.pdf",
+        "potency": [
+          {
+            "type": "cbd",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 1,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 24.6,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 25.6,
+            "unit": "pct"
+          }
+        ],
+        "lab_result_list": [
+          {
+            "coa": "https://files.cultivera.com/435553542D5753353031/Coas/24/10/22/KK05Q1BNDQCR2ZDR/COA_15418887306055562.pdf",
+            "lab_result_id": "15418887306055562",
+            "lab_result_status": "passed",
+            "lab_result_link": "https://files.cultivera.com/https://files.cultivera.com/435553542D5753353031/Interop/24/41/XBQN7YAZG829YW7B/C501_qaCF24NEXA.json",
+            "coa_release_date": null,
+            "coa_amended_date": null,
+            "coa_expire_date": null
+          }
+        ]
+      },
+      "inventory_category": "EndProduct",
+      "inventory_type": "Usable Marijuana",
+      "strain_name": "Permanent Marker ",
+      "product_sku": null
+    },
+    {
+      "created_at": "2025-02-12T20:16:14+00:00",
+      "updated_at": "2025-03-12T14:25:11+00:00",
+      "integrator_data": "C5011H1A90300000249733",
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Freddy's Finest Joint - Black Trop Cherry - 1g",
+      "qty": 10,
+      "serving_weight": null,
+      "unit_weight": 1,
+      "line_price": 40,
+      "uom": "ea",
+      "unit_weight_uom": "g",
+      "inventory_id": "15419977857482316",
+      "sample_source_id": "15418887247319479",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "lab_result_passed": "passed",
+      "lab_result_link": "https://files.cultivera.com/https://files.cultivera.com/435553542D5753353031/Interop/24/41/WVYYQXHS0HP4WQ16/C501_qaATR8HRD3.json",
+      "lab_result_data": {
+        "lab_result_id": "15418887247319479",
+        "lab_result_status": "passed",
+        "lab_result_detail": "https://files.cultivera.com/https://files.cultivera.com/435553542D5753353031/Interop/24/41/WVYYQXHS0HP4WQ16/C501_qaATR8HRD3.json",
+        "coa": "https://files.cultivera.com/435553542D5753353031/Coas/24/10/22/8B7ACWZJ2FMXQQSS/COA_15418887247319479.pdf",
+        "potency": [
+          {
+            "type": "cbd",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 2.5,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 24.4,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 26.9,
+            "unit": "pct"
+          }
+        ],
+        "lab_result_list": [
+          {
+            "coa": "https://files.cultivera.com/435553542D5753353031/Coas/24/10/22/8B7ACWZJ2FMXQQSS/COA_15418887247319479.pdf",
+            "lab_result_id": "15418887247319479",
+            "lab_result_status": "passed",
+            "lab_result_link": "https://files.cultivera.com/https://files.cultivera.com/435553542D5753353031/Interop/24/41/WVYYQXHS0HP4WQ16/C501_qaATR8HRD3.json",
+            "coa_release_date": null,
+            "coa_amended_date": null,
+            "coa_expire_date": null
+          }
+        ]
+      },
+      "inventory_category": "EndProduct",
+      "inventory_type": "Usable Marijuana",
+      "strain_name": "Quickz",
+      "product_sku": null
+    },
+    {
+      "created_at": "2024-12-23T22:05:16+00:00",
+      "updated_at": "2025-03-11T14:15:19+00:00",
+      "integrator_data": "C5011N1P88080000246816",
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Freddy's Finest Joint - Kawazaki - 1g",
+      "qty": 10,
+      "serving_weight": null,
+      "unit_weight": 1,
+      "line_price": 40,
+      "uom": "ea",
+      "unit_weight_uom": "g",
+      "inventory_id": "15419537871609317",
+      "sample_source_id": "15419201834674893",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "lab_result_passed": "passed",
+      "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/24/11/26/QCHVWR8814JY4JAZ/C501_LabTestData_7357.json",
+      "lab_result_data": {
+        "lab_result_id": "WA-241122-085",
+        "lab_result_status": "passed",
+        "lab_result_detail": "https://files.cultivera.com/435553542D5753353031/Coas/24/11/26/QCHVWR8814JY4JAZ/C501_LabTestData_7357.json",
+        "coa": "https://files.cultivera.com/435553542D5753353031/Coas/24/11/26/H6Q7P4YXENQFPXZD/COA_15419201834674893.pdf",
+        "potency": [
+          {
+            "type": "cbd",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 0.162,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 25.42,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.055,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 25.637,
+            "unit": "pct"
+          }
+        ],
+        "lab_result_list": [
+          {
+            "coa": "https://files.cultivera.com/435553542D5753353031/Coas/24/11/26/H6Q7P4YXENQFPXZD/COA_15419201834674893.pdf",
+            "lab_result_id": "WA-241122-085",
+            "lab_result_status": "passed",
+            "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/24/11/26/QCHVWR8814JY4JAZ/C501_LabTestData_7357.json",
+            "coa_release_date": "2024-11-26",
+            "coa_amended_date": null,
+            "coa_expire_date": "2025-11-26"
+          }
+        ]
+      },
+      "inventory_category": "EndProduct",
+      "inventory_type": "Usable Marijuana",
+      "strain_name": "Kawasaki ",
+      "product_sku": null
+    },
+    {
+      "created_at": "2025-01-07T15:05:24+00:00",
+      "updated_at": "2025-03-12T14:25:11+00:00",
+      "integrator_data": "C5011Q1U88090000247203",
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Freddy's Finest Joint - Scented Marker - 1g",
+      "qty": 10,
+      "serving_weight": null,
+      "unit_weight": 1,
+      "line_price": 40,
+      "uom": "ea",
+      "unit_weight_uom": "g",
+      "inventory_id": "15419664952448826",
+      "sample_source_id": "15419112087185890",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "lab_result_passed": "passed",
+      "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/24/11/11/NA46X7WWKZJVMS8A/C501_LabTestData_7337.json",
+      "lab_result_data": {
+        "lab_result_id": "WA-241107-035",
+        "lab_result_status": "passed",
+        "lab_result_detail": "https://files.cultivera.com/435553542D5753353031/Coas/24/11/11/NA46X7WWKZJVMS8A/C501_LabTestData_7337.json",
+        "coa": "https://files.cultivera.com/435553542D5753353031/Coas/24/11/11/4AVBZKNEEHFF8QB7/COA_15419112087185890.pdf",
+        "potency": [
+          {
+            "type": "cbd",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 1.78,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 22.39,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.05,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 24.22,
+            "unit": "pct"
+          }
+        ],
+        "lab_result_list": [
+          {
+            "coa": "https://files.cultivera.com/435553542D5753353031/Coas/24/11/11/4AVBZKNEEHFF8QB7/COA_15419112087185890.pdf",
+            "lab_result_id": "WA-241107-035",
+            "lab_result_status": "passed",
+            "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/24/11/11/NA46X7WWKZJVMS8A/C501_LabTestData_7337.json",
+            "coa_release_date": "2024-11-09",
+            "coa_amended_date": null,
+            "coa_expire_date": "2025-11-09"
+          }
+        ]
+      },
+      "inventory_category": "EndProduct",
+      "inventory_type": "Usable Marijuana",
+      "strain_name": "Scented Marker ",
+      "product_sku": null
+    },
+    {
+      "created_at": "2025-03-04T20:47:27+00:00",
+      "updated_at": "2025-03-12T14:23:53+00:00",
+      "integrator_data": "C5011U1A72750000251106",
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Freddy's Fuego Flower - Carrot Cake - 3.5g (Legacy)",
+      "qty": 10,
+      "serving_weight": null,
+      "unit_weight": 3.5,
+      "line_price": 133.3,
+      "uom": "ea",
+      "unit_weight_uom": "g",
+      "inventory_id": "15410150844872378",
+      "sample_source_id": "15419684380930680",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "lab_result_passed": "passed",
+      "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/20/YJE12MF9G7XRX4SV/C501_LabTestData_7444.json",
+      "lab_result_data": {
+        "lab_result_id": "WA-250116-007",
+        "lab_result_status": "passed",
+        "lab_result_detail": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/20/YJE12MF9G7XRX4SV/C501_LabTestData_7444.json",
+        "coa": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/20/P38NN5WWBB3EA4FW/COA_15419684380930680.pdf",
+        "potency": [
+          {
+            "type": "cbd",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 0.502,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 17.86,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.039,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 18.401,
+            "unit": "pct"
+          }
+        ],
+        "lab_result_list": [
+          {
+            "coa": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/20/P38NN5WWBB3EA4FW/COA_15419684380930680.pdf",
+            "lab_result_id": "WA-250116-007",
+            "lab_result_status": "passed",
+            "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/20/YJE12MF9G7XRX4SV/C501_LabTestData_7444.json",
+            "coa_release_date": "2025-01-17",
+            "coa_amended_date": null,
+            "coa_expire_date": "2026-01-17"
+          }
+        ]
+      },
+      "inventory_category": "EndProduct",
+      "inventory_type": "Usable Marijuana",
+      "strain_name": "Carrot Cake ",
+      "product_sku": null
+    },
+    {
+      "created_at": "2025-02-26T17:20:28+00:00",
+      "updated_at": "2025-03-12T14:18:31+00:00",
+      "integrator_data": "C501181585970000250673",
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Freddy's Fuego Flower - Lyon King - 3.5g (Legacy)",
+      "qty": 10,
+      "serving_weight": null,
+      "unit_weight": 3.5,
+      "line_price": 133.3,
+      "uom": "ea",
+      "unit_weight_uom": "g",
+      "inventory_id": "15410097762956536",
+      "sample_source_id": "15419916916881334",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "lab_result_passed": "passed",
+      "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/25/02/19/G86DYM4EPTP4P4RB/C501_LabTestData_7491.json",
+      "lab_result_data": {
+        "lab_result_id": "WA-250213-072",
+        "lab_result_status": "passed",
+        "lab_result_detail": "https://files.cultivera.com/435553542D5753353031/Coas/25/02/19/G86DYM4EPTP4P4RB/C501_LabTestData_7491.json",
+        "coa": "https://files.cultivera.com/435553542D5753353031/Coas/25/02/19/8QA1HPYKRRJ0ZQXC/COA_15419916916881334.pdf",
+        "potency": [
+          {
+            "type": "cbd",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 0.302,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 24.92,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.056,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 25.277,
+            "unit": "pct"
+          }
+        ],
+        "lab_result_list": [
+          {
+            "coa": "https://files.cultivera.com/435553542D5753353031/Coas/25/02/19/8QA1HPYKRRJ0ZQXC/COA_15419916916881334.pdf",
+            "lab_result_id": "WA-250213-072",
+            "lab_result_status": "passed",
+            "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/25/02/19/G86DYM4EPTP4P4RB/C501_LabTestData_7491.json",
+            "coa_release_date": "2025-02-15",
+            "coa_amended_date": null,
+            "coa_expire_date": "2026-02-15"
+          }
+        ]
+      },
+      "inventory_category": "EndProduct",
+      "inventory_type": "Usable Marijuana",
+      "strain_name": "Lyon King",
+      "product_sku": null
+    },
+    {
+      "created_at": "2025-02-20T17:57:05+00:00",
+      "updated_at": "2025-03-11T14:17:56+00:00",
+      "integrator_data": "C5011P1484090000250394",
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Freddy's Fuego Flower - Permanent Marker - 3.5g (Flagship)",
+      "qty": 10,
+      "serving_weight": null,
+      "unit_weight": 3.5,
+      "line_price": 133.3,
+      "uom": "ea",
+      "unit_weight_uom": "g",
+      "inventory_id": "15410046142686677",
+      "sample_source_id": "15419856121892335",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "lab_result_passed": "passed",
+      "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/25/02/10/AT7XP1HAR5H7W0EZ/C501_LabTestData_7488.json",
+      "lab_result_data": {
+        "lab_result_id": "WA-250208-081",
+        "lab_result_status": "passed",
+        "lab_result_detail": "https://files.cultivera.com/435553542D5753353031/Coas/25/02/10/AT7XP1HAR5H7W0EZ/C501_LabTestData_7488.json",
+        "coa": "https://files.cultivera.com/435553542D5753353031/Coas/25/02/10/4EPZ7ZZVRXVXTJFC/COA_15419856121892335.pdf",
+        "potency": [
+          {
+            "type": "cbd",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 0.288,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 21.44,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.057,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 21.784,
+            "unit": "pct"
+          }
+        ],
+        "lab_result_list": [
+          {
+            "coa": "https://files.cultivera.com/435553542D5753353031/Coas/25/02/10/4EPZ7ZZVRXVXTJFC/COA_15419856121892335.pdf",
+            "lab_result_id": "WA-250208-081",
+            "lab_result_status": "passed",
+            "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/25/02/10/AT7XP1HAR5H7W0EZ/C501_LabTestData_7488.json",
+            "coa_release_date": "2025-02-10",
+            "coa_amended_date": null,
+            "coa_expire_date": "2026-02-10"
+          }
+        ]
+      },
+      "inventory_category": "EndProduct",
+      "inventory_type": "Usable Marijuana",
+      "strain_name": "Permanent Marker ",
+      "product_sku": null
+    },
+    {
+      "created_at": "2025-02-27T17:38:59+00:00",
+      "updated_at": "2025-03-11T20:03:45+00:00",
+      "integrator_data": "C5011S1A90050000250787",
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Freddy's Finest Flower - Black Trop Cherry - 3.5g",
+      "qty": 6,
+      "serving_weight": null,
+      "unit_weight": 3.5,
+      "line_price": 105,
+      "uom": "ea",
+      "unit_weight_uom": "g",
+      "inventory_id": "15410106513918775",
+      "sample_source_id": "15419788094609532",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "lab_result_passed": "passed",
+      "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/27/P1BHV76DKVMZG7PE/C501_LabTestData_7463.json",
+      "lab_result_data": {
+        "lab_result_id": "WA-250123-017",
+        "lab_result_status": "passed",
+        "lab_result_detail": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/27/P1BHV76DKVMZG7PE/C501_LabTestData_7463.json",
+        "coa": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/27/X191A4FJFGEM2212/COA_15419788094609532.pdf",
+        "potency": [
+          {
+            "type": "cbd",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 0.256,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 20.81,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.049,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 21.115,
+            "unit": "pct"
+          }
+        ],
+        "lab_result_list": [
+          {
+            "coa": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/27/X191A4FJFGEM2212/COA_15419788094609532.pdf",
+            "lab_result_id": "WA-250123-017",
+            "lab_result_status": "passed",
+            "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/27/P1BHV76DKVMZG7PE/C501_LabTestData_7463.json",
+            "coa_release_date": "2025-01-25",
+            "coa_amended_date": null,
+            "coa_expire_date": "2026-01-25"
+          }
+        ]
+      },
+      "inventory_category": "EndProduct",
+      "inventory_type": "Usable Marijuana",
+      "strain_name": "Black Trop Cherry",
+      "product_sku": null
+    },
+    {
+      "created_at": "2025-03-05T16:33:54+00:00",
+      "updated_at": "2025-03-10T17:21:19+00:00",
+      "integrator_data": "C5011A1E88190000251236",
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Freddy's Finest Flower - Kawazaki - 3.5g",
+      "qty": 6,
+      "serving_weight": null,
+      "unit_weight": 3.5,
+      "line_price": 105,
+      "uom": "ea",
+      "unit_weight_uom": "g",
+      "inventory_id": "15410157963511354",
+      "sample_source_id": "15419744797714388",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "lab_result_passed": "passed",
+      "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/27/PB0ZYGGM04DSTWRJ/C501_LabTestData_7470.json",
+      "lab_result_data": {
+        "lab_result_id": "WA-250123-003",
+        "lab_result_status": "passed",
+        "lab_result_detail": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/27/PB0ZYGGM04DSTWRJ/C501_LabTestData_7470.json",
+        "coa": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/27/0XCR8HA9DV6B70RN/COA_15419744797714388.pdf",
+        "potency": [
+          {
+            "type": "cbd",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 0.552,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 25.96,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.064,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 26.576,
+            "unit": "pct"
+          }
+        ],
+        "lab_result_list": [
+          {
+            "coa": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/27/0XCR8HA9DV6B70RN/COA_15419744797714388.pdf",
+            "lab_result_id": "WA-250123-003",
+            "lab_result_status": "passed",
+            "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/27/PB0ZYGGM04DSTWRJ/C501_LabTestData_7470.json",
+            "coa_release_date": "2025-01-25",
+            "coa_amended_date": null,
+            "coa_expire_date": "2026-01-25"
+          }
+        ]
+      },
+      "inventory_category": "EndProduct",
+      "inventory_type": "Usable Marijuana",
+      "strain_name": "Kawasaki ",
+      "product_sku": null
+    },
+    {
+      "created_at": "2025-02-13T22:28:58+00:00",
+      "updated_at": "2025-03-10T21:10:10+00:00",
+      "integrator_data": "C5011G1V89740000249855",
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Freddy's Finest Flower - Purple Zkittlez - 3.5g",
+      "qty": 6,
+      "serving_weight": null,
+      "unit_weight": 3.5,
+      "line_price": 105,
+      "uom": "ea",
+      "unit_weight_uom": "g",
+      "inventory_id": "15419987293822069",
+      "sample_source_id": "15419475157107214",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "lab_result_passed": "passed",
+      "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/24/12/23/9193SE1CM84VQM4T/C501_LabTestData_7388.json",
+      "lab_result_data": {
+        "lab_result_id": "WA-241219-009",
+        "lab_result_status": "passed",
+        "lab_result_detail": "https://files.cultivera.com/435553542D5753353031/Coas/24/12/23/9193SE1CM84VQM4T/C501_LabTestData_7388.json",
+        "coa": "https://files.cultivera.com/435553542D5753353031/Coas/24/12/23/DX24KXAAJAKZCBDY/COA_15419475157107214.pdf",
+        "potency": [
+          {
+            "type": "cbd",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 0.686,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 28.68,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.063,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 29.429,
+            "unit": "pct"
+          }
+        ],
+        "lab_result_list": [
+          {
+            "coa": "https://files.cultivera.com/435553542D5753353031/Coas/24/12/23/DX24KXAAJAKZCBDY/COA_15419475157107214.pdf",
+            "lab_result_id": "WA-241219-009",
+            "lab_result_status": "passed",
+            "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/24/12/23/9193SE1CM84VQM4T/C501_LabTestData_7388.json",
+            "coa_release_date": "2024-12-20",
+            "coa_amended_date": null,
+            "coa_expire_date": "2025-12-20"
+          }
+        ]
+      },
+      "inventory_category": "EndProduct",
+      "inventory_type": "Usable Marijuana",
+      "strain_name": "Purple Zkittlez",
+      "product_sku": null
+    },
+    {
+      "created_at": "2025-02-24T22:09:18+00:00",
+      "updated_at": "2025-03-10T18:07:48+00:00",
+      "integrator_data": "C501161S90850000250584",
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Pirate Crystals - Kawazaki - 1g",
+      "qty": 3,
+      "serving_weight": null,
+      "unit_weight": 1,
+      "line_price": 24.99,
+      "uom": "ea",
+      "unit_weight_uom": "g",
+      "inventory_id": "15410082215963329",
+      "sample_source_id": "15419915893045796",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "lab_result_passed": "passed",
+      "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/25/02/10/P62CYXB7RXA91TVF/C501_LabTestData_7487.json",
+      "lab_result_data": {
+        "lab_result_id": "WA-250208-045",
+        "lab_result_status": "passed",
+        "lab_result_detail": "https://files.cultivera.com/435553542D5753353031/Coas/25/02/10/P62CYXB7RXA91TVF/C501_LabTestData_7487.json",
+        "coa": "https://files.cultivera.com/435553542D5753353031/Coas/25/02/10/YE907RRJ48RNSWWQ/COA_15419915893045796.pdf",
+        "potency": [
+          {
+            "type": "cbd",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 6.601,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 76.51,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.11,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 83.221,
+            "unit": "pct"
+          }
+        ],
+        "lab_result_list": [
+          {
+            "coa": "https://files.cultivera.com/435553542D5753353031/Coas/25/02/10/YE907RRJ48RNSWWQ/COA_15419915893045796.pdf",
+            "lab_result_id": "WA-250208-045",
+            "lab_result_status": "passed",
+            "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/25/02/10/P62CYXB7RXA91TVF/C501_LabTestData_7487.json",
+            "coa_release_date": "2025-02-10",
+            "coa_amended_date": null,
+            "coa_expire_date": "2026-02-10"
+          }
+        ]
+      },
+      "inventory_category": "IntermediateProduct",
+      "inventory_type": "Concentrate for Inhalation",
+      "strain_name": "Ice Cream Mintz",
+      "product_sku": null
+    },
+    {
+      "created_at": "2025-02-24T23:57:26+00:00",
+      "updated_at": "2025-02-24T23:57:26+00:00",
+      "integrator_data": "C501161S90850000250586",
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Pirate Crystals - Kawazaki - 1g",
+      "qty": 7,
+      "serving_weight": null,
+      "unit_weight": 1,
+      "line_price": 58.31,
+      "uom": "ea",
+      "unit_weight_uom": "g",
+      "inventory_id": "15410082864621074",
+      "sample_source_id": "15419915893045796",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "lab_result_passed": "passed",
+      "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/25/02/10/P62CYXB7RXA91TVF/C501_LabTestData_7487.json",
+      "lab_result_data": {
+        "lab_result_id": "WA-250208-045",
+        "lab_result_status": "passed",
+        "lab_result_detail": "https://files.cultivera.com/435553542D5753353031/Coas/25/02/10/P62CYXB7RXA91TVF/C501_LabTestData_7487.json",
+        "coa": "https://files.cultivera.com/435553542D5753353031/Coas/25/02/10/YE907RRJ48RNSWWQ/COA_15419915893045796.pdf",
+        "potency": [
+          {
+            "type": "cbd",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 6.601,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 76.51,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.11,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 83.221,
+            "unit": "pct"
+          }
+        ],
+        "lab_result_list": [
+          {
+            "coa": "https://files.cultivera.com/435553542D5753353031/Coas/25/02/10/YE907RRJ48RNSWWQ/COA_15419915893045796.pdf",
+            "lab_result_id": "WA-250208-045",
+            "lab_result_status": "passed",
+            "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/25/02/10/P62CYXB7RXA91TVF/C501_LabTestData_7487.json",
+            "coa_release_date": "2025-02-10",
+            "coa_amended_date": null,
+            "coa_expire_date": "2026-02-10"
+          }
+        ]
+      },
+      "inventory_category": "IntermediateProduct",
+      "inventory_type": "Concentrate for Inhalation",
+      "strain_name": "Ice Cream Mintz",
+      "product_sku": null
+    },
+    {
+      "created_at": "2025-03-03T19:38:08+00:00",
+      "updated_at": "2025-03-04T15:52:24+00:00",
+      "integrator_data": "C5011V1462970000250966",
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Pirate Crystals - Lemon Shortbread - 1g",
+      "qty": 10,
+      "serving_weight": null,
+      "unit_weight": 1,
+      "line_price": 83.3,
+      "uom": "ea",
+      "unit_weight_uom": "g",
+      "inventory_id": "15410141788860385",
+      "sample_source_id": "15410031204086414",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "lab_result_passed": "passed",
+      "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/25/02/24/KAFY2P8FW97V8AA0/C501_LabTestData_7517.json",
+      "lab_result_data": {
+        "lab_result_id": "WA-250220-025",
+        "lab_result_status": "passed",
+        "lab_result_detail": "https://files.cultivera.com/435553542D5753353031/Coas/25/02/24/KAFY2P8FW97V8AA0/C501_LabTestData_7517.json",
+        "coa": "https://files.cultivera.com/435553542D5753353031/Coas/25/02/24/E38YYBPCXBZJNKXB/COA_15410031204086414.pdf",
+        "potency": [
+          {
+            "type": "cbd",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 16.77,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 61.33,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.164,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 78.264,
+            "unit": "pct"
+          }
+        ],
+        "lab_result_list": [
+          {
+            "coa": "https://files.cultivera.com/435553542D5753353031/Coas/25/02/24/E38YYBPCXBZJNKXB/COA_15410031204086414.pdf",
+            "lab_result_id": "WA-250220-025",
+            "lab_result_status": "passed",
+            "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/25/02/24/KAFY2P8FW97V8AA0/C501_LabTestData_7517.json",
+            "coa_release_date": "2025-02-22",
+            "coa_amended_date": null,
+            "coa_expire_date": "2026-02-22"
+          }
+        ]
+      },
+      "inventory_category": "IntermediateProduct",
+      "inventory_type": "Concentrate for Inhalation",
+      "strain_name": "Lemon ShortBread",
+      "product_sku": null
+    },
+    {
+      "created_at": "2025-01-09T01:11:21+00:00",
+      "updated_at": "2025-03-12T14:23:53+00:00",
+      "integrator_data": "C5011V1288520000247439",
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Liquid Gold Disposable - Grape Qoolaid - 1g",
+      "qty": 5,
+      "serving_weight": null,
+      "unit_weight": 1,
+      "line_price": 57.5,
+      "uom": "ea",
+      "unit_weight_uom": "g",
+      "inventory_id": "15419677228158073",
+      "sample_source_id": "15419622448763851",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "lab_result_passed": "passed",
+      "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/06/C8QPGDDD92Y1YEA9/C501_LabTestData_7401.json",
+      "lab_result_data": {
+        "lab_result_id": "WA-250103-044",
+        "lab_result_status": "passed",
+        "lab_result_detail": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/06/C8QPGDDD92Y1YEA9/C501_LabTestData_7401.json",
+        "coa": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/06/NP0V0DBQD5JD58JS/COA_15419622448763851.pdf",
+        "potency": [
+          {
+            "type": "cbd",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 84.77,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 84.77,
+            "unit": "pct"
+          }
+        ],
+        "lab_result_list": [
+          {
+            "coa": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/06/NP0V0DBQD5JD58JS/COA_15419622448763851.pdf",
+            "lab_result_id": "WA-250103-044",
+            "lab_result_status": "passed",
+            "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/06/C8QPGDDD92Y1YEA9/C501_LabTestData_7401.json",
+            "coa_release_date": "2025-01-05",
+            "coa_amended_date": null,
+            "coa_expire_date": "2026-01-05"
+          }
+        ]
+      },
+      "inventory_category": "IntermediateProduct",
+      "inventory_type": "Concentrate for Inhalation",
+      "strain_name": "Grape Qoolaid",
+      "product_sku": null
+    },
+    {
+      "created_at": "2025-02-19T19:58:30+00:00",
+      "updated_at": "2025-03-03T15:16:43+00:00",
+      "integrator_data": "C5011C1S71430000250293",
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Liquid Gold Disposable - Sour Diesel - 1g",
+      "qty": 5,
+      "serving_weight": null,
+      "unit_weight": 1,
+      "line_price": 57.5,
+      "uom": "ea",
+      "unit_weight_uom": "g",
+      "inventory_id": "15410038231179397",
+      "sample_source_id": "15419795739338584",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "lab_result_passed": "passed",
+      "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/27/WC2C44G6N24GF2Q2/C501_LabTestData_7460.json",
+      "lab_result_data": {
+        "lab_result_id": "WA-250123-038",
+        "lab_result_status": "passed",
+        "lab_result_detail": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/27/WC2C44G6N24GF2Q2/C501_LabTestData_7460.json",
+        "coa": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/27/5WEJS2YJYSKH00MA/COA_15419795739338584.pdf",
+        "potency": [
+          {
+            "type": "cbd",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 82.73,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 82.73,
+            "unit": "pct"
+          }
+        ],
+        "lab_result_list": [
+          {
+            "coa": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/27/5WEJS2YJYSKH00MA/COA_15419795739338584.pdf",
+            "lab_result_id": "WA-250123-038",
+            "lab_result_status": "passed",
+            "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/27/WC2C44G6N24GF2Q2/C501_LabTestData_7460.json",
+            "coa_release_date": "2025-01-25",
+            "coa_amended_date": null,
+            "coa_expire_date": "2026-01-25"
+          }
+        ]
+      },
+      "inventory_category": "IntermediateProduct",
+      "inventory_type": "Concentrate for Inhalation",
+      "strain_name": "Sour Diesel",
+      "product_sku": null
+    },
+    {
+      "created_at": "2025-01-16T00:46:33+00:00",
+      "updated_at": "2025-03-12T14:23:53+00:00",
+      "integrator_data": "C501151Y71960000247814",
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Liquid Gold Disposable - Super Lemon Haze - 1g",
+      "qty": 5,
+      "serving_weight": null,
+      "unit_weight": 1,
+      "line_price": 57.5,
+      "uom": "ea",
+      "unit_weight_uom": "g",
+      "inventory_id": "15419737559378736",
+      "sample_source_id": "15419536901614492",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "lab_result_passed": "passed",
+      "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/24/12/30/W8BVRNKSYT1WYWPM/C501_LabTestData_7392.json",
+      "lab_result_data": {
+        "lab_result_id": "WA-241227-008",
+        "lab_result_status": "passed",
+        "lab_result_detail": "https://files.cultivera.com/435553542D5753353031/Coas/24/12/30/W8BVRNKSYT1WYWPM/C501_LabTestData_7392.json",
+        "coa": "https://files.cultivera.com/435553542D5753353031/Coas/24/12/30/74TZCH2BB9RV7ZXD/COA_15419536901614492.pdf",
+        "potency": [
+          {
+            "type": "cbd",
+            "value": 0.722,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 86.61,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 87.332,
+            "unit": "pct"
+          }
+        ],
+        "lab_result_list": [
+          {
+            "coa": "https://files.cultivera.com/435553542D5753353031/Coas/24/12/30/74TZCH2BB9RV7ZXD/COA_15419536901614492.pdf",
+            "lab_result_id": "WA-241227-008",
+            "lab_result_status": "passed",
+            "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/24/12/30/W8BVRNKSYT1WYWPM/C501_LabTestData_7392.json",
+            "coa_release_date": "2024-12-29",
+            "coa_amended_date": null,
+            "coa_expire_date": "2025-12-29"
+          }
+        ]
+      },
+      "inventory_category": "IntermediateProduct",
+      "inventory_type": "Concentrate for Inhalation",
+      "strain_name": "Super Lemon Haze",
+      "product_sku": null
+    },
+    {
+      "created_at": "2025-01-08T21:50:49+00:00",
+      "updated_at": "2025-01-08T21:50:49+00:00",
+      "integrator_data": "C501131771490000247418",
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Liquid Gold Disposable - Zkittles - 1g",
+      "qty": 5,
+      "serving_weight": null,
+      "unit_weight": 1,
+      "line_price": 57.5,
+      "uom": "ea",
+      "unit_weight_uom": "g",
+      "inventory_id": "15419676024965593",
+      "sample_source_id": "15419310937559303",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "lab_result_passed": "passed",
+      "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/24/12/02/WQCXW08HDYPDR9AQ/C501_LabTestData_7361.json",
+      "lab_result_data": {
+        "lab_result_id": "WA-241130-019",
+        "lab_result_status": "passed",
+        "lab_result_detail": "https://files.cultivera.com/435553542D5753353031/Coas/24/12/02/WQCXW08HDYPDR9AQ/C501_LabTestData_7361.json",
+        "coa": "https://files.cultivera.com/435553542D5753353031/Coas/24/12/02/MFV4YHE6B0FQDFB0/COA_15419310937559303.pdf",
+        "potency": [
+          {
+            "type": "cbd",
+            "value": 0.605,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 85.23,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 85.835,
+            "unit": "pct"
+          }
+        ],
+        "lab_result_list": [
+          {
+            "coa": "https://files.cultivera.com/435553542D5753353031/Coas/24/12/02/MFV4YHE6B0FQDFB0/COA_15419310937559303.pdf",
+            "lab_result_id": "WA-241130-019",
+            "lab_result_status": "passed",
+            "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/24/12/02/WQCXW08HDYPDR9AQ/C501_LabTestData_7361.json",
+            "coa_release_date": "2024-12-01",
+            "coa_amended_date": null,
+            "coa_expire_date": "2025-12-01"
+          }
+        ]
+      },
+      "inventory_category": "IntermediateProduct",
+      "inventory_type": "Concentrate for Inhalation",
+      "strain_name": "Zkittles",
+      "product_sku": null
+    },
+    {
+      "created_at": "2025-01-27T15:35:54+00:00",
+      "updated_at": "2025-03-11T18:52:30+00:00",
+      "integrator_data": "C5011E1691610000248271",
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Cured Resin Disposable - Black Trop Cherry - 1g",
+      "qty": 2,
+      "serving_weight": null,
+      "unit_weight": 1,
+      "line_price": 30,
+      "uom": "ea",
+      "unit_weight_uom": "g",
+      "inventory_id": "15419837935499609",
+      "sample_source_id": "15419667310224285",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "lab_result_passed": "passed",
+      "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/13/Y7N59VQKCHAMCRWM/C501_LabTestData_7427.json",
+      "lab_result_data": {
+        "lab_result_id": "WA-250109-010",
+        "lab_result_status": "passed",
+        "lab_result_detail": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/13/Y7N59VQKCHAMCRWM/C501_LabTestData_7427.json",
+        "coa": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/13/N0TSKC4Y0TZ18SVG/COA_15419667310224285.pdf",
+        "potency": [
+          {
+            "type": "cbd",
+            "value": 0.128,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 71.41,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 71.538,
+            "unit": "pct"
+          }
+        ],
+        "lab_result_list": [
+          {
+            "coa": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/13/N0TSKC4Y0TZ18SVG/COA_15419667310224285.pdf",
+            "lab_result_id": "WA-250109-010",
+            "lab_result_status": "passed",
+            "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/13/Y7N59VQKCHAMCRWM/C501_LabTestData_7427.json",
+            "coa_release_date": "2025-01-11",
+            "coa_amended_date": null,
+            "coa_expire_date": "2026-01-11"
+          }
+        ]
+      },
+      "inventory_category": "IntermediateProduct",
+      "inventory_type": "Concentrate for Inhalation",
+      "strain_name": "Black Trop Cherry",
+      "product_sku": null
+    },
+    {
+      "created_at": "2025-02-20T16:25:01+00:00",
+      "updated_at": "2025-02-28T15:23:23+00:00",
+      "integrator_data": "C5011F1592090000250353",
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Sauced HTE Disposable - Carrot Cake - 1g",
+      "qty": 10,
+      "serving_weight": null,
+      "unit_weight": 1,
+      "line_price": 133.3,
+      "uom": "ea",
+      "unit_weight_uom": "g",
+      "inventory_id": "15410045590292353",
+      "sample_source_id": "15419667568434190",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "lab_result_passed": "passed",
+      "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/13/MJ3ZHTGT2C3VN0WC/C501_LabTestData_7438.json",
+      "lab_result_data": {
+        "lab_result_id": "WA-250109-057",
+        "lab_result_status": "passed",
+        "lab_result_detail": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/13/MJ3ZHTGT2C3VN0WC/C501_LabTestData_7438.json",
+        "coa": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/13/1TZ4D63HDXBF0DJP/COA_15419667568434190.pdf",
+        "potency": [
+          {
+            "type": "cbd",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 81.67,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 81.67,
+            "unit": "pct"
+          }
+        ],
+        "lab_result_list": [
+          {
+            "coa": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/13/1TZ4D63HDXBF0DJP/COA_15419667568434190.pdf",
+            "lab_result_id": "WA-250109-057",
+            "lab_result_status": "passed",
+            "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/13/MJ3ZHTGT2C3VN0WC/C501_LabTestData_7438.json",
+            "coa_release_date": "2025-01-11",
+            "coa_amended_date": null,
+            "coa_expire_date": "2026-01-11"
+          }
+        ]
+      },
+      "inventory_category": "IntermediateProduct",
+      "inventory_type": "Concentrate for Inhalation",
+      "strain_name": "Carrot Cake ",
+      "product_sku": null
+    },
+    {
+      "created_at": "2025-03-03T15:11:08+00:00",
+      "updated_at": "2025-03-12T14:23:53+00:00",
+      "integrator_data": "C5011G1N91570000250929",
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Cured Resin Disposable - Kawazaki - 1g",
+      "qty": 10,
+      "serving_weight": null,
+      "unit_weight": 1,
+      "line_price": 150,
+      "uom": "ea",
+      "unit_weight_uom": "g",
+      "inventory_id": "15410140186969823",
+      "sample_source_id": "15419538665988160",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "lab_result_passed": "passed",
+      "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/13/B7GPB3J98SV1P7TS/C501_LabTestData_7435.json",
+      "lab_result_data": {
+        "lab_result_id": "WA-250109-020",
+        "lab_result_status": "passed",
+        "lab_result_detail": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/13/B7GPB3J98SV1P7TS/C501_LabTestData_7435.json",
+        "coa": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/13/KPJSCWXX07MWGERN/COA_15419538665988160.pdf",
+        "potency": [
+          {
+            "type": "cbd",
+            "value": 0.156,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 75.67,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 75.826,
+            "unit": "pct"
+          }
+        ],
+        "lab_result_list": [
+          {
+            "coa": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/13/KPJSCWXX07MWGERN/COA_15419538665988160.pdf",
+            "lab_result_id": "WA-250109-020",
+            "lab_result_status": "passed",
+            "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/13/B7GPB3J98SV1P7TS/C501_LabTestData_7435.json",
+            "coa_release_date": "2025-01-11",
+            "coa_amended_date": null,
+            "coa_expire_date": "2026-01-11"
+          }
+        ]
+      },
+      "inventory_category": "IntermediateProduct",
+      "inventory_type": "Concentrate for Inhalation",
+      "strain_name": "Kawasaki ",
+      "product_sku": null
+    },
+    {
+      "created_at": "2025-02-24T15:29:37+00:00",
+      "updated_at": "2025-03-11T18:25:25+00:00",
+      "integrator_data": "C5011E1A92100000250555",
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Sauced HTE Disposable - Lemon Shortbread - 1g",
+      "qty": 2,
+      "serving_weight": null,
+      "unit_weight": 1,
+      "line_price": 26.66,
+      "uom": "ea",
+      "unit_weight_uom": "g",
+      "inventory_id": "15410079817885961",
+      "sample_source_id": "15419667660916872",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "lab_result_passed": "passed",
+      "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/20/BQXAE51C86S8NSXX/C501_LabTestData_7441.json",
+      "lab_result_data": {
+        "lab_result_id": "WA-250116-034",
+        "lab_result_status": "passed",
+        "lab_result_detail": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/20/BQXAE51C86S8NSXX/C501_LabTestData_7441.json",
+        "coa": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/20/4Y7V3KH1AJK5S8G8/COA_15419667660916872.pdf",
+        "potency": [
+          {
+            "type": "cbd",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 77.68,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 6.071,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 83.751,
+            "unit": "pct"
+          }
+        ],
+        "lab_result_list": [
+          {
+            "coa": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/20/4Y7V3KH1AJK5S8G8/COA_15419667660916872.pdf",
+            "lab_result_id": "WA-250116-034",
+            "lab_result_status": "passed",
+            "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/20/BQXAE51C86S8NSXX/C501_LabTestData_7441.json",
+            "coa_release_date": "2025-01-17",
+            "coa_amended_date": null,
+            "coa_expire_date": "2026-01-17"
+          }
+        ]
+      },
+      "inventory_category": "IntermediateProduct",
+      "inventory_type": "Concentrate for Inhalation",
+      "strain_name": "Lemon ShortBread",
+      "product_sku": null
+    },
+    {
+      "created_at": "2025-03-03T15:13:26+00:00",
+      "updated_at": "2025-03-03T15:13:26+00:00",
+      "integrator_data": "C5011E1A92100000250934",
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Sauced HTE Disposable - Lemon Shortbread - 1g",
+      "qty": 8,
+      "serving_weight": null,
+      "unit_weight": 1,
+      "line_price": 106.64,
+      "uom": "ea",
+      "unit_weight_uom": "g",
+      "inventory_id": "15410140200737242",
+      "sample_source_id": "15419667660916872",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "lab_result_passed": "passed",
+      "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/20/BQXAE51C86S8NSXX/C501_LabTestData_7441.json",
+      "lab_result_data": {
+        "lab_result_id": "WA-250116-034",
+        "lab_result_status": "passed",
+        "lab_result_detail": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/20/BQXAE51C86S8NSXX/C501_LabTestData_7441.json",
+        "coa": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/20/4Y7V3KH1AJK5S8G8/COA_15419667660916872.pdf",
+        "potency": [
+          {
+            "type": "cbd",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 77.68,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 6.071,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 83.751,
+            "unit": "pct"
+          }
+        ],
+        "lab_result_list": [
+          {
+            "coa": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/20/4Y7V3KH1AJK5S8G8/COA_15419667660916872.pdf",
+            "lab_result_id": "WA-250116-034",
+            "lab_result_status": "passed",
+            "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/20/BQXAE51C86S8NSXX/C501_LabTestData_7441.json",
+            "coa_release_date": "2025-01-17",
+            "coa_amended_date": null,
+            "coa_expire_date": "2026-01-17"
+          }
+        ]
+      },
+      "inventory_category": "IntermediateProduct",
+      "inventory_type": "Concentrate for Inhalation",
+      "strain_name": "Lemon ShortBread",
+      "product_sku": null
+    },
+    {
+      "created_at": "2025-02-24T15:34:25+00:00",
+      "updated_at": "2025-03-03T15:14:10+00:00",
+      "integrator_data": "C5011N1A92200000250563",
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Sauced HTE Disposable - Lyon King -1g",
+      "qty": 10,
+      "serving_weight": null,
+      "unit_weight": 1,
+      "line_price": 133.3,
+      "uom": "ea",
+      "unit_weight_uom": "g",
+      "inventory_id": "15410079846693195",
+      "sample_source_id": "15419727538281272",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "lab_result_passed": "passed",
+      "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/20/5D6G57QK6R97RYX9/C501_LabTestData_7452.json",
+      "lab_result_data": {
+        "lab_result_id": "WA-250116-023",
+        "lab_result_status": "passed",
+        "lab_result_detail": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/20/5D6G57QK6R97RYX9/C501_LabTestData_7452.json",
+        "coa": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/20/TW413YPZZHRSHB65/COA_15419727538281272.pdf",
+        "potency": [
+          {
+            "type": "cbd",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 73.93,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 8.475,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 82.405,
+            "unit": "pct"
+          }
+        ],
+        "lab_result_list": [
+          {
+            "coa": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/20/TW413YPZZHRSHB65/COA_15419727538281272.pdf",
+            "lab_result_id": "WA-250116-023",
+            "lab_result_status": "passed",
+            "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/20/5D6G57QK6R97RYX9/C501_LabTestData_7452.json",
+            "coa_release_date": "2025-01-17",
+            "coa_amended_date": null,
+            "coa_expire_date": "2026-01-17"
+          }
+        ]
+      },
+      "inventory_category": "IntermediateProduct",
+      "inventory_type": "Concentrate for Inhalation",
+      "strain_name": "Lemon ShortBread",
+      "product_sku": null
+    },
+    {
+      "created_at": "2025-03-05T20:43:54+00:00",
+      "updated_at": "2025-03-10T14:46:49+00:00",
+      "integrator_data": "C5011Q1375610000251324",
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Cured Resin Disposable - Permanent Marker - 1g",
+      "qty": 10,
+      "serving_weight": null,
+      "unit_weight": 1,
+      "line_price": 150,
+      "uom": "ea",
+      "unit_weight_uom": "g",
+      "inventory_id": "15410159463508558",
+      "sample_source_id": "15419173318987191",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "lab_result_passed": "passed",
+      "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/13/C34HHAFEBKV6404J/C501_LabTestData_7432.json",
+      "lab_result_data": {
+        "lab_result_id": "WA-250109-050",
+        "lab_result_status": "passed",
+        "lab_result_detail": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/13/C34HHAFEBKV6404J/C501_LabTestData_7432.json",
+        "coa": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/13/327AKW7MMXWFA632/COA_15419173318987191.pdf",
+        "potency": [
+          {
+            "type": "cbd",
+            "value": 0.215,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 72.99,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 73.205,
+            "unit": "pct"
+          }
+        ],
+        "lab_result_list": [
+          {
+            "coa": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/13/327AKW7MMXWFA632/COA_15419173318987191.pdf",
+            "lab_result_id": "WA-250109-050",
+            "lab_result_status": "passed",
+            "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/13/C34HHAFEBKV6404J/C501_LabTestData_7432.json",
+            "coa_release_date": "2025-01-11",
+            "coa_amended_date": null,
+            "coa_expire_date": "2026-01-11"
+          }
+        ]
+      },
+      "inventory_category": "IntermediateProduct",
+      "inventory_type": "Concentrate for Inhalation",
+      "strain_name": "Permanent Marker ",
+      "product_sku": null
+    },
+    {
+      "created_at": "2025-01-27T21:41:56+00:00",
+      "updated_at": "2025-03-12T14:25:11+00:00",
+      "integrator_data": "C501151292080000248329",
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Sauced HTE Disposable - Scented Marker - 1g",
+      "qty": 10,
+      "serving_weight": null,
+      "unit_weight": 1,
+      "line_price": 133.3,
+      "uom": "ea",
+      "unit_weight_uom": "g",
+      "inventory_id": "15419840131698939",
+      "sample_source_id": "15419667740267331",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "lab_result_passed": "passed",
+      "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/20/GS2Q6CX5VAMHA8RH/C501_LabTestData_7439.json",
+      "lab_result_data": {
+        "lab_result_id": "WA-250116-021",
+        "lab_result_status": "passed",
+        "lab_result_detail": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/20/GS2Q6CX5VAMHA8RH/C501_LabTestData_7439.json",
+        "coa": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/20/5TPS17BX5ZNN8KH0/COA_15419667740267331.pdf",
+        "potency": [
+          {
+            "type": "cbd",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 78.68,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 5.357,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 84.037,
+            "unit": "pct"
+          }
+        ],
+        "lab_result_list": [
+          {
+            "coa": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/20/5TPS17BX5ZNN8KH0/COA_15419667740267331.pdf",
+            "lab_result_id": "WA-250116-021",
+            "lab_result_status": "passed",
+            "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/20/GS2Q6CX5VAMHA8RH/C501_LabTestData_7439.json",
+            "coa_release_date": "2025-01-17",
+            "coa_amended_date": null,
+            "coa_expire_date": "2026-01-17"
+          }
+        ]
+      },
+      "inventory_category": "IntermediateProduct",
+      "inventory_type": "Concentrate for Inhalation",
+      "strain_name": "Scented Marker ",
+      "product_sku": null
+    },
+    {
+      "created_at": "2025-01-30T23:17:25+00:00",
+      "updated_at": "2025-03-11T14:17:56+00:00",
+      "integrator_data": "C5011X1Y87980000248924",
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Liquid Gold Cartridge - Grape Qoolaid - 1g",
+      "qty": 8,
+      "serving_weight": null,
+      "unit_weight": 1,
+      "line_price": 80,
+      "uom": "ea",
+      "unit_weight_uom": "g",
+      "inventory_id": "15419866624564873",
+      "sample_source_id": "15419622448763851",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "lab_result_passed": "passed",
+      "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/06/C8QPGDDD92Y1YEA9/C501_LabTestData_7401.json",
+      "lab_result_data": {
+        "lab_result_id": "WA-250103-044",
+        "lab_result_status": "passed",
+        "lab_result_detail": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/06/C8QPGDDD92Y1YEA9/C501_LabTestData_7401.json",
+        "coa": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/06/NP0V0DBQD5JD58JS/COA_15419622448763851.pdf",
+        "potency": [
+          {
+            "type": "cbd",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 84.77,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 84.77,
+            "unit": "pct"
+          }
+        ],
+        "lab_result_list": [
+          {
+            "coa": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/06/NP0V0DBQD5JD58JS/COA_15419622448763851.pdf",
+            "lab_result_id": "WA-250103-044",
+            "lab_result_status": "passed",
+            "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/06/C8QPGDDD92Y1YEA9/C501_LabTestData_7401.json",
+            "coa_release_date": "2025-01-05",
+            "coa_amended_date": null,
+            "coa_expire_date": "2026-01-05"
+          }
+        ]
+      },
+      "inventory_category": "IntermediateProduct",
+      "inventory_type": "Concentrate for Inhalation",
+      "strain_name": "Grape Qoolaid",
+      "product_sku": null
+    },
+    {
+      "created_at": "2024-12-17T16:59:04+00:00",
+      "updated_at": "2025-03-12T14:18:31+00:00",
+      "integrator_data": "C5011S1K79470000246461",
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Liquid Gold Cartridge - High Chews. - 1g",
+      "qty": 8,
+      "serving_weight": null,
+      "unit_weight": 1,
+      "line_price": 80,
+      "uom": "ea",
+      "unit_weight_uom": "g",
+      "inventory_id": "15419484194488298",
+      "sample_source_id": "15418940595958258",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "lab_result_passed": "passed",
+      "lab_result_link": "https://files.cultivera.com/https://files.cultivera.com/435553542D5753353031/Interop/24/41/B2N1DFQJZHKYM90K/C501_qa1Y87J5PN.json",
+      "lab_result_data": {
+        "lab_result_id": "15418940595958258",
+        "lab_result_status": "passed",
+        "lab_result_detail": "https://files.cultivera.com/https://files.cultivera.com/435553542D5753353031/Interop/24/41/B2N1DFQJZHKYM90K/C501_qa1Y87J5PN.json",
+        "coa": "https://files.cultivera.com/435553542D5753353031/Coas/24/10/22/MHR359F9FF18R7JM/COA_15418940595958258.pdf",
+        "potency": [
+          {
+            "type": "cbd",
+            "value": 0.6,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 83,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 83.6,
+            "unit": "pct"
+          }
+        ],
+        "lab_result_list": [
+          {
+            "coa": "https://files.cultivera.com/435553542D5753353031/Coas/24/10/22/MHR359F9FF18R7JM/COA_15418940595958258.pdf",
+            "lab_result_id": "15418940595958258",
+            "lab_result_status": "passed",
+            "lab_result_link": "https://files.cultivera.com/https://files.cultivera.com/435553542D5753353031/Interop/24/41/B2N1DFQJZHKYM90K/C501_qa1Y87J5PN.json",
+            "coa_release_date": null,
+            "coa_amended_date": null,
+            "coa_expire_date": null
+          }
+        ]
+      },
+      "inventory_category": "IntermediateProduct",
+      "inventory_type": "Concentrate for Inhalation",
+      "strain_name": "High Chews",
+      "product_sku": null
+    },
+    {
+      "created_at": "2024-12-30T15:20:51+00:00",
+      "updated_at": "2024-12-30T15:20:51+00:00",
+      "integrator_data": "C501171G79490000246957",
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Liquid Gold Cartridge - Tigers Blood - 1g",
+      "qty": 8,
+      "serving_weight": null,
+      "unit_weight": 1,
+      "line_price": 80,
+      "uom": "ea",
+      "unit_weight_uom": "g",
+      "inventory_id": "15419595925139042",
+      "sample_source_id": "15418940603659263",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "lab_result_passed": "passed",
+      "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/07/Y9SRTNMS9KCHCRAE/C501_LabTestData_7294.json",
+      "lab_result_data": {
+        "lab_result_id": "WA-241227-010",
+        "lab_result_status": "passed",
+        "lab_result_detail": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/07/Y9SRTNMS9KCHCRAE/C501_LabTestData_7294.json",
+        "coa": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/07/44N6SWE1CDTB8M5F/COA_15418940603659263.pdf",
+        "potency": [
+          {
+            "type": "cbd",
+            "value": 0.76,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 86.21,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 86.97,
+            "unit": "pct"
+          }
+        ],
+        "lab_result_list": [
+          {
+            "coa": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/07/44N6SWE1CDTB8M5F/COA_15418940603659263.pdf",
+            "lab_result_id": "WA-241227-010",
+            "lab_result_status": "passed",
+            "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/07/Y9SRTNMS9KCHCRAE/C501_LabTestData_7294.json",
+            "coa_release_date": "2024-12-29",
+            "coa_amended_date": null,
+            "coa_expire_date": "2025-12-29"
+          }
+        ]
+      },
+      "inventory_category": "IntermediateProduct",
+      "inventory_type": "Concentrate for Inhalation",
+      "strain_name": "Tigers Blood",
+      "product_sku": null
+    },
+    {
+      "created_at": "2024-12-30T15:14:59+00:00",
+      "updated_at": "2025-03-10T18:06:20+00:00",
+      "integrator_data": "C5011C1H79510000246947",
+      "is_sample": "0",
+      "sample_type": null,
+      "product_name": "Liquid Gold Cartridge - Unicorn Piss - 1g",
+      "qty": 8,
+      "serving_weight": null,
+      "unit_weight": 1,
+      "line_price": 80,
+      "uom": "ea",
+      "unit_weight_uom": "g",
+      "inventory_id": "15419595889987882",
+      "sample_source_id": "15419536896576702",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "lab_result_passed": "passed",
+      "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/24/12/30/NXN1FR20XKHW21P0/C501_LabTestData_7394.json",
+      "lab_result_data": {
+        "lab_result_id": "WA-241227-011",
+        "lab_result_status": "passed",
+        "lab_result_detail": "https://files.cultivera.com/435553542D5753353031/Coas/24/12/30/NXN1FR20XKHW21P0/C501_LabTestData_7394.json",
+        "coa": "https://files.cultivera.com/435553542D5753353031/Coas/24/12/30/ETVG32SHEG173XM0/COA_15419536896576702.pdf",
+        "potency": [
+          {
+            "type": "cbd",
+            "value": 0.774,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 84.35,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 85.124,
+            "unit": "pct"
+          }
+        ],
+        "lab_result_list": [
+          {
+            "coa": "https://files.cultivera.com/435553542D5753353031/Coas/24/12/30/ETVG32SHEG173XM0/COA_15419536896576702.pdf",
+            "lab_result_id": "WA-241227-011",
+            "lab_result_status": "passed",
+            "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/24/12/30/NXN1FR20XKHW21P0/C501_LabTestData_7394.json",
+            "coa_release_date": "2024-12-29",
+            "coa_amended_date": null,
+            "coa_expire_date": "2025-12-29"
+          }
+        ]
+      },
+      "inventory_category": "IntermediateProduct",
+      "inventory_type": "Concentrate for Inhalation",
+      "strain_name": "Unicorn Piss",
+      "product_sku": null
+    },
+    {
+      "created_at": "2025-03-11T20:03:45+00:00",
+      "updated_at": "2025-03-11T20:03:45+00:00",
+      "integrator_data": "C5011N1G77370000251606",
+      "is_sample": "1",
+      "sample_type": "vendor",
+      "product_name": "Cured Resin Disposable - Permanent Marker - 0.5g",
+      "qty": 1,
+      "serving_weight": null,
+      "unit_weight": 0.5,
+      "line_price": 0,
+      "uom": "ea",
+      "unit_weight_uom": "g",
+      "inventory_id": "15410211062569774",
+      "sample_source_id": "15419173318987191",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "lab_result_passed": "passed",
+      "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/13/C34HHAFEBKV6404J/C501_LabTestData_7432.json",
+      "lab_result_data": {
+        "lab_result_id": "WA-250109-050",
+        "lab_result_status": "passed",
+        "lab_result_detail": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/13/C34HHAFEBKV6404J/C501_LabTestData_7432.json",
+        "coa": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/13/327AKW7MMXWFA632/COA_15419173318987191.pdf",
+        "potency": [
+          {
+            "type": "cbd",
+            "value": 0.215,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 72.99,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 73.205,
+            "unit": "pct"
+          }
+        ],
+        "lab_result_list": [
+          {
+            "coa": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/13/327AKW7MMXWFA632/COA_15419173318987191.pdf",
+            "lab_result_id": "WA-250109-050",
+            "lab_result_status": "passed",
+            "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/13/C34HHAFEBKV6404J/C501_LabTestData_7432.json",
+            "coa_release_date": "2025-01-11",
+            "coa_amended_date": null,
+            "coa_expire_date": "2026-01-11"
+          }
+        ]
+      },
+      "inventory_category": "IntermediateProduct",
+      "inventory_type": "Concentrate for Inhalation",
+      "strain_name": "Permanent Marker ",
+      "product_sku": null
+    },
+    {
+      "created_at": "2025-03-11T20:03:45+00:00",
+      "updated_at": "2025-03-11T20:03:45+00:00",
+      "integrator_data": "C501191Y92390000251607",
+      "is_sample": "1",
+      "sample_type": "vendor",
+      "product_name": "Pirate Crystals - Black Trop Cherry - 0.5g",
+      "qty": 1,
+      "serving_weight": null,
+      "unit_weight": 0.5,
+      "line_price": 0,
+      "uom": "ea",
+      "unit_weight_uom": "g",
+      "inventory_id": "15410211062562844",
+      "sample_source_id": "15419915737404787",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "lab_result_passed": "passed",
+      "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/25/02/10/HG68KGHXGWQDK7KF/C501_LabTestData_7497.json",
+      "lab_result_data": {
+        "lab_result_id": "WA-250208-037",
+        "lab_result_status": "passed",
+        "lab_result_detail": "https://files.cultivera.com/435553542D5753353031/Coas/25/02/10/HG68KGHXGWQDK7KF/C501_LabTestData_7497.json",
+        "coa": "https://files.cultivera.com/435553542D5753353031/Coas/25/02/10/BBAFTS6QRWK440DY/COA_15419915737404787.pdf",
+        "potency": [
+          {
+            "type": "cbd",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 12.97,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 72.33,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.098,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 85.398,
+            "unit": "pct"
+          }
+        ],
+        "lab_result_list": [
+          {
+            "coa": "https://files.cultivera.com/435553542D5753353031/Coas/25/02/10/BBAFTS6QRWK440DY/COA_15419915737404787.pdf",
+            "lab_result_id": "WA-250208-037",
+            "lab_result_status": "passed",
+            "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/25/02/10/HG68KGHXGWQDK7KF/C501_LabTestData_7497.json",
+            "coa_release_date": "2025-02-10",
+            "coa_amended_date": null,
+            "coa_expire_date": "2026-02-10"
+          }
+        ]
+      },
+      "inventory_category": "IntermediateProduct",
+      "inventory_type": "Concentrate for Inhalation",
+      "strain_name": "Black Trop Cherry",
+      "product_sku": null
+    },
+    {
+      "created_at": "2025-03-11T20:03:45+00:00",
+      "updated_at": "2025-03-11T20:03:45+00:00",
+      "integrator_data": "C5011S1A90050000251608",
+      "is_sample": "1",
+      "sample_type": "vendor",
+      "product_name": "Freddy's Finest Flower - Black Trop Cherry - 3.5g",
+      "qty": 1,
+      "serving_weight": null,
+      "unit_weight": 3.5,
+      "line_price": 0,
+      "uom": "ea",
+      "unit_weight_uom": "g",
+      "inventory_id": "15410211062569865",
+      "sample_source_id": "15419788094609532",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "lab_result_passed": "passed",
+      "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/27/P1BHV76DKVMZG7PE/C501_LabTestData_7463.json",
+      "lab_result_data": {
+        "lab_result_id": "WA-250123-017",
+        "lab_result_status": "passed",
+        "lab_result_detail": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/27/P1BHV76DKVMZG7PE/C501_LabTestData_7463.json",
+        "coa": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/27/X191A4FJFGEM2212/COA_15419788094609532.pdf",
+        "potency": [
+          {
+            "type": "cbd",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 0.256,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 20.81,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.049,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 21.115,
+            "unit": "pct"
+          }
+        ],
+        "lab_result_list": [
+          {
+            "coa": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/27/X191A4FJFGEM2212/COA_15419788094609532.pdf",
+            "lab_result_id": "WA-250123-017",
+            "lab_result_status": "passed",
+            "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/25/01/27/P1BHV76DKVMZG7PE/C501_LabTestData_7463.json",
+            "coa_release_date": "2025-01-25",
+            "coa_amended_date": null,
+            "coa_expire_date": "2026-01-25"
+          }
+        ]
+      },
+      "inventory_category": "EndProduct",
+      "inventory_type": "Usable Marijuana",
+      "strain_name": "Black Trop Cherry",
+      "product_sku": null
+    },
+    {
+      "created_at": "2025-03-11T20:03:45+00:00",
+      "updated_at": "2025-03-11T20:03:45+00:00",
+      "integrator_data": "C5011Z1J73640000251609",
+      "is_sample": "1",
+      "sample_type": "vendor",
+      "product_name": "Freddy's Fuego Flower - Blue Slushie - 3.5g (Flagship)",
+      "qty": 1,
+      "serving_weight": null,
+      "unit_weight": 3.5,
+      "line_price": 0,
+      "uom": "ea",
+      "unit_weight_uom": "g",
+      "inventory_id": "15410211062662953",
+      "sample_source_id": "15419925402748536",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "lab_result_passed": "passed",
+      "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/25/02/17/H70TFCZKEX2EM1JT/C501_LabTestData_7506.json",
+      "lab_result_data": {
+        "lab_result_id": "WA-250213-073",
+        "lab_result_status": "passed",
+        "lab_result_detail": "https://files.cultivera.com/435553542D5753353031/Coas/25/02/17/H70TFCZKEX2EM1JT/C501_LabTestData_7506.json",
+        "coa": "https://files.cultivera.com/435553542D5753353031/Coas/25/02/17/D9Q29GJTCBJWQ6RQ/COA_15419925402748536.pdf",
+        "potency": [
+          {
+            "type": "cbd",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 0.268,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 24.15,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.053,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 24.471,
+            "unit": "pct"
+          }
+        ],
+        "lab_result_list": [
+          {
+            "coa": "https://files.cultivera.com/435553542D5753353031/Coas/25/02/17/D9Q29GJTCBJWQ6RQ/COA_15419925402748536.pdf",
+            "lab_result_id": "WA-250213-073",
+            "lab_result_status": "passed",
+            "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/25/02/17/H70TFCZKEX2EM1JT/C501_LabTestData_7506.json",
+            "coa_release_date": "2025-02-15",
+            "coa_amended_date": null,
+            "coa_expire_date": "2026-02-15"
+          }
+        ]
+      },
+      "inventory_category": "EndProduct",
+      "inventory_type": "Usable Marijuana",
+      "strain_name": "Moonbow",
+      "product_sku": null
+    },
+    {
+      "created_at": "2025-03-11T20:03:45+00:00",
+      "updated_at": "2025-03-11T20:03:45+00:00",
+      "integrator_data": "C501171R92620000251610",
+      "is_sample": "1",
+      "sample_type": "vendor",
+      "product_name": "Freddy's Fuego Joint - Goldust - 1g",
+      "qty": 1,
+      "serving_weight": null,
+      "unit_weight": 1,
+      "line_price": 0,
+      "uom": "ea",
+      "unit_weight_uom": "g",
+      "inventory_id": "15410211062669937",
+      "sample_source_id": "15418535463517880",
+      "is_medical": "1",
+      "is_for_extraction": "0",
+      "lab_result_passed": "passed",
+      "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/24/09/11/DE6FYZYG2P78AAQ5/C501_LabTestData_7209.json",
+      "lab_result_data": {
+        "lab_result_id": "WA-240906-049",
+        "lab_result_status": "passed",
+        "lab_result_detail": "https://files.cultivera.com/435553542D5753353031/Coas/24/09/11/DE6FYZYG2P78AAQ5/C501_LabTestData_7209.json",
+        "coa": "https://files.cultivera.com/435553542D5753353031/Coas/24/09/11/H4YEM0TWN7JC41BH/COA_15418535463517880.pdf",
+        "potency": [
+          {
+            "type": "cbd",
+            "value": 0,
+            "unit": "pct"
+          },
+          {
+            "type": "thc",
+            "value": 0.968,
+            "unit": "pct"
+          },
+          {
+            "type": "thca",
+            "value": 18.53,
+            "unit": "pct"
+          },
+          {
+            "type": "cbda",
+            "value": 0.045,
+            "unit": "pct"
+          },
+          {
+            "type": "total-cannabinoids",
+            "value": 19.543,
+            "unit": "pct"
+          }
+        ],
+        "lab_result_list": [
+          {
+            "coa": "https://files.cultivera.com/435553542D5753353031/Coas/24/09/11/H4YEM0TWN7JC41BH/COA_15418535463517880.pdf",
+            "lab_result_id": "WA-240906-049",
+            "lab_result_status": "passed",
+            "lab_result_link": "https://files.cultivera.com/435553542D5753353031/Coas/24/09/11/DE6FYZYG2P78AAQ5/C501_LabTestData_7209.json",
+            "coa_release_date": "2024-09-09",
+            "coa_amended_date": null,
+            "coa_expire_date": "2025-09-09"
+          }
+        ]
+      },
+      "inventory_category": "EndProduct",
+      "inventory_type": "Usable Marijuana",
+      "strain_name": "Goldust",
+      "product_sku": null
+    }
+  ]
+}
