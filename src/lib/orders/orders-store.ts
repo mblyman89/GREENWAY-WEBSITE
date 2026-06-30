@@ -259,6 +259,26 @@ export async function setOrderStatus(
     actor_label: opts.actorLabel ?? null,
   });
 
+  // Loyalty accrual: when an order is completed, earn points on the PRETAX
+  // subtotal for the linked customer (idempotent per order; no-op if there is
+  // no customer or no points to earn).
+  if (toStatus === "completed" && fromStatus !== "completed") {
+    const customerId = (updated as unknown as { customer_id?: string | null }).customer_id ?? null;
+    if (customerId) {
+      try {
+        const { accrueForOrder } = await import("@/lib/loyalty/loyalty-store");
+        await accrueForOrder({
+          customerId,
+          orderId: id,
+          subtotalMinor: updated.subtotal_minor_units,
+          actorId: opts.actorId ?? null,
+        });
+      } catch {
+        // Accrual must never block order completion.
+      }
+    }
+  }
+
   return updated;
 }
 
