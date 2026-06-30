@@ -34,7 +34,7 @@ function Section({ title, subtitle, children }: { title: string; subtitle?: stri
 export default async function CompliancePage({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string; to?: string; range?: string }>;
+  searchParams: Promise<{ from?: string; to?: string; range?: string; year?: string }>;
 }) {
   const session = await requirePermission("reports.view");
   const canEdit = can(session.profile.role, "settings.manage");

@@ -112,7 +112,7 @@ const segmentColumns: ReportColumn<SegmentRow & Record<string, unknown>>[] = [
 export default async function CustomersReportPage({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string; to?: string; range?: string }>;
+  searchParams: Promise<{ from?: string; to?: string; range?: string; year?: string }>;
 }) {
   await requirePermission("reports.view");
   const sp = await searchParams;

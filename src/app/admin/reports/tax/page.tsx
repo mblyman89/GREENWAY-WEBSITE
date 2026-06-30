@@ -71,7 +71,7 @@ const catColumns: ReportColumn<WaTaxCategoryRow & Record<string, unknown>>[] = [
 export default async function TaxReportPage({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string; to?: string; range?: string }>;
+  searchParams: Promise<{ from?: string; to?: string; range?: string; year?: string }>;
 }) {
   await requirePermission("reports.view");
   const sp = await searchParams;

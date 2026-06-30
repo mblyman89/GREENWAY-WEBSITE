@@ -1,0 +1,57 @@
+# Back Office Review — Master Task List (Owner's flagged items)
+
+> Source: owner's review notes, captured **word-for-word**. Each item = one slice.
+> Standing rules: ground all work in fact (never guess); walk the file tree repeatedly to
+> stay current; AI output is drafts-only / employee-validated; migrations are owner-run &
+> idempotent; one PR per slice (squash-merge, delete branch, sync main).
+
+## Owner's notes (verbatim)
+
+- [x] **Slice 43 — Report ranges.** Reports tabs: need better range options; please add a, this year, last year, by quarter. _(Done: PR #147 — added this_month/last_month/this_quarter/last_quarter/this_year/last_year + explicit Q1–Q4 by-year presets, all Pacific-time-correct in resolveRange(); DateRangePicker now exposes the new chips + a "By quarter…" dropdown; export routes honor ?year. 19 pure self-tests pass.)_
+
+- [ ] **Slice 44 — Reporting AI coverage.** Make sure the reports/ reporting ai has all of the new reports included into its insight generator.
+
+- [ ] **Slice 45 — AI forecaster.** Do we have an ai forecaster reporting system? If not, please add one that is of professional grade expert rated and industry best practice/ standard.
+
+- [ ] **Slice 46 — Revenue by type (sales).** Sales reports. Please add "revenue by type", if revenue by category is just things like flower, joints, etc. please add the more detailed types within each category, like rosin, bho, the other various concentrates, the various edible categories, various liquid categories, etc.
+
+- [ ] **Slice 47 — XLSX + clean exports everywhere.** Make all reports .xlsx exportable as well as csv. Plus make sure the csv export and xlsx export have very clean tables of data. Also make any and all relevant things from the entire back office suit to be exportable.
+
+- [ ] **Slice 48 — COGS by type + aging + valuation + no-COGS AI.** For COGS reports, I want all the same things from sales reports, cogs by types, etc. please also apply those metrics to the aging products reports, as well as the inventory valuation reporting. I want the table at the bottom that shows products that were sold that have no cogs info to have a dedicated ai assistant to help figure out why and how to resolve the issue.
+
+- [ ] **Slice 49 — Tax: taxable non-cannabis + by type/category.** For the tax reporting tab, I need to add a taxable non cannabis section. The other sales title should be non cannabis sales. I want the same as the sales and cogs, tax by type and by category.
+
+- [ ] **Slice 50 — Customer reporting: newsletter stats suite.** Customer reporting tab, I want a dedicated statistics reporting suit for newsletter success rates and such. How many opened it, how many read it, how many rejected it, how many were return to sender, etc.
+
+- [ ] **Slice 51 — Loyalty/discount reporting polish.** Loyalty and discounts reporting is solid. If there is anything professional or worthy of adding, please add it based on your expertise and professional understanding of top notch high quality loyalty related reporting.
+
+- [ ] **Slice 52 — Employees reporting enrichment.** The employees reporting tab feels like it needs more features and additions to it to make it a more meaningful reporting tab. Please enrich it with more professional with expert techniques for maximum insight. Add as much details as a large enterprise style business would have. We don't have an hr department, and only have a small handful of employees, I still want to have top quality reporting in all areas. Please use your best judgment to add value here.
+
+- [ ] **Slice 53 — Medical reporting enrichment.** Same with the medical reporting tab, it could definitely use a feature and value added round of enhancements. Please use your best judgment here as well to add as much value as you can.
+
+- [ ] **Slice 54 — CCRS reporting + automated upload pipeline.** For CCRS compliance reporting. Please add huge volumes of value here. The ai should be very helpful in this reporting tab. Plus onto of that, I want to have an automated .csv upload process for all things CCRS things. Please double check the CCRS and any other integrator provider docs so that we have a robust automated pipeline of uploading data to the CCRS from all activities across the entire platform. I want this reporting tab to be incredibly insightful as it can be. To let us know if uploads fail, or it something is out of sync, etc. CCRS is a very big deal in my line of work.
+
+- [ ] **Slice 55 — Excise: payments portal + full LIQ-1295 + clickable review issues.** For the excise tax reporting tab, I want to be able to send payments to the lab via their payments portal. Research how to do this. If you need me to fetch any source docs due to you not being able to get it, just let me know and I'll get it for you. Also, might as well add all of the editable fields in the liq-1295, I like to be all inclusive so let's do it. Finally, I need to be able to click on the review issues and have the system take me to the relevant area to fill those fields.
+
+- [ ] **Slice 56 — Sage 50: report uploads + AI smart-fill + Sage AI chat + .ptb.** For the sage 50 reporting tab, I want to be able to upload into the back office all of the various reports I use to import data into sage. That way we can have the ai smart fill what I need. Please also deep research the community knowledge database from sage 50 and its massive resources documentation, so that you can give me a dedicated sage ai chat ability so I can communicate with it to help me with any sage 50 quantum related issues I might have. I can even upload to the back office a backup copy of my full sage 50 book records, if that would help add to the ai helper. it is a .ptb file type, not sure if you or the ai can use that to assist me. But there is a wealth of data online that the ai can use to help me. So if possible, scrape the full sage knowledge data base of anything and everything sage 50 quantum related.
+
+- [ ] **Slice 57 — Inventory types table preload.** On the types and categories page, for inventory types, it could be hardened or more useful. The categories tab has all of the categories listed nicely in the table below for easy viewing of what we already have in place in use by the website. But the types tab does not have the table below preloaded with all of the types we have; BHO, Crumble, Rosin, etc. for all the various categories.
+
+- [ ] **Slice 58 — Sales limits: owner-only edit + clear staff view.** Please help me understand what you built for the sales limits page. I think it's a good start, but I want to make sure that these limits can't be edited and such except by me. I don't want anyone to be able to add or remove limits except me. for everyone not me, they should have a clear and obvious set of limits for them to see and adhere to when discussing limits with customers. it should be as informative as it needs to be.
+
+- [ ] **Slice 59 — Receipt printer setup guide + AI diagnostic chat.** For the receipt printer tab for online order printing. Please give a very detailed explanation of how to set it up end to end. as well as an ai assisted chat box for diagnosing what's wrong and how to fix it.
+
+- [ ] **Slice 60 — Integrations: enter API keys/credentials via back office.** For the integrations tab page. Please allow me the ability to do anything necessary through the back office. Like entering in any api keys or whatever else I will need to enter in from my leafly business login/ admin page, and weed maps back office.
+
+- [ ] **Slice 61 — Help & FAQ all-inclusive.** Make sure to add to the help and FAQ tab page at the bottom of the side bar menu has info from everything new to the back office. It should be all inclusive of all things greenway website, greenway online ordering, greenway back office, greenway point of sales side, greenway equipment, greenway everything.
+
+- [ ] **Slice 62 — Audit log: filters + AI anomaly detection.** The audit activity log should be upgraded to have better filters and options and such. I want ai to be built heavily and extremely intelligently so it can flag anomalies and other things that is abnormal. It should cover all aspects of all things related to greenway operations end to end. This should also be held to the highest of industry standards for utmost accuracy and successful analysis of the audit log.
+
+- [ ] **Slice 63 — Settings overhaul.** The settings tab page could use a major overhaul, it has one option in it. It should probably have a whole suite of options and settings and such that professional back office suit would have in its settings page.
+
+- [ ] **Slice 64 — Dashboard overhaul (POS cockpit).** The dashboard page could use a major over haul as well. It should only have relevant point of sales related over view things. Nothing about the getting started page, that's on the getting started page. I want the dash board to be a professional an exceptional fully inclusive cockpit with all of things the best pos dashboards would have.
+
+## Progress
+(Marked [x] as each slice is merged.)
+
+- 2025 — Slice 43 (report ranges) merged as PR #147. Main advances accordingly.
