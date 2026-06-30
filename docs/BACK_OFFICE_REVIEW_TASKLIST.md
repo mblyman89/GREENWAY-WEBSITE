@@ -9,7 +9,7 @@
 
 - [x] **Slice 43 — Report ranges.** Reports tabs: need better range options; please add a, this year, last year, by quarter. _(Done: PR #147 — added this_month/last_month/this_quarter/last_quarter/this_year/last_year + explicit Q1–Q4 by-year presets, all Pacific-time-correct in resolveRange(); DateRangePicker now exposes the new chips + a "By quarter…" dropdown; export routes honor ?year. 19 pure self-tests pass.)_
 
-- [ ] **Slice 44 — Reporting AI coverage.** Make sure the reports/ reporting ai has all of the new reports included into its insight generator.
+- [x] **Slice 44 — Reporting AI coverage.** Make sure the reports/ reporting ai has all of the new reports included into its insight generator. _(Done: PR #148 — generateReportInsights now digests the full suite — orders, sales detail (incl. by-category & customer-type), COGS/margin + inventory valuation + aging + missing-cost gap, WA tax (cannabis vs non-cannabis), customers (new/returning/segments), loyalty, staffing, medical program, inventory health, promotions — over the resolved Pacific range; action fetches all reports and honors Slice 43 presets via resolveRange(from/to/range/year).)_
 
 - [ ] **Slice 45 — AI forecaster.** Do we have an ai forecaster reporting system? If not, please add one that is of professional grade expert rated and industry best practice/ standard.
 

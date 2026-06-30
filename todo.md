@@ -7,7 +7,7 @@ Standing rules: AI output = drafts only; migrations applied manually by owner
 
 ## In progress / done
 - [x] Slice 43 — Report ranges (this year / last year / by quarter). PR #147.
-- [ ] Slice 44 — Reporting AI coverage of all new reports.
+- [x] Slice 44 — Reporting AI coverage of all new reports. PR #148.
 - [ ] Slice 45 — AI forecaster (professional grade).
 - [ ] Slice 46 — Revenue by type (sales).
 - [ ] Slice 47 — XLSX + clean exports everywhere.

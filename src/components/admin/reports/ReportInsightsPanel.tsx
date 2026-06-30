@@ -73,8 +73,9 @@ export function ReportInsightsPanel({ days, aiEnabled }: Props) {
             <span>✨ AI insights</span>
           </h2>
           <p className="mt-0.5 text-sm text-white/60">
-            A plain-language read on the last {days} days — what&apos;s working, what to watch, and
-            what to do next.
+            A plain-language read across the last {days} days — sales, margin, tax, customers,
+            loyalty, inventory, staffing, and the medical program: what&apos;s working, what to
+            watch, and what to do next.
           </p>
         </div>
         {aiEnabled && (
