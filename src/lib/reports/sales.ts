@@ -26,6 +26,7 @@ import "server-only";
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import { pacificDayKey, pacificHour, addPacificDays, formatHourLabel } from "@/lib/reports/timezone";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -118,19 +119,23 @@ function finalizeGroups(map: Map<string, Acc>, totalRevenue: number, limit?: num
   return limit ? rows.slice(0, limit) : rows;
 }
 
+/** Pacific calendar day for an order's placed_at. */
 function dayKey(iso: string): string {
-  return iso.slice(0, 10);
+  return pacificDayKey(iso);
 }
 
 function emptyDaySeries(fromISO: string, toISO: string): DayPoint[] {
   const out: DayPoint[] = [];
-  const start = new Date(fromISO.slice(0, 10) + "T00:00:00Z");
-  const end = new Date(toISO.slice(0, 10) + "T00:00:00Z");
-  for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
-    out.push({ date: d.toISOString().slice(0, 10), revenueMinorUnits: 0, orders: 0, units: 0 });
+  // Walk Pacific calendar days from the Pacific day of fromISO to that of toISO.
+  let cur = pacificDayKey(fromISO);
+  const last = pacificDayKey(toISO);
+  let guard = 0;
+  while (cur <= last && guard < 400) {
+    out.push({ date: cur, revenueMinorUnits: 0, orders: 0, units: 0 });
+    cur = addPacificDays(cur, 1);
+    guard += 1;
   }
-  // Guard against pathological ranges.
-  return out.slice(0, 400);
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -282,7 +287,7 @@ export async function getSalesReport(fromISO: string, toISO: string): Promise<Sa
       day.revenueMinorUnits += revenue;
       day.orders += 1;
     }
-    const hour = new Date(o.placed_at).getUTCHours();
+    const hour = pacificHour(o.placed_at);
     if (hour >= 0 && hour < 24) {
       hourPoints[hour].revenueMinorUnits += revenue;
       if (!hourOrderSeen[hour].has(orderId)) {
@@ -372,7 +377,5 @@ function pushAcc(
 }
 
 function formatHour(h: number): string {
-  const period = h < 12 ? "AM" : "PM";
-  const hour12 = h % 12 === 0 ? 12 : h % 12;
-  return `${hour12} ${period}`;
+  return formatHourLabel(h);
 }

@@ -13,6 +13,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { getPublishedVersion, getVersionItems } from "@/lib/pos/menu-version";
 import type { OrderStatus } from "@/lib/orders/types";
+import { pacificDayKey, pacificToday, addPacificDays, pacificWallTimeToUtcISO } from "@/lib/reports/timezone";
 
 export type DayPoint = { date: string; value: number };
 export type LabeledCount = { label: string; value: number };
@@ -21,26 +22,24 @@ export type LabeledCount = { label: string; value: number };
 // Date helpers
 // ---------------------------------------------------------------------------
 
+/** Start-of-window as a UTC ISO instant, anchored to the Pacific calendar. */
 export function rangeStartISO(days: number): string {
-  const d = new Date();
-  d.setUTCHours(0, 0, 0, 0);
-  d.setUTCDate(d.getUTCDate() - (days - 1));
-  return d.toISOString();
+  const startDay = addPacificDays(pacificToday(), -(days - 1));
+  return pacificWallTimeToUtcISO(startDay, "start");
 }
 
+/** Pacific calendar day for a timestamp. */
 function dayKey(iso: string): string {
-  return iso.slice(0, 10);
+  return pacificDayKey(iso);
 }
 
-/** Build a zero-filled day series for the last `days` days (oldest -> newest). */
+/** Build a zero-filled Pacific day series for the last `days` days (oldest -> newest). */
 function emptyDaySeries(days: number): DayPoint[] {
   const out: DayPoint[] = [];
-  const d = new Date();
-  d.setUTCHours(0, 0, 0, 0);
-  d.setUTCDate(d.getUTCDate() - (days - 1));
+  let cur = addPacificDays(pacificToday(), -(days - 1));
   for (let i = 0; i < days; i += 1) {
-    out.push({ date: d.toISOString().slice(0, 10), value: 0 });
-    d.setUTCDate(d.getUTCDate() + 1);
+    out.push({ date: cur, value: 0 });
+    cur = addPacificDays(cur, 1);
   }
   return out;
 }
