@@ -154,15 +154,72 @@ Pre Roll, Vape Pens, Wellness. (Each L1 has L2/L3 sub-trees; fetch live via cate
   full menu; use Direct (POST/PATCH/DELETE) when fine-grained id control is needed.
 - POS remains the source of truth; adjust quantities/stock via item updates.
 
+## Authentication — VERIFIED (Obtaining an Access Token + Authorized Requests + Rate Limits)
+- **Token endpoint:** `POST https://api-g.weedmaps.com/auth/token` (NOT under `/wm/...`).
+- **Request body (JSON):**
+  ```json
+  {
+    "client_id": "...",
+    "client_secret": "...",
+    "grant_type": "client_credentials",
+    "scope": "taxonomy:read brands:read products:read menu_items menus:write"
+  }
+  ```
+- **Success: `201 Created`** with
+  `{ access_token, token_type:"Bearer", expires_in:1209600, scope, created_at }`.
+  The token is a JWT (`exp`, `iss`, `wm.client_id`).
+- **Token lifetime: 14 days (1,209,600 s).** A new token is only issued after **50% of
+  lifetime (7 days)** has passed OR if requested with a **different scope**; otherwise the
+  SAME token is returned. → Cache the token; call `/auth/token` roughly **every 8–14 days**.
+- **`/auth/token` rate limit: 1 request per minute** (and it still counts against the global
+  limit). NEVER request a token per API call.
+- **CRITICAL — inspect granted scopes:** you are NOT guaranteed all requested scopes. Always
+  read the `scope` field in the token response; a missing scope causes `403 Invalid Scope`.
+- **Authorized requests:** header `Authorization: Bearer {access_token}` on every call.
+  - Token missing/invalid/expired → **401 Unauthorized**.
+  - Token valid but lacks scope → **403 Forbidden** (`Invalid Scope`).
+  - Expired tokens **cannot be refreshed** — request a new one.
+- Once a listing adds you as integrator, an existing token automatically grants access to
+  their listing data (no new token needed per listing).
+
+## Rate limiting — VERIFIED
+- **Global: 2,500 requests/minute per integrator, enforced at 420 requests / 10 seconds**
+  across all endpoints.
+- **`/auth/token`: 1 request/minute** (separate, stricter).
+- On **429 Too Many Requests**: back off (exponential), reduce polling, consolidate requests.
+
+## Error handling — VERIFIED
+- **422 Unprocessable Entity** — invalid create/update data: prohibited terms in `name`/
+  `description`, unsupported images, or the one-root-category rule.
+- **401 / 403** — auth (see above). **404 / 423** — access / paused integration.
+- **5xx** — treated by Weedmaps as critical incidents; retry with backoff and, if sustained,
+  contact integrations@weedmaps.com.
+- **Best practice:** retry **5xx and 429** with exponential backoff; **log 4xx** for review.
+- Error body shape: `{ errors: [ { status, title, detail, code?, source? } ] }`.
+
+## Images — VERIFIED (Working with Images)
+- **One image per menu item.** Set/replace via `image_url` on create or
+  `PATCH /wm/2025-07/partners/menu_items/{id}` body `{ "image_url": "https://..." }`.
+- **Force refresh (same URL):** include `image_updated_at` (a valid UNIX timestamp). Weedmaps
+  does NOT re-download an unchanged URL otherwise. Do NOT send `image_updated_at` if your
+  image URLs change on every update (causes inconsistent behavior).
+- Weedmaps issues a **HEAD request** to the image URL first — your host must return **200 OK**.
+- **Formats: JPG and PNG only**, and the `Content-Type` header must match the real file type
+  (verify with `file -b --mime-type`).
+
+## Versioning & change monitoring — VERIFIED
+- Two versioned releases/year (**January & July**); each stable version supported **≥ 2 years**
+  with **≥ 18 months overlap**. `2025-07` is supported **until July 2027**.
+- Stable versions are locked except critical bug fixes. RC endpoints exist for a 6-month
+  preview but may break — do not use in production.
+- **Do NOT use undocumented endpoints** (removable without notice).
+- Monitor the **changelog** (RSS: `https://developer.weedmaps.com/changelog.rss`) /
+  integrator email list. Documentation index: `https://developer.weedmaps.com/llms.txt`.
+
 ## NOT fully specified in the supplied source (do NOT guess — confirm against live API)
-The PDFs document the menu-item **enrichment/linking** fields exhaustively but defer the
-**base menu-item write schema** and **OAuth token request** to interactive pages that were
-not inlined:
-1. **OAuth token endpoint URL + grant type + scopes** — docs say OAuth 2.0 Bearer but the
-   token URL / client-credentials params live on `/docs/obtaining-an-access-token`
-   (not inlined). Our client reads a configured token URL from env and supports
-   client-credentials; the exact URL must be confirmed from the partner portal.
-2. **Exact base item attribute names** (e.g. `name`, `description`, price, and the
+The PDFs now fully document **authentication, rate limits, error handling, images, and
+versioning**. The one remaining deferred item is the **base menu-item write schema**:
+1. **Exact base item attribute names** (e.g. `name`, `description`, price, and the
    **Menu Item Variants** price/weight schema referenced at `/docs/wm-menu-item-variants`)
    are shown via the live "API Examples" (`.../partners/menus/{menu_id}/items`) rather than
    inlined. We model these with the documented names we DID see (`name`, `description`,
