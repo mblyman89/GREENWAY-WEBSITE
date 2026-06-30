@@ -9,7 +9,8 @@ accurate the web crawler is *before* we trust its output at scale.
 | File | What it is |
 |------|------------|
 | `VENDOR_BASELINE_RESEARCH.md` | The research record. Every fact, its source, and a confidence score per vendor. Strict no-guessing — unconfirmed vendors are flagged, not invented. |
-| `vendors_baseline_seed.sql` | Idempotent upsert (on `slug`) that loads the 9 confirmed vendors as `draft` rows. The 3 unconfirmed vendors are commented-out stubs. |
+| `vendors_baseline_seed.sql` | Idempotent upsert (on `slug`) that loads the 9 confirmed golden-set vendors as `draft` rows. The 3 unconfirmed vendors are commented-out stubs. |
+| `vendors_batch2_seed.sql` | **Batch 2.** Idempotent upsert (on `slug`) that loads 15 confirmed producer/processors as `draft` rows (`sort_order` 10–24). The 6 unconfirmed/low vendors are commented-out stubs. Research/audit is the "Batch 2" section of `VENDOR_BASELINE_RESEARCH.md`. |
 | `VENDOR_BASELINE_README.md` | This file. |
 
 ## How to load it (owner — manual, in Supabase SQL editor)
@@ -63,3 +64,21 @@ This is the seed for the "golden-set eval harness" noted under DF-8 in
   - **Evergreen Hydro Farms** and **Canna Processing** — no official site or clean
     licensee profile found. Please provide the exact legal entity name or UBI and
     we'll match them against WA state records and seed them.
+
+## Batch 2 — 21 producer/processors (load `vendors_batch2_seed.sql`)
+
+Same load procedure as above: run `vendors_batch2_seed.sql` in the Supabase SQL
+editor after migration `0003`. Idempotent; loads as `status='draft'`; does not
+overwrite `status` on re-run. Full per-vendor sources + confidence are in the
+"Batch 2" section of `VENDOR_BASELINE_RESEARCH.md`.
+
+- **Seeded (15):** Fire Bros., Canna Pacific, Clarity Farms, Seattle Bubble Works,
+  Heavenly Buds, Ceres Garden, Avitas, Sky High Gardens, Mfused, Seattle's Private
+  Reserve, Quality Green Trees (operates Freddy's Fuego), Cultivar Farms, Edgemont
+  Group, Fireline Cannabis, Botanica Seattle (Mr. Moxey's + Journeyman).
+- **Held back (6) — need owner input:** Washington Packaging and Processing,
+  R&B Group, Virtual Services, Wamsterdam Farms, Botanical Arts (no official/
+  licensee source under the given name), and **Alpenglow Extracts** (a Spokane
+  Valley brand is cited by a single weak source; must not be confused with the
+  California brand "Alpenglow Farms 707" — please confirm the WA entity/UBI).
+  Provide the legal entity name / UBI for any of these and we'll seed them.
