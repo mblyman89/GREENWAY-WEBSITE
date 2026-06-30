@@ -149,6 +149,12 @@
 
 ## DF-8 (optional) — AI-5/6 hardening
 - [ ] Golden-set eval harness + model router/budgets gating prompt changes.
+- [x] **Vendor golden set seeded** (`back-office/kb_seed/vendors_baseline_seed.sql` +
+      `VENDOR_BASELINE_RESEARCH.md` + `VENDOR_BASELINE_README.md`): 12 top vendors
+      human-verified with strict no-guessing. 9 seeded as `draft` rows (Dogtown at
+      medium confidence, flagged); 3 held back as commented stubs pending owner input
+      (Mountain Hi = retailer/producer ambiguity; Evergreen Hydro Farms + Canna
+      Processing = unconfirmed). This is the ground truth the crawler is scored against.
 
 ## Where to run the crawler
 - [x] `crawler/docs/WHERE_TO_RUN.md`: recommends a dedicated VM on the shop host
