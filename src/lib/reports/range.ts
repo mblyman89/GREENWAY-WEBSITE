@@ -4,7 +4,14 @@
  * Resolve a reporting date range from URL search params. Supports either explicit
  * ?from=YYYY-MM-DD&to=YYYY-MM-DD, or a ?range=<days> preset (default 30). Returns
  * ISO timestamps suitable for Supabase gte/lte filters, plus display labels.
+ *
+ * PACIFIC TIME: the date labels (from/to) are Pacific calendar days, and the
+ * ISO boundaries are the precise UTC instants for the START of the Pacific
+ * "from" day and the END of the Pacific "to" day. Greenway operates in WA, so
+ * "today" / "last 30 days" always mean Pacific days regardless of server zone.
  */
+import { pacificToday, addPacificDays, pacificWallTimeToUtcISO } from "@/lib/reports/timezone";
+
 export type ResolvedRange = {
   fromISO: string; // start of day, ISO
   toISO: string; // end of day, ISO
@@ -13,10 +20,6 @@ export type ResolvedRange = {
   days: number;
   label: string;
 };
-
-function ymd(d: Date): string {
-  return d.toISOString().slice(0, 10);
-}
 
 export function resolveRange(sp: {
   from?: string;
@@ -33,11 +36,9 @@ export function resolveRange(sp: {
     toDate = sp.to as string;
   } else {
     const days = [7, 30, 90, 180, 365].includes(Number(sp.range)) ? Number(sp.range) : 30;
-    const end = new Date();
-    const start = new Date();
-    start.setDate(start.getDate() - (days - 1));
-    fromDate = ymd(start);
-    toDate = ymd(end);
+    // Anchor to the Pacific calendar: today (PT) back to (today − days + 1).
+    toDate = pacificToday();
+    fromDate = addPacificDays(toDate, -(days - 1));
   }
 
   // Guard against reversed ranges.
@@ -47,8 +48,9 @@ export function resolveRange(sp: {
     toDate = t;
   }
 
-  const fromISO = new Date(`${fromDate}T00:00:00.000Z`).toISOString();
-  const toISO = new Date(`${toDate}T23:59:59.999Z`).toISOString();
+  // Boundaries are the precise UTC instants for the Pacific day edges.
+  const fromISO = pacificWallTimeToUtcISO(fromDate, "start");
+  const toISO = pacificWallTimeToUtcISO(toDate, "end");
   const days = Math.max(1, Math.round((Date.parse(toISO) - Date.parse(fromISO)) / 86400000));
 
   return {

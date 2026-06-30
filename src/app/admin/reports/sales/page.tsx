@@ -164,7 +164,7 @@ export default async function SalesReportPage({
             color={REPORT_COLORS.ORANGE}
           />
         </Section>
-        <Section title="Revenue by hour of day" subtitle="When your customers buy (UTC).">
+        <Section title="Revenue by hour of day" subtitle="When your customers buy (Pacific time).">
           <BarList
             data={report.byHour
               .filter((h) => h.revenueMinorUnits > 0)

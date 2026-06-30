@@ -19,12 +19,13 @@ import "server-only";
  *   tax_category_rules table, then run the shared tax engine.
  *
  * Everything is computed from NON-cancelled orders, bucketed by calendar month
- * of placed_at (UTC). Money in MINOR UNITS (cents). State/local split is
+ * of placed_at (Pacific time). Money in MINOR UNITS (cents). State/local split is
  * pro-rated from the configured basis points.
  */
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import { pacificMonthKey } from "@/lib/reports/timezone";
 import {
   getTaxSettings,
   getCannabisCategorySet,
@@ -103,7 +104,7 @@ const MONTH_LABELS = [
 ];
 
 function monthKey(iso: string): string {
-  return iso.slice(0, 7); // YYYY-MM
+  return pacificMonthKey(iso); // YYYY-MM in Pacific time
 }
 function monthLabel(key: string): string {
   const [y, m] = key.split("-");

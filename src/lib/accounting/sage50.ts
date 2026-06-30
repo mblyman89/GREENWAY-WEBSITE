@@ -8,7 +8,7 @@ import "server-only";
  * entry is one or more distribution lines sharing a Transaction Number; debits
  * are positive, credits negative, and each entry must balance to zero.
  *
- * Per business day (UTC) we emit one balanced entry:
+ * Per business day (Pacific time) we emit one balanced entry:
  *   DR  Cash/Card clearing              = total collected (base + sales tax + excise)
  *   CR  Sales – cannabis (pre-tax)
  *   CR  Sales – non-cannabis (pre-tax)
@@ -26,6 +26,7 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { getTaxSettings, getCannabisCategorySet, isCannabisCategory, applyBps } from "@/lib/reports/tax";
+import { pacificDayKey } from "@/lib/reports/timezone";
 
 export type AccountingSettings = {
   glCashClearing: string;
@@ -234,7 +235,7 @@ export async function buildSage50Journal(fromISO: string, toISO: string): Promis
 
   const dayByOrder = new Map<string, string>();
   for (const o of completed) {
-    const ymd = (o.completed_at ?? o.placed_at).slice(0, 10);
+    const ymd = pacificDayKey(o.completed_at ?? o.placed_at);
     dayByOrder.set(o.id, ymd);
   }
   const orderIds = completed.map((o) => o.id);
