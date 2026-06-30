@@ -14,6 +14,7 @@ import { DateRangePicker } from "@/components/admin/reports/DateRangePicker";
 import { LicenseSettingsForm } from "@/components/admin/reports/LicenseSettingsForm";
 import { resolveRange } from "@/lib/reports/range";
 import { buildCcrsSaleCsv, getCcrsLicenseSettings } from "@/lib/compliance/ccrs-sales";
+import { buildCcrsInventoryAdjustmentCsv } from "@/lib/compliance/ccrs-inventory-adjustment";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -44,6 +45,9 @@ export default async function CompliancePage({
   const license = await getCcrsLicenseSettings();
   const preview = isSupabaseServiceConfigured
     ? await buildCcrsSaleCsv(range.fromISO, range.toISO)
+    : null;
+  const adjPreview = isSupabaseServiceConfigured
+    ? await buildCcrsInventoryAdjustmentCsv(range.fromISO, range.toISO)
     : null;
 
   // Recent export batches.
@@ -116,6 +120,48 @@ export default async function CompliancePage({
         ) : (
           <p className="text-xs text-white/40">
             Generating the regulatory file requires the “Change settings” permission. Ask an admin to download it.
+          </p>
+        )}
+      </Section>
+
+      {/* InventoryAdjustment.csv */}
+      <Section
+        title="Generate CCRS InventoryAdjustment.csv"
+        subtitle="Reports shrink, damage, destruction, recalls, samples & cycle-count reconciliations for the range."
+      >
+        <div className="mb-3 grid grid-cols-2 gap-3 lg:grid-cols-3">
+          <StatCard
+            label="Adjustment lines in range"
+            value={(adjPreview?.recordCount ?? 0).toLocaleString()}
+            accent="green"
+          />
+          <StatCard label="Skipped (e.g. receives)" value={(adjPreview?.skipped ?? 0).toLocaleString()} accent="muted" />
+        </div>
+        {adjPreview && adjPreview.warnings.length > 0 ? (
+          <ul className="mb-3 space-y-1 rounded-xl border border-orange-500/30 bg-orange-500/[0.06] p-3 text-xs text-orange-100/80">
+            {adjPreview.warnings.map((w, i) => (
+              <li key={i}>• {w}</li>
+            ))}
+          </ul>
+        ) : null}
+        {canEdit ? (
+          <div className="flex flex-wrap items-center gap-3">
+            <Link
+              href={`/admin/reports/compliance/adjustment-export?${qs}`}
+              prefetch={false}
+              className="rounded-lg bg-[var(--admin-accent)] px-4 py-2 text-sm font-bold text-black transition hover:opacity-90"
+            >
+              ⬇ Download CCRS InventoryAdjustment.csv
+            </Link>
+            <span className="text-xs text-white/40">
+              Reasons map to CCRS values: count→<code className="text-white/60">Reconciliation</code>, shrink/damage→
+              <code className="text-white/60">Lost</code>, destruction/recall→<code className="text-white/60">Destruction</code>,
+              sample→<code className="text-white/60">ReturnedLabSample</code>.
+            </span>
+          </div>
+        ) : (
+          <p className="text-xs text-white/40">
+            Generating the regulatory file requires the “Change settings” permission.
           </p>
         )}
       </Section>
