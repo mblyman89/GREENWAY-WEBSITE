@@ -11,6 +11,7 @@ accurate the web crawler is *before* we trust its output at scale.
 | `VENDOR_BASELINE_RESEARCH.md` | The research record. Every fact, its source, and a confidence score per vendor. Strict no-guessing — unconfirmed vendors are flagged, not invented. |
 | `vendors_baseline_seed.sql` | Idempotent upsert (on `slug`) that loads the 9 confirmed golden-set vendors as `draft` rows. The 3 unconfirmed vendors are commented-out stubs. |
 | `vendors_batch2_seed.sql` | **Batch 2.** Idempotent upsert (on `slug`) that loads 15 confirmed producer/processors as `draft` rows (`sort_order` 10–24). The 6 unconfirmed/low vendors are commented-out stubs. Research/audit is the "Batch 2" section of `VENDOR_BASELINE_RESEARCH.md`. |
+| `vendors_batch3_seed.sql` | **Batch 3.** Idempotent upsert (on `slug`) that loads 20 confirmed producer/processors / WA cannabis brands as `draft` rows (`sort_order` 25–44) from a ~80-name list. Duplicates of earlier batches are skipped; ~55 unconfirmed/holding-company names are flagged (commented-out stubs). Research/audit is the "Batch 3" section of `VENDOR_BASELINE_RESEARCH.md`. |
 | `VENDOR_BASELINE_README.md` | This file. |
 
 ## How to load it (owner — manual, in Supabase SQL editor)
@@ -82,3 +83,25 @@ overwrite `status` on re-run. Full per-vendor sources + confidence are in the
   Valley brand is cited by a single weak source; must not be confused with the
   California brand "Alpenglow Farms 707" — please confirm the WA entity/UBI).
   Provide the legal entity name / UBI for any of these and we'll seed them.
+
+## Batch 3 — large ~80-name list (load `vendors_batch3_seed.sql`)
+
+Same load procedure: run `vendors_batch3_seed.sql` in the Supabase SQL editor after
+migration `0003`. Idempotent; loads as `status='draft'`; does not overwrite `status`
+on re-run. Full per-vendor sources + confidence are in the "Batch 3" section of
+`VENDOR_BASELINE_RESEARCH.md`.
+
+- **Seeded (20):** Northwest Cannabis Solutions (=NWCS), Skagit Organics, CannaSol
+  Farms, Forbidden Farms, SKORD, Xtracted Labs (Refine), Craft Elixirs (Pioneer
+  Squares), Royal Tree Gardens, New Leaf Enterprises, Tumbleweed Farm, Free Rain
+  Farms, Blue Roots, Spark Industries, Legacy Organics, Mama J's, Two Heads Co.,
+  My Weed Bunny, Walden Cannabis (=Walden), 1937 Farms, Top Shelf.
+- **Duplicates (4) — not re-seeded:** FIREBROS (fire-bros), Klaritie Farms,
+  Alpha Crux, Edgemont Group.
+- **Flagged/unconfirmed (~55) — need owner input:** a large set of WA cannabis
+  brand names with weak/ambiguous sourcing, plus holding-company / consultancy /
+  packaging entities (TTL Holdings, RGL Industries, NCMX LLC, PHDC2, 2727, Five O 2,
+  Saturn Group, JMS Consultants, Pacific Northwest Consulting, etc.) that have no
+  verifiable marketing data. Also **Frosted Cannabis** appears to be a *retailer*
+  (verify before seeding). Provide the legal entity / UBI or the brand each entity
+  trades as, and we'll verify + seed. Full list is in the research doc.

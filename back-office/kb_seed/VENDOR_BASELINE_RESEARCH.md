@@ -406,3 +406,127 @@ Group LLC.
 B17, B18, B19, B21 — `sort_order` 10–24, `status='draft'`.
 **Held back pending owner input (6):** B2, B4, B7, B9 (LOW/ambiguous), B12, B20 —
 commented-out stubs in the SQL. Owner supplies legal entity / UBI to uncomment.
+
+---
+
+# Batch 3 — Large list (~80 owner-provided names)
+
+**Scope.** Owner-provided list of ~80 names (producer/processors only). Same
+strict no-guessing rule. This list contained three categories that are worth
+calling out up front:
+
+1. **Duplicates** of vendors already in the KB (do NOT re-seed): `FIREBROS` =
+   Fire Bros. (Batch 2), `Klaritie Farms` (baseline), `Alpha Crux, llc` (baseline),
+   `EDGEMONT GROUP` (Batch 2).
+2. **Licensee/holding-company or consultancy names** with no consumer-facing
+   marketing presence (e.g. TTL Holdings, RGL Industries, NCMX LLC, PHDC2, 2727,
+   Five O 2, Saturn Group, JMS Consultants, Pacific Northwest Consulting, Green
+   Research Network LLC, Green Network, Joint Ventures, Translucency LLC, Suspended
+   Brands, Nalley Valley Partners LLC, Purform Labs Distribution, Sitka Packaging,
+   Kohl Processing Enterprises, Dynamic Processors, Georgetown Bottling SPC, Agro
+   Couture, EV Enterprises, Big City Sasquatch LLC, Cassidy Cannabis LLC). These are
+   real LCB-style entity names but have **no verifiable marketing data** to seed —
+   flagged for the owner to supply UBI / which brand they trade as.
+3. **Confirmed producer/processors or WA cannabis brands** with a real official
+   site or strong multi-source presence — seeded as draft rows.
+
+Verified primarily via official sites, L&I business lookup, and brand presence
+across multiple WA dispensary menus (a brand on several independent WA retailer
+menus is treated as a real WA cannabis brand even when the licensee entity is
+opaque).
+
+## CONFIRMED → seeded (Batch 3)
+
+- **Northwest Cannabis Solutions (NWCS)** — major WA producer/processor; Satsop
+  facility (has a Wikipedia article); maker of Liberty Reach and other lines.
+  Sources: Wikipedia (Satsop facility), DH420 brand page. Confidence 0.85.
+  *(Note: the list's separate entry "NWCS" is the same entity.)*
+- **Skagit Organics** — "Washington's Best RSO," Skagit Valley; RSO/edibles/
+  tinctures. Sources: skagitorganics.net (official), LinkedIn. Confidence 0.90.
+- **CannaSol Farms** — regenerative/sungrown organic cannabis in Riverside, WA;
+  Sun+Earth certified. Sources: cannasol.com (official), sunandearth.org.
+  Confidence 0.90.
+- **Forbidden Farms** — explicitly "Cannabis Producer/Processor." Sources:
+  forbidden-farms.com (official). Confidence 0.90.
+- **SKORD (SKöRD)** — artisan-quality WA cannabis brand. Sources: iskord.com
+  (official), Headset brand data. Confidence 0.85.
+- **Xtracted Labs** — WA hash-oil/extraction labs; maker of the Refine brand.
+  Sources: x-tracted.com (official), LinkedIn. Confidence 0.88.
+- **Craft Elixirs** — small-batch cannabis infusions; maker of Pioneer Squares;
+  founder Jamie Hoffman. Sources: craftelixirs.com (official), pioneersquares.com.
+  Confidence 0.88.
+- **Royal Tree Gardens** — WA producer/processor (Royal line / Royal Trees).
+  Sources: royaltreegardens.com (official). Confidence 0.88.
+- **New Leaf Enterprises Inc.** — Seattle WA producer/processor (New Leaf Ventures
+  group). Sources: LinkedIn (New Leaf Enterprises Inc.), Yahoo Finance (New Leaf
+  Ventures). Confidence 0.80.
+- **Tumbleweed Farm** — WA cannabis farm. Sources: gotumbleweed.com (official),
+  L&I UBI 603324694 (TUMBLEWEED FARM LLC). Confidence 0.85.
+- **Free Rain Farms, Inc.** — WA producer. Sources: L&I UBI 603360630 (FREE RAIN
+  FARMS INC), LinkedIn. Confidence 0.82.
+- **Blue Roots Cannabis Co.** — WA producer/processor; founder Eben von Ranson;
+  Inlander "Best Of" winner. Sources: bluerootscannabis.com (official). Conf 0.88.
+- **Spark Industries, LLC** — WA craft extraction (Mount Vernon area). Sources:
+  sparkindustrieswa.com (official). Confidence 0.85.
+- **Legacy Organics, LLC** — Kennewick, WA producer/processor. Sources: LinkedIn
+  (Josiah Glesener), Alignable, Tri-Cities marijuana-license listing. Conf 0.78.
+- **Mama J's** — WA cannabis brand ("Grown with Love"); associated with Whidbey
+  Island Cannabis Co. Sources: whidbeyislandcannabisco.com, multiple WA dispensary
+  menus (Kush21, Commencement Bay). Confidence 0.80.
+- **Two Heads Co.** — WA premium concentrate producer; signed an exclusive
+  distribution agreement with Evergreen Herbal. Sources: PRWeb release, Cannabis
+  Business Times. Confidence 0.82.
+- **My Weed Bunny** — woman-owned WA cannabis brand. Sources: Falcanna woman-owned
+  brands list, White Rabbit Cannabis menu. Confidence 0.75.
+- **Walden (Walden Cannabis)** — sustainability-focused WA cannabis; also operates
+  Walden Genetics (seed line). Sources: waldencannabis.com (official), LinkedIn.
+  Confidence 0.88. *(Resolves both "WALDEN CANNABIS" and "WALDEN".)*
+- **1937 Farms** — family craft cannabis grown in WA. Sources: 1937farms.com
+  (official), Have A Heart profile. Confidence 0.85.
+- **Top Shelf** — WA cannabis brand (Top Shelf Cannabis™). Sources: Weedmaps brand
+  page. Confidence 0.72 (brand presence; licensee entity not pinned).
+
+## UNCONFIRMED / FLAG (Batch 3) — NOT seeded, owner to supply UBI / brand
+
+- **Cannabis-brand names with weak/ambiguous sourcing:** Hang Roots (appears on WA
+  menus but licensee opaque), Hometown Herbs, Pastime Brands, Limelight, Coastal
+  Growers, Greenleaf Growers, Hermanos Del Fuego, Grow Bros, Cult Cannabis Co.,
+  Crimsoneye Farms LLC, Bliss Road LLC, Tiger Mountain Cannabis LLC,
+  Olympus Horticulture LLC, Sustainable Organic Solutions, Methow Horticulture,
+  Wild Mint, Hazy Daze, Prismatic, Pinnacle Green, Green Beard & Co, Green
+  Adventures, Green Labs, Alphapheno, Everigreene, Cannaseurs Choice, Prince Farms,
+  Mas Farms, Farmwest 2, South Bay Master Growers, Alki Herbal, Cannabis Northwest
+  C-M Inc., Budz Bud, Translucency LLC, Suspended Brands.
+- **Holding/consultancy/packaging entities (no marketing data):** TTL Holdings LLC,
+  RGL Industries, Georgetown Bottling SPC, 2727, Spark? (Spark confirmed),
+  NCMX LLC, Pacific Northwest Consulting, Joint Ventures, JMS Consultants, Green
+  Network, Big City Sasquatch LLC, Green Research Network LLC, Saturn Group,
+  EV Enterprises, Sitka Packaging, Kohl Processing Enterprises, Dynamic Processors,
+  PHDC2, Mas Farms, Purform Labs Distribution, Nalley Valley Partners LLC,
+  Five O 2, Agro Couture, Cassidy Cannabis LLC.
+- **Possible RETAILER (not P/P) — verify before seeding:** Frosted Cannabis (the
+  clean hit is "Frosted Cannabis" dispensary in Spokane — a retailer).
+- **Action for all of the above:** NOT seeded; nothing invented. Listed as
+  commented-out stubs (representative subset) in `vendors_batch3_seed.sql`. Owner
+  supplies the exact legal entity / UBI or the brand they trade as, and we'll
+  verify + seed.
+
+## DUPLICATES (already in KB — not re-seeded)
+
+| List name | Already seeded as | Slug |
+|-----------|-------------------|------|
+| FIREBROS | Fire Bros. (Batch 2) | fire-bros |
+| Klaritie Farms | baseline | klaritie-farms |
+| Alpha Crux, llc | baseline | alpha-crux |
+| EDGEMONT GROUP | Batch 2 | edgemont-group |
+
+## Batch 3 summary
+
+**Seeded (21 confirmed):** Northwest Cannabis Solutions, Skagit Organics, CannaSol
+Farms, Forbidden Farms, SKORD, Xtracted Labs, Craft Elixirs, Royal Tree Gardens,
+New Leaf Enterprises, Tumbleweed Farm, Free Rain Farms, Blue Roots, Spark
+Industries, Legacy Organics, Mama J's, Two Heads Co., My Weed Bunny, Walden, 1937
+Farms, Top Shelf — `sort_order` 25–45, `status='draft'`.
+**Duplicates (4):** not re-seeded.
+**Flagged/unconfirmed (~55):** not seeded; owner to supply UBI / brand. A
+representative set is left as commented-out stubs in the SQL.

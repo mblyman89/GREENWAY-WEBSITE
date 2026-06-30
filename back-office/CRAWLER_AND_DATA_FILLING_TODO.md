@@ -165,6 +165,17 @@
       pending owner legal-entity/UBI (Washington Packaging and Processing, R&B Group,
       Virtual Services, Wamsterdam Farms, Botanical Arts, Alpenglow Extracts — the
       last flagged LOW to avoid conflation with CA "Alpenglow Farms 707").
+- [x] **Vendor Batch 3 KB seeded** (`back-office/kb_seed/vendors_batch3_seed.sql` +
+      "Batch 3" section of `VENDOR_BASELINE_RESEARCH.md`): ~80-name owner list
+      researched with strict no-guessing. 20 CONFIRMED seeded as `draft` rows
+      (`sort_order` 25–44): Northwest Cannabis Solutions (=NWCS), Skagit Organics,
+      CannaSol Farms, Forbidden Farms, SKORD, Xtracted Labs, Craft Elixirs, Royal
+      Tree Gardens, New Leaf Enterprises, Tumbleweed Farm, Free Rain Farms, Blue
+      Roots, Spark Industries, Legacy Organics, Mama J's, Two Heads Co., My Weed
+      Bunny, Walden Cannabis (=Walden), 1937 Farms, Top Shelf. 4 duplicates of
+      earlier batches skipped; ~55 unconfirmed/holding-company/consultancy names
+      flagged as commented stubs pending owner UBI/brand; Frosted Cannabis flagged
+      as likely a retailer.
 
 ## Where to run the crawler
 - [x] `crawler/docs/WHERE_TO_RUN.md`: recommends a dedicated VM on the shop host
