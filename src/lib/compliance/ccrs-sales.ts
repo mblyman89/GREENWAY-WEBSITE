@@ -27,6 +27,11 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { getTaxSettings, getCannabisCategorySet, isCannabisCategory, applyBps } from "@/lib/reports/tax";
+import {
+  deriveInventoryExternalId,
+  resolveSaleInventoryExternalId,
+  validateExternalId,
+} from "@/lib/compliance/ccrs-identifiers";
 
 export type CcrsLicenseSettings = {
   licenseNumber: string;
@@ -134,6 +139,51 @@ async function buildCategoryLookup(
   return lookup;
 }
 
+/**
+ * Index inventory lots by pos_product_key so a sold line can resolve its
+ * canonical CCRS inventory external id and quarantine status. When multiple
+ * lots share a key, prefer a non-quarantine lot, then the most recently created.
+ */
+type LotInfo = { canonicalExternalId: string | null; quarantined: boolean };
+
+async function buildLotIndex(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+): Promise<Map<string, LotInfo>> {
+  const index = new Map<string, LotInfo>();
+  const { data } = await admin
+    .from("inventory_lots")
+    .select("id, pos_product_key, lot_code, ccrs_inventory_external_id, status, created_at")
+    .order("created_at", { ascending: false })
+    .limit(50000);
+  const rows =
+    (data as
+      | {
+          id: string;
+          pos_product_key: string | null;
+          lot_code: string | null;
+          ccrs_inventory_external_id: string | null;
+          status: string | null;
+        }[]
+      | null) ?? [];
+  for (const r of rows) {
+    const key = r.pos_product_key;
+    if (!key) continue;
+    const quarantined = r.status === "quarantine";
+    const canonicalExternalId = deriveInventoryExternalId({
+      ccrs_inventory_external_id: r.ccrs_inventory_external_id,
+      pos_product_key: r.pos_product_key,
+      lot_code: r.lot_code,
+      id: r.id,
+    });
+    const existing = index.get(key);
+    // Prefer a non-quarantine lot; otherwise keep the first (most recent) seen.
+    if (!existing || (existing.quarantined && !quarantined)) {
+      index.set(key, { canonicalExternalId, quarantined });
+    }
+  }
+  return index;
+}
+
 // ---------------------------------------------------------------------------
 // Builder
 // ---------------------------------------------------------------------------
@@ -164,10 +214,11 @@ export async function buildCcrsSaleCsv(fromISO: string, toISO: string): Promise<
   }
 
   const admin = createSupabaseAdminClient();
-  const [settings, cannabisSet, categoryLookup] = await Promise.all([
+  const [settings, cannabisSet, categoryLookup, lotIndex] = await Promise.all([
     getTaxSettings(),
     getCannabisCategorySet(),
     buildCategoryLookup(admin),
+    buildLotIndex(admin),
   ]);
   const combinedSalesBps = settings.stateSalesRateBps + settings.localSalesRateBps;
 
@@ -213,6 +264,9 @@ export async function buildCcrsSaleCsv(fromISO: string, toISO: string): Promise<
 
   const rows: string[][] = [];
   let missingInvIds = 0;
+  let quarantinedIds = 0;
+  let invalidIds = 0;
+  let fallbackKeyIds = 0;
   let skipped = 0;
 
   for (const l of lines) {
@@ -247,9 +301,26 @@ export async function buildCcrsSaleCsv(fromISO: string, toISO: string): Promise<
     const salesTaxCents = applyBps(baseCents, combinedSalesBps);
     const exciseCents = isCannabis ? applyBps(baseCents, settings.exciseRateBps) : 0;
 
-    // External identifiers (deterministic, stable, idempotent).
-    const inventoryExternalId = (l.ccrs_inventory_external_id ?? l.product_id ?? "").trim();
-    if (!inventoryExternalId) missingInvIds++;
+    // External identifiers (deterministic, stable, idempotent), hardened to the
+    // CCRS spec: prefer the line's explicit id, then the matched lot's canonical
+    // id, then a sanitized product key as a degraded fallback.
+    const lot = l.product_id ? lotIndex.get(l.product_id) : undefined;
+    const resolved = resolveSaleInventoryExternalId({
+      lineExplicit: l.ccrs_inventory_external_id,
+      lotCanonical: lot?.canonicalExternalId,
+      posProductKey: l.product_id,
+    });
+    const inventoryExternalId = resolved.value;
+
+    if (!inventoryExternalId) {
+      missingInvIds++;
+    } else {
+      const idErrs = validateExternalId(inventoryExternalId);
+      if (idErrs.length) invalidIds++;
+      if (resolved.source === "product_key") fallbackKeyIds++;
+      // CCRS rejects sales of inventory still in a quarantine area.
+      if (lot?.quarantined) quarantinedIds++;
+    }
     const saleExternalId = order.order_number || order.id;
     const saleDetailExternalId = `${saleExternalId}-${l.id.slice(0, 8)}`;
     const saleDate = mmddyyyy(order.completed_at ?? order.placed_at);
@@ -278,7 +349,22 @@ export async function buildCcrsSaleCsv(fromISO: string, toISO: string): Promise<
 
   if (missingInvIds > 0) {
     warnings.push(
-      `${missingInvIds} line(s) have no InventoryExternalIdentifier. CCRS requires each sold item to map to an existing CCRS inventory id — set per-product CCRS ids or ensure product_id matches your CCRS inventory.`,
+      `${missingInvIds} line(s) have NO InventoryExternalIdentifier. CCRS requires each sold item to map to an inventory record already reported in an Inventory.csv. Set a per-product CCRS id, give the inventory lot a lot code, or ensure the sold product_id matches a received lot.`,
+    );
+  }
+  if (fallbackKeyIds > 0) {
+    warnings.push(
+      `${fallbackKeyIds} line(s) fell back to using the POS product key as the InventoryExternalIdentifier because no matching inventory lot was found. Verify this key equals the Inventory.ExternalIdentifier you filed in CCRS, or the upload will error with "Invalid InventoryExternalIdentifier".`,
+    );
+  }
+  if (invalidIds > 0) {
+    warnings.push(
+      `${invalidIds} line(s) have an InventoryExternalIdentifier that may be rejected (over 100 chars or non-alphanumeric). These were sanitized, but confirm they still match the id you filed in CCRS.`,
+    );
+  }
+  if (quarantinedIds > 0) {
+    warnings.push(
+      `${quarantinedIds} line(s) reference inventory currently in a QUARANTINE area. CCRS rejects sales of quarantined inventory ("Sold item cannot be in Quarantine"). Accept/move the lot out of quarantine in CCRS before uploading.`,
     );
   }
   if (skipped > 0) {
