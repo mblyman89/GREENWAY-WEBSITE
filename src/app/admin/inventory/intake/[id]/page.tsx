@@ -21,11 +21,17 @@ export default async function ManifestReviewPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ staged?: string; accepted?: string; rejected?: string; error?: string }>;
+  searchParams: Promise<{
+    staged?: string;
+    accepted?: string;
+    drafts?: string;
+    rejected?: string;
+    error?: string;
+  }>;
 }) {
   await requirePermission("inventory.manage");
   const { id } = await params;
-  const { staged, accepted, rejected, error } = await searchParams;
+  const { staged, accepted, drafts, rejected, error } = await searchParams;
 
   const manifest = await getManifestById(id);
   if (!manifest) notFound();
@@ -68,6 +74,16 @@ export default async function ManifestReviewPage({
         {accepted && (
           <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]">
             Accepted — {accepted} lot{accepted === "1" ? "" : "s"} activated and on hand.
+            {drafts && drafts !== "0" && (
+              <>
+                {" "}
+                {drafts} product{drafts === "1" ? "" : "s"} weren&apos;t on the live menu —{" "}
+                <Link href="/admin/inventory/drafts" className="font-semibold underline">
+                  review {drafts === "1" ? "it" : "them"} as draft{drafts === "1" ? "" : "s"}
+                </Link>
+                .
+              </>
+            )}
           </div>
         )}
         {rejected && (
