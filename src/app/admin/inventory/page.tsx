@@ -193,6 +193,7 @@ export default async function InventoryPage({
                   <th className="px-4 py-3">Product / lot</th>
                   <th className="px-4 py-3">Vendor · brand</th>
                   <th className="px-4 py-3 text-center">COA</th>
+                  <th className="px-4 py-3 text-right">THC</th>
                   <th className="px-4 py-3 text-right">On hand</th>
                   <th className="px-4 py-3">Expires</th>
                   <th className="px-4 py-3 text-center">Status</th>
@@ -229,8 +230,16 @@ export default async function InventoryPage({
                       <td className="px-4 py-3 text-center">
                         {l.lab ? "✅" : <span className="text-[var(--admin-orange)]">—</span>}
                       </td>
+                      <td className="px-4 py-3 text-right text-[var(--admin-text-muted)]">
+                        {l.lab?.total_thc_pct != null ? `${l.lab.total_thc_pct}%` : "—"}
+                      </td>
                       <td className="px-4 py-3 text-right font-medium text-[var(--admin-text)]">
                         {fmtQty(l.on_hand_qty, l.unit)}
+                        {l.is_sample && (
+                          <span className="ml-2 rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-[var(--admin-text-faint)]">
+                            sample
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-[var(--admin-text-muted)]">
                         {l.expires_on ? (

@@ -117,31 +117,48 @@ export async function stageManifest(
   }
   const manifestId = (mData as { id: string }).id;
 
+  // Dedupe lab_results within this manifest by external id (the WCIA file shares
+  // one lab_result_id across multiple lots — items 17/18, 27/28 in the example).
+  const labIdCache = new Map<string, string>();
+
   // 2) per line: lab_result (if any) + quarantine lot
   for (const line of parsed.lines) {
     let labId: string | null = null;
     if (line.lab) {
-      const { data: lData } = await admin
-        .from("lab_results")
-        .insert({
-          labtest_external_identifier: line.lab.labtest_external_identifier,
-          lab_name: line.lab.lab_name,
-          tested_on: line.lab.tested_on,
-          thc_pct: line.lab.thc_pct,
-          cbd_pct: line.lab.cbd_pct,
-          total_thc_pct: line.lab.total_thc_pct,
-          total_cbd_pct: line.lab.total_cbd_pct,
-          terpenes_json: line.lab.terpenes_json,
-          analytes_json: line.lab.analytes_json,
-          passed: line.lab.passed,
-          source: "vendor-json",
-          raw_payload: line.lab.raw,
-          created_by: actorId,
-          updated_by: actorId,
-        })
-        .select("id")
-        .single();
-      labId = (lData as { id: string } | null)?.id ?? null;
+      const extId = line.lab.labtest_external_identifier;
+      if (extId && labIdCache.has(extId)) {
+        labId = labIdCache.get(extId)!;
+      } else {
+        const { data: lData } = await admin
+          .from("lab_results")
+          .insert({
+            labtest_external_identifier: extId,
+            lab_name: line.lab.lab_name,
+            tested_on: line.lab.tested_on,
+            thc_pct: line.lab.thc_pct,
+            cbd_pct: line.lab.cbd_pct,
+            thca_pct: line.lab.thca_pct,
+            cbda_pct: line.lab.cbda_pct,
+            total_thc_pct: line.lab.total_thc_pct,
+            total_cbd_pct: line.lab.total_cbd_pct,
+            total_cannabinoids_pct: line.lab.total_cannabinoids_pct,
+            potency_json: line.lab.potency_json,
+            terpenes_json: line.lab.terpenes_json,
+            analytes_json: line.lab.analytes_json,
+            passed: line.lab.passed,
+            source: parsed.source_format === "wcia" ? "wcia-transfer" : "vendor-json",
+            coa_url: line.lab.coa_url,
+            coa_release_date: line.lab.coa_release_date,
+            coa_expire_date: line.lab.coa_expire_date,
+            raw_payload: line.lab.raw,
+            created_by: actorId,
+            updated_by: actorId,
+          })
+          .select("id")
+          .single();
+        labId = (lData as { id: string } | null)?.id ?? null;
+        if (extId && labId) labIdCache.set(extId, labId);
+      }
     }
 
     const brandId = await resolveBrandId(admin, line.brand_name, vendorId);
@@ -154,6 +171,13 @@ export async function stageManifest(
       lab_result_id: labId,
       pos_product_key: line.pos_product_key,
       product_name: line.product_name,
+      strain_name: line.strain_name,
+      category: line.category,
+      inventory_type: line.inventory_type,
+      unit_weight: line.unit_weight,
+      unit_weight_uom: line.unit_weight_uom,
+      is_sample: line.is_sample,
+      is_medical: line.is_medical,
       received_qty: line.received_qty,
       on_hand_qty: line.received_qty,
       unit: line.unit,
@@ -238,7 +262,9 @@ export async function listManifestLots(manifestId: string) {
   const admin = createSupabaseAdminClient();
   const { data } = await admin
     .from("inventory_lots")
-    .select("id, product_name, lot_code, received_qty, unit, pos_product_key, lab_result_id, status, expires_on")
+    .select(
+      "id, product_name, lot_code, received_qty, unit, pos_product_key, lab_result_id, status, expires_on, is_sample, strain_name",
+    )
     .eq("manifest_id", manifestId)
     .order("product_name", { ascending: true });
   return (
@@ -253,6 +279,8 @@ export async function listManifestLots(manifestId: string) {
           lab_result_id: string | null;
           status: string;
           expires_on: string | null;
+          is_sample: boolean;
+          strain_name: string | null;
         }[]
       | null) ?? []
   );
