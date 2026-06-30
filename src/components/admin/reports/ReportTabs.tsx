@@ -18,6 +18,9 @@ export const REPORT_TABS: ReportTab[] = [
   { href: "/admin/reports/cogs", label: "Inventory & COGS", icon: "📦" },
   { href: "/admin/reports/tax", label: "Tax", icon: "🧾" },
   { href: "/admin/reports/customers", label: "Customers", icon: "👥" },
+  { href: "/admin/reports/loyalty", label: "Loyalty & Discounts", icon: "🎁" },
+  { href: "/admin/reports/employees", label: "Employees", icon: "⏱" },
+  { href: "/admin/reports/medical", label: "Medical", icon: "⚕" },
   { href: "/admin/reports/compliance", label: "Compliance (CCRS)", icon: "🛡️" },
   { href: "/admin/reports/accounting", label: "Accounting (Sage 50)", icon: "📒" },
 ];
