@@ -46,7 +46,8 @@ export const adminNav: AdminNavItem[] = [
   { label: "AI Usage", href: "/admin/ai-usage", permission: "reports.view", icon: "✨", group: "Insights" },
 
   { label: "Users", href: "/admin/users", permission: "users.manage", icon: "👥", group: "Admin" },
-  { label: "Settings", href: "/admin/settings", permission: "settings.manage", icon: "⚙", group: "Admin", comingSoon: true },
+  { label: "Types & Categories", href: "/admin/settings/types", permission: "settings.manage", icon: "🏷", group: "Admin" },
+  { label: "Settings", href: "/admin/settings", permission: "settings.manage", icon: "⚙", group: "Admin" },
   { label: "Audit Log", href: "/admin/audit", permission: "users.manage", icon: "⧗", group: "Admin" },
   { label: "Help & FAQ", href: "/admin/help", permission: "dashboard.view", icon: "?", group: "Admin" },
 ];
