@@ -17,7 +17,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import type { ParsedManifest } from "@/lib/inventory/intake-parser";
 import { extractCoaLinks } from "@/lib/inventory/intake-parser";
-import type { InboundManifest } from "@/lib/inventory/types";
+import type { InboundManifest, ManifestTransportInput } from "@/lib/inventory/types";
 import { seedDraftsForManifest } from "@/lib/inventory/catalog-drafts";
 import { archiveCoasForManifest } from "@/lib/inventory/coa-archive";
 import { deriveInventoryExternalId } from "@/lib/compliance/ccrs-identifiers";
@@ -395,6 +395,64 @@ export async function setManifestLifecycle(
   const { error } = await admin.from("inbound_manifests").update(patch).eq("id", manifestId);
   if (error) return { ok: false, error: error.message };
   await logManifestEvent(manifestId, status, note ?? null, actorId);
+  return { ok: true };
+}
+
+/**
+ * Save transport / chain-of-custody details (Slice 33). Only the editable
+ * transport fields are touched; stamps who recorded them and logs a timeline
+ * event so the chain of custody is auditable. Empty strings are normalised to
+ * null so the form can clear a value.
+ */
+export async function updateManifestTransport(
+  manifestId: string,
+  input: ManifestTransportInput,
+  actorId: string | null,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) {
+    return { ok: false, error: "Supabase service role not configured." };
+  }
+  const clean = (v: string | null): string | null => {
+    const t = (v ?? "").trim();
+    return t.length === 0 ? null : t;
+  };
+  const cleanTs = (v: string | null): string | null => {
+    const t = (v ?? "").trim();
+    if (t.length === 0) return null;
+    const d = new Date(t);
+    return Number.isNaN(d.getTime()) ? null : d.toISOString();
+  };
+
+  const admin = createSupabaseAdminClient();
+  const patch = {
+    transporter_name: clean(input.transporter_name),
+    transporter_license: clean(input.transporter_license),
+    driver_name: clean(input.driver_name),
+    driver_license_number: clean(input.driver_license_number),
+    vehicle_description: clean(input.vehicle_description),
+    vehicle_plate: clean(input.vehicle_plate),
+    vehicle_vin: clean(input.vehicle_vin),
+    departed_at: cleanTs(input.departed_at),
+    arrived_at: cleanTs(input.arrived_at),
+    route_notes: clean(input.route_notes),
+    transport_recorded_by: actorId,
+    transport_recorded_at: new Date().toISOString(),
+    updated_by: actorId,
+  };
+
+  const { error } = await admin
+    .from("inbound_manifests")
+    .update(patch)
+    .eq("id", manifestId);
+  if (error) return { ok: false, error: error.message };
+
+  const who = patch.driver_name ?? patch.transporter_name ?? "transport";
+  await logManifestEvent(
+    manifestId,
+    "transport",
+    `Transport details recorded (${who}).`,
+    actorId,
+  );
   return { ok: true };
 }
 

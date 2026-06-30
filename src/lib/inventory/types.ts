@@ -25,10 +25,37 @@ export type InboundManifest = {
   coa_links: ManifestCoaLink[];
   status: string; // pending | accepted | rejected
   notes: string | null;
+  // --- Transport / chain-of-custody (Slice 33, migration 0044). All nullable. ---
+  transporter_name: string | null;
+  transporter_license: string | null;
+  driver_name: string | null;
+  driver_license_number: string | null;
+  vehicle_description: string | null;
+  vehicle_plate: string | null;
+  vehicle_vin: string | null;
+  departed_at: string | null;
+  arrived_at: string | null;
+  route_notes: string | null;
+  transport_recorded_by: string | null;
+  transport_recorded_at: string | null;
   created_by: string | null;
   updated_by: string | null;
   created_at: string;
   updated_at: string;
+};
+
+/** Editable transport fields for the manifest intake screen. */
+export type ManifestTransportInput = {
+  transporter_name: string | null;
+  transporter_license: string | null;
+  driver_name: string | null;
+  driver_license_number: string | null;
+  vehicle_description: string | null;
+  vehicle_plate: string | null;
+  vehicle_vin: string | null;
+  departed_at: string | null;
+  arrived_at: string | null;
+  route_notes: string | null;
 };
 
 export type LabResult = {

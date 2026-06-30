@@ -4,7 +4,7 @@ import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
-import { Button } from "@/components/admin/ui";
+import { Button, Field, Input, Textarea } from "@/components/admin/ui";
 import { getManifestById } from "@/lib/inventory/store";
 import { listManifestLots, listManifestEvents } from "@/lib/inventory/intake-store";
 import { ManifestTimeline } from "@/components/admin/inventory/ManifestTimeline";
@@ -13,7 +13,17 @@ import {
   rejectManifestAction,
   archiveCoasAction,
   setManifestLifecycleAction,
+  updateManifestTransportAction,
 } from "../actions";
+
+/** Format an ISO timestamp into the value a datetime-local input expects. */
+function toLocalInput(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  // YYYY-MM-DDTHH:mm in UTC (stable, no TZ surprises for the form default).
+  return d.toISOString().slice(0, 16);
+}
 
 export const dynamic = "force-dynamic";
 
@@ -33,12 +43,14 @@ export default async function ManifestReviewPage({
     drafts?: string;
     rejected?: string;
     archived?: string;
+    transport?: string;
     error?: string;
   }>;
 }) {
   await requirePermission("inventory.manage");
   const { id } = await params;
-  const { staged, accepted, drafts, rejected, archived, error } = await searchParams;
+  const { staged, accepted, drafts, rejected, archived, transport, error } =
+    await searchParams;
 
   const manifest = await getManifestById(id);
   if (!manifest) notFound();
@@ -58,6 +70,15 @@ export default async function ManifestReviewPage({
   const archiveAction = archiveCoasAction.bind(null, id);
   const markInTransitAction = setManifestLifecycleAction.bind(null, id, "in_transit");
   const markReceivedAction = setManifestLifecycleAction.bind(null, id, "received");
+  const transportAction = updateManifestTransportAction.bind(null, id);
+  const hasTransport = Boolean(
+    manifest.transporter_name ||
+      manifest.driver_name ||
+      manifest.vehicle_plate ||
+      manifest.vehicle_description ||
+      manifest.departed_at ||
+      manifest.arrived_at,
+  );
 
   return (
     <div>
@@ -106,6 +127,11 @@ export default async function ManifestReviewPage({
         {archived && (
           <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]">
             Archived {archived} COA PDF{archived === "1" ? "" : "s"} to our records.
+          </div>
+        )}
+        {transport && (
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]">
+            Transport details saved to the chain-of-custody record.
           </div>
         )}
         {error && (
@@ -241,6 +267,106 @@ export default async function ManifestReviewPage({
             </div>
           </div>
         )}
+
+        {/* Transport / chain-of-custody (Slice 33, Feature L) */}
+        <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
+          <div className="mb-1 flex items-start justify-between gap-3">
+            <h2 className="text-sm font-bold text-[var(--admin-text)]">
+              🚚 Transport &amp; chain of custody
+            </h2>
+            {hasTransport && manifest.transport_recorded_at && (
+              <span className="text-xs text-[var(--admin-text-faint)]">
+                last updated {new Date(manifest.transport_recorded_at).toLocaleString()}
+              </span>
+            )}
+          </div>
+          <p className="mb-4 text-xs text-[var(--admin-text-muted)]">
+            WA WAC 314-55-085 requires keeping transportation manifest records. Record who
+            actually delivered this load and on what vehicle. Saved with the manifest so it
+            prints with the intake record.
+          </p>
+          <form action={transportAction} className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Transporter / carrier" help="Business that moved the load">
+                <Input
+                  name="transporter_name"
+                  defaultValue={manifest.transporter_name ?? ""}
+                  placeholder="e.g. Acme Cannabis Logistics"
+                />
+              </Field>
+              <Field label="Transporter license #">
+                <Input
+                  name="transporter_license"
+                  defaultValue={manifest.transporter_license ?? ""}
+                  placeholder="WA license number"
+                />
+              </Field>
+              <Field label="Driver name">
+                <Input
+                  name="driver_name"
+                  defaultValue={manifest.driver_name ?? ""}
+                  placeholder="Person who delivered"
+                />
+              </Field>
+              <Field label="Driver license #">
+                <Input
+                  name="driver_license_number"
+                  defaultValue={manifest.driver_license_number ?? ""}
+                  placeholder="Driver's license number"
+                />
+              </Field>
+              <Field label="Vehicle description" help="Make / model / color">
+                <Input
+                  name="vehicle_description"
+                  defaultValue={manifest.vehicle_description ?? ""}
+                  placeholder="e.g. White Ford Transit van"
+                />
+              </Field>
+              <Field label="License plate">
+                <Input
+                  name="vehicle_plate"
+                  defaultValue={manifest.vehicle_plate ?? ""}
+                  placeholder="Plate number"
+                />
+              </Field>
+              <Field label="Vehicle VIN">
+                <Input
+                  name="vehicle_vin"
+                  defaultValue={manifest.vehicle_vin ?? ""}
+                  placeholder="Optional"
+                />
+              </Field>
+              <div className="hidden sm:block" />
+              <Field label="Departed" help="When it left the vendor">
+                <Input
+                  type="datetime-local"
+                  name="departed_at"
+                  defaultValue={toLocalInput(manifest.departed_at)}
+                />
+              </Field>
+              <Field label="Arrived" help="When it reached the store">
+                <Input
+                  type="datetime-local"
+                  name="arrived_at"
+                  defaultValue={toLocalInput(manifest.arrived_at)}
+                />
+              </Field>
+            </div>
+            <Field label="Route notes" help="Stops, conditions, seal numbers, etc.">
+              <Textarea
+                name="route_notes"
+                rows={2}
+                defaultValue={manifest.route_notes ?? ""}
+                placeholder="Anything noteworthy about the delivery"
+              />
+            </Field>
+            <div className="flex justify-end">
+              <Button type="submit" variant="save" size="sm">
+                💾 Save transport details
+              </Button>
+            </div>
+          </form>
+        </div>
 
         {/* Lifecycle timeline (Cultivera-style) */}
         <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
