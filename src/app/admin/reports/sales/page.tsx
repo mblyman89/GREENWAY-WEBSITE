@@ -5,7 +5,6 @@
  * brand, product, day, hour, and customer type — with KPI cards, bar charts,
  * sortable-looking tables, and a CSV export for every breakdown.
  */
-import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { StatCard } from "@/components/admin/StatCard";
@@ -16,6 +15,7 @@ import { DateRangePicker } from "@/components/admin/reports/DateRangePicker";
 import { resolveRange } from "@/lib/reports/range";
 import { getSalesReport, type SalesGroupRow } from "@/lib/reports/sales";
 import { formatWebsiteCategory } from "@/lib/pos/category-taxonomy";
+import { ExportButtons } from "@/components/admin/reports/ExportButtons";
 
 export const dynamic = "force-dynamic";
 
@@ -41,14 +41,7 @@ function Section({
           <h2 className="text-sm font-black uppercase tracking-[0.14em] text-white/80">{title}</h2>
           {subtitle ? <p className="mt-1 text-xs text-white/40">{subtitle}</p> : null}
         </div>
-        {exportHref ? (
-          <Link
-            href={exportHref}
-            className="shrink-0 rounded-lg border border-white/10 px-3 py-1.5 text-xs font-bold text-white/70 transition hover:border-white/25 hover:text-white"
-          >
-            ⬇ CSV
-          </Link>
-        ) : null}
+        {exportHref ? <ExportButtons baseHref={exportHref} /> : null}
       </div>
       {children}
     </section>

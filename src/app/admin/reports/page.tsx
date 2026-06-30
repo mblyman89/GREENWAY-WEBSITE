@@ -17,6 +17,7 @@ import {
 } from "@/lib/reports/analytics";
 import { isAiConfigured } from "@/lib/reports/ai-insights";
 import { ReportInsightsPanel } from "@/components/admin/reports/ReportInsightsPanel";
+import { ExportButtons } from "@/components/admin/reports/ExportButtons";
 
 export const dynamic = "force-dynamic";
 
@@ -92,12 +93,7 @@ export default async function ReportsOverviewPage({
             </Link>
           ))}
         </div>
-        <a
-          href={`/admin/reports/export?range=${days}`}
-          className="rounded-lg border border-white/15 bg-white/5 px-3.5 py-2 text-xs font-bold text-white hover:bg-white/10"
-        >
-          Export CSV
-        </a>
+        <ExportButtons baseHref={`/admin/reports/export?range=${days}`} />
       </div>
 
       {/* AI insights briefing */}

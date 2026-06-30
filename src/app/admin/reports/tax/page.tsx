@@ -5,7 +5,7 @@
  * (state 6.5% + local 2.8% = 9.3%). Monthly summary, per-category breakdown,
  * and a printable / CSV export for filing.
  */
-import Link from "next/link";
+import { ExportButtons } from "@/components/admin/reports/ExportButtons";
 import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { StatCard } from "@/components/admin/StatCard";
@@ -36,14 +36,7 @@ function Section({
           <h2 className="text-sm font-black uppercase tracking-[0.14em] text-white/80">{title}</h2>
           {subtitle ? <p className="mt-1 text-xs text-white/40">{subtitle}</p> : null}
         </div>
-        {exportHref ? (
-          <Link
-            href={exportHref}
-            className="shrink-0 rounded-lg border border-white/10 px-3 py-1.5 text-xs font-bold text-white/70 transition hover:border-white/25 hover:text-white"
-          >
-            ⬇ CSV
-          </Link>
-        ) : null}
+        {exportHref ? <ExportButtons baseHref={exportHref} /> : null}
       </div>
       {children}
     </section>
