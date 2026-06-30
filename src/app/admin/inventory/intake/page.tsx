@@ -4,9 +4,9 @@ import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel, EmptyState } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
-import { Field, Textarea, Button } from "@/components/admin/ui";
+import { Field, Input, Textarea, Button } from "@/components/admin/ui";
 import { listManifests, countManifestsByStatus } from "@/lib/inventory/intake-store";
-import { importManifestAction } from "./actions";
+import { importManifestAction, importManifestFromUrlAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -53,13 +53,17 @@ export default async function IntakePage({
   const errorMsg =
     error === "empty"
       ? "Paste the vendor JSON before importing."
-      : error === "parse"
-        ? "That text isn't valid JSON."
-        : error === "nolines"
-          ? "No line items were found in that JSON."
-          : error === "save"
-            ? "Something went wrong staging the manifest."
-            : null;
+      : error === "emptyurl"
+        ? "Paste the Transfer Data Link before importing."
+        : error === "fetch"
+          ? "Couldn't fetch that link — it may have expired or be unreachable. Paste the JSON directly instead."
+          : error === "parse"
+            ? "That text isn't valid JSON."
+            : error === "nolines"
+              ? "No line items were found in that JSON."
+              : error === "save"
+                ? "Something went wrong staging the manifest."
+                : null;
 
   return (
     <div>
@@ -79,15 +83,16 @@ export default async function IntakePage({
             id="intake"
             title="How vendor intake works"
             steps={[
-              "Paste the vendor's JSON (product data + COA/QA results).",
-              "We parse it into a DRAFT manifest: pending status, lots in quarantine.",
-              "Review the parsed lines + warnings on the next screen.",
-              "Accept to activate the lots, or reject to discard them. You're always in control.",
+              "Paste the Transfer Data Link from the order email (fastest) — or paste the raw JSON.",
+              "We pull every product, COA, and potency from the one transfer file. No clicking each COA link.",
+              "We stage a DRAFT manifest: pending status, lots in quarantine, COAs captured to the KB.",
+              "Review the parsed lines + warnings, then accept to activate or reject to discard.",
             ]}
           >
             <p>
-              The parser is tolerant of different vendor formats. Anything it can&apos;t map shows up
-              as a warning on the review screen so you can fix it before accepting.
+              The order email gives each product its own &ldquo;download COA&rdquo; link, but the single
+              Transfer Data Link already contains all of them. Paste that one link and we grab every
+              certificate of analysis for you — no more clicking them one at a time.
             </p>
           </HelpPanel>
         }
@@ -106,9 +111,41 @@ export default async function IntakePage({
           </div>
         )}
 
-        {/* Import form */}
+        {/* Import by Transfer Data Link (preferred) */}
+        <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-accent)]/30 bg-[var(--admin-accent-soft)] p-5">
+          <h2 className="mb-1 text-sm font-bold text-[var(--admin-text)]">
+            Import from Transfer Data Link <span className="text-[var(--admin-accent)]">(recommended)</span>
+          </h2>
+          <p className="mb-4 text-xs text-[var(--admin-text-muted)]">
+            Copy the &ldquo;Transfer Data Link&rdquo; from the order email and paste it here. We fetch the
+            full transfer — every product and every COA — so you never click the per-product COA links.
+          </p>
+          <form action={importManifestFromUrlAction} className="space-y-4">
+            <Field
+              label="Transfer Data Link"
+              help="The single link from the vendor email that contains all products + COAs."
+              htmlFor="transfer_url"
+              required
+            >
+              <Input
+                id="transfer_url"
+                name="transfer_url"
+                type="url"
+                placeholder="https://app.cultivera.com/..."
+              />
+            </Field>
+            <Button type="submit" variant="save" size="sm">
+              Fetch & stage for review
+            </Button>
+          </form>
+        </div>
+
+        {/* Import by pasting raw JSON (fallback) */}
         <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
-          <h2 className="mb-4 text-sm font-bold text-[var(--admin-text)]">Import vendor JSON</h2>
+          <h2 className="mb-1 text-sm font-bold text-[var(--admin-text)]">Or paste the JSON directly</h2>
+          <p className="mb-4 text-xs text-[var(--admin-text-muted)]">
+            If the link won&apos;t fetch, paste the raw transfer JSON from the email instead.
+          </p>
           <form action={importManifestAction} className="space-y-4">
             <Field
               label="Vendor JSON"

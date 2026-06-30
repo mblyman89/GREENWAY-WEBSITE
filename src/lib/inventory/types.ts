@@ -1,6 +1,15 @@
 // Row types for the POS Slice 3 inventory tables.
 // Mirror supabase/migrations/0023_pos_inventory_lots.sql.
 
+export type ManifestCoaLink = {
+  product_name: string | null;
+  lot_code: string | null;
+  lab_result_id: string | null;
+  coa_url: string;
+  release_date: string | null;
+  expire_date: string | null;
+};
+
 export type InboundManifest = {
   id: string;
   manifest_number: string | null;
@@ -8,6 +17,12 @@ export type InboundManifest = {
   vendor_label: string | null;
   transfer_date: string | null;
   raw_payload: unknown | null;
+  /** URL the transfer was fetched from, if imported via Transfer Data Link. */
+  source_url: string | null;
+  /** "wcia" | "generic" — how the payload was recognized. */
+  source_format: string;
+  /** Captured COA references (snapshot for the KB). */
+  coa_links: ManifestCoaLink[];
   status: string; // pending | accepted | rejected
   notes: string | null;
   created_by: string | null;

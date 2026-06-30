@@ -558,6 +558,41 @@ export function parseVendorJson(jsonText: string): ParseResult {
   return { ok: true, manifest };
 }
 
+/** One captured COA reference for the manifest's knowledge-base snapshot. */
+export type CoaLink = {
+  product_name: string | null;
+  lot_code: string | null;
+  lab_result_id: string | null;
+  coa_url: string;
+  release_date: string | null;
+  expire_date: string | null;
+};
+
+/**
+ * Pull the de-duplicated list of COA PDF links out of a parsed manifest so we
+ * can snapshot them into the knowledge base. Vendors send one COA link per
+ * product in the email; this collapses them into a single capture list and
+ * drops duplicates that share a coa_url.
+ */
+export function extractCoaLinks(m: ParsedManifest): CoaLink[] {
+  const out: CoaLink[] = [];
+  const seen = new Set<string>();
+  for (const l of m.lines) {
+    const url = l.lab?.coa_url;
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    out.push({
+      product_name: l.product_name ?? null,
+      lot_code: l.lot_code ?? null,
+      lab_result_id: l.lab?.labtest_external_identifier ?? null,
+      coa_url: url,
+      release_date: l.lab?.coa_release_date ?? null,
+      expire_date: l.lab?.coa_expire_date ?? null,
+    });
+  }
+  return out;
+}
+
 /** Summary counts for the review screen. */
 export function summarizeManifest(m: ParsedManifest): {
   lineCount: number;
