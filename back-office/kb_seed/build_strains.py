@@ -246,7 +246,9 @@ def main():
     def sql_arr(items):
         if not items:
             return "'{}'"
-        inner = ",".join('"' + i.replace('"', '\\"') + '"' for i in items)
+        # Array literals are still wrapped in a SQL single-quoted string, so
+        # apostrophes inside array values must be doubled just like sql_str().
+        inner = ",".join('"' + i.replace("'", "''").replace('"', '\\"') + '"' for i in items)
         return "'{" + inner + "}'"
 
     sql_path = os.path.join(here, "strains_seed.sql")
