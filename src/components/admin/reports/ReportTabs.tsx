@@ -15,6 +15,7 @@ export type ReportTab = { href: string; label: string; icon: string };
 export const REPORT_TABS: ReportTab[] = [
   { href: "/admin/reports", label: "Overview", icon: "📊" },
   { href: "/admin/reports/sales", label: "Sales", icon: "💵" },
+  { href: "/admin/reports/forecast", label: "Forecast", icon: "🔮" },
   { href: "/admin/reports/cogs", label: "Inventory & COGS", icon: "📦" },
   { href: "/admin/reports/tax", label: "Tax", icon: "🧾" },
   { href: "/admin/reports/customers", label: "Customers", icon: "👥" },
