@@ -13,7 +13,12 @@ import { formatMinorCurrency } from "@/lib/leafly/format";
 import { ReportTable, type ReportColumn } from "@/components/admin/reports/ReportTable";
 import { DateRangePicker } from "@/components/admin/reports/DateRangePicker";
 import { resolveRange } from "@/lib/reports/range";
-import { getWaTaxReport, type WaTaxMonthRow, type WaTaxCategoryRow } from "@/lib/reports/wa-tax";
+import {
+  getWaTaxReport,
+  type WaTaxMonthRow,
+  type WaTaxCategoryRow,
+  type WaTaxTypeRow,
+} from "@/lib/reports/wa-tax";
 import { formatWebsiteCategory } from "@/lib/pos/category-taxonomy";
 
 export const dynamic = "force-dynamic";
@@ -46,7 +51,7 @@ function Section({
 const monthColumns: ReportColumn<WaTaxMonthRow & Record<string, unknown>>[] = [
   { key: "label", header: "Month", emphasis: true },
   { key: "cannabisBaseMinor", header: "Cannabis sales", align: "right", render: (r) => formatMinorCurrency(r.cannabisBaseMinor) },
-  { key: "nonCannabisBaseMinor", header: "Other sales", align: "right", render: (r) => formatMinorCurrency(r.nonCannabisBaseMinor) },
+  { key: "nonCannabisBaseMinor", header: "Non-cannabis sales", align: "right", render: (r) => formatMinorCurrency(r.nonCannabisBaseMinor) },
   { key: "salesTaxMinor", header: "Sales tax", align: "right", render: (r) => formatMinorCurrency(r.salesTaxMinor) },
   { key: "exciseTaxMinor", header: "Excise (37%)", align: "right", emphasis: true, render: (r) => formatMinorCurrency(r.exciseTaxMinor) },
   { key: "totalTaxMinor", header: "Total tax", align: "right", emphasis: true, render: (r) => formatMinorCurrency(r.totalTaxMinor) },
@@ -58,6 +63,23 @@ const catColumns: ReportColumn<WaTaxCategoryRow & Record<string, unknown>>[] = [
   { key: "baseMinor", header: "Taxable sales", align: "right", render: (r) => formatMinorCurrency(r.baseMinor) },
   { key: "salesTaxMinor", header: "Sales tax", align: "right", render: (r) => formatMinorCurrency(r.salesTaxMinor) },
   { key: "exciseTaxMinor", header: "Excise", align: "right", emphasis: true, render: (r) => formatMinorCurrency(r.exciseTaxMinor) },
+  { key: "units", header: "Units", align: "right", render: (r) => r.units.toLocaleString() },
+];
+
+const typeColumns: ReportColumn<WaTaxTypeRow & Record<string, unknown>>[] = [
+  { key: "type", header: "Type", emphasis: true },
+  { key: "isCannabis", header: "Cannabis?", render: (r) => (r.isCannabis ? "Yes" : "No") },
+  { key: "baseMinor", header: "Taxable sales", align: "right", render: (r) => formatMinorCurrency(r.baseMinor) },
+  { key: "salesTaxMinor", header: "Sales tax", align: "right", render: (r) => formatMinorCurrency(r.salesTaxMinor) },
+  { key: "exciseTaxMinor", header: "Excise", align: "right", emphasis: true, render: (r) => formatMinorCurrency(r.exciseTaxMinor) },
+  { key: "units", header: "Units", align: "right", render: (r) => r.units.toLocaleString() },
+];
+
+// Non-cannabis-only category rows for the dedicated taxable non-cannabis section.
+const nonCannabisCatColumns: ReportColumn<WaTaxCategoryRow & Record<string, unknown>>[] = [
+  { key: "category", header: "Category", emphasis: true, render: (r) => formatWebsiteCategory(r.category) },
+  { key: "baseMinor", header: "Taxable sales", align: "right", render: (r) => formatMinorCurrency(r.baseMinor) },
+  { key: "salesTaxMinor", header: "Sales tax (9.3%)", align: "right", emphasis: true, render: (r) => formatMinorCurrency(r.salesTaxMinor) },
   { key: "units", header: "Units", align: "right", render: (r) => r.units.toLocaleString() },
 ];
 
@@ -163,6 +185,64 @@ export default async function TaxReportPage({
           emptyLabel="No taxable sales in range."
         />
       </Section>
+
+      {/* Tax by type (detailed POS type) */}
+      <Section
+        title="Tax by type"
+        subtitle="Detailed POS product types — same granularity as the Sales and COGS tabs."
+        exportHref={`/admin/reports/tax/export?view=type&${qs}`}
+      >
+        <ReportTable
+          columns={typeColumns}
+          rows={report.byType as (WaTaxTypeRow & Record<string, unknown>)[]}
+          totals={{
+            type: "Total",
+            baseMinor: formatMinorCurrency(report.totalBaseMinor),
+            salesTaxMinor: formatMinorCurrency(report.salesTaxMinor),
+            exciseTaxMinor: formatMinorCurrency(report.exciseTaxMinor),
+          }}
+          emptyLabel="No taxable sales in range."
+        />
+      </Section>
+
+      {/* Dedicated taxable non-cannabis section */}
+      <section className="rounded-2xl border border-[#8ab4f8]/25 bg-[#8ab4f8]/[0.04] p-5">
+        <div className="mb-4">
+          <h2 className="text-sm font-black uppercase tracking-[0.14em] text-[#8ab4f8]">Taxable non-cannabis sales</h2>
+          <p className="mt-1 text-xs text-white/50">
+            Non-cannabis retail goods (accessories, apparel, etc.) carry retail{" "}
+            <span className="font-bold text-white/75">sales tax only</span> — no 37% excise. Reported separately so you
+            can reconcile the non-cannabis portion of your DOR return.
+          </p>
+        </div>
+
+        <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-3">
+          <StatCard
+            label="Non-cannabis taxable sales"
+            value={formatMinorCurrency(report.nonCannabisBaseMinor)}
+            accent="muted"
+          />
+          <StatCard
+            label="Sales tax on non-cannabis"
+            value={formatMinorCurrency(report.nonCannabisSalesTaxMinor)}
+            hint={`${report.combinedSalesRatePct.toFixed(2)}% retail rate`}
+            accent="gold"
+          />
+          <StatCard label="Non-cannabis units" value={report.nonCannabisUnits.toLocaleString()} accent="muted" />
+        </div>
+
+        <ReportTable
+          columns={nonCannabisCatColumns}
+          rows={report.byCategory.filter((c) => !c.isCannabis) as (WaTaxCategoryRow & Record<string, unknown>)[]}
+          totals={{
+            category: "Total",
+            baseMinor: formatMinorCurrency(report.nonCannabisBaseMinor),
+            salesTaxMinor: formatMinorCurrency(report.nonCannabisSalesTaxMinor),
+            units: report.nonCannabisUnits.toLocaleString(),
+          }}
+          emptyLabel="No non-cannabis taxable sales in range."
+        />
+      </section>
 
       <p className="px-1 text-[0.7rem] leading-relaxed text-white/30">
         Excise is charged on cannabis products only; sales tax applies to all retail goods. Medical sales with a valid
