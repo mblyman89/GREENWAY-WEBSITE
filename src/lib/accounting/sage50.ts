@@ -27,59 +27,32 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { getTaxSettings, getCannabisCategorySet, isCannabisCategory, applyBps } from "@/lib/reports/tax";
 import { pacificDayKey } from "@/lib/reports/timezone";
+import {
+  type AccountingSettings,
+  type JournalLine,
+  type DayJournalSummary,
+  type Sage50BuildResult,
+  DEFAULT_ACCOUNTING_SETTINGS,
+  mmddyyyy,
+  clean,
+  makeFileName,
+  assembleCsv,
+  rebalance,
+} from "@/lib/accounting/sage50-core";
 
-export type AccountingSettings = {
-  glCashClearing: string;
-  glSalesCannabis: string;
-  glSalesNonCannabis: string;
-  glSalesTaxPayable: string;
-  glExciseTaxPayable: string;
-  glCogs: string;
-  glInventory: string;
-  glDiscounts: string;
-  journalRefPrefix: string;
-};
-
-export const DEFAULT_ACCOUNTING_SETTINGS: AccountingSettings = {
-  glCashClearing: "",
-  glSalesCannabis: "",
-  glSalesNonCannabis: "",
-  glSalesTaxPayable: "",
-  glExciseTaxPayable: "",
-  glCogs: "",
-  glInventory: "",
-  glDiscounts: "",
-  journalRefPrefix: "GW",
-};
-
-export type JournalLine = {
-  date: string; // MM/DD/YYYY
-  reference: string;
-  transactionNumber: number;
-  glAccountId: string;
-  description: string;
-  amountMinor: number; // debit positive, credit negative
-};
-
-export type DayJournalSummary = {
-  date: string; // YYYY-MM-DD
-  cannabisSalesMinor: number;
-  nonCannabisSalesMinor: number;
-  salesTaxMinor: number;
-  exciseMinor: number;
-  cogsMinor: number;
-  discountsMinor: number;
-  cashCollectedMinor: number;
-};
-
-export type Sage50BuildResult = {
-  csv: string;
-  fileName: string;
-  lineCount: number;
-  days: number;
-  warnings: string[];
-  summaries: DayJournalSummary[];
-};
+// Re-export the pure types/helpers so existing importers keep working.
+export type { AccountingSettings, JournalLine, DayJournalSummary, Sage50BuildResult };
+export {
+  DEFAULT_ACCOUNTING_SETTINGS,
+  dollars,
+  mmddyyyy,
+  clean,
+  csvCell,
+  makeFileName,
+  assembleCsv,
+  rebalance,
+  missingGlAccounts,
+} from "@/lib/accounting/sage50-core";
 
 // ---------------------------------------------------------------------------
 // Settings loader
@@ -114,23 +87,8 @@ export async function getAccountingSettings(): Promise<AccountingSettings> {
 }
 
 // ---------------------------------------------------------------------------
-// Helpers
+// Helpers (pure formatting helpers now live in sage50-core.ts)
 // ---------------------------------------------------------------------------
-
-function dollars(cents: number): string {
-  return (cents / 100).toFixed(2);
-}
-function mmddyyyy(ymd: string): string {
-  const [y, m, d] = ymd.split("-");
-  return `${m}/${d}/${y}`;
-}
-function clean(s: string): string {
-  return s.replace(/"/g, "").replace(/[\r\n]+/g, " ");
-}
-function csvCell(v: unknown): string {
-  const s = v == null ? "" : String(v);
-  return /[,\n]/.test(s) ? `"${s.replace(/"/g, "")}"` : s;
-}
 
 async function buildCategoryAndCostLookup(admin: ReturnType<typeof createSupabaseAdminClient>) {
   // category lookup
@@ -356,53 +314,4 @@ export async function buildSage50Journal(fromISO: string, toISO: string): Promis
  * unbalance the entry, so we remove discount lines here (kept out of the GL but
  * surfaced in the preview summaries).
  */
-function rebalance(lines: JournalLine[], settings: AccountingSettings, warnings: string[]): void {
-  if (settings.glDiscounts) {
-    // Remove discount distribution lines to preserve balance.
-    for (let i = lines.length - 1; i >= 0; i--) {
-      if (lines[i].glAccountId === settings.glDiscounts && lines[i].description.startsWith("Sales discounts")) {
-        lines.splice(i, 1);
-      }
-    }
-  }
-  // Verify balance per txn.
-  const sums = new Map<number, number>();
-  for (const l of lines) sums.set(l.transactionNumber, (sums.get(l.transactionNumber) ?? 0) + l.amountMinor);
-  const unbalanced = [...sums.entries()].filter(([, v]) => v !== 0);
-  if (unbalanced.length) {
-    warnings.push(
-      `${unbalanced.length} day(s) had rounding imbalances; review before import. (Sales discounts are shown in the preview but omitted from GL lines to keep entries balanced.)`,
-    );
-  }
-}
 
-// ---------------------------------------------------------------------------
-// File assembly
-// ---------------------------------------------------------------------------
-
-function makeFileName(): string {
-  const now = new Date();
-  const ts =
-    now.getUTCFullYear().toString() +
-    String(now.getUTCMonth() + 1).padStart(2, "0") +
-    String(now.getUTCDate()).padStart(2, "0");
-  return `Sage50_GeneralJournal_${ts}.csv`;
-}
-
-function assembleCsv(lines: JournalLine[]): string {
-  const out: string[] = [];
-  out.push(["Date", "Reference", "Transaction Number", "G/L Account ID", "Description", "Amount"].join(","));
-  for (const l of lines) {
-    out.push(
-      [
-        l.date,
-        csvCell(l.reference),
-        l.transactionNumber,
-        csvCell(l.glAccountId),
-        csvCell(l.description),
-        dollars(l.amountMinor),
-      ].join(","),
-    );
-  }
-  return out.join("\n");
-}

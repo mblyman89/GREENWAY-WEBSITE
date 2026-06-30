@@ -1,0 +1,165 @@
+import Link from "next/link";
+import { requirePermission } from "@/lib/auth/session";
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
+import { Badge, Card } from "@/components/admin/ui";
+import { describeLeaflyRuntime } from "@/lib/leafly/client";
+import { describeWeedmapsRuntime } from "@/lib/weedmaps/client";
+import { getAccountingSettings, missingGlAccounts } from "@/lib/accounting/sage50";
+
+export const dynamic = "force-dynamic";
+
+type Row = { label: string; ok: boolean; detail: string };
+
+function StatusBadge({ ok, label }: { ok: boolean; label?: string }) {
+  return (
+    <Badge tone={ok ? "green" : "orange"}>{label ?? (ok ? "Configured" : "Not configured")}</Badge>
+  );
+}
+
+function CredRow({ label, ok, detail }: Row) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-t border-[var(--admin-border)] py-2 first:border-t-0">
+      <div>
+        <div className="text-sm text-[var(--admin-text)]">{label}</div>
+        <div className="text-xs text-[var(--admin-text-faint)]">{detail}</div>
+      </div>
+      <StatusBadge ok={ok} />
+    </div>
+  );
+}
+
+export default async function IntegrationsPage() {
+  await requirePermission("settings.manage");
+
+  const leafly = describeLeaflyRuntime();
+  const weedmaps = describeWeedmapsRuntime();
+  const accounting = await getAccountingSettings();
+  const missingGl = missingGlAccounts(accounting);
+  const sageReady = missingGl.length === 0;
+
+  return (
+    <div>
+      <AdminPageHeader
+        title="Integrations"
+        subtitle="Menu syndication, accounting export, and external service status"
+        breadcrumbs={<Breadcrumbs items={[{ label: "Integrations" }]} />}
+      />
+
+      <div className="space-y-6 px-5 py-6 sm:px-8">
+        <HelpPanel
+          id="integrations"
+          title="How integrations work here"
+          steps={[
+            "Menu syndication (Leafly, WeedMaps) reads our published menu and is drafts-only until certification is confirmed.",
+            "Accounting export builds a Sage 50 General Journal CSV you import into Sage — no live API needed.",
+            "Credentials live in environment variables (never committed); this page shows whether each is present.",
+          ]}
+        >
+          Standing rule: nothing is pushed to a third party automatically. Menu pushes wait for the
+          owner&apos;s go-ahead and Leafly/WeedMaps certification.
+        </HelpPanel>
+
+        <div className="grid gap-6 lg:grid-cols-2">
+          {/* Leafly */}
+          <Card>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-bold text-[var(--admin-text)]">🍃 Leafly menu integration</h2>
+              <StatusBadge
+                ok={leafly.hasMenuIntegrationKey || leafly.hasOAuthCredentials}
+                label={leafly.environment}
+              />
+            </div>
+            <CredRow
+              label="Menu integration key"
+              ok={leafly.hasMenuIntegrationKey}
+              detail="LEAFLY_MENU_INTEGRATION_KEY"
+            />
+            <CredRow
+              label="OAuth client credentials"
+              ok={leafly.hasOAuthCredentials}
+              detail="LEAFLY_CLIENT_ID / LEAFLY_CLIENT_SECRET"
+            />
+            <p className="mt-3 text-xs text-[var(--admin-text-muted)]">
+              Base URL: <span className="font-mono">{leafly.baseUrl}</span>. Preview returns mock
+              data until Leafly certification completes.
+            </p>
+          </Card>
+
+          {/* WeedMaps */}
+          <Card>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-bold text-[var(--admin-text)]">🗺️ WeedMaps menu integration</h2>
+              <StatusBadge
+                ok={weedmaps.hasWmId && (weedmaps.hasApiKey || weedmaps.hasOAuthCredentials)}
+                label={weedmaps.environment}
+              />
+            </div>
+            <CredRow label="WM listing id" ok={weedmaps.hasWmId} detail="WEEDMAPS_WM_ID" />
+            <CredRow label="API key" ok={weedmaps.hasApiKey} detail="WEEDMAPS_API_KEY" />
+            <CredRow
+              label="OAuth client credentials"
+              ok={weedmaps.hasOAuthCredentials}
+              detail="WEEDMAPS_CLIENT_ID / WEEDMAPS_CLIENT_SECRET"
+            />
+            <p className="mt-3 text-xs text-[var(--admin-text-muted)]">
+              Base URL: <span className="font-mono">{weedmaps.baseUrl}</span>. Drafts-only until
+              WeedMaps onboarding/certification is confirmed.
+            </p>
+          </Card>
+
+          {/* Sage 50 */}
+          <Card>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-bold text-[var(--admin-text)]">📒 Sage 50 accounting export</h2>
+              <StatusBadge ok={sageReady} label={sageReady ? "Ready" : "Needs GL mapping"} />
+            </div>
+            <p className="mb-2 text-xs text-[var(--admin-text-muted)]">
+              Builds a balanced General Journal CSV (debits +, credits −) for direct import into
+              Sage 50. No API required.
+            </p>
+            {missingGl.length > 0 ? (
+              <div className="rounded-[var(--admin-radius)] border border-[var(--admin-orange)]/30 bg-[var(--admin-orange-soft)] px-3 py-2 text-xs text-[var(--admin-orange)]">
+                Map these GL accounts before exporting: {missingGl.join(", ")}.
+              </div>
+            ) : (
+              <p className="text-xs text-[var(--admin-text-muted)]">
+                Cash, cannabis-sales, and sales-tax-payable accounts are mapped.
+              </p>
+            )}
+            <div className="mt-3 flex gap-3 text-sm">
+              <Link href="/admin/reports/accounting" className="text-[var(--admin-accent)] hover:underline">
+                Open accounting export →
+              </Link>
+            </div>
+          </Card>
+
+          {/* Cultivera */}
+          <Card>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-bold text-[var(--admin-text)]">🌱 Cultivera (legacy POS)</h2>
+              <Badge tone="neutral">Researched</Badge>
+            </div>
+            <p className="text-xs text-[var(--admin-text-muted)]">
+              This back office replaces Cultivera&apos;s limited tooling. Cultivera is a WCIA-format
+              vendor — incoming transfer manifests in WCIA JSON are already supported under Vendor
+              Intake, so partner orders from Cultivera-using vendors import the same way. No outbound
+              Cultivera API is required; CCRS remains the system of record via the compliance exports.
+            </p>
+            <div className="mt-3 flex gap-3 text-sm">
+              <Link href="/admin/inventory/intake" className="text-[var(--admin-accent)] hover:underline">
+                Open vendor intake →
+              </Link>
+              <Link
+                href="/admin/reports/compliance"
+                className="text-[var(--admin-accent)] hover:underline"
+              >
+                CCRS exports →
+              </Link>
+            </div>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+}
