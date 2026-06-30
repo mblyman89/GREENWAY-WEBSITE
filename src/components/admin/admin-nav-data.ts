@@ -22,6 +22,7 @@ export const adminNav: AdminNavItem[] = [
   { label: "Time Clock", href: "/admin/staffing", permission: "loyalty.view", icon: "⏱", group: "Operations" },
   { label: "Registers & Drawers", href: "/admin/registers", permission: "orders.manage", icon: "💵", group: "Operations" },
   { label: "Equipment", href: "/admin/equipment", permission: "inventory.manage", icon: "🛠", group: "Operations" },
+  { label: "Purchasing", href: "/admin/purchasing", permission: "inventory.manage", icon: "🛒", group: "Operations" },
 
   { label: "Vendors & Brands", href: "/admin/vendors", permission: "vendors.manage", icon: "🏷", group: "Catalog" },
   { label: "Products", href: "/admin/products", permission: "products.enrich", icon: "📦", group: "Catalog" },
