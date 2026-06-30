@@ -57,7 +57,8 @@ export type Permission =
   | "inventory.manage"
   | "reports.view"
   | "users.manage"
-  | "settings.manage";
+  | "settings.manage"
+  | "staffing.manage";
 
 // Role → granted permissions. Higher roles inherit by explicit listing to keep
 // the matrix auditable and obvious.
@@ -80,6 +81,7 @@ const MATRIX: Record<Permission, StaffRole[]> = {
   "reports.view": ["owner", "admin", "manager", "readonly"],
   "users.manage": ["owner", "admin"],
   "settings.manage": ["owner", "admin"],
+  "staffing.manage": ["owner", "admin", "manager"],
 };
 
 export function can(role: StaffRole | null | undefined, permission: Permission): boolean {
@@ -107,6 +109,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   "reports.view": "View reports & exports",
   "users.manage": "Manage staff & roles",
   "settings.manage": "Change settings",
+  "staffing.manage": "Manage employees, shifts & time clock",
 };
 
 /** Display order for the matrix rows (grouped roughly by area). */
@@ -127,6 +130,7 @@ export const ALL_PERMISSIONS: Permission[] = [
   "blog.manage",
   "media.manage",
   "reports.view",
+  "staffing.manage",
   "users.manage",
   "settings.manage",
 ];
