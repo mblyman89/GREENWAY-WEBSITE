@@ -7,7 +7,7 @@ import { StatCard } from "@/components/admin/StatCard";
 import { Button } from "@/components/admin/ui";
 import { getManifestById } from "@/lib/inventory/store";
 import { listManifestLots } from "@/lib/inventory/intake-store";
-import { acceptManifestAction, rejectManifestAction } from "../actions";
+import { acceptManifestAction, rejectManifestAction, archiveCoasAction } from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -26,12 +26,13 @@ export default async function ManifestReviewPage({
     accepted?: string;
     drafts?: string;
     rejected?: string;
+    archived?: string;
     error?: string;
   }>;
 }) {
   await requirePermission("inventory.manage");
   const { id } = await params;
-  const { staged, accepted, drafts, rejected, error } = await searchParams;
+  const { staged, accepted, drafts, rejected, archived, error } = await searchParams;
 
   const manifest = await getManifestById(id);
   if (!manifest) notFound();
@@ -46,6 +47,7 @@ export default async function ManifestReviewPage({
 
   const acceptAction = acceptManifestAction.bind(null, id);
   const rejectAction = rejectManifestAction.bind(null, id);
+  const archiveAction = archiveCoasAction.bind(null, id);
 
   return (
     <div>
@@ -89,6 +91,11 @@ export default async function ManifestReviewPage({
         {rejected && (
           <div className="rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/10 px-4 py-2 text-sm text-[var(--admin-danger)]">
             Manifest rejected — its lots were marked destroyed and will never be sold.
+          </div>
+        )}
+        {archived && (
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]">
+            Archived {archived} COA PDF{archived === "1" ? "" : "s"} to our records.
           </div>
         )}
         {error && (
@@ -175,12 +182,19 @@ export default async function ManifestReviewPage({
         {/* Captured COAs (knowledge-base snapshot) */}
         {coaLinks.length > 0 && (
           <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
-            <h2 className="mb-1 text-sm font-bold text-[var(--admin-text)]">
-              Certificates of analysis ({coaLinks.length})
-            </h2>
+            <div className="mb-1 flex items-start justify-between gap-3">
+              <h2 className="text-sm font-bold text-[var(--admin-text)]">
+                Certificates of analysis ({coaLinks.length})
+              </h2>
+              <form action={archiveAction}>
+                <Button type="submit" variant="subtle" size="sm">
+                  📄 Archive COAs to records
+                </Button>
+              </form>
+            </div>
             <p className="mb-4 text-xs text-[var(--admin-text-muted)]">
               Pulled from the single transfer file — no need to open each product&apos;s COA link in the
-              email. These references are saved with the manifest.
+              email. We download and keep a copy on file so you can print them for LCB enforcement.
             </p>
             <div className="overflow-hidden rounded-[var(--admin-radius)] border border-[var(--admin-border)]">
               <table className="w-full text-sm">
