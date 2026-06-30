@@ -82,6 +82,11 @@ export default async function InventoryPage({
         title="Inventory"
         subtitle="Every lot tied to its vendor, brand, COA, and manifest — the traceability backbone most WA retailers don't have. Compliance reports are built on top of this real data, never re-entered."
         breadcrumbs={<Breadcrumbs items={[{ label: "Inventory" }]} />}
+        action={
+          <Button href="/admin/inventory/intake" variant="save" size="sm">
+            + Import vendor JSON
+          </Button>
+        }
         help={
           <HelpPanel
             id="inventory"
