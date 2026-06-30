@@ -18,6 +18,7 @@ import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import type { ParsedManifest } from "@/lib/inventory/intake-parser";
 import { extractCoaLinks } from "@/lib/inventory/intake-parser";
 import type { InboundManifest } from "@/lib/inventory/types";
+import { seedDraftsForManifest } from "@/lib/inventory/catalog-drafts";
 
 export async function listManifests(opts?: {
   status?: string;
@@ -205,7 +206,10 @@ export async function stageManifest(
 export async function acceptManifest(
   manifestId: string,
   actorId: string | null,
-): Promise<{ ok: true; activated: number } | { ok: false; error: string }> {
+): Promise<
+  | { ok: true; activated: number; draftsCreated: number }
+  | { ok: false; error: string }
+> {
   if (!isSupabaseServiceConfigured) {
     return { ok: false, error: "Supabase service role not configured." };
   }
@@ -240,7 +244,18 @@ export async function acceptManifest(
     .eq("id", manifestId);
   if (error) return { ok: false, error: error.message };
 
-  return { ok: true, activated };
+  // Seed catalog product drafts for any received lot that doesn't match a
+  // product in the published menu. Drafts are never auto-live — an employee
+  // validates and publishes them. Failure here must not fail the accept.
+  let draftsCreated = 0;
+  try {
+    const match = await seedDraftsForManifest(manifestId, actorId);
+    draftsCreated = match.unmatched;
+  } catch (err) {
+    console.error("[intake-store] seedDraftsForManifest failed:", err);
+  }
+
+  return { ok: true, activated, draftsCreated };
 }
 
 /** Reject a pending manifest: its quarantine lots → destroyed. */

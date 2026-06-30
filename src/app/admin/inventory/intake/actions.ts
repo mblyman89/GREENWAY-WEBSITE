@@ -81,7 +81,9 @@ export async function acceptManifestAction(manifestId: string) {
   if (!result.ok) {
     redirect(`/admin/inventory/intake/${manifestId}?error=accept`);
   }
-  redirect(`/admin/inventory/intake/${manifestId}?accepted=${result.activated}`);
+  redirect(
+    `/admin/inventory/intake/${manifestId}?accepted=${result.activated}&drafts=${result.draftsCreated}`,
+  );
 }
 
 export async function rejectManifestAction(manifestId: string) {
