@@ -60,6 +60,20 @@ export type AgingBucketRow = {
   costValueMinorUnits: number;
 };
 
+/**
+ * A sold product whose COGS came back $0 because no unit cost could be resolved.
+ * Surfaced so a $0 COGS is EXPLAINABLE instead of mysterious — the owner can see
+ * exactly which product_id failed to link to an inventory lot with a cost.
+ */
+export type MissingCostRow = {
+  productId: string;
+  productName: string;
+  units: number;
+  revenueMinorUnits: number;
+  /** Why the cost is missing — best-effort diagnosis. */
+  reason: string;
+};
+
 export type CogsReport = {
   hasData: boolean;
   // Sold-period KPIs
@@ -78,6 +92,10 @@ export type CogsReport = {
   byBrand: CogsGroupRow[];
   valuationByCategory: InventoryValuationRow[];
   aging: AgingBucketRow[];
+  // Diagnostics: sold lines whose COGS resolved to $0 for lack of a unit cost.
+  missingCost: MissingCostRow[];
+  missingCostUnits: number;
+  missingCostRevenueMinorUnits: number;
 };
 
 export const EMPTY_COGS_REPORT: CogsReport = {
@@ -95,6 +113,9 @@ export const EMPTY_COGS_REPORT: CogsReport = {
   byBrand: [],
   valuationByCategory: [],
   aging: [],
+  missingCost: [],
+  missingCostUnits: 0,
+  missingCostRevenueMinorUnits: 0,
 };
 
 // ---------------------------------------------------------------------------
@@ -137,15 +158,29 @@ type LotRow = {
   status: string | null;
 };
 
-/** Weighted-average unit cost (minor units) per pos_product_key. */
-function buildCostMap(lots: LotRow[]): Map<string, number> {
+type CostMap = {
+  /** Weighted-average unit cost (minor units) per pos_product_key, when known. */
+  cost: Map<string, number>;
+  /** All pos_product_keys that have at least one lot (cost known or not). */
+  lotKeys: Set<string>;
+  /** Keys that have lot(s) but every lot is missing unit_cost_minor_units. */
+  keysWithLotsButNoCost: Set<string>;
+};
+
+/** Weighted-average unit cost (minor units) per pos_product_key + diagnostics. */
+function buildCostMap(lots: LotRow[]): CostMap {
   const num = new Map<string, number>(); // sum(cost*qty)
   const den = new Map<string, number>(); // sum(qty)
   const simpleSum = new Map<string, number>();
   const simpleCount = new Map<string, number>();
+  const lotKeys = new Set<string>();
+  const keysWithCost = new Set<string>();
   for (const l of lots) {
     const key = l.pos_product_key;
-    if (!key || l.unit_cost_minor_units == null) continue;
+    if (!key) continue;
+    lotKeys.add(key);
+    if (l.unit_cost_minor_units == null) continue;
+    keysWithCost.add(key);
     const cost = l.unit_cost_minor_units;
     const qty = Number(l.received_qty ?? 0);
     if (qty > 0) {
@@ -155,14 +190,16 @@ function buildCostMap(lots: LotRow[]): Map<string, number> {
     simpleSum.set(key, (simpleSum.get(key) ?? 0) + cost);
     simpleCount.set(key, (simpleCount.get(key) ?? 0) + 1);
   }
-  const out = new Map<string, number>();
+  const cost = new Map<string, number>();
   const keys = new Set<string>([...simpleSum.keys()]);
   for (const key of keys) {
     const d = den.get(key) ?? 0;
-    if (d > 0) out.set(key, Math.round((num.get(key) ?? 0) / d));
-    else out.set(key, Math.round((simpleSum.get(key) ?? 0) / (simpleCount.get(key) || 1)));
+    if (d > 0) cost.set(key, Math.round((num.get(key) ?? 0) / d));
+    else cost.set(key, Math.round((simpleSum.get(key) ?? 0) / (simpleCount.get(key) || 1)));
   }
-  return out;
+  const keysWithLotsButNoCost = new Set<string>();
+  for (const k of lotKeys) if (!keysWithCost.has(k)) keysWithLotsButNoCost.add(k);
+  return { cost, lotKeys, keysWithLotsButNoCost };
 }
 
 // ---------------------------------------------------------------------------
@@ -239,6 +276,9 @@ export async function getCogsReport(fromISO: string, toISO: string): Promise<Cog
   const costMap = buildCostMap(lots);
   const lookup = await buildProductLookup(admin);
 
+  // Diagnostics for $0-COGS lines.
+  const missingMap = new Map<string, { name: string; units: number; revenue: number; reason: string }>();
+
   // Orders in range (non-cancelled).
   const { data: ordersData } = await admin
     .from("orders")
@@ -258,18 +298,46 @@ export async function getCogsReport(fromISO: string, toISO: string): Promise<Cog
   if (validOrderIds.length) {
     const { data: linesData } = await admin
       .from("order_lines")
-      .select("order_id, product_id, brand, quantity, price_minor_units")
+      .select("order_id, product_id, product_name, brand, quantity, price_minor_units")
       .in("order_id", validOrderIds.slice(0, 2000));
     const lines =
       (linesData as
-        | { order_id: string; product_id: string | null; brand: string | null; quantity: number; price_minor_units: number }[]
+        | {
+            order_id: string;
+            product_id: string | null;
+            product_name: string | null;
+            brand: string | null;
+            quantity: number;
+            price_minor_units: number;
+          }[]
         | null) ?? [];
 
     for (const l of lines) {
       const qty = l.quantity ?? 0;
       const revenue = (l.price_minor_units ?? 0) * qty;
-      const unitCost = l.product_id ? costMap.get(l.product_id) ?? 0 : 0;
+      const resolvedCost = l.product_id ? costMap.cost.get(l.product_id) : undefined;
+      const unitCost = resolvedCost ?? 0;
       const cogs = unitCost * qty;
+
+      // Diagnose missing cost so a $0 COGS is explainable.
+      if (resolvedCost == null && revenue > 0) {
+        const pid = l.product_id ?? "(no product_id)";
+        let reason: string;
+        if (!l.product_id) {
+          reason = "Order line has no product_id (sold off-catalog or legacy import).";
+        } else if (!costMap.lotKeys.has(l.product_id)) {
+          reason =
+            "No inventory lot matches this product key (received outside this system, or pos_product_key ≠ order product_id).";
+        } else if (costMap.keysWithLotsButNoCost.has(l.product_id)) {
+          reason = "Inventory lot exists but unit_cost_minor_units is empty (no cost captured at intake).";
+        } else {
+          reason = "Cost could not be resolved.";
+        }
+        const m = missingMap.get(pid) ?? { name: l.product_name ?? pid, units: 0, revenue: 0, reason };
+        m.units += qty;
+        m.revenue += revenue;
+        missingMap.set(pid, m);
+      }
 
       totalRevenue += revenue;
       totalCogs += cogs;
@@ -298,7 +366,7 @@ export async function getCogsReport(fromISO: string, toISO: string): Promise<Cog
     const onHand = Number(l.on_hand_qty ?? 0);
     if (onHand <= 0) continue;
     const unitCost =
-      (l.pos_product_key ? costMap.get(l.pos_product_key) : undefined) ?? l.unit_cost_minor_units ?? 0;
+      (l.pos_product_key ? costMap.cost.get(l.pos_product_key) : undefined) ?? l.unit_cost_minor_units ?? 0;
     const value = Math.round(unitCost * onHand);
 
     invValue += value;
@@ -342,6 +410,18 @@ export async function getCogsReport(fromISO: string, toISO: string): Promise<Cog
 
   const totalProfit = totalRevenue - totalCogs;
 
+  const missingCost: MissingCostRow[] = [...missingMap.entries()]
+    .map(([productId, m]) => ({
+      productId,
+      productName: m.name,
+      units: m.units,
+      revenueMinorUnits: m.revenue,
+      reason: m.reason,
+    }))
+    .sort((a, b) => b.revenueMinorUnits - a.revenueMinorUnits);
+  const missingCostUnits = missingCost.reduce((s, r) => s + r.units, 0);
+  const missingCostRevenueMinorUnits = missingCost.reduce((s, r) => s + r.revenueMinorUnits, 0);
+
   return {
     hasData: totalRevenue > 0 || invLots > 0,
     totalRevenueMinorUnits: totalRevenue,
@@ -357,5 +437,8 @@ export async function getCogsReport(fromISO: string, toISO: string): Promise<Cog
     byBrand: finalize(byBrand),
     valuationByCategory,
     aging,
+    missingCost,
+    missingCostUnits,
+    missingCostRevenueMinorUnits,
   };
 }
