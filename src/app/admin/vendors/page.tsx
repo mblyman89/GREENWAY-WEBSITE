@@ -8,6 +8,8 @@ import { Input, Select, Button } from "@/components/admin/ui";
 import { listVendors, vendorLogoUrls } from "@/lib/vendors/store";
 import { vendorCompleteness } from "@/lib/vendors/completeness";
 import { CompletenessMeter } from "@/components/admin/vendors/CompletenessMeter";
+import { computeVendorStats, vendorGapInsights } from "@/lib/insight/vendors";
+import { MissingInsight } from "@/components/admin/insight/MissingInsight";
 
 export const dynamic = "force-dynamic";
 
@@ -37,9 +39,14 @@ export default async function VendorsPage({
   const filtered = q
     ? all.filter((v) => v.display_name.toLowerCase().includes(q.toLowerCase()))
     : all;
-  const logos = await vendorLogoUrls(filtered);
+  // Resolve logos for ALL vendors so aggregate insight is accurate, not just the filtered view.
+  const logos = await vendorLogoUrls(all);
 
   const publishedCount = all.filter((v) => v.status === "published").length;
+
+  // Slice 1 — aggregate insight across all vendors (read-only).
+  const stats = computeVendorStats(all, (id) => Boolean(logos.get(id)));
+  const gapInsights = vendorGapInsights(stats);
 
   return (
     <div>
@@ -67,11 +74,21 @@ export default async function VendorsPage({
       />
 
       <div className="space-y-6 px-5 py-6 sm:px-8">
-        <div className="grid gap-4 sm:grid-cols-3">
-          <StatCard label="Total vendors" value={all.length} accent="muted" />
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard label="Total vendors" value={all.length} hint={`${stats.totalBrands} brands · ${stats.totalProducts} products`} accent="muted" />
           <StatCard label="Published" value={publishedCount} accent="green" />
           <StatCard label="Drafts" value={all.length - publishedCount} accent="orange" />
+          <StatCard label="Avg completeness" value={`${stats.avgCompleteness}%`} hint={`${stats.missing.logo} missing a logo`} accent={stats.avgCompleteness >= 70 ? "green" : "gold"} />
         </div>
+
+        {/* What's missing across all vendor profiles */}
+        {all.length > 0 && (
+          <MissingInsight
+            noun="vendor"
+            subtitle="Ranked by impact"
+            gaps={gapInsights}
+          />
+        )}
 
         {all.length === 0 && (
           <EmptyState

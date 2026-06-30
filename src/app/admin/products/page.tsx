@@ -12,6 +12,14 @@ import { ProductGrid, type ProductGridCard } from "@/components/admin/products/P
 import { Button } from "@/components/admin/ui/Button";
 import { Input, Select } from "@/components/admin/ui/Field";
 import { StatusPill, EmptyState } from "@/components/admin/ux";
+import { computeProductStats, productGapInsights } from "@/lib/insight/products";
+import { MissingInsight } from "@/components/admin/insight/MissingInsight";
+import { DistributionBars } from "@/components/admin/insight/DistributionBars";
+
+function fmtMoney(minor: number | null): string {
+  if (minor == null) return "—";
+  return `$${(minor / 100).toFixed(2)}`;
+}
 
 export const dynamic = "force-dynamic";
 
@@ -79,6 +87,10 @@ export default async function ProductsPage({
   const enriched = gaps.filter((g) => g.enrichmentStatus === "published").length;
   const categories = Array.from(new Set(gaps.map((g) => g.category))).sort();
 
+  // Slice 1 — richer read-only insight over the live menu (no source-of-truth change).
+  const stats = computeProductStats(items, gaps);
+  const gapInsights = productGapInsights(stats);
+
   // Resolve thumbnails for the visual grid (batch — no N+1).
   const shown = filtered.slice(0, 300);
   const thumbIds: string[] = [];
@@ -140,11 +152,33 @@ export default async function ProductsPage({
       />
 
       <div className="space-y-6 px-5 py-6 sm:px-8">
-        <div className="grid gap-4 sm:grid-cols-4">
-          <StatCard label="Products" value={gaps.length} accent="muted" />
-          <StatCard label="Enriched & live" value={enriched} accent="green" />
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard label="Products" value={stats.total} hint={`${stats.visible} visible · ${stats.hidden} hidden`} accent="muted" />
+          <StatCard label="Enriched & live" value={enriched} hint={`avg ${stats.avgCompleteness}% complete`} accent="green" />
           <StatCard label="Missing description" value={missingDesc} accent="orange" href="/admin/products?gap=description" />
           <StatCard label="Missing image" value={missingImg} accent="orange" href="/admin/products?gap=image" />
+        </div>
+
+        {/* Secondary metrics: price range + brand-link gap */}
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard label="Lowest price" value={fmtMoney(stats.price.minMinor)} accent="muted" />
+          <StatCard label="Median price" value={fmtMoney(stats.price.medianMinor)} accent="muted" />
+          <StatCard label="Highest price" value={fmtMoney(stats.price.maxMinor)} accent="muted" />
+          <StatCard label="Missing brand link" value={stats.missing.brandLink} accent="orange" href="/admin/products?gap=brand" />
+        </div>
+
+        {/* What's missing + distributions */}
+        <div className="grid gap-4 lg:grid-cols-2">
+          <MissingInsight
+            noun="product"
+            subtitle="Ranked by impact"
+            gaps={gapInsights}
+          />
+          <DistributionBars title="By category" rows={stats.byCategory} />
+        </div>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <DistributionBars title="By strain type" rows={stats.byStrainType} />
+          <DistributionBars title="By stock status" rows={stats.byStockStatus} />
         </div>
 
         {!isAiConfigured && (
