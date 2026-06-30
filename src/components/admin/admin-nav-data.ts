@@ -20,6 +20,7 @@ export const adminNav: AdminNavItem[] = [
 
   { label: "Vendors & Brands", href: "/admin/vendors", permission: "vendors.manage", icon: "🏷", group: "Catalog" },
   { label: "Products", href: "/admin/products", permission: "products.enrich", icon: "📦", group: "Catalog" },
+  { label: "Product Mastering", href: "/admin/products/masters", permission: "inventory.manage", icon: "🧬", group: "Catalog" },
   { label: "Inventory", href: "/admin/inventory", permission: "inventory.manage", icon: "🧾", group: "Catalog" },
   { label: "Vendor Intake", href: "/admin/inventory/intake", permission: "inventory.manage", icon: "📥", group: "Catalog" },
   { label: "Product Drafts", href: "/admin/inventory/drafts", permission: "inventory.manage", icon: "📝", group: "Catalog" },
