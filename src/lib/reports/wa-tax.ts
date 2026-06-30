@@ -66,6 +66,16 @@ export type WaTaxCategoryRow = {
   units: number;
 };
 
+/** Tax by detailed POS product type (mirrors the Sales / COGS "by type" tables). */
+export type WaTaxTypeRow = {
+  type: string;
+  isCannabis: boolean;
+  baseMinor: number;
+  salesTaxMinor: number;
+  exciseTaxMinor: number;
+  units: number;
+};
+
 export type WaTaxReport = {
   hasData: boolean;
   settings: TaxSettings;
@@ -81,9 +91,14 @@ export type WaTaxReport = {
   exciseTaxMinor: number;
   totalTaxMinor: number;
   orders: number;
+  // Non-cannabis (sales-tax-only) subtotals for the dedicated taxable
+  // non-cannabis section. Excise never applies to these.
+  nonCannabisSalesTaxMinor: number;
+  nonCannabisUnits: number;
   // Breakdowns
   byMonth: WaTaxMonthRow[];
   byCategory: WaTaxCategoryRow[];
+  byType: WaTaxTypeRow[];
 };
 
 // ---------------------------------------------------------------------------
@@ -114,21 +129,34 @@ function monthLabel(key: string): string {
   return `${MONTH_LABELS[idx] ?? m} ${y}`;
 }
 
-type ProductCategory = Map<string, string>; // source_item_id -> category
+type ProductTaxMeta = { category: string; type: string };
+type ProductLookup = Map<string, ProductTaxMeta>; // source_item_id -> {category, type}
 
 async function buildCategoryLookup(
   admin: ReturnType<typeof createSupabaseAdminClient>,
-): Promise<ProductCategory> {
-  const lookup: ProductCategory = new Map();
+): Promise<ProductLookup> {
+  const lookup: ProductLookup = new Map();
   const { data } = await admin
     .from("menu_items")
-    .select("source_item_id, category, created_at")
+    .select("source_item_id, category, pos_inventory_type, pos_inventory_category, created_at")
     .order("created_at", { ascending: false })
     .limit(20000);
-  const rows = (data as { source_item_id: string; category: string | null }[] | null) ?? [];
+  const rows =
+    (data as
+      | {
+          source_item_id: string;
+          category: string | null;
+          pos_inventory_type: string | null;
+          pos_inventory_category: string | null;
+        }[]
+      | null) ?? [];
   for (const r of rows) {
     if (!r.source_item_id || lookup.has(r.source_item_id)) continue;
-    lookup.set(r.source_item_id, r.category?.trim() || "");
+    const category = r.category?.trim() || "";
+    // Detailed POS type mirrors the Sales / COGS reports.
+    const type =
+      r.pos_inventory_type?.trim() || r.pos_inventory_category?.trim() || category || "Untyped";
+    lookup.set(r.source_item_id, { category, type });
   }
   return lookup;
 }
@@ -164,8 +192,11 @@ export async function getWaTaxReport(fromISO: string, toISO: string): Promise<Wa
     exciseTaxMinor: 0,
     totalTaxMinor: 0,
     orders: 0,
+    nonCannabisSalesTaxMinor: 0,
+    nonCannabisUnits: 0,
     byMonth: [],
     byCategory: [],
+    byType: [],
   };
 
   if (!isSupabaseServiceConfigured) return empty;
@@ -226,19 +257,24 @@ export async function getWaTaxReport(fromISO: string, toISO: string): Promise<Wa
   const monthMap = new Map<string, WaTaxMonthRow>();
   const monthOrderSeen = new Map<string, Set<string>>();
   const catMap = new Map<string, WaTaxCategoryRow>();
+  const typeMap = new Map<string, WaTaxTypeRow>();
 
   let cannabisBase = 0;
   let nonCannabisBase = 0;
   let stateSalesTax = 0;
   let localSalesTax = 0;
   let exciseTax = 0;
+  let nonCannabisSalesTax = 0;
+  let nonCannabisUnits = 0;
 
   for (const l of lines) {
     const qty = l.quantity ?? 0;
     const storedBase = (l.price_minor_units ?? 0) * qty;
     if (storedBase <= 0) continue;
 
-    const category = (l.product_id ? categoryLookup.get(l.product_id) : "") || "";
+    const meta = l.product_id ? categoryLookup.get(l.product_id) : undefined;
+    const category = meta?.category || "";
+    const type = meta?.type || "Untyped";
     const isCannabis = isCannabisCategory(category, cannabisSet);
 
     // Robustness: if prices are (or look) tax-inclusive, back the tax out so the
@@ -254,8 +290,13 @@ export async function getWaTaxReport(fromISO: string, toISO: string): Promise<Wa
     const lineStateTax = applyBps(base, stateBps);
     const lineLocalTax = applyBps(base, localBps);
 
-    if (isCannabis) cannabisBase += base;
-    else nonCannabisBase += base;
+    if (isCannabis) {
+      cannabisBase += base;
+    } else {
+      nonCannabisBase += base;
+      nonCannabisSalesTax += lineStateTax + lineLocalTax;
+      nonCannabisUnits += qty;
+    }
     stateSalesTax += lineStateTax;
     localSalesTax += lineLocalTax;
     exciseTax += tax.exciseTaxMinor;
@@ -308,6 +349,18 @@ export async function getWaTaxReport(fromISO: string, toISO: string): Promise<Wa
     cr.salesTaxMinor += lineStateTax + lineLocalTax;
     cr.exciseTaxMinor += tax.exciseTaxMinor;
     cr.units += qty;
+
+    // Type bucket (detailed POS type).
+    const typeKey = type || "Untyped";
+    let tr = typeMap.get(typeKey);
+    if (!tr) {
+      tr = { type: typeKey, isCannabis, baseMinor: 0, salesTaxMinor: 0, exciseTaxMinor: 0, units: 0 };
+      typeMap.set(typeKey, tr);
+    }
+    tr.baseMinor += base;
+    tr.salesTaxMinor += lineStateTax + lineLocalTax;
+    tr.exciseTaxMinor += tax.exciseTaxMinor;
+    tr.units += qty;
   }
 
   const salesTax = stateSalesTax + localSalesTax;
@@ -316,6 +369,7 @@ export async function getWaTaxReport(fromISO: string, toISO: string): Promise<Wa
 
   const byMonth = [...monthMap.values()].sort((a, b) => a.month.localeCompare(b.month));
   const byCategory = [...catMap.values()].sort((a, b) => b.baseMinor - a.baseMinor);
+  const byType = [...typeMap.values()].sort((a, b) => b.baseMinor - a.baseMinor);
 
   return {
     hasData: totalBase > 0,
@@ -331,7 +385,10 @@ export async function getWaTaxReport(fromISO: string, toISO: string): Promise<Wa
     exciseTaxMinor: exciseTax,
     totalTaxMinor: totalTax,
     orders: valid.length,
+    nonCannabisSalesTaxMinor: nonCannabisSalesTax,
+    nonCannabisUnits,
     byMonth,
     byCategory,
+    byType,
   };
 }

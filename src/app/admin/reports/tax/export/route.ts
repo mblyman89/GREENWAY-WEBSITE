@@ -28,6 +28,15 @@ const CATEGORY_COLUMNS: TableColumn[] = [
   { key: "units", header: "Units", type: "integer" },
 ];
 
+const TYPE_COLUMNS: TableColumn[] = [
+  { key: "type", header: "Type", type: "text" },
+  { key: "isCannabis", header: "Cannabis", type: "text" },
+  { key: "base", header: "Taxable sales", type: "currency" },
+  { key: "salesTax", header: "Sales tax", type: "currency" },
+  { key: "exciseTax", header: "Excise tax", type: "currency" },
+  { key: "units", header: "Units", type: "integer" },
+];
+
 const MONTH_COLUMNS: TableColumn[] = [
   { key: "month", header: "Month", type: "text" },
   { key: "cannabis", header: "Cannabis sales", type: "currency" },
@@ -56,7 +65,29 @@ export async function GET(request: Request) {
   const stamp = `${range.fromISO.slice(0, 10)}_${range.toISO.slice(0, 10)}`;
 
   let spec: WorkbookSpec;
-  if (view === "category") {
+  if (view === "type") {
+    const rows: TableRow[] = report.byType.map((r) => ({
+      type: r.type,
+      isCannabis: r.isCannabis ? "Yes" : "No",
+      base: r.baseMinor,
+      salesTax: r.salesTaxMinor,
+      exciseTax: r.exciseTaxMinor,
+      units: r.units,
+    }));
+    const totals: TableRow = {
+      type: "TOTAL",
+      isCannabis: "",
+      base: report.totalBaseMinor,
+      salesTax: report.salesTaxMinor,
+      exciseTax: report.exciseTaxMinor,
+      units: null,
+    };
+    spec = {
+      filename: `greenway_wa_tax_by_type_${stamp}`,
+      title: "Greenway — WA tax by type",
+      sheets: [{ name: "WA tax by type", caption: range.label, columns: TYPE_COLUMNS, rows, totals }],
+    };
+  } else if (view === "category") {
     const rows: TableRow[] = report.byCategory.map((r) => ({
       category: r.category,
       isCannabis: r.isCannabis ? "Yes" : "No",
