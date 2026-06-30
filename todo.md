@@ -11,7 +11,7 @@ Standing rules: AI output = drafts only; migrations applied manually by owner
 - [x] Slice 45 — AI forecaster (professional grade). PR #149.
 - [x] Slice 46 — Revenue by type (sales). PR #150.
 - [x] Slice 47 — XLSX + clean exports everywhere. PR #151.
-- [ ] Slice 48 — COGS by type + aging + valuation + no-COGS AI.
+- [x] Slice 48 — COGS by type + valuation/aging by type + no-COGS AI assistant. PR #152.
 - [ ] Slice 49 — Tax: taxable non-cannabis + by type/category.
 - [ ] Slice 50 — Customer reporting: newsletter stats suite (SendGrid).
 - [ ] Slice 51 — Loyalty/discount reporting polish.

@@ -18,9 +18,12 @@ import {
   type CogsGroupRow,
   type InventoryValuationRow,
   type AgingBucketRow,
+  type AgingBucketWithTypes,
   type MissingCostRow,
 } from "@/lib/reports/cogs";
 import { formatWebsiteCategory } from "@/lib/pos/category-taxonomy";
+import { isAiConfigured } from "@/lib/reports/cogs-ai";
+import { MissingCostInsightsPanel } from "@/components/admin/reports/MissingCostInsightsPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -71,12 +74,17 @@ const cogsColumns = (
   { key: "units", header: "Units", align: "right", render: (r) => r.units.toLocaleString() },
 ];
 
-const valuationColumns: ReportColumn<InventoryValuationRow & Record<string, unknown>>[] = [
-  { key: "label", header: "Category", render: (r) => formatWebsiteCategory(r.label), emphasis: true },
+const valuationColumnsFor = (
+  labelHeader: string,
+  prettify?: (s: string) => string,
+): ReportColumn<InventoryValuationRow & Record<string, unknown>>[] => [
+  { key: "label", header: labelHeader, render: (r) => (prettify ? prettify(r.label) : r.label), emphasis: true },
   { key: "costValueMinorUnits", header: "Value at cost", align: "right", emphasis: true, render: (r) => formatMinorCurrency(r.costValueMinorUnits) },
   { key: "onHandUnits", header: "On-hand units", align: "right", render: (r) => r.onHandUnits.toLocaleString() },
   { key: "lots", header: "Lots", align: "right", render: (r) => r.lots.toLocaleString() },
 ];
+const valuationColumns = valuationColumnsFor("Category", formatWebsiteCategory);
+const valuationTypeColumns = valuationColumnsFor("Type");
 
 const missingCostColumns: ReportColumn<MissingCostRow & Record<string, unknown>>[] = [
   { key: "productName", header: "Product", emphasis: true, render: (r) => r.productName },
@@ -93,6 +101,13 @@ const missingCostColumns: ReportColumn<MissingCostRow & Record<string, unknown>>
 
 const agingColumns: ReportColumn<AgingBucketRow & Record<string, unknown>>[] = [
   { key: "label", header: "Expiry window", emphasis: true },
+  { key: "costValueMinorUnits", header: "Value at cost", align: "right", emphasis: true, render: (r) => formatMinorCurrency(r.costValueMinorUnits) },
+  { key: "onHandUnits", header: "On-hand units", align: "right", render: (r) => r.onHandUnits.toLocaleString() },
+  { key: "lots", header: "Lots", align: "right", render: (r) => r.lots.toLocaleString() },
+];
+
+const agingTypeColumns: ReportColumn<AgingBucketWithTypes["types"][number] & Record<string, unknown>>[] = [
+  { key: "type", header: "Type", emphasis: true },
   { key: "costValueMinorUnits", header: "Value at cost", align: "right", emphasis: true, render: (r) => formatMinorCurrency(r.costValueMinorUnits) },
   { key: "onHandUnits", header: "On-hand units", align: "right", render: (r) => r.onHandUnits.toLocaleString() },
   { key: "lots", header: "Lots", align: "right", render: (r) => r.lots.toLocaleString() },
@@ -169,11 +184,40 @@ export default async function CogsReportPage({
         </Section>
       </div>
 
+      {/* Gross profit by type (detailed POS type) */}
+      <Section
+        title="Gross profit by type"
+        subtitle="Detailed POS product types (e.g. Rosin, BHO, Gummies) — same granularity as the Sales tab."
+      >
+        <BarList
+          data={report.byType.slice(0, 12).map((r) => ({ label: r.label, value: r.grossProfitMinorUnits }))}
+          valueFormatter={formatMinorCurrency}
+          color={REPORT_COLORS.GREEN}
+          emptyLabel="No sales in range."
+        />
+      </Section>
+
       {/* Detailed COGS tables */}
       <Section title="COGS & margin by category" exportHref={`/admin/reports/cogs/export?group=category&${qs}`}>
         <ReportTable
           columns={cogsColumns("Category", formatWebsiteCategory)}
           rows={report.byCategory as (CogsGroupRow & Record<string, unknown>)[]}
+          totals={{
+            label: "Total",
+            revenueMinorUnits: formatMinorCurrency(report.totalRevenueMinorUnits),
+            cogsMinorUnits: formatMinorCurrency(report.totalCogsMinorUnits),
+            grossProfitMinorUnits: formatMinorCurrency(report.totalGrossProfitMinorUnits),
+            margin: pct(report.overallMargin),
+            units: report.unitsSold.toLocaleString(),
+          }}
+          emptyLabel="No sales in range."
+        />
+      </Section>
+
+      <Section title="COGS & margin by type" exportHref={`/admin/reports/cogs/export?group=type&${qs}`}>
+        <ReportTable
+          columns={cogsColumns("Type")}
+          rows={report.byType as (CogsGroupRow & Record<string, unknown>)[]}
           totals={{
             label: "Total",
             revenueMinorUnits: formatMinorCurrency(report.totalRevenueMinorUnits),
@@ -222,23 +266,44 @@ export default async function CogsReportPage({
             rows={report.missingCost as (MissingCostRow & Record<string, unknown>)[]}
             emptyLabel="None — every sold item has a cost."
           />
+          <MissingCostInsightsPanel
+            range={{ from: range.fromISO.slice(0, 10), to: range.toISO.slice(0, 10) }}
+            aiEnabled={isAiConfigured}
+            count={report.missingCost.length}
+          />
         </section>
       ) : null}
 
       {/* Inventory valuation + aging */}
-      <Section title="Inventory valuation by category" subtitle="Current on-hand at cost (not range-bound).">
-        <ReportTable
-          columns={valuationColumns}
-          rows={report.valuationByCategory as (InventoryValuationRow & Record<string, unknown>)[]}
-          totals={{
-            label: "Total",
-            costValueMinorUnits: formatMinorCurrency(report.inventoryCostValueMinorUnits),
-            onHandUnits: report.inventoryOnHandUnits.toLocaleString(),
-            lots: report.inventoryLots.toLocaleString(),
-          }}
-          emptyLabel="No active inventory."
-        />
-      </Section>
+      <div className="grid gap-5 lg:grid-cols-2">
+        <Section title="Inventory valuation by category" subtitle="Current on-hand at cost (not range-bound).">
+          <ReportTable
+            columns={valuationColumns}
+            rows={report.valuationByCategory as (InventoryValuationRow & Record<string, unknown>)[]}
+            totals={{
+              label: "Total",
+              costValueMinorUnits: formatMinorCurrency(report.inventoryCostValueMinorUnits),
+              onHandUnits: report.inventoryOnHandUnits.toLocaleString(),
+              lots: report.inventoryLots.toLocaleString(),
+            }}
+            emptyLabel="No active inventory."
+          />
+        </Section>
+
+        <Section title="Inventory valuation by type" subtitle="On-hand at cost by detailed POS type.">
+          <ReportTable
+            columns={valuationTypeColumns}
+            rows={report.valuationByType as (InventoryValuationRow & Record<string, unknown>)[]}
+            totals={{
+              label: "Total",
+              costValueMinorUnits: formatMinorCurrency(report.inventoryCostValueMinorUnits),
+              onHandUnits: report.inventoryOnHandUnits.toLocaleString(),
+              lots: report.inventoryLots.toLocaleString(),
+            }}
+            emptyLabel="No active inventory."
+          />
+        </Section>
+      </div>
 
       <Section title="Inventory aging by expiry" subtitle="How close on-hand lots are to expiring.">
         <ReportTable
@@ -247,6 +312,35 @@ export default async function CogsReportPage({
           emptyLabel="No active inventory."
         />
       </Section>
+
+      {/* Aging drill-down: each expiry window broken down by detailed type. */}
+      {report.agingByType.some((b) => b.types.length > 0) ? (
+        <Section
+          title="Inventory aging by type"
+          subtitle="Each expiry window broken down by detailed product type — find which types are aging out."
+        >
+          <div className="space-y-4">
+            {report.agingByType
+              .filter((b) => b.types.length > 0)
+              .map((bucket: AgingBucketWithTypes) => (
+                <div key={bucket.label} className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
+                  <div className="mb-2 flex items-baseline justify-between gap-3">
+                    <h3 className="text-xs font-black uppercase tracking-[0.12em] text-white/70">{bucket.label}</h3>
+                    <span className="text-xs text-white/45">
+                      {formatMinorCurrency(bucket.costValueMinorUnits)} · {bucket.onHandUnits.toLocaleString()} units ·{" "}
+                      {bucket.lots.toLocaleString()} lots
+                    </span>
+                  </div>
+                  <ReportTable
+                    columns={agingTypeColumns}
+                    rows={bucket.types as (AgingBucketWithTypes["types"][number] & Record<string, unknown>)[]}
+                    emptyLabel="No lots."
+                  />
+                </div>
+              ))}
+          </div>
+        </Section>
+      ) : null}
     </div>
   );
 }

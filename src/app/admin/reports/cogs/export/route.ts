@@ -56,6 +56,10 @@ export async function GET(request: Request) {
   let rows: CogsGroupRow[];
   let labelHeader: string;
   switch (group) {
+    case "type":
+      rows = report.byType;
+      labelHeader = "Type";
+      break;
     case "vendor":
       rows = report.byVendor;
       labelHeader = "Vendor";

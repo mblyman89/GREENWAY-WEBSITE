@@ -60,6 +60,19 @@ export type AgingBucketRow = {
   costValueMinorUnits: number;
 };
 
+/** Aging detail for a single product type, nested under its aging bucket. */
+export type AgingTypeRow = {
+  type: string;
+  lots: number;
+  onHandUnits: number;
+  costValueMinorUnits: number;
+};
+
+/** An aging bucket with its per-type breakdown (so aging mirrors sales/COGS by type). */
+export type AgingBucketWithTypes = AgingBucketRow & {
+  types: AgingTypeRow[];
+};
+
 /**
  * A sold product whose COGS came back $0 because no unit cost could be resolved.
  * Surfaced so a $0 COGS is EXPLAINABLE instead of mysterious — the owner can see
@@ -88,10 +101,14 @@ export type CogsReport = {
   inventoryLots: number;
   // Breakdowns
   byCategory: CogsGroupRow[];
+  byType: CogsGroupRow[];
   byVendor: CogsGroupRow[];
   byBrand: CogsGroupRow[];
   valuationByCategory: InventoryValuationRow[];
+  valuationByType: InventoryValuationRow[];
   aging: AgingBucketRow[];
+  /** Aging buckets with their per-type breakdown (drill-down). */
+  agingByType: AgingBucketWithTypes[];
   // Diagnostics: sold lines whose COGS resolved to $0 for lack of a unit cost.
   missingCost: MissingCostRow[];
   missingCostUnits: number;
@@ -109,10 +126,13 @@ export const EMPTY_COGS_REPORT: CogsReport = {
   inventoryOnHandUnits: 0,
   inventoryLots: 0,
   byCategory: [],
+  byType: [],
   byVendor: [],
   byBrand: [],
   valuationByCategory: [],
+  valuationByType: [],
   aging: [],
+  agingByType: [],
   missingCost: [],
   missingCostUnits: 0,
   missingCostRevenueMinorUnits: 0,
@@ -122,7 +142,7 @@ export const EMPTY_COGS_REPORT: CogsReport = {
 // Lookups
 // ---------------------------------------------------------------------------
 
-type ProductMeta = { category: string; vendor: string; brand: string };
+type ProductMeta = { category: string; type: string; vendor: string; brand: string };
 
 async function buildProductLookup(
   admin: ReturnType<typeof createSupabaseAdminClient>,
@@ -130,17 +150,34 @@ async function buildProductLookup(
   const lookup = new Map<string, ProductMeta>();
   const { data } = await admin
     .from("menu_items")
-    .select("source_item_id, category, vendor_name, brand_name, created_at")
+    .select(
+      "source_item_id, category, pos_inventory_type, pos_inventory_category, vendor_name, brand_name, created_at",
+    )
     .order("created_at", { ascending: false })
     .limit(20000);
   const rows =
     (data as
-      | { source_item_id: string; category: string | null; vendor_name: string | null; brand_name: string | null }[]
+      | {
+          source_item_id: string;
+          category: string | null;
+          pos_inventory_type: string | null;
+          pos_inventory_category: string | null;
+          vendor_name: string | null;
+          brand_name: string | null;
+        }[]
       | null) ?? [];
   for (const r of rows) {
     if (!r.source_item_id || lookup.has(r.source_item_id)) continue;
+    // Detailed POS type mirrors the Sales report: prefer pos_inventory_type, then
+    // pos_inventory_category, then the website category, else "Untyped".
+    const type =
+      r.pos_inventory_type?.trim() ||
+      r.pos_inventory_category?.trim() ||
+      r.category?.trim() ||
+      "Untyped";
     lookup.set(r.source_item_id, {
       category: r.category?.trim() || "Uncategorized",
+      type,
       vendor: r.vendor_name?.trim() || "Unknown vendor",
       brand: r.brand_name?.trim() || "Unknown brand",
     });
@@ -289,6 +326,7 @@ export async function getCogsReport(fromISO: string, toISO: string): Promise<Cog
   const validOrderIds = orders.filter((o) => o.status !== "cancelled").map((o) => o.id);
 
   const byCategory = new Map<string, Acc>();
+  const byType = new Map<string, Acc>();
   const byVendor = new Map<string, Acc>();
   const byBrand = new Map<string, Acc>();
   let totalRevenue = 0;
@@ -345,10 +383,12 @@ export async function getCogsReport(fromISO: string, toISO: string): Promise<Cog
 
       const meta = (l.product_id && lookup.get(l.product_id)) || null;
       const category = meta?.category ?? "Uncategorized";
+      const type = meta?.type ?? "Untyped";
       const vendor = meta?.vendor ?? "Unknown vendor";
       const brand = l.brand?.trim() || meta?.brand || "Unknown brand";
 
       pushAcc(byCategory, category, revenue, cogs, qty);
+      pushAcc(byType, type, revenue, cogs, qty);
       pushAcc(byVendor, vendor, revenue, cogs, qty);
       pushAcc(byBrand, brand, revenue, cogs, qty);
     }
@@ -356,7 +396,10 @@ export async function getCogsReport(fromISO: string, toISO: string): Promise<Cog
 
   // Inventory valuation + aging from ACTIVE lots with on_hand > 0.
   const valuationMap = new Map<string, { onHand: number; cost: number; lots: number }>();
+  const valuationTypeMap = new Map<string, { onHand: number; cost: number; lots: number }>();
   const agingMap = new Map<string, { lots: number; onHand: number; cost: number }>();
+  // bucket -> type -> totals (so aging mirrors the by-type breakdown).
+  const agingTypeMap = new Map<string, Map<string, { lots: number; onHand: number; cost: number }>>();
   let invValue = 0;
   let invOnHand = 0;
   let invLots = 0;
@@ -375,11 +418,19 @@ export async function getCogsReport(fromISO: string, toISO: string): Promise<Cog
 
     const meta = (l.pos_product_key && lookup.get(l.pos_product_key)) || null;
     const category = meta?.category ?? "Uncategorized";
+    const type = meta?.type ?? "Untyped";
+
     const v = valuationMap.get(category) ?? { onHand: 0, cost: 0, lots: 0 };
     v.onHand += onHand;
     v.cost += value;
     v.lots += 1;
     valuationMap.set(category, v);
+
+    const vt = valuationTypeMap.get(type) ?? { onHand: 0, cost: 0, lots: 0 };
+    vt.onHand += onHand;
+    vt.cost += value;
+    vt.lots += 1;
+    valuationTypeMap.set(type, vt);
 
     const bucket = agingBucket(l.expires_on);
     const a = agingMap.get(bucket) ?? { lots: 0, onHand: 0, cost: 0 };
@@ -387,9 +438,29 @@ export async function getCogsReport(fromISO: string, toISO: string): Promise<Cog
     a.onHand += onHand;
     a.cost += value;
     agingMap.set(bucket, a);
+
+    let typeMap = agingTypeMap.get(bucket);
+    if (!typeMap) {
+      typeMap = new Map();
+      agingTypeMap.set(bucket, typeMap);
+    }
+    const at = typeMap.get(type) ?? { lots: 0, onHand: 0, cost: 0 };
+    at.lots += 1;
+    at.onHand += onHand;
+    at.cost += value;
+    typeMap.set(type, at);
   }
 
   const valuationByCategory: InventoryValuationRow[] = [...valuationMap.entries()]
+    .map(([label, v]) => ({
+      label,
+      onHandUnits: Math.round(v.onHand * 100) / 100,
+      costValueMinorUnits: v.cost,
+      lots: v.lots,
+    }))
+    .sort((x, y) => y.costValueMinorUnits - x.costValueMinorUnits);
+
+  const valuationByType: InventoryValuationRow[] = [...valuationTypeMap.entries()]
     .map(([label, v]) => ({
       label,
       onHandUnits: Math.round(v.onHand * 100) / 100,
@@ -405,6 +476,26 @@ export async function getCogsReport(fromISO: string, toISO: string): Promise<Cog
       lots: a.lots,
       onHandUnits: Math.round(a.onHand * 100) / 100,
       costValueMinorUnits: a.cost,
+    };
+  });
+
+  const agingByType: AgingBucketWithTypes[] = AGING_ORDER.filter((b) => agingMap.has(b)).map((label) => {
+    const a = agingMap.get(label)!;
+    const typeMap = agingTypeMap.get(label) ?? new Map();
+    const types: AgingTypeRow[] = [...typeMap.entries()]
+      .map(([type, t]) => ({
+        type,
+        lots: t.lots,
+        onHandUnits: Math.round(t.onHand * 100) / 100,
+        costValueMinorUnits: t.cost,
+      }))
+      .sort((x, y) => y.costValueMinorUnits - x.costValueMinorUnits);
+    return {
+      label,
+      lots: a.lots,
+      onHandUnits: Math.round(a.onHand * 100) / 100,
+      costValueMinorUnits: a.cost,
+      types,
     };
   });
 
@@ -433,10 +524,13 @@ export async function getCogsReport(fromISO: string, toISO: string): Promise<Cog
     inventoryOnHandUnits: Math.round(invOnHand * 100) / 100,
     inventoryLots: invLots,
     byCategory: finalize(byCategory),
+    byType: finalize(byType),
     byVendor: finalize(byVendor),
     byBrand: finalize(byBrand),
     valuationByCategory,
+    valuationByType,
     aging,
+    agingByType,
     missingCost,
     missingCostUnits,
     missingCostRevenueMinorUnits,
