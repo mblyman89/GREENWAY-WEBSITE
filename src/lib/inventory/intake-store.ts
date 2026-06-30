@@ -241,9 +241,10 @@ export async function acceptManifest(
 
   const { error } = await admin
     .from("inbound_manifests")
-    .update({ status: "accepted", updated_by: actorId })
+    .update({ status: "accepted", accepted_at: new Date().toISOString(), updated_by: actorId })
     .eq("id", manifestId);
   if (error) return { ok: false, error: error.message };
+  await logManifestEvent(manifestId, "accepted", `Accepted ${activated} lot(s).`, actorId);
 
   // Seed catalog product drafts for any received lot that doesn't match a
   // product in the published menu. Drafts are never auto-live — an employee
@@ -283,9 +284,10 @@ export async function rejectManifest(
     .eq("status", "quarantine");
   const { error } = await admin
     .from("inbound_manifests")
-    .update({ status: "rejected", updated_by: actorId })
+    .update({ status: "rejected", rejected_at: new Date().toISOString(), updated_by: actorId })
     .eq("id", manifestId);
   if (error) return { ok: false, error: error.message };
+  await logManifestEvent(manifestId, "rejected", "Manifest rejected; lots destroyed.", actorId);
   return { ok: true };
 }
 
@@ -316,5 +318,89 @@ export async function listManifestLots(manifestId: string) {
           strain_name: string | null;
         }[]
       | null) ?? []
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Manifest lifecycle (Slice 18) — Cultivera-style status timeline.
+//
+// Vendors generate a manifest; the owner wants to watch it move:
+//   pending → in_transit → received → accepted | rejected
+// accept/reject keep their existing inventory side-effects (above); these
+// helpers handle the interim states + a manifest_events timeline. Setting a
+// status is idempotent-ish: it stamps the matching timestamp and logs an event.
+// ---------------------------------------------------------------------------
+
+export type ManifestLifecycleStatus =
+  | "pending"
+  | "in_transit"
+  | "received"
+  | "accepted"
+  | "rejected";
+
+const LIFECYCLE_TIMESTAMP: Partial<Record<ManifestLifecycleStatus, string>> = {
+  in_transit: "in_transit_at",
+  received: "received_at",
+  accepted: "accepted_at",
+  rejected: "rejected_at",
+};
+
+/** Record a manifest_events row (best-effort timeline). */
+export async function logManifestEvent(
+  manifestId: string,
+  eventType: string,
+  note: string | null,
+  actorId: string | null,
+): Promise<void> {
+  if (!isSupabaseServiceConfigured) return;
+  try {
+    const admin = createSupabaseAdminClient();
+    await admin.from("manifest_events").insert({
+      manifest_id: manifestId,
+      event_type: eventType,
+      note,
+      actor_id: actorId,
+    });
+  } catch (err) {
+    console.error("[intake-store] logManifestEvent failed:", err);
+  }
+}
+
+/**
+ * Move a manifest to an interim lifecycle state (in_transit or received).
+ * Does NOT touch inventory lots — that happens on accept/reject. Stamps the
+ * matching timestamp and logs a timeline event.
+ */
+export async function setManifestLifecycle(
+  manifestId: string,
+  status: "in_transit" | "received",
+  actorId: string | null,
+  note?: string | null,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) {
+    return { ok: false, error: "Supabase service role not configured." };
+  }
+  const admin = createSupabaseAdminClient();
+  const patch: Record<string, unknown> = { status, updated_by: actorId };
+  const tsCol = LIFECYCLE_TIMESTAMP[status];
+  if (tsCol) patch[tsCol] = new Date().toISOString();
+
+  const { error } = await admin.from("inbound_manifests").update(patch).eq("id", manifestId);
+  if (error) return { ok: false, error: error.message };
+  await logManifestEvent(manifestId, status, note ?? null, actorId);
+  return { ok: true };
+}
+
+/** The lifecycle timeline for a manifest, oldest first. */
+export async function listManifestEvents(manifestId: string) {
+  if (!isSupabaseServiceConfigured) return [];
+  const admin = createSupabaseAdminClient();
+  const { data } = await admin
+    .from("manifest_events")
+    .select("id, event_type, note, created_at")
+    .eq("manifest_id", manifestId)
+    .order("created_at", { ascending: true });
+  return (
+    (data as { id: string; event_type: string; note: string | null; created_at: string }[] | null) ?? []
   );
 }

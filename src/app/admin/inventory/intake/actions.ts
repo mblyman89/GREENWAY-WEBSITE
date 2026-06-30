@@ -86,6 +86,18 @@ export async function acceptManifestAction(manifestId: string) {
   );
 }
 
+export async function setManifestLifecycleAction(manifestId: string, status: "in_transit" | "received") {
+  const session = await requirePermission("inventory.manage");
+  const { setManifestLifecycle } = await import("@/lib/inventory/intake-store");
+  const result = await setManifestLifecycle(manifestId, status, session.userId);
+  revalidatePath(`/admin/inventory/intake/${manifestId}`);
+  revalidatePath("/admin/inventory/intake");
+  if (!result.ok) {
+    redirect(`/admin/inventory/intake/${manifestId}?error=lifecycle`);
+  }
+  redirect(`/admin/inventory/intake/${manifestId}?lifecycle=${status}`);
+}
+
 export async function archiveCoasAction(manifestId: string) {
   await requirePermission("inventory.manage");
   const { archiveCoasForManifest } = await import("@/lib/inventory/coa-archive");
