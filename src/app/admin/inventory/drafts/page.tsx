@@ -4,7 +4,7 @@ import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel, EmptyState } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
-import { Button } from "@/components/admin/ui";
+import { Button, Input } from "@/components/admin/ui";
 import { listCatalogDrafts, countCatalogDrafts } from "@/lib/inventory/catalog-drafts";
 import { approveDraftAction, dismissDraftAction, restoreDraftAction } from "./actions";
 
@@ -15,13 +15,18 @@ function fmtPct(n: number | null): string {
   return `${n}%`;
 }
 
+function fmtMoney(minor: number | null | undefined): string {
+  if (minor == null) return "—";
+  return `$${(minor / 100).toFixed(2)}`;
+}
+
 export default async function CatalogDraftsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; approved?: string; dismissed?: string; restored?: string; error?: string }>;
+  searchParams: Promise<{ status?: string; approved?: string; dismissed?: string; restored?: string; error?: string; msg?: string }>;
 }) {
   await requirePermission("inventory.manage");
-  const { status, approved, dismissed, restored, error } = await searchParams;
+  const { status, approved, dismissed, restored, error, msg } = await searchParams;
   const view = status === "approved" || status === "dismissed" ? status : "draft";
 
   if (!isSupabaseServiceConfigured) {
@@ -40,11 +45,13 @@ export default async function CatalogDraftsPage({
   const [drafts, counts] = await Promise.all([listCatalogDrafts(view), countCatalogDrafts()]);
 
   const banner =
-    approved ? "Draft approved — it's validated and ready for the next menu publish."
+    approved ? "Draft approved with its price — validated and ready for the next menu publish."
       : dismissed ? "Draft dismissed."
         : restored ? "Draft restored to the review queue."
-          : error ? "Something went wrong updating that draft."
-            : null;
+          : error === "floor" ? (msg || "Price is below the cost floor.")
+            : error === "price" ? "Enter a valid price before approving."
+              : error ? "Something went wrong updating that draft."
+                : null;
   const bannerTone = error ? "danger" : "accent";
 
   return (
@@ -133,7 +140,8 @@ export default async function CatalogDraftsPage({
                   <th className="px-4 py-3">Product</th>
                   <th className="px-4 py-3">Category</th>
                   <th className="px-4 py-3 text-right">THC</th>
-                  <th className="px-4 py-3">POS key</th>
+                  <th className="px-4 py-3 text-right">Cost</th>
+                  <th className="px-4 py-3 text-right">Pricing</th>
                   <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
@@ -142,6 +150,9 @@ export default async function CatalogDraftsPage({
                   const approve = approveDraftAction.bind(null, d.id);
                   const dismiss = dismissDraftAction.bind(null, d.id);
                   const restore = restoreDraftAction.bind(null, d.id);
+                  const defaultPrice =
+                    (d.price_minor_units ?? d.suggested_price_minor_units ?? d.price_floor_minor_units ?? 0) / 100;
+                  const floorDollars = d.price_floor_minor_units != null ? d.price_floor_minor_units / 100 : undefined;
                   return (
                     <tr key={d.id} className="bg-[var(--admin-surface)] align-top">
                       <td className="px-4 py-3">
@@ -154,14 +165,38 @@ export default async function CatalogDraftsPage({
                       <td className="px-4 py-3 text-right text-[var(--admin-text-muted)]">
                         {fmtPct(d.total_thc_pct ?? d.thc_pct)}
                       </td>
-                      <td className="px-4 py-3 font-mono text-xs text-[var(--admin-text-faint)]">
-                        {d.pos_product_key ?? "—"}
+                      <td className="px-4 py-3 text-right text-[var(--admin-text-muted)]">
+                        {fmtMoney(d.unit_cost_minor_units)}
+                      </td>
+                      <td className="px-4 py-3 text-right text-xs">
+                        <div className="text-[var(--admin-text-muted)]">
+                          Floor <span className="font-semibold text-[var(--admin-text)]">{fmtMoney(d.price_floor_minor_units)}</span>
+                        </div>
+                        <div className="text-[var(--admin-accent)]">
+                          AI suggests {fmtMoney(d.suggested_price_minor_units)}
+                        </div>
+                        {d.price_rationale && (
+                          <div className="mt-0.5 max-w-[16rem] text-[10px] leading-tight text-[var(--admin-text-faint)]">
+                            {d.price_rationale}
+                          </div>
+                        )}
                       </td>
                       <td className="px-4 py-3">
-                        <div className="flex justify-end gap-2">
+                        <div className="flex flex-col items-end gap-2">
                           {view === "draft" && (
                             <>
-                              <form action={approve}>
+                              <form action={approve} className="flex items-center gap-2">
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[var(--admin-text-faint)]">$</span>
+                                  <Input
+                                    name="price"
+                                    type="number"
+                                    step="0.01"
+                                    min={floorDollars}
+                                    defaultValue={defaultPrice ? defaultPrice.toFixed(2) : ""}
+                                    className="w-24"
+                                  />
+                                </div>
                                 <Button type="submit" variant="save" size="sm">✓ Approve</Button>
                               </form>
                               <form action={dismiss}>
@@ -170,9 +205,16 @@ export default async function CatalogDraftsPage({
                             </>
                           )}
                           {view !== "draft" && (
-                            <form action={restore}>
-                              <Button type="submit" variant="subtle" size="sm">↩ Restore</Button>
-                            </form>
+                            <>
+                              {d.price_minor_units != null && (
+                                <span className="text-sm font-semibold text-[var(--admin-text)]">
+                                  {fmtMoney(d.price_minor_units)}
+                                </span>
+                              )}
+                              <form action={restore}>
+                                <Button type="submit" variant="subtle" size="sm">↩ Restore</Button>
+                              </form>
+                            </>
                           )}
                         </div>
                       </td>
