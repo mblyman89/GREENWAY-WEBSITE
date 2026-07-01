@@ -17,6 +17,11 @@
  * they call into the assemblers here so the spec stays in one factual place.
  */
 import { pacificDayKey } from "@/lib/reports/timezone";
+import {
+  validateLicenseNumber,
+  checkSaleIdentifierIntegrity,
+  findExternalIdCollisions,
+} from "@/lib/compliance/ccrs-identifiers";
 
 /** The seven upload types a WA RETAILER is required to report (Table 1). */
 export type CcrsRetailerFileType =
@@ -653,6 +658,22 @@ export function verifyCcrsFile(
   const dateCols = dateColumnIndexes(type);
   const catIdx = expected.indexOf("InventoryCategory");
   const typeIdx = expected.indexOf("InventoryType");
+  // Slice 108: identifier-integrity column positions (‑1 when the file lacks it).
+  const licIdx = expected.indexOf("LicenseNumber");
+  const saleIdIdx = expected.indexOf("SaleExternalIdentifier");
+  const saleDetailIdx = expected.indexOf("SaleDetailExternalIdentifier");
+  const saleTypeIdx = expected.indexOf("SaleType");
+  const saleDateIdx = expected.indexOf("SaleDate");
+  const extIdIdx = expected.indexOf("ExternalIdentifier");
+  const invExtIdIdx = expected.indexOf("InventoryExternalIdentifier");
+  // Accumulators for cross-row integrity checks (evaluated after the row loop).
+  const saleLines: {
+    saleExternalId: string;
+    saleDetailExternalId: string;
+    saleType?: string | null;
+    saleDate?: string | null;
+  }[] = [];
+  const extIdOwners: { owner: string; externalId: string | null | undefined }[] = [];
 
   dataRows.forEach((line, idx) => {
     const rowNo = idx + 1;
@@ -671,7 +692,47 @@ export function verifyCcrsFile(
       const cls = validateProductClassification(cells[catIdx], cells[typeIdx]);
       if (!cls.ok) err(`Data row ${rowNo}: ${cls.error}`);
     }
+    // Slice 108: LicenseNumber must be a valid 6-digit retail licensee number.
+    if (licIdx >= 0) {
+      const licProblems = validateLicenseNumber(cells[licIdx]);
+      if (licProblems.length > 0) {
+        err(`Data row ${rowNo}: LicenseNumber "${cells[licIdx] ?? ""}" ${licProblems.join("; ")}.`);
+      }
+    }
+    // Collect Sale identifier triples for the cross-row integrity check.
+    if (type === "Sale" && saleIdIdx >= 0 && saleDetailIdx >= 0) {
+      saleLines.push({
+        saleExternalId: (cells[saleIdIdx] ?? "").trim(),
+        saleDetailExternalId: (cells[saleDetailIdx] ?? "").trim(),
+        saleType: saleTypeIdx >= 0 ? cells[saleTypeIdx] : null,
+        saleDate: saleDateIdx >= 0 ? cells[saleDateIdx] : null,
+      });
+    }
+    // Collect the record's own ExternalIdentifier (or InventoryExternalIdentifier
+    // for the Inventory Adjustment file) to detect in-file collisions. The owner
+    // key is the row number so identical ids on DIFFERENT rows are flagged.
+    if (extIdIdx >= 0) {
+      extIdOwners.push({ owner: `row ${rowNo}`, externalId: cells[extIdIdx] });
+    } else if (type === "InventoryAdjustment" && invExtIdIdx >= 0) {
+      // InventoryAdjustment reuses one inventory id across many adjustments, so a
+      // repeat is legitimate — skip collision detection for that file.
+    }
   });
+
+  // Slice 108: cross-row identifier integrity (evaluated once per file).
+  if (type === "Sale" && saleLines.length > 0) {
+    for (const p of checkSaleIdentifierIntegrity(saleLines)) {
+      err(`Sale identifier integrity (${p.saleExternalId}): ${p.detail}.`);
+    }
+  }
+  // ExternalIdentifier collisions within a file (two records sharing one id).
+  // Strain/Inventory/Product ids must be unique per record; a collision would
+  // silently overwrite a different record in CCRS.
+  if (extIdOwners.length > 0 && (type === "Strain" || type === "Product" || type === "Inventory")) {
+    for (const c of findExternalIdCollisions(extIdOwners)) {
+      err(`ExternalIdentifier "${c.externalId}" is reused on ${c.owners.join(" and ")} (must be unique).`);
+    }
+  }
 
   if (dataRows.length === 0) {
     warn("File contains no data rows (empty submission for this type).");

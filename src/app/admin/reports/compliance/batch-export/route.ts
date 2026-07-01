@@ -12,7 +12,12 @@ import { requirePermission } from "@/lib/auth/session";
 import { can } from "@/lib/auth/roles";
 import { resolveRange } from "@/lib/reports/range";
 import { buildCcrsBatch } from "@/lib/compliance/ccrs-batch";
-import { verifyCcrsBatch } from "@/lib/compliance/ccrs-batch-core";
+import { verifyCcrsBatch, classifyWarning } from "@/lib/compliance/ccrs-batch-core";
+import {
+  assertCcrsBatchSubmittable,
+  verdictSummary,
+  type GateIssue,
+} from "@/lib/compliance/ccrs-submit-gate-core";
 import { buildZip } from "@/lib/reports/zip";
 
 export const dynamic = "force-dynamic";
@@ -47,46 +52,67 @@ export async function GET(request: Request) {
     batch.files.map((f) => ({ type: f.type, csv: f.csv })),
   );
 
-  // Combine builder sync issues + verifier problems; split by severity so blocking
-  // errors are impossible to miss.
-  type Issue = { severity: "error" | "warning"; file: string; message: string; count?: number };
-  const allIssues: Issue[] = [
-    ...batch.syncIssues.map((s) => ({ severity: s.severity, file: String(s.file), message: s.message, count: s.count })),
-    ...verification.problems.map((p) => ({ severity: p.severity, file: String(p.file), message: p.message })),
-  ];
-  // De-duplicate identical (severity+file+message) lines.
-  const seen = new Set<string>();
-  const issues = allIssues.filter((i) => {
-    const k = `${i.severity}|${i.file}|${i.message}`;
-    if (seen.has(k)) return false;
-    seen.add(k);
-    return true;
+  // Slice 105 — AUTHORITATIVE HARD GATE. Consolidate every problem source
+  // (builder sync issues + offline verifier problems + per-file warnings, the
+  // last classified with the SAME classifyWarning the app trusts) into one
+  // verdict. If ANY blocking error exists, we REFUSE to emit the .zip — the
+  // malformed CSVs never leave the building. This is the difference between
+  // "we warned you" and "we protected you."
+  const verdict = assertCcrsBatchSubmittable({
+    syncIssues: batch.syncIssues.map((s) => ({
+      severity: s.severity,
+      file: String(s.file),
+      message: s.message,
+      count: s.count,
+    })),
+    verifierProblems: verification.problems.map((p) => ({
+      severity: p.severity,
+      file: String(p.file),
+      message: p.message,
+    })),
+    files: batch.files.map((f) => ({ type: f.type, warnings: f.warnings, empty: f.empty })),
+    classifyWarning,
   });
-  const errors = issues.filter((i) => i.severity === "error");
-  const warnings = issues.filter((i) => i.severity === "warning");
 
-  const fmt = (i: Issue) => `  ${i.file}: ${i.message}${i.count ? ` (${i.count})` : ""}`;
+  const fmt = (i: GateIssue) => `  ${i.file}: ${i.message}${i.count ? ` (${i.count})` : ""}`;
 
-  // Slice 95: a prominent DO-NOT-UPLOAD gate when any blocking error exists.
-  const gate = errors.length
-    ? [
-        "============================================================",
-        `⛔ DO NOT UPLOAD — ${errors.length} blocking error(s) must be fixed first.`,
-        "   The LCB will reject the batch (and every dependent file) until",
-        "   these are resolved. Fix the mapping/data in the app, then re-export.",
-        "============================================================",
-        "",
-        "BLOCKING ERRORS:",
-        ...errors.map(fmt),
-        "",
-      ]
-    : [
-        "============================================================",
-        "✅ SAFE TO UPLOAD — no blocking errors detected in this batch.",
-        "   (Still review any advisory warnings below.)",
-        "============================================================",
-        "",
-      ];
+  if (!verdict.submittable) {
+    // 409 Conflict — the batch is not in a submittable state. Return a precise,
+    // human-readable report of exactly what to fix. No CSVs are produced.
+    const body = [
+      "============================================================",
+      `⛔ EXPORT REFUSED — ${verdict.errorCount} blocking CCRS error(s).`,
+      "============================================================",
+      "",
+      "The CCRS batch was NOT generated because it would be rejected by the",
+      "LCB (and could constitute a bad submission). Fix the items below in the",
+      "app, then re-export. The malformed files were deliberately not created.",
+      "",
+      `License: ${batch.licenseNumber || "(not set)"}`,
+      `Range: ${range.fromDate} to ${range.toDate}`,
+      "",
+      "BLOCKING ERRORS:",
+      ...verdict.errors.map(fmt),
+      "",
+      verdict.warningCount ? `Advisory warnings (${verdict.warningCount}) — also worth reviewing:` : "No advisory warnings.",
+      ...verdict.warnings.map(fmt),
+      "",
+    ].join("\r\n");
+    return new Response(body, {
+      status: 409,
+      headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" },
+    });
+  }
+
+  const warnings = verdict.warnings;
+  const gate = [
+    "============================================================",
+    `✅ ${verdictSummary(verdict)}`,
+    "   (No blocking errors — the hard gate passed. Review any advisory",
+    "   warnings below before uploading.)",
+    "============================================================",
+    "",
+  ];
 
   // A README documenting the batch + upload order for the employee.
   const readme = [

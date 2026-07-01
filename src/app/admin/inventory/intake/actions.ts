@@ -294,6 +294,6 @@ export async function finalizeManifestAction(manifestId: string) {
     redirect(`/admin/inventory/intake/${manifestId}?error=finalize`);
   }
   redirect(
-    `/admin/inventory/intake/${manifestId}?finalized=${result.derivedStatus}&accepted=${result.activated}&rejected=${result.rejected}&drafts=${result.draftsCreated}`,
+    `/admin/inventory/intake/${manifestId}?finalized=${result.derivedStatus}&accepted=${result.activated}&rejected=${result.rejected}&drafts=${result.draftsCreated}&held=${result.blocked.length}`,
   );
 }

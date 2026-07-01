@@ -55,6 +55,7 @@ export const adminNav: AdminNavItem[] = [
   { label: "Midjourney", href: "/admin/marketing/midjourney", permission: "content.edit", icon: "🎨", group: "Content" },
 
   { label: "Reports", href: "/admin/reports", permission: "reports.view", icon: "📊", group: "Insights" },
+  { label: "Compliance Health", href: "/admin/compliance/health", permission: "reports.view", icon: "🛡", group: "Insights" },
   { label: "AI Usage", href: "/admin/ai-usage", permission: "reports.view", icon: "✨", group: "Insights" },
 
   { label: "Users", href: "/admin/users", permission: "users.manage", icon: "👥", group: "Admin" },

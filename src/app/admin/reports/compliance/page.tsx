@@ -16,7 +16,9 @@ import { resolveRange } from "@/lib/reports/range";
 import { buildCcrsSaleCsv, getCcrsLicenseSettings } from "@/lib/compliance/ccrs-sales";
 import { buildCcrsInventoryAdjustmentCsv } from "@/lib/compliance/ccrs-inventory-adjustment";
 import { buildCcrsBatch } from "@/lib/compliance/ccrs-batch";
-import { verifyCcrsBatch } from "@/lib/compliance/ccrs-batch-core";
+import { verifyCcrsBatch, classifyWarning } from "@/lib/compliance/ccrs-batch-core";
+import { assertCcrsBatchSubmittable } from "@/lib/compliance/ccrs-submit-gate-core";
+import { getCcrsFilingOverview } from "@/lib/compliance/ccrs-filing-status";
 import { isAiConfigured } from "@/lib/ai/provider";
 import { CcrsAdvisorPanel } from "@/components/admin/reports/CcrsAdvisorPanel";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -61,19 +63,30 @@ export default async function CompliancePage({
   const verification = batch
     ? verifyCcrsBatch(batch.files.map((f) => ({ type: f.type, csv: f.csv })))
     : null;
-  const combinedIssues = [
-    ...(batch?.syncIssues.map((s) => ({ severity: s.severity, file: String(s.file), message: s.message, count: s.count as number | undefined })) ?? []),
-    ...(verification?.problems.map((p) => ({ severity: p.severity, file: String(p.file), message: p.message, count: undefined as number | undefined })) ?? []),
-  ];
-  const dedup = new Set<string>();
-  const uniqueIssues = combinedIssues.filter((i) => {
-    const k = `${i.severity}|${i.file}|${i.message}`;
-    if (dedup.has(k)) return false;
-    dedup.add(k);
-    return true;
-  });
-  const batchErrors = uniqueIssues.filter((s) => s.severity === "error");
-  const batchWarnings = uniqueIssues.filter((s) => s.severity === "warning");
+  // Slice 105 — use the SAME authoritative gate the export route enforces, so
+  // the on-screen verdict and the download button agree exactly. This also folds
+  // in per-file ERROR-prefixed warnings (classified with classifyWarning), which
+  // the previous on-screen roll-up missed.
+  const verdict = batch
+    ? assertCcrsBatchSubmittable({
+        syncIssues: batch.syncIssues.map((s) => ({
+          severity: s.severity,
+          file: String(s.file),
+          message: s.message,
+          count: s.count,
+        })),
+        verifierProblems: (verification?.problems ?? []).map((p) => ({
+          severity: p.severity,
+          file: String(p.file),
+          message: p.message,
+        })),
+        files: batch.files.map((f) => ({ type: f.type, warnings: f.warnings, empty: f.empty })),
+        classifyWarning,
+      })
+    : null;
+  const batchErrors = verdict?.errors ?? [];
+  const batchWarnings = verdict?.warnings ?? [];
+  const batchSubmittable = verdict?.submittable ?? false;
 
   // Recent export batches.
   let recentBatches: { file_name: string; record_count: number; created_at: string }[] = [];
@@ -91,18 +104,110 @@ export default async function CompliancePage({
     }
   }
 
+  // Slice 106: monthly LIQ-1295 reporting-deadline overview (due the 20th of the
+  // following month). "Filed" is inferred from a full-month export on record.
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const filing = await getCcrsFilingOverview(todayIso, { lookbackMonths: 3 });
+  const deadlineTone =
+    filing.mostUrgent?.status === "overdue"
+      ? "red"
+      : filing.mostUrgent?.status === "due_today" || filing.mostUrgent?.status === "due_soon"
+        ? "orange"
+        : "green";
+
   return (
     <div className="space-y-5">
       <DateRangePicker />
 
       {/* What is this */}
       <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-5 py-3 text-xs leading-relaxed text-white/50">
-        CCRS is the WSLCB Cannabis Central Reporting System. It accepts a weekly{" "}
-        <span className="font-bold text-white/80">Sale.csv</span> upload (no API). This tool builds that file from your
-        completed orders with the required fields — 37% cannabis excise, combined 9.3% retail sales tax, per-line sale
-        identifiers, and the <code className="text-white/70">Insert</code> operation. Reporting weeks run Sun–Sat and
-        are due the following Sunday. Always review the draft figures before uploading.
+        CCRS is the WSLCB Cannabis Central Reporting System. It accepts CSV uploads (no API). This tool builds the{" "}
+        <span className="font-bold text-white/80">Sale.csv</span> and the full batch from your completed orders with the
+        required fields — 37% cannabis excise, combined retail sales tax, per-line sale identifiers, and the{" "}
+        <code className="text-white/70">Insert</code> operation. Per the LCB CCRS Upload User Guide, inventory-related
+        files are <span className="font-bold text-white/80">required weekly</span> when there are changes; separately,
+        the monthly <span className="font-bold text-white/80">LIQ-1295</span> Retailer Sales &amp; Tax report and excise
+        payment are due the <span className="font-bold text-white/80">20th of the following month</span> (even with no
+        sales; a 2% late penalty accrues after the due date). Always review the draft figures before uploading.
       </div>
+
+      {/* Monthly LIQ-1295 reporting-deadline guard (Slice 106) */}
+      {filing.available ? (
+        <div
+          className={`rounded-2xl border p-4 ${
+            deadlineTone === "red"
+              ? "border-red-500/40 bg-red-500/[0.07]"
+              : deadlineTone === "orange"
+                ? "border-orange-500/35 bg-orange-500/[0.06]"
+                : "border-emerald-500/30 bg-emerald-500/[0.05]"
+          }`}
+        >
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p
+              className={`text-xs font-black uppercase tracking-[0.12em] ${
+                deadlineTone === "red"
+                  ? "text-red-300"
+                  : deadlineTone === "orange"
+                    ? "text-orange-300"
+                    : "text-emerald-300"
+              }`}
+            >
+              Monthly report deadline (LIQ-1295 — due the 20th)
+            </p>
+            {filing.mostUrgent ? (
+              <span
+                className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                  deadlineTone === "red"
+                    ? "bg-red-500/20 text-red-200"
+                    : deadlineTone === "orange"
+                      ? "bg-orange-500/20 text-orange-200"
+                      : "bg-emerald-500/20 text-emerald-200"
+                }`}
+              >
+                {filing.mostUrgent.status.replace("_", " ")}
+              </span>
+            ) : (
+              <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-200">
+                all clear
+              </span>
+            )}
+          </div>
+          <ul className="space-y-1 text-xs">
+            {filing.periods.map((p) => {
+              const label = `${p.period.year}-${String(p.period.month).padStart(2, "0")}`;
+              const tone =
+                p.status === "overdue"
+                  ? "text-red-200"
+                  : p.status === "due_today" || p.status === "due_soon"
+                    ? "text-orange-200"
+                    : p.status === "filed"
+                      ? "text-emerald-200/80"
+                      : "text-white/60";
+              const note =
+                p.status === "filed"
+                  ? "export on record"
+                  : p.status === "overdue"
+                    ? `OVERDUE by ${Math.abs(p.daysUntilDue)} day(s) — no export on record`
+                    : p.status === "due_today"
+                      ? "DUE TODAY — no export on record"
+                      : p.status === "due_soon"
+                        ? `due in ${p.daysUntilDue} day(s) — no export on record`
+                        : `due in ${p.daysUntilDue} day(s)`;
+              return (
+                <li key={label} className={tone}>
+                  • Sales month <span className="font-bold">{label}</span> — report due{" "}
+                  <span className="font-bold">{p.dueDate}</span> — {note}
+                </li>
+              );
+            })}
+          </ul>
+          <p className="mt-2 text-[10px] leading-relaxed text-white/40">
+            &ldquo;Export on record&rdquo; means a full-month CCRS batch was generated here — it is a reminder, not proof
+            the LCB filing/payment was completed. File the LIQ-1295 and pay the excise in the LCB portal on or before the
+            due date (rolled to the next business day if it lands on a weekend/holiday).
+          </p>
+        </div>
+      ) : null}
 
       {/* Preview KPIs */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
@@ -207,16 +312,36 @@ export default async function CompliancePage({
 
             {canEdit ? (
               <div className="flex flex-wrap items-center gap-3">
-                <Link
-                  href={`/admin/reports/compliance/batch-export?${qs}`}
-                  prefetch={false}
-                  className="rounded-lg bg-[var(--admin-accent)] px-4 py-2 text-sm font-bold text-black transition hover:opacity-90"
-                >
-                  ⬇ Download full CCRS batch (.zip)
-                </Link>
-                <span className="text-xs text-white/40">
-                  Files are numbered by upload group and include a README with the exact upload order.
-                </span>
+                {batchSubmittable ? (
+                  <>
+                    <Link
+                      href={`/admin/reports/compliance/batch-export?${qs}`}
+                      prefetch={false}
+                      className="rounded-lg bg-[var(--admin-accent)] px-4 py-2 text-sm font-bold text-black transition hover:opacity-90"
+                    >
+                      ⬇ Download full CCRS batch (.zip)
+                    </Link>
+                    <span className="text-xs text-white/40">
+                      Files are numbered by upload group and include a README with the exact upload order.
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    {/* Slice 105 — the export is HARD-BLOCKED until every blocking
+                        error is resolved. The button is disabled so a malformed
+                        batch can't be generated by accident. */}
+                    <span
+                      aria-disabled="true"
+                      className="cursor-not-allowed rounded-lg bg-white/10 px-4 py-2 text-sm font-bold text-white/40"
+                    >
+                      ⛔ Download blocked — {batchErrors.length} error(s) to fix
+                    </span>
+                    <span className="text-xs text-[var(--admin-danger)]">
+                      Fix the blocking errors listed below, then the download will unlock. The batch is not generated
+                      while errors remain, so you can never upload a bad file.
+                    </span>
+                  </>
+                )}
               </div>
             ) : (
               <p className="text-xs text-white/40">

@@ -14,8 +14,13 @@ import {
   type LimitEvaluation,
   type LimitOverrides,
 } from "@/lib/compliance/sales-limits-core";
+import {
+  decideSalesLimitGate,
+  type SalesLimitGateVerdict,
+} from "@/lib/compliance/sales-limit-gate-core";
 
 export * from "@/lib/compliance/sales-limits-core";
+export * from "@/lib/compliance/sales-limit-gate-core";
 
 export type SalesLimitSettings = {
   enforce: boolean;
@@ -171,7 +176,14 @@ export async function evaluateCartWithSettings(
 /** Persist an evaluation that we want to keep for reporting/audit. */
 export async function logSalesLimitEvent(
   evaluation: LimitEvaluation,
-  opts: { orderId?: string | null; actorId?: string | null } = {},
+  opts: {
+    orderId?: string | null;
+    actorId?: string | null;
+    /** Slice 109: audit fields for a manager override of an over-limit sale. */
+    overrideApplied?: boolean;
+    overrideBy?: string | null;
+    overrideReason?: string | null;
+  } = {},
 ): Promise<void> {
   if (!isSupabaseServiceConfigured) return;
   try {
@@ -183,8 +195,106 @@ export async function logSalesLimitEvent(
       reasons: evaluation.reasons,
       buckets: evaluation.buckets,
       actor_id: opts.actorId ?? null,
+      override_applied: opts.overrideApplied ?? false,
+      override_by: opts.overrideBy ?? null,
+      override_reason: opts.overrideReason?.trim() || null,
     });
   } catch (err) {
     console.error("[sales-limits] logSalesLimitEvent failed:", err);
   }
+}
+
+export type SalesLimitOverrideRow = {
+  id: string;
+  createdAt: string;
+  customerType: string;
+  reasons: string[];
+  overrideReason: string | null;
+  overrideBy: string | null;
+};
+
+/**
+ * Slice 109 — recent LOGGED over-limit overrides for the audit panel. Returns
+ * only rows where an override was actually applied (the ones the owner must be
+ * able to see for protection). Best-effort; empty on any error.
+ */
+export async function listRecentSalesLimitOverrides(limit = 20): Promise<SalesLimitOverrideRow[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data } = await admin
+      .from("sales_limit_events")
+      .select("id, created_at, customer_type, reasons, override_reason, override_by")
+      .eq("override_applied", true)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    const rows =
+      (data as
+        | {
+            id: string;
+            created_at: string;
+            customer_type: string;
+            reasons: unknown;
+            override_reason: string | null;
+            override_by: string | null;
+          }[]
+        | null) ?? [];
+    return rows.map((r) => ({
+      id: r.id,
+      createdAt: r.created_at,
+      customerType: r.customer_type,
+      reasons: Array.isArray(r.reasons) ? (r.reasons as string[]) : [],
+      overrideReason: r.override_reason,
+      overrideBy: r.override_by,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Slice 109 — the authoritative POINT-OF-SALE gate. Evaluates the cart with the
+ * owner's saved limits, applies the hard-block policy (with an optional
+ * permission-gated manager override), ALWAYS logs the outcome for audit, and
+ * returns the verdict. The sale path must refuse to commit when
+ * `verdict.allowed` is false.
+ *
+ * The caller is responsible for the permission check and passes the RESULT of
+ * that check as `override.permitted` — this module never trusts a client flag.
+ */
+export async function enforceSalesLimitForSale(
+  lines: LimitCartLine[],
+  customerType: "recreational" | "medical" = "recreational",
+  opts: {
+    orderId?: string | null;
+    actorId?: string | null;
+    override?: { permitted: boolean; reason?: string | null } | null;
+  } = {},
+): Promise<{ verdict: SalesLimitGateVerdict; evaluation: LimitEvaluation }> {
+  const gated = await evaluateCartWithSettings(lines, customerType);
+  const verdict = decideSalesLimitGate({
+    blocked: gated.blocked,
+    enforce: gated.enforce,
+    hardBlock: gated.hardBlock,
+    reasons: gated.reasons,
+    override: opts.override
+      ? { permitted: opts.override.permitted, actorId: opts.actorId, reason: opts.override.reason }
+      : null,
+  });
+
+  // Log every over-limit encounter (blocked or overridden) so nothing is silent.
+  if (verdict.overLimit) {
+    await logSalesLimitEvent(
+      { ...gated, blocked: !verdict.allowed },
+      {
+        orderId: opts.orderId,
+        actorId: opts.actorId,
+        overrideApplied: verdict.overrideApplied,
+        overrideBy: verdict.overrideApplied ? opts.actorId ?? null : null,
+        overrideReason: verdict.overrideApplied ? opts.override?.reason ?? null : null,
+      },
+    );
+  }
+
+  return { verdict, evaluation: gated };
 }
