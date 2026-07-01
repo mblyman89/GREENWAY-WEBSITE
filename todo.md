@@ -27,15 +27,16 @@ see `docs/COMMAND_CENTER_ENHANCEMENTS_TASKLIST.md`.
 - [x] Build: pure scan core (normalize + match exact/fuzzy/ambiguous/none, tallies; tsx-tested), store getCycleCountScanLines + bumpLineCount (open-session + not-applied guards), scanBumpLineAction (JSON, audited), scanner UI (USB wedge + phone camera BarcodeDetector, live log, progress, ambiguity warnings) on open sessions
 - [x] Verify (core tests, tsc 0, eslint 0, build OK) + Commit → push → PR #173 → merge → sync main
 
-### Slice 69 — Schedule builder [item 4]
-- [ ] Ground: shifts table + staffing page
-- [ ] Build: week grid create/copy/publish scheduled shifts per employee/role + coverage view
-- [ ] Verify + Commit → push → PR → merge → sync main
+### Slice 69 — Schedule builder [item 4] ✅ PR #174
+- [x] Ground: shifts table (mig 0037, status scheduled/open/closed) + staffing page + pacificWallTimeToUtcISO
+- [x] Build: pure schedule core (week math, time parse, duration, coverage; tsx-tested), store week list + create/update/delete/copy-week (UTC-correct), audited actions, week-grid UI (employees×days, inline add/edit, coverage totals, week nav, copy-to-next) at /admin/staffing/schedule, linked from Time Clock
+- [x] Verify (core tests, tsc 0, eslint 0, build OK) + Commit → push → PR #174 → merge → sync main
 
 ### Slice 70 — Phone clock-in + hour adjustments [item 8]
-- [ ] Ground: employees/time_punches + staffing actions
-- [ ] Build: mobile self clock in/out (PIN) + owner/manager punch edit w/ reason + audit
-- [ ] Verify + Commit → push → PR → merge → sync main
+- [x] Ground: employees/time_punches + staffing actions (source col free text → no migration for "phone")
+- [x] Build: mobile PIN clock-in page /admin/staffing/clock (source "phone") + owner/manager Adjust Hours UI /admin/staffing/hours (edit/add punch w/ REQUIRED reason, Pacific wall-time → UTC, minutes recompute, audited)
+- [x] Verify (core tests OK, tsc 0, eslint 0, build OK — both new routes present) + Commit → push → PR #TBD → merge → sync main
+- [x] BATCH 1 COMPLETE (Slices 65–70)
 
 ## BATCH 2 — AI enrichment, compliance, marketing, seeds, mobile
 - [ ] Slice 71 — Sample compliance WAC 314-55-096 (hard blocks) [item 6]

@@ -133,7 +133,7 @@ export type ClockResult =
  */
 export async function toggleClock(
   employeeId: string,
-  source: "web" | "station" | "manager_edit" = "web",
+  source: "web" | "station" | "phone" | "manager_edit" = "web",
 ): Promise<ClockResult> {
   if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not configured." };
   const admin = createSupabaseAdminClient();
@@ -395,4 +395,155 @@ function shiftISOByDays(iso: string, days: number): string {
   const dt = new Date(iso);
   dt.setUTCDate(dt.getUTCDate() + days);
   return dt.toISOString();
+}
+
+// ---------------------------------------------------------------------------
+// Slice 70 [item 8] — hour adjustments (manager punch management)
+// ---------------------------------------------------------------------------
+
+export type PunchWithEmployee = TimePunch & { employee_name: string; job_role: string };
+
+/**
+ * All time punches whose clock-in falls on a given Pacific business day,
+ * joined with the employee name. Used by the hour-adjustment view. We pull a
+ * generous recent window and filter by Pacific day in app (see punchesForDay).
+ */
+export async function listPunchesForDayAll(businessDay: string): Promise<PunchWithEmployee[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  const admin = createSupabaseAdminClient();
+  // Window: clock_in within [day-1, day+2) UTC covers all Pacific-day punches.
+  const startUtc = pacificWallTimeToUtcISO(businessDay, "start");
+  const endUtc = pacificWallTimeToUtcISO(businessDay, "end");
+  // Widen by 12h each side for tz safety.
+  const lo = new Date(Date.parse(startUtc) - 12 * 3600000).toISOString();
+  const hi = new Date(Date.parse(endUtc) + 12 * 3600000).toISOString();
+  const { data } = await admin
+    .from("time_punches")
+    .select("*, employees(full_name, job_role)")
+    .gte("clock_in_at", lo)
+    .lte("clock_in_at", hi)
+    .order("clock_in_at", { ascending: true });
+  const rows = (data as (TimePunch & { employees: { full_name: string; job_role: string } | null })[] | null) ?? [];
+  return rows
+    .filter((r) => businessDayFor(r.clock_in_at) === businessDay)
+    .map((r) => {
+      const { employees, ...rest } = r;
+      return {
+        ...(rest as TimePunch),
+        employee_name: employees?.full_name ?? "—",
+        job_role: employees?.job_role ?? "sales",
+      };
+    });
+}
+
+/** Fetch a single punch by id (for edit forms / validation). */
+export async function getPunch(id: string): Promise<TimePunch | null> {
+  if (!isSupabaseServiceConfigured) return null;
+  const admin = createSupabaseAdminClient();
+  const { data } = await admin.from("time_punches").select("*").eq("id", id).maybeSingle();
+  return (data as TimePunch | null) ?? null;
+}
+
+type PunchWrite = { clock_in_at: string; clock_out_at: string | null; notes: string };
+
+/**
+ * Update an existing punch's in/out times + note. Recomputes minutes. If
+ * clock_out ends up before clock_in (after UTC conversion) we reject.
+ */
+export async function updatePunchTimes(
+  id: string,
+  write: PunchWrite,
+): Promise<{ ok: true; minutes: number | null } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not configured." };
+  const admin = createSupabaseAdminClient();
+  let minutes: number | null = null;
+  if (write.clock_out_at) {
+    if (Date.parse(write.clock_out_at) <= Date.parse(write.clock_in_at)) {
+      return { ok: false, error: "Clock-out must be after clock-in." };
+    }
+    minutes = punchMinutes(write.clock_in_at, write.clock_out_at);
+  }
+  const { error } = await admin
+    .from("time_punches")
+    .update({
+      clock_in_at: write.clock_in_at,
+      clock_out_at: write.clock_out_at,
+      minutes,
+      notes: write.notes,
+      source: "manager_edit",
+    })
+    .eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, minutes };
+}
+
+/**
+ * Create a brand-new manual punch for an employee (e.g. someone forgot to
+ * clock in entirely). Opens/reuses that employee's shift for the Pacific
+ * business day of the clock-in, then inserts a work punch.
+ */
+export async function createManualPunch(input: {
+  employeeId: string;
+  clockInUtc: string;
+  clockOutUtc: string | null;
+  notes: string;
+}): Promise<{ ok: true; id: string; minutes: number | null } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not configured." };
+  const admin = createSupabaseAdminClient();
+  const emp = await getEmployee(input.employeeId);
+  if (!emp) return { ok: false, error: "Employee not found." };
+
+  let minutes: number | null = null;
+  if (input.clockOutUtc) {
+    if (Date.parse(input.clockOutUtc) <= Date.parse(input.clockInUtc)) {
+      return { ok: false, error: "Clock-out must be after clock-in." };
+    }
+    minutes = punchMinutes(input.clockInUtc, input.clockOutUtc);
+  }
+
+  const businessDay = businessDayFor(input.clockInUtc);
+  let shiftId: string;
+  const { data: existingShift } = await admin
+    .from("shifts")
+    .select("id, status, started_at")
+    .eq("employee_id", input.employeeId)
+    .eq("business_day", businessDay)
+    .in("status", ["scheduled", "open", "closed"])
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (existingShift) {
+    shiftId = (existingShift as { id: string }).id;
+  } else {
+    const { data: newShift, error: shiftErr } = await admin
+      .from("shifts")
+      .insert({
+        employee_id: input.employeeId,
+        business_day: businessDay,
+        shift_role: emp.job_role,
+        status: input.clockOutUtc ? "closed" : "open",
+        started_at: input.clockInUtc,
+      })
+      .select("id")
+      .single();
+    if (shiftErr || !newShift) return { ok: false, error: shiftErr?.message ?? "Failed to open shift." };
+    shiftId = (newShift as { id: string }).id;
+  }
+
+  const { data: punch, error: punchErr } = await admin
+    .from("time_punches")
+    .insert({
+      employee_id: input.employeeId,
+      shift_id: shiftId,
+      punch_kind: "work",
+      clock_in_at: input.clockInUtc,
+      clock_out_at: input.clockOutUtc,
+      minutes,
+      source: "manager_edit",
+      notes: input.notes,
+    })
+    .select("id")
+    .single();
+  if (punchErr || !punch) return { ok: false, error: punchErr?.message ?? "Failed to create punch." };
+  return { ok: true, id: (punch as { id: string }).id, minutes };
 }
