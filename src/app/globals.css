@@ -236,3 +236,27 @@ h1, h2, h3, h4, h5, h6 {
     margin: 8mm;
   }
 }
+
+/* Preview-mode badge glow (Slice E10) — pulses between a soft and a bright
+   green so a previewer always notices they are in preview mode. Respects
+   reduced-motion preferences. */
+@keyframes gw-preview-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 1px rgba(126, 217, 87, 0.5), 0 0 8px 1px rgba(126, 217, 87, 0.35);
+    background-color: #5fb83f;
+  }
+  50% {
+    box-shadow: 0 0 0 1px rgba(126, 217, 87, 0.9), 0 0 22px 6px rgba(126, 217, 87, 0.7);
+    background-color: #7ed957;
+  }
+}
+.gw-preview-badge {
+  animation: gw-preview-glow 2.2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .gw-preview-badge {
+    animation: none;
+    box-shadow: 0 0 0 1px rgba(126, 217, 87, 0.7), 0 0 12px 2px rgba(126, 217, 87, 0.5);
+  }
+}
