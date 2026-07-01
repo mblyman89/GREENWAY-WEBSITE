@@ -34,6 +34,7 @@
 import "server-only";
 
 import { getWeedmapsBaseUrl, getWeedmapsConfig } from "./config";
+import { refreshWeedmapsConfig } from "./runtime";
 import { buildWmItemsPayload, type WmItemsPayload } from "./payload-core";
 import { describeWeedmapsRuntime, isWeedmapsConfigured } from "./client";
 import { loadSyndicationFeed } from "@/lib/syndication/feed-source";
@@ -67,6 +68,12 @@ export function describeWeedmapsReadiness(): WeedmapsReadiness {
 
 export { isWeedmapsConfigured };
 
+/** Load back-office credentials (DB over env) then describe readiness. */
+export async function describeWeedmapsReadinessAsync(): Promise<WeedmapsReadiness> {
+  await refreshWeedmapsConfig();
+  return describeWeedmapsReadiness();
+}
+
 const REQUIRED_WRITE_SCOPES = ["menu_items", "menus:write"] as const;
 
 export type WeedmapsPreview = {
@@ -91,6 +98,7 @@ const SCHEMA_NOTES = [
  * WeedMaps. Safe to run any time, with or without credentials.
  */
 export async function previewWeedmapsPush(): Promise<WeedmapsPreview> {
+  await refreshWeedmapsConfig();
   const { versionId, items } = await loadSyndicationFeed();
   return {
     mode: "preview",
@@ -288,6 +296,7 @@ function interpret(status: number, ok: boolean): WeedmapsAccessResult["state"] {
  * returns 200 = access, 404 = no access, 423 = paused (locked), 401/403 = auth/scope.
  */
 export async function verifyWeedmapsMenuAccess(): Promise<WeedmapsAccessResult> {
+  await refreshWeedmapsConfig();
   if (!isWeedmapsConfigured()) {
     throw new Error("WeedMaps is not configured: set menu id + OAuth credentials or access token.");
   }
@@ -332,6 +341,7 @@ export async function pushWeedmapsMenu(opts: { confirm: boolean }): Promise<Weed
   if (!opts.confirm) {
     throw new Error("Live WeedMaps push requires explicit confirmation.");
   }
+  await refreshWeedmapsConfig();
   if (!isWeedmapsConfigured()) {
     throw new Error("WeedMaps is not configured: set menu id + OAuth credentials or access token.");
   }
@@ -380,6 +390,7 @@ export async function setWeedmapsItemImage(opts: {
   if (!opts.confirm) {
     throw new Error("Updating a WeedMaps item image requires explicit confirmation.");
   }
+  await refreshWeedmapsConfig();
   if (!isWeedmapsConfigured()) {
     throw new Error("WeedMaps is not configured.");
   }

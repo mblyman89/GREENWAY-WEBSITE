@@ -17,6 +17,8 @@
  * client credentials + menu id are set.
  */
 
+import type { WeedmapsOverrides } from "@/lib/integrations/integration-credentials-core";
+
 export type WeedmapsEnvironment = "sandbox" | "production";
 
 /** Verified default OAuth token endpoint (Obtaining an Access Token). */
@@ -41,7 +43,20 @@ export type WeedmapsClientConfig = {
   scope: string;
 };
 
-export function getWeedmapsConfig(): WeedmapsClientConfig {
+/**
+ * Back-office credentials (integration_credentials) may override the env
+ * (Slice 60). A non-empty DB value wins. Because most call sites are sync, the
+ * async loader (refreshWeedmapsConfig) installs DB overrides in this cache and
+ * the sync getter reads it, falling back to raw env when the cache is empty.
+ */
+let overrideCache: WeedmapsOverrides | null = null;
+
+/** Install DB-resolved overrides for this process (called by the loader). */
+export function setWeedmapsOverrideCache(overrides: WeedmapsOverrides | null): void {
+  overrideCache = overrides;
+}
+
+function envConfig(): WeedmapsClientConfig {
   return {
     environment: process.env.WEEDMAPS_ENVIRONMENT === "production" ? "production" : "sandbox",
     menuId: process.env.WEEDMAPS_MENU_ID || process.env.WEEDMAPS_WM_ID,
@@ -50,6 +65,21 @@ export function getWeedmapsConfig(): WeedmapsClientConfig {
     accessToken: process.env.WEEDMAPS_ACCESS_TOKEN,
     tokenUrl: process.env.WEEDMAPS_TOKEN_URL || WEEDMAPS_TOKEN_URL_DEFAULT,
     scope: process.env.WEEDMAPS_SCOPE || WEEDMAPS_DEFAULT_SCOPE,
+  };
+}
+
+export function getWeedmapsConfig(overrides?: WeedmapsOverrides | null): WeedmapsClientConfig {
+  const o = overrides ?? overrideCache;
+  if (!o) return envConfig();
+  return {
+    environment: o.environment,
+    menuId: o.menuId,
+    clientId: o.clientId,
+    clientSecret: o.clientSecret,
+    accessToken: o.accessToken,
+    // Verified defaults still apply when the DB/env leaves these empty.
+    tokenUrl: o.tokenUrl || WEEDMAPS_TOKEN_URL_DEFAULT,
+    scope: o.scope || WEEDMAPS_DEFAULT_SCOPE,
   };
 }
 

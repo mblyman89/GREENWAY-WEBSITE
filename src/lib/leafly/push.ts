@@ -19,6 +19,7 @@
 import "server-only";
 
 import { getLeaflyBaseUrl, getLeaflyConfig, getLeaflyTokenUrl } from "./config";
+import { refreshLeaflyConfig } from "./runtime";
 import {
   buildLeaflyDeletePayload,
   buildLeaflyItemsPayload,
@@ -56,6 +57,12 @@ export function isLeaflyConfigured(): boolean {
   return describeLeaflyReadiness().configured;
 }
 
+/** Load back-office credentials (DB over env) then describe readiness. */
+export async function describeLeaflyReadinessAsync(): Promise<LeaflyReadiness> {
+  await refreshLeaflyConfig();
+  return describeLeaflyReadiness();
+}
+
 export type LeaflyPreview = {
   mode: "preview";
   itemCount: number;
@@ -69,6 +76,7 @@ export type LeaflyPreview = {
  * Leafly. Safe to run any time, with or without credentials.
  */
 export async function previewLeaflyPush(): Promise<LeaflyPreview> {
+  await refreshLeaflyConfig();
   const { versionId, items } = await loadSyndicationFeed();
   return {
     mode: "preview",
@@ -174,6 +182,7 @@ export async function pushLeaflyMenu(opts: {
   if (!opts.confirm) {
     throw new Error("Live Leafly push requires explicit confirmation.");
   }
+  await refreshLeaflyConfig();
   if (!isLeaflyConfigured()) {
     throw new Error("Leafly is not configured: set menu integration key + OAuth credentials.");
   }
@@ -201,6 +210,7 @@ export async function deleteLeaflyItems(opts: {
   if (!opts.confirm) {
     throw new Error("Live Leafly delete requires explicit confirmation.");
   }
+  await refreshLeaflyConfig();
   if (!isLeaflyConfigured()) {
     throw new Error("Leafly is not configured.");
   }
@@ -224,6 +234,7 @@ export async function getLeaflyStatus(): Promise<{
   httpStatus: number;
   body: unknown;
 }> {
+  await refreshLeaflyConfig();
   if (!isLeaflyConfigured()) {
     throw new Error("Leafly is not configured.");
   }
