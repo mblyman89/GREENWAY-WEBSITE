@@ -482,6 +482,56 @@ export function assembleCcrsFile(opts: {
 }
 
 /* ------------------------------------------------------------------ *
+ * Sale numeric-column safety (Slice 96 — defense in depth)
+ *
+ * The Sale builder already skips zero-qty / no-price lines, but a numeric
+ * anomaly (NaN, negative, non-numeric, or a mis-formatted money value) that
+ * slips through would silently corrupt the Sale.csv the LCB validates. This
+ * PURE check inspects the EMITTED Sale rows (strings) and flags anomalies as
+ * problems — it NEVER rewrites a value (drafts-only; the employee/data source
+ * is fixed). Grounded in the Sale.csv template column order (A1).
+ * ------------------------------------------------------------------ */
+
+// Column indices within CCRS_COLUMNS.Sale that must be numeric.
+const SALE_QUANTITY_IDX = 6; // Quantity
+const SALE_MONEY_IDXS = [7, 8, 9, 10] as const; // UnitPrice, Discount, RetailSalesTax, CannabisExciseTax
+
+const MONEY_2DP_RE = /^\d+(\.\d{1,2})?$/; // non-negative, up to 2 decimals
+
+/**
+ * Verify the numeric columns of the assembled Sale rows. PURE. Returns problems
+ * (empty when clean). Quantity must be a positive number; money columns must be
+ * non-negative with at most 2 decimals. Never throws, never mutates.
+ */
+export function verifySaleNumericColumns(rows: ReadonlyArray<readonly string[]>): CcrsBatchProblem[] {
+  const problems: CcrsBatchProblem[] = [];
+  const err = (message: string) => problems.push({ file: "Sale", severity: "error", message });
+
+  rows.forEach((row, idx) => {
+    const rowNo = idx + 1;
+    const qtyRaw = (row[SALE_QUANTITY_IDX] ?? "").trim();
+    const qty = Number(qtyRaw);
+    if (qtyRaw === "" || !Number.isFinite(qty)) {
+      err(`Sale row ${rowNo}: Quantity "${qtyRaw}" is not a number.`);
+    } else if (qty <= 0) {
+      err(`Sale row ${rowNo}: Quantity "${qtyRaw}" must be greater than zero.`);
+    }
+    for (const c of SALE_MONEY_IDXS) {
+      const col = CCRS_COLUMNS.Sale[c];
+      const v = (row[c] ?? "").trim();
+      if (v === "") {
+        err(`Sale row ${rowNo}: ${col} is empty (expected a money value like 0.00).`);
+      } else if (!MONEY_2DP_RE.test(v)) {
+        // catches negatives, NaN, scientific notation, >2 decimals, letters.
+        err(`Sale row ${rowNo}: ${col} "${v}" is not a valid non-negative money value.`);
+      }
+    }
+  });
+
+  return problems;
+}
+
+/* ------------------------------------------------------------------ *
  * End-to-end batch verification (Slice 94 — verifiable trust)
  *
  * Given the fully-assembled CCRS files (as produced by assembleCcrsFile), verify
@@ -851,6 +901,37 @@ export function __runCcrsBatchCoreTests(): void {
   const badDate = goodStrain.replace("06/15/2025", "2025-06-15");
   const bad4 = verifyCcrsBatch([{ type: "Strain", csv: badDate }]);
   assert(bad4.ok === false, "bad date rejected");
+
+  // verifySaleNumericColumns (Slice 96). A well-formed Sale row passes.
+  // Columns: [Lic, SoldTo, InvId, PlantId, SaleType, SaleDate, Qty, UnitPrice,
+  //           Discount, RetailSalesTax, CannabisExciseTax, ...]
+  const okSaleRow = [
+    "123456", "", "INV-1", "", "RecreationalRetail", "06/15/2025",
+    "2", "10.00", "1.50", "2.34", "4.44", "ORD-1", "ORD-1-abcd1234", "Jane", "06/15/2025", "", "", "Insert",
+  ];
+  assert(verifySaleNumericColumns([okSaleRow]).length === 0, "good sale row passes");
+
+  // Negative quantity → error.
+  const negQty = [...okSaleRow]; negQty[6] = "-1";
+  assert(verifySaleNumericColumns([negQty]).some((p) => /Quantity/.test(p.message)), "negative qty flagged");
+  // Zero quantity → error.
+  const zeroQty = [...okSaleRow]; zeroQty[6] = "0";
+  assert(verifySaleNumericColumns([zeroQty]).some((p) => /greater than zero/.test(p.message)), "zero qty flagged");
+  // Non-numeric quantity → error.
+  const nanQty = [...okSaleRow]; nanQty[6] = "abc";
+  assert(verifySaleNumericColumns([nanQty]).some((p) => /not a number/.test(p.message)), "nan qty flagged");
+  // Negative money → error.
+  const negMoney = [...okSaleRow]; negMoney[7] = "-10.00";
+  assert(verifySaleNumericColumns([negMoney]).some((p) => /UnitPrice/.test(p.message)), "negative money flagged");
+  // Too many decimals → error.
+  const badDp = [...okSaleRow]; badDp[9] = "2.345";
+  assert(verifySaleNumericColumns([badDp]).some((p) => /RetailSalesTax/.test(p.message)), "3-decimal money flagged");
+  // Empty money → error.
+  const emptyMoney = [...okSaleRow]; emptyMoney[10] = "";
+  assert(verifySaleNumericColumns([emptyMoney]).some((p) => /CannabisExciseTax/.test(p.message)), "empty money flagged");
+  // Integer money (no decimals) is acceptable.
+  const intMoney = [...okSaleRow]; intMoney[7] = "10";
+  assert(verifySaleNumericColumns([intMoney]).length === 0, "integer money ok");
 
   console.log("ccrs-batch-core: all tests passed");
 }
