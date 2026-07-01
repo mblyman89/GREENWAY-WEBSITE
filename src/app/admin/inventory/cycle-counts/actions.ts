@@ -9,6 +9,7 @@ import {
   recordLineCount,
   applyCycleCount,
   cancelCycleCount,
+  bumpLineCount,
 } from "@/lib/inventory/cycle-counts";
 
 export async function createCycleCountAction(formData: FormData) {
@@ -47,6 +48,32 @@ export async function recordLineCountAction(countId: string, lineId: string, for
     redirect(`/admin/inventory/cycle-counts/${countId}?error=${encodeURIComponent(result.error)}`);
   }
   redirect(`/admin/inventory/cycle-counts/${countId}?ok=counted`);
+}
+
+/**
+ * Barcode scan → add one (or N) units to a line's physical count (Slice 68).
+ * Returns a JSON-friendly result for the client scanner (no redirect) so the
+ * operator keeps scanning without a page reload.
+ */
+export async function scanBumpLineAction(input: {
+  countId: string;
+  lineId: string;
+  by?: number;
+}): Promise<{ ok: true; countedQty: number } | { ok: false; error: string }> {
+  const session = await requirePermission("inventory.manage");
+  const by = Number.isFinite(input.by) ? Number(input.by) : 1;
+  const result = await bumpLineCount({ lineId: input.lineId, by });
+  if (!result.ok) return { ok: false, error: result.error };
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: "cycle_count.scan",
+    entityType: "cycle_count_lines",
+    entityId: input.lineId,
+    after: { by, countedQty: result.countedQty },
+  });
+  revalidatePath(`/admin/inventory/cycle-counts/${input.countId}`);
+  return { ok: true, countedQty: result.countedQty };
 }
 
 export async function applyCycleCountAction(countId: string) {

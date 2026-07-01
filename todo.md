@@ -17,10 +17,10 @@ see `docs/COMMAND_CENTER_ENHANCEMENTS_TASKLIST.md`.
 - [x] Build: new `page:"legal"` group w/ editable hero titles for Privacy Policy, Terms of Use, Consumer Health Data (legal bodies untouched); wired via `<SiteText>`; per-block "View on site" links; label + subtitle updated
 - [x] Verify (tsc 0, eslint 0, build OK) + Commit → push → PR #171 → merge --squash --admin → sync main
 
-### Slice 67 — Loyalty customizer [item 2]
-- [ ] Ground: loyalty_config/tiers/promotions tables + existing /admin/loyalty
-- [ ] Build: full editor (earn rate, point value, min redeem, signup bonus, expiry, tiers, promos) + live preview + audited actions
-- [ ] Verify + Commit → push → PR → merge → sync main
+### Slice 67 — Loyalty customizer [item 2] ✅ PR #172
+- [x] Ground: loyalty_config/tiers/promotions tables (mig 0039) + read-only /admin/loyalty
+- [x] Build: pure core (validation + conversions + preview, tsx-tested), store write helpers, audited server actions, full editor UI (earn rate, point value, min redeem, signup bonus, code expiry, tiers, promotions) + live earn preview; read-only fallback for non-managers
+- [x] Verify (core tests, tsc 0, eslint 0, build OK) + Commit → push → PR #172 → merge → sync main
 
 ### Slice 68 — Cycle counts barcode + hardening [item 3]
 - [ ] Ground: cycle_counts/lines/adjustment tables + existing page
