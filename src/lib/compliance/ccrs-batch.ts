@@ -23,6 +23,7 @@ import {
   ccrsFileName,
   CCRS_UPLOAD_ORDER,
   uploadGroupOf,
+  normalizeStrainType,
   type CcrsRetailerFileType,
 } from "@/lib/compliance/ccrs-batch-core";
 import { deriveInventoryExternalId, validateExternalId, sanitizeExternalId } from "@/lib/compliance/ccrs-identifiers";
@@ -124,15 +125,26 @@ function buildStrainFile(
   const warnings: string[] = [];
   const seen = new Set<string>();
   const rows: string[][] = [];
+  const defaulted: string[] = [];
   for (const it of items) {
     const strain = (it.strain_name ?? "").trim();
     if (!strain) continue;
     const key = strain.toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
-    // StrainType: CCRS accepts the plant type; fall back to unknown values as-is.
-    const strainType = (it.strain_type ?? "").trim() || "NotApplicable";
-    rows.push([license, strain, strainType, createdBy, createdDate]);
+    // B2: StrainType MUST be one of Indica/Sativa/Hybrid. Normalize the POS
+    // label; when it can't be resolved we default to Hybrid (safe superset) and
+    // flag the strain so an employee can correct it (drafts-only).
+    const st = normalizeStrainType(it.strain_type);
+    if (st.defaulted) defaulted.push(strain);
+    rows.push([license, strain, st.value, createdBy, createdDate]);
+  }
+  if (defaulted.length > 0) {
+    warnings.push(
+      `${defaulted.length} strain(s) had no recognizable Indica/Sativa/Hybrid type and were defaulted to "Hybrid" — set the correct StrainType before uploading: ${defaulted
+        .slice(0, 15)
+        .join(", ")}${defaulted.length > 15 ? "…" : ""}.`,
+    );
   }
   if (rows.length === 0) warnings.push("No named strains found in the published menu.");
   return { rows, warnings };

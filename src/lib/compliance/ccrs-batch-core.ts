@@ -149,6 +149,48 @@ export function saleTypeForOrder(isMedical: boolean): CcrsSaleType {
 }
 
 /**
+ * Valid CCRS `StrainType` values (Data Model Manual, verified): exactly these
+ * three. CCRS rejects any other token (including "NotApplicable").
+ */
+export const CCRS_STRAIN_TYPES = ["Indica", "Sativa", "Hybrid"] as const;
+export type CcrsStrainType = (typeof CCRS_STRAIN_TYPES)[number];
+
+/**
+ * Normalize an arbitrary POS strain-type label to a valid CCRS StrainType (B2).
+ * PURE. Returns the normalized value plus whether it had to be defaulted (so the
+ * caller can warn — DRAFTS-ONLY, we never silently invent). Rules:
+ *   - exact/lowercase Indica|Sativa|Hybrid → itself
+ *   - anything containing both indica & sativa, a ratio (e.g. "60/40"), or
+ *     "indica-dominant"/"sativa-dominant"/"blend"/"cbd" → Hybrid
+ *   - pure "indica"/"sativa" substrings → that type
+ *   - unknown/empty → Hybrid (the safe superset) + defaulted=true
+ */
+export function normalizeStrainType(
+  raw: string | null | undefined,
+): { value: CcrsStrainType; defaulted: boolean } {
+  const s = (raw ?? "").trim().toLowerCase();
+  if (!s) return { value: "Hybrid", defaulted: true };
+  if (s === "indica") return { value: "Indica", defaulted: false };
+  if (s === "sativa") return { value: "Sativa", defaulted: false };
+  if (s === "hybrid") return { value: "Hybrid", defaulted: false };
+
+  const hasIndica = s.includes("indica");
+  const hasSativa = s.includes("sativa");
+  const looksHybrid =
+    s.includes("hybrid") ||
+    s.includes("blend") ||
+    s.includes("cbd") ||
+    /\d+\s*[\/:%-]\s*\d+/.test(s) || // ratios like 60/40, 1:1
+    (hasIndica && hasSativa);
+  if (looksHybrid) return { value: "Hybrid", defaulted: false };
+  if (hasIndica) return { value: "Indica", defaulted: false };
+  if (hasSativa) return { value: "Sativa", defaulted: false };
+  // "indica-dominant"/"sativa-dominant" handled above via substring; anything
+  // else (e.g. "NotApplicable", "Unknown", brand words) → Hybrid + flag.
+  return { value: "Hybrid", defaulted: true };
+}
+
+/**
  * Order-of-operations validation dependency groups. A full batch must be
  * uploaded in this order so each file's referenced rows already exist.
  *   Group 1: Strain, Area, Product (prerequisites)
@@ -268,6 +310,21 @@ export function __runCcrsBatchCoreTests(): void {
   assert(CCRS_COLUMNS.Sale[9] === "RetailSalesTax", "Sale col 9 = RetailSalesTax");
   assert(CCRS_COLUMNS.Sale[10] === "CannabisExciseTax", "Sale col 10 = CannabisExciseTax");
   assert(CCRS_COLUMNS.Sale[17] === "Operation", "Sale col 17");
+
+  // StrainType normalization (B2).
+  assert(normalizeStrainType("Indica").value === "Indica", "Indica passthrough");
+  assert(normalizeStrainType("sativa").value === "Sativa", "sativa lower");
+  assert(normalizeStrainType("Hybrid").value === "Hybrid", "Hybrid passthrough");
+  assert(normalizeStrainType("Indica-dominant").value === "Indica", "indica-dominant → Indica");
+  assert(normalizeStrainType("60/40 Sativa").value === "Hybrid", "ratio → Hybrid");
+  assert(normalizeStrainType("Indica/Sativa").value === "Hybrid", "both → Hybrid");
+  assert(normalizeStrainType("1:1 CBD").value === "Hybrid", "cbd/ratio → Hybrid");
+  assert(normalizeStrainType("NotApplicable").defaulted === true, "unknown flagged");
+  assert(normalizeStrainType("NotApplicable").value === "Hybrid", "unknown → Hybrid");
+  assert(normalizeStrainType("").defaulted === true, "empty flagged");
+  for (const st of CCRS_STRAIN_TYPES) {
+    assert(normalizeStrainType(st).value === st, `${st} is valid`);
+  }
 
   // SaleType enum (B1): medical → RecreationalMedical; rec → RecreationalRetail.
   assert(saleTypeForOrder(true) === "RecreationalMedical", "medical sale type");
