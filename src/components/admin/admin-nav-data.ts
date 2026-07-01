@@ -58,6 +58,7 @@ export const adminNav: AdminNavItem[] = [
   { label: "Vendor Payments (ACH)", href: "/admin/vendor-payments", permission: "settings.manage", icon: "💳", group: "Finance" },
 
   // ── Marketing: promos, content, email, creative ─────────────────────────
+  { label: "Marketing & Advertising", href: "/admin/marketing", permission: "content.edit", icon: "📣", group: "Marketing" },
   { label: "Promotions", href: "/admin/promotions", permission: "promotions.manage", icon: "%", group: "Marketing" },
   { label: "Blog & Newsletter", href: "/admin/blog", permission: "blog.manage", icon: "✎", group: "Marketing" },
   { label: "Newsletter Send", href: "/admin/newsletter", permission: "blog.manage", icon: "✉", group: "Marketing" },
