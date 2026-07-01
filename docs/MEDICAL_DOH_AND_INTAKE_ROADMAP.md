@@ -84,9 +84,34 @@ manually), branch → PR → squash-merge, money in cents, PHI stays in the priv
 ---
 
 ## STATUS
-- [ ] Slice 99 — Inbound email ingestion (Resend + SendGrid plug-in) — MED
-- [ ] Slice 100 — Medical authorization issuance guardrails — HIGH
-- [ ] Slice 101 — Card validity + expiry safety — HIGH
-- [ ] Slice 102 — Carded purchase-limit reference — MED
-- [ ] Slice 103 — Exempt-sale record completeness — MED
-- [ ] Slice 104 — Intake-email review queue surfacing — MED
+- [x] Slice 99 — Inbound email ingestion (Resend + SendGrid plug-in) — MED — merged PR #207
+- [x] Slice 100 — Medical authorization issuance guardrails — HIGH
+- [x] Slice 101 — Card validity + expiry safety — HIGH
+- [x] Slice 102 — Carded purchase-limit reference — MED (already correct in sales-limits-core; documented)
+- [x] Slice 103 — Exempt-sale record completeness — MED
+- [x] Slice 104 — Intake-email review queue surfacing — MED
+
+## DELIVERED — Slice 104
+- `inbound-store.listInboundEmails(limit)` — read-only recent inbound_email_log rows.
+- `/admin/inventory/intake` now shows an **Inbound email (vendor_intake@)** panel:
+  received time, from, subject (links to the staged draft), attachment count, and a
+  result badge (Staged draft / Parse failed / No manifest / Ignored). Staged drafts
+  still live in the existing pipeline queues — drafts-only, nothing auto-commits.
+
+## DELIVERED — Slices 100/101/103
+- `src/lib/medical/medical-authorization-core.ts` (16 tsx tests):
+  - `validateAuthorizationIssuance(input, now)` — 608-048 four checks + UPID-required-
+    when-in-MCR + effective≤expiration + not-already-expired + valid holder type.
+    Wired into `store.createAuthorization` (replaced the sole `canIssueCard` gate).
+  - `authorizationValidityAt(card, onDate, soonDays)` — layered on `tax.cardValidity`
+    (the exemption source of truth), adds `expiringSoon` + `daysUntilExpiry`. The exempt
+    path already used `cardValidity`, so an expired/inactive/not-in-MCR/no-UPID card
+    already grants NO exemption; this adds the staff early-warning signal.
+- Slice 102 — `sales-limits-core.MEDICAL_LIMITS` ALREADY encodes the WAC 314-55-095(2)(d)
+  3× carded limits (84 g usable / 1360.8 g solid / 6048 g liquid / 21 g concentrate) and
+  `evaluateCart(lines, "medical", …)` applies them. Verified correct — not forked.
+- `src/lib/medical/exempt-sale-record-core.ts` (11 tsx tests):
+  `verifyExemptSaleRecord` / `verifyExemptSaleRecords` — flag any excise-exempt record
+  missing a WAC 314-55-090(2) field (date/UPID/card effective/card expiration/product/
+  price). Wired into `store.recordExemptSale` so an incomplete excise-exempt row is
+  BLOCKED before insert (sales-tax-only rows are exempt from this ledger standard).

@@ -157,3 +157,44 @@ function safeJson(text: string): unknown {
     return text;
   }
 }
+
+// ── Slice 104: review-queue surfacing ───────────────────────────────────────
+
+export type InboundEmailLogRow = {
+  id: string;
+  provider: "resend" | "sendgrid";
+  from_address: string | null;
+  to_addresses: string[];
+  subject: string | null;
+  received_at: string;
+  signature_ok: boolean | null;
+  to_intake: boolean;
+  attachment_count: number;
+  disposition: InboundDisposition;
+  manifest_id: string | null;
+  note: string | null;
+};
+
+/**
+ * Recent inbound vendor_intake@ emails for the intake review queue. Read-only.
+ * Surfaces provenance ("this draft arrived by email") and, crucially, the
+ * `parse_failed` / `no_manifest` rows a human should chase down. Never throws.
+ */
+export async function listInboundEmails(limit = 25): Promise<InboundEmailLogRow[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("inbound_email_log")
+      .select(
+        "id, provider, from_address, to_addresses, subject, received_at, signature_ok, to_intake, attachment_count, disposition, manifest_id, note",
+      )
+      .order("received_at", { ascending: false })
+      .limit(limit);
+    if (error || !data) return [];
+    return data as InboundEmailLogRow[];
+  } catch (err) {
+    console.error("[inbound-email] listInboundEmails failed:", err);
+    return [];
+  }
+}
