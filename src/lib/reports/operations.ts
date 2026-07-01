@@ -574,77 +574,252 @@ export async function getEmployeeReport(fromDate: string, toDate: string): Promi
 // ---------------------------------------------------------------------------
 // Medical report (recognition cards + WAC 314-55-090 exempt sales)
 // ---------------------------------------------------------------------------
+export type MedicalAuthStatusRow = { status: string; label: string; count: number };
+export type MedicalExpiryBucketRow = { label: string; count: number };
+export type MedicalProductRow = {
+  sku: string;
+  name: string;
+  units: number;
+  salesMinor: number;
+  exciseExemptMinor: number;
+};
+export type MedicalCardIssue = {
+  saleDate: string;
+  upid: string;
+  productName: string;
+  cardExpiresOn: string | null;
+  salesPriceMinor: number;
+};
+export type MedicalDailyRow = { date: string; sales: number; salesMinor: number; exciseMinor: number };
+
 export type MedicalReport = {
+  // Headline patient / card counts
   patients: number;
   activeCards: number;
-  expiringSoon: number;
-  exemptSales: number;
-  salesTaxExemptedMinor: number;
-  exciseExemptedMinor: number;
-  dailyExcise: { date: string; minor: number }[];
+  expiringSoon: number; // active cards expiring within 30 days
+  // Store medical endorsement / compliance status
+  isEndorsed: boolean;
+  endorsementNumber: string | null;
+  exemptionUntil: string | null; // date the WAC 314-55-090(6) excise exemption sunsets
+  daysUntilExemptionEnds: number | null;
+  // Authorization pipeline
+  authByStatus: MedicalAuthStatusRow[];
+  expiryBuckets: MedicalExpiryBucketRow[]; // 0-30 / 31-60 / 61-90 / expired
+  inDohDatabase: number; // active cards validated in the DOH MCR database
+  // Exempt-sale activity in the window
+  exemptSales: number; // count of exempt line items
+  uniquePatients: number; // distinct UPIDs served in window
+  exemptSalesMinor: number; // gross exempt sales value
+  salesTaxExemptedMinor: number; // est. 9.3% sales tax not collected
+  exciseExemptedMinor: number; // 37% excise not collected
+  avgExemptBasketMinor: number; // exempt sales value / unique patients
+  // Product mix + compliance audit
+  topExemptProducts: MedicalProductRow[];
+  cardValidityIssues: MedicalCardIssue[]; // exempt sales where the card was expired at sale
+  // Trend
+  dailyExcise: { date: string; minor: number }[]; // retained for backward compat
+  daily: MedicalDailyRow[];
+};
+
+export const EMPTY_MEDICAL_REPORT: MedicalReport = {
+  patients: 0,
+  activeCards: 0,
+  expiringSoon: 0,
+  isEndorsed: false,
+  endorsementNumber: null,
+  exemptionUntil: null,
+  daysUntilExemptionEnds: null,
+  authByStatus: [],
+  expiryBuckets: [],
+  inDohDatabase: 0,
+  exemptSales: 0,
+  uniquePatients: 0,
+  exemptSalesMinor: 0,
+  salesTaxExemptedMinor: 0,
+  exciseExemptedMinor: 0,
+  avgExemptBasketMinor: 0,
+  topExemptProducts: [],
+  cardValidityIssues: [],
+  dailyExcise: [],
+  daily: [],
+};
+
+const AUTH_STATUS_LABELS: Record<string, string> = {
+  active: "Active",
+  expired: "Expired",
+  revoked: "Revoked",
+};
+
+type ExemptRow = {
+  sale_date: string;
+  unique_patient_identifier: string | null;
+  card_expires_on: string | null;
+  product_sku: string | null;
+  product_name: string | null;
+  sales_price_minor: number;
+  excise_amount_exempt_minor: number | null;
+  sales_tax_exempt: boolean;
+};
+
+type AuthRow = {
+  status: string | null;
+  expires_on: string | null;
+  in_doh_database: boolean | null;
 };
 
 export async function getMedicalReport(fromDate: string, toDate: string): Promise<MedicalReport> {
-  const empty: MedicalReport = {
-    patients: 0,
-    activeCards: 0,
-    expiringSoon: 0,
-    exemptSales: 0,
-    salesTaxExemptedMinor: 0,
-    exciseExemptedMinor: 0,
-    dailyExcise: [],
-  };
-  if (!isSupabaseServiceConfigured) return empty;
+  if (!isSupabaseServiceConfigured) return EMPTY_MEDICAL_REPORT;
   const admin = createSupabaseAdminClient();
 
-  const soonCutoff = new Date();
-  soonCutoff.setDate(soonCutoff.getDate() + 30);
-  const soonISO = soonCutoff.toISOString().slice(0, 10);
-  const todayISO = new Date().toISOString().slice(0, 10);
+  const today = new Date();
+  const todayISO = today.toISOString().slice(0, 10);
+  const soonISO = new Date(today.getTime() + 30 * 86_400_000).toISOString().slice(0, 10);
 
-  const [{ count: patients }, { count: activeCards }, { count: expiringSoon }, { data: exempt }] =
+  const [{ count: patients }, { data: auths }, { data: exempt }, { data: endorsement }] =
     await Promise.all([
       admin.from("customers").select("id", { count: "exact", head: true }).eq("is_medical_patient", true),
-      admin.from("patient_authorizations").select("id", { count: "exact", head: true }).eq("status", "active"),
-      admin
-        .from("patient_authorizations")
-        .select("id", { count: "exact", head: true })
-        .eq("status", "active")
-        .gte("expires_on", todayISO)
-        .lte("expires_on", soonISO),
+      admin.from("patient_authorizations").select("status, expires_on, in_doh_database"),
       admin
         .from("medical_exempt_sales")
-        .select("sale_date, sales_price_minor, excise_amount_exempt_minor, sales_tax_exempt")
+        .select(
+          "sale_date, unique_patient_identifier, card_expires_on, product_sku, product_name, sales_price_minor, excise_amount_exempt_minor, sales_tax_exempt",
+        )
         .gte("sale_date", fromDate)
         .lte("sale_date", toDate),
+      admin
+        .from("medical_endorsement_config")
+        .select("is_medically_endorsed, endorsement_number, excise_exemption_until")
+        .limit(1)
+        .maybeSingle(),
     ]);
 
-  const rows =
-    (exempt as
-      | { sale_date: string; sales_price_minor: number; excise_amount_exempt_minor: number; sales_tax_exempt: boolean }[]
-      | null) ?? [];
+  const authRows = (auths as AuthRow[] | null) ?? [];
+  const rows = (exempt as ExemptRow[] | null) ?? [];
 
-  // 9.3% sales tax exempted (approx from price; precise records would carry it).
-  const salesTaxExemptedMinor = rows
-    .filter((r) => r.sales_tax_exempt)
-    .reduce((a, r) => a + Math.round((r.sales_price_minor * 930) / 10000), 0);
-  const exciseExemptedMinor = rows.reduce((a, r) => a + (r.excise_amount_exempt_minor ?? 0), 0);
-
-  const dailyMap = new Map<string, number>();
-  for (const r of rows) {
-    dailyMap.set(r.sale_date, (dailyMap.get(r.sale_date) ?? 0) + (r.excise_amount_exempt_minor ?? 0));
+  // --- Authorization pipeline ------------------------------------------------
+  const statusCounts = new Map<string, number>();
+  let activeCards = 0;
+  let expiringSoon = 0;
+  let inDohDatabase = 0;
+  const buckets = { b30: 0, b60: 0, b90: 0, expired: 0 };
+  for (const a of authRows) {
+    const status = a.status ?? "active";
+    statusCounts.set(status, (statusCounts.get(status) ?? 0) + 1);
+    if (status !== "active") continue;
+    activeCards += 1;
+    if (a.in_doh_database) inDohDatabase += 1;
+    const exp = a.expires_on;
+    if (!exp) continue;
+    if (exp < todayISO) {
+      buckets.expired += 1;
+    } else if (exp <= soonISO) {
+      buckets.b30 += 1;
+      expiringSoon += 1;
+    } else {
+      const days = Math.round((new Date(exp).getTime() - today.getTime()) / 86_400_000);
+      if (days <= 60) buckets.b60 += 1;
+      else if (days <= 90) buckets.b90 += 1;
+    }
   }
-  const dailyExcise = [...dailyMap.entries()]
-    .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([date, minor]) => ({ date, minor }));
+  const authByStatus: MedicalAuthStatusRow[] = [...statusCounts.entries()]
+    .map(([status, count]) => ({ status, label: AUTH_STATUS_LABELS[status] ?? status, count }))
+    .sort((a, b) => b.count - a.count);
+  const expiryBuckets: MedicalExpiryBucketRow[] = [
+    { label: "Expiring ≤ 30 days", count: buckets.b30 },
+    { label: "31–60 days", count: buckets.b60 },
+    { label: "61–90 days", count: buckets.b90 },
+    { label: "Already expired", count: buckets.expired },
+  ];
+
+  // --- Exempt-sale activity --------------------------------------------------
+  const uniqueUpids = new Set<string>();
+  let exemptSalesMinor = 0;
+  let salesTaxExemptedMinor = 0;
+  let exciseExemptedMinor = 0;
+  const productMap = new Map<string, MedicalProductRow>();
+  const dailyMap = new Map<string, MedicalDailyRow>();
+  const cardValidityIssues: MedicalCardIssue[] = [];
+
+  for (const r of rows) {
+    const upid = r.unique_patient_identifier ?? "";
+    if (upid) uniqueUpids.add(upid);
+    const price = r.sales_price_minor ?? 0;
+    const excise = r.excise_amount_exempt_minor ?? 0;
+    exemptSalesMinor += price;
+    if (r.sales_tax_exempt) salesTaxExemptedMinor += Math.round((price * 930) / 10000);
+    exciseExemptedMinor += excise;
+
+    // product mix
+    const sku = r.product_sku ?? "—";
+    const pr = productMap.get(sku) ?? {
+      sku,
+      name: r.product_name ?? sku,
+      units: 0,
+      salesMinor: 0,
+      exciseExemptMinor: 0,
+    };
+    pr.units += 1;
+    pr.salesMinor += price;
+    pr.exciseExemptMinor += excise;
+    productMap.set(sku, pr);
+
+    // daily trend
+    const d = dailyMap.get(r.sale_date) ?? { date: r.sale_date, sales: 0, salesMinor: 0, exciseMinor: 0 };
+    d.sales += 1;
+    d.salesMinor += price;
+    d.exciseMinor += excise;
+    dailyMap.set(r.sale_date, d);
+
+    // compliance audit: card was expired at the time of the exempt sale
+    if (r.card_expires_on && r.card_expires_on < r.sale_date) {
+      cardValidityIssues.push({
+        saleDate: r.sale_date,
+        upid: upid || "—",
+        productName: r.product_name ?? sku,
+        cardExpiresOn: r.card_expires_on,
+        salesPriceMinor: price,
+      });
+    }
+  }
+
+  const uniquePatients = uniqueUpids.size;
+  const topExemptProducts = [...productMap.values()]
+    .sort((a, b) => b.salesMinor - a.salesMinor)
+    .slice(0, 12);
+  const daily = [...dailyMap.values()].sort((a, b) => a.date.localeCompare(b.date));
+  const dailyExcise = daily.map((d) => ({ date: d.date, minor: d.exciseMinor }));
+  cardValidityIssues.sort((a, b) => b.saleDate.localeCompare(a.saleDate));
+
+  // --- Endorsement / compliance ---------------------------------------------
+  const cfg =
+    (endorsement as
+      | { is_medically_endorsed: boolean; endorsement_number: string | null; excise_exemption_until: string | null }
+      | null) ?? null;
+  const exemptionUntil = cfg?.excise_exemption_until ?? null;
+  const daysUntilExemptionEnds = exemptionUntil
+    ? Math.round((new Date(exemptionUntil).getTime() - today.getTime()) / 86_400_000)
+    : null;
 
   return {
     patients: patients ?? 0,
-    activeCards: activeCards ?? 0,
-    expiringSoon: expiringSoon ?? 0,
+    activeCards,
+    expiringSoon,
+    isEndorsed: cfg?.is_medically_endorsed ?? false,
+    endorsementNumber: cfg?.endorsement_number ?? null,
+    exemptionUntil,
+    daysUntilExemptionEnds,
+    authByStatus,
+    expiryBuckets,
+    inDohDatabase,
     exemptSales: rows.length,
+    uniquePatients,
+    exemptSalesMinor,
     salesTaxExemptedMinor,
     exciseExemptedMinor,
+    avgExemptBasketMinor: uniquePatients > 0 ? Math.round(exemptSalesMinor / uniquePatients) : 0,
+    topExemptProducts,
+    cardValidityIssues,
     dailyExcise,
+    daily,
   };
 }
