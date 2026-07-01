@@ -7,6 +7,7 @@ import { ToastProvider } from "@/components/admin/ux";
 import { HelpLauncher } from "@/components/admin/HelpLauncher";
 import { CommandPalette } from "@/components/admin/CommandPalette";
 import { ConciergeWidget } from "@/components/admin/ConciergeWidget";
+import { MobileLauncher } from "@/components/admin/mobile/MobileLauncher";
 import { adminNav } from "@/components/admin/admin-nav-data";
 import { can, type Permission } from "@/lib/auth/roles";
 
@@ -65,6 +66,7 @@ export default async function AdminLayout({
         <HelpLauncher />
         <CommandPalette items={paletteItems} />
         <ConciergeWidget />
+        <MobileLauncher />
       </div>
     </div>
   );
