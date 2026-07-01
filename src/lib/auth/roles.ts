@@ -59,7 +59,8 @@ export type Permission =
   | "users.manage"
   | "settings.manage"
   | "staffing.manage"
-  | "medical.manage";
+  | "medical.manage"
+  | "sales_limit.override";
 
 // Role → granted permissions. Higher roles inherit by explicit listing to keep
 // the matrix auditable and obvious.
@@ -84,6 +85,9 @@ const MATRIX: Record<Permission, StaffRole[]> = {
   "settings.manage": ["owner", "admin"],
   "staffing.manage": ["owner", "admin", "manager"],
   "medical.manage": ["owner", "admin", "manager"],
+  // Authorizing an OVER-LIMIT sale is a manager+ decision (Slice 109). Regular
+  // staff/clerks cannot override the statutory transaction limit.
+  "sales_limit.override": ["owner", "admin", "manager"],
 };
 
 export function can(role: StaffRole | null | undefined, permission: Permission): boolean {
@@ -113,6 +117,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   "settings.manage": "Change settings",
   "staffing.manage": "Manage employees, shifts & time clock",
   "medical.manage": "Issue & manage medical recognition cards (consultant)",
+  "sales_limit.override": "Authorize an over-limit sale (logged override)",
 };
 
 /** Display order for the matrix rows (grouped roughly by area). */
@@ -135,6 +140,7 @@ export const ALL_PERMISSIONS: Permission[] = [
   "media.manage",
   "reports.view",
   "staffing.manage",
+  "sales_limit.override",
   "users.manage",
   "settings.manage",
 ];

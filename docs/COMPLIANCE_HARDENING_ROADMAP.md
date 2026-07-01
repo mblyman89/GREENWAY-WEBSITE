@@ -76,9 +76,27 @@ Standing rules respected: CCRS compliance + 🔴 DOH MEDICAL CANNABIS COMPLIANCE
   (Strain has no ExternalIdentifier per spec — correctly skipped; InventoryAdjustment reuses
   one inventory id across adjustments — correctly skipped). Verified firing via targeted tsx.
 
-## Slice 109 — Sales-limit enforcement at POS (hard block + logged override) [HIGH]
-- Extend `sales-limits-core` so an over-limit cart is BLOCKED (medical vs. rec profile chosen
-  from VERIFIED card status), with a permission-gated, logged manager override (auditable).
+## Slice 109 — Sales-limit enforcement at POS (hard block + logged override) [HIGH] ✅ DONE
+- OWNER DECISION (recorded): HARD BLOCK by default + permission-gated, LOGGED manager override.
+- PURE `sales-limit-gate-core.ts`: `decideSalesLimitGate({blocked, enforce, hardBlock, reasons,
+  override})` → `{decision: allow|override_applied|block, allowed, overLimit, overrideApplied,
+  overrideAvailable, messages, reasons}`. enforce-off → allow; within → allow; soft over → allow
+  flagged; hard over → BLOCK unless override is BOTH `permitted` (caller's permission check) AND
+  carries a written reason. 13 tsx tests.
+- Server gate `enforceSalesLimitForSale(lines, customerType, {actorId, override})` in
+  `sales-limits.ts`: runs `evaluateCartWithSettings` + `decideSalesLimitGate`, ALWAYS logs the
+  over-limit outcome (blocked or overridden) to `sales_limit_events`, returns the verdict. Sale
+  paths must refuse to commit when `verdict.allowed === false`. Never trusts a client flag — the
+  caller passes the RESULT of the permission check as `override.permitted`.
+- New permission `sales_limit.override` (owner/admin/manager) in roles.ts (type, MATRIX, labels,
+  ALL_PERMISSIONS). `logSalesLimitEvent` extended with override_applied/override_by/override_reason.
+- Migration `0063_sales_limit_override.sql` (IDEMPOTENT — OWNER RUNS MANUALLY): adds
+  override_applied/override_by/override_reason + an index to `sales_limit_events`.
+- Sales-limits admin page: "Over-limit override log" audit card via
+  `listRecentSalesLimitOverrides()` so the owner can see every authorized over-limit sale.
+- NOTE: existing persisted sale path is the online reservation (`createOrder`, no category/
+  customer-type data); the gate is the callable authority any register/POS sale path invokes.
+  Wiring the live register UI to call it is a UI task, not a new capability.
 
 ## Slice 110 — "Compliance Health" panel [MED]
 - One read-only screen running every gate: latest CCRS batch submittable?, deadline status,
@@ -91,5 +109,5 @@ Standing rules respected: CCRS compliance + 🔴 DOH MEDICAL CANNABIS COMPLIANCE
 - [x] Slice 106 — CCRS reporting-deadline guard — HIGH
 - [x] Slice 107 — Inventory can't-go-live-dirty gate — HIGH
 - [x] Slice 108 — CCRS identifier integrity assertions — MED
-- [ ] Slice 109 — Sales-limit enforcement at POS — HIGH
+- [x] Slice 109 — Sales-limit enforcement at POS — HIGH
 - [ ] Slice 110 — Compliance Health panel — MED

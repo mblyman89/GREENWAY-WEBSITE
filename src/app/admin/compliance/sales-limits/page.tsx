@@ -4,7 +4,7 @@ import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
 import { Button, Card, Field, Input, Textarea, Badge } from "@/components/admin/ui";
-import { getSalesLimitSettings } from "@/lib/compliance/sales-limits";
+import { getSalesLimitSettings, listRecentSalesLimitOverrides } from "@/lib/compliance/sales-limits";
 import {
   gramsToOunces,
   LIMIT_BUCKET_LABELS,
@@ -36,6 +36,7 @@ export default async function SalesLimitsPage({
   const { ok, error } = await searchParams;
   const s = await getSalesLimitSettings();
   const bucketCats = bucketCategories();
+  const overrides = await listRecentSalesLimitOverrides(20);
 
   const unitGramsText = Object.entries(s.unitGrams)
     .map(([k, v]) => `${k}=${v}`)
@@ -335,6 +336,44 @@ export default async function SalesLimitsPage({
               </div>
             )}
           </form>
+        </Card>
+
+        {/* Slice 109: logged over-limit override audit trail. */}
+        <Card>
+          <div className="mb-2 flex items-center justify-between">
+            <h2 className="text-sm font-black uppercase tracking-[0.12em] text-white/70">
+              Over-limit override log
+            </h2>
+            <Badge>{overrides.length}</Badge>
+          </div>
+          <p className="mb-3 text-xs text-white/50">
+            Every over-limit sale that a manager authorized is recorded here for your protection. An over-limit cart is
+            hard-blocked at checkout unless a user with the{" "}
+            <span className="font-semibold text-white/70">Authorize an over-limit sale</span> permission approves it with
+            a written reason.
+          </p>
+          {overrides.length === 0 ? (
+            <p className="text-xs text-white/40">No overrides recorded — no over-limit sale has been authorized.</p>
+          ) : (
+            <ul className="space-y-2 text-xs">
+              {overrides.map((o) => (
+                <li key={o.id} className="rounded-lg border border-white/10 bg-white/[0.02] p-3">
+                  <div className="mb-1 flex items-center gap-2 text-white/60">
+                    <span className="font-semibold text-white/80">{new Date(o.createdAt).toLocaleString()}</span>
+                    <span className="rounded-full bg-white/10 px-2 py-0.5 uppercase tracking-wide">
+                      {o.customerType}
+                    </span>
+                  </div>
+                  {o.reasons.length > 0 && (
+                    <div className="mb-1 text-orange-200/80">{o.reasons.join(" ")}</div>
+                  )}
+                  <div className="text-white/60">
+                    Reason given: <span className="text-white/80">{o.overrideReason || "(none recorded)"}</span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
         </Card>
       </div>
     </div>
