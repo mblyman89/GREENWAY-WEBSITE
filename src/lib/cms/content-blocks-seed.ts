@@ -333,4 +333,52 @@ export const CONTENT_BLOCK_SEEDS: ContentBlockSeed[] = [
     field_type: "plain",
     defaultValue: "Open Daily 8:00 AM – 11:45 PM",
   },
+
+  // ---- Legal & info pages --------------------------------------------------
+  // These pages have legally-worded bodies that shouldn't be freely edited, but
+  // their page TITLE is safe to manage here — which also makes each page appear
+  // in the Site Content page directory so nothing is "missing" from the list.
+  {
+    block_key: "privacy.hero.title",
+    page: "legal",
+    section: "hero",
+    label: "Privacy Policy — page title",
+    help_text:
+      "The big orange title at the top of your Privacy Policy page. The legal wording below it is fixed for compliance and isn't edited here.",
+    field_type: "plain",
+    seo_impact: true,
+    defaultValue: "Privacy Policy",
+  },
+  {
+    block_key: "terms.hero.title",
+    page: "legal",
+    section: "hero",
+    label: "Terms of Use — page title",
+    help_text:
+      "The big orange title at the top of your Terms of Use page. The legal wording below it is fixed for compliance and isn't edited here.",
+    field_type: "plain",
+    seo_impact: true,
+    defaultValue: "Terms of Use",
+  },
+  {
+    block_key: "chd.hero.title.line1",
+    page: "legal",
+    section: "hero",
+    label: "Consumer Health Data — title (line 1)",
+    help_text:
+      "First line of the title on your Washington Consumer Health Data page (required by the My Health My Data Act). Keep it accurate.",
+    field_type: "plain",
+    seo_impact: true,
+    defaultValue: "Washington Consumer Health Data",
+  },
+  {
+    block_key: "chd.hero.title.line2",
+    page: "legal",
+    section: "hero",
+    label: "Consumer Health Data — title (line 2)",
+    help_text: "Second line of the title on your Consumer Health Data page.",
+    field_type: "plain",
+    seo_impact: true,
+    defaultValue: "Privacy Policy",
+  },
 ];

@@ -58,6 +58,7 @@ const PAGE_LABELS: Record<string, string> = {
   specials: "Specials",
   vendors: "Vendors",
   faq: "FAQ",
+  legal: "Legal & info pages",
 };
 
 function pageLabel(page: string): string {

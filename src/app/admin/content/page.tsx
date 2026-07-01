@@ -24,8 +24,19 @@ import {
   discardAllDraftsAction,
 } from "./actions";
 
-/** Map a content block's page group to a public URL for "View on site". */
-function publicPathForPage(page: string): string | null {
+/**
+ * Map a content block to a public URL for "View on site".
+ *
+ * Most page groups map 1:1 to a public route. The "legal" group bundles a few
+ * statically-authored policy pages, so those are resolved by block-key prefix.
+ */
+function publicPathForBlock(page: string, blockKey: string): string | null {
+  if (page === "legal") {
+    if (blockKey.startsWith("privacy.")) return "/privacy-policy";
+    if (blockKey.startsWith("terms.")) return "/terms-of-use";
+    if (blockKey.startsWith("chd.")) return "/consumer-health-data";
+    return null;
+  }
   switch (page) {
     case "home":
       return "/";
@@ -152,7 +163,7 @@ export default async function SiteContentPage({
     page: b.page,
     status: b.status,
     last_edited_by: b.last_edited_by,
-    publicPath: publicPathForPage(b.page),
+    publicPath: publicPathForBlock(b.page, b.block_key),
     revisions: (revisionsByKey.get(b.block_key) ?? []).map((r) => ({
       id: r.id,
       value: r.value,
@@ -166,7 +177,7 @@ export default async function SiteContentPage({
     <div>
       <AdminPageHeader
         title="Site Content"
-        subtitle="Edit your site-wide text in one place — the footer (store hours, hours line, the required WA compliance warning), business info, and the wording on your About, Locations, and Price-Match pages. Edit a draft, preview it, then Publish to go live."
+        subtitle="Edit your site-wide text in one place — the footer (store hours, hours line, the required WA compliance warning), business info, the wording on your About, Locations, and Price-Match pages, and the titles on your Privacy Policy, Terms of Use, and Consumer Health Data pages. Edit a draft, preview it, then Publish to go live."
         breadcrumbs={<Breadcrumbs items={[{ label: "Site Content" }]} />}
         help={
           <HelpPanel
