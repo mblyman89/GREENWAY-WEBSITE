@@ -121,3 +121,15 @@ see `docs/COMMAND_CENTER_ENHANCEMENTS_TASKLIST.md`.
 - [x] Slice 92 — Product InventoryCategory/Type enum + text-length guardrails (C1/C2) — HIGH/MED
       (grounded on 2026-02 CCRS Upload User Guide Table 2; validateProductClassification + clampText)
 - [x] ALL 11 CCRS AUDIT FINDINGS RESOLVED (Slices 87–92, PRs #195–#200)
+
+## BATCH CCRS-HARDENING-II + VENDOR (Slices 93–98)
+> Owner (verbatim): "Yes please proceed with the next 6 slices. Start with whatever you think is most logical. I trust you to use your best judgement to keep me safe."
+> Best-judgment focus: make the CCRS batch trustworthy END-TO-END (honest error severity, self-verifying dry-run, do-not-upload gate) + safe vendor drafts. Roadmap: docs/CCRS_HARDENING_II_ROADMAP.md
+> Gap found while planning: Slice-92 "ERROR —" product warnings were surfaced as mere "warning" severity — a batch-blocking mis-mapping looked harmless. Slice 93 fixes this.
+> NOTE (not lost): BATCH 2e owner items remain pending — DOH medical authorization intake (Canon PIXMA TS3522 + Scotch laminator) and the devices/equipment management page. Will surface these as the recommended NEXT batch after this round.
+- [x] Slice 93 — Honest sync-issue severity (classifyWarning; ERROR ⇒ error; no hidden blockers) — CRITICAL
+- [ ] Slice 94 — E2E batch dry-run harness verifyCcrsBatch (pure, byte-correct assertions) — HIGH
+- [ ] Slice 95 — "Do not upload" gate + error-first summary in README/sync report — HIGH
+- [ ] Slice 96 — Sale numeric-column safety (non-negative qty/price, cents-consistent tax) — HIGH
+- [ ] Slice 97 — Vendor intake review summary summarizeIntakeForReview (drafts-only) — MED
+- [ ] Slice 98 — Vendor ACH draft vendorPaymentsToNacha (reuse nacha-core, drafts-only) — MED
