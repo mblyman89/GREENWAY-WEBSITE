@@ -63,23 +63,33 @@ Fix the standalone Sale.csv generator + reconcile the column source of truth.
   whose type had to be defaulted.
 - Tests: valid passthrough; synonyms; unknown → Hybrid + flagged.
 
-### Slice 92 — Product Category/Type enum + text-length guardrails (C1 + C2)  [HIGH/MED]
-- PURE `CCRS_INVENTORY_CATEGORIES` (4) + category→valid-type table from the Data
-  Model Manual; `validateProductClassification(category, type)` → normalized value
-  or a precise error; `clampText(value, len)` helper.
-- Wire into `ccrs-batch.ts buildProductFile`: keep the value, but raise an
-  **error-level** sync issue when category/type isn't a valid CCRS enum, and clamp
-  Name(75)/Description(250)/etc. with a warning on truncation.
-- Tests: valid combos pass; invalid category/type flagged; clamp + warn.
+### Slice 92 — Product Category/Type enum + text-length guardrails (C1 + C2)  [HIGH/MED]  ✅ DONE
+- PURE `CCRS_INVENTORY_CATEGORIES` (4) + category→valid-type table
+  (`CCRS_INVENTORY_TYPES`); `validateProductClassification(category, type)` →
+  canonicalized value or a precise error; `clampText(value, len)` helper +
+  `CCRS_PRODUCT_NAME_MAX` (75) / `CCRS_PRODUCT_DESCRIPTION_MAX` (250).
+- **GROUNDING (important):** the enum table was reconstructed from the CURRENT
+  **CCRS Upload User Guide (2026-02), "Table 2. Valid InventoryCategory and
+  InventoryType values"** — NOT the older Data Model Manual. The v2023+ changes
+  renamed/moved values (e.g. `Clones`, `Cannabis Mix`, `Usable Cannabis`;
+  concentrates are now EndProduct). Legacy names like `Marijuana Mix` are
+  intentionally rejected. Source downloaded to `/tmp/ccrs-live/UploadGuide.pdf`.
+- Wired into `ccrs-batch.ts buildProductFile`: KEEPS the POS-supplied values
+  (canonicalized when valid), raises an **ERROR-level** warning (errors sorted
+  first) when category/type isn't a valid CCRS enum, and clamps Name(75)/
+  Description(250) with a truncation warning. Never invents a value (drafts-only).
+- Tests: valid combos pass + canonicalize; case/space tolerant; unknown category
+  and cross-category type mismatch flagged; missing fields flagged; legacy names
+  rejected; clamp truncates+flags; null→empty.
 
 ---
 
-## STATUS
-- [x] Slice 87 — Sale.csv conformance (A1/A2/A3/A6) — CRITICAL
-- [x] Slice 88 — InventoryAdjustment.csv conformance (A4/A5) — CRITICAL
-- [x] Slice 89 — Pacific-time CCRS dates (B3) — HIGH
-- [ ] Slice 90 — SaleType RecreationalMedical (B1) — HIGH
-- [ ] Slice 91 — StrainType enum guardrail (B2) — HIGH
-- [ ] Slice 92 — Product Category/Type + text-length guardrails (C1/C2) — HIGH/MED
+## STATUS  — ALL 11 AUDIT FINDINGS RESOLVED ✅
+- [x] Slice 87 — Sale.csv conformance (A1/A2/A3/A6) — CRITICAL — PR #195
+- [x] Slice 88 — InventoryAdjustment.csv conformance (A4/A5) — CRITICAL — PR #196
+- [x] Slice 89 — Pacific-time CCRS dates (B3) — HIGH — PR #197
+- [x] Slice 90 — SaleType RecreationalMedical (B1) — HIGH — PR #198
+- [x] Slice 91 — StrainType enum guardrail (B2) — HIGH — PR #199
+- [x] Slice 92 — Product Category/Type + text-length guardrails (C1/C2) — HIGH/MED
 
 All 11 findings covered across these 6 slices.

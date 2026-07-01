@@ -24,6 +24,10 @@ import {
   CCRS_UPLOAD_ORDER,
   uploadGroupOf,
   normalizeStrainType,
+  validateProductClassification,
+  clampText,
+  CCRS_PRODUCT_NAME_MAX,
+  CCRS_PRODUCT_DESCRIPTION_MAX,
   type CcrsRetailerFileType,
 } from "@/lib/compliance/ccrs-batch-core";
 import { deriveInventoryExternalId, validateExternalId, sanitizeExternalId } from "@/lib/compliance/ccrs-identifiers";
@@ -196,15 +200,41 @@ function buildProductFile(
     const ext = sanitizeExternalId(key);
     if (!ext || seen.has(ext)) continue;
     seen.add(ext);
-    const category = (it.pos_inventory_category ?? "").trim();
-    const type = (it.pos_inventory_type ?? "").trim();
+    const rawCategory = (it.pos_inventory_category ?? "").trim();
+    const rawType = (it.pos_inventory_type ?? "").trim();
     const grams = weightByKey.get(key) ?? "";
+    const productName = (it.name ?? "").trim();
+
+    // C1: validate the category/type against the CCRS enum. DRAFTS-ONLY policy —
+    // we KEEP the POS-supplied values (canonicalized when valid) and never invent
+    // a value. Invalid pairs raise an ERROR-level warning so the employee fixes
+    // the mapping before submitting.
+    const cls = validateProductClassification(rawCategory, rawType);
+    let category = rawCategory;
+    let type = rawType;
+    if (cls.ok) {
+      category = cls.category;
+      type = cls.type;
+    } else {
+      warnings.push(`ERROR — Product "${productName || ext}": ${cls.error} Fix the CCRS mapping (Inventory types) before submitting.`);
+    }
+
+    // C2: clamp Name (75) and Description (250); flag truncation (don't silently cut).
+    const nameClamp = clampText(productName, CCRS_PRODUCT_NAME_MAX);
+    if (nameClamp.truncated) {
+      warnings.push(`Product "${productName.slice(0, 40)}…": Name exceeds ${CCRS_PRODUCT_NAME_MAX} chars and was truncated — shorten it in the source.`);
+    }
+    const descClamp = clampText(it.description, CCRS_PRODUCT_DESCRIPTION_MAX);
+    if (descClamp.truncated) {
+      warnings.push(`Product "${productName || ext}": Description exceeds ${CCRS_PRODUCT_DESCRIPTION_MAX} chars and was truncated — shorten it in the source.`);
+    }
+
     rows.push([
       license,
       category,
       type,
-      (it.name ?? "").trim(),
-      (it.description ?? "").trim(),
+      nameClamp.value,
+      descClamp.value,
       grams,
       ext,
       createdBy,
@@ -213,13 +243,15 @@ function buildProductFile(
       "",
       "Insert",
     ]);
-    if (!category || !type) {
-      warnings.push(`Product "${it.name}" is missing InventoryCategory/InventoryType (map it in Inventory types).`);
-    }
   }
   if (rows.length === 0) warnings.push("No products found in the published menu.");
-  // Cap the missing-category noise.
-  const dedupWarnings = [...new Set(warnings)].slice(0, 25);
+  // Cap the warning noise (errors first so critical mapping issues aren't buried).
+  const unique = [...new Set(warnings)];
+  const errorsFirst = [
+    ...unique.filter((w) => w.startsWith("ERROR")),
+    ...unique.filter((w) => !w.startsWith("ERROR")),
+  ];
+  const dedupWarnings = errorsFirst.slice(0, 30);
   return { rows, warnings: dedupWarnings };
 }
 

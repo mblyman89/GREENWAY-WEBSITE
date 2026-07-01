@@ -190,6 +190,153 @@ export function normalizeStrainType(
   return { value: "Hybrid", defaulted: true };
 }
 
+/* ------------------------------------------------------------------ *
+ * Product classification: InventoryCategory + InventoryType (C1)
+ *
+ * GROUNDED IN: CCRS Upload User Guide (2026-02), "Table 2. Valid
+ * InventoryCategory and InventoryType values" (page 13-14). This reflects the
+ * CCRS v2023+ changes (e.g. concentrates moved to EndProduct, "Clones"/
+ * "Cannabis Mix"/"Usable Cannabis" naming) and SUPERSEDES the older Data Model
+ * Manual layout. Downloaded + reconstructed 2026-02, /tmp/ccrs-live/UploadGuide.
+ *
+ * NOTE (grounding): the guide's Description/UnitWeightGrams notes reference the
+ * spelling "Useable cannabis" and "Usable Cannabis" inconsistently. Table 2 is
+ * the enum-of-record, and it lists "Usable Cannabis" (single-l 'Usable').
+ * ------------------------------------------------------------------ */
+
+export const CCRS_INVENTORY_CATEGORIES = [
+  "PropagationMaterial",
+  "HarvestedMaterial",
+  "IntermediateProduct",
+  "EndProduct",
+] as const;
+export type CcrsInventoryCategory = (typeof CCRS_INVENTORY_CATEGORIES)[number];
+
+/**
+ * category -> the exact set of valid InventoryType strings, per Table 2 of the
+ * 2026-02 Upload User Guide. Case/spacing here is authoritative (this is what
+ * CCRS validates against). Employees pick these in the POS mapping UI.
+ */
+export const CCRS_INVENTORY_TYPES: Record<CcrsInventoryCategory, readonly string[]> = {
+  PropagationMaterial: ["Clones", "Plant", "Seed"],
+  HarvestedMaterial: [
+    "Flower Lot",
+    "Flower Unlotted",
+    "Other Material Lot",
+    "Other Material Unlotted",
+    "Wet Flower",
+    "Waste",
+  ],
+  IntermediateProduct: [
+    "Cannabis Mix",
+    "CBD",
+    "Food Grade Solvent Concentrate",
+    "Infused Cooking Medium",
+    "Waste",
+  ],
+  EndProduct: [
+    "Cannabis Mix Infused",
+    "Cannabis Mix Packaged",
+    "Capsule",
+    "CO2 Concentrate",
+    "Concentrate for Inhalation",
+    "Ethanol Concentrate",
+    "Hydrocarbon Concentrate",
+    "Liquid Edible",
+    "Non-Solvent Based Concentrate",
+    "Sample Jar",
+    "Solid Edible",
+    "Suppository",
+    "Tincture",
+    "Topical Ointment",
+    "Transdermal",
+    "Usable Cannabis",
+    "Waste",
+  ],
+} as const;
+
+export type ProductClassificationResult =
+  | { ok: true; category: CcrsInventoryCategory; type: string }
+  | { ok: false; category: string; type: string; error: string };
+
+/**
+ * Validate a POS category/type pair against the CCRS enum (C1). PURE.
+ *
+ * DRAFTS-ONLY / NEVER-INVENT policy: we DO NOT coerce or guess a value. If the
+ * pair is unknown we return ok:false with a precise, employee-facing error so
+ * the human can correct the mapping before the file is submitted. The caller
+ * keeps whatever the POS provided (so nothing is silently rewritten) and
+ * surfaces the error as an ERROR-level sync issue.
+ *
+ * Matching is case-insensitive and whitespace-tolerant on input, but the
+ * returned canonical `type`/`category` use the exact CCRS spelling.
+ */
+export function validateProductClassification(
+  rawCategory: string | null | undefined,
+  rawType: string | null | undefined,
+): ProductClassificationResult {
+  const catIn = (rawCategory ?? "").trim();
+  const typeIn = (rawType ?? "").trim();
+
+  if (!catIn && !typeIn) {
+    return { ok: false, category: catIn, type: typeIn, error: "InventoryCategory and InventoryType are both missing." };
+  }
+  if (!catIn) {
+    return { ok: false, category: catIn, type: typeIn, error: "InventoryCategory is missing." };
+  }
+  if (!typeIn) {
+    return { ok: false, category: catIn, type: typeIn, error: "InventoryType is missing." };
+  }
+
+  // Canonicalize the category (case-insensitive).
+  const canonCat = CCRS_INVENTORY_CATEGORIES.find(
+    (c) => c.toLowerCase() === catIn.toLowerCase(),
+  );
+  if (!canonCat) {
+    return {
+      ok: false,
+      category: catIn,
+      type: typeIn,
+      error: `InventoryCategory "${catIn}" is not a valid CCRS category (expected one of: ${CCRS_INVENTORY_CATEGORIES.join(", ")}).`,
+    };
+  }
+
+  // Canonicalize the type within the category (case- and space-insensitive).
+  const norm = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
+  const validTypes = CCRS_INVENTORY_TYPES[canonCat];
+  const canonType = validTypes.find((t) => norm(t) === norm(typeIn));
+  if (!canonType) {
+    return {
+      ok: false,
+      category: catIn,
+      type: typeIn,
+      error: `InventoryType "${typeIn}" is not valid for category "${canonCat}" (expected one of: ${validTypes.join(", ")}).`,
+    };
+  }
+
+  return { ok: true, category: canonCat, type: canonType };
+}
+
+/**
+ * Clamp a text value to a max length (C2). PURE. Returns the clamped value plus
+ * whether it was truncated (so the caller can warn — DRAFTS-ONLY, the employee
+ * should shorten the source rather than ship a silently-cut field). CCRS text
+ * limits are BYTES-agnostic character counts; we count code units which matches
+ * the LCB validator's behavior for the ASCII/BMP data these fields carry.
+ */
+export function clampText(
+  value: string | null | undefined,
+  maxLen: number,
+): { value: string; truncated: boolean } {
+  const s = (value ?? "").trim();
+  if (s.length <= maxLen) return { value: s, truncated: false };
+  return { value: s.slice(0, maxLen), truncated: true };
+}
+
+/** CCRS text-length limits for Product.csv fields (Upload User Guide 2026-02). */
+export const CCRS_PRODUCT_NAME_MAX = 75;
+export const CCRS_PRODUCT_DESCRIPTION_MAX = 250;
+
 /**
  * Order-of-operations validation dependency groups. A full batch must be
  * uploaded in this order so each file's referenced rows already exist.
@@ -374,6 +521,47 @@ export function __runCcrsBatchCoreTests(): void {
   });
   const dataRow = padded.trim().split("\r\n")[4].split(",");
   assert(dataRow.length === CCRS_COLUMNS.Strain.length, "padded to column count");
+
+  // Product classification (C1): valid pairs canonicalize; invalid pairs error.
+  assert(CCRS_INVENTORY_CATEGORIES.length === 4, "4 inventory categories");
+  const okv = validateProductClassification("EndProduct", "Usable Cannabis");
+  assert(okv.ok === true, "valid EndProduct/Usable Cannabis");
+  if (okv.ok) {
+    assert(okv.category === "EndProduct", "canon category");
+    assert(okv.type === "Usable Cannabis", "canon type");
+  }
+  // case- and whitespace-insensitive input, canonical output.
+  const okc = validateProductClassification("endproduct", "usable   cannabis");
+  assert(okc.ok === true && okc.type === "Usable Cannabis", "case/space tolerant");
+  // valid pair in another category.
+  assert(validateProductClassification("PropagationMaterial", "Clones").ok === true, "PropagationMaterial/Clones");
+  assert(validateProductClassification("IntermediateProduct", "Cannabis Mix").ok === true, "IntermediateProduct/Cannabis Mix");
+  // "Waste" is valid in multiple categories.
+  assert(validateProductClassification("HarvestedMaterial", "Waste").ok === true, "HarvestedMaterial/Waste");
+  assert(validateProductClassification("EndProduct", "Waste").ok === true, "EndProduct/Waste");
+  // unknown category → error, value preserved, NEVER invented.
+  const badCat = validateProductClassification("Widget", "Seed");
+  assert(badCat.ok === false, "unknown category rejected");
+  if (!badCat.ok) assert(badCat.category === "Widget", "bad category preserved verbatim");
+  // valid category but type belongs to a different category → error.
+  const badType = validateProductClassification("PropagationMaterial", "Usable Cannabis");
+  assert(badType.ok === false, "type/category mismatch rejected");
+  // missing fields → precise errors.
+  assert(validateProductClassification("", "").ok === false, "both missing rejected");
+  assert(validateProductClassification("EndProduct", "").ok === false, "missing type rejected");
+  assert(validateProductClassification("", "Seed").ok === false, "missing category rejected");
+  // legacy Data Model Manual names are NOT valid in the current enum (grounding).
+  assert(validateProductClassification("HarvestedMaterial", "Marijuana Mix").ok === false, "legacy 'Marijuana Mix' rejected");
+
+  // clampText (C2): under-limit unchanged; over-limit truncated + flagged.
+  assert(clampText("hello", 75).truncated === false, "short text not truncated");
+  assert(clampText("hello", 75).value === "hello", "short text unchanged");
+  const long = "x".repeat(100);
+  const clamped = clampText(long, CCRS_PRODUCT_NAME_MAX);
+  assert(clamped.truncated === true, "long name truncated");
+  assert(clamped.value.length === 75, "name clamped to 75");
+  assert(clampText(null, 75).value === "" && clampText(null, 75).truncated === false, "null → empty, not truncated");
+  assert(CCRS_PRODUCT_NAME_MAX === 75 && CCRS_PRODUCT_DESCRIPTION_MAX === 250, "product text limits");
 
   console.log("ccrs-batch-core: all tests passed");
 }

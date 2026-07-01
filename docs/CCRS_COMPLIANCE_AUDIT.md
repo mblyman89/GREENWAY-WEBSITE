@@ -252,14 +252,27 @@ we never invent a CCRS value.
 | B1 | HIGH | Medical sale mis-typed | RecreationalMedical |
 | B2 | HIGH | StrainType invalid values | normalize to Indica/Sativa/Hybrid |
 | B3 | HIGH | UTC dates (wrong Pacific day) | pacificDayKey |
-| C1 | HIGH | Product category/type not enum-validated | normalize + warn |
-| C2 | MEDIUM | Text length clamps | clamp + warn |
+| C1 | HIGH | Product category/type not enum-validated | normalize + warn | ✅ Slice 92 |
+| C2 | MEDIUM | Text length clamps | clamp + warn | ✅ Slice 92 |
 
 **11 actionable findings (4 CRITICAL, 6 HIGH, 1 MEDIUM).** Groups D/E/F verified OK.
 
 ---
 
 ### GROUP C — Master-data files (Strain / Area / Product / Inventory)
+
+> **RESOLVED — Slice 92 (PR pending).** Added PURE `CCRS_INVENTORY_CATEGORIES`
+> (4) + `CCRS_INVENTORY_TYPES` (category→valid-type map) + `validateProductClassification`
+> + `clampText`/`CCRS_PRODUCT_NAME_MAX`/`CCRS_PRODUCT_DESCRIPTION_MAX` in
+> `ccrs-batch-core.ts`; wired into `buildProductFile`.
+> **GROUNDING CORRECTION:** the enum table was re-grounded on the CURRENT
+> **CCRS Upload User Guide (2026-02), Table 2** (the v2023+ enum), NOT the older
+> Data Model Manual quoted below. The current names are `Clones`, `Cannabis Mix`,
+> `Usable Cannabis`, and concentrates (`CO2`, `Ethanol`, `Hydrocarbon`,
+> `Non-Solvent Based`) are now **EndProduct**. Legacy names (`Marijuana Mix`,
+> `Usable Marijuana`, `Packaged Marijuana Mix`) are intentionally rejected so the
+> employee re-maps them. Values are kept verbatim + an ERROR-level warning is raised
+> — never invented (drafts-only).
 
 #### C1 — HIGH — Product.csv emits un-normalized InventoryCategory / InventoryType
 - **Where:** `ccrs-batch.ts` `buildProductFile` — passes `pos_inventory_category`
@@ -281,6 +294,10 @@ we never invent a CCRS value.
   ("Product X has InventoryType 'Vape Cartridge' which is not a valid CCRS
   InventoryType for category EndProduct — map it before uploading"). Drafts-only:
   the employee resolves it; we never silently invent a category.
+
+> **RESOLVED — Slice 92 (PR pending).** `clampText` clamps Product.Name→75 and
+> Description→250 with a truncation warning; verified against the 2026-02 Upload
+> User Guide field limits.
 
 #### C2 — MEDIUM — Text length clamps not enforced on master-data fields
 - **Spec:** Strain (50), Area (75), Product.Name (75), Description (250),
