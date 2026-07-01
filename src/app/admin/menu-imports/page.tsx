@@ -6,9 +6,10 @@ import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { StatCard } from "@/components/admin/StatCard";
 import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { listImports, listVersions, getPublishedVersion } from "@/lib/pos/menu-version";
+import { countTestData } from "@/lib/pos/import-service";
 import { formatDateTime } from "@/lib/pos/format";
 import type { PosImportStatus, MenuVersionStatus } from "@/lib/pos/db-types";
-import { uploadAndStageImport } from "./actions";
+import { uploadAndStageImport, cleanSlateTestDataAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +30,7 @@ const VERSION_STATUS_STYLE: Record<MenuVersionStatus, string> = {
 export default async function MenuImportsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; published?: string; staged?: string }>;
+  searchParams: Promise<{ error?: string; published?: string; staged?: string; cleaned?: string }>;
 }) {
   const session = await requirePermission("menu.import");
   const params = await searchParams;
@@ -56,13 +57,15 @@ export default async function MenuImportsPage({
   let published: Awaited<ReturnType<typeof getPublishedVersion>> = null;
   let versions: Awaited<ReturnType<typeof listVersions>> = [];
   let imports: Awaited<ReturnType<typeof listImports>> = [];
+  let testCounts = { imports: 0, versions: 0 };
   let loadError: string | null = null;
 
   try {
-    [published, versions, imports] = await Promise.all([
+    [published, versions, imports, testCounts] = await Promise.all([
       getPublishedVersion(),
       listVersions(30),
       listImports(30),
+      countTestData().catch(() => ({ imports: 0, versions: 0 })),
     ]);
   } catch (err) {
     loadError = err instanceof Error ? err.message : "Could not load menu data.";
@@ -121,6 +124,11 @@ export default async function MenuImportsPage({
             Import staged for review. Check the diagnostics and diff below, then publish.
           </div>
         )}
+        {params.cleaned && (
+          <div className="rounded-lg border border-[#7ed957]/40 bg-[#7ed957]/10 px-4 py-3 text-sm text-[#7ed957]">
+            Clean Slate complete — {decodeURIComponent(params.cleaned)} Real data and your knowledge base were untouched.
+          </div>
+        )}
 
         {/* Live status */}
         <div className="grid gap-4 sm:grid-cols-3">
@@ -173,6 +181,15 @@ export default async function MenuImportsPage({
               />
             </label>
             <div className="sm:col-span-2">
+              <label className="flex items-center gap-2 text-xs text-white/70">
+                <input type="checkbox" name="test_mode" />
+                <span>
+                  <strong>Test mode</strong> — flag this upload as test/rehearsal data. Test uploads can
+                  be wiped later with Clean Slate without touching real data.
+                </span>
+              </label>
+            </div>
+            <div className="sm:col-span-2">
               <button
                 type="submit"
                 className="rounded-full bg-[#ff7f00] px-6 py-2.5 text-sm font-bold text-black transition hover:brightness-110"
@@ -182,6 +199,44 @@ export default async function MenuImportsPage({
             </div>
           </form>
         </section>
+
+        {/* Clean Slate — remove only test data */}
+        {canPublish && (
+          <section className="rounded-xl border border-red-500/25 bg-red-500/5 p-5">
+            <h2 className="text-sm font-semibold text-white">Clean Slate — reset test data</h2>
+            <p className="mt-1 text-xs text-white/50">
+              Permanently deletes <strong>only</strong> the imports and staged menu versions marked as
+              test data ({testCounts.imports} test import{testCounts.imports === 1 ? "" : "s"} ·{" "}
+              {testCounts.versions} test version{testCounts.versions === 1 ? "" : "s"} right now). It never
+              touches your real imports, your published menu, or your validated cannabis knowledge base.
+              Published versions are protected even if mis-flagged.
+            </p>
+            {testCounts.imports === 0 && testCounts.versions === 0 ? (
+              <p className="mt-3 text-xs text-white/40">No test data to clean right now.</p>
+            ) : (
+              <form action={cleanSlateTestDataAction} className="mt-4 flex flex-wrap items-end gap-3">
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-xs font-medium text-white/70">
+                    Type <code className="rounded bg-black/40 px-1">DELETE TEST DATA</code> to confirm
+                  </span>
+                  <input
+                    name="confirm"
+                    type="text"
+                    autoComplete="off"
+                    placeholder="DELETE TEST DATA"
+                    className="w-64 rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white/80"
+                  />
+                </label>
+                <button
+                  type="submit"
+                  className="rounded-full border border-red-500/50 bg-red-500/10 px-5 py-2 text-sm font-bold text-red-300 transition hover:bg-red-500/20"
+                >
+                  Wipe test data
+                </button>
+              </form>
+            )}
+          </section>
+        )}
 
         {/* Versions / history */}
         <section className="overflow-hidden rounded-xl border border-white/10 bg-[#0a0a0a]">
@@ -203,6 +258,11 @@ export default async function MenuImportsPage({
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
+                    {imp.is_test && (
+                      <span className="rounded bg-red-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase text-red-300">
+                        test
+                      </span>
+                    )}
                     <span className={`rounded px-2 py-0.5 text-[10px] font-semibold uppercase ${IMPORT_STATUS_STYLE[imp.status] ?? "bg-white/10 text-white/70"}`}>
                       {imp.status}
                     </span>
