@@ -15,6 +15,7 @@ import "server-only";
 import { generate, isAiConfigured, aiModelId, type AiContext } from "@/lib/ai/provider";
 import { SETUP_GUIDE } from "@/lib/admin/setup-status";
 import { conciergeGroundingBlock } from "@/lib/admin/concierge-kb";
+import { integrationsGroundingBlock, guideById } from "@/lib/integrations/integration-guides";
 
 export { isAiConfigured };
 
@@ -82,6 +83,47 @@ export async function answerConciergeQuestion(
       entityType: "concierge",
       ...opts?.context,
     },
+  });
+
+  return { answer: answer.trim(), model: aiModelId };
+}
+
+// ---------------------------------------------------------------------------
+// E13 — Integrations helper. Same model, tightly grounded on the integration
+// setup guides so it walks the owner through connecting a specific service.
+// ---------------------------------------------------------------------------
+
+const INTEGRATIONS_SYSTEM = [
+  "You are the setup helper for the Greenway Marijuana back office INTEGRATIONS page (Leafly, WeedMaps, FLUX, Sage 50, Cultivera transition).",
+  "Help a non-technical owner connect and use an integration. Answer ONLY from the setup guides provided — never invent a key name, page, or step that isn't there.",
+  "Be concrete and use short numbered steps. Name the exact page when useful. Remind them that menu pushes are drafts/preview-safe until certification + explicit confirmation, and that AI images are drafts.",
+  "Never give legal, medical, or financial advice. If the answer isn't in the guides, say so and suggest the closest step or their administrator. Keep it under ~150 words.",
+].join("\n");
+
+export async function answerIntegrationQuestion(
+  question: string,
+  opts?: { integrationId?: string; context?: Omit<AiContext, "feature"> },
+): Promise<ConciergeAnswer> {
+  const focus = opts?.integrationId ? guideById(opts.integrationId) : undefined;
+  const focusBlock = focus
+    ? `\nThe user is asking specifically about: ${focus.title} (${focus.summary}).`
+    : "";
+
+  const user = [
+    integrationsGroundingBlock(),
+    focusBlock,
+    "",
+    `The user asks: "${question.trim()}"`,
+    "",
+    "Answer using ONLY the guides above, in short numbered steps where it's a how-to.",
+  ].join("\n");
+
+  const answer = await generate({
+    system: INTEGRATIONS_SYSTEM,
+    user,
+    temperature: 0.25,
+    maxTokens: 400,
+    context: { feature: "concierge.integrations", entityType: "integration", ...opts?.context },
   });
 
   return { answer: answer.trim(), model: aiModelId };

@@ -9,7 +9,7 @@
  */
 import { useActionState, useState } from "react";
 import { suggestStrategyAction, saveIdeaAction, type StrategyActionResult } from "@/app/admin/marketing/actions";
-import { MARKETING_CHANNELS } from "@/lib/marketing/strategy-ai";
+import { MARKETING_CHANNELS } from "@/lib/marketing/strategy-types";
 import { Button, Field, Input, Select, Textarea } from "@/components/admin/ui";
 
 export function StrategyAssistant({ aiConfigured }: { aiConfigured: boolean }) {
