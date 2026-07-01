@@ -11,7 +11,10 @@ import {
   upsertKbBrand,
   upsertKbStrain,
   setStrainActive,
+  upsertKbNote,
+  setKbNoteActive,
 } from "@/lib/ai/kb/store";
+import { validateNoteInput } from "@/lib/ai/kb/kb-notes-core";
 import {
   upsertImageSubstitute,
   setSubstituteActive,
@@ -217,4 +220,43 @@ export async function deleteSubstituteAction(formData: FormData): Promise<void> 
   await recordAudit({ actorId: session.profile.id, action: "kb.substitute.delete", entityType: "kb_image_substitute", entityId: id }).catch(() => {});
   revalidatePath(PATH);
   back("Fallback image removed.");
+}
+
+// ---------------------------------------------------------------------------
+// Owner-uploaded reference notes (item 14).
+// ---------------------------------------------------------------------------
+
+/** Add or update a free-form reference note. */
+export async function upsertKbNoteAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("products.enrich");
+  const id = String(formData.get("id") ?? "").trim() || null;
+  const parsed = validateNoteInput({
+    title: String(formData.get("title") ?? ""),
+    body: String(formData.get("body") ?? ""),
+    tags: String(formData.get("tags") ?? ""),
+    source: String(formData.get("source") ?? ""),
+  });
+  if (!parsed.ok) back(parsed.error, false);
+  await upsertKbNote({ id, ...parsed.value }, session.profile.id);
+  await recordAudit({
+    actorId: session.profile.id,
+    action: id ? "kb.note.update" : "kb.note.add",
+    entityType: "kb_note",
+    entityId: id ?? undefined,
+    after: { title: parsed.value.title, tags: parsed.value.tags },
+  }).catch(() => {});
+  revalidatePath(PATH);
+  back(id ? "Reference note updated." : "Reference note added.");
+}
+
+/** Show/hide a reference note from the AI's grounding. */
+export async function toggleKbNoteAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("products.enrich");
+  const id = String(formData.get("id") ?? "");
+  const active = String(formData.get("active") ?? "") === "true";
+  if (!id) back("Missing note id.", false);
+  await setKbNoteActive(id, active);
+  await recordAudit({ actorId: session.profile.id, action: "kb.note.toggle", entityType: "kb_note", entityId: id, after: { active } }).catch(() => {});
+  revalidatePath(PATH);
+  back(active ? "Note is now in use." : "Note hidden from the AI.");
 }

@@ -8,6 +8,7 @@ import {
   listKbStrainsFull,
   listKbBrands,
   listKbBanned,
+  listKbNotes,
 } from "@/lib/ai/kb/store";
 import {
   seedKbAction,
@@ -17,6 +18,7 @@ import {
 } from "./actions";
 import { StrainEditor } from "./StrainEditor";
 import { SubstituteManager } from "./SubstituteManager";
+import { NotesManager } from "./NotesManager";
 import {
   listImageSubstitutes,
   imageSubstituteCounts,
@@ -37,7 +39,7 @@ export default async function KnowledgeBasePage({
   const { msg, error } = await searchParams;
 
   const counts = await getKbCounts();
-  const [strains, brands, banned, substitutes, subCounts, subMigrated, mediaAssets] =
+  const [strains, brands, banned, substitutes, subCounts, subMigrated, mediaAssets, notes] =
     await Promise.all([
       listKbStrainsFull(500),
       listKbBrands(50),
@@ -46,6 +48,7 @@ export default async function KnowledgeBasePage({
       imageSubstituteCounts(),
       imageSubstitutesMigrated(),
       listMedia({ limit: 200 }),
+      listKbNotes(500),
     ]);
 
   // Build lightweight media options (id + label + url) for the substitute picker.
@@ -116,6 +119,7 @@ export default async function KnowledgeBasePage({
           <StatCard label="Categories" value={counts.categories} accent="muted" />
           <StatCard label="Brand facts" value={counts.brands} accent="muted" />
           <StatCard label="Banned phrases" value={counts.banned} accent="orange" />
+          <StatCard label="Your notes" value={counts.notes} accent="green" />
         </div>
 
         {/* Seed */}
@@ -131,6 +135,14 @@ export default async function KnowledgeBasePage({
               Seed expert starter set
             </Button>
           </form>
+        </section>
+
+        {/* Owner-uploaded reference notes (item 14) */}
+        <section className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
+          <h2 className="mb-3 text-base font-semibold text-[var(--admin-text)]">
+            Your reference notes ({counts.notes})
+          </h2>
+          <NotesManager notes={notes} migrated={counts.notesMigrated} />
         </section>
 
         {/* Strains — full add/edit editor (manual entry of verified strains) */}

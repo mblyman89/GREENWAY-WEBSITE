@@ -24,8 +24,12 @@ export type KbCounts = {
   categories: number;
   brands: number;
   banned: number;
+  /** Owner-uploaded free-form reference notes (item 14). */
+  notes: number;
   /** True if the kb_* tables exist (migration applied). */
   migrated: boolean;
+  /** True if kb_notes exists (migration 0056 applied). */
+  notesMigrated: boolean;
 };
 
 async function tableCount(table: string): Promise<number | null> {
@@ -37,14 +41,24 @@ async function tableCount(table: string): Promise<number | null> {
 
 /** Read counts across all KB tables. Returns migrated=false if tables missing. */
 export async function getKbCounts(): Promise<KbCounts> {
-  const empty: KbCounts = { strains: 0, terpenes: 0, categories: 0, brands: 0, banned: 0, migrated: false };
+  const empty: KbCounts = {
+    strains: 0,
+    terpenes: 0,
+    categories: 0,
+    brands: 0,
+    banned: 0,
+    notes: 0,
+    migrated: false,
+    notesMigrated: false,
+  };
   if (!isSupabaseServiceConfigured) return empty;
-  const [strains, terpenes, categories, brands, banned] = await Promise.all([
+  const [strains, terpenes, categories, brands, banned, notes] = await Promise.all([
     tableCount("kb_strains"),
     tableCount("kb_terpenes"),
     tableCount("kb_category_terms"),
     tableCount("kb_brands"),
     tableCount("kb_banned_phrases"),
+    tableCount("kb_notes"),
   ]);
   const migrated = strains !== null; // kb_strains query succeeded
   return {
@@ -53,7 +67,9 @@ export async function getKbCounts(): Promise<KbCounts> {
     categories: categories ?? 0,
     brands: brands ?? 0,
     banned: banned ?? 0,
+    notes: notes ?? 0,
     migrated,
+    notesMigrated: notes !== null,
   };
 }
 
@@ -365,5 +381,82 @@ export async function upsertKbBrand(input: UpsertBrandInput, actorId: string | n
     },
     { onConflict: "slug" },
   );
+  if (error) throw new Error(error.message);
+}
+
+// ---------------------------------------------------------------------------
+// Owner-uploaded reference notes (item 14, migration 0056). Free-form
+// title + body + tags the owner drops in without touching code; retrieval
+// matches active notes to a product and injects them into the grounded block.
+// All reads degrade to [] pre-migration.
+// ---------------------------------------------------------------------------
+
+export type KbNoteRow = {
+  id: string;
+  title: string;
+  body: string;
+  tags: string[] | null;
+  source: string | null;
+  active: boolean;
+  created_at: string;
+};
+
+export async function listKbNotes(limit = 500): Promise<KbNoteRow[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("kb_notes")
+      .select("id,title,body,tags,source,active,created_at")
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    if (error || !data) return [];
+    return data as KbNoteRow[];
+  } catch {
+    return [];
+  }
+}
+
+export type UpsertNoteInput = {
+  id?: string | null;
+  title: string;
+  body: string;
+  tags: string[];
+  source: string | null;
+};
+
+/** Insert a new note, or update an existing one when `id` is supplied. */
+export async function upsertKbNote(input: UpsertNoteInput, actorId: string | null): Promise<void> {
+  const admin = createSupabaseAdminClient();
+  if (input.id) {
+    const { error } = await admin
+      .from("kb_notes")
+      .update({
+        title: input.title,
+        body: input.body,
+        tags: input.tags,
+        source: input.source,
+        updated_by: actorId,
+      })
+      .eq("id", input.id);
+    if (error) throw new Error(error.message);
+    return;
+  }
+  const { error } = await admin.from("kb_notes").insert({
+    title: input.title,
+    body: input.body,
+    tags: input.tags,
+    source: input.source,
+    active: true,
+    created_by: actorId,
+    updated_by: actorId,
+  });
+  if (error) throw new Error(error.message);
+}
+
+/** Toggle a note active/inactive (soft hide from retrieval). */
+export async function setKbNoteActive(id: string, active: boolean): Promise<void> {
+  const admin = createSupabaseAdminClient();
+  const { error } = await admin.from("kb_notes").update({ active }).eq("id", id);
   if (error) throw new Error(error.message);
 }

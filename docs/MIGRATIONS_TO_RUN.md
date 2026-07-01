@@ -16,6 +16,7 @@
   cannot persist events.**
 
 - [ ] **`supabase/migrations/0055_flux_credentials.sql`** — Slice A (item 19).
+- [ ] **`supabase/migrations/0056_kb_notes.sql`** — Slice 75 (item 14): owner-uploaded KB reference notes.
   Adds three columns to the existing `public.integration_credentials` singleton
   (`flux_api_key`, `flux_endpoint` default `flux-2-max`, `flux_base_url`) for the
   Black Forest Labs FLUX 2 image pipeline. RLS is inherited from migration 0053
