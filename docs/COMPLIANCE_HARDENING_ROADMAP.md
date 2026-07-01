@@ -98,9 +98,21 @@ Standing rules respected: CCRS compliance + 🔴 DOH MEDICAL CANNABIS COMPLIANCE
   customer-type data); the gate is the callable authority any register/POS sale path invokes.
   Wiring the live register UI to call it is a UI task, not a new capability.
 
-## Slice 110 — "Compliance Health" panel [MED]
-- One read-only screen running every gate: latest CCRS batch submittable?, deadline status,
-  dirty lots, expiring medical cards, exempt-record completeness. One-glance "am I safe?".
+## Slice 110 — "Compliance Health" panel [MED] ✅ DONE
+- One read-only screen running every gate into a single "am I safe?" verdict.
+- PURE aggregator `compliance-health-core.ts` (`buildComplianceHealth(facts)` → 6 checks +
+  worst-level roll-up: critical > warning > unknown > ok). 18 tsx tests pass.
+- SERVER reader `compliance-health.ts` (`getComplianceHealth(todayIso, opts)`) gathers live
+  facts: CCRS upload cadence, monthly LIQ-1295 deadline, held dirty lots, medical-card expiry,
+  exempt-record completeness, sales-limit posture + recent overrides. Any unreadable subsystem
+  is reported honestly as `unknown` (never a false all-clear).
+- Read-only page `src/app/admin/compliance/health/page.tsx` (permission `reports.view`),
+  linked in the Insights nav group.
+- NOTE (verified against migration 0031): `ccrs_export_batches` has NO error/warning verdict
+  columns — it records only that an export was generated. So the CCRS check honestly measures
+  upload CADENCE (weekly obligation: LCB CCRS Upload User Guide; WAC 314-55-083(4)) from
+  `created_at`, rather than fabricating a submittable verdict. The Slice-105 hard gate at export
+  time is what guarantees any emitted batch is well-formed.
 
 ---
 
@@ -110,4 +122,4 @@ Standing rules respected: CCRS compliance + 🔴 DOH MEDICAL CANNABIS COMPLIANCE
 - [x] Slice 107 — Inventory can't-go-live-dirty gate — HIGH
 - [x] Slice 108 — CCRS identifier integrity assertions — MED
 - [x] Slice 109 — Sales-limit enforcement at POS — HIGH
-- [ ] Slice 110 — Compliance Health panel — MED
+- [x] Slice 110 — Compliance Health panel — MED
