@@ -159,7 +159,12 @@ export async function stageManifest(
             terpenes_json: line.lab.terpenes_json,
             analytes_json: line.lab.analytes_json,
             passed: line.lab.passed,
-            source: parsed.source_format === "wcia" ? "wcia-transfer" : "vendor-json",
+            source:
+              parsed.source_format === "wcia"
+                ? "wcia-transfer"
+                : parsed.source_format === "ccrs-csv"
+                  ? "ccrs-manifest-csv"
+                  : "vendor-json",
             coa_url: line.lab.coa_url,
             coa_release_date: line.lab.coa_release_date,
             coa_expire_date: line.lab.coa_expire_date,

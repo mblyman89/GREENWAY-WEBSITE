@@ -15,7 +15,11 @@ import {
   INBOUND_SOURCE_NOTE,
   type ManifestStage,
 } from "@/lib/inventory/manifest-pipeline-core";
-import { importManifestAction, importManifestFromUrlAction } from "./actions";
+import {
+  importManifestAction,
+  importManifestFromUrlAction,
+  importManifestCsvAction,
+} from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -149,10 +153,14 @@ export default async function IntakePage({
           : error === "parse"
             ? "That text isn't valid JSON."
             : error === "nolines"
-              ? "No line items were found in that JSON."
-              : error === "save"
-                ? "Something went wrong staging the manifest."
-                : null;
+              ? "No line items were found in that file."
+              : error === "emptycsv"
+                ? "Paste the CCRS manifest.csv before importing."
+                : error === "csvparse"
+                  ? "That text isn't a valid CCRS manifest.csv (no item header row found)."
+                  : error === "save"
+                    ? "Something went wrong staging the manifest."
+                    : null;
 
   const stageMeta = (s: ManifestStage) => STAGE_META[s];
 
@@ -294,6 +302,40 @@ export default async function IntakePage({
             </Field>
             <Button type="submit" variant="save" size="sm">
               Parse & stage for review
+            </Button>
+          </form>
+        </div>
+
+        {/* Import the official CCRS manifest.csv (state format) */}
+        <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
+          <h2 className="mb-1 text-sm font-bold text-[var(--admin-text)]">
+            Or paste the CCRS manifest.csv
+          </h2>
+          <p className="mb-4 text-xs text-[var(--admin-text-muted)]">
+            Paste the official Washington CCRS Transportation Manifest CSV (the file the sending
+            licensee uploads to CCRS). We read the manifest header + item rows and seed the transport
+            details and ETA. Note: the CCRS manifest carries only identifiers, quantities, UOM,
+            weight, and lab-test IDs — <strong>no product names, prices, or COAs</strong> — so each
+            staged line is a sparse draft you enrich during review.
+          </p>
+          <form action={importManifestCsvAction} className="space-y-4">
+            <Field
+              label="CCRS manifest.csv"
+              help="Paste the full contents of the manifest_*.csv (header block + item table)."
+              htmlFor="csv_text"
+              required
+            >
+              <Textarea
+                id="csv_text"
+                name="csv_text"
+                rows={10}
+                placeholder={
+                  "SubmittedBy,...\nExternalManifestIdentifier,MAN-1001,...\n...\nInventoryExternalIdentifier,PlantExternalIdentifier,Quantity,UOM,...\nINV-A,,10,Each,..."
+                }
+              />
+            </Field>
+            <Button type="submit" variant="save" size="sm">
+              Parse CSV & stage for review
             </Button>
           </form>
         </div>
