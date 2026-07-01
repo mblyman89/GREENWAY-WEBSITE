@@ -6,11 +6,11 @@ see `docs/COMMAND_CENTER_ENHANCEMENTS_TASKLIST.md`.
 ## BATCH 1 — foundation & high-value UI (existing tables; no external accounts)
 
 ### Slice 65 — Nav → top tabs w/ dropdowns [item 16]
-- [ ] Ground: AdminSidebar + admin-nav-data + layout + permission gating + current mobile hamburger
-- [ ] Core: pure grouping/active-tab logic + tests
-- [ ] Build: top tab bar with grouped dropdown menus (keep perms + mobile)
-- [ ] Verify: tsc 0, eslint 0, next build ok
-- [ ] Commit → push → PR → merge → sync main
+- [x] Ground: AdminSidebar + admin-nav-data + layout + permission gating + current mobile hamburger
+- [x] Core: pure grouping/active-tab logic + tests (admin-nav-core, 16 assertions)
+- [x] Build: AdminTopNav top tab bar w/ grouped dropdowns + mobile accordion; layout switched to column; deleted dead AdminSidebar
+- [x] Verify: tsc 0, eslint 0, next build ok (all /admin routes present)
+- [x] Commit → push → PR → merge → sync main
 
 ### Slice 66 — Site Content page: all pages [item 9]
 - [ ] Ground: /admin/content hub + which pages are listed vs which exist on live site
