@@ -27,6 +27,11 @@ import {
   normalizeEtaInput,
   type StageCounts,
 } from "@/lib/inventory/manifest-pipeline-core";
+import {
+  evaluateLotBatchActivation,
+  type LotGateFacts,
+  type LotGateVerdict,
+} from "@/lib/inventory/lot-activation-gate-core";
 
 export async function listManifests(opts?: {
   status?: string;
@@ -399,6 +404,8 @@ export async function finalizeManifestDispositions(
       activated: number;
       rejected: number;
       draftsCreated: number;
+      /** Slice 107: accepted lots BLOCKED from going live because they were dirty. */
+      blocked: LotGateVerdict[];
     }
   | { ok: false; error: string }
 > {
@@ -408,21 +415,74 @@ export async function finalizeManifestDispositions(
   const admin = createSupabaseAdminClient();
   const nowIso = new Date().toISOString();
 
+  // Slice 107: pull the compliance-critical fields so a "dirty" lot (no CCRS
+  // identifier, no COA on record, or a FAILED lab result) can NEVER be flipped
+  // to active/sellable. lab_results is joined for its pass/fail flag.
   const { data: lots } = await admin
     .from("inventory_lots")
-    .select("id, received_qty, status, disposition")
+    .select(
+      "id, product_name, lot_code, received_qty, status, disposition, ccrs_inventory_external_id, lab_result_id, lab_results ( passed )",
+    )
     .eq("manifest_id", manifestId);
-  const rows =
-    (lots as
-      | { id: string; received_qty: number; status: string; disposition: string | null }[]
-      | null) ?? [];
+  type LotRow = {
+    id: string;
+    product_name: string | null;
+    lot_code: string | null;
+    received_qty: number;
+    status: string;
+    disposition: string | null;
+    ccrs_inventory_external_id: string | null;
+    lab_result_id: string | null;
+    lab_results: { passed: boolean | null } | { passed: boolean | null }[] | null;
+  };
+  const rows = (lots as LotRow[] | null) ?? [];
+
+  // Evaluate every lot the reviewer is ACCEPTING against the activation gate.
+  const gateByLotId = new Map<string, LotGateVerdict>();
+  {
+    const acceptedRows = rows.filter(
+      (r) => (r.disposition === "rejected_at_dock" ? "rejected_at_dock" : "accepted") === "accepted",
+    );
+    const facts: LotGateFacts[] = acceptedRows.map((r) => {
+      const lab = Array.isArray(r.lab_results) ? r.lab_results[0] : r.lab_results;
+      return {
+        id: r.id,
+        label: r.product_name || r.lot_code || null,
+        ccrsExternalId: r.ccrs_inventory_external_id,
+        hasLabResult: r.lab_result_id != null,
+        labPassed: lab ? lab.passed : null,
+      };
+    });
+    for (const v of evaluateLotBatchActivation(facts).verdicts) gateByLotId.set(v.lotId, v);
+  }
+  const blocked: LotGateVerdict[] = [];
 
   let activated = 0;
   let rejected = 0;
   for (const lot of rows) {
     const decided = lot.disposition === "rejected_at_dock" ? "rejected_at_dock" : "accepted";
     if (decided === "accepted") {
-      // Only activate lots that are still in quarantine (idempotent).
+      const gate = gateByLotId.get(lot.id);
+      // HARD GATE (Slice 107): a dirty lot is held in quarantine, never activated.
+      if (gate && !gate.canActivate) {
+        blocked.push(gate);
+        if (lot.status === "quarantine" || lot.status === "pending") {
+          await admin
+            .from("inventory_lots")
+            .update({
+              // Keep it OUT of sellable inventory. Record the accept intent but
+              // do not change status to active.
+              disposition: "accepted",
+              updated_by: actorId,
+              notes: `Held in quarantine — cannot go live: ${gate.reasons
+                .map((r) => r.message)
+                .join(" ")}`.slice(0, 2000),
+            })
+            .eq("id", lot.id);
+        }
+        continue;
+      }
+      // Only activate CLEAN lots that are still in quarantine (idempotent).
       if (lot.status === "quarantine" || lot.status === "pending") {
         await admin
           .from("inventory_lots")
@@ -449,10 +509,21 @@ export async function finalizeManifestDispositions(
     }
   }
 
+  // derivedStatus reflects what actually happened. If lots were accepted but
+  // HELD (blocked) while nothing cleanly activated or was refused, the manifest
+  // is only "partially_accepted" (some product is stuck in quarantine awaiting a
+  // fix) rather than being falsely stamped "rejected".
   let derivedStatus: "accepted" | "rejected" | "partially_accepted";
-  if (activated > 0 && rejected > 0) derivedStatus = "partially_accepted";
-  else if (activated > 0) derivedStatus = "accepted";
-  else derivedStatus = "rejected";
+  if ((activated > 0 && rejected > 0) || (activated > 0 && blocked.length > 0)) {
+    derivedStatus = "partially_accepted";
+  } else if (activated > 0) {
+    derivedStatus = "accepted";
+  } else if (blocked.length > 0) {
+    // Everything accepted was dirty and held: not a clean accept, not a refusal.
+    derivedStatus = "partially_accepted";
+  } else {
+    derivedStatus = "rejected";
+  }
 
   const { error } = await admin
     .from("inbound_manifests")
@@ -467,10 +538,16 @@ export async function finalizeManifestDispositions(
     .eq("id", manifestId);
   if (error) return { ok: false, error: error.message };
 
+  const blockedNote =
+    blocked.length > 0
+      ? ` ${blocked.length} accepted lot(s) HELD in quarantine (cannot go live): ${blocked
+          .map((v) => `${v.label ?? v.lotId} [${v.reasons.map((r) => r.code).join(",")}]`)
+          .join("; ")}.`
+      : "";
   await logManifestEvent(
     manifestId,
     derivedStatus,
-    `Finalized: ${activated} accepted, ${rejected} refused at dock. Refused lots never entered inventory; no CCRS filing (vendor to Update/Delete their manifest).`,
+    `Finalized: ${activated} activated, ${rejected} refused at dock.${blockedNote} Refused lots never entered inventory; no CCRS filing (vendor to Update/Delete their manifest).`,
     actorId,
   );
 
@@ -490,7 +567,7 @@ export async function finalizeManifestDispositions(
     }
   }
 
-  return { ok: true, derivedStatus, activated, rejected, draftsCreated };
+  return { ok: true, derivedStatus, activated, rejected, draftsCreated, blocked };
 }
 
 /** Lots tied to a manifest, for the review screen. */

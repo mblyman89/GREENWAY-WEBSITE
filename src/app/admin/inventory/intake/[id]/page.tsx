@@ -50,11 +50,12 @@ export default async function ManifestReviewPage({
     error?: string;
     finalized?: string;
     lot?: string;
+    held?: string;
   }>;
 }) {
   await requirePermission("inventory.manage");
   const { id } = await params;
-  const { staged, accepted, drafts, rejected, archived, transport, error, finalized, lot } =
+  const { staged, accepted, drafts, rejected, archived, transport, error, finalized, lot, held } =
     await searchParams;
 
   const manifest = await getManifestById(id);
@@ -133,7 +134,7 @@ export default async function ManifestReviewPage({
         {finalized && (
           <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]">
             Finalized as <strong>{manifestStatusBadge(finalized).label}</strong> — {accepted ?? 0}{" "}
-            accepted, {rejected ?? 0} refused at dock.
+            activated, {rejected ?? 0} refused at dock.
             {drafts && drafts !== "0" && (
               <>
                 {" "}
@@ -144,6 +145,14 @@ export default async function ManifestReviewPage({
                 .
               </>
             )}
+          </div>
+        )}
+        {held && held !== "0" && (
+          <div className="rounded-[var(--admin-radius)] border border-red-500/45 bg-red-500/[0.08] px-4 py-2 text-sm text-red-200">
+            ⛔ <strong>{held}</strong> accepted lot{held === "1" ? " was" : "s were"} <strong>held in
+            quarantine</strong> and could NOT go live — each is missing a CCRS identifier, missing a COA/lab
+            result, or has a FAILED lab result. Fix the flagged lots (add the identifier / attach the passing
+            COA) and finalize again. Nothing dirty was placed on the sales floor.
           </div>
         )}
         {lot && (

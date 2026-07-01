@@ -49,10 +49,20 @@ Standing rules respected: CCRS compliance + 🔴 DOH MEDICAL CANNABIS COMPLIANCE
 - Also corrected the compliance page's inaccurate "weekly Sale.csv ... due the following Sunday"
   copy to state the verified weekly-upload + monthly-LIQ-1295-by-the-20th facts.
 
-## Slice 107 — Inventory "cannot go live dirty" gate [HIGH]
-- Harden lot activation: a lot missing a required CCRS identifier / lab result / with a
-  failed COA cannot be flipped to active/sellable. Reuse the Slice-97 intake-review flags;
-  block `acceptManifest` / `finalizeManifestDispositions` / lot activation with reasons.
+## Slice 107 — Inventory "cannot go live dirty" gate [HIGH] ✅ DONE
+- PURE `lot-activation-gate-core.ts`: `evaluateLotActivation(facts)` +
+  `evaluateLotBatchActivation(lots)` → hard-blocks a lot from going ACTIVE when it is
+  missing its CCRS `ccrs_inventory_external_id`, has NO lab result / COA on record, or
+  carries a FAILED lab result (`labPassed === false`). Reason codes: `missing_ccrs_id`,
+  `missing_lab_result`, `failed_lab_result`. A present-but-pending COA is allowed (soft,
+  surfaced elsewhere) to avoid guessing intent. 15 tsx tests. Grounded in WAC 314-55-102,
+  WAC 246-70-050, CCRS Upload Guide, WAC 314-55-083(4).
+- Wired into `finalizeManifestDispositions`: the select now joins `lab_results(passed)` and
+  reads `ccrs_inventory_external_id` / `lab_result_id`; every ACCEPTED lot runs the gate.
+  Dirty lots are HELD in quarantine (status NOT flipped to active), the reasons are written
+  to the lot notes + manifest event log, and the count is returned as `blocked[]`.
+  derivedStatus falls to `partially_accepted` when lots are held. Nothing dirty reaches the
+  floor. Intake detail page shows a red "N lots held in quarantine" banner (`?held=N`).
 
 ## Slice 108 — CCRS identifier integrity assertions [MED]
 - Extend `ccrs-identifiers.ts` with strict format assertions (UBI/license shape, non-empty,
@@ -71,7 +81,7 @@ Standing rules respected: CCRS compliance + 🔴 DOH MEDICAL CANNABIS COMPLIANCE
 ## STATUS
 - [x] Slice 105 — CCRS pre-submission hard gate — HIGH
 - [x] Slice 106 — CCRS reporting-deadline guard — HIGH
-- [ ] Slice 107 — Inventory can't-go-live-dirty gate — HIGH
+- [x] Slice 107 — Inventory can't-go-live-dirty gate — HIGH
 - [ ] Slice 108 — CCRS identifier integrity assertions — MED
 - [ ] Slice 109 — Sales-limit enforcement at POS — HIGH
 - [ ] Slice 110 — Compliance Health panel — MED
