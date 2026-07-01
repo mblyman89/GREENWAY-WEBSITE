@@ -114,6 +114,49 @@ export function categoryToBucket(category: string | null | undefined): LimitBuck
 }
 
 /**
+ * The category slugs that map into each statutory bucket, derived by inverting
+ * categoryToBucket() over the full known taxonomy. Used by the read-only staff
+ * reference so budtenders can see exactly which products count toward which
+ * limit. GROUNDED: the slug list mirrors DEFAULT_UNIT_GRAMS + categoryToBucket's
+ * own switch — no invented categories.
+ */
+export const ALL_LIMIT_CATEGORY_SLUGS: readonly string[] = [
+  "flower",
+  "popcorn-bud",
+  "infused-flower",
+  "trim",
+  "preroll",
+  "blunt",
+  "preroll-pack",
+  "infused-preroll",
+  "infused-blunt",
+  "infused-preroll-pack",
+  "cartridge",
+  "disposable-cartridge",
+  "concentrate",
+  "rso",
+  "edible-solid",
+  "edible-liquid",
+  "tincture",
+  "topical",
+] as const;
+
+/** Group the known category slugs by the bucket they count toward. */
+export function bucketCategories(): Record<LimitBucket, string[]> {
+  const out: Record<LimitBucket, string[]> = {
+    usable: [],
+    solid_edible: [],
+    concentrate: [],
+    liquid_edible: [],
+  };
+  for (const slug of ALL_LIMIT_CATEGORY_SLUGS) {
+    const bucket = categoryToBucket(slug);
+    if (bucket) out[bucket].push(slug);
+  }
+  return out;
+}
+
+/**
  * Default grams-equivalent contributed by ONE unit of a given category. These
  * are conservative defaults the owner can override per-category in settings.
  * For useable: a typical retail unit is 3.5 g; prerolls ~1 g; packs larger.
@@ -367,6 +410,21 @@ export function __runSalesLimitTests(): void {
   // gramsToOunces
   ok(gramsToOunces(28) === 1, "28g=1oz");
   ok(gramsToOunces(14) === 0.5, "14g=0.5oz");
+
+  // bucketCategories: every known slug lands in exactly one bucket, and the
+  // groupings match categoryToBucket.
+  const bc = bucketCategories();
+  ok(bc.usable.includes("flower") && bc.usable.includes("preroll"), "usable has flower+preroll");
+  ok(bc.concentrate.includes("cartridge") && bc.concentrate.includes("rso"), "concentrate has cartridge+rso");
+  ok(bc.solid_edible.length === 1 && bc.solid_edible[0] === "edible-solid", "solid = edible-solid only");
+  ok(
+    bc.liquid_edible.includes("edible-liquid") &&
+      bc.liquid_edible.includes("tincture") &&
+      bc.liquid_edible.includes("topical"),
+    "liquid has edible-liquid+tincture+topical",
+  );
+  const totalGrouped = bc.usable.length + bc.solid_edible.length + bc.concentrate.length + bc.liquid_edible.length;
+  ok(totalGrouped === ALL_LIMIT_CATEGORY_SLUGS.length, "all slugs grouped exactly once");
 
   console.log(`sales-limits-core: ${pass} passed, ${fail} failed`);
   if (fail > 0) throw new Error(`${fail} sales-limits-core tests failed`);

@@ -1,14 +1,18 @@
 import { requirePermission } from "@/lib/auth/session";
-import { can } from "@/lib/auth/roles";
+import { isOwnerRole, ROLE_LABELS } from "@/lib/auth/roles";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
-import { Button, Card, Field, Input, Textarea } from "@/components/admin/ui";
+import { Button, Card, Field, Input, Textarea, Badge } from "@/components/admin/ui";
 import { getSalesLimitSettings } from "@/lib/compliance/sales-limits";
 import {
   gramsToOunces,
   LIMIT_BUCKET_LABELS,
+  LIMIT_BUCKETS,
+  bucketCategories,
+  type LimitBucket,
 } from "@/lib/compliance/sales-limits-core";
+import { websiteCategoryDefinitions } from "@/lib/pos/category-taxonomy";
 import { updateSalesLimitSettingsAction } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -17,15 +21,21 @@ function ozLabel(g: number): string {
   return `${gramsToOunces(g)} oz (${g} g)`;
 }
 
+/** Friendly label for a website category slug (falls back to the slug). */
+function catLabel(slug: string): string {
+  return websiteCategoryDefinitions.find((c) => c.value === slug)?.label ?? slug;
+}
+
 export default async function SalesLimitsPage({
   searchParams,
 }: {
   searchParams: Promise<{ ok?: string; error?: string }>;
 }) {
   const session = await requirePermission("settings.manage");
-  const isAdmin = can(session.profile.role, "settings.manage");
+  const isOwner = isOwnerRole(session.profile.role);
   const { ok, error } = await searchParams;
   const s = await getSalesLimitSettings();
+  const bucketCats = bucketCategories();
 
   const unitGramsText = Object.entries(s.unitGrams)
     .map(([k, v]) => `${k}=${v}`)
@@ -113,13 +123,80 @@ export default async function SalesLimitsPage({
           />
         </div>
 
-        {!isAdmin && (
+        {/* Staff-facing read-only reference: the clear, informative limit sheet
+            a budtender reads to a customer. Always shown (owner benefits too). */}
+        <Card>
+          <div className="p-1">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h3 className="text-sm font-bold text-[var(--admin-text)]">
+                Single-transaction purchase limits
+              </h3>
+              <Badge tone="outline">WAC 314-55-095 · RCW 69.50.360</Badge>
+            </div>
+            <p className="mb-4 text-xs text-[var(--admin-muted)]">
+              These are the most a single customer may buy in one transaction.
+              Medical patients entered in the DOH database get the higher medical
+              limits. Read these to customers when discussing how much they can buy.
+            </p>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[640px] border-collapse text-sm">
+                <thead>
+                  <tr className="border-b border-[var(--admin-border)] text-left text-[var(--admin-muted)]">
+                    <th className="py-2 pr-4 font-semibold">Product type</th>
+                    <th className="py-2 pr-4 font-semibold">Recreational (21+)</th>
+                    <th className="py-2 pr-4 font-semibold">Medical (DOH database)</th>
+                    <th className="py-2 font-semibold">Counts these categories</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {LIMIT_BUCKETS.map((bucket: LimitBucket) => {
+                    const isConc = bucket === "concentrate";
+                    const rec = s.rec[bucket];
+                    const med = s.med[bucket];
+                    const fmt = (g: number) => (isConc ? `${g} g` : `${gramsToOunces(g)} oz (${g} g)`);
+                    const cats = bucketCats[bucket];
+                    return (
+                      <tr key={bucket} className="border-b border-[var(--admin-border)]/60 align-top">
+                        <td className="py-2.5 pr-4 font-medium text-[var(--admin-text)]">
+                          {LIMIT_BUCKET_LABELS[bucket]}
+                        </td>
+                        <td className="py-2.5 pr-4 font-semibold text-[var(--admin-accent)]">{fmt(rec)}</td>
+                        <td className="py-2.5 pr-4 text-[var(--admin-text)]">{fmt(med)}</td>
+                        <td className="py-2.5 text-xs text-[var(--admin-muted)]">
+                          {cats.length ? cats.map(catLabel).join(", ") : "—"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <p className="mt-4 text-xs text-[var(--admin-muted)]">
+              Accessories, Greenway merch, and paraphernalia are not cannabis and
+              do not count toward any limit. At checkout, enforcement is currently{" "}
+              <strong className="text-[var(--admin-text)]">{s.enforce ? "on" : "off"}</strong>{" "}
+              ({s.hardBlock ? "hard block" : "warn only"}).
+            </p>
+          </div>
+        </Card>
+
+        {!isOwner ? (
           <div className="rounded-[var(--admin-radius)] border border-[var(--admin-orange)]/30 bg-[var(--admin-orange-soft)] px-4 py-3 text-sm text-[var(--admin-orange)]">
-            You can view the limits but only an admin can change them.
+            <strong>These limits are set by the store owner.</strong> You are signed
+            in as {ROLE_LABELS[session.profile.role]}, so this page is read-only for
+            you. Use the reference above with customers. If a limit looks wrong,
+            ask the owner to update it here.
+          </div>
+        ) : (
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/30 bg-[var(--admin-accent-soft)] px-4 py-3 text-sm text-[var(--admin-text)]">
+            <strong>Owner controls.</strong> Only you (the owner) can change, add,
+            or remove these limits. Staff and admins see the reference above as
+            read-only. The statutory defaults already match WA law — only change
+            them if the law changes or you intend to sell tighter than the cap.
           </div>
         )}
 
-        {/* Editor */}
+        {/* Editor (owner-only) */}
         <Card>
           <form action={updateSalesLimitSettingsAction} className="space-y-6 p-1">
             <div className="flex flex-wrap gap-6">
@@ -128,7 +205,7 @@ export default async function SalesLimitsPage({
                   type="checkbox"
                   name="enforce"
                   defaultChecked={s.enforce}
-                  disabled={!isAdmin}
+                  disabled={!isOwner}
                   className="h-4 w-4 accent-[var(--admin-accent)]"
                 />
                 Enforce sales limits at checkout
@@ -138,7 +215,7 @@ export default async function SalesLimitsPage({
                   type="checkbox"
                   name="hard_block"
                   defaultChecked={s.hardBlock}
-                  disabled={!isAdmin}
+                  disabled={!isOwner}
                   className="h-4 w-4 accent-[var(--admin-accent)]"
                 />
                 Hard block (otherwise warn only)
@@ -156,7 +233,7 @@ export default async function SalesLimitsPage({
                     step="0.001"
                     name="rec_usable"
                     defaultValue={s.rec.usable}
-                    disabled={!isAdmin}
+                    disabled={!isOwner}
                   />
                 </Field>
                 <Field label={LIMIT_BUCKET_LABELS.concentrate}>
@@ -165,7 +242,7 @@ export default async function SalesLimitsPage({
                     step="0.001"
                     name="rec_concentrate"
                     defaultValue={s.rec.concentrate}
-                    disabled={!isAdmin}
+                    disabled={!isOwner}
                   />
                 </Field>
                 <Field label={LIMIT_BUCKET_LABELS.solid_edible}>
@@ -174,7 +251,7 @@ export default async function SalesLimitsPage({
                     step="0.001"
                     name="rec_solid"
                     defaultValue={s.rec.solid_edible}
-                    disabled={!isAdmin}
+                    disabled={!isOwner}
                   />
                 </Field>
                 <Field label={LIMIT_BUCKET_LABELS.liquid_edible}>
@@ -183,7 +260,7 @@ export default async function SalesLimitsPage({
                     step="0.001"
                     name="rec_liquid"
                     defaultValue={s.rec.liquid_edible}
-                    disabled={!isAdmin}
+                    disabled={!isOwner}
                   />
                 </Field>
               </div>
@@ -200,7 +277,7 @@ export default async function SalesLimitsPage({
                     step="0.001"
                     name="med_usable"
                     defaultValue={s.med.usable}
-                    disabled={!isAdmin}
+                    disabled={!isOwner}
                   />
                 </Field>
                 <Field label={LIMIT_BUCKET_LABELS.concentrate}>
@@ -209,7 +286,7 @@ export default async function SalesLimitsPage({
                     step="0.001"
                     name="med_concentrate"
                     defaultValue={s.med.concentrate}
-                    disabled={!isAdmin}
+                    disabled={!isOwner}
                   />
                 </Field>
                 <Field label={LIMIT_BUCKET_LABELS.solid_edible}>
@@ -218,7 +295,7 @@ export default async function SalesLimitsPage({
                     step="0.001"
                     name="med_solid"
                     defaultValue={s.med.solid_edible}
-                    disabled={!isAdmin}
+                    disabled={!isOwner}
                   />
                 </Field>
                 <Field label={LIMIT_BUCKET_LABELS.liquid_edible}>
@@ -227,7 +304,7 @@ export default async function SalesLimitsPage({
                     step="0.001"
                     name="med_liquid"
                     defaultValue={s.med.liquid_edible}
-                    disabled={!isAdmin}
+                    disabled={!isOwner}
                   />
                 </Field>
               </div>
@@ -242,15 +319,15 @@ export default async function SalesLimitsPage({
                 rows={5}
                 defaultValue={unitGramsText}
                 placeholder={"flower=3.5\nconcentrate=1\nedible-solid=28"}
-                disabled={!isAdmin}
+                disabled={!isOwner}
               />
             </Field>
 
             <Field label="Notes">
-              <Textarea name="notes" rows={2} defaultValue={s.notes ?? ""} disabled={!isAdmin} />
+              <Textarea name="notes" rows={2} defaultValue={s.notes ?? ""} disabled={!isOwner} />
             </Field>
 
-            {isAdmin && (
+            {isOwner && (
               <div className="flex justify-end">
                 <Button type="submit" variant="save" size="sm">
                   💾 Save sales-limit settings

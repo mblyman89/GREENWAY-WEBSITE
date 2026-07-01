@@ -151,6 +151,14 @@ export function isAdminRole(role: StaffRole | null | undefined): boolean {
   return role === "owner" || role === "admin";
 }
 
+/**
+ * True only for the store OWNER. Use this to gate owner-reserved controls (e.g.
+ * editing statutory sales limits) that even admins should NOT be able to change.
+ */
+export function isOwnerRole(role: StaffRole | null | undefined): boolean {
+  return role === "owner";
+}
+
 export function atLeast(role: StaffRole | null | undefined, min: StaffRole): boolean {
   if (!role) return false;
   return ROLE_RANK[role] >= ROLE_RANK[min];
