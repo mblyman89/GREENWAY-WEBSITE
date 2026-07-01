@@ -1,36 +1,54 @@
-# Back Office Review Tasklist — Slices 43–64
+# Command Center Enhancements — Slices 65–80 (build 6 at a time)
 
-Slices 43–61: [x] (done, merged)
+Full verbatim list, owner decisions, deep-research log, and finalized roadmap:
+see `docs/COMMAND_CENTER_ENHANCEMENTS_TASKLIST.md`.
 
-## Slice 62 — Audit log: filters + AI anomaly detection
-- [x] Ground: audit_logs schema, audit page, AuditTimeline, audit-humanize, full action vocabulary, AI provider
-- [x] Core: audit-anomaly-core.ts — PURE action-category map + deterministic anomaly rules + tests (30 assertions)
-- [x] Server: audit-anomaly.ts — load recent logs, run detector, grounded AI summary (drafts-only)
-- [x] Action: anomaly AI server action (users.manage-gated)
-- [x] Filters: upgrade AuditTimeline (date range, category, entity type, sensitive-only); window widened 200→500
-- [x] UI: anomaly panel on audit page (deterministic findings + grounded AI assistant, collapsible)
-- [x] Verify: tsc 0, eslint 0, next build ok (/admin/audit present)
-- [x] Commit → push → PR → merge → sync main (PR #166)
-- NOTE: NO migration — detection is stateless over existing audit_logs
+## BATCH 1 — foundation & high-value UI (existing tables; no external accounts)
 
-## Slice 63 — Settings overhaul
-- [x] Ground: current hub (1 card), existing settings tables (tax_settings+tax_category_rules, pricing_settings actively READ but NO UI; site_settings unused KV; license_settings), helper signatures, nav
-- [x] Store profile: store-profile-core (25 assertions) over site_settings KV + store + editor page + action (settings.manage, audited)
-- [x] Tax settings: editor page for tax_settings (rates %→bps, medical endorsement, base mode) + per-category cannabis rules (tax_category_rules) + actions
-- [x] Pricing settings: editor page for pricing_settings (min markup, rounding, default tax rate) + action
-- [x] Hub overhaul: 6 categorized groups linking 11 REAL settings surfaces (all routes verified) with live status pills
-- [x] Nav: /admin/settings stays the Settings entry (sub-pages linked from hub)
-- [x] Verify: tsc 0, eslint 0, next build ok (/admin/settings/{store-profile,tax,pricing} present)
-- [x] Commit → push → PR → merge → sync main (PR #167)
-- NOTE: NO migration — all tables already exist (site_settings, tax_settings, tax_category_rules, pricing_settings, license_settings)
-## Slice 64 — Dashboard overhaul (POS cockpit)
-- [x] Ground: current dashboard (getting-started + 4 thin stats), real data sources (getSalesReport, getOrderStatusCounts+ACTIVE_ORDER_STATUSES, liveRegisters, buildReorderSuggestions, getPublishedVersion, countLoyaltySignups, pacific TZ helpers)
-- [x] Core: cockpit-core.ts — PURE deltas/percent-change, peak-hour, bar scaling, drawer over/short rollup, attention flags + tests (29 assertions)
-- [x] Server: cockpit-data.ts — today vs yesterday sales, open orders, live drawers, low stock, menu/loyalty (all safeData-wrapped)
-- [x] Page: rewrote /admin as POS cockpit (attention flags, KPIs w/ day-over-day, hourly sales bar chart, top sellers, open-orders board, live registers/drawers, ops strip, category revenue) — NO getting-started (moved to Setup guide button)
-- [x] Verify: tsc 0, eslint 0, next build ok (/admin present)
-- [x] Commit → push → PR → merge → sync main (PR #168)
-- NOTE: NO migration — reads existing tables/reports only
+### Slice 65 — Nav → top tabs w/ dropdowns [item 16]
+- [ ] Ground: AdminSidebar + admin-nav-data + layout + permission gating + current mobile hamburger
+- [ ] Core: pure grouping/active-tab logic + tests
+- [ ] Build: top tab bar with grouped dropdown menus (keep perms + mobile)
+- [ ] Verify: tsc 0, eslint 0, next build ok
+- [ ] Commit → push → PR → merge → sync main
 
----
-✅ COMPLETE — All of Slices 43–64 (the full 21-item Back Office Review tasklist) are shipped and merged to main. No slices remain.
+### Slice 66 — Site Content page: all pages [item 9]
+- [ ] Ground: /admin/content hub + which pages are listed vs which exist on live site
+- [ ] Build: add Blog + legal/info pages (Consumer Health Data, Privacy Policy, Terms of Use, Unsubscribe, Vendor Delivery); group sensibly; exclude transactional Checkout
+- [ ] Verify + Commit → push → PR → merge → sync main
+
+### Slice 67 — Loyalty customizer [item 2]
+- [ ] Ground: loyalty_config/tiers/promotions tables + existing /admin/loyalty
+- [ ] Build: full editor (earn rate, point value, min redeem, signup bonus, expiry, tiers, promos) + live preview + audited actions
+- [ ] Verify + Commit → push → PR → merge → sync main
+
+### Slice 68 — Cycle counts barcode + hardening [item 3]
+- [ ] Ground: cycle_counts/lines/adjustment tables + existing page
+- [ ] Build: barcode scan (USB wedge + camera), blind-count, variance flags, session lock, audit
+- [ ] Verify + Commit → push → PR → merge → sync main
+
+### Slice 69 — Schedule builder [item 4]
+- [ ] Ground: shifts table + staffing page
+- [ ] Build: week grid create/copy/publish scheduled shifts per employee/role + coverage view
+- [ ] Verify + Commit → push → PR → merge → sync main
+
+### Slice 70 — Phone clock-in + hour adjustments [item 8]
+- [ ] Ground: employees/time_punches + staffing actions
+- [ ] Build: mobile self clock in/out (PIN) + owner/manager punch edit w/ reason + audit
+- [ ] Verify + Commit → push → PR → merge → sync main
+
+## BATCH 2 — AI enrichment, compliance, marketing, seeds, mobile
+- [ ] Slice 71 — Sample compliance WAC 314-55-096 (hard blocks) [item 6]
+- [ ] Slice 72 — Midjourney prompt builder + media overhaul [items 7+17]
+- [ ] Slice 73 — Sage 50 KB enrichment + Chart of Accounts upload [items 1+13]
+- [ ] Slice 74 — Manifest pipeline pending/in-transit/awaiting-intake [item 10]
+- [ ] Slice 75 — KB seed coverage + owner uploads [item 14]
+- [ ] Slice 76 — Mobile-friendly pass [item 15]
+
+## BATCH 3 — money movement & customer AI
+- [ ] Slice 77 — Vendor ACH: banking + approval model [items 5/11]
+- [ ] Slice 78 — Vendor ACH: NACHA batch generation [items 5/11]
+- [ ] Slice 79 — Customer-facing AI concierge [item 18]
+- [ ] Slice 80 — Customer AI knowledge seeding [item 18 cont.]
+
+- OUT OF SCOPE: item 12 (employee ACH payroll) — owner uses Sage.
