@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
-import { can } from "@/lib/auth/roles";
+import { isOwnerRole } from "@/lib/auth/roles";
 import { recordAudit } from "@/lib/auth/audit";
 import {
   updateSalesLimitSettings,
@@ -20,8 +20,10 @@ function num(formData: FormData, key: string, fallback: number): number {
 
 export async function updateSalesLimitSettingsAction(formData: FormData) {
   const session = await requirePermission("settings.manage");
-  if (!can(session.profile.role, "settings.manage")) {
-    redirect(`${BASE}?error=${encodeURIComponent("Changing sales limits requires admin.")}`);
+  // Owner-only: even admins may VIEW the limits but only the store owner may
+  // change, add, or remove them (owner directive, Slice 58).
+  if (!isOwnerRole(session.profile.role)) {
+    redirect(`${BASE}?error=${encodeURIComponent("Only the store owner can change sales limits.")}`);
   }
 
   // Per-category grams-per-unit overrides: a textarea of "slug=grams" lines.
