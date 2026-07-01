@@ -32,7 +32,12 @@ import {
   resolveSaleInventoryExternalId,
   validateExternalId,
 } from "@/lib/compliance/ccrs-identifiers";
-import { assembleCcrsFile, ccrsFileName, ccrsDate } from "@/lib/compliance/ccrs-batch-core";
+import {
+  assembleCcrsFile,
+  ccrsFileName,
+  ccrsDate,
+  saleTypeForOrder,
+} from "@/lib/compliance/ccrs-batch-core";
 
 export type CcrsLicenseSettings = {
   licenseNumber: string;
@@ -206,6 +211,22 @@ export async function buildCcrsSaleCsv(fromISO: string, toISO: string): Promise<
     (ordersData as
       | { id: string; order_number: string; status: string; placed_at: string; completed_at: string | null }[]
       | null) ?? [];
+
+  // B1: an order is a MEDICAL sale (SaleType = RecreationalMedical) when it has
+  // WAC 314-55-090(2) exempt-sale records tied to it — the authoritative,
+  // schema-grounded signal (there is no orders.medical column). We look up the
+  // set of order ids that appear in medical_exempt_sales for this range.
+  const medicalOrderIds = new Set<string>();
+  {
+    const { data: exemptData } = await admin
+      .from("medical_exempt_sales")
+      .select("order_id, sale_date")
+      .gte("sale_date", fromISO.slice(0, 10))
+      .lte("sale_date", toISO.slice(0, 10));
+    for (const r of (exemptData as { order_id: string | null }[] | null) ?? []) {
+      if (r.order_id) medicalOrderIds.add(r.order_id);
+    }
+  }
   const reportable = orders.filter((o) => o.status === "completed");
   if (reportable.length === 0) {
     warnings.push("No completed orders in the selected range.");
@@ -242,6 +263,7 @@ export async function buildCcrsSaleCsv(fromISO: string, toISO: string): Promise<
   let invalidIds = 0;
   let fallbackKeyIds = 0;
   let skipped = 0;
+  let medicalLines = 0;
 
   for (const l of lines) {
     const qty = l.quantity ?? 0;
@@ -304,7 +326,11 @@ export async function buildCcrsSaleCsv(fromISO: string, toISO: string): Promise<
       "", // SoldToLicenseNumber (retail = blank)
       inventoryExternalId, // InventoryExternalIdentifier
       "", // PlantExternalIdentifier (retail = blank)
-      "RecreationalRetail", // SaleType
+      (() => {
+        const t = saleTypeForOrder(medicalOrderIds.has(order.id));
+        if (t === "RecreationalMedical") medicalLines += 1;
+        return t;
+      })(), // SaleType (B1: medical → RecreationalMedical)
       saleDate, // SaleDate
       String(qty), // Quantity
       dollars(unitPriceCents), // UnitPrice (one unit, pre-discount/tax)
@@ -343,6 +369,11 @@ export async function buildCcrsSaleCsv(fromISO: string, toISO: string): Promise<
   }
   if (skipped > 0) {
     warnings.push(`${skipped} line(s) were skipped (zero quantity or no usable price).`);
+  }
+  if (medicalLines > 0) {
+    warnings.push(
+      `${medicalLines} line(s) are reported as SaleType "RecreationalMedical" because their order has WAC 314-55-090(2) medical exempt-sale records. Confirm each was a qualifying DOH-authorized medical sale before uploading.`,
+    );
   }
 
   result.csv = buildFile(rows, license);

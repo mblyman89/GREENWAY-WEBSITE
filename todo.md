@@ -116,6 +116,6 @@ see `docs/COMMAND_CENTER_ENHANCEMENTS_TASKLIST.md`.
 - [x] Slice 87 — Sale.csv conformance: RetailSalesTax/CannabisExciseTax + 3-row header + \r\n via shared assembleCcrsFile; deleted divergent local COLUMNS/buildFile (A1/A2/A3/A6). Verified tsx, tsc 0, eslint 0, build OK.
 - [x] Slice 88 — InventoryAdjustment.csv: added missing ExternalIdentifier (12th col, ADJ-<id>) + 3-row header + \r\n via shared assembler; matched ccrs-batch-core column set; fixed self-test (A4/A5). tsx 48/48, tsc 0, eslint 0, build OK.
 - [x] Slice 89 — Pacific-time CCRS dates: ccrsDate now derives the America/Los_Angeles calendar day (pacificDayKey); Sale/Adjustment mmddyyyy delegate to it; SubmittedDate too. Late-evening sales no longer slip a day/week (B3). tsx OK, tsc 0, eslint 0, build OK.
-- [ ] Slice 90 — SaleType RecreationalMedical off orders.medical (B1) — HIGH
+- [x] Slice 90 — SaleType RecreationalMedical: PURE saleTypeForOrder helper (validated enum); medical orders detected via the medical_exempt_sales table (WAC 314-55-090(2)) — NOT a nonexistent orders.medical column (verified schema); draft warning added (B1). tsx OK, tsc 0, eslint 0, build OK.
 - [ ] Slice 91 — StrainType enum guardrail Indica/Sativa/Hybrid (B2) — HIGH
 - [ ] Slice 92 — Product InventoryCategory/Type enum + text-length guardrails (C1/C2) — HIGH/MED
