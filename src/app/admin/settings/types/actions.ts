@@ -12,8 +12,22 @@ import {
   getWebsiteCategoryType,
   normalizeInventoryTypeKey,
 } from "@/lib/pos/types-store";
+import { INVENTORY_TYPE_CATALOG, inventoryTypeKey } from "@/lib/pos/inventory-type-catalog";
 
 const BASE = "/admin/settings/types";
+
+/** True when an id is a synthetic catalog preset (not yet a real DB row). */
+function isCatalogPresetId(id: string): boolean {
+  return id.startsWith("catalog:");
+}
+
+/** Look up a catalog preset by its synthetic `catalog:<key>` id. */
+function catalogPresetById(id: string): { key: string; label: string; website_category: string } | null {
+  const key = id.slice("catalog:".length);
+  const entry = INVENTORY_TYPE_CATALOG.find((e) => inventoryTypeKey(e.label) === key);
+  if (!entry) return null;
+  return { key, label: entry.label, website_category: entry.websiteCategory };
+}
 
 function str(formData: FormData, key: string): string {
   return String(formData.get(key) ?? "").trim();
@@ -204,11 +218,46 @@ export async function updateInventoryType(formData: FormData): Promise<void> {
   const id = str(formData, "id");
   if (!id) redirect(`${BASE}?error=` + encodeURIComponent("Missing id.") + "&tab=inventory");
 
+  const isActive = formData.get("is_active") === "on" || formData.get("is_active") === "true";
+
+  // Materialize (adopt) path: catalog presets aren't real DB rows yet. The first
+  // time a built-in preset is edited we upsert it into inventory_types by key so
+  // it becomes a real, editable row — grounded in the canonical catalog.
+  if (isCatalogPresetId(id)) {
+    const preset = catalogPresetById(id);
+    if (!preset) redirect(`${BASE}?error=` + encodeURIComponent("Unknown built-in type.") + "&tab=inventory");
+
+    const { error } = await admin
+      .from("inventory_types")
+      .upsert(
+        {
+          key: preset.key,
+          label: str(formData, "label") || preset.label,
+          notes: orNull(formData, "notes"),
+          website_category: orNull(formData, "website_category"),
+          is_active: isActive,
+          is_system: true,
+        },
+        { onConflict: "key" },
+      );
+    if (error) redirect(`${BASE}?error=` + encodeURIComponent(error.message) + "&tab=inventory");
+
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "inventory_type.adopted",
+      entityType: "inventory_type",
+      entityId: preset.key,
+    });
+    revalidatePath(BASE);
+    redirect(`${BASE}?saved=inventory&tab=inventory`);
+  }
+
   const update: Record<string, unknown> = {
     label: str(formData, "label"),
     notes: orNull(formData, "notes"),
     website_category: orNull(formData, "website_category"),
-    is_active: formData.get("is_active") === "on" || formData.get("is_active") === "true",
+    is_active: isActive,
   };
 
   const { error } = await admin.from("inventory_types").update(update).eq("id", id);
@@ -235,6 +284,37 @@ export async function deleteInventoryType(formData: FormData): Promise<void> {
 
   const id = str(formData, "id");
   if (!id) redirect(`${BASE}?error=` + encodeURIComponent("Missing id.") + "&tab=inventory");
+
+  // Catalog presets are built-in (is_system): "delete" means hide. We materialize
+  // the preset into the DB as an inactive row (upsert by key) so it stays hidden.
+  if (isCatalogPresetId(id)) {
+    const preset = catalogPresetById(id);
+    if (!preset) redirect(`${BASE}?error=` + encodeURIComponent("Unknown built-in type.") + "&tab=inventory");
+
+    const { error } = await admin
+      .from("inventory_types")
+      .upsert(
+        {
+          key: preset.key,
+          label: preset.label,
+          website_category: preset.website_category,
+          is_active: false,
+          is_system: true,
+        },
+        { onConflict: "key" },
+      );
+    if (error) redirect(`${BASE}?error=` + encodeURIComponent(error.message) + "&tab=inventory");
+
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "inventory_type.deactivated",
+      entityType: "inventory_type",
+      entityId: preset.key,
+    });
+    revalidatePath(BASE);
+    redirect(`${BASE}?saved=deactivated&reason=system&tab=inventory`);
+  }
 
   const existing = await getInventoryType(id);
   if (!existing) redirect(`${BASE}?error=` + encodeURIComponent("Inventory type not found.") + "&tab=inventory");

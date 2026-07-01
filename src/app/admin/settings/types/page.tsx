@@ -263,8 +263,38 @@ function InventoryTypesTab({
   categories: Awaited<ReturnType<typeof listWebsiteCategoryTypes>>;
 }) {
   const activeCategories = categories.filter((c) => c.is_active);
+  const categoryLabel = (value: string | null) =>
+    (value && categories.find((c) => c.value === value)?.label) || null;
+
+  // Group the (preloaded) types by their website category, in taxonomy order so
+  // the table reads top-to-bottom like the public menu. Types are alphabetized
+  // within each group. Types with no mapping fall into an "Unmapped" bucket last.
+  const order = categories.map((c) => c.value);
+  const groupsMap = new Map<string, typeof inventoryTypes>();
+  const UNMAPPED = "__unmapped__";
+  for (const t of inventoryTypes) {
+    const cat = t.website_category ?? UNMAPPED;
+    const list = groupsMap.get(cat) ?? [];
+    list.push(t);
+    groupsMap.set(cat, list);
+  }
+  const orderedCats: string[] = [];
+  for (const c of order) if (groupsMap.has(c)) orderedCats.push(c);
+  for (const c of groupsMap.keys()) if (!orderedCats.includes(c) && c !== UNMAPPED) orderedCats.push(c);
+  if (groupsMap.has(UNMAPPED)) orderedCats.push(UNMAPPED);
+
+  const totalTypes = inventoryTypes.length;
+
   return (
     <div className="space-y-6">
+      <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)]/60 px-4 py-3 text-xs text-white/60">
+        These are the inventory types Greenway carries, preloaded and grouped by
+        the website category each maps to. Built-in types are ready to use out of
+        the box — edit one to fine-tune its label, mapping, or notes (that saves
+        your own copy), or add a brand-new type below. Imported stock also lands
+        here automatically.
+      </div>
+
       {/* Add new */}
       <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
         <h3 className="mb-4 text-sm font-semibold text-white">Add an inventory type</h3>
@@ -294,72 +324,91 @@ function InventoryTypesTab({
         </form>
       </div>
 
-      {/* List */}
-      {inventoryTypes.length === 0 ? (
+      {/* Grouped list */}
+      {totalTypes === 0 ? (
         <div className="rounded-[var(--admin-radius-lg)] border border-dashed border-[var(--admin-border)] p-8 text-center text-sm text-white/50">
           No inventory types catalogued yet. They populate automatically as stock
           is imported, or add one above.
         </div>
       ) : (
-        <div className="space-y-3">
-          {inventoryTypes.map((t) => (
-            <details
-              key={t.id}
-              className="group rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)]"
-            >
-              <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3">
-                <span className="flex-1 text-sm font-semibold text-white">{t.label}</span>
-                <span className="font-mono text-[11px] text-white/30">{t.key}</span>
-                {t.website_category && (
-                  <Badge tone="outline">
-                    → {categories.find((c) => c.value === t.website_category)?.label ?? t.website_category}
-                  </Badge>
-                )}
-                {t.is_system && <Badge tone="neutral">built-in</Badge>}
-                {t.is_active ? (
-                  <Badge tone="green">active</Badge>
-                ) : (
-                  <Badge tone="gold">hidden</Badge>
-                )}
-              </summary>
-              <div className="border-t border-[var(--admin-border)] px-4 py-4">
-                <form action={updateInventoryType} className="grid gap-4 sm:grid-cols-2">
-                  <input type="hidden" name="id" value={t.id} />
-                  <Field label="Label" required>
-                    <Input name="label" defaultValue={t.label} required />
-                  </Field>
-                  <Field label="Maps to website category">
-                    <Select name="website_category" defaultValue={t.website_category ?? ""}>
-                      <option value="">— none —</option>
-                      {activeCategories.map((c) => (
-                        <option key={c.value} value={c.value}>
-                          {c.label}
-                        </option>
-                      ))}
-                    </Select>
-                  </Field>
-                  <Field label="Notes" className="sm:col-span-2">
-                    <Textarea name="notes" defaultValue={t.notes ?? ""} />
-                  </Field>
-                  <label className="flex items-center gap-2 text-sm text-white/70">
-                    <input type="checkbox" name="is_active" defaultChecked={t.is_active} className="h-4 w-4" />
-                    Active (show in pickers)
-                  </label>
-                  <div className="flex items-end justify-end gap-2">
-                    <Button type="submit">Save</Button>
-                  </div>
-                </form>
-                <form action={deleteInventoryType} className="mt-3 border-t border-[var(--admin-border)] pt-3">
-                  <input type="hidden" name="id" value={t.id} />
-                  <p className="mb-2 text-xs text-white/40">
-                    If this type is used by live stock, it will be hidden instead of
-                    permanently deleted.
-                  </p>
-                  <Button type="submit" variant="subtle">Delete type</Button>
-                </form>
-              </div>
-            </details>
-          ))}
+        <div className="space-y-6">
+          {orderedCats.map((cat) => {
+            const rows = (groupsMap.get(cat) ?? [])
+              .slice()
+              .sort((a, b) => a.label.localeCompare(b.label));
+            const label = cat === UNMAPPED ? "Unmapped (no website category)" : categoryLabel(cat) ?? cat;
+            return (
+              <section
+                key={cat}
+                className="overflow-hidden rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)]"
+              >
+                <header className="flex items-center justify-between gap-3 border-b border-[var(--admin-border)] bg-[var(--admin-surface)]/80 px-4 py-2.5">
+                  <h3 className="text-sm font-semibold text-white">{label}</h3>
+                  <span className="text-[11px] text-white/40">
+                    {rows.length} type{rows.length === 1 ? "" : "s"}
+                  </span>
+                </header>
+                <div className="divide-y divide-[var(--admin-border)]">
+                  {rows.map((t) => (
+                    <details key={t.id} className="group">
+                      <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-2.5 hover:bg-white/[0.02]">
+                        <span className="flex-1 text-sm font-medium text-white">{t.label}</span>
+                        <span className="hidden font-mono text-[11px] text-white/25 sm:inline">{t.key}</span>
+                        {t.is_system && <Badge tone="neutral">built-in</Badge>}
+                        {t.is_active ? (
+                          <Badge tone="green">active</Badge>
+                        ) : (
+                          <Badge tone="gold">hidden</Badge>
+                        )}
+                        <span className="text-white/25 transition group-open:rotate-180" aria-hidden>
+                          ▾
+                        </span>
+                      </summary>
+                      <div className="border-t border-[var(--admin-border)] bg-[var(--admin-surface)]/40 px-4 py-4">
+                        <form action={updateInventoryType} className="grid gap-4 sm:grid-cols-2">
+                          <input type="hidden" name="id" value={t.id} />
+                          <Field label="Label" required>
+                            <Input name="label" defaultValue={t.label} required />
+                          </Field>
+                          <Field label="Maps to website category">
+                            <Select name="website_category" defaultValue={t.website_category ?? ""}>
+                              <option value="">— none —</option>
+                              {activeCategories.map((c) => (
+                                <option key={c.value} value={c.value}>
+                                  {c.label}
+                                </option>
+                              ))}
+                            </Select>
+                          </Field>
+                          <Field label="Notes" className="sm:col-span-2">
+                            <Textarea name="notes" defaultValue={t.notes ?? ""} />
+                          </Field>
+                          <label className="flex items-center gap-2 text-sm text-white/70">
+                            <input type="checkbox" name="is_active" defaultChecked={t.is_active} className="h-4 w-4" />
+                            Active (show in pickers)
+                          </label>
+                          <div className="flex items-end justify-end gap-2">
+                            <Button type="submit">Save</Button>
+                          </div>
+                        </form>
+                        <form action={deleteInventoryType} className="mt-3 border-t border-[var(--admin-border)] pt-3">
+                          <input type="hidden" name="id" value={t.id} />
+                          <p className="mb-2 text-xs text-white/40">
+                            {t.is_system
+                              ? "Built-in types can’t be permanently deleted — deleting hides them instead."
+                              : "If this type is used by live stock, it will be hidden instead of permanently deleted."}
+                          </p>
+                          <Button type="submit" variant="subtle">
+                            {t.is_system ? "Hide type" : "Delete type"}
+                          </Button>
+                        </form>
+                      </div>
+                    </details>
+                  ))}
+                </div>
+              </section>
+            );
+          })}
         </div>
       )}
     </div>
