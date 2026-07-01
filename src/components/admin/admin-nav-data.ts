@@ -50,6 +50,7 @@ export const adminNav: AdminNavItem[] = [
   { label: "Blog & Newsletter", href: "/admin/blog", permission: "blog.manage", icon: "✎", group: "Content" },
   { label: "Newsletter Send", href: "/admin/newsletter", permission: "blog.manage", icon: "✉", group: "Content" },
   { label: "Site Content", href: "/admin/content", permission: "content.edit", icon: "❡", group: "Content" },
+  { label: "Midjourney", href: "/admin/marketing/midjourney", permission: "content.edit", icon: "🎨", group: "Content" },
 
   { label: "Reports", href: "/admin/reports", permission: "reports.view", icon: "📊", group: "Insights" },
   { label: "AI Usage", href: "/admin/ai-usage", permission: "reports.view", icon: "✨", group: "Insights" },

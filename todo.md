@@ -40,7 +40,7 @@ see `docs/COMMAND_CENTER_ENHANCEMENTS_TASKLIST.md`.
 
 ## BATCH 2 — AI enrichment, compliance, marketing, seeds, mobile
 - [x] Slice 71 — Sample compliance WAC 314-55-096 (hard blocks) [item 6] — migration 0054 (trade_sample_settings + trade_sample_events, idempotent); PURE core (quarter keys, per-unit size caps, cap eval) tsx-tested; store w/ hard-block enforcement; /admin/compliance/samples (recorder + per-processor/per-employee insight bars, ledger, owner settings, no-customer notice); nav entry; verify OK; PR #TBD merged
-- [ ] Slice 72 — Midjourney prompt builder + media overhaul [items 7+17]
+- [x] Slice 72 — Midjourney prompt builder + media overhaul [items 7+17] — PURE core (correct MJ syntax: subject-first comma groups, params at end w/ one space, punctuation stripped, clamped stylize/chaos/weird, niji, --sref/--sw/--oref/--no/--tile/--seed) + 5 cannabis-retail presets + compliance note, tsx-tested; grounded AI assist (real store+vendor context, drafts-only, no-op safe); /admin/marketing/midjourney (preset picker, brief fields, param sliders, media-library reference picker, live prompt + copy); media page already had AI alt/caption + tags/search/dropzone → added cross-link both ways; nav; verify OK; PR #TBD merged
 - [ ] Slice 73 — Sage 50 KB enrichment + Chart of Accounts upload [items 1+13]
 - [ ] Slice 74 — Manifest pipeline pending/in-transit/awaiting-intake [item 10]
 - [ ] Slice 75 — KB seed coverage + owner uploads [item 14]

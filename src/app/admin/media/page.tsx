@@ -65,6 +65,11 @@ export default async function MediaPage({
         title="Media Library"
         subtitle="One home for every logo, banner, and image. Upload, tag, and publish — published assets serve publicly."
         breadcrumbs={<Breadcrumbs items={[{ label: "Media Library" }]} />}
+        action={
+          <Link href="/admin/marketing/midjourney">
+            <Button variant="subtle">🎨 Midjourney prompt builder</Button>
+          </Link>
+        }
         help={
           <HelpPanel
             id="media"
