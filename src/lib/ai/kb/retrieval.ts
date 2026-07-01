@@ -27,6 +27,7 @@ import {
   type SeedCategory,
 } from "./seed";
 import { STRAINS_RICH, type SeedStrainRich } from "./strains-data";
+import { renderNoteFacts, type KbNote, type NoteMatchFacts } from "./kb-notes-core";
 import type { ProductFacts } from "../suggestions";
 
 // ---------------------------------------------------------------------------
@@ -168,6 +169,25 @@ async function loadBrandFact(brand: string | null | undefined, vendor: string | 
   }
 }
 
+/** Load active owner-uploaded reference notes (best-effort; [] pre-migration). */
+async function loadNotes(): Promise<KbNote[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("kb_notes")
+      .select("id,title,body,tags,source,active")
+      .eq("active", true)
+      .limit(500);
+    if (error || !data) return [];
+    return (data as { id: string; title: string; body: string; tags: string[] | null; source: string | null }[]).map(
+      (r) => ({ id: r.id, title: r.title, body: r.body, tags: r.tags ?? [], source: r.source, active: true }),
+    );
+  } catch {
+    return [];
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Matching
 // ---------------------------------------------------------------------------
@@ -202,11 +222,12 @@ export type GroundedFacts = {
  * notes into a compact list the model must stay within.
  */
 export async function buildGroundedFacts(facts: ProductFacts): Promise<GroundedFacts> {
-  const [strains, terpenes, categories, brandFact] = await Promise.all([
+  const [strains, terpenes, categories, brandFact, notes] = await Promise.all([
     loadStrains(),
     loadTerpenes(),
     loadCategories(),
     loadBrandFact(facts.brand, facts.vendor),
+    loadNotes(),
   ]);
 
   const sources: string[] = [];
@@ -266,6 +287,21 @@ export async function buildGroundedFacts(facts: ProductFacts): Promise<GroundedF
     if (brandFact.known_for) lines.push(`${brandFact.name} is known for ${brandFact.known_for}.`);
     if (brandFact.house_style) lines.push(`${brandFact.name} house style: ${brandFact.house_style}.`);
     if (brandFact.sensory_notes?.length) lines.push(`${brandFact.name} sensory notes: ${brandFact.sensory_notes.join(", ")}.`);
+  }
+
+  // --- Owner-uploaded reference notes (item 14) ---
+  if (notes.length) {
+    const noteFacts: NoteMatchFacts = {
+      name: facts.name,
+      strainName: facts.strainName,
+      strainSlug: strain?.slug ?? null,
+      category: catKey,
+      brand: facts.brand,
+      vendor: facts.vendor,
+    };
+    const { lines: noteLines, sources: noteSources } = renderNoteFacts(notes, noteFacts, 4);
+    lines.push(...noteLines);
+    sources.push(...noteSources);
   }
 
   return {
