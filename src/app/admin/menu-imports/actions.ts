@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
-import { runImport, publishMenuVersion, findDuplicateImport, sha256 } from "@/lib/pos/import-service";
+import { runImport, publishMenuVersion, findDuplicateImport, sha256, cleanSlateTestData } from "@/lib/pos/import-service";
 
 const PRODUCTS_HINT = "PRODUCTS.xlsx";
 const INVENTORIES_HINT = "INVENTORIES.xlsx";
@@ -53,12 +53,15 @@ export async function uploadAndStageImport(formData: FormData): Promise<void> {
     // allow re-import (POS can re-export identical files; the manager decides).
     const dup = await findDuplicateImport(sha256(productsBuffer), sha256(inventoriesBuffer));
 
+    const isTest = String(formData.get("test_mode") ?? "") === "on";
+
     const result = await runImport({
       productsBuffer,
       inventoriesBuffer,
       productsFilename: productsFile.name || PRODUCTS_HINT,
       inventoriesFilename: inventoriesFile.name || INVENTORIES_HINT,
       uploadedBy: session.userId,
+      isTest,
     });
     importId = result.import.id;
 
@@ -75,6 +78,7 @@ export async function uploadAndStageImport(formData: FormData): Promise<void> {
         errors: result.transform.diagnosticCounts.errors,
         warnings: result.transform.diagnosticCounts.warnings,
         duplicateOf: dup?.id ?? null,
+        isTest,
       },
     });
   } catch (err) {
@@ -119,4 +123,40 @@ export async function publishVersion(formData: FormData): Promise<void> {
 
   const dest = importId ? `/admin/menu-imports/${importId}` : "/admin/menu-imports";
   redirect(dest + "?published=1");
+}
+
+/**
+ * Clean Slate — delete ONLY test-flagged import/menu data. Confirm-gated
+ * (requires typing the exact phrase) and audit-logged. Never touches real data
+ * or the validated knowledge base (handled by the DB function in 0066).
+ */
+export async function cleanSlateTestDataAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("menu.publish");
+
+  const confirm = String(formData.get("confirm") ?? "").trim().toUpperCase();
+  if (confirm !== "DELETE TEST DATA") {
+    redirect(
+      "/admin/menu-imports?error=" +
+        encodeURIComponent('To confirm, type exactly: DELETE TEST DATA'),
+    );
+  }
+
+  let cleaned: string;
+  try {
+    const summary = await cleanSlateTestData();
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "pos_import.clean_slate_test_data",
+      entityType: "pos_import",
+      after: summary,
+    });
+    cleaned = `${summary.menuVersionsDeleted} test version(s) and ${summary.posImportsDeleted} test import(s) removed.`;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Clean Slate failed.";
+    redirect("/admin/menu-imports?error=" + encodeURIComponent(message));
+  }
+
+  revalidatePath("/admin/menu-imports");
+  redirect("/admin/menu-imports?cleaned=" + encodeURIComponent(cleaned));
 }

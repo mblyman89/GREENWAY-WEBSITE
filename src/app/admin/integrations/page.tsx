@@ -7,7 +7,10 @@ import { describeLeaflyRuntimeAsync } from "@/lib/leafly/client";
 import { describeWeedmapsRuntimeAsync } from "@/lib/weedmaps/client";
 import { getAccountingSettings, missingGlAccounts } from "@/lib/accounting/sage50";
 import { getIntegrationCredentialsView } from "@/lib/integrations/integration-credentials-store";
+import { guideById } from "@/lib/integrations/integration-guides";
+import { isAiConfigured } from "@/lib/ai/provider";
 import { LeaflyCredentialsForm, WeedmapsCredentialsForm, FluxCredentialsForm } from "./CredentialsEditor";
+import { IntegrationGuidePanel, IntegrationHelper } from "./IntegrationHelpers";
 
 export const dynamic = "force-dynamic";
 
@@ -111,6 +114,7 @@ export default async function IntegrationsPage() {
             >
               Open Leafly push &amp; preview →
             </a>
+            {guideById("leafly") ? <IntegrationGuidePanel guide={guideById("leafly")!} /> : null}
           </Card>
 
           {/* WeedMaps */}
@@ -137,6 +141,7 @@ export default async function IntegrationsPage() {
             >
               Open WeedMaps push &amp; preview →
             </a>
+            {guideById("weedmaps") ? <IntegrationGuidePanel guide={guideById("weedmaps")!} /> : null}
           </Card>
 
           {/* Sage 50 */}
@@ -163,6 +168,7 @@ export default async function IntegrationsPage() {
                 Open accounting export →
               </Link>
             </div>
+            {guideById("sage50") ? <IntegrationGuidePanel guide={guideById("sage50")!} /> : null}
           </Card>
 
           {/* Cultivera */}
@@ -188,8 +194,12 @@ export default async function IntegrationsPage() {
                 CCRS exports →
               </Link>
             </div>
+            {guideById("cultivera") ? <IntegrationGuidePanel guide={guideById("cultivera")!} /> : null}
           </Card>
         </div>
+
+        {/* Integrations AI helper */}
+        <IntegrationHelper aiConfigured={isAiConfigured} />
       </div>
     </div>
   );

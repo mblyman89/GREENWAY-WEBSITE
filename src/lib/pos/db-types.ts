@@ -24,6 +24,7 @@ export type PosImport = {
   products_size_bytes: number | null;
   inventories_size_bytes: number | null;
   status: PosImportStatus;
+  is_test?: boolean;
   summary_json: unknown | null;
   error_message: string | null;
   started_at: string | null;
@@ -48,6 +49,7 @@ export type MenuVersion = {
   id: string;
   import_id: string | null;
   status: MenuVersionStatus;
+  is_test?: boolean;
   item_count: number;
   variant_count: number;
   vendor_count: number;

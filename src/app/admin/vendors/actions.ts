@@ -36,6 +36,7 @@ export async function updateVendor(formData: FormData): Promise<void> {
   const update: Record<string, unknown> = {
     display_name: String(formData.get("display_name") ?? "").trim(),
     legal_name: orNull(formData.get("legal_name")),
+    license_number: orNull(formData.get("license_number")),
     mission_statement: orNull(formData.get("mission_statement")),
     about: orNull(formData.get("about")),
     website: orNull(formData.get("website")),

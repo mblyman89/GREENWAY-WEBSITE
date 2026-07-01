@@ -6,6 +6,7 @@ import { AdminSetupNotice } from "@/components/admin/AdminSetupNotice";
 import { ToastProvider } from "@/components/admin/ux";
 import { HelpLauncher } from "@/components/admin/HelpLauncher";
 import { CommandPalette } from "@/components/admin/CommandPalette";
+import { ConciergeWidget } from "@/components/admin/ConciergeWidget";
 import { adminNav } from "@/components/admin/admin-nav-data";
 import { can, type Permission } from "@/lib/auth/roles";
 
@@ -63,6 +64,7 @@ export default async function AdminLayout({
       <div className="admin-chrome">
         <HelpLauncher />
         <CommandPalette items={paletteItems} />
+        <ConciergeWidget />
       </div>
     </div>
   );

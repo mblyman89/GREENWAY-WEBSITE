@@ -17,6 +17,7 @@ export type Vendor = {
   display_name: string;
   slug: string;
   legal_name: string | null;
+  license_number: string | null;
   mission_statement: string | null;
   about: string | null;
   website: string | null;

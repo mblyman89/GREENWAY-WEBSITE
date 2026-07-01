@@ -31,6 +31,8 @@ export type CreateImportInput = {
   productsFilename: string;
   inventoriesFilename: string;
   uploadedBy: string | null;
+  /** Mark this as a TEST/rehearsal import so Clean Slate can remove it later. */
+  isTest?: boolean;
 };
 
 export type CreateImportResult = {
@@ -93,6 +95,7 @@ export async function runImport(input: CreateImportInput): Promise<CreateImportR
       products_size_bytes: input.productsBuffer.length,
       inventories_size_bytes: input.inventoriesBuffer.length,
       status: "processing",
+      is_test: Boolean(input.isTest),
       started_at: new Date().toISOString(),
     })
     .select("*")
@@ -117,6 +120,7 @@ export async function runImport(input: CreateImportInput): Promise<CreateImportR
       .insert({
         import_id: posImport.id,
         status: "staged",
+        is_test: Boolean(input.isTest),
         item_count: result.items.length,
         variant_count: result.items.reduce((s, i) => s + i.variants.length, 0),
         vendor_count: result.vendors.length,
@@ -288,4 +292,30 @@ export async function publishMenuVersion(versionId: string, actorId: string | nu
 
 function sanitize(name: string): string {
   return name.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0, 80) || "file.xlsx";
+}
+
+/** How many test-flagged imports/versions currently exist (for the UI badge). */
+export async function countTestData(): Promise<{ imports: number; versions: number }> {
+  const admin = createSupabaseAdminClient();
+  const [{ count: imports }, { count: versions }] = await Promise.all([
+    admin.from("pos_imports").select("id", { count: "exact", head: true }).eq("is_test", true),
+    admin.from("menu_versions").select("id", { count: "exact", head: true }).eq("is_test", true),
+  ]);
+  return { imports: imports ?? 0, versions: versions ?? 0 };
+}
+
+/**
+ * Clean Slate: delete ONLY test-flagged import/menu data via the DB function
+ * (migration 0066). Never touches real data or the knowledge base. Returns the
+ * server-side deletion summary.
+ */
+export async function cleanSlateTestData(): Promise<{ menuVersionsDeleted: number; posImportsDeleted: number }> {
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin.rpc("clean_slate_test_data");
+  if (error) throw new Error(`Clean Slate failed: ${error.message}`);
+  const summary = (data ?? {}) as { menu_versions_deleted?: number; pos_imports_deleted?: number };
+  return {
+    menuVersionsDeleted: summary.menu_versions_deleted ?? 0,
+    posImportsDeleted: summary.pos_imports_deleted ?? 0,
+  };
 }

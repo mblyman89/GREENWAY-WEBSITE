@@ -6,6 +6,7 @@ import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
 import { Button, Field, Input, Textarea, Select } from "@/components/admin/ui";
 import { getManifestById } from "@/lib/inventory/store";
+import { getVendorById } from "@/lib/vendors/store";
 import { listManifestLots, listManifestEvents } from "@/lib/inventory/intake-store";
 import { ManifestTimeline } from "@/components/admin/inventory/ManifestTimeline";
 import { ManifestLotDisposition } from "@/components/admin/inventory/ManifestLotDisposition";
@@ -60,6 +61,20 @@ export default async function ManifestReviewPage({
 
   const manifest = await getManifestById(id);
   if (!manifest) notFound();
+
+  // E7: auto-fill the manifest origin-license fields (WAC 314-55-085) from the
+  // linked vendor record so staff don't retype them each delivery. The manifest's
+  // own saved value always wins (manual override preserved); the vendor supplies
+  // only the DEFAULT when the manifest field is still blank.
+  const linkedVendor = manifest.vendor_id ? await getVendorById(manifest.vendor_id) : null;
+  const originLicenseDefault =
+    manifest.transporter_license ?? linkedVendor?.license_number ?? "";
+  const originNameDefault =
+    manifest.transporter_name ??
+    linkedVendor?.legal_name ??
+    linkedVendor?.display_name ??
+    manifest.vendor_label ??
+    "";
 
   const lots = await listManifestLots(id);
   const events = await listManifestEvents(id);
@@ -358,17 +373,23 @@ export default async function ManifestReviewPage({
           </p>
           <form action={transportAction} className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Transporter / carrier" help="Business that moved the load">
+              <Field
+                label="Transporter / carrier"
+                help={linkedVendor ? "Pre-filled from the linked vendor — edit if a different carrier delivered" : "Business that moved the load"}
+              >
                 <Input
                   name="transporter_name"
-                  defaultValue={manifest.transporter_name ?? ""}
+                  defaultValue={originNameDefault}
                   placeholder="e.g. Acme Cannabis Logistics"
                 />
               </Field>
-              <Field label="Transporter license #">
+              <Field
+                label="Origin / transporter license #"
+                help={linkedVendor?.license_number ? "Auto-filled from the vendor's WA license number" : undefined}
+              >
                 <Input
                   name="transporter_license"
-                  defaultValue={manifest.transporter_license ?? ""}
+                  defaultValue={originLicenseDefault}
                   placeholder="WA license number"
                 />
               </Field>
