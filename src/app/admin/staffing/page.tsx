@@ -77,9 +77,12 @@ export default async function StaffingPage({
         }
         action={
           canManage ? (
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Link href={`${BASE}/schedule`}>
                 <Button variant="subtle">Schedule builder</Button>
+              </Link>
+              <Link href={`${BASE}/hours`}>
+                <Button variant="subtle">Adjust hours</Button>
               </Link>
               <Link href={`${BASE}/employees`}>
                 <Button variant="subtle">Manage employees</Button>
@@ -134,6 +137,13 @@ export default async function StaffingPage({
             </div>
             <Button type="submit">Clock in / out</Button>
           </form>
+          <p className="mt-3 text-xs text-white/40">
+            On your phone?{" "}
+            <Link href={`${BASE}/clock`} className="text-[#7ed957] underline">
+              Open the phone clock-in page
+            </Link>{" "}
+            — big keypad, bookmark it to your home screen.
+          </p>
         </div>
 
         {/* Tap-to-clock grid */}

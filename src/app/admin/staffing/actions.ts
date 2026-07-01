@@ -5,8 +5,16 @@ import { redirect } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { toggleClock, getEmployeeByPin } from "@/lib/staffing/store";
+import {
+  toggleClock,
+  getEmployeeByPin,
+  getPunch,
+  updatePunchTimes,
+  createManualPunch,
+} from "@/lib/staffing/store";
 import { isValidPin } from "@/lib/staffing/time";
+import { parsePunchEdit, composeEditNote } from "@/lib/staffing/timeclock-core";
+import { pacificWallTimeToUtcISO } from "@/lib/reports/timezone";
 
 const BASE = "/admin/staffing";
 
@@ -54,6 +62,33 @@ export async function clockByPinAction(formData: FormData): Promise<void> {
   });
   revalidatePath(BASE);
   redirect(`${BASE}?clocked=${result.action}&who=${encodeURIComponent(emp.full_name)}`);
+}
+
+/**
+ * Clock in/out from an employee's PHONE (Slice 70, item 8). Same PIN flow as
+ * the station, but tagged source="phone" and lives on the mobile-first
+ * /admin/staffing/clock page so employees can bookmark it. Any active staff
+ * session is allowed (the PIN identifies the employee).
+ */
+export async function clockByPinPhoneAction(formData: FormData): Promise<void> {
+  await requirePermission("loyalty.view");
+  const pin = str(formData, "pin");
+  const CLOCK = `${BASE}/clock`;
+  if (!isValidPin(pin)) redirect(`${CLOCK}?error=` + encodeURIComponent("Enter a valid 4–6 digit PIN."));
+  const emp = await getEmployeeByPin(pin);
+  if (!emp) redirect(`${CLOCK}?error=` + encodeURIComponent("No active employee for that PIN."));
+  const result = await toggleClock(emp.id, "phone");
+  if (!result.ok) redirect(`${CLOCK}?error=` + encodeURIComponent(result.error));
+  await recordAudit({
+    actorId: emp.staff_id,
+    actorEmail: emp.full_name,
+    action: `timeclock.${result.action}`,
+    entityType: "employee",
+    entityId: emp.id,
+  });
+  revalidatePath(CLOCK);
+  revalidatePath(BASE);
+  redirect(`${CLOCK}?clocked=${result.action}&who=${encodeURIComponent(emp.full_name)}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -120,34 +155,106 @@ export async function updateEmployeeAction(formData: FormData): Promise<void> {
   redirect(`${BASE}/employees?saved=1`);
 }
 
-/** Manager edit of a punch (correct a missed clock-out, etc.). */
-export async function editPunchAction(formData: FormData): Promise<void> {
+// ---------------------------------------------------------------------------
+// Hour adjustments (staffing.manage) — Slice 70, item 8
+// ---------------------------------------------------------------------------
+
+export type PunchActionResult = { ok: true; minutes?: number | null } | { ok: false; error?: string; errors?: string[] };
+
+/** Convert a WallTime (Pacific) to a UTC ISO instant via the tz helper. */
+function wallToUtc(w: { ymd: string; h: number; m: number; s: number }): string {
+  return pacificWallTimeToUtcISO(w.ymd, { h: w.h, m: w.m, s: w.s, ms: 0 });
+}
+
+/**
+ * Manager edit of an existing punch (correct a missed clock-out, fix times).
+ * Requires a reason, which is prepended to the punch notes and audited. Times
+ * are entered as Pacific wall-clock and converted to UTC here.
+ */
+export async function editPunchAction(input: {
+  id: string;
+  clockInLocal: string;
+  clockOutLocal?: string;
+  reason: string;
+}): Promise<PunchActionResult> {
   const session = await requirePermission("staffing.manage");
-  const id = str(formData, "id");
-  if (!id) redirect(`${BASE}?error=` + encodeURIComponent("Missing punch id."));
-  const admin = createSupabaseAdminClient();
-  const update: Record<string, unknown> = {};
-  const inAt = str(formData, "clock_in_at");
-  const outAt = str(formData, "clock_out_at");
-  if (inAt) update.clock_in_at = new Date(inAt).toISOString();
-  if (outAt) {
-    update.clock_out_at = new Date(outAt).toISOString();
-  }
-  update.source = "manager_edit";
-  // Recompute minutes if both present.
-  if (inAt && outAt) {
-    const mins = Math.max(0, Math.round((Date.parse(outAt) - Date.parse(inAt)) / 60000));
-    update.minutes = mins;
-  }
-  const { error } = await admin.from("time_punches").update(update).eq("id", id);
-  if (error) redirect(`${BASE}?error=` + encodeURIComponent(error.message));
+  if (!input.id) return { ok: false, error: "Missing punch id." };
+
+  const parsed = parsePunchEdit({
+    clockInLocal: input.clockInLocal,
+    clockOutLocal: input.clockOutLocal,
+    reason: input.reason,
+  });
+  if (!parsed.ok) return { ok: false, errors: parsed.errors };
+
+  const existing = await getPunch(input.id);
+  if (!existing) return { ok: false, error: "Punch not found." };
+
+  const clockInUtc = wallToUtc(parsed.value.inWall);
+  const clockOutUtc = parsed.value.outWall ? wallToUtc(parsed.value.outWall) : null;
+  const notes = composeEditNote(parsed.value.reason, existing.notes);
+
+  const res = await updatePunchTimes(input.id, {
+    clock_in_at: clockInUtc,
+    clock_out_at: clockOutUtc,
+    notes,
+  });
+  if (!res.ok) return { ok: false, error: res.error };
+
   await recordAudit({
     actorId: session.userId,
     actorEmail: session.email,
     action: "timepunch.edited",
     entityType: "time_punch",
-    entityId: id,
+    entityId: input.id,
+    after: { clock_in_at: clockInUtc, clock_out_at: clockOutUtc, minutes: res.minutes, reason: parsed.value.reason },
   });
+  revalidatePath(`${BASE}/hours`);
   revalidatePath(BASE);
-  redirect(`${BASE}?saved=1`);
+  return { ok: true, minutes: res.minutes };
+}
+
+/**
+ * Create a brand-new manual punch (employee forgot to clock in entirely).
+ * Requires a reason; audited. Times are Pacific wall-clock.
+ */
+export async function createPunchAction(input: {
+  employeeId: string;
+  clockInLocal: string;
+  clockOutLocal?: string;
+  reason: string;
+}): Promise<PunchActionResult> {
+  const session = await requirePermission("staffing.manage");
+  if (!input.employeeId) return { ok: false, error: "Choose an employee." };
+
+  const parsed = parsePunchEdit({
+    clockInLocal: input.clockInLocal,
+    clockOutLocal: input.clockOutLocal,
+    reason: input.reason,
+  });
+  if (!parsed.ok) return { ok: false, errors: parsed.errors };
+
+  const clockInUtc = wallToUtc(parsed.value.inWall);
+  const clockOutUtc = parsed.value.outWall ? wallToUtc(parsed.value.outWall) : null;
+  const notes = composeEditNote(parsed.value.reason);
+
+  const res = await createManualPunch({
+    employeeId: input.employeeId,
+    clockInUtc,
+    clockOutUtc,
+    notes,
+  });
+  if (!res.ok) return { ok: false, error: res.error };
+
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "timepunch.created",
+    entityType: "time_punch",
+    entityId: res.id,
+    after: { employee_id: input.employeeId, clock_in_at: clockInUtc, clock_out_at: clockOutUtc, minutes: res.minutes, reason: parsed.value.reason },
+  });
+  revalidatePath(`${BASE}/hours`);
+  revalidatePath(BASE);
+  return { ok: true, minutes: res.minutes };
 }
