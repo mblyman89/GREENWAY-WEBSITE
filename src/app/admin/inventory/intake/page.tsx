@@ -207,6 +207,30 @@ export default async function IntakePage({
           <StatCard label={stageMeta("rejected").label} value={counts.rejected} accent="muted" />
         </div>
 
+        {/* Export: full intake picture (manifests + every lot line) */}
+        <div className="flex flex-wrap items-center gap-3 rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface)] px-4 py-3 text-sm">
+          <span className="font-semibold text-[var(--admin-text)]">Export intake</span>
+          <span className="text-xs text-[var(--admin-text-faint)]">
+            Two sheets — every manifest and every lot line, with all fields.
+          </span>
+          <span className="ml-auto flex items-center gap-2">
+            <Link
+              href="/admin/inventory/intake/export?format=xlsx"
+              className="rounded border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-3 py-1.5 text-xs font-semibold text-[var(--admin-accent)] hover:brightness-105"
+              title="Download Excel (.xlsx)"
+            >
+              ⬇ Excel (.xlsx)
+            </Link>
+            <Link
+              href="/admin/inventory/intake/export?format=csv"
+              className="rounded border border-[var(--admin-border)] px-3 py-1.5 text-xs font-semibold text-[var(--admin-text-muted)] hover:border-[var(--admin-accent)] hover:text-[var(--admin-accent)]"
+              title="Download CSV"
+            >
+              ⬇ CSV
+            </Link>
+          </span>
+        </div>
+
         {overdue.length > 0 && (
           <div className="rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/10 px-4 py-2 text-sm text-[var(--admin-danger)]">
             🚨 {overdue.length} in-transit manifest{overdue.length === 1 ? "" : "s"} past ETA — follow up with the transporter.
