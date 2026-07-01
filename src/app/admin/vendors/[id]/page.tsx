@@ -280,6 +280,7 @@ export default async function VendorEditPage({
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="flex flex-col gap-1"><span className={label}>Display name</span><input name="display_name" defaultValue={vendor.display_name} className={field} /></label>
                 <label className="flex flex-col gap-1"><span className={label}>Legal name</span><input name="legal_name" defaultValue={vendor.legal_name ?? ""} className={field} /></label>
+                <label className="flex flex-col gap-1"><span className={label}>WA license number</span><input name="license_number" defaultValue={vendor.license_number ?? ""} placeholder="Origin licensee number (auto-fills manifests)" className={field} /></label>
                 <label className="flex flex-col gap-1"><span className={label}>Website</span><input name="website" defaultValue={vendor.website ?? ""} placeholder="https://" className={field} /></label>
                 <label className="flex flex-col gap-1"><span className={label}>Email</span><input name="email" defaultValue={vendor.email ?? ""} className={field} /></label>
                 <label className="flex flex-col gap-1"><span className={label}>Phone</span><input name="phone" defaultValue={vendor.phone ?? ""} className={field} /></label>
