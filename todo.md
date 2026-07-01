@@ -22,10 +22,10 @@ see `docs/COMMAND_CENTER_ENHANCEMENTS_TASKLIST.md`.
 - [x] Build: pure core (validation + conversions + preview, tsx-tested), store write helpers, audited server actions, full editor UI (earn rate, point value, min redeem, signup bonus, code expiry, tiers, promotions) + live earn preview; read-only fallback for non-managers
 - [x] Verify (core tests, tsc 0, eslint 0, build OK) + Commit → push → PR #172 → merge → sync main
 
-### Slice 68 — Cycle counts barcode + hardening [item 3]
-- [ ] Ground: cycle_counts/lines/adjustment tables + existing page
-- [ ] Build: barcode scan (USB wedge + camera), blind-count, variance flags, session lock, audit
-- [ ] Verify + Commit → push → PR → merge → sync main
+### Slice 68 — Cycle counts barcode + hardening [item 3] ✅ PR #173
+- [x] Ground: cycle_counts/lines (mig 0041) + inventory_lots (lot_code, pos_product_key; no UPC col) + detail page
+- [x] Build: pure scan core (normalize + match exact/fuzzy/ambiguous/none, tallies; tsx-tested), store getCycleCountScanLines + bumpLineCount (open-session + not-applied guards), scanBumpLineAction (JSON, audited), scanner UI (USB wedge + phone camera BarcodeDetector, live log, progress, ambiguity warnings) on open sessions
+- [x] Verify (core tests, tsc 0, eslint 0, build OK) + Commit → push → PR #173 → merge → sync main
 
 ### Slice 69 — Schedule builder [item 4]
 - [ ] Ground: shifts table + staffing page

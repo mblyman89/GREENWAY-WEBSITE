@@ -77,9 +77,14 @@ export default async function StaffingPage({
         }
         action={
           canManage ? (
-            <Link href={`${BASE}/employees`}>
-              <Button variant="subtle">Manage employees</Button>
-            </Link>
+            <div className="flex gap-2">
+              <Link href={`${BASE}/schedule`}>
+                <Button variant="subtle">Schedule builder</Button>
+              </Link>
+              <Link href={`${BASE}/employees`}>
+                <Button variant="subtle">Manage employees</Button>
+              </Link>
+            </div>
           ) : undefined
         }
       />
