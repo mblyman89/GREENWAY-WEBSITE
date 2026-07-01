@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
@@ -37,6 +38,14 @@ export default async function MedicalOverviewPage() {
       <AdminPageHeader
         title="Medical cannabis"
         subtitle="Recognition cards, DOH database (MCR) status, and excise-exempt sale records."
+        action={
+          <Link
+            href="/admin/medical/intake"
+            className="inline-flex items-center gap-2 rounded-[var(--admin-radius)] bg-[var(--admin-accent)] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+          >
+            📇 New authorization intake
+          </Link>
+        }
         help={
           <HelpPanel
             id="medical-overview"

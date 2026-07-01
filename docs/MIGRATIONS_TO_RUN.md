@@ -59,6 +59,18 @@
   reject no longer marks lots `destroyed`; refused product is `rejected` (never
   received), per docs/ccrs-rejection-and-returns.md.
 
+- [ ] **`supabase/migrations/0060_medical_form_scans.sql`** — Slice 85
+  (efficient medical authorization intake): stores the SCANNED authorization form
+  (from the Canon PIXMA TS3522 flatbed) with each authorization so the DOH 608-048
+  record is complete and auditable (5-year retention, WAC 314-55-090(2)). Creates
+  a PRIVATE `medical-forms` storage bucket with staff-only read/write policies on
+  `storage.objects`. Adds to `public.patient_authorizations`: `form_scan_path`,
+  `form_scan_filename`, `form_scan_bytes` (int), `form_scan_uploaded_at`
+  (timestamptz), `form_scan_uploaded_by` (FK `staff_profiles`), and `card_printed_at`
+  (timestamptz); plus index `patient_auth_scan_uploaded_idx`. No data backfill.
+  **Until this is run, `/admin/medical/intake` scan uploads and the "mark printed"
+  action will error (missing bucket/columns).**
+
 ---
 
 ### How to run

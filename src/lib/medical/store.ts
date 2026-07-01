@@ -36,6 +36,11 @@ export type AuthorizationRow = {
   embossed_seal_verified: boolean;
   mcr_validated_at: string | null;
   notes: string | null;
+  form_scan_path: string | null;
+  form_scan_filename: string | null;
+  form_scan_bytes: number | null;
+  form_scan_uploaded_at: string | null;
+  card_printed_at: string | null;
 };
 
 export type ExemptSaleRow = {
@@ -106,6 +111,35 @@ export async function listAuthorizations(customerId: string): Promise<Authorizat
     .eq("customer_id", customerId)
     .order("created_at", { ascending: false });
   return (data as AuthorizationRow[] | null) ?? [];
+}
+
+/** Recent authorizations across ALL customers (for the intake queue). */
+export type AuthorizationWithCustomer = AuthorizationRow & {
+  customer_name: string | null;
+  created_at: string;
+};
+
+export async function listRecentAuthorizations(limit = 25): Promise<AuthorizationWithCustomer[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  const admin = createSupabaseAdminClient();
+  const { data } = await admin
+    .from("patient_authorizations")
+    .select("*, customers(first_name, last_name)")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  const rows =
+    (data as
+      | (AuthorizationRow & {
+          created_at: string;
+          customers?: { first_name: string | null; last_name: string | null } | null;
+        })[]
+      | null) ?? [];
+  return rows.map((r) => ({
+    ...r,
+    customer_name: r.customers
+      ? `${r.customers.first_name ?? ""} ${r.customers.last_name ?? ""}`.trim() || null
+      : null,
+  }));
 }
 
 export async function getActiveCard(customerId: string): Promise<AuthorizationRow | null> {
@@ -193,6 +227,63 @@ export async function createAuthorization(
   // Mark the customer as a medical patient.
   await admin.from("customers").update({ is_medical_patient: true }).eq("id", input.customerId);
   return { ok: true, id: (data as { id: string }).id };
+}
+
+/**
+ * Slice 85 — attach a SCANNED authorization form (from the Canon PIXMA TS3522)
+ * to an authorization row. The bytes are uploaded to the private `medical-forms`
+ * bucket; we record the path/filename/size + who/when for the audit trail.
+ */
+export async function attachFormScan(
+  authorizationId: string,
+  scan: { bytes: ArrayBuffer; filename: string; contentType: string },
+  actorId: string | null,
+): Promise<{ ok: true; path: string } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Supabase not configured" };
+  const admin = createSupabaseAdminClient();
+  const safeName = scan.filename.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-80) || "scan";
+  const path = `${authorizationId}/${Date.now()}_${safeName}`;
+  const { error: upErr } = await admin.storage
+    .from("medical-forms")
+    .upload(path, new Uint8Array(scan.bytes), {
+      contentType: scan.contentType || "application/octet-stream",
+      upsert: false,
+    });
+  if (upErr) return { ok: false, error: upErr.message };
+  const { error } = await admin
+    .from("patient_authorizations")
+    .update({
+      form_scan_path: path,
+      form_scan_filename: scan.filename,
+      form_scan_bytes: scan.bytes.byteLength,
+      form_scan_uploaded_at: new Date().toISOString(),
+      form_scan_uploaded_by: actorId,
+      updated_by: actorId,
+    })
+    .eq("id", authorizationId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, path };
+}
+
+/** A short-lived signed URL to view a scanned authorization form (staff only). */
+export async function signedFormScanUrl(path: string, expiresInSec = 300): Promise<string | null> {
+  if (!isSupabaseServiceConfigured) return null;
+  const admin = createSupabaseAdminClient();
+  const { data } = await admin.storage.from("medical-forms").createSignedUrl(path, expiresInSec);
+  return data?.signedUrl ?? null;
+}
+
+/** Stamp when the physical recognition card was printed (for laminating). */
+export async function markCardPrinted(
+  authorizationId: string,
+  actorId: string | null,
+): Promise<void> {
+  if (!isSupabaseServiceConfigured) return;
+  const admin = createSupabaseAdminClient();
+  await admin
+    .from("patient_authorizations")
+    .update({ card_printed_at: new Date().toISOString(), updated_by: actorId })
+    .eq("id", authorizationId);
 }
 
 export async function setAuthorizationStatus(
