@@ -16,6 +16,7 @@ import { resolveRange } from "@/lib/reports/range";
 import { buildCcrsSaleCsv, getCcrsLicenseSettings } from "@/lib/compliance/ccrs-sales";
 import { buildCcrsInventoryAdjustmentCsv } from "@/lib/compliance/ccrs-inventory-adjustment";
 import { buildCcrsBatch } from "@/lib/compliance/ccrs-batch";
+import { verifyCcrsBatch } from "@/lib/compliance/ccrs-batch-core";
 import { isAiConfigured } from "@/lib/ai/provider";
 import { CcrsAdvisorPanel } from "@/components/admin/reports/CcrsAdvisorPanel";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -53,8 +54,26 @@ export default async function CompliancePage({
     ? await buildCcrsInventoryAdjustmentCsv(range.fromISO, range.toISO)
     : null;
   const batch = isSupabaseServiceConfigured ? await buildCcrsBatch(range.fromISO, range.toISO) : null;
-  const batchErrors = batch?.syncIssues.filter((s) => s.severity === "error") ?? [];
-  const batchWarnings = batch?.syncIssues.filter((s) => s.severity === "warning") ?? [];
+  // Slice 95: fold the structural dry-run (verifyCcrsBatch) into the on-screen
+  // report so the UI is as trustworthy as the downloaded README — a structural
+  // problem (bad header, NumberRecords mismatch, invalid enum) shows as a
+  // blocking error here, not just in the zip.
+  const verification = batch
+    ? verifyCcrsBatch(batch.files.map((f) => ({ type: f.type, csv: f.csv })))
+    : null;
+  const combinedIssues = [
+    ...(batch?.syncIssues.map((s) => ({ severity: s.severity, file: String(s.file), message: s.message, count: s.count as number | undefined })) ?? []),
+    ...(verification?.problems.map((p) => ({ severity: p.severity, file: String(p.file), message: p.message, count: undefined as number | undefined })) ?? []),
+  ];
+  const dedup = new Set<string>();
+  const uniqueIssues = combinedIssues.filter((i) => {
+    const k = `${i.severity}|${i.file}|${i.message}`;
+    if (dedup.has(k)) return false;
+    dedup.add(k);
+    return true;
+  });
+  const batchErrors = uniqueIssues.filter((s) => s.severity === "error");
+  const batchWarnings = uniqueIssues.filter((s) => s.severity === "warning");
 
   // Recent export batches.
   let recentBatches: { file_name: string; record_count: number; created_at: string }[] = [];
