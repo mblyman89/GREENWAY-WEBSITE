@@ -12,10 +12,10 @@ see `docs/COMMAND_CENTER_ENHANCEMENTS_TASKLIST.md`.
 - [x] Verify: tsc 0, eslint 0, next build ok (all /admin routes present)
 - [x] Commit → push → PR → merge → sync main
 
-### Slice 66 — Site Content page: all pages [item 9]
-- [ ] Ground: /admin/content hub + which pages are listed vs which exist on live site
-- [ ] Build: add Blog + legal/info pages (Consumer Health Data, Privacy Policy, Terms of Use, Unsubscribe, Vendor Delivery); group sensibly; exclude transactional Checkout
-- [ ] Verify + Commit → push → PR → merge → sync main
+### Slice 66 — Site Content page: all pages [item 9] ✅ PR #171
+- [x] Ground: /admin/content hub lists pages derived from content-block `page` values; legal/info pages had no editable blocks
+- [x] Build: new `page:"legal"` group w/ editable hero titles for Privacy Policy, Terms of Use, Consumer Health Data (legal bodies untouched); wired via `<SiteText>`; per-block "View on site" links; label + subtitle updated
+- [x] Verify (tsc 0, eslint 0, build OK) + Commit → push → PR #171 → merge --squash --admin → sync main
 
 ### Slice 67 — Loyalty customizer [item 2]
 - [ ] Ground: loyalty_config/tiers/promotions tables + existing /admin/loyalty
