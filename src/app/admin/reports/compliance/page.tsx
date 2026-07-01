@@ -15,6 +15,9 @@ import { LicenseSettingsForm } from "@/components/admin/reports/LicenseSettingsF
 import { resolveRange } from "@/lib/reports/range";
 import { buildCcrsSaleCsv, getCcrsLicenseSettings } from "@/lib/compliance/ccrs-sales";
 import { buildCcrsInventoryAdjustmentCsv } from "@/lib/compliance/ccrs-inventory-adjustment";
+import { buildCcrsBatch } from "@/lib/compliance/ccrs-batch";
+import { isAiConfigured } from "@/lib/ai/provider";
+import { CcrsAdvisorPanel } from "@/components/admin/reports/CcrsAdvisorPanel";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -49,6 +52,9 @@ export default async function CompliancePage({
   const adjPreview = isSupabaseServiceConfigured
     ? await buildCcrsInventoryAdjustmentCsv(range.fromISO, range.toISO)
     : null;
+  const batch = isSupabaseServiceConfigured ? await buildCcrsBatch(range.fromISO, range.toISO) : null;
+  const batchErrors = batch?.syncIssues.filter((s) => s.severity === "error") ?? [];
+  const batchWarnings = batch?.syncIssues.filter((s) => s.severity === "warning") ?? [];
 
   // Recent export batches.
   let recentBatches: { file_name: string; record_count: number; created_at: string }[] = [];
@@ -101,6 +107,118 @@ export default async function CompliancePage({
           </ul>
         </div>
       ) : null}
+
+      {/* Full batch generator + sync report (Slice 54) */}
+      <Section
+        title="Full CCRS batch"
+        subtitle="Generates every file a retailer must report — Strain, Area, Product, Inventory, InventoryAdjustment, InventoryTransfer, Sale — in the exact upload order, as one .zip."
+      >
+        {batch ? (
+          <>
+            {/* Sync / data-integrity report */}
+            {batchErrors.length > 0 ? (
+              <div className="mb-3 rounded-xl border border-red-500/40 bg-red-500/[0.07] p-4">
+                <p className="mb-2 text-xs font-black uppercase tracking-[0.12em] text-red-300">
+                  Out of sync — fix before uploading
+                </p>
+                <ul className="space-y-1 text-xs text-red-100/90">
+                  {batchErrors.map((s, i) => (
+                    <li key={i}>
+                      • <span className="font-bold">{s.file}</span>: {s.message}
+                      {s.count ? ` (${s.count})` : ""}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : (
+              <div className="mb-3 rounded-xl border border-[#7ed957]/25 bg-[#7ed957]/[0.05] p-3 text-xs text-[#9be870]">
+                ✓ No blocking sync issues detected — every file’s dependencies resolve.
+              </div>
+            )}
+
+            {batchWarnings.length > 0 ? (
+              <ul className="mb-3 max-h-48 space-y-1 overflow-y-auto rounded-xl border border-orange-500/25 bg-orange-500/[0.05] p-3 text-xs text-orange-100/80">
+                {batchWarnings.slice(0, 30).map((s, i) => (
+                  <li key={i}>
+                    • <span className="font-bold">{s.file}</span>: {s.message}
+                    {s.count ? ` (${s.count})` : ""}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+
+            {/* Per-file record counts, grouped by upload order */}
+            <div className="mb-4 overflow-x-auto rounded-xl border border-white/10">
+              <table className="w-full border-collapse text-sm">
+                <thead>
+                  <tr className="border-b border-white/10 bg-white/[0.03] text-left text-[0.68rem] font-black uppercase tracking-[0.08em] text-white/50">
+                    <th className="px-4 py-2.5">Group</th>
+                    <th className="px-4 py-2.5">File</th>
+                    <th className="px-4 py-2.5 text-right">Records</th>
+                    <th className="px-4 py-2.5 text-right">Skipped</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {batch.files.map((f) => (
+                    <tr key={f.type} className="border-b border-white/5">
+                      <td className="px-4 py-2 text-white/40">{f.group}</td>
+                      <td className="px-4 py-2 font-mono text-xs text-white/80">{f.type}.csv</td>
+                      <td className="px-4 py-2 text-right tabular-nums text-white/80">
+                        {f.recordCount.toLocaleString()}
+                      </td>
+                      <td className="px-4 py-2 text-right tabular-nums text-white/40">
+                        {f.skipped ? f.skipped.toLocaleString() : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t border-white/10 bg-white/[0.02] font-bold">
+                    <td className="px-4 py-2 text-white/50" colSpan={2}>
+                      Total records
+                    </td>
+                    <td className="px-4 py-2 text-right tabular-nums text-white/90">
+                      {batch.totalRecords.toLocaleString()}
+                    </td>
+                    <td className="px-4 py-2" />
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+
+            {canEdit ? (
+              <div className="flex flex-wrap items-center gap-3">
+                <Link
+                  href={`/admin/reports/compliance/batch-export?${qs}`}
+                  prefetch={false}
+                  className="rounded-lg bg-[var(--admin-accent)] px-4 py-2 text-sm font-bold text-black transition hover:opacity-90"
+                >
+                  ⬇ Download full CCRS batch (.zip)
+                </Link>
+                <span className="text-xs text-white/40">
+                  Files are numbered by upload group and include a README with the exact upload order.
+                </span>
+              </div>
+            ) : (
+              <p className="text-xs text-white/40">
+                Generating the batch requires the “Change settings” permission. Ask an admin to download it.
+              </p>
+            )}
+
+            <p className="mt-3 text-xs leading-relaxed text-white/40">
+              Automated integrator uploads (SFTP) run under the LCB-issued integrator credentials — the same generated
+              files. Until integrator credentials are configured, an authorized employee uploads the batch at{" "}
+              <span className="text-white/60">cannabisreporting.lcb.wa.gov</span>. These are drafts: review the figures
+              and the sync report above before uploading.
+            </p>
+          </>
+        ) : (
+          <p className="text-xs text-white/40">Connect Supabase to generate the CCRS batch.</p>
+        )}
+      </Section>
+
+      {/* AI advisor (drafts-only, grounded in the batch summary + sync report) */}
+      {batch ? <CcrsAdvisorPanel aiEnabled={isAiConfigured} sp={sp} /> : null}
 
       {/* Generate */}
       <Section title="Generate CCRS Sale.csv" subtitle="Downloads the exact file CCRS expects for the selected range.">

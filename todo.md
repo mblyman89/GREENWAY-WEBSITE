@@ -17,7 +17,7 @@ Standing rules: AI output = drafts only; migrations applied manually by owner
 - [x] Slice 51 — Loyalty/discount reporting polish (program economics + tiers + code funnel + export). PR #155.
 - [x] Slice 52 — Employees reporting enrichment (work/break, schedule adherence, orders handled, breakdowns, export). PR #156.
 - [x] Slice 53 — Medical reporting enrichment. (PR #157)
-- [ ] Slice 54 — CCRS reporting + automated upload pipeline + AI.
+- [x] Slice 54 — CCRS reporting + automated upload pipeline + AI. (PR #158)
 - [ ] Slice 55 — Excise: LCB payments portal + full LIQ-1295 + clickable review issues.
 - [ ] Slice 56 — Sage 50: report uploads + AI smart-fill + Sage AI chat.
 - [ ] Slice 57 — Inventory types table preload.
