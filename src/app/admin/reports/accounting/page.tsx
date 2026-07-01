@@ -20,6 +20,7 @@ import { listSageUploads, getSageChatHistory } from "@/lib/accounting/sage-helpe
 import { SAGE_REPORT_KINDS, sageReportKindLabel } from "@/lib/accounting/sage-helper-core";
 import { isAiConfigured } from "@/lib/ai/provider";
 import { SageAssistantChat } from "@/components/admin/reports/SageAssistantChat";
+import { ChartOfAccountsValidator } from "@/components/admin/reports/ChartOfAccountsValidator";
 import {
   uploadSageReportAction,
   deleteSageReportAction,
@@ -173,7 +174,7 @@ export default async function AccountingPage({
 
       <Section
         title="Upload reports for Sage import"
-        subtitle="Upload the reports you use to key data into Sage (Cultivera / POS exports, or a Sage report export). CSV/Excel/PDF — a .ptb backup can't be read outside Sage, so export a report instead."
+        subtitle="Upload the reports you use to key data into Sage (Cultivera / POS exports, or a Sage report export). Choose “Sage Chart of Accounts (CHART.CSV)” to validate your mapped GL accounts. CSV/Excel/PDF — a .ptb backup can't be read outside Sage, so export a report instead."
       >
         <form action={uploadSageReportAction} className="flex flex-wrap items-end gap-3">
           <label className="flex flex-col gap-1 text-xs text-white/60">
@@ -236,6 +237,9 @@ export default async function AccountingPage({
                         .map((t) => `${t.header}=${t.total.toLocaleString()}`)
                         .join(" · ")}
                     </div>
+                  ) : null}
+                  {u.report_kind === "chart_of_accounts" ? (
+                    <ChartOfAccountsValidator uploadId={u.id} />
                   ) : null}
                 </div>
                 <form action={deleteSageReportAction}>

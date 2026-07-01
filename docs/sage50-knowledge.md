@@ -55,6 +55,35 @@ Accounts** (and Customer/Vendor lists) **before** transaction journals that refe
 For our General Journal export, every G/L account used must already exist in Sage's Chart
 of Accounts.
 
+## 3a. Chart of Accounts fields (Import/Export) — default file `CHART.CSV`
+
+Source: official Sage 50 help (Chart of Accounts Import/Export fields).
+
+| Field | Import? | Description | Limit |
+| --- | --- | --- | --- |
+| Account ID | **Yes** | Alphanumeric G/L account number | ≤ 15 chars |
+| Account Description | **Yes** | Alphanumeric account description | ≤ 30 chars |
+| Account Type | **Yes** | Whole-number code (see below) | — |
+| Inactive | **Yes** | Boolean `[True]`/`[False]` (True = inactive) | — |
+| 1099 Settings | **Yes** | Whole-number code `0..14` (from Vendor Defaults) | — |
+| Begin/period/prev-yr Debit-Credit-Net totals, Current Balance | No | Export-only | — |
+
+**Account Type codes:** `0`=Cash, `1`=Accounts Receivable, `2`=Inventory,
+`3`=Receivable Retainage, `4`=Other Current Assets, `5`=Fixed Assets,
+`6`=Accumulated Depreciation, `8`=Other Assets, `10`=Accounts Payable,
+`11`=Payable Retainage, `12`=Other Current Liabilities, `14`=Long Term Liabilities,
+`16`=Equity-doesn't close, `18`=Equity-Retained Earnings, `19`=Equity-gets closed,
+`21`=Income, `23`=Cost of Sales, `24`=Expenses.
+
+**Import procedure:** File → Select Import/Export → General Ledger → **Chart of Accounts List**
+→ Import; on the Fields tab check Show for exactly the fields in your file (same order); on
+Options set the path and "First Row Contains Headings" if your file has a header.
+
+**Back-office validation:** upload your `CHART.CSV` on the Accounting (Sage 50) tab and choose
+report type "Sage Chart of Accounts". The back office parses the account IDs and cross-checks
+every G/L account you've mapped in Accounting settings, flagging any that are **missing** or
+**inactive** — so a General Journal import won't fail on a nonexistent account.
+
 ## 4. How our back office produces the file
 
 The "Accounting (Sage 50)" tab builds a **daily General Journal CSV** from completed sales

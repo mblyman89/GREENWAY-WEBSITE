@@ -11,6 +11,7 @@
 
 /** Accepted report file kinds (a .ptb Sage backup is explicitly NOT accepted). */
 export const SAGE_REPORT_KINDS = [
+  { value: "chart_of_accounts", label: "Sage Chart of Accounts (CHART.CSV)" },
   { value: "cultivera_sales", label: "Cultivera — sales export" },
   { value: "cultivera_inventory", label: "Cultivera — inventory export" },
   { value: "pos_summary", label: "POS daily summary" },
@@ -18,6 +19,36 @@ export const SAGE_REPORT_KINDS = [
   { value: "trial_balance", label: "Trial balance export" },
   { value: "other", label: "Other report" },
 ] as const;
+
+/**
+ * Sage 50 Account Type codes (VERIFIED — official Sage 50 help, Chart of
+ * Accounts Import/Export fields). Used to interpret an uploaded CHART.CSV.
+ */
+export const SAGE_ACCOUNT_TYPES: Record<number, string> = {
+  0: "Cash",
+  1: "Accounts Receivable",
+  2: "Inventory",
+  3: "Receivable Retainage",
+  4: "Other Current Assets",
+  5: "Fixed Assets",
+  6: "Accumulated Depreciation",
+  8: "Other Assets",
+  10: "Accounts Payable",
+  11: "Payable Retainage",
+  12: "Other Current Liabilities",
+  14: "Long Term Liabilities",
+  16: "Equity-doesn't close",
+  18: "Equity-Retained Earnings",
+  19: "Equity-gets closed",
+  21: "Income",
+  23: "Cost of Sales",
+  24: "Expenses",
+};
+
+export function sageAccountTypeLabel(code: number | null | undefined): string {
+  if (code == null) return "Unknown";
+  return SAGE_ACCOUNT_TYPES[code] ?? `Type ${code}`;
+}
 
 export type SageReportKind = (typeof SAGE_REPORT_KINDS)[number]["value"];
 
@@ -161,6 +192,161 @@ export function summarizeCsv(text: string, maxRows = 50_000): SageUploadSummary 
 }
 
 // ---------------------------------------------------------------------------
+// Chart of Accounts (CHART.CSV) parsing + GL-mapping validation
+// ---------------------------------------------------------------------------
+
+export type ChartAccount = {
+  id: string; // Account ID (≤15 chars)
+  description: string; // Account Description (≤30 chars)
+  /** Sage Account Type code (0..24) when detected, else null. */
+  typeCode: number | null;
+  typeLabel: string;
+  inactive: boolean;
+};
+
+export type ChartOfAccountsParse = {
+  ok: boolean;
+  accounts: ChartAccount[];
+  /** IDs only, for fast membership checks. */
+  ids: string[];
+  /** Non-fatal notes (e.g. header not recognized -> fell back to positions). */
+  warnings: string[];
+  rowCount: number;
+};
+
+/** Case-insensitive header locator that tolerates spaces/underscores. */
+function findHeaderIndex(headers: string[], candidates: string[]): number {
+  const norm = (s: string) => s.trim().toLowerCase().replace(/[\s_]+/g, " ");
+  const wanted = candidates.map(norm);
+  for (let i = 0; i < headers.length; i += 1) {
+    if (wanted.includes(norm(headers[i]))) return i;
+  }
+  return -1;
+}
+
+function toBool(v: string): boolean {
+  const t = v.trim().toLowerCase();
+  return t === "true" || t === "yes" || t === "1" || t === "[true]" || t === "y";
+}
+
+/**
+ * Parse a Sage 50 Chart of Accounts export (CHART.CSV). VERIFIED field order:
+ * Account ID, Account Description, Account Type, Inactive, ... We locate columns
+ * by header when a header row is present; otherwise fall back to the first four
+ * canonical positions. Only the import-relevant fields are extracted.
+ */
+export function parseChartOfAccounts(text: string, maxRows = 100_000): ChartOfAccountsParse {
+  const lines = text.split(/\r\n|\n|\r/).filter((l) => l.trim().length > 0);
+  const warnings: string[] = [];
+  if (lines.length === 0) {
+    return { ok: false, accounts: [], ids: [], warnings: ["Empty file."], rowCount: 0 };
+  }
+
+  const firstCells = splitCsvLine(lines[0]).map((c) => c.trim());
+  const idxId = findHeaderIndex(firstCells, ["Account ID", "Account Id", "ID"]);
+  const hasHeader = idxId >= 0;
+
+  let iId = 0;
+  let iDesc = 1;
+  let iType = 2;
+  let iInactive = 3;
+  let dataLines = lines;
+
+  if (hasHeader) {
+    iId = idxId;
+    iDesc = findHeaderIndex(firstCells, ["Account Description", "Description"]);
+    iType = findHeaderIndex(firstCells, ["Account Type", "Type"]);
+    iInactive = findHeaderIndex(firstCells, ["Inactive"]);
+    dataLines = lines.slice(1);
+    if (iDesc < 0) iDesc = 1;
+  } else {
+    warnings.push("No header row detected — read columns by canonical position (ID, Description, Type, Inactive).");
+  }
+
+  const accounts: ChartAccount[] = [];
+  const seen = new Set<string>();
+  for (const line of dataLines.slice(0, maxRows)) {
+    const cells = splitCsvLine(line);
+    const id = (cells[iId] ?? "").trim();
+    if (!id) continue;
+    const description = iDesc >= 0 ? (cells[iDesc] ?? "").trim() : "";
+    let typeCode: number | null = null;
+    if (iType >= 0) {
+      const raw = (cells[iType] ?? "").trim();
+      const n = Number(raw);
+      if (raw !== "" && Number.isInteger(n)) typeCode = n;
+    }
+    const inactive = iInactive >= 0 ? toBool(cells[iInactive] ?? "") : false;
+    if (seen.has(id.toLowerCase())) continue;
+    seen.add(id.toLowerCase());
+    accounts.push({ id, description, typeCode, typeLabel: sageAccountTypeLabel(typeCode), inactive });
+  }
+
+  return {
+    ok: accounts.length > 0,
+    accounts,
+    ids: accounts.map((a) => a.id),
+    warnings,
+    rowCount: dataLines.length,
+  };
+}
+
+export type GlMappingCheck = {
+  /** Which store mapping this is (label + the account id it points at). */
+  label: string;
+  accountId: string;
+  /** Present in the uploaded CoA? */
+  exists: boolean;
+  /** If present, is it marked inactive in the CoA? */
+  inactive: boolean;
+  /** The CoA description when found. */
+  description?: string;
+  typeLabel?: string;
+};
+
+export type GlValidationResult = {
+  checks: GlMappingCheck[];
+  missing: GlMappingCheck[];
+  inactive: GlMappingCheck[];
+  allValid: boolean;
+};
+
+/**
+ * Cross-check the store's configured GL account mappings against an uploaded
+ * Chart of Accounts. This is the grounding: Sage REQUIRES that every G/L
+ * account used in an import already exist in the CoA, so we flag any mapping
+ * that points at an account not present (or marked inactive) in the CoA.
+ *
+ * `mappings` is a flat list of {label, accountId} the caller derives from the
+ * AccountingSettings (empty account ids are skipped).
+ */
+export function validateGlMappingAgainstCoa(
+  mappings: { label: string; accountId: string }[],
+  coa: ChartOfAccountsParse,
+): GlValidationResult {
+  const byId = new Map<string, ChartAccount>();
+  for (const a of coa.accounts) byId.set(a.id.trim().toLowerCase(), a);
+
+  const checks: GlMappingCheck[] = [];
+  for (const m of mappings) {
+    const id = m.accountId.trim();
+    if (!id) continue;
+    const found = byId.get(id.toLowerCase());
+    checks.push({
+      label: m.label,
+      accountId: id,
+      exists: Boolean(found),
+      inactive: Boolean(found?.inactive),
+      description: found?.description,
+      typeLabel: found?.typeLabel,
+    });
+  }
+  const missing = checks.filter((c) => !c.exists);
+  const inactive = checks.filter((c) => c.exists && c.inactive);
+  return { checks, missing, inactive, allValid: missing.length === 0 && inactive.length === 0 };
+}
+
+// ---------------------------------------------------------------------------
 // Grounded Sage 50 AI system prompt.
 // ---------------------------------------------------------------------------
 
@@ -187,7 +373,15 @@ IMPORT PROCEDURE:
 File menu -> Select Import/Export -> pick General Ledger -> General Journal -> Import.
 On the Fields tab, check Show for exactly the fields in your file, in the same order (import FAILS if count/order mismatch; use Move to reorder). On the Options tab set the file path; check "First Row Contains Headings" if your file has a header row. Optionally Save the template under a unique name. Click OK. On error Sage reports the problem AND the line number.
 
-IMPORT ORDER: Chart of Accounts (and customer/vendor lists) must exist before importing transaction journals; every G/L account used must already exist.
+CHART OF ACCOUNTS IMPORT FIELDS (default export file CHART.CSV):
+1. Account ID (REQUIRED for import) — alphanumeric G/L account number, up to 15 chars.
+2. Account Description (REQUIRED for import) — alphanumeric, up to 30 chars.
+3. Account Type (REQUIRED for import) — WHOLE NUMBER code: 0=Cash, 1=Accounts Receivable, 2=Inventory, 3=Receivable Retainage, 4=Other Current Assets, 5=Fixed Assets, 6=Accumulated Depreciation, 8=Other Assets, 10=Accounts Payable, 11=Payable Retainage, 12=Other Current Liabilities, 14=Long Term Liabilities, 16=Equity-doesn't close, 18=Equity-Retained Earnings, 19=Equity-gets closed, 21=Income, 23=Cost of Sales, 24=Expenses.
+4. Inactive (importable) — Boolean [True]/[False] (True=Inactive, False=Active).
+5. 1099 Settings (importable) — whole-number code (0..14) from Vendor Defaults.
+   Beginning/period debit-credit-net totals and Current Balance are EXPORT-ONLY (cannot be imported). To import a Chart of Accounts: File -> Select Import/Export -> General Ledger -> Chart of Accounts List -> Import; on the Fields tab check Show for exactly the fields in your file in the same order; on Options set the path and "First Row Contains Headings" if applicable.
+
+IMPORT ORDER: Chart of Accounts (and customer/vendor lists) must exist before importing transaction journals; every G/L account used must already exist. The back office can VALIDATE this: upload your Chart of Accounts (CHART.CSV) here and it cross-checks the account IDs mapped in Accounting settings so a General Journal import won't fail on a missing/inactive account.
 
 OUR BACK OFFICE FILE: the Accounting (Sage 50) tab builds a daily General Journal CSV from completed sales using the store's chart-of-accounts mapping. Each day = one balanced transaction (debits positive, credits negative, summing to zero). Header row: Date, Reference, Transaction Number, G/L Account ID, Description, Amount — so enable "First Row Contains Headings" on import.
 
@@ -264,6 +458,56 @@ export function __runSageHelperCoreTests(): void {
   ok(prompt.includes("Select Import/Export"), "prompt has import steps");
   ok(prompt.includes("License: 412345"), "prompt has extra context");
   ok(prompt.includes("do NOT guess"), "prompt forbids guessing");
+  ok(prompt.includes("CHART.CSV"), "prompt has Chart of Accounts facts");
+
+  // account type labels
+  eq(sageAccountTypeLabel(0), "Cash", "type 0 cash");
+  eq(sageAccountTypeLabel(23), "Cost of Sales", "type 23 cos");
+  eq(sageAccountTypeLabel(999), "Type 999", "unknown type code");
+  eq(sageAccountTypeLabel(null), "Unknown", "null type");
+
+  // parse chart of accounts (with header, mixed order)
+  const coaCsv =
+    "Account ID,Account Description,Account Type,Inactive\n" +
+    "1000,Cash on hand,0,False\n" +
+    "4000,Cannabis Sales,21,False\n" +
+    "2200,Sales Tax Payable,12,False\n" +
+    "9999,Old Account,24,True\n";
+  const coa = parseChartOfAccounts(coaCsv);
+  ok(coa.ok === true, "coa parsed ok");
+  eq(coa.accounts.length, 4, "coa 4 accounts");
+  eq(coa.ids.includes("4000"), true, "coa has 4000");
+  const cash = coa.accounts.find((a) => a.id === "1000");
+  ok(cash !== undefined && cash.typeCode === 0 && cash.typeLabel === "Cash", "coa cash typed");
+  const old = coa.accounts.find((a) => a.id === "9999");
+  ok(old !== undefined && old.inactive === true, "coa inactive flagged");
+
+  // headerless fallback
+  const coaNoHeader = parseChartOfAccounts("1000,Cash,0,False\n4000,Sales,21,False\n");
+  ok(coaNoHeader.ok === true && coaNoHeader.accounts.length === 2, "headerless coa parsed");
+  ok(coaNoHeader.warnings.some((w) => w.includes("canonical position")), "headerless warns");
+
+  // GL mapping validation
+  const val = validateGlMappingAgainstCoa(
+    [
+      { label: "Cash / clearing", accountId: "1000" },
+      { label: "Cannabis sales", accountId: "4000" },
+      { label: "Sales tax payable", accountId: "2200" },
+      { label: "COGS", accountId: "5000" }, // not in CoA
+      { label: "Discounts", accountId: "" }, // skipped
+    ],
+    coa,
+  );
+  eq(val.checks.length, 4, "4 non-empty mappings checked");
+  eq(val.missing.length, 1, "1 missing (5000)");
+  ok(val.missing[0].accountId === "5000", "missing is 5000");
+  ok(val.allValid === false, "not all valid");
+  const allGood = validateGlMappingAgainstCoa([{ label: "Cash", accountId: "1000" }], coa);
+  ok(allGood.allValid === true, "all valid when present");
+  // inactive detection
+  const inact = validateGlMappingAgainstCoa([{ label: "Old", accountId: "9999" }], coa);
+  eq(inact.inactive.length, 1, "inactive mapping detected");
+  ok(inact.allValid === false, "inactive => not valid");
 
   console.log(`sage-helper-core: ${pass} assertions passed`);
 }

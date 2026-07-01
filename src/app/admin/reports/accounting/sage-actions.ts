@@ -9,7 +9,9 @@ import {
   deleteSageUpload,
   askSageAssistant,
   clearSageChatHistory,
+  validateChartOfAccounts,
   type SageAskResult,
+  type ChartValidationOutcome,
 } from "@/lib/accounting/sage-helper";
 
 const BASE = "/admin/reports/accounting";
@@ -73,6 +75,23 @@ export async function deleteSageReportAction(formData: FormData) {
 export async function askSageAssistantAction(question: string, uploadId?: string | null): Promise<SageAskResult> {
   const session = await requirePermission("reports.view");
   return askSageAssistant(question, { id: session.profile.id, email: session.email }, uploadId ?? null);
+}
+
+/** Validate a mapped GL accounts against an uploaded Chart of Accounts. */
+export async function validateChartOfAccountsAction(uploadId: string): Promise<ChartValidationOutcome> {
+  const session = await requirePermission("reports.view");
+  const result = await validateChartOfAccounts(uploadId);
+  if (result.ok) {
+    await recordAudit({
+      actorId: session.profile.id,
+      actorEmail: session.email,
+      action: "sage.coa_validated",
+      entityType: "sage_import_uploads",
+      entityId: uploadId,
+      after: { accounts: result.accountsInCoa, missing: result.validation.missing.length, inactive: result.validation.inactive.length },
+    });
+  }
+  return result;
 }
 
 /** Clear the Sage chat history. */

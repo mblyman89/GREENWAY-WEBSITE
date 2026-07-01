@@ -23,8 +23,12 @@ import {
   fileExtension,
   isSageReportKind,
   sageReportKindLabel,
+  parseChartOfAccounts,
+  validateGlMappingAgainstCoa,
   type SageUploadSummary,
+  type GlValidationResult,
 } from "@/lib/accounting/sage-helper-core";
+import type { AccountingSettings } from "@/lib/accounting/sage50-core";
 
 const SAGE_BUCKET = "sage-imports";
 
@@ -141,6 +145,58 @@ export async function deleteSageUpload(id: string): Promise<{ ok: boolean; error
   if (path) await admin.storage.from(SAGE_BUCKET).remove([path]).catch(() => undefined);
   const { error } = await admin.from("sage_import_uploads").delete().eq("id", id);
   return error ? { ok: false, error: error.message } : { ok: true };
+}
+
+/** Flatten the AccountingSettings GL mappings into label/accountId pairs. */
+export function glMappingsFromSettings(settings: AccountingSettings): { label: string; accountId: string }[] {
+  return [
+    { label: "Cash / clearing", accountId: settings.glCashClearing },
+    { label: "Cannabis sales", accountId: settings.glSalesCannabis },
+    { label: "Non-cannabis sales", accountId: settings.glSalesNonCannabis },
+    { label: "Sales tax payable", accountId: settings.glSalesTaxPayable },
+    { label: "Excise tax payable", accountId: settings.glExciseTaxPayable },
+    { label: "COGS", accountId: settings.glCogs },
+    { label: "Inventory", accountId: settings.glInventory },
+    { label: "Discounts", accountId: settings.glDiscounts },
+  ].filter((m) => m.accountId && m.accountId.trim());
+}
+
+export type ChartValidationOutcome =
+  | { ok: true; accountsInCoa: number; validation: GlValidationResult; warnings: string[] }
+  | { ok: false; error: string };
+
+/**
+ * Download a stored Chart-of-Accounts upload, parse it, and cross-check the
+ * store's configured GL mappings against it (grounded: Sage requires every G/L
+ * account used in an import to already exist in the CoA).
+ */
+export async function validateChartOfAccounts(uploadId: string): Promise<ChartValidationOutcome> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Supabase is not configured." };
+  const admin = createSupabaseAdminClient();
+  const { data: row } = await admin
+    .from("sage_import_uploads")
+    .select("storage_path, file_name")
+    .eq("id", uploadId)
+    .maybeSingle();
+  const path = (row as { storage_path?: string; file_name?: string } | null)?.storage_path;
+  const fileName = (row as { file_name?: string } | null)?.file_name ?? "";
+  if (!path) return { ok: false, error: "Upload not found." };
+
+  const ext = fileExtension(fileName);
+  if (ext !== ".csv" && ext !== ".txt") {
+    return { ok: false, error: "Chart of Accounts must be a CSV/TXT export (CHART.CSV). Excel/PDF can't be parsed here." };
+  }
+
+  const { data: blob, error: dlErr } = await admin.storage.from(SAGE_BUCKET).download(path);
+  if (dlErr || !blob) return { ok: false, error: `Could not read the uploaded file: ${dlErr?.message ?? "unknown error"}` };
+  const text = Buffer.from(await blob.arrayBuffer()).toString("utf8");
+
+  const coa = parseChartOfAccounts(text);
+  if (!coa.ok) return { ok: false, error: "No account rows found — is this the Chart of Accounts export (CHART.CSV)?" };
+
+  const settings = await getAccountingSettings();
+  const validation = validateGlMappingAgainstCoa(glMappingsFromSettings(settings), coa);
+  return { ok: true, accountsInCoa: coa.accounts.length, validation, warnings: coa.warnings };
 }
 
 export async function getSageChatHistory(limit = 40): Promise<SageChatMessage[]> {
