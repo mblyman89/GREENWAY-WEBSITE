@@ -36,3 +36,14 @@ export function isWeedmapsConfigured(): boolean {
   const s = describeWeedmapsRuntime();
   return s.hasMenuId && s.hasAuth;
 }
+
+/**
+ * Load back-office-entered credentials (integration_credentials) then describe
+ * the WeedMaps runtime. Used by the integrations dashboard. Server-only via the
+ * runtime import.
+ */
+export async function describeWeedmapsRuntimeAsync() {
+  const { refreshWeedmapsConfig } = await import("./runtime");
+  await refreshWeedmapsConfig();
+  return describeWeedmapsRuntime();
+}

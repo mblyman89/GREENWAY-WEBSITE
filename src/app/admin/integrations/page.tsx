@@ -3,9 +3,11 @@ import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { Badge, Card } from "@/components/admin/ui";
-import { describeLeaflyRuntime } from "@/lib/leafly/client";
-import { describeWeedmapsRuntime } from "@/lib/weedmaps/client";
+import { describeLeaflyRuntimeAsync } from "@/lib/leafly/client";
+import { describeWeedmapsRuntimeAsync } from "@/lib/weedmaps/client";
 import { getAccountingSettings, missingGlAccounts } from "@/lib/accounting/sage50";
+import { getIntegrationCredentialsView } from "@/lib/integrations/integration-credentials-store";
+import { LeaflyCredentialsForm, WeedmapsCredentialsForm } from "./CredentialsEditor";
 
 export const dynamic = "force-dynamic";
 
@@ -32,8 +34,9 @@ function CredRow({ label, ok, detail }: Row) {
 export default async function IntegrationsPage() {
   await requirePermission("settings.manage");
 
-  const leafly = describeLeaflyRuntime();
-  const weedmaps = describeWeedmapsRuntime();
+  const leafly = await describeLeaflyRuntimeAsync();
+  const weedmaps = await describeWeedmapsRuntimeAsync();
+  const credentials = await getIntegrationCredentialsView();
   const accounting = await getAccountingSettings();
   const missingGl = missingGlAccounts(accounting);
   const sageReady = missingGl.length === 0;
@@ -53,12 +56,28 @@ export default async function IntegrationsPage() {
           steps={[
             "Menu syndication (Leafly, WeedMaps) reads our published menu and is drafts-only until certification is confirmed.",
             "Accounting export builds a Sage 50 General Journal CSV you import into Sage — no live API needed.",
-            "Credentials live in environment variables (never committed); this page shows whether each is present.",
+            "Enter API keys/credentials right here in the Credentials section below — a value saved here overrides the server environment variable. Secrets are stored securely and shown masked.",
           ]}
         >
           Standing rule: nothing is pushed to a third party automatically. Menu pushes wait for the
           owner&apos;s go-ahead and Leafly/WeedMaps certification.
         </HelpPanel>
+
+        {/* Credentials — enter API keys directly from the back office */}
+        <section className="space-y-4">
+          <div>
+            <h2 className="text-base font-bold text-[var(--admin-text)]">Credentials</h2>
+            <p className="text-xs text-[var(--admin-text-muted)]">
+              Enter the keys from your Leafly business login and WeedMaps back office. Anything
+              you save here takes priority over the matching server environment variable. Nothing
+              is sent to Leafly or WeedMaps just by saving credentials.
+            </p>
+          </div>
+          <div className="grid gap-6 lg:grid-cols-2">
+            <LeaflyCredentialsForm view={credentials.leafly} />
+            <WeedmapsCredentialsForm view={credentials.weedmaps} />
+          </div>
+        </section>
 
         <div className="grid gap-6 lg:grid-cols-2">
           {/* Leafly */}
