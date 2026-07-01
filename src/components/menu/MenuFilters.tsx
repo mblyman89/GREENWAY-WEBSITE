@@ -6,7 +6,15 @@ function countFor(category: string) {
 }
 
 export function MenuFilters() {
-  const strainTypes = ["hybrid", "indica", "sativa", "cbd", "unknown"];
+  const strainTypes = [
+    "hybrid",
+    "indica leaning hybrid",
+    "sativa leaning hybrid",
+    "indica",
+    "sativa",
+    "cbd",
+    "unknown",
+  ];
 
   return (
     <aside className="rounded-3xl border border-white/10 bg-zinc-950 p-5 lg:sticky lg:top-28 lg:self-start">
