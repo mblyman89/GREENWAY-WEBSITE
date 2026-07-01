@@ -71,6 +71,17 @@
   **Until this is run, `/admin/medical/intake` scan uploads and the "mark printed"
   action will error (missing bucket/columns).**
 
+- [ ] **`supabase/migrations/0061_seed_owner_hardware.sql`** — Slice 86: seeds the
+  owner's integrated hardware into the EXISTING equipment registry
+  (`public.equipment_assets`, 0046) so it shows on `/admin/equipment`: Star
+  Micronics TSP143IV (receipt printer, `PRN-RECEIPT-01`), Rollo Wireless X1040
+  (label printer, `PRN-LABEL-01`), Canon PIXMA TS3522 (scanner, `SCAN-MEDICAL-01`),
+  and Scotch Thermal Laminator (`LAMINATOR-01`). Data-only INSERT with
+  `on conflict (asset_tag) do nothing` (uses the 0046 partial unique index), so
+  re-running does nothing and never overwrites owner edits. **Optional** — the
+  "Your integrated hardware" card on `/admin/equipment` links to each device even
+  before this runs; this just adds them as editable registry rows.
+
 ---
 
 ### How to run

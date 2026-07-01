@@ -77,6 +77,94 @@ export default async function EquipmentPage({
           and periodically inspected — record the next calibration date so nothing lapses.
         </HelpPanel>
 
+        {/* Integrated hardware — the devices wired into the back office. Seeded
+            as registry rows by migration 0061; links jump to each device's
+            config/usage page. */}
+        <Card>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-bold text-[var(--admin-text)]">Your integrated hardware</h2>
+            <Badge tone="outline">Wired into the back office</Badge>
+          </div>
+          <p className="mb-4 text-xs text-[var(--admin-text-faint)]">
+            These devices are integrated with specific pages. Once migration 0061 is applied they
+            also appear as registry rows below (fill in serial numbers / purchase details there).
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="rounded-[var(--admin-radius)] border border-[var(--admin-border)] p-3">
+              <div className="flex items-center gap-2">
+                <span>🧾</span>
+                <span className="text-sm font-semibold text-[var(--admin-text)]">
+                  Star Micronics TSP143IV
+                </span>
+                <Badge tone="neutral">Receipt printer</Badge>
+              </div>
+              <p className="mt-1 text-xs text-[var(--admin-text-muted)]">
+                Auto-prints online pickup orders via CloudPRNT.
+              </p>
+              <Link
+                href="/admin/settings/receipt-printer"
+                className="mt-1 inline-block text-xs font-semibold text-[var(--admin-accent)] hover:underline"
+              >
+                Configure →
+              </Link>
+            </div>
+            <div className="rounded-[var(--admin-radius)] border border-[var(--admin-border)] p-3">
+              <div className="flex items-center gap-2">
+                <span>🏷</span>
+                <span className="text-sm font-semibold text-[var(--admin-text)]">
+                  Rollo Wireless X1040
+                </span>
+                <Badge tone="neutral">Label printer</Badge>
+              </div>
+              <p className="mt-1 text-xs text-[var(--admin-text-muted)]">
+                4×6 lot / shelf labels. Prints from the browser print dialog (no cloud API).
+              </p>
+              <Link
+                href="/admin/inventory/intake"
+                className="mt-1 inline-block text-xs font-semibold text-[var(--admin-accent)] hover:underline"
+              >
+                Print labels from Vendor Intake →
+              </Link>
+            </div>
+            <div className="rounded-[var(--admin-radius)] border border-[var(--admin-border)] p-3">
+              <div className="flex items-center gap-2">
+                <span>🖨</span>
+                <span className="text-sm font-semibold text-[var(--admin-text)]">
+                  Canon PIXMA TS3522
+                </span>
+                <Badge tone="neutral">Scanner</Badge>
+              </div>
+              <p className="mt-1 text-xs text-[var(--admin-text-muted)]">
+                Scan medical authorization forms to PDF, then upload during intake.
+              </p>
+              <Link
+                href="/admin/medical/intake"
+                className="mt-1 inline-block text-xs font-semibold text-[var(--admin-accent)] hover:underline"
+              >
+                Authorization Intake →
+              </Link>
+            </div>
+            <div className="rounded-[var(--admin-radius)] border border-[var(--admin-border)] p-3">
+              <div className="flex items-center gap-2">
+                <span>📇</span>
+                <span className="text-sm font-semibold text-[var(--admin-text)]">
+                  Scotch Thermal Laminator
+                </span>
+                <Badge tone="neutral">Laminator</Badge>
+              </div>
+              <p className="mt-1 text-xs text-[var(--admin-text-muted)]">
+                Laminates printed medical recognition cards so they last at the register.
+              </p>
+              <Link
+                href="/admin/medical/intake"
+                className="mt-1 inline-block text-xs font-semibold text-[var(--admin-accent)] hover:underline"
+              >
+                Used during Authorization Intake →
+              </Link>
+            </div>
+          </div>
+        </Card>
+
         <div className="grid gap-4 sm:grid-cols-4">
           <StatCard label="Total assets" value={summary.total} accent="muted" />
           <StatCard label="Active" value={summary.active} accent="green" />
