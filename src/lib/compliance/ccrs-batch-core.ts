@@ -109,8 +109,11 @@ export const CCRS_COLUMNS: Record<CcrsRetailerFileType, readonly string[]> = {
     "Quantity",
     "UnitPrice",
     "Discount",
-    "SalesTax",
-    "OtherTax",
+    // A1: the LIVE LCB Sales.csv template uses RetailSalesTax / CannabisExciseTax.
+    // (The older Data Model Manual field list calls them SalesTax / OtherTax, but
+    // the CSV is validated against the template header, so the template wins.)
+    "RetailSalesTax",
+    "CannabisExciseTax",
     "SaleExternalIdentifier",
     "SaleDetailExternalIdentifier",
     "CreatedBy",
@@ -231,9 +234,11 @@ export function __runCcrsBatchCoreTests(): void {
     assert(CCRS_COLUMNS[t].length > 0, `columns for ${t}`);
   }
 
-  // Sale.csv columns must match the existing generator's spec exactly.
+  // Sale.csv columns must match the LIVE LCB template exactly (A1).
   assert(CCRS_COLUMNS.Sale.length === 18, "Sale has 18 columns");
   assert(CCRS_COLUMNS.Sale[0] === "LicenseNumber", "Sale col 0");
+  assert(CCRS_COLUMNS.Sale[9] === "RetailSalesTax", "Sale col 9 = RetailSalesTax");
+  assert(CCRS_COLUMNS.Sale[10] === "CannabisExciseTax", "Sale col 10 = CannabisExciseTax");
   assert(CCRS_COLUMNS.Sale[17] === "Operation", "Sale col 17");
 
   // Ordering: Strain/Area/Product are group 1; Inventory group 2; Sale group 3.
