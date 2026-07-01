@@ -24,6 +24,7 @@ import {
   ContentImageField,
   type MediaChoice,
 } from "@/components/admin/ContentImageField";
+import { resolveImageSpec } from "@/lib/cms/image-spec-core";
 import { ContentFontField } from "@/components/admin/ContentFontField";
 
 export type EditableBlock = {
@@ -198,6 +199,7 @@ export function ContentBlockEditor({
             value={value}
             onChange={setValue}
             mediaChoices={mediaChoices}
+            spec={resolveImageSpec(block.block_key)}
           />
         ) : isFont ? (
           <ContentFontField value={value} onChange={setValue} />

@@ -18,6 +18,8 @@
  * parent <form action={saveDraftAction}> submits it exactly like a text block.
  */
 import { useMemo, useState } from "react";
+import type { ImageSpec } from "@/lib/cms/image-spec-core";
+import { ImageSpecHelper } from "@/components/admin/ImageSpecHelper";
 
 export type MediaChoice = {
   id: string;
@@ -30,10 +32,13 @@ export function ContentImageField({
   value,
   onChange,
   mediaChoices,
+  spec,
 }: {
   value: string;
   onChange: (next: string) => void;
   mediaChoices: MediaChoice[];
+  /** Optional Canva-ready sizing hint for this slot. */
+  spec?: ImageSpec;
 }) {
   const [picking, setPicking] = useState(false);
   const [filter, setFilter] = useState("");
@@ -112,6 +117,9 @@ export function ContentImageField({
           />
         </div>
       </div>
+
+      {/* Canva-ready sizing hint for this slot */}
+      {spec && <ImageSpecHelper spec={spec} />}
 
       {/* Media picker grid */}
       {picking && (
