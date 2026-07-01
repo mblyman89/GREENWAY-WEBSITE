@@ -437,3 +437,182 @@ export async function loyaltySummary(): Promise<{
   );
   return { accounts: accounts ?? 0, pointsOutstanding, codesIssued: codes ?? 0 };
 }
+
+// ---------------------------------------------------------------------------
+// Customizer editor rows + write helpers (Slice 67 — item 2)
+// ---------------------------------------------------------------------------
+export type TierEditRow = LoyaltyTier & { sortOrder: number; isActive: boolean };
+export type PromoEditRow = LoyaltyPromotion & { name: string; notes: string | null };
+
+/** All tiers (including inactive) with editor fields, ordered for display. */
+export async function listTiersForEdit(): Promise<TierEditRow[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  const admin = createSupabaseAdminClient();
+  const { data } = await admin
+    .from("loyalty_tiers")
+    .select("*")
+    .order("min_points", { ascending: true });
+  return ((data as Record<string, unknown>[] | null) ?? []).map((r) => ({
+    id: String(r.id),
+    name: String(r.name),
+    minPoints: Number(r.min_points),
+    discountBps: Number(r.discount_bps),
+    sortOrder: Number(r.sort_order ?? 0),
+    isActive: Boolean(r.is_active),
+  }));
+}
+
+/** All promotions with editor fields (name + notes), newest first. */
+export async function listPromotionsForEdit(): Promise<PromoEditRow[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  const admin = createSupabaseAdminClient();
+  const { data } = await admin
+    .from("loyalty_promotions")
+    .select("*")
+    .order("created_at", { ascending: false });
+  return ((data as Record<string, unknown>[] | null) ?? []).map((r) => ({
+    id: String(r.id),
+    name: String(r.name),
+    kind: String(r.kind) as LoyaltyPromotion["kind"],
+    multiplierBps: Number(r.multiplier_bps),
+    flatBonusPoints: Number(r.flat_bonus_points),
+    startsAt: (r.starts_at as string | null) ?? null,
+    endsAt: (r.ends_at as string | null) ?? null,
+    hourStart: r.hour_start == null ? null : Number(r.hour_start),
+    hourEnd: r.hour_end == null ? null : Number(r.hour_end),
+    isActive: Boolean(r.is_active),
+    notes: (r.notes as string | null) ?? null,
+  }));
+}
+
+/**
+ * Update the active program configuration. Keeps a single active row; if none
+ * exists yet, inserts one. Returns the persisted config.
+ */
+export async function updateConfig(
+  cfg: {
+    pointsPerDollar: number;
+    pointValueMinor: number;
+    minRedeemPoints: number;
+    signupBonusPoints: number;
+    codeExpiryDays: number | null;
+    notes?: string | null;
+  },
+  actorId: string | null,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Supabase not configured" };
+  const admin = createSupabaseAdminClient();
+  const payload = {
+    points_per_dollar: cfg.pointsPerDollar,
+    point_value_minor: cfg.pointValueMinor,
+    min_redeem_points: cfg.minRedeemPoints,
+    signup_bonus_points: cfg.signupBonusPoints,
+    code_expiry_days: cfg.codeExpiryDays,
+    notes: cfg.notes ?? null,
+    updated_by: actorId,
+    is_active: true,
+  };
+  const { data: existing } = await admin
+    .from("loyalty_config")
+    .select("id")
+    .eq("is_active", true)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (existing?.id) {
+    const { error } = await admin.from("loyalty_config").update(payload).eq("id", existing.id);
+    if (error) return { ok: false, error: error.message };
+  } else {
+    const { error } = await admin
+      .from("loyalty_config")
+      .insert({ ...payload, created_by: actorId });
+    if (error) return { ok: false, error: error.message };
+  }
+  return { ok: true };
+}
+
+/** Create or update a tier. */
+export async function upsertTier(tier: {
+  id?: string | null;
+  name: string;
+  minPoints: number;
+  discountBps: number;
+  sortOrder?: number;
+  isActive?: boolean;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Supabase not configured" };
+  const admin = createSupabaseAdminClient();
+  const payload = {
+    name: tier.name,
+    min_points: tier.minPoints,
+    discount_bps: tier.discountBps,
+    sort_order: tier.sortOrder ?? tier.minPoints,
+    is_active: tier.isActive ?? true,
+  };
+  if (tier.id) {
+    const { error } = await admin.from("loyalty_tiers").update(payload).eq("id", tier.id);
+    if (error) return { ok: false, error: error.message };
+  } else {
+    const { error } = await admin.from("loyalty_tiers").insert(payload);
+    if (error) return { ok: false, error: error.message };
+  }
+  return { ok: true };
+}
+
+/** Soft-delete a tier (mark inactive) so historical assignments stay intact. */
+export async function deactivateTier(id: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Supabase not configured" };
+  const admin = createSupabaseAdminClient();
+  const { error } = await admin.from("loyalty_tiers").update({ is_active: false }).eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/** Create or update a promotion. */
+export async function upsertPromotion(promo: {
+  id?: string | null;
+  name: string;
+  kind: LoyaltyPromotion["kind"];
+  multiplierBps: number;
+  flatBonusPoints: number;
+  hourStart: number | null;
+  hourEnd: number | null;
+  isActive: boolean;
+  notes?: string | null;
+  createdBy?: string | null;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Supabase not configured" };
+  const admin = createSupabaseAdminClient();
+  const payload = {
+    name: promo.name,
+    kind: promo.kind,
+    multiplier_bps: promo.multiplierBps,
+    flat_bonus_points: promo.flatBonusPoints,
+    hour_start: promo.hourStart,
+    hour_end: promo.hourEnd,
+    is_active: promo.isActive,
+    notes: promo.notes ?? null,
+  };
+  if (promo.id) {
+    const { error } = await admin.from("loyalty_promotions").update(payload).eq("id", promo.id);
+    if (error) return { ok: false, error: error.message };
+  } else {
+    const { error } = await admin
+      .from("loyalty_promotions")
+      .insert({ ...payload, created_by: promo.createdBy ?? null });
+    if (error) return { ok: false, error: error.message };
+  }
+  return { ok: true };
+}
+
+/** Toggle a promotion active/inactive. */
+export async function setPromotionActive(
+  id: string,
+  isActive: boolean,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Supabase not configured" };
+  const admin = createSupabaseAdminClient();
+  const { error } = await admin.from("loyalty_promotions").update({ is_active: isActive }).eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
