@@ -27,6 +27,8 @@ import {
   validateProductClassification,
   clampText,
   classifyWarning,
+  verifySaleNumericColumns,
+  splitCsvLine,
   CCRS_PRODUCT_NAME_MAX,
   CCRS_PRODUCT_DESCRIPTION_MAX,
   type CcrsRetailerFileType,
@@ -474,6 +476,20 @@ export async function buildCcrsBatch(fromISO: string, toISO: string): Promise<Cc
       message: "Inventory lots reference products not present in the published menu (Product.csv).",
       count: orphanLotProducts.size,
     });
+  }
+
+  // Slice 96: numeric-column safety on the EMITTED Sale rows. Parse the assembled
+  // Sale csv's data rows (skip the 3-row header + column row) and flag any
+  // negative/NaN/mis-formatted Quantity or money value. Defense-in-depth — the
+  // builder already skips bad lines, but this guarantees the file the LCB sees is
+  // numerically sound. Never rewrites values.
+  const saleFile = files.find((f) => f.type === "Sale");
+  if (saleFile && saleFile.recordCount > 0) {
+    const saleLines = saleFile.csv.replace(/\r\n$/, "").split("\r\n").slice(4);
+    const saleRows = saleLines.map((l) => splitCsvLine(l));
+    for (const p of verifySaleNumericColumns(saleRows)) {
+      syncIssues.push({ severity: p.severity, file: "Sale", message: p.message });
+    }
   }
 
   // Carry each file's own warnings up as sync issues with HONEST severity
