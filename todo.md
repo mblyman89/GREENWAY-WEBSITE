@@ -108,3 +108,14 @@ see `docs/COMMAND_CENTER_ENHANCEMENTS_TASKLIST.md`.
 
 ## Remaining 6 slices to complete this run (owner-directed): 73, 74, 75, B, C, D
 - [x] Slice A — FLUX 2 pipeline (PR #178) ✅
+
+## BATCH CCRS-REMEDIATION — full-scope CCRS compliance audit fixes (Slices 87–92)
+> Owner (verbatim): "Thank you for the findings. We need to fix them all. Please put together a very comprehensive task list and roadmap to working them all out. Make sure to add to the standing rules to always check and satisfy CCRS compliance. Then please proceed through each one, tackling 6 slices for this round. Be methodical, go slow and make certain CCRS is respected and adhered to strictly with all the necessary guard rails set up to protect me. I trust your judgement so please do the profession and expert thing. Keep me safe. Please proceed."
+> Audit: docs/CCRS_COMPLIANCE_AUDIT.md (11 actionable findings, 4 CRITICAL). Roadmap: docs/CCRS_REMEDIATION_ROADMAP.md. New binding standing rule added to AGENTS.md (🔴 CCRS COMPLIANCE — ALWAYS CHECK AND SATISFY).
+- [x] Slice 0 (planning) — standing rule + audit doc + roadmap + todo (this PR)
+- [ ] Slice 87 — Sale.csv conformance: RetailSalesTax/CannabisExciseTax names + 3-row header + \r\n + one column source of truth (A1/A2/A3/A6) — CRITICAL
+- [ ] Slice 88 — InventoryAdjustment.csv: add missing ExternalIdentifier column + 3-row header + \r\n (A4/A5) — CRITICAL
+- [ ] Slice 89 — Pacific-time CCRS dates everywhere (B3) — HIGH
+- [ ] Slice 90 — SaleType RecreationalMedical off orders.medical (B1) — HIGH
+- [ ] Slice 91 — StrainType enum guardrail Indica/Sativa/Hybrid (B2) — HIGH
+- [ ] Slice 92 — Product InventoryCategory/Type enum + text-length guardrails (C1/C2) — HIGH/MED
