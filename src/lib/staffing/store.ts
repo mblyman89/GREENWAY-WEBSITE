@@ -9,6 +9,8 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { punchMinutes, businessDayFor } from "@/lib/staffing/time";
+import { pacificWallTimeToUtcISO } from "@/lib/reports/timezone";
+import { type Hm, shiftDurationMinutes } from "@/lib/staffing/schedule-core";
 
 export type Employee = {
   id: string;
@@ -236,4 +238,161 @@ export async function listRecentShifts(limit = 60): Promise<(Shift & { employee_
   const { data: emps } = await admin.from("employees").select("id, full_name").in("id", ids);
   const byId = new Map(((emps as { id: string; full_name: string }[] | null) ?? []).map((e) => [e.id, e.full_name]));
   return shifts.map((s) => ({ ...s, employee_name: byId.get(s.employee_id) ?? "—" }));
+}
+
+// ---------------------------------------------------------------------------
+// Schedule builder (Slice 69 — item 4)
+// ---------------------------------------------------------------------------
+
+/** SCHEDULED shifts for a Pacific week [startYmd, endYmd] inclusive. */
+export async function listScheduledShiftsForWeek(
+  startYmd: string,
+  endYmd: string,
+): Promise<Shift[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  const admin = createSupabaseAdminClient();
+  const { data } = await admin
+    .from("shifts")
+    .select("*")
+    .gte("business_day", startYmd)
+    .lte("business_day", endYmd)
+    .order("business_day", { ascending: true })
+    .order("scheduled_start", { ascending: true });
+  return (data as Shift[] | null) ?? [];
+}
+
+/** Create a SCHEDULED shift; converts Pacific wall times to UTC for storage. */
+export async function createScheduledShift(input: {
+  employeeId: string;
+  businessDay: string;
+  shiftRole: Shift["shift_role"];
+  start: Hm;
+  end: Hm;
+  notes?: string | null;
+}): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Supabase not configured" };
+  const admin = createSupabaseAdminClient();
+  const startISO = pacificWallTimeToUtcISO(input.businessDay, {
+    h: input.start.h,
+    m: input.start.m,
+    s: 0,
+    ms: 0,
+  });
+  // If the end wraps past midnight, the end lands on the next calendar day.
+  const endsNextDay = shiftDurationMinutes(input.start, input.end) > 0 && input.end.h * 60 + input.end.m <= input.start.h * 60 + input.start.m;
+  const endYmd = endsNextDay ? nextYmd(input.businessDay) : input.businessDay;
+  const endISO = pacificWallTimeToUtcISO(endYmd, { h: input.end.h, m: input.end.m, s: 0, ms: 0 });
+
+  const { data, error } = await admin
+    .from("shifts")
+    .insert({
+      employee_id: input.employeeId,
+      business_day: input.businessDay,
+      shift_role: input.shiftRole,
+      status: "scheduled",
+      scheduled_start: startISO,
+      scheduled_end: endISO,
+      notes: input.notes ?? null,
+    })
+    .select("id")
+    .single();
+  if (error || !data) return { ok: false, error: error?.message ?? "Could not create shift." };
+  return { ok: true, id: (data as { id: string }).id };
+}
+
+/** Update a SCHEDULED shift's times/role/notes. */
+export async function updateScheduledShift(input: {
+  id: string;
+  businessDay: string;
+  shiftRole: Shift["shift_role"];
+  start: Hm;
+  end: Hm;
+  notes?: string | null;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Supabase not configured" };
+  const admin = createSupabaseAdminClient();
+  const startISO = pacificWallTimeToUtcISO(input.businessDay, { h: input.start.h, m: input.start.m, s: 0, ms: 0 });
+  const endsNextDay = input.end.h * 60 + input.end.m <= input.start.h * 60 + input.start.m;
+  const endYmd = endsNextDay ? nextYmd(input.businessDay) : input.businessDay;
+  const endISO = pacificWallTimeToUtcISO(endYmd, { h: input.end.h, m: input.end.m, s: 0, ms: 0 });
+  const { error } = await admin
+    .from("shifts")
+    .update({
+      shift_role: input.shiftRole,
+      scheduled_start: startISO,
+      scheduled_end: endISO,
+      notes: input.notes ?? null,
+    })
+    .eq("id", input.id)
+    .eq("status", "scheduled");
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/** Delete a SCHEDULED shift (only if not yet opened/worked). */
+export async function deleteScheduledShift(id: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Supabase not configured" };
+  const admin = createSupabaseAdminClient();
+  const { error } = await admin.from("shifts").delete().eq("id", id).eq("status", "scheduled");
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/**
+ * Copy every SCHEDULED shift from one Pacific week onto another, shifting each
+ * shift by the same number of days. Idempotency is the caller's concern; this
+ * inserts fresh scheduled rows. Returns how many were copied.
+ */
+export async function copyWeekSchedule(
+  fromMondayYmd: string,
+  toMondayYmd: string,
+): Promise<{ ok: true; copied: number } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Supabase not configured" };
+  const admin = createSupabaseAdminClient();
+  const fromEnd = addDaysYmdLocal(fromMondayYmd, 6);
+  const source = await listScheduledShiftsForWeek(fromMondayYmd, fromEnd);
+  const scheduled = source.filter((s) => s.status === "scheduled");
+  if (scheduled.length === 0) return { ok: true, copied: 0 };
+
+  const dayOffset = diffDaysYmd(fromMondayYmd, toMondayYmd);
+  const rows = scheduled.map((s) => {
+    const newDay = addDaysYmdLocal(s.business_day, dayOffset);
+    const newStart = s.scheduled_start ? shiftISOByDays(s.scheduled_start, dayOffset) : null;
+    const newEnd = s.scheduled_end ? shiftISOByDays(s.scheduled_end, dayOffset) : null;
+    return {
+      employee_id: s.employee_id,
+      business_day: newDay,
+      shift_role: s.shift_role,
+      status: "scheduled" as const,
+      scheduled_start: newStart,
+      scheduled_end: newEnd,
+      notes: s.notes,
+    };
+  });
+  const { error } = await admin.from("shifts").insert(rows);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, copied: rows.length };
+}
+
+// -- small local date helpers (kept private to avoid importing client core) --
+function addDaysYmdLocal(ymd: string, days: number): string {
+  const [y, mo, d] = ymd.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, mo - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + days);
+  return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}-${String(dt.getUTCDate()).padStart(2, "0")}`;
+}
+function nextYmd(ymd: string): string {
+  return addDaysYmdLocal(ymd, 1);
+}
+function diffDaysYmd(a: string, b: string): number {
+  const [ay, am, ad] = a.split("-").map(Number);
+  const [by, bm, bd] = b.split("-").map(Number);
+  const ams = Date.UTC(ay, am - 1, ad);
+  const bms = Date.UTC(by, bm - 1, bd);
+  return Math.round((bms - ams) / 86400000);
+}
+function shiftISOByDays(iso: string, days: number): string {
+  const dt = new Date(iso);
+  dt.setUTCDate(dt.getUTCDate() + days);
+  return dt.toISOString();
 }
