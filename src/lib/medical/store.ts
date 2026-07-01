@@ -13,8 +13,9 @@ import {
   type MedTaxSettings,
   DEFAULT_MED_TAX_SETTINGS,
   cardValidity,
-  canIssueCard,
 } from "@/lib/medical/tax";
+import { validateAuthorizationIssuance } from "@/lib/medical/medical-authorization-core";
+import { verifyExemptSaleRecord } from "@/lib/medical/exempt-sale-record-core";
 
 // ---------------------------------------------------------------------------
 // Row types
@@ -191,11 +192,19 @@ export async function createAuthorization(
   actorId: string | null,
 ): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
   if (!isSupabaseServiceConfigured) return { ok: false, error: "Supabase not configured" };
-  if (!canIssueCard(input.checklist)) {
-    return {
-      ok: false,
-      error: "All authorization-form checks (complete/signed, tamper-resistant, identity, embossed seal) must be verified before issuing a card.",
-    };
+  // Slice 100 — full issuance guardrail: the DOH 608-048 four checks PLUS the
+  // data-integrity rules (UPID required when in-MCR, effective<=expiration, not
+  // already expired, valid holder type). Blocks bad cards with precise reasons.
+  const issuance = validateAuthorizationIssuance({
+    uniquePatientIdentifier: input.uniquePatientIdentifier ?? null,
+    holderType: input.holderType,
+    effectiveOn: input.effectiveOn ?? null,
+    expiresOn: input.expiresOn ?? null,
+    inDohDatabase: input.inDohDatabase,
+    checklist: input.checklist,
+  });
+  if (!issuance.ok) {
+    return { ok: false, error: issuance.errors.join(" ") };
   }
   const admin = createSupabaseAdminClient();
   const { data, error } = await admin
@@ -332,6 +341,26 @@ export async function recordExemptSale(
   actorId: string | null,
 ): Promise<{ ok: boolean; error?: string }> {
   if (!isSupabaseServiceConfigured) return { ok: false, error: "Supabase not configured" };
+  // Slice 103 — WAC 314-55-090(2) completeness guardrail: an EXCISE-exempt sale
+  // record must carry date + UPID + card effective/expiration + product + price
+  // before we persist it (it must survive a 5-yr audit). Sales-tax-only exempt
+  // rows (exciseTaxExempt === false) are not held to this ledger standard.
+  const completeness = verifyExemptSaleRecord({
+    saleDate: new Date().toISOString().slice(0, 10),
+    uniquePatientIdentifier: input.uniquePatientIdentifier,
+    cardEffectiveOn: input.cardEffectiveOn ?? null,
+    cardExpiresOn: input.cardExpiresOn ?? null,
+    productSku: input.productSku,
+    productName: input.productName ?? null,
+    salesPriceMinor: input.salesPriceMinor,
+    exciseTaxExempt: input.exciseTaxExempt,
+  });
+  if (!completeness.ok) {
+    return {
+      ok: false,
+      error: `Excise-exempt sale record is missing required WAC 314-55-090(2) field(s): ${completeness.missing.join(", ")}.`,
+    };
+  }
   const admin = createSupabaseAdminClient();
   const { error } = await admin.from("medical_exempt_sales").insert({
     order_id: input.orderId ?? null,
