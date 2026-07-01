@@ -244,6 +244,13 @@ export default async function ManifestReviewPage({
                         </span>
                       )}
                     </div>
+                    <Link
+                      href={`/admin/inventory/lots/${l.id}/label`}
+                      target="_blank"
+                      className="mt-1 inline-block text-[11px] font-semibold text-[var(--admin-accent)] underline hover:brightness-110"
+                    >
+                      🏷 Print 4×6 label
+                    </Link>
                   </td>
                   <td className="px-4 py-3 text-right text-[var(--admin-text-muted)]">{fmtQty(l.received_qty, l.unit)}</td>
                   <td className="px-4 py-3 text-center">
