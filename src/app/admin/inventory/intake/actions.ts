@@ -126,6 +126,7 @@ export async function updateManifestTransportAction(
       departed_at: str("departed_at"),
       arrived_at: str("arrived_at"),
       route_notes: str("route_notes"),
+      eta_date: str("eta_date"),
     },
     session.userId,
   );

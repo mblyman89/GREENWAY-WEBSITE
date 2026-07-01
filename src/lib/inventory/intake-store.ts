@@ -21,6 +21,12 @@ import type { InboundManifest, ManifestTransportInput } from "@/lib/inventory/ty
 import { seedDraftsForManifest } from "@/lib/inventory/catalog-drafts";
 import { archiveCoasForManifest } from "@/lib/inventory/coa-archive";
 import { deriveInventoryExternalId } from "@/lib/compliance/ccrs-identifiers";
+import {
+  countStages,
+  emptyStageCounts,
+  normalizeEtaInput,
+  type StageCounts,
+} from "@/lib/inventory/manifest-pipeline-core";
 
 export async function listManifests(opts?: {
   status?: string;
@@ -38,23 +44,18 @@ export async function listManifests(opts?: {
   return (data as InboundManifest[] | null) ?? [];
 }
 
-export async function countManifestsByStatus(): Promise<{
-  pending: number;
-  accepted: number;
-  rejected: number;
-}> {
-  const empty = { pending: 0, accepted: 0, rejected: 0 };
-  if (!isSupabaseServiceConfigured) return empty;
+/**
+ * Full lifecycle counts across every stage (pending / in_transit / received /
+ * accepted / rejected) plus the `open` and `awaitingIntake` rollups. This is a
+ * superset of the old {pending, accepted, rejected} return, so existing callers
+ * keep working while the pipeline dashboard gets the interim states too.
+ */
+export async function countManifestsByStatus(): Promise<StageCounts> {
+  if (!isSupabaseServiceConfigured) return emptyStageCounts();
   const admin = createSupabaseAdminClient();
   const { data } = await admin.from("inbound_manifests").select("status").limit(2000);
   const rows = (data as { status: string }[] | null) ?? [];
-  const out = { ...empty };
-  for (const r of rows) {
-    if (r.status === "pending") out.pending += 1;
-    else if (r.status === "accepted") out.accepted += 1;
-    else if (r.status === "rejected") out.rejected += 1;
-  }
-  return out;
+  return countStages(rows.map((r) => r.status));
 }
 
 /** Try to match a free-text vendor label to an existing vendor row. */
@@ -435,6 +436,7 @@ export async function updateManifestTransport(
     departed_at: cleanTs(input.departed_at),
     arrived_at: cleanTs(input.arrived_at),
     route_notes: clean(input.route_notes),
+    eta_date: normalizeEtaInput(input.eta_date),
     transport_recorded_by: actorId,
     transport_recorded_at: new Date().toISOString(),
     updated_by: actorId,

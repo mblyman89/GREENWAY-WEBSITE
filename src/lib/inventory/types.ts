@@ -23,8 +23,15 @@ export type InboundManifest = {
   source_format: string;
   /** Captured COA references (snapshot for the KB). */
   coa_links: ManifestCoaLink[];
-  status: string; // pending | accepted | rejected
+  status: string; // pending | in_transit | received | accepted | rejected
   notes: string | null;
+  // --- Lifecycle timestamps + ETA (Slice 18/74, migration 0032). All nullable. ---
+  in_transit_at: string | null;
+  received_at: string | null;
+  accepted_at: string | null;
+  rejected_at: string | null;
+  /** Expected arrival date (YYYY-MM-DD) for an in-transit manifest. */
+  eta_date: string | null;
   // --- Transport / chain-of-custody (Slice 33, migration 0044). All nullable. ---
   transporter_name: string | null;
   transporter_license: string | null;
@@ -56,6 +63,8 @@ export type ManifestTransportInput = {
   departed_at: string | null;
   arrived_at: string | null;
   route_notes: string | null;
+  /** Expected arrival date (YYYY-MM-DD); surfaced for in-transit tracking. */
+  eta_date: string | null;
 };
 
 export type LabResult = {
