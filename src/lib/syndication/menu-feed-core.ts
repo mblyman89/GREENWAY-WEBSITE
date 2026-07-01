@@ -55,7 +55,20 @@ export type FeedSourceItem = {
   variants: { source_variant_id: string; label: string; price_minor_units: number; inventory_level: number }[];
 };
 
-const VALID_STRAIN = new Set(["indica", "sativa", "hybrid", "cbd"]);
+// Our own (granular) strain vocabulary for the website + menu filters. The two
+// "leaning" values are display-only classifications for shoppers; they are
+// COLLAPSED to a CCRS-valid base (Indica/Sativa/Hybrid) on CCRS export — the
+// CCRS batch normalizer already maps anything containing "hybrid" to Hybrid,
+// so "indica leaning hybrid"/"sativa leaning hybrid" export correctly as
+// Hybrid (verified against the CCRS Data Model Manual).
+const VALID_STRAIN = new Set([
+  "indica",
+  "sativa",
+  "hybrid",
+  "indica leaning hybrid",
+  "sativa leaning hybrid",
+  "cbd",
+]);
 
 export function normalizeStrainType(value: string | null | undefined): string {
   const v = (value ?? "").trim().toLowerCase();

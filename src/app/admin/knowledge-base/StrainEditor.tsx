@@ -5,7 +5,14 @@ import { Button } from "@/components/admin/ui/Button";
 import type { KbStrainFull } from "@/lib/ai/kb/store";
 import { upsertStrainAction, toggleStrainAction } from "./actions";
 
-const STRAIN_TYPES = ["hybrid", "indica", "sativa", "unknown"] as const;
+const STRAIN_TYPES = [
+  "hybrid",
+  "indica leaning hybrid",
+  "sativa leaning hybrid",
+  "indica",
+  "sativa",
+  "unknown",
+] as const;
 
 const inputCls =
   "mt-1 w-full rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-bg)] px-3 py-2 text-sm text-[var(--admin-text)]";

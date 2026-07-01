@@ -12,6 +12,8 @@ import {
   type SendableNewsletter,
 } from "@/lib/cms/newsletter-send-store";
 import { testSendNewsletterAction, broadcastNewsletterAction } from "./actions";
+import { getNewsletterStats } from "@/lib/reports/newsletter-stats";
+import { NewsletterStatsSection } from "@/components/admin/reports/NewsletterStatsSection";
 import { Button } from "@/components/admin/ui/Button";
 import { Input } from "@/components/admin/ui/Field";
 import { StatusPill, EmptyState } from "@/components/admin/ux";
@@ -51,10 +53,15 @@ export default async function NewsletterSendPage({
   }
 
   const cfg = newsletterSendConfig();
-  const [newsletters, recipients, history] = await Promise.all([
+  // Engagement window: trailing 90 days. Reuses the same stats engine that
+  // powers Reports → Customers → Newsletter Statistics (no new tracking).
+  const engagementFromISO = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+  const engagementToISO = new Date().toISOString();
+  const [newsletters, recipients, history, engagement] = await Promise.all([
     listSendableNewsletters(),
     getRecipientStats(),
     listSendHistory(20),
+    getNewsletterStats(engagementFromISO, engagementToISO),
   ]);
 
   const sendable = newsletters.filter((n) => n.status === "published" && n.pdfUrl);
@@ -126,6 +133,24 @@ export default async function NewsletterSendPage({
           <StatCard label="Loyalty recipients" value={recipients.total} accent="muted" />
           <StatCard label="From address" value={cfg.from ? "Set" : "Not set"} accent={cfg.from ? "green" : "orange"} />
         </div>
+
+        {/* Engagement (last 90 days). Same data as Reports → Customers →
+            Newsletter Statistics, surfaced here where you send from. */}
+        <section className="space-y-3">
+          <div className="flex items-baseline justify-between">
+            <h2 className="text-sm font-semibold text-white">Engagement · last 90 days</h2>
+            <Link
+              href="/admin/reports/customers"
+              className="text-xs font-medium text-[var(--admin-accent)] hover:underline"
+            >
+              Full report →
+            </Link>
+          </div>
+          <NewsletterStatsSection
+            stats={engagement}
+            exportHref="/admin/reports/customers/newsletter-export"
+          />
+        </section>
 
         {sendable.length === 0 ? (
           <EmptyState

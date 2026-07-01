@@ -28,6 +28,7 @@ const ADMIN_EDIT_BASE = "/admin/content";
 export function PreviewEditOverlay({ path = "/" }: { path?: string }) {
   const [hotspots, setHotspots] = useState<Hotspot[]>([]);
   const [inFrame, setInFrame] = useState(false);
+  const [badgeOpen, setBadgeOpen] = useState(false);
 
   useEffect(() => {
     setInFrame(window.self !== window.top);
@@ -77,15 +78,44 @@ export function PreviewEditOverlay({ path = "/" }: { path?: string }) {
 
   return (
     <>
-      {/* Preview banner */}
-      <div className="fixed left-0 right-0 top-0 z-[9998] flex items-center justify-center gap-3 bg-[#7ed957] px-4 py-1.5 text-xs font-semibold text-black">
-        <span>👁 Preview mode — you&apos;re seeing unpublished drafts</span>
-        <a
-          href={`/api/admin/preview/disable?path=${encodeURIComponent(path)}`}
-          className="rounded bg-black/15 px-2 py-0.5 hover:bg-black/25"
+      {/* Preview badge — bottom-right, glowing. Replaces the old full-width top
+          banner so it no longer covers the header tabs. Click to expand for the
+          Exit control; the glow signals preview mode at a glance. */}
+      <div className="fixed bottom-4 right-4 z-[9998] flex flex-col items-end gap-2">
+        {badgeOpen && (
+          <div className="w-64 rounded-xl border border-[#7ed957]/50 bg-black/90 p-3 text-xs text-white shadow-2xl shadow-black/50 backdrop-blur">
+            <p className="font-semibold text-[#7ed957]">👁 Preview mode</p>
+            <p className="mt-1 leading-relaxed text-white/70">
+              You&apos;re seeing unpublished drafts. Changes here are not live
+              until you publish them in the admin.
+            </p>
+            <a
+              href={`/api/admin/preview/disable?path=${encodeURIComponent(path)}`}
+              className="mt-3 block rounded-lg bg-[#7ed957] px-3 py-1.5 text-center text-xs font-semibold text-black transition hover:bg-[#94e570]"
+            >
+              Exit preview
+            </a>
+            <p className="mt-2 text-center text-[10px] text-white/40">
+              To re-enter preview later, open the page from the admin editor.
+            </p>
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={() => setBadgeOpen((v) => !v)}
+          aria-label={badgeOpen ? "Collapse preview badge" : "Preview mode — expand for options"}
+          title="Preview mode"
+          className="gw-preview-badge flex items-center gap-2 rounded-full px-3 py-2 text-xs font-bold text-black transition"
         >
-          Exit preview
-        </a>
+          <span aria-hidden="true">👁</span>
+          <span>Preview</span>
+          <span
+            className={`text-[9px] transition-transform ${badgeOpen ? "rotate-180" : ""}`}
+            aria-hidden="true"
+          >
+            ▾
+          </span>
+        </button>
       </div>
 
       {/* Edit hotspots */}

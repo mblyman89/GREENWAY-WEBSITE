@@ -50,6 +50,30 @@ export function AdminTopNav({ role, fullName, email }: Props) {
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const barRef = useRef<HTMLDivElement | null>(null);
+  // Hover-intent: delay closing so the pointer can travel from the tab to its
+  // dropdown without the menu vanishing (the previous bug). A short grace
+  // period + no dead-space gap keeps the menu comfortably usable.
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const cancelClose = () => {
+    if (closeTimer.current) {
+      clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+  };
+  const openGroupNow = (group: string) => {
+    cancelClose();
+    setOpenGroup(group);
+  };
+  const scheduleClose = (group: string) => {
+    cancelClose();
+    closeTimer.current = setTimeout(() => {
+      setOpenGroup((cur) => (cur === group ? null : cur));
+    }, 220);
+  };
+
+  // Clear any pending timer on unmount.
+  useEffect(() => () => cancelClose(), []);
 
   const visible = adminNav.filter((item) => can(role, item.permission as Permission));
   const groups = buildNavGroups<AdminNavItem>(visible, navGroups, pathname);
@@ -92,8 +116,8 @@ export function AdminTopNav({ role, fullName, email }: Props) {
               <div
                 key={g.group}
                 className="relative"
-                onMouseEnter={() => setOpenGroup(g.group)}
-                onMouseLeave={() => setOpenGroup((cur) => (cur === g.group ? null : cur))}
+                onMouseEnter={() => openGroupNow(g.group)}
+                onMouseLeave={() => scheduleClose(g.group)}
               >
                 <button
                   type="button"
@@ -118,8 +142,13 @@ export function AdminTopNav({ role, fullName, email }: Props) {
                 {isOpen && (
                   <div
                     role="menu"
-                    className="absolute left-0 top-full z-50 mt-1 min-w-[15rem] rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-1.5 shadow-xl"
+                    onMouseEnter={() => openGroupNow(g.group)}
+                    onMouseLeave={() => scheduleClose(g.group)}
+                    /* pt-2 acts as an invisible bridge from the tab to the
+                       menu so the pointer never crosses a dead gap. */
+                    className="absolute left-0 top-full z-50 min-w-[15rem] pt-2"
                   >
+                  <div className="rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-1.5 shadow-xl">
                     {g.items.map((item) => {
                       const active = isHrefActive(item.href, pathname);
                       return (
@@ -144,6 +173,7 @@ export function AdminTopNav({ role, fullName, email }: Props) {
                         </Link>
                       );
                     })}
+                  </div>
                   </div>
                 )}
               </div>

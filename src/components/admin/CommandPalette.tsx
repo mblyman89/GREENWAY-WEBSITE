@@ -106,17 +106,19 @@ export function CommandPalette({ items }: Props) {
 
   return (
     <>
-      {/* Floating hint button (hidden on small screens to stay out of the way) */}
+      {/* Floating trigger — circle only (no text label) so it doesn't cover
+          page content. Sits just above the bottom-left Help "?" button.
+          Accessible name kept via aria-label + title; ⌘K still works. */}
       <button
         type="button"
         onClick={() => setOpen(true)}
-        aria-label="Open quick search"
-        className="admin-chrome fixed bottom-5 left-5 z-30 hidden items-center gap-1.5 rounded-full border border-white/15 bg-[#0a0a0a]/90 px-3 py-2 text-xs font-semibold text-white/60 shadow-lg backdrop-blur transition hover:text-white lg:flex"
+        aria-label="Open quick search (Cmd/Ctrl + K)"
+        title="Quick search (⌘K)"
+        className="admin-chrome fixed bottom-[4.25rem] left-4 z-30 hidden h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-[#0a0a0a]/90 text-white/60 shadow-lg shadow-black/50 backdrop-blur transition hover:text-white lg:flex"
       >
-        <span className="rounded border border-white/20 px-1.5 py-0.5 font-mono text-[0.65rem]">
-          ⌘K
+        <span className="text-lg leading-none" aria-hidden="true">
+          🔍
         </span>
-        Quick search
       </button>
 
       {open && (
