@@ -26,6 +26,7 @@ import {
   normalizeStrainType,
   validateProductClassification,
   clampText,
+  classifyWarning,
   CCRS_PRODUCT_NAME_MAX,
   CCRS_PRODUCT_DESCRIPTION_MAX,
   type CcrsRetailerFileType,
@@ -475,10 +476,22 @@ export async function buildCcrsBatch(fromISO: string, toISO: string): Promise<Cc
     });
   }
 
-  // Carry each file's own warnings up as sync warnings (deduped, capped).
+  // Carry each file's own warnings up as sync issues with HONEST severity
+  // (Slice 93). Batch-blocking messages (invalid enum, missing id, etc.) become
+  // `error` and are NEVER dropped by the cap; advisory notes stay `warning` and
+  // are capped per file to avoid noise.
+  const WARNING_CAP_PER_FILE = 5;
   for (const f of files) {
-    for (const w of f.warnings.slice(0, 5)) {
-      syncIssues.push({ severity: "warning", file: f.type, message: w });
+    let warningCount = 0;
+    for (const w of f.warnings) {
+      const severity = classifyWarning(w);
+      if (severity === "error") {
+        // Always surface blocking errors — no cap.
+        syncIssues.push({ severity: "error", file: f.type, message: w });
+      } else if (warningCount < WARNING_CAP_PER_FILE) {
+        syncIssues.push({ severity: "warning", file: f.type, message: w });
+        warningCount += 1;
+      }
     }
   }
 

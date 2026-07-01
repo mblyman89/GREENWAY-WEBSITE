@@ -337,6 +337,49 @@ export function clampText(
 export const CCRS_PRODUCT_NAME_MAX = 75;
 export const CCRS_PRODUCT_DESCRIPTION_MAX = 250;
 
+/* ------------------------------------------------------------------ *
+ * Sync-issue severity classification (Slice 93 — guardrail integrity)
+ *
+ * File builders emit free-text `warnings`. Some are BATCH-BLOCKING (the LCB will
+ * reject the whole upload — e.g. an invalid InventoryCategory/InventoryType or a
+ * missing required identifier) and MUST surface as `error`; others are advisory.
+ * `buildCcrsBatch` previously promoted EVERY warning to `warning` severity, so a
+ * blocking mis-mapping looked identical to a cosmetic note. This classifier is
+ * the single source of truth for that decision. PURE.
+ * ------------------------------------------------------------------ */
+
+export type CcrsIssueSeverity = "error" | "warning";
+
+/**
+ * Substrings that mark a warning as batch-blocking. Kept lowercase; matched
+ * case-insensitively. Grounded in the actual builder messages + CCRS behavior:
+ * a rejected file in an early upload group blocks every dependent file.
+ */
+const CCRS_BLOCKING_MARKERS: readonly string[] = [
+  "error —", // explicit error prefix used by builders (em dash)
+  "error -", // hyphen variant, defensive
+  "not a valid ccrs", // invalid enum value
+  "is not valid for category", // invalid category/type pair
+  "no usable external identifier", // inventory row cannot be reported
+  "no usable ccrs external identifier",
+  "cannot be reported",
+  "supabase is not configured",
+];
+
+/**
+ * Classify a builder warning into a sync-issue severity. PURE.
+ * A message is an `error` iff it contains any blocking marker (case-insensitive);
+ * otherwise it is a `warning`. Never throws.
+ */
+export function classifyWarning(message: string | null | undefined): CcrsIssueSeverity {
+  const s = (message ?? "").toLowerCase();
+  if (!s) return "warning";
+  for (const marker of CCRS_BLOCKING_MARKERS) {
+    if (s.includes(marker)) return "error";
+  }
+  return "warning";
+}
+
 /**
  * Order-of-operations validation dependency groups. A full batch must be
  * uploaded in this order so each file's referenced rows already exist.
@@ -562,6 +605,28 @@ export function __runCcrsBatchCoreTests(): void {
   assert(clamped.value.length === 75, "name clamped to 75");
   assert(clampText(null, 75).value === "" && clampText(null, 75).truncated === false, "null → empty, not truncated");
   assert(CCRS_PRODUCT_NAME_MAX === 75 && CCRS_PRODUCT_DESCRIPTION_MAX === 250, "product text limits");
+
+  // classifyWarning (Slice 93): blocking messages → error; advisory → warning.
+  assert(
+    classifyWarning('ERROR — Product "X": InventoryType "Vape" is not a valid CCRS InventoryType.') === "error",
+    "ERROR-prefixed → error",
+  );
+  assert(
+    classifyWarning('InventoryType "Vape Cartridge" is not valid for category "EndProduct".') === "error",
+    "invalid-for-category → error",
+  );
+  assert(
+    classifyWarning("Inventory lots have no usable external identifier and cannot be reported.") === "error",
+    "no usable id → error",
+  );
+  assert(classifyWarning("Supabase is not configured.") === "error", "supabase config → error");
+  assert(
+    classifyWarning('Product "Sunset": Name exceeds 75 chars and was truncated — shorten it in the source.') === "warning",
+    "truncation note → warning",
+  );
+  assert(classifyWarning("No products found in the published menu.") === "warning", "empty note → warning");
+  assert(classifyWarning("") === "warning", "empty string → warning");
+  assert(classifyWarning(null) === "warning", "null → warning");
 
   console.log("ccrs-batch-core: all tests passed");
 }
