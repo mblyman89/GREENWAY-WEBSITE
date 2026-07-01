@@ -44,7 +44,15 @@ see `docs/COMMAND_CENTER_ENHANCEMENTS_TASKLIST.md`.
 - [ ] Slice 73 — Sage 50 KB enrichment + Chart of Accounts upload [items 1+13]
 - [ ] Slice 74 — Manifest pipeline pending/in-transit/awaiting-intake [item 10]
 - [ ] Slice 75 — KB seed coverage + owner uploads [item 14]
-- [ ] Slice 76 — Mobile-friendly pass [item 15]
+- [~] Slice 76 — Mobile-friendly pass [item 15] — **DEFERRED / BACK BURNER** (owner: not critical; wants a strategy session first to scope only the most useful phone features rather than porting ~70% of desktop. Revisit after strategy chat.)
+
+## BATCH 2b — NEW owner tasks (added verbatim; replace mobile pass for now)
+> Owner (verbatim):
+> - "I want to pivot from mid journey to using flux 2 max. I will setup an account and fund it. On the same page as the mid journey ai prompt builder, please include a complete api pipeline implementation for using for our website and other marketing strategies. It should also have the same prompt builder as the mid journey ai. So it should be a seamless transition from using mid journey to this more powerful, fully integratabtle image generator baked directly into our workflow for easy content generation."
+> - "I want to revisit the ach payments to my employees. Now that you have more info from me about my bank account with timberland. I want to process ach for my employees through my timberland account. I will run payroll in sage 50, i pay for the payroll service so it's super easy. I'll run payroll, export the data and upload it to the back office for ach processing. Please enhance the sage 50 reporting section to allow all of the available import export functions. I now have the ability to upload export sample data to help you help me with configuring the link between the two apps. That way the ai can assist me with filling out the fields properly and correctly."
+
+- [x] Slice A (NEW) — FLUX 2 MAX image generation pipeline [new item 19] — VERIFIED BFL API (POST {base}/v1/{endpoint} x-key → {id,polling_url}; poll until Ready → result.sample signed URL; download+re-serve). Migration 0055 adds flux_api_key/flux_endpoint(default flux-2-max)/flux_base_url to integration_credentials (idempotent, RLS inherited from 0053). PURE flux-core (aspect→dims mult of 32, natural-language prompt from SAME CreativeBrief w/ MJ flags stripped + exclude→"Avoid:", submit/poll parsers, submit-url + filename; 34 assertions tsx-tested). Server flux-client (submit→poll 2min budget→download→uploadMedia as DRAFT; no-op-safe; 429/402/moderation/timeout handled). generateFluxAction (content.edit, audited flux.image_generated). "Generate with FLUX 2 Max" panel baked into MidjourneyBuilder on the SAME page (same brief; format PNG/JPEG; inline preview + Open in Media). Credential core+store extended (mask/merge/fold + getFluxOverrides; 42 assertions). FluxCredentialsForm added to Settings→Integrations. Verify: tsc 0, eslint 0, next build OK (both routes present). PR #TBD merged.
+- [ ] Slice B (NEW) — Employee payroll ACH via Timberland + Sage 50 import/export overhaul [new item 20; supersedes former OUT-OF-SCOPE item 12] — enhance the Sage 50 reporting section with ALL available import/export functions; accept Sage 50 payroll EXPORT upload → generate employee ACH (NACHA .ach / CCD or PPD) through Timberland (Jack Henry). Owner can upload REAL export sample data so the AI assists in mapping fields correctly. Deep-research Sage 50 payroll export format + NACHA PPD for payroll before building.
 
 ## BATCH 3 — money movement & customer AI
 - [ ] Slice 77 — Vendor ACH: banking + approval model [items 5/11]
@@ -52,4 +60,4 @@ see `docs/COMMAND_CENTER_ENHANCEMENTS_TASKLIST.md`.
 - [ ] Slice 79 — Customer-facing AI concierge [item 18]
 - [ ] Slice 80 — Customer AI knowledge seeding [item 18 cont.]
 
-- OUT OF SCOPE: item 12 (employee ACH payroll) — owner uses Sage.
+- NOTE: former OUT-OF-SCOPE item 12 (employee ACH payroll) is now IN SCOPE as Slice B per owner's new instruction.

@@ -11,6 +11,7 @@
  * call Midjourney; this produces a prompt to paste there.
  */
 import { useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 import { Button, Field, Input, Select, Badge } from "@/components/admin/ui";
 import { useToast } from "@/components/admin/ux";
 import {
@@ -22,9 +23,11 @@ import {
   type CreativeBrief,
   type AspectRatio,
 } from "@/lib/marketing/midjourney-core";
-import { assistBriefAction } from "@/app/admin/marketing/midjourney/actions";
+import { assistBriefAction, generateFluxAction } from "@/app/admin/marketing/midjourney/actions";
 
 export type ReferenceImage = { id: string; url: string; label: string };
+
+type FluxAsset = { id: string; url: string; filename: string; title: string };
 
 const EMPTY: CreativeBrief = {
   subject: "",
@@ -44,9 +47,11 @@ const EMPTY: CreativeBrief = {
 export function MidjourneyBuilder({
   references,
   aiConfigured,
+  fluxConfigured,
 }: {
   references: ReferenceImage[];
   aiConfigured: boolean;
+  fluxConfigured: boolean;
 }) {
   const { toast } = useToast();
   const [brief, setBrief] = useState<CreativeBrief>(EMPTY);
@@ -54,6 +59,27 @@ export function MidjourneyBuilder({
   const [idea, setIdea] = useState("");
   const [rationale, setRationale] = useState("");
   const [pending, start] = useTransition();
+
+  // FLUX 2 generation (baked-in API pipeline; same brief, same page).
+  const [fluxPending, startFlux] = useTransition();
+  const [fluxFormat, setFluxFormat] = useState<"png" | "jpeg">("png");
+  const [fluxAsset, setFluxAsset] = useState<FluxAsset | null>(null);
+  const [fluxWarnings, setFluxWarnings] = useState<string[]>([]);
+
+  function generateFlux() {
+    setFluxAsset(null);
+    setFluxWarnings([]);
+    startFlux(async () => {
+      const res = await generateFluxAction({ brief, outputFormat: fluxFormat });
+      if (res.ok) {
+        setFluxAsset(res.asset);
+        setFluxWarnings(res.warnings);
+        toast({ tone: "success", message: `Image generated with ${res.endpoint} and saved to your media library (draft).` });
+      } else {
+        toast({ tone: "error", message: res.error });
+      }
+    });
+  }
 
   const assembled = useMemo(() => assemblePrompt(brief), [brief]);
 
@@ -247,6 +273,61 @@ export function MidjourneyBuilder({
                 <li key={i}>{w}</li>
               ))}
             </ul>
+          )}
+        </div>
+
+        {/* FLUX 2 — baked-in API pipeline (same brief, saved to media library) */}
+        <div className="rounded-[var(--admin-radius-lg)] border border-[#9b6bff]/35 bg-[#9b6bff]/5 p-5">
+          <div className="mb-2 flex items-center justify-between">
+            <h4 className="text-sm font-semibold text-white">Generate with FLUX 2</h4>
+            <Badge tone={fluxConfigured ? "green" : "neutral"}>{fluxConfigured ? "Connected" : "Not configured"}</Badge>
+          </div>
+          <p className="mb-3 text-xs leading-relaxed text-white/50">
+            Uses the same brief above. FLUX takes a natural-language prompt plus the aspect ratio (no <code>--</code> flags), then saves the
+            result straight into your media library as a <strong>draft</strong> to review before publishing.
+          </p>
+
+          <div className="flex flex-wrap items-end gap-3">
+            <Field label="Format" className="w-28">
+              <Select value={fluxFormat} onChange={(e) => setFluxFormat(e.target.value as "png" | "jpeg")}>
+                <option value="png">PNG</option>
+                <option value="jpeg">JPEG</option>
+              </Select>
+            </Field>
+            <Button
+              variant="primary"
+              onClick={generateFlux}
+              disabled={!fluxConfigured || fluxPending || !brief.subject.trim()}
+            >
+              {fluxPending ? "Generating…" : "Generate with FLUX 2 Max"}
+            </Button>
+          </div>
+
+          {!fluxConfigured && (
+            <p className="mt-3 rounded-lg border border-[var(--admin-border)] bg-[var(--admin-bg)] px-3 py-2 text-xs text-white/50">
+              Add your Black Forest Labs API key in <strong>Settings → Integrations</strong> to enable one-click generation.
+            </p>
+          )}
+
+          {fluxWarnings.length > 0 && (
+            <ul className="mt-3 list-disc space-y-0.5 pl-5 text-xs text-[var(--admin-orange)]">
+              {fluxWarnings.map((w, i) => (
+                <li key={i}>{w}</li>
+              ))}
+            </ul>
+          )}
+
+          {fluxAsset && (
+            <div className="mt-4 space-y-2">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={fluxAsset.url} alt={fluxAsset.title} className="w-full rounded-lg border border-[var(--admin-border)]" />
+              <div className="flex items-center justify-between gap-2 text-xs text-white/60">
+                <span className="truncate">{fluxAsset.filename}</span>
+                <Link href="/admin/media" className="shrink-0 text-[#9b6bff] hover:underline">
+                  Open in Media →
+                </Link>
+              </div>
+            </div>
           )}
         </div>
 

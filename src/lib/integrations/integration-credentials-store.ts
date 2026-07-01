@@ -20,8 +20,10 @@ import {
   buildCredentialsView,
   resolveLeaflyOverrides,
   resolveWeedmapsOverrides,
+  resolveFluxOverrides,
   type CredentialsFormInput,
   type CredentialsView,
+  type FluxOverrides,
   type IntegrationCredentialsRow,
   type IntegrationEnv,
   type LeaflyOverrides,
@@ -44,6 +46,9 @@ export function readIntegrationEnv(): IntegrationEnv {
     weedmapsAccessToken: process.env.WEEDMAPS_ACCESS_TOKEN,
     weedmapsTokenUrl: process.env.WEEDMAPS_TOKEN_URL,
     weedmapsScope: process.env.WEEDMAPS_SCOPE,
+    fluxApiKey: process.env.BFL_API_KEY || process.env.FLUX_API_KEY,
+    fluxEndpoint: process.env.FLUX_ENDPOINT,
+    fluxBaseUrl: process.env.FLUX_BASE_URL || process.env.BFL_BASE_URL,
   };
 }
 
@@ -66,6 +71,9 @@ function coerceRow(data: Record<string, unknown> | null): IntegrationCredentials
     weedmaps_access_token: s("weedmaps_access_token"),
     weedmaps_token_url: s("weedmaps_token_url"),
     weedmaps_scope: s("weedmaps_scope"),
+    flux_api_key: s("flux_api_key"),
+    flux_endpoint: s("flux_endpoint") || "flux-2-max",
+    flux_base_url: s("flux_base_url"),
   };
 }
 
@@ -97,6 +105,12 @@ export async function getLeaflyOverrides(): Promise<LeaflyOverrides> {
 export async function getWeedmapsOverrides(): Promise<WeedmapsOverrides> {
   const row = await getIntegrationCredentialsRow();
   return resolveWeedmapsOverrides(row, readIntegrationEnv());
+}
+
+/** Resolved FLUX 2 credentials (DB over env) for the image pipeline. */
+export async function getFluxOverrides(): Promise<FluxOverrides> {
+  const row = await getIntegrationCredentialsRow();
+  return resolveFluxOverrides(row, readIntegrationEnv());
 }
 
 export type UpdateCredentialsResult =
