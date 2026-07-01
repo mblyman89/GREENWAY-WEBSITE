@@ -20,6 +20,11 @@ export type Employee = {
   job_role: "sales" | "manager" | "lead" | "other";
   active: boolean;
   notes: string | null;
+  // Optional direct-deposit banking (added in migration 0057). Present because
+  // listEmployees/getEmployee select "*". May be null until an admin fills them in.
+  bank_routing?: string | null;
+  bank_account_number?: string | null;
+  bank_account_type?: "checking" | "savings" | null;
   created_at: string;
   updated_at: string;
 };
