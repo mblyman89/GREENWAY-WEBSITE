@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { getStaffSession } from "@/lib/auth/session";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
-import { AdminSidebar } from "@/components/admin/AdminSidebar";
+import { AdminTopNav } from "@/components/admin/AdminTopNav";
 import { AdminSetupNotice } from "@/components/admin/AdminSetupNotice";
 import { ToastProvider } from "@/components/admin/ux";
 import { HelpLauncher } from "@/components/admin/HelpLauncher";
@@ -49,9 +49,9 @@ export default async function AdminLayout({
     }));
 
   return (
-    <div className="admin-shell min-h-screen lg:flex">
-      <div className="admin-chrome contents">
-        <AdminSidebar
+    <div className="admin-shell flex min-h-screen flex-col">
+      <div className="admin-chrome">
+        <AdminTopNav
           role={session.profile.role}
           fullName={session.profile.full_name ?? ""}
           email={session.email}
