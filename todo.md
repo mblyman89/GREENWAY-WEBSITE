@@ -14,7 +14,7 @@ Standing rules: AI output = drafts only; migrations applied manually by owner
 - [x] Slice 48 — COGS by type + valuation/aging by type + no-COGS AI assistant. PR #152.
 - [x] Slice 49 — Tax: taxable non-cannabis section + tax by type/category. PR #153.
 - [x] Slice 50 — Customer reporting: newsletter stats suite (Resend + SendGrid). PR #154.
-- [ ] Slice 51 — Loyalty/discount reporting polish.
+- [x] Slice 51 — Loyalty/discount reporting polish (program economics + tiers + code funnel + export). PR #155.
 - [ ] Slice 52 — Employees reporting enrichment.
 - [ ] Slice 53 — Medical reporting enrichment.
 - [ ] Slice 54 — CCRS reporting + automated upload pipeline + AI.

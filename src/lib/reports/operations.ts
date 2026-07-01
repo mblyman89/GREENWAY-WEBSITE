@@ -12,67 +12,259 @@ import { pacificDayKey } from "@/lib/reports/timezone";
 // ---------------------------------------------------------------------------
 // Loyalty & discount report
 // ---------------------------------------------------------------------------
+export type LoyaltyKindRow = { kind: string; label: string; points: number };
+export type LoyaltyTierRow = {
+  tierId: string | null;
+  name: string;
+  members: number;
+  discountBps: number;
+  outstandingPoints: number;
+  lifetimePoints: number;
+};
+export type LoyaltyCodeFunnelRow = { label: string; count: number; valueMinor: number };
+
 export type LoyaltyReport = {
+  // Headline membership + points
   enrolledAccounts: number;
+  activeAccounts: number;
   pointsEarned: number;
   pointsRedeemed: number;
   pointsOutstanding: number;
+  // Program economics (the professional layer)
+  pointValueMinor: number; // cash value of one point (cents)
+  liabilityMinor: number; // outstanding points valued at cash
+  redeemedValueMinor: number; // points redeemed in window valued at cash
+  breakagePoints: number; // points expired in window (never redeemed)
+  breakageMinor: number; // breakage valued at cash
+  redemptionRate: number; // points redeemed / points earned (0..1) in window
+  avgEarnBasisMinor: number; // avg pretax basis behind each earn event
+  newEnrollments: number; // accounts enrolled in window
+  // Discount codes
   codesIssued: number;
   codesRedeemed: number;
-  discountValueMinor: number;
+  codesExpired: number;
+  codesCancelled: number;
+  codesOutstanding: number;
+  codeRedemptionRate: number; // redeemed / issued (0..1) in window
+  avgDaysToRedeem: number; // avg days issue -> redeem
+  discountValueMinor: number; // value of redeemed codes
+  outstandingCodeValueMinor: number; // value tied up in still-issued codes
+  // Breakdowns
+  pointsByKind: LoyaltyKindRow[];
+  tiers: LoyaltyTierRow[];
+  codeFunnel: LoyaltyCodeFunnelRow[];
   dailyEarn: { date: string; points: number }[];
+  dailyRedeem: { date: string; points: number }[];
+  enrollmentTrend: { date: string; count: number }[];
   topEarners: { label: string; points: number }[];
 };
 
+const LEDGER_KIND_LABELS: Record<string, string> = {
+  earn: "Earned (purchases)",
+  signup_bonus: "Signup bonus",
+  promo_bonus: "Promo bonus",
+  adjust: "Manual adjustment",
+  redeem: "Redeemed",
+  expire: "Expired (breakage)",
+};
+
+export const EMPTY_LOYALTY_REPORT: LoyaltyReport = {
+  enrolledAccounts: 0,
+  activeAccounts: 0,
+  pointsEarned: 0,
+  pointsRedeemed: 0,
+  pointsOutstanding: 0,
+  pointValueMinor: 1,
+  liabilityMinor: 0,
+  redeemedValueMinor: 0,
+  breakagePoints: 0,
+  breakageMinor: 0,
+  redemptionRate: 0,
+  avgEarnBasisMinor: 0,
+  newEnrollments: 0,
+  codesIssued: 0,
+  codesRedeemed: 0,
+  codesExpired: 0,
+  codesCancelled: 0,
+  codesOutstanding: 0,
+  codeRedemptionRate: 0,
+  avgDaysToRedeem: 0,
+  discountValueMinor: 0,
+  outstandingCodeValueMinor: 0,
+  pointsByKind: [],
+  tiers: [],
+  codeFunnel: [],
+  dailyEarn: [],
+  dailyRedeem: [],
+  enrollmentTrend: [],
+  topEarners: [],
+};
+
 export async function getLoyaltyReport(fromISO: string, toISO: string): Promise<LoyaltyReport> {
-  const empty: LoyaltyReport = {
-    enrolledAccounts: 0,
-    pointsEarned: 0,
-    pointsRedeemed: 0,
-    pointsOutstanding: 0,
-    codesIssued: 0,
-    codesRedeemed: 0,
-    discountValueMinor: 0,
-    dailyEarn: [],
-    topEarners: [],
-  };
-  if (!isSupabaseServiceConfigured) return empty;
+  if (!isSupabaseServiceConfigured) return { ...EMPTY_LOYALTY_REPORT };
   const admin = createSupabaseAdminClient();
 
-  const [{ count: accounts }, { data: balances }, { data: ledger }, { data: redemptions }] =
-    await Promise.all([
-      admin.from("loyalty_accounts").select("id", { count: "exact", head: true }),
-      admin.from("loyalty_accounts").select("balance_points"),
-      admin
-        .from("loyalty_ledger")
-        .select("account_id, kind, points, created_at")
-        .gte("created_at", fromISO)
-        .lte("created_at", toISO),
-      admin
-        .from("loyalty_redemptions")
-        .select("status, value_minor, created_at")
-        .gte("created_at", fromISO)
-        .lte("created_at", toISO),
-    ]);
+  const [
+    { count: accounts },
+    { count: activeAccounts },
+    { data: balances },
+    { data: accountsInWindow },
+    { data: ledger },
+    { data: redemptions },
+    { data: config },
+    { data: tierRows },
+  ] = await Promise.all([
+    admin.from("loyalty_accounts").select("id", { count: "exact", head: true }),
+    admin.from("loyalty_accounts").select("id", { count: "exact", head: true }).eq("is_active", true),
+    admin.from("loyalty_accounts").select("balance_points, lifetime_points, tier_id"),
+    admin
+      .from("loyalty_accounts")
+      .select("id, enrolled_at")
+      .gte("enrolled_at", fromISO)
+      .lte("enrolled_at", toISO),
+    admin
+      .from("loyalty_ledger")
+      .select("account_id, kind, points, basis_minor, created_at")
+      .gte("created_at", fromISO)
+      .lte("created_at", toISO),
+    admin
+      .from("loyalty_redemptions")
+      .select("status, points, value_minor, created_at, redeemed_at")
+      .gte("created_at", fromISO)
+      .lte("created_at", toISO),
+    admin.from("loyalty_config").select("point_value_minor").eq("is_active", true).limit(1),
+    admin.from("loyalty_tiers").select("id, name, discount_bps, sort_order").order("sort_order"),
+  ]);
 
-  const led = (ledger as { account_id: string; kind: string; points: number; created_at: string }[] | null) ?? [];
-  const reds = (redemptions as { status: string; value_minor: number }[] | null) ?? [];
+  const led =
+    (ledger as
+      | { account_id: string; kind: string; points: number; basis_minor: number | null; created_at: string }[]
+      | null) ?? [];
+  const reds =
+    (redemptions as
+      | { status: string; points: number; value_minor: number; created_at: string; redeemed_at: string | null }[]
+      | null) ?? [];
+  const bals =
+    (balances as { balance_points: number; lifetime_points: number; tier_id: string | null }[] | null) ?? [];
 
-  const pointsEarned = led.filter((l) => l.points > 0).reduce((a, l) => a + l.points, 0);
-  const pointsRedeemed = led.filter((l) => l.kind === "redeem").reduce((a, l) => a + Math.abs(l.points), 0);
-  const pointsOutstanding = ((balances as { balance_points: number }[] | null) ?? []).reduce(
-    (a, r) => a + (r.balance_points ?? 0),
-    0,
+  const pointValueMinor = Number(
+    ((config as { point_value_minor: number }[] | null) ?? [])[0]?.point_value_minor ?? 1,
   );
 
-  const dailyMap = new Map<string, number>();
-  for (const l of led) {
-    if (l.points <= 0) continue;
-    const key = pacificDayKey(l.created_at);
-    dailyMap.set(key, (dailyMap.get(key) ?? 0) + l.points);
-  }
-  const dailyEarn = [...dailyMap.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([date, points]) => ({ date, points }));
+  // --- Points totals + composition by ledger kind ---
+  const pointsEarned = led.filter((l) => l.points > 0).reduce((a, l) => a + l.points, 0);
+  const pointsRedeemed = led.filter((l) => l.kind === "redeem").reduce((a, l) => a + Math.abs(l.points), 0);
+  const breakagePoints = led.filter((l) => l.kind === "expire").reduce((a, l) => a + Math.abs(l.points), 0);
+  const pointsOutstanding = bals.reduce((a, r) => a + (r.balance_points ?? 0), 0);
 
+  const kindMap = new Map<string, number>();
+  for (const l of led) kindMap.set(l.kind, (kindMap.get(l.kind) ?? 0) + Math.abs(l.points));
+  const pointsByKind: LoyaltyKindRow[] = [...kindMap.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([kind, points]) => ({ kind, label: LEDGER_KIND_LABELS[kind] ?? kind, points }));
+
+  const earnEvents = led.filter((l) => l.kind === "earn" && (l.basis_minor ?? 0) > 0);
+  const avgEarnBasisMinor =
+    earnEvents.length > 0
+      ? Math.round(earnEvents.reduce((a, l) => a + (l.basis_minor ?? 0), 0) / earnEvents.length)
+      : 0;
+
+  // --- Daily trends ---
+  const dailyEarnMap = new Map<string, number>();
+  const dailyRedeemMap = new Map<string, number>();
+  for (const l of led) {
+    const key = pacificDayKey(l.created_at);
+    if (l.points > 0) dailyEarnMap.set(key, (dailyEarnMap.get(key) ?? 0) + l.points);
+    if (l.kind === "redeem") dailyRedeemMap.set(key, (dailyRedeemMap.get(key) ?? 0) + Math.abs(l.points));
+  }
+  const dailyEarn = [...dailyEarnMap.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([date, points]) => ({ date, points }));
+  const dailyRedeem = [...dailyRedeemMap.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([date, points]) => ({ date, points }));
+
+  const enrollMap = new Map<string, number>();
+  for (const a of (accountsInWindow as { enrolled_at: string }[] | null) ?? []) {
+    const key = pacificDayKey(a.enrolled_at);
+    enrollMap.set(key, (enrollMap.get(key) ?? 0) + 1);
+  }
+  const enrollmentTrend = [...enrollMap.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([date, count]) => ({ date, count }));
+
+  // --- Tier distribution (member count + points by tier) ---
+  const tierDefs = (tierRows as { id: string; name: string; discount_bps: number }[] | null) ?? [];
+  const tierAgg = new Map<string | null, { members: number; outstanding: number; lifetime: number }>();
+  for (const b of bals) {
+    const key = b.tier_id ?? null;
+    const cur = tierAgg.get(key) ?? { members: 0, outstanding: 0, lifetime: 0 };
+    cur.members += 1;
+    cur.outstanding += b.balance_points ?? 0;
+    cur.lifetime += b.lifetime_points ?? 0;
+    tierAgg.set(key, cur);
+  }
+  const tiers: LoyaltyTierRow[] = tierDefs.map((t) => {
+    const agg = tierAgg.get(t.id) ?? { members: 0, outstanding: 0, lifetime: 0 };
+    return {
+      tierId: t.id,
+      name: t.name,
+      members: agg.members,
+      discountBps: t.discount_bps,
+      outstandingPoints: agg.outstanding,
+      lifetimePoints: agg.lifetime,
+    };
+  });
+  const untiered = tierAgg.get(null);
+  if (untiered && untiered.members > 0) {
+    tiers.push({
+      tierId: null,
+      name: "No tier yet",
+      members: untiered.members,
+      discountBps: 0,
+      outstandingPoints: untiered.outstanding,
+      lifetimePoints: untiered.lifetime,
+    });
+  }
+
+  // --- Discount code funnel + economics ---
+  const codesIssued = reds.length;
+  const codesRedeemed = reds.filter((r) => r.status === "redeemed").length;
+  const codesExpired = reds.filter((r) => r.status === "expired").length;
+  const codesCancelled = reds.filter((r) => r.status === "cancelled").length;
+  const codesOutstanding = reds.filter((r) => r.status === "issued").length;
+  const discountValueMinor = reds
+    .filter((r) => r.status === "redeemed")
+    .reduce((a, r) => a + (r.value_minor ?? 0), 0);
+  const outstandingCodeValueMinor = reds
+    .filter((r) => r.status === "issued")
+    .reduce((a, r) => a + (r.value_minor ?? 0), 0);
+
+  const redeemedWithDates = reds.filter((r) => r.status === "redeemed" && r.redeemed_at && r.created_at);
+  const avgDaysToRedeem =
+    redeemedWithDates.length > 0
+      ? Math.round(
+          (redeemedWithDates.reduce(
+            (a, r) => a + (new Date(r.redeemed_at!).getTime() - new Date(r.created_at).getTime()),
+            0,
+          ) /
+            redeemedWithDates.length /
+            (1000 * 60 * 60 * 24)) *
+            10,
+        ) / 10
+      : 0;
+
+  const codeFunnel: LoyaltyCodeFunnelRow[] = [
+    { label: "Issued", count: codesIssued, valueMinor: reds.reduce((a, r) => a + (r.value_minor ?? 0), 0) },
+    { label: "Redeemed", count: codesRedeemed, valueMinor: discountValueMinor },
+    { label: "Outstanding", count: codesOutstanding, valueMinor: outstandingCodeValueMinor },
+    {
+      label: "Expired",
+      count: codesExpired,
+      valueMinor: reds.filter((r) => r.status === "expired").reduce((a, r) => a + (r.value_minor ?? 0), 0),
+    },
+    {
+      label: "Cancelled",
+      count: codesCancelled,
+      valueMinor: reds.filter((r) => r.status === "cancelled").reduce((a, r) => a + (r.value_minor ?? 0), 0),
+    },
+  ];
+
+  // --- Top earners (names) ---
   const earnByAccount = new Map<string, number>();
   for (const l of led) {
     if (l.points <= 0) continue;
@@ -105,13 +297,33 @@ export async function getLoyaltyReport(fromISO: string, toISO: string): Promise<
 
   return {
     enrolledAccounts: accounts ?? 0,
+    activeAccounts: activeAccounts ?? 0,
     pointsEarned,
     pointsRedeemed,
     pointsOutstanding,
-    codesIssued: reds.length,
-    codesRedeemed: reds.filter((r) => r.status === "redeemed").length,
-    discountValueMinor: reds.filter((r) => r.status === "redeemed").reduce((a, r) => a + (r.value_minor ?? 0), 0),
+    pointValueMinor,
+    liabilityMinor: pointsOutstanding * pointValueMinor,
+    redeemedValueMinor: pointsRedeemed * pointValueMinor,
+    breakagePoints,
+    breakageMinor: breakagePoints * pointValueMinor,
+    redemptionRate: pointsEarned > 0 ? pointsRedeemed / pointsEarned : 0,
+    avgEarnBasisMinor,
+    newEnrollments: ((accountsInWindow as unknown[] | null) ?? []).length,
+    codesIssued,
+    codesRedeemed,
+    codesExpired,
+    codesCancelled,
+    codesOutstanding,
+    codeRedemptionRate: codesIssued > 0 ? codesRedeemed / codesIssued : 0,
+    avgDaysToRedeem,
+    discountValueMinor,
+    outstandingCodeValueMinor,
+    pointsByKind,
+    tiers,
+    codeFunnel,
     dailyEarn,
+    dailyRedeem,
+    enrollmentTrend,
     topEarners,
   };
 }
