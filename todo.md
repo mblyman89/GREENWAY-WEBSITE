@@ -22,7 +22,7 @@ Standing rules: AI output = drafts only; migrations applied manually by owner
 - [x] Slice 56 — Sage 50: report uploads + AI smart-fill + Sage AI chat. (PR #160)
 - [x] Slice 57 — Inventory types table preload.
 - [x] Slice 58 — Sales limits owner-only edit + clear staff view.
-- [ ] Slice 59 — Receipt printer setup guide + AI diagnostic chat.
+- [x] Slice 59 — Receipt printer setup guide + AI diagnostic chat.
 - [ ] Slice 60 — Integrations: enter API keys/credentials via back office.
 - [ ] Slice 61 — Help & FAQ all-inclusive.
 - [ ] Slice 62 — Audit log filters + AI anomaly detection.
