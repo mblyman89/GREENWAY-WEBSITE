@@ -17,6 +17,18 @@
 
 - [ ] **`supabase/migrations/0055_flux_credentials.sql`** — Slice A (item 19).
 - [ ] **`supabase/migrations/0056_kb_notes.sql`** — Slice 75 (item 14): owner-uploaded KB reference notes.
+- [ ] **`supabase/migrations/0057_payroll_ach.sql`** — Slice B (item 20): manual-entry
+  payroll → NACHA ACH. Adds `bank_routing` / `bank_account_number` /
+  `bank_account_type` to `public.employees`; a singleton
+  `public.ach_company_settings` (destination routing/name, immediate origin,
+  company name/id, originating DFI, entry description default `PAYROLL`);
+  `public.payroll_runs` (label, pay_date, status, total_*_cents, entry_count,
+  nacha_filename, file_id_modifier, generated_at, notes); and
+  `public.payroll_run_lines` (per-employee net/gross/taxes/deductions cents +
+  banking snapshot). RLS: `ach_company_settings` staff-read/admin-write;
+  `payroll_runs` + `payroll_run_lines` admin-only. No data backfill.
+  **Until this is run, `/admin/payroll` cannot save the ACH company block, any
+  employee banking, or generate a NACHA file.**
   Adds three columns to the existing `public.integration_credentials` singleton
   (`flux_api_key`, `flux_endpoint` default `flux-2-max`, `flux_base_url`) for the
   Black Forest Labs FLUX 2 image pipeline. RLS is inherited from migration 0053
