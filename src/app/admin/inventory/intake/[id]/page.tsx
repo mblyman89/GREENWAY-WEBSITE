@@ -336,6 +336,13 @@ export default async function ManifestReviewPage({
                   placeholder="Optional"
                 />
               </Field>
+              <Field label="Expected arrival (ETA)" help="When you expect it to reach the store">
+                <Input
+                  type="date"
+                  name="eta_date"
+                  defaultValue={manifest.eta_date ?? ""}
+                />
+              </Field>
               <div className="hidden sm:block" />
               <Field label="Departed" help="When it left the vendor">
                 <Input
