@@ -1,6 +1,7 @@
 import { Breadcrumbs } from "@/components/site/Breadcrumbs";
 import { Footer } from "@/components/site/Footer";
 import { Header } from "@/components/site/Header";
+import { SiteText } from "@/components/site/SiteText";
 import { consumerHealthDataParagraphs } from "@/content/consumer-health-data";
 import { renderPolicyParagraph } from "@/lib/policies/renderPolicyParagraph";
 import { pageMetadata } from "@/lib/seo/seo";
@@ -26,8 +27,10 @@ export default function ConsumerHealthDataPage() {
 
         <div className="relative mx-auto max-w-7xl px-4 py-10 md:px-8 md:py-16 lg:py-20">
           <h1 className="text-center text-[1.85rem] font-black uppercase leading-[0.98] tracking-tight text-[var(--orange)] sm:text-[2.5rem] md:text-5xl lg:text-[3.4rem] xl:text-[3.9rem]">
-            <span className="block whitespace-nowrap">Washington Consumer Health Data</span>
-            <span className="block">Privacy Policy</span>
+            {/* Editable from Admin → Site Content (chd.hero.title.*). Legal
+                body below stays fixed for compliance. */}
+            <SiteText blockKey="chd.hero.title.line1" as="span" className="block whitespace-nowrap" />
+            <SiteText blockKey="chd.hero.title.line2" as="span" className="block" />
           </h1>
 
           <article className="mx-auto mt-8 max-w-5xl rounded-[1.35rem] border border-white/10 bg-zinc-950/92 p-5 shadow-2xl shadow-black/35 md:mt-12 md:rounded-[2rem] md:p-8 lg:p-10">
