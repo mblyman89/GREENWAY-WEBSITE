@@ -55,6 +55,7 @@ export const adminNav: AdminNavItem[] = [
   // ── Finance: pay, hours ─────────────────────────────────────────────────
   { label: "Time Clock", href: "/admin/staffing", permission: "loyalty.view", icon: "⏱", group: "Finance" },
   { label: "Payroll (ACH)", href: "/admin/payroll", permission: "settings.manage", icon: "🏦", group: "Finance" },
+  { label: "Vendor Payments (ACH)", href: "/admin/vendor-payments", permission: "settings.manage", icon: "💳", group: "Finance" },
 
   // ── Marketing: promos, content, email, creative ─────────────────────────
   { label: "Promotions", href: "/admin/promotions", permission: "promotions.manage", icon: "%", group: "Marketing" },
