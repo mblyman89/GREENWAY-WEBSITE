@@ -15,7 +15,8 @@
  *   • AdjustmentDate               (Date mm/dd/yyyy)
  * Plus universal columns: CreatedBy / CreatedDate / UpdatedBy / UpdatedDate / Operation.
  */
-import { deriveInventoryExternalId } from "@/lib/compliance/ccrs-identifiers";
+import { deriveInventoryExternalId, sanitizeExternalId } from "@/lib/compliance/ccrs-identifiers";
+import { assembleCcrsFile, ccrsFileName } from "@/lib/compliance/ccrs-batch-core";
 
 /** Minimal license identity needed to build a row (matches CcrsLicenseSettings). */
 export type CcrsLicenseLike = {
@@ -117,6 +118,10 @@ export function adjustmentDetail(note: string | null | undefined): string {
   return (note ?? "").replace(/\s+/g, " ").trim().slice(0, 250);
 }
 
+// A5: the LIVE LCB InventoryAdjustment.csv template is 12 columns — the
+// per-adjustment unique `ExternalIdentifier` sits between AdjustmentDate and
+// CreatedBy and was previously missing (11 cols → CCRS rejection). This set now
+// matches ccrs-batch-core.CCRS_COLUMNS.InventoryAdjustment exactly.
 export const ADJUSTMENT_COLUMNS = [
   "LicenseNumber",
   "InventoryExternalIdentifier",
@@ -124,6 +129,7 @@ export const ADJUSTMENT_COLUMNS = [
   "AdjustmentDetail",
   "Quantity",
   "AdjustmentDate",
+  "ExternalIdentifier",
   "CreatedBy",
   "CreatedDate",
   "UpdatedBy",
@@ -172,6 +178,9 @@ export function mapAdjustmentRow(
   }
 
   const date = mmddyyyy(src.created_at);
+  // A5: the per-adjustment ExternalIdentifier — unique + deterministic so
+  // re-generating the same range yields the same id (idempotent upload).
+  const adjustmentExternalId = sanitizeExternalId(`ADJ-${src.id}`);
   const row = [
     license.licenseNumber,
     externalId,
@@ -179,6 +188,7 @@ export function mapAdjustmentRow(
     adjustmentDetail(src.note),
     adjustmentQuantity(Number(src.qty_delta)),
     date,
+    adjustmentExternalId, // ExternalIdentifier (per-adjustment, unique)
     license.submittedBy, // CreatedBy
     date, // CreatedDate
     license.submittedBy, // UpdatedBy
@@ -188,26 +198,23 @@ export function mapAdjustmentRow(
   return { row };
 }
 
-/** Assemble the full file text. PURE. */
+/**
+ * Assemble the full file text. PURE. A4: uses the shared, spec-verified
+ * assembler so the header is the 3-row common header (SubmittedBy /
+ * SubmittedDate / NumberRecords, one per line), then the exact 12-column header
+ * row, then data rows, joined with \r\n and NumberRecords == data-row count.
+ */
 export function buildAdjustmentFile(rows: string[][], license: CcrsLicenseLike): string {
-  const submittedDate = mmddyyyy(new Date());
-  const out: string[] = [];
-  out.push(["SubmittedBy", "SubmittedDate", "NumberRecords"].map(cell).join(","));
-  out.push([license.submittedBy, submittedDate, String(rows.length)].map(cell).join(","));
-  out.push(ADJUSTMENT_COLUMNS.join(","));
-  for (const r of rows) out.push(r.map(cell).join(","));
-  return out.join("\n") + "\n";
+  return assembleCcrsFile({
+    type: "InventoryAdjustment",
+    submittedBy: license.submittedBy,
+    rows,
+  });
 }
 
-/** File naming: inventoryadjustment_<license>_YYYYMMDDHHMMSS.csv */
+/** File naming (spec convention): InventoryAdjustment_<license>_YYYYMMDDHHMMSS.csv */
 export function makeAdjustmentFileName(licenseNumber: string): string {
-  const d = new Date();
-  const pad = (n: number) => String(n).padStart(2, "0");
-  const stamp = `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}${pad(
-    d.getUTCHours(),
-  )}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}`;
-  const lic = (licenseNumber || "LICENSE").replace(/[^A-Za-z0-9]/g, "");
-  return `inventoryadjustment_${lic}_${stamp}.csv`;
+  return ccrsFileName("InventoryAdjustment", licenseNumber);
 }
 
 // ---------------------------------------------------------------------------
@@ -273,7 +280,8 @@ export function __runCcrsAdjustmentTests(): void {
   eq(r1.row?.[3], "cycle count variance", "AdjustmentDetail");
   eq(r1.row?.[4], "4", "Quantity abs");
   eq(r1.row?.[5], "03/09/2025", "AdjustmentDate");
-  eq(r1.row?.[10], "Insert", "Operation");
+  eq(r1.row?.[6], "ADJ-a1", "ExternalIdentifier (per-adjustment)");
+  eq(r1.row?.[11], "Insert", "Operation (now col 11 of 12)");
   eq(r1.row?.length, ADJUSTMENT_COLUMNS.length, "row width matches columns");
 
   const r2 = mapAdjustmentRow(
@@ -329,14 +337,20 @@ export function __runCcrsAdjustmentTests(): void {
   ok(r5.row === null && !!r5.skipReason, "no-identifier row skipped with reason");
 
   const file = buildAdjustmentFile([r1.row as string[]], lic);
-  const lines = file.trimEnd().split("\n");
-  eq(lines[0], "SubmittedBy,SubmittedDate,NumberRecords", "header labels");
-  ok(lines[1].startsWith("Greenway,"), "submittedBy in row 2");
-  ok(lines[1].endsWith(",1"), "record count = 1");
-  eq(lines[2], ADJUSTMENT_COLUMNS.join(","), "column header");
-  ok(lines[3].startsWith("412345,LOT-ABC-001,Reconciliation,"), "data row");
+  // A4: 3-row common header (one attribute per line) + \r\n line endings.
+  ok(file.includes("\r\n"), "CRLF line endings");
+  const lines = file.trimEnd().split("\r\n");
+  eq(lines[0], "SubmittedBy,Greenway", "row1 SubmittedBy");
+  ok(lines[1].startsWith("SubmittedDate,"), "row2 SubmittedDate");
+  eq(lines[2], "NumberRecords,1", "row3 NumberRecords == 1");
+  eq(lines[3], ADJUSTMENT_COLUMNS.join(","), "column header (12 cols)");
+  ok(lines[4].startsWith("412345,LOT-ABC-001,Reconciliation,"), "data row");
+  // A5: the per-adjustment ExternalIdentifier column is present and populated.
+  eq(ADJUSTMENT_COLUMNS.length, 12, "12 adjustment columns");
+  eq(ADJUSTMENT_COLUMNS[6], "ExternalIdentifier", "col 6 = ExternalIdentifier");
+  ok((r1.row as string[])[6] === "ADJ-a1", "ExternalIdentifier value = ADJ-a1");
 
-  ok(/^inventoryadjustment_412345_\d{14}\.csv$/.test(makeAdjustmentFileName("412345")), "file name pattern");
+  ok(/^InventoryAdjustment_412345_\d{14}\.csv$/.test(makeAdjustmentFileName("412345")), "file name pattern");
 
   console.log(`ccrs-inventory-adjustment-core: ${pass} assertions passed`);
 }

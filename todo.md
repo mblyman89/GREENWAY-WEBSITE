@@ -114,7 +114,7 @@ see `docs/COMMAND_CENTER_ENHANCEMENTS_TASKLIST.md`.
 > Audit: docs/CCRS_COMPLIANCE_AUDIT.md (11 actionable findings, 4 CRITICAL). Roadmap: docs/CCRS_REMEDIATION_ROADMAP.md. New binding standing rule added to AGENTS.md (🔴 CCRS COMPLIANCE — ALWAYS CHECK AND SATISFY).
 - [x] Slice 0 (planning) — standing rule + audit doc + roadmap + todo (this PR)
 - [x] Slice 87 — Sale.csv conformance: RetailSalesTax/CannabisExciseTax + 3-row header + \r\n via shared assembleCcrsFile; deleted divergent local COLUMNS/buildFile (A1/A2/A3/A6). Verified tsx, tsc 0, eslint 0, build OK.
-- [ ] Slice 88 — InventoryAdjustment.csv: add missing ExternalIdentifier column + 3-row header + \r\n (A4/A5) — CRITICAL
+- [x] Slice 88 — InventoryAdjustment.csv: added missing ExternalIdentifier (12th col, ADJ-<id>) + 3-row header + \r\n via shared assembler; matched ccrs-batch-core column set; fixed self-test (A4/A5). tsx 48/48, tsc 0, eslint 0, build OK.
 - [ ] Slice 89 — Pacific-time CCRS dates everywhere (B3) — HIGH
 - [ ] Slice 90 — SaleType RecreationalMedical off orders.medical (B1) — HIGH
 - [ ] Slice 91 — StrainType enum guardrail Indica/Sativa/Hybrid (B2) — HIGH
