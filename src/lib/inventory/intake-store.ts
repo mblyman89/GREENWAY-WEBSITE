@@ -276,27 +276,216 @@ export async function acceptManifest(
   return { ok: true, activated, draftsCreated };
 }
 
-/** Reject a pending manifest: its quarantine lots → destroyed. */
+/**
+ * Reject the WHOLE manifest (refuse-at-dock).
+ *
+ * RESEARCH-GROUNDED (docs/ccrs-rejection-and-returns.md): refused product stays
+ * on the truck and never enters our reported inventory. We therefore mark its
+ * quarantine lots `rejected` (NOT `destroyed`) with a mandatory reason, and file
+ * NOTHING with CCRS — the VENDOR corrects their own manifest via CCRS
+ * Update/Delete. This intentionally no longer destroys product.
+ */
 export async function rejectManifest(
   manifestId: string,
   actorId: string | null,
+  rejection?: { reasonCode: string; reasonText: string },
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!isSupabaseServiceConfigured) {
     return { ok: false, error: "Supabase service role not configured." };
   }
   const admin = createSupabaseAdminClient();
-  await admin
+  const nowIso = new Date().toISOString();
+
+  const { data: lots } = await admin
     .from("inventory_lots")
-    .update({ status: "destroyed", updated_by: actorId })
-    .eq("manifest_id", manifestId)
-    .eq("status", "quarantine");
+    .select("id, status")
+    .eq("manifest_id", manifestId);
+  const rows = (lots as { id: string; status: string }[] | null) ?? [];
+  let rejected = 0;
+  for (const lot of rows) {
+    // Only reject lots not already active/sold (don't claw back accepted stock).
+    if (lot.status === "active" || lot.status === "sold_out") continue;
+    await admin
+      .from("inventory_lots")
+      .update({
+        status: "rejected",
+        disposition: "rejected_at_dock",
+        reject_reason_code: rejection?.reasonCode ?? null,
+        reject_reason: rejection?.reasonText ?? "Whole manifest rejected at dock.",
+        dispositioned_by: actorId,
+        dispositioned_at: nowIso,
+        updated_by: actorId,
+      })
+      .eq("id", lot.id);
+    rejected += 1;
+  }
+
   const { error } = await admin
     .from("inbound_manifests")
-    .update({ status: "rejected", rejected_at: new Date().toISOString(), updated_by: actorId })
+    .update({
+      status: "rejected",
+      rejected_at: nowIso,
+      accepted_lot_count: 0,
+      rejected_lot_count: rejected,
+      updated_by: actorId,
+    })
     .eq("id", manifestId);
   if (error) return { ok: false, error: error.message };
-  await logManifestEvent(manifestId, "rejected", "Manifest rejected; lots destroyed.", actorId);
+  await logManifestEvent(
+    manifestId,
+    "rejected",
+    `Manifest rejected at dock (${rejection?.reasonText ?? "no reason given"}); ${rejected} lot(s) refused — never received. No CCRS filing; vendor to Update/Delete their manifest.`,
+    actorId,
+  );
   return { ok: true };
+}
+
+/**
+ * Set a SINGLE lot's disposition (accepted | rejected_at_dock). Rejection needs
+ * a normalized reason. This only records the decision; inventory side-effects
+ * happen in finalizeManifestDispositions so accept/COA/drafts run once.
+ */
+export async function setLotDisposition(
+  lotId: string,
+  disposition: "accepted" | "rejected_at_dock",
+  actorId: string | null,
+  rejection?: { reasonCode: string; reasonText: string },
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) {
+    return { ok: false, error: "Supabase service role not configured." };
+  }
+  const admin = createSupabaseAdminClient();
+  const patch: Record<string, unknown> = {
+    disposition,
+    dispositioned_by: actorId,
+    dispositioned_at: new Date().toISOString(),
+    updated_by: actorId,
+  };
+  if (disposition === "rejected_at_dock") {
+    patch.reject_reason_code = rejection?.reasonCode ?? null;
+    patch.reject_reason = rejection?.reasonText ?? null;
+  } else {
+    patch.reject_reason_code = null;
+    patch.reject_reason = null;
+  }
+  const { error } = await admin.from("inventory_lots").update(patch).eq("id", lotId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/**
+ * Finalize a manifest after per-lot dispositions are set: activate ACCEPTED lots
+ * (quarantine → active + a `receive` adjustment), leave REJECTED lots out of
+ * inventory (status `rejected`, never destroyed), seed drafts + archive COAs for
+ * the accepted set only, and stamp the manifest's derived status + counts
+ * (accepted | rejected | partially_accepted).
+ *
+ * Any lot left `pending` is treated as ACCEPTED by default (an employee who
+ * finalizes without explicitly rejecting a line is accepting it). Callers that
+ * want stricter behavior can require all lots to be dispositioned first.
+ */
+export async function finalizeManifestDispositions(
+  manifestId: string,
+  actorId: string | null,
+): Promise<
+  | {
+      ok: true;
+      derivedStatus: "accepted" | "rejected" | "partially_accepted";
+      activated: number;
+      rejected: number;
+      draftsCreated: number;
+    }
+  | { ok: false; error: string }
+> {
+  if (!isSupabaseServiceConfigured) {
+    return { ok: false, error: "Supabase service role not configured." };
+  }
+  const admin = createSupabaseAdminClient();
+  const nowIso = new Date().toISOString();
+
+  const { data: lots } = await admin
+    .from("inventory_lots")
+    .select("id, received_qty, status, disposition")
+    .eq("manifest_id", manifestId);
+  const rows =
+    (lots as
+      | { id: string; received_qty: number; status: string; disposition: string | null }[]
+      | null) ?? [];
+
+  let activated = 0;
+  let rejected = 0;
+  for (const lot of rows) {
+    const decided = lot.disposition === "rejected_at_dock" ? "rejected_at_dock" : "accepted";
+    if (decided === "accepted") {
+      // Only activate lots that are still in quarantine (idempotent).
+      if (lot.status === "quarantine" || lot.status === "pending") {
+        await admin
+          .from("inventory_lots")
+          .update({ status: "active", disposition: "accepted", updated_by: actorId })
+          .eq("id", lot.id);
+        await admin.from("inventory_adjustments").insert({
+          lot_id: lot.id,
+          qty_delta: lot.received_qty,
+          reason: "receive",
+          note: "Accepted from vendor manifest intake (partial-accept flow).",
+          actor_id: actorId,
+        });
+      }
+      activated += 1;
+    } else {
+      // Refused at dock: never received. Mark rejected; never destroy.
+      if (lot.status !== "active" && lot.status !== "sold_out") {
+        await admin
+          .from("inventory_lots")
+          .update({ status: "rejected", dispositioned_at: nowIso, updated_by: actorId })
+          .eq("id", lot.id);
+      }
+      rejected += 1;
+    }
+  }
+
+  let derivedStatus: "accepted" | "rejected" | "partially_accepted";
+  if (activated > 0 && rejected > 0) derivedStatus = "partially_accepted";
+  else if (activated > 0) derivedStatus = "accepted";
+  else derivedStatus = "rejected";
+
+  const { error } = await admin
+    .from("inbound_manifests")
+    .update({
+      status: derivedStatus,
+      accepted_at: activated > 0 ? nowIso : null,
+      rejected_at: rejected > 0 ? nowIso : null,
+      accepted_lot_count: activated,
+      rejected_lot_count: rejected,
+      updated_by: actorId,
+    })
+    .eq("id", manifestId);
+  if (error) return { ok: false, error: error.message };
+
+  await logManifestEvent(
+    manifestId,
+    derivedStatus,
+    `Finalized: ${activated} accepted, ${rejected} refused at dock. Refused lots never entered inventory; no CCRS filing (vendor to Update/Delete their manifest).`,
+    actorId,
+  );
+
+  // Seed drafts + archive COAs only when something was accepted. Best-effort.
+  let draftsCreated = 0;
+  if (activated > 0) {
+    try {
+      const match = await seedDraftsForManifest(manifestId, actorId);
+      draftsCreated = match.unmatched;
+    } catch (err) {
+      console.error("[intake-store] seedDraftsForManifest failed:", err);
+    }
+    try {
+      await archiveCoasForManifest(manifestId);
+    } catch (err) {
+      console.error("[intake-store] archiveCoasForManifest failed:", err);
+    }
+  }
+
+  return { ok: true, derivedStatus, activated, rejected, draftsCreated };
 }
 
 /** Lots tied to a manifest, for the review screen. */
@@ -306,7 +495,7 @@ export async function listManifestLots(manifestId: string) {
   const { data } = await admin
     .from("inventory_lots")
     .select(
-      "id, product_name, lot_code, received_qty, unit, pos_product_key, lab_result_id, status, expires_on, is_sample, strain_name",
+      "id, product_name, lot_code, received_qty, unit, pos_product_key, lab_result_id, status, expires_on, is_sample, strain_name, disposition, reject_reason, reject_reason_code",
     )
     .eq("manifest_id", manifestId)
     .order("product_name", { ascending: true });
@@ -324,6 +513,9 @@ export async function listManifestLots(manifestId: string) {
           expires_on: string | null;
           is_sample: boolean;
           strain_name: string | null;
+          disposition: string | null;
+          reject_reason: string | null;
+          reject_reason_code: string | null;
         }[]
       | null) ?? []
   );

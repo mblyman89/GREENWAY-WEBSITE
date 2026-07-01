@@ -27,18 +27,21 @@ export const MANIFEST_STAGES = [
   "in_transit",
   "received",
   "accepted",
+  "partially_accepted",
   "rejected",
 ] as const;
 
 export type ManifestStage = (typeof MANIFEST_STAGES)[number];
 
-/** Order used to know how far a manifest has progressed. Rejected shares the
- * terminal slot with accepted so the rail renders correctly. */
+/** Order used to know how far a manifest has progressed. The terminal stages
+ * (accepted / partially_accepted / rejected) share the final slot so the rail
+ * renders correctly. */
 export const STAGE_ORDER: Record<string, number> = {
   pending: 0,
   in_transit: 1,
   received: 2,
   accepted: 3,
+  partially_accepted: 3,
   rejected: 3,
 };
 
@@ -67,9 +70,14 @@ export const STAGE_META: Record<
     blurb: "Lots activated and receive adjustments logged.",
     tone: "green",
   },
+  partially_accepted: {
+    label: "Partially Accepted",
+    blurb: "Some lots accepted; the rest were refused at the dock (never received).",
+    tone: "gold",
+  },
   rejected: {
     label: "Rejected",
-    blurb: "Discarded; lots were destroyed and never sellable.",
+    blurb: "Refused at the dock — never received (nothing destroyed; no CCRS filing).",
     tone: "danger",
   },
 };
@@ -99,6 +107,7 @@ export type StageCounts = {
   in_transit: number;
   received: number;
   accepted: number;
+  partially_accepted: number;
   rejected: number;
   /** Convenience rollup: pending + in_transit + received. */
   open: number;
@@ -112,6 +121,7 @@ export function emptyStageCounts(): StageCounts {
     in_transit: 0,
     received: 0,
     accepted: 0,
+    partially_accepted: 0,
     rejected: 0,
     open: 0,
     awaitingIntake: 0,
@@ -211,7 +221,8 @@ export function groupPipeline<T extends PipelineRow>(rows: T[]): GroupedPipeline
     if (s === "received") out.awaitingIntake.push(r);
     else if (s === "in_transit") out.inTransit.push(r);
     else if (s === "pending") out.pending.push(r);
-    else if (s === "accepted") out.accepted.push(r);
+    // Partially-accepted lives with accepted (it did enter inventory).
+    else if (s === "accepted" || s === "partially_accepted") out.accepted.push(r);
     else out.rejected.push(r);
   }
   return out;

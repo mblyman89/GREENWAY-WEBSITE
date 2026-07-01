@@ -23,8 +23,11 @@ export type InboundManifest = {
   source_format: string;
   /** Captured COA references (snapshot for the KB). */
   coa_links: ManifestCoaLink[];
-  status: string; // pending | in_transit | received | accepted | rejected
+  status: string; // pending | in_transit | received | accepted | partially_accepted | rejected
   notes: string | null;
+  // Denormalized lot rollups for the partial-accept badge (migration 0059).
+  accepted_lot_count?: number;
+  rejected_lot_count?: number;
   // --- Lifecycle timestamps + ETA (Slice 18/74, migration 0032). All nullable. ---
   in_transit_at: string | null;
   received_at: string | null;
