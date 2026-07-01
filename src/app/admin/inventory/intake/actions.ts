@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
-import { parseVendorJson } from "@/lib/inventory/intake-parser";
+import { parseVendorJson, type ParsedManifest } from "@/lib/inventory/intake-parser";
 import { fetchTransferJson } from "@/lib/inventory/transfer-fetch";
 import {
   stageManifest,
@@ -11,8 +11,13 @@ import {
   rejectManifest,
   setLotDisposition,
   finalizeManifestDispositions,
+  updateManifestTransport,
 } from "@/lib/inventory/intake-store";
 import { normalizeRejection } from "@/lib/inventory/intake-disposition-core";
+import {
+  parseCcrsManifestCsv,
+  ccrsToParsedManifest,
+} from "@/lib/inventory/ccrs-manifest-csv-core";
 
 /** Shared: parse + stage a JSON payload, redirect on each failure mode. */
 async function stageJsonText(
@@ -73,6 +78,83 @@ export async function importManifestFromUrlAction(formData: FormData) {
   }
 
   await stageJsonText(fetched.jsonText, session.userId, fetched.finalUrl);
+}
+
+/**
+ * Import the OFFICIAL Washington CCRS Transportation Manifest CSV (the file the
+ * sending licensee uploads to CCRS, or its downloadable template). Grounded in
+ * the LCB spec (see src/lib/inventory/ccrs-manifest-csv-core.ts). CCRS carries
+ * only identifiers + quantities + lab-test id — NOT product names/prices/COAs —
+ * so the staged lines are sparse DRAFTS that staff enrich during review. We also
+ * seed the transport chain-of-custody + ETA from the manifest header.
+ */
+export async function importManifestCsvAction(formData: FormData) {
+  const session = await requirePermission("inventory.manage");
+  const csvText = (formData.get("csv_text") as string | null)?.trim() ?? "";
+  if (!csvText) {
+    redirect("/admin/inventory/intake?error=emptycsv");
+  }
+
+  const parsed = parseCcrsManifestCsv(csvText);
+  if (!parsed.ok) {
+    redirect("/admin/inventory/intake?error=csvparse");
+  }
+  const mapped = ccrsToParsedManifest(parsed);
+  if (mapped.lines.length === 0) {
+    redirect("/admin/inventory/intake?error=nolines");
+  }
+
+  // Adapt to the shared ParsedManifest shape stageManifest expects.
+  const manifest: ParsedManifest = {
+    manifest_number: mapped.manifest_number,
+    vendor_label: mapped.vendor_label,
+    vendor_license: mapped.vendor_license,
+    transfer_date: mapped.transfer_date,
+    source_format: "ccrs-csv",
+    lines: mapped.lines,
+    warnings: mapped.warnings,
+  };
+
+  const staged = await stageManifest(manifest, csvText, session.userId, {
+    sourceUrl: null,
+  });
+  revalidatePath("/admin/inventory/intake");
+  if (!staged.ok) {
+    redirect("/admin/inventory/intake?error=save");
+  }
+
+  // Seed transport chain-of-custody + ETA from the CCRS header (best-effort).
+  const t = mapped.transport;
+  if (
+    t.driver_name ||
+    t.vehicle_plate ||
+    t.vehicle_vin ||
+    t.vehicle_description ||
+    t.transporter_license ||
+    t.departed_at ||
+    t.arrived_at ||
+    t.eta_date
+  ) {
+    await updateManifestTransport(
+      staged.manifestId,
+      {
+        transporter_name: null,
+        transporter_license: t.transporter_license,
+        driver_name: t.driver_name,
+        driver_license_number: null,
+        vehicle_description: t.vehicle_description,
+        vehicle_plate: t.vehicle_plate,
+        vehicle_vin: t.vehicle_vin,
+        departed_at: t.departed_at,
+        arrived_at: t.arrived_at,
+        route_notes: null,
+        eta_date: t.eta_date,
+      },
+      session.userId,
+    );
+  }
+
+  redirect(`/admin/inventory/intake/${staged.manifestId}?staged=1&csv=1`);
 }
 
 export async function acceptManifestAction(manifestId: string) {
