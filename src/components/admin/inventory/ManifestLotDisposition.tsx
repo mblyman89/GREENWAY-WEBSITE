@@ -42,6 +42,11 @@ export function ManifestLotDisposition({
   const acceptBound = acceptAction.bind(null, manifestId, lotId, "accepted");
   const rejectBound = acceptAction.bind(null, manifestId, lotId, "rejected_at_dock");
 
+  // Slice 81b guard-rail: reality is refuse-at-dock, never accept-then-reject.
+  // When a line is ALREADY marked accepted and the intaker switches to reject,
+  // surface a warning so they don't accept product then reject/return it later.
+  const wasAccepted = disposition === "accepted";
+
   if (disposition === "accepted" && mode !== "rejecting") {
     return (
       <span className="inline-flex items-center gap-2">
@@ -84,6 +89,13 @@ export function ManifestLotDisposition({
   if (mode === "rejecting") {
     return (
       <form action={rejectBound} className="flex flex-col gap-2">
+        {wasAccepted && (
+          <p className="rounded border border-[var(--admin-orange)]/40 bg-[var(--admin-orange)]/10 px-2 py-1.5 text-[11px] leading-snug text-[var(--admin-orange)]">
+            <strong>Heads up:</strong> this line was already marked accepted. Product should be
+            refused at the dock <em>before</em> you accept it &mdash; accepting first and rejecting
+            later means it briefly entered inventory. Only continue if this is a genuine correction.
+          </p>
+        )}
         <Select
           name="reason_code"
           value={reasonCode}

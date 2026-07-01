@@ -462,6 +462,7 @@ export default async function ManifestReviewPage({
               steps={[
                 "Mark each line Accept or Reject above. Only accepted lots enter inventory (quarantine → active).",
                 "Rejecting is 'refuse at the dock' — the product leaves with the driver and never becomes your reported inventory. Nothing is destroyed.",
+                "Decide BEFORE you accept. Refuse questionable product at the dock rather than accepting it and rejecting/returning it later — once a lot is accepted it briefly enters inventory.",
                 "Because refused product was never yours, you file NOTHING with CCRS. Ask the vendor to submit a CCRS manifest Update (to fix a quantity) or Delete (to remove a line) so their record matches what physically stayed.",
                 "Do NOT create a return manifest for driver-present refusals. Contingency manifests are discontinued (WSLCB, Nov 2025).",
                 "When every line is decided, click Finalize intake. A mix of accept + reject marks the manifest 'Partially Accepted'.",
