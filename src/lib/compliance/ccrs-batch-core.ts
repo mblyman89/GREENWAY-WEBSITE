@@ -16,6 +16,7 @@
  * The generators that read the database live in ccrs-batch.ts (server-only);
  * they call into the assemblers here so the spec stays in one factual place.
  */
+import { pacificDayKey } from "@/lib/reports/timezone";
 
 /** The seven upload types a WA RETAILER is required to report (Table 1). */
 export type CcrsRetailerFileType =
@@ -159,12 +160,16 @@ export function ccrsCell(v: unknown): string {
   return /[,\n]/.test(clean) ? `"${clean}"` : clean;
 }
 
-/** MM/DD/YYYY in UTC (matches the Sale.csv generator). */
+/**
+ * MM/DD/YYYY for the **Pacific** calendar day (B3). Greenway operates in
+ * America/Los_Angeles, so a sale/adjustment recorded after ~4–5 PM Pacific is
+ * the NEXT day in UTC; formatting from UTC would report the wrong calendar day
+ * and could slip a Saturday-evening sale into the next Sun–Sat CCRS week. We
+ * derive the Pacific day (via the reporting timezone helper) and reformat.
+ */
 export function ccrsDate(iso: string | Date): string {
-  const d = typeof iso === "string" ? new Date(iso) : iso;
-  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
-  const dd = String(d.getUTCDate()).padStart(2, "0");
-  const yyyy = d.getUTCFullYear();
+  const key = pacificDayKey(iso); // YYYY-MM-DD in America/Los_Angeles
+  const [yyyy, mm, dd] = key.split("-");
   return `${mm}/${dd}/${yyyy}`;
 }
 
@@ -257,7 +262,9 @@ export function __runCcrsBatchCoreTests(): void {
   const file = assembleCcrsFile({
     type: "Strain",
     submittedBy: "Jane Doe",
-    submittedDate: new Date(Date.UTC(2025, 5, 15)),
+    // B3: SubmittedDate is the Pacific calendar day. Use noon UTC (= ~4–5 AM
+    // Pacific) so the intended day (06/15) is unambiguous across DST.
+    submittedDate: new Date(Date.UTC(2025, 5, 15, 12, 0, 0)),
     rows: [
       ["123456", "Blue Dream", "Hybrid", "Jane Doe", "06/15/2025"],
       ["123456", "OG Kush", "Indica", "Jane Doe", "06/15/2025"],
