@@ -1,9 +1,7 @@
 # Back Office Review Tasklist — Slices 43–64
 
-Slices 43–60: [x] (done, merged)
+Slices 43–61: [x] (done, merged)
 
-## Slice 61 — Help & FAQ all-inclusive
-- [ ] pending
 ## Slice 62 — Audit log: filters + AI anomaly detection
 - [ ] pending
 ## Slice 63 — Settings overhaul
