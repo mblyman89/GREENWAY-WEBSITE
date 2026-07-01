@@ -39,7 +39,7 @@ see `docs/COMMAND_CENTER_ENHANCEMENTS_TASKLIST.md`.
 - [x] BATCH 1 COMPLETE (Slices 65–70)
 
 ## BATCH 2 — AI enrichment, compliance, marketing, seeds, mobile
-- [ ] Slice 71 — Sample compliance WAC 314-55-096 (hard blocks) [item 6]
+- [x] Slice 71 — Sample compliance WAC 314-55-096 (hard blocks) [item 6] — migration 0054 (trade_sample_settings + trade_sample_events, idempotent); PURE core (quarter keys, per-unit size caps, cap eval) tsx-tested; store w/ hard-block enforcement; /admin/compliance/samples (recorder + per-processor/per-employee insight bars, ledger, owner settings, no-customer notice); nav entry; verify OK; PR #TBD merged
 - [ ] Slice 72 — Midjourney prompt builder + media overhaul [items 7+17]
 - [ ] Slice 73 — Sage 50 KB enrichment + Chart of Accounts upload [items 1+13]
 - [ ] Slice 74 — Manifest pipeline pending/in-transit/awaiting-intake [item 10]
