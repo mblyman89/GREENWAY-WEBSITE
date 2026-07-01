@@ -142,6 +142,12 @@ export default async function SettingsHomePage() {
           description: "A plain-language history of every change, with a security review.",
           icon: "📜",
         },
+        {
+          href: "/admin/settings/security",
+          title: "Security & passkeys",
+          description: "Add Face ID / Touch ID sign-in for your own account.",
+          icon: "🔑",
+        },
       ],
     },
   ];

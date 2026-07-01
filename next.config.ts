@@ -2,6 +2,12 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   allowedDevOrigins: ["127.0.0.1"],
+  // @simplewebauthn/server depends on cbor-x, whose native require() path breaks
+  // under Vercel's bundler. Disabling native acceleration avoids the
+  // "extractStrings is not a function" verify error (per SimpleWebAuthn docs).
+  env: {
+    CBOR_NATIVE_ACCELERATION_DISABLED: "true",
+  },
   // The LIQ-1295 excise-return route reads the official .xlsx template at
   // runtime via fs. Next's tracer doesn't follow that dynamic read, so include
   // the template explicitly in the route's serverless bundle.

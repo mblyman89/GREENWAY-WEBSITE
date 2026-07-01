@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { supportsPasskeys, authenticatePasskey } from "@/lib/auth/webauthn-client";
 
 type Mode = "password" | "magic";
 
@@ -13,8 +14,36 @@ export function LoginForm({ initialError }: { initialError?: string | null }) {
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "sent">("idle");
   const [error, setError] = useState<string | null>(initialError ?? null);
+  const [canBiometric, setCanBiometric] = useState(false);
+  const [bioBusy, setBioBusy] = useState(false);
 
   const supabase = createSupabaseBrowserClient();
+
+  useEffect(() => {
+    // Detect passkey support after mount (browser-only API). Defer the state
+    // update out of the effect body to avoid a synchronous cascading render.
+    const id = requestAnimationFrame(() => setCanBiometric(supportsPasskeys()));
+    return () => cancelAnimationFrame(id);
+  }, []);
+
+  async function handleBiometric() {
+    setError(null);
+    if (!email) {
+      setError("Enter your email first, then use Face ID / Touch ID.");
+      return;
+    }
+    setBioBusy(true);
+    try {
+      const { tokenHash } = await authenticatePasskey(email);
+      const { error } = await supabase.auth.verifyOtp({ type: "magiclink", token_hash: tokenHash });
+      if (error) throw new Error(error.message);
+      router.refresh();
+      router.push("/admin");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Biometric sign-in failed.");
+      setBioBusy(false);
+    }
+  }
 
   async function handlePassword(e: React.FormEvent) {
     e.preventDefault();
@@ -109,6 +138,28 @@ export function LoginForm({ initialError }: { initialError?: string | null }) {
             ? "Sign in"
             : "Email me a sign-in link"}
       </button>
+
+      {canBiometric && mode === "password" && (
+        <>
+          <div className="flex items-center gap-3 py-1">
+            <span className="h-px flex-1 bg-white/10" />
+            <span className="text-[0.65rem] uppercase tracking-wide text-white/30">or</span>
+            <span className="h-px flex-1 bg-white/10" />
+          </div>
+          <button
+            type="button"
+            onClick={handleBiometric}
+            disabled={bioBusy || status === "loading"}
+            className="flex w-full items-center justify-center gap-2 rounded-full border border-[#7ed957]/40 bg-[#7ed957]/10 px-4 py-3 text-sm font-bold uppercase tracking-wide text-[#7ed957] transition hover:bg-[#7ed957]/20 disabled:opacity-60"
+          >
+            <span aria-hidden>👤</span>
+            {bioBusy ? "Waiting for Face ID / Touch ID…" : "Sign in with Face ID / Touch ID"}
+          </button>
+          <p className="text-center text-[0.65rem] text-white/35">
+            Enter your email above, then use the passkey saved on this device.
+          </p>
+        </>
+      )}
 
       <button
         type="button"
