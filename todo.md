@@ -15,7 +15,7 @@ Standing rules: AI output = drafts only; migrations applied manually by owner
 - [x] Slice 49 — Tax: taxable non-cannabis section + tax by type/category. PR #153.
 - [x] Slice 50 — Customer reporting: newsletter stats suite (Resend + SendGrid). PR #154.
 - [x] Slice 51 — Loyalty/discount reporting polish (program economics + tiers + code funnel + export). PR #155.
-- [ ] Slice 52 — Employees reporting enrichment.
+- [x] Slice 52 — Employees reporting enrichment (work/break, schedule adherence, orders handled, breakdowns, export). PR #156.
 - [ ] Slice 53 — Medical reporting enrichment.
 - [ ] Slice 54 — CCRS reporting + automated upload pipeline + AI.
 - [ ] Slice 55 — Excise: LCB payments portal + full LIQ-1295 + clickable review issues.
