@@ -334,64 +334,239 @@ export async function getLoyaltyReport(fromISO: string, toISO: string): Promise<
 export type EmployeeReportRow = {
   employeeId: string;
   name: string;
+  jobRole: string;
+  active: boolean;
   shifts: number;
-  minutesWorked: number;
+  daysWorked: number;
+  minutesWorked: number; // work punches only (break excluded)
+  breakMinutes: number;
+  avgShiftMinutes: number;
+  ordersHandled: number;
+  lastActiveDay: string | null;
 };
 
 export type EmployeeReport = {
+  // headline
+  activeEmployees: number;
+  inactiveEmployees: number;
   totalShifts: number;
-  totalMinutes: number;
+  totalMinutes: number; // net worked minutes
+  totalBreakMinutes: number;
+  avgShiftMinutes: number;
+  // schedule adherence
+  scheduledMinutes: number;
+  scheduleAdherence: number; // actual / scheduled (0..1+)
+  onTimeRate: number; // shifts started <=5 min after scheduled_start (0..1)
+  // breakdowns
+  shiftsByStatus: { label: string; count: number }[];
+  punchesBySource: { label: string; count: number }[];
+  roleBreakdown: { label: string; minutes: number }[];
+  dailyCoverage: { date: string; minutes: number }[];
   rows: EmployeeReportRow[];
 };
 
+export const EMPTY_EMPLOYEE_REPORT: EmployeeReport = {
+  activeEmployees: 0,
+  inactiveEmployees: 0,
+  totalShifts: 0,
+  totalMinutes: 0,
+  totalBreakMinutes: 0,
+  avgShiftMinutes: 0,
+  scheduledMinutes: 0,
+  scheduleAdherence: 0,
+  onTimeRate: 0,
+  shiftsByStatus: [],
+  punchesBySource: [],
+  roleBreakdown: [],
+  dailyCoverage: [],
+  rows: [],
+};
+
+const SHIFT_STATUS_LABELS: Record<string, string> = {
+  scheduled: "Scheduled",
+  open: "Open",
+  closed: "Closed",
+};
+const PUNCH_SOURCE_LABELS: Record<string, string> = {
+  web: "Web",
+  station: "Station",
+  manager_edit: "Manager edit",
+};
+
 export async function getEmployeeReport(fromDate: string, toDate: string): Promise<EmployeeReport> {
-  if (!isSupabaseServiceConfigured) return { totalShifts: 0, totalMinutes: 0, rows: [] };
+  if (!isSupabaseServiceConfigured) return { ...EMPTY_EMPLOYEE_REPORT };
   const admin = createSupabaseAdminClient();
 
   const [{ data: shifts }, { data: employees }, { data: punches }] = await Promise.all([
     admin
       .from("shifts")
-      .select("id, employee_id, business_day")
+      .select("id, employee_id, business_day, shift_role, status, scheduled_start, scheduled_end, started_at, ended_at")
       .gte("business_day", fromDate)
       .lte("business_day", toDate),
-    admin.from("employees").select("id, full_name"),
+    admin.from("employees").select("id, full_name, job_role, active, staff_id"),
     admin
       .from("time_punches")
-      .select("employee_id, minutes, business_day")
+      .select("employee_id, punch_kind, minutes, source, business_day, clock_in_at")
       .gte("business_day", fromDate)
       .lte("business_day", toDate),
   ]);
 
-  const empName = new Map(
-    ((employees as { id: string; full_name: string }[] | null) ?? []).map((e) => [e.id, e.full_name]),
-  );
-  const shiftRows = (shifts as { id: string; employee_id: string }[] | null) ?? [];
-  const punchRows = (punches as { employee_id: string; minutes: number | null }[] | null) ?? [];
+  const empRows =
+    (employees as { id: string; full_name: string; job_role: string; active: boolean; staff_id: string | null }[] | null) ??
+    [];
+  const empById = new Map(empRows.map((e) => [e.id, e]));
+  const shiftRows =
+    (shifts as
+      | {
+          id: string;
+          employee_id: string;
+          business_day: string;
+          shift_role: string;
+          status: string;
+          scheduled_start: string | null;
+          scheduled_end: string | null;
+          started_at: string | null;
+          ended_at: string | null;
+        }[]
+      | null) ?? [];
+  const punchRows =
+    (punches as
+      | { employee_id: string; punch_kind: string; minutes: number | null; source: string; business_day: string; clock_in_at: string }[]
+      | null) ?? [];
 
-  const byEmp = new Map<string, { shifts: number; minutes: number }>();
+  // --- Orders handled per employee (via employees.staff_id -> orders.handled_by) ---
+  const staffToEmp = new Map<string, string>();
+  for (const e of empRows) if (e.staff_id) staffToEmp.set(e.staff_id, e.id);
+  const ordersHandled = new Map<string, number>();
+  if (staffToEmp.size > 0) {
+    const { data: orders } = await admin
+      .from("orders")
+      .select("handled_by, placed_at")
+      .gte("placed_at", `${fromDate}T00:00:00Z`)
+      .lte("placed_at", `${toDate}T23:59:59Z`)
+      .not("handled_by", "is", null);
+    for (const o of (orders as { handled_by: string | null }[] | null) ?? []) {
+      const empId = o.handled_by ? staffToEmp.get(o.handled_by) : undefined;
+      if (empId) ordersHandled.set(empId, (ordersHandled.get(empId) ?? 0) + 1);
+    }
+  }
+
+  // --- Per-employee aggregation ---
+  type Agg = {
+    shifts: number;
+    workMinutes: number;
+    breakMinutes: number;
+    days: Set<string>;
+    lastDay: string | null;
+  };
+  const byEmp = new Map<string, Agg>();
+  const ensure = (id: string): Agg => {
+    let a = byEmp.get(id);
+    if (!a) {
+      a = { shifts: 0, workMinutes: 0, breakMinutes: 0, days: new Set(), lastDay: null };
+      byEmp.set(id, a);
+    }
+    return a;
+  };
+
   for (const s of shiftRows) {
-    const cur = byEmp.get(s.employee_id) ?? { shifts: 0, minutes: 0 };
-    cur.shifts += 1;
-    byEmp.set(s.employee_id, cur);
+    const a = ensure(s.employee_id);
+    a.shifts += 1;
+    a.days.add(s.business_day);
+    if (!a.lastDay || s.business_day > a.lastDay) a.lastDay = s.business_day;
   }
   for (const p of punchRows) {
-    const cur = byEmp.get(p.employee_id) ?? { shifts: 0, minutes: 0 };
-    cur.minutes += p.minutes ?? 0;
-    byEmp.set(p.employee_id, cur);
+    const a = ensure(p.employee_id);
+    const m = p.minutes ?? 0;
+    if (p.punch_kind === "break") a.breakMinutes += m;
+    else a.workMinutes += m;
+    a.days.add(p.business_day);
+    if (!a.lastDay || p.business_day > a.lastDay) a.lastDay = p.business_day;
   }
 
   const rows: EmployeeReportRow[] = [...byEmp.entries()]
-    .map(([employeeId, v]) => ({
-      employeeId,
-      name: empName.get(employeeId) ?? "Employee",
-      shifts: v.shifts,
-      minutesWorked: v.minutes,
-    }))
+    .map(([employeeId, v]) => {
+      const emp = empById.get(employeeId);
+      return {
+        employeeId,
+        name: emp?.full_name ?? "Employee",
+        jobRole: emp?.job_role ?? "sales",
+        active: emp?.active ?? true,
+        shifts: v.shifts,
+        daysWorked: v.days.size,
+        minutesWorked: v.workMinutes,
+        breakMinutes: v.breakMinutes,
+        avgShiftMinutes: v.shifts > 0 ? Math.round(v.workMinutes / v.shifts) : 0,
+        ordersHandled: ordersHandled.get(employeeId) ?? 0,
+        lastActiveDay: v.lastDay,
+      };
+    })
     .sort((a, b) => b.minutesWorked - a.minutesWorked);
 
+  // --- Schedule adherence ---
+  let scheduledMinutes = 0;
+  let scheduledShiftsWithStart = 0;
+  let onTimeShifts = 0;
+  for (const s of shiftRows) {
+    if (s.scheduled_start && s.scheduled_end) {
+      const mins = Math.max(
+        0,
+        Math.round((new Date(s.scheduled_end).getTime() - new Date(s.scheduled_start).getTime()) / 60000),
+      );
+      scheduledMinutes += mins;
+    }
+    if (s.scheduled_start && s.started_at) {
+      scheduledShiftsWithStart += 1;
+      const lateMs = new Date(s.started_at).getTime() - new Date(s.scheduled_start).getTime();
+      if (lateMs <= 5 * 60000) onTimeShifts += 1; // within 5 minutes = on time
+    }
+  }
+
+  // --- Breakdowns ---
+  const statusMap = new Map<string, number>();
+  for (const s of shiftRows) statusMap.set(s.status, (statusMap.get(s.status) ?? 0) + 1);
+  const shiftsByStatus = [...statusMap.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([status, count]) => ({ label: SHIFT_STATUS_LABELS[status] ?? status, count }));
+
+  const sourceMap = new Map<string, number>();
+  for (const p of punchRows) sourceMap.set(p.source, (sourceMap.get(p.source) ?? 0) + 1);
+  const punchesBySource = [...sourceMap.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([source, count]) => ({ label: PUNCH_SOURCE_LABELS[source] ?? source, count }));
+
+  const roleMap = new Map<string, number>();
+  for (const r of rows) roleMap.set(r.jobRole, (roleMap.get(r.jobRole) ?? 0) + r.minutesWorked);
+  const roleBreakdown = [...roleMap.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([role, minutes]) => ({ label: role.charAt(0).toUpperCase() + role.slice(1), minutes }));
+
+  const coverageMap = new Map<string, number>();
+  for (const p of punchRows) {
+    if (p.punch_kind === "break") continue;
+    coverageMap.set(p.business_day, (coverageMap.get(p.business_day) ?? 0) + (p.minutes ?? 0));
+  }
+  const dailyCoverage = [...coverageMap.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([date, minutes]) => ({ date, minutes }));
+
+  const totalMinutes = rows.reduce((a, r) => a + r.minutesWorked, 0);
+  const totalBreakMinutes = rows.reduce((a, r) => a + r.breakMinutes, 0);
+
   return {
+    activeEmployees: empRows.filter((e) => e.active).length,
+    inactiveEmployees: empRows.filter((e) => !e.active).length,
     totalShifts: shiftRows.length,
-    totalMinutes: rows.reduce((a, r) => a + r.minutesWorked, 0),
+    totalMinutes,
+    totalBreakMinutes,
+    avgShiftMinutes: shiftRows.length > 0 ? Math.round(totalMinutes / shiftRows.length) : 0,
+    scheduledMinutes,
+    scheduleAdherence: scheduledMinutes > 0 ? totalMinutes / scheduledMinutes : 0,
+    onTimeRate: scheduledShiftsWithStart > 0 ? onTimeShifts / scheduledShiftsWithStart : 0,
+    shiftsByStatus,
+    punchesBySource,
+    roleBreakdown,
+    dailyCoverage,
     rows,
   };
 }
