@@ -15,6 +15,14 @@
   **Until this is run, `/admin/compliance/samples` will show default caps and
   cannot persist events.**
 
+- [ ] **`supabase/migrations/0055_flux_credentials.sql`** — Slice A (item 19).
+  Adds three columns to the existing `public.integration_credentials` singleton
+  (`flux_api_key`, `flux_endpoint` default `flux-2-max`, `flux_base_url`) for the
+  Black Forest Labs FLUX 2 image pipeline. RLS is inherited from migration 0053
+  (admin read/write). No data backfill — the empty row already exists.
+  **Until this is run, the FLUX API-key field on Settings → Integrations has
+  nowhere to save, so "Generate with FLUX 2" stays disabled.**
+
 ---
 
 ### How to run

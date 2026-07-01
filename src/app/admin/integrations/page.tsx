@@ -7,7 +7,7 @@ import { describeLeaflyRuntimeAsync } from "@/lib/leafly/client";
 import { describeWeedmapsRuntimeAsync } from "@/lib/weedmaps/client";
 import { getAccountingSettings, missingGlAccounts } from "@/lib/accounting/sage50";
 import { getIntegrationCredentialsView } from "@/lib/integrations/integration-credentials-store";
-import { LeaflyCredentialsForm, WeedmapsCredentialsForm } from "./CredentialsEditor";
+import { LeaflyCredentialsForm, WeedmapsCredentialsForm, FluxCredentialsForm } from "./CredentialsEditor";
 
 export const dynamic = "force-dynamic";
 
@@ -76,6 +76,7 @@ export default async function IntegrationsPage() {
           <div className="grid gap-6 lg:grid-cols-2">
             <LeaflyCredentialsForm view={credentials.leafly} />
             <WeedmapsCredentialsForm view={credentials.weedmaps} />
+            <FluxCredentialsForm view={credentials.flux} />
           </div>
         </section>
 

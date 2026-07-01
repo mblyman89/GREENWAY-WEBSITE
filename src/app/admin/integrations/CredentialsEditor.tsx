@@ -14,7 +14,9 @@ import type { CredentialsView } from "@/lib/integrations/integration-credentials
 import {
   saveLeaflyCredentialsAction,
   saveWeedmapsCredentialsAction,
+  saveFluxCredentialsAction,
 } from "./credential-actions";
+import { FLUX_ENDPOINTS } from "@/lib/marketing/flux-core";
 
 type Source = "database" | "environment" | "unset";
 
@@ -247,6 +249,92 @@ export function WeedmapsCredentialsForm({ view }: { view: CredentialsView["weedm
       <div className="mt-4 flex items-center gap-3">
         <Button onClick={save} disabled={pending}>
           {pending ? "Saving…" : "Save WeedMaps credentials"}
+        </Button>
+        {msg ? (
+          <span
+            className={
+              msg.ok
+                ? "text-xs font-medium text-[var(--admin-green)]"
+                : "text-xs font-medium text-[var(--admin-orange)]"
+            }
+          >
+            {msg.text}
+          </span>
+        ) : null}
+      </div>
+    </Card>
+  );
+}
+
+export function FluxCredentialsForm({ view }: { view: CredentialsView["flux"] }) {
+  const [pending, startTransition] = useTransition();
+  const [apiKey, setApiKey] = useState(view.apiKey);
+  const [endpoint, setEndpoint] = useState(view.endpoint || "flux-2-max");
+  const [baseUrl, setBaseUrl] = useState(view.baseUrl);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  function save() {
+    setMsg(null);
+    const fd = new FormData();
+    fd.set("fluxApiKey", apiKey);
+    fd.set("fluxEndpoint", endpoint);
+    fd.set("fluxBaseUrl", baseUrl);
+    startTransition(async () => {
+      const res = await saveFluxCredentialsAction(fd);
+      setMsg(
+        res.ok
+          ? { ok: true, text: "FLUX credentials saved." }
+          : { ok: false, text: res.error },
+      );
+    });
+  }
+
+  return (
+    <Card>
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-sm font-bold text-[var(--admin-text)]">🎨 FLUX 2 (Black Forest Labs) credentials</h2>
+        <SourceBadge source={view.sources.apiKey} />
+      </div>
+      <p className="mb-4 text-xs text-[var(--admin-text-muted)]">
+        Powers one-click image generation in the marketing image builder. Create an API key at
+        Black Forest Labs and paste it here. The key is stored securely (admin-only) and never shown again in full.
+        Leave the API base URL blank to use the global endpoint (https://api.bfl.ai).
+      </p>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="API key (x-key)">
+          <Input
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            placeholder="BFL_API_KEY"
+            autoComplete="off"
+          />
+          <Note />
+        </Field>
+
+        <Field label="Model endpoint">
+          <Select value={endpoint} onChange={(e) => setEndpoint(e.target.value)}>
+            {FLUX_ENDPOINTS.map((ep) => (
+              <option key={ep.value} value={ep.value}>
+                {ep.label}
+              </option>
+            ))}
+          </Select>
+        </Field>
+
+        <Field label="API base URL (optional override)">
+          <Input
+            value={baseUrl}
+            onChange={(e) => setBaseUrl(e.target.value)}
+            placeholder="Leave blank for https://api.bfl.ai (or pin api.us.bfl.ai / api.eu.bfl.ai)"
+            autoComplete="off"
+          />
+        </Field>
+      </div>
+
+      <div className="mt-4 flex items-center gap-3">
+        <Button onClick={save} disabled={pending}>
+          {pending ? "Saving…" : "Save FLUX credentials"}
         </Button>
         {msg ? (
           <span

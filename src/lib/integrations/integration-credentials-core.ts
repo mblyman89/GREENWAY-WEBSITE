@@ -32,6 +32,11 @@ export type IntegrationCredentialsRow = {
   weedmaps_access_token: string;
   weedmaps_token_url: string;
   weedmaps_scope: string;
+
+  // Black Forest Labs FLUX 2 image API (Slice A / migration 0055) -----------
+  flux_api_key: string;
+  flux_endpoint: string;
+  flux_base_url: string;
 };
 
 /** Env fallback values (read from process.env by the caller). */
@@ -47,6 +52,9 @@ export type IntegrationEnv = {
   weedmapsAccessToken?: string;
   weedmapsTokenUrl?: string;
   weedmapsScope?: string;
+  fluxApiKey?: string;
+  fluxEndpoint?: string;
+  fluxBaseUrl?: string;
 };
 
 /** Resolved Leafly credential overrides (DB wins over env). */
@@ -68,6 +76,13 @@ export type WeedmapsOverrides = {
   scope?: string;
 };
 
+/** Resolved FLUX 2 credential overrides (DB wins over env). */
+export type FluxOverrides = {
+  apiKey?: string;
+  endpoint: string;
+  baseUrl?: string;
+};
+
 /** Which service a stored value originated from — for the "source" hint. */
 export type CredentialSource = "database" | "environment" | "unset";
 
@@ -83,6 +98,9 @@ export const EMPTY_CREDENTIALS_ROW: IntegrationCredentialsRow = {
   weedmaps_access_token: "",
   weedmaps_token_url: "",
   weedmaps_scope: "",
+  flux_api_key: "",
+  flux_endpoint: "flux-2-max",
+  flux_base_url: "",
 };
 
 // ---------------------------------------------------------------------------
@@ -147,6 +165,17 @@ export function resolveWeedmapsOverrides(
   };
 }
 
+export function resolveFluxOverrides(
+  row: IntegrationCredentialsRow,
+  env: IntegrationEnv,
+): FluxOverrides {
+  return {
+    apiKey: pick(row.flux_api_key, env.fluxApiKey),
+    endpoint: pick(row.flux_endpoint, env.fluxEndpoint) ?? "flux-2-max",
+    baseUrl: pick(row.flux_base_url, env.fluxBaseUrl),
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Masking (for display)
 // ---------------------------------------------------------------------------
@@ -196,6 +225,14 @@ export type CredentialsView = {
       accessToken: CredentialSource;
     };
   };
+  flux: {
+    apiKey: string; // masked
+    endpoint: string; // clear
+    baseUrl: string; // clear
+    sources: {
+      apiKey: CredentialSource;
+    };
+  };
 };
 
 export function buildCredentialsView(
@@ -234,6 +271,14 @@ export function buildCredentialsView(
         accessToken: credentialSource(row.weedmaps_access_token, env.weedmapsAccessToken),
       },
     },
+    flux: {
+      apiKey: maskSecret(pick(row.flux_api_key, env.fluxApiKey) ?? ""),
+      endpoint: resolveFluxOverrides(row, env).endpoint,
+      baseUrl: pick(row.flux_base_url, env.fluxBaseUrl) ?? "",
+      sources: {
+        apiKey: credentialSource(row.flux_api_key, env.fluxApiKey),
+      },
+    },
   };
 }
 
@@ -254,6 +299,9 @@ export type CredentialsFormInput = {
   weedmapsAccessToken?: string;
   weedmapsTokenUrl?: string;
   weedmapsScope?: string;
+  fluxApiKey?: string;
+  fluxEndpoint?: string;
+  fluxBaseUrl?: string;
 };
 
 function normEnvInput(value: string | undefined, current: string): string {
@@ -310,6 +358,9 @@ export function applyCredentialsUpdate(
     ),
     weedmaps_token_url: foldPlain(form.weedmapsTokenUrl, current.weedmaps_token_url),
     weedmaps_scope: foldPlain(form.weedmapsScope, current.weedmaps_scope),
+    flux_api_key: foldSecret(form.fluxApiKey, current.flux_api_key),
+    flux_endpoint: foldPlain(form.fluxEndpoint, current.flux_endpoint) || "flux-2-max",
+    flux_base_url: foldPlain(form.fluxBaseUrl, current.flux_base_url),
   };
 }
 
@@ -409,6 +460,25 @@ export function __runIntegrationCredentialsTests(): { passed: number } {
   // plain field trims
   const r6 = applyCredentialsUpdate(cur, { weedmapsMenuId: "  m-1  " });
   ok(r6.weedmaps_menu_id === "m-1", "plain field trimmed");
+
+  // FLUX 2 (Slice A)
+  const fluxRow: IntegrationCredentialsRow = {
+    ...EMPTY_CREDENTIALS_ROW,
+    flux_api_key: "bfl-abcdef",
+    flux_endpoint: "flux-2-pro",
+  };
+  const fx = resolveFluxOverrides(fluxRow, {});
+  ok(fx.apiKey === "bfl-abcdef", "flux api key db wins");
+  ok(fx.endpoint === "flux-2-pro", "flux endpoint db wins");
+  ok(resolveFluxOverrides(EMPTY_CREDENTIALS_ROW, {}).endpoint === "flux-2-max", "flux endpoint default");
+  ok(resolveFluxOverrides(EMPTY_CREDENTIALS_ROW, { fluxApiKey: "envk" }).apiKey === "envk", "flux key env fallback");
+  const fView = buildCredentialsView(fluxRow, {});
+  ok(fView.flux.apiKey === "••••cdef", "flux key masked in view");
+  ok(fView.flux.sources.apiKey === "database", "flux key source db");
+  const fUpd = applyCredentialsUpdate(fluxRow, { fluxApiKey: "••••cdef", fluxEndpoint: "flux-2-max" });
+  ok(fUpd.flux_api_key === "bfl-abcdef", "flux masked key preserved");
+  ok(fUpd.flux_endpoint === "flux-2-max", "flux endpoint updated");
+  ok(applyCredentialsUpdate(fluxRow, { fluxEndpoint: "" }).flux_endpoint === "flux-2-max", "flux endpoint empty -> default");
 
   return { passed };
 }

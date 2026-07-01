@@ -68,3 +68,26 @@ export async function saveWeedmapsCredentialsAction(
   });
   return { ok: true };
 }
+
+/** Save Black Forest Labs FLUX 2 credentials only (Slice A). */
+export async function saveFluxCredentialsAction(
+  fd: FormData,
+): Promise<SaveCredentialsResult> {
+  const session = await requirePermission("settings.manage");
+  const form: CredentialsFormInput = {
+    fluxApiKey: str(fd, "fluxApiKey"),
+    fluxEndpoint: str(fd, "fluxEndpoint"),
+    fluxBaseUrl: str(fd, "fluxBaseUrl"),
+  };
+  const res = await updateIntegrationCredentials(form);
+  if (!res.ok) return { ok: false, error: res.error };
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: "integration.credentials.update",
+    entityType: "integration_credentials",
+    entityId: "flux",
+    after: { service: "flux", endpoint: form.fluxEndpoint ?? null },
+  });
+  return { ok: true };
+}

@@ -3,6 +3,7 @@ import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { listMedia, publicUrlForKey } from "@/lib/media/store";
 import { isAiConfigured } from "@/lib/ai/provider";
+import { isFluxConfigured } from "@/lib/marketing/flux-client";
 import {
   MidjourneyBuilder,
   type ReferenceImage,
@@ -12,6 +13,8 @@ export const dynamic = "force-dynamic";
 
 export default async function MidjourneyPage() {
   await requirePermission("content.edit");
+
+  const fluxConfigured = await isFluxConfigured().catch(() => false);
 
   // Published images from the media library become style-reference options.
   const media = await listMedia({ status: "published", limit: 60 }).catch(() => []);
@@ -27,8 +30,8 @@ export default async function MidjourneyPage() {
   return (
     <div>
       <AdminPageHeader
-        title="Midjourney prompt builder"
-        subtitle="Craft professional image prompts for Midjourney — presets, brand-grounded AI assist, references, and correct syntax."
+        title="Image prompt builder"
+        subtitle="Build one brief — copy a Midjourney prompt or generate directly with FLUX 2 and save into your media library."
         breadcrumbs={<Breadcrumbs items={[{ label: "Marketing" }, { label: "Midjourney" }]} />}
         help={
           <HelpPanel
@@ -38,17 +41,17 @@ export default async function MidjourneyPage() {
               "Pick a preset (product hero, lifestyle, menu banner, social, signage) to start.",
               "Optionally type your idea and press AI assist to draft the brief fields — then edit them.",
               "Tune parameters (aspect ratio, version, stylize, chaos) with the sliders.",
-              "Optionally choose a media-library image as a --sref style reference.",
-              "Copy the finished prompt and paste it into Midjourney.",
+              "Copy the Midjourney prompt to paste there, OR click Generate with FLUX 2 Max.",
+              "FLUX images save into your media library as drafts — review, then publish.",
             ]}
           >
-            <p>This tool does not call Midjourney — it builds the prompt text for you to paste there. All AI suggestions are drafts to review.</p>
+            <p>Copy builds a Midjourney prompt to paste there. FLUX 2 generates the image directly via API and saves it to your media library. All AI output is a draft to review before publishing.</p>
           </HelpPanel>
         }
       />
 
       <div className="px-5 py-6 sm:px-8">
-        <MidjourneyBuilder references={references} aiConfigured={isAiConfigured} />
+        <MidjourneyBuilder references={references} aiConfigured={isAiConfigured} fluxConfigured={fluxConfigured} />
       </div>
     </div>
   );
