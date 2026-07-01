@@ -64,9 +64,17 @@ Standing rules respected: CCRS compliance + 🔴 DOH MEDICAL CANNABIS COMPLIANCE
   derivedStatus falls to `partially_accepted` when lots are held. Nothing dirty reaches the
   floor. Intake detail page shows a red "N lots held in quarantine" banner (`?held=N`).
 
-## Slice 108 — CCRS identifier integrity assertions [MED]
-- Extend `ccrs-identifiers.ts` with strict format assertions (UBI/license shape, non-empty,
-  no in-batch collisions) so a malformed or duplicate identifier can never reach a file.
+## Slice 108 — CCRS identifier integrity assertions [MED] ✅ DONE
+- Extended PURE `ccrs-identifiers.ts` with: `validateLicenseNumber` (strict 6-digit retail
+  licensee number; optional 10-digit lab), `findExternalIdCollisions` (distinct owners → same
+  id), and `checkSaleIdentifierIntegrity` (SaleDetailExternalIdentifier unique within a sale;
+  SaleType + SaleDate consistent per SaleExternalIdentifier — the CCRS "Duplicate Sale detail"
+  rule). 27 tsx tests. Grounded in the CCRS Upload User Guide field spec.
+- WIRED into `verifyCcrsFile` so they BLOCK through the Slice-105 gate: every file's
+  `LicenseNumber` column is format-checked per row; Sale files run the sale-identifier
+  integrity check; Strain/Product/Inventory files run ExternalIdentifier collision detection
+  (Strain has no ExternalIdentifier per spec — correctly skipped; InventoryAdjustment reuses
+  one inventory id across adjustments — correctly skipped). Verified firing via targeted tsx.
 
 ## Slice 109 — Sales-limit enforcement at POS (hard block + logged override) [HIGH]
 - Extend `sales-limits-core` so an over-limit cart is BLOCKED (medical vs. rec profile chosen
@@ -82,6 +90,6 @@ Standing rules respected: CCRS compliance + 🔴 DOH MEDICAL CANNABIS COMPLIANCE
 - [x] Slice 105 — CCRS pre-submission hard gate — HIGH
 - [x] Slice 106 — CCRS reporting-deadline guard — HIGH
 - [x] Slice 107 — Inventory can't-go-live-dirty gate — HIGH
-- [ ] Slice 108 — CCRS identifier integrity assertions — MED
+- [x] Slice 108 — CCRS identifier integrity assertions — MED
 - [ ] Slice 109 — Sales-limit enforcement at POS — HIGH
 - [ ] Slice 110 — Compliance Health panel — MED
