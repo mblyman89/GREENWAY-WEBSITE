@@ -8,8 +8,10 @@ import { Input, Button, Badge } from "@/components/admin/ui";
 import {
   getCycleCount,
   getCycleCountLines,
+  getCycleCountScanLines,
   type CycleCountLineWithLot,
 } from "@/lib/inventory/cycle-counts";
+import { CycleCountScanner } from "@/components/admin/inventory/CycleCountScanner";
 import {
   recordLineCountAction,
   applyCycleCountAction,
@@ -44,6 +46,7 @@ export default async function CycleCountDetailPage({
   const session = await getCycleCount(id);
   if (!session) notFound();
   const lines = await getCycleCountLines(id);
+  const scanLines = session.status === "open" ? await getCycleCountScanLines(id) : [];
 
   const isOpen = session.status === "open";
   const counted = lines.filter((l) => l.counted_qty != null).length;
@@ -113,6 +116,8 @@ export default async function CycleCountDetailPage({
           ]}
         />
       ) : null}
+
+      {isOpen ? <CycleCountScanner countId={id} lines={scanLines} /> : null}
 
       <section className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.02]">
         <table className="w-full text-sm">

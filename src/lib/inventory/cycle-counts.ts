@@ -91,6 +91,94 @@ export async function getCycleCountLines(countId: string): Promise<CycleCountLin
   });
 }
 
+export type CycleCountScanLine = {
+  lineId: string;
+  lotId: string;
+  lotCode: string | null;
+  posProductKey: string | null;
+  productName: string | null;
+};
+
+/**
+ * Lines for a session shaped for barcode matching (Slice 68). Includes the
+ * lot_code + pos_product_key so a scanned code can be resolved client-side.
+ */
+export async function getCycleCountScanLines(countId: string): Promise<CycleCountScanLine[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  const admin = createSupabaseAdminClient();
+  const { data } = await admin
+    .from("cycle_count_lines")
+    .select("id, lot_id, lot:inventory_lots(lot_code, pos_product_key, product_name)")
+    .eq("count_id", countId)
+    .order("created_at", { ascending: true });
+  const rows =
+    (data as unknown as { id: string; lot_id: string; lot: unknown }[] | null) ?? [];
+  return rows.map((r) => {
+    const lotRel = r.lot;
+    const lot = (Array.isArray(lotRel) ? lotRel[0] : lotRel) as
+      | { lot_code: string | null; pos_product_key: string | null; product_name: string | null }
+      | null;
+    return {
+      lineId: r.id,
+      lotId: r.lot_id,
+      lotCode: lot?.lot_code ?? null,
+      posProductKey: lot?.pos_product_key ?? null,
+      productName: lot?.product_name ?? null,
+    };
+  });
+}
+
+/**
+ * Add scanned units to a line's counted quantity. Each scan of a unit bumps the
+ * running physical count by `by` (default 1). Session must still be open and the
+ * line not yet applied (hardening). Recomputes variance + caches the session's
+ * variance count. Returns the new counted quantity.
+ */
+export async function bumpLineCount(
+  input: { lineId: string; by?: number },
+): Promise<{ ok: true; countedQty: number; countId: string } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) {
+    return { ok: false, error: "Supabase service role not configured." };
+  }
+  const admin = createSupabaseAdminClient();
+  const by = Number.isFinite(input.by) ? Number(input.by) : 1;
+
+  const { data: line } = await admin
+    .from("cycle_count_lines")
+    .select("id, count_id, system_qty, counted_qty, applied")
+    .eq("id", input.lineId)
+    .maybeSingle();
+  if (!line) return { ok: false, error: "Count line not found." };
+  const l = line as {
+    count_id: string;
+    system_qty: number;
+    counted_qty: number | null;
+    applied: boolean;
+  };
+  if (l.applied) return { ok: false, error: "This line has already been applied." };
+
+  // Guard: the parent session must still be open.
+  const { data: parent } = await admin
+    .from("cycle_counts")
+    .select("status")
+    .eq("id", l.count_id)
+    .maybeSingle();
+  if (!parent || (parent as { status: string }).status !== "open") {
+    return { ok: false, error: "This count session is closed." };
+  }
+
+  const nextQty = Math.max(0, (l.counted_qty ?? 0) + by);
+  const variance = nextQty - (Number(l.system_qty) || 0);
+  const { error } = await admin
+    .from("cycle_count_lines")
+    .update({ counted_qty: nextQty, variance_qty: variance })
+    .eq("id", input.lineId);
+  if (error) return { ok: false, error: error.message };
+
+  await refreshVarianceCount(l.count_id);
+  return { ok: true, countedQty: nextQty, countId: l.count_id };
+}
+
 /**
  * Create a new cycle-count session and snapshot the current system on-hand for
  * the selected lots (or all active lots if none specified). Blind: counted_qty
