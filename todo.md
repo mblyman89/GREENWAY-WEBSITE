@@ -24,4 +24,10 @@ Slices 43–61: [x] (done, merged)
 - [ ] Commit → push → PR → merge → sync main
 - NOTE: NO migration — all tables already exist (site_settings, tax_settings, tax_category_rules, pricing_settings, license_settings)
 ## Slice 64 — Dashboard overhaul (POS cockpit)
-- [ ] pending
+- [x] Ground: current dashboard (getting-started + 4 thin stats), real data sources (getSalesReport, getOrderStatusCounts+ACTIVE_ORDER_STATUSES, liveRegisters, buildReorderSuggestions, getPublishedVersion, countLoyaltySignups, pacific TZ helpers)
+- [x] Core: cockpit-core.ts — PURE deltas/percent-change, peak-hour, bar scaling, drawer over/short rollup, attention flags + tests (29 assertions)
+- [x] Server: cockpit-data.ts — today vs yesterday sales, open orders, live drawers, low stock, menu/loyalty (all safeData-wrapped)
+- [x] Page: rewrote /admin as POS cockpit (attention flags, KPIs w/ day-over-day, hourly sales bar chart, top sellers, open-orders board, live registers/drawers, ops strip, category revenue) — NO getting-started (moved to Setup guide button)
+- [x] Verify: tsc 0, eslint 0, next build ok (/admin present)
+- [ ] Commit → push → PR → merge → sync main
+- NOTE: NO migration — reads existing tables/reports only
