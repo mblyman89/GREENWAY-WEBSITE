@@ -78,4 +78,4 @@ binding **CCRS compliance** rule (valid enums, 3-row header, exact columns, clam
 - [x] Slice 95 — "Do not upload" gate + error summary — HIGH
 - [x] Slice 96 — Sale numeric-column safety — HIGH
 - [x] Slice 97 — Vendor intake review summary (drafts-only) — MED
-- [ ] Slice 98 — Vendor ACH draft (reuse NACHA) — MED
+- [x] Slice 98 — Vendor ACH draft (reuse NACHA) — MED

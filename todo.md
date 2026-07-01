@@ -132,4 +132,5 @@ see `docs/COMMAND_CENTER_ENHANCEMENTS_TASKLIST.md`.
 - [x] Slice 95 — "Do not upload" gate + error-first summary in README/sync report — HIGH
 - [x] Slice 96 — Sale numeric-column safety (non-negative qty/price, cents-consistent tax) — HIGH
 - [x] Slice 97 — Vendor intake review summary summarizeIntakeForReview (drafts-only) — MED
-- [ ] Slice 98 — Vendor ACH draft vendorPaymentsToNacha (reuse nacha-core, drafts-only) — MED
+- [x] Slice 98 — Vendor ACH draft vendorPaymentsToNacha (reuse nacha-core, drafts-only) — MED
+- [x] ROUND COMPLETE — Slices 93–98 merged (PRs #201–#206). CCRS batch now trustworthy end-to-end + safe vendor drafts.
