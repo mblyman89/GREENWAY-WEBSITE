@@ -9,7 +9,10 @@ import {
   stageManifest,
   acceptManifest,
   rejectManifest,
+  setLotDisposition,
+  finalizeManifestDispositions,
 } from "@/lib/inventory/intake-store";
+import { normalizeRejection } from "@/lib/inventory/intake-disposition-core";
 
 /** Shared: parse + stage a JSON payload, redirect on each failure mode. */
 async function stageJsonText(
@@ -137,9 +140,24 @@ export async function updateManifestTransportAction(
   redirect(`/admin/inventory/intake/${manifestId}?transport=1`);
 }
 
-export async function rejectManifestAction(manifestId: string) {
+/**
+ * Reject the WHOLE manifest at the dock. Requires a reason (guard rail).
+ * Refused product never enters inventory and is NEVER destroyed; we file
+ * nothing with CCRS (the vendor corrects their own manifest).
+ */
+export async function rejectManifestAction(manifestId: string, formData: FormData) {
   const session = await requirePermission("inventory.manage");
-  const result = await rejectManifest(manifestId, session.userId);
+  const norm = normalizeRejection(
+    formData.get("reason_code") as string | null,
+    formData.get("reason_text") as string | null,
+  );
+  if (!norm.ok) {
+    redirect(`/admin/inventory/intake/${manifestId}?error=reason`);
+  }
+  const result = await rejectManifest(manifestId, session.userId, {
+    reasonCode: norm.value.reasonCode,
+    reasonText: norm.value.reasonText,
+  });
   revalidatePath(`/admin/inventory/intake/${manifestId}`);
   revalidatePath("/admin/inventory/intake");
   revalidatePath("/admin/inventory");
@@ -147,4 +165,53 @@ export async function rejectManifestAction(manifestId: string) {
     redirect(`/admin/inventory/intake/${manifestId}?error=reject`);
   }
   redirect(`/admin/inventory/intake/${manifestId}?rejected=1`);
+}
+
+/**
+ * Set a single lot's disposition. Reject requires a reason. Used by the
+ * per-line accept/reject controls on the manifest review screen.
+ */
+export async function setLotDispositionAction(
+  manifestId: string,
+  lotId: string,
+  disposition: "accepted" | "rejected_at_dock",
+  formData: FormData,
+) {
+  const session = await requirePermission("inventory.manage");
+  if (disposition === "rejected_at_dock") {
+    const norm = normalizeRejection(
+      formData.get("reason_code") as string | null,
+      formData.get("reason_text") as string | null,
+    );
+    if (!norm.ok) {
+      redirect(`/admin/inventory/intake/${manifestId}?error=reason`);
+    }
+    await setLotDisposition(lotId, "rejected_at_dock", session.userId, {
+      reasonCode: norm.value.reasonCode,
+      reasonText: norm.value.reasonText,
+    });
+  } else {
+    await setLotDisposition(lotId, "accepted", session.userId);
+  }
+  revalidatePath(`/admin/inventory/intake/${manifestId}`);
+  redirect(`/admin/inventory/intake/${manifestId}?lot=${disposition}`);
+}
+
+/**
+ * Finalize the manifest after per-lot decisions: activate accepted lots, leave
+ * refused ones out of inventory, and stamp the derived status
+ * (accepted | rejected | partially_accepted).
+ */
+export async function finalizeManifestAction(manifestId: string) {
+  const session = await requirePermission("inventory.manage");
+  const result = await finalizeManifestDispositions(manifestId, session.userId);
+  revalidatePath(`/admin/inventory/intake/${manifestId}`);
+  revalidatePath("/admin/inventory/intake");
+  revalidatePath("/admin/inventory");
+  if (!result.ok) {
+    redirect(`/admin/inventory/intake/${manifestId}?error=finalize`);
+  }
+  redirect(
+    `/admin/inventory/intake/${manifestId}?finalized=${result.derivedStatus}&accepted=${result.activated}&rejected=${result.rejected}&drafts=${result.draftsCreated}`,
+  );
 }

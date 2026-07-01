@@ -45,6 +45,20 @@
   **Until this is run, the FLUX API-key field on Settings → Integrations has
   nowhere to save, so "Generate with FLUX 2" stays disabled.**
 
+- [ ] **`supabase/migrations/0059_intake_lot_disposition.sql`** — Slice 81
+  (Batch 2d #1 + #4): CCRS-compliant partial acceptance / reject-at-dock. Adds to
+  `public.inventory_lots`: `disposition` (`pending|accepted|rejected_at_dock`,
+  CHECK-guarded), `reject_reason`, `reject_reason_code`, `dispositioned_by`,
+  `dispositioned_at`; backfills existing active/sold/recalled lots to
+  `disposition = 'accepted'`. Adds to `public.inbound_manifests`:
+  `accepted_lot_count`, `rejected_lot_count` (both default 0). No CHECK on
+  `inbound_manifests.status`, so the new `partially_accepted` value needs no
+  schema change. **Until this is run, the per-line Accept/Reject controls,
+  Finalize intake, and the "Partially Accepted" badge on the intake page will
+  error (missing columns).** Note: this deliberately CHANGES old behavior — a
+  reject no longer marks lots `destroyed`; refused product is `rejected` (never
+  received), per docs/ccrs-rejection-and-returns.md.
+
 ---
 
 ### How to run

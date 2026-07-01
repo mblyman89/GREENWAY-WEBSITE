@@ -2,18 +2,21 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { Breadcrumbs } from "@/components/admin/ux";
+import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
-import { Button, Field, Input, Textarea } from "@/components/admin/ui";
+import { Button, Field, Input, Textarea, Select } from "@/components/admin/ui";
 import { getManifestById } from "@/lib/inventory/store";
 import { listManifestLots, listManifestEvents } from "@/lib/inventory/intake-store";
 import { ManifestTimeline } from "@/components/admin/inventory/ManifestTimeline";
+import { ManifestLotDisposition } from "@/components/admin/inventory/ManifestLotDisposition";
+import { manifestStatusBadge } from "@/lib/inventory/intake-disposition-core";
 import {
-  acceptManifestAction,
   rejectManifestAction,
   archiveCoasAction,
   setManifestLifecycleAction,
   updateManifestTransportAction,
+  setLotDispositionAction,
+  finalizeManifestAction,
 } from "../actions";
 
 /** Format an ISO timestamp into the value a datetime-local input expects. */
@@ -45,11 +48,13 @@ export default async function ManifestReviewPage({
     archived?: string;
     transport?: string;
     error?: string;
+    finalized?: string;
+    lot?: string;
   }>;
 }) {
   await requirePermission("inventory.manage");
   const { id } = await params;
-  const { staged, accepted, drafts, rejected, archived, transport, error } =
+  const { staged, accepted, drafts, rejected, archived, transport, error, finalized, lot } =
     await searchParams;
 
   const manifest = await getManifestById(id);
@@ -65,8 +70,8 @@ export default async function ManifestReviewPage({
   const sampleCount = lots.filter((l) => l.is_sample).length;
   const coaLinks = Array.isArray(manifest.coa_links) ? manifest.coa_links : [];
 
-  const acceptAction = acceptManifestAction.bind(null, id);
   const rejectAction = rejectManifestAction.bind(null, id);
+  const finalizeAction = finalizeManifestAction.bind(null, id);
   const archiveAction = archiveCoasAction.bind(null, id);
   const markInTransitAction = setManifestLifecycleAction.bind(null, id, "in_transit");
   const markReceivedAction = setManifestLifecycleAction.bind(null, id, "received");
@@ -121,7 +126,30 @@ export default async function ManifestReviewPage({
         )}
         {rejected && (
           <div className="rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/10 px-4 py-2 text-sm text-[var(--admin-danger)]">
-            Manifest rejected — its lots were marked destroyed and will never be sold.
+            Whole manifest rejected at the dock — refused product never entered inventory (nothing
+            destroyed). No CCRS filing on our end; ask the vendor to Update/Delete their manifest.
+          </div>
+        )}
+        {finalized && (
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]">
+            Finalized as <strong>{manifestStatusBadge(finalized).label}</strong> — {accepted ?? 0}{" "}
+            accepted, {rejected ?? 0} refused at dock.
+            {drafts && drafts !== "0" && (
+              <>
+                {" "}
+                {drafts} new product{drafts === "1" ? "" : "s"} →{" "}
+                <Link href="/admin/inventory/drafts" className="font-semibold underline">
+                  review draft{drafts === "1" ? "" : "s"}
+                </Link>
+                .
+              </>
+            )}
+          </div>
+        )}
+        {lot && (
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-4 py-2 text-sm text-[var(--admin-text-muted)]">
+            Line marked <strong>{lot === "accepted" ? "accepted" : "rejected at dock"}</strong>. When
+            you&apos;ve decided every line, click <em>Finalize intake</em> below.
           </div>
         )}
         {archived && (
@@ -157,8 +185,23 @@ export default async function ManifestReviewPage({
           />
           <StatCard
             label="Status"
-            value={manifest.status}
-            accent={manifest.status === "accepted" ? "green" : manifest.status === "pending" ? "gold" : "muted"}
+            value={manifestStatusBadge(manifest.status).label}
+            accent={
+              manifest.status === "accepted"
+                ? "green"
+                : manifest.status === "partially_accepted"
+                  ? "gold"
+                  : manifest.status === "rejected"
+                    ? "orange"
+                    : manifest.status === "pending"
+                      ? "gold"
+                      : "muted"
+            }
+            hint={
+              manifest.status === "partially_accepted"
+                ? `${manifest.accepted_lot_count ?? 0} in · ${manifest.rejected_lot_count ?? 0} refused`
+                : undefined
+            }
           />
         </div>
 
@@ -179,6 +222,7 @@ export default async function ManifestReviewPage({
                 <th className="px-4 py-3 text-center">COA</th>
                 <th className="px-4 py-3 text-center">Catalog</th>
                 <th className="px-4 py-3">Expires</th>
+                {inProgress && <th className="px-4 py-3">Decision</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--admin-border)]">
@@ -209,6 +253,17 @@ export default async function ManifestReviewPage({
                     {l.pos_product_key ? "🔗" : <span className="text-[var(--admin-text-faint)]">—</span>}
                   </td>
                   <td className="px-4 py-3 text-[var(--admin-text-muted)]">{l.expires_on ?? "—"}</td>
+                  {inProgress && (
+                    <td className="px-4 py-3">
+                      <ManifestLotDisposition
+                        manifestId={id}
+                        lotId={l.id}
+                        disposition={l.disposition}
+                        rejectReason={l.reject_reason}
+                        acceptAction={setLotDispositionAction}
+                      />
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -400,25 +455,66 @@ export default async function ManifestReviewPage({
 
         {/* Accept / reject controls */}
         {inProgress ? (
-          <div className="flex flex-wrap items-center gap-3 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
-            <p className="flex-1 text-sm text-[var(--admin-text-muted)]">
-              Accepting activates these lots (quarantine → active) and logs a receive adjustment for
-              each. Rejecting marks them destroyed.
-            </p>
-            <form action={acceptAction}>
-              <Button type="submit" variant="save" size="sm">
-                ✓ Accept manifest
-              </Button>
-            </form>
-            <form action={rejectAction}>
-              <Button type="submit" variant="subtle" size="sm">
-                ✕ Reject
-              </Button>
-            </form>
+          <div className="space-y-4">
+            <HelpPanel
+              id="ccrs-reject-guardrails"
+              title="How rejecting product works (and stays compliant)"
+              steps={[
+                "Mark each line Accept or Reject above. Only accepted lots enter inventory (quarantine → active).",
+                "Rejecting is 'refuse at the dock' — the product leaves with the driver and never becomes your reported inventory. Nothing is destroyed.",
+                "Because refused product was never yours, you file NOTHING with CCRS. Ask the vendor to submit a CCRS manifest Update (to fix a quantity) or Delete (to remove a line) so their record matches what physically stayed.",
+                "Do NOT create a return manifest for driver-present refusals. Contingency manifests are discontinued (WSLCB, Nov 2025).",
+                "When every line is decided, click Finalize intake. A mix of accept + reject marks the manifest 'Partially Accepted'.",
+              ]}
+            >
+              <p className="text-xs text-[var(--admin-text-faint)]">
+                Grounded in the WSLCB CCRS Manifest Guide (Feb 2026) — see
+                docs/ccrs-rejection-and-returns.md.
+              </p>
+            </HelpPanel>
+
+            <div className="flex flex-wrap items-center gap-3 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
+              <p className="flex-1 text-sm text-[var(--admin-text-muted)]">
+                Decide each line above, then <strong>Finalize intake</strong> to activate the
+                accepted lots. Lines left undecided are accepted by default.
+              </p>
+              <form action={finalizeAction}>
+                <Button type="submit" variant="save" size="sm">
+                  ✓ Finalize intake
+                </Button>
+              </form>
+            </div>
+
+            {/* Whole-manifest reject (reason required) */}
+            <details className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-danger)]/30 bg-[var(--admin-surface)] p-5">
+              <summary className="cursor-pointer text-sm font-semibold text-[var(--admin-danger)]">
+                ✕ Reject the entire manifest
+              </summary>
+              <form action={rejectAction} className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end">
+                <Field label="Reason" help="Refused at the dock — nothing is destroyed or reported to CCRS.">
+                  <Select name="reason_code" defaultValue="short_shipment">
+                    <option value="short_shipment">Short shipment — vendor forgot it</option>
+                    <option value="damaged_in_transit">Damaged / broke in transit</option>
+                    <option value="wrong_product">Wrong product</option>
+                    <option value="failed_coa">Failed COA / quality</option>
+                    <option value="expired">Expired / short-dated</option>
+                    <option value="overage">Overage — more than ordered</option>
+                    <option value="other">Other (explain)</option>
+                  </Select>
+                </Field>
+                <Field label="Details (optional / required for Other)">
+                  <Input name="reason_text" placeholder="Explain if 'Other'…" />
+                </Field>
+                <Button type="submit" variant="subtle" size="sm">
+                  ✕ Reject whole manifest
+                </Button>
+              </form>
+            </details>
           </div>
         ) : (
           <p className="text-sm text-[var(--admin-text-faint)]">
-            This manifest has been {manifest.status}. Lots are managed from the inventory list.
+            This manifest has been {manifestStatusBadge(manifest.status).label.toLowerCase()}. Lots
+            are managed from the inventory list.
           </p>
         )}
       </div>
