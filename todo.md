@@ -18,7 +18,7 @@ Standing rules: AI output = drafts only; migrations applied manually by owner
 - [x] Slice 52 — Employees reporting enrichment (work/break, schedule adherence, orders handled, breakdowns, export). PR #156.
 - [x] Slice 53 — Medical reporting enrichment. (PR #157)
 - [x] Slice 54 — CCRS reporting + automated upload pipeline + AI. (PR #158)
-- [ ] Slice 55 — Excise: LCB payments portal + full LIQ-1295 + clickable review issues.
+- [x] Slice 55 — Excise: LCB payments portal + full LIQ-1295 + clickable review issues. (PR #159)
 - [ ] Slice 56 — Sage 50: report uploads + AI smart-fill + Sage AI chat.
 - [ ] Slice 57 — Inventory types table preload.
 - [ ] Slice 58 — Sales limits owner-only edit + clear staff view.

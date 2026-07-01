@@ -7,20 +7,14 @@
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import {
-  computeExciseReturnForMonth,
   buildLiq1295Xlsx,
   makeLiq1295FileName,
   logExciseReturnBatch,
 } from "@/lib/compliance/excise-return";
+import { resolveExciseReturn } from "@/lib/compliance/excise-draft";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-
-function dollarsToMinor(raw: string | null): number | undefined {
-  if (raw == null || raw.trim() === "") return undefined;
-  const n = Number(raw);
-  return Number.isFinite(n) ? Math.round(n * 100) : undefined;
-}
 
 export async function GET(request: Request) {
   const session = await requirePermission("settings.manage");
@@ -29,11 +23,9 @@ export async function GET(request: Request) {
   const month = Number(url.searchParams.get("month")) || now.getUTCMonth() + 1;
   const year = Number(url.searchParams.get("year")) || now.getUTCFullYear();
 
-  const data = await computeExciseReturnForMonth(month, year, {
-    additionalExciseCollectedMinor: dollarsToMinor(url.searchParams.get("extra")),
-    assessedPenaltyMinor: dollarsToMinor(url.searchParams.get("penalty")),
-    approvedCreditsMinor: dollarsToMinor(url.searchParams.get("credits")),
-  });
+  // The download reflects the employee's saved draft (header/flags/box overrides
+  // + payment reconciliation), merged over the live computed figures.
+  const { data } = await resolveExciseReturn(month, year);
 
   const fileName = makeLiq1295FileName(data.identity.licenseNumber, month, year);
   const buffer = await buildLiq1295Xlsx(data);

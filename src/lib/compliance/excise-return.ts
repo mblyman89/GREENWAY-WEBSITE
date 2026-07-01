@@ -53,6 +53,8 @@ export type ExciseReturnData = {
   /** Number of exempt medical sale records aggregated. */
   exemptRecordCount: number;
   warnings: string[];
+  /** LIQ-1295 Yes/No flags (default all false). */
+  flags?: { isRevised: boolean; isNoSales: boolean; isFinal: boolean };
 };
 
 /** Load the reporting identity from license_settings. */
@@ -95,6 +97,10 @@ export async function computeExciseReturnForMonth(
     additionalExciseCollectedMinor?: number;
     assessedPenaltyMinor?: number;
     approvedCreditsMinor?: number;
+    /** Override the live Box 1 pretax sales (MINOR units) — e.g. corrected POS total. */
+    cannabisSalesMinorOverride?: number;
+    /** Override the live Box 2 exempt medical magnitude (MINOR units, positive). */
+    exemptMedicalSalesMinorOverride?: number;
   },
 ): Promise<ExciseReturnData> {
   const identity = await getExciseIdentity();
@@ -142,11 +148,27 @@ export async function computeExciseReturnForMonth(
     }
   }
 
+  // Manual overrides for Box 1 / Box 2 win over the live-aggregated figures
+  // (used when an employee corrects the return against a POS report or files a
+  // revised return). A defined override replaces the computed value entirely.
+  const effectiveCannabisSalesMinor =
+    overrides?.cannabisSalesMinorOverride != null ? overrides.cannabisSalesMinorOverride : cannabisSalesMinor;
+  const effectiveExemptMedicalSalesMinor =
+    overrides?.exemptMedicalSalesMinorOverride != null
+      ? overrides.exemptMedicalSalesMinorOverride
+      : exemptMedicalSalesMinor;
+  if (overrides?.cannabisSalesMinorOverride != null) {
+    warnings.push("Box 1 was manually overridden — it does not match the live completed-sales total.");
+  }
+  if (overrides?.exemptMedicalSalesMinorOverride != null) {
+    warnings.push("Box 2 (medical exempt) was manually overridden — it does not match the live exempt-sales total.");
+  }
+
   const boxes = computeExciseReturn({
     month,
     year,
-    cannabisSalesMinor,
-    exemptMedicalSalesMinor,
+    cannabisSalesMinor: effectiveCannabisSalesMinor,
+    exemptMedicalSalesMinor: effectiveExemptMedicalSalesMinor,
     additionalExciseCollectedMinor: overrides?.additionalExciseCollectedMinor,
     assessedPenaltyMinor: overrides?.assessedPenaltyMinor,
     approvedCreditsMinor: overrides?.approvedCreditsMinor,
@@ -180,10 +202,11 @@ export async function buildLiq1295Xlsx(data: ExciseReturnData): Promise<Buffer> 
   ws.getCell("O10").value = boxes.month;
   ws.getCell("O12").value = boxes.year;
 
-  // Yes/No flags.
-  ws.getCell("L14").value = "No"; // revised
-  ws.getCell("L15").value = boxes.noSales ? "Yes" : "No"; // no-sales
-  ws.getCell("L16").value = "No"; // final
+  // Yes/No flags. A saved draft may set revised/final and force no-sales.
+  const flags = data.flags;
+  ws.getCell("L14").value = flags?.isRevised ? "Yes" : "No"; // revised
+  ws.getCell("L15").value = flags?.isNoSales || boxes.noSales ? "Yes" : "No"; // no-sales
+  ws.getCell("L16").value = flags?.isFinal ? "Yes" : "No"; // final
 
   // Box values (dollars). Formulas in S22/S24/S26/S30 recompute on open.
   ws.getCell("S20").value = boxes.box1_cannabisSales;
