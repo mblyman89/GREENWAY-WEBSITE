@@ -10,7 +10,7 @@ Slices 43–61: [x] (done, merged)
 - [x] Filters: upgrade AuditTimeline (date range, category, entity type, sensitive-only); window widened 200→500
 - [x] UI: anomaly panel on audit page (deterministic findings + grounded AI assistant, collapsible)
 - [x] Verify: tsc 0, eslint 0, next build ok (/admin/audit present)
-- [ ] Commit → push → PR → merge → sync main
+- [x] Commit → push → PR → merge → sync main (PR #166)
 - NOTE: NO migration — detection is stateless over existing audit_logs
 
 ## Slice 63 — Settings overhaul
@@ -21,7 +21,7 @@ Slices 43–61: [x] (done, merged)
 - [x] Hub overhaul: 6 categorized groups linking 11 REAL settings surfaces (all routes verified) with live status pills
 - [x] Nav: /admin/settings stays the Settings entry (sub-pages linked from hub)
 - [x] Verify: tsc 0, eslint 0, next build ok (/admin/settings/{store-profile,tax,pricing} present)
-- [ ] Commit → push → PR → merge → sync main
+- [x] Commit → push → PR → merge → sync main (PR #167)
 - NOTE: NO migration — all tables already exist (site_settings, tax_settings, tax_category_rules, pricing_settings, license_settings)
 ## Slice 64 — Dashboard overhaul (POS cockpit)
 - [x] Ground: current dashboard (getting-started + 4 thin stats), real data sources (getSalesReport, getOrderStatusCounts+ACTIVE_ORDER_STATUSES, liveRegisters, buildReorderSuggestions, getPublishedVersion, countLoyaltySignups, pacific TZ helpers)
@@ -29,5 +29,8 @@ Slices 43–61: [x] (done, merged)
 - [x] Server: cockpit-data.ts — today vs yesterday sales, open orders, live drawers, low stock, menu/loyalty (all safeData-wrapped)
 - [x] Page: rewrote /admin as POS cockpit (attention flags, KPIs w/ day-over-day, hourly sales bar chart, top sellers, open-orders board, live registers/drawers, ops strip, category revenue) — NO getting-started (moved to Setup guide button)
 - [x] Verify: tsc 0, eslint 0, next build ok (/admin present)
-- [ ] Commit → push → PR → merge → sync main
+- [x] Commit → push → PR → merge → sync main (PR #168)
 - NOTE: NO migration — reads existing tables/reports only
+
+---
+✅ COMPLETE — All of Slices 43–64 (the full 21-item Back Office Review tasklist) are shipped and merged to main. No slices remain.
