@@ -20,6 +20,7 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { websiteCategoryDefinitions } from "@/lib/pos/category-taxonomy";
+import { INVENTORY_TYPE_CATALOG, inventoryTypeKey } from "@/lib/pos/inventory-type-catalog";
 
 export type WebsiteCategoryType = {
   value: string;
@@ -92,19 +93,51 @@ export async function getWebsiteCategoryType(
   return fallbackWebsiteCategories().find((c) => c.value === value) ?? null;
 }
 
-/** List canonical inventory types. Empty when DB not configured. */
+/**
+ * The canonical inventory-type catalog rendered as table rows (fallback + seed
+ * shape). Grounded in CATEGORY_MAP (see inventory-type-catalog.ts) so the
+ * Inventory Types tab is preloaded out of the box — BHO, Crumble, Rosin, … —
+ * exactly the way the Website Categories tab is always preloaded. Catalog rows
+ * carry a synthetic `catalog:` id and is_system=true so the UI can treat them as
+ * built-in presets until they're materialized into the DB.
+ */
+export function fallbackInventoryTypes(): InventoryType[] {
+  return INVENTORY_TYPE_CATALOG.map((e) => ({
+    id: `catalog:${inventoryTypeKey(e.label)}`,
+    key: inventoryTypeKey(e.label),
+    label: e.label,
+    notes: null,
+    website_category: e.websiteCategory,
+    is_active: true,
+    is_system: true,
+  }));
+}
+
+/**
+ * List inventory types. DB rows are authoritative; the canonical catalog fills
+ * in any type the store hasn't imported yet, so the tab is never empty. When the
+ * DB isn't configured (or the table is empty), returns the full catalog. Catalog
+ * rows carry a synthetic `catalog:` id and are flagged is_system so the UI can
+ * treat them as read-only presets until they're materialized into the DB.
+ */
 export async function listInventoryTypes(opts?: {
   includeInactive?: boolean;
 }): Promise<InventoryType[]> {
-  if (!isSupabaseServiceConfigured) return [];
+  const catalog = fallbackInventoryTypes();
+  if (!isSupabaseServiceConfigured) return catalog;
+
   const admin = createSupabaseAdminClient();
-  let q = admin
-    .from("inventory_types")
-    .select("*")
-    .order("label", { ascending: true });
+  let q = admin.from("inventory_types").select("*").order("label", { ascending: true });
   if (!opts?.includeInactive) q = q.eq("is_active", true);
   const { data } = await q;
-  return (data as InventoryType[] | null) ?? [];
+  const dbRows = (data as InventoryType[] | null) ?? [];
+
+  // Merge: DB rows win by key; catalog entries fill the gaps.
+  const dbKeys = new Set(dbRows.map((r) => (r.key || "").toLowerCase()));
+  const filler = catalog.filter((c) => !dbKeys.has(c.key.toLowerCase()));
+  const merged = [...dbRows, ...filler];
+  merged.sort((a, b) => a.label.localeCompare(b.label));
+  return merged;
 }
 
 /** Get one inventory type by id. */
