@@ -131,5 +131,5 @@ see `docs/COMMAND_CENTER_ENHANCEMENTS_TASKLIST.md`.
 - [x] Slice 94 — E2E batch dry-run harness verifyCcrsBatch (pure, byte-correct assertions) — HIGH
 - [x] Slice 95 — "Do not upload" gate + error-first summary in README/sync report — HIGH
 - [x] Slice 96 — Sale numeric-column safety (non-negative qty/price, cents-consistent tax) — HIGH
-- [ ] Slice 97 — Vendor intake review summary summarizeIntakeForReview (drafts-only) — MED
+- [x] Slice 97 — Vendor intake review summary summarizeIntakeForReview (drafts-only) — MED
 - [ ] Slice 98 — Vendor ACH draft vendorPaymentsToNacha (reuse nacha-core, drafts-only) — MED

@@ -77,5 +77,5 @@ binding **CCRS compliance** rule (valid enums, 3-row header, exact columns, clam
 - [x] Slice 94 — E2E batch dry-run harness (verifyCcrsBatch) — HIGH
 - [x] Slice 95 — "Do not upload" gate + error summary — HIGH
 - [x] Slice 96 — Sale numeric-column safety — HIGH
-- [ ] Slice 97 — Vendor intake review summary (drafts-only) — MED
+- [x] Slice 97 — Vendor intake review summary (drafts-only) — MED
 - [ ] Slice 98 — Vendor ACH draft (reuse NACHA) — MED
