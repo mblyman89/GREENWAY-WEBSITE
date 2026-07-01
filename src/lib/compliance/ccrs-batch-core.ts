@@ -126,6 +126,29 @@ export const CCRS_COLUMNS: Record<CcrsRetailerFileType, readonly string[]> = {
 };
 
 /**
+ * Valid CCRS `SaleType` values (Data Model File Specifications Manual, verified).
+ * A retailer emits RecreationalRetail for standard sales and RecreationalMedical
+ * for qualifying medical (DOH-authorized, tax-exempt) sales. Wholesale is for
+ * producer/processor transactions, not retail.
+ */
+export const CCRS_SALE_TYPES = [
+  "RecreationalRetail",
+  "RecreationalMedical",
+  "Wholesale",
+] as const;
+export type CcrsSaleType = (typeof CCRS_SALE_TYPES)[number];
+
+/**
+ * Resolve the CCRS SaleType for a RETAIL order (B1). PURE. A medical order
+ * (Greenway is DOH medical-endorsed; the sale is recorded against a qualifying
+ * patient) is `RecreationalMedical`; everything else is `RecreationalRetail`.
+ * Never returns an invalid enum value.
+ */
+export function saleTypeForOrder(isMedical: boolean): CcrsSaleType {
+  return isMedical ? "RecreationalMedical" : "RecreationalRetail";
+}
+
+/**
  * Order-of-operations validation dependency groups. A full batch must be
  * uploaded in this order so each file's referenced rows already exist.
  *   Group 1: Strain, Area, Product (prerequisites)
@@ -245,6 +268,11 @@ export function __runCcrsBatchCoreTests(): void {
   assert(CCRS_COLUMNS.Sale[9] === "RetailSalesTax", "Sale col 9 = RetailSalesTax");
   assert(CCRS_COLUMNS.Sale[10] === "CannabisExciseTax", "Sale col 10 = CannabisExciseTax");
   assert(CCRS_COLUMNS.Sale[17] === "Operation", "Sale col 17");
+
+  // SaleType enum (B1): medical → RecreationalMedical; rec → RecreationalRetail.
+  assert(saleTypeForOrder(true) === "RecreationalMedical", "medical sale type");
+  assert(saleTypeForOrder(false) === "RecreationalRetail", "rec sale type");
+  assert(CCRS_SALE_TYPES.includes(saleTypeForOrder(true)), "sale type is a valid enum");
 
   // Ordering: Strain/Area/Product are group 1; Inventory group 2; Sale group 3.
   assert(uploadGroupOf("Strain") === 1, "Strain group 1");
