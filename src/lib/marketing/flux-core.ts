@@ -106,6 +106,13 @@ export function buildFluxPrompt(brief: CreativeBrief): string {
 // Request body
 // ---------------------------------------------------------------------------
 
+/**
+ * FLUX.2 supports up to 8 reference images via the API (verified against
+ * docs.bfl.ai/flux_2/flux2_image_editing — "up to 8 via API"). They are sent as
+ * input_image, input_image_2 … input_image_8 (URL or base64 data URI).
+ */
+export const MAX_REFERENCE_IMAGES = 8;
+
 export type FluxRequest = {
   prompt: string;
   width: number;
@@ -118,6 +125,15 @@ export type FluxRequest = {
   safety_tolerance: number;
   /** Output container. */
   output_format: "png" | "jpeg";
+  /** Reference images (FLUX.2 multi-reference). URL or base64 data URI. */
+  input_image?: string;
+  input_image_2?: string;
+  input_image_3?: string;
+  input_image_4?: string;
+  input_image_5?: string;
+  input_image_6?: string;
+  input_image_7?: string;
+  input_image_8?: string;
 };
 
 export type BuildFluxRequestResult =
@@ -135,7 +151,14 @@ function clampInt(n: number | undefined | null, lo: number, hi: number, dflt: nu
  */
 export function buildFluxRequest(
   brief: CreativeBrief,
-  opts?: { safetyTolerance?: number; outputFormat?: "png" | "jpeg" },
+  opts?: {
+    safetyTolerance?: number;
+    outputFormat?: "png" | "jpeg";
+    /** Up to 8 reference-image URLs / data URIs (FLUX.2 multi-reference). */
+    referenceImages?: string[];
+    /** Let FLUX rewrite/expand the prompt (default off). */
+    promptUpsampling?: boolean;
+  },
 ): BuildFluxRequestResult {
   const prompt = buildFluxPrompt(brief);
   if (prompt.length < 3) return { ok: false, error: "Add at least a subject before generating." };
@@ -148,21 +171,41 @@ export function buildFluxRequest(
   if (brief.stylize || brief.chaos || brief.weird || brief.niji || brief.raw) {
     warnings.push("Midjourney-only settings (stylize, chaos, weird, niji, raw) do not apply to FLUX and were ignored.");
   }
-  if (brief.srefUrl || brief.orefUrl) {
-    warnings.push("Reference images are not sent to FLUX in this pipeline; describe the desired look in the brief instead.");
-  }
 
   const request: FluxRequest = {
     prompt,
     width,
     height,
-    prompt_upsampling: false,
+    prompt_upsampling: Boolean(opts?.promptUpsampling),
     safety_tolerance: clampInt(opts?.safetyTolerance, 0, 6, 2),
     output_format: opts?.outputFormat === "jpeg" ? "jpeg" : "png",
   };
   if (brief.seed !== undefined && brief.seed !== null && Number.isFinite(brief.seed)) {
     request.seed = clampInt(brief.seed, 0, 4294967295, 0);
   }
+
+  // Reference images -> input_image, input_image_2 … input_image_8.
+  const refs = (opts?.referenceImages ?? [])
+    .map((r) => (typeof r === "string" ? r.trim() : ""))
+    .filter(Boolean)
+    .slice(0, MAX_REFERENCE_IMAGES);
+  if ((opts?.referenceImages ?? []).length > MAX_REFERENCE_IMAGES) {
+    warnings.push(`Only the first ${MAX_REFERENCE_IMAGES} reference images are used (FLUX.2 API limit).`);
+  }
+  const refKeys: (keyof FluxRequest)[] = [
+    "input_image",
+    "input_image_2",
+    "input_image_3",
+    "input_image_4",
+    "input_image_5",
+    "input_image_6",
+    "input_image_7",
+    "input_image_8",
+  ];
+  refs.forEach((url, i) => {
+    (request as Record<string, unknown>)[refKeys[i] as string] = url;
+  });
+
   return { ok: true, request, warnings };
 }
 
@@ -301,6 +344,26 @@ export function __runFluxCoreTests(): string {
 
   const empty = buildFluxRequest({ subject: "" });
   ok(empty.ok === false, "empty subject rejected");
+
+  // reference images -> input_image, input_image_2 … (cap at 8, verified limit)
+  const withRefs = buildFluxRequest(
+    { subject: "product hero" },
+    { referenceImages: ["https://a/1.png", "https://a/2.png"] },
+  );
+  ok(withRefs.ok === true, "request with refs builds");
+  if (withRefs.ok) {
+    ok(withRefs.request.input_image === "https://a/1.png", "input_image mapped");
+    ok(withRefs.request.input_image_2 === "https://a/2.png", "input_image_2 mapped");
+    ok(withRefs.request.input_image_3 === undefined, "input_image_3 unset");
+  }
+  const nineRefs = buildFluxRequest(
+    { subject: "product hero shot" },
+    { referenceImages: Array.from({ length: 9 }, (_, i) => `https://a/${i}.png`) },
+  );
+  ok(
+    nineRefs.ok === true && nineRefs.warnings.some((w) => w.includes("first 8")),
+    "warns + caps at 8 references",
+  );
 
   // submit parse
   const s1 = parseSubmitResponse({ id: "abc", polling_url: "https://x/poll" });

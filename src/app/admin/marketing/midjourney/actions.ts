@@ -78,6 +78,10 @@ export type FluxGenerateResult =
 export async function generateFluxAction(input: {
   brief: CreativeBrief;
   outputFormat?: "png" | "jpeg";
+  /** Up to 8 reference-image URLs (FLUX.2 multi-reference). */
+  referenceImages?: string[];
+  /** Let FLUX rewrite/expand the prompt. */
+  promptUpsampling?: boolean;
 }): Promise<FluxGenerateResult> {
   const session = await requirePermission("content.edit");
   const brief = input.brief;
@@ -85,9 +89,15 @@ export async function generateFluxAction(input: {
     return { ok: false, error: "Add at least a subject before generating." };
   }
 
+  const referenceImages = (input.referenceImages ?? [])
+    .filter((r): r is string => typeof r === "string" && r.trim().length > 0)
+    .slice(0, 8);
+
   const res = await generateFluxImage({
     brief,
     outputFormat: input.outputFormat,
+    referenceImages,
+    promptUpsampling: input.promptUpsampling,
     usageType: "marketing",
     title: brief.subject.trim().slice(0, 120),
     tags: ["marketing"],
@@ -103,7 +113,7 @@ export async function generateFluxAction(input: {
     action: "flux.image_generated",
     entityType: "media",
     entityId: res.asset.id,
-    after: { endpoint: res.endpoint, width: res.request.width, height: res.request.height, subject: brief.subject },
+    after: { endpoint: res.endpoint, width: res.request.width, height: res.request.height, subject: brief.subject, referenceCount: referenceImages.length },
   });
 
   return {

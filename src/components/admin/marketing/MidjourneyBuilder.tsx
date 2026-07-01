@@ -65,12 +65,29 @@ export function MidjourneyBuilder({
   const [fluxFormat, setFluxFormat] = useState<"png" | "jpeg">("png");
   const [fluxAsset, setFluxAsset] = useState<FluxAsset | null>(null);
   const [fluxWarnings, setFluxWarnings] = useState<string[]>([]);
+  // FLUX.2 multi-reference: up to 8 images from the media library (verified API limit).
+  const [fluxRefs, setFluxRefs] = useState<string[]>([]);
+  const [promptUpsampling, setPromptUpsampling] = useState(false);
+
+  const MAX_FLUX_REFS = 8;
+  function toggleFluxRef(url: string) {
+    setFluxRefs((prev) => {
+      if (prev.includes(url)) return prev.filter((u) => u !== url);
+      if (prev.length >= MAX_FLUX_REFS) return prev; // cap at 8
+      return [...prev, url];
+    });
+  }
 
   function generateFlux() {
     setFluxAsset(null);
     setFluxWarnings([]);
     startFlux(async () => {
-      const res = await generateFluxAction({ brief, outputFormat: fluxFormat });
+      const res = await generateFluxAction({
+        brief,
+        outputFormat: fluxFormat,
+        referenceImages: fluxRefs,
+        promptUpsampling,
+      });
       if (res.ok) {
         setFluxAsset(res.asset);
         setFluxWarnings(res.warnings);
@@ -286,6 +303,64 @@ export function MidjourneyBuilder({
             Uses the same brief above. FLUX takes a natural-language prompt plus the aspect ratio (no <code>--</code> flags), then saves the
             result straight into your media library as a <strong>draft</strong> to review before publishing.
           </p>
+
+          {/* Reference images — FLUX.2 multi-reference (up to 8, verified API limit) */}
+          <div className="mb-3">
+            <div className="mb-1 flex items-center justify-between">
+              <h5 className="text-xs font-semibold uppercase tracking-wide text-white/50">
+                Reference images (optional · up to {MAX_FLUX_REFS})
+              </h5>
+              <span className="text-xs text-white/40">{fluxRefs.length}/{MAX_FLUX_REFS} selected</span>
+            </div>
+            <p className="mb-2 text-xs text-white/40">
+              FLUX.2 can blend up to {MAX_FLUX_REFS} references — combine product shots, styles, or brand
+              assets. Click to select from your published media.
+            </p>
+            {references.length === 0 ? (
+              <p className="text-xs text-white/40">No published media yet. Upload images on the Media page to use them as references.</p>
+            ) : (
+              <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
+                {references.map((r) => {
+                  const selected = fluxRefs.includes(r.url);
+                  const idx = fluxRefs.indexOf(r.url);
+                  const atCap = !selected && fluxRefs.length >= MAX_FLUX_REFS;
+                  return (
+                    <button
+                      key={r.id}
+                      type="button"
+                      onClick={() => toggleFluxRef(r.url)}
+                      disabled={atCap}
+                      title={r.label}
+                      className={`relative aspect-square overflow-hidden rounded-lg border transition ${
+                        selected
+                          ? "border-[#9b6bff] ring-2 ring-[#9b6bff]/60"
+                          : atCap
+                            ? "border-white/10 opacity-40"
+                            : "border-white/15 hover:border-white/40"
+                      }`}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={r.url} alt={r.label} className="h-full w-full object-cover" />
+                      {selected ? (
+                        <span className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-[#9b6bff] text-[0.65rem] font-bold text-white">
+                          {idx + 1}
+                        </span>
+                      ) : null}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <label className="mb-3 flex items-center gap-2 text-sm text-white/70">
+            <input
+              type="checkbox"
+              checked={promptUpsampling}
+              onChange={(e) => setPromptUpsampling(e.target.checked)}
+            />{" "}
+            Let FLUX expand my prompt (prompt upsampling)
+          </label>
 
           <div className="flex flex-wrap items-end gap-3">
             <Field label="Format" className="w-28">

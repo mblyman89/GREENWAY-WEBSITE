@@ -55,6 +55,10 @@ export type GenerateFluxInput = {
   uploadedBy: string | null;
   outputFormat?: "png" | "jpeg";
   safetyTolerance?: number;
+  /** Up to 8 reference-image URLs (FLUX.2 multi-reference). */
+  referenceImages?: string[];
+  /** Let FLUX rewrite/expand the prompt (default off). */
+  promptUpsampling?: boolean;
 };
 
 export type GenerateFluxResult =
@@ -86,6 +90,8 @@ export async function generateFluxImage(input: GenerateFluxInput): Promise<Gener
   const built = buildFluxRequest(input.brief, {
     outputFormat: input.outputFormat,
     safetyTolerance: input.safetyTolerance,
+    referenceImages: input.referenceImages,
+    promptUpsampling: input.promptUpsampling,
   });
   if (!built.ok) return { ok: false, error: built.error, code: "api" };
 
