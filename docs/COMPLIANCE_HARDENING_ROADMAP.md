@@ -28,10 +28,26 @@ Standing rules respected: CCRS compliance + 🔴 DOH MEDICAL CANNABIS COMPLIANCE
 - Tests: 10 tsx assertions (clean/ sync-error / verifier-error / ERROR-file-warning /
   dedup / ordering / summary / injected classifier).
 
-## Slice 106 — CCRS reporting-deadline guard [HIGH]
-- PURE deadline calculator grounded in the CCRS retailer reporting cadence. Flag any period
-  whose submission window is open/closing/overdue relative to today, and whether a batch was
-  exported for it (using `ccrs_export_batches`). Surface a red signal before it's late.
+## Slice 106 — CCRS reporting-deadline guard [HIGH] ✅ DONE
+- **VERIFIED FACT (two DISTINCT obligations — do not conflate):**
+  1. **CCRS file uploads = WEEKLY.** LCB "CCRS Upload User Guide" (June 2025) states
+     Inventory / InventoryAdjustment / InventoryTransfer "is required weekly by any licensed
+     facility ... only when [there are changes]. No report is needed if there are no changes."
+     The guide prescribes *weekly* cadence but does NOT publish a fixed weekday due date, so we
+     must NOT assert "due Sunday" (that was an unverifiable claim in old UI copy — corrected).
+     Grounded in WAC 314-55-083(4) (seed-to-sale traceability "kept completely up-to-date").
+  2. **LIQ-1295 Retailer Sales & Tax report + excise payment = MONTHLY, by the 20th of the
+     next month** (even with no sales); weekend/holiday rolls to next business day; 2% late
+     penalty after due date. Grounded in RCW 69.50.535, WAC 314-55-089 / 314-55-092.
+- Slice 106 models obligation #2 (the monthly LIQ-1295 deadline — the one with a hard statutory
+  date and a money penalty). PURE `ccrs-deadline-core.ts`: `dueDateForPeriod`, `periodDeadline`,
+  `reportingDeadlineOverview` (newest-first, most-urgent = OLDEST overdue = max penalty exposure),
+  injectable holiday set (never guess a holiday list), UTC math, 17 tsx tests.
+- Server reader `ccrs-filing-status.ts` derives which sales MONTHS have a full-month export on
+  record from `ccrs_export_batches` (range_from/range_to) — labeled honestly as "export on
+  record", NOT proof of a completed LCB filing. Surfaced read-only on the compliance page.
+- Also corrected the compliance page's inaccurate "weekly Sale.csv ... due the following Sunday"
+  copy to state the verified weekly-upload + monthly-LIQ-1295-by-the-20th facts.
 
 ## Slice 107 — Inventory "cannot go live dirty" gate [HIGH]
 - Harden lot activation: a lot missing a required CCRS identifier / lab result / with a
@@ -54,7 +70,7 @@ Standing rules respected: CCRS compliance + 🔴 DOH MEDICAL CANNABIS COMPLIANCE
 
 ## STATUS
 - [x] Slice 105 — CCRS pre-submission hard gate — HIGH
-- [ ] Slice 106 — CCRS reporting-deadline guard — HIGH
+- [x] Slice 106 — CCRS reporting-deadline guard — HIGH
 - [ ] Slice 107 — Inventory can't-go-live-dirty gate — HIGH
 - [ ] Slice 108 — CCRS identifier integrity assertions — MED
 - [ ] Slice 109 — Sales-limit enforcement at POS — HIGH

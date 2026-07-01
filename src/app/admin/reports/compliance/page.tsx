@@ -18,6 +18,7 @@ import { buildCcrsInventoryAdjustmentCsv } from "@/lib/compliance/ccrs-inventory
 import { buildCcrsBatch } from "@/lib/compliance/ccrs-batch";
 import { verifyCcrsBatch, classifyWarning } from "@/lib/compliance/ccrs-batch-core";
 import { assertCcrsBatchSubmittable } from "@/lib/compliance/ccrs-submit-gate-core";
+import { getCcrsFilingOverview } from "@/lib/compliance/ccrs-filing-status";
 import { isAiConfigured } from "@/lib/ai/provider";
 import { CcrsAdvisorPanel } from "@/components/admin/reports/CcrsAdvisorPanel";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -103,18 +104,110 @@ export default async function CompliancePage({
     }
   }
 
+  // Slice 106: monthly LIQ-1295 reporting-deadline overview (due the 20th of the
+  // following month). "Filed" is inferred from a full-month export on record.
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const filing = await getCcrsFilingOverview(todayIso, { lookbackMonths: 3 });
+  const deadlineTone =
+    filing.mostUrgent?.status === "overdue"
+      ? "red"
+      : filing.mostUrgent?.status === "due_today" || filing.mostUrgent?.status === "due_soon"
+        ? "orange"
+        : "green";
+
   return (
     <div className="space-y-5">
       <DateRangePicker />
 
       {/* What is this */}
       <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-5 py-3 text-xs leading-relaxed text-white/50">
-        CCRS is the WSLCB Cannabis Central Reporting System. It accepts a weekly{" "}
-        <span className="font-bold text-white/80">Sale.csv</span> upload (no API). This tool builds that file from your
-        completed orders with the required fields — 37% cannabis excise, combined 9.3% retail sales tax, per-line sale
-        identifiers, and the <code className="text-white/70">Insert</code> operation. Reporting weeks run Sun–Sat and
-        are due the following Sunday. Always review the draft figures before uploading.
+        CCRS is the WSLCB Cannabis Central Reporting System. It accepts CSV uploads (no API). This tool builds the{" "}
+        <span className="font-bold text-white/80">Sale.csv</span> and the full batch from your completed orders with the
+        required fields — 37% cannabis excise, combined retail sales tax, per-line sale identifiers, and the{" "}
+        <code className="text-white/70">Insert</code> operation. Per the LCB CCRS Upload User Guide, inventory-related
+        files are <span className="font-bold text-white/80">required weekly</span> when there are changes; separately,
+        the monthly <span className="font-bold text-white/80">LIQ-1295</span> Retailer Sales &amp; Tax report and excise
+        payment are due the <span className="font-bold text-white/80">20th of the following month</span> (even with no
+        sales; a 2% late penalty accrues after the due date). Always review the draft figures before uploading.
       </div>
+
+      {/* Monthly LIQ-1295 reporting-deadline guard (Slice 106) */}
+      {filing.available ? (
+        <div
+          className={`rounded-2xl border p-4 ${
+            deadlineTone === "red"
+              ? "border-red-500/40 bg-red-500/[0.07]"
+              : deadlineTone === "orange"
+                ? "border-orange-500/35 bg-orange-500/[0.06]"
+                : "border-emerald-500/30 bg-emerald-500/[0.05]"
+          }`}
+        >
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p
+              className={`text-xs font-black uppercase tracking-[0.12em] ${
+                deadlineTone === "red"
+                  ? "text-red-300"
+                  : deadlineTone === "orange"
+                    ? "text-orange-300"
+                    : "text-emerald-300"
+              }`}
+            >
+              Monthly report deadline (LIQ-1295 — due the 20th)
+            </p>
+            {filing.mostUrgent ? (
+              <span
+                className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                  deadlineTone === "red"
+                    ? "bg-red-500/20 text-red-200"
+                    : deadlineTone === "orange"
+                      ? "bg-orange-500/20 text-orange-200"
+                      : "bg-emerald-500/20 text-emerald-200"
+                }`}
+              >
+                {filing.mostUrgent.status.replace("_", " ")}
+              </span>
+            ) : (
+              <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-200">
+                all clear
+              </span>
+            )}
+          </div>
+          <ul className="space-y-1 text-xs">
+            {filing.periods.map((p) => {
+              const label = `${p.period.year}-${String(p.period.month).padStart(2, "0")}`;
+              const tone =
+                p.status === "overdue"
+                  ? "text-red-200"
+                  : p.status === "due_today" || p.status === "due_soon"
+                    ? "text-orange-200"
+                    : p.status === "filed"
+                      ? "text-emerald-200/80"
+                      : "text-white/60";
+              const note =
+                p.status === "filed"
+                  ? "export on record"
+                  : p.status === "overdue"
+                    ? `OVERDUE by ${Math.abs(p.daysUntilDue)} day(s) — no export on record`
+                    : p.status === "due_today"
+                      ? "DUE TODAY — no export on record"
+                      : p.status === "due_soon"
+                        ? `due in ${p.daysUntilDue} day(s) — no export on record`
+                        : `due in ${p.daysUntilDue} day(s)`;
+              return (
+                <li key={label} className={tone}>
+                  • Sales month <span className="font-bold">{label}</span> — report due{" "}
+                  <span className="font-bold">{p.dueDate}</span> — {note}
+                </li>
+              );
+            })}
+          </ul>
+          <p className="mt-2 text-[10px] leading-relaxed text-white/40">
+            &ldquo;Export on record&rdquo; means a full-month CCRS batch was generated here — it is a reminder, not proof
+            the LCB filing/payment was completed. File the LIQ-1295 and pay the excise in the LCB portal on or before the
+            due date (rolled to the next business day if it lands on a weekend/holiday).
+          </p>
+        </div>
+      ) : null}
 
       {/* Preview KPIs */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
