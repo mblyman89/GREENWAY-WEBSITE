@@ -29,6 +29,15 @@
   `payroll_runs` + `payroll_run_lines` admin-only. No data backfill.
   **Until this is run, `/admin/payroll` cannot save the ACH company block, any
   employee banking, or generate a NACHA file.**
+- [ ] **`supabase/migrations/0058_webauthn_passkeys.sql`** — Slice D (item 22):
+  biometric (Face ID / Touch ID) sign-in. Adds `public.webauthn_credentials`
+  (passkey bound to an `auth.users` id: Base64URL id, COSE public key bytea,
+  counter, device_type, backed_up, transports CSV, label, last_used_at) and a
+  short-lived `public.webauthn_challenges` table (service-role only). RLS:
+  credentials owner-read/rename/delete (inserts via verified service-role only);
+  challenges have NO policies (service-role only). No data backfill.
+  **Until this is run, the "Add passkey" button on Settings → Security and the
+  "Sign in with Face ID / Touch ID" button on the login screen will error.**
   Adds three columns to the existing `public.integration_credentials` singleton
   (`flux_api_key`, `flux_endpoint` default `flux-2-max`, `flux_base_url`) for the
   Black Forest Labs FLUX 2 image pipeline. RLS is inherited from migration 0053
