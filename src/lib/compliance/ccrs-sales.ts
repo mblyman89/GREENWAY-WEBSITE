@@ -32,7 +32,7 @@ import {
   resolveSaleInventoryExternalId,
   validateExternalId,
 } from "@/lib/compliance/ccrs-identifiers";
-import { assembleCcrsFile, ccrsFileName } from "@/lib/compliance/ccrs-batch-core";
+import { assembleCcrsFile, ccrsFileName, ccrsDate } from "@/lib/compliance/ccrs-batch-core";
 
 export type CcrsLicenseSettings = {
   licenseNumber: string;
@@ -58,13 +58,10 @@ function dollars(cents: number): string {
   return (Math.max(0, cents) / 100).toFixed(2);
 }
 
-/** MM/DD/YYYY in UTC. */
+/** MM/DD/YYYY for the Pacific calendar day (B3) — delegates to the shared,
+ * timezone-correct formatter so SaleDate/CreatedDate use the WA business day. */
 function mmddyyyy(iso: string | Date): string {
-  const d = typeof iso === "string" ? new Date(iso) : iso;
-  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
-  const dd = String(d.getUTCDate()).padStart(2, "0");
-  const yyyy = d.getUTCFullYear();
-  return `${mm}/${dd}/${yyyy}`;
+  return ccrsDate(iso);
 }
 
 // A6: single source of truth — the Sale column set + file assembly now live in

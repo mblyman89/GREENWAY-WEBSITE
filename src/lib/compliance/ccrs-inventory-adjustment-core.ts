@@ -16,7 +16,7 @@
  * Plus universal columns: CreatedBy / CreatedDate / UpdatedBy / UpdatedDate / Operation.
  */
 import { deriveInventoryExternalId, sanitizeExternalId } from "@/lib/compliance/ccrs-identifiers";
-import { assembleCcrsFile, ccrsFileName } from "@/lib/compliance/ccrs-batch-core";
+import { assembleCcrsFile, ccrsFileName, ccrsDate } from "@/lib/compliance/ccrs-batch-core";
 
 /** Minimal license identity needed to build a row (matches CcrsLicenseSettings). */
 export type CcrsLicenseLike = {
@@ -91,13 +91,10 @@ export function isReportableAdjustment(internal: string, qtyDelta: number): bool
 // Formatting helpers
 // ---------------------------------------------------------------------------
 
-/** MM/DD/YYYY in UTC. */
+/** MM/DD/YYYY for the Pacific calendar day (B3) — delegates to the shared,
+ * timezone-correct formatter so AdjustmentDate uses the WA business day. */
 export function mmddyyyy(iso: string | Date): string {
-  const d = typeof iso === "string" ? new Date(iso) : iso;
-  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
-  const dd = String(d.getUTCDate()).padStart(2, "0");
-  const yyyy = d.getUTCFullYear();
-  return `${mm}/${dd}/${yyyy}`;
+  return ccrsDate(iso);
 }
 
 /** CCRS dislikes embedded quotes; strip them and quote if a comma/newline. */
@@ -255,7 +252,10 @@ export function __runCcrsAdjustmentTests(): void {
   eq(adjustmentDetail("  multi   space  "), "multi space", "detail whitespace collapsed");
   eq(adjustmentDetail(null), "", "null detail → empty");
 
-  eq(mmddyyyy("2025-03-09T12:00:00Z"), "03/09/2025", "mmddyyyy");
+  // B3: dates are the PACIFIC calendar day. Noon UTC = 4–5 AM Pacific (same day).
+  eq(mmddyyyy("2025-03-09T12:00:00Z"), "03/09/2025", "mmddyyyy Pacific same-day");
+  // 11:30 PM Pacific on Jun 15 (06:30 UTC Jun 16) must format as Jun 15, not 16.
+  eq(mmddyyyy("2025-06-16T06:30:00Z"), "06/15/2025", "mmddyyyy Pacific late-evening");
 
   eq(cell("a,b"), '"a,b"', "comma quoted");
   eq(cell('a"b'), "ab", "quote stripped");
@@ -268,7 +268,7 @@ export function __runCcrsAdjustmentTests(): void {
       qty_delta: -4,
       reason: "count",
       note: "cycle count variance",
-      created_at: "2025-03-09T00:00:00Z",
+      created_at: "2025-03-09T12:00:00Z",
       lot: { id: "L1", lot_code: "LOT-ABC-001", pos_product_key: "pk1" },
     },
     lic,
