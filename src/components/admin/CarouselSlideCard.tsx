@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ContentImageField, type MediaChoice } from "./ContentImageField";
+import { CAROUSEL_SLIDE_SPEC } from "@/lib/cms/image-spec-core";
 import type { SlideAdminVM, SlideCta } from "@/lib/cms/carousel-types";
 
 /**
@@ -195,6 +196,7 @@ export function CarouselSlideCard({
             value={image}
             onChange={setImage}
             mediaChoices={mediaChoices}
+            spec={CAROUSEL_SLIDE_SPEC}
           />
         </div>
 

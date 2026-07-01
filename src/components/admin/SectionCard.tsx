@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ContentImageField, type MediaChoice } from "./ContentImageField";
+import { SECTION_BANNER_SPEC } from "@/lib/cms/image-spec-core";
 import { controlClassName, labelClassName } from "./ui";
 import type {
   SectionAdminVM,
@@ -245,6 +246,7 @@ export function SectionCard({
                 value={image}
                 onChange={setImage}
                 mediaChoices={mediaChoices}
+                spec={SECTION_BANNER_SPEC}
               />
             </div>
 

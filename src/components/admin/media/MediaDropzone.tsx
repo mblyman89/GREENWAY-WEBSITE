@@ -9,6 +9,7 @@
  */
 import { useRef, useState } from "react";
 import { MEDIA_PURPOSES, PLACEMENT_SUGGESTIONS } from "@/lib/media/taxonomy";
+import { imageSpecCheatSheet } from "@/lib/cms/image-spec-core";
 
 type Preview = { name: string; url: string; isImage: boolean };
 
@@ -181,6 +182,40 @@ export function MediaDropzone({
       >
         Upload
       </button>
+
+      {/* Canva size cheat-sheet — create art at the right size the first time. */}
+      <details className="rounded-xl border border-white/10 bg-black/40 p-4 text-xs text-white/70">
+        <summary className="cursor-pointer select-none font-semibold text-[#7ed957]">
+          🎨 Canva size cheat-sheet — build art at the right size
+        </summary>
+        <p className="mt-2 text-white/45">
+          Create a custom-size canvas in Canva using these dimensions, then export as WebP or
+          PNG. Design textless art — headings and buttons are layered on top automatically.
+        </p>
+        <div className="mt-3 overflow-x-auto">
+          <table className="w-full min-w-[420px] border-collapse text-left">
+            <thead className="text-[0.65rem] uppercase tracking-wide text-white/40">
+              <tr>
+                <th className="py-1 pr-4">Slot</th>
+                <th className="py-1 pr-4">Canva size</th>
+                <th className="py-1">Aspect</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/5">
+              {imageSpecCheatSheet().map((s) => (
+                <tr key={s.id}>
+                  <td className="py-1.5 pr-4 text-white/70">{s.title}</td>
+                  <td className="py-1.5 pr-4 font-mono text-white">
+                    {s.presets[0].width}×{s.presets[0].height}
+                    {s.transparent ? " (transparent PNG)" : ""}
+                  </td>
+                  <td className="py-1.5 font-mono text-white/50">{s.aspectLabel}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </details>
     </form>
   );
 }
