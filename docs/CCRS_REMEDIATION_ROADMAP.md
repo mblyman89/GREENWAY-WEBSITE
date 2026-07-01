@@ -75,7 +75,7 @@ Fix the standalone Sale.csv generator + reconcile the column source of truth.
 ---
 
 ## STATUS
-- [ ] Slice 87 — Sale.csv conformance (A1/A2/A3/A6) — CRITICAL
+- [x] Slice 87 — Sale.csv conformance (A1/A2/A3/A6) — CRITICAL
 - [ ] Slice 88 — InventoryAdjustment.csv conformance (A4/A5) — CRITICAL
 - [ ] Slice 89 — Pacific-time CCRS dates (B3) — HIGH
 - [ ] Slice 90 — SaleType RecreationalMedical (B1) — HIGH

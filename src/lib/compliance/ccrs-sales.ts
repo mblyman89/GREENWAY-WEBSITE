@@ -32,6 +32,7 @@ import {
   resolveSaleInventoryExternalId,
   validateExternalId,
 } from "@/lib/compliance/ccrs-identifiers";
+import { assembleCcrsFile, ccrsFileName } from "@/lib/compliance/ccrs-batch-core";
 
 export type CcrsLicenseSettings = {
   licenseNumber: string;
@@ -66,33 +67,9 @@ function mmddyyyy(iso: string | Date): string {
   return `${mm}/${dd}/${yyyy}`;
 }
 
-function cell(v: unknown): string {
-  const s = v == null ? "" : String(v);
-  // CCRS dislikes embedded quotes; strip them and quote if a comma/newline.
-  const clean = s.replace(/"/g, "");
-  return /[,\n]/.test(clean) ? `"${clean}"` : clean;
-}
-
-const COLUMNS = [
-  "LicenseNumber",
-  "SoldToLicenseNumber",
-  "InventoryExternalIdentifier",
-  "PlantExternalIdentifier",
-  "SaleType",
-  "SaleDate",
-  "Quantity",
-  "UnitPrice",
-  "Discount",
-  "SalesTax",
-  "OtherTax",
-  "SaleExternalIdentifier",
-  "SaleDetailExternalIdentifier",
-  "CreatedBy",
-  "CreatedDate",
-  "UpdatedBy",
-  "UpdatedDate",
-  "Operation",
-] as const;
+// A6: single source of truth — the Sale column set + file assembly now live in
+// ccrs-batch-core (A1: RetailSalesTax / CannabisExciseTax; A2/A3: 3-row header +
+// \r\n via assembleCcrsFile). No divergent local column copy here anymore.
 
 // ---------------------------------------------------------------------------
 // Settings loader
@@ -382,31 +359,22 @@ export async function buildCcrsSaleCsv(fromISO: string, toISO: string): Promise<
 // File assembly
 // ---------------------------------------------------------------------------
 
+/** UploadType_LicenseNumber_YYYYMMDDHHMMSS.csv (A6: shared spec helper). */
 function makeFileName(licenseNumber: string): string {
-  const now = new Date();
-  const ts =
-    now.getUTCFullYear().toString() +
-    String(now.getUTCMonth() + 1).padStart(2, "0") +
-    String(now.getUTCDate()).padStart(2, "0") +
-    String(now.getUTCHours()).padStart(2, "0") +
-    String(now.getUTCMinutes()).padStart(2, "0") +
-    String(now.getUTCSeconds()).padStart(2, "0");
-  const lic = licenseNumber || "LICENSE";
-  return `sale_${lic}_${ts}.csv`;
+  return ccrsFileName("Sale", licenseNumber);
 }
 
 /**
- * The CCRS Sale file: header rows (SubmittedBy / SubmittedDate / NumberRecords),
- * a blank line, the column header row, then the data rows.
+ * The CCRS Sale file. A2/A3/A6: assembled by the shared, spec-verified
+ * assembler so it is byte-identical in shape to the batch's master-data files —
+ * the 3-row common header (SubmittedBy / SubmittedDate / NumberRecords, one per
+ * line), the exact template column row, then data rows, joined with \r\n and
+ * with NumberRecords == the data-row count.
  */
 function buildFile(rows: string[][], license: CcrsLicenseSettings): string {
-  const submittedDate = mmddyyyy(new Date());
-  const out: string[] = [];
-  // File header (3 fields, one per labeled line — matches the guide's format).
-  out.push(["SubmittedBy", "SubmittedDate", "NumberRecords"].map(cell).join(","));
-  out.push([license.submittedBy, submittedDate, String(rows.length)].map(cell).join(","));
-  // Column header row.
-  out.push(COLUMNS.join(","));
-  for (const r of rows) out.push(r.map(cell).join(","));
-  return out.join("\n");
+  return assembleCcrsFile({
+    type: "Sale",
+    submittedBy: license.submittedBy,
+    rows,
+  });
 }
