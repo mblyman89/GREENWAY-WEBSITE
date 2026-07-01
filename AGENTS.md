@@ -59,4 +59,43 @@ manifests, or any file/data the LCB ingests, you MUST:
 - **Keep the spec docs current.** When the LCB updates a template/manual, update
   `docs/ccrs-data-model.md` + `docs/ccrs-templates/` and re-verify generators.
 - The living audit + findings ledger is `docs/CCRS_COMPLIANCE_AUDIT.md`.
+
+## 🔴 DOH MEDICAL CANNABIS COMPLIANCE — ALWAYS RESPECT (BINDING)
+
+The medical program MUST strictly adhere to WA **DOH** (Medical Cannabis Registry / MCR)
+and the medical provisions of LCB rules at all times. Compliance protects the owner's
+license and the patient. For ANY change that touches medical patients, recognition
+cards, authorization intake, tax exemptions (sales/excise), possession/purchase limits,
+DOH-compliant products, or the medical audit trail, you MUST:
+
+- **Ground against the authoritative sources — never guess a DOH rule, field, rate,
+  limit, or date.** Verified sources (re-verify against the LIVE current versions):
+  - DOH **Medical Cannabis Registry (MCR)** program page (replaced "Airlift" on
+    2025-06-30). There is **NO public retailer API** — staff validate cards by logging
+    into the MCR; our system stores the **validation result**, it never calls the MCR.
+  - **RCW 69.51A** (esp. `.230` recognition-card unique patient identifier / dates),
+    **RCW 69.50.375/.535**, **HB 1453** (DOH 608-050 FAQ), **DOH 608-048** (authorization-
+    form validation checklist), **WAC 314-55-090** (recognition-card sales + the
+    `(2)` excise-exempt recordkeeping, 5-yr retention; `(6)` exemption sunset
+    **2029-06-30**), **WAC 246-70-040** (DOH-compliant product), **WAC 314-55-095**
+    (purchase limits). The living reference is `docs/medical-doh-requirements.md`.
+- **Never issue a card unless DOH 608-048 is fully satisfied.** All four form checks
+  (complete/signed, tamper-resistant paper w/ security feature, identity verified,
+  embossed RCW 69.51A.030 seal) MUST be verified server-side. If ANY cannot be
+  verified → do NOT create a card. A UPID is required whenever the patient is marked
+  in the MCR; effective ≤ expiration; never issue an already-expired card.
+- **Two tax exemptions — never conflate them.** Sales tax (9.3%) exempt for a
+  carded patient/DP buying ANY cannabis at a medically-endorsed store. Excise (37%)
+  exempt ONLY when ALL THREE hold: endorsed retailer + valid **in-MCR** card + product
+  is **DOH-compliant** (WAC 246-70-040). An expired/invalid card grants NO exemption.
+- **Retain the WAC 314-55-090(2) record for every excise-exempt sale for 5 years**
+  (date, UPID, card effective + expiration, product SKU, sales price). If we cannot
+  produce it, excise is presumed owed. Keep the durable `medical_exempt_sales` ledger.
+- **Enforce the 3× carded purchase limits** (WAC 314-55-095: 3 oz usable, 48 oz
+  solid, 216 oz infused-liquid, 21 g concentrate) for carded patients.
+- **Protect PHI.** Scanned authorization forms and patient data are sensitive: keep
+  them in the PRIVATE `medical-forms` bucket (staff-only), never public; audit access.
+- **Add guardrails, not just fixes** — PURE, unit-tested validate layers that BLOCK a
+  non-compliant card/exemption before it can happen. Drafts-only for anything crawled.
+- The living reference is `docs/medical-doh-requirements.md`; keep it current.
 <!-- END:greenway-standing-rules -->

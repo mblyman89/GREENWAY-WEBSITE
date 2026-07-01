@@ -82,6 +82,15 @@
   "Your integrated hardware" card on `/admin/equipment` links to each device even
   before this runs; this just adds them as editable registry rows.
 
+- [ ] **`supabase/migrations/0062_inbound_email_log.sql`** — Slice 99: audit trail
+  for the inbound `vendor_intake@` mailbox. Adds `public.inbound_email_log`
+  (provider, from/to, subject, received_at, signature_ok, to_intake,
+  attachment_count, disposition `received|ignored|no_manifest|staged|parse_failed`,
+  `manifest_id` FK → `inbound_manifests` on delete set null, note, raw_headers) with
+  two indexes. RLS: authenticated staff **read-only** (the service-role webhook does
+  all writes). No data backfill. **Optional but recommended** — inbound email still
+  stages draft manifests without it, but you lose the arrival audit log rows.
+
 ---
 
 ### How to run
