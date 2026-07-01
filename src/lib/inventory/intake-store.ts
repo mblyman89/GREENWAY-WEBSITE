@@ -521,6 +521,88 @@ export async function listManifestLots(manifestId: string) {
   );
 }
 
+/**
+ * Every lot line across ALL manifests, joined to its manifest number/vendor and
+ * lab COA fields, for the intake Excel export (Slice 82 — "every field"). This
+ * is a read-only reporting query; it is NOT paginated because the export is a
+ * point-in-time snapshot the owner reconciles against CCRS.
+ */
+export type ManifestLotExportRow = {
+  manifest_id: string | null;
+  manifest_number: string | null;
+  vendor_label: string | null;
+  lot_id: string;
+  product_name: string | null;
+  strain_name: string | null;
+  lot_code: string | null;
+  category: string | null;
+  inventory_type: string | null;
+  pos_product_key: string | null;
+  received_qty: number;
+  on_hand_qty: number;
+  unit: string;
+  unit_weight: number | null;
+  unit_weight_uom: string | null;
+  unit_cost_minor_units: number | null;
+  is_sample: boolean;
+  is_medical: boolean;
+  status: string;
+  disposition: string | null;
+  reject_reason_code: string | null;
+  reject_reason: string | null;
+  expires_on: string | null;
+  lab_result_id: string | null;
+  created_at: string;
+};
+
+export async function listAllManifestLotsForExport(
+  limit = 5000,
+): Promise<ManifestLotExportRow[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  const admin = createSupabaseAdminClient();
+  const { data } = await admin
+    .from("inventory_lots")
+    .select(
+      "id, manifest_id, product_name, strain_name, lot_code, category, inventory_type, pos_product_key, received_qty, on_hand_qty, unit, unit_weight, unit_weight_uom, unit_cost_minor_units, is_sample, is_medical, status, disposition, reject_reason, reject_reason_code, expires_on, lab_result_id, created_at, inbound_manifests(manifest_number, vendor_label)",
+    )
+    .not("manifest_id", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  const rows =
+    (data as
+      | (Record<string, unknown> & {
+          inbound_manifests?: { manifest_number: string | null; vendor_label: string | null } | null;
+        })[]
+      | null) ?? [];
+  return rows.map((r) => ({
+    manifest_id: (r.manifest_id as string | null) ?? null,
+    manifest_number: r.inbound_manifests?.manifest_number ?? null,
+    vendor_label: r.inbound_manifests?.vendor_label ?? null,
+    lot_id: r.id as string,
+    product_name: (r.product_name as string | null) ?? null,
+    strain_name: (r.strain_name as string | null) ?? null,
+    lot_code: (r.lot_code as string | null) ?? null,
+    category: (r.category as string | null) ?? null,
+    inventory_type: (r.inventory_type as string | null) ?? null,
+    pos_product_key: (r.pos_product_key as string | null) ?? null,
+    received_qty: (r.received_qty as number) ?? 0,
+    on_hand_qty: (r.on_hand_qty as number) ?? 0,
+    unit: (r.unit as string) ?? "",
+    unit_weight: (r.unit_weight as number | null) ?? null,
+    unit_weight_uom: (r.unit_weight_uom as string | null) ?? null,
+    unit_cost_minor_units: (r.unit_cost_minor_units as number | null) ?? null,
+    is_sample: Boolean(r.is_sample),
+    is_medical: Boolean(r.is_medical),
+    status: (r.status as string) ?? "",
+    disposition: (r.disposition as string | null) ?? null,
+    reject_reason_code: (r.reject_reason_code as string | null) ?? null,
+    reject_reason: (r.reject_reason as string | null) ?? null,
+    expires_on: (r.expires_on as string | null) ?? null,
+    lab_result_id: (r.lab_result_id as string | null) ?? null,
+    created_at: (r.created_at as string) ?? "",
+  }));
+}
+
 // ---------------------------------------------------------------------------
 // Manifest lifecycle (Slice 18) — Cultivera-style status timeline.
 //
