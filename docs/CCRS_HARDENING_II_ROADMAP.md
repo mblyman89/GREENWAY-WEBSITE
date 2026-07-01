@@ -74,7 +74,7 @@ binding **CCRS compliance** rule (valid enums, 3-row header, exact columns, clam
 
 ## STATUS
 - [x] Slice 93 — Honest sync-issue severity — CRITICAL
-- [ ] Slice 94 — E2E batch dry-run harness (verifyCcrsBatch) — HIGH
+- [x] Slice 94 — E2E batch dry-run harness (verifyCcrsBatch) — HIGH
 - [ ] Slice 95 — "Do not upload" gate + error summary — HIGH
 - [ ] Slice 96 — Sale numeric-column safety — HIGH
 - [ ] Slice 97 — Vendor intake review summary (drafts-only) — MED

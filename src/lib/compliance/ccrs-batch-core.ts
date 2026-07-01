@@ -481,6 +481,173 @@ export function assembleCcrsFile(opts: {
   return lines.join("\r\n") + "\r\n";
 }
 
+/* ------------------------------------------------------------------ *
+ * End-to-end batch verification (Slice 94 — verifiable trust)
+ *
+ * Given the fully-assembled CCRS files (as produced by assembleCcrsFile), verify
+ * — offline, no DB, no network — that each is byte-correct BEFORE the employee
+ * uploads to the LCB. This is the composed-output check that complements the
+ * per-builder unit tests. PURE; never throws (returns a structured report).
+ * ------------------------------------------------------------------ */
+
+export type CcrsBatchProblem = {
+  file: CcrsRetailerFileType | string;
+  severity: CcrsIssueSeverity;
+  message: string;
+};
+
+export type CcrsBatchVerification = {
+  ok: boolean;
+  problems: CcrsBatchProblem[];
+  checkedFiles: number;
+};
+
+/**
+ * Split one CSV line into cells, honoring double-quote wrapping (RFC-4180-ish).
+ * ccrsCell only wraps a cell in quotes when it contains a comma/newline/quote and
+ * strips inner quotes, so a simple state machine is sufficient and lossless here.
+ */
+export function splitCsvLine(line: string): string[] {
+  const cells: string[] = [];
+  let cur = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        // doubled quote -> literal quote; else end of quoted region
+        if (line[i + 1] === '"') {
+          cur += '"';
+          i++;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        cur += ch;
+      }
+    } else if (ch === '"') {
+      inQuotes = true;
+    } else if (ch === ",") {
+      cells.push(cur);
+      cur = "";
+    } else {
+      cur += ch;
+    }
+  }
+  cells.push(cur);
+  return cells;
+}
+
+const MMDDYYYY_RE = /^(0[1-9]|1[0-2])\/(0[1-9]|[12]\d|3[01])\/\d{4}$/;
+
+/**
+ * Which column indices in each file carry a CCRS date (MM/DD/YYYY). Grounded in
+ * the template column names — any column whose header ends in "Date".
+ */
+function dateColumnIndexes(type: CcrsRetailerFileType): number[] {
+  return CCRS_COLUMNS[type]
+    .map((name, i) => (/date$/i.test(name) ? i : -1))
+    .filter((i) => i >= 0);
+}
+
+/**
+ * Verify one assembled CCRS file string. PURE. Returns problems (may be empty).
+ */
+export function verifyCcrsFile(
+  type: CcrsRetailerFileType,
+  csv: string,
+): CcrsBatchProblem[] {
+  const problems: CcrsBatchProblem[] = [];
+  const err = (message: string) => problems.push({ file: type, severity: "error", message });
+  const warn = (message: string) => problems.push({ file: type, severity: "warning", message });
+
+  if (typeof csv !== "string" || csv.length === 0) {
+    err("File is empty (no header rows).");
+    return problems;
+  }
+  // Line endings MUST be CRLF. Reject a bare-LF file (a common corruption).
+  if (/(^|[^\r])\n/.test(csv)) {
+    err("File does not use CRLF (\\r\\n) line endings.");
+  }
+  const lines = csv.replace(/\r\n$/, "").split("\r\n");
+  if (lines.length < 4) {
+    err(`File has ${lines.length} line(s); expected at least 4 (3-row header + column row).`);
+    return problems;
+  }
+
+  // Row 1-3: the 3-row header.
+  const r1 = splitCsvLine(lines[0]);
+  const r2 = splitCsvLine(lines[1]);
+  const r3 = splitCsvLine(lines[2]);
+  if (r1[0] !== "SubmittedBy") err(`Row 1 must start with "SubmittedBy" (got "${r1[0]}").`);
+  if (r2[0] !== "SubmittedDate") err(`Row 2 must start with "SubmittedDate" (got "${r2[0]}").`);
+  else if (!MMDDYYYY_RE.test((r2[1] ?? "").trim())) err(`SubmittedDate "${r2[1]}" is not MM/DD/YYYY.`);
+  if (r3[0] !== "NumberRecords") err(`Row 3 must start with "NumberRecords" (got "${r3[0]}").`);
+
+  // Row 4: exact template column header.
+  const expected = CCRS_COLUMNS[type];
+  const header = splitCsvLine(lines[3]);
+  if (header.length !== expected.length || header.some((h, i) => h !== expected[i])) {
+    err(`Column header row does not match the ${type} template. Expected: ${expected.join(",")}`);
+  }
+
+  // Data rows.
+  const dataRows = lines.slice(4);
+  const declared = Number((r3[1] ?? "").trim());
+  if (!Number.isInteger(declared) || declared < 0) {
+    err(`NumberRecords "${r3[1]}" is not a valid count.`);
+  } else if (declared !== dataRows.length) {
+    err(`NumberRecords (${declared}) does not equal the ${dataRows.length} data row(s).`);
+  }
+
+  const dateCols = dateColumnIndexes(type);
+  const catIdx = expected.indexOf("InventoryCategory");
+  const typeIdx = expected.indexOf("InventoryType");
+
+  dataRows.forEach((line, idx) => {
+    const rowNo = idx + 1;
+    const cells = splitCsvLine(line);
+    if (cells.length !== expected.length) {
+      err(`Data row ${rowNo} has ${cells.length} column(s); expected ${expected.length}.`);
+    }
+    for (const c of dateCols) {
+      const v = (cells[c] ?? "").trim();
+      if (v && !MMDDYYYY_RE.test(v)) {
+        err(`Data row ${rowNo}: ${expected[c]} "${v}" is not MM/DD/YYYY.`);
+      }
+    }
+    // Product classification cross-check (drafts-only: flag, never fix).
+    if (type === "Product" && catIdx >= 0 && typeIdx >= 0) {
+      const cls = validateProductClassification(cells[catIdx], cells[typeIdx]);
+      if (!cls.ok) err(`Data row ${rowNo}: ${cls.error}`);
+    }
+  });
+
+  if (dataRows.length === 0) {
+    warn("File contains no data rows (empty submission for this type).");
+  }
+
+  return problems;
+}
+
+/**
+ * Verify a whole assembled batch. PURE. `ok` is true iff there are no `error`
+ * problems (advisory warnings do not block). Never throws.
+ */
+export function verifyCcrsBatch(
+  files: ReadonlyArray<{ type: CcrsRetailerFileType; csv: string }>,
+): CcrsBatchVerification {
+  const problems: CcrsBatchProblem[] = [];
+  for (const f of files) {
+    problems.push(...verifyCcrsFile(f.type, f.csv));
+  }
+  return {
+    ok: problems.every((p) => p.severity !== "error"),
+    problems,
+    checkedFiles: files.length,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Self-tests (run via tsx). Pure — no I/O.
 // ---------------------------------------------------------------------------
@@ -627,6 +794,63 @@ export function __runCcrsBatchCoreTests(): void {
   assert(classifyWarning("No products found in the published menu.") === "warning", "empty note → warning");
   assert(classifyWarning("") === "warning", "empty string → warning");
   assert(classifyWarning(null) === "warning", "null → warning");
+
+  // splitCsvLine (Slice 94): plain, quoted-with-comma, doubled-quote.
+  assert(JSON.stringify(splitCsvLine("a,b,c")) === JSON.stringify(["a", "b", "c"]), "plain split");
+  assert(JSON.stringify(splitCsvLine('a,"b,c",d')) === JSON.stringify(["a", "b,c", "d"]), "quoted comma split");
+  assert(JSON.stringify(splitCsvLine('"x""y"')) === JSON.stringify(['x"y']), "doubled quote");
+  assert(JSON.stringify(splitCsvLine("a,,c")) === JSON.stringify(["a", "", "c"]), "empty middle cell");
+
+  // verifyCcrsBatch (Slice 94): a well-formed batch passes.
+  const goodStrain = assembleCcrsFile({
+    type: "Strain",
+    submittedBy: "Jane Doe",
+    submittedDate: new Date(Date.UTC(2025, 5, 15, 12, 0, 0)),
+    rows: [["123456", "Blue Dream", "Hybrid", "Jane Doe", "06/15/2025"]],
+  });
+  const goodProduct = assembleCcrsFile({
+    type: "Product",
+    submittedBy: "Jane Doe",
+    submittedDate: new Date(Date.UTC(2025, 5, 15, 12, 0, 0)),
+    rows: [
+      ["123456", "EndProduct", "Usable Cannabis", "3.5g Blue Dream", "desc", "3.50", "P-1", "Jane", "06/15/2025", "", "", "Insert"],
+    ],
+  });
+  const goodBatch = verifyCcrsBatch([
+    { type: "Strain", csv: goodStrain },
+    { type: "Product", csv: goodProduct },
+  ]);
+  assert(goodBatch.ok === true, "good batch verifies: " + JSON.stringify(goodBatch.problems));
+  assert(goodBatch.checkedFiles === 2, "checked 2 files");
+
+  // A batch with a bad NumberRecords is rejected.
+  const tamperedNumber = goodStrain.replace("NumberRecords,1", "NumberRecords,5");
+  const bad1 = verifyCcrsBatch([{ type: "Strain", csv: tamperedNumber }]);
+  assert(bad1.ok === false, "NumberRecords mismatch rejected");
+  assert(bad1.problems.some((p) => p.severity === "error" && /NumberRecords/.test(p.message)), "reports NumberRecords error");
+
+  // A Product batch with an invalid category/type is rejected.
+  const badProduct = assembleCcrsFile({
+    type: "Product",
+    submittedBy: "Jane Doe",
+    submittedDate: new Date(Date.UTC(2025, 5, 15, 12, 0, 0)),
+    rows: [
+      ["123456", "EndProduct", "Vape Cartridge", "Vape", "", "0", "P-2", "Jane", "06/15/2025", "", "", "Insert"],
+    ],
+  });
+  const bad2 = verifyCcrsBatch([{ type: "Product", csv: badProduct }]);
+  assert(bad2.ok === false, "invalid product classification rejected");
+
+  // A bare-LF file (wrong line endings) is rejected.
+  const lfFile = goodStrain.replace(/\r\n/g, "\n");
+  const bad3 = verifyCcrsBatch([{ type: "Strain", csv: lfFile }]);
+  assert(bad3.ok === false, "LF-only file rejected");
+  assert(bad3.problems.some((p) => /CRLF/.test(p.message)), "reports CRLF error");
+
+  // A bad date in a data row is rejected.
+  const badDate = goodStrain.replace("06/15/2025", "2025-06-15");
+  const bad4 = verifyCcrsBatch([{ type: "Strain", csv: badDate }]);
+  assert(bad4.ok === false, "bad date rejected");
 
   console.log("ccrs-batch-core: all tests passed");
 }

@@ -128,7 +128,7 @@ see `docs/COMMAND_CENTER_ENHANCEMENTS_TASKLIST.md`.
 > Gap found while planning: Slice-92 "ERROR —" product warnings were surfaced as mere "warning" severity — a batch-blocking mis-mapping looked harmless. Slice 93 fixes this.
 > NOTE (not lost): BATCH 2e owner items remain pending — DOH medical authorization intake (Canon PIXMA TS3522 + Scotch laminator) and the devices/equipment management page. Will surface these as the recommended NEXT batch after this round.
 - [x] Slice 93 — Honest sync-issue severity (classifyWarning; ERROR ⇒ error; no hidden blockers) — CRITICAL
-- [ ] Slice 94 — E2E batch dry-run harness verifyCcrsBatch (pure, byte-correct assertions) — HIGH
+- [x] Slice 94 — E2E batch dry-run harness verifyCcrsBatch (pure, byte-correct assertions) — HIGH
 - [ ] Slice 95 — "Do not upload" gate + error-first summary in README/sync report — HIGH
 - [ ] Slice 96 — Sale numeric-column safety (non-negative qty/price, cents-consistent tax) — HIGH
 - [ ] Slice 97 — Vendor intake review summary summarizeIntakeForReview (drafts-only) — MED
