@@ -19,6 +19,7 @@ export const adminNav: AdminNavItem[] = [
   { label: "Loyalty Program", href: "/admin/loyalty", permission: "loyalty.view", icon: "🎁", group: "Operations" },
   { label: "Customers", href: "/admin/customers", permission: "customers.manage", icon: "👤", group: "Operations" },
   { label: "Medical", href: "/admin/medical", permission: "medical.manage", icon: "⚕", group: "Operations" },
+  { label: "Authorization Intake", href: "/admin/medical/intake", permission: "medical.manage", icon: "📇", group: "Operations" },
   { label: "Time Clock", href: "/admin/staffing", permission: "loyalty.view", icon: "⏱", group: "Operations" },
   { label: "Registers & Drawers", href: "/admin/registers", permission: "orders.manage", icon: "💵", group: "Operations" },
   { label: "Payroll (ACH)", href: "/admin/payroll", permission: "settings.manage", icon: "🏦", group: "Operations" },
