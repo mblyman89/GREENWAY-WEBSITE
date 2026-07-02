@@ -266,7 +266,7 @@ export default async function LotDetailPage({
                   ))}
                 </Select>
               </Field>
-              <Button type="submit" variant="subtle" size="sm">
+              <Button type="submit" variant="neutral" size="sm">
                 Update status
               </Button>
             </form>

@@ -42,6 +42,120 @@ export type VendorPaymentProblem = {
   message: string;
 };
 
+// ---------------------------------------------------------------------------
+// MANIFEST-BACKED GUARDRAILS (B6)
+//
+// A vendor ACH payment must be married to an ACCEPTED inbound manifest (the
+// "invoice"). The amount owed for a manifest is the CCRS cost basis:
+//   owed = SUM(received_qty * unit_cost_minor_units) over its non-rejected lots.
+// We subtract what has already been paid to get the REMAINING owed. Then:
+//   • overpay  (amount > remaining)  = BLOCKED (error)
+//   • underpay (0 < amount < remaining) = allowed WITH WARNING
+//   • exact                          = clean
+// All amounts CENTS (integer). PURE — no I/O.
+// ---------------------------------------------------------------------------
+
+/** A payable derived from an accepted manifest + what we've already paid. */
+export type ManifestPayable = {
+  manifestId: string;
+  manifestNumber: string;
+  vendorId: string | null;
+  vendorName: string;
+  /** Manifest status; must be an accepted state to be payable. */
+  status: string;
+  /** SUM(received_qty * unit_cost_minor_units) over non-rejected lots, CENTS. */
+  owedMinorUnits: number;
+  /** SUM of prior payments applied to this manifest, CENTS. */
+  paidMinorUnits: number;
+};
+
+/** Manifest statuses we consider "accepted" (payable). */
+export const PAYABLE_MANIFEST_STATUSES = new Set(["accepted", "partially_accepted"]);
+
+export type PaymentCheckSeverity = "ok" | "warning" | "blocked";
+
+export type PaymentCheck = {
+  severity: PaymentCheckSeverity;
+  /** Remaining owed = owed - alreadyPaid (never below 0 for display). */
+  remainingMinorUnits: number;
+  /** Human-readable explanation. */
+  message: string;
+};
+
+/** True if a manifest is in a payable (accepted) state. */
+export function isPayableManifest(payable: Pick<ManifestPayable, "status">): boolean {
+  return PAYABLE_MANIFEST_STATUSES.has((payable.status || "").toLowerCase());
+}
+
+/** Remaining owed for a payable (owed - paid), clamped at 0. PURE. */
+export function remainingOwed(payable: Pick<ManifestPayable, "owedMinorUnits" | "paidMinorUnits">): number {
+  const remaining = (payable.owedMinorUnits || 0) - (payable.paidMinorUnits || 0);
+  return remaining > 0 ? remaining : 0;
+}
+
+function usd(cents: number): string {
+  return (cents / 100).toLocaleString("en-US", { style: "currency", currency: "USD" });
+}
+
+/**
+ * Check ONE proposed payment against ONE manifest payable. PURE. Returns a
+ * severity (ok | warning | blocked) with a message. Never throws.
+ *
+ *   - manifest not accepted           -> blocked
+ *   - amount not a positive integer   -> blocked
+ *   - nothing left to pay (remaining 0) -> blocked
+ *   - amount > remaining (overpay)    -> blocked
+ *   - 0 < amount < remaining (partial)-> warning (allowed)
+ *   - amount === remaining            -> ok
+ */
+export function checkManifestPayment(
+  payable: ManifestPayable,
+  amountMinorUnits: number,
+): PaymentCheck {
+  const remaining = remainingOwed(payable);
+
+  if (!isPayableManifest(payable)) {
+    return {
+      severity: "blocked",
+      remainingMinorUnits: remaining,
+      message: `Manifest ${payable.manifestNumber || payable.manifestId} is not accepted (status: ${payable.status}). Payment must be married to an ACCEPTED manifest.`,
+    };
+  }
+  if (!Number.isInteger(amountMinorUnits) || amountMinorUnits <= 0) {
+    return {
+      severity: "blocked",
+      remainingMinorUnits: remaining,
+      message: "Payment amount must be a whole number of cents greater than zero.",
+    };
+  }
+  if (remaining <= 0) {
+    return {
+      severity: "blocked",
+      remainingMinorUnits: 0,
+      message: `Manifest ${payable.manifestNumber || payable.manifestId} is already fully paid (${usd(payable.paidMinorUnits)} of ${usd(payable.owedMinorUnits)}). Nothing left to pay.`,
+    };
+  }
+  if (amountMinorUnits > remaining) {
+    return {
+      severity: "blocked",
+      remainingMinorUnits: remaining,
+      message: `Overpayment blocked: paying ${usd(amountMinorUnits)} exceeds the remaining ${usd(remaining)} owed on manifest ${payable.manifestNumber || payable.manifestId} (owed ${usd(payable.owedMinorUnits)}, already paid ${usd(payable.paidMinorUnits)}).`,
+    };
+  }
+  if (amountMinorUnits < remaining) {
+    return {
+      severity: "warning",
+      remainingMinorUnits: remaining,
+      message: `Partial payment: ${usd(amountMinorUnits)} is less than the remaining ${usd(remaining)} owed on manifest ${payable.manifestNumber || payable.manifestId}. Allowed — the balance of ${usd(remaining - amountMinorUnits)} will remain outstanding.`,
+    };
+  }
+  return {
+    severity: "ok",
+    remainingMinorUnits: remaining,
+    message: `Pays the manifest in full (${usd(amountMinorUnits)}).`,
+  };
+}
+
 export type VendorAchResult =
   | { ok: true; file: string; totalCents: number; entryCount: number; recordCount: number; problems: VendorPaymentProblem[] }
   | { ok: false; problems: VendorPaymentProblem[] };
@@ -205,6 +319,61 @@ export function __runVendorAchTests(): { passed: number; failed: number } {
 
   // validateVendorPayments standalone: clean batch → no problems.
   ok(validateVendorPayments([goodPayment()]).length === 0, "clean validation empty");
+
+  // ---- Manifest-backed guardrails (B6) ------------------------------------
+  const payable = (over: Partial<ManifestPayable> = {}): ManifestPayable => ({
+    manifestId: "M-1",
+    manifestNumber: "15410217973875889",
+    vendorId: "vendor-1",
+    vendorName: "Freddy's Fuego",
+    status: "accepted",
+    owedMinorUnits: 19995, // $199.95 (from the real invoice/transfer sample)
+    paidMinorUnits: 0,
+    ...over,
+  });
+
+  // Exact full payment → ok.
+  const exact = checkManifestPayment(payable(), 19995);
+  ok(exact.severity === "ok", "exact full payment is ok");
+  ok(exact.remainingMinorUnits === 19995, "remaining equals owed when nothing paid");
+
+  // Underpayment → warning (allowed).
+  const under = checkManifestPayment(payable(), 10000);
+  ok(under.severity === "warning", "underpay is a warning (allowed)");
+
+  // Overpayment → blocked.
+  const over = checkManifestPayment(payable(), 20000);
+  ok(over.severity === "blocked", "overpay is blocked");
+  ok(/overpayment blocked/i.test(over.message), "overpay message");
+
+  // Partially-paid manifest: remaining subtracts prior payments.
+  const partial = checkManifestPayment(payable({ paidMinorUnits: 15000 }), 4995);
+  ok(partial.severity === "ok", "pays remaining balance exactly");
+  ok(partial.remainingMinorUnits === 4995, "remaining = owed - paid");
+
+  // Overpay relative to REMAINING (not owed) is blocked.
+  const overRemaining = checkManifestPayment(payable({ paidMinorUnits: 15000 }), 5000);
+  ok(overRemaining.severity === "blocked", "overpay vs remaining blocked");
+
+  // Fully-paid manifest → blocked (nothing left).
+  const done = checkManifestPayment(payable({ paidMinorUnits: 19995 }), 100);
+  ok(done.severity === "blocked", "fully paid manifest blocks further payment");
+  ok(done.remainingMinorUnits === 0, "remaining 0 when fully paid");
+
+  // Non-accepted manifest → blocked regardless of amount.
+  const notAccepted = checkManifestPayment(payable({ status: "received" }), 19995);
+  ok(notAccepted.severity === "blocked", "non-accepted manifest blocked");
+
+  // partially_accepted is payable.
+  ok(isPayableManifest({ status: "partially_accepted" }) === true, "partially_accepted is payable");
+  ok(isPayableManifest({ status: "pending" }) === false, "pending not payable");
+
+  // Zero/negative amount → blocked.
+  ok(checkManifestPayment(payable(), 0).severity === "blocked", "zero amount blocked");
+  ok(checkManifestPayment(payable(), -5).severity === "blocked", "negative amount blocked");
+
+  // remainingOwed clamps at 0.
+  ok(remainingOwed({ owedMinorUnits: 100, paidMinorUnits: 200 }) === 0, "remaining clamps at 0");
 
   if (failed === 0) console.log(`vendor-ach-core: all ${passed} tests passed`);
   return { passed, failed };

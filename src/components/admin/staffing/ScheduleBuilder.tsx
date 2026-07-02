@@ -122,7 +122,7 @@ export function ScheduleBuilder({
             </a>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button type="button" size="sm" variant="subtle" disabled={pending} onClick={() => copyThisWeek(nextMonday)}>
+            <Button type="button" size="sm" variant="neutral" disabled={pending} onClick={() => copyThisWeek(nextMonday)}>
               Copy to next week
             </Button>
           </div>
@@ -378,7 +378,7 @@ function ShiftForm({
         <Button type="submit" size="sm" disabled={pending}>
           {mode === "edit" ? "Save" : "Add"}
         </Button>
-        <Button type="button" size="sm" variant="subtle" disabled={pending} onClick={onDone}>
+        <Button type="button" size="sm" variant="neutral" disabled={pending} onClick={onDone}>
           Cancel
         </Button>
       </div>

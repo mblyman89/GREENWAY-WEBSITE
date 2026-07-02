@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Badge, Button, Input } from "@/components/admin/ui";
+import { Badge, Button, Input, Field, Select, Textarea } from "@/components/admin/ui";
 
 /**
  * Editable purchase-order builder table (client island).
@@ -13,6 +13,8 @@ import { Badge, Button, Input } from "@/components/admin/ui";
  *
  * STANDING RULE: AI/auto-computed numbers are DRAFT defaults — the manager
  * confirms every quantity here before the PO is saved.
+ *
+ * THEME: fully on the dark admin tokens (no light `stone`/`white` surfaces).
  */
 export type SuggestionRow = {
   posProductKey: string | null;
@@ -109,33 +111,33 @@ export function BuilderTable({
   return (
     <form action={createAction} className="space-y-4">
       {planSummary ? (
-        <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/30 bg-[var(--admin-accent-soft)] px-4 py-3 text-sm text-stone-700">
-          <span className="font-semibold">AI draft plan:</span> {planSummary}{" "}
-          <span className="text-stone-500">(Review and adjust below before saving.)</span>
+        <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/30 bg-[var(--admin-accent-soft)] px-4 py-3 text-sm text-[var(--admin-text)]">
+          <span className="font-semibold text-[var(--admin-accent)]">AI draft plan:</span> {planSummary}{" "}
+          <span className="text-[var(--admin-text-muted)]">(Review and adjust below before saving.)</span>
         </div>
       ) : null}
 
       {rows.length === 0 ? (
-        <div className="rounded-[var(--admin-radius)] border border-stone-200 bg-stone-50 px-4 py-6 text-center text-sm text-stone-500">
+        <div className="rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface)] px-4 py-6 text-center text-sm text-[var(--admin-text-muted)]">
           No products match the current filters, or there is no active inventory to evaluate.
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-[var(--admin-radius)] border border-stone-200">
+        <div className="overflow-x-auto rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)]">
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-stone-50 text-left text-xs uppercase tracking-wide text-stone-500">
-                <th className="px-2 py-2 w-8"></th>
-                <th className="px-2 py-2">Product</th>
-                <th className="px-2 py-2 text-right">On hand</th>
-                <th className="px-2 py-2 text-right">Avg/day</th>
-                <th className="px-2 py-2 text-right">Reorder pt</th>
-                <th className="px-2 py-2 text-right">Days left</th>
-                <th className="px-2 py-2 text-right">Order qty</th>
-                <th className="px-2 py-2 text-right">Unit cost</th>
-                <th className="px-2 py-2 text-right">Line total</th>
+              <tr className="bg-[var(--admin-surface-2)] text-left text-xs uppercase tracking-wide text-[var(--admin-text-faint)]">
+                <th className="w-8 px-3 py-3"></th>
+                <th className="px-3 py-3">Product</th>
+                <th className="px-3 py-3 text-right">On hand</th>
+                <th className="px-3 py-3 text-right">Avg/day</th>
+                <th className="px-3 py-3 text-right">Reorder pt</th>
+                <th className="px-3 py-3 text-right">Days left</th>
+                <th className="px-3 py-3 text-right">Order qty</th>
+                <th className="px-3 py-3 text-right">Unit cost</th>
+                <th className="px-3 py-3 text-right">Line total</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-[var(--admin-border)]">
               {rows.map((r, i) => {
                 const key = String(i);
                 const isSel = selected.has(key);
@@ -143,32 +145,37 @@ export function BuilderTable({
                 return (
                   <tr
                     key={key}
-                    className={`border-t border-stone-100 ${isSel ? "bg-emerald-50/40" : "hover:bg-stone-50"}`}
+                    className={
+                      isSel
+                        ? "bg-[var(--admin-accent-soft)]"
+                        : "bg-[var(--admin-surface)] transition hover:bg-[var(--admin-surface-hover)]"
+                    }
                   >
-                    <td className="px-2 py-2">
+                    <td className="px-3 py-3 align-top">
                       <input
                         type="checkbox"
                         checked={isSel}
                         onChange={() => toggle(i)}
                         aria-label={`Select ${r.productName}`}
+                        className="h-4 w-4 accent-[var(--admin-accent)]"
                       />
                     </td>
-                    <td className="px-2 py-2">
-                      <div className="font-medium text-stone-800">{r.productName}</div>
-                      <div className="text-xs text-stone-500">
+                    <td className="px-3 py-3">
+                      <div className="font-semibold text-[var(--admin-text)]">{r.productName}</div>
+                      <div className="mt-0.5 text-xs text-[var(--admin-text-muted)]">
                         {[r.brand, r.vendorName].filter(Boolean).join(" · ") || "—"}
                         {r.belowReorderPoint ? (
                           <Badge tone="orange" className="ml-2">below reorder</Badge>
                         ) : null}
                       </div>
                     </td>
-                    <td className="px-2 py-2 text-right text-stone-700">{r.onHand}</td>
-                    <td className="px-2 py-2 text-right text-stone-600">{r.avgDaily.toFixed(2)}</td>
-                    <td className="px-2 py-2 text-right text-stone-600">{r.reorderPoint}</td>
-                    <td className="px-2 py-2 text-right text-stone-600">
+                    <td className="px-3 py-3 text-right text-[var(--admin-text)]">{r.onHand}</td>
+                    <td className="px-3 py-3 text-right text-[var(--admin-text-muted)]">{r.avgDaily.toFixed(2)}</td>
+                    <td className="px-3 py-3 text-right text-[var(--admin-text-muted)]">{r.reorderPoint}</td>
+                    <td className="px-3 py-3 text-right text-[var(--admin-text-muted)]">
                       {Number.isFinite(r.daysOfSupplyLeft) ? Math.round(r.daysOfSupplyLeft) : "∞"}
                     </td>
-                    <td className="px-2 py-2 text-right">
+                    <td className="px-3 py-3 text-right">
                       <Input
                         type="number"
                         min={0}
@@ -179,7 +186,7 @@ export function BuilderTable({
                         className="w-20 text-right"
                       />
                     </td>
-                    <td className="px-2 py-2 text-right">
+                    <td className="px-3 py-3 text-right">
                       <Input
                         type="number"
                         min={0}
@@ -191,7 +198,7 @@ export function BuilderTable({
                         className="w-24 text-right"
                       />
                     </td>
-                    <td className="px-2 py-2 text-right font-medium text-stone-800">{money(lineTotal)}</td>
+                    <td className="px-3 py-3 text-right font-semibold text-[var(--admin-text)]">{money(lineTotal)}</td>
                   </tr>
                 );
               })}
@@ -200,57 +207,38 @@ export function BuilderTable({
         </div>
       )}
 
-      <div className="grid gap-4 rounded-[var(--admin-radius)] border border-stone-200 bg-white p-4 sm:grid-cols-2">
-        <div>
-          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-stone-500">
-            Vendor (for this PO)
-          </label>
-          <select
-            name="vendor_id"
-            value={vendorId}
-            onChange={(e) => setVendorId(e.target.value)}
-            className="w-full rounded-[var(--admin-radius)] border border-stone-300 px-3 py-2 text-sm"
-          >
+      <div className="grid gap-4 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5 sm:grid-cols-2">
+        <Field label="Vendor (for this PO)">
+          <Select name="vendor_id" value={vendorId} onChange={(e) => setVendorId(e.target.value)}>
             <option value="">— Select vendor —</option>
             {vendors.map((v) => (
               <option key={v.id} value={v.id}>
                 {v.name}
               </option>
             ))}
-          </select>
+          </Select>
           <input type="hidden" name="vendor_name" value={selectedVendor?.name ?? ""} />
-        </div>
-        <div>
-          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-stone-500">
-            Expected delivery (optional)
-          </label>
-          <input
-            type="date"
-            name="expected_date"
-            className="w-full rounded-[var(--admin-radius)] border border-stone-300 px-3 py-2 text-sm"
-          />
-        </div>
-        <div className="sm:col-span-2">
-          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-stone-500">
-            Note to vendor (optional)
-          </label>
-          <textarea
+        </Field>
+        <Field label="Expected delivery (optional)">
+          <Input type="date" name="expected_date" />
+        </Field>
+        <Field label="Note to vendor (optional)" className="sm:col-span-2">
+          <Textarea
             name="note"
             rows={2}
-            className="w-full rounded-[var(--admin-radius)] border border-stone-300 px-3 py-2 text-sm"
             placeholder="e.g. Please confirm availability and ship by Friday."
           />
-        </div>
+        </Field>
       </div>
 
       <input type="hidden" name="lines" value={linesJson} />
       <input type="hidden" name="origin" value={origin} />
 
-      <div className="flex items-center justify-between">
-        <div className="text-sm text-stone-600">
-          <span className="font-semibold text-stone-800">{chosen.length}</span> line
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="text-sm text-[var(--admin-text-muted)]">
+          <span className="font-semibold text-[var(--admin-text)]">{chosen.length}</span> line
           {chosen.length === 1 ? "" : "s"} selected ·{" "}
-          <span className="font-semibold text-stone-800">{money(total)}</span> total
+          <span className="font-semibold text-[var(--admin-text)]">{money(total)}</span> total
         </div>
         <Button type="submit" variant="save" disabled={chosen.length === 0}>
           Save purchase order

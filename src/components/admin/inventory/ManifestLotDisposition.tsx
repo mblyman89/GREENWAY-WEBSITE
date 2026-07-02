@@ -111,7 +111,7 @@ export function ManifestLotDisposition({
           <Input name="reason_text" placeholder="Explain the reason…" required />
         )}
         <div className="flex items-center gap-2">
-          <Button type="submit" variant="subtle" size="sm">
+          <Button type="submit" variant="neutral" size="sm">
             ✕ Confirm reject
           </Button>
           <button

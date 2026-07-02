@@ -185,7 +185,7 @@ export default async function KnowledgeBasePage({
               <input name="sensory_notes" className="mt-1 w-full rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-bg)] px-3 py-2 text-[var(--admin-text)]" placeholder="e.g. bright, true-to-strain, smooth" />
             </label>
             <div className="sm:col-span-2">
-              <Button type="submit" variant="subtle" disabled={!counts.migrated}>Save brand facts</Button>
+              <Button type="submit" variant="neutral" disabled={!counts.migrated}>Save brand facts</Button>
             </div>
           </form>
 
@@ -235,7 +235,7 @@ export default async function KnowledgeBasePage({
               <span className="block text-[var(--admin-text-muted)]">Reason (optional)</span>
               <input name="reason" className="mt-1 w-full rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-bg)] px-3 py-2 text-[var(--admin-text)]" placeholder="why it's banned" />
             </label>
-            <Button type="submit" variant="subtle" disabled={!counts.migrated}>Add phrase</Button>
+            <Button type="submit" variant="neutral" disabled={!counts.migrated}>Add phrase</Button>
           </form>
 
           {banned.length > 0 ? (

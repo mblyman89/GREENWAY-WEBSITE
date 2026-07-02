@@ -239,7 +239,7 @@ function SuggestionsTab({
               </form>
               <form action={rejectSuggestionAction}>
                 <input type="hidden" name="id" value={s.id} />
-                <Button type="submit" variant="subtle">Reject</Button>
+                <Button type="submit" variant="neutral">Reject</Button>
               </form>
             </div>
           </div>

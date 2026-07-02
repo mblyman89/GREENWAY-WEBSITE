@@ -234,7 +234,7 @@ async function CarouselTab({ mediaChoices }: { mediaChoices: MediaChoice[] }) {
         <div className="flex items-center gap-2">
           {slides.length === 0 ? (
             <form action={seedCarouselAction}>
-              <Button type="submit" variant="subtle">Load starter slides</Button>
+              <Button type="submit" variant="neutral">Load starter slides</Button>
             </form>
           ) : null}
           <form action={addCarouselSlideAction}>
@@ -298,7 +298,7 @@ async function SectionsTab({
           {sections.length === 0 && hasSeeds ? (
             <form action={seedSectionsAction}>
               <input type="hidden" name="page_slug" value={slug} />
-              <Button type="submit" variant="subtle">Load starter sections</Button>
+              <Button type="submit" variant="neutral">Load starter sections</Button>
             </form>
           ) : null}
           <form action={addSectionAction}>
@@ -364,7 +364,7 @@ async function QandaTab() {
         <div className="flex items-center gap-2">
           {items.length === 0 ? (
             <form action={seedFaqAction}>
-              <Button type="submit" variant="subtle">Load starter Q&amp;A</Button>
+              <Button type="submit" variant="neutral">Load starter Q&amp;A</Button>
             </form>
           ) : null}
           <form action={addFaqAction}>

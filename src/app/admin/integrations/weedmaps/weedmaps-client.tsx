@@ -102,7 +102,7 @@ export function WeedmapsPushClient({
             <Button variant="danger" size="sm" onClick={doPush} disabled={pending}>
               {pending ? "Sending\u2026" : "Yes, push now"}
             </Button>
-            <Button variant="subtle" size="sm" onClick={() => setConfirmArmed(false)} disabled={pending}>
+            <Button variant="neutral" size="sm" onClick={() => setConfirmArmed(false)} disabled={pending}>
               Cancel
             </Button>
           </div>
@@ -119,7 +119,7 @@ export function WeedmapsPushClient({
         ) : null}
 
         <div className="mt-4 border-t border-[var(--admin-border)] pt-3">
-          <Button variant="subtle" size="sm" onClick={doAccess} disabled={pending || !configured}>
+          <Button variant="neutral" size="sm" onClick={doAccess} disabled={pending || !configured}>
             Verify menu access
           </Button>
           {accessMsg ? (
@@ -224,7 +224,7 @@ function DescriptionDrafter() {
           <div className="mb-2 flex items-center justify-between">
             <span className="text-xs font-semibold text-[var(--admin-text-muted)]">Draft</span>
             <Button
-              variant="subtle"
+              variant="neutral"
               size="sm"
               onClick={() => {
                 navigator.clipboard?.writeText(draft);

@@ -241,7 +241,7 @@ export default async function LoyaltySignupReviewPage({
                 action={
                   <Link
                     href="/loyalty"
-                    className="rounded-lg bg-[#7ed957] px-4 py-2 text-sm font-bold text-black transition hover:bg-white"
+                    className="rounded-lg bg-[#7ed957] px-4 py-2 text-sm font-bold text-black transition hover:brightness-110"
                   >
                     See the signup form
                   </Link>
@@ -372,7 +372,7 @@ function StatusButton({
         type="submit"
         className={
           primary
-            ? "rounded-lg bg-[#7ed957] px-3.5 py-2 text-xs font-black uppercase tracking-[0.08em] text-black transition hover:bg-white"
+            ? "rounded-lg bg-[#7ed957] px-3.5 py-2 text-xs font-black uppercase tracking-[0.08em] text-black transition hover:brightness-110"
             : "rounded-lg border border-white/15 bg-white/5 px-3.5 py-2 text-xs font-bold text-white hover:bg-white/10"
         }
       >

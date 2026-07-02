@@ -54,8 +54,9 @@ type Props = {
 };
 
 const fieldCls =
-  "w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#7ed957]";
-const labelCls = "mb-1 block text-xs font-semibold uppercase tracking-wider text-white/50";
+  "w-full rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-3 py-2 text-sm text-[var(--admin-text)] outline-none focus:border-[var(--admin-accent)]";
+const labelCls =
+  "mb-1 block text-xs font-semibold uppercase tracking-wider text-[var(--admin-text-muted)]";
 
 /** Inline live character counter with optional SEO target guidance. */
 function CharCount({
@@ -68,16 +69,16 @@ function CharCount({
   max?: number;
 }) {
   const len = value.length;
-  let tone = "text-white/40";
+  let tone = "text-[var(--admin-text-faint)]";
   let note = "";
   if (typeof max === "number" && len > max) {
-    tone = "text-[#ff7f00]";
+    tone = "text-[var(--admin-orange)]";
     note = ` · ${len - max} over ideal`;
   } else if (typeof min === "number" && len > 0 && len < min) {
-    tone = "text-[#ffd700]";
+    tone = "text-[var(--admin-gold)]";
     note = " · a bit short";
   } else if (typeof min === "number" && len >= min) {
-    tone = "text-[#7ed957]";
+    tone = "text-[var(--admin-accent)]";
     note = " · good length";
   }
   const range =
@@ -238,7 +239,7 @@ export function BlogEditorClient({ initial, categories, aiEnabled, updateAction 
             onChange={(e) => setBody(e.target.value)}
             className={fieldCls}
           />
-          <p className="mt-1 text-[0.7rem] text-white/40">
+          <p className="mt-1 text-[0.7rem] text-[var(--admin-text-faint)]">
             {paragraphs.length} paragraph{paragraphs.length === 1 ? "" : "s"} ·{" "}
             {body.trim() ? body.trim().split(/\s+/).length : 0} words
           </p>
@@ -253,10 +254,10 @@ export function BlogEditorClient({ initial, categories, aiEnabled, updateAction 
               name="hero_image"
               accept="image/png,image/jpeg,image/webp,image/gif"
               onChange={onPickHero}
-              className="w-full text-xs text-white/60 file:mr-3 file:rounded-lg file:border-0 file:bg-white/10 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white"
+              className="w-full text-xs text-[var(--admin-text-muted)] file:mr-3 file:rounded-full file:border-0 file:bg-[var(--admin-surface-2)] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-[var(--admin-text)] hover:file:bg-[var(--admin-surface-hover)]"
             />
             {initial.heroImagePath && (
-              <p className="mt-1 text-xs text-white/40">Current: {initial.heroImagePath}</p>
+              <p className="mt-1 text-xs text-[var(--admin-text-faint)]">Current: {initial.heroImagePath}</p>
             )}
           </div>
           <div>
@@ -267,7 +268,7 @@ export function BlogEditorClient({ initial, categories, aiEnabled, updateAction 
                   type="button"
                   onClick={onSuggestAlt}
                   disabled={aiPending}
-                  className="rounded-md border border-[#ffd700]/40 px-2 py-0.5 text-[0.7rem] font-bold text-[#ffd700] transition hover:bg-[#ffd700]/10 disabled:opacity-50"
+                  className="rounded-full bg-[var(--admin-gold)] px-3 py-0.5 text-[0.7rem] font-black uppercase tracking-[0.1em] text-black transition hover:brightness-110 disabled:opacity-50"
                 >
                   {aiPending ? "…thinking" : "✨ Suggest alt text"}
                 </button>
@@ -279,7 +280,7 @@ export function BlogEditorClient({ initial, categories, aiEnabled, updateAction 
               onChange={(e) => setHeroAlt(e.target.value)}
               className={fieldCls}
             />
-            <p className="mt-1 text-[0.7rem] text-white/40">
+            <p className="mt-1 text-[0.7rem] text-[var(--admin-text-faint)]">
               Describe the image for screen readers + SEO.
             </p>
           </div>
@@ -303,18 +304,18 @@ export function BlogEditorClient({ initial, categories, aiEnabled, updateAction 
               onChange={(e) => setDateLabel(e.target.value)}
               className={fieldCls}
             />
-            <p className="mt-1 text-[0.65rem] text-white/40">
+            <p className="mt-1 text-[0.65rem] text-[var(--admin-text-faint)]">
               Shown as a full date on the site, e.g. “June 20, 2026”.
             </p>
           </div>
         </div>
 
         {/* Title styling — editable headline typography */}
-        <div className="rounded-xl border border-white/10 bg-[#0a0a0a] p-4">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-white/50">
+        <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--admin-text-muted)]">
             Title styling
           </h3>
-          <p className="mt-1 text-[0.65rem] text-white/40">
+          <p className="mt-1 text-[0.65rem] text-[var(--admin-text-faint)]">
             Style the headline on the blog card + article. Leave font on “Site
             default” to match the rest of the site.
           </p>
@@ -358,19 +359,19 @@ export function BlogEditorClient({ initial, categories, aiEnabled, updateAction 
                   type="color"
                   value={titleColor || "#ffffff"}
                   onChange={(e) => setTitleColor(e.target.value)}
-                  className="h-9 w-10 shrink-0 cursor-pointer rounded border border-white/15 bg-black"
+                  className="h-9 w-10 shrink-0 cursor-pointer rounded border border-[var(--admin-border)] bg-[var(--admin-surface-2)]"
                   aria-label="Title color"
                 />
                 {titleColor ? (
                   <button
                     type="button"
                     onClick={() => setTitleColor("")}
-                    className="rounded-lg border border-white/15 px-2 py-1.5 text-xs font-semibold text-white/60 hover:bg-white/10"
+                    className="rounded-full bg-[var(--admin-surface-2)] px-3 py-1.5 text-xs font-semibold text-[var(--admin-text-muted)] hover:bg-[var(--admin-surface-hover)]"
                   >
                     Reset
                   </button>
                 ) : (
-                  <span className="text-[0.65rem] text-white/40">Default (white)</span>
+                  <span className="text-[0.65rem] text-[var(--admin-text-faint)]">Default (white)</span>
                 )}
               </div>
             </div>
@@ -378,22 +379,22 @@ export function BlogEditorClient({ initial, categories, aiEnabled, updateAction 
         </div>
 
         {/* Newsletter assets */}
-        <div className="rounded-xl border border-white/10 bg-[#0a0a0a] p-4">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-white/50">
+        <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--admin-text-muted)]">
             Newsletter assets (used only when Kind = newsletter)
           </h3>
           <div className="mt-3 grid gap-4 sm:grid-cols-2">
             <div>
-              <label className="mb-1 block text-xs font-semibold text-white/50">PDF upload</label>
+              <label className="mb-1 block text-xs font-semibold text-[var(--admin-text-muted)]">PDF upload</label>
               <input
                 type="file"
                 name="pdf_file"
                 accept="application/pdf"
-                className="w-full text-xs text-white/60 file:mr-3 file:rounded-lg file:border-0 file:bg-white/10 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white"
+                className="w-full text-xs text-[var(--admin-text-muted)] file:mr-3 file:rounded-full file:border-0 file:bg-[var(--admin-surface-2)] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-[var(--admin-text)] hover:file:bg-[var(--admin-surface-hover)]"
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-semibold text-white/50">
+              <label className="mb-1 block text-xs font-semibold text-[var(--admin-text-muted)]">
                 Page image paths (one per line; first = preview)
               </label>
               <textarea
@@ -401,19 +402,19 @@ export function BlogEditorClient({ initial, categories, aiEnabled, updateAction 
                 rows={3}
                 defaultValue={initial.newsletterPagePaths}
                 placeholder="/blog/newsletters/2026-06-20-p1.png"
-                className="w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-xs text-white outline-none focus:border-[#7ed957]"
+                className="w-full rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-3 py-2 text-xs text-[var(--admin-text)] outline-none focus:border-[var(--admin-accent)]"
               />
             </div>
           </div>
         </div>
 
         {/* SEO */}
-        <div className="rounded-xl border border-white/10 bg-[#0a0a0a] p-4">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-white/50">SEO</h3>
+        <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--admin-text-muted)]">SEO</h3>
           <div className="mt-3 space-y-3">
             <div>
               <div className="flex items-center justify-between">
-                <label className="mb-1 block text-xs font-semibold text-white/50">SEO title</label>
+                <label className="mb-1 block text-xs font-semibold text-[var(--admin-text-muted)]">SEO title</label>
                 <CharCount value={seoTitle} min={50} max={60} />
               </div>
               <input
@@ -425,7 +426,7 @@ export function BlogEditorClient({ initial, categories, aiEnabled, updateAction 
             </div>
             <div>
               <div className="flex items-center justify-between">
-                <label className="mb-1 block text-xs font-semibold text-white/50">
+                <label className="mb-1 block text-xs font-semibold text-[var(--admin-text-muted)]">
                   SEO description
                 </label>
                 <CharCount value={seoDescription} min={140} max={160} />
@@ -440,12 +441,12 @@ export function BlogEditorClient({ initial, categories, aiEnabled, updateAction 
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label className="mb-1 block text-xs font-semibold text-white/50">
+                <label className="mb-1 block text-xs font-semibold text-[var(--admin-text-muted)]">
                   Canonical path (optional)
                 </label>
                 <input name="canonical_path" defaultValue={initial.canonicalPath} className={fieldCls} />
               </div>
-              <label className="flex items-center gap-2 self-end pb-2 text-sm text-white/70">
+              <label className="flex items-center gap-2 self-end pb-2 text-sm text-[var(--admin-text-muted)]">
                 <input
                   type="checkbox"
                   name="noindex"
@@ -455,9 +456,11 @@ export function BlogEditorClient({ initial, categories, aiEnabled, updateAction 
                 Noindex this post
               </label>
             </div>
-            {/* Google-style search preview */}
+            {/* Google-style SERP preview — an intentional mock of Google's own
+                surface (blue title, green URL, black card). NOT back-office
+                chrome, so it keeps authentic Google colors, not admin tokens. */}
             <div className="rounded-lg border border-white/10 bg-black p-3">
-              <div className="text-xs text-white/40">Search preview</div>
+              <div className="text-xs text-[var(--admin-text-faint)]">Search preview</div>
               <div className="mt-1 text-sm text-[#8ab4f8]">{seoTitle || title}</div>
               <div className="text-xs text-[#7ed957]/80">greenwaymarijuana.com/blog/{initial.slug}</div>
               <div className="mt-0.5 text-xs text-white/55">
@@ -469,7 +472,7 @@ export function BlogEditorClient({ initial, categories, aiEnabled, updateAction 
 
         <button
           type="submit"
-          className="rounded-lg bg-[#7ed957] px-5 py-2.5 text-sm font-bold text-black transition hover:bg-[#6bc746]"
+          className="rounded-full bg-[var(--admin-accent)] px-5 py-2.5 text-xs font-black uppercase tracking-[0.1em] text-black transition hover:brightness-110"
         >
           Save changes
         </button>
@@ -478,8 +481,8 @@ export function BlogEditorClient({ initial, categories, aiEnabled, updateAction 
       {/* ---------------- RIGHT: live preview ---------------- */}
       <div className="lg:sticky lg:top-6 lg:self-start">
         <div className="mb-2 flex items-center gap-2">
-          <span className="h-2 w-2 animate-pulse rounded-full bg-[#7ed957]" aria-hidden />
-          <span className="text-xs font-semibold uppercase tracking-wider text-white/50">
+          <span className="h-2 w-2 animate-pulse rounded-full bg-[var(--admin-accent)]" aria-hidden />
+          <span className="text-xs font-semibold uppercase tracking-wider text-[var(--admin-text-muted)]">
             Live preview · how it looks on the site
           </span>
         </div>
@@ -535,7 +538,7 @@ export function BlogEditorClient({ initial, categories, aiEnabled, updateAction 
             </>
           )}
         </div>
-        <p className="mt-2 text-center text-[0.7rem] text-white/35">
+        <p className="mt-2 text-center text-[0.7rem] text-[var(--admin-text-faint)]">
           Approximate preview · final styling matches the public blog. Remember to <strong>Save</strong>,
           then Publish.
         </p>

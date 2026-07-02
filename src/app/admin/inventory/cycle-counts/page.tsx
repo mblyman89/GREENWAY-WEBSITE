@@ -69,38 +69,44 @@ export default async function CycleCountsPage({
         ]}
       />
 
-      <section className="rounded-2xl border border-white/10 bg-white/[0.02] p-5">
-        <h2 className="mb-4 text-sm font-black uppercase tracking-[0.14em] text-white/80">Start a new count</h2>
-        <form action={createCycleCountAction} className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
-          <Field label="Label" required>
+      <section className="rounded-2xl border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
+        <h2 className="mb-4 text-sm font-black uppercase tracking-[0.14em] text-[var(--admin-text)]">Start a new count</h2>
+        {/* Two inputs share one help row so they line up on the same baseline;
+            the button sits on its own row on mobile, inline on ≥sm. */}
+        <form action={createCycleCountAction} className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-start">
+          <Field label="Label" required help="A name for this count session">
             <Input name="label" placeholder="e.g. March end-of-month count" required />
           </Field>
           <Field label="Scope note" help="Optional — which area / category">
             <Input name="scope_note" placeholder="e.g. Flower aisle" />
           </Field>
-          <Button type="submit">Start count</Button>
+          <div className="flex flex-col">
+            {/* Spacer label keeps the button aligned with the input row (not the label row). */}
+            <span className="mb-1 hidden text-xs sm:block" aria-hidden>&nbsp;</span>
+            <Button type="submit" variant="confirm" className="w-full sm:w-auto">Start count</Button>
+          </div>
         </form>
-        <p className="mt-2 text-xs text-white/40">
-          Snapshots every <span className="font-semibold text-white/60">active</span> lot. Counting is blind.
+        <p className="mt-2 text-xs text-[var(--admin-text-faint)]">
+          Snapshots every <span className="font-semibold text-[var(--admin-text-muted)]">active</span> lot. Counting is blind.
         </p>
       </section>
 
-      <section className="rounded-2xl border border-white/10 bg-white/[0.02] p-5">
-        <h2 className="mb-4 text-sm font-black uppercase tracking-[0.14em] text-white/80">Sessions</h2>
+      <section className="rounded-2xl border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
+        <h2 className="mb-4 text-sm font-black uppercase tracking-[0.14em] text-[var(--admin-text)]">Sessions</h2>
         {sessions.length === 0 ? (
           <EmptyState title="No cycle counts yet" description="Start your first count above." />
         ) : (
-          <ul className="divide-y divide-white/5">
+          <ul className="divide-y divide-[var(--admin-border)]">
             {sessions.map((s) => (
               <li key={s.id} className="flex items-center justify-between gap-3 py-3">
                 <div className="min-w-0">
                   <Link
                     href={`/admin/inventory/cycle-counts/${s.id}`}
-                    className="block truncate text-sm font-semibold text-white/90 hover:text-[var(--admin-accent)]"
+                    className="block truncate text-sm font-semibold text-[var(--admin-text)] hover:text-[var(--admin-accent)]"
                   >
                     {s.label}
                   </Link>
-                  <p className="mt-0.5 text-xs text-white/40">
+                  <p className="mt-0.5 text-xs text-[var(--admin-text-faint)]">
                     {s.line_count} lots · {s.variance_count} variance
                     {s.variance_count === 1 ? "" : "s"} · {new Date(s.created_at).toLocaleString()}
                   </p>

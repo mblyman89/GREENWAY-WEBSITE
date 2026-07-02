@@ -127,7 +127,7 @@ export default async function OrderDetailPage({
                     <input type="hidden" name="status" value={next} />
                     <button
                       type="submit"
-                      className="rounded-lg bg-[#7ed957] px-4 py-2.5 text-sm font-black uppercase tracking-[0.08em] text-black transition hover:bg-white"
+                      className="rounded-lg bg-[#7ed957] px-4 py-2.5 text-sm font-black uppercase tracking-[0.08em] text-black transition hover:brightness-110"
                     >
                       Mark {ORDER_STATUS_LABELS[next]}
                     </button>

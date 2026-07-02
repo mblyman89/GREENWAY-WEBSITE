@@ -346,10 +346,10 @@ function PromotionRow({ promo }: { promo: PromoRow }) {
           {!promo.isActive && <span className="text-xs text-white/30">paused</span>}
         </div>
         <div className="flex gap-2">
-          <Button type="button" size="sm" variant="subtle" disabled={pending} onClick={() => setEditing((v) => !v)}>
+          <Button type="button" size="sm" variant="neutral" disabled={pending} onClick={() => setEditing((v) => !v)}>
             {editing ? "Close" : "Edit"}
           </Button>
-          <Button type="button" size="sm" variant="subtle" disabled={pending} onClick={onToggle}>
+          <Button type="button" size="sm" variant="neutral" disabled={pending} onClick={onToggle}>
             {promo.isActive ? "Pause" : "Activate"}
           </Button>
         </div>

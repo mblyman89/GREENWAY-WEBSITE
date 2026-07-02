@@ -27,6 +27,11 @@ import {
 import type { BlogKind } from "@/lib/cms/types";
 import { BLOG_CATEGORIES } from "@/lib/cms/types";
 import type { PostStatus } from "@/lib/cms/types";
+import {
+  generateBlogIdeas,
+  type BlogIdea,
+  type BlogIdeaKind,
+} from "@/lib/cms/ai-blog-ideas";
 
 const MAX_IMG_BYTES = 5 * 1024 * 1024;
 const IMAGE_MIME = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
@@ -118,7 +123,10 @@ export async function createPostAction(formData: FormData): Promise<void> {
   });
 
   revalidateBlog(slug);
-  redirect(`/admin/blog/${post.id}`);
+  // Carry any idea-assistant seed to the editor so the body-draft AI has context.
+  const seed = String(formData.get("ai_topic_seed") ?? "").trim();
+  const suffix = seed ? `?topic=${encodeURIComponent(seed.slice(0, 300))}` : "";
+  redirect(`/admin/blog/${post.id}${suffix}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -380,6 +388,50 @@ export async function suggestHeroAltAction(
     return { ok: true, value, complianceFlags, model };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "AI suggestion failed." };
+  }
+}
+
+/**
+ * Client-callable: suggest blog IDEAS / HEADLINES / TRENDS for the local market
+ * (Kitsap County + surrounding + Seattle). DRAFTS-ONLY — returns suggestions to
+ * the editor; nothing is persisted or published. The author picks an idea and
+ * uses it to seed a new post (or the topic box for a body draft).
+ */
+export type BlogIdeaResultOut =
+  | { ok: true; ideas: BlogIdea[]; model: string }
+  | { ok: false; error: string };
+
+export async function suggestBlogIdeasAction(
+  kind: BlogIdeaKind,
+  topic: string,
+): Promise<BlogIdeaResultOut> {
+  const session = await requirePermission("blog.manage");
+  if (!isAiConfigured) {
+    return { ok: false, error: "AI is not configured. Set AI_API_KEY (or OPENAI_API_KEY) to enable idea suggestions." };
+  }
+  const cleanKind: BlogIdeaKind =
+    kind === "headline" || kind === "trend" ? kind : "idea";
+  try {
+    const { ideas, model } = await generateBlogIdeas({
+      kind: cleanKind,
+      count: 6,
+      topic: topic.trim() || null,
+      actorId: session.userId,
+      actorEmail: session.email,
+    });
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: `blog.ai.ideas.${cleanKind}`,
+      entityType: "blog_post",
+      after: { count: ideas.length, topic: topic.trim() || null },
+    }).catch(() => {});
+    if (ideas.length === 0) {
+      return { ok: false, error: "The assistant returned no usable ideas. Try again or add a topic." };
+    }
+    return { ok: true, ideas, model };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "AI idea generation failed." };
   }
 }
 

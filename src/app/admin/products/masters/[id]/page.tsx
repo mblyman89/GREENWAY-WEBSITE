@@ -49,7 +49,7 @@ export default async function MasterDetailPage({
             <form action={publishMasterAction}>
               <input type="hidden" name="id" value={master.id} />
               <input type="hidden" name="status" value="draft" />
-              <Button type="submit" variant="subtle">Unpublish</Button>
+              <Button type="submit" variant="neutral">Unpublish</Button>
             </form>
           ) : (
             <form action={publishMasterAction}>
@@ -144,7 +144,7 @@ export default async function MasterDetailPage({
           </p>
           <form action={deleteMasterAction}>
             <input type="hidden" name="id" value={master.id} />
-            <Button type="submit" variant="subtle">Delete master</Button>
+            <Button type="submit" variant="neutral">Delete master</Button>
           </form>
         </div>
 

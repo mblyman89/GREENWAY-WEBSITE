@@ -131,8 +131,37 @@ h1, h2, h3, h4, h5, h6 {
 .admin-shell {
   background:
     radial-gradient(120% 60% at 50% -10%, rgba(126, 217, 87, 0.08), transparent 60%),
+    radial-gradient(90% 50% at 100% -10%, rgba(255, 127, 0, 0.06), transparent 55%),
     var(--admin-canvas);
   color: var(--admin-text);
+  /* Force NATIVE form controls (date pickers, select popups, checkboxes,
+     scrollbars) to render dark so no white leaks into the back office. */
+  color-scheme: dark;
+}
+
+/* Native controls: keep them on the dark surface tokens instead of the
+   browser's default white. Scoped to .admin-shell so the public site and the
+   print pages (labels/receipts on white paper) are untouched. */
+.admin-shell input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+.admin-shell select,
+.admin-shell textarea {
+  color-scheme: dark;
+}
+
+/* Brand-tint the date/time picker indicator so it reads on dark. */
+.admin-shell input[type="date"]::-webkit-calendar-picker-indicator,
+.admin-shell input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+.admin-shell input[type="time"]::-webkit-calendar-picker-indicator,
+.admin-shell input[type="month"]::-webkit-calendar-picker-indicator,
+.admin-shell input[type="week"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.85) sepia(1) saturate(4) hue-rotate(50deg);
+  cursor: pointer;
+}
+
+/* Checkboxes/radios pick up the brand green. */
+.admin-shell input[type="checkbox"],
+.admin-shell input[type="radio"] {
+  accent-color: var(--admin-accent);
 }
 
 /* Custom, slim scrollbar for the admin (sidebar + scroll regions). */

@@ -225,7 +225,7 @@ export function SimulatorClient({
             ) : null}
 
             <div className="mt-4">
-              <Button type="button" variant="subtle" size="sm" onClick={() => setBasket([])}>
+              <Button type="button" variant="neutral" size="sm" onClick={() => setBasket([])}>
                 Clear basket
               </Button>
             </div>

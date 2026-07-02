@@ -71,7 +71,7 @@ export function HoursManager({
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-white">Punches for {dayLabel}</h3>
         {!adding && (
-          <Button variant="subtle" size="sm" onClick={() => setAdding(true)}>
+          <Button variant="neutral" size="sm" onClick={() => setAdding(true)}>
             + Add missing punch
           </Button>
         )}
@@ -106,7 +106,7 @@ export function HoursManager({
                 </span>
                 <span className="text-white/40">{fmtMinutes(p.minutes)}</span>
                 {p.source === "manager_edit" && <Badge tone="gold">edited</Badge>}
-                <Button variant="ghost" size="sm" onClick={() => setEditingId(p.id)}>
+                <Button variant="neutral" size="sm" onClick={() => setEditingId(p.id)}>
                   Adjust
                 </Button>
               </div>
@@ -173,7 +173,7 @@ function EditPunchForm({ row, onDone }: { row: HoursPunchRow; onDone: () => void
         <Button size="sm" onClick={submit} disabled={pending}>
           {pending ? "Saving…" : "Save changes"}
         </Button>
-        <Button variant="ghost" size="sm" onClick={onDone} disabled={pending}>
+        <Button variant="neutral" size="sm" onClick={onDone} disabled={pending}>
           Cancel
         </Button>
       </div>
@@ -254,7 +254,7 @@ function AddPunchForm({
         <Button size="sm" onClick={submit} disabled={pending || !employeeId}>
           {pending ? "Adding…" : "Add punch"}
         </Button>
-        <Button variant="ghost" size="sm" onClick={onDone} disabled={pending}>
+        <Button variant="neutral" size="sm" onClick={onDone} disabled={pending}>
           Cancel
         </Button>
       </div>

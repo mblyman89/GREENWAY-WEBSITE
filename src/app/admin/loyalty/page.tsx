@@ -54,7 +54,7 @@ export default async function LoyaltyProgramPage() {
         subtitle="Points accrue pretax at the program rate; no tax counts toward points."
         action={
           <Link href="/admin/loyalty-signups">
-            <Button variant="subtle">Signups</Button>
+            <Button variant="neutral">Signups</Button>
           </Link>
         }
         help={

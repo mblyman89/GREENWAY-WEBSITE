@@ -323,7 +323,7 @@ export function PromotionForm({ action, promotion, brands, submitLabel, aiEnable
         <Button type="submit" variant="save">
           {submitLabel}
         </Button>
-        <Button href="/admin/promotions" variant="ghost">
+        <Button href="/admin/promotions" variant="neutral">
           Cancel
         </Button>
       </div>

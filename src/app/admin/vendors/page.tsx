@@ -109,7 +109,7 @@ export default async function VendorsPage({
               <option value="draft">Draft</option>
               <option value="published">Published</option>
             </Select>
-            <Button type="submit" variant="subtle">Filter</Button>
+            <Button type="submit" variant="neutral">Filter</Button>
           </form>
         )}
 

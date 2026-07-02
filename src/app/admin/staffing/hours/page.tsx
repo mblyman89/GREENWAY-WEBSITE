@@ -93,7 +93,7 @@ export default async function HoursPage({
         }
         action={
           <Link href={BASE}>
-            <Button variant="subtle">Back to time clock</Button>
+            <Button variant="neutral">Back to time clock</Button>
           </Link>
         }
       />
@@ -101,11 +101,11 @@ export default async function HoursPage({
       <div className="space-y-6 px-5 py-6 sm:px-8">
         <div className="flex items-center justify-between rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] px-4 py-3">
           <Link href={`?day=${prevDay}`}>
-            <Button variant="ghost" size="sm">← Prev day</Button>
+            <Button variant="neutral" size="sm">← Prev day</Button>
           </Link>
           <span className="text-sm font-semibold text-white">{dayLabel(day)}</span>
           <Link href={`?day=${nextDay}`}>
-            <Button variant="ghost" size="sm">Next day →</Button>
+            <Button variant="neutral" size="sm">Next day →</Button>
           </Link>
         </div>
 

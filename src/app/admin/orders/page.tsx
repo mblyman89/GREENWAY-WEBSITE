@@ -152,7 +152,7 @@ export default async function OrdersAdminPage({
               placeholder="Search name, phone, order #"
               className="w-56"
             />
-            <Button type="submit" variant="subtle">
+            <Button type="submit" variant="neutral">
               Search
             </Button>
           </div>
@@ -212,7 +212,7 @@ export default async function OrdersAdminPage({
                           </Button>
                         </form>
                       ) : null}
-                      <Button href={`/admin/orders/${order.id}`} variant="subtle" size="sm">
+                      <Button href={`/admin/orders/${order.id}`} variant="neutral" size="sm">
                         Details
                       </Button>
                     </div>

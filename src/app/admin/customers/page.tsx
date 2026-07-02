@@ -45,7 +45,7 @@ export default async function CustomersPage({
         breadcrumbs={<Breadcrumbs items={[{ label: "Customers" }]} />}
         action={
           <div className="flex gap-2">
-            <Button href="/admin/customers/import" variant="subtle" size="sm">
+            <Button href="/admin/customers/import" variant="neutral" size="sm">
               ⬆ Import
             </Button>
             <Button href="/admin/customers/new" variant="save" size="sm">
@@ -83,7 +83,7 @@ export default async function CustomersPage({
           <div className="min-w-48 flex-1">
             <Input name="q" defaultValue={q ?? ""} placeholder="Search name, email, or phone…" />
           </div>
-          <Button type="submit" variant="subtle">
+          <Button type="submit" variant="neutral">
             Search
           </Button>
         </form>

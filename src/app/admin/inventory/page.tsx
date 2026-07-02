@@ -172,7 +172,7 @@ export default async function InventoryPage({
           <div className="min-w-48 flex-1">
             <Input name="q" defaultValue={q ?? ""} placeholder="Search product, lot code, or POS key…" />
           </div>
-          <Button type="submit" variant="subtle">
+          <Button type="submit" variant="neutral">
             Search
           </Button>
         </form>

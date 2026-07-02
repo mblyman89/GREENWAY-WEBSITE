@@ -103,7 +103,7 @@ export function NotesManager({
             {editing ? "Save changes" : "Add note"}
           </Button>
           {editing ? (
-            <Button type="button" variant="subtle" size="sm" onClick={() => setEditing(null)}>
+            <Button type="button" variant="neutral" size="sm" onClick={() => setEditing(null)}>
               Cancel edit
             </Button>
           ) : null}
@@ -152,13 +152,13 @@ export function NotesManager({
                   ) : null}
                 </div>
                 <div className="flex shrink-0 flex-col items-end gap-1.5">
-                  <Button type="button" variant="subtle" size="sm" onClick={() => setEditing(n)}>
+                  <Button type="button" variant="neutral" size="sm" onClick={() => setEditing(n)}>
                     Edit
                   </Button>
                   <form action={toggleKbNoteAction}>
                     <input type="hidden" name="id" value={n.id} />
                     <input type="hidden" name="active" value={(!n.active).toString()} />
-                    <Button type="submit" variant="subtle" size="sm">
+                    <Button type="submit" variant="neutral" size="sm">
                       {n.active ? "Hide" : "Use"}
                     </Button>
                   </form>

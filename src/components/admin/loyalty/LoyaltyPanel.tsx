@@ -66,7 +66,7 @@ export async function LoyaltyPanel({
         {canManage && (
           <form action={enrollCustomerAction}>
             <input type="hidden" name="customer_id" value={customerId} />
-            <Button type="submit" variant="subtle">
+            <Button type="submit" variant="neutral">
               Enroll in loyalty
             </Button>
           </form>
@@ -138,7 +138,7 @@ export async function LoyaltyPanel({
                 <option value="email">Email only</option>
               </Select>
             </Field>
-            <Button type="submit" variant="subtle">
+            <Button type="submit" variant="neutral">
               Issue code
             </Button>
           </form>
@@ -157,7 +157,7 @@ export async function LoyaltyPanel({
             <Field label="Reason">
               <Input name="note" placeholder="e.g. service recovery" />
             </Field>
-            <Button type="submit" variant="subtle">
+            <Button type="submit" variant="neutral">
               Apply adjustment
             </Button>
           </form>

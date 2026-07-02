@@ -228,7 +228,7 @@ export function CycleCountScanner({
           </div>
           <Button
             type="button"
-            variant="subtle"
+            variant="neutral"
             disabled={!cameraSupported || pending}
             onClick={() => (cameraOn ? stopCamera() : startCamera())}
           >

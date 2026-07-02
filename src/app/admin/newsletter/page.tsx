@@ -225,7 +225,7 @@ export default async function NewsletterSendPage({
                       placeholder="you@example.com"
                       className="min-w-56 flex-1"
                     />
-                    <Button type="submit" variant="subtle" disabled={!cfg.configured}>
+                    <Button type="submit" variant="neutral" disabled={!cfg.configured}>
                       Send test
                     </Button>
                   </div>

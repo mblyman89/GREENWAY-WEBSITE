@@ -87,7 +87,7 @@ export default async function SchedulePage({
         }
         action={
           <Link href="/admin/staffing">
-            <Button variant="subtle">Back to time clock</Button>
+            <Button variant="neutral">Back to time clock</Button>
           </Link>
         }
       />
