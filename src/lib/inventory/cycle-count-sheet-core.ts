@@ -28,8 +28,20 @@ export type SheetLine = {
   posProductKey: string | null;
   productName: string | null;
   strainName: string | null;
+  /** RAW LCB/CCRS inventory_category as stored (e.g. "Usable Marijuana"). Untouched. */
   category: string | null;
+  /** RAW LCB/CCRS inventory_type as stored (e.g. "Usable Cannabis"). Untouched. */
   inventoryType: string | null;
+  /**
+   * OUR website category value resolved via website-category-resolver
+   * (e.g. "flower"). This is the PRIMARY category the back office filters/labels
+   * off of per Request B. null when the resolver could not map it.
+   */
+  websiteCategory: string | null;
+  /** Human label for `websiteCategory` (e.g. "Flower"); raw label when unmapped. */
+  websiteCategoryLabel: string | null;
+  /** true when the raw LCB type could not be mapped to our convention (warn UI). */
+  categoryUnmapped: boolean;
   vendorName: string | null;
   brandName: string | null;
   unit: string | null;
@@ -43,8 +55,16 @@ export type SheetLine = {
 export type SheetFilter = {
   /** Free text against product name, strain, lot code, POS key. */
   q?: string;
+  /**
+   * PRIMARY category filter — matches OUR website category (l.websiteCategory).
+   * This is the "converted to our conventions" filter (Request B). It matches on
+   * either the website category value or its label so callers can pass either.
+   */
   category?: string | null;
+  /** RAW LCB inventory_type filter, kept available ("replace but keep old"). */
   inventoryType?: string | null;
+  /** RAW LCB inventory_category filter, kept available. */
+  rawCategory?: string | null;
   vendorName?: string | null;
   brandName?: string | null;
   /** "counted" = only lines already counted; "uncounted" = only blanks. */
@@ -79,7 +99,15 @@ export function filterLines(lines: SheetLine[], f: SheetFilter): SheetLine[] {
         .join(" ");
       if (!hay.includes(q)) return false;
     }
-    if (f.category && norm(l.category) !== norm(f.category)) return false;
+    // PRIMARY filter = OUR website category (value OR label match).
+    if (f.category) {
+      const want = norm(f.category);
+      const hasWebsite =
+        norm(l.websiteCategory) === want || norm(l.websiteCategoryLabel) === want;
+      if (!hasWebsite) return false;
+    }
+    // RAW LCB filters kept available for reference.
+    if (f.rawCategory && norm(l.category) !== norm(f.rawCategory)) return false;
     if (f.inventoryType && norm(l.inventoryType) !== norm(f.inventoryType)) return false;
     if (f.vendorName && norm(l.vendorName) !== norm(f.vendorName)) return false;
     if (f.brandName && norm(l.brandName) !== norm(f.brandName)) return false;
@@ -116,7 +144,10 @@ export function sortLines(lines: SheetLine[], sort: SheetSort): SheetLine[] {
         cmp = norm(a.lotCode ?? a.posProductKey).localeCompare(norm(b.lotCode ?? b.posProductKey));
         break;
       case "category":
-        cmp = norm(a.category).localeCompare(norm(b.category));
+        // Sort by OUR website category (label), matching the primary filter.
+        cmp = norm(a.websiteCategoryLabel ?? a.category).localeCompare(
+          norm(b.websiteCategoryLabel ?? b.category),
+        );
         break;
       case "vendor":
         cmp = norm(a.vendorName).localeCompare(norm(b.vendorName));
@@ -169,6 +200,8 @@ export const SHEET_HEADERS = [
   "Product",
   "Strain",
   "Category",
+  "LCB Type",
+  "LCB Category",
   "Vendor",
   "Brand",
   "Unit",
@@ -183,7 +216,11 @@ export function toExportRows(lines: SheetLine[]): Record<string, string | number
     "POS Product Key": l.posProductKey ?? "",
     Product: l.productName ?? "",
     Strain: l.strainName ?? "",
-    Category: l.category ?? "",
+    // Primary "Category" column is OUR website convention; the raw LCB values are
+    // kept alongside for compliance reference (never dropped).
+    Category: l.websiteCategoryLabel ?? l.category ?? "",
+    "LCB Type": l.inventoryType ?? "",
+    "LCB Category": l.category ?? "",
     Vendor: l.vendorName ?? "",
     Brand: l.brandName ?? "",
     Unit: l.unit ?? "",
@@ -370,19 +407,29 @@ function runSelfTests(): void {
   const lines: SheetLine[] = [
     {
       lineId: "L1", lotId: "lot1", lotCode: "ABC123", posProductKey: "SKU-1", productName: "Blue Dream 3.5g",
-      strainName: "Blue Dream", category: "Flower", inventoryType: "Usable", vendorName: "Acme", brandName: "Sky",
+      strainName: "Blue Dream", category: "Usable Marijuana", inventoryType: "Usable Cannabis",
+      websiteCategory: "flower", websiteCategoryLabel: "Flower", categoryUnmapped: false,
+      vendorName: "Acme", brandName: "Sky",
       unit: "ea", systemQty: 10, countedQty: null, isSample: false, isMedical: false,
     },
     {
       lineId: "L2", lotId: "lot2", lotCode: "XYZ999", posProductKey: "SKU-2", productName: "Gummies 10pk",
-      strainName: null, category: "Edible", inventoryType: "Usable", vendorName: "Beta", brandName: "Chew",
+      strainName: null, category: "Solid Marijuana Infused Edible", inventoryType: "Edible",
+      websiteCategory: "edible-solid", websiteCategoryLabel: "Edible (Solid)", categoryUnmapped: false,
+      vendorName: "Beta", brandName: "Chew",
       unit: "ea", systemQty: 5, countedQty: 5, isSample: false, isMedical: true,
     },
   ];
 
   // filter: free text
   assert(filterLines(lines, { q: "blue" }).length === 1, "q matches product/strain");
-  assert(filterLines(lines, { category: "Edible" }).length === 1, "category filter");
+  // PRIMARY category filter now matches OUR website category by VALUE...
+  assert(filterLines(lines, { category: "flower" }).length === 1, "website category value filter");
+  // ...OR by its label.
+  assert(filterLines(lines, { category: "Edible (Solid)" }).length === 1, "website category label filter");
+  // RAW LCB category still filterable via rawCategory ("keep old available").
+  assert(filterLines(lines, { rawCategory: "Usable Marijuana" }).length === 1, "raw LCB category filter");
+  assert(filterLines(lines, { inventoryType: "Edible" }).length === 1, "raw LCB inventoryType filter");
   assert(filterLines(lines, { counted: "uncounted" }).length === 1, "uncounted filter");
   assert(filterLines(lines, { counted: "counted" }).length === 1, "counted filter");
   assert(filterLines(lines, { medical: "only" }).length === 1, "medical only");
@@ -394,12 +441,27 @@ function runSelfTests(): void {
   const bySys = sortLines(lines, { key: "system", dir: "asc" });
   assert(bySys[0].lineId === "L2", "sort system asc");
 
-  // distinct
-  assert(distinctValues(lines, (l) => l.category).join(",") === "Edible,Flower", "distinct categories");
+  // distinct: OUR website category labels (primary filter dropdown source).
+  assert(
+    distinctValues(lines, (l) => l.websiteCategoryLabel).join(",") === "Edible (Solid),Flower",
+    "distinct website categories",
+  );
+  // distinct: raw LCB categories still available for the reference dropdown.
+  assert(
+    distinctValues(lines, (l) => l.category).join(",") === "Solid Marijuana Infused Edible,Usable Marijuana",
+    "distinct raw LCB categories",
+  );
 
-  // export rows
+  // sort by category uses OUR website label: Edible (Solid) < Flower asc.
+  const byCat = sortLines(lines, { key: "category", dir: "asc" });
+  assert(byCat[0].lineId === "L2", "sort category by website label");
+
+  // export rows: Category = OUR label; raw LCB kept in dedicated columns.
   const rows = toExportRows(lines);
   assert(rows.length === 2 && rows[0]["Line ID"] === "L1" && rows[0]["Counted Qty"] === "", "export blank counted");
+  assert(rows[0].Category === "Flower", "export Category = our website label");
+  assert(rows[0]["LCB Type"] === "Usable Cannabis", "export keeps raw LCB Type");
+  assert(rows[0]["LCB Category"] === "Usable Marijuana", "export keeps raw LCB Category");
   assert(rows[1]["Counted Qty"] === 5, "export prefills existing count");
 
   // import: match by lot code, alias headers, variance, unmatched, invalid

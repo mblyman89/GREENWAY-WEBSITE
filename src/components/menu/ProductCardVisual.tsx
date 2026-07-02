@@ -12,6 +12,15 @@ type CardTone = {
   panel: string;
   pill: string;
   packageGradient: string;
+  /**
+   * Optional split-neon override for leaning hybrids: the LEFT edge/glow uses
+   * the leaning side's color and the RIGHT uses the base hybrid color (owner
+   * request). When omitted, both sides fall back to `glow`/`glowSoft`.
+   */
+  glowLeft?: string;
+  glowSoftLeft?: string;
+  glowRight?: string;
+  glowSoftRight?: string;
 };
 
 const cardTones: Record<GreenwayMenuItem["strainType"], CardTone> = {
@@ -39,20 +48,30 @@ const cardTones: Record<GreenwayMenuItem["strainType"], CardTone> = {
     pill: "#728068",
     packageGradient: "linear-gradient(145deg,#58156e 0%,#a04ea5 42%,#f18b26 100%)",
   },
-  // Indica-Hybrid: hybrid green with an indica-blue lean.
+  // Indica-Hybrid: split neon — indica-BLUE on the LEFT (the lean), hybrid-GREEN
+  // on the RIGHT (the base). `glow`/`glowSoft` stay as a blended fallback.
   "indica-hybrid": {
     border: "#5f88a0",
     glow: "rgba(95,136,160,0.95)",
     glowSoft: "rgba(138,178,178,0.34)",
+    glowLeft: "rgba(84,153,184,0.95)",
+    glowSoftLeft: "rgba(116,184,214,0.34)",
+    glowRight: "rgba(126,151,95,0.95)",
+    glowSoftRight: "rgba(160,184,127,0.34)",
     panel: "rgba(16,26,30,0.76)",
     pill: "#5f8890",
     packageGradient: "linear-gradient(145deg,#5499b8 0%,#6ec583 55%,#7ed957 100%)",
   },
-  // Sativa-Hybrid: hybrid green with a sativa-orange lean.
+  // Sativa-Hybrid: split neon — sativa-ORANGE on the LEFT (the lean), hybrid-GREEN
+  // on the RIGHT (the base). `glow`/`glowSoft` stay as a blended fallback.
   "sativa-hybrid": {
     border: "#8a8a4f",
     glow: "rgba(170,150,70,0.95)",
     glowSoft: "rgba(190,180,110,0.34)",
+    glowLeft: "rgba(217,117,39,0.92)",
+    glowSoftLeft: "rgba(255,151,53,0.34)",
+    glowRight: "rgba(126,151,95,0.95)",
+    glowSoftRight: "rgba(160,184,127,0.34)",
     panel: "rgba(30,27,17,0.76)",
     pill: "#8a8050",
     packageGradient: "linear-gradient(145deg,#ff9d18 0%,#c7c94f 52%,#7ed957 100%)",
@@ -88,11 +107,17 @@ const categoryAliases: Partial<Record<GreenwayMenuItem["category"], string>> = {
 };
 
 function cardStyle(tone: CardTone): CSSProperties {
+  // Split neon: left uses the leaning color, right uses the base hybrid color.
+  // Falls back to the single `glow`/`glowSoft` for non-split tones.
+  const glowL = tone.glowLeft ?? tone.glow;
+  const glowSoftL = tone.glowSoftLeft ?? tone.glowSoft;
+  const glowR = tone.glowRight ?? tone.glow;
+  const glowSoftR = tone.glowSoftRight ?? tone.glowSoft;
   return {
     borderColor: tone.border,
     backgroundColor: "#101010",
-    backgroundImage: `radial-gradient(ellipse 54% 72% at -9% 44%, ${tone.glow} 0%, ${tone.glowSoft} 28%, rgba(20,20,20,0) 61%), radial-gradient(ellipse 48% 68% at 108% 61%, ${tone.glow} 0%, ${tone.glowSoft} 26%, rgba(20,20,20,0) 59%), linear-gradient(180deg, rgba(18,18,18,0.94), ${tone.panel} 48%, rgba(10,10,10,0.98))`,
-    boxShadow: `inset 18px 0 34px -31px ${tone.glow}, inset -18px 0 34px -31px ${tone.glow}, 0 13px 28px rgba(0,0,0,0.38)`,
+    backgroundImage: `radial-gradient(ellipse 54% 72% at -9% 44%, ${glowL} 0%, ${glowSoftL} 28%, rgba(20,20,20,0) 61%), radial-gradient(ellipse 48% 68% at 108% 61%, ${glowR} 0%, ${glowSoftR} 26%, rgba(20,20,20,0) 59%), linear-gradient(180deg, rgba(18,18,18,0.94), ${tone.panel} 48%, rgba(10,10,10,0.98))`,
+    boxShadow: `inset 18px 0 34px -31px ${glowL}, inset -18px 0 34px -31px ${glowR}, 0 13px 28px rgba(0,0,0,0.38)`,
   };
 }
 
@@ -206,8 +231,8 @@ export function ProductCardVisual({ item, salePriceMinorUnits, saleBadgeLabel, c
       className={`group relative flex h-full min-h-[29.25rem] min-w-0 flex-col justify-between overflow-hidden border p-4 text-white transition duration-300 hover:border-white/70 hover:shadow-[0_18px_44px_rgba(0,0,0,0.55)] ${className}`}
       style={cardStyle(tone)}
     >
-      <span className="pointer-events-none absolute -left-px top-10 h-[42%] w-px opacity-90 blur-[1px]" style={{ background: tone.glow }} aria-hidden="true" />
-      <span className="pointer-events-none absolute -right-px top-[31%] h-[46%] w-px opacity-90 blur-[1px]" style={{ background: tone.glow }} aria-hidden="true" />
+      <span className="pointer-events-none absolute -left-px top-10 h-[42%] w-px opacity-90 blur-[1px]" style={{ background: tone.glowLeft ?? tone.glow }} aria-hidden="true" />
+      <span className="pointer-events-none absolute -right-px top-[31%] h-[46%] w-px opacity-90 blur-[1px]" style={{ background: tone.glowRight ?? tone.glow }} aria-hidden="true" />
       <span className="pointer-events-none absolute inset-x-7 -bottom-px h-px opacity-70 blur-[1px]" style={{ background: tone.glow }} aria-hidden="true" />
 
       <div>

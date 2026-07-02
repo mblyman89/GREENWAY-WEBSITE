@@ -9,6 +9,7 @@ import { pageMetadata } from "@/lib/seo/seo";
 import { posMenuPreviewItems } from "@/lib/pos/preview-menu";
 import { getPageBanners } from "@/lib/cms/page-sections-store";
 import { withResolvedImages } from "@/lib/enrichment/image-resolver";
+import { withTerpenes } from "@/lib/menu/strain-terpenes-server";
 
 export const metadata = pageMetadata({
   title: "Shop Cannabis Menu — Flower, Vapes, Edibles & More",
@@ -30,7 +31,9 @@ export default async function MenuPage({ searchParams }: MenuPageProps) {
   const resolvedSearchParams = await searchParams;
   // DF-3: attach resolved product images (exact → brand/vendor → category →
   // inventory → global). Non-throwing; falls back to the stylized mockup.
-  const menuItems = await withResolvedImages(posMenuPreviewItems);
+  // Attach curated terpenes (from the KB strain) so the menu can filter by
+  // terpene. Sensory/descriptive only; degrades to no terpenes when unmatched.
+  const menuItems = await withResolvedImages(await withTerpenes(posMenuPreviewItems));
   // Pages-builder banners for /menu: the primary menu.hero is editable via the
   // existing SiteText hero below; any extra banners staff add render under it.
   const banners = await getPageBanners("menu", ["menu.hero"]);

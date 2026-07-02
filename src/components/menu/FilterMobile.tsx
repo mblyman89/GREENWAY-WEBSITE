@@ -85,6 +85,7 @@ export function FilterMobile({ activeCount, resultCount, children }: FilterMobil
 export type MenuFilterControlsProps = {
   selectedCategories: string[];
   selectedStrains: string[];
+  selectedTerpenes: string[];
   selectedBrands: string[];
   selectedWeights: string[];
   maxThc: number;
@@ -96,6 +97,7 @@ export type MenuFilterControlsProps = {
   maxAvailableCbd?: number;
   onCategoryToggle: (category: string) => void;
   onStrainToggle: (strain: string) => void;
+  onTerpeneToggle: (terpene: string) => void;
   onBrandToggle: (brand: string) => void;
   onWeightToggle: (weight: string) => void;
   onMaxThcChange: (value: number) => void;
@@ -104,6 +106,7 @@ export type MenuFilterControlsProps = {
   onReset: () => void;
   categoryOptions: FilterCheckboxOption[];
   strainOptions: FilterCheckboxOption[];
+  terpeneOptions: FilterCheckboxOption[];
   brandOptions: FilterCheckboxOption[];
   weightOptions: FilterCheckboxOption[];
   clearanceActive?: boolean;
@@ -115,6 +118,7 @@ export type MenuFilterControlsProps = {
 export function MenuFilterControls({
   selectedCategories,
   selectedStrains,
+  selectedTerpenes,
   selectedBrands,
   selectedWeights,
   maxThc,
@@ -126,6 +130,7 @@ export function MenuFilterControls({
   maxAvailableCbd = 100,
   onCategoryToggle,
   onStrainToggle,
+  onTerpeneToggle,
   onBrandToggle,
   onWeightToggle,
   onMaxThcChange,
@@ -134,6 +139,7 @@ export function MenuFilterControls({
   onReset,
   categoryOptions,
   strainOptions,
+  terpeneOptions,
   brandOptions,
   weightOptions,
   clearanceActive = false,
@@ -211,6 +217,12 @@ export function MenuFilterControls({
       <FilterSection title="Strains">
         <FilterCheckboxGroup name="strains" options={strainOptions} selectedValues={selectedStrains} onToggle={onStrainToggle} />
       </FilterSection>
+
+      {(terpeneOptions.length > 0 || selectedTerpenes.length > 0) ? (
+        <FilterSection title="Terpenes" defaultOpen={false}>
+          <FilterCheckboxGroup name="terpenes" options={terpeneOptions} selectedValues={selectedTerpenes} onToggle={onTerpeneToggle} searchable searchPlaceholder="Search terpenes..." />
+        </FilterSection>
+      ) : null}
 
       <FilterSection title="Weights" defaultOpen={false}>
         <FilterCheckboxGroup name="weights" options={weightOptions} selectedValues={selectedWeights} onToggle={onWeightToggle} />

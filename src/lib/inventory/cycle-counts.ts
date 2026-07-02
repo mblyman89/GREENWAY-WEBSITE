@@ -12,6 +12,7 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import { resolveWebsiteCategories } from "@/lib/inventory/website-category-resolver-server";
 
 export type CycleCountStatus = "open" | "applied" | "cancelled";
 
@@ -141,8 +142,16 @@ export type CycleCountSheetLine = {
   posProductKey: string | null;
   productName: string | null;
   strainName: string | null;
+  /** RAW LCB inventory_category as stored (untouched — CCRS truth). */
   category: string | null;
+  /** RAW LCB inventory_type as stored (untouched — CCRS truth). */
   inventoryType: string | null;
+  /** OUR website category value, resolved for back-office filtering (Request B). */
+  websiteCategory: string | null;
+  /** Human label for websiteCategory (raw label when unmapped). */
+  websiteCategoryLabel: string | null;
+  /** true when the raw LCB type could not be mapped to our convention. */
+  categoryUnmapped: boolean;
   vendorName: string | null;
   brandName: string | null;
   unit: string | null;
@@ -204,7 +213,8 @@ export async function getCycleCountSheetLines(countId: string): Promise<CycleCou
     for (const row of (b as { id: string; display_name: string }[] | null) ?? []) brandMap.set(row.id, row.display_name);
   }
 
-  return rows.map((r) => {
+  // Base lines (raw LCB values kept verbatim).
+  const baseLines = rows.map((r) => {
     const lot = lotOf(r);
     return {
       lineId: r.id,
@@ -222,6 +232,27 @@ export async function getCycleCountSheetLines(countId: string): Promise<CycleCou
       countedQty: r.counted_qty == null ? null : Number(r.counted_qty),
       isSample: Boolean(lot?.is_sample),
       isMedical: Boolean(lot?.is_medical),
+    };
+  });
+
+  // Convert each raw LCB line onto OUR website category (Request B). Resolver is
+  // read-only — it NEVER mutates the stored LCB/CCRS `category`/`inventory_type`.
+  const resolutions = await resolveWebsiteCategories(
+    baseLines.map((l) => ({
+      posProductKey: l.posProductKey,
+      productName: l.productName,
+      inventoryType: l.inventoryType,
+      category: l.category,
+    })),
+  );
+
+  return baseLines.map((l, i) => {
+    const res = resolutions[i];
+    return {
+      ...l,
+      websiteCategory: res?.websiteCategory ?? null,
+      websiteCategoryLabel: res?.label ?? null,
+      categoryUnmapped: res?.unmapped ?? true,
     };
   });
 }

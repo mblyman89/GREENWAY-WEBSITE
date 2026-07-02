@@ -577,7 +577,7 @@ export async function listManifestLots(manifestId: string) {
   const { data } = await admin
     .from("inventory_lots")
     .select(
-      "id, product_name, lot_code, received_qty, unit, pos_product_key, lab_result_id, status, expires_on, is_sample, strain_name, disposition, reject_reason, reject_reason_code",
+      "id, product_name, lot_code, received_qty, unit, pos_product_key, lab_result_id, status, expires_on, is_sample, strain_name, category, inventory_type, disposition, reject_reason, reject_reason_code",
     )
     .eq("manifest_id", manifestId)
     .order("product_name", { ascending: true });
@@ -595,6 +595,9 @@ export async function listManifestLots(manifestId: string) {
           expires_on: string | null;
           is_sample: boolean;
           strain_name: string | null;
+          // RAW LCB/CCRS classification as stored (untouched — for display/resolve only).
+          category: string | null;
+          inventory_type: string | null;
           disposition: string | null;
           reject_reason: string | null;
           reject_reason_code: string | null;

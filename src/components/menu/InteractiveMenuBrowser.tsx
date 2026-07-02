@@ -328,6 +328,7 @@ type FilterCriteria = {
   query: string;
   selectedCategories: GreenwayCategory[];
   selectedStrains: string[];
+  selectedTerpenes: string[];
   selectedBrands: string[];
   selectedWeights: string[];
   maxThc: number;
@@ -450,10 +451,33 @@ function matchesStrainSelection(item: GreenwayMenuItem, selectedStrains: string[
   });
 }
 
+// Terpene names on an item, normalized (lower/trim) for reliable matching.
+function itemTerpenes(item: GreenwayMenuItem): string[] {
+  return (item.terpenes ?? []).map((t) => t.toLowerCase().trim()).filter(Boolean);
+}
+
+// Display label for a terpene value (e.g. "beta-caryophyllene" -> "Beta-Caryophyllene").
+function titleCaseTerpene(value: string): string {
+  return value
+    .split(/([-\s])/)
+    .map((part) => (part === "-" || part === " " ? part : part.charAt(0).toUpperCase() + part.slice(1)))
+    .join("");
+}
+
+// An item matches when it carries ANY of the selected terpenes (OR semantics,
+// like the other multi-select facets).
+function matchesTerpeneSelection(item: GreenwayMenuItem, selectedTerpenes: string[]) {
+  if (selectedTerpenes.length === 0) return true;
+  const terps = itemTerpenes(item);
+  if (terps.length === 0) return false;
+  return selectedTerpenes.some((t) => terps.includes(t));
+}
+
 function itemMatchesCriteria(item: GreenwayMenuItem, criteria: FilterCriteria, maxAvailablePrice: number, bounds: CannabinoidBounds) {
   const itemCategories = item.filterCategories?.length ? item.filterCategories : [item.category];
   const categoryOk = criteria.selectedCategories.length === 0 || criteria.selectedCategories.some((category) => itemCategories.includes(category));
   const strainOk = matchesStrainSelection(item, criteria.selectedStrains);
+  const terpeneOk = matchesTerpeneSelection(item, criteria.selectedTerpenes);
   const brandOk = criteria.selectedBrands.length === 0 || criteria.selectedBrands.includes(item.brand);
   const weightOk = criteria.selectedWeights.length === 0 || criteria.selectedWeights.some((weight) => itemWeightLabels(item).includes(weight));
   const thcOk = matchesCannabinoidSlider(cannabinoidPercentageValue(item.totalThc), criteria.maxThc, bounds.maxAvailableThc);
@@ -461,7 +485,7 @@ function itemMatchesCriteria(item: GreenwayMenuItem, criteria: FilterCriteria, m
   const priceOk = matchesPriceSlider(item.priceMinorUnits, criteria.maxPrice, maxAvailablePrice);
   const searchOk = matchesSearch(item, criteria.query);
 
-  return categoryOk && strainOk && brandOk && weightOk && thcOk && cbdOk && priceOk && searchOk;
+  return categoryOk && strainOk && terpeneOk && brandOk && weightOk && thcOk && cbdOk && priceOk && searchOk;
 }
 
 function countValues(values: string[]) {
@@ -497,6 +521,7 @@ function criteriaWithout(criteria: FilterCriteria, key: keyof FilterCriteria): F
   if (key === "query") return { ...criteria, query: "" };
   if (key === "selectedCategories") return { ...criteria, selectedCategories: [] };
   if (key === "selectedStrains") return { ...criteria, selectedStrains: [] };
+  if (key === "selectedTerpenes") return { ...criteria, selectedTerpenes: [] };
   if (key === "selectedBrands") return { ...criteria, selectedBrands: [] };
   if (key === "selectedWeights") return { ...criteria, selectedWeights: [] };
   if (key === "maxThc") return { ...criteria, maxThc: UNBOUNDED };
@@ -513,6 +538,7 @@ type InitialMenuSearchParams = {
   // Richer persisted filter params (Task G).
   categories?: string;
   strains?: string;
+  terpenes?: string;
   brands?: string;
   weights?: string;
   maxThc?: string;
@@ -574,6 +600,7 @@ function resolveInitialParams(serverParams: InitialMenuSearchParams): InitialMen
     special: pick("special") ?? undefined,
     categories: pick("categories") ?? undefined,
     strains: pick("strains") ?? undefined,
+    terpenes: pick("terpenes") ?? undefined,
     brands: pick("brands") ?? undefined,
     weights: pick("weights") ?? undefined,
     maxThc: pick("maxThc") ?? undefined,
@@ -605,6 +632,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
   // so the menu restores the shopper's exact state on return from a product page.
   const persistedCategories = parsePersistedList(initialParams.categories).filter(isWebsiteCategory) as GreenwayCategory[];
   const persistedStrains = parsePersistedList(initialParams.strains);
+  const persistedTerpenes = parsePersistedList(initialParams.terpenes);
   const persistedBrands = parsePersistedList(initialParams.brands);
   const persistedWeights = parsePersistedList(initialParams.weights);
   const persistedMaxThc = parsePersistedNumber(initialParams.maxThc);
@@ -617,6 +645,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
     persistedCategories.length ? persistedCategories : initialCategory ? [initialCategory] : initialSpecialCategories,
   );
   const [selectedStrains, setSelectedStrains] = useState<string[]>(persistedStrains);
+  const [selectedTerpenes, setSelectedTerpenes] = useState<string[]>(persistedTerpenes);
   const [selectedBrands, setSelectedBrands] = useState<string[]>(
     persistedBrands.length ? persistedBrands : initialBrand ? [initialBrand] : [],
   );
@@ -676,6 +705,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
     if (query.trim()) params.set("search", query.trim());
     if (selectedCategories.length) params.set("categories", selectedCategories.join(","));
     if (selectedStrains.length) params.set("strains", selectedStrains.join(","));
+    if (selectedTerpenes.length) params.set("terpenes", selectedTerpenes.join(","));
     if (selectedBrands.length) params.set("brands", selectedBrands.join(","));
     if (selectedWeights.length) params.set("weights", selectedWeights.join(","));
     if (maxThc < maxAvailableThc) params.set("maxThc", String(maxThc));
@@ -690,6 +720,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
     selectedCategories,
     selectedStrains,
     selectedBrands,
+    selectedTerpenes,
     selectedWeights,
     maxThc,
     maxCbd,
@@ -723,6 +754,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
       );
 
       setSelectedStrains(list("strains"));
+      setSelectedTerpenes(list("terpenes"));
 
       const nextBrands = list("brands");
       const singleBrand = params.get("brand") ?? "";
@@ -749,12 +781,13 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
     query,
     selectedCategories,
     selectedStrains,
+    selectedTerpenes,
     selectedBrands,
     selectedWeights,
     maxThc,
     maxCbd,
     maxPrice,
-  }), [maxCbd, maxPrice, maxThc, query, selectedBrands, selectedCategories, selectedStrains, selectedWeights]);
+  }), [maxCbd, maxPrice, maxThc, query, selectedBrands, selectedCategories, selectedStrains, selectedTerpenes, selectedWeights]);
 
   const filteredItems = useMemo(() => {
     const specialItemIds = initialSpecial?.itemIds;
@@ -800,6 +833,15 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
     return baseOptions;
   }, [cannabinoidBounds, criteria, items, maxAvailablePrice, selectedStrains]);
 
+  const terpeneOptions = useMemo(() => {
+    const optionItems = items.filter((item) => itemMatchesCriteria(item, criteriaWithout(criteria, "selectedTerpenes"), maxAvailablePrice, cannabinoidBounds));
+    return buildOptions(
+      optionItems.flatMap((item) => itemTerpenes(item)),
+      selectedTerpenes,
+      titleCaseTerpene,
+    );
+  }, [cannabinoidBounds, criteria, items, maxAvailablePrice, selectedTerpenes]);
+
   const brandOptions = useMemo(() => {
     const optionItems = items.filter((item) => itemMatchesCriteria(item, criteriaWithout(criteria, "selectedBrands"), maxAvailablePrice, cannabinoidBounds));
     return buildOptions(optionItems.map((item) => item.brand), selectedBrands);
@@ -835,6 +877,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
   const hasOtherFiltersActive =
     query.trim().length > 0 ||
     selectedStrains.length > 0 ||
+    selectedTerpenes.length > 0 ||
     selectedBrands.length > 0 ||
     selectedWeights.length > 0 ||
     clearanceOnly ||
@@ -884,6 +927,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
     setQuery("");
     setSelectedCategories([]);
     setSelectedStrains([]);
+    setSelectedTerpenes([]);
     setSelectedBrands([]);
     setSelectedWeights([]);
     setMaxThc(maxAvailableThc);
@@ -925,6 +969,12 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
       label: "Strain",
       value: strainTagLabel(strain),
       onRemove: () => setSelectedStrains((current) => current.filter((value) => value !== strain)),
+    })),
+    ...selectedTerpenes.map((terpene) => ({
+      key: `terpene-${terpene}`,
+      label: "Terpene",
+      value: titleCaseTerpene(terpene),
+      onRemove: () => setSelectedTerpenes((current) => current.filter((value) => value !== terpene)),
     })),
     ...selectedWeights.map((weight) => ({
       key: `weight-${weight}`,
@@ -970,6 +1020,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
     <MenuFilterControls
       selectedCategories={selectedCategories}
       selectedStrains={selectedStrains}
+      selectedTerpenes={selectedTerpenes}
       selectedBrands={selectedBrands}
       selectedWeights={selectedWeights}
       maxThc={maxThc}
@@ -979,6 +1030,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
         if (isWebsiteCategory(category)) setSelectedCategories((current) => toggleValue(current, category));
       }}
       onStrainToggle={(strain) => setSelectedStrains((current) => toggleValue(current, strain))}
+      onTerpeneToggle={(terpene) => setSelectedTerpenes((current) => toggleValue(current, terpene))}
       onBrandToggle={(brand) => setSelectedBrands((current) => toggleValue(current, brand))}
       onWeightToggle={(weight) => setSelectedWeights((current) => toggleValue(current, weight))}
       onMaxThcChange={setMaxThc}
@@ -991,6 +1043,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
       maxAvailableCbd={maxAvailableCbd}
       categoryOptions={categoryOptions}
       strainOptions={strainOptions}
+      terpeneOptions={terpeneOptions}
       brandOptions={brandOptions}
       weightOptions={weightOptions}
       clearanceActive={clearanceOnly}
