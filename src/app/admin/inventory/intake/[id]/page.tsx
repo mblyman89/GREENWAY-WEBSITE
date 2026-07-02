@@ -7,6 +7,7 @@ import { StatCard } from "@/components/admin/StatCard";
 import { Button, Field, Input, Textarea, Select } from "@/components/admin/ui";
 import { getManifestById } from "@/lib/inventory/store";
 import { resolveWebsiteCategories } from "@/lib/inventory/website-category-resolver-server";
+import { matchIntakeLinesToKb } from "@/lib/ai/kb/intake-strain-match-server";
 import { getVendorById } from "@/lib/vendors/store";
 import { listManifestLots, listManifestEvents } from "@/lib/inventory/intake-store";
 import { ManifestTimeline } from "@/components/admin/inventory/ManifestTimeline";
@@ -92,6 +93,15 @@ export default async function ManifestReviewPage({
   );
   const categoryByLotId = new Map(
     lots.map((l, i) => [l.id, categoryResolutions[i]] as const),
+  );
+
+  // Intelligent KB match suggestion per line (exact + near-exact). Drafts-only:
+  // this only suggests which known strain a product likely is; it never writes.
+  const kbMatches = await matchIntakeLinesToKb(
+    lots.map((l) => ({ strainName: l.strain_name, productName: l.product_name })),
+  );
+  const kbMatchByLotId = new Map(
+    lots.map((l, i) => [l.id, kbMatches[i]] as const),
   );
   const isPending = manifest.status === "pending";
   const inProgress = manifest.status === "pending" || manifest.status === "in_transit" || manifest.status === "received";
@@ -283,6 +293,45 @@ export default async function ManifestReviewPage({
                         </span>
                       )}
                     </div>
+                    {(() => {
+                      const m = kbMatchByLotId.get(l.id);
+                      if (!m) return null;
+                      // Confident auto-match → green "KB: <name>".
+                      if (m.best) {
+                        return (
+                          <div className="mt-1 text-[10px]">
+                            <span
+                              className="rounded bg-[var(--admin-accent-soft)] px-1.5 py-0.5 font-semibold text-[var(--admin-accent)]"
+                              title={`${m.best.reason} (${Math.round(m.best.score * 100)}%)`}
+                            >
+                              KB match: {m.best.strain.name}
+                            </span>
+                          </div>
+                        );
+                      }
+                      // Near-exact but ambiguous → amber "confirm?" with the top pick.
+                      const top = m.candidates[0];
+                      if (top) {
+                        return (
+                          <div className="mt-1 text-[10px]">
+                            <span
+                              className="rounded bg-[var(--admin-gold-soft)] px-1.5 py-0.5 font-semibold text-[var(--admin-gold)]"
+                              title={`${top.reason} (${Math.round(top.score * 100)}%). Confirm before relying on it.`}
+                            >
+                              KB: {top.strain.name}? · confirm
+                            </span>
+                          </div>
+                        );
+                      }
+                      // No plausible match → gray hint (KB can grow from here).
+                      return (
+                        <div className="mt-1 text-[10px]">
+                          <span className="rounded bg-[var(--admin-surface-2)] px-1.5 py-0.5 font-semibold uppercase text-[var(--admin-text-faint)]">
+                            No KB match
+                          </span>
+                        </div>
+                      );
+                    })()}
                     {(() => {
                       const cat = categoryByLotId.get(l.id);
                       if (!cat) return null;
