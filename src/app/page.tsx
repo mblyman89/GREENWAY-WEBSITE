@@ -6,6 +6,7 @@ import { Footer } from "@/components/site/Footer";
 import { Header } from "@/components/site/Header";
 import { StaffShortcut } from "@/components/site/StaffShortcut";
 import { posMenuPreviewItems } from "@/lib/pos/preview-menu";
+import { withMenuProfile } from "@/lib/menu/strain-terpenes-server";
 import { getContentValues, isPreviewActive } from "@/lib/cms/render-content";
 import { getCarouselForRender } from "@/lib/cms/carousel-store";
 import { getSectionsForRender } from "@/lib/cms/page-sections-store";
@@ -22,7 +23,7 @@ export const metadata: Metadata = {
 export default async function Home() {
   // Hero slides come from the staff-managed Home Carousel (draft-aware).
   // Section-banner copy/images are editable from Admin → Site Content.
-  const [slides, copy, sections, preview] = await Promise.all([
+  const [slides, copy, sections, preview, dealItems] = await Promise.all([
     getCarouselForRender(),
     getContentValues([
       "home.category.image",
@@ -39,6 +40,9 @@ export default async function Home() {
     // back to the legacy content_blocks copy, then to hardcoded defaults.
     getSectionsForRender("home"),
     isPreviewActive(),
+    // Overlay the KB strain profile so home deal cards match the menu (leaning
+    // hybrids + terpenes). No-op when no KB/curated match.
+    withMenuProfile(posMenuPreviewItems),
   ]);
 
   // Map the new page_sections rows (by section_key) onto the banner content.
@@ -49,7 +53,7 @@ export default async function Home() {
     <main>
       <Header />
       <Hero slides={slides} />
-      <HomeDailyDeals items={posMenuPreviewItems} />
+      <HomeDailyDeals items={dealItems} />
       <PromoGrid
         content={{
           categoryImage: category?.image || copy["home.category.image"],
