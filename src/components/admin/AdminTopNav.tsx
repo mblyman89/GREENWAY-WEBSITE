@@ -14,9 +14,11 @@
  *   reachable on a phone (supports the owner's mobile-friendly goal).
  */
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { greenwayBusiness } from "@/content/business";
 import { adminNav, navGroups, type AdminNavItem } from "./admin-nav-data";
 import { can, type Permission } from "@/lib/auth/roles";
 import type { StaffRole } from "@/lib/supabase/types";
@@ -34,10 +36,19 @@ type Props = {
 
 function Wordmark() {
   return (
-    <Link href="/admin" className="flex items-baseline gap-2" aria-label="Greenway Admin home">
-      <span className="font-[cursive] text-2xl leading-none text-[var(--admin-accent)]">
-        Greenway
-      </span>
+    <Link href="/admin" className="flex items-center gap-2" aria-label="Greenway Marijuana Admin home">
+      {/* Same fancy script wordmark used on the public site (single source of
+          truth via greenwayBusiness.assets.wordmark). Transparent PNG, so it
+          sits cleanly on the dark admin bar. */}
+      <Image
+        src={greenwayBusiness.assets.wordmark}
+        alt="Greenway Marijuana"
+        width={5891}
+        height={1170}
+        priority
+        className="h-6 w-auto object-contain sm:h-7"
+        sizes="(min-width: 640px) 180px, 150px"
+      />
       <span className="hidden rounded-[var(--admin-radius-sm)] bg-[var(--admin-gold-soft)] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.18em] text-[var(--admin-gold)] sm:inline">
         Admin
       </span>

@@ -60,6 +60,10 @@ export function CycleCountScanner({
   const [buffer, setBuffer] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const logSeq = useRef(0);
+  // True while a pointer is pressed on another interactive control. Native
+  // <select> blur can report relatedTarget=null on some browsers, so we use
+  // this as a belt-and-suspenders signal to NOT re-steal focus mid-interaction.
+  const interactingElsewhere = useRef(false);
 
   const progress = scanProgressPct(lines, tally);
 
@@ -111,6 +115,33 @@ export function CycleCountScanner({
   useEffect(() => {
     const el = inputRef.current;
     if (el) el.focus();
+  }, []);
+
+  // Track pointer presses on OTHER interactive controls (filters/sort/buttons/
+  // links). This closes the native-<select> edge case where blur's
+  // relatedTarget can be null, so we never yank focus while the user is
+  // opening a dropdown.
+  useEffect(() => {
+    const CONTROL_SELECTOR =
+      "input, select, textarea, button, a, [tabindex], [contenteditable='true']";
+    const onPointerDown = (ev: PointerEvent) => {
+      const target = ev.target as HTMLElement | null;
+      const onControl = !!target?.closest(CONTROL_SELECTOR);
+      const isScanBox = target === inputRef.current;
+      interactingElsewhere.current = onControl && !isScanBox;
+    };
+    // Clear shortly after the interaction settles.
+    const clear = () => {
+      window.setTimeout(() => {
+        interactingElsewhere.current = false;
+      }, 300);
+    };
+    document.addEventListener("pointerdown", onPointerDown, true);
+    document.addEventListener("pointerup", clear, true);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown, true);
+      document.removeEventListener("pointerup", clear, true);
+    };
   }, []);
 
   function onBufferKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
@@ -216,10 +247,20 @@ export function CycleCountScanner({
               value={buffer}
               onChange={(e) => setBuffer(e.target.value)}
               onKeyDown={onBufferKeyDown}
-              onBlur={() => {
-                // Re-focus shortly after blur so the wedge scanner keeps landing here,
-                // unless the camera is active.
-                if (!cameraOn) setTimeout(() => inputRef.current?.focus(), 50);
+              onBlur={(e) => {
+                // Keep the wedge scanner landing here — BUT only re-grab focus
+                // when the user clicks empty space, NOT when they deliberately
+                // move to another control (filter/sort <select>, a text field,
+                // a button, or a link). Stealing focus from an open <select>
+                // was closing the dropdown and causing the flicker. React gives
+                // us the element focus is moving TO via relatedTarget.
+                if (cameraOn) return;
+                if (interactingElsewhere.current) return; // clicking another control
+                const next = e.relatedTarget as HTMLElement | null;
+                if (next && next.closest("input, select, textarea, button, a, [tabindex], [contenteditable='true']")) {
+                  return; // focus is moving to another control — leave it alone
+                }
+                setTimeout(() => inputRef.current?.focus(), 50);
               }}
               placeholder="Scan or type a lot code, then Enter"
               autoComplete="off"
