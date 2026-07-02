@@ -13,18 +13,10 @@ import { useStoreWeekday } from "@/lib/specials/useStoreWeekday";
 import { merchProductDefs } from "@/lib/merch/merch-catalog";
 import { MerchProductCard } from "@/components/merch/MerchProductCard";
 
-// Item IDs eligible for the 50% Off clearance lane. These are placeholder IDs
-// (no live 50%-off inventory yet), so selecting "50% OFF" shows the empty state.
-const clearanceItemIds: string[] = [
-  "mock-flower-001",
-  "mock-flower-002",
-  "mock-preroll-001",
-  "mock-preroll-002",
-  "mock-edible-001",
-  "mock-vape-001",
-  "mock-concentrate-001",
-  "mock-topical-001",
-];
+// Item IDs eligible for the 50% Off clearance lane. Empty until real 50%-off
+// inventory is designated, so selecting "50% OFF" shows the empty state. (No
+// placeholder/mock IDs — this is wired for real clearance items later.)
+const clearanceItemIds: string[] = [];
 
 // Canonical gram-weight order. Only weights actually present in the data are shown (see deriveWeightOptions).
 const weightDisplayOrder = ["0.5g", "0.7g", "0.75g", "1g", "1.2g", "1.5g", "2g", "2.5g", "3g", "3.5g", "4g", "5g", "7g", "14g", "28g", "1oz", "10pk"];
@@ -57,16 +49,8 @@ const previewSpecialCollections: Record<string, PreviewSpecialCollection> = {
     label: "50% Off Clearance",
     helper: "Clearance-filtered shopping lane from the Specials and homepage 50% off sections.",
     categories: [],
-    itemIds: [
-      "mock-flower-001",
-      "mock-flower-002",
-      "mock-preroll-001",
-      "mock-preroll-002",
-      "mock-edible-001",
-      "mock-vape-001",
-      "mock-concentrate-001",
-      "mock-topical-001",
-    ],
+    // Empty until real 50%-off inventory is designated (shows the empty state).
+    itemIds: [],
     maxPrice: 100,
     sortBy: "price-low",
   },

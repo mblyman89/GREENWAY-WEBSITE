@@ -8,7 +8,7 @@ import { ProductDetailPurchasePanel } from "@/components/menu/ProductDetailPurch
 import { Footer } from "@/components/site/Footer";
 import { Header } from "@/components/site/Header";
 import { JsonLd } from "@/components/seo/JsonLd";
-import { getMockMenuItemById, mockMenuItems } from "@/lib/leafly/mock-menu";
+
 import type { GreenwayMenuItem } from "@/lib/leafly/types";
 import { formatWebsiteCategory } from "@/lib/pos/category-taxonomy";
 import { strainTypeLabel } from "@/lib/menu/strain-taxonomy";
@@ -95,7 +95,7 @@ const categoryAliases: Partial<Record<GreenwayMenuItem["category"], string>> = {
 };
 
 function getMenuItemById(id: string) {
-  return getMerchMenuItemById(id) ?? getPosPreviewMenuItemById(id) ?? getMockMenuItemById(id);
+  return getMerchMenuItemById(id) ?? getPosPreviewMenuItemById(id);
 }
 
 function isMerchItem(item: GreenwayMenuItem) {
@@ -205,7 +205,7 @@ function relatedItemsFor(item: GreenwayMenuItem) {
   if (isMerchItem(item)) {
     return merchMenuItems.filter((candidate) => candidate.id !== item.id).slice(0, 8);
   }
-  const allItems = [...posMenuPreviewItems, ...mockMenuItems];
+  const allItems = posMenuPreviewItems;
   const sameBrand = allItems.filter((candidate) => candidate.brand === item.brand && candidate.id !== item.id);
   const fallback = allItems.filter((candidate) => candidate.id !== item.id && candidate.category === item.category);
   const related = sameBrand.length ? sameBrand : fallback;
@@ -213,7 +213,7 @@ function relatedItemsFor(item: GreenwayMenuItem) {
 }
 
 export function generateStaticParams() {
-  return [...posMenuPreviewItems, ...mockMenuItems, ...merchMenuItems].map((item) => ({ id: item.id }));
+  return [...posMenuPreviewItems, ...merchMenuItems].map((item) => ({ id: item.id }));
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {

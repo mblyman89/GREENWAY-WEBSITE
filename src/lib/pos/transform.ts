@@ -39,7 +39,7 @@ type GreenwayStrainType =
   | "sativa-hybrid"
   | "cbd"
   | "unknown";
-type InventoryStatus = "mock" | "in-stock" | "low-stock" | "unavailable";
+type InventoryStatus = "in-stock" | "low-stock" | "unavailable";
 type CannabinoidUnit = "%" | "mg";
 
 type GreenwayCannabinoid = { type: "thc" | "thca" | "cbd" | "cbda" | "cbg" | "cbn" | "cbdv"; value: string | null; unit: CannabinoidUnit };
@@ -577,7 +577,7 @@ function validatedPackageSize(productName: string, rawPackage: string, category:
   return fromName;
 }
 
-function statusForInventory(level: number): Exclude<InventoryStatus, "mock"> {
+function statusForInventory(level: number): InventoryStatus {
   if (level <= 0) return "unavailable";
   if (level <= 3) return "low-stock";
   return "in-stock";

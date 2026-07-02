@@ -14,7 +14,6 @@ export default function robots(): MetadataRoute.Robots {
           "/admin",
           "/admin/loyalty-signups",
           "/api/",
-          "/menu/mock-preview",
           "/menu/pos-preview",
         ],
       },

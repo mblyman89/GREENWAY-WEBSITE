@@ -22,6 +22,8 @@ import {
 } from "@/lib/admin/settings-store";
 import { getTaxSettings, type TaxBaseMode, type TaxSettings } from "@/lib/reports/tax";
 import { getPricingSettings, type PricingSettings } from "@/lib/inventory/pricing";
+import { redirect } from "next/navigation";
+import { resetOperationalData } from "@/lib/admin/reset-service";
 
 export type ActionResult = { ok: boolean; error?: string; errors?: string[] };
 
@@ -155,4 +157,62 @@ export async function savePricingSettingsAction(fd: FormData): Promise<ActionRes
   revalidatePath("/admin/settings/pricing");
   revalidatePath("/admin/settings");
   return { ok: true };
+}
+
+// ── Reset operational data (Danger Zone) ────────────────────────────────────
+
+/**
+ * Reset Operational Data — wipes ONLY operational/transactional data (sales,
+ * COGS, inventory, imported products, customers/loyalty signups, tills,
+ * time/payroll, etc.) via the reset_operational_data() DB function (0069).
+ * NEVER touches settings, the knowledge base, CMS/marketing, product masters /
+ * members / enrichments, brands, vendors, promotions, people/hardware, or the
+ * audit log.
+ *
+ * Double-gated: settings.manage permission + a typed confirmation phrase. The
+ * result (per-table counts) is recorded in the audit log.
+ */
+export async function resetOperationalDataAction(fd: FormData): Promise<void> {
+  const session = await requirePermission("settings.manage");
+
+  const confirm = String(fd.get("confirm") ?? "").trim().toUpperCase();
+  if (confirm !== "RESET OPERATIONAL DATA") {
+    redirect(
+      "/admin/settings/reset?error=" +
+        encodeURIComponent("To confirm, type exactly: RESET OPERATIONAL DATA"),
+    );
+  }
+
+  let summaryMsg: string;
+  try {
+    const summary = await resetOperationalData();
+    await recordAudit({
+      actorId: session.profile.id,
+      actorEmail: session.email,
+      action: "ops.reset_operational_data",
+      entityType: "database",
+      entityId: "operational",
+      after: summary as unknown as Record<string, unknown>,
+    });
+    summaryMsg = `${summary.totalRowsDeleted} row(s) removed across ${Object.keys(summary.tables).length} table(s). Settings and knowledge base untouched.`;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Reset failed.";
+    redirect("/admin/settings/reset?error=" + encodeURIComponent(message));
+  }
+
+  // Broadly revalidate the operational surfaces that now show empty state.
+  for (const p of [
+    "/admin",
+    "/admin/settings",
+    "/admin/settings/reset",
+    "/admin/orders",
+    "/admin/inventory",
+    "/admin/customers",
+    "/admin/loyalty-signups",
+    "/admin/menu-imports",
+    "/admin/reports",
+  ]) {
+    revalidatePath(p);
+  }
+  redirect("/admin/settings/reset?done=" + encodeURIComponent(summaryMsg));
 }
