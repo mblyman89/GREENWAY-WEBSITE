@@ -13,6 +13,8 @@ import {
   setStrainActive,
   upsertKbNote,
   setKbNoteActive,
+  upsertKbProductCategory,
+  setProductCategoryActive,
 } from "@/lib/ai/kb/store";
 import { validateNoteInput } from "@/lib/ai/kb/kb-notes-core";
 import { canonicalStrainType } from "@/lib/menu/strain-taxonomy";
@@ -150,6 +152,80 @@ export async function upsertStrainAction(formData: FormData): Promise<void> {
   }).catch(() => {});
   revalidatePath(PATH);
   back(`Saved strain "${name}".`);
+}
+
+const ALLOWED_PRODUCT_GROUPS = new Set([
+  "flower",
+  "concentrate",
+  "vape",
+  "edible",
+  "liquid",
+  "topical",
+]);
+
+/**
+ * Add or update a single product type/category (manual staff entry). Lets the
+ * owner grow the product-type taxonomy (edibles, liquids, tinctures, topicals,
+ * …) over time. Market-factual only (WA I-502: no health/effect claims).
+ */
+export async function upsertProductCategoryAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("products.enrich");
+
+  const name = String(formData.get("name") ?? "").trim();
+  if (!name) back("Please enter a product type name.", false);
+
+  const rawGroup = String(formData.get("group_key") ?? "edible").trim().toLowerCase();
+  const group_key = ALLOWED_PRODUCT_GROUPS.has(rawGroup) ? rawGroup : "edible";
+
+  const sortRaw = String(formData.get("sort_order") ?? "").trim();
+  let sort_order: number | null = null;
+  if (sortRaw) {
+    const n = Number(sortRaw);
+    if (!Number.isNaN(n)) sort_order = Math.max(0, Math.trunc(n));
+  }
+
+  const result = await upsertKbProductCategory(
+    {
+      slug: String(formData.get("slug") ?? "").trim() || null,
+      name,
+      group_key,
+      summary: String(formData.get("summary") ?? "").trim() || null,
+      aliases: csv(formData.get("aliases"), { lower: true }),
+      wa_inventory_types: csv(formData.get("wa_inventory_types")),
+      sort_order,
+      active: String(formData.get("active") ?? "true") !== "false",
+    },
+    session.profile.id,
+  );
+
+  await recordAudit({
+    actorId: session.profile.id,
+    action: "kb.product_category.upsert",
+    entityType: "kb_product_category",
+    entityId: name.toLowerCase(),
+  }).catch(() => {});
+  revalidatePath(PATH);
+  if (!result.ok) back(result.message ?? "Couldn't save the product type.", false);
+  back(`Saved product type "${name}".`);
+}
+
+/** Toggle a product type active/inactive. */
+export async function toggleProductCategoryAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("products.enrich");
+  const id = String(formData.get("id") ?? "");
+  const active = String(formData.get("active") ?? "") === "true";
+  if (!id) back("Missing product type id.", false);
+  const result = await setProductCategoryActive(id, active);
+  await recordAudit({
+    actorId: session.profile.id,
+    action: "kb.product_category.toggle",
+    entityType: "kb_product_category",
+    entityId: id,
+    after: { active },
+  }).catch(() => {});
+  revalidatePath(PATH);
+  if (!result.ok) back(result.message ?? "Couldn't update the product type.", false);
+  back(active ? "Product type re-enabled." : "Product type hidden from the AI.");
 }
 
 /** Toggle a strain active/inactive. */
