@@ -24,16 +24,19 @@ export function AiBusyButton({
   className?: string;
 }) {
   const { pending } = useFormStatus();
+  // Solid fills only (no transparent/bordered buttons). AI actions are a
+  // positive "go" action, so primary uses brand green; the secondary form uses
+  // a solid dark neutral chip.
   const base =
     variant === "primary"
-      ? "bg-[#7ed957] text-black hover:brightness-110"
-      : "border border-white/20 text-white/80 hover:border-[#7ed957] hover:text-white";
+      ? "bg-[var(--admin-accent)] text-black shadow-[var(--admin-shadow-sm)] hover:brightness-110"
+      : "bg-[var(--admin-surface-2)] text-[var(--admin-text)] shadow-[var(--admin-shadow-sm)] hover:bg-[var(--admin-surface-hover)]";
   return (
     <button
       type="submit"
       disabled={pending}
       aria-busy={pending}
-      className={`inline-flex items-center gap-2 rounded-full px-5 py-2 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-60 ${base} ${className}`}
+      className={`inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-xs font-black uppercase tracking-[0.1em] transition disabled:cursor-not-allowed disabled:opacity-60 ${base} ${className}`}
     >
       {pending ? (
         <>

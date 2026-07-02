@@ -50,7 +50,7 @@ export default async function SeoEditorPage({
         title="SEO Editor"
         subtitle="Control how each page looks on Google and when shared on social media — title, description, and more — with a live Google-style preview."
         action={
-          <Button href="/admin/content" variant="subtle">← Site content</Button>
+          <Button href="/admin/content" variant="neutral">← Site content</Button>
         }
         help={
           <HelpPanel

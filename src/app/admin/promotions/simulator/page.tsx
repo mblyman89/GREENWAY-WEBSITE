@@ -43,7 +43,7 @@ export default async function PromotionSimulatorPage() {
         }
         action={
           <Link href="/admin/promotions">
-            <Button variant="subtle" size="sm">Back to promotions</Button>
+            <Button variant="neutral" size="sm">Back to promotions</Button>
           </Link>
         }
       />

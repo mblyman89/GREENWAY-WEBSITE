@@ -239,7 +239,7 @@ function WebsiteCategoriesTab({
                     ? "Built-in categories can’t be permanently deleted — deleting hides them instead."
                     : "If this category is in use, it will be hidden instead of permanently deleted."}
                 </p>
-                <Button type="submit" variant="subtle">
+                <Button type="submit" variant="neutral">
                   {c.is_system ? "Hide category" : "Delete category"}
                 </Button>
               </form>
@@ -398,7 +398,7 @@ function InventoryTypesTab({
                               ? "Built-in types can’t be permanently deleted — deleting hides them instead."
                               : "If this type is used by live stock, it will be hidden instead of permanently deleted."}
                           </p>
-                          <Button type="submit" variant="subtle">
+                          <Button type="submit" variant="neutral">
                             {t.is_system ? "Hide type" : "Delete type"}
                           </Button>
                         </form>

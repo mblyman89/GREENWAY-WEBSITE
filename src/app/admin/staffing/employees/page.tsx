@@ -41,7 +41,7 @@ export default async function EmployeesPage({
         title="Employees"
         subtitle="Your workforce roster. Set a clock-in PIN so floor staff can punch in at a shared station, and a job role that drives drawer assignment."
         breadcrumbs={<Breadcrumbs items={[{ label: "Operations" }, { label: "Time Clock", href: BASE }, { label: "Employees" }]} />}
-        action={<Link href={BASE}><Button variant="subtle">← Back to clock</Button></Link>}
+        action={<Link href={BASE}><Button variant="neutral">← Back to clock</Button></Link>}
       />
 
       <div className="space-y-6 px-5 py-6 sm:px-8">

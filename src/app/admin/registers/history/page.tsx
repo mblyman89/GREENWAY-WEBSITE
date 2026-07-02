@@ -70,7 +70,7 @@ export default async function RegisterHistoryPage() {
         subtitle="Closed, reconciled, and verified drawer sessions across all registers."
         action={
           <Link href={BASE}>
-            <Button variant="subtle">Back to registers</Button>
+            <Button variant="neutral">Back to registers</Button>
           </Link>
         }
         help={

@@ -226,7 +226,7 @@ export default async function DispositionPage({
                         </Button>
                       </form>
                       <form action={cancelDestructionAction.bind(null, d.id)}>
-                        <Button type="submit" variant="subtle">
+                        <Button type="submit" variant="neutral">
                           Cancel
                         </Button>
                       </form>

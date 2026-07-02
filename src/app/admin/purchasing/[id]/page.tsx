@@ -65,7 +65,7 @@ export default async function PurchaseOrderDetailPage({
         }
         action={
           <Link href="/admin/purchasing">
-            <Button variant="subtle" size="sm">Back</Button>
+            <Button variant="neutral" size="sm">Back</Button>
           </Link>
         }
       />
@@ -106,7 +106,7 @@ export default async function PurchaseOrderDetailPage({
               <form action={setStatusAction}>
                 <input type="hidden" name="po_id" value={po.id} />
                 <input type="hidden" name="status" value="submitted" />
-                <Button type="submit" variant="subtle" size="sm">Mark submitted</Button>
+                <Button type="submit" variant="neutral" size="sm">Mark submitted</Button>
               </form>
             ) : null}
 
@@ -114,13 +114,13 @@ export default async function PurchaseOrderDetailPage({
               <form action={setStatusAction}>
                 <input type="hidden" name="po_id" value={po.id} />
                 <input type="hidden" name="status" value="cancelled" />
-                <Button type="submit" variant="subtle" size="sm">Cancel PO</Button>
+                <Button type="submit" variant="neutral" size="sm">Cancel PO</Button>
               </form>
             ) : null}
 
             <form action={deletePurchaseOrderAction} className="ml-auto">
               <input type="hidden" name="po_id" value={po.id} />
-              <Button type="submit" variant="subtle" size="sm">Delete</Button>
+              <Button type="submit" variant="neutral" size="sm">Delete</Button>
             </form>
           </div>
           {po.vendor_email ? (
@@ -182,7 +182,7 @@ export default async function PurchaseOrderDetailPage({
                                 defaultValue={remaining}
                                 className="w-16 rounded border border-stone-300 px-2 py-1 text-right text-sm"
                               />
-                              <Button type="submit" variant="subtle" size="sm">Receive</Button>
+                              <Button type="submit" variant="neutral" size="sm">Receive</Button>
                             </form>
                           ) : (
                             <span className="text-xs text-emerald-700">complete</span>

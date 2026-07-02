@@ -72,13 +72,13 @@ export async function MedicalPanel({
                 {canManage && (
                   <div className="mt-2 flex flex-wrap gap-2">
                     <Link href={`/admin/medical/card/${c.id}`} target="_blank">
-                      <Button variant="subtle">Print card</Button>
+                      <Button variant="neutral">Print card</Button>
                     </Link>
                     {!c.in_doh_database && (
                       <form action={validateMcrAction}>
                         <input type="hidden" name="authorization_row_id" value={c.id} />
                         <input type="hidden" name="customer_id" value={customerId} />
-                        <Button type="submit" variant="subtle">
+                        <Button type="submit" variant="neutral">
                           Mark validated in MCR
                         </Button>
                       </form>
@@ -88,7 +88,7 @@ export async function MedicalPanel({
                         <input type="hidden" name="authorization_row_id" value={c.id} />
                         <input type="hidden" name="customer_id" value={customerId} />
                         <input type="hidden" name="status" value="revoked" />
-                        <Button type="submit" variant="subtle">
+                        <Button type="submit" variant="neutral">
                           Revoke
                         </Button>
                       </form>
@@ -160,7 +160,7 @@ export async function MedicalPanel({
               <Input name="notes" placeholder="Internal note" />
             </Field>
 
-            <Button type="submit" variant="subtle">
+            <Button type="submit" variant="neutral">
               Issue recognition card
             </Button>
           </form>

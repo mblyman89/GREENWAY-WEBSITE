@@ -4,40 +4,54 @@ import type { ComponentPropsWithoutRef, ReactNode } from "react";
 /**
  * Button — the one button used across the back office.
  *
- * Variants encode brand intent (research: green = go/publish, gold = save/draft,
- * subtle = secondary, ghost = tertiary, danger = destructive). Renders as a
- * <button> by default, or an <a>/<Link> when `href` is passed. Server-component
- * friendly (no client hooks).
+ * DESIGN (owner-approved, grounded in the public site's button DNA):
+ *   - SOLID fills only. No transparent / ghost / bordered-outline buttons.
+ *   - Pill shape (rounded-full), UPPERCASE, bold — mirrors the public site's
+ *     signature CTA (`rounded-full bg-[var(--orange)] text-black font-black
+ *     uppercase tracking-[0.14em]`).
+ *   - Only the four brand colors carry meaning; a neutral SOLID dark chip is
+ *     used for plain secondary/navigation actions (never white, never
+ *     transparent).
+ *
+ * COLOR MAPPING (binding — see docs/TODO_BEAUTIFICATION.md):
+ *   primary  → ORANGE : the main call-to-action (the thing you came to do).
+ *   confirm  → GREEN  : positive / publish / approve / go / start.
+ *   save     → GOLD   : save draft / save settings (persist without publishing).
+ *   danger   → RED    : destructive (delete, reject, discard).
+ *   neutral  → solid dark chip : secondary / cancel / back navigation.
+ *
+ * Renders as a <button> by default, or an <a>/<Link> when `href` is passed.
+ * Server-component friendly (no client hooks).
  */
 
 export type ButtonVariant =
-  | "primary" // green — go / publish / confirm
-  | "save" // gold — save draft
-  | "subtle" // bordered neutral — secondary
-  | "ghost" // text only — tertiary
-  | "danger"; // destructive
+  | "primary" // orange — main CTA
+  | "confirm" // green — publish / approve / go
+  | "save" // gold — save draft / settings
+  | "danger" // red — destructive
+  | "neutral"; // solid dark chip — secondary / cancel / back
 
 export type ButtonSize = "sm" | "md" | "lg";
 
 const BASE =
-  "admin-focus inline-flex items-center justify-center gap-2 whitespace-nowrap font-semibold transition disabled:cursor-not-allowed disabled:opacity-40";
+  "admin-focus inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full font-black uppercase tracking-[0.1em] transition disabled:cursor-not-allowed disabled:opacity-40";
 
 const SIZES: Record<ButtonSize, string> = {
-  sm: "rounded-[var(--admin-radius-sm)] px-3 py-1.5 text-xs",
-  md: "rounded-[var(--admin-radius)] px-4 py-2 text-sm",
-  lg: "rounded-[var(--admin-radius)] px-5 py-2.5 text-sm",
+  sm: "px-3.5 py-1.5 text-[0.7rem]",
+  md: "px-5 py-2.5 text-xs",
+  lg: "px-7 py-3 text-sm",
 };
 
 const VARIANTS: Record<ButtonVariant, string> = {
   primary:
-    "bg-[var(--admin-accent)] text-black hover:brightness-110 active:brightness-95 shadow-[var(--admin-shadow-sm)]",
-  save: "bg-[var(--admin-gold)] text-black hover:brightness-110 active:brightness-95 shadow-[var(--admin-shadow-sm)]",
-  subtle:
-    "border border-[var(--admin-border-strong)] bg-[var(--admin-surface-2)] text-[var(--admin-text)] hover:bg-[var(--admin-surface-hover)]",
-  ghost:
-    "text-[var(--admin-text-muted)] hover:bg-white/5 hover:text-[var(--admin-text)]",
+    "bg-[var(--admin-orange)] text-black shadow-[var(--admin-shadow-sm)] hover:brightness-110 active:brightness-95",
+  confirm:
+    "bg-[var(--admin-accent)] text-black shadow-[var(--admin-shadow-sm)] hover:brightness-110 active:brightness-95",
+  save: "bg-[var(--admin-gold)] text-black shadow-[var(--admin-shadow-sm)] hover:brightness-110 active:brightness-95",
   danger:
-    "border border-[var(--admin-danger)]/40 bg-[var(--admin-danger-soft)] text-[var(--admin-danger)] hover:bg-[var(--admin-danger)]/20",
+    "bg-[var(--admin-danger)] text-black shadow-[var(--admin-shadow-sm)] hover:brightness-110 active:brightness-95",
+  neutral:
+    "bg-[var(--admin-surface-2)] text-[var(--admin-text)] shadow-[var(--admin-shadow-sm)] hover:bg-[var(--admin-surface-hover)] active:brightness-95",
 };
 
 type CommonProps = {

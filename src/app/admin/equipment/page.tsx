@@ -202,7 +202,7 @@ export default async function EquipmentPage({
               ))}
             </Select>
           </Field>
-          <Button type="submit" variant="subtle" size="sm">
+          <Button type="submit" variant="neutral" size="sm">
             Filter
           </Button>
         </form>

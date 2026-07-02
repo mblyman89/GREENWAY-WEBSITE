@@ -67,7 +67,7 @@ export default async function MediaPage({
         breadcrumbs={<Breadcrumbs items={[{ label: "Media Library" }]} />}
         action={
           <Link href="/admin/marketing/midjourney">
-            <Button variant="subtle">🎨 Midjourney prompt builder</Button>
+            <Button variant="neutral">🎨 Midjourney prompt builder</Button>
           </Link>
         }
         help={
@@ -134,7 +134,7 @@ export default async function MediaPage({
               <option value="published">Published</option>
               <option value="archived">Archived</option>
             </Select>
-            <Button type="submit" variant="subtle">
+            <Button type="submit" variant="neutral">
               Filter
             </Button>
           </form>

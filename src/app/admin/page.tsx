@@ -54,10 +54,10 @@ export default async function AdminDashboardPage() {
         subtitle={`Point-of-sale cockpit · signed in as ${ROLE_LABELS[session.profile.role]}.`}
         action={
           <div className="flex gap-2">
-            <Button href="/admin/getting-started" variant="subtle" size="sm">
+            <Button href="/admin/getting-started" variant="neutral" size="sm">
               Setup guide
             </Button>
-            <Button href="/" external variant="subtle" size="sm">
+            <Button href="/" external variant="neutral" size="sm">
               View live site ↗
             </Button>
           </div>
@@ -200,7 +200,7 @@ export default async function AdminDashboardPage() {
               title="Open orders"
               subtitle={`${snap.activeOrders} awaiting fulfillment`}
               action={
-                <Button href="/admin/orders" variant="subtle" size="sm">
+                <Button href="/admin/orders" variant="neutral" size="sm">
                   Manage
                 </Button>
               }
@@ -229,7 +229,7 @@ export default async function AdminDashboardPage() {
                   : "No registers configured"
               }
               action={
-                <Button href="/admin/registers" variant="subtle" size="sm">
+                <Button href="/admin/registers" variant="neutral" size="sm">
                   Open register
                 </Button>
               }

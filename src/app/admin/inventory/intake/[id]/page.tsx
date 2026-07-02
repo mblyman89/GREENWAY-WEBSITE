@@ -309,7 +309,7 @@ export default async function ManifestReviewPage({
                 Certificates of analysis ({coaLinks.length})
               </h2>
               <form action={archiveAction}>
-                <Button type="submit" variant="subtle" size="sm">
+                <Button type="submit" variant="neutral" size="sm">
                   📄 Archive COAs to records
                 </Button>
               </form>
@@ -477,12 +477,12 @@ export default async function ManifestReviewPage({
             <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-[var(--admin-border)] pt-4">
               <span className="text-xs text-[var(--admin-text-faint)]">Update arrival progress:</span>
               <form action={markInTransitAction}>
-                <Button type="submit" variant="subtle" size="sm">
+                <Button type="submit" variant="neutral" size="sm">
                   🚚 Mark in transit
                 </Button>
               </form>
               <form action={markReceivedAction}>
-                <Button type="submit" variant="subtle" size="sm">
+                <Button type="submit" variant="neutral" size="sm">
                   📦 Mark received
                 </Button>
               </form>
@@ -543,7 +543,7 @@ export default async function ManifestReviewPage({
                 <Field label="Details (optional / required for Other)">
                   <Input name="reason_text" placeholder="Explain if 'Other'…" />
                 </Field>
-                <Button type="submit" variant="subtle" size="sm">
+                <Button type="submit" variant="neutral" size="sm">
                   ✕ Reject whole manifest
                 </Button>
               </form>

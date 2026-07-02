@@ -203,7 +203,7 @@ export default async function SiteContentPage({
           </HelpPanel>
         }
         action={
-          <Button href="/admin/content/seo" variant="subtle">SEO editor →</Button>
+          <Button href="/admin/content/seo" variant="neutral">SEO editor →</Button>
         }
       />
 

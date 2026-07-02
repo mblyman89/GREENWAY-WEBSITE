@@ -95,7 +95,7 @@ export default async function NewPurchaseOrderPage({
         }
         action={
           <Link href="/admin/purchasing">
-            <Button variant="subtle" size="sm">Cancel</Button>
+            <Button variant="neutral" size="sm">Cancel</Button>
           </Link>
         }
       />
@@ -137,7 +137,7 @@ export default async function NewPurchaseOrderPage({
               placeholder="e.g. Reorder all flower from Acme except pre-rolls, cover 3 weeks"
               className="flex-1 rounded-[var(--admin-radius)] border border-stone-300 px-3 py-2 text-sm"
             />
-            <Button type="submit" variant="subtle" size="sm">Draft plan with AI</Button>
+            <Button type="submit" variant="neutral" size="sm">Draft plan with AI</Button>
           </form>
         </Card>
 
@@ -164,9 +164,9 @@ export default async function NewPurchaseOrderPage({
               <Input name="excBrand" defaultValue={csv(sp, "excBrand").join(", ")} />
             </Field>
             <div className="sm:col-span-2 flex gap-2">
-              <Button type="submit" variant="subtle" size="sm">Apply filters</Button>
+              <Button type="submit" variant="neutral" size="sm">Apply filters</Button>
               <Link href="/admin/purchasing/new">
-                <Button type="button" variant="subtle" size="sm">Reset</Button>
+                <Button type="button" variant="neutral" size="sm">Reset</Button>
               </Link>
             </div>
           </form>

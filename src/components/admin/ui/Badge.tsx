@@ -15,13 +15,13 @@ export type BadgeTone =
   | "outline";
 
 const TONES: Record<BadgeTone, string> = {
-  neutral: "bg-white/10 text-[var(--admin-text-muted)]",
+  neutral: "bg-[var(--admin-surface-2)] text-[var(--admin-text-muted)]",
   green: "bg-[var(--admin-accent-soft)] text-[var(--admin-accent)]",
   gold: "bg-[var(--admin-gold-soft)] text-[var(--admin-gold)]",
   orange: "bg-[var(--admin-orange-soft)] text-[var(--admin-orange)]",
   danger: "bg-[var(--admin-danger-soft)] text-[var(--admin-danger)]",
-  outline:
-    "border border-[var(--admin-border-strong)] text-[var(--admin-text-muted)]",
+  // Kept for API compatibility; now a solid dark chip (no transparent border).
+  outline: "bg-[var(--admin-surface-2)] text-[var(--admin-text-muted)]",
 };
 
 export function Badge({

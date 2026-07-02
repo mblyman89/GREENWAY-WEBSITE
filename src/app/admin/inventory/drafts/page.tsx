@@ -200,7 +200,7 @@ export default async function CatalogDraftsPage({
                                 <Button type="submit" variant="save" size="sm">✓ Approve</Button>
                               </form>
                               <form action={dismiss}>
-                                <Button type="submit" variant="subtle" size="sm">Dismiss</Button>
+                                <Button type="submit" variant="neutral" size="sm">Dismiss</Button>
                               </form>
                             </>
                           )}
@@ -212,7 +212,7 @@ export default async function CatalogDraftsPage({
                                 </span>
                               )}
                               <form action={restore}>
-                                <Button type="submit" variant="subtle" size="sm">↩ Restore</Button>
+                                <Button type="submit" variant="neutral" size="sm">↩ Restore</Button>
                               </form>
                             </>
                           )}

@@ -248,7 +248,7 @@ export default async function EquipmentDetailPage({
               </Field>
             </div>
             <div className="flex justify-end">
-              <Button type="submit" variant="subtle" size="sm">
+              <Button type="submit" variant="neutral" size="sm">
                 ＋ Log event
               </Button>
             </div>

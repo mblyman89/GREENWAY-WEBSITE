@@ -53,7 +53,7 @@ export function CustomerForm({
         <Button type="submit" variant="save">
           {submitLabel}
         </Button>
-        <Button href="/admin/customers" variant="subtle">
+        <Button href="/admin/customers" variant="neutral">
           Cancel
         </Button>
       </div>

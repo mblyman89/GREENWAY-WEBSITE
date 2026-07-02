@@ -74,7 +74,7 @@ export default async function RegistersPage({
             <p>All amounts are in dollars; we track to the penny by denomination. The closing employee never sees the expected total — that keeps counts honest.</p>
           </HelpPanel>
         }
-        action={canManage ? <Link href={`${BASE}/history`}><Button variant="subtle">History</Button></Link> : undefined}
+        action={canManage ? <Link href={`${BASE}/history`}><Button variant="neutral">History</Button></Link> : undefined}
       />
 
       <div className="space-y-6 px-5 py-6 sm:px-8">
@@ -129,7 +129,7 @@ export default async function RegistersPage({
                         <option value="other">Other</option>
                       </Select>
                       <EmployeePicker employees={employees} name="dropped_by" compact />
-                      <Button type="submit" variant="subtle">Drop</Button>
+                      <Button type="submit" variant="neutral">Drop</Button>
                     </form>
                   </details>
 
@@ -216,7 +216,7 @@ async function ManagerActions({
                 <input type="hidden" name="session_id" value={s.id} />
                 <div className="w-32"><Input name="cash_sales" placeholder="$ cash sales" inputMode="decimal" /></div>
                 <EmployeePicker employees={employees} name="reconciled_by" compact />
-                <Button type="submit" variant="subtle">Reconcile</Button>
+                <Button type="submit" variant="neutral">Reconcile</Button>
               </form>
               {/* Verify (manager till) */}
               <details className="rounded-lg border border-[var(--admin-border)] p-2">
@@ -229,7 +229,7 @@ async function ManagerActions({
                     <input type="checkbox" name="agrees" defaultChecked className="h-4 w-4" />
                     Counts agree
                   </label>
-                  <Button type="submit" variant="subtle">Verify &amp; validate</Button>
+                  <Button type="submit" variant="neutral">Verify &amp; validate</Button>
                 </form>
               </details>
             </div>

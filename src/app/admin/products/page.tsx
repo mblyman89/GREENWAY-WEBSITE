@@ -210,7 +210,7 @@ export default async function ProductsPage({
             <option value="image">Missing image</option>
             <option value="brand">Missing brand link</option>
           </Select>
-          <Button type="submit" variant="subtle">
+          <Button type="submit" variant="neutral">
             Filter
           </Button>
           {view && <input type="hidden" name="view" value={view} />}

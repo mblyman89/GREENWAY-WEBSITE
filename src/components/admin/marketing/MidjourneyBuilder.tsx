@@ -165,7 +165,7 @@ export function MidjourneyBuilder({
             <Field label="Your idea (for AI assist)" help={aiConfigured ? "A sentence is enough — AI will draft the brief fields." : "AI is not configured; fill the fields below manually."}>
               <div className="flex gap-2">
                 <Input value={idea} onChange={(e) => setIdea(e.target.value)} placeholder="e.g. a cozy autumn menu banner for our new pre-rolls" disabled={!aiConfigured} />
-                <Button variant="subtle" onClick={assist} disabled={!aiConfigured || pending}>
+                <Button variant="neutral" onClick={assist} disabled={!aiConfigured || pending}>
                   {pending ? "Thinking…" : "AI assist"}
                 </Button>
               </div>

@@ -5,17 +5,19 @@
  *
  * Shows saved marketing strategy drafts and lets the owner triage them
  * (change status, delete). Drafts-only notebook. Server actions do the writes.
+ *
+ * THEME: dark admin tokens only (no light slate/white surfaces).
  */
 import { useState, useTransition } from "react";
 import { updateIdeaAction, deleteIdeaAction } from "@/app/admin/marketing/actions";
-import { Badge, Button, type BadgeTone } from "@/components/admin/ui";
+import { Badge, Button, Select, type BadgeTone } from "@/components/admin/ui";
 import type { MarketingIdea, MarketingIdeaStatus } from "@/lib/marketing/ideas-store";
 
 const STATUS_OPTIONS: { value: MarketingIdeaStatus; label: string; tone: BadgeTone }[] = [
   { value: "idea", label: "Idea", tone: "gold" },
   { value: "planned", label: "Planned", tone: "green" },
   { value: "done", label: "Done", tone: "neutral" },
-  { value: "archived", label: "Archived", tone: "outline" },
+  { value: "archived", label: "Archived", tone: "neutral" },
 ];
 
 function toneFor(status: string): BadgeTone {
@@ -25,7 +27,7 @@ function toneFor(status: string): BadgeTone {
 export function IdeaNotebook({ ideas }: { ideas: MarketingIdea[] }) {
   if (ideas.length === 0) {
     return (
-      <p className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-500">
+      <p className="rounded-[var(--admin-radius-lg)] border border-dashed border-[var(--admin-border-strong)] bg-[var(--admin-surface)] p-5 text-sm text-[var(--admin-text-muted)]">
         No saved ideas yet. Draft a strategy above and click “Save to idea notebook” to keep it here.
       </p>
     );
@@ -64,7 +66,7 @@ function IdeaRow({ idea }: { idea: MarketingIdea }) {
   }
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
+    <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <button
           type="button"
@@ -72,15 +74,15 @@ function IdeaRow({ idea }: { idea: MarketingIdea }) {
           className="flex items-center gap-2 text-left"
         >
           <span aria-hidden>{open ? "▾" : "▸"}</span>
-          <span className="font-medium text-slate-900">{idea.title || idea.goal || "Untitled idea"}</span>
+          <span className="font-medium text-[var(--admin-text)]">{idea.title || idea.goal || "Untitled idea"}</span>
           <Badge tone={toneFor(status)}>{status}</Badge>
         </button>
         <div className="flex items-center gap-2">
-          <select
+          <Select
             value={status}
             disabled={pending}
             onChange={(e) => changeStatus(e.target.value as MarketingIdeaStatus)}
-            className="rounded-lg border border-slate-300 px-2 py-1 text-xs"
+            className="w-auto py-1 text-xs"
             aria-label="Change status"
           >
             {STATUS_OPTIONS.map((s) => (
@@ -88,18 +90,18 @@ function IdeaRow({ idea }: { idea: MarketingIdea }) {
                 {s.label}
               </option>
             ))}
-          </select>
-          <Button type="button" variant="ghost" size="sm" onClick={remove} disabled={pending}>
+          </Select>
+          <Button type="button" variant="danger" size="sm" onClick={remove} disabled={pending}>
             Delete
           </Button>
         </div>
       </div>
       {idea.channel && idea.channel !== "general" ? (
-        <p className="mt-1 text-xs text-slate-500">Channel: {idea.channel}</p>
+        <p className="mt-1 text-xs text-[var(--admin-text-muted)]">Channel: {idea.channel}</p>
       ) : null}
       {open ? (
-        <div className="mt-3 whitespace-pre-wrap border-t border-slate-100 pt-3 text-sm text-slate-700">
-          {idea.body || <span className="text-slate-400">(empty)</span>}
+        <div className="mt-3 whitespace-pre-wrap border-t border-[var(--admin-border)] pt-3 text-sm text-[var(--admin-text-muted)]">
+          {idea.body || <span className="text-[var(--admin-text-faint)]">(empty)</span>}
         </div>
       ) : null}
     </div>

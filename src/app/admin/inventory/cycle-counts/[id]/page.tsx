@@ -76,7 +76,7 @@ export default async function CycleCountDetailPage({
                 </Button>
               </form>
               <form action={cancelCycleCountAction.bind(null, id)}>
-                <Button type="submit" variant="subtle">
+                <Button type="submit" variant="neutral">
                   Cancel
                 </Button>
               </form>
@@ -161,7 +161,7 @@ export default async function CycleCountDetailPage({
                         className="w-24 text-right"
                         placeholder={line.counted_qty != null ? undefined : "qty"}
                       />
-                      <Button type="submit" variant="subtle">
+                      <Button type="submit" variant="neutral">
                         {line.counted_qty != null ? "Update" : "Save"}
                       </Button>
                     </form>

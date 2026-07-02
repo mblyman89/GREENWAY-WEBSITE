@@ -79,13 +79,13 @@ export default async function StaffingPage({
           canManage ? (
             <div className="flex flex-wrap gap-2">
               <Link href={`${BASE}/schedule`}>
-                <Button variant="subtle">Schedule builder</Button>
+                <Button variant="neutral">Schedule builder</Button>
               </Link>
               <Link href={`${BASE}/hours`}>
-                <Button variant="subtle">Adjust hours</Button>
+                <Button variant="neutral">Adjust hours</Button>
               </Link>
               <Link href={`${BASE}/employees`}>
-                <Button variant="subtle">Manage employees</Button>
+                <Button variant="neutral">Manage employees</Button>
               </Link>
             </div>
           ) : undefined
