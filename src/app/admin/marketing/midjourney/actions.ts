@@ -6,7 +6,7 @@ import { suggestBrief, isAiConfigured, type BriefSuggestion } from "@/lib/market
 import { getStoreProfile } from "@/lib/admin/store-profile-store";
 import { listVendors } from "@/lib/vendors/store";
 import { generateFluxImage } from "@/lib/marketing/flux-client";
-import { publicUrlForKey } from "@/lib/media/store";
+import { publicUrlForKey, uploadMedia } from "@/lib/media/store";
 import type { CreativeBrief } from "@/lib/marketing/midjourney-core";
 
 export type BriefAssistResult =
@@ -127,4 +127,80 @@ export async function generateFluxAction(input: {
     endpoint: res.endpoint,
     warnings: res.warnings,
   };
+}
+
+/**
+ * Upload a single reference image DIRECTLY from the prompt builder so the
+ * employee can bring their own FLUX.2 reference without first visiting the
+ * Media page. Reuses the SAME verified media pipeline (uploadMedia -> public
+ * `media` bucket) the Media page uses, so the file persists, gets a stable
+ * public URL FLUX can fetch, and is reusable later. Saved as a DRAFT tagged
+ * "flux-reference" (AI-adjacent asset the staffer can publish/curate later).
+ *
+ * Only raster images are accepted here: FLUX.2 references must be fetchable
+ * pictures (PNG / JPEG / WEBP / GIF) — SVG/PDF are not valid image references.
+ */
+const FLUX_REF_MAX_BYTES = 10 * 1024 * 1024; // match media library ceiling
+const FLUX_REF_ALLOWED_MIME = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "image/gif",
+]);
+
+export type FluxReferenceUploadResult =
+  | { ok: true; reference: { id: string; url: string; label: string } }
+  | { ok: false; error: string };
+
+export async function uploadFluxReferenceAction(
+  formData: FormData,
+): Promise<FluxReferenceUploadResult> {
+  const session = await requirePermission("content.edit");
+
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) {
+    return { ok: false, error: "Choose an image to upload." };
+  }
+  if (!FLUX_REF_ALLOWED_MIME.has(file.type)) {
+    return {
+      ok: false,
+      error: `Unsupported type: ${file.type || file.name}. Use PNG, JPG, WEBP, or GIF.`,
+    };
+  }
+  if (file.size > FLUX_REF_MAX_BYTES) {
+    return { ok: false, error: `${file.name} exceeds 10 MB.` };
+  }
+
+  try {
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const asset = await uploadMedia({
+      buffer,
+      filename: file.name,
+      mimeType: file.type,
+      usageType: "marketing",
+      tags: ["marketing", "flux-reference"],
+      uploadedBy: session.userId,
+      status: "draft",
+    });
+
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "media.uploaded",
+      entityType: "media_asset",
+      entityId: asset.id,
+      after: { via: "flux_reference_upload" },
+    });
+
+    const url = asset.public_url ?? publicUrlForKey(asset.storage_key) ?? "";
+    if (!url) {
+      return { ok: false, error: "Uploaded, but no public URL is available. Check storage configuration." };
+    }
+    return {
+      ok: true,
+      reference: { id: asset.id, url, label: asset.title || asset.filename },
+    };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Upload failed." };
+  }
 }

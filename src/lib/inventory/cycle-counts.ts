@@ -129,6 +129,104 @@ export async function getCycleCountScanLines(countId: string): Promise<CycleCoun
 }
 
 /**
+ * Rich, enriched lines for the "scan to Excel" round trip (Beautification B5).
+ * Joins each line's lot to its identity + classification and resolves vendor /
+ * brand display names so the export sheet and the filter/sort UI have every
+ * field the owner asked to slice on. Shaped to the PURE core's SheetLine.
+ */
+export type CycleCountSheetLine = {
+  lineId: string;
+  lotId: string;
+  lotCode: string | null;
+  posProductKey: string | null;
+  productName: string | null;
+  strainName: string | null;
+  category: string | null;
+  inventoryType: string | null;
+  vendorName: string | null;
+  brandName: string | null;
+  unit: string | null;
+  systemQty: number;
+  countedQty: number | null;
+  isSample: boolean;
+  isMedical: boolean;
+};
+
+export async function getCycleCountSheetLines(countId: string): Promise<CycleCountSheetLine[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  const admin = createSupabaseAdminClient();
+  const { data } = await admin
+    .from("cycle_count_lines")
+    .select(
+      "id, lot_id, system_qty, counted_qty, lot:inventory_lots(lot_code, pos_product_key, product_name, strain_name, category, inventory_type, unit, is_sample, is_medical, vendor_id, brand_id)",
+    )
+    .eq("count_id", countId)
+    .order("created_at", { ascending: true });
+
+  type LotRel = {
+    lot_code: string | null;
+    pos_product_key: string | null;
+    product_name: string | null;
+    strain_name: string | null;
+    category: string | null;
+    inventory_type: string | null;
+    unit: string | null;
+    is_sample: boolean | null;
+    is_medical: boolean | null;
+    vendor_id: string | null;
+    brand_id: string | null;
+  };
+  const rows =
+    (data as unknown as {
+      id: string;
+      lot_id: string;
+      system_qty: number;
+      counted_qty: number | null;
+      lot: unknown;
+    }[] | null) ?? [];
+
+  const lotOf = (r: (typeof rows)[number]): LotRel | null => {
+    const rel = r.lot;
+    return (Array.isArray(rel) ? rel[0] : rel) as LotRel | null;
+  };
+
+  // Resolve vendor + brand display names in one round trip each.
+  const vendorIds = [...new Set(rows.map((r) => lotOf(r)?.vendor_id).filter(Boolean))] as string[];
+  const brandIds = [...new Set(rows.map((r) => lotOf(r)?.brand_id).filter(Boolean))] as string[];
+  const vendorMap = new Map<string, string>();
+  const brandMap = new Map<string, string>();
+  if (vendorIds.length > 0) {
+    const { data: v } = await admin.from("vendors").select("id, display_name").in("id", vendorIds);
+    for (const row of (v as { id: string; display_name: string }[] | null) ?? []) vendorMap.set(row.id, row.display_name);
+  }
+  if (brandIds.length > 0) {
+    const { data: b } = await admin.from("brands").select("id, display_name").in("id", brandIds);
+    for (const row of (b as { id: string; display_name: string }[] | null) ?? []) brandMap.set(row.id, row.display_name);
+  }
+
+  return rows.map((r) => {
+    const lot = lotOf(r);
+    return {
+      lineId: r.id,
+      lotId: r.lot_id,
+      lotCode: lot?.lot_code ?? null,
+      posProductKey: lot?.pos_product_key ?? null,
+      productName: lot?.product_name ?? null,
+      strainName: lot?.strain_name ?? null,
+      category: lot?.category ?? null,
+      inventoryType: lot?.inventory_type ?? null,
+      vendorName: lot?.vendor_id ? vendorMap.get(lot.vendor_id) ?? null : null,
+      brandName: lot?.brand_id ? brandMap.get(lot.brand_id) ?? null : null,
+      unit: lot?.unit ?? null,
+      systemQty: Number(r.system_qty) || 0,
+      countedQty: r.counted_qty == null ? null : Number(r.counted_qty),
+      isSample: Boolean(lot?.is_sample),
+      isMedical: Boolean(lot?.is_medical),
+    };
+  });
+}
+
+/**
  * Add scanned units to a line's counted quantity. Each scan of a unit bumps the
  * running physical count by `by` (default 1). Session must still be open and the
  * line not yet applied (hardening). Recomputes variance + caches the session's

@@ -1,16 +1,21 @@
 "use client";
 
 /**
- * MidjourneyBuilder — Slice 72 [items 7 + 17]
+ * MidjourneyBuilder — Slice 72 [items 7 + 17] + Beautification B4
  *
  * Guided Midjourney prompt builder for the marketing team. Structured brief
  * fields + parameter controls + optional reference image (from the media
- * library) assemble — live — into a syntactically-correct Midjourney prompt
- * string (via the PURE core). An optional AI assist expands a short idea into
- * draft brief fields, grounded in the store's real brand context. We do NOT
- * call Midjourney; this produces a prompt to paste there.
+ * library OR uploaded inline) assemble — live — into a syntactically-correct
+ * Midjourney prompt string (via the PURE core). An optional AI assist expands a
+ * short idea into draft brief fields, grounded in the store's real brand
+ * context. We do NOT call Midjourney; this produces a prompt to paste there.
+ *
+ * FLUX 2: the same brief generates an image via the baked-in API and saves it
+ * to the media library as a draft. Up to 8 reference images can be selected
+ * from published media OR uploaded directly here (each upload is stored via the
+ * same verified media pipeline and becomes reusable).
  */
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { Button, Field, Input, Select, Badge } from "@/components/admin/ui";
 import { useToast } from "@/components/admin/ux";
@@ -23,7 +28,11 @@ import {
   type CreativeBrief,
   type AspectRatio,
 } from "@/lib/marketing/midjourney-core";
-import { assistBriefAction, generateFluxAction } from "@/app/admin/marketing/midjourney/actions";
+import {
+  assistBriefAction,
+  generateFluxAction,
+  uploadFluxReferenceAction,
+} from "@/app/admin/marketing/midjourney/actions";
 
 export type ReferenceImage = { id: string; url: string; label: string };
 
@@ -65,17 +74,75 @@ export function MidjourneyBuilder({
   const [fluxFormat, setFluxFormat] = useState<"png" | "jpeg">("png");
   const [fluxAsset, setFluxAsset] = useState<FluxAsset | null>(null);
   const [fluxWarnings, setFluxWarnings] = useState<string[]>([]);
-  // FLUX.2 multi-reference: up to 8 images from the media library (verified API limit).
+  // FLUX.2 multi-reference: up to 8 images (verified API limit). Selected URLs.
   const [fluxRefs, setFluxRefs] = useState<string[]>([]);
+  // Images uploaded directly here (merged with the published-media grid).
+  const [uploadedRefs, setUploadedRefs] = useState<ReferenceImage[]>([]);
+  const [uploadPending, setUploadPending] = useState(false);
+  const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const [promptUpsampling, setPromptUpsampling] = useState(false);
 
   const MAX_FLUX_REFS = 8;
+
+  // All references the FLUX grid shows: published media + inline uploads
+  // (uploads first so the freshly-added image is easy to find).
+  const allRefs = useMemo<ReferenceImage[]>(() => {
+    const seen = new Set<string>();
+    const out: ReferenceImage[] = [];
+    for (const r of [...uploadedRefs, ...references]) {
+      if (seen.has(r.url)) continue;
+      seen.add(r.url);
+      out.push(r);
+    }
+    return out;
+  }, [uploadedRefs, references]);
+
   function toggleFluxRef(url: string) {
     setFluxRefs((prev) => {
       if (prev.includes(url)) return prev.filter((u) => u !== url);
       if (prev.length >= MAX_FLUX_REFS) return prev; // cap at 8
       return [...prev, url];
     });
+  }
+
+  async function handleUploadFiles(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    // Respect the 8-reference cap: only accept as many new files as free slots.
+    const freeSlots = MAX_FLUX_REFS - fluxRefs.length;
+    if (freeSlots <= 0) {
+      toast({ tone: "error", message: `You already have ${MAX_FLUX_REFS} references selected. Remove one first.` });
+      return;
+    }
+    const chosen = Array.from(files).slice(0, freeSlots);
+    if (files.length > chosen.length) {
+      toast({ tone: "info", message: `Only ${chosen.length} image(s) uploaded — max ${MAX_FLUX_REFS} references.` });
+    }
+
+    setUploadPending(true);
+    try {
+      for (const file of chosen) {
+        const fd = new FormData();
+        fd.set("file", file);
+        const res = await uploadFluxReferenceAction(fd);
+        if (res.ok) {
+          setUploadedRefs((prev) =>
+            prev.some((r) => r.url === res.reference.url) ? prev : [res.reference, ...prev],
+          );
+          // Auto-select the freshly uploaded reference (still honouring the cap).
+          setFluxRefs((prev) =>
+            prev.includes(res.reference.url) || prev.length >= MAX_FLUX_REFS
+              ? prev
+              : [...prev, res.reference.url],
+          );
+        } else {
+          toast({ tone: "error", message: res.error });
+        }
+      }
+      toast({ tone: "success", message: "Reference image uploaded and saved to your media library (draft)." });
+    } finally {
+      setUploadPending(false);
+      if (uploadInputRef.current) uploadInputRef.current.value = "";
+    }
   }
 
   function generateFlux() {
@@ -159,7 +226,7 @@ export function MidjourneyBuilder({
               ))}
             </Select>
           </Field>
-          {presetId && <p className="mt-2 text-xs text-white/40">{presetById(presetId)?.description}</p>}
+          {presetId && <p className="mt-2 text-xs text-[var(--admin-text-muted)]">{presetById(presetId)?.description}</p>}
 
           <div className="mt-4">
             <Field label="Your idea (for AI assist)" help={aiConfigured ? "A sentence is enough — AI will draft the brief fields." : "AI is not configured; fill the fields below manually."}>
@@ -172,8 +239,8 @@ export function MidjourneyBuilder({
             </Field>
           </div>
           {rationale && (
-            <p className="mt-3 rounded-lg border border-[#7ed957]/25 bg-[#7ed957]/5 px-3 py-2 text-xs text-white/70">
-              <strong className="text-[#7ed957]">Why:</strong> {rationale}
+            <p className="mt-3 rounded-lg border border-[var(--admin-accent)]/25 bg-[var(--admin-accent)]/10 px-3 py-2 text-xs text-[var(--admin-text)]">
+              <strong className="text-[var(--admin-accent)]">Why:</strong> {rationale}
             </p>
           )}
         </div>
@@ -205,7 +272,7 @@ export function MidjourneyBuilder({
 
         {/* Parameters */}
         <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
-          <h4 className="mb-3 text-xs font-semibold uppercase tracking-wide text-white/50">Parameters</h4>
+          <h4 className="mb-3 text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-muted)]">Parameters</h4>
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Aspect ratio">
               <Select value={brief.aspectRatio} onChange={(e) => set("aspectRatio", e.target.value as AspectRatio)}>
@@ -230,33 +297,33 @@ export function MidjourneyBuilder({
               </Select>
             </Field>
             <Field label={`Stylize (${brief.stylize ?? 0})`} help="0 literal · 1000 stylized">
-              <input type="range" min={0} max={1000} step={10} value={brief.stylize ?? 0} onChange={(e) => set("stylize", Number(e.target.value))} className="w-full" />
+              <input type="range" min={0} max={1000} step={10} value={brief.stylize ?? 0} onChange={(e) => set("stylize", Number(e.target.value))} className="w-full accent-[var(--admin-accent)]" />
             </Field>
             <Field label={`Chaos (${brief.chaos ?? 0})`} help="variety across results">
-              <input type="range" min={0} max={100} step={5} value={brief.chaos ?? 0} onChange={(e) => set("chaos", Number(e.target.value))} className="w-full" />
+              <input type="range" min={0} max={100} step={5} value={brief.chaos ?? 0} onChange={(e) => set("chaos", Number(e.target.value))} className="w-full accent-[var(--admin-accent)]" />
             </Field>
           </div>
           <div className="mt-3 flex flex-wrap gap-6">
-            <label className="flex items-center gap-2 text-sm text-white/70">
-              <input type="checkbox" checked={Boolean(brief.raw)} onChange={(e) => set("raw", e.target.checked)} /> Raw mode
+            <label className="flex items-center gap-2 text-sm text-[var(--admin-text)]">
+              <input type="checkbox" checked={Boolean(brief.raw)} onChange={(e) => set("raw", e.target.checked)} className="accent-[var(--admin-accent)]" /> Raw mode
             </label>
-            <label className="flex items-center gap-2 text-sm text-white/70">
-              <input type="checkbox" checked={Boolean(brief.tile)} onChange={(e) => set("tile", e.target.checked)} /> Seamless tile
+            <label className="flex items-center gap-2 text-sm text-[var(--admin-text)]">
+              <input type="checkbox" checked={Boolean(brief.tile)} onChange={(e) => set("tile", e.target.checked)} className="accent-[var(--admin-accent)]" /> Seamless tile
             </label>
           </div>
         </div>
 
-        {/* Reference image */}
+        {/* Reference image (Midjourney --sref) */}
         <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
-          <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-white/50">Style reference (optional)</h4>
-          <p className="mb-3 text-xs text-white/40">Pick an image from your media library to emit a <code>--sref</code> tag. Its public URL is used as the style reference.</p>
-          {references.length === 0 ? (
-            <p className="text-xs text-white/40">No published media yet. Upload images on the Media page to use them as references.</p>
+          <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-muted)]">Style reference (optional)</h4>
+          <p className="mb-3 text-xs text-[var(--admin-text-muted)]">Pick an image from your media library to emit a <code>--sref</code> tag. Its public URL is used as the style reference.</p>
+          {allRefs.length === 0 ? (
+            <p className="text-xs text-[var(--admin-text-muted)]">No images yet. Upload one in the FLUX section, or add published media on the Media page.</p>
           ) : (
             <Field label="Reference image (→ --sref)">
               <Select value={brief.srefUrl ?? ""} onChange={(e) => set("srefUrl", e.target.value)}>
                 <option value="">— None —</option>
-                {references.map((r) => (
+                {allRefs.map((r) => (
                   <option key={r.id} value={r.url}>
                     {r.label}
                   </option>
@@ -266,7 +333,7 @@ export function MidjourneyBuilder({
           )}
           {brief.srefUrl && (
             <Field label={`Style weight (${brief.styleWeight ?? 100})`} className="mt-3">
-              <input type="range" min={0} max={1000} step={10} value={brief.styleWeight ?? 100} onChange={(e) => set("styleWeight", Number(e.target.value))} className="w-full" />
+              <input type="range" min={0} max={1000} step={10} value={brief.styleWeight ?? 100} onChange={(e) => set("styleWeight", Number(e.target.value))} className="w-full accent-[var(--admin-accent)]" />
             </Field>
           )}
         </div>
@@ -274,14 +341,14 @@ export function MidjourneyBuilder({
 
       {/* Right: output */}
       <div className="space-y-4 lg:sticky lg:top-4 lg:self-start">
-        <div className="rounded-[var(--admin-radius-lg)] border border-[#7ed957]/30 bg-[#7ed957]/5 p-5">
+        <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-accent)]/30 bg-[var(--admin-accent)]/10 p-5">
           <div className="mb-2 flex items-center justify-between">
-            <h4 className="text-sm font-semibold text-white">Your Midjourney prompt</h4>
+            <h4 className="text-sm font-semibold text-[var(--admin-text)]">Your Midjourney prompt</h4>
             <Button size="sm" onClick={copyPrompt} disabled={!assembled.prompt}>
               Copy
             </Button>
           </div>
-          <pre className="whitespace-pre-wrap break-words rounded-lg border border-[var(--admin-border)] bg-[var(--admin-bg)] p-3 text-sm text-white/90">
+          <pre className="whitespace-pre-wrap break-words rounded-lg border border-[var(--admin-border)] bg-[var(--admin-canvas)] p-3 text-sm text-[var(--admin-text)]">
             {assembled.prompt || "Fill in a subject to build your prompt…"}
           </pre>
           {assembled.warnings.length > 0 && (
@@ -294,12 +361,12 @@ export function MidjourneyBuilder({
         </div>
 
         {/* FLUX 2 — baked-in API pipeline (same brief, saved to media library) */}
-        <div className="rounded-[var(--admin-radius-lg)] border border-[#9b6bff]/35 bg-[#9b6bff]/5 p-5">
+        <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
           <div className="mb-2 flex items-center justify-between">
-            <h4 className="text-sm font-semibold text-white">Generate with FLUX 2</h4>
+            <h4 className="text-sm font-semibold text-[var(--admin-text)]">Generate with FLUX 2</h4>
             <Badge tone={fluxConfigured ? "green" : "neutral"}>{fluxConfigured ? "Connected" : "Not configured"}</Badge>
           </div>
-          <p className="mb-3 text-xs leading-relaxed text-white/50">
+          <p className="mb-3 text-xs leading-relaxed text-[var(--admin-text-muted)]">
             Uses the same brief above. FLUX takes a natural-language prompt plus the aspect ratio (no <code>--</code> flags), then saves the
             result straight into your media library as a <strong>draft</strong> to review before publishing.
           </p>
@@ -307,20 +374,44 @@ export function MidjourneyBuilder({
           {/* Reference images — FLUX.2 multi-reference (up to 8, verified API limit) */}
           <div className="mb-3">
             <div className="mb-1 flex items-center justify-between">
-              <h5 className="text-xs font-semibold uppercase tracking-wide text-white/50">
+              <h5 className="text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-muted)]">
                 Reference images (optional · up to {MAX_FLUX_REFS})
               </h5>
-              <span className="text-xs text-white/40">{fluxRefs.length}/{MAX_FLUX_REFS} selected</span>
+              <span className="text-xs text-[var(--admin-text-muted)]">{fluxRefs.length}/{MAX_FLUX_REFS} selected</span>
             </div>
-            <p className="mb-2 text-xs text-white/40">
+            <p className="mb-2 text-xs text-[var(--admin-text-muted)]">
               FLUX.2 can blend up to {MAX_FLUX_REFS} references — combine product shots, styles, or brand
-              assets. Click to select from your published media.
+              assets. Upload your own below or click to select from your media.
             </p>
-            {references.length === 0 ? (
-              <p className="text-xs text-white/40">No published media yet. Upload images on the Media page to use them as references.</p>
+
+            {/* Inline upload — bring your own reference images (B4) */}
+            <div className="mb-3">
+              <input
+                ref={uploadInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                multiple
+                className="hidden"
+                onChange={(e) => handleUploadFiles(e.target.files)}
+              />
+              <Button
+                variant="save"
+                size="sm"
+                onClick={() => uploadInputRef.current?.click()}
+                disabled={uploadPending || fluxRefs.length >= MAX_FLUX_REFS}
+              >
+                {uploadPending ? "Uploading…" : "Upload reference image(s)"}
+              </Button>
+              <p className="mt-1 text-xs text-[var(--admin-text-muted)]">
+                PNG, JPG, WEBP, or GIF · up to 10 MB each. Uploads are saved to your media library (draft) and selected automatically.
+              </p>
+            </div>
+
+            {allRefs.length === 0 ? (
+              <p className="text-xs text-[var(--admin-text-muted)]">No images yet. Upload one above, or publish media on the Media page.</p>
             ) : (
               <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
-                {references.map((r) => {
+                {allRefs.map((r) => {
                   const selected = fluxRefs.includes(r.url);
                   const idx = fluxRefs.indexOf(r.url);
                   const atCap = !selected && fluxRefs.length >= MAX_FLUX_REFS;
@@ -333,16 +424,16 @@ export function MidjourneyBuilder({
                       title={r.label}
                       className={`relative aspect-square overflow-hidden rounded-lg border transition ${
                         selected
-                          ? "border-[#9b6bff] ring-2 ring-[#9b6bff]/60"
+                          ? "border-[var(--admin-accent)] ring-2 ring-[var(--admin-accent)]/60"
                           : atCap
-                            ? "border-white/10 opacity-40"
-                            : "border-white/15 hover:border-white/40"
+                            ? "border-[var(--admin-border)] opacity-40"
+                            : "border-[var(--admin-border)] hover:border-[var(--admin-accent)]"
                       }`}
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={r.url} alt={r.label} className="h-full w-full object-cover" />
                       {selected ? (
-                        <span className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-[#9b6bff] text-[0.65rem] font-bold text-white">
+                        <span className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--admin-accent)] text-[0.65rem] font-bold text-black">
                           {idx + 1}
                         </span>
                       ) : null}
@@ -353,11 +444,12 @@ export function MidjourneyBuilder({
             )}
           </div>
 
-          <label className="mb-3 flex items-center gap-2 text-sm text-white/70">
+          <label className="mb-3 flex items-center gap-2 text-sm text-[var(--admin-text)]">
             <input
               type="checkbox"
               checked={promptUpsampling}
               onChange={(e) => setPromptUpsampling(e.target.checked)}
+              className="accent-[var(--admin-accent)]"
             />{" "}
             Let FLUX expand my prompt (prompt upsampling)
           </label>
@@ -379,7 +471,7 @@ export function MidjourneyBuilder({
           </div>
 
           {!fluxConfigured && (
-            <p className="mt-3 rounded-lg border border-[var(--admin-border)] bg-[var(--admin-bg)] px-3 py-2 text-xs text-white/50">
+            <p className="mt-3 rounded-lg border border-[var(--admin-border)] bg-[var(--admin-canvas)] px-3 py-2 text-xs text-[var(--admin-text-muted)]">
               Add your Black Forest Labs API key in <strong>Settings → Integrations</strong> to enable one-click generation.
             </p>
           )}
@@ -396,9 +488,9 @@ export function MidjourneyBuilder({
             <div className="mt-4 space-y-2">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={fluxAsset.url} alt={fluxAsset.title} className="w-full rounded-lg border border-[var(--admin-border)]" />
-              <div className="flex items-center justify-between gap-2 text-xs text-white/60">
+              <div className="flex items-center justify-between gap-2 text-xs text-[var(--admin-text-muted)]">
                 <span className="truncate">{fluxAsset.filename}</span>
-                <Link href="/admin/media" className="shrink-0 text-[#9b6bff] hover:underline">
+                <Link href="/admin/media" className="shrink-0 text-[var(--admin-accent)] hover:underline">
                   Open in Media →
                 </Link>
               </div>
@@ -407,16 +499,16 @@ export function MidjourneyBuilder({
         </div>
 
         <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
-          <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-white/50">Structure</h4>
-          <p className="text-xs leading-relaxed text-white/50">
+          <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-muted)]">Structure</h4>
+          <p className="text-xs leading-relaxed text-[var(--admin-text-muted)]">
             <Badge tone="outline">subject</Badge> , environment , composition , lighting , style , color/mood <Badge tone="neutral">--parameters</Badge>
           </p>
-          <p className="mt-3 text-xs text-white/40">
+          <p className="mt-3 text-xs text-[var(--admin-text-muted)]">
             Parameters always go at the end, one space before each <code>--</code>, with no punctuation inside them.
           </p>
         </div>
 
-        <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-orange)]/30 bg-[var(--admin-orange)]/5 p-4 text-xs text-white/70">
+        <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-orange)]/30 bg-[var(--admin-orange)]/5 p-4 text-xs text-[var(--admin-text)]">
           <strong className="text-[var(--admin-orange)]">Compliance:</strong> {COMPLIANCE_NOTE}
         </div>
       </div>

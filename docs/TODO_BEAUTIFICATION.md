@@ -63,8 +63,32 @@
       Verified.
 - [x] (bonus) Marketing StrategyAssistant + IdeaNotebook white cards → dark tokens. Delete
       button now red (danger). Verified.
-- [ ] B4. FLUX image prompt builder: add 8-image upload UI (verify against existing FLUX core).
-- [ ] B5. Cycle count: fix "start a new count" field alignment; add heavy filter/sort;
+- [x] B4. FLUX image prompt builder: add 8-image upload UI (verify against existing FLUX core).
+      DONE: new `uploadFluxReferenceAction` (reuses verified `uploadMedia()` -> public `media`
+      bucket; raster-only PNG/JPG/WEBP/GIF, 10MB cap, saved as draft tagged `flux-reference`).
+      MidjourneyBuilder gets an inline multi-file upload button; uploads merge into the reference
+      grid, auto-select into fluxRefs (8-cap honoured), and become reusable. Full theme sweep:
+      migrated all text-white/#7ed957/#9b6bff/white-* to admin tokens; fixed pre-existing
+      undefined `--admin-bg` -> `--admin-canvas`; selection accent now green (--admin-accent).
+      Verified: tsc --noEmit exit 0.
+- [x] B5. Cycle count: fix "start a new count" field alignment; add heavy filter/sort;
+      DONE:
+        • Fixed the "start a new count" mis-alignment (both fields now carry a help line +
+          items-start + button spacer -> inputs share the same baseline). Themed both
+          cycle-count pages to admin tokens (no white).
+        • New PURE core `cycle-count-sheet-core.ts` (filter / sort / export-rows / import-match)
+          with self-tests (all pass). Store gets `getCycleCountSheetLines` (enriched: category,
+          strain, vendor, brand, type, sample, medical, pos key).
+        • Rich filter/sort UI (`CycleCountSheetTools.tsx`): search + category + type + vendor +
+          brand + counted-status + samples + medical + 8 sort keys × asc/desc. Drives the page
+          query AND the export URL (export exactly what you see).
+        • Export route `[id]/export/route.ts` -> .xlsx or .csv via shared workbook helpers, with a
+          blank "Counted Qty" column + identity columns (Line ID / Lot Code / POS key).
+        • Import: `previewCountSheetAction` parses the uploaded sheet (XLSX) and returns a
+          NON-DESTRUCTIVE preview (matched/changed/unmatched/invalid + duplicate warning);
+          `applyCountSheetAction` writes only APPROVED changed rows via recordLineCount (blind-safe,
+          re-validated to the open session). Full validation/approval step as requested.
+      Verified: core self-tests pass; tsc --noEmit exit 0.
       export filtered list; scan-to-Excel import w/ validation+approval step.
 - [ ] B6. Vendor ACH guardrails: payment must marry an ACCEPTED invoice; over/under-pay guard.
 - [ ] B7. Blog page: GPT-4o trend/news assistant (cannabis + local demographic); center content.
