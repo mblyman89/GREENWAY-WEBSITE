@@ -124,7 +124,27 @@
         (vendor_manifest_payments) to track "already paid per manifest" so over/under math is real.
       GUARDRAILS: payment must select an ACCEPTED manifest; overpay (pay > owed - already-paid)
         = BLOCKED; underpay/partial (0 < pay < remaining) = WARNING but ALLOWED (owner decision #4).
-- [ ] B7. Blog page: GPT-4o trend/news assistant (cannabis + local demographic); center content.
+- [x] B7. Blog page: GPT-4o trend/news assistant (cannabis + local demographic); center content.
+      DONE (verified: tsc --noEmit exit 0; full next build 0 failures). Built:
+        • ai-blog-ideas.ts: generateBlogIdeas({kind: idea|headline|trend, count, topic}) — GPT-4o
+          via the shared budget-guarded provider (generateJSON, tolerant parse since it's an
+          array-of-objects the tiny schema lib can't express). LOCAL_MARKET_CONTEXT grounds it to
+          Kitsap County (Port Orchard, Bremerton, Silverdale, Poulsbo, Bainbridge, Gig Harbor) +
+          surrounding + greater Seattle/Puget Sound. Each idea = headline/angle/hook/category/
+          keywords, run through the I-502 COMPLIANCE_SYSTEM prompt + checkCompliance scan.
+          DRAFTS-ONLY (nothing saved/published).
+        • actions.ts: suggestBlogIdeasAction(kind, topic) client-callable, permission-gated,
+          audited; createPostAction now carries an ai_topic_seed to the editor via ?topic=.
+        • BlogIdeaAssistant.tsx (client): 3 mode tabs (ideas/headlines/trends), topic box, results
+          w/ "Use this idea" that fills the New Post form (title+category) and seeds the topic;
+          local-focus copy; admin-token themed + solid brand-color pill buttons + Badges.
+        • New Post page rewritten: assistant on top, form uses Field/Input/Select/Textarea/Button
+          primitives, CONTENT CENTERED (mx-auto max-w-3xl). Editor [id] page: CONTENT CENTERED
+          (mx-auto max-w-5xl), topic box pre-filled from ?topic=, ALL hardcoded hex/white swept to
+          admin tokens, inline server-action buttons -> solid pill (confirm/gold/danger/neutral).
+        • BlogEditorClient swept to admin tokens (fields, panels, labels, file inputs, save/reset/
+          alt buttons -> pills). Kept the Google SERP mock + the live public-article preview
+          AUTHENTIC (intentional external-surface mirrors; commented as such).
 
 ## OWNER DECISIONS (answered — binding)
 1. Match public site EXACTLY: rounded-full pill, UPPERCASE, bold, SOLID fill only. No white
