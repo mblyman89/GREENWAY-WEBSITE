@@ -23,7 +23,15 @@ export type GreenwayCategory =
   | "topical"
   | "trim";
 
-export type GreenwayStrainType = "indica" | "sativa" | "hybrid" | "cbd" | "unknown";
+export type GreenwayStrainType =
+  | "indica"
+  | "sativa"
+  | "hybrid"
+  // Leaning hybrids (website + back office only; collapse to CCRS "Hybrid").
+  | "indica-hybrid"
+  | "sativa-hybrid"
+  | "cbd"
+  | "unknown";
 
 export type GreenwayCannabinoid = {
   type: "thc" | "thca" | "cbd" | "cbda" | "cbg" | "cbn" | "cbdv";

@@ -25,7 +25,7 @@ export type SeedStrain = {
   slug: string;
   name: string;
   aliases?: string[];
-  strain_type: "indica" | "sativa" | "hybrid";
+  strain_type: "indica" | "sativa" | "hybrid" | "indica-hybrid" | "sativa-hybrid";
   lineage?: string;
   aroma_notes: string[];
   flavor_notes: string[];

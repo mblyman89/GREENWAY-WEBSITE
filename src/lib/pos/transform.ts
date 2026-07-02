@@ -26,7 +26,19 @@ type GreenwayCategory =
   | "edible-solid" | "concentrate" | "infused-preroll" | "infused-preroll-pack"
   | "preroll" | "edible-liquid" | "topical" | "trim";
 
-type GreenwayStrainType = "indica" | "sativa" | "hybrid" | "cbd" | "unknown";
+// Kept in sync with GreenwayStrainType in src/lib/leafly/types.ts. This module
+// is intentionally standalone (fs-free, runs in the CLI too), so the union is
+// duplicated rather than imported. "indica-hybrid"/"sativa-hybrid" are the
+// website/back-office leaning-hybrid designations (CCRS still collapses them to
+// Hybrid via its own normalizer — see ccrs-batch-core.ts, untouched).
+type GreenwayStrainType =
+  | "indica"
+  | "sativa"
+  | "hybrid"
+  | "indica-hybrid"
+  | "sativa-hybrid"
+  | "cbd"
+  | "unknown";
 type InventoryStatus = "mock" | "in-stock" | "low-stock" | "unavailable";
 type CannabinoidUnit = "%" | "mg";
 
@@ -171,8 +183,21 @@ const STRAIN_MAP: Record<string, GreenwayStrainType> = {
   "sativa": "sativa",
   "hybrid": "hybrid",
   "cbd": "cbd",
-  "indica dominant": "indica",
-  "sativa dominant": "sativa",
+  // Leaning-hybrid spellings the POS/data may present. "indica dominant" (and
+  // the explicit leaning/hybrid spellings) now map to the leaning-hybrid
+  // designation so customers can see which way a hybrid leans.
+  "indica dominant": "indica-hybrid",
+  "sativa dominant": "sativa-hybrid",
+  "indica dominant hybrid": "indica-hybrid",
+  "sativa dominant hybrid": "sativa-hybrid",
+  "indica leaning hybrid": "indica-hybrid",
+  "sativa leaning hybrid": "sativa-hybrid",
+  "indica-leaning hybrid": "indica-hybrid",
+  "sativa-leaning hybrid": "sativa-hybrid",
+  "indica hybrid": "indica-hybrid",
+  "sativa hybrid": "sativa-hybrid",
+  "indica-hybrid": "indica-hybrid",
+  "sativa-hybrid": "sativa-hybrid",
   "50/50 hybrid": "hybrid",
 };
 
@@ -371,12 +396,30 @@ function detectInfusedFlower(productName: string, currentCategory: GreenwayCateg
 
 function normalizeStrainType(value: string, category: GreenwayCategory): GreenwayStrainType {
   if (["topical", "paraphernalia"].includes(category)) return "unknown";
-  const mapped = STRAIN_MAP[comparableName(value)];
-  if (!mapped) {
-    addDiagnostic("warning", "unknown_strain_type", `Unknown strain type '${value}', defaulting to unknown.`, { value, category });
-    return "unknown";
+  const key = comparableName(value);
+  const mapped = STRAIN_MAP[key];
+  if (mapped) return mapped;
+
+  // Smart fallback for spellings not in the flat map (e.g. odd punctuation).
+  // Mirrors canonicalStrainType() in src/lib/menu/strain-taxonomy.ts but kept
+  // local so this transform stays standalone (fs-free, CLI-safe).
+  const s = key.replace(/[_/]+/g, " ").replace(/\s+/g, " ").trim();
+  if (s) {
+    const hasIndica = s.includes("indica");
+    const hasSativa = s.includes("sativa");
+    const hasHybrid = s.includes("hybrid") || s.includes("leaning") || s.includes("lean") || s.includes("dominant");
+    if (hasHybrid) {
+      if (hasIndica && !hasSativa) return "indica-hybrid";
+      if (hasSativa && !hasIndica) return "sativa-hybrid";
+      return "hybrid";
+    }
+    if (hasIndica && !hasSativa) return "indica";
+    if (hasSativa && !hasIndica) return "sativa";
+    if (s.includes("cbd")) return "cbd";
   }
-  return mapped;
+
+  addDiagnostic("warning", "unknown_strain_type", `Unknown strain type '${value}', defaulting to unknown.`, { value, category });
+  return "unknown";
 }
 
 function parsePackageSize(rawPackage: string, fallbackSize?: string, fallbackUnit?: string): ParsedPackage {

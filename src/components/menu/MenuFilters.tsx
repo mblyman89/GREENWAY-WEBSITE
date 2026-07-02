@@ -1,20 +1,17 @@
 import { menuCategories, mockMenuItems } from "@/lib/leafly/mock-menu";
 import { formatWebsiteCategory } from "@/lib/pos/category-taxonomy";
+import { strainTypeDefinitions } from "@/lib/menu/strain-taxonomy";
 
 function countFor(category: string) {
   return mockMenuItems.filter((item) => item.category === category).length;
 }
 
 export function MenuFilters() {
-  const strainTypes = [
-    "hybrid",
-    "indica leaning hybrid",
-    "sativa leaning hybrid",
-    "indica",
-    "sativa",
-    "cbd",
-    "unknown",
-  ];
+  // Aligned to the shared taxonomy (single source of truth). "unknown" is
+  // omitted from the customer-facing chip list.
+  const strainTypes = strainTypeDefinitions
+    .filter((d) => d.value !== "unknown")
+    .map((d) => ({ value: d.value, label: d.label }));
 
   return (
     <aside className="rounded-3xl border border-white/10 bg-zinc-950 p-5 lg:sticky lg:top-28 lg:self-start">
@@ -39,7 +36,7 @@ export function MenuFilters() {
         <p className="text-xs font-black uppercase tracking-[0.16em] text-[var(--greenway)]">Strain Type</p>
         <div className="mt-4 flex flex-wrap gap-2">
           {strainTypes.map((type) => (
-            <span key={type} className="rounded-full border border-white/10 px-3 py-2 text-xs font-bold capitalize text-zinc-300">{type}</span>
+            <span key={type.value} className="rounded-full border border-white/10 px-3 py-2 text-xs font-bold text-zinc-300">{type.label}</span>
           ))}
         </div>
       </div>

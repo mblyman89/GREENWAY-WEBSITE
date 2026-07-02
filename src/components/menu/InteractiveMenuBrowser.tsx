@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { GreenwayCategory, GreenwayMenuItem } from "@/lib/leafly/types";
 import { formatWebsiteCategory, websiteCategories } from "@/lib/pos/category-taxonomy";
+import { strainTypeLabel } from "@/lib/menu/strain-taxonomy";
 import { FilterMobile, MenuFilterControls } from "./FilterMobile";
 import { FilterTags } from "./FilterTags";
 import { ProductCard } from "./ProductCard";
@@ -789,6 +790,7 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
     const baseOptions = buildOptions(
       optionItems.map((item) => item.strainType).filter((strainType) => strainType !== "unknown" && strainType !== HIGH_CBD_VALUE),
       selectedStrains.filter((strainType) => strainType !== "unknown" && strainType !== HIGH_CBD_VALUE),
+      strainTypeLabel,
     );
     // Inject the high-CBD ("CBD") option, threshold-based on totalCbd >= 4%.
     const highCbdCount = optionItems.filter(isHighCbdItem).length;

@@ -4,15 +4,16 @@ import { useState } from "react";
 import { Button } from "@/components/admin/ui/Button";
 import type { KbStrainFull } from "@/lib/ai/kb/store";
 import { upsertStrainAction, toggleStrainAction } from "./actions";
+import { strainTypeDefinitions, strainTypeLabel } from "@/lib/menu/strain-taxonomy";
 
-const STRAIN_TYPES = [
-  "hybrid",
-  "indica leaning hybrid",
-  "sativa leaning hybrid",
-  "indica",
-  "sativa",
-  "unknown",
-] as const;
+// Canonical strain-type options for the staff dropdown. Sourced from the single
+// taxonomy so the leaning hybrids (Indica-Hybrid / Sativa-Hybrid) stay in sync
+// with the website menu, POS transform, and everywhere else. CCRS export is
+// untouched (it collapses these to "Hybrid" separately).
+const STRAIN_TYPE_OPTIONS = strainTypeDefinitions.map((d) => ({
+  value: d.value,
+  label: d.label,
+}));
 
 const inputCls =
   "mt-1 w-full rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-bg)] px-3 py-2 text-sm text-[var(--admin-text)]";
@@ -173,9 +174,9 @@ export function StrainEditor({
             onChange={(e) => set("strain_type", e.target.value)}
             className={inputCls}
           >
-            {STRAIN_TYPES.map((t) => (
-              <option key={t} value={t} className="capitalize">
-                {t}
+            {STRAIN_TYPE_OPTIONS.map((t) => (
+              <option key={t.value} value={t.value}>
+                {t.label}
               </option>
             ))}
           </select>
@@ -388,8 +389,8 @@ export function StrainEditor({
                         {s.name}
                       </button>
                     </td>
-                    <td className="py-2 pr-4 capitalize text-[var(--admin-text-muted)]">
-                      {s.strain_type ?? "—"}
+                    <td className="py-2 pr-4 text-[var(--admin-text-muted)]">
+                      {s.strain_type ? strainTypeLabel(s.strain_type) : "—"}
                     </td>
                     <td className="py-2 pr-4 text-[var(--admin-text-muted)]">
                       {(s.terpenes ?? []).join(", ") || "—"}

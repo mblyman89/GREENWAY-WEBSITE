@@ -11,6 +11,7 @@ import { JsonLd } from "@/components/seo/JsonLd";
 import { getMockMenuItemById, mockMenuItems } from "@/lib/leafly/mock-menu";
 import type { GreenwayMenuItem } from "@/lib/leafly/types";
 import { formatWebsiteCategory } from "@/lib/pos/category-taxonomy";
+import { strainTypeLabel } from "@/lib/menu/strain-taxonomy";
 import { getPosPreviewMenuItemById, posMenuPreviewItems } from "@/lib/pos/preview-menu";
 import { withResolvedImages } from "@/lib/enrichment/image-resolver";
 import { breadcrumbSchema, pageMetadata, productSchema } from "@/lib/seo/seo";
@@ -47,6 +48,22 @@ const productTones: Record<GreenwayMenuItem["strainType"], ProductTone> = {
     glowSoft: "rgba(160,184,127,0.3)",
     pill: "#728068",
     packageGradient: "linear-gradient(145deg,#58156e 0%,#a04ea5 42%,#f18b26 100%)",
+  },
+  // Indica-Hybrid: hybrid green with an indica-blue lean.
+  "indica-hybrid": {
+    border: "#5f88a0",
+    glow: "rgba(95,136,160,0.96)",
+    glowSoft: "rgba(138,178,178,0.3)",
+    pill: "#5f8890",
+    packageGradient: "linear-gradient(145deg,#5499b8 0%,#6ec583 55%,#7ed957 100%)",
+  },
+  // Sativa-Hybrid: hybrid green with a sativa-orange lean.
+  "sativa-hybrid": {
+    border: "#8a8a4f",
+    glow: "rgba(170,150,70,0.96)",
+    glowSoft: "rgba(190,180,110,0.3)",
+    pill: "#8a8050",
+    packageGradient: "linear-gradient(145deg,#ff9d18 0%,#c7c94f 52%,#7ed957 100%)",
   },
   cbd: {
     border: "#9a78a9",
@@ -97,7 +114,7 @@ function toneForItem(item: GreenwayMenuItem) {
 function displayStrain(item: GreenwayMenuItem) {
   if (isNonCannabisItem(item)) return "Non Cannabis";
   if (item.strainType === "unknown") return categoryAliases[item.category] ?? formatWebsiteCategory(item.category);
-  return item.strainType.charAt(0).toUpperCase() + item.strainType.slice(1);
+  return strainTypeLabel(item.strainType);
 }
 
 function categoryLabel(item: GreenwayMenuItem) {

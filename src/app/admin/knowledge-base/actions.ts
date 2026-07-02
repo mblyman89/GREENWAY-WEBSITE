@@ -15,6 +15,7 @@ import {
   setKbNoteActive,
 } from "@/lib/ai/kb/store";
 import { validateNoteInput } from "@/lib/ai/kb/kb-notes-core";
+import { canonicalStrainType } from "@/lib/menu/strain-taxonomy";
 import {
   upsertImageSubstitute,
   setSubstituteActive,
@@ -94,8 +95,6 @@ export async function upsertBrandAction(formData: FormData): Promise<void> {
   back(`Saved brand facts for "${name}".`);
 }
 
-const ALLOWED_STRAIN_TYPES = new Set(["indica", "sativa", "hybrid", "unknown"]);
-
 /**
  * Add or update a single verified strain (manual staff entry). Exposes every
  * field the kb_strains table holds. NO brand field — brand info lives on the
@@ -107,8 +106,11 @@ export async function upsertStrainAction(formData: FormData): Promise<void> {
   const name = String(formData.get("name") ?? "").trim();
   if (!name) back("Please enter a strain name.", false);
 
-  const rawType = String(formData.get("strain_type") ?? "hybrid").trim().toLowerCase();
-  const strain_type = ALLOWED_STRAIN_TYPES.has(rawType) ? rawType : "hybrid";
+  // Canonicalize whatever the form sent (accepts any legacy spelling and the
+  // new indica-hybrid / sativa-hybrid leaning tokens). Website + back office
+  // only — CCRS export collapses these to "Hybrid" separately and is untouched.
+  const rawType = String(formData.get("strain_type") ?? "hybrid").trim();
+  const strain_type = canonicalStrainType(rawType);
 
   // Confidence: optional 0..1; accept blank.
   const confRaw = String(formData.get("confidence") ?? "").trim();
