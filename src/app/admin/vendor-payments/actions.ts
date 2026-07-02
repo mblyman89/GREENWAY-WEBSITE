@@ -16,6 +16,7 @@
  * Still DRAFTS-ONLY: we build a NACHA (CCD) file for manual bank upload and
  * record the payment intent. Nothing is transmitted. Money is CENTS throughout.
  */
+import { revalidatePath } from "next/cache";
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import { getAchCompanySettings } from "@/lib/payroll/payroll-store";
@@ -32,6 +33,7 @@ import {
   getVendorPayable,
   recordManifestPayment,
   type VendorPayableRow,
+  type PaymentMethod,
 } from "@/lib/payments/vendor-payables-store";
 import { isValidRouting } from "@/lib/payments/nacha-core";
 
@@ -300,5 +302,155 @@ export async function buildVendorAchAction(
     filename: `vendor-ach-${stamp}.txt`,
     totalCents: result.totalCents,
     entryCount: result.entryCount,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Non-ACH manual payment (check / cash / wire / other)
+//
+// Owner's requirement (verbatim): "If I'm ever required for whatever reason to
+// write a check instead of ach, I need a way to tell the system that I paid via
+// another method. So I dont have hanging invoices."
+//
+// This records a payment against an ACCEPTED manifest WITHOUT generating a NACHA
+// file, so a manifest paid by check/cash/wire stops showing as an outstanding
+// payable. It runs the SAME guardrails as ACH (overpay BLOCKED, partial WARNING,
+// non-accepted / fully-paid BLOCKED) via checkManifestPayment. Money is CENTS.
+// ---------------------------------------------------------------------------
+
+const MANUAL_METHODS = new Set<PaymentMethod>(["check", "cash", "wire", "other"]);
+
+export type ManualPaymentResult = {
+  ok: boolean;
+  /** Blocking errors (payment NOT recorded). */
+  problems: string[];
+  /** Non-blocking notice (e.g. partial payment recorded, balance remains). */
+  warning?: string;
+  /** Success confirmation message (payment recorded). */
+  message?: string;
+  /** Fresh remaining owed after this payment (CENTS), for the UI. */
+  remainingMinorUnits?: number;
+};
+
+export async function recordManualPaymentAction(
+  _prev: ManualPaymentResult | null,
+  formData: FormData,
+): Promise<ManualPaymentResult> {
+  const session = await requirePermission("settings.manage");
+
+  const manifestId = String(formData.get("manifestId") ?? "").trim();
+  const methodRaw = String(formData.get("paymentMethod") ?? "").trim().toLowerCase();
+  const reference = String(formData.get("reference") ?? "").trim();
+  const note = String(formData.get("note") ?? "").trim();
+  const amountRaw = String(formData.get("amountDollars") ?? "").trim();
+
+  const problems: string[] = [];
+
+  if (!manifestId) {
+    problems.push("Select an accepted manifest (invoice) to record a payment against.");
+  }
+
+  const method = methodRaw as PaymentMethod;
+  if (!MANUAL_METHODS.has(method)) {
+    problems.push("Choose a payment method: check, cash, wire, or other.");
+  }
+
+  // A reference is required for check/wire (so the record is auditable); cash
+  // and other may omit it but a note is encouraged.
+  if ((method === "check" || method === "wire") && !reference) {
+    problems.push(
+      method === "check"
+        ? "Enter the check number as the reference."
+        : "Enter the wire confirmation/reference.",
+    );
+  }
+
+  const dollars = Number(amountRaw);
+  const amountCents = Number.isFinite(dollars) ? Math.round(dollars * 100) : NaN;
+  if (!amountRaw || !Number.isFinite(dollars) || amountCents <= 0) {
+    problems.push("Enter a payment amount greater than $0.00.");
+  }
+
+  if (problems.length > 0) {
+    return { ok: false, problems };
+  }
+
+  // Resolve the payable fresh (owed/paid at submit time).
+  const payable = await getVendorPayable(manifestId);
+  if (!payable) {
+    return {
+      ok: false,
+      problems: ["That manifest could not be found or is no longer payable."],
+    };
+  }
+
+  // THE GUARDRAIL — identical logic to the ACH path.
+  const check = checkManifestPayment(payable, amountCents);
+  if (check.severity === "blocked") {
+    return { ok: false, problems: [check.message], remainingMinorUnits: check.remainingMinorUnits };
+  }
+
+  const remaining = Math.max(0, payable.owedMinorUnits - payable.paidMinorUnits);
+  const isPartial = amountCents < remaining;
+
+  const recorded = await recordManifestPayment({
+    manifestId: payable.manifestId,
+    vendorId: payable.vendorId,
+    vendorName: payable.vendorName,
+    manifestNumber: payable.manifestNumber,
+    amountMinorUnits: amountCents,
+    owedMinorUnits: payable.owedMinorUnits,
+    isPartial,
+    paymentMethod: method,
+    reference: reference || null,
+    note: note || null,
+    createdBy: session.userId,
+  });
+
+  if (!recorded) {
+    return {
+      ok: false,
+      problems: ["Could not save the payment. Please try again or check the database connection."],
+    };
+  }
+
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "vendor_payment.manual_record",
+    entityType: "vendor_manifest_payments",
+    entityId: recorded.id,
+    after: {
+      manifestId: payable.manifestId,
+      manifestNumber: payable.manifestNumber,
+      vendorName: payable.vendorName,
+      amountCents,
+      owedCents: payable.owedMinorUnits,
+      paymentMethod: method,
+      reference: reference || null,
+      isPartial,
+    },
+  }).catch(() => {});
+
+  revalidatePath("/admin/vendor-payments");
+
+  const remainingAfter = Math.max(0, remaining - amountCents);
+  const methodLabel = method.charAt(0).toUpperCase() + method.slice(1);
+  const usd = (c: number) => (c / 100).toLocaleString("en-US", { style: "currency", currency: "USD" });
+
+  if (isPartial) {
+    return {
+      ok: true,
+      problems: [],
+      warning: `Partial ${methodLabel.toLowerCase()} payment of ${usd(amountCents)} recorded for manifest #${payable.manifestNumber}. Balance of ${usd(remainingAfter)} remains outstanding.`,
+      remainingMinorUnits: remainingAfter,
+    };
+  }
+
+  return {
+    ok: true,
+    problems: [],
+    message: `${methodLabel} payment of ${usd(amountCents)} recorded for manifest #${payable.manifestNumber}. This manifest is now paid in full and cleared from payables.`,
+    remainingMinorUnits: remainingAfter,
   };
 }

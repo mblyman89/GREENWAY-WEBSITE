@@ -4,7 +4,9 @@ import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { getAchCompanySettings } from "@/lib/payroll/payroll-store";
+import { Card, CardHeader, Section } from "@/components/admin/ui";
 import { VendorAchForm } from "./VendorAchForm";
+import { ManualPaymentForm } from "./ManualPaymentForm";
 
 export const dynamic = "force-dynamic";
 
@@ -65,7 +67,32 @@ export default async function VendorPaymentsPage() {
           </div>
         )}
 
-        <VendorAchForm settingsComplete={settingsComplete} companyName={settings.company_name} />
+        <Section
+          title="Pay by ACH"
+          description="Generate a NACHA file to upload to your bank."
+        >
+          <Card>
+            <VendorAchForm
+              settingsComplete={settingsComplete}
+              companyName={settings.company_name}
+            />
+          </Card>
+        </Section>
+
+        <Section
+          title="Record a non-ACH payment"
+          description="Paid a vendor by check, cash, or wire? Record it here so the manifest doesn't hang as an open payable. No bank file is generated."
+        >
+          <Card>
+            <CardHeader
+              title="Close out an invoice paid another way"
+              subtitle="Same guardrails as ACH: overpaying is blocked, partial payments are allowed with a warning."
+            />
+            <div className="mt-4">
+              <ManualPaymentForm />
+            </div>
+          </Card>
+        </Section>
       </div>
     </div>
   );
