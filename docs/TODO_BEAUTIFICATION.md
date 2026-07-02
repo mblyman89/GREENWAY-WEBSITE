@@ -90,7 +90,40 @@
           re-validated to the open session). Full validation/approval step as requested.
       Verified: core self-tests pass; tsc --noEmit exit 0.
       export filtered list; scan-to-Excel import w/ validation+approval step.
-- [ ] B6. Vendor ACH guardrails: payment must marry an ACCEPTED invoice; over/under-pay guard.
+- [x] B6. Vendor ACH guardrails: payment must marry an ACCEPTED invoice; over/under-pay guard.
+      DONE (verified: 29 core self-tests pass; tsc --noEmit exit 0; full next build 2378 routes,
+      0 failures). Built:
+        • Migration 0067_vendor_manifest_payments.sql (idempotent, RLS) tracks amount PAID per
+          accepted manifest so over/under math is real. Apply manually in Supabase.
+        • vendor-ach-core.ts: PURE guardrail fns checkManifestPayment/remainingOwed/isPayableManifest
+          + ManifestPayable type + PAYABLE_MANIFEST_STATUSES. overpay=blocked, partial=warning,
+          exact=ok, non-accepted/fully-paid/zero=blocked. 10 new self-tests.
+        • vendor-payables-store.ts: listVendorPayables (accepted manifests w/ owed = SUM(received_qty
+          * unit_cost_minor_units) over non-rejected lots, minus prior payments), getVendorPayable,
+          recordManifestPayment.
+        • actions.ts rewrite: each row selects an accepted manifest; server re-checks guardrails at
+          submit (block overpay, warn partial), builds NACHA, records payments w/ batch ref + audit.
+        • VendorAchForm.tsx rewrite: per-row manifest picker showing owed/paid/remaining, amount
+          defaults to remaining, partial warnings (gold) + block errors (red) inline. Themed to
+          admin tokens + solid brand-color pill Buttons (primary/neutral/confirm).
+      CCRS COST-BASIS GROUNDING (VERIFIED against real files, no guessing):
+        • intake-parser.ts (lines ~259-275) DOES capture cost basis: reads `line_price` + `qty`
+          from the WCIA transfer JSON and computes `unit_cost_minor_units = round((line_price/qty)*100)`
+          (cents), stored per lot on inventory_lots. So cost basis IS recorded + used. NOT MISSING.
+        • Verified against the REAL sample transfer JSON
+          (back-office/source-materials/examples/QGT_FreddysFuego_ORD-20636_transfer.json):
+          inventory_transfer_items[] each carry product_name/qty/unit_weight/`line_price` (e.g. 199.95).
+        • Verified against the REAL invoice PDF (QGT_FreddysFuego_INVOICE.pdf): "Freddy's FUEGO Pack 3"
+          Unit $13.33 x 15.00 = Line $199.95 == the manifest's line_price. Invoice total == SUM of lots.
+        • inventory_lots.manifest_id -> inbound_manifests(id) (migration 0023, indexed). inbound_manifests
+          has status ('accepted'), vendor_id, accepted_at, manifest_number, accepted/rejected lot counts.
+      DECISION (Option B, grounded): the owner's "ACCEPTED invoice" == an ACCEPTED inbound manifest.
+        Amount owed per manifest = SUM(received_qty * unit_cost_minor_units) over its non-rejected
+        (active/accepted) lots. This is the cost basis the state already has via CCRS intake.
+      NO vendor-payment/paid tracking table exists (grepped all migrations) -> add one
+        (vendor_manifest_payments) to track "already paid per manifest" so over/under math is real.
+      GUARDRAILS: payment must select an ACCEPTED manifest; overpay (pay > owed - already-paid)
+        = BLOCKED; underpay/partial (0 < pay < remaining) = WARNING but ALLOWED (owner decision #4).
 - [ ] B7. Blog page: GPT-4o trend/news assistant (cannabis + local demographic); center content.
 
 ## OWNER DECISIONS (answered — binding)
