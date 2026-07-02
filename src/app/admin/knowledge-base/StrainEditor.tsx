@@ -90,6 +90,9 @@ export function StrainEditor({
   const [form, setForm] = useState<FormState>(EMPTY);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [terpFilter, setTerpFilter] = useState<string>("all");
+  const [sortBy, setSortBy] = useState<"name" | "type" | "confidence">("name");
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -108,16 +111,43 @@ export function StrainEditor({
     setEditingId(null);
   }
 
-  const filtered = query.trim()
-    ? strains.filter((s) => {
-        const q = query.trim().toLowerCase();
-        return (
+  // Base-type buckets (leaning hybrids count under "hybrid" for filtering).
+  function baseType(t: string | null | undefined): string {
+    const v = (t ?? "").toLowerCase();
+    if (v.startsWith("indica")) return "indica";
+    if (v.startsWith("sativa")) return "sativa";
+    if (v.includes("hybrid")) return "hybrid";
+    return "other";
+  }
+
+  const q = query.trim().toLowerCase();
+  const filtered = strains
+    .filter((s) => {
+      if (q) {
+        const hit =
           s.name.toLowerCase().includes(q) ||
           s.slug.toLowerCase().includes(q) ||
-          (s.aliases ?? []).some((a) => a.toLowerCase().includes(q))
-        );
-      })
-    : strains;
+          (s.aliases ?? []).some((a) => a.toLowerCase().includes(q)) ||
+          (s.terpenes ?? []).some((t) => t.toLowerCase().includes(q));
+        if (!hit) return false;
+      }
+      if (typeFilter !== "all" && baseType(s.strain_type) !== typeFilter) return false;
+      if (terpFilter === "with" && (s.terpenes ?? []).length === 0) return false;
+      if (terpFilter === "without" && (s.terpenes ?? []).length > 0) return false;
+      return true;
+    })
+    .sort((a, b) => {
+      if (sortBy === "type") {
+        const t = baseType(a.strain_type).localeCompare(baseType(b.strain_type));
+        return t !== 0 ? t : a.name.localeCompare(b.name);
+      }
+      if (sortBy === "confidence") {
+        const ca = a.confidence ?? 0;
+        const cb = b.confidence ?? 0;
+        return cb - ca || a.name.localeCompare(b.name);
+      }
+      return a.name.localeCompare(b.name);
+    });
 
   return (
     <section className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
@@ -347,7 +377,7 @@ export function StrainEditor({
 
       {/* Manage list — click a row to edit, toggle active. */}
       <div className="mt-6">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <h3 className="text-sm font-semibold text-[var(--admin-text)]">
             Manage strains ({total})
           </h3>
@@ -355,8 +385,57 @@ export function StrainEditor({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             className="w-56 rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-bg)] px-3 py-1.5 text-sm text-[var(--admin-text)]"
-            placeholder="Search strains…"
+            placeholder="Search name, alias, terpene…"
           />
+        </div>
+
+        {/* Sort & filter — makes the large verified library easy to browse. */}
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <div className="flex overflow-hidden rounded-[var(--admin-radius)] border border-[var(--admin-border)] text-xs">
+            {[
+              { v: "all", label: "All types" },
+              { v: "indica", label: "Indica" },
+              { v: "sativa", label: "Sativa" },
+              { v: "hybrid", label: "Hybrid" },
+            ].map((opt) => (
+              <button
+                key={opt.v}
+                type="button"
+                onClick={() => setTypeFilter(opt.v)}
+                className={
+                  "px-3 py-1.5 " +
+                  (typeFilter === opt.v
+                    ? "bg-[var(--admin-accent-soft)] text-[var(--admin-text)]"
+                    : "text-[var(--admin-text-muted)] hover:bg-[var(--admin-bg)]")
+                }
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          <select
+            value={terpFilter}
+            onChange={(e) => setTerpFilter(e.target.value)}
+            className="rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-bg)] px-2 py-1.5 text-xs text-[var(--admin-text)]"
+            aria-label="Filter by terpene data"
+          >
+            <option value="all">Any terpene data</option>
+            <option value="with">Has terpenes</option>
+            <option value="without">No terpenes yet</option>
+          </select>
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as "name" | "type" | "confidence")}
+            className="rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-bg)] px-2 py-1.5 text-xs text-[var(--admin-text)]"
+            aria-label="Sort strains"
+          >
+            <option value="name">Sort: Name (A–Z)</option>
+            <option value="type">Sort: Type</option>
+            <option value="confidence">Sort: Confidence</option>
+          </select>
+          <span className="text-xs text-[var(--admin-text-muted)]">
+            {filtered.length} shown
+          </span>
         </div>
 
         {filtered.length === 0 ? (

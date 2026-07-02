@@ -239,6 +239,43 @@ export async function listKbStrainsFull(limit = 500): Promise<KbStrainFull[]> {
   }
 }
 
+/**
+ * Customer-facing product-category taxonomy row (migration 0070). Reads degrade
+ * to [] pre-migration like the other KB list helpers, so the admin page renders
+ * safely before the owner has applied 0070.
+ */
+export type KbProductCategoryRow = {
+  id: string;
+  slug: string;
+  name: string;
+  group_key: string;
+  summary: string | null;
+  aliases: string[] | null;
+  wa_inventory_types: string[] | null;
+  sort_order: number;
+  active: boolean;
+};
+
+export async function listKbProductCategories(
+  limit = 200,
+): Promise<KbProductCategoryRow[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("kb_product_categories")
+      .select(
+        "id,slug,name,group_key,summary,aliases,wa_inventory_types,sort_order,active",
+      )
+      .order("sort_order", { ascending: true })
+      .limit(limit);
+    if (error || !data) return [];
+    return data as KbProductCategoryRow[];
+  } catch {
+    return [];
+  }
+}
+
 export type UpsertStrainInput = {
   slug?: string | null;
   name: string;
