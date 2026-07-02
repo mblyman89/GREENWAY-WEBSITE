@@ -21,6 +21,15 @@ type CardTone = {
   glowSoftLeft?: string;
   glowRight?: string;
   glowSoftRight?: string;
+  /**
+   * Optional split fill for the strain-type banner (the labeled pill) on leaning
+   * hybrids: `pillLeft` is the leaning side's color, `pillRight` is the base
+   * hybrid color. The banner renders a left→right linear-gradient between the
+   * two so they mesh through their blended midpoint with NO hard boundary (owner
+   * request). When omitted, the banner falls back to the solid `pill` color.
+   */
+  pillLeft?: string;
+  pillRight?: string;
 };
 
 const cardTones: Record<GreenwayMenuItem["strainType"], CardTone> = {
@@ -60,6 +69,9 @@ const cardTones: Record<GreenwayMenuItem["strainType"], CardTone> = {
     glowSoftRight: "rgba(160,184,127,0.34)",
     panel: "rgba(16,26,30,0.76)",
     pill: "#5f8890",
+    // Banner mesh: indica-blue pill (left) → hybrid-green pill (right).
+    pillLeft: "#6f91a4",
+    pillRight: "#728068",
     packageGradient: "linear-gradient(145deg,#5499b8 0%,#6ec583 55%,#7ed957 100%)",
   },
   // Sativa-Hybrid: split neon — sativa-ORANGE on the LEFT (the lean), hybrid-GREEN
@@ -74,6 +86,9 @@ const cardTones: Record<GreenwayMenuItem["strainType"], CardTone> = {
     glowSoftRight: "rgba(160,184,127,0.34)",
     panel: "rgba(30,27,17,0.76)",
     pill: "#8a8050",
+    // Banner mesh: sativa-orange pill (left) → hybrid-green pill (right).
+    pillLeft: "#a76b3d",
+    pillRight: "#728068",
     packageGradient: "linear-gradient(145deg,#ff9d18 0%,#c7c94f 52%,#7ed957 100%)",
   },
   cbd: {
@@ -145,6 +160,19 @@ function cardToneForItem(item: GreenwayMenuItem) {
 
 function categoryLabel(item: GreenwayMenuItem) {
   return categoryAliases[item.category] ?? formatWebsiteCategory(item.category);
+}
+
+/**
+ * Fill for the strain-type banner (pill). Leaning hybrids mesh left→right from
+ * the leaning color into the base hybrid color with no hard boundary; every
+ * other strain type keeps its solid pill color. Text color stays as set by the
+ * caller (white for cannabis, dark for non-cannabis).
+ */
+function pillBackground(tone: CardTone): CSSProperties["background"] {
+  if (tone.pillLeft && tone.pillRight) {
+    return `linear-gradient(to right, ${tone.pillLeft} 0%, ${tone.pillRight} 100%)`;
+  }
+  return tone.pill;
 }
 
 function productCardDisplayName(item: GreenwayMenuItem) {
@@ -274,7 +302,7 @@ export function ProductCardVisual({ item, salePriceMinorUnits, saleBadgeLabel, c
         <div className="mb-3 grid gap-2 text-center">
           <span
             className="flex min-h-9 w-full items-center justify-center rounded-md px-3 py-2 text-sm font-black uppercase leading-none text-white"
-            style={{ backgroundColor: tone.pill, color: isNonCannabisItem(item) ? "#111" : "#fff" }}
+            style={{ background: pillBackground(tone), color: isNonCannabisItem(item) ? "#111" : "#fff" }}
           >
             {displayStrain(item)}
           </span>
