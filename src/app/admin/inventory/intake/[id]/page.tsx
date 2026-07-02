@@ -6,6 +6,7 @@ import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
 import { Button, Field, Input, Textarea, Select } from "@/components/admin/ui";
 import { getManifestById } from "@/lib/inventory/store";
+import { resolveWebsiteCategories } from "@/lib/inventory/website-category-resolver-server";
 import { getVendorById } from "@/lib/vendors/store";
 import { listManifestLots, listManifestEvents } from "@/lib/inventory/intake-store";
 import { ManifestTimeline } from "@/components/admin/inventory/ManifestTimeline";
@@ -78,6 +79,20 @@ export default async function ManifestReviewPage({
 
   const lots = await listManifestLots(id);
   const events = await listManifestEvents(id);
+
+  // Convert each intake line's raw LCB classification to OUR website category
+  // for display (Request B). Read-only — never mutates the stored CCRS values.
+  const categoryResolutions = await resolveWebsiteCategories(
+    lots.map((l) => ({
+      posProductKey: l.pos_product_key,
+      productName: l.product_name,
+      inventoryType: l.inventory_type,
+      category: l.category,
+    })),
+  );
+  const categoryByLotId = new Map(
+    lots.map((l, i) => [l.id, categoryResolutions[i]] as const),
+  );
   const isPending = manifest.status === "pending";
   const inProgress = manifest.status === "pending" || manifest.status === "in_transit" || manifest.status === "received";
 
@@ -268,6 +283,39 @@ export default async function ManifestReviewPage({
                         </span>
                       )}
                     </div>
+                    {(() => {
+                      const cat = categoryByLotId.get(l.id);
+                      if (!cat) return null;
+                      return (
+                        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px]">
+                          {cat.unmapped ? (
+                            <span className="rounded bg-[var(--admin-gold-soft)] px-1.5 py-0.5 font-semibold uppercase text-[var(--admin-gold)]">
+                              Unmapped category
+                            </span>
+                          ) : (
+                            <span className="rounded bg-[var(--admin-surface-2)] px-1.5 py-0.5 font-semibold uppercase text-[var(--admin-text-muted)]">
+                              {cat.label}
+                            </span>
+                          )}
+                          {cat.raw ? (
+                            <span
+                              className="uppercase tracking-wide text-[var(--admin-text-faint)]"
+                              title={`LCB inventory type: ${l.inventory_type ?? "—"}`}
+                            >
+                              LCB: {cat.raw}
+                            </span>
+                          ) : null}
+                          {cat.unmapped ? (
+                            <Link
+                              href="/admin/settings/types"
+                              className="text-[var(--admin-accent)] underline hover:brightness-110"
+                            >
+                              Map it →
+                            </Link>
+                          ) : null}
+                        </div>
+                      );
+                    })()}
                     <Link
                       href={`/admin/inventory/lots/${l.id}/label`}
                       target="_blank"

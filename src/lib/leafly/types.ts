@@ -59,6 +59,14 @@ export type GreenwayMenuItem = {
   posInventoryCategory?: string;
   strainType: GreenwayStrainType;
   strainName?: string;
+  /**
+   * Dominant terpene names attached to this item (e.g. ["myrcene","limonene"]).
+   * SENSORY/descriptive only — no effects/medical claims, not tracked/reported.
+   * Populated at menu-build time from the matching KB strain (single source of
+   * truth). Absent/empty when the strain has no curated terpenes. Used to power
+   * the website menu terpene filter.
+   */
+  terpenes?: string[];
   thc: string | null;
   cbd: string | null;
   totalThc: GreenwayCannabinoid | null;

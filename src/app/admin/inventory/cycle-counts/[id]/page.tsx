@@ -54,6 +54,7 @@ export default async function CycleCountDetailPage({
     ok?: string;
     q?: string;
     category?: string;
+    lcbcategory?: string;
     type?: string;
     vendor?: string;
     brand?: string;
@@ -79,7 +80,10 @@ export default async function CycleCountDetailPage({
   const sheetLines = await getCycleCountSheetLines(id);
   const filter: SheetFilter = {
     q: sp.q,
+    // PRIMARY filter is OUR website category (Request B). Raw LCB category/type
+    // remain available via rawCategory/inventoryType ("replace but keep old").
     category: sp.category || null,
+    rawCategory: sp.lcbcategory || null,
     inventoryType: sp.type || null,
     vendorName: sp.vendor || null,
     brandName: sp.brand || null,
@@ -91,6 +95,18 @@ export default async function CycleCountDetailPage({
     key: (SHEET_SORT_KEYS.includes((sp.sort ?? "") as SheetSortKey) ? sp.sort : "product") as SheetSortKey,
     dir: sp.dir === "desc" ? "desc" : "asc",
   };
+  // Resolved category (our convention) + raw LCB, keyed by line id for the table.
+  const catByLine = new Map(
+    sheetLines.map((l) => [
+      l.lineId,
+      {
+        label: l.websiteCategoryLabel,
+        raw: l.category,
+        rawType: l.inventoryType,
+        unmapped: l.categoryUnmapped,
+      },
+    ] as const),
+  );
   const orderedSheet = sortSheetLines(filterSheetLines(sheetLines, filter), sort);
   const orderedIds = orderedSheet.map((l) => l.lineId);
   const orderIndex = new Map(orderedIds.map((lineId, i) => [lineId, i] as const));
@@ -100,7 +116,10 @@ export default async function CycleCountDetailPage({
     .sort((a, b) => (orderIndex.get(a.id)! - orderIndex.get(b.id)!));
 
   const filterOptions = {
-    categories: distinctValues(sheetLines, (l) => l.category),
+    // PRIMARY category dropdown = OUR website category labels (converted).
+    categories: distinctValues(sheetLines, (l) => l.websiteCategoryLabel),
+    // RAW LCB values kept available for reference filtering.
+    lcbCategories: distinctValues(sheetLines, (l) => l.category),
     types: distinctValues(sheetLines, (l) => l.inventoryType),
     vendors: distinctValues(sheetLines, (l) => l.vendorName),
     brands: distinctValues(sheetLines, (l) => l.brandName),
@@ -217,6 +236,37 @@ export default async function CycleCountDetailPage({
                 <td className="px-4 py-3">
                   <div className="font-medium text-[var(--admin-text)]">{line.product_name ?? "—"}</div>
                   <div className="font-mono text-[11px] text-[var(--admin-text-faint)]">{line.lot_code ?? line.lot_id.slice(0, 8)}</div>
+                  {(() => {
+                    const cat = catByLine.get(line.id);
+                    if (!cat) return null;
+                    return (
+                      <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                        {cat.unmapped ? (
+                          <Badge tone="gold">
+                            Unmapped category
+                          </Badge>
+                        ) : (
+                          <Badge tone="neutral">{cat.label}</Badge>
+                        )}
+                        {cat.raw ? (
+                          <span
+                            className="text-[10px] uppercase tracking-wide text-[var(--admin-text-faint)]"
+                            title={`LCB inventory type: ${cat.rawType ?? "—"}`}
+                          >
+                            LCB: {cat.raw}
+                          </span>
+                        ) : null}
+                        {cat.unmapped ? (
+                          <Link
+                            href="/admin/settings/types"
+                            className="text-[10px] text-[var(--admin-accent)] hover:underline"
+                          >
+                            Map it →
+                          </Link>
+                        ) : null}
+                      </div>
+                    );
+                  })()}
                 </td>
                 {reveal ? (
                   <td className="px-4 py-3 text-right text-[var(--admin-text-muted)]">{fmtQty(line.system_qty, line.unit)}</td>

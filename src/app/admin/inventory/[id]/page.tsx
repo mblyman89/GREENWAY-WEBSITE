@@ -4,11 +4,13 @@ import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
 import { Field, Input, Textarea, Select, Button } from "@/components/admin/ui";
+import Link from "next/link";
 import {
   getLotById,
   listLotAdjustments,
   getManifestById,
 } from "@/lib/inventory/store";
+import { resolveWebsiteCategoryForLot } from "@/lib/inventory/website-category-resolver-server";
 import { adjustLotAction, setLotStatusAction } from "../actions";
 
 export const dynamic = "force-dynamic";
@@ -60,6 +62,16 @@ export default async function LotDetailPage({
     listLotAdjustments(id),
     lot.manifest_id ? getManifestById(lot.manifest_id) : Promise.resolve(null),
   ]);
+
+  // Convert the raw LCB classification to OUR website category for display
+  // (Request B). Read-only — the stored LCB category/inventory_type are never
+  // changed; they remain the CCRS source of truth.
+  const categoryResolution = await resolveWebsiteCategoryForLot({
+    posProductKey: lot.pos_product_key,
+    productName: lot.product_name,
+    inventoryType: lot.inventory_type,
+    category: lot.category,
+  });
 
   const adjustAction = adjustLotAction.bind(null, id);
   const statusAction = setLotStatusAction.bind(null, id);
@@ -128,8 +140,25 @@ export default async function LotDetailPage({
               <Row label="Strain" value={lot.strain_name ?? "—"} />
               <Row
                 label="Category"
+                value={
+                  categoryResolution.unmapped
+                    ? "— (unmapped)"
+                    : categoryResolution.label || "—"
+                }
+              />
+              <Row
+                label="LCB classification"
                 value={[lot.category, lot.inventory_type].filter(Boolean).join(" · ") || "—"}
               />
+              {categoryResolution.unmapped && (lot.category || lot.inventory_type) ? (
+                <div className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-gold)] bg-[var(--admin-gold-soft)] px-3 py-2 text-[11px] text-[var(--admin-gold)]">
+                  This LCB type isn&apos;t mapped to a website category yet, so the
+                  menu and back office can&apos;t convert it.{" "}
+                  <Link href="/admin/settings/types" className="underline">
+                    Add a mapping in Settings → Types →
+                  </Link>
+                </div>
+              ) : null}
               <Row
                 label="Unit weight"
                 value={lot.unit_weight != null ? `${lot.unit_weight} ${lot.unit_weight_uom ?? ""}`.trim() : "—"}

@@ -27,7 +27,10 @@ import {
 import type { ImportPreview } from "@/lib/inventory/cycle-count-sheet-core";
 
 type FilterOptions = {
+  /** OUR website category labels (primary, converted-to-our-convention filter). */
   categories: string[];
+  /** RAW LCB inventory_category values (reference filter, kept available). */
+  lcbCategories: string[];
   types: string[];
   vendors: string[];
   brands: string[];
@@ -70,6 +73,7 @@ export function CycleCountSheetTools({
   // Controlled from the current query so the tools mirror the visible table.
   const [q, setQ] = useState(sp.get("q") ?? "");
   const [category, setCategory] = useState(sp.get("category") ?? "");
+  const [lcbCategory, setLcbCategory] = useState(sp.get("lcbcategory") ?? "");
   const [type, setType] = useState(sp.get("type") ?? "");
   const [vendor, setVendor] = useState(sp.get("vendor") ?? "");
   const [brand, setBrand] = useState(sp.get("brand") ?? "");
@@ -83,6 +87,7 @@ export function CycleCountSheetTools({
     const p = new URLSearchParams();
     if (q.trim()) p.set("q", q.trim());
     if (category) p.set("category", category);
+    if (lcbCategory) p.set("lcbcategory", lcbCategory);
     if (type) p.set("type", type);
     if (vendor) p.set("vendor", vendor);
     if (brand) p.set("brand", brand);
@@ -92,7 +97,7 @@ export function CycleCountSheetTools({
     if (sort !== "product") p.set("sort", sort);
     if (dir !== "asc") p.set("dir", dir);
     return p;
-  }, [q, category, type, vendor, brand, counted, sample, medical, sort, dir]);
+  }, [q, category, lcbCategory, type, vendor, brand, counted, sample, medical, sort, dir]);
 
   function applyFilters() {
     const s = query.toString();
@@ -100,7 +105,7 @@ export function CycleCountSheetTools({
   }
 
   function resetFilters() {
-    setQ(""); setCategory(""); setType(""); setVendor(""); setBrand("");
+    setQ(""); setCategory(""); setLcbCategory(""); setType(""); setVendor(""); setBrand("");
     setCounted("all"); setSample("all"); setMedical("all"); setSort("product"); setDir("asc");
     router.push(pathname);
   }
@@ -175,7 +180,7 @@ export function CycleCountSheetTools({
         <Field label="Search" help="Product, strain, lot code, or POS key">
           <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="e.g. blue dream" />
         </Field>
-        <Field label="Category">
+        <Field label="Category" help="Our website category (converted from LCB)">
           <Select value={category} onChange={(e) => setCategory(e.target.value)}>
             <option value="">All categories</option>
             {options.categories.map((c) => (
@@ -183,7 +188,15 @@ export function CycleCountSheetTools({
             ))}
           </Select>
         </Field>
-        <Field label="Inventory type">
+        <Field label="LCB category" help="Raw LCB/CCRS classification (reference)">
+          <Select value={lcbCategory} onChange={(e) => setLcbCategory(e.target.value)}>
+            <option value="">All LCB categories</option>
+            {options.lcbCategories.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="LCB inventory type" help="Raw LCB/CCRS inventory type (reference)">
           <Select value={type} onChange={(e) => setType(e.target.value)}>
             <option value="">All types</option>
             {options.types.map((t) => (
