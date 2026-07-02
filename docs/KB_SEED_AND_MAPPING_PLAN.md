@@ -23,8 +23,14 @@ Supabase migrations MANUAL by owner + idempotent; branch+PR+squash-merge; hand-o
 - [x] S5 — verify slice (tsc clean + build exit 0, menu untouched). COMMITTED.
 - [x] A3 — intelligent inventory→KB fuzzy matcher (exact + near-exact). PURE lib strain-matcher.ts + 12/12 test.
 - [x] A3b — wired matcher into intake review ([id]/page.tsx): green KB match / amber confirm / gray no-match badge.
-- [ ] A2 — fix reset RPC "DELETE requires a WHERE clause".
-- [ ] Verify: tsc clean + next build; menu untouched; CCRS/DOH untouched; push; PR.
+- [x] A2 — fixed reset RPC: added `where true` to all 52 DELETEs in migration 0069 (on PR #222 branch, pushed).
+- [x] Verify: tsc clean + next build exit 0 (2,380 pages); menu untouched; CCRS/DOH untouched; both branches pushed.
+
+## Result
+- PR #223 (feature/kb-deep-extraction): unified Strains/Product-types switcher, editable product types,
+  seedKnowledgeBase() now seeds kb_product_categories, intelligent intake→KB matcher + review badges.
+- PR #222 (feature/reset-operational-data-and-mock-cleanup): 0069 `where true` fix for the reset error.
+- Both applied MANUALLY by owner: migration 0070 (product categories) + re-run seed; migration 0069 (reset fix).
 
 ## A3 matcher design (grounded in intake fields)
 Intake ParsedLine has: product_name, strain_name, category, inventory_type. KB has kb_strains
