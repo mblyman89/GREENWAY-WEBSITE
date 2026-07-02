@@ -159,6 +159,9 @@ export async function getVendorPayable(manifestId: string): Promise<VendorPayabl
   return all.find((r) => r.manifestId === manifestId) ?? null;
 }
 
+/** How a manifest payment was made. 'ach' = generated NACHA batch. */
+export type PaymentMethod = "ach" | "check" | "cash" | "wire" | "other";
+
 /** Input for recording a payment against a manifest (CENTS). */
 export type RecordManifestPaymentInput = {
   manifestId: string;
@@ -171,6 +174,10 @@ export type RecordManifestPaymentInput = {
   achBatchRef?: string | null;
   note?: string | null;
   createdBy?: string | null;
+  /** Payment channel; defaults to 'ach' for back-compat with the ACH flow. */
+  paymentMethod?: PaymentMethod;
+  /** Human reference for non-ACH payments (check #, wire confirmation, memo). */
+  reference?: string | null;
 };
 
 /**
@@ -196,6 +203,8 @@ export async function recordManifestPayment(
       ach_batch_ref: input.achBatchRef ?? null,
       note: input.note ?? null,
       created_by: input.createdBy ?? null,
+      payment_method: input.paymentMethod ?? "ach",
+      reference: input.reference ?? null,
     })
     .select("id")
     .single();
