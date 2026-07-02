@@ -10,6 +10,7 @@
  */
 import type { MenuItemRow } from "@/lib/pos/db-types";
 import type { GapFlags } from "@/lib/enrichment/store";
+import { canonicalStrainType, strainTypeLabel } from "@/lib/menu/strain-taxonomy";
 
 /** A single counted, deep-linkable gap for the "what's missing" panel. */
 export type GapInsight = {
@@ -76,6 +77,25 @@ function distribution(values: string[]): { label: string; count: number }[] {
 }
 
 /**
+ * Strain-type distribution with customer-friendly labels. Raw stored values are
+ * canonicalized (so any legacy spelling folds into the right bucket) and then
+ * shown with their display label — e.g. `indica-hybrid` → "Indica-Hybrid".
+ * Blank/missing values render as "—". CCRS export is separate and untouched.
+ */
+function strainDistribution(values: string[]): { label: string; count: number }[] {
+  const map = new Map<string, number>();
+  for (const raw of values) {
+    if (!raw || raw.trim().length === 0) {
+      map.set("—", (map.get("—") ?? 0) + 1);
+      continue;
+    }
+    const label = strainTypeLabel(canonicalStrainType(raw));
+    map.set(label, (map.get(label) ?? 0) + 1);
+  }
+  return [...map.entries()].map(([label, count]) => ({ label, count })).sort((a, b) => b.count - a.count);
+}
+
+/**
  * Compute aggregate product statistics from the menu rows + their gap flags.
  * `items` and `gaps` are expected to be index-aligned (gaps[i] derived from items[i]).
  */
@@ -105,7 +125,7 @@ export function computeProductStats(items: MenuItemRow[], gaps: GapFlags[]): Pro
     enrichedLive,
     missing: { description: missingDescription, image: missingImage, brandLink: missingBrandLink },
     byCategory: distribution(items.map((i) => i.category)).slice(0, 12),
-    byStrainType: distribution(items.map((i) => i.strain_type)),
+    byStrainType: strainDistribution(items.map((i) => i.strain_type)),
     byStockStatus: distribution(items.map((i) => i.inventory_status)),
     price: { minMinor, medianMinor: median(prices), maxMinor },
     avgCompleteness,

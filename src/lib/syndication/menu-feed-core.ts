@@ -59,20 +59,37 @@ export type FeedSourceItem = {
 // "leaning" values are display-only classifications for shoppers; they are
 // COLLAPSED to a CCRS-valid base (Indica/Sativa/Hybrid) on CCRS export — the
 // CCRS batch normalizer already maps anything containing "hybrid" to Hybrid,
-// so "indica leaning hybrid"/"sativa leaning hybrid" export correctly as
-// Hybrid (verified against the CCRS Data Model Manual).
-const VALID_STRAIN = new Set([
-  "indica",
-  "sativa",
-  "hybrid",
-  "indica leaning hybrid",
-  "sativa leaning hybrid",
-  "cbd",
+// so "indica-hybrid"/"sativa-hybrid" export correctly as Hybrid (verified
+// against the CCRS Data Model Manual).
+//
+// Canonical machine values are the compact hyphen tokens (indica-hybrid /
+// sativa-hybrid) used across the website menu, POS transform, and back office.
+// This module stays intentionally standalone (no imports) so it remains
+// unit-testable in isolation; we mirror the taxonomy's canonicalization here
+// and still accept legacy spellings so older stored data never breaks.
+const VALID_STRAIN = new Set(["indica", "sativa", "hybrid", "indica-hybrid", "sativa-hybrid", "cbd"]);
+
+// Legacy / alternate spellings → canonical token. Keeps backward-compat with
+// any menu row that still carries a space-spelled or "dominant" value.
+const STRAIN_ALIASES = new Map<string, string>([
+  ["indica leaning hybrid", "indica-hybrid"],
+  ["indica-leaning hybrid", "indica-hybrid"],
+  ["indica dominant hybrid", "indica-hybrid"],
+  ["indica dominant", "indica-hybrid"],
+  ["indica hybrid", "indica-hybrid"],
+  ["sativa leaning hybrid", "sativa-hybrid"],
+  ["sativa-leaning hybrid", "sativa-hybrid"],
+  ["sativa dominant hybrid", "sativa-hybrid"],
+  ["sativa dominant", "sativa-hybrid"],
+  ["sativa hybrid", "sativa-hybrid"],
 ]);
 
 export function normalizeStrainType(value: string | null | undefined): string {
-  const v = (value ?? "").trim().toLowerCase();
-  return VALID_STRAIN.has(v) ? v : "unknown";
+  const v = (value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+  if (VALID_STRAIN.has(v)) return v;
+  const aliased = STRAIN_ALIASES.get(v);
+  if (aliased) return aliased;
+  return "unknown";
 }
 
 /** A menu item is "in stock" when its status isn't unavailable and some variant has inventory. */
@@ -141,6 +158,10 @@ export function __runMenuFeedTests(): void {
   expect("strain normalize hybrid", normalizeStrainType("Hybrid") === "hybrid");
   expect("strain normalize junk", normalizeStrainType("weird") === "unknown");
   expect("strain normalize null", normalizeStrainType(null) === "unknown");
+  expect("strain normalize indica-hybrid token", normalizeStrainType("indica-hybrid") === "indica-hybrid");
+  expect("strain normalize sativa-hybrid token", normalizeStrainType("sativa-hybrid") === "sativa-hybrid");
+  expect("strain normalize legacy space spelling", normalizeStrainType("Indica Leaning Hybrid") === "indica-hybrid");
+  expect("strain normalize dominant spelling", normalizeStrainType("Sativa Dominant") === "sativa-hybrid");
 
   const base: FeedSourceItem = {
     source_item_id: "k1",

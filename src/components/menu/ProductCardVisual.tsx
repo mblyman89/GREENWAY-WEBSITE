@@ -2,6 +2,7 @@ import type { CSSProperties } from "react";
 import Link from "next/link";
 import type { GreenwayMenuItem } from "@/lib/leafly/types";
 import { formatWebsiteCategory } from "@/lib/pos/category-taxonomy";
+import { strainTypeLabel } from "@/lib/menu/strain-taxonomy";
 import { ProductCardPriceSelector } from "./ProductCardPriceSelector";
 
 type CardTone = {
@@ -37,6 +38,24 @@ const cardTones: Record<GreenwayMenuItem["strainType"], CardTone> = {
     panel: "rgba(27,22,31,0.76)",
     pill: "#728068",
     packageGradient: "linear-gradient(145deg,#58156e 0%,#a04ea5 42%,#f18b26 100%)",
+  },
+  // Indica-Hybrid: hybrid green with an indica-blue lean.
+  "indica-hybrid": {
+    border: "#5f88a0",
+    glow: "rgba(95,136,160,0.95)",
+    glowSoft: "rgba(138,178,178,0.34)",
+    panel: "rgba(16,26,30,0.76)",
+    pill: "#5f8890",
+    packageGradient: "linear-gradient(145deg,#5499b8 0%,#6ec583 55%,#7ed957 100%)",
+  },
+  // Sativa-Hybrid: hybrid green with a sativa-orange lean.
+  "sativa-hybrid": {
+    border: "#8a8a4f",
+    glow: "rgba(170,150,70,0.95)",
+    glowSoft: "rgba(190,180,110,0.34)",
+    panel: "rgba(30,27,17,0.76)",
+    pill: "#8a8050",
+    packageGradient: "linear-gradient(145deg,#ff9d18 0%,#c7c94f 52%,#7ed957 100%)",
   },
   cbd: {
     border: "#9a78a9",
@@ -90,7 +109,7 @@ function displayStrain(item: GreenwayMenuItem) {
   // For items where strain type is still unknown (edibles, topicals, paraphernalia),
   // show the category label since strain type doesn't apply to those products
   if (item.strainType === "unknown") return formatWebsiteCategory(item.category);
-  return item.strainType.charAt(0).toUpperCase() + item.strainType.slice(1);
+  return strainTypeLabel(item.strainType);
 }
 
 function cardToneForItem(item: GreenwayMenuItem) {
