@@ -43,6 +43,15 @@ Capsule; Marijuana Mix Packaged; Tincture; Suppository.
 7. **cannabinoid range (potency_note)** — dolt avg thc/cbd per strain+category, phrased factually ("Typically tested ~X% THC in WA flower lots"). MEASURED, not a claim.
 8. **product categories** — WA inventory_type taxonomy -> new kb_product_categories table + kb_products seed of validated category facts.
 
+## STATUS: COMPLETE (PR #223)
+- [x] Sources inspected & verified (dolt WA, terpene assays, Cannabis API, Kushy).
+- [x] Extraction pipeline built; terpene scale artifact corrected (per-column normalization).
+- [x] Strain seed expanded 184 -> 2,370 (184 curated preserved; 2,186 verified appended).
+- [x] Product-category taxonomy: migration 0070 + 24 categories mapped to WA CCRS types.
+- [x] KB admin UI: strain type/terpene filters + sort; new Product types browser.
+- [x] tsc clean; next build OK (2,380 pages); CCRS/DOH + menu untouched.
+- [x] Idempotent seed SQL + apply guide (KB_EXTRACTION_APPLY.md).
+
 ## Deliverables
 - `NNNN_kb_extraction_enhancements.sql` — idempotent: add kb_strains cols if missing;
   new kb_product_categories table; new kb_products table (validated category facts).
