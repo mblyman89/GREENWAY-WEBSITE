@@ -14,6 +14,7 @@ import { formatWebsiteCategory } from "@/lib/pos/category-taxonomy";
 import { strainTypeLabel } from "@/lib/menu/strain-taxonomy";
 import { getPosPreviewMenuItemById, posMenuPreviewItems } from "@/lib/pos/preview-menu";
 import { withResolvedImages } from "@/lib/enrichment/image-resolver";
+import { withMenuProfile } from "@/lib/menu/strain-terpenes-server";
 import { breadcrumbSchema, pageMetadata, productSchema } from "@/lib/seo/seo";
 import { getMerchDefById, getMerchMenuItemById, merchMenuItems, merchProductDefs, merchIdForKey } from "@/lib/merch/merch-catalog";
 import { MerchDetailPanel } from "@/components/merch/MerchDetailPanel";
@@ -245,9 +246,11 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
 
   // DF-3: resolve a real/approved-substitute image (non-throwing). Merch keeps
   // its own photo path, so we only resolve for cannabis + non-cannabis items.
+  // Also overlay the KB strain profile (terpenes + leaning-hybrid strainType)
+  // so the detail page matches the menu card. No-op when no KB/curated match.
   const [item] = isMerchItem(baseItem)
     ? [baseItem]
-    : await withResolvedImages([baseItem]);
+    : await withMenuProfile(await withResolvedImages([baseItem]));
 
   const tone = toneForItem(item);
   const relatedItems = relatedItemsFor(item);
