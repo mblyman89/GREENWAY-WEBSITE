@@ -34,6 +34,7 @@ import {
   type CcrsRetailerFileType,
 } from "@/lib/compliance/ccrs-batch-core";
 import { deriveInventoryExternalId, validateExternalId, sanitizeExternalId } from "@/lib/compliance/ccrs-identifiers";
+import { validateName, suggestName } from "@/lib/naming/convention-core";
 import { getCcrsLicenseSettings, buildCcrsSaleCsv } from "@/lib/compliance/ccrs-sales";
 import { buildCcrsInventoryAdjustmentCsv } from "@/lib/compliance/ccrs-inventory-adjustment";
 
@@ -183,8 +184,13 @@ function buildProductFile(
   license: string,
   createdBy: string,
   createdDate: string,
-): { rows: string[][]; warnings: string[] } {
+): { rows: string[][]; warnings: string[]; nameByProductKey: Map<string, string> } {
   const warnings: string[] = [];
+  // CCRS joins Inventory.Product -> Product.Name by the EXACT name string. We
+  // record the final (clamped) Name we wrote for each raw product key so the
+  // Inventory file can reference the IDENTICAL string. See
+  // docs/CCRS_PRODUCT_NAMING_RESEARCH.md (the Inventory.Product join bug).
+  const nameByProductKey = new Map<string, string>();
   // Weight per product key from lots (first non-null wins).
   const weightByKey = new Map<string, string>();
   for (const l of lots) {
@@ -227,6 +233,17 @@ function buildProductFile(
     if (nameClamp.truncated) {
       warnings.push(`Product "${productName.slice(0, 40)}…": Name exceeds ${CCRS_PRODUCT_NAME_MAX} chars and was truncated — shorten it in the source.`);
     }
+    // Naming-convention check (drafts-only, surfaced as a warning): if the Name
+    // violates the house convention (leading symbol, disallowed char, casing),
+    // flag it so staff fix the source. Does NOT alter the value written here.
+    const nameCheck = validateName(nameClamp.value);
+    if (!nameCheck.ok) {
+      warnings.push(
+        `Product "${nameClamp.value.slice(0, 40)}…": name convention issues — ${nameCheck.issues.map((i) => i.message).join(" ")} Suggested: "${suggestName(nameClamp.value)}".`,
+      );
+    }
+    // Record the exact Name for the Inventory.Product join (keyed by raw key).
+    nameByProductKey.set(key, nameClamp.value);
     const descClamp = clampText(it.description, CCRS_PRODUCT_DESCRIPTION_MAX);
     if (descClamp.truncated) {
       warnings.push(`Product "${productName || ext}": Description exceeds ${CCRS_PRODUCT_DESCRIPTION_MAX} chars and was truncated — shorten it in the source.`);
@@ -255,7 +272,7 @@ function buildProductFile(
     ...unique.filter((w) => !w.startsWith("ERROR")),
   ];
   const dedupWarnings = errorsFirst.slice(0, 30);
-  return { rows, warnings: dedupWarnings };
+  return { rows, warnings: dedupWarnings, nameByProductKey };
 }
 
 function buildInventoryFile(
@@ -263,6 +280,7 @@ function buildInventoryFile(
   itemsByKey: Map<string, MenuItemRow>,
   license: string,
   createdBy: string,
+  nameByProductKey: Map<string, string>,
 ): { rows: string[][]; warnings: string[] } {
   const warnings: string[] = [];
   const rows: string[][] = [];
@@ -277,16 +295,25 @@ function buildInventoryFile(
       warnings.push(`Lot ${l.id} has no usable external identifier and was skipped.`);
       continue;
     }
-    const item = l.pos_product_key ? itemsByKey.get(l.pos_product_key.trim()) : undefined;
+    const key = (l.pos_product_key ?? "").trim();
+    const item = key ? itemsByKey.get(key) : undefined;
     const strain = (item?.strain_name ?? "").trim();
-    const productExt = sanitizeExternalId((l.pos_product_key ?? "").trim());
+    // CCRS joins Inventory.Product -> Product.Name by the EXACT name string
+    // (NOT by ExternalIdentifier). Write the identical Name recorded by
+    // buildProductFile. See docs/CCRS_PRODUCT_NAMING_RESEARCH.md.
+    const productName = nameByProductKey.get(key) ?? "";
+    if (!productName) {
+      warnings.push(
+        `Lot ${l.id}: no matching Product.Name for key "${key}" — Inventory.Product would be blank/invalid. Ensure the product is in the published menu.`,
+      );
+    }
     const area = l.status === "quarantine" || l.status === "recalled" ? "Quarantine" : "Sales Floor";
     const totalCostMinor = (l.unit_cost_minor_units ?? 0) * (l.received_qty ?? 0);
     rows.push([
       license,
       strain,
       area,
-      productExt,
+      productName,
       String(l.received_qty ?? 0),
       String(l.on_hand_qty ?? 0),
       (Math.max(0, totalCostMinor) / 100).toFixed(2),
@@ -378,7 +405,13 @@ export async function buildCcrsBatch(fromISO: string, toISO: string): Promise<Cc
   const strain = buildStrainFile(items, license.licenseNumber, submittedBy, createdBy, createdDate);
   const area = buildAreaFile(hasQuarantine, license.licenseNumber, createdBy, createdDate);
   const product = buildProductFile(items, lots, license.licenseNumber, createdBy, createdDate);
-  const inventory = buildInventoryFile(lots, itemsByKey, license.licenseNumber, createdBy);
+  const inventory = buildInventoryFile(
+    lots,
+    itemsByKey,
+    license.licenseNumber,
+    createdBy,
+    product.nameByProductKey,
+  );
 
   // --- Reuse mature builders for Adjustment + Sale --------------------------
   const [adj, sale] = await Promise.all([
