@@ -1,0 +1,729 @@
+[
+  {
+    "slug": "yummy",
+    "name": "Yummy",
+    "strain_type": "hybrid",
+    "dominant_cannabinoid": "cbd",
+    "flavor_notes": [
+      "sweet",
+      "earthy",
+      "pungent"
+    ],
+    "potency_note": "WA lab avg ~46.4% CBD / ~7.3% THC (45 tests, CBD-dominant (Type III))",
+    "avg_cbd": 46.4,
+    "avg_thc": 7.3,
+    "chemo": 3,
+    "tests": 45,
+    "source": "dolthub/cannabis-testing-wa (WA state lab tests)",
+    "confidence": 0.65
+  },
+  {
+    "slug": "acdc",
+    "name": "ACDC",
+    "strain_type": "hybrid",
+    "dominant_cannabinoid": "cbd",
+    "flavor_notes": [
+      "earthy",
+      "pine",
+      "woody"
+    ],
+    "potency_note": "WA lab avg ~28.5% CBD / ~7.7% THC (733 tests, CBD-dominant (Type III))",
+    "avg_cbd": 28.5,
+    "avg_thc": 7.7,
+    "chemo": 3,
+    "tests": 733,
+    "source": "dolthub/cannabis-testing-wa (WA state lab tests)",
+    "confidence": 0.75
+  },
+  {
+    "slug": "dancehall",
+    "name": "Dancehall",
+    "strain_type": "hybrid",
+    "dominant_cannabinoid": "cbd",
+    "flavor_notes": [
+      "earthy",
+      "citrus",
+      "flowery"
+    ],
+    "potency_note": "WA lab avg ~28.5% CBD / ~6.6% THC (35 tests, CBD-dominant (Type III))",
+    "avg_cbd": 28.5,
+    "avg_thc": 6.6,
+    "chemo": 3,
+    "tests": 35,
+    "source": "dolthub/cannabis-testing-wa (WA state lab tests)",
+    "confidence": 0.65
+  },
+  {
+    "slug": "sour tsunami",
+    "name": "Sour Tsunami",
+    "strain_type": "hybrid",
+    "dominant_cannabinoid": "cbd",
+    "flavor_notes": [
+      "citrus",
+      "diesel",
+      "sweet"
+    ],
+    "potency_note": "WA lab avg ~22.1% CBD / ~5.5% THC (346 tests, CBD-dominant (Type III))",
+    "avg_cbd": 22.1,
+    "avg_thc": 5.5,
+    "chemo": 3,
+    "tests": 346,
+    "source": "dolthub/cannabis-testing-wa (WA state lab tests)",
+    "confidence": 0.75
+  },
+  {
+    "slug": "suzy q",
+    "name": "Suzy Q",
+    "strain_type": "hybrid",
+    "dominant_cannabinoid": "cbd",
+    "flavor_notes": [
+      "pine",
+      "earthy",
+      "spicy",
+      "herbal"
+    ],
+    "potency_note": "WA lab avg ~21.4% CBD / ~1.7% THC (21 tests, CBD-dominant (Type III))",
+    "avg_cbd": 21.4,
+    "avg_thc": 1.7,
+    "chemo": 3,
+    "tests": 21,
+    "source": "dolthub/cannabis-testing-wa (WA state lab tests)",
+    "confidence": 0.65
+  },
+  {
+    "slug": "swiss tsunami",
+    "name": "Swiss Tsunami",
+    "strain_type": "sativa",
+    "dominant_cannabinoid": "cbd",
+    "flavor_notes": [
+      "earthy",
+      "citrus",
+      "orange"
+    ],
+    "potency_note": "WA lab avg ~18.7% CBD / ~12% THC (12 tests, CBD-dominant (Type III))",
+    "avg_cbd": 18.7,
+    "avg_thc": 12.0,
+    "chemo": 3,
+    "tests": 12,
+    "source": "dolthub/cannabis-testing-wa (WA state lab tests)",
+    "confidence": 0.55
+  },
+  {
+    "slug": "ringos gift",
+    "name": "Ringos Gift",
+    "strain_type": "hybrid",
+    "dominant_cannabinoid": "cbd",
+    "flavor_notes": [
+      "earthy",
+      "pine",
+      "citrus"
+    ],
+    "potency_note": "WA lab avg ~15.7% CBD / ~8.4% THC (36 tests, CBD-dominant (Type III))",
+    "avg_cbd": 15.7,
+    "avg_thc": 8.4,
+    "chemo": 3,
+    "tests": 36,
+    "source": "dolthub/cannabis-testing-wa (WA state lab tests)",
+    "confidence": 0.65
+  },
+  {
+    "slug": "charlottes web",
+    "name": "Charlottes Web",
+    "strain_type": "sativa",
+    "dominant_cannabinoid": "cbd",
+    "flavor_notes": [
+      "earthy",
+      "flowery",
+      "sweet"
+    ],
+    "potency_note": "WA lab avg ~14.4% CBD / ~10.5% THC (191 tests, CBD-dominant (Type III))",
+    "avg_cbd": 14.4,
+    "avg_thc": 10.5,
+    "chemo": 3,
+    "tests": 191,
+    "source": "dolthub/cannabis-testing-wa (WA state lab tests)",
+    "confidence": 0.75
+  },
+  {
+    "slug": "harle tsu",
+    "name": "Harle Tsu",
+    "strain_type": "hybrid",
+    "dominant_cannabinoid": "cbd",
+    "flavor_notes": [
+      "earthy",
+      "woody",
+      "spicy",
+      "herbal"
+    ],
+    "potency_note": "WA lab avg ~13.5% CBD / ~9.2% THC (116 tests, CBD-dominant (Type III))",
+    "avg_cbd": 13.5,
+    "avg_thc": 9.2,
+    "chemo": 3,
+    "tests": 116,
+    "source": "dolthub/cannabis-testing-wa (WA state lab tests)",
+    "confidence": 0.75
+  },
+  {
+    "slug": "frida",
+    "name": "Frida",
+    "strain_type": "indica",
+    "dominant_cannabinoid": "balanced",
+    "flavor_notes": [
+      "lemon",
+      "earthy",
+      "pine"
+    ],
+    "potency_note": "WA lab avg ~27% CBD / ~13.7% THC (16 tests, balanced (Type II))",
+    "avg_cbd": 27.0,
+    "avg_thc": 13.7,
+    "chemo": 2,
+    "tests": 16,
+    "source": "dolthub/cannabis-testing-wa (WA state lab tests)",
+    "confidence": 0.55
+  },
+  {
+    "slug": "swiss gold",
+    "name": "Swiss Gold",
+    "strain_type": "sativa",
+    "dominant_cannabinoid": "balanced",
+    "flavor_notes": [
+      "diesel",
+      "citrus",
+      "berry"
+    ],
+    "potency_note": "WA lab avg ~25.7% CBD / ~20.3% THC (10 tests, balanced (Type II))",
+    "avg_cbd": 25.7,
+    "avg_thc": 20.3,
+    "chemo": 2,
+    "tests": 10,
+    "source": "dolthub/cannabis-testing-wa (WA state lab tests)",
+    "confidence": 0.55
+  },
+  {
+    "slug": "haze wreck",
+    "name": "Haze Wreck",
+    "strain_type": "sativa",
+    "dominant_cannabinoid": "balanced",
+    "flavor_notes": [
+      "citrus",
+      "pine",
+      "woody"
+    ],
+    "potency_note": "WA lab avg ~21.2% CBD / ~20.3% THC (10 tests, balanced (Type II))",
+    "avg_cbd": 21.2,
+    "avg_thc": 20.3,
+    "chemo": 2,
+    "tests": 10,
+    "source": "dolthub/cannabis-testing-wa (WA state lab tests)",
+    "confidence": 0.55
+  },
+  {
+    "slug": "shurman 7",
+    "name": "Shurman 7",
+    "strain_type": "hybrid",
+    "dominant_cannabinoid": "balanced",
+    "flavor_notes": [
+      "earthy",
+      "sweet",
+      "pine"
+    ],
+    "potency_note": "WA lab avg ~21% CBD / ~15.1% THC (12 tests, balanced (Type II))",
+    "avg_cbd": 21.0,
+    "avg_thc": 15.1,
+    "chemo": 2,
+    "tests": 12,
+    "source": "dolthub/cannabis-testing-wa (WA state lab tests)",
+    "confidence": 0.55
+  },
+  {
+    "slug": "remedy",
+    "name": "Remedy",
+    "strain_type": "indica",
+    "dominant_cannabinoid": "balanced",
+    "flavor_notes": [
+      "woody",
+      "earthy",
+      "citrus"
+    ],
+    "potency_note": "WA lab avg ~19.3% CBD / ~9.7% THC (189 tests, balanced (Type II))",
+    "avg_cbd": 19.3,
+    "avg_thc": 9.7,
+    "chemo": 2,
+    "tests": 189,
+    "source": "dolthub/cannabis-testing-wa (WA state lab tests)",
+    "confidence": 0.75
+  },
+  {
+    "slug": "canna tsu",
+    "name": "Canna Tsu",
+    "strain_type": "hybrid",
+    "dominant_cannabinoid": "balanced",
+    "flavor_notes": [
+      "woody",
+      "earthy",
+      "grapefruit"
+    ],
+    "potency_note": "WA lab avg ~18.9% CBD / ~8.4% THC (33 tests, balanced (Type II))",
+    "avg_cbd": 18.9,
+    "avg_thc": 8.4,
+    "chemo": 2,
+    "tests": 33,
+    "source": "dolthub/cannabis-testing-wa (WA state lab tests)",
+    "confidence": 0.65
+  },
+  {
+    "slug": "treasure island",
+    "name": "Treasure Island",
+    "strain_type": "hybrid",
+    "dominant_cannabinoid": "balanced",
+    "flavor_notes": [
+      "pepper",
+      "spicy",
+      "herbal",
+      "flowery"
+    ],
+    "potency_note": "WA lab avg ~18.9% CBD / ~6.8% THC (13 tests, balanced (Type II))",
+    "avg_cbd": 18.9,
+    "avg_thc": 6.8,
+    "chemo": 2,
+    "tests": 13,
+    "source": "dolthub/cannabis-testing-wa (WA state lab tests)",
+    "confidence": 0.55
+  },
+  {
+    "slug": "aliens on moonshine",
+    "name": "Aliens On Moonshine",
+    "strain_type": "indica",
+    "dominant_cannabinoid": "balanced",
+    "flavor_notes": [
+      "citrus",
+      "sage",
+      "grapefruit"
+    ],
+    "potency_note": "WA lab avg ~18.8% CBD / ~14% THC (163 tests, balanced (Type II))",
+    "avg_cbd": 18.8,
+    "avg_thc": 14.0,
+    "chemo": 2,
+    "tests": 163,
+    "source": "dolthub/cannabis-testing-wa (WA state lab tests)",
+    "confidence": 0.75
+  },
+  {
+    "slug": "blue dynamite",
+    "name": "Blue Dynamite",
+    "strain_type": "indica",
+    "dominant_cannabinoid": "balanced",
+    "flavor_notes": [
+      "berry",
+      "spicy",
+      "herbal",
+      "pine"
+    ],
+    "potency_note": "WA lab avg ~17.5% CBD / ~12.7% THC (33 tests, balanced (Type II))",
+    "avg_cbd": 17.5,
+    "avg_thc": 12.7,
+    "chemo": 2,
+    "tests": 33,
+    "source": "dolthub/cannabis-testing-wa (WA state lab tests)",
+    "confidence": 0.65
+  },
+  {
+    "slug": "medihaze",
+    "name": "Medihaze",
+    "strain_type": "sativa",
+    "dominant_cannabinoid": "balanced",
+    "flavor_notes": [
+      "earthy",
+      "sweet",
+      "spicy",
+      "herbal"
+    ],
+    "potency_note": "WA lab avg ~16.2% CBD / ~12.1% THC (60 tests, balanced (Type II))",
+    "avg_cbd": 16.2,
+    "avg_thc": 12.1,
+    "chemo": 2,
+    "tests": 60,
+    "source": "dolthub/cannabis-testing-wa (WA state lab tests)",
+    "confidence": 0.65
+  },
+  {
+    "slug": "cbd kush",
+    "name": "CBD Kush",
+    "strain_type": "hybrid",
+    "dominant_cannabinoid": "balanced",
+    "flavor_notes": [
+      "earthy",
+      "woody",
+      "spicy",
+      "herbal"
+    ],
+    "potency_note": "WA lab avg ~14.7% CBD / ~14.5% THC (18 tests, balanced (Type II))",
+    "avg_cbd": 14.7,
+    "avg_thc": 14.5,
+    "chemo": 2,
+    "tests": 18,
+    "source": "dolthub/cannabis-testing-wa (WA state lab tests)",
+    "confidence": 0.55
+  },
+  {
+    "slug": "cannatonic",
+    "name": "Cannatonic",
+    "strain_type": "hybrid",
+    "dominant_cannabinoid": "balanced",
+    "flavor_notes": [
+      "earthy",
+      "woody",
+      "sweet"
+    ],
+    "potency_note": "WA lab avg ~14.5% CBD / ~16.8% THC (271 tests, balanced (Type II))",
+    "avg_cbd": 14.5,
+    "avg_thc": 16.8,
+    "chemo": 2,
+    "tests": 271,
+    "source": "dolthub/cannabis-testing-wa (WA state lab tests)",
+    "confidence": 0.75
+  },
+  {
+    "slug": "dance world",
+    "name": "Dance World",
+    "strain_type": "sativa",
+    "dominant_cannabinoid": "balanced",
+    "flavor_notes": [
+      "earthy",
+      "citrus",
+      "spicy",
+      "herbal"
+    ],
+    "potency_note": "WA lab avg ~13.7% CBD / ~24.9% THC (38 tests, balanced (Type II))",
+    "avg_cbd": 13.7,
+    "avg_thc": 24.9,
+    "chemo": 2,
+    "tests": 38,
+    "source": "dolthub/cannabis-testing-wa (WA state lab tests)",
+    "confidence": 0.65
+  },
+  {
+    "slug": "franks gift",
+    "name": "Franks Gift",
+    "strain_type": "hybrid",
+    "dominant_cannabinoid": "balanced",
+    "flavor_notes": [
+      "skunk",
+      "woody",
+      "tobacco"
+    ],
+    "potency_note": "WA lab avg ~13.6% CBD / ~11.1% THC (5 tests, balanced (Type II))",
+    "avg_cbd": 13.6,
+    "avg_thc": 11.1,
+    "chemo": 2,
+    "tests": 5,
+    "source": "dolthub/cannabis-testing-wa (WA state lab tests)",
+    "confidence": 0.55
+  },
+  {
+    "slug": "sweet and sour widow",
+    "name": "Sweet And Sour Widow",
+    "strain_type": "indica",
+    "dominant_cannabinoid": "balanced",
+    "flavor_notes": [
+      "earthy",
+      "sweet",
+      "woody"
+    ],
+    "potency_note": "WA lab avg ~13.5% CBD / ~11.9% THC (87 tests, balanced (Type II))",
+    "avg_cbd": 13.5,
+    "avg_thc": 11.9,
+    "chemo": 2,
+    "tests": 87,
+    "source": "dolthub/cannabis-testing-wa (WA state lab tests)",
+    "confidence": 0.65
+  },
+  {
+    "slug": "white dream",
+    "name": "White Dream",
+    "strain_type": "hybrid",
+    "dominant_cannabinoid": "balanced",
+    "flavor_notes": [
+      "earthy",
+      "sweet",
+      "citrus"
+    ],
+    "potency_note": "WA lab avg ~12% CBD / ~19.1% THC (8 tests, balanced (Type II))",
+    "avg_cbd": 12.0,
+    "avg_thc": 19.1,
+    "chemo": 2,
+    "tests": 8,
+    "source": "dolthub/cannabis-testing-wa (WA state lab tests)",
+    "confidence": 0.55
+  },
+  {
+    "slug": "hawaiian dream",
+    "name": "Hawaiian Dream",
+    "strain_type": "sativa",
+    "dominant_cannabinoid": "balanced",
+    "flavor_notes": [
+      "sweet",
+      "tropical",
+      "pineapple"
+    ],
+    "potency_note": "WA lab avg ~11.6% CBD / ~8.8% THC (73 tests, balanced (Type II))",
+    "avg_cbd": 11.6,
+    "avg_thc": 8.8,
+    "chemo": 2,
+    "tests": 73,
+    "source": "dolthub/cannabis-testing-wa (WA state lab tests)",
+    "confidence": 0.65
+  },
+  {
+    "slug": "stephen hawking kush",
+    "name": "Stephen Hawking Kush",
+    "strain_type": "indica",
+    "dominant_cannabinoid": "balanced",
+    "flavor_notes": [
+      "earthy",
+      "woody",
+      "berry"
+    ],
+    "potency_note": "WA lab avg ~11.5% CBD / ~16.7% THC (74 tests, balanced (Type II))",
+    "avg_cbd": 11.5,
+    "avg_thc": 16.7,
+    "chemo": 2,
+    "tests": 74,
+    "source": "dolthub/cannabis-testing-wa (WA state lab tests)",
+    "confidence": 0.65
+  },
+  {
+    "slug": "pennywise",
+    "name": "Pennywise",
+    "strain_type": "indica",
+    "dominant_cannabinoid": "balanced",
+    "flavor_notes": [
+      "earthy",
+      "woody",
+      "sweet"
+    ],
+    "potency_note": "WA lab avg ~11.1% CBD / ~15.1% THC (158 tests, balanced (Type II))",
+    "avg_cbd": 11.1,
+    "avg_thc": 15.1,
+    "chemo": 2,
+    "tests": 158,
+    "source": "dolthub/cannabis-testing-wa (WA state lab tests)",
+    "confidence": 0.75
+  },
+  {
+    "slug": "harlequin",
+    "name": "Harlequin",
+    "strain_type": "sativa",
+    "dominant_cannabinoid": "balanced",
+    "flavor_notes": [
+      "earthy",
+      "sweet",
+      "woody"
+    ],
+    "potency_note": "WA lab avg ~10.8% CBD / ~18.2% THC (846 tests, balanced (Type II))",
+    "avg_cbd": 10.8,
+    "avg_thc": 18.2,
+    "chemo": 2,
+    "tests": 846,
+    "source": "dolthub/cannabis-testing-wa (WA state lab tests)",
+    "confidence": 0.75
+  },
+  {
+    "slug": "grape krush",
+    "name": "Grape Krush",
+    "strain_type": "indica",
+    "dominant_cannabinoid": "balanced",
+    "flavor_notes": [
+      "grape",
+      "sweet",
+      "berry"
+    ],
+    "potency_note": "WA lab avg ~10.3% CBD / ~21.9% THC (12 tests, balanced (Type II))",
+    "avg_cbd": 10.3,
+    "avg_thc": 21.9,
+    "chemo": 2,
+    "tests": 12,
+    "source": "dolthub/cannabis-testing-wa (WA state lab tests)",
+    "confidence": 0.55
+  },
+  {
+    "slug": "nordle",
+    "name": "Nordle",
+    "strain_type": "indica",
+    "dominant_cannabinoid": "balanced",
+    "flavor_notes": [
+      "sweet",
+      "citrus",
+      "pungent"
+    ],
+    "potency_note": "WA lab avg ~9.8% CBD / ~12.2% THC (57 tests, balanced (Type II))",
+    "avg_cbd": 9.8,
+    "avg_thc": 12.2,
+    "chemo": 2,
+    "tests": 57,
+    "source": "dolthub/cannabis-testing-wa (WA state lab tests)",
+    "confidence": 0.65
+  },
+  {
+    "slug": "bubblegun",
+    "name": "Bubblegun",
+    "strain_type": "hybrid",
+    "dominant_cannabinoid": "balanced",
+    "flavor_notes": [
+      "pepper",
+      "mint",
+      "blueberry"
+    ],
+    "potency_note": "WA lab avg ~9.1% CBD / ~5.1% THC (15 tests, balanced (Type II))",
+    "avg_cbd": 9.1,
+    "avg_thc": 5.1,
+    "chemo": 2,
+    "tests": 15,
+    "source": "dolthub/cannabis-testing-wa (WA state lab tests)",
+    "confidence": 0.55
+  },
+  {
+    "slug": "cbd mango haze",
+    "name": "CBD Mango Haze",
+    "strain_type": "sativa",
+    "dominant_cannabinoid": "balanced",
+    "flavor_notes": [
+      "mango",
+      "tropical",
+      "flowery"
+    ],
+    "potency_note": "WA lab avg ~8.4% CBD / ~21.8% THC (8 tests, balanced (Type II))",
+    "avg_cbd": 8.4,
+    "avg_thc": 21.8,
+    "chemo": 2,
+    "tests": 8,
+    "source": "dolthub/cannabis-testing-wa (WA state lab tests)",
+    "confidence": 0.55
+  },
+  {
+    "slug": "cbd shark",
+    "name": "CBD Shark",
+    "strain_type": "indica",
+    "dominant_cannabinoid": "balanced",
+    "flavor_notes": [
+      "pungent",
+      "nutty",
+      "earthy"
+    ],
+    "potency_note": "WA lab avg ~8.3% CBD / ~22.3% THC (5 tests, balanced (Type II))",
+    "avg_cbd": 8.3,
+    "avg_thc": 22.3,
+    "chemo": 2,
+    "tests": 5,
+    "source": "dolthub/cannabis-testing-wa (WA state lab tests)",
+    "confidence": 0.55
+  },
+  {
+    "slug": "raw diesel",
+    "name": "Raw Diesel",
+    "strain_type": "hybrid",
+    "dominant_cannabinoid": "balanced",
+    "flavor_notes": [
+      "earthy",
+      "diesel",
+      "citrus"
+    ],
+    "potency_note": "WA lab avg ~8% CBD / ~9.6% THC (14 tests, balanced (Type II))",
+    "avg_cbd": 8.0,
+    "avg_thc": 9.6,
+    "chemo": 2,
+    "tests": 14,
+    "source": "dolthub/cannabis-testing-wa (WA state lab tests)",
+    "confidence": 0.55
+  },
+  {
+    "slug": "skunk haze",
+    "name": "Skunk Haze",
+    "strain_type": "hybrid",
+    "dominant_cannabinoid": "balanced",
+    "flavor_notes": [
+      "earthy",
+      "woody",
+      "skunk"
+    ],
+    "potency_note": "WA lab avg ~7.3% CBD / ~16% THC (225 tests, balanced (Type II))",
+    "avg_cbd": 7.3,
+    "avg_thc": 16.0,
+    "chemo": 2,
+    "tests": 225,
+    "source": "dolthub/cannabis-testing-wa (WA state lab tests)",
+    "confidence": 0.75
+  },
+  {
+    "slug": "cbd critical cure",
+    "name": "CBD Critical Cure",
+    "strain_type": "indica",
+    "dominant_cannabinoid": "balanced",
+    "flavor_notes": [
+      "sweet",
+      "earthy",
+      "berry"
+    ],
+    "potency_note": "WA lab avg ~7.1% CBD / ~11.2% THC (26 tests, balanced (Type II))",
+    "avg_cbd": 7.1,
+    "avg_thc": 11.2,
+    "chemo": 2,
+    "tests": 26,
+    "source": "dolthub/cannabis-testing-wa (WA state lab tests)",
+    "confidence": 0.65
+  },
+  {
+    "slug": "jamaican lion",
+    "name": "Jamaican Lion",
+    "strain_type": "sativa",
+    "dominant_cannabinoid": "balanced",
+    "flavor_notes": [
+      "earthy",
+      "lime",
+      "tropical"
+    ],
+    "potency_note": "WA lab avg ~7% CBD / ~19.7% THC (15 tests, balanced (Type II))",
+    "avg_cbd": 7.0,
+    "avg_thc": 19.7,
+    "chemo": 2,
+    "tests": 15,
+    "source": "dolthub/cannabis-testing-wa (WA state lab tests)",
+    "confidence": 0.55
+  },
+  {
+    "slug": "tesla",
+    "name": "Tesla",
+    "strain_type": "hybrid",
+    "dominant_cannabinoid": "balanced",
+    "flavor_notes": [
+      "tropical",
+      "pepper",
+      "sweet"
+    ],
+    "potency_note": "WA lab avg ~6.8% CBD / ~7.6% THC (6 tests, balanced (Type II))",
+    "avg_cbd": 6.8,
+    "avg_thc": 7.6,
+    "chemo": 2,
+    "tests": 6,
+    "source": "dolthub/cannabis-testing-wa (WA state lab tests)",
+    "confidence": 0.55
+  },
+  {
+    "slug": "super sour skunk",
+    "name": "Super Sour Skunk",
+    "strain_type": "hybrid",
+    "dominant_cannabinoid": "balanced",
+    "flavor_notes": [
+      "citrus",
+      "earthy",
+      "diesel"
+    ],
+    "potency_note": "WA lab avg ~5.9% CBD / ~11% THC (28 tests, balanced (Type II))",
+    "avg_cbd": 5.9,
+    "avg_thc": 11.0,
+    "chemo": 2,
+    "tests": 28,
+    "source": "dolthub/cannabis-testing-wa (WA state lab tests)",
+    "confidence": 0.65
+  }
+]

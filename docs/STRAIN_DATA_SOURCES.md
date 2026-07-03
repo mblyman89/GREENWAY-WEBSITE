@@ -49,3 +49,30 @@ dolt clone dolthub/cannabis-testing-wa
   first pass dropped.
 - CCRS is hard-set (Indica/Sativa/Hybrid) and must NOT be touched — leaning +
   ratio are WEBSITE + BACK-OFFICE only.
+
+## CBD strain pass (migration 0075)
+
+A dedicated pass for CBD strains, grounded in VERIFIED WA state lab data rather
+than marketing copy:
+
+- Source: `dolthub/cannabis-testing-wa` (`tests` table) — real WA state lab
+  results with `cbd_max`, `thc_max`, and `strain_chemotype`.
+- CBD relevance defined scientifically by modal chemotype:
+  - Chemotype 3 = CBD-dominant (Type III)
+  - Chemotype 2 = balanced THC:CBD (Type II)
+- Threshold: >= 5 lab tests per strain (drops one-off outliers / mislabeled
+  products — e.g. a THC strain with a single fluke high-CBD test is excluded).
+- Result: 40 strains (9 CBD-dominant, 31 balanced).
+- Factual flavor tags cross-referenced from the Cannabis API structured `Flavor`
+  list (descriptors only — NO verbatim prose descriptions copied).
+- `potency_note` records the averaged lab facts + test count + chemotype.
+- Confidence scales with test volume (>=100 tests -> 0.75, >=20 -> 0.65, else 0.55).
+
+Migration `0075_seed_kb_cbd_strains.sql` is idempotent and NON-destructive:
+INSERT new strains by slug; ON CONFLICT only fills NULL/empty fields (coalesce)
+and merges arrays (deduped append), so owner edits are never overwritten.
+Validated against a local Postgres 15 instance: clean apply, owner-row edits
+preserved, re-apply stays at 40 rows.
+
+Build artifacts: `kb_sources/cbd/` (build_cbd_seed.py, emit_migration.py,
+cbd_strains.json, wa_cbd_chemotype.csv).

@@ -121,12 +121,24 @@ export function StrainEditor({
     setEditingId(null);
   }
 
-  // Type filter matches on the canonical strain-type value so the leaning
-  // designations (Indica-Hybrid / Sativa-Hybrid) are distinct choices — not
-  // folded into "Hybrid". "hybrid" means a true (non-leaning) hybrid only.
-  function matchesType(t: string | null | undefined, want: string): boolean {
+  // Type filter.
+  //
+  // The two leaning designations (Indica-Hybrid / Sativa-Hybrid) are carried by
+  // the verified `leaning` column (migration 0074), NOT by `strain_type` — the
+  // strain_type field itself is only ever indica/sativa/hybrid for most rows.
+  // So for those two options we match on `leaning` (falling back to strain_type
+  // if a row happens to store the leaning there too). The base indica/sativa/
+  // hybrid options match on the canonical strain_type. This is why the leaning
+  // filter previously blanked the table — nothing had a leaning *strain_type*.
+  function matchesType(s: KbStrainFull, want: string): boolean {
     if (want === "all") return true;
-    return canonicalStrainType(t) === want;
+    if (want === "indica-hybrid" || want === "sativa-hybrid") {
+      const lean = canonicalStrainType(s.leaning ?? s.strain_type);
+      return lean === want;
+    }
+    // Base type: don't let a leaning row also show under plain "hybrid" via its
+    // strain_type; just compare the canonical strain_type directly.
+    return canonicalStrainType(s.strain_type) === want;
   }
 
   const q = query.trim().toLowerCase();
@@ -140,7 +152,7 @@ export function StrainEditor({
           (s.terpenes ?? []).some((t) => t.toLowerCase().includes(q));
         if (!hit) return false;
       }
-      if (!matchesType(s.strain_type, typeFilter)) return false;
+      if (!matchesType(s, typeFilter)) return false;
       // Terpene checkboxes. When exactly one is ticked we filter to it; when
       // both (or neither) are ticked we show everything.
       const hasTerpData = (s.terpenes ?? []).length > 0;
@@ -454,7 +466,7 @@ export function StrainEditor({
           <p className="mt-2 text-sm text-[var(--admin-text-muted)]">
             {strains.length === 0
               ? "No strains yet. Add one above, or seed the expert starter set."
-              : "No strains match your search."}
+              : "No strains match these filters. Try clearing the type, terpene, or search filters."}
           </p>
         ) : (
           <div className="mt-3 overflow-x-auto">
