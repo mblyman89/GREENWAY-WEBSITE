@@ -74,6 +74,19 @@ export default async function VendorsPage({
       />
 
       <div className="space-y-6 px-5 py-6 sm:px-8">
+        {/* Import action — bring vendors/brands in from a Cultivera export. */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-[var(--admin-text-faint)]">
+            Import your vendor or brand list from a spreadsheet export.
+          </p>
+          <Link
+            href="/admin/vendors/import"
+            className="inline-flex items-center gap-2 rounded-[var(--admin-radius)] bg-[var(--admin-orange)] px-4 py-2 text-sm font-semibold text-black shadow-[var(--admin-shadow-sm)] hover:brightness-110"
+          >
+            <span aria-hidden>⬆️</span> Import vendors &amp; brands
+          </Link>
+        </div>
+
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard label="Total vendors" value={all.length} hint={`${stats.totalBrands} brands · ${stats.totalProducts} products`} accent="muted" />
           <StatCard label="Published" value={publishedCount} accent="green" />
