@@ -9,11 +9,12 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { generateStructured, isAiConfigured, aiModelId } from "./provider";
-import { COMPLIANCE_SYSTEM, PROMPT_VERSION, checkCompliance } from "./compliance";
+import { COMPLIANCE_SYSTEM, PROMPT_VERSION, checkCompliance, checkEffects } from "./compliance";
 import {
   productDescriptionSchema,
   productTagsSchema,
   productSensorySchema,
+  productEffectsSchema,
   ALLOWED_PRODUCT_TAGS,
 } from "./schemas/product";
 import { buildGroundedFacts, loadBannedPhrases } from "./kb/retrieval";
@@ -169,6 +170,65 @@ export async function generateProductSensory(
     suggestion,
     complianceFlags: compliance.flags,
     blockingFlags: compliance.blockingFlags,
+    confidence: result.confidence,
+  };
+}
+
+/**
+ * Generate EXPERIENTIAL EFFECTS as a structured, validated draft (Request D).
+ * Effects are permitted ONLY as general experiential descriptors (sleepy,
+ * relaxed, uplifted, …) — never medical claims. The model is constrained to the
+ * allowed vocabulary by the schema, and the app RE-VALIDATES every returned
+ * effect with checkEffects() (allow-list + medical-claim filter + owner's
+ * kb_banned_phrases) before persisting. Non-compliant effects are dropped.
+ * Stored as field_key 'effects', a comma-separated list of accepted terms.
+ */
+export async function generateProductEffects(
+  posProductKey: string,
+  facts: ProductFacts,
+  generatedBy: string | null,
+): Promise<GeneratedSuggestion> {
+  const { lines, summary } = factLines(facts);
+  const grounded = await buildGroundedFacts(facts);
+  const banned = await loadBannedPhrases();
+
+  const factBlock = [
+    `POS FACTS:\n${lines.map((l) => `- ${l}`).join("\n")}`,
+    grounded.block,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
+  const result = await generateStructured({
+    system: COMPLIANCE_SYSTEM,
+    user: `From ONLY the facts below, list the general EXPERIENTIAL effect descriptors typically associated with this product/strain, from the allowed vocabulary only. Describe the general vibe (e.g. relaxed, uplifted), NEVER a medical benefit. Do NOT name conditions or use cure/treat/heal/relieve. If the facts don't support any, return an empty list and set confidence low.\n\n${factBlock}`,
+    schema: productEffectsSchema,
+    tier: "heavy",
+    maxTokens: 80,
+    context: { feature: "product.effects", entityType: "product", entityId: posProductKey, actorId: generatedBy },
+  });
+
+  // Re-validate every effect: allow-list + medical-claim filter + banned list.
+  const gate = checkEffects(result.effects, banned);
+  const value = gate.allowed.join(", ");
+  // Surface any rejected effects as compliance flags for the reviewer.
+  const flags = gate.rejected.map((r) => `effect "${r.effect}": ${r.reason}`);
+  const source = grounded.sources.length ? `kb:${grounded.sources.length}` : "model";
+  const suggestion = await persistSuggestion({
+    entity_type: "product",
+    entity_id: posProductKey,
+    field_key: "effects",
+    suggested_value: value,
+    input_summary: `${summary}${grounded.sources.length ? ` | grounded: ${grounded.sources.join(", ")}` : ""}${gate.rejected.length ? ` | dropped: ${gate.rejected.map((r) => r.effect).join(", ")}` : ""}`,
+    generated_by: generatedBy,
+    confidence: result.confidence,
+    source,
+  });
+  return {
+    suggestion,
+    complianceFlags: flags,
+    // Effects are pre-filtered, so nothing blocks acceptance; flags are advisory.
+    blockingFlags: [],
     confidence: result.confidence,
   };
 }

@@ -632,3 +632,92 @@ export async function setKbNoteActive(id: string, active: boolean): Promise<void
   const { error } = await admin.from("kb_notes").update({ active }).eq("id", id);
   if (error) throw new Error(error.message);
 }
+
+// ---------------------------------------------------------------------------
+// kb_products — per-SKU KB records promoted by the write-back service (0071).
+// The admin "Review write-backs" queue lists DRAFT rows so the owner can
+// validate them into published/active or archive them. Reads degrade to empty
+// pre-migration.
+// ---------------------------------------------------------------------------
+
+export type KbProductRow = {
+  id: string;
+  brand_slug: string;
+  product_slug: string;
+  variant_label: string;
+  display_name: string;
+  category: string | null;
+  aroma_notes: string[];
+  flavor_notes: string[];
+  terpenes: string[];
+  effects: string[];
+  description: string | null;
+  short_description: string | null;
+  image_media_ids: string[];
+  primary_media_id: string | null;
+  source: string | null;
+  confidence: number | null;
+  status: string;
+  active: boolean;
+  updated_at: string;
+};
+
+/** List kb_products by status (default: draft = the review queue). */
+export async function listKbProducts(
+  status: "draft" | "published" | "archived" | "all" = "draft",
+  limit = 200,
+): Promise<KbProductRow[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  try {
+    const admin = createSupabaseAdminClient();
+    let q = admin
+      .from("kb_products")
+      .select(
+        "id, brand_slug, product_slug, variant_label, display_name, category, aroma_notes, flavor_notes, terpenes, effects, description, short_description, image_media_ids, primary_media_id, source, confidence, status, active, updated_at",
+      )
+      .order("updated_at", { ascending: false })
+      .limit(limit);
+    if (status !== "all") q = q.eq("status", status);
+    const { data, error } = await q;
+    if (error || !data) return [];
+    return data as KbProductRow[];
+  } catch {
+    return [];
+  }
+}
+
+/** Count draft kb_products (for the review-queue badge). */
+export async function countKbProductDrafts(): Promise<number> {
+  if (!isSupabaseServiceConfigured) return 0;
+  try {
+    const admin = createSupabaseAdminClient();
+    const { count } = await admin
+      .from("kb_products")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "draft");
+    return count ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Validate a staged kb_products row into published/active, or archive it.
+ * Publishing is the human validation step (drafts-only rule): only after this
+ * is the per-SKU record treated as authoritative by the read side.
+ */
+export async function reviewKbProduct(
+  id: string,
+  decision: "publish" | "archive" | "draft",
+  actorId: string | null,
+): Promise<void> {
+  const admin = createSupabaseAdminClient();
+  const patch =
+    decision === "publish"
+      ? { status: "published", active: true, updated_by: actorId }
+      : decision === "archive"
+        ? { status: "archived", active: false, updated_by: actorId }
+        : { status: "draft", active: false, updated_by: actorId };
+  const { error } = await admin.from("kb_products").update(patch).eq("id", id);
+  if (error) throw new Error(error.message);
+}

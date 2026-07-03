@@ -9,6 +9,7 @@
  * paying for output that gets rejected.
  */
 import { defineSchema } from "../schema";
+import { ALLOWED_EFFECTS } from "../compliance";
 
 /** The fixed merchandising tag vocabulary (mirrors enrichment ProductTag). */
 export const ALLOWED_PRODUCT_TAGS = [
@@ -103,6 +104,30 @@ export const productSensorySchema = defineSchema<ProductSensoryResult>("product_
   terpenes: {
     kind: "stringArray",
     description: "Dominant terpenes ONLY if supported by the provided strain/brand facts; otherwise empty. (myrcene, limonene, caryophyllene, pinene, linalool, terpinolene, humulene)",
+    maxItems: 4,
+  },
+  confidence: { kind: "number", description: "0 to 1 grounding confidence.", min: 0, max: 1 },
+  used_generic_language: { kind: "boolean", description: "True if facts were too thin." },
+});
+
+export type ProductEffectsResult = {
+  /**
+   * EXPERIENTIAL descriptors ONLY, from the allowed list. Never medical claims.
+   * The app re-validates these with checkEffects() before anything is stored.
+   */
+  effects: string[];
+  confidence: number;
+  used_generic_language: boolean;
+};
+
+export const productEffectsSchema = defineSchema<ProductEffectsResult>("product_effects", {
+  effects: {
+    kind: "stringArray",
+    description:
+      "Up to 4 general experiential effect descriptors from the allowed list ONLY: [" +
+      ALLOWED_EFFECTS.join(", ") +
+      "]. Describe the general vibe/character, NOT medical benefits. NEVER say cure, treat, heal, relieve, or name any condition/symptom. If facts are thin, return an empty list.",
+    allowed: ALLOWED_EFFECTS,
     maxItems: 4,
   },
   confidence: { kind: "number", description: "0 to 1 grounding confidence.", min: 0, max: 1 },

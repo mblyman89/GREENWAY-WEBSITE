@@ -14,6 +14,7 @@ import {
   type ProductFacts,
 } from "@/lib/ai/suggestions";
 import { isAiConfigured } from "@/lib/ai/provider";
+import { writeBackOnPublish } from "@/lib/ai/kb/writeback";
 
 /**
  * Bulk AI: generate draft DESCRIPTIONS for a set of selected products in one
@@ -87,13 +88,16 @@ export async function bulkAcceptSuggestionAction(formData: FormData): Promise<vo
   }
   await reviewSuggestion(id, "accepted", session.userId);
 
+  // Promote the newly-validated fact(s) into the KB (drafts-only, best-effort).
+  const writeback = await writeBackOnPublish(key, session.userId);
+
   await recordAudit({
     actorId: session.userId,
     actorEmail: session.email,
     action: "product.bulk_ai_accepted",
     entityType: "product",
     entityId: key,
-    after: { suggestionId: id },
+    after: { suggestionId: id, kb_writeback: writeback ?? undefined },
   });
 
   revalidatePath("/admin/products/bulk-ai");
