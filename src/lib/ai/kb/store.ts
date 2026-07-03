@@ -252,24 +252,49 @@ export type KbStrainFull = {
   sources: string[] | null;
   confidence: number | null;
   active: boolean;
+  // Leaning + ratio (migration 0073). Percentages are 0-100 (indica vs sativa
+  // split); `leaning` is a canonical strain-taxonomy value (e.g. sativa-hybrid).
+  // These are NULL unless we have a verified ratio (owner-approved), so the UI
+  // must treat null as "no verified ratio" rather than 0%.
+  indica_pct: number | null;
+  sativa_pct: number | null;
+  ruderalis_pct: number | null;
+  leaning: string | null;
+  ratio_source: string | null;
 };
 
 const KB_STRAIN_FULL_COLUMNS =
   "id,slug,name,aliases,strain_type,lineage,aroma_notes,flavor_notes,terpenes,summary," +
-  "dominant_cannabinoid,potency_note,bud_structure,origin,sources,confidence,active";
+  "dominant_cannabinoid,potency_note,bud_structure,origin,sources,confidence,active," +
+  "indica_pct,sativa_pct,ruderalis_pct,leaning,ratio_source";
 
-/** Read full strain rows (all editable fields) for the manage/edit table. */
-export async function listKbStrainsFull(limit = 500): Promise<KbStrainFull[]> {
+/**
+ * Read full strain rows (all editable fields) for the manage/edit table.
+ *
+ * PostgREST caps a single `select()` at 1000 rows, so a plain `.limit(2500)`
+ * silently returns only the first 1000 (the root cause of "only 1000 strains
+ * show" even though the library holds 2000+). We page through with `.range()`
+ * in 1000-row windows until we've fetched everything (up to `limit`).
+ */
+export async function listKbStrainsFull(limit = 5000): Promise<KbStrainFull[]> {
   if (!isSupabaseServiceConfigured) return [];
   try {
     const admin = createSupabaseAdminClient();
-    const { data, error } = await admin
-      .from("kb_strains")
-      .select(KB_STRAIN_FULL_COLUMNS)
-      .order("name", { ascending: true })
-      .limit(limit);
-    if (error || !data) return [];
-    return data as unknown as KbStrainFull[];
+    const PAGE = 1000;
+    const rows: KbStrainFull[] = [];
+    for (let from = 0; from < limit; from += PAGE) {
+      const to = Math.min(from + PAGE, limit) - 1;
+      const { data, error } = await admin
+        .from("kb_strains")
+        .select(KB_STRAIN_FULL_COLUMNS)
+        .order("name", { ascending: true })
+        .range(from, to);
+      if (error || !data) break;
+      rows.push(...(data as unknown as KbStrainFull[]));
+      // Short page => no more rows to fetch.
+      if (data.length < PAGE) break;
+    }
+    return rows;
   } catch {
     return [];
   }

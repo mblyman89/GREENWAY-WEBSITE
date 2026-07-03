@@ -130,13 +130,6 @@ export default async function KnowledgeBasePage({
               accent="muted"
             />
             <KbNavCard
-              href="/admin/knowledge-base/notes"
-              title="Reference notes"
-              description="Your own house knowledge the AI treats as authoritative."
-              count={counts.notes}
-              accent="green"
-            />
-            <KbNavCard
               href="/admin/knowledge-base/compliance"
               title="Compliance guardrails"
               description="Banned phrases checked on top of the built-in WA rules."
@@ -151,15 +144,6 @@ export default async function KnowledgeBasePage({
               accent="orange"
               badge={draftReviews > 0 ? `${draftReviews} to review` : null}
             />
-          </div>
-        </div>
-
-        {/* Reference (terpenes) + setup — secondary, kept quiet at the bottom. */}
-        <div>
-          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
-            Reference & setup
-          </h2>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <KbNavCard
               href="/admin/knowledge-base/terpenes"
               title="Terpenes"

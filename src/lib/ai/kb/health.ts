@@ -2,32 +2,45 @@
  * src/lib/ai/kb/health.ts
  *
  * Aggregate Knowledge-Base HEALTH — the golden-record signals for the command
- * center. Reads existing list helpers (no new tables) and folds them through the
- * pure scorers in quality.ts to produce dashboard-level numbers:
+ * center. Folds source lists through the pure scorers in quality.ts to produce
+ * dashboard-level numbers:
  *
- *   • average strain / brand completeness
+ *   • average strain / brand / product / vendor completeness
+ *   • the TRUE total record count per domain (exact count, not the sampled page)
  *   • counts of records that need attention (below a threshold)
  *   • draft product write-backs waiting for review (timeliness/trust signal)
  *
- * Read-only and defensive: every source list already degrades to [] before its
- * migration is applied, so this returns zeros rather than throwing.
+ * 8b fixes (verified):
+ *   - Strain completeness previously showed "1000 strains" because PostgREST caps
+ *     a single select at 1000 rows and the strip displayed the SAMPLE size. We now
+ *     read an EXACT count separately (getKbCounts / countBrands / countVendors) and
+ *     display that as the denominator, while completeness is averaged over a large
+ *     sample. The two numbers are now labelled honestly.
+ *   - Brand completeness read the now-empty kb_brands table (brand facts folded
+ *     into operational `brands` in migration 0072). We now score operational
+ *     brands, so the number reflects reality.
+ *   - Added VENDOR completeness (operational vendors), per owner request.
+ *
+ * Read-only and defensive: every source degrades to []/0 before its migration is
+ * applied, so this returns zeros rather than throwing.
  */
-import {
-  listKbStrainsFull,
-  listKbBrands,
-  listKbProducts,
-  countKbProductDrafts,
-} from "./store";
-import { scoreStrain, scoreBrand, scoreProduct } from "./quality";
+import { listKbStrainsFull, listKbProducts, countKbProductDrafts, getKbCounts } from "./store";
+import { listBrandsWithFacts, listVendors, countBrands, countVendors } from "@/lib/vendors/store";
+import { scoreStrain, scoreBrand, scoreProduct, scoreVendor } from "./quality";
 
 export type KbHealth = {
   strainCompleteness: number; // 0–100 average
   brandCompleteness: number; // 0–100 average
   productCompleteness: number; // 0–100 average (published)
-  strainsNeedingAttention: number; // completeness < threshold
+  vendorCompleteness: number; // 0–100 average
+  strainsNeedingAttention: number; // completeness < threshold (within the sample)
   brandsNeedingAttention: number;
+  vendorsNeedingAttention: number;
   draftReviews: number;
-  sampled: { strains: number; brands: number; products: number };
+  /** TRUE totals per domain (exact counts, not the sampled page). */
+  totals: { strains: number; brands: number; products: number; vendors: number };
+  /** How many rows were actually scored (the completeness sample size). */
+  sampled: { strains: number; brands: number; products: number; vendors: number };
 };
 
 const ATTENTION_THRESHOLD = 65; // below this => "needs attention" (matches "good" grade floor)
@@ -38,24 +51,43 @@ function avg(nums: number[]): number {
 }
 
 export async function getKbHealth(): Promise<KbHealth> {
-  const [strains, brands, products, draftReviews] = await Promise.all([
-    listKbStrainsFull(2500),
-    listKbBrands(1000),
-    listKbProducts("published", 2000),
-    countKbProductDrafts(),
-  ]);
+  const [strains, brands, vendors, products, draftReviews, counts, brandTotal, vendorCounts] =
+    await Promise.all([
+      listKbStrainsFull(1000),
+      listBrandsWithFacts(1000),
+      listVendors(),
+      listKbProducts("published", 2000),
+      countKbProductDrafts(),
+      getKbCounts(),
+      countBrands(),
+      countVendors(),
+    ]);
 
   const strainScores = strains.map((s) => scoreStrain(s as unknown as Record<string, unknown>));
   const brandScores = brands.map((b) => scoreBrand(b as unknown as Record<string, unknown>));
   const productScores = products.map((p) => scoreProduct(p as unknown as Record<string, unknown>));
+  const vendorScores = vendors.map((v) => scoreVendor(v as unknown as Record<string, unknown>));
 
   return {
     strainCompleteness: avg(strainScores.map((s) => s.completeness)),
     brandCompleteness: avg(brandScores.map((s) => s.completeness)),
     productCompleteness: avg(productScores.map((s) => s.completeness)),
+    vendorCompleteness: avg(vendorScores.map((s) => s.completeness)),
     strainsNeedingAttention: strainScores.filter((s) => s.quality < ATTENTION_THRESHOLD).length,
     brandsNeedingAttention: brandScores.filter((s) => s.quality < ATTENTION_THRESHOLD).length,
+    vendorsNeedingAttention: vendorScores.filter((s) => s.quality < ATTENTION_THRESHOLD).length,
     draftReviews,
-    sampled: { strains: strains.length, brands: brands.length, products: products.length },
+    totals: {
+      strains: counts.strains,
+      brands: brandTotal,
+      products: products.length, // published set is small; the sample IS the total
+      vendors: vendorCounts.total,
+    },
+    sampled: {
+      strains: strains.length,
+      brands: brands.length,
+      products: products.length,
+      vendors: vendors.length,
+    },
   };
 }

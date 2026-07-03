@@ -118,6 +118,11 @@ export const PRODUCT_ESSENTIALS = [
 
 export const PRODUCT_CATEGORY_ESSENTIALS = ["group_key", "summary"] as const;
 
+// Vendor golden-record essentials (operational `vendors` shape — verified against
+// src/lib/vendors/types.ts). The minimum a vendor needs to read as a complete,
+// customer-usable record: who they are + how to describe/reach them.
+export const VENDOR_ESSENTIALS = ["legal_name", "about", "website", "license_number"] as const;
+
 /** Score a strain row (KbStrainFull-shaped). */
 export function scoreStrain(row: Record<string, unknown>): QualityScore {
   return scoreRecord(row, [...STRAIN_ESSENTIALS], {
@@ -142,6 +147,11 @@ export function scoreProduct(row: Record<string, unknown>): QualityScore {
 /** Score a product-category row (KbProductCategoryRow-shaped). */
 export function scoreProductCategory(row: Record<string, unknown>): QualityScore {
   return scoreRecord(row, [...PRODUCT_CATEGORY_ESSENTIALS]);
+}
+
+/** Score an operational vendor row (Vendor-shaped). No provenance columns. */
+export function scoreVendor(row: Record<string, unknown>): QualityScore {
+  return scoreRecord(row, [...VENDOR_ESSENTIALS]);
 }
 
 /** Human-readable label for a missing field key (for UI hints). */
