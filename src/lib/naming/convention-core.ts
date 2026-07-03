@@ -147,6 +147,23 @@ function num(v: Cannabinoid["value"]): number | null {
 
 /** Fixed display order for multi-cannabinoid letter tags. */
 const TAG_ORDER: CannabinoidType[] = ["thc", "cbd", "cbg", "cbn", "cbc"];
+
+/**
+ * Trace-cannabinoid guard.
+ *
+ * A co-cannabinoid must be at least this fraction of the DOMINANT cannabinoid to
+ * count toward the tag. Real cannabis flower and carts routinely carry 1-2%
+ * "trace" CBD (and other minors); tagging a 92%THC / 1.7%CBD cart as "20:1" is
+ * misleading and clutters the name, so trace amounts are treated as
+ * single-cannabinoid (no ratio/tag). 0.10 keeps genuine 1:1..5:1 and 10:1
+ * products tagged while dropping trace noise:
+ *   share >= 0.10  <=>  ratio <= 10:1   (matches the ratio snap ceiling of 10)
+ *
+ * This mirrors MIN_CO_CANNABINOID_SHARE in
+ * scripts/naming/build_cultivera_products_sheet.py so the website cards, the
+ * CCRS export, and the Cultivera upload sheet all agree.
+ */
+export const MIN_CO_CANNABINOID_SHARE = 0.1;
 const TAG_LABEL: Partial<Record<CannabinoidType, string>> = {
   thc: "THC",
   cbd: "CBD",
@@ -182,6 +199,16 @@ export function cannabinoidTag(
   (compounds ?? []).forEach(consider);
   consider(totalThc);
   consider(totalCbd);
+
+  // Trace-cannabinoid guard: drop co-cannabinoids that are below
+  // MIN_CO_CANNABINOID_SHARE of the dominant one, so THC-dominant products with
+  // only trace CBD stay THC-only (no misleading ratio). See the constant above.
+  const dominant = Math.max(0, ...Array.from(present.values()));
+  if (dominant > 0) {
+    for (const [k, v] of Array.from(present.entries())) {
+      if (v / dominant < MIN_CO_CANNABINOID_SHARE) present.delete(k);
+    }
+  }
 
   const keys = TAG_ORDER.filter((k) => present.has(k));
   if (keys.length <= 1) return ""; // THC-only (or nothing) => no tag
@@ -398,8 +425,22 @@ export function __runNamingConventionTests(): void {
   assert(cannabinoidTag([c("thc", 50), c("cbd", 100)]) === "1:2", "1:2 ratio");
   // 3 compounds -> letters in fixed order
   assert(cannabinoidTag([c("cbn", 10), c("thc", 100), c("cbd", 100)]) === "THC:CBD:CBN", "3-compound tag order");
+
+  // trace-cannabinoid guard: co-cannabinoid < 10% of dominant is dropped.
+  // 92% THC / 1.7% CBD cart (share ~1.8%) -> THC-only, no misleading ratio.
+  assert(cannabinoidTag([c("thc", 92), c("cbd", 1.7)]) === "", "trace cbd dropped (no 20:1)");
+  // 100 THC / 5 CBD (5% share) also trace -> no tag.
+  assert(cannabinoidTag([c("thc", 100), c("cbd", 5)]) === "", "5% co-cannabinoid dropped");
+  // exactly at the 10% threshold (100/10) still tags -> 10:1.
+  assert(cannabinoidTag([c("thc", 100), c("cbd", 10)]) === "10:1", "10% share still tagged");
+  // trace minor in a 3-compound set is dropped, leaving a clean 1:1.
+  assert(cannabinoidTag([c("thc", 100), c("cbd", 100), c("cbn", 2)]) === "1:1", "trace minor dropped from multi");
   // acid forms fold in
-  assert(cannabinoidTag([c("thca", 90, "%"), c("cbda", 5, "%")]) === "1:1" || cannabinoidTag([c("thca", 90, "%"), c("cbda", 5, "%")]) !== "", "acid forms considered");
+  // acid forms fold into thc/cbd; here cbda 5% is only ~5.5% of thca 90% (below
+  // the 10% trace threshold) so it is dropped -> THC-only, no tag.
+  assert(cannabinoidTag([c("thca", 90, "%"), c("cbda", 5, "%")]) === "", "acid forms folded, trace cbd dropped");
+  // a genuine acid-form 1:1 still tags.
+  assert(cannabinoidTag([c("thca", 50, "%"), c("cbda", 50, "%")]) === "1:1", "acid-form genuine 1:1");
 
   // buildComplianceName: vendor==brand drop
   const r1 = buildComplianceName({ vendor: "Acme", brand: "Acme", strainOrFlavor: "Blue Dream", type: "Flower" });
