@@ -5,7 +5,7 @@ import { PromoGrid } from "@/components/home/PromoGrid";
 import { Footer } from "@/components/site/Footer";
 import { Header } from "@/components/site/Header";
 import { StaffShortcut } from "@/components/site/StaffShortcut";
-import { posMenuPreviewItems } from "@/lib/pos/preview-menu";
+import { loadLiveMenuItems } from "@/lib/pos/live-menu";
 import { withMenuProfile } from "@/lib/menu/strain-terpenes-server";
 import { getContentValues, isPreviewActive } from "@/lib/cms/render-content";
 import { getCarouselForRender } from "@/lib/cms/carousel-store";
@@ -19,6 +19,11 @@ export const metadata: Metadata = {
   openGraph: { images: [{ url: "/og/home.png", alt: "Greenway Marijuana" }] },
   twitter: { images: ["/og/home.png"] },
 };
+
+// The home page shows live product cards (daily deals + brand grid) sourced from
+// the published DB menu, so it must render on demand rather than be frozen at
+// build time. Keeps the storefront in lock-step with the back office.
+export const dynamic = "force-dynamic";
 
 export default async function Home() {
   // Hero slides come from the staff-managed Home Carousel (draft-aware).
@@ -41,8 +46,9 @@ export default async function Home() {
     getSectionsForRender("home"),
     isPreviewActive(),
     // Overlay the KB strain profile so home deal cards match the menu (leaning
-    // hybrids + terpenes). No-op when no KB/curated match.
-    withMenuProfile(posMenuPreviewItems),
+    // hybrids + terpenes). No-op when no KB/curated match. Menu now comes from
+    // the PUBLISHED DB version (dynamic), not a static snapshot.
+    loadLiveMenuItems().then((items) => withMenuProfile(items)),
   ]);
 
   // Map the new page_sections rows (by section_key) onto the banner content.
@@ -55,6 +61,7 @@ export default async function Home() {
       <Hero slides={slides} />
       <HomeDailyDeals items={dealItems} />
       <PromoGrid
+        items={dealItems}
         content={{
           categoryImage: category?.image || copy["home.category.image"],
           categoryEyebrow: category?.eyebrow || copy["home.category.eyebrow"],

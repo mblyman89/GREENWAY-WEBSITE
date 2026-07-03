@@ -6,6 +6,10 @@ import { pageMetadata } from "@/lib/seo/seo";
 import { getThursdayBrands } from "@/lib/promotions/storefront-bridge";
 import { getContentValues, isPreviewActive } from "@/lib/cms/render-content";
 import { getPageBanners } from "@/lib/cms/page-sections-store";
+import { loadLiveMenuItems } from "@/lib/pos/live-menu";
+
+// Menu is dynamic (published DB version), so specials render on demand.
+export const dynamic = "force-dynamic";
 
 export const metadata = pageMetadata({
   title: "Cannabis Specials & Daily Deals — Port Orchard",
@@ -17,7 +21,7 @@ export const metadata = pageMetadata({
 
 export default async function SpecialsPage() {
   // DB-published Thursday brands (back-office promotions) with static fallback.
-  const [thursdayBrands, copy, preview, banners] = await Promise.all([
+  const [thursdayBrands, copy, preview, banners, menuItems] = await Promise.all([
     getThursdayBrands(),
     getContentValues([
       "specials.hero.eyebrow",
@@ -26,6 +30,7 @@ export default async function SpecialsPage() {
     ]),
     isPreviewActive(),
     getPageBanners("specials", ["specials.hero"]),
+    loadLiveMenuItems(),
   ]);
 
   // Pages-builder hero (specials.hero) is the source of truth when present;
@@ -38,6 +43,7 @@ export default async function SpecialsPage() {
       <Breadcrumbs items={[{ label: "Specials" }]} />
       <SpecialsContent
         thursdayBrands={thursdayBrands}
+        menuItems={menuItems}
         content={{
           eyebrow: hero?.eyebrow || copy["specials.hero.eyebrow"],
           title: hero?.title || copy["specials.hero.title"],

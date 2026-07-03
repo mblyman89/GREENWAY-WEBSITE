@@ -12,7 +12,7 @@ import { JsonLd } from "@/components/seo/JsonLd";
 import type { GreenwayMenuItem } from "@/lib/leafly/types";
 import { formatWebsiteCategory } from "@/lib/pos/category-taxonomy";
 import { strainTypeLabel } from "@/lib/menu/strain-taxonomy";
-import { getPosPreviewMenuItemById, posMenuPreviewItems } from "@/lib/pos/preview-menu";
+import { getLiveMenuItemById, loadLiveMenuItems } from "@/lib/pos/live-menu";
 import { withResolvedImages } from "@/lib/enrichment/image-resolver";
 import { withMenuProfile } from "@/lib/menu/strain-terpenes-server";
 import { breadcrumbSchema, pageMetadata, productSchema } from "@/lib/seo/seo";
@@ -94,8 +94,8 @@ const categoryAliases: Partial<Record<GreenwayMenuItem["category"], string>> = {
   paraphernalia: "Accessory",
 };
 
-function getMenuItemById(id: string) {
-  return getMerchMenuItemById(id) ?? getPosPreviewMenuItemById(id);
+async function getMenuItemById(id: string) {
+  return getMerchMenuItemById(id) ?? (await getLiveMenuItemById(id));
 }
 
 function isMerchItem(item: GreenwayMenuItem) {
@@ -201,24 +201,24 @@ function ProductHeroArt({ item, tone }: { item: GreenwayMenuItem; tone: ProductT
   );
 }
 
-function relatedItemsFor(item: GreenwayMenuItem) {
+async function relatedItemsFor(item: GreenwayMenuItem) {
   if (isMerchItem(item)) {
     return merchMenuItems.filter((candidate) => candidate.id !== item.id).slice(0, 8);
   }
-  const allItems = posMenuPreviewItems;
+  const allItems = await loadLiveMenuItems();
   const sameBrand = allItems.filter((candidate) => candidate.brand === item.brand && candidate.id !== item.id);
   const fallback = allItems.filter((candidate) => candidate.id !== item.id && candidate.category === item.category);
   const related = sameBrand.length ? sameBrand : fallback;
   return related.slice(0, 8);
 }
 
-export function generateStaticParams() {
-  return [...posMenuPreviewItems, ...merchMenuItems].map((item) => ({ id: item.id }));
-}
+// The menu is dynamic (published DB version), so product pages render on demand
+// rather than being statically pre-generated from a frozen snapshot.
+export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
-  const item = getMenuItemById(id);
+  const item = await getMenuItemById(id);
 
   if (!item) {
     return {
@@ -240,7 +240,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
 export default async function ProductDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const baseItem = getMenuItemById(id);
+  const baseItem = await getMenuItemById(id);
 
   if (!baseItem) notFound();
 
@@ -253,7 +253,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
     : await withMenuProfile(await withResolvedImages([baseItem]));
 
   const tone = toneForItem(item);
-  const relatedItems = relatedItemsFor(item);
+  const relatedItems = await relatedItemsFor(item);
   const brandHref = `/menu?brand=${encodeURIComponent(item.brand)}`;
   const productDescription = item.description?.trim() || "No description available for this product.";
   const showCannabinoids = !isNonCannabisItem(item);
