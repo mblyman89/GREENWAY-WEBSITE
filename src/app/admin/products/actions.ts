@@ -10,10 +10,12 @@ import {
   generateProductDescription,
   generateProductTags,
   generateProductSensory,
+  generateProductEffects,
   reviewSuggestion,
   getSuggestion,
   type ProductFacts,
 } from "@/lib/ai/suggestions";
+import { writeBackOnPublish } from "@/lib/ai/kb/writeback";
 
 const ALLOWED_TAGS = new Set([
   "new-arrival",
@@ -129,12 +131,20 @@ export async function setEnrichmentStatus(formData: FormData): Promise<void> {
   await ensureEnrichment(key, {}, session.userId);
   await updateEnrichment(key, { status }, session.userId);
 
+  // On PUBLISH, promote the validated facts into the KB (drafts-only, non-
+  // destructive, compliance-gated). Best-effort: never blocks the publish.
+  let writeback: Awaited<ReturnType<typeof writeBackOnPublish>> = null;
+  if (status === "published") {
+    writeback = await writeBackOnPublish(key, session.userId);
+  }
+
   await recordAudit({
     actorId: session.userId,
     actorEmail: session.email,
     action: `product.${status}`,
     entityType: "product",
     entityId: key,
+    after: writeback ? { kb_writeback: writeback } : undefined,
   });
 
   revalidatePath("/admin/products");
@@ -165,6 +175,8 @@ export async function generateProductAi(formData: FormData): Promise<void> {
       await generateProductTags(key, facts, session.userId);
     } else if (kind === "sensory") {
       await generateProductSensory(key, facts, session.userId);
+    } else if (kind === "effects") {
+      await generateProductEffects(key, facts, session.userId);
     } else {
       await generateProductDescription(key, facts, session.userId);
     }
@@ -206,8 +218,14 @@ export async function acceptSuggestion(formData: FormData): Promise<void> {
       .filter((t) => ALLOWED_TAGS.has(t));
     await updateEnrichment(key, { tags }, session.userId);
   }
+  // sensory + effects have no enrichment column; they are validated facts that
+  // live on the accepted suggestion and are promoted to the KB (on accept here
+  // and again on publish via writeBackOnPublish). No enrichment write needed.
 
   await reviewSuggestion(id, "accepted", session.userId);
+
+  // Promote the newly-validated fact(s) into the KB (drafts-only, best-effort).
+  const writeback = await writeBackOnPublish(key, session.userId);
 
   await recordAudit({
     actorId: session.userId,
@@ -215,7 +233,7 @@ export async function acceptSuggestion(formData: FormData): Promise<void> {
     action: "product.ai_accepted",
     entityType: "product",
     entityId: key,
-    after: { field: sugg!.field_key },
+    after: { field: sugg!.field_key, kb_writeback: writeback ?? undefined },
   });
 
   revalidatePath(`/admin/products/${encodeURIComponent(key)}`);

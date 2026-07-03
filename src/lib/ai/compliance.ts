@@ -49,9 +49,20 @@ WASHINGTON I-502 COMPLIANCE (never violate):
 - NO false or misleading statements.
 - Do NOT include price, stock, discounts, or below-cost language.
 
+EFFECTS (allowed as EXPERIENTIAL descriptors ONLY):
+- You MAY describe a general experiential character using plain adjectives such
+  as: sleepy, relaxed, calm, uplifted, happy, focused, creative, energetic,
+  euphoric, giggly, talkative, hungry, mellow.
+- Frame them as experiential vibe/character, never as a treatment. GOOD:
+  "commonly described as relaxing and mellow." BAD: "relieves anxiety",
+  "cures insomnia", "helps you sleep", "treats pain".
+- NEVER pair an effect with a medical condition, symptom, or the words cure/
+  treat/heal/relieve/prevent/diagnose/remedy/therapy/medicine.
+
 STYLE:
-- Describe aroma, flavor, format, lineage/strain type, and craftsmanship — the
-  legal, expert surface area. Never describe effects on the body or mind.
+- Describe aroma, flavor, format, lineage/strain type, craftsmanship, and (when
+  supported) the general experiential character — the legal, expert surface
+  area. Do not describe medical effects on the body or mind.
 - Warm, knowledgeable, concise. Avoid empty hype ("best", "amazing", "miracle").
 `.trim();
 
@@ -113,3 +124,155 @@ export function checkCompliance(text: string, extra: ExtraBannedPhrase[] = []): 
   }
   return { ok: blockingFlags.length === 0, flags, blockingFlags };
 }
+
+// =============================================================================
+// EFFECTS — experiential-only allow-list + validator
+// =============================================================================
+// Request D: experiential effects (sleepy/relaxed) are OK; medical claims
+// (cure/treat/…) are NOT. We keep a canonical allow-list of experiential
+// descriptors and a validator that (a) rejects any effect not on the list and
+// (b) rejects any effect that trips the medical-claim regex or the owner's
+// kb_banned_phrases blocklist. This is the gate for BOTH effect generation and
+// effect write-back into the KB. Sensory copy still uses checkCompliance().
+
+/** Canonical experiential effect descriptors permitted under WA I-502. */
+export const ALLOWED_EFFECTS = [
+  "sleepy",
+  "relaxed",
+  "relaxing",
+  "calm",
+  "calming",
+  "mellow",
+  "uplifted",
+  "uplifting",
+  "happy",
+  "euphoric",
+  "focused",
+  "creative",
+  "energetic",
+  "energizing",
+  "giggly",
+  "talkative",
+  "sociable",
+  "hungry",
+  "tingly",
+] as const;
+
+export type EffectCheckResult = {
+  /** Effects that are on the allow-list AND pass the medical-claim filter. */
+  allowed: string[];
+  /** Effects rejected (not on allow-list, or trip a medical/banned phrase). */
+  rejected: { effect: string; reason: string }[];
+  /** True when every input effect was accepted. */
+  ok: boolean;
+};
+
+const ALLOWED_EFFECT_SET = new Set<string>(ALLOWED_EFFECTS.map((e) => e.toLowerCase()));
+
+/**
+ * Extra medical-claim words that, on their own, are never valid as an "effect"
+ * value even though checkCompliance already flags them in prose. Keeping a small
+ * dedicated list makes the effect validator strict and self-documenting.
+ */
+const EFFECT_MEDICAL_WORDS = [
+  "cure",
+  "cures",
+  "treat",
+  "treats",
+  "heal",
+  "heals",
+  "relieve",
+  "relieves",
+  "relief",
+  "prevent",
+  "prevents",
+  "diagnose",
+  "remedy",
+  "therapy",
+  "therapeutic",
+  "medicine",
+  "medical",
+  "medicinal",
+  "disease",
+  "disorder",
+  "symptom",
+  "clinical",
+  "clinically",
+  "fda",
+  "pain",
+  "anxiety",
+  "depression",
+  "insomnia",
+  "ptsd",
+  "cancer",
+  "arthritis",
+  "migraine",
+  "nausea",
+  "seizure",
+  "adhd",
+  "inflammation",
+];
+
+/**
+ * Validate a list of proposed EFFECT descriptors. An effect is accepted only if
+ * it is a single/short experiential term on ALLOWED_EFFECTS and it neither trips
+ * the medical-claim regex (checkCompliance blocking flags) nor contains a
+ * medical word nor matches the owner's kb_banned_phrases blocklist.
+ *
+ * `extra` layers kb_banned_phrases (same source checkCompliance uses).
+ */
+export function checkEffects(effects: string[], extra: ExtraBannedPhrase[] = []): EffectCheckResult {
+  const allowed: string[] = [];
+  const rejected: { effect: string; reason: string }[] = [];
+  const seen = new Set<string>();
+
+  for (const raw of effects) {
+    const effect = String(raw ?? "").trim().toLowerCase();
+    if (!effect) continue;
+    if (seen.has(effect)) continue;
+    seen.add(effect);
+
+    if (!ALLOWED_EFFECT_SET.has(effect)) {
+      rejected.push({ effect, reason: "not on the approved experiential-effect list" });
+      continue;
+    }
+    if (EFFECT_MEDICAL_WORDS.some((w) => effect === w || effect.includes(w))) {
+      rejected.push({ effect, reason: "contains a medical-claim word" });
+      continue;
+    }
+    const compliance = checkCompliance(effect, extra);
+    if (!compliance.ok) {
+      rejected.push({ effect, reason: `blocked: ${compliance.blockingFlags.join(", ")}` });
+      continue;
+    }
+    allowed.push(effect);
+  }
+
+  return { allowed, rejected, ok: rejected.length === 0 };
+}
+
+/**
+ * The medical-claim phrases we want present in the owner-editable
+ * kb_banned_phrases table so the DB-backed blocklist stays in sync with the
+ * code. Used by the idempotent seed helper (src/lib/ai/kb/seed-banned.ts).
+ */
+export const MEDICAL_BANNED_PHRASES: { phrase: string; severity: ComplianceSeverity; reason: string }[] = [
+  "cure",
+  "cures",
+  "treat",
+  "treats",
+  "heal",
+  "heals",
+  "prevent",
+  "prevents",
+  "diagnose",
+  "remedy",
+  "therapy",
+  "therapeutic",
+  "medicine",
+  "medicinal",
+  "disease",
+  "disorder",
+  "symptom",
+  "clinically",
+].map((phrase) => ({ phrase, severity: "block" as ComplianceSeverity, reason: "medical/therapeutic claim (WA I-502)" }));

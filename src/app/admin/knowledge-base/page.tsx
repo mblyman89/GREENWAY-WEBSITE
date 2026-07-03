@@ -16,7 +16,9 @@ import {
   addBannedPhraseAction,
   toggleBannedAction,
   upsertBrandAction,
+  seedMedicalBlocklistAction,
 } from "./actions";
+import Link from "next/link";
 import { KbLibrary } from "./KbLibrary";
 import { SubstituteManager } from "./SubstituteManager";
 import { NotesManager } from "./NotesManager";
@@ -239,6 +241,16 @@ export default async function KnowledgeBasePage({
             compliance rules. A <strong>block</strong> phrase means a draft must be edited before it can
             be accepted; a <strong>warn</strong> is just a heads-up.
           </p>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <form action={seedMedicalBlocklistAction}>
+              <Button type="submit" variant="neutral" disabled={!counts.migrated}>
+                Sync medical-claim blocklist
+              </Button>
+            </form>
+            <Link href="/admin/knowledge-base/review" className="text-sm text-[var(--admin-orange)] underline">
+              Review KB write-backs →
+            </Link>
+          </div>
           <form action={addBannedPhraseAction} className="mt-4 flex flex-wrap items-end gap-3">
             <label className="text-sm">
               <span className="block text-[var(--admin-text-muted)]">Phrase</span>

@@ -15,7 +15,9 @@ import {
   setKbNoteActive,
   upsertKbProductCategory,
   setProductCategoryActive,
+  reviewKbProduct,
 } from "@/lib/ai/kb/store";
+import { seedMedicalBannedPhrases } from "@/lib/ai/kb/seed-banned";
 import { validateNoteInput } from "@/lib/ai/kb/kb-notes-core";
 import { canonicalStrainType } from "@/lib/menu/strain-taxonomy";
 import {
@@ -337,4 +339,59 @@ export async function toggleKbNoteAction(formData: FormData): Promise<void> {
   await recordAudit({ actorId: session.profile.id, action: "kb.note.toggle", entityType: "kb_note", entityId: id, after: { active } }).catch(() => {});
   revalidatePath(PATH);
   back(active ? "Note is now in use." : "Note hidden from the AI.");
+}
+
+// ---------------------------------------------------------------------------
+// KB write-back review queue (kb_products drafts) + medical blocklist seed.
+// ---------------------------------------------------------------------------
+
+const REVIEW_PATH = "/admin/knowledge-base/review";
+
+function backReview(message: string, ok = true): never {
+  const key = ok ? "msg" : "error";
+  redirect(`${REVIEW_PATH}?${key}=${encodeURIComponent(message)}`);
+}
+
+/** Validate a staged kb_products row into published/active, or archive it. */
+export async function reviewKbProductAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("products.enrich");
+  const id = String(formData.get("id") ?? "");
+  const raw = String(formData.get("decision") ?? "");
+  const decision = raw === "publish" ? "publish" : raw === "archive" ? "archive" : "draft";
+  if (!id) backReview("Missing record id.", false);
+  await reviewKbProduct(id, decision, session.profile.id);
+  await recordAudit({
+    actorId: session.profile.id,
+    action: `kb.product.${decision}`,
+    entityType: "kb_product",
+    entityId: id,
+    after: { decision },
+  }).catch(() => {});
+  revalidatePath(REVIEW_PATH);
+  backReview(
+    decision === "publish"
+      ? "Record published into the KB."
+      : decision === "archive"
+        ? "Record archived."
+        : "Record returned to draft.",
+  );
+}
+
+/** Sync the code-defined medical-claim blocklist into kb_banned_phrases. */
+export async function seedMedicalBlocklistAction(): Promise<void> {
+  const session = await requirePermission("products.enrich");
+  const res = await seedMedicalBannedPhrases(session.profile.id);
+  await recordAudit({
+    actorId: session.profile.id,
+    action: "kb.banned.seed_medical",
+    entityType: "kb_banned_phrases",
+    after: { attempted: res.attempted, ok: res.ok, error: res.error ?? null },
+  }).catch(() => {});
+  revalidatePath(PATH);
+  back(
+    res.ok
+      ? `Synced ${res.attempted} medical-claim phrases into the blocklist.`
+      : `Could not sync blocklist: ${res.error ?? "unknown error"}`,
+    res.ok,
+  );
 }
