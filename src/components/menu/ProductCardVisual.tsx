@@ -3,6 +3,7 @@ import Link from "next/link";
 import type { GreenwayMenuItem } from "@/lib/leafly/types";
 import { formatWebsiteCategory } from "@/lib/pos/category-taxonomy";
 import { strainTypeLabel } from "@/lib/menu/strain-taxonomy";
+import { cardCannabinoids, deriveNetWeightLine } from "@/lib/menu/card-cannabinoids";
 import { ProductCardPriceSelector } from "./ProductCardPriceSelector";
 
 type CardTone = {
@@ -253,6 +254,11 @@ export function ProductCardVisual({ item, salePriceMinorUnits, saleBadgeLabel, c
   const showCannabinoids = isCannabisItem(item);
   const tone = cardToneForItem(item);
   const displayName = productCardDisplayName(item);
+  // Honest, compliance-aware cannabinoid display (profile badge + per-compound
+  // chips + PACKAGE-TOTAL mg headline for edibles/drinks so a 100 mg lemonade
+  // never reads like a 10 mg microdose). Grounded in verified menu-item data.
+  const cannabinoids = showCannabinoids ? cardCannabinoids(item) : null;
+  const netWeightLine = showCannabinoids ? deriveNetWeightLine(item) : null;
 
   return (
     <article
@@ -306,10 +312,74 @@ export function ProductCardVisual({ item, salePriceMinorUnits, saleBadgeLabel, c
           >
             {displayStrain(item)}
           </span>
-          {showCannabinoids ? (
-            <div className="grid grid-cols-2 gap-2">
-              <span className="flex min-h-9 items-center justify-center rounded-md bg-white px-2.5 py-2 text-[0.72rem] font-black uppercase leading-none text-black">THC: {item.thc ?? "--"}</span>
-              <span className="flex min-h-9 items-center justify-center rounded-md bg-white px-2.5 py-2 text-[0.72rem] font-black uppercase leading-none text-black">CBD: {item.cbd ?? "--"}</span>
+          {showCannabinoids && cannabinoids ? (
+            <div className="grid gap-2">
+              {/* Profile badge — mirrors the compliance naming tag (THC / 1:1 / THC:CBD:CBN / CBD). */}
+              {cannabinoids.profile ? (
+                <span className="mx-auto inline-flex items-center gap-1.5 rounded-full border border-white/25 bg-black/45 px-3 py-1 text-[0.62rem] font-black uppercase tracking-[0.12em] text-white/90 backdrop-blur-sm">
+                  <span className="h-1.5 w-1.5 rounded-full bg-[var(--greenway)]" aria-hidden="true" />
+                  {cannabinoids.profile.kind === "thc"
+                    ? "THC"
+                    : cannabinoids.profile.kind === "cbd"
+                      ? "CBD"
+                      : cannabinoids.profile.kind === "ratio"
+                        ? `${cannabinoids.profile.label} THC:CBD`
+                        : cannabinoids.profile.label}
+                </span>
+              ) : null}
+
+              {/* Package-TOTAL headline for mg-dosed products (edibles/drinks/tinctures). */}
+              {cannabinoids.isMgProduct && (cannabinoids.totalThcHeadline || cannabinoids.totalCbdHeadline) ? (
+                <div className="grid gap-1">
+                  {cannabinoids.totalThcHeadline ? (
+                    <span className="flex min-h-9 items-center justify-center rounded-md bg-white px-2.5 py-2 text-[0.74rem] font-black uppercase leading-none text-black">
+                      {cannabinoids.totalThcHeadline}
+                    </span>
+                  ) : null}
+                  {cannabinoids.totalCbdHeadline ? (
+                    <span className="flex min-h-8 items-center justify-center rounded-md bg-white/85 px-2.5 py-1.5 text-[0.68rem] font-black uppercase leading-none text-black">
+                      {cannabinoids.totalCbdHeadline}
+                    </span>
+                  ) : null}
+                  {netWeightLine ? (
+                    <span className="text-center text-[0.62rem] font-bold uppercase tracking-[0.06em] text-white/70">
+                      {netWeightLine}
+                    </span>
+                  ) : null}
+                </div>
+              ) : cannabinoids.chips.length > 0 ? (
+                /* %-dosed products (flower/concentrate/cartridge): per-compound chips. */
+                <div className={`grid gap-2 ${cannabinoids.chips.length >= 2 ? "grid-cols-2" : "grid-cols-1"}`}>
+                  {cannabinoids.chips.slice(0, 4).map((chip) => (
+                    <span
+                      key={chip.label}
+                      className="flex min-h-9 items-center justify-center rounded-md bg-white px-2.5 py-2 text-[0.72rem] font-black uppercase leading-none text-black"
+                    >
+                      {chip.label}: {chip.display}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  <span className="flex min-h-9 items-center justify-center rounded-md bg-white px-2.5 py-2 text-[0.72rem] font-black uppercase leading-none text-black">THC: --</span>
+                  <span className="flex min-h-9 items-center justify-center rounded-md bg-white px-2.5 py-2 text-[0.72rem] font-black uppercase leading-none text-black">CBD: --</span>
+                </div>
+              )}
+
+              {/* For mg products that also list minor cannabinoids beyond THC/CBD,
+                  show the extra chips so a THC:CBD:CBN blend is fully transparent. */}
+              {cannabinoids.isMgProduct && cannabinoids.chips.length > 0 ? (
+                <div className="flex flex-wrap justify-center gap-1.5">
+                  {cannabinoids.chips.map((chip) => (
+                    <span
+                      key={chip.label}
+                      className="inline-flex items-center rounded-full bg-white/12 px-2 py-0.5 text-[0.6rem] font-bold uppercase tracking-[0.05em] text-white/85"
+                    >
+                      {chip.label} {chip.display}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
             </div>
           ) : null}
         </div>
