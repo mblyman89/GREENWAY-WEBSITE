@@ -150,6 +150,19 @@ export default async function SettingsHomePage() {
         },
       ],
     },
+    {
+      name: "Data & lifecycle",
+      blurb: "Get to a clean slate before going live.",
+      links: [
+        {
+          href: "/admin/settings/reset",
+          title: "Reset operational data",
+          description:
+            "Clear test sales, inventory, imported products, customers & loyalty signups. Keeps your settings and knowledge base.",
+          icon: "🧹",
+        },
+      ],
+    },
   ];
 
   return (

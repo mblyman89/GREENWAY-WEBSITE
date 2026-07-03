@@ -1,6 +1,5 @@
 import type { MetadataRoute } from "next";
 import { posMenuPreviewItems } from "@/lib/pos/preview-menu";
-import { mockMenuItems } from "@/lib/leafly/mock-menu";
 
 const baseUrl = "https://www.greenwaymarijuana.com";
 
@@ -39,10 +38,10 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: priorityFor(route),
   })) satisfies MetadataRoute.Sitemap;
 
-  // Product detail pages mirror the live menu (POS preview items) plus any mock
-  // items still routed, de-duplicated by id.
+  // Product detail pages mirror the live menu (POS preview items),
+  // de-duplicated by id.
   const seen = new Set<string>();
-  const productEntries = [...posMenuPreviewItems, ...mockMenuItems]
+  const productEntries = [...posMenuPreviewItems]
     .filter((item) => {
       if (seen.has(item.id)) return false;
       seen.add(item.id);

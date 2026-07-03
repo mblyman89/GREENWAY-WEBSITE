@@ -75,7 +75,7 @@ export type GreenwayMenuItem = {
   description: string;
   priceLabel: string;
   priceMinorUnits: number;
-  inventoryStatus: "mock" | "in-stock" | "low-stock" | "unavailable";
+  inventoryStatus: "in-stock" | "low-stock" | "unavailable";
   hidden?: boolean;
   hiddenReason?: string;
   variants: GreenwayMenuVariant[];

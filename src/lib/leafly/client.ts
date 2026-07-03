@@ -1,11 +1,4 @@
 import { getLeaflyBaseUrl, getLeaflyConfig } from "./config";
-import { mockMenuItems } from "./mock-menu";
-
-export async function getGreenwayMenuPreview() {
-  // First milestone intentionally returns mock data. Do not call Leafly until credentials,
-  // sandbox access, and the certification plan are confirmed.
-  return mockMenuItems;
-}
 
 /**
  * Synchronous runtime descriptor (reads the current config cache). Prefer

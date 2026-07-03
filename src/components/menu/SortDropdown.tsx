@@ -4,10 +4,10 @@ export const sortOptions: { value: SortOption; label: string; helper: string }[]
   { value: "featured-shuffle", label: "Featured Shuffle", helper: "Rotates products on every visit" },
   { value: "name-az", label: "Name A-Z", helper: "Alphabetical product browsing" },
   { value: "name-za", label: "Name Z-A", helper: "Reverse alphabetical browsing" },
-  { value: "price-low", label: "Price Low-High", helper: "Lowest mock price first" },
-  { value: "price-high", label: "Price High-Low", helper: "Highest mock price first" },
+  { value: "price-low", label: "Price Low-High", helper: "Lowest price first" },
+  { value: "price-high", label: "Price High-Low", helper: "Highest price first" },
   { value: "category", label: "Category", helper: "Group similar product types" },
-  { value: "best-sellers", label: "Best Sellers", helper: "Preview order using mock inventory depth" },
+  { value: "best-sellers", label: "Best Sellers", helper: "Ordered by inventory depth" },
   { value: "potency-low", label: "Low to High Potency", helper: "Lowest listed THC/CBD value first" },
   { value: "potency-high", label: "High to Low Potency", helper: "Highest listed THC/CBD value first" },
 ];
