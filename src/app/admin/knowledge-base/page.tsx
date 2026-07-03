@@ -9,6 +9,7 @@ import {
   listKbBrands,
   listKbBanned,
   listKbNotes,
+  listKbProductCategoriesAll,
 } from "@/lib/ai/kb/store";
 import {
   seedKbAction,
@@ -16,7 +17,7 @@ import {
   toggleBannedAction,
   upsertBrandAction,
 } from "./actions";
-import { StrainEditor } from "./StrainEditor";
+import { KbLibrary } from "./KbLibrary";
 import { SubstituteManager } from "./SubstituteManager";
 import { NotesManager } from "./NotesManager";
 import {
@@ -39,17 +40,28 @@ export default async function KnowledgeBasePage({
   const { msg, error } = await searchParams;
 
   const counts = await getKbCounts();
-  const [strains, brands, banned, substitutes, subCounts, subMigrated, mediaAssets, notes] =
-    await Promise.all([
-      listKbStrainsFull(500),
-      listKbBrands(50),
-      listKbBanned(200),
-      listImageSubstitutes(500),
-      imageSubstituteCounts(),
-      imageSubstitutesMigrated(),
-      listMedia({ limit: 200 }),
-      listKbNotes(500),
-    ]);
+  const [
+    strains,
+    brands,
+    banned,
+    substitutes,
+    subCounts,
+    subMigrated,
+    mediaAssets,
+    notes,
+    productCategories,
+  ] = await Promise.all([
+    listKbStrainsFull(2500),
+    listKbBrands(50),
+    listKbBanned(200),
+    listImageSubstitutes(500),
+    imageSubstituteCounts(),
+    imageSubstitutesMigrated(),
+    listMedia({ limit: 200 }),
+    listKbNotes(500),
+    listKbProductCategoriesAll(500),
+  ]);
+  const productCategoriesMigrated = productCategories.length > 0;
 
   // Build lightweight media options (id + label + url) for the substitute picker.
   const mediaOptions = mediaAssets.map((m) => ({
@@ -145,8 +157,16 @@ export default async function KnowledgeBasePage({
           <NotesManager notes={notes} migrated={counts.notesMigrated} />
         </section>
 
-        {/* Strains — full add/edit editor (manual entry of verified strains) */}
-        <StrainEditor strains={strains} migrated={counts.migrated} total={counts.strains} />
+        {/* Unified library — switch between Strains and Product types up top.
+            Strains back flower/joint/blunt/concentrate/RSO; product types
+            (edibles, liquids, tinctures, topicals, vapes, …) live separately. */}
+        <KbLibrary
+          strains={strains}
+          strainsMigrated={counts.migrated}
+          strainsTotal={counts.strains}
+          productCategories={productCategories}
+          productCategoriesMigrated={productCategoriesMigrated}
+        />
 
         {/* Fallback / substitute images so product cards are never blank */}
         <SubstituteManager

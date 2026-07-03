@@ -17,6 +17,7 @@ import {
   SEED_BANNED_PHRASES,
 } from "./seed";
 import { STRAINS_RICH } from "./strains-data";
+import { PRODUCT_CATEGORIES } from "./product-categories-data";
 
 export type KbCounts = {
   strains: number;
@@ -76,7 +77,7 @@ export async function getKbCounts(): Promise<KbCounts> {
 export type SeedReport = {
   ok: boolean;
   message: string;
-  inserted: { strains: number; terpenes: number; categories: number; banned: number };
+  inserted: { strains: number; terpenes: number; categories: number; banned: number; productCategories: number };
 };
 
 /**
@@ -86,7 +87,7 @@ export type SeedReport = {
  */
 export async function seedKnowledgeBase(actorId: string | null): Promise<SeedReport> {
   if (!isSupabaseServiceConfigured) {
-    return { ok: false, message: "The database isn't connected yet.", inserted: { strains: 0, terpenes: 0, categories: 0, banned: 0 } };
+    return { ok: false, message: "The database isn't connected yet.", inserted: { strains: 0, terpenes: 0, categories: 0, banned: 0, productCategories: 0 } };
   }
   const admin = createSupabaseAdminClient();
 
@@ -138,8 +139,24 @@ export async function seedKnowledgeBase(actorId: string | null): Promise<SeedRep
     active: true,
     created_by: actorId,
   }));
+  // Product-type taxonomy (edibles, liquids, tinctures, topicals, vapes, …).
+  // These are the validated PRODUCT families the store carries — kept separate
+  // from strains, market-factual only (WA I-502). Seeded on `slug`.
+  const productCategoryRows = PRODUCT_CATEGORIES.map((c) => ({
+    slug: c.slug,
+    name: c.name,
+    group_key: c.group_key,
+    summary: c.summary,
+    aliases: c.aliases ?? [],
+    wa_inventory_types: c.wa_inventory_types ?? [],
+    sort_order: c.sort_order,
+    active: true,
+    created_by: actorId,
+    updated_by: actorId,
+  }));
 
   const errors: string[] = [];
+  const warnings: string[] = [];
   const r1 = await admin.from("kb_strains").upsert(strainRows, { onConflict: "slug" });
   if (r1.error) errors.push(`strains: ${r1.error.message}`);
   const r2 = await admin.from("kb_terpenes").upsert(terpeneRows, { onConflict: "slug" });
@@ -149,21 +166,40 @@ export async function seedKnowledgeBase(actorId: string | null): Promise<SeedRep
   const r4 = await admin.from("kb_banned_phrases").upsert(bannedRows, { onConflict: "phrase" });
   if (r4.error) errors.push(`banned phrases: ${r4.error.message}`);
 
+  // Product categories live behind migration 0070. If the table isn't there yet,
+  // don't fail the whole seed — just note it (matches the pre-migration degrade
+  // pattern used by the list helpers). Seeding these is idempotent.
+  let productCategoriesSeeded = 0;
+  const r5 = await admin
+    .from("kb_product_categories")
+    .upsert(productCategoryRows, { onConflict: "slug" });
+  if (r5.error) {
+    warnings.push(
+      `product types not seeded (apply migration 0070): ${r5.error.message}`,
+    );
+  } else {
+    productCategoriesSeeded = productCategoryRows.length;
+  }
+
   if (errors.length) {
     return {
       ok: false,
       message: `Some data couldn't be saved. Make sure the knowledge-base setup has been run. (${errors.join("; ")})`,
-      inserted: { strains: 0, terpenes: 0, categories: 0, banned: 0 },
+      inserted: { strains: 0, terpenes: 0, categories: 0, banned: 0, productCategories: 0 },
     };
   }
+  const okMessage =
+    "Knowledge base seeded with the expert starter set. You can edit or add to it any time." +
+    (warnings.length ? ` Note: ${warnings.join("; ")}.` : "");
   return {
     ok: true,
-    message: "Knowledge base seeded with the expert starter set. You can edit or add to it any time.",
+    message: okMessage,
     inserted: {
       strains: strainRows.length,
       terpenes: terpeneRows.length,
       categories: categoryRows.length,
       banned: bannedRows.length,
+      productCategories: productCategoriesSeeded,
     },
   };
 }
@@ -234,6 +270,142 @@ export async function listKbStrainsFull(limit = 500): Promise<KbStrainFull[]> {
       .limit(limit);
     if (error || !data) return [];
     return data as unknown as KbStrainFull[];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Customer-facing product-category taxonomy row (migration 0070). Reads degrade
+ * to [] pre-migration like the other KB list helpers, so the admin page renders
+ * safely before the owner has applied 0070.
+ */
+export type KbProductCategoryRow = {
+  id: string;
+  slug: string;
+  name: string;
+  group_key: string;
+  summary: string | null;
+  aliases: string[] | null;
+  wa_inventory_types: string[] | null;
+  sort_order: number;
+  active: boolean;
+};
+
+export async function listKbProductCategories(
+  limit = 200,
+): Promise<KbProductCategoryRow[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("kb_product_categories")
+      .select(
+        "id,slug,name,group_key,summary,aliases,wa_inventory_types,sort_order,active",
+      )
+      .order("sort_order", { ascending: true })
+      .limit(limit);
+    if (error || !data) return [];
+    return data as KbProductCategoryRow[];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Add or update a single product-type/category (manual staff entry). Mirrors the
+ * strain editor so the owner can grow the product-type taxonomy over time.
+ * Market-factual only (WA I-502: no health/effect claims). Upserts on `slug`.
+ */
+export type UpsertProductCategoryInput = {
+  slug?: string | null;
+  name: string;
+  group_key: string; // flower | concentrate | vape | edible | liquid | topical
+  summary?: string | null;
+  aliases?: string[];
+  wa_inventory_types?: string[];
+  sort_order?: number | null;
+  active?: boolean;
+};
+
+/** Normalize a display name into a stable slug (lowercase, dashed). */
+function slugifyName(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+export async function upsertKbProductCategory(
+  input: UpsertProductCategoryInput,
+  actorId: string | null,
+): Promise<{ ok: boolean; message?: string }> {
+  if (!isSupabaseServiceConfigured) {
+    return { ok: false, message: "The database isn't connected yet." };
+  }
+  const admin = createSupabaseAdminClient();
+  const slug = (input.slug?.trim() || slugifyName(input.name)) || slugifyName(input.name);
+  if (!slug) return { ok: false, message: "A product type needs a name." };
+  const row = {
+    slug,
+    name: input.name.trim(),
+    group_key: input.group_key,
+    summary: input.summary?.trim() || null,
+    aliases: input.aliases ?? [],
+    wa_inventory_types: input.wa_inventory_types ?? [],
+    sort_order: typeof input.sort_order === "number" ? input.sort_order : 999,
+    active: input.active ?? true,
+    updated_by: actorId,
+  };
+  const { error } = await admin
+    .from("kb_product_categories")
+    .upsert(row, { onConflict: "slug" });
+  if (error) {
+    return {
+      ok: false,
+      message: `Couldn't save the product type (apply migration 0070?): ${error.message}`,
+    };
+  }
+  return { ok: true };
+}
+
+/** Toggle a product-type row active/inactive. */
+export async function setProductCategoryActive(
+  id: string,
+  active: boolean,
+): Promise<{ ok: boolean; message?: string }> {
+  if (!isSupabaseServiceConfigured) {
+    return { ok: false, message: "The database isn't connected yet." };
+  }
+  const admin = createSupabaseAdminClient();
+  const { error } = await admin
+    .from("kb_product_categories")
+    .update({ active })
+    .eq("id", id);
+  if (error) return { ok: false, message: error.message };
+  return { ok: true };
+}
+
+/**
+ * List product categories INCLUDING inactive rows, for the editor view. Reads
+ * degrade to [] pre-migration like the other helpers.
+ */
+export async function listKbProductCategoriesAll(
+  limit = 500,
+): Promise<KbProductCategoryRow[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("kb_product_categories")
+      .select(
+        "id,slug,name,group_key,summary,aliases,wa_inventory_types,sort_order,active",
+      )
+      .order("sort_order", { ascending: true })
+      .limit(limit);
+    if (error || !data) return [];
+    return data as KbProductCategoryRow[];
   } catch {
     return [];
   }
