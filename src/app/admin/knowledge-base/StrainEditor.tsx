@@ -136,6 +136,16 @@ export function StrainEditor({
       const lean = canonicalStrainType(s.leaning ?? s.strain_type);
       return lean === want;
     }
+    if (want === "cbd") {
+      // A strain is CBD-relevant if either its canonical type is cbd OR its
+      // dominant cannabinoid is cbd (the CBD lab-data seed, migration 0075,
+      // sets dominant_cannabinoid='cbd' while keeping the botanical strain_type
+      // like indica/sativa/hybrid).
+      return (
+        canonicalStrainType(s.strain_type) === "cbd" ||
+        (s.dominant_cannabinoid ?? "").trim().toLowerCase() === "cbd"
+      );
+    }
     // Base type: don't let a leaning row also show under plain "hybrid" via its
     // strain_type; just compare the canonical strain_type directly.
     return canonicalStrainType(s.strain_type) === want;
@@ -414,6 +424,7 @@ export function StrainEditor({
               { v: "hybrid", label: "Hybrid" },
               { v: "indica-hybrid", label: "Indica-Hybrid" },
               { v: "sativa-hybrid", label: "Sativa-Hybrid" },
+              { v: "cbd", label: "CBD" },
             ].map((opt) => (
               <button
                 key={opt.v}
