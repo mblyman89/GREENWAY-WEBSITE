@@ -138,6 +138,39 @@ export async function listImageSubstitutes(limit = 500): Promise<ImageSubstitute
   }
 }
 
+/**
+ * Sets of brand/vendor slugs that have at least one ACTIVE image substitute.
+ * Lets the master-data view show, per brand/vendor, whether product cards would
+ * have a fallback image (PIM + DAM: image coverage is a product-experience
+ * quality signal). Read-only + defensive (returns empty sets pre-migration).
+ */
+export async function imageSubstituteSlugSets(): Promise<{
+  brands: Set<string>;
+  vendors: Set<string>;
+}> {
+  const empty = { brands: new Set<string>(), vendors: new Set<string>() };
+  if (!isSupabaseServiceConfigured) return empty;
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("kb_image_substitutes")
+      .select("scope,key,active")
+      .in("scope", ["brand", "vendor"]);
+    if (error || !data) return empty;
+    const rows = data as { scope: SubstituteScope; key: string; active: boolean }[];
+    const brands = new Set<string>();
+    const vendors = new Set<string>();
+    for (const r of rows) {
+      if (!r.active) continue;
+      if (r.scope === "brand") brands.add(normalizeKey(r.key));
+      if (r.scope === "vendor") vendors.add(normalizeKey(r.key));
+    }
+    return { brands, vendors };
+  } catch {
+    return empty;
+  }
+}
+
 /** Count active substitutes per scope (for the admin coverage summary). */
 export async function imageSubstituteCounts(): Promise<{
   total: number;

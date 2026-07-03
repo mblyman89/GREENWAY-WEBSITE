@@ -1,38 +1,24 @@
 import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { StatCard } from "@/components/admin/StatCard";
 import { HelpPanel } from "@/components/admin/ux/HelpPanel";
-import { Button } from "@/components/admin/ui/Button";
-import {
-  getKbCounts,
-  listKbStrainsFull,
-  listKbBrands,
-  listKbBanned,
-  listKbNotes,
-  listKbProductCategoriesAll,
-} from "@/lib/ai/kb/store";
-import {
-  seedKbAction,
-  addBannedPhraseAction,
-  toggleBannedAction,
-  upsertBrandAction,
-  seedMedicalBlocklistAction,
-} from "./actions";
-import Link from "next/link";
-import { KbLibrary } from "./KbLibrary";
-import { SubstituteManager } from "./SubstituteManager";
-import { NotesManager } from "./NotesManager";
-import {
-  listImageSubstitutes,
-  imageSubstituteCounts,
-  imageSubstitutesMigrated,
-  SEED_CATEGORY_KEYS,
-  SEED_INVENTORY_TYPE_KEYS,
-} from "@/lib/ai/kb/image-substitutes";
-import { listMedia, publicUrlForKey } from "@/lib/media/store";
+import { getKbCounts, countKbProductDrafts } from "@/lib/ai/kb/store";
+import { countBrands } from "@/lib/vendors/store";
+import { getKbHealth } from "@/lib/ai/kb/health";
+import { KbNavCard } from "./KbNavCard";
+import { KbFlash } from "./KbFlash";
+import { KbHealthStrip } from "./KbHealthStrip";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * Knowledge Base — command center hub.
+ *
+ * Designed with progressive disclosure (NN/g): the hub shows only the few most
+ * important things — a health strip and a small set of clearly-labelled doors
+ * into focused sub-pages. Every heavy editor (strains, brands, images, notes,
+ * compliance) lives behind its own route so this screen stays clean and fast to
+ * scan. This is the PIM "single repository" surfaced as a wayfinding console.
+ */
 export default async function KnowledgeBasePage({
   searchParams,
 }: {
@@ -41,270 +27,138 @@ export default async function KnowledgeBasePage({
   await requirePermission("products.enrich");
   const { msg, error } = await searchParams;
 
-  const counts = await getKbCounts();
-  const [
-    strains,
-    brands,
-    banned,
-    substitutes,
-    subCounts,
-    subMigrated,
-    mediaAssets,
-    notes,
-    productCategories,
-  ] = await Promise.all([
-    listKbStrainsFull(2500),
-    listKbBrands(50),
-    listKbBanned(200),
-    listImageSubstitutes(500),
-    imageSubstituteCounts(),
-    imageSubstitutesMigrated(),
-    listMedia({ limit: 200 }),
-    listKbNotes(500),
-    listKbProductCategoriesAll(500),
+  const [counts, draftReviews, health, brandCount] = await Promise.all([
+    getKbCounts(),
+    countKbProductDrafts(),
+    getKbHealth(),
+    countBrands(),
   ]);
-  const productCategoriesMigrated = productCategories.length > 0;
-
-  // Build lightweight media options (id + label + url) for the substitute picker.
-  const mediaOptions = mediaAssets.map((m) => ({
-    id: m.id,
-    label: m.title || m.filename || m.id,
-    url: publicUrlForKey(m.storage_key) ?? m.public_url ?? null,
-  }));
 
   return (
     <div>
       <AdminPageHeader
         title="Knowledge Base"
-        subtitle="The expert facts the AI is allowed to use when writing product copy"
+        subtitle="The single source of truth the AI writes from — your data command center"
+        help={
+          <HelpPanel id="kb-help" title="What is the knowledge base?">
+            <p>
+              Your point-of-sale data is thin — often just a product name and a category. To write
+              genuinely <strong>expert, accurate</strong> descriptions, the AI needs real facts to work
+              from. The knowledge base is that source of truth: curated <em>strains</em>,{" "}
+              <em>terpenes</em>, <em>product categories</em>, and <em>brand notes</em>.
+            </p>
+            <p className="mt-2">
+              Pick an area below to manage it. Everything here is <strong>sensory and factual only</strong>{" "}
+              — aroma, flavor, format, lineage — because Washington advertising rules don&apos;t allow
+              health or effect claims.
+            </p>
+          </HelpPanel>
+        }
       />
 
       <div className="px-5 py-6 sm:px-8 space-y-6">
-        {msg ? (
-          <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-3 text-sm text-[var(--admin-text)]">
-            {msg}
-          </div>
-        ) : null}
-        {error ? (
-          <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-orange)]/40 bg-[var(--admin-orange-soft)] px-4 py-3 text-sm text-[var(--admin-text)]">
-            {error}
-          </div>
-        ) : null}
-
-        <HelpPanel id="kb-help" title="What is the knowledge base?">
-          <p>
-            Your point-of-sale data is thin — often just a product name and a category. To write
-            genuinely <strong>expert, accurate</strong> descriptions, the AI needs real facts to work
-            from. The knowledge base is that source of truth: a curated list of <em>strains</em> (with
-            their lineage and typical aroma/flavor), <em>terpenes</em> (what each one smells and tastes
-            like), <em>category words</em> (the right way to describe flower vs. vapes vs. edibles), and
-            <em> brand notes</em>.
-          </p>
-          <p className="mt-2">
-            When you ask the AI to write a description, it looks up the matching facts here and is told
-            to <strong>use only those facts</strong> — so it never invents a strain lineage or a terpene
-            that isn&apos;t real. The more you fill this in, the better and more trustworthy the copy.
-          </p>
-          <p className="mt-2">
-            Start by clicking <strong>Seed expert starter set</strong> below to load a solid baseline of
-            common strains, terpenes, and category vocabulary. Then edit or add to it any time.
-          </p>
-          <p className="mt-2 text-[var(--admin-text-muted)]">
-            Everything here is <strong>sensory and factual only</strong> — aroma, flavor, format,
-            lineage. There is deliberately no place to record health or effect claims, because
-            Washington advertising rules don&apos;t allow them.
-          </p>
-        </HelpPanel>
+        <KbFlash msg={msg} error={error} />
 
         {!counts.migrated ? (
           <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-orange)]/40 bg-[var(--admin-orange-soft)] px-4 py-4 text-sm text-[var(--admin-text)]">
             <p className="font-medium">The knowledge base isn&apos;t fully set up yet.</p>
             <p className="mt-1 text-[var(--admin-text-muted)]">
-              Once your administrator finishes the one-time database setup, this page will let you seed
-              and manage the AI&apos;s reference facts.
+              Once the one-time database setup is finished, this page will let you seed and manage the
+              AI&apos;s reference facts. Start at{" "}
+              <a href="/admin/knowledge-base/setup" className="text-[var(--admin-accent)] underline">
+                Setup
+              </a>
+              .
             </p>
           </div>
         ) : null}
 
-        {/* Counts */}
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-          <StatCard label="Strains" value={counts.strains} accent="green" />
-          <StatCard label="Terpenes" value={counts.terpenes} accent="gold" />
-          <StatCard label="Categories" value={counts.categories} accent="muted" />
-          <StatCard label="Brand facts" value={counts.brands} accent="muted" />
-          <StatCard label="Banned phrases" value={counts.banned} accent="orange" />
-          <StatCard label="Your notes" value={counts.notes} accent="green" />
-        </div>
-
-        {/* Seed */}
-        <section className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
-          <h2 className="text-base font-semibold text-[var(--admin-text)]">Expert starter set</h2>
-          <p className="mt-1 text-sm text-[var(--admin-text-muted)]">
-            Loads a curated baseline of common strains, the terpene aroma/flavor map, and per-category
-            vocabulary. It&apos;s safe to run more than once — it refreshes the starter rows and leaves
-            anything you&apos;ve added untouched.
-          </p>
-          <form action={seedKbAction} className="mt-4">
-            <Button type="submit" variant="primary" disabled={!counts.migrated}>
-              Seed expert starter set
-            </Button>
-          </form>
-        </section>
-
-        {/* Owner-uploaded reference notes (item 14) */}
-        <section className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
-          <h2 className="mb-3 text-base font-semibold text-[var(--admin-text)]">
-            Your reference notes ({counts.notes})
-          </h2>
-          <NotesManager notes={notes} migrated={counts.notesMigrated} />
-        </section>
-
-        {/* Unified library — switch between Strains and Product types up top.
-            Strains back flower/joint/blunt/concentrate/RSO; product types
-            (edibles, liquids, tinctures, topicals, vapes, …) live separately. */}
-        <KbLibrary
-          strains={strains}
-          strainsMigrated={counts.migrated}
-          strainsTotal={counts.strains}
-          productCategories={productCategories}
-          productCategoriesMigrated={productCategoriesMigrated}
-        />
-
-        {/* Fallback / substitute images so product cards are never blank */}
-        <SubstituteManager
-          substitutes={substitutes}
-          media={mediaOptions}
-          categoryKeys={SEED_CATEGORY_KEYS}
-          inventoryTypeKeys={SEED_INVENTORY_TYPE_KEYS}
-          coveredCategories={subCounts.coveredCategories}
-          coveredInventoryTypes={subCounts.coveredInventoryTypes}
-          totalCategories={SEED_CATEGORY_KEYS.length}
-          totalInventoryTypes={SEED_INVENTORY_TYPE_KEYS.length}
-          migrated={subMigrated}
-        />
-
-        {/* Brand facts */}
-        <section className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
-          <h2 className="text-base font-semibold text-[var(--admin-text)]">Brand facts ({counts.brands})</h2>
-          <p className="mt-1 text-sm text-[var(--admin-text-muted)]">
-            Tell the AI what each brand is known for, so it can write copy that matches their style.
-          </p>
-          <form action={upsertBrandAction} className="mt-4 grid gap-3 sm:grid-cols-2">
-            <label className="text-sm">
-              <span className="block text-[var(--admin-text-muted)]">Brand name</span>
-              <input name="name" required className="mt-1 w-full rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-bg)] px-3 py-2 text-[var(--admin-text)]" placeholder="e.g. Avitas" />
-            </label>
-            <label className="text-sm">
-              <span className="block text-[var(--admin-text-muted)]">Known for</span>
-              <input name="known_for" className="mt-1 w-full rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-bg)] px-3 py-2 text-[var(--admin-text)]" placeholder="e.g. clean live-resin vape cartridges" />
-            </label>
-            <label className="text-sm">
-              <span className="block text-[var(--admin-text-muted)]">House style (voice)</span>
-              <input name="house_style" className="mt-1 w-full rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-bg)] px-3 py-2 text-[var(--admin-text)]" placeholder="e.g. clean, modern, understated" />
-            </label>
-            <label className="text-sm">
-              <span className="block text-[var(--admin-text-muted)]">Sensory notes (comma-separated)</span>
-              <input name="sensory_notes" className="mt-1 w-full rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-bg)] px-3 py-2 text-[var(--admin-text)]" placeholder="e.g. bright, true-to-strain, smooth" />
-            </label>
-            <div className="sm:col-span-2">
-              <Button type="submit" variant="neutral" disabled={!counts.migrated}>Save brand facts</Button>
-            </div>
-          </form>
-
-          {brands.length > 0 ? (
-            <div className="mt-4 overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-[var(--admin-text-muted)]">
-                    <th className="py-2 pr-4 font-medium">Brand</th>
-                    <th className="py-2 pr-4 font-medium">Known for</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {brands.map((b) => (
-                    <tr key={b.id} className="border-t border-[var(--admin-border)]">
-                      <td className="py-2 pr-4 text-[var(--admin-text)]">{b.name}</td>
-                      <td className="py-2 pr-4 text-[var(--admin-text-muted)]">{b.known_for ?? "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : null}
-        </section>
-
-        {/* Banned phrases */}
-        <section className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
-          <h2 className="text-base font-semibold text-[var(--admin-text)]">Banned phrases ({counts.banned})</h2>
-          <p className="mt-1 text-sm text-[var(--admin-text-muted)]">
-            Extra words or phrases the AI must never use. These are checked on top of the built-in
-            compliance rules. A <strong>block</strong> phrase means a draft must be edited before it can
-            be accepted; a <strong>warn</strong> is just a heads-up.
-          </p>
-          <div className="mt-3 flex flex-wrap items-center gap-3">
-            <form action={seedMedicalBlocklistAction}>
-              <Button type="submit" variant="neutral" disabled={!counts.migrated}>
-                Sync medical-claim blocklist
-              </Button>
-            </form>
-            <Link href="/admin/knowledge-base/review" className="text-sm text-[var(--admin-orange)] underline">
-              Review KB write-backs →
-            </Link>
+        {/* Golden-record health signals (MDM: Completeness + Trust). */}
+        {counts.migrated ? (
+          <div>
+            <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
+              Data health
+            </h2>
+            <KbHealthStrip health={health} />
           </div>
-          <form action={addBannedPhraseAction} className="mt-4 flex flex-wrap items-end gap-3">
-            <label className="text-sm">
-              <span className="block text-[var(--admin-text-muted)]">Phrase</span>
-              <input name="phrase" required className="mt-1 w-64 rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-bg)] px-3 py-2 text-[var(--admin-text)]" placeholder="e.g. couch lock" />
-            </label>
-            <label className="text-sm">
-              <span className="block text-[var(--admin-text-muted)]">Severity</span>
-              <select name="severity" className="mt-1 rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-bg)] px-3 py-2 text-[var(--admin-text)]">
-                <option value="block">Block</option>
-                <option value="warn">Warn</option>
-              </select>
-            </label>
-            <label className="text-sm flex-1 min-w-[12rem]">
-              <span className="block text-[var(--admin-text-muted)]">Reason (optional)</span>
-              <input name="reason" className="mt-1 w-full rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-bg)] px-3 py-2 text-[var(--admin-text)]" placeholder="why it's banned" />
-            </label>
-            <Button type="submit" variant="neutral" disabled={!counts.migrated}>Add phrase</Button>
-          </form>
+        ) : null}
 
-          {banned.length > 0 ? (
-            <div className="mt-4 overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-[var(--admin-text-muted)]">
-                    <th className="py-2 pr-4 font-medium">Phrase</th>
-                    <th className="py-2 pr-4 font-medium">Severity</th>
-                    <th className="py-2 pr-4 font-medium">Reason</th>
-                    <th className="py-2 pr-4 font-medium">Status</th>
-                    <th className="py-2 pr-4 font-medium"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {banned.map((b) => (
-                    <tr key={b.id} className="border-t border-[var(--admin-border)]">
-                      <td className="py-2 pr-4 text-[var(--admin-text)]">{b.phrase}</td>
-                      <td className="py-2 pr-4 text-[var(--admin-text-muted)] capitalize">{b.severity}</td>
-                      <td className="py-2 pr-4 text-[var(--admin-text-muted)]">{b.reason ?? "—"}</td>
-                      <td className="py-2 pr-4 text-[var(--admin-text-muted)]">{b.active ? "Active" : "Disabled"}</td>
-                      <td className="py-2 pr-4">
-                        <form action={toggleBannedAction}>
-                          <input type="hidden" name="id" value={b.id} />
-                          <input type="hidden" name="active" value={(!b.active).toString()} />
-                          <button type="submit" className="text-xs text-[var(--admin-accent)] hover:underline">
-                            {b.active ? "Disable" : "Enable"}
-                          </button>
-                        </form>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : null}
-        </section>
+        {/* Needs attention — surfaces the golden-record review queue first (MDM human-in-the-loop). */}
+        {draftReviews > 0 ? (
+          <a
+            href="/admin/knowledge-base/review"
+            className="flex items-center justify-between rounded-[var(--admin-radius-lg)] border border-[var(--admin-orange)]/40 bg-[var(--admin-orange-soft)] px-5 py-4 text-sm text-[var(--admin-text)] transition-colors hover:border-[var(--admin-orange)]"
+          >
+            <span>
+              <strong>{draftReviews}</strong> product write-back{draftReviews === 1 ? "" : "s"} awaiting
+              your review before they become published facts.
+            </span>
+            <span className="font-medium text-[var(--admin-orange)]">Review →</span>
+          </a>
+        ) : null}
+
+        {/* Entity navigator — the small set of doors (progressive disclosure). */}
+        <div>
+          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
+            Manage your data
+          </h2>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <KbNavCard
+              href="/admin/knowledge-base/master-data"
+              title="Master data"
+              description="Vendor → Brand → Product hierarchy and where data is thin."
+              accent="green"
+            />
+            <KbNavCard
+              href="/admin/knowledge-base/library"
+              title="Strains & categories"
+              description="Lineage, aroma, flavor, and the right words per product format."
+              count={counts.strains}
+              accent="green"
+            />
+            <KbNavCard
+              href="/admin/knowledge-base/brands"
+              title="Brand facts"
+              description="What each brand is known for, so copy matches their voice."
+              count={brandCount}
+              accent="gold"
+            />
+            <KbNavCard
+              href="/admin/knowledge-base/images"
+              title="Fallback images"
+              description="Substitute images so product cards are never blank."
+              accent="muted"
+            />
+            <KbNavCard
+              href="/admin/knowledge-base/compliance"
+              title="Compliance guardrails"
+              description="Banned phrases checked on top of the built-in WA rules."
+              count={counts.banned}
+              accent="orange"
+            />
+            <KbNavCard
+              href="/admin/knowledge-base/pipeline"
+              title="Data pipeline"
+              description="Bronze intake → Silver review → Gold published. Approve write-backs before they publish."
+              count={draftReviews}
+              accent="orange"
+              badge={draftReviews > 0 ? `${draftReviews} to review` : null}
+            />
+            <KbNavCard
+              href="/admin/knowledge-base/terpenes"
+              title="Terpenes"
+              description="The aroma/flavor map used to describe every strain. Reference only."
+              count={counts.terpenes}
+              accent="muted"
+            />
+            <KbNavCard
+              href="/admin/knowledge-base/setup"
+              title="Setup & starter data"
+              description="Load or refresh the curated baseline of strains, terpenes, and vocabulary."
+              accent="muted"
+            />
+          </div>
+        </div>
       </div>
     </div>
   );

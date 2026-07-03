@@ -14,7 +14,10 @@ import {
   buildCandidateClusters,
   deterministicNameGroups,
   deriveVariantLabel,
+  backboneGroups,
   type MasterCandidateItem,
+  type ResolvedIdentity,
+  type IdentityResolver,
 } from "@/lib/products/masters-cluster";
 import { generateStructured, isAiConfigured, AiNotConfiguredError } from "@/lib/ai/provider";
 import { groupingSuggestionSchema } from "@/lib/ai/schemas/grouping";
@@ -126,7 +129,135 @@ export async function loadCandidateItems(): Promise<MasterCandidateItem[]> {
       category: i.category,
       strainName: i.strain_name,
       priceMinor: i.price_minor_units,
+      // 7f: item-level medical flag isn't on MenuItemRow; variants carry it. A
+      // menu item is treated as medical only if ALL its variants are medical.
+      medical: (i.variants ?? []).length > 0 && (i.variants ?? []).every((v) => v.medical),
     }));
+}
+
+// ---------------------------------------------------------------------------
+// 7f — backbone identity resolver (brand / category-family / canonical strain)
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a backbone-aware IdentityResolver by loading the master-data lookups
+ * ONCE (blocking step is cheap; resolution then reuses the maps). Every axis
+ * falls back to a normalized raw string when the backbone has no matching row,
+ * so a thin catalog still groups by string. Best-effort; never throws.
+ *
+ *   - brand   -> operational `brands` canonical slug (by display_name/slug/aliases)
+ *   - family  -> `kb_product_categories.group_key` (flower/concentrate/vape/…)
+ *   - strain  -> `kb_strains` canonical slug, ALIAS-AWARE (the big upgrade)
+ *   - market  -> 'medical' | 'adult'
+ */
+export async function buildBackboneIdentityResolver(): Promise<IdentityResolver> {
+  const normStr = (s: string | null | undefined) =>
+    String(s ?? "").toLowerCase().trim().replace(/\s+/g, " ");
+
+  // Brand string -> canonical slug (display_name, slug, and alias variants).
+  const brandByKey = new Map<string, string>();
+  // Category string -> family group_key (name, slug, aliases).
+  const familyByKey = new Map<string, string>();
+  // Strain string -> { slug } (name, slug, aliases), alias-aware.
+  const strainByKey = new Map<string, string>();
+
+  if (isSupabaseServiceConfigured) {
+    const admin = createSupabaseAdminClient();
+
+    try {
+      const { data } = await admin.from("brands").select("slug,display_name").neq("status", "archived");
+      for (const r of (data as { slug: string; display_name: string }[] | null) ?? []) {
+        const slug = String(r.slug ?? "").trim();
+        if (!slug) continue;
+        if (r.display_name) brandByKey.set(normStr(r.display_name), slug);
+        brandByKey.set(normStr(slug), slug);
+      }
+    } catch {
+      /* degrade to string */
+    }
+
+    try {
+      const { data } = await admin
+        .from("kb_product_categories")
+        .select("slug,name,group_key,aliases")
+        .eq("active", true);
+      for (const r of (data as { slug: string; name: string; group_key: string; aliases: string[] | null }[] | null) ?? []) {
+        const family = String(r.group_key ?? "").trim();
+        if (!family) continue;
+        familyByKey.set(normStr(r.name), family);
+        familyByKey.set(normStr(r.slug), family);
+        for (const a of r.aliases ?? []) familyByKey.set(normStr(a), family);
+      }
+    } catch {
+      /* degrade to normalizeCategory */
+    }
+
+    try {
+      const { data } = await admin.from("kb_strains").select("slug,name,aliases").eq("active", true);
+      for (const r of (data as { slug: string; name: string; aliases: string[] | null }[] | null) ?? []) {
+        const slug = String(r.slug ?? "").trim();
+        if (!slug) continue;
+        strainByKey.set(normStr(r.name), slug);
+        strainByKey.set(normStr(slug), slug);
+        for (const a of r.aliases ?? []) strainByKey.set(normStr(a), slug);
+      }
+    } catch {
+      /* degrade to string */
+    }
+  }
+
+  return (item: MasterCandidateItem): ResolvedIdentity => {
+    const brandKey = normStr(item.brand);
+    const brandIdentity = brandByKey.get(brandKey) ?? (brandKey || "unknown-brand");
+
+    const catKey = normStr(item.category);
+    const categoryFamily = familyByKey.get(catKey) ?? normalizeCategoryFamily(item.category);
+
+    // Strain: try the explicit strain field, then the product name (alias-aware).
+    const strainRaw = normStr(item.strainName);
+    const nameRaw = normStr(item.name);
+    let strainIdentity = "";
+    let strainVerified = false;
+    if (strainRaw && strainByKey.has(strainRaw)) {
+      strainIdentity = strainByKey.get(strainRaw)!;
+      strainVerified = true;
+    } else if (nameRaw && strainByKey.has(nameRaw)) {
+      strainIdentity = strainByKey.get(nameRaw)!;
+      strainVerified = true;
+    } else {
+      // Fall back to a size-stripped normalized string (never verified).
+      strainIdentity = normStr(item.strainName || item.name)
+        .replace(/\b\d+(\.\d+)?\s*(g|mg|gram|grams|oz|ml|pk|pack|ct|count)\b/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+      strainVerified = false;
+    }
+
+    return {
+      brandIdentity,
+      categoryFamily,
+      strainIdentity: strainIdentity || nameRaw,
+      strainVerified,
+      market: item.medical ? "medical" : "adult",
+    };
+  };
+}
+
+/**
+ * Coarse category -> family fallback used when kb_product_categories has no row.
+ * Mirrors the families kb_product_categories.group_key uses.
+ */
+function normalizeCategoryFamily(category: string | null | undefined): string {
+  const c = String(category ?? "").toLowerCase();
+  if (!c) return "other";
+  if (/(flower|bud|nug|eighth|ounce|popcorn|shake|trim|gram\b)/.test(c)) return "flower";
+  if (/(pre-?roll|preroll|joint|blunt)/.test(c)) return "flower"; // prerolls are flower-family
+  if (/(cart|vape|510|disposable|pod|aio)/.test(c)) return "vape";
+  if (/(concentrate|rosin|resin|wax|shatter|badder|budder|sauce|diamond|dab|hash|kief)/.test(c)) return "concentrate";
+  if (/(edible|gummy|gummies|chocolate|candy|mint|capsule|tablet)/.test(c)) return "edible";
+  if (/(beverage|drink|soda|seltzer|tincture|dropper|sublingual|syrup)/.test(c)) return "liquid";
+  if (/(topical|balm|lotion|salve|cream|patch)/.test(c)) return "topical";
+  return c;
 }
 
 // ---------------------------------------------------------------------------
@@ -223,15 +354,36 @@ export async function generateGroupingSuggestions(opts?: {
     });
   }
 
-  // 2) deterministic same-name groups (no AI).
+  // 1b) 7f — BACKBONE deterministic pass (highest signal, no AI cost). Groups by
+  // canonical brand + category-family + canonical strain (alias-aware) + market,
+  // so alias/spelling variants of one cultivar marry across sizes and a flower
+  // never marries a vape. Confidence is higher when the strain was verified
+  // against a curated kb_strains row.
+  const resolve = await buildBackboneIdentityResolver();
+  const backboneKeyed = new Set<string>();
+  for (const bg of backboneGroups(free, resolve)) {
+    const name = bg.items[0].strainName || bg.items[0].name;
+    const conf = bg.strainVerified ? 0.97 : 0.9;
+    const rationale = bg.strainVerified
+      ? "Same brand, same product-type family, and the SAME curated strain (matched to the knowledge base, alias-aware) across multiple sizes."
+      : "Same brand, same product-type family, and the same strain/name across multiple sizes.";
+    const before = toInsert.length;
+    pushSuggestion(bg.items, name, rationale, conf);
+    // Track keys we grouped so the legacy + AI passes don't re-propose them.
+    if (toInsert.length > before) for (const it of bg.items) backboneKeyed.add(it.key);
+  }
+
+  // 2) deterministic same-name groups (legacy string fallback for anything the
+  // backbone pass didn't already cover — e.g. items with no backbone match).
   for (const cluster of clusters) {
     for (const group of deterministicNameGroups(cluster)) {
+      if (group.some((g) => backboneKeyed.has(g.key))) continue;
       const name = group[0].strainName || group[0].name;
       pushSuggestion(
         group,
         name,
         "Same brand, category, and product name across multiple sizes/forms.",
-        0.95,
+        0.9,
       );
     }
   }
@@ -248,11 +400,17 @@ export async function generateGroupingSuggestions(opts?: {
       const detGrouped = new Set(
         deterministicNameGroups(cluster).flat().map((g) => g.key),
       );
-      const remaining = cluster.filter((c) => !detGrouped.has(c.key));
+      // Exclude anything already grouped deterministically (legacy OR backbone).
+      const remaining = cluster.filter((c) => !detGrouped.has(c.key) && !backboneKeyed.has(c.key));
       if (remaining.length < 2) continue;
 
+      // 7f: give the model the backbone-resolved facts so it adjudicates on
+      // canonical identity, not just raw strings.
       const list = remaining
-        .map((r) => `- key=${r.key} | name="${r.name}" | strain="${r.strainName ?? ""}" | price=${(r.priceMinor / 100).toFixed(2)}`)
+        .map((r) => {
+          const id = resolve(r);
+          return `- key=${r.key} | name="${r.name}" | strain="${r.strainName ?? ""}" | canonical_strain="${id.strainIdentity}"${id.strainVerified ? " (verified)" : ""} | family="${id.categoryFamily}" | price=${(r.priceMinor / 100).toFixed(2)}`;
+        })
         .join("\n");
       try {
         const result = await generateStructured({

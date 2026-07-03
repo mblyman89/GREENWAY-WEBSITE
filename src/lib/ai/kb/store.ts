@@ -252,26 +252,101 @@ export type KbStrainFull = {
   sources: string[] | null;
   confidence: number | null;
   active: boolean;
+  // Leaning + ratio (migration 0073). Percentages are 0-100 (indica vs sativa
+  // split); `leaning` is a canonical strain-taxonomy value (e.g. sativa-hybrid).
+  // These are NULL unless we have a verified ratio (owner-approved), so the UI
+  // must treat null as "no verified ratio" rather than 0%.
+  indica_pct: number | null;
+  sativa_pct: number | null;
+  ruderalis_pct: number | null;
+  leaning: string | null;
+  ratio_source: string | null;
 };
 
 const KB_STRAIN_FULL_COLUMNS =
   "id,slug,name,aliases,strain_type,lineage,aroma_notes,flavor_notes,terpenes,summary," +
-  "dominant_cannabinoid,potency_note,bud_structure,origin,sources,confidence,active";
+  "dominant_cannabinoid,potency_note,bud_structure,origin,sources,confidence,active," +
+  "indica_pct,sativa_pct,ruderalis_pct,leaning,ratio_source";
 
-/** Read full strain rows (all editable fields) for the manage/edit table. */
-export async function listKbStrainsFull(limit = 500): Promise<KbStrainFull[]> {
+/**
+ * Read full strain rows (all editable fields) for the manage/edit table.
+ *
+ * PostgREST caps a single `select()` at 1000 rows, so a plain `.limit(2500)`
+ * silently returns only the first 1000 (the root cause of "only 1000 strains
+ * show" even though the library holds 2000+). We page through with `.range()`
+ * in 1000-row windows until we've fetched everything (up to `limit`).
+ */
+export async function listKbStrainsFull(limit = 5000): Promise<KbStrainFull[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  try {
+    const admin = createSupabaseAdminClient();
+    const PAGE = 1000;
+    const rows: KbStrainFull[] = [];
+    for (let from = 0; from < limit; from += PAGE) {
+      const to = Math.min(from + PAGE, limit) - 1;
+      const { data, error } = await admin
+        .from("kb_strains")
+        .select(KB_STRAIN_FULL_COLUMNS)
+        .order("name", { ascending: true })
+        .range(from, to);
+      if (error || !data) break;
+      rows.push(...(data as unknown as KbStrainFull[]));
+      // Short page => no more rows to fetch.
+      if (data.length < PAGE) break;
+    }
+    return rows;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Terpene reference row (migration 0019). Read-only reference data — the owner
+ * does not edit terpenes (there are a fixed set), but a detail view is useful.
+ */
+export type KbTerpeneRow = {
+  id: string;
+  slug: string;
+  name: string;
+  aroma_notes: string[];
+  flavor_notes: string[];
+  also_found_in: string | null;
+  active: boolean;
+};
+
+const KB_TERPENE_COLUMNS = "id,slug,name,aroma_notes,flavor_notes,also_found_in,active";
+
+/** List all terpene reference rows (active first, alphabetical). Degrades to []. */
+export async function listKbTerpenesFull(limit = 500): Promise<KbTerpeneRow[]> {
   if (!isSupabaseServiceConfigured) return [];
   try {
     const admin = createSupabaseAdminClient();
     const { data, error } = await admin
-      .from("kb_strains")
-      .select(KB_STRAIN_FULL_COLUMNS)
+      .from("kb_terpenes")
+      .select(KB_TERPENE_COLUMNS)
       .order("name", { ascending: true })
       .limit(limit);
     if (error || !data) return [];
-    return data as unknown as KbStrainFull[];
+    return data as unknown as KbTerpeneRow[];
   } catch {
     return [];
+  }
+}
+
+/** Fetch one terpene by slug (for the detail page). Returns null if missing. */
+export async function getKbTerpeneBySlug(slug: string): Promise<KbTerpeneRow | null> {
+  if (!isSupabaseServiceConfigured) return null;
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("kb_terpenes")
+      .select(KB_TERPENE_COLUMNS)
+      .eq("slug", slug)
+      .maybeSingle();
+    if (error || !data) return null;
+    return data as unknown as KbTerpeneRow;
+  } catch {
+    return null;
   }
 }
 
@@ -698,6 +773,53 @@ export async function countKbProductDrafts(): Promise<number> {
     return count ?? 0;
   } catch {
     return 0;
+  }
+}
+
+export type KbPipelineCounts = {
+  /** Bronze: raw intake staged as drafts, awaiting enrichment/review. */
+  draft: number;
+  /** Gold: human-validated, active golden records the read side trusts. */
+  published: number;
+  /** Discarded/superseded records kept for audit. */
+  archived: number;
+  /** kb_products table reachable (migration 0071 applied). */
+  migrated: boolean;
+};
+
+/**
+ * Medallion pipeline stage counts for kb_products (Slice 6).
+ * Bronze/Silver work is staged as `draft`; the review inbox is the Silver→Gold
+ * human gate that promotes a draft to `published` (Gold) or `archived`.
+ * Degrades to migrated=false pre-0071.
+ */
+export async function getKbPipelineCounts(): Promise<KbPipelineCounts> {
+  const empty: KbPipelineCounts = { draft: 0, published: 0, archived: 0, migrated: false };
+  if (!isSupabaseServiceConfigured) return empty;
+  try {
+    const admin = createSupabaseAdminClient();
+    const countByStatus = async (status: string): Promise<number | null> => {
+      const { count, error } = await admin
+        .from("kb_products")
+        .select("id", { count: "exact", head: true })
+        .eq("status", status);
+      if (error) return null;
+      return count ?? 0;
+    };
+    const [draft, published, archived] = await Promise.all([
+      countByStatus("draft"),
+      countByStatus("published"),
+      countByStatus("archived"),
+    ]);
+    const migrated = draft !== null; // a query succeeded → table exists
+    return {
+      draft: draft ?? 0,
+      published: published ?? 0,
+      archived: archived ?? 0,
+      migrated,
+    };
+  } catch {
+    return empty;
   }
 }
 

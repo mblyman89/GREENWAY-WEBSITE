@@ -17,6 +17,7 @@ import {
   setProductCategoryActive,
   reviewKbProduct,
 } from "@/lib/ai/kb/store";
+import { updateBrandFacts } from "@/lib/vendors/store";
 import { seedMedicalBannedPhrases } from "@/lib/ai/kb/seed-banned";
 import { validateNoteInput } from "@/lib/ai/kb/kb-notes-core";
 import { canonicalStrainType } from "@/lib/menu/strain-taxonomy";
@@ -97,6 +98,41 @@ export async function upsertBrandAction(formData: FormData): Promise<void> {
   await recordAudit({ actorId: session.profile.id, action: "kb.brand.upsert", entityType: "kb_brand", entityId: slug }).catch(() => {});
   revalidatePath(PATH);
   back(`Saved brand facts for "${name}".`);
+}
+
+/**
+ * Update the brand FACTS on an operational brand (migration 0072 folded these
+ * columns onto `brands`). Keyed by the real brand id — this enriches an existing
+ * vendor-linked brand rather than creating a KB-only brand record. Facts are
+ * sensory/voice only (WA I-502: no medical/curative claims).
+ */
+export async function updateBrandFactsAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("products.enrich");
+  const id = String(formData.get("id") ?? "").trim();
+  if (!id) back("Missing brand id.", false);
+  const known_for = String(formData.get("known_for") ?? "").trim() || null;
+  const house_style = String(formData.get("house_style") ?? "").trim() || null;
+  const signature_lines = String(formData.get("signature_lines") ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const sensory_notes = String(formData.get("sensory_notes") ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const ok = await updateBrandFacts(
+    id,
+    { known_for, house_style, signature_lines, sensory_notes },
+    session.profile.id,
+  );
+  await recordAudit({
+    actorId: session.profile.id,
+    action: "brand.facts.update",
+    entityType: "brand",
+    entityId: id,
+  }).catch(() => {});
+  revalidatePath(PATH);
+  back(ok ? "Saved brand facts." : "Could not save brand facts.", ok);
 }
 
 /**

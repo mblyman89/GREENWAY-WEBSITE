@@ -88,6 +88,53 @@ export async function listAllBrands(): Promise<Pick<Brand, "id" | "display_name"
   return (data as Pick<Brand, "id" | "display_name" | "vendor_id">[] | null) ?? [];
 }
 
+/** Update the folded-in brand FACTS on an operational brand (by id). */
+export async function updateBrandFacts(
+  id: string,
+  facts: {
+    known_for: string | null;
+    house_style: string | null;
+    signature_lines: string[];
+    sensory_notes: string[];
+  },
+  actorId: string | null,
+): Promise<boolean> {
+  if (!isSupabaseServiceConfigured) return false;
+  const admin = createSupabaseAdminClient();
+  const { error } = await admin
+    .from("brands")
+    .update({
+      known_for: facts.known_for,
+      house_style: facts.house_style,
+      signature_lines: facts.signature_lines,
+      sensory_notes: facts.sensory_notes,
+      updated_by: actorId,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id);
+  return !error;
+}
+
+/** Count of operational brands (the real vendor-attached brands). */
+export async function countBrands(): Promise<number> {
+  if (!isSupabaseServiceConfigured) return 0;
+  const admin = createSupabaseAdminClient();
+  const { count } = await admin.from("brands").select("id", { count: "exact", head: true });
+  return count ?? 0;
+}
+
+/** Full brand rows (all columns, incl. folded-in facts) — for the brand editor. */
+export async function listBrandsWithFacts(limit = 1000): Promise<Brand[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  const admin = createSupabaseAdminClient();
+  const { data } = await admin
+    .from("brands")
+    .select("*")
+    .order("display_name", { ascending: true })
+    .limit(limit);
+  return (data as Brand[] | null) ?? [];
+}
+
 async function resolveMediaKey(mediaId: string | null): Promise<string | null> {
   if (!mediaId || !isSupabaseServiceConfigured) return null;
   const admin = createSupabaseAdminClient();

@@ -4,7 +4,13 @@ import { useState } from "react";
 import { Button } from "@/components/admin/ui/Button";
 import type { KbStrainFull } from "@/lib/ai/kb/store";
 import { upsertStrainAction, toggleStrainAction } from "./actions";
-import { strainTypeDefinitions, strainTypeLabel } from "@/lib/menu/strain-taxonomy";
+import {
+  strainTypeDefinitions,
+  strainTypeLabel,
+  canonicalStrainType,
+} from "@/lib/menu/strain-taxonomy";
+import { scoreStrain } from "@/lib/ai/kb/quality";
+import { QualityBadge } from "./QualityBadge";
 
 // Canonical strain-type options for the staff dropdown. Sourced from the single
 // taxonomy so the leaning hybrids (Indica-Hybrid / Sativa-Hybrid) stay in sync
@@ -91,8 +97,12 @@ export function StrainEditor({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("all");
-  const [terpFilter, setTerpFilter] = useState<string>("all");
-  const [sortBy, setSortBy] = useState<"name" | "type" | "confidence">("name");
+  // Two independent terpene checkboxes ("Has terpenes" / "No terpenes"). When
+  // both are on (or both off) we show everything.
+  const [hasTerps, setHasTerps] = useState(false);
+  const [noTerps, setNoTerps] = useState(false);
+  // Sort is intentionally only A–Z / Z–A (owner request).
+  const [sortBy, setSortBy] = useState<"az" | "za">("az");
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -111,13 +121,34 @@ export function StrainEditor({
     setEditingId(null);
   }
 
-  // Base-type buckets (leaning hybrids count under "hybrid" for filtering).
-  function baseType(t: string | null | undefined): string {
-    const v = (t ?? "").toLowerCase();
-    if (v.startsWith("indica")) return "indica";
-    if (v.startsWith("sativa")) return "sativa";
-    if (v.includes("hybrid")) return "hybrid";
-    return "other";
+  // Type filter.
+  //
+  // The two leaning designations (Indica-Hybrid / Sativa-Hybrid) are carried by
+  // the verified `leaning` column (migration 0074), NOT by `strain_type` — the
+  // strain_type field itself is only ever indica/sativa/hybrid for most rows.
+  // So for those two options we match on `leaning` (falling back to strain_type
+  // if a row happens to store the leaning there too). The base indica/sativa/
+  // hybrid options match on the canonical strain_type. This is why the leaning
+  // filter previously blanked the table — nothing had a leaning *strain_type*.
+  function matchesType(s: KbStrainFull, want: string): boolean {
+    if (want === "all") return true;
+    if (want === "indica-hybrid" || want === "sativa-hybrid") {
+      const lean = canonicalStrainType(s.leaning ?? s.strain_type);
+      return lean === want;
+    }
+    if (want === "cbd") {
+      // A strain is CBD-relevant if either its canonical type is cbd OR its
+      // dominant cannabinoid is cbd (the CBD lab-data seed, migration 0075,
+      // sets dominant_cannabinoid='cbd' while keeping the botanical strain_type
+      // like indica/sativa/hybrid).
+      return (
+        canonicalStrainType(s.strain_type) === "cbd" ||
+        (s.dominant_cannabinoid ?? "").trim().toLowerCase() === "cbd"
+      );
+    }
+    // Base type: don't let a leaning row also show under plain "hybrid" via its
+    // strain_type; just compare the canonical strain_type directly.
+    return canonicalStrainType(s.strain_type) === want;
   }
 
   const q = query.trim().toLowerCase();
@@ -131,22 +162,17 @@ export function StrainEditor({
           (s.terpenes ?? []).some((t) => t.toLowerCase().includes(q));
         if (!hit) return false;
       }
-      if (typeFilter !== "all" && baseType(s.strain_type) !== typeFilter) return false;
-      if (terpFilter === "with" && (s.terpenes ?? []).length === 0) return false;
-      if (terpFilter === "without" && (s.terpenes ?? []).length > 0) return false;
+      if (!matchesType(s, typeFilter)) return false;
+      // Terpene checkboxes. When exactly one is ticked we filter to it; when
+      // both (or neither) are ticked we show everything.
+      const hasTerpData = (s.terpenes ?? []).length > 0;
+      if (hasTerps && !noTerps && !hasTerpData) return false;
+      if (noTerps && !hasTerps && hasTerpData) return false;
       return true;
     })
     .sort((a, b) => {
-      if (sortBy === "type") {
-        const t = baseType(a.strain_type).localeCompare(baseType(b.strain_type));
-        return t !== 0 ? t : a.name.localeCompare(b.name);
-      }
-      if (sortBy === "confidence") {
-        const ca = a.confidence ?? 0;
-        const cb = b.confidence ?? 0;
-        return cb - ca || a.name.localeCompare(b.name);
-      }
-      return a.name.localeCompare(b.name);
+      const cmp = a.name.localeCompare(b.name);
+      return sortBy === "za" ? -cmp : cmp;
     });
 
   return (
@@ -377,26 +403,28 @@ export function StrainEditor({
 
       {/* Manage list — click a row to edit, toggle active. */}
       <div className="mt-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h3 className="text-sm font-semibold text-[var(--admin-text)]">
-            Manage strains ({total})
-          </h3>
+        <h3 className="text-sm font-semibold text-[var(--admin-text)]">
+          Manage strains ({total})
+        </h3>
+
+        {/* Search, sort & filter all live on the same row so the whole verified
+            library is easy to browse in one place. */}
+        <div className="mt-3 flex flex-wrap items-center gap-2">
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             className="w-56 rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-bg)] px-3 py-1.5 text-sm text-[var(--admin-text)]"
             placeholder="Search name, alias, terpene…"
           />
-        </div>
-
-        {/* Sort & filter — makes the large verified library easy to browse. */}
-        <div className="mt-3 flex flex-wrap items-center gap-2">
           <div className="flex overflow-hidden rounded-[var(--admin-radius)] border border-[var(--admin-border)] text-xs">
             {[
               { v: "all", label: "All types" },
               { v: "indica", label: "Indica" },
               { v: "sativa", label: "Sativa" },
               { v: "hybrid", label: "Hybrid" },
+              { v: "indica-hybrid", label: "Indica-Hybrid" },
+              { v: "sativa-hybrid", label: "Sativa-Hybrid" },
+              { v: "cbd", label: "CBD" },
             ].map((opt) => (
               <button
                 key={opt.v}
@@ -413,25 +441,32 @@ export function StrainEditor({
               </button>
             ))}
           </div>
-          <select
-            value={terpFilter}
-            onChange={(e) => setTerpFilter(e.target.value)}
-            className="rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-bg)] px-2 py-1.5 text-xs text-[var(--admin-text)]"
-            aria-label="Filter by terpene data"
-          >
-            <option value="all">Any terpene data</option>
-            <option value="with">Has terpenes</option>
-            <option value="without">No terpenes yet</option>
-          </select>
+          <label className="inline-flex items-center gap-1.5 text-xs text-[var(--admin-text-muted)]">
+            <input
+              type="checkbox"
+              checked={hasTerps}
+              onChange={(e) => setHasTerps(e.target.checked)}
+              className="accent-[var(--admin-accent)]"
+            />
+            Has terpenes
+          </label>
+          <label className="inline-flex items-center gap-1.5 text-xs text-[var(--admin-text-muted)]">
+            <input
+              type="checkbox"
+              checked={noTerps}
+              onChange={(e) => setNoTerps(e.target.checked)}
+              className="accent-[var(--admin-accent)]"
+            />
+            No terpenes
+          </label>
           <select
             value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as "name" | "type" | "confidence")}
+            onChange={(e) => setSortBy(e.target.value as "az" | "za")}
             className="rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-bg)] px-2 py-1.5 text-xs text-[var(--admin-text)]"
             aria-label="Sort strains"
           >
-            <option value="name">Sort: Name (A–Z)</option>
-            <option value="type">Sort: Type</option>
-            <option value="confidence">Sort: Confidence</option>
+            <option value="az">Sort: A–Z</option>
+            <option value="za">Sort: Z–A</option>
           </select>
           <span className="text-xs text-[var(--admin-text-muted)]">
             {filtered.length} shown
@@ -442,7 +477,7 @@ export function StrainEditor({
           <p className="mt-2 text-sm text-[var(--admin-text-muted)]">
             {strains.length === 0
               ? "No strains yet. Add one above, or seed the expert starter set."
-              : "No strains match your search."}
+              : "No strains match these filters. Try clearing the type, terpene, or search filters."}
           </p>
         ) : (
           <div className="mt-3 overflow-x-auto">
@@ -450,14 +485,16 @@ export function StrainEditor({
               <thead>
                 <tr className="text-left text-[var(--admin-text-muted)]">
                   <th className="py-2 pr-4 font-medium">Strain</th>
+                  <th className="py-2 pr-4 font-medium">Health</th>
                   <th className="py-2 pr-4 font-medium">Type</th>
+                  <th className="py-2 pr-4 font-medium">Ratio (I / S)</th>
                   <th className="py-2 pr-4 font-medium">Terpenes</th>
                   <th className="py-2 pr-4 font-medium">Status</th>
                   <th className="py-2 pr-4 font-medium"></th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.slice(0, 300).map((s) => (
+                {filtered.map((s) => (
                   <tr key={s.id} className="border-t border-[var(--admin-border)]">
                     <td className="py-2 pr-4 text-[var(--admin-text)]">
                       <button
@@ -468,8 +505,43 @@ export function StrainEditor({
                         {s.name}
                       </button>
                     </td>
+                    <td className="py-2 pr-4">
+                      {(() => {
+                        const sc = scoreStrain(s as unknown as Record<string, unknown>);
+                        return (
+                          <QualityBadge
+                            quality={sc.quality}
+                            grade={sc.grade}
+                            completeness={sc.completeness}
+                          />
+                        );
+                      })()}
+                    </td>
                     <td className="py-2 pr-4 text-[var(--admin-text-muted)]">
                       {s.strain_type ? strainTypeLabel(s.strain_type) : "—"}
+                    </td>
+                    <td className="py-2 pr-4 text-[var(--admin-text-muted)]">
+                      {(() => {
+                        // Show the verified indica/sativa split when we have it.
+                        // NULL means no verified ratio — never render as 0%.
+                        const ind = s.indica_pct;
+                        const sat = s.sativa_pct;
+                        if (ind === null && sat === null) return "—";
+                        const i = ind ?? 0;
+                        const sv = sat ?? 0;
+                        return (
+                          <span
+                            className="whitespace-nowrap"
+                            title={
+                              s.ratio_source
+                                ? `Source: ${s.ratio_source}`
+                                : undefined
+                            }
+                          >
+                            {i}% / {sv}%
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td className="py-2 pr-4 text-[var(--admin-text-muted)]">
                       {(s.terpenes ?? []).join(", ") || "—"}
@@ -502,11 +574,6 @@ export function StrainEditor({
                 ))}
               </tbody>
             </table>
-            {filtered.length > 300 ? (
-              <p className="mt-2 text-xs text-[var(--admin-text-muted)]">
-                Showing first 300 of {filtered.length} matches. Use search to narrow down.
-              </p>
-            ) : null}
           </div>
         )}
       </div>

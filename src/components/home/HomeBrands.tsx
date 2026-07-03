@@ -15,6 +15,20 @@ type BrandEntry = {
   href: string;
 };
 
+/**
+ * 7d: master-data overlay shape. Structurally identical to BrandFactsOverlay in
+ * src/lib/home/brand-facts.ts, redeclared here so this CLIENT component never
+ * imports that server-only module.
+ */
+type BrandFactsOverlay = {
+  displayName: string;
+  knownFor: string | null;
+};
+
+function normalizeBrandKey(value: string): string {
+  return String(value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
 // Brand accent palette cycles across the 16 tiles for a lively, on-brand grid.
 const ACCENTS = [
   "from-[var(--greenway)] to-emerald-700",
@@ -47,9 +61,12 @@ function buildBrandEntries(items: GreenwayMenuItem[]): BrandEntry[] {
 export function HomeBrands({
   items,
   content,
+  brandFacts,
 }: {
   items: GreenwayMenuItem[];
   content?: PromoBannerContent;
+  /** 7d: master-data overlay keyed by normalized brand name. */
+  brandFacts?: Record<string, BrandFactsOverlay>;
 }) {
   const allBrands = useMemo(() => buildBrandEntries(items), [items]);
   const shuffle = useShuffleOrder(
@@ -81,30 +98,41 @@ export function HomeBrands({
         />
 
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4 lg:grid-cols-4">
-          {brands.map((entry, index) => (
-            <Link
-              key={entry.brand}
-              href={entry.href}
-              className="group relative isolate flex aspect-[5/3] flex-col justify-end overflow-hidden rounded-2xl border border-white/10 bg-[var(--charcoal)] p-4 shadow-lg shadow-black/30 transition hover:-translate-y-0.5 hover:border-white/25"
-            >
-              <div
-                className={`absolute inset-0 bg-gradient-to-br ${ACCENTS[index % ACCENTS.length]} opacity-80 transition group-hover:opacity-95`}
-                aria-hidden="true"
-              />
-              <div
-                className="absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,rgba(255,255,255,0.28),transparent_55%),linear-gradient(180deg,rgba(0,0,0,0.1)_0%,rgba(0,0,0,0.72)_100%)]"
-                aria-hidden="true"
-              />
-              <div className="relative">
-                <p className="text-[0.58rem] font-black uppercase tracking-[0.18em] text-white/80 md:text-[0.62rem]">
-                  {entry.count} {entry.count === 1 ? "product" : "products"}
-                </p>
-                <p className="mt-0.5 text-base font-black uppercase leading-tight tracking-tight text-white drop-shadow md:text-lg lg:text-xl">
-                  {entry.brand}
-                </p>
-              </div>
-            </Link>
-          ))}
+          {brands.map((entry, index) => {
+            // 7d: overlay master data \u2014 canonical display name + known_for tagline.
+            const facts = brandFacts?.[normalizeBrandKey(entry.brand)];
+            const label = facts?.displayName || entry.brand;
+            const tagline = facts?.knownFor?.trim() || null;
+            return (
+              <Link
+                key={entry.brand}
+                href={entry.href}
+                className="group relative isolate flex aspect-[5/3] flex-col justify-end overflow-hidden rounded-2xl border border-white/10 bg-[var(--charcoal)] p-4 shadow-lg shadow-black/30 transition hover:-translate-y-0.5 hover:border-white/25"
+              >
+                <div
+                  className={`absolute inset-0 bg-gradient-to-br ${ACCENTS[index % ACCENTS.length]} opacity-80 transition group-hover:opacity-95`}
+                  aria-hidden="true"
+                />
+                <div
+                  className="absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,rgba(255,255,255,0.28),transparent_55%),linear-gradient(180deg,rgba(0,0,0,0.1)_0%,rgba(0,0,0,0.72)_100%)]"
+                  aria-hidden="true"
+                />
+                <div className="relative">
+                  <p className="text-[0.58rem] font-black uppercase tracking-[0.18em] text-white/80 md:text-[0.62rem]">
+                    {entry.count} {entry.count === 1 ? "product" : "products"}
+                  </p>
+                  <p className="mt-0.5 text-base font-black uppercase leading-tight tracking-tight text-white drop-shadow md:text-lg lg:text-xl">
+                    {label}
+                  </p>
+                  {tagline ? (
+                    <p className="mt-1 line-clamp-2 text-[0.62rem] font-semibold leading-snug text-white/85 drop-shadow md:text-[0.68rem]">
+                      {tagline}
+                    </p>
+                  ) : null}
+                </div>
+              </Link>
+            );
+          })}
         </div>
       </div>
     </section>

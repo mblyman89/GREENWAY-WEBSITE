@@ -2,6 +2,7 @@ import Link from "next/link";
 import { HomeBrands } from "@/components/home/HomeBrands";
 import { SectionBanner } from "@/components/home/SectionBanner";
 import type { GreenwayMenuItem } from "@/lib/leafly/types";
+import type { BrandFactsOverlay } from "@/lib/home/brand-facts";
 import { categoryLanes } from "@/lib/specials/daily-deal-presentation";
 
 // Accent gradient per category tile (cycled in lane order).
@@ -40,10 +41,13 @@ export type PromoBannerContent = {
 export function PromoGrid({
   content,
   items = [],
+  brandFacts,
 }: {
   content?: PromoBannerContent;
   /** Live menu items (from the published DB version) for the brand grid. */
   items?: GreenwayMenuItem[];
+  /** 7d: master-data brand overlay (normalized name -> canonical name + known_for). */
+  brandFacts?: Record<string, BrandFactsOverlay>;
 } = {}) {
   return (
     <>
@@ -95,7 +99,7 @@ export function PromoGrid({
         </div>
       </section>
 
-      <HomeBrands items={items} content={content} />
+      <HomeBrands items={items} content={content} brandFacts={brandFacts} />
     </>
   );
 }
