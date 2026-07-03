@@ -6,7 +6,7 @@ import {
   type SectionBannerButton,
   type SectionBannerData,
 } from "@/components/home/SectionBanner";
-import { posMenuPreviewItems } from "@/lib/pos/preview-menu";
+import type { GreenwayMenuItem } from "@/lib/leafly/types";
 
 type DealTone = {
   /** Glowing card border color (matches ProductCardVisual tones). */
@@ -270,9 +270,12 @@ type SpecialsHeroContent = {
 export function SpecialsContent({
   thursdayBrands,
   content,
+  menuItems = [],
 }: {
   thursdayBrands?: string[];
   content?: SpecialsHeroContent;
+  /** Live menu items (from the published DB version) for the daily-deals grid. */
+  menuItems?: GreenwayMenuItem[];
 } = {}) {
   // When DB-published Thursday brands are supplied, override the static Thursday
   // card's menu link so the storefront reflects the back-office promotion.
@@ -368,7 +371,7 @@ export function SpecialsContent({
 
         {/* Today's actual on-deal products — standard site-wide card, 16 cards,
             with a wide day banner above the grid. */}
-        <SpecialsDailyDeals items={posMenuPreviewItems} />
+        <SpecialsDailyDeals items={menuItems} />
 
         {/* Extra banners staff added in the Pages builder render here. */}
         {(content?.extraSections ?? []).length ? (

@@ -40,19 +40,37 @@ Branch: `feature/vendors-import-and-dynamic-menu` (off `main` after #222 + #223 
   — NOT the DB. The DB menu (`menu_versions`→`menu_items`, migration 0002) exists
   but the site never reads it. THIS is the "broken pipeline."
 
-## Slice V1 — Vendors/Brands Import button (FIRST)
-- [ ] Add Import control to `/admin/vendors` (upload spreadsheet: csv/xlsx).
-- [ ] Server action + parser scaffold that upserts by slug (mirror
-  `seed_vendors_brands.ts`: draft status, gap-fill, never blindly overwrite
-  curated fields). Column mapping finalized when owner supplies the real
-  Cultivera file. NO GUESSING columns before then.
-- [ ] Audit-log the import. Idempotent.
+## Slice V1 — Vendors/Brands Import button (FIRST) ✅ DONE
+- [x] Import control on `/admin/vendors` header → `/admin/vendors/import`.
+- [x] `src/lib/vendors/import.ts`: tolerant header mapping (vendor & brand sheet
+  synonyms), gap-fill upsert BY SLUG (never overwrites curated data), new rows
+  land as `draft`, social links merged non-destructively, brands resolve parent
+  vendor by slug. Reuses `parseCsv` from customers importer.
+- [x] `/admin/vendors/import` page (paste-CSV, mirrors customers import UX).
+- [x] Server action `importVendorsBrandsAction` — audit-logged (`vendors.import`).
+- [x] tsc clean. Column mapping is tolerant of common variants; finalize exact
+  columns when owner supplies the real Cultivera export file.
 
-## Slice P1 — Dynamic menu (SECOND, then STOP)
-- [ ] Make customer pages read the live DB menu (active `menu_versions`→
-  `menu_items`) with the committed JSON as an explicit build-time fallback.
-- [ ] Empty back office ⇒ no product cards on home/shop/specials/menu.
-- [ ] Verify all four surfaces switch cleanly; tsc + build green.
+## Slice P1 — Dynamic menu (SECOND, then STOP) ✅ DONE (pending build verify)
+- [x] New `src/lib/pos/live-menu.ts`: `loadLiveMenuItems()`,
+  `loadLiveMenuAll()`, `getLiveMenuItemById()`, `menuRowToGreenwayItem()`.
+  Reads the PUBLISHED `menu_versions` snapshot via `getPublishedVersion()` +
+  `getVersionItems()` and converts `MenuItemRow`(+variants) → `GreenwayMenuItem`.
+  Fallback: committed JSON ONLY when Supabase unconfigured; when configured but
+  no published version → returns [] (empty menu = no product cards). This is the
+  fix for the broken pipeline.
+- [x] Rewired all 6 consumers off the static JSON:
+  - `src/app/page.tsx` (home deal items + PromoGrid brand grid)
+  - `src/components/home/PromoGrid.tsx` (now takes `items` prop)
+  - `src/app/menu/page.tsx`
+  - `src/app/menu/products/[id]/page.tsx` (helpers now async; `generateStaticParams`
+    removed; `dynamic = "force-dynamic"`)
+  - `src/components/specials/SpecialsContent.tsx` (now takes `menuItems` prop) +
+    `src/app/specials/page.tsx` (`dynamic = "force-dynamic"`)
+  - `src/app/sitemap.ts` (now async)
+- [x] tsc clean. No remaining direct consumers of `preview-menu` outside the
+  live-menu fallback.
+- [ ] Full `npm run build` verification (running).
 
 ## After that: STOP for owner inspection, then resume KB hardening
 (see prior audit conclusion: validated enrichment does NOT flow to KB yet;

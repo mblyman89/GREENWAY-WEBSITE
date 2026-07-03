@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { posMenuPreviewItems } from "@/lib/pos/preview-menu";
+import { loadLiveMenuItems } from "@/lib/pos/live-menu";
 
 const baseUrl = "https://www.greenwaymarijuana.com";
 
@@ -28,7 +28,7 @@ function priorityFor(route: string) {
   return 0.6;
 }
 
-export default function sitemap(): MetadataRoute.Sitemap {
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const now = new Date();
 
   const staticEntries = staticRoutes.map((route) => ({
@@ -41,7 +41,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
   // Product detail pages mirror the live menu (POS preview items),
   // de-duplicated by id.
   const seen = new Set<string>();
-  const productEntries = [...posMenuPreviewItems]
+  const liveMenuItems = await loadLiveMenuItems();
+  const productEntries = [...liveMenuItems]
     .filter((item) => {
       if (seen.has(item.id)) return false;
       seen.add(item.id);
