@@ -117,17 +117,49 @@ own branch + PR + squash-merge; always satisfy CCRS + DOH; hand-off ready.
 ---
 
 ## 3. Deliverables / hand-off checklist
-- [ ] `docs/PRODUCT_NAMING_CONVENTION.md` (finalized v2, decisions locked)
-- [ ] `docs/CCRS_PRODUCT_NAMING_RESEARCH.md` (already written)
-- [ ] `docs/NAMING_AND_NONCANNABIS_ROADMAP.md` (this file)
-- [ ] `docs/CULTIVERA_NAMING_RESEARCH.md`
-- [ ] Naming engine + tests (Slice A)
-- [ ] Non-cannabis inventory + SKU + label + KB (Slice B)
-- [ ] Menu card fixes (Slice C)
-- [ ] Normalized spreadsheets + reports (Slice E)
-- [ ] One PR per slice, each squash-merged after review
+- [x] `docs/PRODUCT_NAMING_CONVENTION.md` (finalized v2, decisions locked)   — PR #227
+- [x] `docs/CCRS_PRODUCT_NAMING_RESEARCH.md` (already written)
+- [x] `docs/NAMING_AND_NONCANNABIS_ROADMAP.md` (this file)                    — PR #227
+- [x] `docs/CULTIVERA_NAMING_RESEARCH.md`                                     — PR #231 (Slice D)
+- [x] Naming engine + tests (Slice A) + CCRS Inventory.Product join fix       — PR #228
+- [x] Non-cannabis inventory + SKU + label + KB (Slice B)                     — PR #229
+- [x] Menu card fixes (Slice C)                                               — PR #230
+- [x] Cultivera naming research (Slice D)                                     — PR #231
+- [x] Normalized spreadsheets + reports (Slice E)                             — PR #232
+- [x] One PR per slice, each squash-merged after review (owner merges manually)
 
 ---
 
 ## 4. Progress log (append-only)
 - (init) Roadmap created; spreadsheets inspected & analyzed; decisions locked.
+- (Slice A) `src/lib/naming/convention-core.ts` built (pure engine, unit tests pass):
+  toTitleCase / cannabinoidTag (ratio + THC:CBD:CBN) / ratioTag / buildComplianceName
+  (drop brand==vendor, CBD-flower marker, 75-clamp) / validateName (hard-block) /
+  suggestName (AI-style acceptable alternative). Also fixed the triple-confirmed CCRS
+  bug: `Inventory.Product` now writes the exact Product.Name (was the slug) so the
+  Inventory→Product join holds. tsc+eslint clean. → PR #228.
+- (Slice B) Non-cannabis catalog: migration 0076 (noncannabis_products + sku_sequences +
+  kb view), `noncannabis-core.ts` (naming + smart SKU per type + collision-safe seq),
+  store + server actions, intake page with live name/SKU preview, 2.25×1.25in SKU label
+  w/ Code128, KB counts + nav card, admin nav entry. tsc+eslint clean, tests pass.
+  Stacked on Slice A. → PR #229.
+- (Slice C) Menu product cards: `src/lib/menu/card-cannabinoids.ts` (15 tests) — profile
+  badge (THC/1:1/THC:CBD:CBN/CBD via the engine), per-compound chips, PACKAGE-TOTAL mg
+  headline (100 mg lemonade no longer reads as 10 mg), oz+g / fl oz+ml net weight for
+  edibles/drinks (flower stays %/g). Wired into ProductCardVisual + product detail page.
+  NOTE: the "× N × 10 mg" per-serving split is intentionally NOT shown — per-serving mg is
+  not persisted on the menu item; flagged as a follow-up transform.ts plumbing task (no
+  guessing). Stacked on Slice A. → PR #230.
+- (Slice D) `docs/CULTIVERA_NAMING_RESEARCH.md` — verified reference (all cited): Cultivera
+  enforces unique Product Name (its product-mastering key), POS vs PRO fields (PRO adds
+  Product Line/Sub-Product Line/Label Template), Receipt Name vs internal Name, non-cannabis
+  model (no COGS), controlled/METRC-locked Strains list, 75-char/no-comma CCRS ceiling. → PR #231.
+- (Slice E) `scripts/naming/normalize_cultivera.py` (14 self-tests) + normalized outputs +
+  `docs/CULTIVERA_NORMALIZATION_RESULTS.md`. Rebuilt names from structured columns only
+  (never guessed) w/ vendor prefix, drop-brand==vendor, ratio/letter tag from measured THC/CBD
+  with a <10% trace guard, size normalization, cleanup, 75-clamp. PRODUCTS master deduped
+  3,500→2,676 (824 true dups collapsed); INVENTORIES 4,346 lots renamed (kept separate).
+  Result: dup-name groups 708/581→0/0, names>75 110/132→0/0, commas 46/41→0/0. → PR #232.
+- (status) All 5 slices complete; 6 PRs open (#227–#232). Owner to squash-merge in order:
+  #227 & #228 first (Slice C/#230 is based on #228 and will retarget to main after; #229
+  Slice B is stacked on #228), then #229, #230, #231, #232.
