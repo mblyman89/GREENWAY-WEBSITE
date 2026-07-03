@@ -107,7 +107,7 @@ export const STRAIN_ESSENTIALS = [
   "summary",
 ] as const;
 
-export const BRAND_ESSENTIALS = ["known_for"] as const;
+export const BRAND_ESSENTIALS = ["known_for", "house_style", "sensory_notes"] as const;
 
 export const PRODUCT_ESSENTIALS = [
   "category",
@@ -154,6 +154,9 @@ export function labelForField(key: string): string {
     terpenes: "terpenes",
     summary: "summary",
     known_for: "known for",
+    house_style: "house style / voice",
+    sensory_notes: "sensory notes",
+    signature_lines: "signature product lines",
     category: "category",
     description: "description",
     group_key: "group",

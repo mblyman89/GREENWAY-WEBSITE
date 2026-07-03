@@ -10,6 +10,7 @@ import { withMenuProfile } from "@/lib/menu/strain-terpenes-server";
 import { getContentValues, isPreviewActive } from "@/lib/cms/render-content";
 import { getCarouselForRender } from "@/lib/cms/carousel-store";
 import { getSectionsForRender } from "@/lib/cms/page-sections-store";
+import { loadBrandFactsOverlay } from "@/lib/home/brand-facts";
 
 export const metadata: Metadata = {
   // The root layout supplies the default title; we only set the canonical here so
@@ -28,7 +29,7 @@ export const dynamic = "force-dynamic";
 export default async function Home() {
   // Hero slides come from the staff-managed Home Carousel (draft-aware).
   // Section-banner copy/images are editable from Admin → Site Content.
-  const [slides, copy, sections, preview, dealItems] = await Promise.all([
+  const [slides, copy, sections, preview, dealItems, brandFacts] = await Promise.all([
     getCarouselForRender(),
     getContentValues([
       "home.category.image",
@@ -49,6 +50,9 @@ export default async function Home() {
     // hybrids + terpenes). No-op when no KB/curated match. Menu now comes from
     // the PUBLISHED DB version (dynamic), not a static snapshot.
     loadLiveMenuItems().then((items) => withMenuProfile(items)),
+    // 7d: master-data overlay for the brand grid (canonical name + known_for),
+    // sourced from the operational `brands` table. Defensive (empty when off).
+    loadBrandFactsOverlay(),
   ]);
 
   // Map the new page_sections rows (by section_key) onto the banner content.
@@ -62,6 +66,7 @@ export default async function Home() {
       <HomeDailyDeals items={dealItems} />
       <PromoGrid
         items={dealItems}
+        brandFacts={brandFacts}
         content={{
           categoryImage: category?.image || copy["home.category.image"],
           categoryEyebrow: category?.eyebrow || copy["home.category.eyebrow"],

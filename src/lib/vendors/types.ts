@@ -60,6 +60,12 @@ export type Brand = {
   product_count: number;
   status: AssetStatus;
   sort_order: number;
+  // Brand FACTS (folded in from kb_brands — migration 0072). The golden record
+  // now carries both operational + descriptive brand data.
+  known_for: string | null;
+  house_style: string | null;
+  signature_lines: string[];
+  sensory_notes: string[];
   created_by: string | null;
   updated_by: string | null;
   created_at: string;

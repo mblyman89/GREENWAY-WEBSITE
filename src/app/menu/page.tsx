@@ -10,6 +10,7 @@ import { loadLiveMenuItems } from "@/lib/pos/live-menu";
 import { getPageBanners } from "@/lib/cms/page-sections-store";
 import { withResolvedImages } from "@/lib/enrichment/image-resolver";
 import { withMenuProfile } from "@/lib/menu/strain-terpenes-server";
+import { withDisplayKnowledge } from "@/lib/menu/product-knowledge-display";
 
 export const metadata = pageMetadata({
   title: "Shop Cannabis Menu — Flower, Vapes, Edibles & More",
@@ -33,7 +34,11 @@ export default async function MenuPage({ searchParams }: MenuPageProps) {
   // inventory → global). Non-throwing; falls back to the stylized mockup.
   // Attach curated terpenes (from the KB strain) so the menu can filter by
   // terpene. Sensory/descriptive only; degrades to no terpenes when unmatched.
-  const menuItems = await withResolvedImages(await withMenuProfile(await loadLiveMenuItems()));
+  // 7b.2: KB-first curated copy + terpene fallback, compliance-filtered, batched
+  // (one resolve for the whole menu \u2014 no per-card DB reads). Non-throwing.
+  const menuItems = await withDisplayKnowledge(
+    await withResolvedImages(await withMenuProfile(await loadLiveMenuItems())),
+  );
   // Pages-builder banners for /menu: the primary menu.hero is editable via the
   // existing SiteText hero below; any extra banners staff add render under it.
   const banners = await getPageBanners("menu", ["menu.hero"]);

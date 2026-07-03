@@ -251,6 +251,93 @@ export function checkEffects(effects: string[], extra: ExtraBannedPhrase[] = [])
   return { allowed, rejected, ok: rejected.length === 0 };
 }
 
+// =============================================================================
+// DISPLAY LINTER \u2014 thin layer over checkCompliance for surfacing KB copy safely
+// =============================================================================
+// Slice 7b. Owner directive: "warnings only, no hard blocks unless it's truly a
+// medicinal claim... relaxing or uplifting etc is fine... let me tell the
+// customer how 'Stoney' the strain is." (see docs/COMPLIANCE_CLAIMS_REFERENCE.md)
+//
+// This is NOT a second rule engine \u2014 it reuses checkCompliance() (single source
+// of truth for the regex + owner blocklist) and reshapes the verdict for two
+// consumers:
+//   1. The employee review UI  \u2192 wants warn/allow guidance, never a hard stop.
+//   2. The PUBLIC product surface \u2192 must never render a TRUE curative/therapeutic
+//      claim. So on the public path we DROP blocking copy (with an audit note)
+//      rather than display it. Everything else (experiential/sensory) passes.
+//
+// The distinction the owner cares about: experiential words (relaxing, uplifting,
+// stoney, mellow) are ALLOWED; only genuine medical/curative language blocks.
+// checkCompliance already encodes exactly that split (RISKY_PATTERNS block =
+// medical/curative + minors + safety + dosing; warn = hype/price).
+
+/** Overall lint disposition for a piece of copy. */
+export type CopyDisposition = "clean" | "warn" | "block";
+
+export type CopyLintResult = {
+  /** The disposition of the ORIGINAL text. */
+  disposition: CopyDisposition;
+  /** All human-readable flags (block + warn), suitable for a review UI. */
+  flags: string[];
+  /** Only the must-fix (curative/therapeutic/etc) flags. */
+  blockingFlags: string[];
+  /**
+   * The text as it is SAFE to display publicly. When `disposition === "block"`
+   * we return null (caller should fall back to a generic description) so a true
+   * medical claim never reaches a customer. When "clean"/"warn" the original
+   * text is returned unchanged (warnings are advisory, not display-blocking \u2014
+   * per the owner's warn-only rule for borderline copy).
+   */
+  publicText: string | null;
+};
+
+/**
+ * Lint a single copy string for public display. Reuses checkCompliance().
+ *
+ * `extra` layers the owner's kb_banned_phrases (same source everything else
+ * uses). Empty/blank input is treated as clean with null publicText.
+ */
+export function lintCopy(text: string | null | undefined, extra: ExtraBannedPhrase[] = []): CopyLintResult {
+  const trimmed = String(text ?? "").trim();
+  if (!trimmed) {
+    return { disposition: "clean", flags: [], blockingFlags: [], publicText: null };
+  }
+  const res = checkCompliance(trimmed, extra);
+  if (res.blockingFlags.length > 0) {
+    // True medical/curative (or minors/safety/dosing) claim \u2014 never surface it.
+    return { disposition: "block", flags: res.flags, blockingFlags: res.blockingFlags, publicText: null };
+  }
+  if (res.flags.length > 0) {
+    // Borderline (hype/price) \u2014 owner wants warn-only, so still display it.
+    return { disposition: "warn", flags: res.flags, blockingFlags: [], publicText: trimmed };
+  }
+  return { disposition: "clean", flags: [], blockingFlags: [], publicText: trimmed };
+}
+
+/**
+ * Filter a list of short descriptor terms (aroma / flavor / terpene names /
+ * effects) for public display. Each term is linted individually; any term whose
+ * disposition is "block" is dropped. Returns the safe subset plus the dropped
+ * terms (for optional audit/logging). De-dupes case-insensitively, preserves
+ * order and original casing of the first occurrence.
+ */
+export function lintTerms(terms: string[], extra: ExtraBannedPhrase[] = []): { safe: string[]; dropped: string[] } {
+  const safe: string[] = [];
+  const dropped: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of terms ?? []) {
+    const term = String(raw ?? "").trim();
+    if (!term) continue;
+    const key = term.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const res = lintCopy(term, extra);
+    if (res.disposition === "block") dropped.push(term);
+    else safe.push(term);
+  }
+  return { safe, dropped };
+}
+
 /**
  * The medical-claim phrases we want present in the owner-editable
  * kb_banned_phrases table so the DB-backed blocklist stays in sync with the

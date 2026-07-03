@@ -15,6 +15,7 @@ import { strainTypeLabel } from "@/lib/menu/strain-taxonomy";
 import { getLiveMenuItemById, loadLiveMenuItems } from "@/lib/pos/live-menu";
 import { withResolvedImages } from "@/lib/enrichment/image-resolver";
 import { withMenuProfile } from "@/lib/menu/strain-terpenes-server";
+import { resolveDisplayKnowledge } from "@/lib/menu/product-knowledge-display";
 import { breadcrumbSchema, pageMetadata, productSchema } from "@/lib/seo/seo";
 import { getMerchDefById, getMerchMenuItemById, merchMenuItems, merchProductDefs, merchIdForKey } from "@/lib/merch/merch-catalog";
 import { MerchDetailPanel } from "@/components/merch/MerchDetailPanel";
@@ -201,6 +202,26 @@ function ProductHeroArt({ item, tone }: { item: GreenwayMenuItem; tone: ProductT
   );
 }
 
+function ChipGroup({ label, chips, accent }: { label: string; chips: string[]; accent: string }) {
+  if (!chips.length) return null;
+  return (
+    <div>
+      <p className="text-[0.62rem] font-black uppercase tracking-[0.22em] text-zinc-500">{label}</p>
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {chips.map((chip) => (
+          <span
+            key={`${label}-${chip}`}
+            className="inline-flex items-center rounded-full border px-2.5 py-1 text-[0.72rem] font-semibold capitalize text-zinc-200"
+            style={{ borderColor: accent, backgroundColor: "rgba(255,255,255,0.04)" }}
+          >
+            {chip}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 async function relatedItemsFor(item: GreenwayMenuItem) {
   if (isMerchItem(item)) {
     return merchMenuItems.filter((candidate) => candidate.id !== item.id).slice(0, 8);
@@ -252,11 +273,29 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
     ? [baseItem]
     : await withMenuProfile(await withResolvedImages([baseItem]));
 
+  // 7b.1: KB-first curated knowledge, compliance-filtered for public display.
+  // Merch/accessories are non-cannabis \u2192 the helper returns an empty result.
+  const knowledge = isMerchItem(item) ? null : await resolveDisplayKnowledge(item);
+
   const tone = toneForItem(item);
   const relatedItems = await relatedItemsFor(item);
   const brandHref = `/menu?brand=${encodeURIComponent(item.brand)}`;
-  const productDescription = item.description?.trim() || "No description available for this product.";
+  // Prefer curated KB copy when present, then the item's own description, then a
+  // generic line. All KB copy is already compliance-filtered by the resolver.
+  const productDescription =
+    knowledge?.description?.trim() ||
+    item.description?.trim() ||
+    knowledge?.shortDescription?.trim() ||
+    "No description available for this product.";
   const showCannabinoids = !isNonCannabisItem(item);
+
+  // Compliance-safe experiential + sensory descriptors from the KB (may be empty).
+  const kbAroma = knowledge?.aromaNotes ?? [];
+  const kbFlavor = knowledge?.flavorNotes ?? [];
+  const kbEffects = knowledge?.effects ?? [];
+  // Terpenes: prefer the menu-build terpenes already on the item; fall back to KB.
+  const kbTerpenes = (item.terpenes?.length ? item.terpenes : knowledge?.terpenes) ?? [];
+  const hasSensory = kbAroma.length > 0 || kbFlavor.length > 0 || kbEffects.length > 0 || kbTerpenes.length > 0;
 
   return (
     <main id="top" className="min-h-screen bg-black text-white">
@@ -340,6 +379,33 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
                 <button type="button" className="border-b-2 border-[var(--orange)] pb-3 text-[0.76rem] font-black uppercase tracking-[0.2em] text-white">Description</button>
               </div>
               <p className="mt-5 text-[0.95rem] leading-7 text-zinc-300">{productDescription}</p>
+
+              {/* 7b.1: KB sensory + experiential profile (compliance-filtered).
+                  Experiential descriptors are legal EXPERIENCE words (relaxing,
+                  uplifting, etc.) \u2014 never medical claims (the resolver drops those). */}
+              {hasSensory ? (
+                <div className="mt-6 grid gap-4 sm:grid-cols-2">
+                  {kbEffects.length > 0 ? (
+                    <ChipGroup label="Experience" chips={kbEffects} accent="var(--orange)" />
+                  ) : null}
+                  {kbTerpenes.length > 0 ? (
+                    <ChipGroup label="Terpenes" chips={kbTerpenes} accent="var(--greenway)" />
+                  ) : null}
+                  {kbAroma.length > 0 ? (
+                    <ChipGroup label="Aroma" chips={kbAroma} accent="#7fb0d4" />
+                  ) : null}
+                  {kbFlavor.length > 0 ? (
+                    <ChipGroup label="Flavor" chips={kbFlavor} accent="#c98fd0" />
+                  ) : null}
+                </div>
+              ) : null}
+
+              {kbEffects.length > 0 ? (
+                <p className="mt-4 text-[0.68rem] leading-5 text-zinc-500">
+                  Experiential character only \u2014 general descriptors of the experience adults
+                  commonly report, not a health, medical, or therapeutic claim.
+                </p>
+              ) : null}
             </section>
           </article>
         </div>

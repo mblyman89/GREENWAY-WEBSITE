@@ -2,6 +2,7 @@ import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { HelpPanel } from "@/components/admin/ux/HelpPanel";
 import { getKbCounts, countKbProductDrafts } from "@/lib/ai/kb/store";
+import { countBrands } from "@/lib/vendors/store";
 import { getKbHealth } from "@/lib/ai/kb/health";
 import { KbNavCard } from "./KbNavCard";
 import { KbFlash } from "./KbFlash";
@@ -26,10 +27,11 @@ export default async function KnowledgeBasePage({
   await requirePermission("products.enrich");
   const { msg, error } = await searchParams;
 
-  const [counts, draftReviews, health] = await Promise.all([
+  const [counts, draftReviews, health, brandCount] = await Promise.all([
     getKbCounts(),
     countKbProductDrafts(),
     getKbHealth(),
+    countBrands(),
   ]);
 
   return (
@@ -118,7 +120,7 @@ export default async function KnowledgeBasePage({
               href="/admin/knowledge-base/brands"
               title="Brand facts"
               description="What each brand is known for, so copy matches their voice."
-              count={counts.brands}
+              count={brandCount}
               accent="gold"
             />
             <KbNavCard
@@ -158,17 +160,13 @@ export default async function KnowledgeBasePage({
             Reference & setup
           </h2>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
-              <div className="flex items-start justify-between gap-3">
-                <h3 className="text-sm font-semibold text-[var(--admin-text)]">Terpenes</h3>
-                <span className="text-lg font-semibold tabular-nums text-[var(--admin-text)]">
-                  {counts.terpenes.toLocaleString()}
-                </span>
-              </div>
-              <p className="mt-1 text-xs leading-relaxed text-[var(--admin-text-muted)]">
-                The aroma/flavor map used to describe every strain. Loaded from the starter set.
-              </p>
-            </div>
+            <KbNavCard
+              href="/admin/knowledge-base/terpenes"
+              title="Terpenes"
+              description="The aroma/flavor map used to describe every strain. Reference only."
+              count={counts.terpenes}
+              accent="muted"
+            />
             <KbNavCard
               href="/admin/knowledge-base/setup"
               title="Setup & starter data"

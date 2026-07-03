@@ -150,20 +150,36 @@ async function loadBrandFact(brand: string | null | undefined, vendor: string | 
   if (!needle) return null;
   try {
     const admin = createSupabaseAdminClient();
+    // Brand facts now live on the operational `brands` table (migration 0072).
+    // display_name maps to name; there is no `aliases` column here (aliases are
+    // in brand_aliases) and status replaces the active flag.
     const { data, error } = await admin
-      .from("kb_brands")
-      .select("slug,name,aliases,known_for,house_style,signature_lines,sensory_notes")
-      .eq("active", true);
+      .from("brands")
+      .select("slug,display_name,known_for,house_style,signature_lines,sensory_notes,status")
+      .neq("status", "archived");
     if (error || !data) return null;
-    const rows = data as BrandRow[];
-    return (
-      rows.find(
-        (r) =>
-          norm(r.name) === needle ||
-          r.slug === needle ||
-          (r.aliases ?? []).some((a) => norm(a) === needle),
-      ) ?? null
+    const rows = data as {
+      slug: string;
+      display_name: string;
+      known_for: string | null;
+      house_style: string | null;
+      signature_lines: string[] | null;
+      sensory_notes: string[] | null;
+      status: string;
+    }[];
+    const match = rows.find(
+      (r) => norm(r.display_name) === needle || norm(r.slug) === needle,
     );
+    if (!match) return null;
+    return {
+      slug: match.slug,
+      name: match.display_name,
+      aliases: null,
+      known_for: match.known_for,
+      house_style: match.house_style,
+      signature_lines: match.signature_lines,
+      sensory_notes: match.sensory_notes,
+    };
   } catch {
     return null;
   }
@@ -185,6 +201,105 @@ async function loadNotes(): Promise<KbNote[]> {
     );
   } catch {
     return [];
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 7e \u2014 richest KB tables for the AI brain: kb_products + kb_product_categories
+// ---------------------------------------------------------------------------
+// The AI previously read strains/terpenes/category_terms/brands/notes but NOT
+// the two RICHEST curated tables: kb_products (validated per-SKU golden records)
+// and kb_product_categories (the deep product-type taxonomy). Feeding these in
+// lets the model ground on an EXACT, human-approved record for the very product
+// when one exists \u2014 the highest-signal fact source we have. Both are
+// best-effort + defensive (skip cleanly if migration 0071 isn't applied).
+
+/** Dashed slug (matches writeback's brand/product convention). */
+function slugifyDashed(value: string | null | undefined): string {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+type KbProductFactRow = {
+  display_name: string | null;
+  description: string | null;
+  short_description: string | null;
+  aroma_notes: string[] | null;
+  flavor_notes: string[] | null;
+  terpenes: string[] | null;
+  effects: string[] | null;
+  status: string | null;
+};
+
+/**
+ * Find the validated per-SKU kb_products record for a product (published wins;
+ * draft is usable as a lower-confidence suggestion). Matched by the natural
+ * identity brand_slug + product_slug. Returns null when the table isn't
+ * available or nothing matches. Never throws.
+ */
+async function loadKbProductFact(facts: ProductFacts): Promise<{ row: KbProductFactRow; draft: boolean } | null> {
+  if (!isSupabaseServiceConfigured) return null;
+  const productName = facts.name?.trim();
+  if (!productName) return null;
+  const brandSlug = facts.brand ? slugifyDashed(facts.brand) : "";
+  const productSlug = slugifyDashed(productName);
+  if (!productSlug) return null;
+  try {
+    const admin = createSupabaseAdminClient();
+    let q = admin
+      .from("kb_products")
+      .select("display_name,description,short_description,aroma_notes,flavor_notes,terpenes,effects,status")
+      .eq("product_slug", productSlug);
+    if (brandSlug) q = q.eq("brand_slug", brandSlug);
+    const { data, error } = await q.limit(5);
+    if (error || !data || data.length === 0) return null;
+    const rows = data as KbProductFactRow[];
+    const published = rows.find((r) => r.status === "published");
+    if (published) return { row: published, draft: false };
+    return { row: rows[0], draft: true };
+  } catch {
+    return null;
+  }
+}
+
+type KbProductCategoryRow = {
+  slug: string;
+  name: string | null;
+  summary: string | null;
+  aliases: string[] | null;
+};
+
+/**
+ * Load the kb_product_categories taxonomy row for a category value (best-effort).
+ * Adds a richer summary/aliases layer on top of kb_category_terms vocab. Matched
+ * by slug first, then a case-insensitive name. Null when unavailable. Columns
+ * verified against migration 0070 (slug, name, summary, aliases).
+ */
+async function loadKbProductCategory(category: string | null | undefined): Promise<KbProductCategoryRow | null> {
+  const value = String(category ?? "").trim();
+  if (!value || !isSupabaseServiceConfigured) return null;
+  try {
+    const admin = createSupabaseAdminClient();
+    const slug = slugifyDashed(value);
+    if (slug) {
+      const { data: bySlug } = await admin
+        .from("kb_product_categories")
+        .select("slug,name,summary,aliases")
+        .eq("slug", slug)
+        .maybeSingle();
+      if (bySlug) return bySlug as KbProductCategoryRow;
+    }
+    const { data: byName } = await admin
+      .from("kb_product_categories")
+      .select("slug,name,summary,aliases")
+      .ilike("name", value)
+      .maybeSingle();
+    return (byName as KbProductCategoryRow | null) ?? null;
+  } catch {
+    return null;
   }
 }
 
@@ -222,16 +337,35 @@ export type GroundedFacts = {
  * notes into a compact list the model must stay within.
  */
 export async function buildGroundedFacts(facts: ProductFacts): Promise<GroundedFacts> {
-  const [strains, terpenes, categories, brandFact, notes] = await Promise.all([
+  const [strains, terpenes, categories, brandFact, notes, kbProduct, kbCategory] = await Promise.all([
     loadStrains(),
     loadTerpenes(),
     loadCategories(),
     loadBrandFact(facts.brand, facts.vendor),
     loadNotes(),
+    // 7e: the two richest curated tables (exact per-SKU record + deep taxonomy).
+    loadKbProductFact(facts),
+    loadKbProductCategory(facts.category),
   ]);
 
   const sources: string[] = [];
   const lines: string[] = [];
+
+  // --- Exact per-SKU KB record (HIGHEST signal, when present) ---
+  // A human-validated golden record for this exact product. Published is
+  // authoritative; a draft is offered as a lower-confidence suggestion.
+  if (kbProduct) {
+    const r = kbProduct.row;
+    sources.push(kbProduct.draft ? "kb:product:draft" : "kb:product:published");
+    const label = kbProduct.draft ? "(DRAFT \u2014 not yet human-published; treat as a suggestion)" : "(validated)";
+    if (r.display_name) lines.push(`Curated product record ${label}: "${r.display_name}".`);
+    if (r.description) lines.push(`Curated description: ${r.description}`);
+    else if (r.short_description) lines.push(`Curated summary: ${r.short_description}`);
+    if (r.aroma_notes?.length) lines.push(`Curated aroma: ${r.aroma_notes.join(", ")}.`);
+    if (r.flavor_notes?.length) lines.push(`Curated flavor: ${r.flavor_notes.join(", ")}.`);
+    if (r.terpenes?.length) lines.push(`Curated terpenes: ${r.terpenes.join(", ")}.`);
+    if (r.effects?.length) lines.push(`Curated experiential character: ${r.effects.join(", ")} (experience only, not medical).`);
+  }
 
   // --- Strain ---
   const strain = matchStrain(strains, facts);
@@ -266,6 +400,14 @@ export async function buildGroundedFacts(facts: ProductFacts): Promise<GroundedF
     const vocab = [...cat.format_words, ...cat.sensory_words];
     if (vocab.length) lines.push(`Legal ${cat.display_name} descriptors you may draw from: ${vocab.join(", ")}.`);
     if (cat.notes) lines.push(`${cat.display_name} guidance: ${cat.notes}`);
+  }
+
+  // --- Deep product-type taxonomy (kb_product_categories) ---
+  if (kbCategory) {
+    sources.push(`kb:product-category:${kbCategory.slug}`);
+    const name = kbCategory.name ?? kbCategory.slug;
+    if (kbCategory.summary) lines.push(`Product-type "${name}": ${kbCategory.summary}`);
+    if (kbCategory.aliases?.length) lines.push(`"${name}" is also called: ${kbCategory.aliases.join(", ")}.`);
   }
 
   // --- Terpene aroma/flavor map (only for terpenes the strain/facts mention) ---

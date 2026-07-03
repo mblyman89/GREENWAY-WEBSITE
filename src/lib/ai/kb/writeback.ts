@@ -97,6 +97,58 @@ async function tableUsable(table: string, column = "id"): Promise<boolean> {
 }
 
 /**
+ * 7c.1 \u2014 Resolve the kb_brands golden-record id for a brand slug (best-effort).
+ * kb_products.kb_brand_id \u2192 kb_brands.id. Returns null when the KB brand table
+ * isn't available or no match exists. Never throws.
+ */
+async function resolveKbBrandId(brandSlug: string): Promise<string | null> {
+  if (!brandSlug || brandSlug === "unknown-brand") return null;
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("kb_brands")
+      .select("id")
+      .eq("slug", brandSlug)
+      .maybeSingle();
+    if (error || !data) return null;
+    return (data.id as string) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 7c.2 \u2014 Resolve the kb_product_categories id for a POS/website category value
+ * (best-effort). kb_products.product_category_id \u2192 kb_product_categories.id.
+ * Matches on slug first (slugified category), then on a case-insensitive name.
+ * Returns null when the table isn't available or no match exists. Never throws.
+ */
+async function resolveProductCategoryId(category: string | null | undefined): Promise<string | null> {
+  const value = String(category ?? "").trim();
+  if (!value) return null;
+  try {
+    const admin = createSupabaseAdminClient();
+    const slug = slugifyDashed(value);
+    if (slug) {
+      const { data: bySlug } = await admin
+        .from("kb_product_categories")
+        .select("id")
+        .eq("slug", slug)
+        .maybeSingle();
+      if (bySlug?.id) return bySlug.id as string;
+    }
+    const { data: byName } = await admin
+      .from("kb_product_categories")
+      .select("id")
+      .ilike("name", value)
+      .maybeSingle();
+    return (byName?.id as string) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Promote a set of VALIDATED product facts into the KB as a drafts-only,
  * per-SKU kb_products row (+ non-destructive strain-level sensory gap-fill).
  * Compliance-gated and idempotent. Returns a small result for auditing.
@@ -195,6 +247,19 @@ export async function writeBackProductFacts(
 
   const fallbackName = [facts.brandName, facts.productName, variantLabel].filter(Boolean).join(" — ");
 
+  // 7c: close the two write-side FK gaps (G8) so the per-SKU record joins the
+  // full backbone. Both are best-effort + non-destructive (existing wins) and
+  // ONLY included in the upsert when their column is present (defensive against
+  // a pre-0071 schema \u2014 including an unknown column would fail the whole write).
+  const kbBrandIdCol = await tableUsable("kb_products", "kb_brand_id");
+  const productCategoryIdCol = await tableUsable("kb_products", "product_category_id");
+  const kbBrandId = kbBrandIdCol
+    ? (existing?.kb_brand_id as string | null) ?? (await resolveKbBrandId(brandSlug))
+    : null;
+  const productCategoryId = productCategoryIdCol
+    ? (existing?.product_category_id as string | null) ?? (await resolveProductCategoryId(facts.category))
+    : null;
+
   const row = {
     brand_slug: brandSlug,
     product_slug: productSlug,
@@ -215,6 +280,8 @@ export async function writeBackProductFacts(
     primary_media_id:
       gapStr((existing?.primary_media_id as string | null) ?? null, facts.primaryMediaId ?? null),
     kb_strain_id: (existing?.kb_strain_id as string | null) ?? kbStrainId,
+    ...(kbBrandIdCol ? { kb_brand_id: kbBrandId } : {}),
+    ...(productCategoryIdCol ? { product_category_id: productCategoryId } : {}),
     brand_id: (existing?.brand_id as string | null) ?? facts.brandId ?? null,
     vendor_id: (existing?.vendor_id as string | null) ?? facts.vendorId ?? null,
     source: (existing?.source as string | null) ?? facts.source ?? "enrichment",

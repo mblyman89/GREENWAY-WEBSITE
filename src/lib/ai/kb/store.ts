@@ -276,6 +276,56 @@ export async function listKbStrainsFull(limit = 500): Promise<KbStrainFull[]> {
 }
 
 /**
+ * Terpene reference row (migration 0019). Read-only reference data — the owner
+ * does not edit terpenes (there are a fixed set), but a detail view is useful.
+ */
+export type KbTerpeneRow = {
+  id: string;
+  slug: string;
+  name: string;
+  aroma_notes: string[];
+  flavor_notes: string[];
+  also_found_in: string | null;
+  active: boolean;
+};
+
+const KB_TERPENE_COLUMNS = "id,slug,name,aroma_notes,flavor_notes,also_found_in,active";
+
+/** List all terpene reference rows (active first, alphabetical). Degrades to []. */
+export async function listKbTerpenesFull(limit = 500): Promise<KbTerpeneRow[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("kb_terpenes")
+      .select(KB_TERPENE_COLUMNS)
+      .order("name", { ascending: true })
+      .limit(limit);
+    if (error || !data) return [];
+    return data as unknown as KbTerpeneRow[];
+  } catch {
+    return [];
+  }
+}
+
+/** Fetch one terpene by slug (for the detail page). Returns null if missing. */
+export async function getKbTerpeneBySlug(slug: string): Promise<KbTerpeneRow | null> {
+  if (!isSupabaseServiceConfigured) return null;
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("kb_terpenes")
+      .select(KB_TERPENE_COLUMNS)
+      .eq("slug", slug)
+      .maybeSingle();
+    if (error || !data) return null;
+    return data as unknown as KbTerpeneRow;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Customer-facing product-category taxonomy row (migration 0070). Reads degrade
  * to [] pre-migration like the other KB list helpers, so the admin page renders
  * safely before the owner has applied 0070.
