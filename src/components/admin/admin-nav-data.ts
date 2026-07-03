@@ -41,6 +41,7 @@ export const adminNav: AdminNavItem[] = [
   { label: "Product Drafts", href: "/admin/inventory/drafts", permission: "inventory.manage", icon: "📝", group: "Inventory" },
   { label: "Cycle Counts", href: "/admin/inventory/cycle-counts", permission: "inventory.manage", icon: "🔢", group: "Inventory" },
   { label: "Returns & Destruction", href: "/admin/inventory/disposition", permission: "inventory.manage", icon: "♻️", group: "Inventory" },
+  { label: "Non-Cannabis", href: "/admin/inventory/noncannabis", permission: "inventory.manage", icon: "🧴", group: "Inventory" },
   { label: "Purchasing", href: "/admin/purchasing", permission: "inventory.manage", icon: "🛒", group: "Inventory" },
   { label: "Equipment", href: "/admin/equipment", permission: "inventory.manage", icon: "🛠", group: "Inventory" },
   { label: "Knowledge Base", href: "/admin/knowledge-base", permission: "products.enrich", icon: "📚", group: "Inventory" },

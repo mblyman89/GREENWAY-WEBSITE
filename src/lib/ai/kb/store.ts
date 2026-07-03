@@ -27,6 +27,8 @@ export type KbCounts = {
   banned: number;
   /** Owner-uploaded free-form reference notes (item 14). */
   notes: number;
+  /** Active non-cannabis products connected to the KB (migration 0076). */
+  nonCannabis: number;
   /** True if the kb_* tables exist (migration applied). */
   migrated: boolean;
   /** True if kb_notes exists (migration 0056 applied). */
@@ -49,17 +51,19 @@ export async function getKbCounts(): Promise<KbCounts> {
     brands: 0,
     banned: 0,
     notes: 0,
+    nonCannabis: 0,
     migrated: false,
     notesMigrated: false,
   };
   if (!isSupabaseServiceConfigured) return empty;
-  const [strains, terpenes, categories, brands, banned, notes] = await Promise.all([
+  const [strains, terpenes, categories, brands, banned, notes, nonCannabis] = await Promise.all([
     tableCount("kb_strains"),
     tableCount("kb_terpenes"),
     tableCount("kb_category_terms"),
     tableCount("kb_brands"),
     tableCount("kb_banned_phrases"),
     tableCount("kb_notes"),
+    tableCount("noncannabis_products"),
   ]);
   const migrated = strains !== null; // kb_strains query succeeded
   return {
@@ -69,9 +73,39 @@ export async function getKbCounts(): Promise<KbCounts> {
     brands: brands ?? 0,
     banned: banned ?? 0,
     notes: notes ?? 0,
+    nonCannabis: nonCannabis ?? 0,
     migrated,
     notesMigrated: notes !== null,
   };
+}
+
+/**
+ * List active non-cannabis products connected to the KB (migration 0076). This
+ * keeps the KB "connected" to the non-cannabis catalog the owner asked for.
+ */
+export type KbNonCannabisRow = {
+  id: string;
+  sku: string;
+  name: string;
+  brand: string | null;
+  type: string;
+  price_minor_units: number;
+  qty_on_hand: number;
+  kb_category_slug: string | null;
+};
+
+export async function listKbNonCannabis(limit = 1000): Promise<KbNonCannabisRow[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("noncannabis_products")
+    .select("id, sku, name, brand, type, price_minor_units, qty_on_hand, kb_category_slug")
+    .eq("status", "active")
+    .order("type", { ascending: true })
+    .order("name", { ascending: true })
+    .limit(limit);
+  if (error) return [];
+  return (data as KbNonCannabisRow[] | null) ?? [];
 }
 
 export type SeedReport = {
