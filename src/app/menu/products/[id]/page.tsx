@@ -12,6 +12,7 @@ import { JsonLd } from "@/components/seo/JsonLd";
 import type { GreenwayMenuItem } from "@/lib/leafly/types";
 import { formatWebsiteCategory } from "@/lib/pos/category-taxonomy";
 import { strainTypeLabel } from "@/lib/menu/strain-taxonomy";
+import { cardCannabinoids, deriveNetWeightLine } from "@/lib/menu/card-cannabinoids";
 import { getLiveMenuItemById, loadLiveMenuItems } from "@/lib/pos/live-menu";
 import { withResolvedImages } from "@/lib/enrichment/image-resolver";
 import { withMenuProfile } from "@/lib/menu/strain-terpenes-server";
@@ -288,6 +289,11 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
     knowledge?.shortDescription?.trim() ||
     "No description available for this product.";
   const showCannabinoids = !isNonCannabisItem(item);
+  // Honest cannabinoid display: package-TOTAL mg for edibles/drinks/tinctures,
+  // accurate per-compound values, and a profile badge (THC / 1:1 / THC:CBD:CBN /
+  // CBD). Keeps the detail page consistent with the product card.
+  const detailCannabinoids = showCannabinoids ? cardCannabinoids(item) : null;
+  const detailNetWeightLine = showCannabinoids ? deriveNetWeightLine(item) : null;
 
   // Compliance-safe experiential + sensory descriptors from the KB (may be empty).
   const kbAroma = knowledge?.aromaNotes ?? [];
@@ -359,8 +365,50 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
                   Greenway Merch
                 </span>
               )}
-              {showCannabinoids ? <span className="inline-flex min-h-7 items-center bg-white px-2.5 py-1 text-[0.72rem] font-black uppercase leading-none text-black">THC: {item.thc ?? "--"}</span> : null}
-              {showCannabinoids ? <span className="inline-flex min-h-7 items-center bg-white px-2.5 py-1 text-[0.72rem] font-black uppercase leading-none text-black">CBD: {item.cbd ?? "--"}</span> : null}
+              {showCannabinoids && detailCannabinoids?.profile ? (
+                <span className="inline-flex min-h-7 items-center gap-1.5 rounded-full border border-white/25 bg-black/45 px-2.5 py-1 text-[0.66rem] font-black uppercase tracking-[0.1em] text-white/90">
+                  <span className="h-1.5 w-1.5 rounded-full bg-[var(--greenway)]" aria-hidden="true" />
+                  {detailCannabinoids.profile.kind === "thc"
+                    ? "THC"
+                    : detailCannabinoids.profile.kind === "cbd"
+                      ? "CBD"
+                      : detailCannabinoids.profile.kind === "ratio"
+                        ? `${detailCannabinoids.profile.label} THC:CBD`
+                        : detailCannabinoids.profile.label}
+                </span>
+              ) : null}
+              {showCannabinoids && detailCannabinoids?.isMgProduct ? (
+                <>
+                  {detailCannabinoids.totalThcHeadline ? (
+                    <span className="inline-flex min-h-7 items-center bg-white px-2.5 py-1 text-[0.72rem] font-black uppercase leading-none text-black">
+                      {detailCannabinoids.totalThcHeadline}
+                    </span>
+                  ) : null}
+                  {detailCannabinoids.totalCbdHeadline ? (
+                    <span className="inline-flex min-h-7 items-center bg-white/85 px-2.5 py-1 text-[0.72rem] font-black uppercase leading-none text-black">
+                      {detailCannabinoids.totalCbdHeadline}
+                    </span>
+                  ) : null}
+                  {detailNetWeightLine ? (
+                    <span className="inline-flex min-h-7 items-center bg-black/40 px-2.5 py-1 text-[0.66rem] font-bold uppercase tracking-[0.06em] text-white/80">
+                      {detailNetWeightLine}
+                    </span>
+                  ) : null}
+                </>
+              ) : showCannabinoids && detailCannabinoids ? (
+                detailCannabinoids.chips.length > 0 ? (
+                  detailCannabinoids.chips.map((chip) => (
+                    <span key={chip.label} className="inline-flex min-h-7 items-center bg-white px-2.5 py-1 text-[0.72rem] font-black uppercase leading-none text-black">
+                      {chip.label}: {chip.display}
+                    </span>
+                  ))
+                ) : (
+                  <>
+                    <span className="inline-flex min-h-7 items-center bg-white px-2.5 py-1 text-[0.72rem] font-black uppercase leading-none text-black">THC: --</span>
+                    <span className="inline-flex min-h-7 items-center bg-white px-2.5 py-1 text-[0.72rem] font-black uppercase leading-none text-black">CBD: --</span>
+                  </>
+                )
+              ) : null}
             </div>
 
             {isMerchItem(item) ? (
