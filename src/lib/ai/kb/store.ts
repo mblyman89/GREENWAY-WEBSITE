@@ -701,6 +701,53 @@ export async function countKbProductDrafts(): Promise<number> {
   }
 }
 
+export type KbPipelineCounts = {
+  /** Bronze: raw intake staged as drafts, awaiting enrichment/review. */
+  draft: number;
+  /** Gold: human-validated, active golden records the read side trusts. */
+  published: number;
+  /** Discarded/superseded records kept for audit. */
+  archived: number;
+  /** kb_products table reachable (migration 0071 applied). */
+  migrated: boolean;
+};
+
+/**
+ * Medallion pipeline stage counts for kb_products (Slice 6).
+ * Bronze/Silver work is staged as `draft`; the review inbox is the Silver→Gold
+ * human gate that promotes a draft to `published` (Gold) or `archived`.
+ * Degrades to migrated=false pre-0071.
+ */
+export async function getKbPipelineCounts(): Promise<KbPipelineCounts> {
+  const empty: KbPipelineCounts = { draft: 0, published: 0, archived: 0, migrated: false };
+  if (!isSupabaseServiceConfigured) return empty;
+  try {
+    const admin = createSupabaseAdminClient();
+    const countByStatus = async (status: string): Promise<number | null> => {
+      const { count, error } = await admin
+        .from("kb_products")
+        .select("id", { count: "exact", head: true })
+        .eq("status", status);
+      if (error) return null;
+      return count ?? 0;
+    };
+    const [draft, published, archived] = await Promise.all([
+      countByStatus("draft"),
+      countByStatus("published"),
+      countByStatus("archived"),
+    ]);
+    const migrated = draft !== null; // a query succeeded → table exists
+    return {
+      draft: draft ?? 0,
+      published: published ?? 0,
+      archived: archived ?? 0,
+      migrated,
+    };
+  } catch {
+    return empty;
+  }
+}
+
 /**
  * Validate a staged kb_products row into published/active, or archive it.
  * Publishing is the human validation step (drafts-only rule): only after this

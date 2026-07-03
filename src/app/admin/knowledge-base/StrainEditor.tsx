@@ -5,6 +5,8 @@ import { Button } from "@/components/admin/ui/Button";
 import type { KbStrainFull } from "@/lib/ai/kb/store";
 import { upsertStrainAction, toggleStrainAction } from "./actions";
 import { strainTypeDefinitions, strainTypeLabel } from "@/lib/menu/strain-taxonomy";
+import { scoreStrain } from "@/lib/ai/kb/quality";
+import { QualityBadge } from "./QualityBadge";
 
 // Canonical strain-type options for the staff dropdown. Sourced from the single
 // taxonomy so the leaning hybrids (Indica-Hybrid / Sativa-Hybrid) stay in sync
@@ -92,7 +94,10 @@ export function StrainEditor({
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [terpFilter, setTerpFilter] = useState<string>("all");
-  const [sortBy, setSortBy] = useState<"name" | "type" | "confidence">("name");
+  const [sortBy, setSortBy] = useState<
+    "name" | "type" | "confidence" | "completeness"
+  >("name");
+  const [needsWork, setNeedsWork] = useState(false);
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -134,6 +139,8 @@ export function StrainEditor({
       if (typeFilter !== "all" && baseType(s.strain_type) !== typeFilter) return false;
       if (terpFilter === "with" && (s.terpenes ?? []).length === 0) return false;
       if (terpFilter === "without" && (s.terpenes ?? []).length > 0) return false;
+      if (needsWork && scoreStrain(s as unknown as Record<string, unknown>).quality >= 65)
+        return false;
       return true;
     })
     .sort((a, b) => {
@@ -145,6 +152,12 @@ export function StrainEditor({
         const ca = a.confidence ?? 0;
         const cb = b.confidence ?? 0;
         return cb - ca || a.name.localeCompare(b.name);
+      }
+      if (sortBy === "completeness") {
+        const qa = scoreStrain(a as unknown as Record<string, unknown>).completeness;
+        const qb = scoreStrain(b as unknown as Record<string, unknown>).completeness;
+        // Lowest completeness first — surface what needs work.
+        return qa - qb || a.name.localeCompare(b.name);
       }
       return a.name.localeCompare(b.name);
     });
@@ -425,14 +438,28 @@ export function StrainEditor({
           </select>
           <select
             value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as "name" | "type" | "confidence")}
+            onChange={(e) =>
+              setSortBy(
+                e.target.value as "name" | "type" | "confidence" | "completeness",
+              )
+            }
             className="rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-bg)] px-2 py-1.5 text-xs text-[var(--admin-text)]"
             aria-label="Sort strains"
           >
             <option value="name">Sort: Name (A–Z)</option>
             <option value="type">Sort: Type</option>
             <option value="confidence">Sort: Confidence</option>
+            <option value="completeness">Sort: Least complete first</option>
           </select>
+          <label className="inline-flex items-center gap-1.5 text-xs text-[var(--admin-text-muted)]">
+            <input
+              type="checkbox"
+              checked={needsWork}
+              onChange={(e) => setNeedsWork(e.target.checked)}
+              className="accent-[var(--admin-accent)]"
+            />
+            Needs work only
+          </label>
           <span className="text-xs text-[var(--admin-text-muted)]">
             {filtered.length} shown
           </span>
@@ -450,6 +477,7 @@ export function StrainEditor({
               <thead>
                 <tr className="text-left text-[var(--admin-text-muted)]">
                   <th className="py-2 pr-4 font-medium">Strain</th>
+                  <th className="py-2 pr-4 font-medium">Health</th>
                   <th className="py-2 pr-4 font-medium">Type</th>
                   <th className="py-2 pr-4 font-medium">Terpenes</th>
                   <th className="py-2 pr-4 font-medium">Status</th>
@@ -467,6 +495,18 @@ export function StrainEditor({
                       >
                         {s.name}
                       </button>
+                    </td>
+                    <td className="py-2 pr-4">
+                      {(() => {
+                        const sc = scoreStrain(s as unknown as Record<string, unknown>);
+                        return (
+                          <QualityBadge
+                            quality={sc.quality}
+                            grade={sc.grade}
+                            completeness={sc.completeness}
+                          />
+                        );
+                      })()}
                     </td>
                     <td className="py-2 pr-4 text-[var(--admin-text-muted)]">
                       {s.strain_type ? strainTypeLabel(s.strain_type) : "—"}
