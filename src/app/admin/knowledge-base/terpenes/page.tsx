@@ -25,15 +25,15 @@ function Chips({ items, dotColor }: { items: string[]; dotColor: string }) {
     return <span className="text-xs text-[var(--admin-text-faint)]">—</span>;
   }
   return (
-    <div className="flex flex-wrap gap-1.5">
+    <div className="flex flex-wrap gap-2">
       {items.map((it) => (
         <span
           key={it}
-          className="inline-flex items-center gap-1 rounded-full border border-[var(--admin-border)] bg-[var(--admin-bg)] px-2 py-0.5 text-[11px] text-[var(--admin-text)]"
+          className="inline-flex items-center gap-1.5 rounded-full border border-[var(--admin-border)] bg-[var(--admin-bg)] px-3 py-1 text-sm text-[var(--admin-text)]"
         >
           <span
             aria-hidden
-            className="h-1.5 w-1.5 rounded-full"
+            className="h-2 w-2 rounded-full"
             style={{ background: dotColor }}
           />
           {it}
@@ -96,39 +96,39 @@ export default async function KbTerpenesPage({
                 >
                   {/* Color header bar */}
                   <div
-                    className="flex items-center justify-between gap-2 px-4 py-2.5"
+                    className="flex items-center justify-between gap-2 px-5 py-3.5"
                     style={{ background: c.color }}
                   >
-                    <span className="text-sm font-semibold text-white drop-shadow-sm">
+                    <span className="text-xl font-bold text-white drop-shadow-sm">
                       {t.name}
                     </span>
-                    <span className="rounded-full bg-white/25 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-white">
+                    <span className="rounded-full bg-white/25 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-white">
                       {c.family}
                     </span>
                   </div>
 
-                  <div className="space-y-3 p-4">
+                  <div className="space-y-4 p-5">
                     <div>
-                      <h3 className="text-[10px] font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
+                      <h3 className="text-sm font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
                         Aroma
                       </h3>
-                      <div className="mt-1.5">
+                      <div className="mt-2">
                         <Chips items={t.aroma_notes} dotColor={c.color} />
                       </div>
                     </div>
                     <div>
-                      <h3 className="text-[10px] font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
+                      <h3 className="text-sm font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
                         Flavor
                       </h3>
-                      <div className="mt-1.5">
+                      <div className="mt-2">
                         <Chips items={t.flavor_notes} dotColor={c.color} />
                       </div>
                     </div>
                     <div>
-                      <h3 className="text-[10px] font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
+                      <h3 className="text-sm font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
                         Also found in
                       </h3>
-                      <p className="mt-1 text-xs text-[var(--admin-text)]">
+                      <p className="mt-1.5 text-base text-[var(--admin-text)]">
                         {t.also_found_in ? (
                           t.also_found_in
                         ) : (
@@ -137,7 +137,7 @@ export default async function KbTerpenesPage({
                       </p>
                     </div>
                     {!t.active ? (
-                      <span className="inline-block text-[10px] uppercase tracking-wide text-[var(--admin-text-faint)]">
+                      <span className="inline-block text-xs uppercase tracking-wide text-[var(--admin-text-faint)]">
                         inactive
                       </span>
                     ) : null}
