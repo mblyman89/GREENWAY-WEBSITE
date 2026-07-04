@@ -19,6 +19,14 @@ import {
   isDiscoveryEnabled,
 } from "@/lib/discovery/store";
 import { parseVendorLeadsCsv, parseProductLeadsCsv } from "@/lib/discovery/import";
+import {
+  createDataset,
+  ingestCcrsText,
+  markDatasetReady,
+  markDatasetError,
+  deleteDataset,
+} from "@/lib/discovery/ingest";
+import { computeBenchmarks, generateVendorLeadsFromCcrs } from "@/lib/discovery/benchmarks";
 import type {
   DiscoveryVendorStatus,
   DiscoveryProductStatus,
@@ -297,4 +305,161 @@ export async function importLeadsAction(formData: FormData): Promise<void> {
   });
   revalidatePath(BASE);
   redirect(`${IMPORT}?imported=product&inserted=${inserted}&processed=${processed}&skipped=${parsed.skipped.length}`);
+}
+
+// ---------------------------------------------------------------------------
+// CCRS Benchmarks (Public Records dataset ingest + compute)
+//
+// STANDING RULES honored:
+//  - kill-switch: every write calls ensureEnabled() first (removable feature).
+//  - never guess: files are parsed by verified CCRS column names; unknown files
+//    are reported, not force-fit.
+//  - audit trail: every mutation is recorded.
+//  - money in minor units throughout (handled in ingest/benchmarks layer).
+// ---------------------------------------------------------------------------
+
+const CCRS = "/admin/discovery/ccrs";
+
+/**
+ * Create a dataset and ingest one or more uploaded CCRS CSV files into it.
+ * Each file is auto-classified (Sale / Product / Inventory / LabTest / Strain)
+ * by its verified column header. Nothing is ordered or published — this is raw
+ * reference data the store OWNS for statewide benchmarking.
+ */
+export async function uploadCcrsDatasetAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("inventory.manage");
+  await ensureEnabled();
+
+  const label = str(formData, "label") ?? "CCRS dataset";
+  const periodStart = str(formData, "period_start");
+  const periodEnd = str(formData, "period_end");
+  const sourceNote = str(formData, "source_note");
+
+  const files = formData.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
+  if (files.length === 0) {
+    redirect(`${CCRS}?error=${encodeURIComponent("Attach at least one CCRS CSV file.")}`);
+  }
+
+  const datasetId = await createDataset({
+    label,
+    periodStart,
+    periodEnd,
+    sourceNote,
+    uploadedBy: session.userId,
+  });
+  if (!datasetId) {
+    redirect(`${CCRS}?error=${encodeURIComponent("Could not create the dataset (database not configured).")}`);
+  }
+
+  const summary: Record<string, number> = {};
+  const unknown: string[] = [];
+  try {
+    for (const file of files) {
+      const text = await file.text();
+      const result = await ingestCcrsText(datasetId as string, text);
+      if (result.kind === "unknown" || !result.ok) {
+        unknown.push(file.name);
+      } else {
+        summary[result.kind] = (summary[result.kind] ?? 0) + result.inserted;
+      }
+    }
+    await markDatasetReady(datasetId as string);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Ingest failed.";
+    await markDatasetError(datasetId as string, message);
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "discovery.ccrs.upload.error",
+      entityType: "discovery_datasets",
+      entityId: datasetId as string,
+      after: { message },
+    });
+    redirect(`${CCRS}?error=${encodeURIComponent(message)}`);
+  }
+
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "discovery.ccrs.upload",
+    entityType: "discovery_datasets",
+    entityId: datasetId as string,
+    after: { label, summary, unknown, files: files.length },
+  });
+  revalidatePath(CCRS);
+  const uq = unknown.length ? `&unknown=${encodeURIComponent(unknown.join(", "))}` : "";
+  const total = Object.values(summary).reduce((a, b) => a + b, 0);
+  redirect(`${CCRS}?uploaded=1&rows=${total}&dataset=${datasetId}${uq}`);
+}
+
+/** Recompute all statewide benchmarks for a dataset from its ingested rows. */
+export async function computeBenchmarksAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("inventory.manage");
+  await ensureEnabled();
+  const datasetId = str(formData, "dataset_id");
+  if (!datasetId) redirect(`${CCRS}?error=${encodeURIComponent("Missing dataset id.")}`);
+
+  let rows = 0;
+  try {
+    const res = await computeBenchmarks(datasetId as string);
+    rows = res.rows;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Benchmark computation failed.";
+    redirect(`${CCRS}?error=${encodeURIComponent(message)}`);
+  }
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "discovery.ccrs.compute",
+    entityType: "discovery_datasets",
+    entityId: datasetId as string,
+    after: { benchmark_rows: rows },
+  });
+  revalidatePath(CCRS);
+  revalidatePath("/admin/discovery/benchmarks");
+  redirect(`${CCRS}?computed=${rows}&dataset=${datasetId}`);
+}
+
+/** Turn the top wholesale sellers in a dataset into draft vendor leads. */
+export async function generateCcrsVendorLeadsAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("inventory.manage");
+  await ensureEnabled();
+  const datasetId = str(formData, "dataset_id");
+  if (!datasetId) redirect(`${CCRS}?error=${encodeURIComponent("Missing dataset id.")}`);
+
+  const { inserted, processed } = await generateVendorLeadsFromCcrs(datasetId as string, {
+    limit: 50,
+    createdBy: session.userId,
+  });
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "discovery.ccrs.generate_leads",
+    entityType: "discovery_vendor_leads",
+    entityId: datasetId as string,
+    after: { inserted, processed },
+  });
+  revalidatePath(CCRS);
+  revalidatePath(BASE);
+  redirect(`${CCRS}?leads_inserted=${inserted}&leads_processed=${processed}&dataset=${datasetId}`);
+}
+
+/** Permanently delete a dataset and its rows/benchmarks (cascade). */
+export async function deleteCcrsDatasetAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("inventory.manage");
+  await ensureEnabled();
+  const datasetId = str(formData, "dataset_id");
+  if (!datasetId) redirect(CCRS);
+
+  await deleteDataset(datasetId as string);
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "discovery.ccrs.delete",
+    entityType: "discovery_datasets",
+    entityId: datasetId as string,
+  });
+  revalidatePath(CCRS);
+  revalidatePath("/admin/discovery/benchmarks");
+  redirect(`${CCRS}?deleted=1`);
 }

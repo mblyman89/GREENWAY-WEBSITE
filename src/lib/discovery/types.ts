@@ -95,6 +95,99 @@ export type DiscoveryProductLead = {
   updated_at: string;
 };
 
+// ---------------------------------------------------------------------------
+// CCRS benchmark command center (migration 0079)
+// ---------------------------------------------------------------------------
+
+export type DiscoveryDatasetStatus = "uploading" | "ready" | "error";
+
+/** Mirrors CCRS Sale.SaleType, normalized. */
+export type CcrsSaleType = "retail" | "medical" | "wholesale" | "other";
+
+export type DiscoveryLicenseeRole =
+  | "producer"
+  | "processor"
+  | "producer_processor"
+  | "retailer"
+  | "lab"
+  | "unknown";
+
+export type DiscoveryDataset = {
+  id: string;
+  label: string;
+  period_start: string | null;
+  period_end: string | null;
+  status: DiscoveryDatasetStatus;
+  source_note: string | null;
+  sales_rows: number;
+  product_rows: number;
+  inventory_rows: number;
+  lab_rows: number;
+  strain_rows: number;
+  error: string | null;
+  benchmarks_computed_at: string | null;
+  uploaded_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+/** Which CCRS collection file a given upload is. */
+export type CcrsFileKind =
+  | "sale"
+  | "product"
+  | "inventory"
+  | "labtest"
+  | "strain"
+  | "unknown";
+
+export type DiscoveryLicensee = {
+  id: number;
+  dataset_id: string;
+  license_number: string;
+  name: string | null;
+  role: DiscoveryLicenseeRole;
+  wholesale_out_units: number;
+  wholesale_out_minor: number;
+  created_at: string;
+};
+
+/** Scope + metric taxonomy for computed benchmarks. */
+export type BenchmarkScope =
+  | "category"
+  | "type"
+  | "category_type"
+  | "brand"
+  | "strain"
+  | "overall";
+
+export type BenchmarkMetric =
+  | "wholesale_unit_price"
+  | "retail_unit_price"
+  | "price_per_gram"
+  | "units"
+  | "revenue"
+  | "thc_pct"
+  | "cbd_pct";
+
+export type DiscoveryBenchmark = {
+  id: number;
+  dataset_id: string;
+  scope: BenchmarkScope;
+  scope_key: string;
+  metric: BenchmarkMetric;
+  sample_size: number;
+  min_minor: number | null;
+  p25_minor: number | null;
+  median_minor: number | null;
+  p75_minor: number | null;
+  max_minor: number | null;
+  avg_minor: number | null;
+  value_num: number | null;
+  period_start: string | null;
+  period_end: string | null;
+  computed_at: string;
+};
+
 /** Aggregated counts for the Discovery hub KPIs. */
 export type DiscoverySnapshot = {
   configured: boolean;
