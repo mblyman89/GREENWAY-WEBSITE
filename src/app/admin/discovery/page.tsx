@@ -129,9 +129,6 @@ export default async function DiscoveryPage({ searchParams }: { searchParams: Pr
         <div className="flex flex-wrap items-center justify-between gap-3">
           <BackLink />
           <div className="flex flex-wrap items-center gap-2">
-            <Link href="/admin/discovery/benchmarks">
-              <Button variant="primary" size="sm">📊 CCRS Benchmarks</Button>
-            </Link>
             <Link href="/admin/discovery/import">
               <Button variant="neutral" size="sm">Import leads (CSV)</Button>
             </Link>
@@ -171,29 +168,29 @@ export default async function DiscoveryPage({ searchParams }: { searchParams: Pr
           <StatCard label="Promoted to PO" value={snap.productLeads.ordered} hint="pushed into purchasing" accent="muted" />
         </div>
 
-        {/* CCRS Benchmark & Insights command center — statewide market data via Public Records */}
+        {/* Data intake only — the "juicy" market analytics now live under Reports → Benchmarks. */}
         <Section
-          title="Statewide market benchmarks (CCRS)"
-          description="Request WA Public Records → upload the raw CCRS files → own the statewide wholesale/retail prices, potency, velocity and top-vendor rankings, then compare against your own numbers."
+          title="CCRS data intake"
+          description="This page is for product & vendor leads. Upload raw WA Public Records CCRS files here — the market benchmarks, competitor pricing and sourcing analytics they power now live under Reports → Benchmarks."
         >
           <Card padding="md">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="max-w-2xl">
                 <div className="text-sm font-semibold text-[var(--admin-text)]">
-                  Turn the state&apos;s source-of-truth dataset into your buying edge
+                  Upload the state dataset here; read the insights in Reports
                 </div>
                 <p className="mt-1 text-sm text-[var(--admin-text-muted)]">
-                  The same traceability data the market-analytics firms sell is available to you for free
-                  through a Public Records request. Upload it here and the system computes the benchmarks and
-                  ranks the biggest wholesale vendors — no subscription required.
+                  Request the CCRS extract via WA Public Records and upload it below. Once processed, the
+                  statewide benchmarks and the local competitor &amp; area intelligence (what stores sell for,
+                  what they pay vendors, who they source from) appear on the Benchmarks report.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
                 <Link href="/admin/discovery/ccrs">
                   <Button variant="confirm" size="sm">Request &amp; upload data</Button>
                 </Link>
-                <Link href="/admin/discovery/benchmarks">
-                  <Button variant="neutral" size="sm">View benchmarks →</Button>
+                <Link href="/admin/reports/benchmarks">
+                  <Button variant="neutral" size="sm">View Benchmarks report →</Button>
                 </Link>
               </div>
             </div>
