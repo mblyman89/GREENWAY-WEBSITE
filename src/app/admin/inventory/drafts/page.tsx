@@ -63,7 +63,7 @@ export default async function CatalogDraftsPage({
         breadcrumbs={
           <Breadcrumbs
             items={[
-              { label: "Catalog", href: "/admin/catalog" },
+              { label: "Product Intake", href: "/admin/catalog" },
               { label: "Product Onboarding" },
             ]}
           />
@@ -88,6 +88,14 @@ export default async function CatalogDraftsPage({
       />
 
       <div className="space-y-6 px-5 py-6 sm:px-8">
+        <div>
+          <Link
+            href="/admin/catalog"
+            className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--admin-text-muted)] hover:text-[var(--admin-accent)]"
+          >
+            ← Back to Product Intake Hub
+          </Link>
+        </div>
         <CatalogStageStrip current="onboarding" />
         <div className="grid gap-4 sm:grid-cols-3">
           <StatCard label="Needs review" value={counts.draft} accent={counts.draft > 0 ? "gold" : "muted"} href="/admin/inventory/drafts?status=draft" />

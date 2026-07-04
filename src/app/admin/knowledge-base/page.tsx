@@ -1,6 +1,8 @@
+import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { HelpPanel } from "@/components/admin/ux/HelpPanel";
+import { Breadcrumbs } from "@/components/admin/ux/Breadcrumbs";
 import { getKbCounts, countKbProductDrafts } from "@/lib/ai/kb/store";
 import { countBrands } from "@/lib/vendors/store";
 import { getKbHealth } from "@/lib/ai/kb/health";
@@ -39,6 +41,14 @@ export default async function KnowledgeBasePage({
       <AdminPageHeader
         title="Knowledge Base"
         subtitle="The single source of truth the AI writes from — your data command center"
+        breadcrumbs={
+          <Breadcrumbs
+            items={[
+              { label: "Product Intake", href: "/admin/catalog" },
+              { label: "Knowledge Base" },
+            ]}
+          />
+        }
         help={
           <HelpPanel id="kb-help" title="What is the knowledge base?">
             <p>
@@ -57,6 +67,14 @@ export default async function KnowledgeBasePage({
       />
 
       <div className="px-5 py-6 sm:px-8 space-y-6">
+        <div>
+          <Link
+            href="/admin/catalog"
+            className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--admin-text-muted)] hover:text-[var(--admin-accent)]"
+          >
+            ← Back to Product Intake Hub
+          </Link>
+        </div>
         <KbFlash msg={msg} error={error} />
 
         {!counts.migrated ? (

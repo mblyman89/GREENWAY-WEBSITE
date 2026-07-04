@@ -6,10 +6,11 @@ import Link from "next/link";
  * lifecycle at a glance so a new employee instantly understands the sequence and
  * what comes next:
  *
- *   Vendor Intake → Product Onboarding → Live Menu → Product Enrichment
+ *   Receiving → Product Onboarding → Live Menu → Product Enrichment
  *
- * Each stage links to its page (except the Live Menu marker, which is a
- * milestone, not a page). The `current` stage is highlighted. This is purely
+ * Every stage links to the page where that work happens (the Live Menu stage
+ * links to Menu Imports, where the published, customer-facing version is
+ * managed). The `current` stage is highlighted. This is purely
  * navigational/orientational — it changes no data.
  */
 
@@ -25,7 +26,7 @@ type StageDef = {
 const STAGES: StageDef[] = [
   {
     key: "intake",
-    label: "Vendor Intake",
+    label: "Receiving",
     href: "/admin/inventory/intake",
     hint: "Receive the transfer + COA",
   },
@@ -38,8 +39,8 @@ const STAGES: StageDef[] = [
   {
     key: "menu",
     label: "Live Menu",
-    href: null, // a milestone, not a page you edit here
-    hint: "Published & customer-facing",
+    href: "/admin/menu-imports",
+    hint: "Publish & review the customer-facing menu",
   },
   {
     key: "enrichment",

@@ -38,7 +38,7 @@ export default async function MasterDetailPage({
         breadcrumbs={
           <Breadcrumbs
             items={[
-              { label: "Catalog", href: "/admin/catalog" },
+              { label: "Product Intake", href: "/admin/catalog" },
               { label: "Product Mastering", href: BASE },
               { label: master.display_name },
             ]}

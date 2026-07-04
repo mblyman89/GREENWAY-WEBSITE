@@ -15,10 +15,14 @@ import { countCatalogDrafts } from "@/lib/inventory/catalog-drafts";
 import { getPublishedVersion, getVersionItems } from "@/lib/pos/menu-version";
 import { getEnrichmentsForKeys, computeGaps, type GapFlags } from "@/lib/enrichment/store";
 import { listSuggestions } from "@/lib/products/masters-store";
+import { listPurchaseOrders } from "@/lib/purchasing/po-store";
+import { countManifestsByStatus } from "@/lib/inventory/intake-store";
 
 export type CatalogHubSnapshot = {
   configured: boolean;
   hasPublishedMenu: boolean;
+  purchasing: { openPos: number; openValueMinor: number; awaitingDelivery: number };
+  receiving: { inTransit: number; awaitingIntake: number; pending: number };
   onboarding: { needsReview: number; approved: number; dismissed: number };
   enrichment: {
     total: number;
@@ -35,6 +39,8 @@ function emptySnapshot(configured: boolean, hasPublishedMenu = false): CatalogHu
   return {
     configured,
     hasPublishedMenu,
+    purchasing: { openPos: 0, openValueMinor: 0, awaitingDelivery: 0 },
+    receiving: { inTransit: 0, awaitingIntake: 0, pending: 0 },
     onboarding: { needsReview: 0, approved: 0, dismissed: 0 },
     enrichment: {
       total: 0,
@@ -101,9 +107,40 @@ export async function getCatalogHub(): Promise<CatalogHubSnapshot> {
     pendingSuggestions = 0;
   }
 
+  // Purchasing — open POs and their value (mirrors the Purchasing page logic).
+  let purchasing = emptySnapshot(true).purchasing;
+  try {
+    const pos = await listPurchaseOrders();
+    const open = pos.filter((p) =>
+      ["draft", "submitted", "sent", "partial"].includes(p.status),
+    );
+    purchasing = {
+      openPos: open.length,
+      openValueMinor: open.reduce((s, p) => s + p.subtotal_minor_units, 0),
+      awaitingDelivery: pos.filter((p) => ["sent", "partial"].includes(p.status)).length,
+    };
+  } catch {
+    purchasing = emptySnapshot(true).purchasing;
+  }
+
+  // Receiving — inbound manifests by stage (mirrors the Receiving page).
+  let receiving = emptySnapshot(true).receiving;
+  try {
+    const counts = await countManifestsByStatus();
+    receiving = {
+      inTransit: counts.in_transit,
+      awaitingIntake: counts.awaitingIntake, // received, awaiting verify & accept
+      pending: counts.pending,
+    };
+  } catch {
+    receiving = emptySnapshot(true).receiving;
+  }
+
   return {
     configured: true,
     hasPublishedMenu,
+    purchasing,
+    receiving,
     onboarding: {
       needsReview: draftCounts.draft,
       approved: draftCounts.approved,

@@ -131,7 +131,7 @@ export default async function ProductsPage({
       <AdminPageHeader
         title="Product Enrichment"
         subtitle={`Enrich the ${gaps.length} products in the live menu — descriptions, images, tags, staff picks${isAiConfigured ? ", and AI-drafted copy" : ""}. Price & stock stay POS-controlled.`}
-        breadcrumbs={<Breadcrumbs items={[{ label: "Catalog", href: "/admin/catalog" }, { label: "Product Enrichment" }]} />}
+        breadcrumbs={<Breadcrumbs items={[{ label: "Product Intake", href: "/admin/catalog" }, { label: "Product Enrichment" }]} />}
         help={
           <HelpPanel
             id="products"
@@ -153,6 +153,14 @@ export default async function ProductsPage({
       />
 
       <div className="space-y-6 px-5 py-6 sm:px-8">
+        <div>
+          <Link
+            href="/admin/catalog"
+            className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--admin-text-muted)] hover:text-[var(--admin-accent)]"
+          >
+            ← Back to Product Intake Hub
+          </Link>
+        </div>
         <CatalogStageStrip current="enrichment" />
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard label="Products" value={stats.total} hint={`${stats.visible} visible · ${stats.hidden} hidden`} accent="muted" />

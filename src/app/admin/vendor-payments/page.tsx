@@ -3,6 +3,7 @@ import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
+import { StatCard } from "@/components/admin/StatCard";
 import { getAchCompanySettings } from "@/lib/payroll/payroll-store";
 import { Card, CardHeader, Section } from "@/components/admin/ui";
 import { VendorAchForm } from "./VendorAchForm";
@@ -16,7 +17,7 @@ export default async function VendorPaymentsPage() {
   if (!isSupabaseServiceConfigured) {
     return (
       <div>
-        <AdminPageHeader title="Vendor payments (ACH)" subtitle="Manual-entry vendor bills → ACH file." />
+        <AdminPageHeader title="Accounts Payable" subtitle="Manual-entry vendor bills → ACH file." />
         <div className="px-5 py-6 sm:px-8">
           <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] p-5 text-sm text-[var(--admin-gold)]">
             The database isn&apos;t connected yet.
@@ -33,30 +34,75 @@ export default async function VendorPaymentsPage() {
   return (
     <div>
       <AdminPageHeader
-        title="Vendor payments (ACH)"
+        title="Accounts Payable"
         subtitle="Enter what you owe each vendor and generate a NACHA file to upload to your bank."
-        breadcrumbs={<Breadcrumbs items={[{ label: "Finance" }, { label: "Vendor payments" }]} />}
+        breadcrumbs={
+          <Breadcrumbs
+            items={[
+              { label: "Product Intake", href: "/admin/catalog" },
+              { label: "Accounts Payable" },
+            ]}
+          />
+        }
         help={
           <HelpPanel
             id="vendor-ach"
-            title="How vendor ACH works"
+            title="How vendor payments work"
             steps={[
               "Set your company/bank ACH details once on the Payroll page — they're shared here.",
+              "Confirm the three-way match: the purchase order, the received goods, and the vendor's invoice all agree on quantity and price.",
               "Add a row per vendor: name, routing #, account #, checking/savings, amount.",
               "Click Generate — we validate every row, then build a NACHA (CCD) file.",
               "Download the file and upload it in your bank's ACH portal. Nothing is sent from here.",
             ]}
           >
             <p>
-              This uses the exact same vendor-payment engine that already powers the file format
-              (validation + NACHA build). Amounts are entered in dollars and stored/generated in
-              cents. This is a draft for your review and manual bank upload.
+              Before you pay, do a <strong>three-way match</strong> — confirm the{" "}
+              <Link href="/admin/purchasing" className="text-[var(--admin-accent)] hover:underline">purchase order</Link>,
+              the{" "}
+              <Link href="/admin/inventory/intake" className="text-[var(--admin-accent)] hover:underline">received goods</Link>,
+              and the vendor invoice all agree. That single habit blocks duplicate
+              payments, overbilling, and paying for goods you never received. Amounts
+              are entered in dollars and stored/generated in cents. This is a draft
+              for your review and manual bank upload.
             </p>
           </HelpPanel>
         }
       />
 
       <div className="space-y-6 px-5 py-6 sm:px-8">
+        <div>
+          <Link
+            href="/admin/catalog"
+            className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--admin-text-muted)] hover:text-[var(--admin-accent)]"
+          >
+            ← Back to Product Intake Hub
+          </Link>
+        </div>
+
+        {/* Readiness at a glance — real state, no fabricated payables ledger. */}
+        <div className="grid gap-4 sm:grid-cols-3">
+          <StatCard
+            label="Bank/ACH setup"
+            value={settingsComplete ? "Ready" : "Incomplete"}
+            hint={settingsComplete ? "company + routing on file" : "set it on the Payroll page"}
+            accent={settingsComplete ? "green" : "orange"}
+            href="/admin/payroll"
+          />
+          <StatCard
+            label="Payment methods"
+            value="ACH + manual"
+            hint="NACHA file or record a check/cash/wire"
+            accent="muted"
+          />
+          <StatCard
+            label="Control"
+            value="3-way match"
+            hint="PO · receipt · invoice must agree"
+            accent="muted"
+          />
+        </div>
+
         {!settingsComplete && (
           <div className="rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] px-4 py-3 text-sm text-[var(--admin-gold)]">
             Your bank/company ACH settings are incomplete. Set them once on the{" "}

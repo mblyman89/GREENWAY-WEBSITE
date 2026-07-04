@@ -327,8 +327,8 @@ export const HELP_SECTIONS: HelpSection[] = [
         href: "/admin/inventory",
       },
       {
-        q: "What is Vendor Intake?",
-        a: "It's how you receive incoming transfers from suppliers. Upload the vendor's transfer manifest and review it before accepting it into inventory.",
+        q: "What is Receiving?",
+        a: "It's how you receive incoming transfers from suppliers. Upload the vendor's transfer manifest and review it before accepting it into inventory. Receiving lives in the Product Intake tab.",
         href: "/admin/inventory/intake",
       },
       {
@@ -357,8 +357,13 @@ export const HELP_SECTIONS: HelpSection[] = [
     items: [
       {
         q: "How do I create a purchase order?",
-        a: "Go to Purchasing and start a new PO. Add the vendor and items, then track it from ordered to received. Received POs line up with Vendor Intake.",
+        a: "Go to Purchasing and start a new PO. Add the vendor and items, then track it from ordered to received. Received POs line up with Receiving.",
         href: "/admin/purchasing/new",
+      },
+      {
+        q: "How do I pay a vendor?",
+        a: "Accounts Payable (in the Product Intake tab) is where you queue and send vendor ACH payments once a PO is received and reconciled. Every payment is drafted for review before it's sent.",
+        href: "/admin/vendor-payments",
       },
     ],
   },
