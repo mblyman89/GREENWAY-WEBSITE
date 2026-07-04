@@ -29,10 +29,9 @@ export type AdminNavItem = {
 export const adminNav: AdminNavItem[] = [
   // Dashboard: daily front-of-house. (The "Dashboard" landing page itself is
   // reachable via the Greenway wordmark, so no separate nav item for it.)
-  { label: "Getting Started", href: "/admin/getting-started", permission: "dashboard.view", icon: "\ud83d\ude80", group: "Dashboard" },
   { label: "Online Orders", href: "/admin/orders", permission: "orders.view", icon: "\ud83e\uddfe", group: "Dashboard" },
-  { label: "Register Activity", href: "/admin/registers", permission: "orders.manage", icon: "\ud83d\udcb5", group: "Dashboard" },
   { label: "Loyalty", href: "/admin/loyalty-signups", permission: "loyalty.view", icon: "\u2605", group: "Dashboard" },
+  { label: "Getting Started", href: "/admin/getting-started", permission: "dashboard.view", icon: "\ud83d\ude80", group: "Dashboard" },
 
   // Reports: standalone top-header button (rendered as a direct link tab, not a
   // dropdown — see AdminTopNav DIRECT_LINK_GROUPS).
@@ -72,7 +71,8 @@ export const adminNav: AdminNavItem[] = [
   // Employee: time & pay + trade samples
   { label: "Time Clock", href: "/admin/staffing", permission: "loyalty.view", icon: "\u23f1", group: "Employee" },
   { label: "Payroll", href: "/admin/payroll", permission: "settings.manage", icon: "\ud83c\udfe6", group: "Employee" },
-  { label: "Trade Samples", href: "/admin/compliance/samples", permission: "settings.manage", icon: "\ud83e\uddea", group: "Employee" },
+  { label: "Samples", href: "/admin/compliance/samples", permission: "settings.manage", icon: "\ud83e\uddea", group: "Employee" },
+  { label: "Register Activity", href: "/admin/registers", permission: "orders.manage", icon: "\ud83d\udcb5", group: "Employee" },
 
   // Medical: patient/DOH tools
   { label: "Patient Records", href: "/admin/medical", permission: "medical.manage", icon: "\u2695", group: "Medical" },
