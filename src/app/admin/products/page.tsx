@@ -188,6 +188,66 @@ export default async function ProductsPage({
           </Link>
         </div>
         <CatalogStageStrip current="enrichment" />
+
+        {/* Green helper box — how to enrich well, with quick links to the
+            highest-impact gaps. Numbers are real (from stats), so the buttons
+            take you straight to the products that need work. */}
+        <section className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-accent)]/30 bg-[var(--admin-accent-soft)] p-5">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="max-w-2xl">
+              <h2 className="flex items-center gap-2 text-sm font-bold text-[var(--admin-accent)]">
+                <span aria-hidden>🌱</span> Enrichment helpers
+              </h2>
+              <p className="mt-1 text-sm text-[var(--admin-text-muted)]">
+                Enrichment is what makes a product look great online — your POS only gives names
+                and prices. Fill the biggest gaps first (they hurt discoverability most), then
+                polish the rest. Everything here is a draft you approve; price &amp; stock stay
+                POS-controlled.
+              </p>
+              <ul className="mt-3 grid gap-1.5 text-sm text-[var(--admin-text-muted)] sm:grid-cols-2">
+                <li className="flex gap-2">
+                  <span aria-hidden className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--admin-accent)]" />
+                  <span><strong className="text-[var(--admin-text)]">Descriptions</strong> — 2–3 honest sentences; no medical claims.</span>
+                </li>
+                <li className="flex gap-2">
+                  <span aria-hidden className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--admin-accent)]" />
+                  <span><strong className="text-[var(--admin-text)]">Images</strong> — a clean product photo lifts click-through.</span>
+                </li>
+                <li className="flex gap-2">
+                  <span aria-hidden className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--admin-accent)]" />
+                  <span><strong className="text-[var(--admin-text)]">Tags &amp; strain type</strong> — power search &amp; filtering.</span>
+                </li>
+                <li className="flex gap-2">
+                  <span aria-hidden className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--admin-accent)]" />
+                  <span><strong className="text-[var(--admin-text)]">Brand link</strong> — connects the product to its brand page.</span>
+                </li>
+              </ul>
+            </div>
+            <div className="flex flex-col gap-2">
+              <Button href="/admin/products?gap=description" variant="save" size="sm">
+                Fix missing descriptions{missingDesc > 0 ? ` (${missingDesc})` : ""} →
+              </Button>
+              <Button href="/admin/products?gap=image" variant="neutral" size="sm">
+                Fix missing images{missingImg > 0 ? ` (${missingImg})` : ""} →
+              </Button>
+              <Button href="/admin/products?gap=brand" variant="neutral" size="sm">
+                Fix brand links{stats.missing.brandLink > 0 ? ` (${stats.missing.brandLink})` : ""} →
+              </Button>
+              {isAiConfigured && (
+                <Button href="/admin/products/bulk-ai" variant="neutral" size="sm">
+                  ✨ Bulk-draft with AI →
+                </Button>
+              )}
+              <Link
+                href="/admin/knowledge-base"
+                className="mt-0.5 text-center text-xs font-semibold text-[var(--admin-text-muted)] hover:text-[var(--admin-accent)]"
+              >
+                📚 Open the Knowledge Base
+              </Link>
+            </div>
+          </div>
+        </section>
+
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard label="Products" value={stats.total} hint={`${stats.visible} visible · ${stats.hidden} hidden`} accent="muted" />
           <StatCard label="Enriched & live" value={enriched} hint={`avg ${stats.avgCompleteness}% complete`} accent="green" />

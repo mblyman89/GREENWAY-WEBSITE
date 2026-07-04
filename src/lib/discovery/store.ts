@@ -103,6 +103,7 @@ export async function getManualSourceId(): Promise<string | null> {
 // ---------------------------------------------------------------------------
 export async function listVendorLeads(opts?: {
   status?: DiscoveryVendorStatus;
+  limit?: number;
 }): Promise<DiscoveryVendorLead[]> {
   if (!isSupabaseServiceConfigured) return [];
   const admin = createSupabaseAdminClient();
@@ -112,6 +113,7 @@ export async function listVendorLeads(opts?: {
     .order("priority", { ascending: true })
     .order("created_at", { ascending: false });
   if (opts?.status) q = q.eq("status", opts.status);
+  if (opts?.limit && opts.limit > 0) q = q.limit(opts.limit);
   const { data } = await q;
   return (data as DiscoveryVendorLead[] | null) ?? [];
 }
@@ -228,6 +230,7 @@ export async function reconcileAllVendorLeads(): Promise<number> {
 // ---------------------------------------------------------------------------
 export async function listProductLeads(opts?: {
   status?: DiscoveryProductStatus;
+  limit?: number;
 }): Promise<DiscoveryProductLead[]> {
   if (!isSupabaseServiceConfigured) return [];
   const admin = createSupabaseAdminClient();
@@ -237,6 +240,7 @@ export async function listProductLeads(opts?: {
     .order("priority", { ascending: true })
     .order("created_at", { ascending: false });
   if (opts?.status) q = q.eq("status", opts.status);
+  if (opts?.limit && opts.limit > 0) q = q.limit(opts.limit);
   const { data } = await q;
   return (data as DiscoveryProductLead[] | null) ?? [];
 }

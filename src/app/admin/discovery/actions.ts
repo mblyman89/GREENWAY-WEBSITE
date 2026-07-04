@@ -27,6 +27,14 @@ import {
   deleteDataset,
 } from "@/lib/discovery/ingest";
 import { computeBenchmarks, generateVendorLeadsFromCcrs } from "@/lib/discovery/benchmarks";
+import { listVendorLeads, listProductLeads } from "@/lib/discovery/store";
+import { listDatasets } from "@/lib/discovery/ingest";
+import { computeCompetitorProfiles, rollUpAreas } from "@/lib/discovery/competitors";
+import {
+  generateLeadsAdvice,
+  isAiConfigured as isLeadsAiConfigured,
+  type LeadsAdvice,
+} from "@/lib/discovery/leads-ai";
 import type {
   DiscoveryVendorStatus,
   DiscoveryProductStatus,
@@ -462,4 +470,85 @@ export async function deleteCcrsDatasetAction(formData: FormData): Promise<void>
   revalidatePath(CCRS);
   revalidatePath("/admin/discovery/benchmarks");
   redirect(`${CCRS}?deleted=1`);
+}
+
+// ---------------------------------------------------------------------------
+// AI leads advisor (gpt-4o via the "heavy" tier). Read-only / advisory.
+// ---------------------------------------------------------------------------
+
+export type LeadsAdviceResult =
+  | { ok: true; advice: LeadsAdvice }
+  | { ok: false; error: string };
+
+/**
+ * Run the AI leads advisor over the current discovery pipeline. It re-reads the
+ * same vendor & product leads the page renders and, when a CCRS benchmark
+ * dataset is available, layers in the local competitor market context, then
+ * returns a grounded briefing (verdicts, insights, next actions, open
+ * questions). Gated on inventory.manage. Drafts-only: it changes nothing.
+ */
+export async function analyzeLeadsAction(): Promise<LeadsAdviceResult> {
+  const session = await requirePermission("inventory.manage");
+
+  if (!isLeadsAiConfigured) {
+    return {
+      ok: false,
+      error:
+        "AI isn't set up yet. Add an AI_API_KEY (or OPENAI_API_KEY) in your environment to enable the leads advisor. The lead tables work without it.",
+    };
+  }
+
+  try {
+    // The leads to reason over — cap generously to keep the prompt bounded.
+    const [vendorLeads, productLeads] = await Promise.all([
+      listVendorLeads({ limit: 120 }),
+      listProductLeads({ limit: 120 }),
+    ]);
+
+    if (vendorLeads.length === 0 && productLeads.length === 0) {
+      return {
+        ok: false,
+        error: "There are no leads to analyze yet. Add a vendor or product lead first.",
+      };
+    }
+
+    // Optional grounded market context from the most recent COMPUTED CCRS
+    // dataset. Best-effort: if discovery/benchmarks aren't set up, we simply
+    // analyze the leads without market context.
+    let competitors: Awaited<ReturnType<typeof computeCompetitorProfiles>> | undefined;
+    let areas: ReturnType<typeof rollUpAreas> | undefined;
+    try {
+      const datasets = await listDatasets();
+      const computed = datasets.find((d) => d.status === "ready" && d.benchmarks_computed_at);
+      if (computed) {
+        competitors = await computeCompetitorProfiles(computed.id);
+        areas = rollUpAreas(competitors);
+      }
+    } catch {
+      // Non-fatal — proceed with leads-only analysis.
+    }
+
+    const advice = await generateLeadsAdvice(
+      { vendorLeads, productLeads, competitors, areas },
+      { actorId: session.userId, actorEmail: session.email },
+    );
+
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "discovery.leads_advisor",
+      entityType: "discovery",
+      after: {
+        model: advice.model,
+        vendorLeads: vendorLeads.length,
+        productLeads: productLeads.length,
+        withMarketContext: Boolean(competitors && competitors.length > 0),
+      },
+    });
+
+    return { ok: true, advice };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "AI request failed. Please try again.";
+    return { ok: false, error: message };
+  }
 }

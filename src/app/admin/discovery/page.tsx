@@ -21,6 +21,8 @@ import {
 } from "./actions";
 import { VendorLeadsTable } from "./vendor-leads-table";
 import { ProductLeadsTable } from "./product-leads-table";
+import { LeadsAssistantPanel } from "./LeadsAssistantPanel";
+import { isAiConfigured } from "@/lib/ai/provider";
 
 export const dynamic = "force-dynamic";
 
@@ -196,6 +198,9 @@ export default async function DiscoveryPage({ searchParams }: { searchParams: Pr
             </div>
           </Card>
         </Section>
+
+        {/* AI leads advisor — a grounded second opinion over the pipeline. */}
+        <LeadsAssistantPanel aiEnabled={isAiConfigured} />
 
         {/* Vendor leads */}
         <Section

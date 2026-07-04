@@ -6,6 +6,7 @@ import { Breadcrumbs, HelpPanel, EmptyState } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
 import { Input, Button } from "@/components/admin/ui";
 import { MissingInsight } from "@/components/admin/insight/MissingInsight";
+import { CatalogStageStrip } from "@/components/admin/catalog/CatalogStageStrip";
 import { listLots, computeInventoryStats, EXPIRING_SOON_DAYS } from "@/lib/inventory/store";
 import { inventoryGapInsights } from "@/lib/insight/inventory";
 
@@ -107,6 +108,16 @@ export default async function InventoryPage({
       />
 
       <div className="space-y-6 px-5 py-6 sm:px-8">
+        <div>
+          <Link
+            href="/admin/catalog"
+            className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--admin-text-muted)] hover:text-[var(--admin-accent)]"
+          >
+            ← Back to Product Intake Hub
+          </Link>
+        </div>
+        <CatalogStageStrip current="menu" />
+
         {/* Top KPI band */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard label="Total lots" value={stats.total} accent="muted" />
