@@ -9,9 +9,9 @@ import Link from "next/link";
  *   Receiving → Product Onboarding → Live Menu → Product Enrichment
  *
  * Every stage links to the page where that work happens (the Live Menu stage
- * links to Menu Imports, where the published, customer-facing version is
- * managed). The `current` stage is highlighted. This is purely
- * navigational/orientational — it changes no data.
+ * links to Inventory — the live, on-hand, customer-facing stock). The `current`
+ * stage is highlighted but stays clickable, so you can jump to any stage from
+ * anywhere. This is purely navigational/orientational — it changes no data.
  */
 
 export type CatalogStage = "intake" | "onboarding" | "menu" | "enrichment";
@@ -39,8 +39,8 @@ const STAGES: StageDef[] = [
   {
     key: "menu",
     label: "Live Menu",
-    href: "/admin/menu-imports",
-    hint: "Publish & review the customer-facing menu",
+    href: "/admin/inventory",
+    hint: "Live, on-hand inventory that's customer-facing",
   },
   {
     key: "enrichment",
@@ -86,8 +86,11 @@ export function CatalogStageStrip({ current }: { current: CatalogStage }) {
         );
         return (
           <span key={s.key} className="inline-flex items-center gap-1">
-            {s.href && !isCurrent ? (
-              <Link href={s.href} aria-current={undefined}>
+            {s.href ? (
+              // A stage with a destination is ALWAYS a link — even when it's the
+              // current stage — so you can jump straight to it from anywhere
+              // (e.g. the hub highlights "Live Menu" but still lets you open it).
+              <Link href={s.href} aria-current={isCurrent ? "step" : undefined}>
                 {inner}
               </Link>
             ) : (
