@@ -35,20 +35,27 @@ export function CountGrid({
         {DENOM_FIELDS.map((d) => (
           <label
             key={d.key}
-            className="flex items-center gap-2 rounded-lg border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-2 py-1.5"
+            className="flex flex-col gap-1 rounded-lg border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-2 py-1.5"
           >
-            <span className="w-12 shrink-0 text-xs font-semibold text-white/60">{d.label}</span>
+            <span className="text-[0.7rem] font-semibold text-white/60">{d.label}</span>
             <input
-              type="number"
+              // text + numeric inputMode = free typing, NO spinner arrows, and a
+              // numeric keypad on tablets (the iPad POS use case).
+              type="text"
               name={d.key}
-              min={0}
               inputMode="numeric"
+              pattern="[0-9]*"
+              autoComplete="off"
               placeholder="0"
+              onFocus={(e) => e.currentTarget.select()}
               onChange={(e) => {
-                const v = Math.max(0, Math.floor(Number(e.target.value) || 0));
+                // Keep digits only; store the sanitized value back in the field.
+                const digits = e.target.value.replace(/[^0-9]/g, "");
+                if (digits !== e.target.value) e.target.value = digits;
+                const v = digits === "" ? 0 : Math.max(0, parseInt(digits, 10));
                 setCounts((prev) => ({ ...prev, [d.key]: v }));
               }}
-              className="admin-focus w-full rounded bg-transparent px-1 py-0.5 text-right text-sm text-white outline-none"
+              className="admin-focus w-full rounded border border-[var(--admin-border)] bg-[var(--admin-surface)] px-2 py-1.5 text-right text-base font-medium text-white outline-none focus:border-[var(--admin-accent)]"
             />
           </label>
         ))}
