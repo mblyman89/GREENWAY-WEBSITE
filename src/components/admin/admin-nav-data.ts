@@ -27,7 +27,7 @@ export const adminNav: AdminNavItem[] = [
   { label: "Dashboard", href: "/admin", permission: "dashboard.view", icon: "▦", group: "Sell" },
   { label: "Getting Started", href: "/admin/getting-started", permission: "dashboard.view", icon: "🚀", group: "Sell" },
   { label: "Orders", href: "/admin/orders", permission: "orders.view", icon: "🧾", group: "Sell" },
-  { label: "Registers & Drawers", href: "/admin/registers", permission: "orders.manage", icon: "💵", group: "Sell" },
+  { label: "Register Activity", href: "/admin/registers", permission: "orders.manage", icon: "💵", group: "Sell" },
   { label: "Customers", href: "/admin/customers", permission: "customers.manage", icon: "👤", group: "Sell" },
   { label: "Loyalty", href: "/admin/loyalty-signups", permission: "loyalty.view", icon: "★", group: "Sell" },
   { label: "Loyalty Program", href: "/admin/loyalty", permission: "loyalty.view", icon: "🎁", group: "Sell" },

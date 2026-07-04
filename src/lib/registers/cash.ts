@@ -10,7 +10,10 @@ export type DenomCounts = {
   nickels: number;
   dimes: number;
   quarters: number;
+  half_dollars: number; // 50¢ coin
+  dollar_coins: number; // $1 coin
   ones: number;
+  twos: number; // $2 bill
   fives: number;
   tens: number;
   twenties: number;
@@ -19,24 +22,27 @@ export type DenomCounts = {
 };
 
 export const EMPTY_DENOMS: DenomCounts = {
-  pennies: 0, nickels: 0, dimes: 0, quarters: 0,
-  ones: 0, fives: 0, tens: 0, twenties: 0, fifties: 0, hundreds: 0,
+  pennies: 0, nickels: 0, dimes: 0, quarters: 0, half_dollars: 0, dollar_coins: 0,
+  ones: 0, twos: 0, fives: 0, tens: 0, twenties: 0, fifties: 0, hundreds: 0,
 };
 
 /** Cents value of each denomination unit. */
 const DENOM_CENTS: Record<keyof DenomCounts, number> = {
-  pennies: 1, nickels: 5, dimes: 10, quarters: 25,
-  ones: 100, fives: 500, tens: 1000, twenties: 2000, fifties: 5000, hundreds: 10000,
+  pennies: 1, nickels: 5, dimes: 10, quarters: 25, half_dollars: 50, dollar_coins: 100,
+  ones: 100, twos: 200, fives: 500, tens: 1000, twenties: 2000, fifties: 5000, hundreds: 10000,
 };
 
-/** Friendly ordered list for rendering count forms. */
+/** Friendly ordered list for rendering count forms (bills high→low, then coins high→low). */
 export const DENOM_FIELDS: { key: keyof DenomCounts; label: string }[] = [
   { key: "hundreds", label: "$100" },
   { key: "fifties", label: "$50" },
   { key: "twenties", label: "$20" },
   { key: "tens", label: "$10" },
   { key: "fives", label: "$5" },
+  { key: "twos", label: "$2" },
   { key: "ones", label: "$1" },
+  { key: "dollar_coins", label: "$1 coin" },
+  { key: "half_dollars", label: "50¢" },
   { key: "quarters", label: "25¢" },
   { key: "dimes", label: "10¢" },
   { key: "nickels", label: "5¢" },

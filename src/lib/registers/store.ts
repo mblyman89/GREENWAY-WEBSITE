@@ -327,6 +327,64 @@ export async function liveRegisters(): Promise<RegisterLive[]> {
   return out;
 }
 
+/**
+ * At-a-glance cash summary for the Cash Management page. Computed server-side so
+ * the page render stays pure (no Date.now() in the component). "Today" is the
+ * current Pacific business day.
+ */
+export type CashDrawerSummary = {
+  registerCount: number;
+  openCount: number;
+  /** Sum of opening (starting) cash across currently-open drawers, cents. */
+  startingCashOpenMinor: number;
+  /** Sum of cash dropped to the safe across currently-open drawers, cents. */
+  droppedOpenMinor: number;
+  /** Closed sessions still awaiting a manager reconcile. */
+  awaitingReconcile: number;
+  /** Net over/short across sessions reconciled today (cents). */
+  netOverShortTodayMinor: number;
+  reconciledToday: number;
+};
+
+export async function cashDrawerSummary(): Promise<CashDrawerSummary> {
+  const live = await liveRegisters();
+  const today = businessDayFor(new Date().toISOString());
+
+  let startingCashOpenMinor = 0;
+  let droppedOpenMinor = 0;
+  let openCount = 0;
+  for (const l of live) {
+    if (l.openSession) {
+      openCount += 1;
+      startingCashOpenMinor += l.openSession.opening_count_minor ?? 0;
+      droppedOpenMinor += l.dropsMinor;
+    }
+  }
+
+  const recent = await recentSessions(120);
+  const awaitingReconcile = recent.filter((s) => s.status === "closed").length;
+  const reconciledTodaySessions = recent.filter(
+    (s) =>
+      s.business_day === today &&
+      (s.status === "reconciled" || s.status === "verified") &&
+      s.over_short_minor != null,
+  );
+  const netOverShortTodayMinor = reconciledTodaySessions.reduce(
+    (sum, s) => sum + (s.over_short_minor ?? 0),
+    0,
+  );
+
+  return {
+    registerCount: live.length,
+    openCount,
+    startingCashOpenMinor,
+    droppedOpenMinor,
+    awaitingReconcile,
+    netOverShortTodayMinor,
+    reconciledToday: reconciledTodaySessions.length,
+  };
+}
+
 export async function recentSessions(limit = 40): Promise<(DrawerSession & { register_name: string })[]> {
   if (!isSupabaseServiceConfigured) return [];
   const admin = createSupabaseAdminClient();

@@ -180,24 +180,29 @@ export const HELP_SECTIONS: HelpSection[] = [
   // ── Point of sale ──────────────────────────────────────────────────────────
   {
     id: "registers",
-    title: "Registers & cash drawers",
+    title: "Register Activity",
     icon: "💵",
     category: "Point of sale",
-    intro: "Opening, counting, and closing the drawer for each shift.",
+    intro: "The back-office oversight console: who's working, what each register is doing, and a live feed of store activity.",
     items: [
       {
-        q: "How do I open a register for a shift?",
-        a: "Go to Registers & Drawers, pick the register, and open it with a starting cash count. That count is what the closing count is measured against.",
+        q: "What is the Register Activity page for?",
+        a: "It's the manager oversight console for the sales floor — like Lightspeed's BackOffice Shifts Summary or Square Dashboard. It shows the day's headline numbers, who is currently clocked in, each register's live status, and a live activity feed. The hands-on drawer counting happens on the front-end iPad POS at the register; here a manager monitors it.",
         href: "/admin/registers",
       },
       {
-        q: "How do I close out and count the drawer?",
-        a: "At the end of a shift, close the drawer and enter the counted cash. The system compares it to what should be there and records any over/short. Pay-ins and pay-outs are logged too.",
+        q: "Which sales figures does it show?",
+        a: "It shows online pickup-order sales — the only itemized transactions in this back office. In-store card/cash sales are captured at the register and aren't broken out here. Over/short reflects reconciled cash drawers.",
         href: "/admin/registers",
       },
       {
-        q: "Can I see past drawer sessions?",
-        a: "Yes — Registers history shows every opened/closed session with its counts and any discrepancies, so nothing is a mystery later.",
+        q: "What are the reconcile and verify sign-offs?",
+        a: "After a cashier blind-closes a drawer at the register, a manager reconciles it (enters the day's cash sales to reveal over/short) and verifies the shared manager till the next morning. These two manager sign-offs appear under 'Needs attention' when there's something to do.",
+        href: "/admin/registers",
+      },
+      {
+        q: "Where are the cash drawer reports?",
+        a: "Cash drawer reports (History) shows every opened, closed, reconciled, and verified session with its counts and any discrepancies, so nothing is a mystery later.",
         href: "/admin/registers/history",
       },
     ],
