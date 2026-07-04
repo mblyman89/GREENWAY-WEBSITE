@@ -8,6 +8,7 @@ export type AdminNavItem = {
   icon: string; // simple emoji/glyph for now; swap for SVG icons later
   group:
     | "Sell"
+    | "Catalog"
     | "Inventory"
     | "Compliance"
     | "Finance"
@@ -32,19 +33,21 @@ export const adminNav: AdminNavItem[] = [
   { label: "Loyalty", href: "/admin/loyalty-signups", permission: "loyalty.view", icon: "★", group: "Sell" },
   { label: "Loyalty Program", href: "/admin/loyalty", permission: "loyalty.view", icon: "🎁", group: "Sell" },
 
-  // ── Inventory: catalog, receiving, counts, purchasing ───────────────────
+  // Catalog: the product workflow (onboard -> menu -> enrich -> master).
+  { label: "Catalog Hub", href: "/admin/catalog", permission: "products.enrich", icon: "🗂", group: "Catalog" },
+  { label: "Product Onboarding", href: "/admin/inventory/drafts", permission: "inventory.manage", icon: "📝", group: "Catalog" },
+  { label: "Product Enrichment", href: "/admin/products", permission: "products.enrich", icon: "📦", group: "Catalog" },
+  { label: "Product Mastering", href: "/admin/products/masters", permission: "inventory.manage", icon: "🧬", group: "Catalog" },
+  { label: "Knowledge Base", href: "/admin/knowledge-base", permission: "products.enrich", icon: "📚", group: "Catalog" },
+
   { label: "Vendors & Brands", href: "/admin/vendors", permission: "vendors.manage", icon: "🏷", group: "Inventory" },
-  { label: "Products", href: "/admin/products", permission: "products.enrich", icon: "📦", group: "Inventory" },
-  { label: "Product Mastering", href: "/admin/products/masters", permission: "inventory.manage", icon: "🧬", group: "Inventory" },
   { label: "Inventory", href: "/admin/inventory", permission: "inventory.manage", icon: "🧾", group: "Inventory" },
   { label: "Vendor Intake", href: "/admin/inventory/intake", permission: "inventory.manage", icon: "📥", group: "Inventory" },
-  { label: "Product Drafts", href: "/admin/inventory/drafts", permission: "inventory.manage", icon: "📝", group: "Inventory" },
   { label: "Cycle Counts", href: "/admin/inventory/cycle-counts", permission: "inventory.manage", icon: "🔢", group: "Inventory" },
   { label: "Returns & Destruction", href: "/admin/inventory/disposition", permission: "inventory.manage", icon: "♻️", group: "Inventory" },
   { label: "Non-Cannabis", href: "/admin/inventory/noncannabis", permission: "inventory.manage", icon: "🧴", group: "Inventory" },
   { label: "Purchasing", href: "/admin/purchasing", permission: "inventory.manage", icon: "🛒", group: "Inventory" },
   { label: "Equipment", href: "/admin/equipment", permission: "inventory.manage", icon: "🛠", group: "Inventory" },
-  { label: "Knowledge Base", href: "/admin/knowledge-base", permission: "products.enrich", icon: "📚", group: "Inventory" },
 
   // ── Compliance: regulatory tools (CCRS / DOH) ───────────────────────────
   { label: "Compliance Health", href: "/admin/compliance/health", permission: "reports.view", icon: "🛡", group: "Compliance" },
@@ -95,6 +98,7 @@ export const adminNav: AdminNavItem[] = [
 
 export const navGroups: AdminNavItem["group"][] = [
   "Sell",
+  "Catalog",
   "Inventory",
   "Compliance",
   "Finance",

@@ -64,7 +64,7 @@ export default async function MastersPage({
       <AdminPageHeader
         title="Product Mastering"
         subtitle="Group menu items that are really one product sold at different sizes or forms into a single card, so your menu reads clean. AI suggests groupings — you decide."
-        breadcrumbs={<Breadcrumbs items={[{ label: "Catalog" }, { label: "Product Mastering" }]} />}
+        breadcrumbs={<Breadcrumbs items={[{ label: "Catalog", href: "/admin/catalog" }, { label: "Product Mastering" }]} />}
         help={
           <HelpPanel
             id="product-masters"

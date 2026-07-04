@@ -273,10 +273,10 @@ export const HELP_SECTIONS: HelpSection[] = [
   },
   {
     id: "products",
-    title: "Products",
+    title: "Product Enrichment",
     icon: "📦",
     category: "Catalog & inventory",
-    intro: "Photos, descriptions, and details that make products shine online.",
+    intro: "Photos, descriptions, and details that make live products shine online.",
     items: [
       {
         q: "Why are some products missing photos or descriptions?",
@@ -332,8 +332,8 @@ export const HELP_SECTIONS: HelpSection[] = [
         href: "/admin/inventory/intake",
       },
       {
-        q: "What are Product Drafts?",
-        a: "New items that came in but need a little setup (category, details) before they're menu-ready. You finish them here and they flow into your catalog.",
+        q: "What is Product Onboarding?",
+        a: "When you receive a lot that isn't on the live menu yet, the system drafts the new product from the transfer + COA. You review it, set a price (guarded by the cost floor), and approve it onto the menu. Nothing is customer-facing until you approve it. After it publishes, add photos and a description in Product Enrichment.",
         href: "/admin/inventory/drafts",
       },
       {

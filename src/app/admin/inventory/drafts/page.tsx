@@ -5,6 +5,7 @@ import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel, EmptyState } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
 import { Button, Input } from "@/components/admin/ui";
+import { CatalogStageStrip } from "@/components/admin/catalog/CatalogStageStrip";
 import { listCatalogDrafts, countCatalogDrafts } from "@/lib/inventory/catalog-drafts";
 import { approveDraftAction, dismissDraftAction, restoreDraftAction } from "./actions";
 
@@ -32,7 +33,7 @@ export default async function CatalogDraftsPage({
   if (!isSupabaseServiceConfigured) {
     return (
       <div>
-        <AdminPageHeader title="Product drafts" subtitle="Draft products suggested from intake." />
+        <AdminPageHeader title="Product Onboarding" subtitle="Review and approve new products onto the menu." />
         <div className="px-5 py-6 sm:px-8">
           <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] p-5 text-sm text-[var(--admin-gold)]">
             The database isn&apos;t fully set up yet. Apply migration 0026 to enable product drafts.
@@ -45,7 +46,7 @@ export default async function CatalogDraftsPage({
   const [drafts, counts] = await Promise.all([listCatalogDrafts(view), countCatalogDrafts()]);
 
   const banner =
-    approved ? "Draft approved with its price — validated and ready for the next menu publish."
+    approved ? "Approved with its price — staged for the next menu publish. After it publishes, add photos & a description in Product Enrichment."
       : dismissed ? "Draft dismissed."
         : restored ? "Draft restored to the review queue."
           : error === "floor" ? (msg || "Price is below the cost floor.")
@@ -57,20 +58,20 @@ export default async function CatalogDraftsPage({
   return (
     <div>
       <AdminPageHeader
-        title="Product drafts"
+        title="Product Onboarding"
         subtitle="When a received lot isn't on the live menu, we draft the product from the transfer + COA so you can validate it before it goes live. Nothing here is customer-facing until you approve it."
         breadcrumbs={
           <Breadcrumbs
             items={[
-              { label: "Inventory", href: "/admin/inventory" },
-              { label: "Product drafts" },
+              { label: "Catalog", href: "/admin/catalog" },
+              { label: "Product Onboarding" },
             ]}
           />
         }
         help={
           <HelpPanel
             id="catalog-drafts"
-            title="How product drafts work"
+            title="How product onboarding works"
             steps={[
               "On accepting a manifest, we match each lot to the published menu by its POS key.",
               "Lots that don't match get a DRAFT product, pre-filled from the JSON + COA potency.",
@@ -87,6 +88,7 @@ export default async function CatalogDraftsPage({
       />
 
       <div className="space-y-6 px-5 py-6 sm:px-8">
+        <CatalogStageStrip current="onboarding" />
         <div className="grid gap-4 sm:grid-cols-3">
           <StatCard label="Needs review" value={counts.draft} accent={counts.draft > 0 ? "gold" : "muted"} href="/admin/inventory/drafts?status=draft" />
           <StatCard label="Approved" value={counts.approved} accent="green" href="/admin/inventory/drafts?status=approved" />
@@ -210,6 +212,15 @@ export default async function CatalogDraftsPage({
                                 <span className="text-sm font-semibold text-[var(--admin-text)]">
                                   {fmtMoney(d.price_minor_units)}
                                 </span>
+                              )}
+                              {view === "approved" && (
+                                <Button
+                                  href={`/admin/products?q=${encodeURIComponent(d.name || "")}`}
+                                  variant="save"
+                                  size="sm"
+                                >
+                                  ✨ Enrich now →
+                                </Button>
                               )}
                               <form action={restore}>
                                 <Button type="submit" variant="neutral" size="sm">↩ Restore</Button>
