@@ -99,6 +99,63 @@ export type DiscoveryProductLead = {
 // CCRS benchmark command center (migration 0079)
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Local competitor & area benchmarking (0080)
+// ---------------------------------------------------------------------------
+export type DiscoveryCompetitorArea =
+  | "port_orchard"
+  | "bremerton"
+  | "silverdale"
+  | "tacoma"
+  | "key_peninsula"
+  | "kitsap_other"
+  | "other";
+
+export type DiscoveryCompetitor = {
+  license_number: string;
+  tradename: string;
+  city: string | null;
+  county: string | null;
+  area: DiscoveryCompetitorArea;
+  is_self: boolean;
+  is_active: boolean;
+  note: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+/** One competitor's price/cost profile computed from an uploaded CCRS dataset. */
+export type CompetitorProfile = {
+  license_number: string;
+  tradename: string;
+  city: string | null;
+  area: DiscoveryCompetitorArea;
+  is_self: boolean;
+  // retail (what they SELL for)
+  retailSales: number;
+  retailMedianMinor: number | null;
+  retailAvgMinor: number | null;
+  retailPerGramMedianMinor: number | null;
+  // wholesale (what they PAY vendors) — rows where they are the buyer
+  wholesaleBuys: number;
+  wholesaleMedianMinor: number | null;
+  wholesaleSpendMinor: number; // total $ they spent buying
+  // sourcing
+  topVendors: Array<{ license_number: string; name: string | null; spendMinor: number; units: number }>;
+  topCategories: Array<{ category: string; units: number; revenueMinor: number }>;
+};
+
+/** Area-level roll-up across all competitors in that area (excludes self by default). */
+export type AreaBenchmark = {
+  area: DiscoveryCompetitorArea;
+  storeCount: number;
+  retailSales: number;
+  retailMedianMinor: number | null;
+  retailAvgMinor: number | null;
+  retailPerGramMedianMinor: number | null;
+  wholesaleMedianMinor: number | null;
+};
+
 export type DiscoveryDatasetStatus = "uploading" | "ready" | "error";
 
 /** Mirrors CCRS Sale.SaleType, normalized. */
