@@ -174,10 +174,13 @@ create trigger drawer_sessions_set_updated_at before update on public.drawer_ses
 -- ---------------------------------------------------------------------------
 -- Seed the three registers (idempotent: only if none exist yet).
 -- ---------------------------------------------------------------------------
+-- Sales-register standing float is $167.50 (16750 cents) — see 0077 for the
+-- denomination breakdown. Manager Till float $300 (30000). Fresh installs seed
+-- the correct values directly; 0077 corrects any pre-existing rows.
 insert into public.registers (name, kind, default_float_minor, sort_order)
 select * from (values
-  ('Sales Register 1', 'sales',        20000, 10),
-  ('Sales Register 2', 'sales',        20000, 20),
+  ('Sales Register 1', 'sales',        16750, 10),
+  ('Sales Register 2', 'sales',        16750, 20),
   ('Manager Till',     'manager_till', 30000, 30)
 ) as seed(name, kind, default_float_minor, sort_order)
 where not exists (select 1 from public.registers);
