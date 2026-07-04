@@ -3,6 +3,7 @@ import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
+import { CatalogStageStrip } from "@/components/admin/catalog/CatalogStageStrip";
 import { StatCard } from "@/components/admin/StatCard";
 import { getPublishedVersion, getVersionItems } from "@/lib/pos/menu-version";
 import { getEnrichmentsForKeys, computeGaps, type GapFlags } from "@/lib/enrichment/store";
@@ -35,8 +36,21 @@ export default async function ProductsPage({
   if (!isSupabaseServiceConfigured) {
     return (
       <div>
-        <AdminPageHeader title="Products" subtitle="Enrich products with descriptions, images, tags, and AI assist." />
-        <div className="px-5 py-6 sm:px-8">
+        <AdminPageHeader
+          title="Product Enrichment"
+          subtitle="Enrich products with descriptions, images, tags, and AI assist."
+          breadcrumbs={<Breadcrumbs items={[{ label: "Product Intake", href: "/admin/catalog" }, { label: "Product Enrichment" }]} />}
+        />
+        <div className="space-y-6 px-5 py-6 sm:px-8">
+          <div>
+            <Link
+              href="/admin/catalog"
+              className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--admin-text-muted)] hover:text-[var(--admin-accent)]"
+            >
+              ← Back to Product Intake Hub
+            </Link>
+          </div>
+          <CatalogStageStrip current="enrichment" />
           <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] p-5 text-sm text-[var(--admin-gold)]">
             The database isn&apos;t fully set up yet. Once your administrator
             finishes the one-time setup, your products will appear here.
@@ -51,8 +65,21 @@ export default async function ProductsPage({
   if (!published) {
     return (
       <div>
-        <AdminPageHeader title="Products" subtitle="Enrich products with descriptions, images, tags, and AI assist." />
-        <div className="px-5 py-6 sm:px-8">
+        <AdminPageHeader
+          title="Product Enrichment"
+          subtitle="Enrich products with descriptions, images, tags, and AI assist."
+          breadcrumbs={<Breadcrumbs items={[{ label: "Product Intake", href: "/admin/catalog" }, { label: "Product Enrichment" }]} />}
+        />
+        <div className="space-y-6 px-5 py-6 sm:px-8">
+          <div>
+            <Link
+              href="/admin/catalog"
+              className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--admin-text-muted)] hover:text-[var(--admin-accent)]"
+            >
+              ← Back to Product Intake Hub
+            </Link>
+          </div>
+          <CatalogStageStrip current="enrichment" />
           <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-6 text-sm text-[var(--admin-text-muted)]">
             No published menu yet. Import and publish a menu version under{" "}
             <Link href="/admin/menu-imports" className="text-[var(--admin-accent)] hover:underline">
@@ -128,9 +155,9 @@ export default async function ProductsPage({
   return (
     <div>
       <AdminPageHeader
-        title="Products"
+        title="Product Enrichment"
         subtitle={`Enrich the ${gaps.length} products in the live menu — descriptions, images, tags, staff picks${isAiConfigured ? ", and AI-drafted copy" : ""}. Price & stock stay POS-controlled.`}
-        breadcrumbs={<Breadcrumbs items={[{ label: "Products" }]} />}
+        breadcrumbs={<Breadcrumbs items={[{ label: "Product Intake", href: "/admin/catalog" }, { label: "Product Enrichment" }]} />}
         help={
           <HelpPanel
             id="products"
@@ -152,6 +179,15 @@ export default async function ProductsPage({
       />
 
       <div className="space-y-6 px-5 py-6 sm:px-8">
+        <div>
+          <Link
+            href="/admin/catalog"
+            className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--admin-text-muted)] hover:text-[var(--admin-accent)]"
+          >
+            ← Back to Product Intake Hub
+          </Link>
+        </div>
+        <CatalogStageStrip current="enrichment" />
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard label="Products" value={stats.total} hint={`${stats.visible} visible · ${stats.hidden} hidden`} accent="muted" />
           <StatCard label="Enriched & live" value={enriched} hint={`avg ${stats.avgCompleteness}% complete`} accent="green" />

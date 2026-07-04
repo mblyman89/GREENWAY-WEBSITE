@@ -5,6 +5,7 @@ import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel, EmptyState } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
 import { Field, Input, Textarea, Button, Badge } from "@/components/admin/ui";
+import { CatalogStageStrip } from "@/components/admin/catalog/CatalogStageStrip";
 import { listManifests, countManifestsByStatus } from "@/lib/inventory/intake-store";
 import { listInboundEmails, type InboundEmailLogRow } from "@/lib/inbound-email/inbound-store";
 import type { InboundManifest } from "@/lib/inventory/types";
@@ -194,7 +195,18 @@ export default async function IntakePage({
   if (!isSupabaseServiceConfigured) {
     return (
       <div>
-        <AdminPageHeader title="Vendor intake" subtitle="Import vendor JSON manifests." />
+        <AdminPageHeader
+          title="Receiving"
+          subtitle="Import vendor JSON manifests."
+          breadcrumbs={
+            <Breadcrumbs
+              items={[
+                { label: "Product Intake", href: "/admin/catalog" },
+                { label: "Receiving" },
+              ]}
+            />
+          }
+        />
         <div className="px-5 py-6 sm:px-8">
           <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] p-5 text-sm text-[var(--admin-gold)]">
             The database isn&apos;t fully set up yet. Apply migration 0023 to enable intake.
@@ -239,13 +251,13 @@ export default async function IntakePage({
   return (
     <div>
       <AdminPageHeader
-        title="Inbound pipeline"
+        title="Receiving"
         subtitle="Every incoming transfer, grouped by where it is right now — pending, in transit, awaiting intake, accepted. Nothing goes live until you accept it."
         breadcrumbs={
           <Breadcrumbs
             items={[
-              { label: "Inventory", href: "/admin/inventory" },
-              { label: "Vendor intake" },
+              { label: "Product Intake", href: "/admin/catalog" },
+              { label: "Receiving" },
             ]}
           />
         }
@@ -266,6 +278,16 @@ export default async function IntakePage({
       />
 
       <div className="space-y-6 px-5 py-6 sm:px-8">
+        <div>
+          <Link
+            href="/admin/catalog"
+            className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--admin-text-muted)] hover:text-[var(--admin-accent)]"
+          >
+            ← Back to Product Intake Hub
+          </Link>
+        </div>
+        <CatalogStageStrip current="intake" />
+
         {/* Pipeline stat cards — full lifecycle, not just 3 */}
         <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-5">
           <StatCard

@@ -68,7 +68,7 @@ export default async function BulkAiPage({
         title="Bulk AI review"
         subtitle="Draft compliant descriptions for many products at once — then approve them in a grid."
         breadcrumbs={
-          <Breadcrumbs items={[{ label: "Products", href: "/admin/products" }, { label: "Bulk AI" }]} />
+          <Breadcrumbs items={[{ label: "Product Intake", href: "/admin/catalog" }, { label: "Product Enrichment", href: "/admin/products" }, { label: "Bulk AI" }]} />
         }
         help={
           <HelpPanel

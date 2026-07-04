@@ -273,10 +273,10 @@ export const HELP_SECTIONS: HelpSection[] = [
   },
   {
     id: "products",
-    title: "Products",
+    title: "Product Enrichment",
     icon: "📦",
     category: "Catalog & inventory",
-    intro: "Photos, descriptions, and details that make products shine online.",
+    intro: "Photos, descriptions, and details that make live products shine online.",
     items: [
       {
         q: "Why are some products missing photos or descriptions?",
@@ -327,13 +327,13 @@ export const HELP_SECTIONS: HelpSection[] = [
         href: "/admin/inventory",
       },
       {
-        q: "What is Vendor Intake?",
-        a: "It's how you receive incoming transfers from suppliers. Upload the vendor's transfer manifest and review it before accepting it into inventory.",
+        q: "What is Receiving?",
+        a: "It's how you receive incoming transfers from suppliers. Upload the vendor's transfer manifest and review it before accepting it into inventory. Receiving lives in the Product Intake tab.",
         href: "/admin/inventory/intake",
       },
       {
-        q: "What are Product Drafts?",
-        a: "New items that came in but need a little setup (category, details) before they're menu-ready. You finish them here and they flow into your catalog.",
+        q: "What is Product Onboarding?",
+        a: "When you receive a lot that isn't on the live menu yet, the system drafts the new product from the transfer + COA. You review it, set a price (guarded by the cost floor), and approve it onto the menu. Nothing is customer-facing until you approve it. After it publishes, add photos and a description in Product Enrichment.",
         href: "/admin/inventory/drafts",
       },
       {
@@ -357,8 +357,13 @@ export const HELP_SECTIONS: HelpSection[] = [
     items: [
       {
         q: "How do I create a purchase order?",
-        a: "Go to Purchasing and start a new PO. Add the vendor and items, then track it from ordered to received. Received POs line up with Vendor Intake.",
+        a: "Go to Purchasing and start a new PO. Add the vendor and items, then track it from ordered to received. Received POs line up with Receiving.",
         href: "/admin/purchasing/new",
+      },
+      {
+        q: "How do I pay a vendor?",
+        a: "Accounts Payable (in the Product Intake tab) is where you queue and send vendor ACH payments once a PO is received and reconciled. Every payment is drafted for review before it's sent.",
+        href: "/admin/vendor-payments",
       },
     ],
   },

@@ -64,7 +64,7 @@ export default async function MastersPage({
       <AdminPageHeader
         title="Product Mastering"
         subtitle="Group menu items that are really one product sold at different sizes or forms into a single card, so your menu reads clean. AI suggests groupings — you decide."
-        breadcrumbs={<Breadcrumbs items={[{ label: "Catalog" }, { label: "Product Mastering" }]} />}
+        breadcrumbs={<Breadcrumbs items={[{ label: "Product Intake", href: "/admin/catalog" }, { label: "Product Mastering" }]} />}
         help={
           <HelpPanel
             id="product-masters"
@@ -91,6 +91,14 @@ export default async function MastersPage({
       />
 
       <div className="space-y-6 px-5 py-6 sm:px-8">
+        <div>
+          <Link
+            href="/admin/catalog"
+            className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--admin-text-muted)] hover:text-[var(--admin-accent)]"
+          >
+            ← Back to Product Intake Hub
+          </Link>
+        </div>
         {sp.error && (
           <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
             {decodeURIComponent(sp.error)}

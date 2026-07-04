@@ -93,6 +93,108 @@ export async function createPurchaseOrderAction(formData: FormData): Promise<voi
   redirect(`${BASE}/${poId}`);
 }
 
+/**
+ * Create a PO from the builder AND email it to the vendor in one step.
+ * Same parsing/insert path as `createPurchaseOrderAction`, then routes through
+ * the same render + Resend send used by the detail page. If no vendor email is
+ * on file (or Resend isn't configured) the PO is still saved and we land on the
+ * detail page with a "marked as sent" notice so nothing is lost.
+ */
+export async function createAndSendPurchaseOrderAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("inventory.manage");
+
+  let lines: NewPoLine[] = [];
+  try {
+    const raw = (formData.get("lines") as string | null) ?? "[]";
+    const parsed = JSON.parse(raw) as unknown;
+    if (Array.isArray(parsed)) {
+      lines = parsed
+        .map((p) => p as Record<string, unknown>)
+        .filter((p) => typeof p.productName === "string" && Number(p.orderQty) > 0)
+        .map((p) => ({
+          posProductKey: (p.posProductKey as string | null) ?? null,
+          productName: p.productName as string,
+          brand: (p.brand as string | null) ?? null,
+          category: (p.category as string | null) ?? null,
+          onHandQty: Number(p.onHandQty ?? 0),
+          avgDailySales: Number(p.avgDailySales ?? 0),
+          reorderPoint: p.reorderPoint != null ? Number(p.reorderPoint) : null,
+          orderQty: Number(p.orderQty),
+          unit: (p.unit as string | null) ?? "each",
+          unitCostMinor: Math.round(Number(p.unitCostMinor ?? 0)),
+        }));
+    }
+  } catch {
+    lines = [];
+  }
+
+  if (lines.length === 0) {
+    redirect(`${BASE}/new?error=${encodeURIComponent("Add at least one line with a quantity.")}`);
+  }
+
+  const vendorEmail = str(formData, "vendor_email");
+  const poId = await createPurchaseOrder({
+    vendorId: str(formData, "vendor_id"),
+    vendorName: str(formData, "vendor_name"),
+    vendorEmail,
+    origin: (formData.get("origin") as string | null) === "ai_suggested" ? "ai_suggested" : "manual",
+    note: str(formData, "note"),
+    internalNote: str(formData, "internal_note"),
+    expectedDate: str(formData, "expected_date"),
+    lines,
+    createdBy: session.userId,
+  });
+
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "purchase_order.create",
+    entityType: "purchase_orders",
+    entityId: poId ?? "n/a",
+    after: { lineCount: lines.length, sendRequested: true },
+  });
+
+  if (!poId) {
+    redirect(`${BASE}/new?error=${encodeURIComponent("Could not save — Supabase service role not configured.")}`);
+  }
+
+  // Now send it — re-fetch so we render from the persisted record (po_number etc.).
+  const po = await getPurchaseOrder(poId);
+  let sent = false;
+  if (po) {
+    const body = renderPoText({
+      poNumber: po.po_number ?? "PO",
+      vendorName: po.vendor_name,
+      expectedDate: po.expected_date,
+      note: po.note,
+      lines: po.lines.map((l) => ({
+        product_name: l.product_name,
+        brand: l.brand,
+        order_qty: l.order_qty,
+        unit: l.unit,
+        unit_cost_minor_units: l.unit_cost_minor_units,
+      })),
+    });
+    sent = await sendPurchaseOrderEmail({
+      to: po.vendor_email,
+      poNumber: po.po_number ?? "PO",
+      bodyText: body,
+    });
+    await setPurchaseOrderStatus(poId, "sent");
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "purchase_order.send",
+      entityType: "purchase_orders",
+      entityId: poId,
+      after: { emailed: sent },
+    });
+  }
+
+  revalidatePath(BASE);
+  redirect(`${BASE}/${poId}?${sent ? "sent=1" : "marked=1"}`);
+}
+
 export async function setStatusAction(formData: FormData): Promise<void> {
   const session = await requirePermission("inventory.manage");
   const id = str(formData, "po_id");

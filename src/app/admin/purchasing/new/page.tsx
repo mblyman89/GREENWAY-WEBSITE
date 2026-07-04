@@ -2,7 +2,7 @@ import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
-import { Button, Card, Field, Input } from "@/components/admin/ui";
+import { Button, Card, CardHeader, Section, Field, Input } from "@/components/admin/ui";
 import { listVendors } from "@/lib/vendors/store";
 import {
   buildReorderSuggestions,
@@ -11,6 +11,7 @@ import {
 } from "@/lib/purchasing/po-store";
 import {
   createPurchaseOrderAction,
+  createAndSendPurchaseOrderAction,
   interpretPlanAction,
   saveReorderSettingsAction,
 } from "../actions";
@@ -29,6 +30,25 @@ function csv(sp: SP, key: string): string[] {
     .map((s) => s.trim())
     .filter(Boolean);
 }
+
+function one(sp: SP, key: string): string | undefined {
+  const v = sp[key];
+  return (Array.isArray(v) ? v[0] : v) || undefined;
+}
+
+/**
+ * Cannabis category benchmarks (Northstar Financial) shown as GUIDANCE ONLY —
+ * these are industry ranges to sanity-check an order's mix, never this store's
+ * actual numbers. Documented in docs/RESEARCH_CANNABIS_PURCHASING.md.
+ */
+const CATEGORY_GUIDE: { label: string; note: string }[] = [
+  { label: "Flower", note: "Fastest turns (12–18/yr) · order often, never stock out" },
+  { label: "Pre-rolls", note: "8–14 turns · strong impulse category" },
+  { label: "Vape", note: "8–12 turns · high margin (55–65%)" },
+  { label: "Concentrates", note: "6–10 turns · watch batch dates" },
+  { label: "Edibles", note: "Slower (4–8) · FIFO, expiration matters" },
+  { label: "Topicals", note: "Slowest (3–6) · order conservatively" },
+];
 
 export default async function NewPurchaseOrderPage({
   searchParams,
@@ -62,6 +82,7 @@ export default async function NewPurchaseOrderPage({
     posProductKey: s.posProductKey,
     productName: s.productName,
     brand: s.brand,
+    category: s.category,
     vendorId: s.vendorId,
     vendorName: s.vendorName,
     onHand: s.onHand,
@@ -74,20 +95,33 @@ export default async function NewPurchaseOrderPage({
     daysOfSupplyLeft: s.result.daysOfSupplyLeft,
   }));
 
-  const planSummary = (Array.isArray(sp.plan) ? sp.plan[0] : sp.plan) || undefined;
-  const origin = (Array.isArray(sp.origin) ? sp.origin[0] : sp.origin) === "ai_suggested" ? "ai_suggested" : "manual";
-  const aiError = Array.isArray(sp.aierror) ? sp.aierror[0] : sp.aierror;
-  const settingsSaved = (Array.isArray(sp.settings) ? sp.settings[0] : sp.settings) === "1";
+  const needCount = rows.filter((r) => r.belowReorderPoint).length;
 
+  const planSummary = one(sp, "plan");
+  const origin = one(sp, "origin") === "ai_suggested" ? "ai_suggested" : "manual";
+  const aiError = one(sp, "aierror");
+  const errorMsg = one(sp, "error");
+  const settingsSaved = one(sp, "settings") === "1";
+
+  // Full vendor options WITH email so the builder can email the PO directly.
   const vendorOptions = vendors
     .filter((v) => v.display_name)
-    .map((v) => ({ id: v.id, name: v.display_name as string }));
+    .map((v) => ({ id: v.id, name: v.display_name as string, email: v.email ?? null }));
+
+  const hasActiveFilters =
+    csv(sp, "incVendor").length +
+      csv(sp, "excVendor").length +
+      csv(sp, "incCat").length +
+      csv(sp, "excCat").length +
+      csv(sp, "incBrand").length +
+      csv(sp, "excBrand").length >
+    0;
 
   return (
     <div>
       <AdminPageHeader
         title="New purchase order"
-        subtitle="Reorder suggestions from on-hand stock and recent sales velocity"
+        subtitle="Build a cannabis reorder from on-hand stock and recent sales velocity — then email it to the vendor"
         breadcrumbs={
           <Breadcrumbs
             items={[{ label: "Purchasing", href: "/admin/purchasing" }, { label: "New" }]}
@@ -101,110 +135,172 @@ export default async function NewPurchaseOrderPage({
       />
 
       <div className="space-y-6 px-5 py-6 sm:px-8">
-        <HelpPanel
-          id="po-new-help"
-          title="Building this order"
-          steps={[
-            "Rows below the reorder point are pre-selected with a suggested quantity. Reorder point = average daily sales × lead time + safety stock.",
-            "Tick or untick rows, adjust quantities and unit costs, pick the vendor, then Save purchase order.",
-            "Use the AI plan box to filter by plain English (e.g. ‘reorder flower from Acme, cover 3 weeks’). AI only proposes a draft filter — you confirm the lines.",
-            "Adjust planning defaults (window, lead time, target days, safety days) under Reorder settings.",
-          ]}
-        />
-
+        {/* Status banners */}
         {settingsSaved ? (
-          <div className="rounded-[var(--admin-radius)] border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-800">
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-text)]">
             Reorder settings saved.
           </div>
         ) : null}
+        {errorMsg ? (
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/10 px-4 py-2 text-sm text-[var(--admin-text)]">
+            {errorMsg}
+          </div>
+        ) : null}
         {aiError ? (
-          <div className="rounded-[var(--admin-radius)] border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-orange)]/40 bg-[var(--admin-orange)]/10 px-4 py-2 text-sm text-[var(--admin-text)]">
             {aiError}
           </div>
         ) : null}
 
-        {/* AI plan assist */}
-        <Card className="p-5">
-          <h2 className="mb-2 text-sm font-semibold text-stone-800">Describe what to order (AI draft)</h2>
-          <p className="mb-3 text-xs text-stone-500">
-            Plain English. AI maps it to filters using your real vendors and categories — it never invents
-            products, and you review every line before saving.
+        <HelpPanel
+          id="po-new-help"
+          title="How to build this order"
+          steps={[
+            "Step 1 — Narrow the list (optional): use the AI box or manual filters to focus on a vendor, category, or brand.",
+            "Step 2 — Review & build: rows below the reorder point are pre-ticked with a suggested quantity. Reorder point = avg daily sales × lead time + safety stock. Adjust quantities and unit costs — every number is a draft you confirm.",
+            "Step 3 — Send: pick the vendor and either Save as draft or Save & send to email the PO straight from here.",
+          ]}
+        >
+          <p className="text-xs text-[var(--admin-text-muted)]">
+            Cannabis guidance (industry benchmarks, not your data): flower turns fastest so order it
+            often; edibles and topicals turn slowly, so order conservatively and watch batch dates.
           </p>
-          <form action={interpretPlanAction} className="flex flex-col gap-2 sm:flex-row">
-            <input
-              type="text"
-              name="request"
-              placeholder="e.g. Reorder all flower from Acme except pre-rolls, cover 3 weeks"
-              className="flex-1 rounded-[var(--admin-radius)] border border-stone-300 px-3 py-2 text-sm"
+        </HelpPanel>
+
+        {/* Step 1 — Narrow the list */}
+        <Section
+          title="1 · Narrow the list"
+          description="Optional. Focus the suggestions before you build — by plain-English request or manual filters."
+        >
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Card padding="md">
+              <CardHeader title="Describe what to order" subtitle="AI drafts a filter — you confirm every line" />
+              <form action={interpretPlanAction} className="mt-3 flex flex-col gap-2 sm:flex-row">
+                <Input
+                  type="text"
+                  name="request"
+                  placeholder="e.g. Reorder all flower from Acme except pre-rolls, cover 3 weeks"
+                  className="flex-1"
+                />
+                <Button type="submit" variant="neutral" size="sm">Draft with AI</Button>
+              </form>
+              <p className="mt-2 text-xs text-[var(--admin-text-muted)]">
+                AI maps your words to your real vendors and categories — it never invents products.
+              </p>
+            </Card>
+
+            <Card padding="md">
+              <CardHeader
+                title="Manual filters"
+                subtitle="Comma-separated · blank = everything"
+                action={
+                  hasActiveFilters ? (
+                    <Link href="/admin/purchasing/new">
+                      <Button type="button" variant="neutral" size="sm">Reset</Button>
+                    </Link>
+                  ) : undefined
+                }
+              />
+              <form method="get" className="mt-3 grid gap-3 sm:grid-cols-2">
+                <Field label="Include vendors">
+                  <Input name="incVendor" defaultValue={csv(sp, "incVendor").join(", ")} />
+                </Field>
+                <Field label="Exclude vendors">
+                  <Input name="excVendor" defaultValue={csv(sp, "excVendor").join(", ")} />
+                </Field>
+                <Field label="Include categories" help="flower, edible, vape, preroll, …">
+                  <Input name="incCat" defaultValue={csv(sp, "incCat").join(", ")} />
+                </Field>
+                <Field label="Exclude categories">
+                  <Input name="excCat" defaultValue={csv(sp, "excCat").join(", ")} />
+                </Field>
+                <Field label="Include brands">
+                  <Input name="incBrand" defaultValue={csv(sp, "incBrand").join(", ")} />
+                </Field>
+                <Field label="Exclude brands">
+                  <Input name="excBrand" defaultValue={csv(sp, "excBrand").join(", ")} />
+                </Field>
+                <div className="sm:col-span-2">
+                  <Button type="submit" variant="neutral" size="sm">Apply filters</Button>
+                </div>
+              </form>
+            </Card>
+          </div>
+        </Section>
+
+        {/* Step 2 & 3 — Review, build, send */}
+        <Section
+          title="2 · Review, build & send"
+          description={
+            rows.length === 0
+              ? "No products to evaluate yet."
+              : `${rows.length} product${rows.length === 1 ? "" : "s"} in view · ${needCount} below reorder point${
+                  hasActiveFilters ? " (filtered)" : ""
+                }`
+          }
+        >
+          <Card padding="md">
+            <BuilderTable
+              rows={rows}
+              vendors={vendorOptions}
+              origin={origin}
+              planSummary={planSummary}
+              createAction={createPurchaseOrderAction}
+              sendAction={createAndSendPurchaseOrderAction}
             />
-            <Button type="submit" variant="neutral" size="sm">Draft plan with AI</Button>
-          </form>
-        </Card>
+          </Card>
+        </Section>
 
-        {/* Manual include/exclude filters */}
-        <Card className="p-5">
-          <h2 className="mb-2 text-sm font-semibold text-stone-800">Filters</h2>
-          <form method="get" className="grid gap-3 sm:grid-cols-2">
-            <Field label="Include vendors" help="Comma-separated names; blank = all">
-              <Input name="incVendor" defaultValue={csv(sp, "incVendor").join(", ")} />
-            </Field>
-            <Field label="Exclude vendors" help="Comma-separated names">
-              <Input name="excVendor" defaultValue={csv(sp, "excVendor").join(", ")} />
-            </Field>
-            <Field label="Include categories" help="flower, edible, vape, preroll, …">
-              <Input name="incCat" defaultValue={csv(sp, "incCat").join(", ")} />
-            </Field>
-            <Field label="Exclude categories">
-              <Input name="excCat" defaultValue={csv(sp, "excCat").join(", ")} />
-            </Field>
-            <Field label="Include brands">
-              <Input name="incBrand" defaultValue={csv(sp, "incBrand").join(", ")} />
-            </Field>
-            <Field label="Exclude brands">
-              <Input name="excBrand" defaultValue={csv(sp, "excBrand").join(", ")} />
-            </Field>
-            <div className="sm:col-span-2 flex gap-2">
-              <Button type="submit" variant="neutral" size="sm">Apply filters</Button>
-              <Link href="/admin/purchasing/new">
-                <Button type="button" variant="neutral" size="sm">Reset</Button>
-              </Link>
+        {/* Reference: category guidance + planning settings (secondary) */}
+        <details className="group rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)]">
+          <summary className="cursor-pointer list-none px-5 py-4 text-sm font-semibold text-[var(--admin-text)] marker:content-none">
+            <span className="inline-flex items-center gap-2">
+              <span className="text-[var(--admin-text-muted)] group-open:rotate-90 transition">▸</span>
+              Reference — cannabis category guidance &amp; planning settings
+            </span>
+          </summary>
+          <div className="space-y-5 border-t border-[var(--admin-border)] px-5 py-5">
+            <div>
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
+                Category benchmarks (industry guidance, not your data)
+              </h3>
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {CATEGORY_GUIDE.map((c) => (
+                  <div
+                    key={c.label}
+                    className="rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-3 py-2"
+                  >
+                    <div className="text-sm font-semibold text-[var(--admin-text)]">{c.label}</div>
+                    <div className="text-xs text-[var(--admin-text-muted)]">{c.note}</div>
+                  </div>
+                ))}
+              </div>
             </div>
-          </form>
-        </Card>
 
-        {/* Suggestion table + create */}
-        <Card className="p-5">
-          <h2 className="mb-3 text-sm font-semibold text-stone-800">Reorder suggestions</h2>
-          <BuilderTable
-            rows={rows}
-            vendors={vendorOptions}
-            origin={origin}
-            planSummary={planSummary}
-            createAction={createPurchaseOrderAction}
-          />
-        </Card>
-
-        {/* Reorder settings */}
-        <Card className="p-5">
-          <h2 className="mb-3 text-sm font-semibold text-stone-800">Reorder settings</h2>
-          <form action={saveReorderSettingsAction} className="grid gap-3 sm:grid-cols-4">
-            <Field label="Velocity window (days)">
-              <Input type="number" name="velocity_window_days" defaultValue={String(settings.velocity_window_days)} />
-            </Field>
-            <Field label="Lead time (days)">
-              <Input type="number" name="default_lead_time_days" defaultValue={String(settings.default_lead_time_days)} />
-            </Field>
-            <Field label="Target days of supply">
-              <Input type="number" name="target_days_of_supply" defaultValue={String(settings.target_days_of_supply)} />
-            </Field>
-            <Field label="Safety stock (days)">
-              <Input type="number" name="default_safety_days" defaultValue={String(settings.default_safety_days)} />
-            </Field>
-            <div className="sm:col-span-4">
-              <Button type="submit" variant="save" size="sm">Save settings</Button>
+            <div>
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
+                Reorder planning defaults
+              </h3>
+              <form action={saveReorderSettingsAction} className="grid gap-3 sm:grid-cols-4">
+                <Field label="Velocity window (days)">
+                  <Input type="number" name="velocity_window_days" defaultValue={String(settings.velocity_window_days)} />
+                </Field>
+                <Field label="Lead time (days)">
+                  <Input type="number" name="default_lead_time_days" defaultValue={String(settings.default_lead_time_days)} />
+                </Field>
+                <Field label="Target days of supply">
+                  <Input type="number" name="target_days_of_supply" defaultValue={String(settings.target_days_of_supply)} />
+                </Field>
+                <Field label="Safety stock (days)">
+                  <Input type="number" name="default_safety_days" defaultValue={String(settings.default_safety_days)} />
+                </Field>
+                <div className="sm:col-span-4">
+                  <Button type="submit" variant="save" size="sm">Save settings</Button>
+                </div>
+              </form>
             </div>
-          </form>
-        </Card>
+          </div>
+        </details>
       </div>
     </div>
   );
