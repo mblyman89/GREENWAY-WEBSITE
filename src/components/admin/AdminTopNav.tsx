@@ -34,6 +34,14 @@ type Props = {
   email: string;
 };
 
+/**
+ * Groups that render as a single direct-link TAB instead of a dropdown.
+ * The group's first (only) visible item supplies the href/label/icon. This
+ * keeps the nav data-driven (admin-nav-data.ts remains the single source of
+ * truth) while letting a group like "Reports" behave as a plain button.
+ */
+const DIRECT_LINK_GROUPS = new Set<AdminNavItem["group"]>(["Reports"]);
+
 function Wordmark() {
   return (
     <Link href="/admin" className="flex items-center gap-2" aria-label="Greenway Marijuana Admin home">
@@ -122,6 +130,30 @@ export function AdminTopNav({ role, fullName, email }: Props) {
         {/* Desktop tab bar */}
         <nav ref={barRef} className="relative ml-2 hidden flex-1 items-center gap-0.5 lg:flex">
           {groups.map((g) => {
+            // Direct-link group: render as a single tab that navigates straight
+            // to its item (no dropdown). Uses the group's first visible item.
+            if (DIRECT_LINK_GROUPS.has(g.group as AdminNavItem["group"])) {
+              const item = g.items[0];
+              if (!item) return null;
+              return (
+                <Link
+                  key={g.group}
+                  href={item.href}
+                  onClick={closeMenus}
+                  className={`admin-focus flex items-center gap-1.5 rounded-[var(--admin-radius)] px-3 py-2 text-sm font-medium transition ${
+                    g.active
+                      ? "bg-[var(--admin-accent-soft)] text-[var(--admin-accent)]"
+                      : "text-[var(--admin-text-muted)] hover:bg-white/5 hover:text-[var(--admin-text)]"
+                  }`}
+                >
+                  <span className="text-xs opacity-80" aria-hidden="true">
+                    {item.icon}
+                  </span>
+                  {g.group}
+                </Link>
+              );
+            }
+
             const isOpen = openGroup === g.group;
             return (
               <div
@@ -250,7 +282,29 @@ export function AdminTopNav({ role, fullName, email }: Props) {
             </form>
           </div>
           <div className="flex flex-col gap-4">
-            {groups.map((g) => (
+            {groups.map((g) => {
+              // Direct-link group on mobile: a single link, no section header.
+              if (DIRECT_LINK_GROUPS.has(g.group as AdminNavItem["group"])) {
+                const item = g.items[0];
+                if (!item) return null;
+                const active = isHrefActive(item.href, pathname);
+                return (
+                  <Link
+                    key={g.group}
+                    href={item.href}
+                    onClick={closeMenus}
+                    className={`flex items-center gap-2.5 rounded-[var(--admin-radius)] px-2.5 py-2 text-sm transition ${
+                      active
+                        ? "bg-[var(--admin-accent-soft)] font-medium text-[var(--admin-accent)]"
+                        : "text-[var(--admin-text-muted)] hover:bg-white/5 hover:text-[var(--admin-text)]"
+                    }`}
+                  >
+                    <span className="w-4 text-center text-xs opacity-80">{item.icon}</span>
+                    <span className="flex-1">{g.group}</span>
+                  </Link>
+                );
+              }
+              return (
               <div key={g.group}>
                 <p className="px-2.5 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--admin-text-faint)]">
                   {g.group}
@@ -282,7 +336,8 @@ export function AdminTopNav({ role, fullName, email }: Props) {
                   })}
                 </ul>
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

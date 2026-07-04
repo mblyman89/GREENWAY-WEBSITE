@@ -8,6 +8,8 @@ export type AdminNavItem = {
   icon: string; // simple emoji/glyph for now; swap for SVG icons later
   group:
     | "Sell"
+    | "Reports"
+    | "CRM"
     | "Product Intake"
     | "Inventory"
     | "Compliance"
@@ -29,9 +31,15 @@ export const adminNav: AdminNavItem[] = [
   { label: "Getting Started", href: "/admin/getting-started", permission: "dashboard.view", icon: "\ud83d\ude80", group: "Sell" },
   { label: "Orders", href: "/admin/orders", permission: "orders.view", icon: "\ud83e\uddfe", group: "Sell" },
   { label: "Register Activity", href: "/admin/registers", permission: "orders.manage", icon: "\ud83d\udcb5", group: "Sell" },
-  { label: "Customers", href: "/admin/customers", permission: "customers.manage", icon: "\ud83d\udc64", group: "Sell" },
   { label: "Loyalty", href: "/admin/loyalty-signups", permission: "loyalty.view", icon: "\u2605", group: "Sell" },
-  { label: "Loyalty Program", href: "/admin/loyalty", permission: "loyalty.view", icon: "\ud83c\udf81", group: "Sell" },
+
+  // Reports: standalone top-header button (rendered as a direct link tab, not a
+  // dropdown — see AdminTopNav DIRECT_LINK_GROUPS).
+  { label: "Reports", href: "/admin/reports", permission: "reports.view", icon: "\ud83d\udcca", group: "Reports" },
+
+  // CRM: customer relationship management (customers + loyalty program).
+  { label: "Customers", href: "/admin/customers", permission: "customers.manage", icon: "\ud83d\udc64", group: "CRM" },
+  { label: "Loyalty Program", href: "/admin/loyalty", permission: "loyalty.view", icon: "\ud83c\udf81", group: "CRM" },
 
   // Product Intake: the end-to-end product workflow, from procurement through
   // receiving, onboarding, menu enrichment, mastering, and paying the vendor.
@@ -52,7 +60,6 @@ export const adminNav: AdminNavItem[] = [
   { label: "Cycle Counts", href: "/admin/inventory/cycle-counts", permission: "inventory.manage", icon: "\ud83d\udd22", group: "Inventory" },
   { label: "Returns & Destruction", href: "/admin/inventory/disposition", permission: "inventory.manage", icon: "\u267b\ufe0f", group: "Inventory" },
   { label: "Non-Cannabis", href: "/admin/inventory/noncannabis", permission: "inventory.manage", icon: "\ud83e\uddf4", group: "Inventory" },
-  { label: "Equipment", href: "/admin/equipment", permission: "inventory.manage", icon: "\ud83d\udee0", group: "Inventory" },
 
   // Compliance: regulatory tools (CCRS / DOH)
   { label: "Compliance Health", href: "/admin/compliance/health", permission: "reports.view", icon: "\ud83d\udee1", group: "Compliance" },
@@ -70,10 +77,12 @@ export const adminNav: AdminNavItem[] = [
   { label: "Promotions", href: "/admin/promotions", permission: "promotions.manage", icon: "%", group: "Marketing" },
   { label: "Blog & Newsletter", href: "/admin/blog", permission: "blog.manage", icon: "\u270e", group: "Marketing" },
   { label: "Newsletter Send", href: "/admin/newsletter", permission: "blog.manage", icon: "\u2709", group: "Marketing" },
-  { label: "Media Library", href: "/admin/media", permission: "media.manage", icon: "\ud83d\uddbc", group: "Marketing" },
   { label: "Midjourney", href: "/admin/marketing/midjourney", permission: "content.edit", icon: "\ud83c\udfa8", group: "Marketing" },
 
-  // Website: public page editors + site content + menu imports
+  // Website: media + site content, then public page editors + menu imports.
+  // Media Library is pinned to the TOP with Site Content directly under it.
+  { label: "Media Library", href: "/admin/media", permission: "media.manage", icon: "\ud83d\uddbc", group: "Website" },
+  { label: "Site Content", href: "/admin/content", permission: "content.edit", icon: "\u2761", group: "Website" },
   { label: "Home", href: "/admin/pages/home", permission: "content.edit", icon: "\u2302", group: "Website" },
   { label: "Menu", href: "/admin/pages/menu", permission: "content.edit", icon: "\u25a4", group: "Website" },
   { label: "Loyalty", href: "/admin/pages/loyalty", permission: "content.edit", icon: "\u2605", group: "Website" },
@@ -83,15 +92,14 @@ export const adminNav: AdminNavItem[] = [
   { label: "About", href: "/admin/pages/about", permission: "content.edit", icon: "\u24d8", group: "Website" },
   { label: "Locations", href: "/admin/pages/locations", permission: "content.edit", icon: "\u26b2", group: "Website" },
   { label: "Price Match", href: "/admin/pages/price-match", permission: "content.edit", icon: "=", group: "Website" },
-  { label: "Site Content", href: "/admin/content", permission: "content.edit", icon: "\u2761", group: "Website" },
   { label: "Menu Imports", href: "/admin/menu-imports", permission: "menu.import", icon: "\u2b06", group: "Website" },
 
-  // Insights: reporting
-  { label: "Reports", href: "/admin/reports", permission: "reports.view", icon: "\ud83d\udcca", group: "Insights" },
+  // Insights: AI usage metering (Reports now has its own top-header button).
   { label: "AI Usage", href: "/admin/ai-usage", permission: "reports.view", icon: "\u2728", group: "Insights" },
 
-  // Admin: users, settings, integrations
+  // Admin: users, settings, integrations, equipment
   { label: "Users", href: "/admin/users", permission: "users.manage", icon: "\ud83d\udc65", group: "Admin" },
+  { label: "Equipment", href: "/admin/equipment", permission: "inventory.manage", icon: "\ud83d\udee0", group: "Admin" },
   { label: "Types & Categories", href: "/admin/settings/types", permission: "settings.manage", icon: "\ud83c\udff7", group: "Admin" },
   { label: "Integrations", href: "/admin/integrations", permission: "settings.manage", icon: "\ud83d\udd0c", group: "Admin" },
   { label: "Receipt Printer", href: "/admin/settings/receipt-printer", permission: "settings.manage", icon: "\ud83e\uddfe", group: "Admin" },
@@ -102,12 +110,14 @@ export const adminNav: AdminNavItem[] = [
 
 export const navGroups: AdminNavItem["group"][] = [
   "Sell",
+  "Reports",
+  "CRM",
   "Product Intake",
   "Inventory",
+  "Website",
   "Compliance",
   "Finance",
   "Marketing",
-  "Website",
   "Insights",
   "Admin",
 ];

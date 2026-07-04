@@ -179,19 +179,11 @@ export default async function ProductsPage({
       />
 
       <div className="space-y-6 px-5 py-6 sm:px-8">
-        <div>
-          <Link
-            href="/admin/catalog"
-            className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--admin-text-muted)] hover:text-[var(--admin-accent)]"
-          >
-            ← Back to Product Intake Hub
-          </Link>
-        </div>
-        <CatalogStageStrip current="enrichment" />
-
         {/* Green helper box — how to enrich well, with quick links to the
-            highest-impact gaps. Numbers are real (from stats), so the buttons
-            take you straight to the products that need work. */}
+            highest-impact gaps. Pinned to the TOP of the page (above the
+            back-link + stage strip) so the guidance & one-click gap fixes are
+            the first thing you see. Numbers are real (from stats), so the
+            buttons take you straight to the products that need work. */}
         <section className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-accent)]/30 bg-[var(--admin-accent-soft)] p-5">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="max-w-2xl">
@@ -247,6 +239,16 @@ export default async function ProductsPage({
             </div>
           </div>
         </section>
+
+        <div>
+          <Link
+            href="/admin/catalog"
+            className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--admin-text-muted)] hover:text-[var(--admin-accent)]"
+          >
+            ← Back to Product Intake Hub
+          </Link>
+        </div>
+        <CatalogStageStrip current="enrichment" />
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard label="Products" value={stats.total} hint={`${stats.visible} visible · ${stats.hidden} hidden`} accent="muted" />
