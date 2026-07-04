@@ -36,8 +36,21 @@ export default async function ProductsPage({
   if (!isSupabaseServiceConfigured) {
     return (
       <div>
-        <AdminPageHeader title="Product Enrichment" subtitle="Enrich products with descriptions, images, tags, and AI assist." />
-        <div className="px-5 py-6 sm:px-8">
+        <AdminPageHeader
+          title="Product Enrichment"
+          subtitle="Enrich products with descriptions, images, tags, and AI assist."
+          breadcrumbs={<Breadcrumbs items={[{ label: "Product Intake", href: "/admin/catalog" }, { label: "Product Enrichment" }]} />}
+        />
+        <div className="space-y-6 px-5 py-6 sm:px-8">
+          <div>
+            <Link
+              href="/admin/catalog"
+              className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--admin-text-muted)] hover:text-[var(--admin-accent)]"
+            >
+              ← Back to Product Intake Hub
+            </Link>
+          </div>
+          <CatalogStageStrip current="enrichment" />
           <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] p-5 text-sm text-[var(--admin-gold)]">
             The database isn&apos;t fully set up yet. Once your administrator
             finishes the one-time setup, your products will appear here.
@@ -52,8 +65,21 @@ export default async function ProductsPage({
   if (!published) {
     return (
       <div>
-        <AdminPageHeader title="Product Enrichment" subtitle="Enrich products with descriptions, images, tags, and AI assist." />
-        <div className="px-5 py-6 sm:px-8">
+        <AdminPageHeader
+          title="Product Enrichment"
+          subtitle="Enrich products with descriptions, images, tags, and AI assist."
+          breadcrumbs={<Breadcrumbs items={[{ label: "Product Intake", href: "/admin/catalog" }, { label: "Product Enrichment" }]} />}
+        />
+        <div className="space-y-6 px-5 py-6 sm:px-8">
+          <div>
+            <Link
+              href="/admin/catalog"
+              className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--admin-text-muted)] hover:text-[var(--admin-accent)]"
+            >
+              ← Back to Product Intake Hub
+            </Link>
+          </div>
+          <CatalogStageStrip current="enrichment" />
           <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-6 text-sm text-[var(--admin-text-muted)]">
             No published menu yet. Import and publish a menu version under{" "}
             <Link href="/admin/menu-imports" className="text-[var(--admin-accent)] hover:underline">
