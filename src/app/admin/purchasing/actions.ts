@@ -17,6 +17,7 @@ import {
 import { sendPurchaseOrderEmail } from "@/lib/purchasing/po-notify";
 import { interpretPlanRequest } from "@/lib/purchasing/ai-assist";
 import { listVendors } from "@/lib/vendors/store";
+import { markProductLeadPromoted } from "@/lib/discovery/store";
 
 const BASE = "/admin/purchasing";
 
@@ -89,6 +90,14 @@ export async function createPurchaseOrderAction(formData: FormData): Promise<voi
   if (!poId) {
     redirect(`${BASE}/new?error=${encodeURIComponent("Could not save — Supabase service role not configured.")}`);
   }
+
+  // If this PO started from a discovery product lead, stamp the PO id back on
+  // the lead (best-effort; never blocks the PO).
+  const fromLead = str(formData, "from_lead");
+  if (fromLead) {
+    await markProductLeadPromoted(fromLead, poId, session.userId);
+  }
+
   revalidatePath(BASE);
   redirect(`${BASE}/${poId}`);
 }
@@ -156,6 +165,13 @@ export async function createAndSendPurchaseOrderAction(formData: FormData): Prom
 
   if (!poId) {
     redirect(`${BASE}/new?error=${encodeURIComponent("Could not save — Supabase service role not configured.")}`);
+  }
+
+  // If this PO started from a discovery product lead, stamp the PO id back on
+  // the lead (best-effort; never blocks the PO).
+  const fromLead = str(formData, "from_lead");
+  if (fromLead) {
+    await markProductLeadPromoted(fromLead, poId, session.userId);
   }
 
   // Now send it — re-fetch so we render from the persisted record (po_number etc.).

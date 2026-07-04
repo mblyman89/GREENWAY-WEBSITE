@@ -46,10 +46,12 @@ function titleCase(s: string): string {
 }
 
 export function BuilderTable({
-  rows,
+  rows: rowsProp,
   vendors,
   origin,
   planSummary,
+  prefill,
+  fromLeadId,
   createAction,
   sendAction,
 }: {
@@ -57,10 +59,21 @@ export function BuilderTable({
   vendors: VendorOption[];
   origin: string;
   planSummary?: string;
+  prefill?: SuggestionRow;
+  fromLeadId?: string;
   createAction: (formData: FormData) => void | Promise<void>;
   sendAction: (formData: FormData) => void | Promise<void>;
 }) {
-  // Pre-select rows that are below the reorder point (need attention).
+  // When promoting a discovery lead, prepend its draft line so it's the first
+  // row and pre-selected. Memoized so the row list is stable across renders
+  // (it feeds the initial-selection useMemo below).
+  const rows = useMemo(
+    () => (prefill ? [prefill, ...rowsProp] : rowsProp),
+    [prefill, rowsProp],
+  );
+
+  // Pre-select rows that are below the reorder point (need attention). A
+  // prefilled lead row (index 0) is always pre-selected.
   const initialSelected = useMemo(() => {
     const set = new Set<string>();
     rows.forEach((r, i) => {
@@ -81,6 +94,14 @@ export function BuilderTable({
     return o;
   });
   const [vendorId, setVendorId] = useState<string>(() => {
+    // Prefer a vendor matched by the prefilled lead's vendor name, then any
+    // suggestion row's vendor id.
+    if (prefill?.vendorName) {
+      const match = vendors.find(
+        (v) => v.name.toLowerCase() === prefill.vendorName!.toLowerCase(),
+      );
+      if (match) return match.id;
+    }
     const first = rows.find((r) => r.vendorId)?.vendorId;
     return first ?? "";
   });
@@ -295,6 +316,7 @@ export function BuilderTable({
 
       <input type="hidden" name="lines" value={linesJson} />
       <input type="hidden" name="origin" value={origin} />
+      {fromLeadId ? <input type="hidden" name="from_lead" value={fromLeadId} /> : null}
 
       {/* Order summary + category breakdown */}
       <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] p-5">

@@ -111,6 +111,23 @@ export default async function CatalogHubPage() {
           description="Each surface owns one step of the product journey. They're listed in the order a product moves through the store."
         >
           <div className="grid gap-4 lg:grid-cols-3">
+            {/* 0 — Discovery (front door of the funnel) */}
+            <Card accent="green">
+              <CardHeader title="0 · Product Discovery" subtitle="Find products & vendors worth pursuing" />
+              <p className="mt-1 text-sm text-[var(--admin-text-muted)]">
+                The front door of the funnel. Capture candidate vendors and
+                products, qualify them, and promote the winners straight into a
+                purchase order. Everything is a draft you confirm.
+              </p>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <Badge tone="green">Leads &amp; prospects</Badge>
+                <Badge tone="neutral">Promote to PO</Badge>
+              </div>
+              <div className="mt-4">
+                <Button href="/admin/discovery" size="sm">Open discovery →</Button>
+              </div>
+            </Card>
+
             {/* 1 — Purchasing */}
             <Card accent="gold">
               <CardHeader title="1 · Purchasing" subtitle="Order stock from your vendors" />
