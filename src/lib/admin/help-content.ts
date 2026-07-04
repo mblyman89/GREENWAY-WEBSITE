@@ -180,24 +180,24 @@ export const HELP_SECTIONS: HelpSection[] = [
   // ── Point of sale ──────────────────────────────────────────────────────────
   {
     id: "registers",
-    title: "Cash Management",
+    title: "Register Activity",
     icon: "💵",
     category: "Point of sale",
-    intro: "Opening, counting, dropping, and reconciling the cash drawer for each shift.",
+    intro: "The back-office oversight console: who's working, what each register is doing, and a live feed of store activity.",
     items: [
       {
-        q: "How do I open a drawer for a shift?",
-        a: "Go to Cash Management, pick the register, and count in your starting cash by denomination. That starting count is what the closing count is measured against.",
+        q: "What is the Register Activity page for?",
+        a: "It's the manager oversight console for the sales floor — like Lightspeed's BackOffice Shifts Summary or Square Dashboard. It shows the day's headline numbers, who is currently clocked in, each register's live status, and a live activity feed. The hands-on drawer counting happens on the front-end iPad POS at the register; here a manager monitors it.",
         href: "/admin/registers",
       },
       {
-        q: "How do I close out and count the drawer?",
-        a: "At the end of a shift, count out the drawer (a blind count — you won't see the expected amount). A manager then enters the day's cash sales to reconcile it and reveal any over/short (overage or shortage). Cash drops to the safe are logged during the day.",
+        q: "Which sales figures does it show?",
+        a: "It shows online pickup-order sales — the only itemized transactions in this back office. In-store card/cash sales are captured at the register and aren't broken out here. Over/short reflects reconciled cash drawers.",
         href: "/admin/registers",
       },
       {
-        q: "What's the manager till verify step?",
-        a: "The shared manager till is independently re-counted and verified the next morning, so two managers' counts back each other up. This is the two-step verification best practice used by major POS systems.",
+        q: "What are the reconcile and verify sign-offs?",
+        a: "After a cashier blind-closes a drawer at the register, a manager reconciles it (enters the day's cash sales to reveal over/short) and verifies the shared manager till the next morning. These two manager sign-offs appear under 'Needs attention' when there's something to do.",
         href: "/admin/registers",
       },
       {

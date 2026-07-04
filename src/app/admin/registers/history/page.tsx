@@ -47,7 +47,7 @@ export default async function RegisterHistoryPage() {
   if (!isSupabaseServiceConfigured) {
     return (
       <div className="space-y-6">
-        <Breadcrumbs items={[{ label: "Sell" }, { label: "Cash Management", href: BASE }, { label: "Cash drawer reports" }]} />
+        <Breadcrumbs items={[{ label: "Sell" }, { label: "Register Activity", href: BASE }, { label: "Cash drawer reports" }]} />
         <AdminPageHeader title="Cash drawer reports" subtitle="Closed, reconciled, and verified drawer sessions." />
         <EmptyState title="Supabase not configured" description="Connect the service role key to view cash drawer history." />
       </div>
@@ -64,13 +64,13 @@ export default async function RegisterHistoryPage() {
 
   return (
     <div className="space-y-6">
-      <Breadcrumbs items={[{ label: "Sell" }, { label: "Cash Management", href: BASE }, { label: "Cash drawer reports" }]} />
+      <Breadcrumbs items={[{ label: "Sell" }, { label: "Register Activity", href: BASE }, { label: "Cash drawer reports" }]} />
       <AdminPageHeader
         title="Cash drawer reports"
         subtitle="Closed, reconciled, and verified drawer sessions across all registers."
         action={
           <Link href={BASE}>
-            <Button variant="neutral">Back to Cash Management</Button>
+            <Button variant="neutral">Back to Register Activity</Button>
           </Link>
         }
         help={

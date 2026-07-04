@@ -1,88 +1,139 @@
-# Cash Management page overhaul — plan & research
+# Cash Management → Register & Shift Oversight (Back-Office Console)
 
-**Task (owner, verbatim):** "now lets overhaul the registers and tills page. I am not sure what this page is or for, so I think we should go back to the internet to gather definitive authoritative resources and documentation about pos software, not necessarily cannabis pos, but the best pos systems, so we can properly transform it into what it is meant to be. please rename it to be an industry standard page name. please proceed, follow the standing rules and never guess."
+**Status:** Second attempt (corrected direction). Supersedes the first-attempt plan.
+**Branch:** `feat/cash-management-page` · **PR:** #238
+**Page:** `/admin/registers`
 
-Standing rules honored: grounded in file tree first; deep research from authoritative sources; money in minor units; no schema changes without owner-applied idempotent migration; AI output = draft.
+---
 
-## 1. What the page IS today (grounded in code + migration 0038)
+## 1. Why this was rewritten
 
-Route `/admin/registers` (+ `/admin/registers/history`). Nav label **"Registers & Drawers"** (group "Sell", permission `orders.manage`).
+The first attempt renamed "Registers & Drawers" → "Cash Management" and reorganized the
+existing **count-in / drop / blind-close / reconcile** cash-drawer *workflow* into the page.
 
-It is a **cash-drawer management / reconciliation** tool for Greenway's physical registers:
-- 3 registers seeded by migration 0038: `Sales Register 1`, `Sales Register 2` (kind `sales`), `Manager Till` (kind `manager_till`).
-- Lifecycle per drawer session (table `drawer_sessions`, status `open → closed → reconciled → verified`):
-  1. **Count-in / open** — employee counts the starting float by denomination (`drawer_counts` count_type `open`).
-  2. **Cash drops** — mid-shift drops to the safe (`drawer_drops`, windows afternoon/night/other; owner runs 4 drops/day).
-  3. **Blind count-out / close** — employee counts drawer WITHOUT seeing expected (`drawer_counts` count_type `close`).
-  4. **Reconcile (manager)** — manager enters cash sales; system computes expected = opening + cash sales − drops, reveals **over/short** (`over_short_minor`).
-  5. **Verify (manager till)** — next-morning manager independently recounts & validates (`till_verifications`).
-- Denomination counting to the penny (pennies…hundreds). All money in cents.
-- Audit logged (`recordAudit`): drawer.opened / drawer.drop / drawer.closed_blind / drawer.reconciled / till.verified.
-- RLS staff-only. Stores return `[]`/`null` when Supabase unconfigured (graceful).
+The owner corrected the intent (verbatim):
 
-Files:
-- `src/app/admin/registers/page.tsx` — live registers grid + open/drop/close forms + manager reconcile/verify block.
-- `src/app/admin/registers/history/page.tsx` — recent sessions table with over/short.
-- `src/app/admin/registers/actions.ts` — server actions (open/drop/close/reconcile/verify).
-- `src/lib/registers/store.ts` — DB lifecycle.
-- `src/lib/registers/cash.ts` — PURE cash math (denoms, expectedClose, overShort, formatCents).
-- `src/components/admin/registers/DenomFields.tsx` — denomination input grid.
+> "I feel like the cash management page should be something the employee would see on the
+> front end ipad pos system. I am hoping for more along the lines of shift management, cash
+> register activity, a live transaction feed, and such. can you go back to the authoritative
+> resources and help me actually transform this important arm of the pos system back end."
 
-## 2. Research — how leading POS systems name & structure this
+So the **hands-on drawer-counting workflow belongs on the front-end iPad POS** (the cashier
+does it at the register). The **back office** version of this arm of the POS is a
+**manager oversight / monitoring console** — read-only visibility into who is working,
+what the registers are doing, and a live feed of activity — with the ability to jump into
+the few genuinely-manager actions (reconcile / verify) when something needs attention.
 
-Authoritative sources (accessed for this task):
-- **Square** — "Start and end a cash drawer session" & "Set up cash management" (squareup.com/help). The feature area is **Cash Management**; a working period is a **cash drawer session** (Start Drawer → Pay In/Out → End Drawer); reporting is the **Cash drawer report**. Concepts: *starting cash, cash sales, cash refunds, cash paid in/out, expected cash amount*.
-- **Toast** — "Use Cash Drawers" (support.toasttab.com). Main POS menu section is **Cash Management**; sub-page **Cash Drawers**. States **Open/Active/Paused/Closed**; per-drawer info: *expected balance, starting balance, actual close out cash, cash overage/shortage*; actions *Add Cash / Remove Cash (Cash out, Payout, Tip Out, Cash Drop), No Sale, Count bills (by denomination), Create Deposit*; reporting **Cash Drawer Report / History**; business-day cutoff auto-close.
-- **Lightspeed** — "How to Balance a Cash Register Drawer like a Pro" (lightspeedhq.com/blog). Best practices: **one person per drawer** (accountability), **count starting cash each morning**, **count by denomination**, **deposit cash throughout the day**, **two-step verification** for large counts, **overage vs shortage** definitions, **regular audits**, **written over/short tolerance policy**.
+---
 
-**Convergent industry vocabulary → Greenway mapping (already implemented):**
-| Industry term (Square/Toast/Lightspeed) | Greenway code today |
-| --- | --- |
-| Cash Management (feature area) | the page itself (currently "Registers & Drawers") |
-| Cash drawer session / Open drawer / Starting cash | `drawer_sessions`, `openDrawer`, `opening_count_minor` |
-| Count by denomination | `drawer_counts`, `DenomFields`, `cash.ts` |
-| Cash drop / Paid out / Remove cash | `drawer_drops`, `recordDrop` |
-| Blind close / End drawer / Actual close out cash | `closeDrawerBlind`, `closing_count_minor` |
-| Expected cash / Reconcile | `expectedClose`, `reconcileDrawer`, `expected_close_minor` |
-| Overage / Shortage (over-short) | `overShort`, `over_short_minor`, `overShortLabel` |
-| Two-step verification | `verifyTill`, `till_verifications` (manager till) |
-| Cash Drawer Report / History | `/admin/registers/history` |
+## 2. Authoritative research (best-in-class POS, not cannabis-specific)
 
-**Conclusion:** Greenway's backend already matches POS best practice one-to-one. The gap is purely **naming + page organization/clarity**, not capability. Do NOT rebuild the engine.
+Verified against vendor documentation on 2026-07-04.
 
-## 3. Decision: industry-standard name + structure
+### Square — Shifts + Dashboard (the "business headquarters")
+- **Square Shifts** (back office): scheduling & shift management, time tracking & attendance,
+  **labor-cost reporting**, "real-time attendance, shift, and **sales vs. labor** reports",
+  overtime/break tracking, automatic timecards.
+  Source: https://squareup.com/us/en/staff/shifts
+- **Square Dashboard** ("your new business headquarters"): "**real-time reports** show you
+  hourly sales", "see all your **transactions**", **team-member-attributed activity log**
+  (who's selling, refunds), and "**handle tasks that need attention right away**."
+  Source: https://squareup.com/us/en/point-of-sale/features/dashboard
 
-**Name → "Cash Management"** (the universal term; Square + Toast both use it). Nav label: **"Cash Management"**. Keep the URL working; the sub-view of live drawers is the "Cash Drawers" area of the page.
+### Toast — Reporting Dashboard (Weekly Overview)
+- A single manager view across four areas: **Net Sales, Labor Cost, Guest Count, Top Items**,
+  each with % change vs. a comparison period; **refreshes hourly**; every number is a
+  drill-through link to the detailed report.
+  Source: https://support.toasttab.com/en/article/How-to-Use-the-Toast-Reporting-Dashboard
 
-Rename plan:
-- **Nav:** "Registers & Drawers" → **"Cash Management"** (keep icon 💵, permission `orders.manage`, group "Sell").
-- **Route:** keep `/admin/registers` as the canonical path (avoids breaking bookmarks/links/audit and needs no redirect infra), but retitle the page to **"Cash Management"**. (A route rename to `/admin/cash-management` would ripple through `revalidatePath`, redirects, and every internal link — higher risk for no functional gain. If the owner wants the URL changed too, that's a clean follow-up.)
-- **Page title:** `Cash Management` / subtitle explaining daily cash lifecycle.
-- **Terminology on-screen:** adopt the standard words — *Starting cash* (was "opening float"), *Cash drop*, *Expected in drawer*, *Counted*, *Over/Short (overage/shortage)*, *Verify*.
+### Lightspeed — BackOffice **Shifts Summary** (the closest analogue to our need)
+- "A **read-only overview of cash flow during each register shift**... so you can **monitor
+  the cash drawer from anywhere**." Columns: **Register (green dot = open shift, red = closed)**,
+  Opening Manager, Opened time, Closing Manager, Closed time, Starting Cash, Cash Tenders,
+  Expected Cash, Actual Cash, **Variance (over/short)**.
+  Source: https://shopkeep-support.lightspeedhq.com/hc/en-us/articles/47479940209819-Shifts-Summary
+- **X / Z reports** (the count/close detail) are explicitly **run at the register** (front-end),
+  not in BackOffice — confirming the split the owner described.
+  Source: https://shopkeep-support.lightspeedhq.com/hc/en-us/articles/47480030210971-X-and-Z-Reports
 
-**Page structure (one clean, sectioned page, top → bottom):**
-1. **Header** — "Cash Management" + subtitle + primary action to History (renamed "Cash drawer reports").
-2. **Today at a glance** — StatCards: Open drawers · Registers · Cash in drawers now (sum of open sessions' running cash) · Awaiting reconcile · Net over/short today.
-3. **Needs attention** — closed sessions awaiting reconcile/verify (actionable; only shown when non-empty). Managers act here (reconcile + verify).
-4. **Cash drawers** — the live grid: each register card with clearer status, Starting cash, dropped-so-far, and open/drop/blind-close forms. Keep blind-count integrity (never reveal expected to the counter).
-5. **Help** — restated in standard POS language so any trained cashier recognizes it.
+### Consensus pattern for a back-office oversight console
+1. **Who's working right now** — live on-the-clock roster + today's shifts (shift management).
+2. **Register / shift activity** — per-register live status (open/closed, by whom, since when,
+   starting cash, cash moved), read-only, with a green/red status signal.
+3. **Live activity feed** — a reverse-chronological stream of what's happening (orders coming
+   in, drawers opening/closing, reconcile/verify events).
+4. **At-a-glance KPIs** — the day's headline numbers (sales vs. yesterday, active orders,
+   open drawers, over/short).
+5. **Needs attention** — the short list of manager-only actions to resolve (drawers awaiting
+   reconcile, tills awaiting verify).
 
-## 4. Scope guardrails
+---
 
-## 4. Scope guardrails
+## 3. Backend data reality (verified in the file tree — do NOT fabricate)
 
-- Prefer NO schema changes (all data exists). If a migration is truly needed, propose an idempotent one for the owner to apply manually.
-- Keep the store + cash math + actions (well-built, blind-count integrity). Reorganize the PAGE and RENAME the nav/route sensibly.
-- Reuse the admin design system (AdminPageHeader, Section, Card, StatCard, Badge, Button, HelpPanel, EmptyState).
-- AI output = draft for owner review.
+There is **no in-store per-transaction POS table** in this back end. In-store sales are not
+recorded as individual transactions. The only transaction-like records are **online pickup
+orders**. So the "live transaction feed" must be built from **real** events only:
 
-## 5. Implementation status — DONE
+| Console surface (from research)     | Real backend source (verified)                                             |
+|-------------------------------------|-----------------------------------------------------------------------------|
+| Who's working now / shift mgmt      | `staffing/store.ts` → `onTheClock()`, `listRecentShifts()`, `Shift` type    |
+| Register / shift activity           | `registers/store.ts` → `liveRegisters()` (`RegisterLive`), `recentSessions()` |
+| Live activity feed                  | `orders-store.ts` → `listOrders()` (`OrderRow`) **+** drawer `recentSessions()` **+** clock-ins from `onTheClock()` |
+| At-a-glance KPIs                    | `admin/cockpit-data.ts` → `getCockpitSnapshot()` (today-vs-yesterday sales, active orders, drawers rollup) |
+| Cash over/short & drawer state      | `registers/store.ts` → `cashDrawerSummary()`; `cash.ts` → `formatCents`, `overShortLabel` |
+| Needs attention (reconcile/verify)  | `recentSessions()` filtered by status + existing `reconcileDrawerAction` / `verifyTillAction` |
 
-Delivered on branch `feat/cash-management-page`:
+**Constraints:**
+- Sales figures (`sales.ts`, `getSalesReport`) are derived from the `orders` table — i.e.
+  **online orders**. Label them honestly ("online order sales"), never as full in-store sales.
+- The count-in / drop / blind-close forms stay in the codebase (`actions.ts`, `DenomFields`,
+  `cash.ts`) because the front-end iPad POS is not built here yet — but they are **removed
+  from this back-office page**. The only manager actions kept on this page are **reconcile**
+  and **verify**, which are genuinely back-office oversight actions (a manager signs off).
+- All time-dependent computation stays in the **server data layer** (store functions), never
+  in the page render, to satisfy `react-hooks/purity`.
 
-- **Renamed to the industry-standard "Cash Management"** everywhere: nav (`admin-nav-data.ts`), mobile nav (`mobile-core.ts`), admin dashboard card (`app/admin/page.tsx`), page title + breadcrumbs, and help content (`help-content.ts`). Route kept at `/admin/registers` (no breakage; a URL rename can be a clean follow-up if desired).
-- **Rebuilt `app/admin/registers/page.tsx`** into a clean, sectioned page using the design system (`Section`, `Card`, `StatCard`, `Badge`, `Button`, `HelpPanel`, `EmptyState`): header + "Cash drawer reports" action → **Today at a glance** (5 stats: open drawers / starting cash open / dropped to safe / awaiting reconcile / net over-short today) → **Needs attention** (manager reconcile + verify, only when non-empty) → **Cash drawers** live grid. Adopted standard terminology (Starting cash, Cash drop, Over/Short, Verify). Preserved blind-count integrity (expected total never shown to the counter).
-- **`store.ts`** — added `cashDrawerSummary()` (server-side, keeps page render pure; computes open counts, starting cash, drops, awaiting-reconcile, and net over/short for today's Pacific business day).
-- **`history/page.tsx`** — retitled to "Cash drawer reports" with matching breadcrumbs; "Back to Cash Management".
+---
 
-Verification: `tsc --noEmit` clean · `eslint` clean on all changed files · full `next build` compiled successfully (both routes present). No schema changes; degrades gracefully when Supabase unconfigured. The store, cash math, actions, and blind-count workflow were kept intact (they already match POS best practice).
+## 4. Page design (what we build)
+
+**Name:** the page is renamed to **"Register Activity"** in navigation and headers — the
+plainest industry term for a back-office register/shift oversight surface (Lightspeed's own
+term is "Shifts Summary"; Square calls it register/team activity). Route stays `/admin/registers`.
+
+**Sections (top to bottom):**
+1. **AdminPageHeader** — title "Register Activity", subtitle about live oversight, help panel,
+   breadcrumbs (Sell › Register Activity), action → "Cash drawer reports" (history page).
+2. **Today at a glance** — StatCards from `getCockpitSnapshot()` + `cashDrawerSummary()`:
+   online order sales today (vs. yesterday), active orders, open drawers, net over/short today.
+3. **Needs attention** — only rendered when non-empty: drawers awaiting reconcile (form),
+   tills awaiting verify (form). Manager-permission gated.
+4. **On the clock** — live roster from `onTheClock()` (name, role, clocked-in since). Shift
+   management at-a-glance; links to the full staffing/timeclock pages for editing.
+5. **Registers** — per-register live cards from `liveRegisters()`: green/red status dot,
+   open session's opener + opened-at, starting cash, dropped-to-safe, expected close. Read-only.
+6. **Live activity feed** — merged, reverse-chronological stream built server-side from
+   real events: new/updated online orders, drawer open/close/reconcile/verify, clock-ins.
+   Each row: timestamp (Pacific), icon, human sentence, optional amount.
+
+**Removed from this page:** open-drawer, record-drop, blind-close forms + `DenomFields`
+(these are front-end iPad POS responsibilities).
+
+---
+
+## 5. Data-layer additions (server-side, pure page render)
+
+- `registers/store.ts`: keep `cashDrawerSummary()`. Add nothing impure to the page.
+- New assembler `lib/registers/oversight.ts` → `getRegisterActivity()` returning one typed
+  snapshot: `{ configured, kpis, onClock, registers, needsAttention, feed }`, computing all
+  `new Date()` / business-day logic server-side. Degrades to empty when unconfigured.
+- Activity feed items are a discriminated union `ActivityEvent` with a stable sort key
+  (ISO timestamp) so the page just maps over them.
+
+---
+
+## 6. Verification & handoff
+- `npx tsc --noEmit -p tsconfig.json` → `npx eslint <changed>` → `npx next build` → `rm -rf .next`.
+- Commit on `feat/cash-management-page`; update PR #238; report handoff-ready.
+- No migrations required (reuses existing tables).
