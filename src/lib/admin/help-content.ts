@@ -574,16 +574,21 @@ export const HELP_SECTIONS: HelpSection[] = [
     title: "Equipment",
     icon: "🛠",
     category: "Equipment & integrations",
-    intro: "Tracking your store's hardware and assets.",
+    intro: "One home for every piece of store hardware.",
     items: [
       {
         q: "What's the Equipment page for?",
-        a: "It's your register of store hardware and assets — what you own, where it is, and its details — so nothing gets lost and maintenance is easy to track.",
+        a: "It's the single home for all your hardware. The top shows your integrated devices (receipt printer, label printer, scanner, laminator) with a link to the page each one drives. Below that is the full asset registry — POS terminals, scales, safes, cameras — so nothing gets lost and maintenance is easy to track.",
+        href: "/admin/equipment",
+      },
+      {
+        q: "What does “Needs attention” show?",
+        a: "It surfaces anything actionable: scales with calibration due or coming due, and assets whose warranty expires within 60 days. When nothing needs attention the section is hidden.",
         href: "/admin/equipment",
       },
       {
         q: "Where's the receipt printer setup, specifically?",
-        a: "The receipt printer has its own dedicated page (Receipt Printer) with a full setup guide, live diagnostics, and a troubleshooting assistant.",
+        a: "The receipt printer has its own dedicated page (Receipt Printer) with a full setup guide, live diagnostics, and a troubleshooting assistant. Its live online/offline status also shows on its Equipment card, which links straight there.",
         href: "/admin/settings/receipt-printer",
       },
     ],

@@ -9,6 +9,7 @@ import { listRegisters } from "@/lib/registers/store";
 import {
   getEquipmentAsset,
   listServiceEvents,
+  warrantyExpiringSoon,
   EQUIPMENT_CATEGORIES,
   EQUIPMENT_CATEGORY_LABELS,
   EQUIPMENT_STATUSES,
@@ -75,13 +76,18 @@ export default async function EquipmentDetailPage({
           </div>
         )}
 
-        <div className="grid gap-4 sm:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <StatCard label="Status" value={asset.status} accent={asset.status === "active" ? "green" : "muted"} />
           <StatCard label="Register" value={asset.register_name ?? "—"} accent="gold" />
           <StatCard
             label="Calibration"
             value={asset.requires_calibration ? asset.next_calibration_due ?? "—" : "n/a"}
             accent={asset.calibration_due ? "orange" : "muted"}
+          />
+          <StatCard
+            label="Warranty"
+            value={asset.warranty_expires ?? "—"}
+            accent={warrantyExpiringSoon(asset) ? "gold" : "muted"}
           />
           <StatCard
             label="Purchase cost"
