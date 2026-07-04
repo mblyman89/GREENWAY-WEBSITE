@@ -310,10 +310,24 @@ export type EquipmentSummary = {
   retired: number;
   calibrationDue: number;
   calibrationSoon: number;
+  warrantyExpiringSoon: number;
   mappedToRegister: number;
 };
 
+/** Warranty is "expiring soon" when it lapses within this many days. */
+export const WARRANTY_SOON_DAYS = 60;
+
+/** True when an asset's warranty lapses within WARRANTY_SOON_DAYS (from today). */
+export function warrantyExpiringSoon(asset: EquipmentAsset, today?: string): boolean {
+  if (!asset.warranty_expires) return false;
+  const now = today ?? todayISO();
+  if (asset.warranty_expires < now) return false; // already lapsed — not "soon"
+  const cutoff = addDaysISO(WARRANTY_SOON_DAYS);
+  return asset.warranty_expires <= cutoff;
+}
+
 export function summarizeEquipment(assets: EquipmentAssetView[]): EquipmentSummary {
+  const today = todayISO();
   return {
     total: assets.length,
     active: assets.filter((a) => a.status === "active").length,
@@ -321,6 +335,111 @@ export function summarizeEquipment(assets: EquipmentAssetView[]): EquipmentSumma
     retired: assets.filter((a) => a.status === "retired").length,
     calibrationDue: assets.filter((a) => a.calibration_due).length,
     calibrationSoon: assets.filter((a) => a.calibration_soon).length,
+    warrantyExpiringSoon: assets.filter((a) => warrantyExpiringSoon(a, today)).length,
     mappedToRegister: assets.filter((a) => a.register_id).length,
   };
+}
+
+/* ------------------------------------------------------------------ *
+ *  Integrated hardware catalog
+ *
+ *  The devices actually wired into back-office workflows. These are seeded as
+ *  registry rows by migration 0061 (stable asset_tags below), so the Equipment
+ *  hub renders them FROM THE DATA and links each to the page it drives — no
+ *  hardcoded duplicate list. When a row is not present yet (migration not
+ *  applied), the hub still shows the device from this catalog so the owner
+ *  always sees their integrated hardware and where it is used.
+ *
+ *  Facts (manufacturer/model/role) are grounded in migration 0061.
+ * ------------------------------------------------------------------ */
+
+export type IntegratedDeviceKind = "receipt_printer" | "label_printer" | "scanner" | "laminator";
+
+export type IntegratedDevice = {
+  /** Stable registry asset_tag seeded by migration 0061. */
+  assetTag: string;
+  kind: IntegratedDeviceKind;
+  icon: string;
+  roleLabel: string;
+  name: string;
+  manufacturer: string;
+  model: string;
+  /** What it does, in one plain sentence. */
+  summary: string;
+  /** Where to configure or use it. */
+  href: string;
+  hrefLabel: string;
+};
+
+export const INTEGRATED_DEVICES: readonly IntegratedDevice[] = [
+  {
+    assetTag: "PRN-RECEIPT-01",
+    kind: "receipt_printer",
+    icon: "🧾",
+    roleLabel: "Receipt printer",
+    name: "Receipt printer",
+    manufacturer: "Star Micronics",
+    model: "TSP143IV (CloudPRNT)",
+    summary: "Auto-prints online pickup orders via CloudPRNT.",
+    href: "/admin/settings/receipt-printer",
+    hrefLabel: "Configure & diagnostics",
+  },
+  {
+    assetTag: "PRN-LABEL-01",
+    kind: "label_printer",
+    icon: "🏷",
+    roleLabel: "Label printer",
+    name: "Label printer",
+    manufacturer: "Rollo",
+    model: "Wireless X1040",
+    summary: "4×6 lot / shelf labels, printed from the browser print dialog.",
+    href: "/admin/inventory/intake",
+    hrefLabel: "Print labels from Intake",
+  },
+  {
+    assetTag: "SCAN-MEDICAL-01",
+    kind: "scanner",
+    icon: "🖨",
+    roleLabel: "Scanner",
+    name: "Medical authorization scanner",
+    manufacturer: "Canon",
+    model: "PIXMA TS3522",
+    summary: "Scan medical authorization forms to PDF, then upload during intake.",
+    href: "/admin/medical/intake",
+    hrefLabel: "Authorization Intake",
+  },
+  {
+    assetTag: "LAMINATOR-01",
+    kind: "laminator",
+    icon: "📇",
+    roleLabel: "Laminator",
+    name: "Thermal laminator",
+    manufacturer: "Scotch",
+    model: "Thermal Laminator",
+    summary: "Laminates printed medical recognition cards so they last at the register.",
+    href: "/admin/medical/intake",
+    hrefLabel: "Used during Authorization Intake",
+  },
+] as const;
+
+export const INTEGRATED_ASSET_TAGS: ReadonlySet<string> = new Set(
+  INTEGRATED_DEVICES.map((d) => d.assetTag),
+);
+
+/** An integrated device paired with its registry row (if it exists yet). */
+export type IntegratedDeviceView = IntegratedDevice & {
+  asset: EquipmentAssetView | null;
+};
+
+/**
+ * Pair the integrated-device catalog with any matching registry rows (by
+ * asset_tag). Pure — pass the already-loaded asset list so the page makes one
+ * DB round-trip. Devices with no row yet still appear (asset: null).
+ */
+export function resolveIntegratedDevices(
+  assets: EquipmentAssetView[],
+): IntegratedDeviceView[] {
+  const byTag = new Map<string, EquipmentAssetView>();
+  for (const a of assets) if (a.asset_tag) byTag.set(a.asset_tag, a);
+  return INTEGRATED_DEVICES.map((d) => ({ ...d, asset: byTag.get(d.assetTag) ?? null }));
 }
