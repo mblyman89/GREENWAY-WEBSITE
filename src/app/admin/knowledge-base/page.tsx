@@ -152,6 +152,13 @@ export default async function KnowledgeBasePage({
               accent="muted"
             />
             <KbNavCard
+              href="/admin/inventory/noncannabis"
+              title="Non-cannabis catalog"
+              description="Glass, accessories, papers & devices — tracked with smart SKUs and connected to the KB."
+              count={counts.nonCannabis}
+              accent="muted"
+            />
+            <KbNavCard
               href="/admin/knowledge-base/setup"
               title="Setup & starter data"
               description="Load or refresh the curated baseline of strains, terpenes, and vocabulary."
