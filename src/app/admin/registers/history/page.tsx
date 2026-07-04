@@ -47,9 +47,9 @@ export default async function RegisterHistoryPage() {
   if (!isSupabaseServiceConfigured) {
     return (
       <div className="space-y-6">
-        <Breadcrumbs items={[{ label: "Operations" }, { label: "Registers", href: BASE }, { label: "History" }]} />
-        <AdminPageHeader title="Drawer history" subtitle="Closed, reconciled, and verified drawer sessions." />
-        <EmptyState title="Supabase not configured" description="Connect the service role key to view drawer history." />
+        <Breadcrumbs items={[{ label: "Sell" }, { label: "Cash Management", href: BASE }, { label: "Cash drawer reports" }]} />
+        <AdminPageHeader title="Cash drawer reports" subtitle="Closed, reconciled, and verified drawer sessions." />
+        <EmptyState title="Supabase not configured" description="Connect the service role key to view cash drawer history." />
       </div>
     );
   }
@@ -64,17 +64,17 @@ export default async function RegisterHistoryPage() {
 
   return (
     <div className="space-y-6">
-      <Breadcrumbs items={[{ label: "Operations" }, { label: "Registers", href: BASE }, { label: "History" }]} />
+      <Breadcrumbs items={[{ label: "Sell" }, { label: "Cash Management", href: BASE }, { label: "Cash drawer reports" }]} />
       <AdminPageHeader
-        title="Drawer history"
+        title="Cash drawer reports"
         subtitle="Closed, reconciled, and verified drawer sessions across all registers."
         action={
           <Link href={BASE}>
-            <Button variant="neutral">Back to registers</Button>
+            <Button variant="neutral">Back to Cash Management</Button>
           </Link>
         }
         help={
-          <HelpPanel id="registers-history" title="About drawer history">
+          <HelpPanel id="registers-history" title="About cash drawer reports">
             <p>
               Every drawer session is recorded here once it has been counted out. Blind closes show as
               <strong> Closed</strong> until a manager reconciles them with the day&apos;s cash sales, which reveals the

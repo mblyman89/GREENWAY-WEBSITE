@@ -180,24 +180,29 @@ export const HELP_SECTIONS: HelpSection[] = [
   // ── Point of sale ──────────────────────────────────────────────────────────
   {
     id: "registers",
-    title: "Registers & cash drawers",
+    title: "Cash Management",
     icon: "💵",
     category: "Point of sale",
-    intro: "Opening, counting, and closing the drawer for each shift.",
+    intro: "Opening, counting, dropping, and reconciling the cash drawer for each shift.",
     items: [
       {
-        q: "How do I open a register for a shift?",
-        a: "Go to Registers & Drawers, pick the register, and open it with a starting cash count. That count is what the closing count is measured against.",
+        q: "How do I open a drawer for a shift?",
+        a: "Go to Cash Management, pick the register, and count in your starting cash by denomination. That starting count is what the closing count is measured against.",
         href: "/admin/registers",
       },
       {
         q: "How do I close out and count the drawer?",
-        a: "At the end of a shift, close the drawer and enter the counted cash. The system compares it to what should be there and records any over/short. Pay-ins and pay-outs are logged too.",
+        a: "At the end of a shift, count out the drawer (a blind count — you won't see the expected amount). A manager then enters the day's cash sales to reconcile it and reveal any over/short (overage or shortage). Cash drops to the safe are logged during the day.",
         href: "/admin/registers",
       },
       {
-        q: "Can I see past drawer sessions?",
-        a: "Yes — Registers history shows every opened/closed session with its counts and any discrepancies, so nothing is a mystery later.",
+        q: "What's the manager till verify step?",
+        a: "The shared manager till is independently re-counted and verified the next morning, so two managers' counts back each other up. This is the two-step verification best practice used by major POS systems.",
+        href: "/admin/registers",
+      },
+      {
+        q: "Where are the cash drawer reports?",
+        a: "Cash drawer reports (History) shows every opened, closed, reconciled, and verified session with its counts and any discrepancies, so nothing is a mystery later.",
         href: "/admin/registers/history",
       },
     ],

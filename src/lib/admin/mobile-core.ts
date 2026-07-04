@@ -160,7 +160,7 @@ export type MobileShortcut = {
  */
 export const MOBILE_SHORTCUTS: MobileShortcut[] = [
   { label: "Orders", href: "/admin/orders", icon: "🧾", permission: "orders.view", hint: "Check & fulfill open orders" },
-  { label: "Registers & Drawers", href: "/admin/registers", icon: "💵", permission: "orders.manage", hint: "Verify drawers, spot variances" },
+  { label: "Cash Management", href: "/admin/registers", icon: "💵", permission: "orders.manage", hint: "Count, drop, reconcile drawers" },
   { label: "Reports", href: "/admin/reports", icon: "📊", permission: "reports.view", hint: "Sales, tax & performance" },
   { label: "Compliance Health", href: "/admin/compliance/health", icon: "🛡", permission: "reports.view", hint: "CCRS/DOH readiness at a glance" },
   { label: "Inventory", href: "/admin/inventory", icon: "🧾", permission: "inventory.manage", hint: "Look up stock & lots" },

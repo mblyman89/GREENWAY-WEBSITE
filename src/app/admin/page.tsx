@@ -222,7 +222,7 @@ export default async function AdminDashboardPage() {
           <Card padding="none">
             <CardHeader
               className="p-5 pb-0"
-              title="Registers & drawers"
+              title="Cash Management"
               subtitle={
                 snap.registers.length > 0
                   ? `${snap.drawers.openCount} open · ${snap.drawers.verifiedCount} verified`
@@ -230,7 +230,7 @@ export default async function AdminDashboardPage() {
               }
               action={
                 <Button href="/admin/registers" variant="neutral" size="sm">
-                  Open register
+                  Open drawers
                 </Button>
               }
             />
