@@ -7,15 +7,16 @@ export type AdminNavItem = {
   permission: Permission;
   icon: string; // simple emoji/glyph for now; swap for SVG icons later
   group:
-    | "Sell"
+    | "Dashboard"
     | "Reports"
     | "CRM"
     | "Product Intake"
     | "Inventory"
-    | "Compliance"
-    | "Finance"
-    | "Marketing"
     | "Website"
+    | "MKTG & ADV"
+    | "Employee"
+    | "Medical"
+    | "CCRS"
     | "Insights"
     | "Admin";
   comingSoon?: boolean;
@@ -26,12 +27,12 @@ export type AdminNavItem = {
 // "information scent"). The old single "Operations" group (15 items) is split
 // into Sell / Inventory / Compliance / Finance so staff can find things fast.
 export const adminNav: AdminNavItem[] = [
-  // Sell: daily front-of-house selling & customers
-  { label: "Dashboard", href: "/admin", permission: "dashboard.view", icon: "\u25a6", group: "Sell" },
-  { label: "Getting Started", href: "/admin/getting-started", permission: "dashboard.view", icon: "\ud83d\ude80", group: "Sell" },
-  { label: "Orders", href: "/admin/orders", permission: "orders.view", icon: "\ud83e\uddfe", group: "Sell" },
-  { label: "Register Activity", href: "/admin/registers", permission: "orders.manage", icon: "\ud83d\udcb5", group: "Sell" },
-  { label: "Loyalty", href: "/admin/loyalty-signups", permission: "loyalty.view", icon: "\u2605", group: "Sell" },
+  // Dashboard: daily front-of-house. (The "Dashboard" landing page itself is
+  // reachable via the Greenway wordmark, so no separate nav item for it.)
+  { label: "Getting Started", href: "/admin/getting-started", permission: "dashboard.view", icon: "\ud83d\ude80", group: "Dashboard" },
+  { label: "Online Orders", href: "/admin/orders", permission: "orders.view", icon: "\ud83e\uddfe", group: "Dashboard" },
+  { label: "Register Activity", href: "/admin/registers", permission: "orders.manage", icon: "\ud83d\udcb5", group: "Dashboard" },
+  { label: "Loyalty", href: "/admin/loyalty-signups", permission: "loyalty.view", icon: "\u2605", group: "Dashboard" },
 
   // Reports: standalone top-header button (rendered as a direct link tab, not a
   // dropdown — see AdminTopNav DIRECT_LINK_GROUPS).
@@ -61,23 +62,24 @@ export const adminNav: AdminNavItem[] = [
   { label: "Returns & Destruction", href: "/admin/inventory/disposition", permission: "inventory.manage", icon: "\u267b\ufe0f", group: "Inventory" },
   { label: "Non-Cannabis", href: "/admin/inventory/noncannabis", permission: "inventory.manage", icon: "\ud83e\uddf4", group: "Inventory" },
 
-  // Compliance: regulatory tools (CCRS / DOH)
-  { label: "Compliance Health", href: "/admin/compliance/health", permission: "reports.view", icon: "\ud83d\udee1", group: "Compliance" },
-  { label: "Medical", href: "/admin/medical", permission: "medical.manage", icon: "\u2695", group: "Compliance" },
-  { label: "Authorization Intake", href: "/admin/medical/intake", permission: "medical.manage", icon: "\ud83d\udcc7", group: "Compliance" },
-  { label: "Sales Limits", href: "/admin/compliance/sales-limits", permission: "settings.manage", icon: "\u2696", group: "Compliance" },
-  { label: "Trade Samples", href: "/admin/compliance/samples", permission: "settings.manage", icon: "\ud83e\uddea", group: "Compliance" },
+  // MKTG & ADV: promos, content, email, creative
+  { label: "Marketing & Advertising", href: "/admin/marketing", permission: "content.edit", icon: "\ud83d\udce3", group: "MKTG & ADV" },
+  { label: "Promotions", href: "/admin/promotions", permission: "promotions.manage", icon: "%", group: "MKTG & ADV" },
+  { label: "Blog & Newsletter", href: "/admin/blog", permission: "blog.manage", icon: "\u270e", group: "MKTG & ADV" },
+  { label: "Email Newsletter", href: "/admin/newsletter", permission: "blog.manage", icon: "\u2709", group: "MKTG & ADV" },
+  { label: "Image Generator", href: "/admin/marketing/midjourney", permission: "content.edit", icon: "\ud83c\udfa8", group: "MKTG & ADV" },
 
-  // Finance: pay, hours
-  { label: "Time Clock", href: "/admin/staffing", permission: "loyalty.view", icon: "\u23f1", group: "Finance" },
-  { label: "Payroll (ACH)", href: "/admin/payroll", permission: "settings.manage", icon: "\ud83c\udfe6", group: "Finance" },
+  // Employee: time & pay + trade samples
+  { label: "Time Clock", href: "/admin/staffing", permission: "loyalty.view", icon: "\u23f1", group: "Employee" },
+  { label: "Payroll", href: "/admin/payroll", permission: "settings.manage", icon: "\ud83c\udfe6", group: "Employee" },
+  { label: "Trade Samples", href: "/admin/compliance/samples", permission: "settings.manage", icon: "\ud83e\uddea", group: "Employee" },
 
-  // Marketing: promos, content, email, creative
-  { label: "Marketing & Advertising", href: "/admin/marketing", permission: "content.edit", icon: "\ud83d\udce3", group: "Marketing" },
-  { label: "Promotions", href: "/admin/promotions", permission: "promotions.manage", icon: "%", group: "Marketing" },
-  { label: "Blog & Newsletter", href: "/admin/blog", permission: "blog.manage", icon: "\u270e", group: "Marketing" },
-  { label: "Newsletter Send", href: "/admin/newsletter", permission: "blog.manage", icon: "\u2709", group: "Marketing" },
-  { label: "Midjourney", href: "/admin/marketing/midjourney", permission: "content.edit", icon: "\ud83c\udfa8", group: "Marketing" },
+  // Medical: patient/DOH tools
+  { label: "Patient Records", href: "/admin/medical", permission: "medical.manage", icon: "\u2695", group: "Medical" },
+  { label: "Authorization Intake", href: "/admin/medical/intake", permission: "medical.manage", icon: "\ud83d\udcc7", group: "Medical" },
+
+  // CCRS: standalone top-header button \u2192 Compliance Health (direct link, no dropdown).
+  { label: "Compliance Health", href: "/admin/compliance/health", permission: "reports.view", icon: "\ud83d\udee1", group: "CCRS" },
 
   // Website: media + site content, then public page editors + menu imports.
   // Media Library is pinned to the TOP with Site Content directly under it.
@@ -100,6 +102,7 @@ export const adminNav: AdminNavItem[] = [
   // Admin: users, settings, integrations, equipment
   { label: "Users", href: "/admin/users", permission: "users.manage", icon: "\ud83d\udc65", group: "Admin" },
   { label: "Equipment", href: "/admin/equipment", permission: "inventory.manage", icon: "\ud83d\udee0", group: "Admin" },
+  { label: "Sales Limits", href: "/admin/compliance/sales-limits", permission: "settings.manage", icon: "\u2696", group: "Admin" },
   { label: "Types & Categories", href: "/admin/settings/types", permission: "settings.manage", icon: "\ud83c\udff7", group: "Admin" },
   { label: "Integrations", href: "/admin/integrations", permission: "settings.manage", icon: "\ud83d\udd0c", group: "Admin" },
   { label: "Receipt Printer", href: "/admin/settings/receipt-printer", permission: "settings.manage", icon: "\ud83e\uddfe", group: "Admin" },
@@ -109,15 +112,16 @@ export const adminNav: AdminNavItem[] = [
 ];
 
 export const navGroups: AdminNavItem["group"][] = [
-  "Sell",
+  "Dashboard",
   "Reports",
   "CRM",
   "Product Intake",
   "Inventory",
   "Website",
-  "Compliance",
-  "Finance",
-  "Marketing",
+  "MKTG & ADV",
+  "Employee",
+  "Medical",
+  "CCRS",
   "Insights",
   "Admin",
 ];
