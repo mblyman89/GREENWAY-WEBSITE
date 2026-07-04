@@ -36,6 +36,7 @@ export const adminNav: AdminNavItem[] = [
   // Product Intake: the end-to-end product workflow, from procurement through
   // receiving, onboarding, menu enrichment, mastering, and paying the vendor.
   // Order mirrors the real lifecycle so staff move top-to-bottom.
+  { label: "Product Discovery", href: "/admin/discovery", permission: "inventory.manage", icon: "\ud83d\udd0d", group: "Product Intake" },
   { label: "Catalog Hub", href: "/admin/catalog", permission: "products.enrich", icon: "\ud83d\uddc2", group: "Product Intake" },
   { label: "Purchasing", href: "/admin/purchasing", permission: "inventory.manage", icon: "\ud83d\uded2", group: "Product Intake" },
   { label: "Receiving", href: "/admin/inventory/intake", permission: "inventory.manage", icon: "\ud83d\udce5", group: "Product Intake" },

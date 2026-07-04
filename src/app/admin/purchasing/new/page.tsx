@@ -97,6 +97,31 @@ export default async function NewPurchaseOrderPage({
 
   const needCount = rows.filter((r) => r.belowReorderPoint).length;
 
+  // Discovery hand-off: when arriving from a promoted product lead, build a
+  // prefilled DRAFT line the builder prepends and pre-selects. Nothing is
+  // ordered automatically — the manager confirms quantity, cost, and vendor.
+  const fromLead = one(sp, "fromLead");
+  const leadCostMinorRaw = one(sp, "leadCostMinor");
+  const leadCostMinor = leadCostMinorRaw ? Math.max(0, Math.round(Number(leadCostMinorRaw) || 0)) : 0;
+  const prefill: SuggestionRow | undefined = fromLead
+    ? {
+        posProductKey: null,
+        productName: one(sp, "leadName") ?? "New product (from lead)",
+        brand: one(sp, "leadBrand") ?? null,
+        category: one(sp, "leadCategory") ?? null,
+        vendorId: null,
+        vendorName: one(sp, "leadVendorName") ?? null,
+        onHand: 0,
+        unit: "each",
+        unitCostMinor: leadCostMinor,
+        avgDaily: 0,
+        reorderPoint: 0,
+        suggestedQty: 1,
+        belowReorderPoint: true,
+        daysOfSupplyLeft: 0,
+      }
+    : undefined;
+
   const planSummary = one(sp, "plan");
   const origin = one(sp, "origin") === "ai_suggested" ? "ai_suggested" : "manual";
   const aiError = one(sp, "aierror");
@@ -149,6 +174,13 @@ export default async function NewPurchaseOrderPage({
         {aiError ? (
           <div className="rounded-[var(--admin-radius)] border border-[var(--admin-orange)]/40 bg-[var(--admin-orange)]/10 px-4 py-2 text-sm text-[var(--admin-text)]">
             {aiError}
+          </div>
+        ) : null}
+        {prefill ? (
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-text)]">
+            Started from a discovery lead:{" "}
+            <span className="font-semibold text-[var(--admin-text)]">{prefill.productName}</span>. It&apos;s
+            pre-added below as a draft line — confirm the quantity, cost, and vendor, then save.
           </div>
         ) : null}
 
@@ -245,6 +277,8 @@ export default async function NewPurchaseOrderPage({
               vendors={vendorOptions}
               origin={origin}
               planSummary={planSummary}
+              prefill={prefill}
+              fromLeadId={fromLead}
               createAction={createPurchaseOrderAction}
               sendAction={createAndSendPurchaseOrderAction}
             />
