@@ -36,13 +36,16 @@ import {
   liveRegisters,
   recentSessions,
   cashDrawerSummary,
+  dropsForSession,
   type RegisterLive,
   type DrawerSession,
+  type DrawerDrop,
   type CashDrawerSummary,
 } from "@/lib/registers/store";
 import {
   onTheClock,
   listRecentShifts,
+  listEmployees,
   type Employee,
   type TimePunch,
   type Shift,
@@ -69,21 +72,41 @@ export type OnClockRow = {
   minutesOnClock: number;
 };
 
-/** Per-register live status card (read-only oversight, Lightspeed-style). */
+/** A single cash drop to the safe during an open session. */
+export type DropRow = {
+  id: string;
+  amountMinor: number;
+  window: "afternoon" | "night" | "other";
+  byLabel: string | null;
+  witnessLabel: string | null;
+  atLabel: string;
+  notes: string | null;
+};
+
+/** Per-register live status card + manager controls (Lightspeed-style). */
 export type RegisterActivityRow = {
   registerId: string;
   name: string;
   kind: "sales" | "manager_till";
+  /** Standard starting float for this register (cents) — pre-fills count-in. */
+  defaultFloatMinor: number;
   /** True when a drawer session is currently open on this register. */
   open: boolean;
   status: DrawerSession["status"] | "idle";
+  /** The open session id (for close / drop actions). Null when idle. */
+  sessionId: string | null;
   openedByLabel: string | null;
   openedAtISO: string | null;
   openedAtLabel: string | null;
   startingCashMinor: number | null;
   droppedMinor: number;
   expectedCloseMinor: number | null;
+  /** Drops recorded during this open session (most recent last). */
+  dropsToday: DropRow[];
 };
+
+/** A selectable active employee for count-in / count-out / drop attribution. */
+export type EmployeeOption = { id: string; name: string; role: Employee["job_role"] };
 
 /** A closed drawer awaiting a manager reconcile / verify action. */
 export type AttentionItem = {
@@ -104,7 +127,8 @@ export type ActivityKind =
   | "drawer_closed"
   | "drawer_reconciled"
   | "drawer_verified"
-  | "clock_in";
+  | "clock_in"
+  | "drawer_drop";
 
 /** One item in the merged, reverse-chronological live activity feed. */
 export type ActivityEvent = {
@@ -142,6 +166,8 @@ export type RegisterActivitySnapshot = {
   attention: AttentionItem[];
   feed: ActivityEvent[];
   cash: CashDrawerSummary;
+  /** Active employees for count-in / count-out / drop attribution pickers. */
+  employees: EmployeeOption[];
 };
 
 // ---------------------------------------------------------------------------
@@ -193,6 +219,7 @@ function emptySnapshot(): RegisterActivitySnapshot {
       netOverShortTodayMinor: 0,
       reconciledToday: 0,
     },
+    employees: [],
   };
 }
 
@@ -206,7 +233,7 @@ export async function getRegisterActivity(): Promise<RegisterActivitySnapshot> {
   const nowISO = new Date().toISOString();
   const today = businessDayFor(nowISO);
 
-  const [cockpit, cash, live, sessions, clock, recentShifts, orders]: [
+  const [cockpit, cash, live, sessions, clock, recentShifts, orders, allEmployees]: [
     CockpitSnapshot,
     CashDrawerSummary,
     RegisterLive[],
@@ -214,6 +241,7 @@ export async function getRegisterActivity(): Promise<RegisterActivitySnapshot> {
     { employee: Employee; punch: TimePunch }[],
     (Shift & { employee_name: string })[],
     OrderRow[],
+    Employee[],
   ] = await Promise.all([
     getCockpitSnapshot(),
     cashDrawerSummary(),
@@ -222,7 +250,27 @@ export async function getRegisterActivity(): Promise<RegisterActivitySnapshot> {
     onTheClock(),
     listRecentShifts(20),
     listOrders({ status: "all", limit: 40 }),
+    listEmployees({ includeInactive: true }),
   ]);
+
+  // Employee id → full name resolver (opened_by/closed_by/drops are FKs).
+  const empName = new Map(allEmployees.map((e) => [e.id, e.full_name]));
+  const nameFor = (id: string | null | undefined): string | null =>
+    id ? (empName.get(id) ?? "—") : null;
+
+  // Active-employee options for the count-in / count-out / drop pickers.
+  const employees: EmployeeOption[] = allEmployees
+    .filter((e) => e.active)
+    .map((e) => ({ id: e.id, name: e.full_name, role: e.job_role }));
+
+  // Drops for each currently-open session (for the "drops today" detail).
+  const openSessionIds = live.map((l) => l.openSession?.id).filter((x): x is string => Boolean(x));
+  const dropsBySession = new Map<string, DrawerDrop[]>();
+  await Promise.all(
+    openSessionIds.map(async (sid) => {
+      dropsBySession.set(sid, await dropsForSession(sid));
+    }),
+  );
 
   // --- KPIs -----------------------------------------------------------------
   const kpis: RegisterActivityKpis = {
@@ -249,18 +297,30 @@ export async function getRegisterActivity(): Promise<RegisterActivitySnapshot> {
   // --- Register activity (read-only, Lightspeed Shifts-Summary style) -------
   const registers: RegisterActivityRow[] = live.map((l) => {
     const s = l.openSession;
+    const drops = s ? (dropsBySession.get(s.id) ?? []) : [];
     return {
       registerId: l.register.id,
       name: l.register.name,
       kind: l.register.kind,
+      defaultFloatMinor: l.register.default_float_minor,
       open: Boolean(s),
       status: s ? s.status : "idle",
-      openedByLabel: s?.opened_by ?? null,
+      sessionId: s?.id ?? null,
+      openedByLabel: nameFor(s?.opened_by),
       openedAtISO: s?.opened_at ?? null,
       openedAtLabel: s?.opened_at ? pacificClock(s.opened_at) : null,
       startingCashMinor: s?.opening_count_minor ?? null,
       droppedMinor: l.dropsMinor,
       expectedCloseMinor: s?.expected_close_minor ?? null,
+      dropsToday: drops.map((d) => ({
+        id: d.id,
+        amountMinor: d.amount_minor,
+        window: d.drop_window,
+        byLabel: nameFor(d.dropped_by),
+        witnessLabel: nameFor(d.witnessed_by),
+        atLabel: pacificClock(d.dropped_at),
+        notes: d.notes,
+      })),
     };
   });
 
@@ -347,7 +407,7 @@ export async function getRegisterActivity(): Promise<RegisterActivitySnapshot> {
         atISO: s.opened_at,
         atLabel: pacificClock(s.opened_at),
         title: `${s.register_name} opened`,
-        detail: s.opened_by ? `by ${s.opened_by}` : null,
+        detail: s.opened_by ? `by ${nameFor(s.opened_by)}` : null,
         amountMinor: s.opening_count_minor,
       });
     }
@@ -358,7 +418,7 @@ export async function getRegisterActivity(): Promise<RegisterActivitySnapshot> {
         atISO: s.closed_at,
         atLabel: pacificClock(s.closed_at),
         title: `${s.register_name} closed`,
-        detail: s.closed_by ? `by ${s.closed_by}` : null,
+        detail: s.closed_by ? `by ${nameFor(s.closed_by)}` : null,
         amountMinor: s.closing_count_minor,
       });
     }
@@ -398,6 +458,24 @@ export async function getRegisterActivity(): Promise<RegisterActivitySnapshot> {
     });
   }
 
+  // Cash drops to the safe from currently-open sessions (real drawer_drops).
+  for (const l of live) {
+    const s = l.openSession;
+    if (!s) continue;
+    const drops = dropsBySession.get(s.id) ?? [];
+    for (const d of drops) {
+      feed.push({
+        id: `drop-${d.id}`,
+        kind: "drawer_drop",
+        atISO: d.dropped_at,
+        atLabel: pacificClock(d.dropped_at),
+        title: `${l.register.name} · cash dropped to safe`,
+        detail: d.dropped_by ? `by ${nameFor(d.dropped_by)} · ${d.drop_window}` : d.drop_window,
+        amountMinor: d.amount_minor,
+      });
+    }
+  }
+
   feed.sort((a, b) => (a.atISO < b.atISO ? 1 : a.atISO > b.atISO ? -1 : 0));
 
   // reference recentShifts + today so the imports are used and available if we
@@ -413,5 +491,6 @@ export async function getRegisterActivity(): Promise<RegisterActivitySnapshot> {
     attention,
     feed: feed.slice(0, 40),
     cash,
+    employees,
   };
 }

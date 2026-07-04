@@ -5,6 +5,7 @@ import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel, EmptyState } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
 import { Input, Button, Badge, Card, Section } from "@/components/admin/ui";
+import { RegisterControls } from "@/components/admin/registers/RegisterControls";
 import { getRegisterActivity, type ActivityKind } from "@/lib/registers/oversight";
 import { formatCents, overShortLabel } from "@/lib/registers/cash";
 import { reconcileDrawerAction, verifyTillAction } from "./actions";
@@ -44,7 +45,7 @@ export default async function RegisterActivityPage({
   }
 
   const data = await getRegisterActivity();
-  const { kpis, onClock, registers, attention, feed } = data;
+  const { kpis, onClock, registers, attention, feed, employees } = data;
 
   return (
     <div>
@@ -69,9 +70,11 @@ export default async function RegisterActivityPage({
             </p>
             <p className="mt-2">
               The hands-on cash steps &mdash; counting cash in, dropping to the safe, and blind-closing
-              a drawer &mdash; happen on the front-end iPad POS at the register. Here a manager
-              <strong> monitors</strong> that activity and signs off on the two oversight actions:
-              <strong> reconcile</strong> a closed drawer and <strong>verify</strong> the till.
+              a drawer &mdash; normally happen on the front-end iPad POS at the register. This console
+              also gives a manager the same <strong>cash controls</strong> so you can open, drop, or
+              close a drawer from here (for example, to close one that was left open), plus the two
+              oversight sign-offs: <strong>reconcile</strong> a closed drawer and <strong>verify</strong>
+              the manager till.
             </p>
             <p className="mt-2">
               Sales figures shown are <strong>online pickup order</strong> sales &mdash; the only
@@ -234,8 +237,11 @@ export default async function RegisterActivityPage({
           )}
         </Section>
 
-        {/* Registers — read-only live status */}
-        <Section title="Registers" description="Live status of each register on the floor.">
+        {/* Registers — live status + manager cash controls */}
+        <Section
+          title="Registers"
+          description="Live status of each register, with manager cash controls."
+        >
           {registers.length === 0 ? (
             <Card padding="md">
               <EmptyState title="No registers configured" description="Registers appear here once set up." />
@@ -262,19 +268,47 @@ export default async function RegisterActivityPage({
                   <div className="mt-1 text-xs uppercase tracking-wide text-[var(--admin-text-faint)]">
                     {r.kind === "manager_till" ? "Manager till" : "Sales register"}
                   </div>
+
                   {r.open ? (
-                    <dl className="mt-3 space-y-1 text-xs">
-                      <Row label="Opened by" value={r.openedByLabel ?? "—"} />
-                      <Row label="Opened" value={r.openedAtLabel ?? "—"} />
-                      <Row label="Starting cash" value={formatCents(r.startingCashMinor)} />
-                      <Row label="Dropped to safe" value={formatCents(r.droppedMinor)} />
-                      <Row label="Expected close" value={formatCents(r.expectedCloseMinor)} />
-                    </dl>
+                    <>
+                      <dl className="mt-3 space-y-1 text-xs">
+                        <Row label="Opened by" value={r.openedByLabel ?? "—"} />
+                        <Row label="Opened" value={r.openedAtLabel ?? "—"} />
+                        <Row label="Starting cash" value={formatCents(r.startingCashMinor)} />
+                        <Row label="Dropped to safe" value={formatCents(r.droppedMinor)} />
+                        {r.expectedCloseMinor != null && (
+                          <Row label="Expected close" value={formatCents(r.expectedCloseMinor)} />
+                        )}
+                      </dl>
+
+                      {r.dropsToday.length > 0 && (
+                        <div className="mt-3 rounded-lg border border-[var(--admin-border)] bg-[var(--admin-surface)] px-3 py-2">
+                          <div className="mb-1 text-xs font-semibold text-[var(--admin-text-muted)]">
+                            Drops today ({r.dropsToday.length})
+                          </div>
+                          <ul className="space-y-1 text-xs">
+                            {r.dropsToday.map((d) => (
+                              <li key={d.id} className="flex items-center justify-between gap-2">
+                                <span className="truncate text-[var(--admin-text-faint)]">
+                                  {d.atLabel} · {d.window}
+                                  {d.byLabel ? ` · ${d.byLabel}` : ""}
+                                </span>
+                                <span className="whitespace-nowrap font-medium text-[var(--admin-text)]">
+                                  {formatCents(d.amountMinor)}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </>
                   ) : (
                     <p className="mt-3 text-xs text-[var(--admin-text-muted)]">
-                      No open shift. Drawers are opened at the register.
+                      No open shift. Count in a starting float to open this drawer.
                     </p>
                   )}
+
+                  <RegisterControls register={r} employees={employees} />
                 </Card>
               ))}
             </div>
@@ -405,6 +439,8 @@ function activityIcon(kind: ActivityKind): string {
       return "✔️";
     case "clock_in":
       return "🕒";
+    case "drawer_drop":
+      return "🔽";
     default:
       return "•";
   }

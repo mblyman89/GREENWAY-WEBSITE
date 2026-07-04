@@ -133,6 +133,32 @@ term is "Shifts Summary"; Square calls it register/team activity). Route stays `
 
 ---
 
+## 5b. Premium manager cash controls (follow-up slice)
+
+Owner feedback after review: an open drawer showed up but there was **no way to
+close it** from the console, and the command center should carry premium cash
+controls. Added — all reusing the EXISTING server actions / store functions and
+real tables (no new backend contract, no fabricated data):
+
+- **Open drawer** (idle register) — count-in the starting float by denomination,
+  pre-labelled with the register's standard float. → `openDrawerAction`.
+- **Cash drop to safe** (open register) — amount + window (afternoon/night/other)
+  + dropped-by/witnessed-by + notes. → `recordDropAction` (real `drawer_drops`).
+- **Close drawer** (open register) — **blind** denomination count-out (expected /
+  variance intentionally hidden until reconcile). → `closeDrawerAction`.
+- **Drops-today detail** on each open register card (real `dropsForSession`).
+- **Live count total** as the manager types — new client component
+  `CountGrid.tsx` (the only client piece; server actions still read the same
+  denomination field names off FormData).
+- **Employee attribution pickers** (real `listEmployees`), and `opened_by` /
+  `closed_by` / drop actors now resolve to **employee names** (were raw UUIDs).
+- Cash drops now also appear in the **live activity feed**.
+
+New files: `src/components/admin/registers/CountGrid.tsx`,
+`src/components/admin/registers/RegisterControls.tsx`. Controls are gated by the
+page's existing `orders.manage` requirement; reconcile/verify remain
+`inventory.manage`. All `new Date()` logic stays server-side.
+
 ## 6. Verification & handoff
 - `npx tsc --noEmit -p tsconfig.json` → `npx eslint <changed>` → `npx next build` → `rm -rf .next`.
 - Commit on `feat/cash-management-page`; update PR #238; report handoff-ready.
