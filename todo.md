@@ -221,7 +221,17 @@ see `docs/COMMAND_CENTER_ENHANCEMENTS_TASKLIST.md`.
 - [x] Verify: tsc 0 · eslint 0 (0 warnings) · next build OK · .next removed (disk 90%, held). Commit f073400, pushed to feat/kb-hardening-v2.
 - [x] Roadmap + todo marked SHIPPED; 0089 added to owner MANUAL steps.
 
-> ⏸️ STOP POINT (per owner directive): slices 2/3/5 done. Do NOT build Slice 4 yet — report to owner + brief them on exactly what Slice 4 will contain, get their input FIRST.
+> ✅ STOP POINT CLEARED: owner briefed on Slice 4 and gave direction (facts + FAQ + owner-editable). Slice 4 built below.
 
-### Slice 4 — Store/brand voice & FAQ pack (LAST, own slice)
-- [ ] Define Greenway store voice + curated FAQ pack for grounding; admin + verify
+### Slice 4 — Store/brand voice & FAQ pack (LAST, own slice)  [SHIPPED]
+> OWNER-CONFIRMED FACTS (verbatim, do NOT guess): Hours 8am–11pm every day. Address: 4851 Geiger Rd SE, Port Orchard, WA 98367. Phone: 360-443-6988. Payment: CASH ONLY; on-site ATM $2.50 fee. Delivery: NONE (illegal in WA). Price-match → mirrored from PriceMatchContent.tsx. Loyalty earn rate → LIVE from loyalty_config via getConfig() (NOT hardcoded). Returns → from src/content/faq.ts (WAC 314-55-079, 15 days). Owner can ADD facts/FAQs manually. Voice preserved.
+- [x] RESEARCH (never guessed): loyalty earn rate = loyalty_config (getConfig, owner-editable, live-composed); price-match terms = PriceMatchContent.tsx (8 terms, Port Orchard); returns + all Q&A = src/content/faq.ts; hours/address/phone owner-confirmed. FLAGGED site typo: static FAQ price-match answer says "Uncle Ike's"/"Seattle" (copy-paste from another shop) — seed uses correct Greenway/Port Orchard, owner should fix site copy.
+- [x] Migration 0090_kb_store_voice_faq.sql: kb_store_facts (upsert on key) + kb_faqs (upsert on slug). Idempotent, non-destructive, RLS is_staff, trigger, status checks, indexes. MANUAL apply.
+- [x] seed.ts: SeedStoreFact + SeedFaq types + SEED_STORE_FACTS (6) + SEED_FAQS (17). Compliance 0 blocking (5 non-blocking price/loyalty "heads-up" warns inherent to topic — documented).
+- [x] store.ts: counts (storeFacts, faqs) + seed upserts (r10/r11, degrade pre-0090) + full CRUD both (listFull/listActive/get/upsert/setActive).
+- [x] retrieval.ts: NEW store-wide buildStoreContext() (distinct from per-SKU buildGroundedFacts) — loads facts+FAQs (DB→seed), stitches LIVE loyalty rate onto loyalty FAQ, kb:fact:<key>/kb:faq:<slug> provenance. For future concierge (Slice 79).
+- [x] health.ts: storeFactCoverage + faqCoverage.
+- [x] admin: /admin/knowledge-base/about (facts add/edit/hide) + /admin/knowledge-base/faqs (add/edit/hide) + 2 KB landing nav cards. actions.ts: 4 audited server actions.
+- [x] docs/KB_STORE_VOICE_FAQ_SOURCES.md (sources + flagged site typo).
+- [x] Verify: tsc 0 · eslint 0 · next build OK (both routes present) · .next removed · compliance 0 blocking.
+- [ ] MERGE whole feat/kb-hardening-v2 branch (PR → squash) so owner can move on

@@ -30,7 +30,7 @@ enjoyable and a little funny, **but still professional**. Curated **quality over
 1. **Effects / experience vocabulary** (culture voice, compliance-gated) — **SHIPPED**
 2. **Consumption methods / product formats** — deep, Washington-State-specific research — **SHIPPED**
 3. **Compliance rules in the KB** — surfaced helpfully to keep customers safe — **SHIPPED**
-4. *(item 4 — store/brand voice & FAQ pack)* — its **own slice, LAST**, after 1/2/3/5
+4. **Store/brand voice & FAQ pack** — its **own slice, LAST**, after 1/2/3/5 — **SHIPPED**
 5. **Terpene → aroma cross-map enrichment** — **SHIPPED**
 
 > Build order: **1 → 2 → 3 → 5 → 4** (item 4 is explicitly last).
@@ -223,11 +223,48 @@ successfully · `.next` removed (disk discipline).
 
 ---
 
-## Slice 4 — Store/brand voice & FAQ pack — NOT STARTED (report to owner FIRST)
+## Slice 4 — Store/brand voice & FAQ pack — SHIPPED
 
-LAST slice by direction. Curated house voice + FAQ pack for grounding. **The owner asked to be
-briefed on exactly what Slice 4 will contain before it is built** — do NOT build it until that
-conversation happens.
+**Gap it filled (verified).** The KB taught the AI the product world but nothing about GREENWAY
+itself — so "you" questions (hours, payment, delivery, price match, loyalty, returns) had no
+grounded source. Slice 4 adds an owner-extendable store-facts store + a curated FAQ pack.
+
+**Owner-confirmed / site-verified facts (nothing guessed).** Hours 8am–11pm daily (closed
+Christmas). Address 4851 Geiger Rd SE, Port Orchard, WA 98367. Phone 360-443-6988. Cash only + ATM
+($2.50 fee). No delivery (illegal in WA). Price-match terms mirrored from the price-match page;
+returns from the site FAQ (WAC 314-55-079, 15 days, original packaging + legible lot/batch +
+receipt). See `docs/KB_STORE_VOICE_FAQ_SOURCES.md` for every source.
+
+**Live, never hard-coded.** The loyalty earn rate lives in `loyalty_config` (owner-editable). The
+loyalty FAQ carries NO hard-coded rate — `retrieval.ts` composes the live rate from `getConfig()`
+at grounding time, so the concierge can never quote a stale number.
+
+**Owner-extendable.** The owner can ADD / EDIT / HIDE both store facts (mission, about-us, parking,
+discounts, ADA — anything) and FAQs from the admin UI without touching code.
+
+**What shipped.**
+1. **Migration 0090** (`0090_kb_store_voice_faq.sql`, MANUAL, idempotent, non-destructive):
+   `kb_store_facts` (upsert on `key`) + `kb_faqs` (upsert on `slug`), both with drafts/provenance
+   parity, RLS `is_staff()`, `set_updated_at()` trigger, status checks, indexes.
+2. **seed.ts** — `SeedStoreFact` + `SeedFaq` types; `SEED_STORE_FACTS` (6) + `SEED_FAQS` (17). All
+   pass compliance **0 blocking** (5 non-blocking price/loyalty "heads-up" warnings are inherent to
+   the price-match/loyalty topic — documented in the sources doc).
+3. **store.ts** — counts + seed upserts (r10/r11, degrade pre-0090) + full CRUD for both.
+4. **retrieval.ts** — new store-wide `buildStoreContext()` (distinct from per-SKU
+   `buildGroundedFacts()`), stitches the live loyalty rate onto the loyalty FAQ,
+   `kb:fact:<key>` / `kb:faq:<slug>` provenance. For a future concierge (Slice 79).
+5. **health.ts** — `storeFactCoverage` + `faqCoverage`.
+6. **admin** — `/admin/knowledge-base/about` (store facts, add/edit/hide) +
+   `/admin/knowledge-base/faqs` (FAQ, add/edit/hide) + two KB landing nav cards.
+7. **docs** — `docs/KB_STORE_VOICE_FAQ_SOURCES.md` (sources + the flagged "Uncle Ike's / Seattle"
+   copy error in the site's static FAQ, which the seed does NOT propagate).
+
+**Verified.** `tsc --noEmit` clean · `eslint` 0/0 · `next build` compiled (both new routes present)
+· `.next` removed. Compliance gate: **0 blocking** across all facts + FAQs.
+
+> ⚠️ **Owner follow-up (not a code issue):** the static site FAQ price-match answer
+> (`src/content/faq.ts`) still says "Uncle Ike's" / "Seattle" — a copy-paste from another shop. The
+> KB seed uses the correct Greenway / Port Orchard wording; recommend fixing the site copy too.
 
 ---
 
@@ -242,15 +279,19 @@ The agent never applies migrations. After reviewing/merging this branch:
    - `0087_kb_product_formats.sql` (Slice 2).
    - `0088_kb_compliance_rules.sql` (Slice 3).
    - `0089_kb_terpene_aroma_crossmap.sql` (Slice 5) — adds `aroma_families` to `kb_terpenes`.
+   - `0090_kb_store_voice_faq.sql` (Slice 4) — `kb_store_facts` + `kb_faqs`.
 2. **Reseed the KB** from `/admin/knowledge-base/setup` (the "Seed knowledge base" action). This
    idempotently upserts the 8 cannabinoids **with the new psychoactive/non-psychoactive labels**,
-   the **16 effects**, the **14 product formats**, the **8 WA compliance/safety rules**, and the
-   **aroma-family tags on all 22 terpenes** (Slice 5). It never overwrites curated edits (upsert on
-   `slug`). If 0089 hasn't been applied yet, the reseed still succeeds and simply warns that the
-   terpene aroma cross-map was skipped — apply 0089 and reseed to light it up.
-3. **Confirm** the new pages render: `/admin/knowledge-base/cannabinoids` (new labels),
-   `/admin/knowledge-base/effects` (16 cards), `/admin/knowledge-base/formats` (14 cards), and
-   `/admin/knowledge-base/rules` (8 cards). The KB landing shows live counts.
+   the **16 effects**, the **14 product formats**, the **8 WA compliance/safety rules**, the
+   **aroma-family tags on all 22 terpenes** (Slice 5), the **6 store facts**, and the **17 FAQs**
+   (Slice 4). It never overwrites curated edits (upsert on `slug`/`key`). If a migration hasn't been
+   applied yet, the reseed still succeeds and simply warns that that piece was skipped — apply it
+   and reseed to light it up.
+3. **Confirm** the pages render: `/admin/knowledge-base/cannabinoids` (new labels),
+   `/admin/knowledge-base/effects` (16 cards), `/admin/knowledge-base/formats` (14 cards),
+   `/admin/knowledge-base/rules` (8 cards), `/admin/knowledge-base/about` (store facts,
+   owner-editable), and `/admin/knowledge-base/faqs` (FAQ pack, owner-editable). The KB landing
+   shows live counts.
 
 > Standing rule reminder: `main` is branch-protected (branch → PR → squash-merge). Money is in
 > minor units (cents). AI copy is drafts-only and compliance-gated. Never overwrite curated data.
