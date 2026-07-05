@@ -15,6 +15,7 @@ import {
   SEED_TERPENES,
   SEED_CANNABINOIDS,
   SEED_EFFECTS,
+  SEED_PRODUCT_FORMATS,
   SEED_CATEGORIES,
   SEED_BANNED_PHRASES,
 } from "./seed";
@@ -28,6 +29,8 @@ export type KbCounts = {
   cannabinoids: number;
   /** Experiential-effect vocabulary (migration 0086). */
   effects: number;
+  /** Product-format / consumption-method vocabulary (migration 0087). */
+  productFormats: number;
   categories: number;
   brands: number;
   banned: number;
@@ -55,6 +58,7 @@ export async function getKbCounts(): Promise<KbCounts> {
     terpenes: 0,
     cannabinoids: 0,
     effects: 0,
+    productFormats: 0,
     categories: 0,
     brands: 0,
     banned: 0,
@@ -64,12 +68,13 @@ export async function getKbCounts(): Promise<KbCounts> {
     notesMigrated: false,
   };
   if (!isSupabaseServiceConfigured) return empty;
-  const [strains, terpenes, cannabinoids, effects, categories, brands, banned, notes, nonCannabis] =
+  const [strains, terpenes, cannabinoids, effects, productFormats, categories, brands, banned, notes, nonCannabis] =
     await Promise.all([
       tableCount("kb_strains"),
       tableCount("kb_terpenes"),
       tableCount("kb_cannabinoids"),
       tableCount("kb_effects"),
+      tableCount("kb_product_formats"),
       tableCount("kb_category_terms"),
       tableCount("kb_brands"),
       tableCount("kb_banned_phrases"),
@@ -82,6 +87,7 @@ export async function getKbCounts(): Promise<KbCounts> {
     terpenes: terpenes ?? 0,
     cannabinoids: cannabinoids ?? 0,
     effects: effects ?? 0,
+    productFormats: productFormats ?? 0,
     categories: categories ?? 0,
     brands: brands ?? 0,
     banned: banned ?? 0,
@@ -124,7 +130,7 @@ export async function listKbNonCannabis(limit = 1000): Promise<KbNonCannabisRow[
 export type SeedReport = {
   ok: boolean;
   message: string;
-  inserted: { strains: number; terpenes: number; cannabinoids: number; effects: number; categories: number; banned: number; productCategories: number };
+  inserted: { strains: number; terpenes: number; cannabinoids: number; effects: number; productFormats: number; categories: number; banned: number; productCategories: number };
 };
 
 /**
@@ -134,7 +140,7 @@ export type SeedReport = {
  */
 export async function seedKnowledgeBase(actorId: string | null): Promise<SeedReport> {
   if (!isSupabaseServiceConfigured) {
-    return { ok: false, message: "The database isn't connected yet.", inserted: { strains: 0, terpenes: 0, cannabinoids: 0, effects: 0, categories: 0, banned: 0, productCategories: 0 } };
+    return { ok: false, message: "The database isn't connected yet.", inserted: { strains: 0, terpenes: 0, cannabinoids: 0, effects: 0, productFormats: 0, categories: 0, banned: 0, productCategories: 0 } };
   }
   const admin = createSupabaseAdminClient();
 
@@ -193,6 +199,23 @@ export async function seedKnowledgeBase(actorId: string | null): Promise<SeedRep
     aliases: e.aliases,
     sources: e.sources,
     confidence: e.confidence,
+    source: "manual",
+    status: "published",
+    active: true,
+    created_by: actorId,
+    updated_by: actorId,
+  }));
+  const productFormatRows = SEED_PRODUCT_FORMATS.map((f) => ({
+    slug: f.slug,
+    name: f.name,
+    category: f.category,
+    definition: f.definition,
+    consumption: f.consumption,
+    potency_note: f.potency_note,
+    house_note: f.house_note,
+    aliases: f.aliases,
+    sources: f.sources,
+    confidence: f.confidence,
     source: "manual",
     status: "published",
     active: true,
@@ -285,11 +308,23 @@ export async function seedKnowledgeBase(actorId: string | null): Promise<SeedRep
     effectsSeeded = effectRows.length;
   }
 
+  // Product-format vocabulary lives behind migration 0087. Degrade gracefully
+  // so seeding still works before the owner applies 0087.
+  let productFormatsSeeded = 0;
+  const r8 = await admin
+    .from("kb_product_formats")
+    .upsert(productFormatRows, { onConflict: "slug" });
+  if (r8.error) {
+    warnings.push(`product formats not seeded (apply migration 0087): ${r8.error.message}`);
+  } else {
+    productFormatsSeeded = productFormatRows.length;
+  }
+
   if (errors.length) {
     return {
       ok: false,
       message: `Some data couldn't be saved. Make sure the knowledge-base setup has been run. (${errors.join("; ")})`,
-      inserted: { strains: 0, terpenes: 0, cannabinoids: 0, effects: 0, categories: 0, banned: 0, productCategories: 0 },
+      inserted: { strains: 0, terpenes: 0, cannabinoids: 0, effects: 0, productFormats: 0, categories: 0, banned: 0, productCategories: 0 },
     };
   }
   const okMessage =
@@ -303,6 +338,7 @@ export async function seedKnowledgeBase(actorId: string | null): Promise<SeedRep
       terpenes: terpeneRows.length,
       cannabinoids: cannabinoidsSeeded,
       effects: effectsSeeded,
+      productFormats: productFormatsSeeded,
       categories: categoryRows.length,
       banned: bannedRows.length,
       productCategories: productCategoriesSeeded,
@@ -720,6 +756,137 @@ export async function setEffectActive(
     const admin = createSupabaseAdminClient();
     const { error } = await admin
       .from("kb_effects")
+      .update({ active, updated_by: actorId })
+      .eq("slug", slug.trim().toLowerCase());
+    if (error) return { ok: false, message: error.message };
+    return { ok: true, message: active ? "Shown." : "Hidden." };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Unexpected error." };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Product formats / consumption methods (migration 0087). Mirrors the effects
+// CRUD above: read-only list/get for the admin card, plus idempotent upsert and
+// active toggle for future curation. All reads degrade to []/null pre-migration.
+// ---------------------------------------------------------------------------
+export type KbProductFormatRow = {
+  id: string;
+  slug: string;
+  name: string;
+  category: string | null;
+  definition: string | null;
+  consumption: string | null;
+  potency_note: string | null;
+  house_note: string | null;
+  aliases: string[];
+  sources: string[];
+  confidence: number | null;
+  source: string | null;
+  status: string;
+  active: boolean;
+};
+
+const KB_PRODUCT_FORMAT_COLUMNS =
+  "id,slug,name,category,definition,consumption,potency_note,house_note,aliases,sources,confidence,source,status,active";
+
+/** List all product-format rows (active first, alphabetical). Degrades to []. */
+export async function listKbProductFormatsFull(limit = 200): Promise<KbProductFormatRow[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("kb_product_formats")
+      .select(KB_PRODUCT_FORMAT_COLUMNS)
+      .order("active", { ascending: false })
+      .order("name", { ascending: true })
+      .limit(limit);
+    if (error || !data) return [];
+    return data as unknown as KbProductFormatRow[];
+  } catch {
+    return [];
+  }
+}
+
+/** Fetch one product format by slug. Returns null if missing. */
+export async function getKbProductFormatBySlug(slug: string): Promise<KbProductFormatRow | null> {
+  if (!isSupabaseServiceConfigured) return null;
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("kb_product_formats")
+      .select(KB_PRODUCT_FORMAT_COLUMNS)
+      .eq("slug", slug)
+      .maybeSingle();
+    if (error || !data) return null;
+    return data as unknown as KbProductFormatRow;
+  } catch {
+    return null;
+  }
+}
+
+export type UpsertKbProductFormatInput = {
+  slug: string;
+  name: string;
+  category?: string | null;
+  definition?: string | null;
+  consumption?: string | null;
+  potency_note?: string | null;
+  house_note?: string | null;
+  aliases?: string[];
+  sources?: string[];
+  confidence?: number | null;
+};
+
+/** Idempotent upsert of a single product format on slug. Curated edits stay published. */
+export async function upsertKbProductFormat(
+  input: UpsertKbProductFormatInput,
+  actorId: string | null,
+): Promise<{ ok: boolean; message: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, message: "The database isn't connected yet." };
+  const slug = input.slug.trim().toLowerCase();
+  if (!slug) return { ok: false, message: "A slug is required." };
+  if (!input.name.trim()) return { ok: false, message: "A name is required." };
+  try {
+    const admin = createSupabaseAdminClient();
+    const { error } = await admin.from("kb_product_formats").upsert(
+      {
+        slug,
+        name: input.name.trim(),
+        category: input.category?.trim() || null,
+        definition: input.definition?.trim() || null,
+        consumption: input.consumption?.trim() || null,
+        potency_note: input.potency_note?.trim() || null,
+        house_note: input.house_note?.trim() || null,
+        aliases: input.aliases ?? [],
+        sources: input.sources ?? [],
+        confidence: input.confidence ?? null,
+        source: "manual",
+        status: "published",
+        updated_by: actorId,
+      },
+      { onConflict: "slug" },
+    );
+    if (error) {
+      return { ok: false, message: `Couldn't save (apply migration 0087 if needed): ${error.message}` };
+    }
+    return { ok: true, message: `Saved ${input.name.trim()}.` };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Unexpected error." };
+  }
+}
+
+/** Toggle a product format active/hidden. */
+export async function setProductFormatActive(
+  slug: string,
+  active: boolean,
+  actorId: string | null,
+): Promise<{ ok: boolean; message: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, message: "The database isn't connected yet." };
+  try {
+    const admin = createSupabaseAdminClient();
+    const { error } = await admin
+      .from("kb_product_formats")
       .update({ active, updated_by: actorId })
       .eq("slug", slug.trim().toLowerCase());
     if (error) return { ok: false, message: error.message };

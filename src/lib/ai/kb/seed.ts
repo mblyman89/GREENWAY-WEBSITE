@@ -73,6 +73,25 @@ export type SeedEffect = {
   confidence: number;
 };
 
+export type SeedProductFormat = {
+  slug: string;
+  name: string;
+  /** UI grouping ONLY, not a medical category: inhaled | ingested | topical. */
+  category: "inhaled" | "ingested" | "topical";
+  /** Factual, non-medical definition of the physical form. Compliance-gated on surface. */
+  definition: string;
+  /** Factual description of HOW it's used (smoked/eaten/applied/sublingual). NOT a dosing directive. */
+  consumption: string;
+  /** WA-verified typical potency band (market fact). NEVER a dosing instruction. */
+  potency_note: string;
+  /** House-voiced budtender blurb (fun-but-professional, non-medical). Compliance-gated on surface. */
+  house_note: string;
+  /** Neutral synonyms / adjacent terms that map to this format (for matching category/type text). */
+  aliases: string[];
+  sources: string[];
+  confidence: number;
+};
+
 export type SeedCategory = {
   category: string;
   display_name: string;
@@ -501,6 +520,261 @@ export const SEED_EFFECTS: SeedEffect[] = [
       "startling; more 'ooh, nice' than anything else.",
     aliases: [],
     sources: [`${LEAFLY_EFFECTS}/relaxed`],
+    confidence: 0.88,
+  },
+];
+
+// ---------------------------------------------------------------------------
+// Product formats / consumption methods — FACTUAL form + use + measured
+// potency band. Effects (SEED_EFFECTS) = how it FEELS; formats = what it IS and
+// how you USE it. Every potency band and consumption fact is WA-verified from
+// WSLCB "Types of Products", WAC 314-55-095 (edible cap), and RCW possession
+// limits — see docs/KB_PRODUCT_FORMATS_SEED_SOURCES.md.
+//
+// COMPLIANCE (WA I-502): descriptive only. No medical/therapeutic claims, no
+// dosing directives ("take X"). Onset statements ("comes on more slowly than
+// inhalation") describe how ingestion differs, not a health benefit. All prose
+// is compliance-gated before it can surface in retrieval.
+// ---------------------------------------------------------------------------
+const WSLCB_PRODUCTS = "https://lcb.wa.gov/education/types_of_products";
+const WAC_EDIBLE_CAP = "https://www.networkforphl.org/resources/state-regulation-of-edible-cannabis-products/";
+
+export const SEED_PRODUCT_FORMATS: SeedProductFormat[] = [
+  // ---- Inhaled -------------------------------------------------------------
+  {
+    slug: "flower",
+    name: "Loose Flower",
+    category: "inhaled",
+    definition:
+      "Dried, well-aged cannabis buds — the OG format, sold loose by weight (gram, eighth, quarter, " +
+      "ounce). What most people picture when they picture weed.",
+    consumption:
+      "Smoked in a joint, blunt, bowl/pipe, or bong, or run through a dry-flower vaporizer.",
+    potency_note: "Varies by cultivar; commonly around 15–25%+ THC on the Washington shelf.",
+    house_note:
+      "The classic for a reason. Grind it, roll it or pack a bowl, and you're in full control of the " +
+      "ritual — made for folks who love the whole hands-on experience and the full aroma of the bud.",
+    aliases: ["bud", "loose flower", "dried flower", "eighth", "nugs", "herb", "smokable flower"],
+    sources: [WSLCB_PRODUCTS],
+    confidence: 0.97,
+  },
+  {
+    slug: "preroll",
+    name: "Pre-Roll",
+    category: "inhaled",
+    definition:
+      "Flower already ground and rolled into a joint (sometimes a blunt) — ready to spark, no rolling " +
+      "skills required.",
+    consumption: "Smoked straight out of the package; light one end and go.",
+    potency_note: "Tracks its flower — commonly around 15–25%+ THC unless it's an infused pre-roll.",
+    house_note:
+      "The grab-and-go move. Perfect when you don't feel like breaking out the grinder, or for sharing " +
+      "on a walk. All the flower experience, zero prep.",
+    aliases: ["pre-roll", "pre roll", "joint", "pre-rolled", "prerolls", "doobie"],
+    sources: [WSLCB_PRODUCTS],
+    confidence: 0.96,
+  },
+  {
+    slug: "infused-preroll",
+    name: "Infused Pre-Roll",
+    category: "inhaled",
+    definition:
+      "A pre-roll boosted with concentrate and/or kief — coated, cored, or dusted with extract for a " +
+      "stronger, more potent smoke than flower alone.",
+    consumption: "Smoked like any pre-roll; light and enjoy — usually a slower, harder-hitting burn.",
+    potency_note: "Runs noticeably HIGHER THC than the base flower thanks to the added concentrate (WSLCB).",
+    house_note:
+      "The pre-roll's turbo cousin. When a regular joint feels a little too polite, this is the one. " +
+      "One for seasoned heads — it earns its keep.",
+    aliases: ["infused pre-roll", "infused joint", "infused preroll", "diamond-infused", "kief-coated"],
+    sources: [WSLCB_PRODUCTS],
+    confidence: 0.94,
+  },
+  {
+    slug: "vape-cartridge",
+    name: "Vape Cartridge",
+    category: "inhaled",
+    definition:
+      "A cartridge of cannabis oil (distillate, live-resin, or full-spectrum) that screws onto a " +
+      "battery. Clean, portable, and no flame required.",
+    consumption: "Attach to a 510-thread battery and inhale; the coil warms the oil into vapor.",
+    potency_note: "Extract-based, so typically high THC — commonly well above flower.",
+    house_note:
+      "The discreet everyday driver. Slips in a pocket, no smoke smell to speak of, and true-to-strain " +
+      "flavor if you grab a live-resin cart. Low fuss, high reward.",
+    aliases: ["cart", "cartridge", "510 cart", "vape cart", "oil cart", "vape pen cartridge"],
+    sources: [WSLCB_PRODUCTS],
+    confidence: 0.95,
+  },
+  {
+    slug: "disposable-vape",
+    name: "Disposable Vape",
+    category: "inhaled",
+    definition:
+      "An all-in-one vape pen with the battery and oil built in — nothing to screw together, nothing " +
+      "to recharge past its life.",
+    consumption: "Inhale straight from the pen; when it's empty, it's done.",
+    potency_note: "Extract-based, so typically high THC — similar band to cartridges.",
+    house_note:
+      "The zero-setup option. Made for travel or as a starter — pull it out of the box and you're " +
+      "already going. No battery shopping, no thread mismatches.",
+    aliases: ["disposable", "all-in-one", "aio", "disposable pen", "throwaway vape"],
+    sources: [WSLCB_PRODUCTS],
+    confidence: 0.93,
+  },
+  {
+    slug: "kief-hash",
+    name: "Kief / Hash",
+    category: "inhaled",
+    definition:
+      "The trichome heads themselves — sifted (kief) or pressed (hash). One of the oldest concentrates " +
+      "on earth and a step up in potency from flower.",
+    consumption: "Sprinkled on top of a bowl, added to a joint, or pressed and smoked/vaped.",
+    potency_note: "Commonly around 30–60% THC (WSLCB) — meaningfully stronger than flower.",
+    house_note:
+      "Old-school connoisseur territory. A little dusting on a bowl turns an ordinary session into a " +
+      "special one. Respect the potency and go easy the first time.",
+    aliases: ["kief", "hash", "hashish", "pollen", "dry sift", "pressed hash"],
+    sources: [WSLCB_PRODUCTS],
+    confidence: 0.92,
+  },
+  {
+    slug: "concentrate",
+    name: "Concentrate (Shatter / Wax / Budder)",
+    category: "inhaled",
+    definition:
+      "Solvent- or heat-extracted cannabis concentrate — shatter, wax, budder, crumble, or dabs. The " +
+      "high-octane end of the inhaled shelf.",
+    consumption: "Vaporized or \u201cdabbed\u201d on a dab rig / e-rig, or added to a bowl or joint.",
+    potency_note: "The strongest everyday form — commonly around 60–90% THC (WSLCB).",
+    house_note:
+      "Not messing around. This is the deep end of the pool — big flavor, big potency, made for " +
+      "experienced dabbers with the right gear. Begin with a rice-grain dab; you can always add more.",
+    aliases: ["shatter", "wax", "budder", "crumble", "dabs", "bho", "concentrates", "extract"],
+    sources: [WSLCB_PRODUCTS],
+    confidence: 0.94,
+  },
+  {
+    slug: "live-resin-rosin",
+    name: "Live Resin / Live Rosin",
+    category: "inhaled",
+    definition:
+      "A terpene-forward concentrate made from fresh-frozen plants to capture more of the living aroma. " +
+      "Live resin uses solvent; live rosin is solventless (heat + pressure).",
+    consumption: "Dabbed/vaporized on a rig, or found inside premium live-resin vape carts.",
+    potency_note: "High-THC concentrate band; prized less for raw numbers than for full-flavor terpenes.",
+    house_note:
+      "The flavor-chaser's pick. If terps are your thing, this is where the plant tastes most alive — " +
+      "loud, bright, and true-to-strain. Solventless rosin is the connoisseur's flex.",
+    aliases: ["live resin", "live rosin", "rosin", "fresh frozen", "solventless", "sauce", "diamonds"],
+    sources: [WSLCB_PRODUCTS],
+    confidence: 0.9,
+  },
+  // ---- Ingested ------------------------------------------------------------
+  {
+    slug: "edible",
+    name: "Edible",
+    category: "ingested",
+    definition:
+      "Cannabis-infused food — gummies, chocolate, mints, and baked goods. You eat it; your body does " +
+      "the rest.",
+    consumption:
+      "Eaten and digested. Effects come on more slowly than inhalation and tend to last longer — a " +
+      "factual difference in how ingestion works, not a health claim.",
+    potency_note:
+      "Washington caps infused edibles at ten milligrams of active THC in a single serving, and one " +
+      "hundred milligrams total in a package (WAC 314-55-095).",
+    house_note:
+      "Low-key and long-lasting. No smoke, no gear — just a tasty bite. The golden rule: begin with a " +
+      "single serving and give it plenty of time before reaching for more, because edibles like to " +
+      "sneak up on you.",
+    aliases: ["edibles", "gummies", "gummy", "chocolate", "mints", "chews", "baked goods"],
+    sources: [WSLCB_PRODUCTS, WAC_EDIBLE_CAP],
+    confidence: 0.96,
+  },
+  {
+    slug: "beverage",
+    name: "Beverage",
+    category: "ingested",
+    definition:
+      "A cannabis-infused drink — sodas, seltzers, teas, elixirs, and shots. An edible you sip.",
+    consumption:
+      "Drunk and digested; like other edibles, onset is slower than inhalation — a factual property, " +
+      "not a benefit claim.",
+    potency_note:
+      "Falls under the WA edible rules: up to ten milligrams of active THC in a single serving, and one " +
+      "hundred milligrams total in a package (WAC 314-55-095).",
+    house_note:
+      "The social sipper. Great when you want something in hand that isn't a drink-drink. Same edible " +
+      "wisdom applies — pace yourself and let it settle before topping off.",
+    aliases: ["beverage", "drink", "seltzer", "soda", "infused drink", "elixir", "shot", "tea"],
+    sources: [WSLCB_PRODUCTS, WAC_EDIBLE_CAP],
+    confidence: 0.93,
+  },
+  {
+    slug: "capsule",
+    name: "Capsule / Tablet",
+    category: "ingested",
+    definition:
+      "Cannabis in a swallowable pill or softgel — precise, familiar, and about as low-drama as a " +
+      "format gets.",
+    consumption: "Swallowed with water like any capsule; digested, so onset is slower than inhalation.",
+    potency_note: "An ingested format; each capsule is measured, and packages follow WA edible limits.",
+    house_note:
+      "The no-frills, no-flavor route. If you'd rather skip smoke, sweets, and fuss entirely, a capsule " +
+      "just gets it done. Predictable and pocket-friendly.",
+    aliases: ["capsule", "capsules", "softgel", "softgels", "tablet", "pill", "caps"],
+    sources: [WSLCB_PRODUCTS],
+    confidence: 0.9,
+  },
+  {
+    slug: "tincture",
+    name: "Tincture",
+    category: "ingested",
+    definition:
+      "A liquid cannabis extract in a dropper bottle — flavored or plain, taken drop by drop.",
+    consumption:
+      "Placed under the tongue (sublingual) and held, or added to food/drink. Sublingual tends to come " +
+      "on faster than a food edible — a factual difference in absorption.",
+    potency_note: "Measured per dropper; an ingested/sublingual format under WA rules.",
+    house_note:
+      "The precision tool. The dropper lets you dial things in easily, and the sublingual route is a " +
+      "nice middle ground between a quick vape and a slow gummy. Clean and controllable.",
+    aliases: ["tincture", "tinctures", "dropper", "sublingual", "drops", "oil dropper"],
+    sources: [WSLCB_PRODUCTS],
+    confidence: 0.91,
+  },
+  // ---- Topical -------------------------------------------------------------
+  {
+    slug: "topical",
+    name: "Topical",
+    category: "topical",
+    definition:
+      "Cannabis-infused lotion, balm, salve, or cream meant for the skin — a body-care format, not a " +
+      "smoke-or-swallow one.",
+    consumption: "Rubbed onto the skin where you want it. Applied topically, not ingested or inhaled.",
+    potency_note: "A skin-applied format; not measured in the smoke/edible potency bands.",
+    house_note:
+      "The spa-day side of the shelf. Botanical scents, smooth textures, and a totally different vibe " +
+      "from the rest of the menu. (Scent and texture only — we don't make skin or health claims.)",
+    aliases: ["topical", "topicals", "lotion", "balm", "salve", "cream", "ointment", "roll-on", "bath soak"],
+    sources: [WSLCB_PRODUCTS],
+    confidence: 0.92,
+  },
+  {
+    slug: "transdermal-patch",
+    name: "Transdermal Patch",
+    category: "topical",
+    definition:
+      "An adhesive patch worn on the skin that releases cannabinoids gradually over time — set-it-and-" +
+      "forget-it in patch form.",
+    consumption: "Applied to clean skin and worn; delivered through the skin over a stretch of time.",
+    potency_note: "A skin-delivered format; measured per patch rather than in smoke/edible bands.",
+    house_note:
+      "The steady, hands-off option. Stick it on and go about your day — nothing to hold, sip, or " +
+      "relight. A quietly clever format for folks who want simple and consistent.",
+    aliases: ["transdermal", "patch", "patches", "transdermal patch", "skin patch"],
+    sources: [WSLCB_PRODUCTS],
     confidence: 0.88,
   },
 ];

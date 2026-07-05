@@ -184,6 +184,13 @@ export default async function KnowledgeBasePage({
               accent="muted"
             />
             <KbNavCard
+              href="/admin/knowledge-base/formats"
+              title="Formats"
+              description="What each product is and how it's used — flower, vape, dabs, edibles & more, with WA-verified potency and our house voice. Reference only."
+              count={counts.productFormats}
+              accent="muted"
+            />
+            <KbNavCard
               href="/admin/inventory/noncannabis"
               title="Non-cannabis catalog"
               description="Glass, accessories, papers & devices — tracked with smart SKUs and connected to the KB."

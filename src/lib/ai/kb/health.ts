@@ -27,7 +27,7 @@
 import { listKbStrainsFull, listKbProducts, countKbProductDrafts, getKbCounts } from "./store";
 import { listBrandsWithFacts, listVendors, countBrands, countVendors } from "@/lib/vendors/store";
 import { scoreStrain, scoreBrand, scoreProduct, scoreVendor } from "./quality";
-import { SEED_CANNABINOIDS, SEED_EFFECTS } from "./seed";
+import { SEED_CANNABINOIDS, SEED_EFFECTS, SEED_PRODUCT_FORMATS } from "./seed";
 
 export type KbHealth = {
   strainCompleteness: number; // 0–100 average
@@ -48,6 +48,11 @@ export type KbHealth = {
    * are in the KB vs. the expected curated set. `expected` = the in-code seed set.
    */
   effectCoverage: { present: number; expected: number };
+  /**
+   * Product-format / consumption-method vocabulary coverage (migration 0087):
+   * how many formats are in the KB vs. the expected curated set.
+   */
+  productFormatCoverage: { present: number; expected: number };
   /**
    * Strain drafts awaiting human review (migration 0085 lifecycle). A
    * machine-suggested strain lands as status='draft' until promoted; curated
@@ -97,6 +102,7 @@ export async function getKbHealth(): Promise<KbHealth> {
     draftReviews,
     cannabinoidCoverage: { present: counts.cannabinoids, expected: SEED_CANNABINOIDS.length },
     effectCoverage: { present: counts.effects, expected: SEED_EFFECTS.length },
+    productFormatCoverage: { present: counts.productFormats, expected: SEED_PRODUCT_FORMATS.length },
     strainDrafts: strains.filter((s) => s.status === "draft").length,
     totals: {
       strains: counts.strains,

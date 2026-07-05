@@ -23,11 +23,13 @@ import {
   SEED_TERPENES,
   SEED_CANNABINOIDS,
   SEED_EFFECTS,
+  SEED_PRODUCT_FORMATS,
   SEED_CATEGORIES,
   type SeedStrain,
   type SeedTerpene,
   type SeedCannabinoid,
   type SeedEffect,
+  type SeedProductFormat,
   type SeedCategory,
 } from "./seed";
 import { STRAINS_RICH, type SeedStrainRich } from "./strains-data";
@@ -239,6 +241,73 @@ function buildEffectIndex(effects: SeedEffect[]): Map<string, SeedEffect> {
     idx.set(e.slug.toLowerCase(), e);
     idx.set(e.name.toLowerCase(), e);
     for (const a of e.aliases) idx.set(a.toLowerCase(), e);
+  }
+  return idx;
+}
+
+type ProductFormatRow = {
+  slug: string;
+  name: string;
+  category: string | null;
+  definition: string | null;
+  consumption: string | null;
+  potency_note: string | null;
+  house_note: string | null;
+  aliases: string[] | null;
+};
+
+/**
+ * Load the active, published product-format vocabulary (migration 0087). Falls
+ * back to the in-code SEED_PRODUCT_FORMATS if the table is empty / not migrated,
+ * so format grounding works on day one — mirrors loadEffects(). Reads only
+ * published rows; drafts never surface to copy.
+ */
+async function loadProductFormats(): Promise<SeedProductFormat[]> {
+  if (!isSupabaseServiceConfigured) return SEED_PRODUCT_FORMATS;
+  try {
+    const admin = createSupabaseAdminClient();
+    const cols = "slug,name,category,definition,consumption,potency_note,house_note,aliases";
+    let rows: ProductFormatRow[] | null = null;
+    const full = await admin
+      .from("kb_product_formats")
+      .select(cols)
+      .eq("active", true)
+      .eq("status", "published");
+    if (!full.error && full.data) {
+      rows = full.data as ProductFormatRow[];
+    } else {
+      const base = await admin.from("kb_product_formats").select(cols).eq("active", true);
+      if (!base.error && base.data) rows = base.data as ProductFormatRow[];
+    }
+    if (!rows || rows.length === 0) return SEED_PRODUCT_FORMATS;
+    return rows.map((r) => ({
+      slug: r.slug,
+      name: r.name,
+      category: (r.category as SeedProductFormat["category"]) ?? "inhaled",
+      definition: r.definition ?? "",
+      consumption: r.consumption ?? "",
+      potency_note: r.potency_note ?? "",
+      house_note: r.house_note ?? "",
+      aliases: r.aliases ?? [],
+      sources: [],
+      confidence: 0,
+    }));
+  } catch {
+    return SEED_PRODUCT_FORMATS;
+  }
+}
+
+/**
+ * Build a lookup from any known format token (slug, name, or alias, all
+ * normalized) to its canonical SeedProductFormat, so a product's category/type
+ * text resolves to a defined format entry.
+ */
+function buildFormatIndex(formats: SeedProductFormat[]): Map<string, SeedProductFormat> {
+  const idx = new Map<string, SeedProductFormat>();
+  for (const f of formats) {
+    idx.set(f.slug.toLowerCase(), f);
+    idx.set(f.name.toLowerCase(), f);
+    for (const a of f.aliases) idx.set(a.toLowerCase(), f);
   }
   return idx;
 }
@@ -474,12 +543,13 @@ export type GroundedFacts = {
  * notes into a compact list the model must stay within.
  */
 export async function buildGroundedFacts(facts: ProductFacts): Promise<GroundedFacts> {
-  const [strains, terpenes, cannabinoids, effectVocab, categories, brandFact, notes, kbProduct, kbCategory] =
+  const [strains, terpenes, cannabinoids, effectVocab, formatVocab, categories, brandFact, notes, kbProduct, kbCategory] =
     await Promise.all([
       loadStrains(),
       loadTerpenes(),
       loadCannabinoids(),
       loadEffects(),
+      loadProductFormats(),
       loadCategories(),
       loadBrandFact(facts.brand, facts.vendor),
       loadNotes(),
@@ -574,6 +644,38 @@ export async function buildGroundedFacts(facts: ProductFacts): Promise<GroundedF
     const vocab = [...cat.format_words, ...cat.sensory_words];
     if (vocab.length) lines.push(`Legal ${cat.display_name} descriptors you may draw from: ${vocab.join(", ")}.`);
     if (cat.notes) lines.push(`${cat.display_name} guidance: ${cat.notes}`);
+  }
+
+  // --- Product format / consumption method (kb_product_formats, migration 0087) ---
+  // Resolve the product's category/type text to a defined FORM so the model can
+  // speak accurately about what it is, how it's used, and its WA potency band.
+  // Factual/descriptive only — never dosing advice or a medical claim.
+  const formatIndex = buildFormatIndex(formatVocab);
+  const formatTokens = [facts.category, catKey, kbCategory?.slug, kbCategory?.name]
+    .filter((t): t is string => !!t)
+    .map(norm);
+  let matchedFormat: SeedProductFormat | undefined;
+  for (const tok of formatTokens) {
+    const f = formatIndex.get(tok);
+    if (f) {
+      matchedFormat = f;
+      break;
+    }
+  }
+  if (matchedFormat) {
+    sources.push(`kb:format:${matchedFormat.slug}`);
+    if (matchedFormat.definition) {
+      lines.push(`Product format "${matchedFormat.name}": ${matchedFormat.definition}`);
+    }
+    if (matchedFormat.consumption) {
+      lines.push(`${matchedFormat.name} is used by: ${matchedFormat.consumption} (factual, not dosing advice).`);
+    }
+    if (matchedFormat.potency_note) {
+      lines.push(`${matchedFormat.name} typical potency (WA market fact): ${matchedFormat.potency_note}`);
+    }
+    if (matchedFormat.house_note) {
+      lines.push(`${matchedFormat.name} house voice: ${matchedFormat.house_note}`);
+    }
   }
 
   // --- Deep product-type taxonomy (kb_product_categories) ---
