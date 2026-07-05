@@ -167,3 +167,33 @@ see `docs/COMMAND_CENTER_ENHANCEMENTS_TASKLIST.md`.
 - [x] Code: store.ts KbStrainFull + listKbStrainsFull FULL→BASE fallback add status/source; StrainEditor Status column shows Draft/Archived pill + provenance source (no-op pre-0085); health.ts strainDrafts count. (No standalone review queue built: writeback only enriches EXISTING published rows — it never creates strain drafts today — so a promote-queue would be speculative; parity + auditability + a Draft signal cover GAP 6.)
 - [x] Verify tsc 0 → eslint 0 → next build OK → rm -rf .next; audit GAP 6 updated
 - [x] Commit → push (same branch, folds into PR #255); migration 0085 is MANUAL
+
+## KB HARDENING v2 (post-#255) — branch feat/kb-hardening-v2
+> Owner (verbatim, msg): "please change the labels, 'intoxicating' and 'non intoxicating' to be 'Psychoactive' and 'non psychoactive'. then you can merge the open pr. then open a new branch so we can continue hardening the kb. i want to add all of your recommendations to the kb. start with the effects/ experience. please do quality research on this, i want it to be factual, but i also want it to be read by a cannabis user, which means it should sound and flow like how we would expect it to. it needs to have personality and vibe with our culture. then move on to number 2, i want you to go back to the internet and deep research washington state products specifically so you can add quality and relevant consumption methods and product format facts. then move on to number 3. i want to add all the compliance related stuff to the kb and have it use it in a useful helpful way to keep use safe. for number 4, i like this. i am not exactly sure what this means, but i like the sound of it. lets make it its own slice after the other 4 slices are finished. finally do the 5th item on the list. the terpenes and cross map enrichment. please proceed, follow all the standing rules, and never guess. please do what ever a professional an expert would do. do not cut corners, i want it done the right way, even if it is harder."
+> Owner (verbatim, follow-up): "label cbd as non psychoactive please. its how we all in the industry label it and describe it when selling cbd type products. the other one that is mildly psychoactive, please leave as is, i think that is fine. please continue."
+
+- [x] TASK A — Relabel intoxicating/non-intoxicating -> psychoactive/non-psychoactive (CBN stays mildly-psychoactive). Values only; column name 'intoxication' unchanged (no destructive migration). WA-mandated warning text + sourced mechanism prose preserved. Labeling note added. Commit b0f69de pushed. tsc/eslint/build clean.
+- [x] TASK B — Merge PR #255 (squash, --admin, delete branch). Merged ac43c5c; main synced. (Migrations 0083/0084/0085 remain MANUAL for owner.)
+- [ ] TASK C — Open branch feat/kb-hardening-v2; build 5 recommendations IN ORDER:
+
+### Slice 1 — Effects/experience vocabulary (culture voice, compliance-gated)  [NEXT]
+- [ ] Deep research: WA-legal effect/experience descriptors; what is FACT vs medical claim
+- [ ] Migration 0086: kb_effects table (drafts/provenance parity; status default published)
+- [ ] Seed: factual, non-medical, culture-voiced effect vocabulary (compliance-gated)
+- [ ] Wire: store CRUD + retrieval grounding + admin read-only cards + health coverage
+- [ ] Verify tsc/eslint/build -> rm -rf .next; commit; push
+
+### Slice 2 — Consumption methods / product formats (DEEP WA-specific research)
+- [ ] Deep internet research: WA I-502 product categories/formats + consumption methods (factual)
+- [ ] Migration + seed + wire + admin + verify
+
+### Slice 3 — Compliance rules reference in KB (used helpfully to keep customers safe)
+- [ ] Encode WA I-502 / DOH / CCRS-relevant safety + purchase rules as KB facts; surface helpfully
+- [ ] Migration + seed + wire + admin + verify
+
+### Slice 5 — Terpene -> aroma cross-map enrichment
+- [ ] Cross-map terpenes to aroma/flavor descriptors (factual); enrich strain/product grounding
+- [ ] Migration + seed + wire + verify
+
+### Slice 4 — Store/brand voice & FAQ pack (LAST, own slice)
+- [ ] Define Greenway store voice + curated FAQ pack for grounding; admin + verify
