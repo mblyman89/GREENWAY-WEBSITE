@@ -20,6 +20,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { greenwayBusiness } from "@/content/business";
 import { adminNav, navGroups, type AdminNavItem } from "./admin-nav-data";
+import { NavGlyph } from "./nav-glyphs";
 import { can, type Permission } from "@/lib/auth/roles";
 import type { StaffRole } from "@/lib/supabase/types";
 import {
@@ -147,7 +148,7 @@ export function AdminTopNav({ role, fullName, email }: Props) {
                   }`}
                 >
                   <span className="text-xs opacity-80" aria-hidden="true">
-                    {item.icon}
+                    <NavGlyph item={item} />
                   </span>
                   {g.group}
                 </Link>
@@ -206,7 +207,7 @@ export function AdminTopNav({ role, fullName, email }: Props) {
                               : "text-[var(--admin-text-muted)] hover:bg-white/5 hover:text-[var(--admin-text)]"
                           }`}
                         >
-                          <span className="w-4 text-center text-xs opacity-80">{item.icon}</span>
+                          <span className="w-4 text-center text-xs opacity-80"><NavGlyph item={item} /></span>
                           <span className="flex-1">{item.label}</span>
                           {item.comingSoon && (
                             <span className="rounded bg-white/10 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-[var(--admin-text-faint)]">
@@ -299,7 +300,7 @@ export function AdminTopNav({ role, fullName, email }: Props) {
                         : "text-[var(--admin-text-muted)] hover:bg-white/5 hover:text-[var(--admin-text)]"
                     }`}
                   >
-                    <span className="w-4 text-center text-xs opacity-80">{item.icon}</span>
+                    <span className="w-4 text-center text-xs opacity-80"><NavGlyph item={item} /></span>
                     <span className="flex-1">{g.group}</span>
                   </Link>
                 );
@@ -323,7 +324,7 @@ export function AdminTopNav({ role, fullName, email }: Props) {
                               : "text-[var(--admin-text-muted)] hover:bg-white/5 hover:text-[var(--admin-text)]"
                           }`}
                         >
-                          <span className="w-4 text-center text-xs opacity-80">{item.icon}</span>
+                          <span className="w-4 text-center text-xs opacity-80"><NavGlyph item={item} /></span>
                           <span className="flex-1">{item.label}</span>
                           {item.comingSoon && (
                             <span className="rounded bg-white/10 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-[var(--admin-text-faint)]">

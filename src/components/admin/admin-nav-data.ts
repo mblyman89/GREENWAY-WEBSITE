@@ -5,7 +5,12 @@ export type AdminNavItem = {
   label: string;
   href: string;
   permission: Permission;
-  icon: string; // simple emoji/glyph for now; swap for SVG icons later
+  icon: string; // emoji/glyph fallback used when `glyph` is not set
+  /**
+   * Optional custom SVG glyph key (see src/components/admin/nav-glyphs.tsx).
+   * When set, the nav renders the bespoke SVG instead of the emoji `icon`.
+   */
+  glyph?: string;
   group:
     | "Dashboard"
     | "Reports"
@@ -60,8 +65,8 @@ export const adminNav: AdminNavItem[] = [
   { label: "Accounts Payable", href: "/admin/vendor-payments", permission: "settings.manage", icon: "\ud83d\udcb3", group: "Product Intake" }, // 💳 payments
   { label: "Knowledge Base", href: "/admin/knowledge-base", permission: "products.enrich", icon: "\ud83d\udcda", group: "Product Intake" }, // 📚 reference
 
-  { label: "Inventory", href: "/admin/inventory", permission: "inventory.manage", icon: "\ud83c\udf41", group: "Inventory" }, // 🍁 pot leaf (cannabis flower lots)
-  { label: "Other Inventory", href: "/admin/inventory/noncannabis", permission: "inventory.manage", icon: "\ud83d\udeac", group: "Inventory" }, // 🚬 bong / smoking accessories (non-cannabis goods)
+  { label: "Inventory", href: "/admin/inventory", permission: "inventory.manage", icon: "\ud83c\udf41", glyph: "pot-leaf", group: "Inventory" }, // custom pot-leaf SVG (cannabis flower lots)
+  { label: "Other Inventory", href: "/admin/inventory/noncannabis", permission: "inventory.manage", icon: "\ud83d\udeac", glyph: "bong", group: "Inventory" }, // custom bong SVG (non-cannabis goods) — swap to "bong-outline" for the light version
   { label: "Vendors & Brands", href: "/admin/vendors", permission: "vendors.manage", icon: "\ud83c\udfe2", group: "Inventory" }, // 🏢 suppliers
   { label: "Types & Categories", href: "/admin/settings/types", permission: "settings.manage", icon: "\ud83c\udff7\ufe0f", group: "Inventory" }, // 🏷️ tags
   { label: "Cycle Counts", href: "/admin/inventory/cycle-counts", permission: "inventory.manage", icon: "\ud83d\udccb", group: "Inventory" }, // 📋 count clipboard
