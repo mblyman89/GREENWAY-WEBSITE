@@ -7,7 +7,7 @@
  * product and strain copy and when reading COA potency.
  *
  * COMPLIANCE (WA I-502): every card states FACTUAL chemistry only —
- * intoxicating vs non-intoxicating vs mildly-psychoactive, and the
+ * psychoactive vs non-psychoactive vs mildly-psychoactive, and the
  * acidic-precursor → decarboxylation relationship. NO medical claims
  * ("treats/helps/relieves"). A non-medical disclaimer footer is always shown.
  *
@@ -23,16 +23,16 @@ import { KbFlash } from "../KbFlash";
 
 export const dynamic = "force-dynamic";
 
-/** Factual intoxication badge — color-coded, no medical language. */
+/** Factual psychoactivity badge — color-coded, no medical language. */
 function IntoxicationBadge({ value }: { value: string | null }) {
   const v = (value ?? "").toLowerCase();
   const style =
-    v === "intoxicating"
-      ? { bg: "#b45309", label: "Intoxicating" }
+    v === "psychoactive"
+      ? { bg: "#b45309", label: "Psychoactive" }
       : v === "mildly-psychoactive"
         ? { bg: "#a16207", label: "Mildly psychoactive" }
-        : v === "non-intoxicating"
-          ? { bg: "#15803d", label: "Non-intoxicating" }
+        : v === "non-psychoactive"
+          ? { bg: "#15803d", label: "Non-psychoactive" }
           : { bg: "var(--admin-text-faint)", label: value ?? "—" };
   return (
     <span
@@ -92,7 +92,7 @@ export default async function KbCannabinoidsPage({
         <p className="text-sm text-[var(--admin-text-muted)]">
           {cannabinoids.length} cannabinoid{cannabinoids.length === 1 ? "" : "s"} in the
           reference set. These are read-only, research-backed compound facts — they power
-          the chemistry language (intoxicating vs non-intoxicating, acidic precursor →
+          the chemistry language (psychoactive vs non-psychoactive, acidic precursor →
           decarboxylation) used across the knowledge base and alongside COA potency.
         </p>
 
@@ -233,7 +233,7 @@ export default async function KbCannabinoidsPage({
 
         <p className="text-[11px] text-[var(--admin-text-faint)]">
           Chemistry &amp; pharmacology reference only — describes what each compound is and
-          whether it is intoxicating, not a health, therapeutic, or medical claim. Cannabis
+          whether it is psychoactive, not a health, therapeutic, or medical claim. Cannabis
           products have intoxicating effects and are for adults 21+.
         </p>
       </div>

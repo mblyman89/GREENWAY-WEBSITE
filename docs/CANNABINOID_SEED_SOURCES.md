@@ -4,7 +4,7 @@
 reputable sources. Per the standing rules: **never guess.** Every fact used in the seed below is
 traceable to a source in the reference list. **Compliance constraint:** the KB stores only
 **factual pharmacology / chemistry** — molecular identity, biosynthetic relationship (acidic
-precursor → decarboxylation), and *intoxicating vs. non-intoxicating* classification. It stores
+precursor → decarboxylation), and *psychoactive vs. non-psychoactive* classification. It stores
 **NO** medical/therapeutic claims ("treats / helps / relieves / cures"). All seed prose is routed
 through the existing `checkCompliance` gate before it can surface in retrieval.
 
@@ -21,16 +21,17 @@ invent scope).
 ### THC — Δ9-tetrahydrocannabinol  (slug: `thc`)
 - Molecular formula **C21H30O2**. [1]
 - The **principal psychoactive / intoxicating** constituent of cannabis. [1]
+  (Labeled **psychoactive** in the KB — see the labeling note at the bottom of this file.)
 - Not itself the plant's native form: it is produced by **decarboxylation of its acidic precursor
   THCA** (loss of CO2 driven by heat and/or time/aging). [1][3]
-- Classification for KB: **intoxicating**. `is_acidic = false`. `decarbs_to = null`.
+- Classification for KB: **psychoactive**. `is_acidic = false`. `decarbs_to = null`.
 
 ### THCA — tetrahydrocannabinolic acid  (slug: `thca`)
 - The **acidic biosynthetic precursor** of THC; the dominant cannabinoid form actually present in
   living/fresh, un-heated cannabis. [1][3]
 - **Non-intoxicating** in its acidic form; on heating (smoking, vaping, cooking) it
   **decarboxylates to THC**. [1][3]
-- Classification for KB: **non-intoxicating (acidic precursor)**. `is_acidic = true`.
+- Classification for KB: **non-psychoactive (acidic precursor)**. `is_acidic = true`.
   `decarbs_to = "thc"`.
 
 ### CBD — cannabidiol  (slug: `cbd`)
@@ -38,12 +39,12 @@ invent scope).
 - **Non-intoxicating**; has **very weak affinity for CB1 and CB2** receptors (i.e. it does not
   produce the CB1-driven intoxication that THC does). [2]
 - Produced by **decarboxylation of its acidic precursor CBDA**. [2][3]
-- Classification for KB: **non-intoxicating**. `is_acidic = false`. `decarbs_to = null`.
+- Classification for KB: **non-psychoactive**. `is_acidic = false`. `decarbs_to = null`.
 
 ### CBDA — cannabidiolic acid  (slug: `cbda`)
 - The **acidic biosynthetic precursor** of CBD, present in fresh/un-heated plant material. [2][3]
 - **Non-intoxicating**; **decarboxylates to CBD** with heat/time. [2][3]
-- Classification for KB: **non-intoxicating (acidic precursor)**. `is_acidic = true`.
+- Classification for KB: **non-psychoactive (acidic precursor)**. `is_acidic = true`.
   `decarbs_to = "cbd"`.
 
 ### CBG — cannabigerol  (slug: `cbg`)
@@ -52,7 +53,7 @@ invent scope).
   single common intermediate** from which the plant's enzymes biosynthesize the acidic precursors
   of THC (THCA), CBD (CBDA) and CBC (CBCA). [4][5]
 - **Non-intoxicating**; typically a **minor** cannabinoid in finished material. [4]
-- Classification for KB: **non-intoxicating**. `is_acidic = false`. `decarbs_to = null`.
+- Classification for KB: **non-psychoactive**. `is_acidic = false`. `decarbs_to = null`.
 
 ### CBN — cannabinol  (slug: `cbn`)
 - Molecular formula **C21H26O2**; PubChem CID **2543**. [6]
@@ -69,13 +70,13 @@ invent scope).
 - **Non-intoxicating**; binds only **weakly** to CB1/CB2 (much lower affinity than THC). [7]
 - Occurs in the plant mainly as its acidic precursor **CBCA**, which is formed from **CBGA** by
   CBCA synthase and **decarboxylates to CBC** over time or when heated. [7][3]
-- Classification for KB: **non-intoxicating**. `is_acidic = false`. `decarbs_to = null`.
+- Classification for KB: **non-psychoactive**. `is_acidic = false`. `decarbs_to = null`.
 
 ### CBDV — cannabidivarin  (slug: `cbdv`)
 - A **propyl (varin) analog of CBD** — structurally the CBD homolog with a shorter (propyl vs.
   pentyl) side chain — grouped with the cannabidiols. [8]
 - **Non-intoxicating** (a minor cannabinoid). [8]
-- Classification for KB: **non-intoxicating (propyl analog of CBD)**. `is_acidic = false`.
+- Classification for KB: **non-psychoactive (propyl analog of CBD)**. `is_acidic = false`.
   `decarbs_to = null`.
 
 ---
@@ -88,8 +89,9 @@ invent scope).
   precursor. [6]
 
 ## Compliance handling of the "what it does" text
-- Allowed in KB prose: molecular identity, "**intoxicating**" vs "**non-intoxicating**" vs "**mildly
-  psychoactive**", "**acidic precursor**", "**decarboxylates to X**", "**degradation product of
+- Allowed in KB prose: molecular identity, "**psychoactive**" vs "**non-psychoactive**" vs "**mildly
+  psychoactive**" (and, where factual, "intoxicating" / "non-intoxicating" describing effect),
+  "**acidic precursor**", "**decarboxylates to X**", "**degradation product of
   THC**", relative **abundance** (major/minor), and neutral **receptor-affinity** facts
   ("weak/low affinity for CB1"). These are chemistry, not medical claims.
 - **Prohibited** (and stripped by `checkCompliance`): any "treats / helps / relieves / cures /
@@ -112,3 +114,27 @@ invent scope).
 7. Cannabichromene — Wikipedia (formula C21H30O2, PubChem CID 30219, weak CB1/CB2, CBCA→CBC).
    https://en.wikipedia.org/wiki/Cannabichromene
 8. Cannabidivarin — Wikipedia (propyl analog of CBD). https://en.wikipedia.org/wiki/Cannabidivarin
+
+---
+
+## Labeling note — "psychoactive / non-psychoactive" (industry-standard convention)
+
+The `intoxication` classification column uses three values: **`psychoactive`** (THC),
+**`mildly-psychoactive`** (CBN), and **`non-psychoactive`** (THCA, CBD, CBDA, CBG, CBC, CBDV).
+
+**Why this vocabulary.** Earlier drafts used *intoxicating / non-intoxicating*. The owner
+directed the KB to adopt the labeling that Washington retailers and the wider industry actually
+use at point of sale: CBD-type products are marketed and described as **"non-psychoactive."**
+This is the industry-standard shelf/sales label, so the KB mirrors it for consistency with how
+staff speak to customers.
+
+**Scientific nuance (retained, not lost).** Strictly, "psychoactive" and "intoxicating" are not
+identical — some sources note CBD has measurable effects on the CNS without producing a THC-style
+"high," i.e. it can be described as *psychoactive but non-intoxicating* in the technical
+literature. The KB **label** follows the sales/industry convention (**non-psychoactive** for CBD
+and the other minor/acidic compounds), while the underlying **sourced mechanism prose** above is
+preserved verbatim (e.g. CBD "does not produce the CB1-driven intoxication that THC does";
+raw flower "is not intoxicating until it is smoked"). No verified fact was removed.
+
+**CBN stays `mildly-psychoactive`** per the owner and the source: Cannabinol is a low-affinity
+partial agonist at CB1, so much higher doses are required to feel effects than with THC. [6]

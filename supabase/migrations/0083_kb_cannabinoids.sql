@@ -13,7 +13,7 @@
 --   * Applied MANUALLY by the owner.
 --   * KB is internal copy-grounding data: staff read/write, no public read
 --     (same RLS shape as every other kb_* table -> public.is_staff()).
---   * Stored content is FACTUAL chemistry only (intoxicating vs non-intoxicating,
+--   * Stored content is FACTUAL chemistry only (psychoactive vs non-psychoactive,
 --     acidic precursor -> decarboxylation). NO medical/therapeutic claims; the
 --     application compliance gate strips those before anything surfaces.
 -- =============================================================================
@@ -25,7 +25,7 @@ create table if not exists public.kb_cannabinoids (
   name            text not null,                         -- 'THC'
   full_name       text,                                  -- 'Delta-9-tetrahydrocannabinol'
   -- Factual classification (chemistry, NOT a medical claim):
-  --   'intoxicating' | 'non-intoxicating' | 'mildly-psychoactive'
+  --   'psychoactive' | 'non-psychoactive' | 'mildly-psychoactive'
   intoxication    text,
   is_acidic       boolean not null default false,        -- true for THCA/CBDA (acidic precursor forms)
   decarbs_to      text,                                  -- slug this acid decarboxylates to (e.g. 'thc'); null for neutrals
@@ -45,7 +45,7 @@ create index if not exists idx_kb_cannabinoids_slug   on public.kb_cannabinoids(
 create index if not exists idx_kb_cannabinoids_active  on public.kb_cannabinoids(active) where active;
 
 comment on table  public.kb_cannabinoids                 is 'KB cannabinoid compounds. Factual chemistry only (no medical claims). Staff-only.';
-comment on column public.kb_cannabinoids.intoxication    is 'Factual classification: intoxicating | non-intoxicating | mildly-psychoactive.';
+comment on column public.kb_cannabinoids.intoxication    is 'Factual classification: psychoactive | non-psychoactive | mildly-psychoactive.';
 comment on column public.kb_cannabinoids.is_acidic       is 'true for acidic precursor forms (THCA, CBDA).';
 comment on column public.kb_cannabinoids.decarbs_to      is 'Slug of the neutral compound this acid decarboxylates to (heat/time); null for neutral forms.';
 comment on column public.kb_cannabinoids.description     is 'Full factual explanation. Surfaced only after the application compliance gate.';

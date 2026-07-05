@@ -159,9 +159,9 @@ async function loadCannabinoids(): Promise<SeedCannabinoid[]> {
       name: r.name,
       full_name: r.full_name ?? undefined,
       intoxication:
-        r.intoxication === "intoxicating" || r.intoxication === "mildly-psychoactive"
+        r.intoxication === "psychoactive" || r.intoxication === "mildly-psychoactive"
           ? r.intoxication
-          : "non-intoxicating",
+          : "non-psychoactive",
       is_acidic: r.is_acidic,
       decarbs_to: r.decarbs_to ?? undefined,
       character_notes: r.character_notes ?? [],
@@ -508,7 +508,7 @@ export async function buildGroundedFacts(facts: ProductFacts): Promise<GroundedF
   // --- Cannabinoid compounds (factual chemistry; NO medical claims) ---
   // Fire for compounds named on the exact KB product record and for the
   // strain's dominant cannabinoid, so the model can speak accurately about
-  // intoxicating vs non-intoxicating / acidic precursors.
+  // psychoactive vs non-psychoactive / acidic precursors.
   const cannaSlugs = new Set<string>();
   if (kbProduct?.row.cannabinoids?.length) {
     for (const c of kbProduct.row.cannabinoids) cannaSlugs.add(norm(c));
@@ -530,11 +530,11 @@ export async function buildGroundedFacts(facts: ProductFacts): Promise<GroundedF
     for (const c of matchedCanna) {
       sources.push(`kb:cannabinoid:${c.slug}`);
       const cls =
-        c.intoxication === "intoxicating"
-          ? "intoxicating"
+        c.intoxication === "psychoactive"
+          ? "psychoactive"
           : c.intoxication === "mildly-psychoactive"
             ? "mildly psychoactive"
-            : "non-intoxicating";
+            : "non-psychoactive";
       const decarb = c.is_acidic && c.decarbs_to ? ` (acidic precursor; decarboxylates to ${c.decarbs_to.toUpperCase()})` : "";
       lines.push(`Cannabinoid ${c.name}${c.full_name ? ` (${c.full_name})` : ""}: ${cls}${decarb}.`);
     }

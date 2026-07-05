@@ -172,7 +172,7 @@ export default async function KnowledgeBasePage({
             <KbNavCard
               href="/admin/knowledge-base/cannabinoids"
               title="Cannabinoids"
-              description="Research-backed compound facts (intoxicating vs non-intoxicating, acidic precursors). Grounds potency & copy. Reference only."
+              description="Research-backed compound facts (psychoactive vs non-psychoactive, acidic precursors). Grounds potency & copy. Reference only."
               count={counts.cannabinoids}
               accent="muted"
             />

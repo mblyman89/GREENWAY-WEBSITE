@@ -46,7 +46,7 @@ export type SeedCannabinoid = {
   name: string;
   full_name?: string;
   /** Factual classification (chemistry, not a medical claim). */
-  intoxication: "intoxicating" | "non-intoxicating" | "mildly-psychoactive";
+  intoxication: "psychoactive" | "non-psychoactive" | "mildly-psychoactive";
   is_acidic: boolean;
   /** Slug this acid decarboxylates to (e.g. 'thc'); undefined for neutral forms. */
   decarbs_to?: string;
@@ -104,7 +104,7 @@ export const SEED_TERPENES: SeedTerpene[] = [
 
 // ---------------------------------------------------------------------------
 // Cannabinoid compounds — FACTUAL chemistry only (molecular identity,
-// intoxicating vs non-intoxicating, acidic precursor → decarboxylation,
+// psychoactive vs non-psychoactive, acidic precursor → decarboxylation,
 // relative abundance, neutral receptor-affinity facts). There is deliberately
 // NO medical/therapeutic content ("treats/helps/relieves") — that would violate
 // WA I-502 advertising rules and the grounding contract; the compliance gate
@@ -120,7 +120,7 @@ export const SEED_CANNABINOIDS: SeedCannabinoid[] = [
     slug: "thc",
     name: "THC",
     full_name: "Delta-9-tetrahydrocannabinol",
-    intoxication: "intoxicating",
+    intoxication: "psychoactive",
     is_acidic: false,
     character_notes: ["major cannabinoid", "principal psychoactive constituent"],
     description:
@@ -128,7 +128,7 @@ export const SEED_CANNABINOIDS: SeedCannabinoid[] = [
       "psychoactive and intoxicating constituent of cannabis. It is not the plant's " +
       "native form: it is produced when its acidic precursor THCA is decarboxylated " +
       "(loses CO2) through heat and/or time, such as smoking, vaping or cooking.",
-    also_found_in: "the primary intoxicating cannabinoid in most adult-use cannabis",
+    also_found_in: "the primary psychoactive cannabinoid in most adult-use cannabis",
     sources: [`${WIKI}Tetrahydrocannabinol`],
     confidence: 0.98,
   },
@@ -136,14 +136,14 @@ export const SEED_CANNABINOIDS: SeedCannabinoid[] = [
     slug: "thca",
     name: "THCA",
     full_name: "Tetrahydrocannabinolic acid",
-    intoxication: "non-intoxicating",
+    intoxication: "non-psychoactive",
     is_acidic: true,
     decarbs_to: "thc",
     character_notes: ["acidic precursor", "dominant form in fresh flower"],
     description:
       "Tetrahydrocannabinolic acid is the acidic biosynthetic precursor of THC and the " +
       "dominant cannabinoid form actually present in fresh, un-heated cannabis. In its " +
-      "acidic form it is non-intoxicating; on heating it decarboxylates to THC, which is " +
+      "acidic form it is non-psychoactive; on heating it decarboxylates to THC, which is " +
       "why raw flower is not intoxicating until it is smoked, vaped or cooked.",
     also_found_in: "fresh/un-decarboxylated flower and concentrate",
     sources: [`${WIKI}Tetrahydrocannabinolic_acid`, `${WIKI}Decarboxylation`],
@@ -153,11 +153,11 @@ export const SEED_CANNABINOIDS: SeedCannabinoid[] = [
     slug: "cbd",
     name: "CBD",
     full_name: "Cannabidiol",
-    intoxication: "non-intoxicating",
+    intoxication: "non-psychoactive",
     is_acidic: false,
     character_notes: ["major cannabinoid", "very weak CB1/CB2 affinity"],
     description:
-      "Cannabidiol (molecular formula C21H30O2) is a non-intoxicating cannabinoid. It has " +
+      "Cannabidiol (molecular formula C21H30O2) is a non-psychoactive cannabinoid. It has " +
       "very weak affinity for the CB1 and CB2 receptors, so it does not produce the CB1-driven " +
       "intoxication associated with THC. It is produced by decarboxylation of its acidic " +
       "precursor CBDA.",
@@ -169,13 +169,13 @@ export const SEED_CANNABINOIDS: SeedCannabinoid[] = [
     slug: "cbda",
     name: "CBDA",
     full_name: "Cannabidiolic acid",
-    intoxication: "non-intoxicating",
+    intoxication: "non-psychoactive",
     is_acidic: true,
     decarbs_to: "cbd",
     character_notes: ["acidic precursor"],
     description:
       "Cannabidiolic acid is the acidic biosynthetic precursor of CBD, present in fresh, " +
-      "un-heated plant material. It is non-intoxicating and decarboxylates to CBD with heat " +
+      "un-heated plant material. It is non-psychoactive and decarboxylates to CBD with heat " +
       "and time.",
     also_found_in: "fresh high-CBD plant material",
     sources: [`${WIKI}Cannabidiol`, `${WIKI}Decarboxylation`],
@@ -185,11 +185,11 @@ export const SEED_CANNABINOIDS: SeedCannabinoid[] = [
     slug: "cbg",
     name: "CBG",
     full_name: "Cannabigerol",
-    intoxication: "non-intoxicating",
+    intoxication: "non-psychoactive",
     is_acidic: false,
     character_notes: ["mother cannabinoid", "typically minor in finished material"],
     description:
-      "Cannabigerol (molecular formula C21H32O2) is a non-intoxicating cannabinoid often called " +
+      "Cannabigerol (molecular formula C21H32O2) is a non-psychoactive cannabinoid often called " +
       "the \"mother cannabinoid\": its acidic form, CBGA, is the single common intermediate from " +
       "which the plant's enzymes biosynthesize the acidic precursors of THC (THCA), CBD (CBDA) " +
       "and CBC (CBCA). It is typically present only as a minor cannabinoid in finished material.",
@@ -218,11 +218,11 @@ export const SEED_CANNABINOIDS: SeedCannabinoid[] = [
     slug: "cbc",
     name: "CBC",
     full_name: "Cannabichromene",
-    intoxication: "non-intoxicating",
+    intoxication: "non-psychoactive",
     is_acidic: false,
     character_notes: ["minor cannabinoid", "weak CB1/CB2 binding"],
     description:
-      "Cannabichromene (molecular formula C21H30O2) is a non-intoxicating minor cannabinoid that " +
+      "Cannabichromene (molecular formula C21H30O2) is a non-psychoactive minor cannabinoid that " +
       "binds only weakly to the CB1 and CB2 receptors. In the plant it occurs mainly as its " +
       "acidic precursor CBCA, which is formed from CBGA by CBCA synthase and decarboxylates to " +
       "CBC over time or when heated.",
@@ -234,11 +234,11 @@ export const SEED_CANNABINOIDS: SeedCannabinoid[] = [
     slug: "cbdv",
     name: "CBDV",
     full_name: "Cannabidivarin",
-    intoxication: "non-intoxicating",
+    intoxication: "non-psychoactive",
     is_acidic: false,
     character_notes: ["propyl (varin) analog of CBD", "minor cannabinoid"],
     description:
-      "Cannabidivarin is a non-intoxicating minor cannabinoid and the propyl (varin) analog of " +
+      "Cannabidivarin is a non-psychoactive minor cannabinoid and the propyl (varin) analog of " +
       "CBD — structurally the CBD homolog with a shorter propyl side chain in place of CBD's " +
       "pentyl chain.",
     also_found_in: "trace amounts, more common in some hemp-type cultivars",

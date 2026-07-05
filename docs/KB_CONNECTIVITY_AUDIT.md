@@ -29,11 +29,11 @@ The plan below has been BUILT (code held for owner review; migrations 0083 +
       link columns (migration 0083, `not null default '{}'`).
 - [x] **GAP 3** — retrieval brain surfaces a cannabinoid map: `loadCannabinoids()`
       (falls back to seed pre-migration) + a grounding block emitting
-      `kb:cannabinoid:<slug>` tags with FACTUAL intoxicating/non-intoxicating/
+      `kb:cannabinoid:<slug>` tags with FACTUAL psychoactive/non-psychoactive/
       mildly-psychoactive + acidic-precursor→decarb lines (`retrieval.ts`).
 - [x] **GAP 4** — admin surface parity with terpenes: read-only
       `/admin/knowledge-base/cannabinoids` factual cards (name, full name,
-      intoxication badge, acidic→decarbs_to chemistry, notes, description,
+      psychoactivity badge, acidic→decarbs_to chemistry, notes, description,
       cited sources, non-medical footer) + KB-landing nav card + seed via the
       existing `seedKbAction`.
 - [x] **GAP 5** — validated POTENCY inflow: migration 0084 adds
@@ -154,7 +154,7 @@ seeded. The seed set is exactly the 8 compounds already recognized by the app.
   `abbrev text` ('THC'), `is_acidic boolean` (true for THCA/CBDA — factual),
   `decarbs_to text` (slug of the neutral form; THCA→thc, CBDA→cbd — factual
   chemistry, non-medical), `character_notes text[]` (SENSORY/legal descriptors
-  only — e.g. "non-intoxicating" is a FACT allowed by WA for CBD; but we will
+  only — e.g. "non-psychoactive" is the industry-standard label used by WA retailers for CBD; but we will
   keep this to neutral, non-medical descriptors and route every value through
   the existing compliance gate before it can be published),
   `also_found_in text`, `sources text[] default '{}'`, `confidence numeric`,
@@ -307,8 +307,8 @@ the owner.
 
 ## 5. Open questions for the owner (before building)
 1. **Cannabinoid `character_notes`:** ship empty (safest) or pre-seed with
-   strictly factual, non-medical descriptors (e.g. THC "intoxicating cannabinoid",
-   CBD "non-intoxicating")? These are widely-accepted FACTS, not medical claims,
+   strictly factual, non-medical descriptors (e.g. THC "psychoactive cannabinoid",
+   CBD "non-psychoactive")? These are widely-accepted FACTS, not medical claims,
    but I will only seed them on your say-so.
 2. **`kb_strains.cannabinoids[]`:** add it now for future minor-cannabinoid
    listing, or keep strain-level to `dominant_cannabinoid` only for now?
