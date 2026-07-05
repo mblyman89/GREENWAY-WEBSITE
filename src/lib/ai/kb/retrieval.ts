@@ -112,23 +112,49 @@ async function loadStrains(): Promise<SeedStrainRich[]> {
   }
 }
 
-type TerpeneRow = { slug: string; name: string; aroma_notes: string[] | null; flavor_notes: string[] | null; also_found_in: string | null };
+type TerpeneRow = {
+  slug: string;
+  name: string;
+  aroma_notes: string[] | null;
+  flavor_notes: string[] | null;
+  also_found_in: string | null;
+  // Slice 5: aroma-family cross-map, added in migration 0089. May be absent on
+  // databases that haven't applied 0089 yet — handled by the fallback select.
+  aroma_families?: string[] | null;
+};
 
 async function loadTerpenes(): Promise<SeedTerpene[]> {
   if (!isSupabaseServiceConfigured) return SEED_TERPENES;
   try {
     const admin = createSupabaseAdminClient();
-    const { data, error } = await admin
+    // Prefer the enriched select (with aroma_families). If migration 0089 hasn't
+    // been applied, that column is unknown and PostgREST errors — fall back to the
+    // base select so grounding still works day one (mirrors the seed degrade path).
+    let data:
+      | TerpeneRow[]
+      | null = null;
+    const enriched = await admin
       .from("kb_terpenes")
-      .select("slug,name,aroma_notes,flavor_notes,also_found_in")
+      .select("slug,name,aroma_notes,flavor_notes,also_found_in,aroma_families")
       .eq("active", true);
-    if (error || !data || data.length === 0) return SEED_TERPENES;
-    return (data as TerpeneRow[]).map((r) => ({
+    if (enriched.error) {
+      const base = await admin
+        .from("kb_terpenes")
+        .select("slug,name,aroma_notes,flavor_notes,also_found_in")
+        .eq("active", true);
+      if (base.error || !base.data || base.data.length === 0) return SEED_TERPENES;
+      data = base.data as TerpeneRow[];
+    } else {
+      if (!enriched.data || enriched.data.length === 0) return SEED_TERPENES;
+      data = enriched.data as TerpeneRow[];
+    }
+    return data.map((r) => ({
       slug: r.slug,
       name: r.name,
       aroma_notes: r.aroma_notes ?? [],
       flavor_notes: r.flavor_notes ?? [],
       also_found_in: r.also_found_in ?? undefined,
+      aroma_families: r.aroma_families ?? [],
     }));
   } catch {
     return SEED_TERPENES;
@@ -754,16 +780,84 @@ export async function buildGroundedFacts(facts: ProductFacts): Promise<GroundedF
     if (kbCategory.aliases?.length) lines.push(`"${name}" is also called: ${kbCategory.aliases.join(", ")}.`);
   }
 
-  // --- Terpene aroma/flavor map (only for terpenes the strain/facts mention) ---
+  // --- Terpene aroma/flavor map + aroma-family cross-map (Slice 5) ---------
+  // Fire for terpenes named on the strain family AND on the exact KB product
+  // record, so we ground on whichever the customer is actually holding.
   const terpNames = new Set<string>([
     ...(strain?.terpenes ?? []).map(norm),
+    ...(kbProduct?.row.terpenes ?? []).map(norm),
   ]);
+  const matchedTerpeneSlugs = new Set<string>();
   if (terpNames.size) {
     const matched = terpenes.filter((t) => terpNames.has(t.slug) || terpNames.has(norm(t.name)));
     for (const t of matched) {
+      matchedTerpeneSlugs.add(t.slug);
       sources.push(`kb:terpene:${t.slug}`);
       const notes = [...t.aroma_notes, ...t.flavor_notes];
       if (notes.length) lines.push(`Terpene ${t.name} reads as: ${Array.from(new Set(notes)).join(", ")}.`);
+      // Aroma-family + real-world hook: "the citrus side... the same terpene
+      // you'd also meet in citrus rind, juniper" — factual scent chemistry, no
+      // effect/medical claim implied.
+      const fams = t.aroma_families ?? [];
+      if (fams.length) {
+        const hook = t.also_found_in ? ` — the same terpene you'd also meet in ${t.also_found_in}` : "";
+        lines.push(
+          `Terpene ${t.name} sits in the ${fams.join(" / ")} aroma family${hook} (scent chemistry, not an effect claim).`,
+        );
+      }
+    }
+  }
+
+  // Reverse aroma cross-map: take the aroma/flavor words the strain or product
+  // already carries, resolve them to normalized aroma families, and name the
+  // terpenes that typically drive that family. Lets the model connect a scent
+  // the customer mentions ("something citrusy") to the underlying chemistry
+  // without inventing anything — every line is grounded in curated terpene data.
+  const AROMA_FAMILY_KEYWORDS: Record<string, string[]> = {
+    citrus: ["citrus", "lemon", "orange", "lime", "grapefruit", "tangy", "tangerine"],
+    pine: ["pine", "piney", "forest", "fir", "cedar"],
+    earthy: ["earthy", "earth", "soil", "musky", "musk"],
+    floral: ["floral", "flower", "lavender", "rose", "lilac", "jasmine"],
+    spicy: ["spicy", "spice", "pepper", "peppery", "clove", "cinnamon"],
+    minty: ["minty", "mint", "menthol", "cooling", "eucalyptus", "camphor"],
+    herbal: ["herbal", "herb", "sage", "basil", "rosemary", "thyme"],
+    woody: ["woody", "wood", "oak", "sandalwood"],
+    sweet: ["sweet", "honey", "fruity", "fruit", "berry", "tropical", "mango"],
+    hoppy: ["hoppy", "hops"],
+  };
+  const aromaWords = new Set<string>(
+    [
+      ...(strain?.aroma_notes ?? []),
+      ...(strain?.flavor_notes ?? []),
+      ...(kbProduct?.row.aroma_notes ?? []),
+      ...(kbProduct?.row.flavor_notes ?? []),
+    ].map(norm),
+  );
+  if (aromaWords.size && terpenes.length) {
+    const detectedFamilies = new Set<string>();
+    for (const [fam, keywords] of Object.entries(AROMA_FAMILY_KEYWORDS)) {
+      for (const w of aromaWords) {
+        if (keywords.some((k) => w.includes(k))) {
+          detectedFamilies.add(fam);
+          break;
+        }
+      }
+    }
+    for (const fam of detectedFamilies) {
+      // Terpenes carrying this family, preferring ones NOT already surfaced above
+      // so we add signal rather than repeat. Cap at three to keep grounding tight.
+      const carriers = terpenes
+        .filter((t) => (t.aroma_families ?? []).includes(fam))
+        .filter((t) => !matchedTerpeneSlugs.has(t.slug))
+        .slice(0, 3);
+      if (carriers.length) {
+        for (const t of carriers) sources.push(`kb:terpene:${t.slug}`);
+        lines.push(
+          `That ${fam} note usually traces back to terpenes like ${carriers
+            .map((t) => t.name)
+            .join(", ")} (aroma cross-map — describes smell, makes no effect claim).`,
+        );
+      }
     }
   }
 

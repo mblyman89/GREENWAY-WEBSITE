@@ -45,6 +45,12 @@ export type SeedTerpene = {
   aroma_notes: string[];
   flavor_notes: string[];
   also_found_in?: string;
+  /**
+   * Normalized aroma-family tags for the reverse cross-map (aroma word →
+   * terpene). Sensory only; derived from this terpene's own aroma/flavor notes.
+   * Slice 5 (migration 0089).
+   */
+  aroma_families?: string[];
 };
 
 export type SeedCannabinoid = {
@@ -144,28 +150,28 @@ export type SeedBannedPhrase = {
 // "dominant terpene: limonene" into legal sensory language.
 // ---------------------------------------------------------------------------
 export const SEED_TERPENES: SeedTerpene[] = [
-  { slug: "myrcene", name: "Myrcene", aroma_notes: ["earthy", "musky", "herbal", "ripe-fruit"], flavor_notes: ["earthy", "mango", "clove"], also_found_in: "mango, hops, thyme, lemongrass" },
-  { slug: "limonene", name: "Limonene", aroma_notes: ["citrus", "lemon", "orange", "bright"], flavor_notes: ["citrus", "lemon", "tangy"], also_found_in: "citrus rind, juniper, peppermint" },
-  { slug: "caryophyllene", name: "Caryophyllene", aroma_notes: ["peppery", "spicy", "woody"], flavor_notes: ["pepper", "spice", "clove"], also_found_in: "black pepper, cloves, cinnamon" },
-  { slug: "pinene", name: "Pinene", aroma_notes: ["pine", "fresh", "forest", "herbal"], flavor_notes: ["pine", "rosemary", "sharp"], also_found_in: "pine needles, rosemary, basil, dill" },
-  { slug: "linalool", name: "Linalool", aroma_notes: ["floral", "lavender", "sweet"], flavor_notes: ["floral", "lavender", "citrus"], also_found_in: "lavender, coriander, birch" },
-  { slug: "terpinolene", name: "Terpinolene", aroma_notes: ["fresh", "piney", "floral", "herbal"], flavor_notes: ["citrus", "apple", "cumin"], also_found_in: "apples, nutmeg, tea tree, lilac" },
-  { slug: "humulene", name: "Humulene", aroma_notes: ["earthy", "woody", "hoppy"], flavor_notes: ["hops", "wood", "herbal"], also_found_in: "hops, sage, ginseng, coriander" },
-  { slug: "ocimene", name: "Ocimene", aroma_notes: ["sweet", "herbal", "woody"], flavor_notes: ["sweet", "citrus", "herbal"], also_found_in: "mint, parsley, basil, mango" },
-  { slug: "bisabolol", name: "Bisabolol", aroma_notes: ["floral", "chamomile", "sweet", "nutty"], flavor_notes: ["floral", "honey", "soft"], also_found_in: "chamomile, candeia tree" },
-  { slug: "nerolidol", name: "Nerolidol", aroma_notes: ["floral", "woody", "citrus", "apple"], flavor_notes: ["floral", "woody", "citrus"], also_found_in: "jasmine, tea tree, lemongrass, ginger" },
-  { slug: "geraniol", name: "Geraniol", aroma_notes: ["floral", "rose", "sweet", "fruity"], flavor_notes: ["rose", "peach", "sweet"], also_found_in: "roses, geraniums, lemons" },
-  { slug: "valencene", name: "Valencene", aroma_notes: ["citrus", "orange", "sweet", "fresh"], flavor_notes: ["orange", "citrus", "sweet"], also_found_in: "valencia oranges, grapefruit" },
-  { slug: "eucalyptol", name: "Eucalyptol", aroma_notes: ["minty", "cooling", "eucalyptus", "fresh"], flavor_notes: ["mint", "menthol", "cooling"], also_found_in: "eucalyptus, rosemary, tea tree, bay leaves" },
-  { slug: "camphene", name: "Camphene", aroma_notes: ["pine", "damp-woods", "fir", "musky"], flavor_notes: ["pine", "earthy", "herbal"], also_found_in: "fir needles, cypress, nutmeg, ginger" },
-  { slug: "terpineol", name: "Terpineol", aroma_notes: ["floral", "lilac", "pine", "clove"], flavor_notes: ["floral", "citrus", "sweet"], also_found_in: "lilac, pine, lime blossoms" },
-  { slug: "borneol", name: "Borneol", aroma_notes: ["minty", "camphor", "herbal", "earthy"], flavor_notes: ["mint", "menthol", "herbal"], also_found_in: "rosemary, mint, camphor, wormwood" },
-  { slug: "fenchol", name: "Fenchol", aroma_notes: ["earthy", "camphor", "lemon", "pine"], flavor_notes: ["earthy", "citrus", "herbal"], also_found_in: "basil, nutmeg, pine" },
-  { slug: "sabinene", name: "Sabinene", aroma_notes: ["spicy", "peppery", "citrus", "woody"], flavor_notes: ["spice", "citrus", "herbal"], also_found_in: "black pepper, nutmeg, tea tree, oak" },
-  { slug: "phellandrene", name: "Phellandrene", aroma_notes: ["minty", "citrus", "peppery", "woody"], flavor_notes: ["mint", "citrus", "herbal"], also_found_in: "mint, dill, eucalyptus, ginger" },
-  { slug: "carene", name: "Carene", aroma_notes: ["sweet", "pine", "citrus", "earthy"], flavor_notes: ["sweet", "pine", "citrus"], also_found_in: "pine, cedar, rosemary, basil, citrus" },
-  { slug: "pulegone", name: "Pulegone", aroma_notes: ["minty", "camphor", "herbal", "sweet"], flavor_notes: ["mint", "menthol", "herbal"], also_found_in: "peppermint, catnip, rosemary" },
-  { slug: "guaiol", name: "Guaiol", aroma_notes: ["pine", "woody", "rose", "earthy"], flavor_notes: ["pine", "woody", "floral"], also_found_in: "cypress pine, guaiacum" },
+  { slug: "myrcene", name: "Myrcene", aroma_notes: ["earthy", "musky", "herbal", "ripe-fruit"], flavor_notes: ["earthy", "mango", "clove"], also_found_in: "mango, hops, thyme, lemongrass", aroma_families: ["earthy", "herbal", "sweet", "hoppy"] },
+  { slug: "limonene", name: "Limonene", aroma_notes: ["citrus", "lemon", "orange", "bright"], flavor_notes: ["citrus", "lemon", "tangy"], also_found_in: "citrus rind, juniper, peppermint", aroma_families: ["citrus"] },
+  { slug: "caryophyllene", name: "Caryophyllene", aroma_notes: ["peppery", "spicy", "woody"], flavor_notes: ["pepper", "spice", "clove"], also_found_in: "black pepper, cloves, cinnamon", aroma_families: ["spicy", "woody"] },
+  { slug: "pinene", name: "Pinene", aroma_notes: ["pine", "fresh", "forest", "herbal"], flavor_notes: ["pine", "rosemary", "sharp"], also_found_in: "pine needles, rosemary, basil, dill", aroma_families: ["pine", "herbal"] },
+  { slug: "linalool", name: "Linalool", aroma_notes: ["floral", "lavender", "sweet"], flavor_notes: ["floral", "lavender", "citrus"], also_found_in: "lavender, coriander, birch", aroma_families: ["floral", "sweet"] },
+  { slug: "terpinolene", name: "Terpinolene", aroma_notes: ["fresh", "piney", "floral", "herbal"], flavor_notes: ["citrus", "apple", "cumin"], also_found_in: "apples, nutmeg, tea tree, lilac", aroma_families: ["pine", "floral", "herbal", "citrus"] },
+  { slug: "humulene", name: "Humulene", aroma_notes: ["earthy", "woody", "hoppy"], flavor_notes: ["hops", "wood", "herbal"], also_found_in: "hops, sage, ginseng, coriander", aroma_families: ["earthy", "woody", "hoppy", "herbal"] },
+  { slug: "ocimene", name: "Ocimene", aroma_notes: ["sweet", "herbal", "woody"], flavor_notes: ["sweet", "citrus", "herbal"], also_found_in: "mint, parsley, basil, mango", aroma_families: ["sweet", "herbal", "woody", "citrus"] },
+  { slug: "bisabolol", name: "Bisabolol", aroma_notes: ["floral", "chamomile", "sweet", "nutty"], flavor_notes: ["floral", "honey", "soft"], also_found_in: "chamomile, candeia tree", aroma_families: ["floral", "sweet"] },
+  { slug: "nerolidol", name: "Nerolidol", aroma_notes: ["floral", "woody", "citrus", "apple"], flavor_notes: ["floral", "woody", "citrus"], also_found_in: "jasmine, tea tree, lemongrass, ginger", aroma_families: ["floral", "woody", "citrus"] },
+  { slug: "geraniol", name: "Geraniol", aroma_notes: ["floral", "rose", "sweet", "fruity"], flavor_notes: ["rose", "peach", "sweet"], also_found_in: "roses, geraniums, lemons", aroma_families: ["floral", "sweet"] },
+  { slug: "valencene", name: "Valencene", aroma_notes: ["citrus", "orange", "sweet", "fresh"], flavor_notes: ["orange", "citrus", "sweet"], also_found_in: "valencia oranges, grapefruit", aroma_families: ["citrus", "sweet"] },
+  { slug: "eucalyptol", name: "Eucalyptol", aroma_notes: ["minty", "cooling", "eucalyptus", "fresh"], flavor_notes: ["mint", "menthol", "cooling"], also_found_in: "eucalyptus, rosemary, tea tree, bay leaves", aroma_families: ["minty"] },
+  { slug: "camphene", name: "Camphene", aroma_notes: ["pine", "damp-woods", "fir", "musky"], flavor_notes: ["pine", "earthy", "herbal"], also_found_in: "fir needles, cypress, nutmeg, ginger", aroma_families: ["pine", "woody", "earthy"] },
+  { slug: "terpineol", name: "Terpineol", aroma_notes: ["floral", "lilac", "pine", "clove"], flavor_notes: ["floral", "citrus", "sweet"], also_found_in: "lilac, pine, lime blossoms", aroma_families: ["floral", "pine"] },
+  { slug: "borneol", name: "Borneol", aroma_notes: ["minty", "camphor", "herbal", "earthy"], flavor_notes: ["mint", "menthol", "herbal"], also_found_in: "rosemary, mint, camphor, wormwood", aroma_families: ["minty", "herbal", "earthy"] },
+  { slug: "fenchol", name: "Fenchol", aroma_notes: ["earthy", "camphor", "lemon", "pine"], flavor_notes: ["earthy", "citrus", "herbal"], also_found_in: "basil, nutmeg, pine", aroma_families: ["earthy", "citrus", "pine", "herbal"] },
+  { slug: "sabinene", name: "Sabinene", aroma_notes: ["spicy", "peppery", "citrus", "woody"], flavor_notes: ["spice", "citrus", "herbal"], also_found_in: "black pepper, nutmeg, tea tree, oak", aroma_families: ["spicy", "citrus", "woody"] },
+  { slug: "phellandrene", name: "Phellandrene", aroma_notes: ["minty", "citrus", "peppery", "woody"], flavor_notes: ["mint", "citrus", "herbal"], also_found_in: "mint, dill, eucalyptus, ginger", aroma_families: ["minty", "citrus", "spicy", "woody"] },
+  { slug: "carene", name: "Carene", aroma_notes: ["sweet", "pine", "citrus", "earthy"], flavor_notes: ["sweet", "pine", "citrus"], also_found_in: "pine, cedar, rosemary, basil, citrus", aroma_families: ["sweet", "pine", "citrus", "earthy"] },
+  { slug: "pulegone", name: "Pulegone", aroma_notes: ["minty", "camphor", "herbal", "sweet"], flavor_notes: ["mint", "menthol", "herbal"], also_found_in: "peppermint, catnip, rosemary", aroma_families: ["minty", "herbal", "sweet"] },
+  { slug: "guaiol", name: "Guaiol", aroma_notes: ["pine", "woody", "rose", "earthy"], flavor_notes: ["pine", "woody", "floral"], also_found_in: "cypress pine, guaiacum", aroma_families: ["pine", "woody", "floral", "earthy"] },
 ];
 
 // ---------------------------------------------------------------------------

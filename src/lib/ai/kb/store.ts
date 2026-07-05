@@ -176,6 +176,8 @@ export async function seedKnowledgeBase(actorId: string | null): Promise<SeedRep
     aroma_notes: t.aroma_notes,
     flavor_notes: t.flavor_notes,
     also_found_in: t.also_found_in ?? null,
+    // Slice 5: aroma-family cross-map. Column added in migration 0089 (default '{}').
+    aroma_families: t.aroma_families ?? [],
     active: true,
     created_by: actorId,
     updated_by: actorId,
@@ -284,7 +286,33 @@ export async function seedKnowledgeBase(actorId: string | null): Promise<SeedRep
   const r1 = await admin.from("kb_strains").upsert(strainRows, { onConflict: "slug" });
   if (r1.error) errors.push(`strains: ${r1.error.message}`);
   const r2 = await admin.from("kb_terpenes").upsert(terpeneRows, { onConflict: "slug" });
-  if (r2.error) errors.push(`terpenes: ${r2.error.message}`);
+  if (r2.error) {
+    // Slice 5: aroma_families lives behind migration 0089. If that column isn't
+    // there yet, don't fail the whole terpene seed — retry without it (matches the
+    // pre-migration degrade pattern). Any OTHER error is still surfaced.
+    const missingAromaFamilies =
+      /aroma_families/i.test(r2.error.message) &&
+      /(column|does not exist|schema cache)/i.test(r2.error.message);
+    if (missingAromaFamilies) {
+      const terpeneRowsNoFamilies = terpeneRows.map((row) => {
+        const rest: Record<string, unknown> = { ...row };
+        delete rest.aroma_families;
+        return rest;
+      });
+      const r2b = await admin
+        .from("kb_terpenes")
+        .upsert(terpeneRowsNoFamilies, { onConflict: "slug" });
+      if (r2b.error) {
+        errors.push(`terpenes: ${r2b.error.message}`);
+      } else {
+        warnings.push(
+          "terpenes: aroma_families column not found — seeded without the aroma cross-map. Apply migration 0089, then reseed.",
+        );
+      }
+    } else {
+      errors.push(`terpenes: ${r2.error.message}`);
+    }
+  }
   const r3 = await admin.from("kb_category_terms").upsert(categoryRows, { onConflict: "category" });
   if (r3.error) errors.push(`categories: ${r3.error.message}`);
   const r4 = await admin.from("kb_banned_phrases").upsert(bannedRows, { onConflict: "phrase" });
