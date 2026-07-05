@@ -18,6 +18,10 @@ import {
   reviewKbProduct,
   reviewKbBrand,
   bulkReviewKbDraftsBySource,
+  upsertKbStoreFact,
+  setStoreFactActive,
+  upsertKbFaq,
+  setFaqActive,
 } from "@/lib/ai/kb/store";
 import { updateBrandFacts } from "@/lib/vendors/store";
 import { seedMedicalBannedPhrases } from "@/lib/ai/kb/seed-banned";
@@ -481,4 +485,107 @@ export async function seedMedicalBlocklistAction(): Promise<void> {
       : `Could not sync blocklist: ${res.error ?? "unknown error"}`,
     res.ok,
   );
+}
+
+// ---------------------------------------------------------------------------
+// Store/brand facts + FAQ pack (Slice 4). Owner-extendable "about us" cards and
+// curated Q&A. Same drafts-first, compliance-gated KB pattern as the rest.
+// ---------------------------------------------------------------------------
+
+const ABOUT_PATH = "/admin/knowledge-base/about";
+const FAQ_PATH = "/admin/knowledge-base/faqs";
+
+function backTo(path: string, message: string, ok = true): never {
+  const key = ok ? "msg" : "error";
+  redirect(`${path}?${key}=${encodeURIComponent(message)}`);
+}
+
+/** Add or update an owner store fact (hours, address, mission, etc.). */
+export async function upsertKbStoreFactAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("products.enrich");
+  const key = String(formData.get("key") ?? "").trim();
+  const label = String(formData.get("label") ?? "").trim();
+  const body = String(formData.get("body") ?? "").trim();
+  if (!key) backTo(ABOUT_PATH, "A key is required.", false);
+  if (!label) backTo(ABOUT_PATH, "A label is required.", false);
+  if (!body) backTo(ABOUT_PATH, "The fact can't be empty.", false);
+  const sortRaw = Number.parseInt(String(formData.get("sort_order") ?? ""), 10);
+  const res = await upsertKbStoreFact(
+    {
+      key,
+      label,
+      category: String(formData.get("category") ?? "basics"),
+      body,
+      tags: csv(formData.get("tags"), { lower: true }),
+      sort_order: Number.isFinite(sortRaw) ? sortRaw : 100,
+      sources: csv(formData.get("sources")),
+    },
+    session.profile.id,
+  );
+  await recordAudit({
+    actorId: session.profile.id,
+    action: "kb.store_fact.upsert",
+    entityType: "kb_store_fact",
+    entityId: key,
+    after: { label },
+  }).catch(() => {});
+  revalidatePath(ABOUT_PATH);
+  backTo(ABOUT_PATH, res.message, res.ok);
+}
+
+/** Show/hide a store fact from the AI. */
+export async function toggleKbStoreFactAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("products.enrich");
+  const key = String(formData.get("key") ?? "");
+  const active = String(formData.get("active") ?? "") === "true";
+  if (!key) backTo(ABOUT_PATH, "Missing key.", false);
+  const res = await setStoreFactActive(key, active, session.profile.id);
+  await recordAudit({ actorId: session.profile.id, action: "kb.store_fact.toggle", entityType: "kb_store_fact", entityId: key, after: { active } }).catch(() => {});
+  revalidatePath(ABOUT_PATH);
+  backTo(ABOUT_PATH, res.ok ? (active ? "Fact is now in use." : "Fact hidden.") : res.message, res.ok);
+}
+
+/** Add or update a curated FAQ. */
+export async function upsertKbFaqAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("products.enrich");
+  const slug = String(formData.get("slug") ?? "").trim();
+  const question = String(formData.get("question") ?? "").trim();
+  const answer = String(formData.get("answer") ?? "").trim();
+  if (!slug) backTo(FAQ_PATH, "A slug is required.", false);
+  if (!question) backTo(FAQ_PATH, "A question is required.", false);
+  if (!answer) backTo(FAQ_PATH, "An answer is required.", false);
+  const sortRaw = Number.parseInt(String(formData.get("sort_order") ?? ""), 10);
+  const res = await upsertKbFaq(
+    {
+      slug,
+      question,
+      answer,
+      category: String(formData.get("category") ?? "basics"),
+      tags: csv(formData.get("tags"), { lower: true }),
+      sort_order: Number.isFinite(sortRaw) ? sortRaw : 100,
+      sources: csv(formData.get("sources")),
+    },
+    session.profile.id,
+  );
+  await recordAudit({
+    actorId: session.profile.id,
+    action: "kb.faq.upsert",
+    entityType: "kb_faq",
+    entityId: slug,
+    after: { question },
+  }).catch(() => {});
+  revalidatePath(FAQ_PATH);
+  backTo(FAQ_PATH, res.message, res.ok);
+}
+
+/** Show/hide an FAQ from the AI. */
+export async function toggleKbFaqAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("products.enrich");
+  const slug = String(formData.get("slug") ?? "");
+  const active = String(formData.get("active") ?? "") === "true";
+  if (!slug) backTo(FAQ_PATH, "Missing slug.", false);
+  const res = await setFaqActive(slug, active, session.profile.id);
+  await recordAudit({ actorId: session.profile.id, action: "kb.faq.toggle", entityType: "kb_faq", entityId: slug, after: { active } }).catch(() => {});
+  revalidatePath(FAQ_PATH);
+  backTo(FAQ_PATH, res.ok ? (active ? "FAQ is now in use." : "FAQ hidden.") : res.message, res.ok);
 }

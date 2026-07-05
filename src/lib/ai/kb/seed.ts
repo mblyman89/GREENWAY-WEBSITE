@@ -130,6 +130,44 @@ export type SeedComplianceRule = {
   sort_order: number;
 };
 
+/**
+ * Slice 4: store/brand fact card (owner-extendable). Hours, address, phone,
+ * payment, delivery, mission, "about us", etc. Policy/marketing language only —
+ * never a medical claim. The owner can add more of these in the admin UI.
+ */
+export type SeedStoreFact = {
+  /** Stable slug key (unique); seed upserts on this so curated edits survive. */
+  key: string;
+  label: string;
+  /** UI grouping ONLY: basics | payment | policies | about | other. */
+  category: "basics" | "payment" | "policies" | "about" | "other";
+  /** The fact itself, in Greenway voice. Compliance-gated on surface. */
+  body: string;
+  /** Optional lowercase tags for retrieval targeting. */
+  tags: string[];
+  sort_order: number;
+  sources: string[];
+  confidence: number;
+};
+
+/**
+ * Slice 4: curated FAQ entry (owner-extendable). Question + Greenway-voice
+ * answer the concierge can lean on. WA I-502 compliant; no medical claims.
+ * NOTE: the loyalty FAQ deliberately carries no hard-coded earn rate — the live
+ * rate is composed at runtime from loyalty_config so it can never drift.
+ */
+export type SeedFaq = {
+  slug: string;
+  question: string;
+  answer: string;
+  /** UI grouping ONLY: basics | buying | compliance | products | loyalty | other. */
+  category: "basics" | "buying" | "compliance" | "products" | "loyalty" | "other";
+  tags: string[];
+  sort_order: number;
+  sources: string[];
+  confidence: number;
+};
+
 export type SeedCategory = {
   category: string;
   display_name: string;
@@ -973,6 +1011,266 @@ export const SEED_COMPLIANCE_RULES: SeedComplianceRule[] = [
     sources: [WSLCB_USING],
     confidence: 0.95,
     sort_order: 80,
+  },
+];
+
+// ---------------------------------------------------------------------------
+// Slice 4 — Store/brand FACTS + FAQ pack.
+//
+// Every store fact below is OWNER-CONFIRMED or mirrored VERBATIM from the live
+// customer site (src/content/faq.ts + PriceMatchContent). Nothing here is
+// guessed. The owner can add more of these (mission, about-us, parking, etc.)
+// in the admin UI; the seed only gap-fills on key/slug and never clobbers edits.
+//
+// The LIVE loyalty earn rate is intentionally NOT hard-coded here: it lives in
+// loyalty_config (owner-editable) and is composed into the loyalty answer at
+// grounding time by retrieval.ts, so it can never drift from the real program.
+// ---------------------------------------------------------------------------
+
+// Site sources (for provenance strings).
+const SITE_FAQ = "greenwaymarijuana.com/faq";
+const SITE_PRICE_MATCH = "greenwaymarijuana.com/price-match";
+
+export const SEED_STORE_FACTS: SeedStoreFact[] = [
+  {
+    key: "hours",
+    label: "Store hours",
+    category: "basics",
+    body: "We're open 8:00 AM to 11:00 PM every single day of the week — the one exception is Christmas Day, when we close so the crew can be with family.",
+    tags: ["hours", "open", "closing", "time"],
+    sort_order: 10,
+    sources: [SITE_FAQ, "owner-confirmed"],
+    confidence: 1,
+  },
+  {
+    key: "address",
+    label: "Address & location",
+    category: "basics",
+    body: "You'll find us at 4851 Geiger Rd SE, Port Orchard, WA 98367. Twenty-one and up, come see us.",
+    tags: ["address", "location", "directions", "where"],
+    sort_order: 20,
+    sources: ["owner-confirmed"],
+    confidence: 1,
+  },
+  {
+    key: "phone",
+    label: "Phone",
+    category: "basics",
+    body: "Give us a ring at 360-443-6988 — happy to answer questions before you make the trip.",
+    tags: ["phone", "call", "contact", "number"],
+    sort_order: 30,
+    sources: ["owner-confirmed"],
+    confidence: 1,
+  },
+  {
+    key: "payment",
+    label: "Payment (cash only + ATM)",
+    category: "payment",
+    body: "We're cash only — that's the norm in this industry. No worries if you came empty-handed: there's an ATM right in the shop, and the fee is two dollars and fifty cents. Credit and debit cards aren't accepted for cannabis purchases.",
+    tags: ["payment", "cash", "atm", "debit", "credit", "card"],
+    sort_order: 10,
+    sources: [SITE_FAQ, "owner-confirmed"],
+    confidence: 1,
+  },
+  {
+    key: "delivery",
+    label: "Delivery (not available)",
+    category: "policies",
+    body: "No delivery here — cannabis delivery isn't legal in Washington, so every order is an in-store pickup with a valid 21+ ID. Come on by.",
+    tags: ["delivery", "deliver", "shipping", "mail"],
+    sort_order: 10,
+    sources: ["owner-confirmed", WSLCB_USING],
+    confidence: 1,
+  },
+  {
+    key: "price-match",
+    label: "Price-match promise",
+    category: "policies",
+    body: "Greenway Marijuana offers a price-match promise for our Loyalty members on regularly priced products from our Port Orchard competitors. Ask your budtender and they'll walk you through how it works.",
+    tags: ["price", "match", "price-match", "loyalty", "competitor"],
+    sort_order: 20,
+    sources: [SITE_PRICE_MATCH],
+    confidence: 1,
+  },
+];
+
+export const SEED_FAQS: SeedFaq[] = [
+  {
+    slug: "store-hours",
+    question: "What are Greenway Marijuana's store hours?",
+    answer:
+      "We're open 8:00 AM to 11:00 PM every day of the week, closed only on Christmas Day. Roll through whenever works for you.",
+    category: "basics",
+    tags: ["hours", "open", "time"],
+    sort_order: 10,
+    sources: [SITE_FAQ, "owner-confirmed"],
+    confidence: 1,
+  },
+  {
+    slug: "location",
+    question: "Where is Greenway Marijuana located?",
+    answer:
+      "We're at 4851 Geiger Rd SE, Port Orchard, WA 98367. You can reach us at 360-443-6988 if you need directions.",
+    category: "basics",
+    tags: ["address", "location", "directions", "phone"],
+    sort_order: 20,
+    sources: ["owner-confirmed"],
+    confidence: 1,
+  },
+  {
+    slug: "payment-methods",
+    question: "What forms of payment do you accept?",
+    answer:
+      "Cash only, which is standard for cannabis retail. There's an ATM in the shop if you need it — the fee is two dollars and fifty cents. We can't take credit or debit for cannabis purchases.",
+    category: "buying",
+    tags: ["payment", "cash", "atm", "card", "debit", "credit"],
+    sort_order: 30,
+    sources: [SITE_FAQ, "owner-confirmed"],
+    confidence: 1,
+  },
+  {
+    slug: "who-can-buy",
+    question: "Who can legally buy cannabis?",
+    answer:
+      "Adults 21 and older, full stop. Bring a valid, unexpired government-issued photo ID and we'll get you taken care of.",
+    category: "compliance",
+    tags: ["age", "21", "id", "legal"],
+    sort_order: 40,
+    sources: [SITE_FAQ],
+    confidence: 1,
+  },
+  {
+    slug: "acceptable-id",
+    question: "What forms of ID do you accept?",
+    answer:
+      "We take a driver's license, instruction permit, or ID card from any U.S. state, territory, or D.C. (or any Canadian province); a valid Washington temporary driver's license; a U.S. Armed Forces ID; a Merchant Marine ID from the U.S. Coast Guard; an official passport, passport card, Global Entry card, Permanent Resident card, or NEXUS card; or a Washington State Tribal Enrollment card. It just has to be valid and 21+.",
+    category: "compliance",
+    tags: ["id", "identification", "age", "passport", "license"],
+    sort_order: 50,
+    sources: [SITE_FAQ],
+    confidence: 1,
+  },
+  {
+    slug: "out-of-state-residents",
+    question: "Do I have to be a Washington resident to buy?",
+    answer:
+      "Nope — you don't have to live in Washington to shop with us. You just have to be 21+ with a valid ID.",
+    category: "compliance",
+    tags: ["resident", "out-of-state", "tourist", "visitor"],
+    sort_order: 60,
+    sources: [SITE_FAQ],
+    confidence: 1,
+  },
+  {
+    slug: "purchase-limits",
+    question: "How much cannabis can I buy at once?",
+    answer:
+      "Washington sets the single-visit limits: up to one ounce (28 grams) of usable flower, sixteen ounces of solid cannabis-infused edibles, seventy-two ounces of infused liquids, or seven grams of concentrate (dabs, vape carts, infused pre-rolls). Our register keeps every basket within those limits for you.",
+    category: "compliance",
+    tags: ["limit", "purchase", "how-much", "ounce"],
+    sort_order: 70,
+    sources: [SITE_FAQ, "RCW 69.50.360"],
+    confidence: 1,
+  },
+  {
+    slug: "consume-on-site",
+    question: "Can I use cannabis on the premises?",
+    answer:
+      "You can't open, smoke, or consume any cannabis product on our property — and public consumption isn't allowed in Washington, period. Save it for private property.",
+    category: "compliance",
+    tags: ["consume", "smoke", "on-site", "public"],
+    sort_order: 80,
+    sources: [SITE_FAQ, WSLCB_USING],
+    confidence: 1,
+  },
+  {
+    slug: "where-to-consume",
+    question: "Where can I legally consume what I buy?",
+    answer:
+      "On private property only. Washington handles public use much like public intoxication — think a fine of around three hundred fifty dollars that can climb higher, so keep it private.",
+    category: "compliance",
+    tags: ["consume", "private", "public", "where"],
+    sort_order: 90,
+    sources: [SITE_FAQ],
+    confidence: 1,
+  },
+  {
+    slug: "cross-state-lines",
+    question: "Can I take my purchase to another state?",
+    answer:
+      "No — cannabis bought here stays in Washington. Crossing state lines with it is a federal issue, so keep it in-state.",
+    category: "compliance",
+    tags: ["travel", "state-lines", "transport", "airport"],
+    sort_order: 100,
+    sources: [SITE_FAQ, WSLCB_USING],
+    confidence: 1,
+  },
+  {
+    slug: "see-before-buying",
+    question: "Can I see the product before I buy it?",
+    answer:
+      "Absolutely — in all its packaged glory. You can't open or sample it on site (that's federally a no-go), but your budtender is happy to show you what we've got.",
+    category: "buying",
+    tags: ["see", "sample", "try", "product"],
+    sort_order: 110,
+    sources: [SITE_FAQ],
+    confidence: 1,
+  },
+  {
+    slug: "returns",
+    question: "Can I return or exchange a product?",
+    answer:
+      "Yes, within limits set by WAC 314-55-079. Returns must be made within 15 days of purchase, and the item has to come back in its original packaging with the lot/batch/inventory ID fully legible, along with your receipt. That covers flower, joints, edibles, cartridges, syringes, and disposable vapes.",
+    category: "buying",
+    tags: ["return", "exchange", "refund", "defective"],
+    sort_order: 120,
+    sources: [SITE_FAQ, "WAC 314-55-079"],
+    confidence: 1,
+  },
+  {
+    slug: "price-match",
+    question: "Do you offer a price match?",
+    answer:
+      "We do, for our Loyalty members. We'll match regularly priced menu items against other Port Orchard, Washington cannabis retailers when it's the exact same vendor/brand and size we carry. A few ground rules: the competitor's price has to be regular price (no happy hours, holidays, or daily specials), it must include all Washington and local taxes, and it needs to be verifiable via their website, menu, or a phone call. Price-matched items can't be discounted further, and every sale stays compliant. Ask your budtender to set it up.",
+    category: "loyalty",
+    tags: ["price", "match", "price-match", "loyalty", "competitor"],
+    sort_order: 130,
+    sources: [SITE_PRICE_MATCH],
+    confidence: 1,
+  },
+  {
+    slug: "delivery",
+    question: "Do you deliver?",
+    answer:
+      "We don't — cannabis delivery isn't legal in Washington. Everything is in-store pickup with a valid 21+ ID, so come see us at the shop.",
+    category: "buying",
+    tags: ["delivery", "deliver", "pickup", "shipping"],
+    sort_order: 140,
+    sources: ["owner-confirmed", WSLCB_USING],
+    confidence: 1,
+  },
+  {
+    slug: "resell",
+    question: "Can I buy products to resell?",
+    answer:
+      "Only if you're looking to get in serious trouble — reselling cannabis is illegal in Washington. What you buy from us is for personal, legal use.",
+    category: "compliance",
+    tags: ["resell", "resale", "wholesale"],
+    sort_order: 150,
+    sources: [SITE_FAQ],
+    confidence: 1,
+  },
+  {
+    slug: "loyalty-program",
+    question: "How does your loyalty program work?",
+    answer:
+      "Sign up for free and you'll start earning points on your purchases that you can redeem for savings down the road — plus loyalty members get access to our price-match promise. Ask your budtender to get you enrolled and they'll walk you through the current earn rate and rewards.",
+    category: "loyalty",
+    tags: ["loyalty", "points", "rewards", "earn", "program"],
+    sort_order: 160,
+    // No hard-coded earn rate: retrieval composes the LIVE rate from loyalty_config.
+    sources: ["loyalty_config (live)"],
+    confidence: 0.9,
   },
 ];
 

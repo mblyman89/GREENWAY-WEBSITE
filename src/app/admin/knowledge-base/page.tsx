@@ -198,6 +198,20 @@ export default async function KnowledgeBasePage({
               accent="orange"
             />
             <KbNavCard
+              href="/admin/knowledge-base/about"
+              title="About us & store facts"
+              description="Everything the concierge should know about Greenway — hours, address, payment, delivery, mission & more. Add your own any time."
+              count={counts.storeFacts}
+              accent="green"
+            />
+            <KbNavCard
+              href="/admin/knowledge-base/faqs"
+              title="FAQ pack"
+              description="The questions customers actually ask, answered in our voice — hours, ID, payment, limits, returns, price match, loyalty. Owner-editable."
+              count={counts.faqs}
+              accent="gold"
+            />
+            <KbNavCard
               href="/admin/inventory/noncannabis"
               title="Non-cannabis catalog"
               description="Glass, accessories, papers & devices — tracked with smart SKUs and connected to the KB."

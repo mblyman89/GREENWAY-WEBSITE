@@ -25,6 +25,8 @@ import {
   SEED_EFFECTS,
   SEED_PRODUCT_FORMATS,
   SEED_COMPLIANCE_RULES,
+  SEED_STORE_FACTS,
+  SEED_FAQS,
   SEED_CATEGORIES,
   type SeedStrain,
   type SeedTerpene,
@@ -32,8 +34,17 @@ import {
   type SeedEffect,
   type SeedProductFormat,
   type SeedComplianceRule,
+  type SeedStoreFact,
+  type SeedFaq,
   type SeedCategory,
 } from "./seed";
+import {
+  listActiveKbStoreFacts,
+  listActiveKbFaqs,
+  type KbStoreFactRow,
+  type KbFaqRow,
+} from "./store";
+import { getConfig as getLoyaltyConfig } from "@/lib/loyalty/loyalty-store";
 import { STRAINS_RICH, type SeedStrainRich } from "./strains-data";
 import { renderNoteFacts, type KbNote, type NoteMatchFacts } from "./kb-notes-core";
 import type { ProductFacts } from "../suggestions";
@@ -953,4 +964,133 @@ export async function loadBannedPhrases(): Promise<BannedPhrase[]> {
   } catch {
     return [];
   }
+}
+
+// ===========================================================================
+// STORE CONTEXT (Slice 4) — store/brand facts + FAQ pack for a customer-facing
+// concierge or any "about us" question. This is STORE-WIDE context, distinct
+// from buildGroundedFacts() which grounds a single product's copy. It is kept
+// separate so per-SKU prompts stay tight and so a concierge can pull the store
+// facts on demand.
+//
+// The loyalty answer is composed with the LIVE earn rate from loyalty_config,
+// never a hard-coded number, so the concierge can never quote a stale rate.
+// ===========================================================================
+
+export type StoreContext = {
+  /** Prompt-ready block of store facts + FAQ (or "" if nothing available). */
+  block: string;
+  /** Provenance tags (kb:fact:<key>, kb:faq:<slug>). */
+  sources: string[];
+};
+
+type StoreFactLike = Pick<KbStoreFactRow, "key" | "label" | "category" | "body">;
+type FaqLike = Pick<KbFaqRow, "slug" | "question" | "answer" | "category">;
+
+/** Load active store facts (DB published → in-code seed fallback). */
+async function loadStoreFacts(): Promise<StoreFactLike[]> {
+  if (isSupabaseServiceConfigured) {
+    try {
+      const rows = await listActiveKbStoreFacts();
+      if (rows.length) {
+        return rows.map((r) => ({ key: r.key, label: r.label, category: r.category, body: r.body }));
+      }
+    } catch {
+      /* fall through to seed */
+    }
+  }
+  return SEED_STORE_FACTS.map((f: SeedStoreFact) => ({
+    key: f.key,
+    label: f.label,
+    category: f.category,
+    body: f.body,
+  }));
+}
+
+/** Load active FAQs (DB published → in-code seed fallback). */
+async function loadFaqs(): Promise<FaqLike[]> {
+  if (isSupabaseServiceConfigured) {
+    try {
+      const rows = await listActiveKbFaqs();
+      if (rows.length) {
+        return rows.map((r) => ({ slug: r.slug, question: r.question, answer: r.answer, category: r.category }));
+      }
+    } catch {
+      /* fall through to seed */
+    }
+  }
+  return SEED_FAQS.map((q: SeedFaq) => ({
+    slug: q.slug,
+    question: q.question,
+    answer: q.answer,
+    category: q.category,
+  }));
+}
+
+/**
+ * Compose the LIVE loyalty earn-rate sentence from loyalty_config. Returns "" if
+ * the config isn't available so we never fabricate a rate. pointsPerDollar and
+ * pointValueMinor come straight from the owner-editable program config.
+ */
+async function liveLoyaltySentence(): Promise<string> {
+  try {
+    const cfg = await getLoyaltyConfig();
+    if (!cfg || !Number.isFinite(cfg.pointsPerDollar) || cfg.pointsPerDollar <= 0) return "";
+    const ppd = cfg.pointsPerDollar;
+    const ptLabel = ppd === 1 ? "point" : "points";
+    // pointValueMinor is the redemption value of ONE point, in cents.
+    const centsPerPoint = Number.isFinite(cfg.pointValueMinor) ? cfg.pointValueMinor : null;
+    let redeem = "";
+    if (centsPerPoint && centsPerPoint > 0) {
+      const dollarsPerPoint = centsPerPoint / 100;
+      redeem = ` Each point is worth about $${dollarsPerPoint.toFixed(2)} toward a future purchase.`;
+    }
+    const minRedeem =
+      Number.isFinite(cfg.minRedeemPoints) && cfg.minRedeemPoints > 0
+        ? ` You can start redeeming once you've banked ${cfg.minRedeemPoints} points.`
+        : "";
+    return `Current loyalty earn rate: ${ppd} ${ptLabel} per $1 spent (pretax).${redeem}${minRedeem}`.trim();
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Build the store-wide context block: store facts + FAQ pack, with the LIVE
+ * loyalty rate stitched into the loyalty FAQ. Best-effort; never throws.
+ */
+export async function buildStoreContext(): Promise<StoreContext> {
+  const [facts, faqs, loyaltyLine] = await Promise.all([
+    loadStoreFacts(),
+    loadFaqs(),
+    liveLoyaltySentence(),
+  ]);
+
+  const sources: string[] = [];
+  const lines: string[] = [];
+
+  if (facts.length) {
+    lines.push("Greenway store facts (use these verbatim for 'about us' questions; never invent store details):");
+    for (const f of facts) {
+      sources.push(`kb:fact:${f.key}`);
+      lines.push(`- ${f.label}: ${f.body}`);
+    }
+  }
+
+  if (faqs.length) {
+    lines.push("");
+    lines.push("Greenway FAQ (answer in this voice; if a customer asks something not covered, say you'll check with the team rather than guess):");
+    for (const q of faqs) {
+      sources.push(`kb:faq:${q.slug}`);
+      let answer = q.answer;
+      // Stitch the LIVE loyalty rate into the loyalty answer so it can't drift.
+      if (q.slug === "loyalty-program" && loyaltyLine) {
+        answer = `${answer} ${loyaltyLine}`;
+      }
+      lines.push(`Q: ${q.question}`);
+      lines.push(`A: ${answer}`);
+    }
+  }
+
+  return { block: lines.join("\n").trim(), sources };
 }
