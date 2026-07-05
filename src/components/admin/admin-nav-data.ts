@@ -60,8 +60,8 @@ export const adminNav: AdminNavItem[] = [
   { label: "Accounts Payable", href: "/admin/vendor-payments", permission: "settings.manage", icon: "\ud83d\udcb3", group: "Product Intake" }, // 💳 payments
   { label: "Knowledge Base", href: "/admin/knowledge-base", permission: "products.enrich", icon: "\ud83d\udcda", group: "Product Intake" }, // 📚 reference
 
-  { label: "Inventory", href: "/admin/inventory", permission: "inventory.manage", icon: "\ud83c\udf3f", group: "Inventory" }, // 🌿 cannabis flower lots
-  { label: "Other Inventory", href: "/admin/inventory/noncannabis", permission: "inventory.manage", icon: "\ud83d\uded2", group: "Inventory" }, // 🛒 non-cannabis goods
+  { label: "Inventory", href: "/admin/inventory", permission: "inventory.manage", icon: "\ud83c\udf41", group: "Inventory" }, // 🍁 pot leaf (cannabis flower lots)
+  { label: "Other Inventory", href: "/admin/inventory/noncannabis", permission: "inventory.manage", icon: "\ud83d\udeac", group: "Inventory" }, // 🚬 bong / smoking accessories (non-cannabis goods)
   { label: "Vendors & Brands", href: "/admin/vendors", permission: "vendors.manage", icon: "\ud83c\udfe2", group: "Inventory" }, // 🏢 suppliers
   { label: "Types & Categories", href: "/admin/settings/types", permission: "settings.manage", icon: "\ud83c\udff7\ufe0f", group: "Inventory" }, // 🏷️ tags
   { label: "Cycle Counts", href: "/admin/inventory/cycle-counts", permission: "inventory.manage", icon: "\ud83d\udccb", group: "Inventory" }, // 📋 count clipboard
