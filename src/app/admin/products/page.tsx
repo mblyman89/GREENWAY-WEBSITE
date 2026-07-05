@@ -51,6 +51,23 @@ export default async function ProductsPage({
             </Link>
           </div>
           <CatalogStageStrip current="enrichment" />
+          <HelpPanel
+            id="products-empty"
+            title="How product enrichment works"
+            defaultOpen
+            steps={[
+              "Finish the one-time database setup (your administrator does this).",
+              "Publish a menu: import your POS export under Menu Imports and publish it.",
+              "Products then appear here automatically — your POS only provides names and prices.",
+              "Open a product to add a photo, description, tags, and strain type.",
+              "Use the AI helper to draft copy, then edit and approve it. Price & stock stay POS-controlled.",
+            ]}
+          >
+            <p>
+              Enrichment is what makes a product look great online. Everything here is a
+              draft you approve, and nothing makes medical or health claims.
+            </p>
+          </HelpPanel>
           <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] p-5 text-sm text-[var(--admin-gold)]">
             The database isn&apos;t fully set up yet. Once your administrator
             finishes the one-time setup, your products will appear here.
@@ -80,6 +97,23 @@ export default async function ProductsPage({
             </Link>
           </div>
           <CatalogStageStrip current="enrichment" />
+          <HelpPanel
+            id="products-empty"
+            title="How product enrichment works"
+            defaultOpen
+            steps={[
+              "Publish a menu first: import your POS export under Menu Imports and publish it.",
+              "Products then appear here automatically — your POS only provides names and prices.",
+              "Open a product to add a photo, description, tags, and strain type.",
+              "Use the AI helper to draft a description or alt-text, then edit and approve it.",
+              "Save — the richer info shows on your public product page. Price & stock stay POS-controlled.",
+            ]}
+          >
+            <p>
+              Enrichment is what makes a product look great online. Everything here is a
+              draft you approve, and nothing makes medical or health claims.
+            </p>
+          </HelpPanel>
           <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-6 text-sm text-[var(--admin-text-muted)]">
             No published menu yet. Import and publish a menu version under{" "}
             <Link href="/admin/menu-imports" className="text-[var(--admin-accent)] hover:underline">
