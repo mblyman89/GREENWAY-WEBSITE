@@ -234,4 +234,4 @@ see `docs/COMMAND_CENTER_ENHANCEMENTS_TASKLIST.md`.
 - [x] admin: /admin/knowledge-base/about (facts add/edit/hide) + /admin/knowledge-base/faqs (add/edit/hide) + 2 KB landing nav cards. actions.ts: 4 audited server actions.
 - [x] docs/KB_STORE_VOICE_FAQ_SOURCES.md (sources + flagged site typo).
 - [x] Verify: tsc 0 · eslint 0 · next build OK (both routes present) · .next removed · compliance 0 blocking.
-- [ ] MERGE whole feat/kb-hardening-v2 branch (PR → squash) so owner can move on
+- [x] MERGE whole feat/kb-hardening-v2 branch (PR → squash) so owner can move on — DONE via PR #256, squash-merged to main (merge commit 721c956), branch deleted.
