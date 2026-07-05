@@ -211,9 +211,17 @@ see `docs/COMMAND_CENTER_ENHANCEMENTS_TASKLIST.md`.
 - [x] admin read-only page /admin/knowledge-base/rules + KB landing nav card
 - [x] Verify: tsc 0 · eslint 0 · next build OK · compliance 0 blocking/0 warn. Commit cc7f7d2, pushed.
 
-### Slice 5 — Terpene -> aroma cross-map enrichment
-- [ ] Cross-map terpenes to aroma/flavor descriptors (factual); enrich strain/product grounding
-- [ ] Migration + seed + wire + verify
+### Slice 5 — Terpene -> aroma cross-map enrichment  [SHIPPED]
+> KEY FINDING (verified, not guessed): kb_terpenes (migration 0019) already had aroma_notes[]/flavor_notes[]/also_found_in for 22 terpenes, but retrieval only fired terpene grounding for terpenes the STRAIN listed, emitted bare words, and had NO reverse map (aroma word -> terpene). Slice 5 enriches this SENSORY-ONLY (no effects/entourage/medical — the rule since 0019 is preserved).
+- [x] Migration 0089_kb_terpene_aroma_crossmap.sql — idempotent, NON-DESTRUCTIVE single column add `aroma_families text[] not null default '{}'` + comment (MANUAL apply)
+- [x] seed.ts: `aroma_families?: string[]` on SeedTerpene; all 22 SEED_TERPENES enriched with normalized families (citrus/pine/earthy/floral/spicy/minty/herbal/woody/sweet/hoppy) derived from each terpene's own notes
+- [x] store.ts: terpeneRows upserts aroma_families; DEGRADE-SAFE retry (strips aroma_families + warns) if column absent (pre-0089)
+- [x] retrieval.ts: enriched loadTerpenes() with base-select fallback; WIDENED trigger to include kbProduct.row.terpenes; forward lines add aroma family + botanical hook ("same terpene you'd meet in lemon rind"); REVERSE aroma->terpene cross-map from strain/product aroma/flavor words (capped 3/family, prefers un-surfaced terpenes; every line labelled "describes smell, makes no effect claim")
+- [x] docs/KB_TERPENE_AROMA_CROSSMAP_SOURCES.md (cross-map table + rationale + sources)
+- [x] Verify: tsc 0 · eslint 0 (0 warnings) · next build OK · .next removed (disk 90%, held). Commit f073400, pushed to feat/kb-hardening-v2.
+- [x] Roadmap + todo marked SHIPPED; 0089 added to owner MANUAL steps.
+
+> ⏸️ STOP POINT (per owner directive): slices 2/3/5 done. Do NOT build Slice 4 yet — report to owner + brief them on exactly what Slice 4 will contain, get their input FIRST.
 
 ### Slice 4 — Store/brand voice & FAQ pack (LAST, own slice)
 - [ ] Define Greenway store voice + curated FAQ pack for grounding; admin + verify

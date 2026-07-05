@@ -31,7 +31,7 @@ enjoyable and a little funny, **but still professional**. Curated **quality over
 2. **Consumption methods / product formats** — deep, Washington-State-specific research — **SHIPPED**
 3. **Compliance rules in the KB** — surfaced helpfully to keep customers safe — **SHIPPED**
 4. *(item 4 — store/brand voice & FAQ pack)* — its **own slice, LAST**, after 1/2/3/5
-5. **Terpene → aroma cross-map enrichment**
+5. **Terpene → aroma cross-map enrichment** — **SHIPPED**
 
 > Build order: **1 → 2 → 3 → 5 → 4** (item 4 is explicitly last).
 
@@ -176,11 +176,58 @@ underage", "treat it like"→"store it like", milligrams spelled in words).
 
 ---
 
-## Slices 5, 4 — NOT STARTED
+## Slice 5 — Terpene → aroma cross-map enrichment — SHIPPED
 
-- **Slice 5 (terpene → aroma cross-map):** enrich the existing kb_terpenes aroma/flavor map and
-  cross-map it into strain/product grounding.
-- **Slice 4 (store/brand voice & FAQ pack):** LAST. Curated house voice + FAQ pack for grounding.
+**Gap it filled (verified).** `kb_terpenes` (migration 0019) already carried `aroma_notes[]`,
+`flavor_notes[]`, and an `also_found_in` botanical bridge, and `SEED_TERPENES` had 22 rich
+entries. But retrieval grounding only fired terpene lines for terpenes the **strain** listed
+(`strain.terpenes`), emitted bare comma-joined words, and had **no reverse map** — no way to go
+from an aroma word a customer says ("something citrusy") back to the terpene that drives it.
+
+**What shipped.** Sensory-only enrichment (no effects / no "entourage effect" / no medical
+content — the rule since 0019 is preserved):
+1. **`aroma_families text[]`** added to `kb_terpenes` (migration 0089, one nullable column,
+   default `'{}'`) — normalized aroma-family tags per terpene (limonene → `{citrus}`, pinene →
+   `{pine, herbal}`, myrcene → `{earthy, herbal, sweet, hoppy}`, …). All 22 seed terpenes enriched.
+2. **Widened terpene trigger** in `retrieval.ts`: terpene grounding now fires for the terpenes on
+   the exact **KB product record** (`kbProduct.row.terpenes`) as well as the strain's, so it grounds
+   on whatever the customer is actually holding.
+3. **Enriched forward lines**: each matched terpene now also emits its aroma family + a real-world
+   hook from `also_found_in` ("Terpene Limonene sits in the citrus aroma family — the same terpene
+   you'd also meet in citrus rind, juniper, peppermint (scent chemistry, not an effect claim)").
+4. **Reverse aroma cross-map**: the aroma/flavor words already on the strain or product are resolved
+   to normalized aroma families, then the terpenes that typically carry that family are named
+   ("That citrus note usually traces back to terpenes like Limonene, Terpinolene … (aroma cross-map
+   — describes smell, makes no effect claim)"), capped at three per family and preferring terpenes
+   not already surfaced above.
+
+**Degrade-safe (day-one correctness).** Both the seed upsert (`store.ts`) and the retrieval loader
+(`retrieval.ts`) handle a database that has **not yet applied 0089**: the seed retries the terpene
+upsert without `aroma_families` (and warns), and the loader falls back to the base select. So the
+whole slice compiles and runs before the owner applies the migration; the cross-map simply lights
+up once 0089 is applied and the KB is reseeded.
+
+**Files.**
+- `supabase/migrations/0089_kb_terpene_aroma_crossmap.sql` — idempotent, non-destructive single
+  column add + comment. No value backfill (seed upserts families on `slug`, gap-fill style).
+- `src/lib/ai/kb/seed.ts` — `aroma_families?: string[]` on `SeedTerpene`; all 22 `SEED_TERPENES`
+  enriched with normalized families derived from each terpene's own notes.
+- `src/lib/ai/kb/store.ts` — `terpeneRows` now upserts `aroma_families`; degrade retry if column
+  absent.
+- `src/lib/ai/kb/retrieval.ts` — enriched `loadTerpenes()` (with base-select fallback), widened
+  trigger, forward aroma-family + botanical hook, reverse aroma→terpene cross-map.
+- `docs/KB_TERPENE_AROMA_CROSSMAP_SOURCES.md` — cross-map table + rationale + sources.
+
+**Verified.** `tsc --noEmit` clean · `eslint` 0 errors/0 warnings · `next build` compiled
+successfully · `.next` removed (disk discipline).
+
+---
+
+## Slice 4 — Store/brand voice & FAQ pack — NOT STARTED (report to owner FIRST)
+
+LAST slice by direction. Curated house voice + FAQ pack for grounding. **The owner asked to be
+briefed on exactly what Slice 4 will contain before it is built** — do NOT build it until that
+conversation happens.
 
 ---
 
@@ -194,10 +241,13 @@ The agent never applies migrations. After reviewing/merging this branch:
    - `0086_kb_effects.sql` (Slice 1).
    - `0087_kb_product_formats.sql` (Slice 2).
    - `0088_kb_compliance_rules.sql` (Slice 3).
+   - `0089_kb_terpene_aroma_crossmap.sql` (Slice 5) — adds `aroma_families` to `kb_terpenes`.
 2. **Reseed the KB** from `/admin/knowledge-base/setup` (the "Seed knowledge base" action). This
    idempotently upserts the 8 cannabinoids **with the new psychoactive/non-psychoactive labels**,
-   the **16 effects**, the **14 product formats**, and the **8 WA compliance/safety rules**. It never
-   overwrites curated edits (upsert on `slug`).
+   the **16 effects**, the **14 product formats**, the **8 WA compliance/safety rules**, and the
+   **aroma-family tags on all 22 terpenes** (Slice 5). It never overwrites curated edits (upsert on
+   `slug`). If 0089 hasn't been applied yet, the reseed still succeeds and simply warns that the
+   terpene aroma cross-map was skipped — apply 0089 and reseed to light it up.
 3. **Confirm** the new pages render: `/admin/knowledge-base/cannabinoids` (new labels),
    `/admin/knowledge-base/effects` (16 cards), `/admin/knowledge-base/formats` (14 cards), and
    `/admin/knowledge-base/rules` (8 cards). The KB landing shows live counts.
