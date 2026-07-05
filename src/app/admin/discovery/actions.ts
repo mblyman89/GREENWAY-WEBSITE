@@ -27,6 +27,7 @@ import {
   deleteDataset,
 } from "@/lib/discovery/ingest";
 import { computeBenchmarks, generateVendorLeadsFromCcrs } from "@/lib/discovery/benchmarks";
+import { enrichKbFromCcrsDataset } from "@/lib/kb/enrich-from-discovery";
 import { listVendorLeads, listProductLeads } from "@/lib/discovery/store";
 import { listDatasets } from "@/lib/discovery/ingest";
 import { computeCompetitorProfiles, rollUpAreas } from "@/lib/discovery/competitors";
@@ -394,10 +395,47 @@ export async function uploadCcrsDatasetAction(formData: FormData): Promise<void>
     entityId: datasetId as string,
     after: { label, summary, unknown, files: files.length },
   });
+
+  // AUTO-HOOK (Slice B): every accurate fact that enters via state data finds
+  // its home in the KB. Fire enrichment right after a successful ingest —
+  // drafts-only, non-destructive, and NON-FATAL: an enrichment failure must
+  // never break the upload the owner just completed.
+  let kbBanner = "";
+  try {
+    const enrich = await enrichKbFromCcrsDataset(datasetId as string, session.profile.id);
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "kb.enriched_from_ccrs",
+      entityType: "discovery_datasets",
+      entityId: datasetId as string,
+      after: {
+        auto: true,
+        brandsInserted: enrich.brandsInserted,
+        brandsEnriched: enrich.brandsEnriched,
+        productsInserted: enrich.productsInserted,
+        productsEnriched: enrich.productsEnriched,
+        skipped: enrich.skipped,
+        warnings: enrich.warnings,
+      },
+    });
+    kbBanner = `&kb_brands=${enrich.brandsInserted + enrich.brandsEnriched}&kb_products=${enrich.productsInserted + enrich.productsEnriched}`;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "KB enrichment failed.";
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "kb.enriched_from_ccrs.error",
+      entityType: "discovery_datasets",
+      entityId: datasetId as string,
+      after: { auto: true, message },
+    }).catch(() => {});
+  }
+
   revalidatePath(CCRS);
   const uq = unknown.length ? `&unknown=${encodeURIComponent(unknown.join(", "))}` : "";
   const total = Object.values(summary).reduce((a, b) => a + b, 0);
-  redirect(`${CCRS}?uploaded=1&rows=${total}&dataset=${datasetId}${uq}`);
+  redirect(`${CCRS}?uploaded=1&rows=${total}&dataset=${datasetId}${uq}${kbBanner}`);
 }
 
 /** Recompute all statewide benchmarks for a dataset from its ingested rows. */
@@ -450,6 +488,55 @@ export async function generateCcrsVendorLeadsAction(formData: FormData): Promise
   revalidatePath(CCRS);
   revalidatePath(BASE);
   redirect(`${CCRS}?leads_inserted=${inserted}&leads_processed=${processed}&dataset=${datasetId}`);
+}
+
+/**
+ * Slice B — manually (re-)run KB enrichment for one dataset. Drafts-only and
+ * idempotent (ON CONFLICT DO NOTHING + gap-fill), so re-running is always safe.
+ */
+export async function enrichKbFromCcrsAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("products.enrich");
+  await ensureEnabled();
+  const datasetId = str(formData, "dataset_id");
+  if (!datasetId) redirect(`${CCRS}?error=${encodeURIComponent("Missing dataset id.")}`);
+
+  let banner: string;
+  try {
+    const enrich = await enrichKbFromCcrsDataset(datasetId as string, session.profile.id);
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "kb.enriched_from_ccrs",
+      entityType: "discovery_datasets",
+      entityId: datasetId as string,
+      after: {
+        auto: false,
+        brandsInserted: enrich.brandsInserted,
+        brandsEnriched: enrich.brandsEnriched,
+        productsInserted: enrich.productsInserted,
+        productsEnriched: enrich.productsEnriched,
+        skipped: enrich.skipped,
+        warnings: enrich.warnings,
+      },
+    });
+    banner = `kb_brands=${enrich.brandsInserted + enrich.brandsEnriched}&kb_products=${enrich.productsInserted + enrich.productsEnriched}&kb_ran=1`;
+    const blocking = enrich.warnings.find((w) => w.includes("migration 0082") || w.includes("migration 0071"));
+    if (blocking) banner += `&kb_warn=${encodeURIComponent(blocking)}`;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "KB enrichment failed.";
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "kb.enriched_from_ccrs.error",
+      entityType: "discovery_datasets",
+      entityId: datasetId as string,
+      after: { auto: false, message },
+    }).catch(() => {});
+    redirect(`${CCRS}?error=${encodeURIComponent(message)}`);
+  }
+  revalidatePath(CCRS);
+  revalidatePath("/admin/knowledge-base/review");
+  redirect(`${CCRS}?${banner}&dataset=${datasetId}`);
 }
 
 /** Permanently delete a dataset and its rows/benchmarks (cascade). */

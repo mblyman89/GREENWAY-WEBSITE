@@ -605,6 +605,119 @@ export async function listKbBrands(limit = 500): Promise<KbBrandRow[]> {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Slice B — kb_brands drafts review (requires migration 0082 for the status/
+// provenance columns; every read degrades to empty pre-migration).
+// ---------------------------------------------------------------------------
+
+export type KbBrandDraftRow = {
+  id: string;
+  slug: string;
+  name: string;
+  aliases: string[] | null;
+  vendor_id: string | null;
+  source: string | null;
+  confidence: number | null;
+  status: string;
+  updated_at: string;
+};
+
+/** List kb_brands rows awaiting review (status='draft'). Empty pre-0082. */
+export async function listKbBrandDrafts(limit = 200): Promise<KbBrandDraftRow[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("kb_brands")
+      .select("id,slug,name,aliases,vendor_id,source,confidence,status,updated_at")
+      .eq("status", "draft")
+      .order("updated_at", { ascending: false })
+      .limit(limit);
+    if (error || !data) return [];
+    return data as KbBrandDraftRow[];
+  } catch {
+    return [];
+  }
+}
+
+/** Count draft kb_brands (for the review-queue badge). 0 pre-0082. */
+export async function countKbBrandDrafts(): Promise<number> {
+  if (!isSupabaseServiceConfigured) return 0;
+  try {
+    const admin = createSupabaseAdminClient();
+    const { count, error } = await admin
+      .from("kb_brands")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "draft");
+    if (error) return 0;
+    return count ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** Publish / archive / return-to-draft one kb_brands row (mirrors reviewKbProduct). */
+export async function reviewKbBrand(
+  id: string,
+  decision: "publish" | "archive" | "draft",
+  actorId: string | null,
+): Promise<void> {
+  const admin = createSupabaseAdminClient();
+  const patch =
+    decision === "publish"
+      ? { status: "published", active: true, updated_by: actorId }
+      : decision === "archive"
+        ? { status: "archived", active: false, updated_by: actorId }
+        : { status: "draft", active: false, updated_by: actorId };
+  const { error } = await admin.from("kb_brands").update(patch).eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+/**
+ * Bulk publish/archive every DRAFT whose source starts with the given prefix
+ * (e.g. 'ccrs:' = all CCRS-enrichment drafts, or 'ccrs:<datasetId>' = one
+ * dataset). Only ever touches status='draft' rows — published/archived rows
+ * are never moved by a bulk action. Returns per-table update counts.
+ */
+export async function bulkReviewKbDraftsBySource(
+  sourcePrefix: string,
+  decision: "publish" | "archive",
+  actorId: string | null,
+): Promise<{ products: number; brands: number }> {
+  const admin = createSupabaseAdminClient();
+  const patch =
+    decision === "publish"
+      ? { status: "published", active: true, updated_by: actorId }
+      : { status: "archived", active: false, updated_by: actorId };
+  const like = `${sourcePrefix.replaceAll("%", "\\%")}%`;
+
+  let products = 0;
+  let brands = 0;
+  {
+    const { data, error } = await admin
+      .from("kb_products")
+      .update(patch)
+      .eq("status", "draft")
+      .like("source", like)
+      .select("id");
+    if (error) throw new Error(error.message);
+    products = data?.length ?? 0;
+  }
+  try {
+    // kb_brands needs 0082; degrade to 0 when the columns don't exist yet.
+    const { data, error } = await admin
+      .from("kb_brands")
+      .update(patch)
+      .eq("status", "draft")
+      .like("source", like)
+      .select("id");
+    if (!error) brands = data?.length ?? 0;
+  } catch {
+    // pre-0082 schema — brands untouched
+  }
+  return { products, brands };
+}
+
 export type KbBannedRow = { id: string; phrase: string; severity: string; reason: string | null; active: boolean };
 
 export async function listKbBanned(limit = 500): Promise<KbBannedRow[]> {

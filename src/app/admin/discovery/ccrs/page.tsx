@@ -10,6 +10,7 @@ import {
   uploadCcrsDatasetAction,
   computeBenchmarksAction,
   generateCcrsVendorLeadsAction,
+  enrichKbFromCcrsAction,
   deleteCcrsDatasetAction,
   setDiscoveryEnabledAction,
 } from "../actions";
@@ -106,6 +107,10 @@ export default async function CcrsPage({ searchParams }: { searchParams: Promise
   const leadsProcessed = one(sp, "leads_processed");
   const deleted = one(sp, "deleted");
   const errorMsg = one(sp, "error");
+  const kbBrands = one(sp, "kb_brands");
+  const kbProducts = one(sp, "kb_products");
+  const kbRan = one(sp, "kb_ran");
+  const kbWarn = one(sp, "kb_warn");
 
   return (
     <div>
@@ -174,6 +179,19 @@ export default async function CcrsPage({ searchParams }: { searchParams: Promise
             </Link>
           </Flash>
         ) : null}
+        {kbRan || (uploaded && (kbBrands || kbProducts)) ? (
+          <Flash tone="ok">
+            KB enrichment staged <strong>{kbBrands ?? "0"}</strong> brand and{" "}
+            <strong>{kbProducts ?? "0"}</strong> product record(s) as drafts (nothing auto-publishes).{" "}
+            <Link
+              href="/admin/knowledge-base/review"
+              className="font-semibold text-[var(--admin-accent)] hover:underline"
+            >
+              Review the drafts →
+            </Link>
+          </Flash>
+        ) : null}
+        {kbWarn ? <Flash tone="err">{kbWarn}</Flash> : null}
         {deleted ? <Flash tone="ok">Dataset deleted.</Flash> : null}
         {errorMsg ? <Flash tone="err">{errorMsg}</Flash> : null}
 
@@ -347,6 +365,12 @@ export default async function CcrsPage({ searchParams }: { searchParams: Promise
                         <input type="hidden" name="dataset_id" value={d.id} />
                         <Button type="submit" variant="save" size="sm" disabled={d.sales_rows === 0}>
                           Generate vendor leads
+                        </Button>
+                      </form>
+                      <form action={enrichKbFromCcrsAction}>
+                        <input type="hidden" name="dataset_id" value={d.id} />
+                        <Button type="submit" variant="neutral" size="sm" disabled={d.product_rows === 0}>
+                          Enrich KB
                         </Button>
                       </form>
                       <form action={deleteCcrsDatasetAction}>

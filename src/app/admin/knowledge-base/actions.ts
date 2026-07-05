@@ -16,6 +16,8 @@ import {
   upsertKbProductCategory,
   setProductCategoryActive,
   reviewKbProduct,
+  reviewKbBrand,
+  bulkReviewKbDraftsBySource,
 } from "@/lib/ai/kb/store";
 import { updateBrandFacts } from "@/lib/vendors/store";
 import { seedMedicalBannedPhrases } from "@/lib/ai/kb/seed-banned";
@@ -410,6 +412,55 @@ export async function reviewKbProductAction(formData: FormData): Promise<void> {
       : decision === "archive"
         ? "Record archived."
         : "Record returned to draft.",
+  );
+}
+
+/** Slice B — validate a staged kb_brands row into published/active, or archive it. */
+export async function reviewKbBrandAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("products.enrich");
+  const id = String(formData.get("id") ?? "");
+  const raw = String(formData.get("decision") ?? "");
+  const decision = raw === "publish" ? "publish" : raw === "archive" ? "archive" : "draft";
+  if (!id) backReview("Missing record id.", false);
+  await reviewKbBrand(id, decision, session.profile.id);
+  await recordAudit({
+    actorId: session.profile.id,
+    action: `kb.brand.${decision}`,
+    entityType: "kb_brand",
+    entityId: id,
+    after: { decision },
+  }).catch(() => {});
+  revalidatePath(REVIEW_PATH);
+  backReview(
+    decision === "publish"
+      ? "Brand published into the KB."
+      : decision === "archive"
+        ? "Brand archived."
+        : "Brand returned to draft.",
+  );
+}
+
+/**
+ * Slice B — bulk publish/archive all CCRS-sourced DRAFTS (source like 'ccrs:%').
+ * Only status='draft' rows move; curated/published records are never touched.
+ */
+export async function bulkReviewCcrsDraftsAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("products.enrich");
+  const raw = String(formData.get("decision") ?? "");
+  const decision = raw === "publish" ? "publish" : raw === "archive" ? "archive" : null;
+  if (!decision) backReview("Missing bulk decision.", false);
+  const { products, brands } = await bulkReviewKbDraftsBySource("ccrs:", decision, session.profile.id);
+  await recordAudit({
+    actorId: session.profile.id,
+    action: `kb.bulk.${decision}_ccrs_drafts`,
+    entityType: "kb_products",
+    after: { products, brands },
+  }).catch(() => {});
+  revalidatePath(REVIEW_PATH);
+  backReview(
+    decision === "publish"
+      ? `Published ${products} product and ${brands} brand CCRS draft(s) into the KB.`
+      : `Archived ${products} product and ${brands} brand CCRS draft(s).`,
   );
 }
 
