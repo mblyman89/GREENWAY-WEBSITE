@@ -23,6 +23,7 @@ export type HelpCategory =
   | "Start here"
   | "Website & online ordering"
   | "Point of sale"
+  | "Customers & loyalty"
   | "Catalog & inventory"
   | "Compliance"
   | "Money & accounting"
@@ -50,6 +51,10 @@ export const HELP_CATEGORIES: { name: HelpCategory; blurb: string }[] = [
   {
     name: "Point of sale",
     blurb: "The in-store side: registers, cash drawers, receipts, and time clock.",
+  },
+  {
+    name: "Customers & loyalty",
+    blurb: "Customer and patient profiles, and your rewards program.",
   },
   {
     name: "Catalog & inventory",
@@ -150,6 +155,11 @@ export const HELP_SECTIONS: HelpSection[] = [
         a: "That's the FAQ page builder in the Pages section — it controls the questions shown to shoppers on your site. (This Help & FAQ you're reading now is the internal staff guide.)",
         href: "/admin/pages/faq",
       },
+      {
+        q: "How do I edit the Price Match page?",
+        a: "Open the Price Match page builder in the Pages section to edit your price-match policy and the words customers see, with preview before it goes live.",
+        href: "/admin/pages/price-match",
+      },
     ],
   },
   {
@@ -242,6 +252,56 @@ export const HELP_SECTIONS: HelpSection[] = [
         q: "Where do I manage the employee list?",
         a: "Under the Employees area of staffing. You add employees, set their details, and review their time.",
         href: "/admin/staffing/employees",
+      },
+    ],
+  },
+
+  // Customers & loyalty (CRM)
+  {
+    id: "customers",
+    title: "Customers",
+    icon: "👥",
+    category: "Customers & loyalty",
+    intro: "Customer and patient profiles — the foundation for history and rewards.",
+    items: [
+      {
+        q: "What are Customers for?",
+        a: "Customer profiles are the foundation for loyalty, purchase history, and (later) register limit checks. You build a record for each shopper or patient so their rewards and history follow them.",
+        href: "/admin/customers",
+      },
+      {
+        q: "How do I add customers?",
+        a: "Add them one at a time from the Customers page, or bring in a whole list at once using Customers → Import.",
+        href: "/admin/customers/import",
+      },
+      {
+        q: "Where do website loyalty signups go?",
+        a: "New signups from the public site land in Loyalty signups on the Dashboard so you can review and enter them. It shows who signed up and when.",
+        href: "/admin/loyalty-signups",
+      },
+    ],
+  },
+  {
+    id: "loyalty",
+    title: "Loyalty program",
+    icon: "🏅",
+    category: "Customers & loyalty",
+    intro: "Points, tiers, promotions, and redemptions.",
+    items: [
+      {
+        q: "How does the loyalty program work?",
+        a: "The Loyalty Program area is where you manage points, tiers, promotions, and redemptions for your rewards members. It's the back-office control panel for the program.",
+        href: "/admin/loyalty",
+      },
+      {
+        q: "How is that different from the public Loyalty page?",
+        a: "This area runs the program (points and rules). The words and design customers see are edited separately under Website → Loyalty, with preview before publish.",
+        href: "/admin/pages/loyalty",
+      },
+      {
+        q: "Where do I see loyalty performance?",
+        a: "The Loyalty report under Reports summarizes program activity — signups, points, and redemptions — so you can see how it's doing.",
+        href: "/admin/reports/loyalty",
       },
     ],
   },
@@ -345,6 +405,35 @@ export const HELP_SECTIONS: HelpSection[] = [
         q: "How do I record a return or destroy product lawfully?",
         a: "Returns & Destruction handles customer returns, samples, and lawful destruction with the documentation WA compliance requires.",
         href: "/admin/inventory/disposition",
+      },
+    ],
+  },
+  {
+    id: "discovery",
+    title: "Product discovery & sourcing",
+    icon: "🔍",
+    category: "Catalog & inventory",
+    intro: "Find products and vendors worth pursuing, and see how your buying compares to the market.",
+    items: [
+      {
+        q: "What is Product Discovery?",
+        a: "Product Discovery is where you find products and vendors worth pursuing — the very start of the intake lifecycle, before you raise a purchase order.",
+        href: "/admin/discovery",
+      },
+      {
+        q: "What are CCRS Benchmarks?",
+        a: "CCRS Benchmarks give you statewide market insights from public WA CCRS data: retail and wholesale prices, price per gram, brand and strain premiums, sales velocity, the top-25 vendors, and a \"your numbers vs. the market\" comparison so you can see if you're over- or under-paying. (This is the statewide view; the local competitor view lives under Reports → Benchmarks.)",
+        href: "/admin/discovery/benchmarks",
+      },
+      {
+        q: "What is the Catalog Hub?",
+        a: "The Catalog Hub is the one-stop Product Intake dashboard that ties the whole lifecycle together — discovery, purchasing, receiving, onboarding, enrichment, and mastering.",
+        href: "/admin/catalog",
+      },
+      {
+        q: "Where do new products get approved onto the menu?",
+        a: "Product Onboarding is where you review and approve newly received products before they appear on the menu.",
+        href: "/admin/inventory/drafts",
       },
     ],
   },
@@ -507,6 +596,30 @@ export const HELP_SECTIONS: HelpSection[] = [
 
   // ── Marketing & content ──────────────────────────────────────────────────────
   {
+    id: "marketing",
+    title: "Marketing & advertising",
+    icon: "📣",
+    category: "Marketing & content",
+    intro: "The AI marketing strategist and where your ideas live — always WA-compliant, always drafts.",
+    items: [
+      {
+        q: "What does Marketing & Advertising do?",
+        a: "You enter a goal and the AI strategist returns a WA-compliant marketing strategy draft grounded in your real store and vendors. Plans are automatically scanned against WA advertising rules, and anything with health/medical claims or appeal to minors is withheld.",
+        href: "/admin/marketing",
+      },
+      {
+        q: "Does it post anything for me?",
+        a: "No. Everything is a draft you review. You save promising ideas to the idea notebook and move them from idea → planned → done. You always approve before anything is used.",
+        href: "/admin/marketing",
+      },
+      {
+        q: "How do I generate marketing images?",
+        a: "Image Generator lets you build one image brief, then either copy a Midjourney prompt or generate an image with FLUX straight into your Media Library (as a draft) for use on the site or in campaigns.",
+        href: "/admin/marketing/midjourney",
+      },
+    ],
+  },
+  {
     id: "promotions",
     title: "Promotions",
     icon: "%",
@@ -650,6 +763,26 @@ export const HELP_SECTIONS: HelpSection[] = [
         q: "Can it predict demand?",
         a: "Yes — the Forecast report uses AI to project demand so you can plan reorders. Like all AI here, it's guidance you review, not an automatic action.",
         href: "/admin/reports/forecast",
+      },
+      {
+        q: "How are my customers and their spending trending?",
+        a: "The Customers report breaks down customer activity and spending so you can spot your best shoppers and how retention is trending.",
+        href: "/admin/reports/customers",
+      },
+      {
+        q: "How do I see employee performance or hours?",
+        a: "The Employees report summarizes staff activity and hours, useful alongside the time clock and payroll.",
+        href: "/admin/reports/employees",
+      },
+      {
+        q: "Where's the loyalty program report?",
+        a: "The Loyalty report shows signups, points, and redemptions so you can measure how the rewards program is performing.",
+        href: "/admin/reports/loyalty",
+      },
+      {
+        q: "How do I compare against local competitors?",
+        a: "The Benchmarks report (under Reports) is the local competitor view of pricing and assortment. For the statewide market view from CCRS data, use CCRS Benchmarks in the Product Intake tab.",
+        href: "/admin/reports/benchmarks",
       },
       {
         q: "How much am I spending on AI?",

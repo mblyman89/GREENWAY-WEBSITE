@@ -2,6 +2,9 @@ import Link from "next/link";
 import { requireStaff } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { HelpPanel } from "@/components/admin/ux";
+import { Section } from "@/components/admin/ui/Section";
+import { Button } from "@/components/admin/ui/Button";
+import { WorkspaceTour } from "@/components/admin/WorkspaceTour";
 import { getSetupStatus, SETUP_GUIDE } from "@/lib/admin/setup-status";
 import { isAiConfigured } from "@/lib/admin/ai-setup-assistant";
 import {
@@ -12,7 +15,7 @@ import {
 export const dynamic = "force-dynamic";
 
 export default async function GettingStartedPage() {
-  await requireStaff();
+  const session = await requireStaff();
   const status = await getSetupStatus();
 
   const steps: WizardStep[] = status.checks.map((c) => {
@@ -60,6 +63,22 @@ export default async function GettingStartedPage() {
           total={status.total}
           aiEnabled={isAiConfigured}
         />
+
+        {/* ── Explore your back office ──────────────────────────────────────
+            Setup gets the store live; this tour introduces the full product so
+            owners know everything they can do and where to find it. Data-driven
+            from WORKSPACES (the 11 nav areas) and filtered to the user's role. */}
+        <Section
+          title="Explore your back office"
+          description="Once you're set up, here's every area you can work in. Open any one to dive in."
+          action={
+            <Button href="/admin/help" variant="neutral" size="sm">
+              Full help & FAQ
+            </Button>
+          }
+        >
+          <WorkspaceTour role={session.profile.role} variant="full" />
+        </Section>
       </div>
     </div>
   );
