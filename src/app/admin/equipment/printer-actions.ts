@@ -1,5 +1,14 @@
 "use server";
 
+/**
+ * Receipt-printer server actions.
+ *
+ * These used to live under /admin/settings/receipt-printer. The printer UI now
+ * lives inside the Equipment page as its own tab (/admin/equipment?tab=printer)
+ * so all hardware management is in one place, so these actions redirect/
+ * revalidate back to that tab.
+ */
+
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { randomBytes } from "node:crypto";
@@ -12,7 +21,9 @@ import {
   formatReceipt,
 } from "@/lib/printing/printer-store";
 
-const BASE = "/admin/settings/receipt-printer";
+// Revalidate the equipment route; redirect back to the printer tab.
+const REVALIDATE = "/admin/equipment";
+const BASE = "/admin/equipment?tab=printer";
 
 function str(formData: FormData, key: string): string | null {
   const v = ((formData.get(key) as string | null) ?? "").trim();
@@ -46,11 +57,11 @@ export async function savePrinterSettingsAction(formData: FormData): Promise<voi
   });
 
   if (!updated) {
-    redirect(`${BASE}?error=${encodeURIComponent("Could not save — Supabase service role not configured.")}`);
+    redirect(`${BASE}&error=${encodeURIComponent("Could not save \u2014 Supabase service role not configured.")}`);
   }
 
-  revalidatePath(BASE);
-  redirect(`${BASE}?saved=1`);
+  revalidatePath(REVALIDATE);
+  redirect(`${BASE}&saved=1`);
 }
 
 /** Generate (or rotate) the shared poll token the printer authenticates with. */
@@ -68,10 +79,10 @@ export async function rotatePollTokenAction(): Promise<void> {
   });
 
   if (!updated) {
-    redirect(`${BASE}?error=${encodeURIComponent("Could not save token — Supabase service role not configured.")}`);
+    redirect(`${BASE}&error=${encodeURIComponent("Could not save token \u2014 Supabase service role not configured.")}`);
   }
-  revalidatePath(BASE);
-  redirect(`${BASE}?token=1`);
+  revalidatePath(REVALIDATE);
+  redirect(`${BASE}&token=1`);
 }
 
 /** Queue a sample receipt so staff can confirm the printer is wired up. */
@@ -104,10 +115,10 @@ export async function testPrintAction(): Promise<void> {
   });
 
   if (!id) {
-    redirect(`${BASE}?error=${encodeURIComponent("Could not queue test print — Supabase service role not configured.")}`);
+    redirect(`${BASE}&error=${encodeURIComponent("Could not queue test print \u2014 Supabase service role not configured.")}`);
   }
-  revalidatePath(BASE);
-  redirect(`${BASE}?test=1`);
+  revalidatePath(REVALIDATE);
+  redirect(`${BASE}&test=1`);
 }
 
 /** Cancel a queued/failed job from the queue table. */
@@ -124,6 +135,6 @@ export async function cancelJobAction(formData: FormData): Promise<void> {
       entityId: id,
     });
   }
-  revalidatePath(BASE);
+  revalidatePath(REVALIDATE);
   redirect(BASE);
 }

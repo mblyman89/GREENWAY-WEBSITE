@@ -381,8 +381,8 @@ export const INTEGRATED_DEVICES: readonly IntegratedDevice[] = [
     manufacturer: "Star Micronics",
     model: "TSP143IV (CloudPRNT)",
     summary: "Auto-prints online pickup orders via CloudPRNT.",
-    href: "/admin/settings/receipt-printer",
-    hrefLabel: "Configure & diagnostics",
+    href: "/admin/equipment?tab=printer",
+    hrefLabel: "Manage receipt printer",
   },
   {
     assetTag: "PRN-LABEL-01",

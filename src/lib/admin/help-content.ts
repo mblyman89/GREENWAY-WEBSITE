@@ -217,12 +217,12 @@ export const HELP_SECTIONS: HelpSection[] = [
       {
         q: "How do I set up the receipt printer?",
         a: "Open Receipt Printer. There's a full plain-language setup guide (plug it in, point it at our Poll URL, confirm it's online) plus live diagnostics and an assistant that troubleshoots problems for you.",
-        href: "/admin/settings/receipt-printer",
+        href: "/admin/equipment?tab=printer",
       },
       {
         q: "My receipts aren't printing — what do I check?",
         a: "Open Receipt Printer and read the live diagnostics panel; it tells you exactly what's wrong (offline, wrong Poll URL, out of paper, queued jobs). The built-in assistant walks you through the fix step by step.",
-        href: "/admin/settings/receipt-printer",
+        href: "/admin/equipment?tab=printer",
       },
     ],
   },
@@ -599,7 +599,7 @@ export const HELP_SECTIONS: HelpSection[] = [
       {
         q: "Where's the receipt printer setup, specifically?",
         a: "The receipt printer has its own dedicated page (Receipt Printer) with a full setup guide, live diagnostics, and a troubleshooting assistant. Its live online/offline status also shows on its Equipment card, which links straight there.",
-        href: "/admin/settings/receipt-printer",
+        href: "/admin/equipment?tab=printer",
       },
     ],
   },
