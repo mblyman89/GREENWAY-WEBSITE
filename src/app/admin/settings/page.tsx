@@ -82,6 +82,13 @@ export default async function SettingsHomePage() {
           description: "Set low-stock thresholds and reorder rules for purchasing.",
           icon: "📦",
         },
+        {
+          href: "/admin/knowledge-base/setup",
+          title: "Starter data",
+          description:
+            "Load a curated baseline of strains, terpenes, and category vocabulary so the catalog and AI have good data to start from.",
+          icon: "🌱",
+        },
       ],
     },
     {
@@ -91,20 +98,33 @@ export default async function SettingsHomePage() {
         {
           href: "/admin/compliance/sales-limits",
           title: "Sales limits",
-          description: "Daily per-customer purchase limits enforced at the register.",
+          description: "Single-transaction purchase limits (WAC 314-55-095) enforced at checkout.",
           icon: "⚖",
+        },
+        {
+          href: "/admin/compliance/health",
+          title: "Compliance health",
+          description:
+            "One-glance 'am I safe?' — every compliance gate (CCRS batches, limits, manifests) checked live.",
+          icon: "🛡",
         },
       ],
     },
     {
       name: "Money & accounting",
-      blurb: "Bookkeeping export configuration.",
+      blurb: "Bookkeeping export configuration and AI cost visibility.",
       links: [
         {
           href: "/admin/reports/accounting",
           title: "Accounting settings",
           description: "General-ledger account mapping and Sage 50 export options.",
           icon: "📚",
+        },
+        {
+          href: "/admin/ai-usage",
+          title: "AI usage & cost",
+          description: "See how much AI the back office is using and where, over the last 30 days.",
+          icon: "✨",
         },
       ],
     },
@@ -113,9 +133,15 @@ export default async function SettingsHomePage() {
       blurb: "Hardware and third-party menu services.",
       links: [
         {
+          href: "/admin/equipment",
+          title: "Equipment",
+          description: "One home for every piece of store hardware — integrated devices, POS, scales, safes, cameras.",
+          icon: "🛠",
+        },
+        {
           href: "/admin/equipment?tab=printer",
           title: "Receipt printer",
-          description: "Connect and diagnose the receipt printer with a guided assistant (now on the Equipment page).",
+          description: "Connect and diagnose the receipt printer with a guided assistant (a tab on the Equipment page).",
           icon: "🧾",
         },
         {
