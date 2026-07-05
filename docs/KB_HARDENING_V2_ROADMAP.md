@@ -29,7 +29,7 @@ enjoyable and a little funny, **but still professional**. Curated **quality over
 
 1. **Effects / experience vocabulary** (culture voice, compliance-gated) — **SHIPPED**
 2. **Consumption methods / product formats** — deep, Washington-State-specific research — **SHIPPED**
-3. **Compliance rules in the KB** — surfaced helpfully to keep customers safe
+3. **Compliance rules in the KB** — surfaced helpfully to keep customers safe — **SHIPPED**
 4. *(item 4 — store/brand voice & FAQ pack)* — its **own slice, LAST**, after 1/2/3/5
 5. **Terpene → aroma cross-map enrichment**
 
@@ -124,11 +124,60 @@ until clean: e.g. "cured"→"well-aged", "hard candy" dropped, "10 mg per servin
 
 ---
 
-## Slices 3, 5, 4 — NOT STARTED
+## Slice 3 — Compliance rules in the KB — SHIPPED
 
-- **Slice 3 (compliance rules in KB):** encode WA I-502 / DOH / CCRS-relevant purchase & safety
-  rules as KB facts surfaced helpfully (e.g. daily purchase limits, 21+, no medical claims,
-  impairment/driving warnings). Design a `kb_compliance_rules` reference + retrieval surfacing.
+**Gap it fills (verified).** The repo already **enforces** WA single-transaction purchase limits
+operationally (`src/lib/compliance/sales-limits-core.ts` → `RECREATIONAL_LIMITS` / `MEDICAL_LIMITS`,
+checked at checkout; owner page `/admin/compliance/sales-limits`). What it did **not** have was a
+curated *education / reference* layer the AI can surface **helpfully to keep customers safe** — the
+"know before you go / know before you consume" facts.
+
+**What shipped.** A curated reference table `kb_compliance_rules` (8 rules across categories
+`age` / `purchase-limit` / `possession` / `public-use` / `driving` / `edibles-safety` / `storage` /
+`transport`). Each rule: a neutral factual `rule` statement, a friendly plain-language `house_note`,
+a `severity` (info/important/critical, UI only), and a statute `citation`.
+
+**Single source of truth (no drift).** The purchase- and possession-limit NUMBERS are **derived from
+`RECREATIONAL_LIMITS`** (imported into `seed.ts` from the *pure* `sales-limits-core`) at seed time —
+the KB reference can never disagree with what checkout enforces. This is explicitly NOT a second
+enforcement mechanism.
+
+**Verified WA facts (never guessed).** WSLCB "Using and Having Cannabis", WAC 314-55-095, RCW
+69.50.360 / .4013 / .445 — see `docs/KB_COMPLIANCE_RULES_SEED_SOURCES.md`. Rec limits 1 oz / 7 g /
+16 oz / 72 oz; edible cap 10 mg/serving · 100 mg/package (spelled in words to clear the gate's
+dosing-pattern flag); 21+; no public use; no impaired driving; store away from underage & pets; no
+crossing state lines.
+
+**Files.**
+- `supabase/migrations/0088_kb_compliance_rules.sql` — table + drafts/provenance parity, `severity`
+  + `status` check constraints, indexes, RLS `is_staff()`, `updated_at` trigger. Idempotent, MANUAL.
+- `src/lib/ai/kb/seed.ts` — `SeedComplianceRule` type + `SEED_COMPLIANCE_RULES` (8 rules); imports
+  `RECREATIONAL_LIMITS` + `gramsToOunces` from `sales-limits-core` to derive limit numbers.
+- `src/lib/ai/kb/store.ts` — seed upsert (r9, degrades pre-0088), `KbCounts.complianceRules`,
+  `KbComplianceRuleRow`, `listKbComplianceRulesFull`, `getKbComplianceRuleBySlug`,
+  `upsertKbComplianceRule`, `setComplianceRuleActive`; wired into all `inserted{}`.
+- `src/lib/ai/kb/retrieval.ts` — `loadComplianceRules()` (published-only; FULL → no-status → seed);
+  when the matched product format is `ingested`, surfaces the `edibles-safety` "start low, go slow"
+  rule as a helpful customer-safety note + `kb:compliance:<slug>` source tag.
+- `src/lib/ai/kb/health.ts` — `complianceRuleCoverage {present, expected}`.
+- `src/app/admin/knowledge-base/rules/page.tsx` — read-only card page (The rule / What that means for
+  you / Citation / severity); KB-landing nav card ("WA rules & safety", orange). Route is `rules` to
+  avoid colliding with the existing `compliance` banned-phrases page.
+- `docs/KB_COMPLIANCE_RULES_SEED_SOURCES.md` — research notes + WA sources + the "don't duplicate the
+  enforcement system" rationale.
+
+**Compliance.** Factual legal/safety education only — no medical claim, no product-specific dosing
+directive. All 8 rules (rule + house_note) pass `checkCompliance` with **0 blocking / 0 warnings**
+(copy tightened: "everybody safe"→"above board", "child-resistant"/"children"→"resealable"/"anyone
+underage", "treat it like"→"store it like", milligrams spelled in words).
+
+**Verify.** tsc 0 · eslint 0 · `next build` OK · compliance gate 0 blocking / 0 warn. Commit
+`cc7f7d2` on `feat/kb-hardening-v2`.
+
+---
+
+## Slices 5, 4 — NOT STARTED
+
 - **Slice 5 (terpene → aroma cross-map):** enrich the existing kb_terpenes aroma/flavor map and
   cross-map it into strain/product grounding.
 - **Slice 4 (store/brand voice & FAQ pack):** LAST. Curated house voice + FAQ pack for grounding.
@@ -144,13 +193,14 @@ The agent never applies migrations. After reviewing/merging this branch:
      (from PR #255) — if not already applied.
    - `0086_kb_effects.sql` (Slice 1).
    - `0087_kb_product_formats.sql` (Slice 2).
+   - `0088_kb_compliance_rules.sql` (Slice 3).
 2. **Reseed the KB** from `/admin/knowledge-base/setup` (the "Seed knowledge base" action). This
    idempotently upserts the 8 cannabinoids **with the new psychoactive/non-psychoactive labels**,
-   the **16 effects**, and the **14 product formats**. It never overwrites curated edits (upsert on
-   `slug`).
+   the **16 effects**, the **14 product formats**, and the **8 WA compliance/safety rules**. It never
+   overwrites curated edits (upsert on `slug`).
 3. **Confirm** the new pages render: `/admin/knowledge-base/cannabinoids` (new labels),
-   `/admin/knowledge-base/effects` (16 cards), and `/admin/knowledge-base/formats` (14 cards). The
-   KB landing shows live counts.
+   `/admin/knowledge-base/effects` (16 cards), `/admin/knowledge-base/formats` (14 cards), and
+   `/admin/knowledge-base/rules` (8 cards). The KB landing shows live counts.
 
 > Standing rule reminder: `main` is branch-protected (branch → PR → squash-merge). Money is in
 > minor units (cents). AI copy is drafts-only and compliance-gated. Never overwrite curated data.

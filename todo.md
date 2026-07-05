@@ -200,9 +200,16 @@ see `docs/COMMAND_CENTER_ENHANCEMENTS_TASKLIST.md`.
 - [x] admin read-only page /admin/knowledge-base/formats + KB landing nav card
 - [x] Verify: tsc 0 · eslint 0 · next build OK · compliance 0 blocking/0 warn. Commit 2cfd113, pushed to feat/kb-hardening-v2.
 
-### Slice 3 — Compliance rules reference in KB (used helpfully to keep customers safe)
-- [ ] Encode WA I-502 / DOH / CCRS-relevant safety + purchase rules as KB facts; surface helpfully
-- [ ] Migration + seed + wire + admin + verify
+### Slice 3 — Compliance rules reference in KB (used helpfully to keep customers safe)  [SHIPPED]
+> KEY FINDING (verified, not guessed): the repo ALREADY enforces WA single-transaction limits operationally (src/lib/compliance/sales-limits-core.ts RECREATIONAL_LIMITS/MEDICAL_LIMITS, checked at checkout; /admin/compliance/sales-limits). So Slice 3 is NOT a second enforcement path — it's a curated REFERENCE/education layer (kb_compliance_rules, 8 rules). The purchase/possession limit NUMBERS are DERIVED from RECREATIONAL_LIMITS at seed time so KB can never drift from enforcement. WA facts from WSLCB Using-and-Having, WAC 314-55-095, RCW 69.50.360/.4013/.445. All 8 rules pass checkCompliance 0 blocking/0 warn (copy tightened: "everybody safe"->"above board", child-resistant/children->resealable/anyone underage, "treat it like"->"store it like", mg spelled in words).
+- [x] Verified WA safety/purchase/use facts, sourced in docs/KB_COMPLIANCE_RULES_SEED_SOURCES.md
+- [x] Migration 0088_kb_compliance_rules.sql (idempotent, MANUAL, severity+status checks, RLS is_staff, trigger, indexes)
+- [x] seed.ts SeedComplianceRule + SEED_COMPLIANCE_RULES (8), limits derived from RECREATIONAL_LIMITS
+- [x] store.ts counts + seed upsert (r9) + CRUD (list/get/upsert/setActive)
+- [x] retrieval.ts loadComplianceRules + surface edibles-safety rule for ingested formats (kb:compliance:<slug>)
+- [x] health.ts complianceRuleCoverage
+- [x] admin read-only page /admin/knowledge-base/rules + KB landing nav card
+- [x] Verify: tsc 0 · eslint 0 · next build OK · compliance 0 blocking/0 warn. Commit cc7f7d2, pushed.
 
 ### Slice 5 — Terpene -> aroma cross-map enrichment
 - [ ] Cross-map terpenes to aroma/flavor descriptors (factual); enrich strain/product grounding
