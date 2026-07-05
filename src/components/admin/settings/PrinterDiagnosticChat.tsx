@@ -12,7 +12,7 @@
  */
 import { useState, useRef, useEffect, useTransition } from "react";
 import { useToast } from "@/components/admin/ux";
-import { askPrinterAssistantAction } from "@/app/admin/settings/receipt-printer/assistant-actions";
+import { askPrinterAssistantAction } from "@/app/admin/equipment/printer-assistant-actions";
 
 type ChatMsg = { role: "user" | "assistant"; content: string };
 

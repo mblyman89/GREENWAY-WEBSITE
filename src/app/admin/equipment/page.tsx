@@ -20,6 +20,7 @@ import {
   type EquipmentAssetView,
 } from "@/lib/equipment/store";
 import { createEquipmentAssetAction } from "./actions";
+import { ReceiptPrinterPanel } from "@/components/admin/equipment/ReceiptPrinterPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -43,10 +44,21 @@ function groupByCategory(
 export default async function EquipmentPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; category?: string; q?: string; error?: string }>;
+  searchParams: Promise<{
+    status?: string;
+    category?: string;
+    q?: string;
+    error?: string;
+    tab?: string;
+    // Receipt-printer tab banners (set by the printer server actions).
+    saved?: string;
+    token?: string;
+    test?: string;
+  }>;
 }) {
   await requirePermission("inventory.manage");
   const sp = await searchParams;
+  const tab: "equipment" | "printer" = sp.tab === "printer" ? "printer" : "equipment";
   const status = (EQUIPMENT_STATUSES as readonly string[]).includes(sp.status ?? "")
     ? (sp.status as EquipmentStatus)
     : undefined;
@@ -90,12 +102,46 @@ export default async function EquipmentPage({
         subtitle="One home for every piece of store hardware — integrated devices, POS, scales, safes, cameras"
         breadcrumbs={<Breadcrumbs items={[{ label: "Equipment" }]} />}
         action={
-          <Button href="#add-asset" variant="save" size="sm">
-            ＋ Add asset
-          </Button>
+          tab === "equipment" ? (
+            <Button href="#add-asset" variant="save" size="sm">
+              ＋ Add asset
+            </Button>
+          ) : undefined
         }
       />
 
+      {/* Tabs — keep all hardware management in one place. The Receipt Printer
+          used to be its own top-level page; it now lives here as a tab. */}
+      <div className="border-b border-[var(--admin-border)] px-5 pt-1 sm:px-8">
+        <nav className="-mb-px flex gap-1" aria-label="Equipment tabs">
+          <Link
+            href="/admin/equipment"
+            className={`rounded-t-[var(--admin-radius)] border-b-2 px-4 py-2.5 text-sm font-medium transition ${
+              tab === "equipment"
+                ? "border-[var(--admin-accent)] text-[var(--admin-accent)]"
+                : "border-transparent text-[var(--admin-text-muted)] hover:text-[var(--admin-text)]"
+            }`}
+          >
+            Equipment
+          </Link>
+          <Link
+            href="/admin/equipment?tab=printer"
+            className={`flex items-center gap-2 rounded-t-[var(--admin-radius)] border-b-2 px-4 py-2.5 text-sm font-medium transition ${
+              tab === "printer"
+                ? "border-[var(--admin-accent)] text-[var(--admin-accent)]"
+                : "border-transparent text-[var(--admin-text-muted)] hover:text-[var(--admin-text)]"
+            }`}
+          >
+            <span aria-hidden>🧾</span> Receipt Printer
+          </Link>
+        </nav>
+      </div>
+
+      {tab === "printer" ? (
+        <div className="px-5 py-6 sm:px-8">
+          <ReceiptPrinterPanel banners={{ saved: sp.saved, token: sp.token, test: sp.test, error: sp.error }} />
+        </div>
+      ) : (
       <div className="space-y-8 px-5 py-6 sm:px-8">
         {sp.error && (
           <div className="rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/10 px-4 py-2 text-sm text-[var(--admin-danger)]">
@@ -454,6 +500,7 @@ export default async function EquipmentPage({
           </Card>
         </Section>
       </div>
+      )}
     </div>
   );
 }

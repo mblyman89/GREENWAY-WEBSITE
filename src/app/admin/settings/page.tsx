@@ -113,9 +113,9 @@ export default async function SettingsHomePage() {
       blurb: "Hardware and third-party menu services.",
       links: [
         {
-          href: "/admin/settings/receipt-printer",
+          href: "/admin/equipment?tab=printer",
           title: "Receipt printer",
-          description: "Connect and diagnose the receipt printer with a guided assistant.",
+          description: "Connect and diagnose the receipt printer with a guided assistant (now on the Equipment page).",
           icon: "🧾",
         },
         {
