@@ -18,11 +18,16 @@ import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs } from "@/components/admin/ux";
 import { Button } from "@/components/admin/ui/Button";
-import { listKbProducts, countKbProductDrafts } from "@/lib/ai/kb/store";
+import {
+  listKbProducts,
+  countKbProductDrafts,
+  listKbBrandDrafts,
+  countKbBrandDrafts,
+} from "@/lib/ai/kb/store";
 import { scoreProduct, labelForField } from "@/lib/ai/kb/quality";
 import { QualityBadge } from "../QualityBadge";
 import { KbFlash } from "../KbFlash";
-import { reviewKbProductAction } from "../actions";
+import { reviewKbProductAction, reviewKbBrandAction, bulkReviewCcrsDraftsAction } from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -34,10 +39,15 @@ export default async function KbReviewPage({
   await requirePermission("products.enrich");
   const { msg, error } = await searchParams;
 
-  const [drafts, draftCount] = await Promise.all([
+  const [drafts, draftCount, brandDrafts, brandDraftCount] = await Promise.all([
     listKbProducts("draft", 200),
     countKbProductDrafts(),
+    listKbBrandDrafts(200),
+    countKbBrandDrafts(),
   ]);
+  const ccrsDraftCount =
+    drafts.filter((d) => (d.source ?? "").startsWith("ccrs:")).length +
+    brandDrafts.filter((b) => (b.source ?? "").startsWith("ccrs:")).length;
 
   return (
     <div>
@@ -59,15 +69,98 @@ export default async function KbReviewPage({
         <KbFlash msg={msg} error={error} />
 
         <p className="text-sm text-[var(--admin-text-muted)]">
-          {draftCount} record{draftCount === 1 ? "" : "s"} awaiting review. Nothing
-          here is authoritative until you publish it (drafts-only rule).
+          {draftCount} product record{draftCount === 1 ? "" : "s"}
+          {brandDraftCount > 0 ? ` and ${brandDraftCount} brand record${brandDraftCount === 1 ? "" : "s"}` : ""}{" "}
+          awaiting review. Nothing here is authoritative until you publish it
+          (drafts-only rule).
         </p>
 
-        {drafts.length === 0 ? (
+        {/* Bulk actions for CCRS-enrichment drafts (Slice B). Only DRAFT rows
+            whose source starts with 'ccrs:' move — curated data never does. */}
+        {ccrsDraftCount > 0 ? (
+          <div className="flex flex-wrap items-center gap-3 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] px-4 py-3">
+            <span className="text-sm text-[var(--admin-text)]">
+              <strong>{ccrsDraftCount}</strong> of the visible drafts came from CCRS state-data
+              enrichment. Bulk actions apply to <em>all</em> CCRS drafts (including any beyond this page).
+            </span>
+            <div className="flex items-center gap-2">
+              <form action={bulkReviewCcrsDraftsAction}>
+                <input type="hidden" name="decision" value="publish" />
+                <Button variant="confirm" size="sm" type="submit">
+                  Publish all CCRS drafts
+                </Button>
+              </form>
+              <form action={bulkReviewCcrsDraftsAction}>
+                <input type="hidden" name="decision" value="archive" />
+                <Button variant="danger" size="sm" type="submit">
+                  Archive all CCRS drafts
+                </Button>
+              </form>
+            </div>
+          </div>
+        ) : null}
+
+        {/* BRAND drafts (Slice B — requires migration 0082; hidden when empty). */}
+        {brandDrafts.length > 0 ? (
+          <div className="grid gap-3">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--admin-text-muted)]">
+              Brand drafts
+            </h2>
+            {brandDrafts.map((b) => (
+              <div
+                key={b.id}
+                className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4"
+                style={{ boxShadow: "var(--admin-shadow-sm)" }}
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <strong className="text-[1.05rem] text-[var(--admin-text)]">{b.name}</strong>
+                    <div className="mt-0.5 text-[0.85rem] text-[var(--admin-text-faint)]">
+                      {b.slug}
+                      {b.aliases && b.aliases.length ? ` \u00b7 aka ${b.aliases.join(", ")}` : ""}
+                      {b.vendor_id ? " \u00b7 linked to a vendor" : " \u00b7 no vendor link"}
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
+                      <span className="rounded-full border border-[var(--admin-border)] bg-[var(--admin-bg)] px-2 py-0.5 text-[var(--admin-text-muted)]">
+                        Source: {b.source ?? "unknown"}
+                      </span>
+                      {typeof b.confidence === "number" ? (
+                        <span className="rounded-full border border-[var(--admin-border)] bg-[var(--admin-bg)] px-2 py-0.5 text-[var(--admin-text-muted)]">
+                          Confidence: {Math.round(b.confidence * 100)}%
+                        </span>
+                      ) : null}
+                      <span className="rounded-full border border-[var(--admin-border)] bg-[var(--admin-bg)] px-2 py-0.5 text-[var(--admin-text-muted)]">
+                        Updated {new Date(b.updated_at).toLocaleDateString()}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <form action={reviewKbBrandAction}>
+                      <input type="hidden" name="id" value={b.id} />
+                      <input type="hidden" name="decision" value="publish" />
+                      <Button variant="confirm" size="sm" type="submit">
+                        Publish
+                      </Button>
+                    </form>
+                    <form action={reviewKbBrandAction}>
+                      <input type="hidden" name="id" value={b.id} />
+                      <input type="hidden" name="decision" value="archive" />
+                      <Button variant="danger" size="sm" type="submit">
+                        Archive
+                      </Button>
+                    </form>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
+
+        {drafts.length === 0 && brandDrafts.length === 0 ? (
           <div className="rounded-[var(--admin-radius-lg)] border border-dashed border-[var(--admin-border)] bg-[var(--admin-surface)] p-8 text-center text-sm text-[var(--admin-text-faint)]">
-            Nothing to review. When you publish a product enrichment or accept an AI
-            suggestion, the validated data is promoted here as a draft for a final
-            check before it joins the KB brain.
+            Nothing to review. When you publish a product enrichment, accept an AI
+            suggestion, or enrich the KB from a CCRS dataset, the validated data is
+            promoted here as a draft for a final check before it joins the KB brain.
             <div className="mt-2 text-xs">
               (If you just applied migration 0071, generate or accept a suggestion to
               see records appear.)

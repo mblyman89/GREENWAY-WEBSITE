@@ -88,52 +88,57 @@ KB**, as reviewable drafts with provenance — never auto-published, never
 overwriting curated work. The KB is the backbone; treat it that way.
 
 ### B1. Migration `0082_kb_enrichment_provenance.sql` (idempotent)
-- [ ] `kb_brands`: add `source text`, `confidence numeric`, `sources text[]
+- [x] `kb_brands`: add `source text`, `confidence numeric`, `sources text[]
       default '{}'`, `status text default 'published'` (existing rows keep
       behaving; enrichment inserts land `status='draft'`). Backfill null →
       'published' for existing rows (idempotent update).
-- [ ] Indexes: `kb_brands (status)`, `kb_products (status)` if missing.
-- [ ] Comment every new column (handoff-ready).
+- [x] Indexes: `kb_brands (status)`, `kb_products (status)` if missing.
+- [x] Comment every new column (handoff-ready).
 
 ### B2. Enrichment engine `src/lib/kb/enrich-from-discovery.ts`
-- [ ] `enrichKbFromCcrsDataset(datasetId, actorId)` — the single entry point.
-- [ ] **Brands:** distinct `discovery_ccrs_products.brand` → `kb_brands`
+- [x] `enrichKbFromCcrsDataset(datasetId, actorId)` — the single entry point.
+- [x] **Brands:** distinct `discovery_ccrs_products.brand` → `kb_brands`
       (slug via existing `slugifyName`); gap-fill aliases; link `vendor_id`
       when the product's `license_number` matches a vendor (reuse
       `normalizeLicense`); insert as `status='draft'`,
       `source='ccrs:<dataset>'`. NEVER touch existing curated rows except to
       append missing aliases.
-- [ ] **Products:** `discovery_ccrs_products` → `kb_products` drafts keyed by
+- [x] **Products:** `discovery_ccrs_products` → `kb_products` drafts keyed by
       (brand_slug, product_slug, variant from unit_weight_grams); map
       `category`/`product_type` → KB `category`; carry `description`;
       `vendor_id` via license match; provenance `source='ccrs:<dataset>'`,
       `confidence` (license-matched 0.9 / name-only 0.6), `sources[]`
       = dataset label. Upsert = gap-fill only.
-- [ ] **Potency:** `discovery_ccrs_lab` THC/CBD → attach to the matching
+- [x] **Potency:** `discovery_ccrs_lab` THC/CBD → attach to the matching
       kb_products draft `potency_note`-style fields where they exist (verify
       target columns first — never guess).
-- [ ] Batch-safe: page every read with `.range()`; chunk inserts; bounded.
-- [ ] Result report: `{brandsInserted, brandsEnriched, productsInserted,
+      **VERIFIED OUTCOME:** kb_products has NO potency columns (checked
+      migration 0071 line-by-line). Per the never-guess rule the engine does
+      NOT attach potency; it emits an explicit warning documenting the gap.
+      Potency remains available in `discovery_ccrs_lab` / benchmarks. Adding
+      dedicated potency columns to kb_products is listed as a follow-up.
+- [x] Batch-safe: page every read with `.range()`; chunk inserts; bounded.
+- [x] Result report: `{brandsInserted, brandsEnriched, productsInserted,
       productsEnriched, skipped, warnings[]}`.
 
 ### B3. Wiring — enrichment runs where state data lands
-- [ ] Discovery CCRS page: "Enrich KB from this dataset" action (server action
+- [x] Discovery CCRS page: "Enrich KB from this dataset" action (server action
       calling B2, with audit log entry) + result banner.
-- [ ] Auto-hook: after a dataset ingest completes (`markDatasetReady`), fire
+- [x] Auto-hook: after a dataset ingest completes (`markDatasetReady`), fire
       enrichment automatically. Failures logged, non-fatal.
-- [ ] Audit entries via `recordAudit` (`kb.enriched_from_ccrs`).
+- [x] Audit entries via `recordAudit` (`kb.enriched_from_ccrs`).
 
 ### B4. Review surface (drafts-only lifecycle)
-- [ ] Audit the existing KB admin pages first (never guess): find where
+- [x] Audit the existing KB admin pages first (never guess): find where
       kb_products / kb_brands are listed and whether a `status=draft` filter
       exists. Extend so enrichment drafts are visible + reviewable
       (publish / archive), with bulk actions for ccrs-sourced drafts.
-- [ ] Never auto-publish: enrichment inserts stay `draft` until a human acts.
+- [x] Never auto-publish: enrichment inserts stay `draft` until a human acts.
 
 ### B5. Verification + ship
-- [ ] Unit-checkable dry-run mode (no writes) for the enrichment engine
+- [x] Unit-checkable dry-run mode (no writes) for the enrichment engine
       (`SEED_DRY_RUN`-style env or an options flag).
-- [ ] `tsc` / `eslint` / `next build` clean; `rm -rf .next`.
+- [x] `tsc` / `eslint` / `next build` clean; `rm -rf .next`.
 - [ ] PR opened with audit summary; **HELD for owner review** (KB is the
       backbone — owner approves before merge).
 
@@ -147,6 +152,9 @@ overwriting curated work. The KB is the backbone; treat it that way.
       as display-only fields.
 - [ ] Rotate the Supabase service-role key (owner action; key was shared in
       chat during the seed run).
+- [ ] kb_products potency columns (e.g. `thc_pct numeric`, `cbd_pct numeric`
+      + provenance) so CCRS lab results can find their KB home — new
+      migration + engine extension (drafts-only as always).
 
 ---
 
