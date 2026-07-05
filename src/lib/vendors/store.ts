@@ -15,17 +15,116 @@ export function publicMediaUrl(storageKey: string | null | undefined): string | 
   return `${supabaseUrl}/storage/v1/object/public/media/${storageKey}`;
 }
 
-export async function listVendors(opts?: { status?: string }): Promise<Vendor[]> {
+export type ListVendorsOpts = {
+  status?: string;
+  /** true = only is_active vendors; false = only inactive. */
+  active?: boolean;
+  /** true = license_number present; false = missing. */
+  hasLicense?: boolean;
+  /** Case-insensitive match on display_name, dba, or license_number. */
+  q?: string;
+};
+
+/**
+ * List vendors — ALL of them.
+ *
+ * PostgREST caps a single `select()` at 1000 rows, so a plain query silently
+ * returned only the first 1000 (the root cause of "the system thinks we only
+ * have 1000 vendors"). We page through with `.range()` in 1000-row windows
+ * until a short page, mirroring listKbStrainsFull() in src/lib/ai/kb/store.ts.
+ */
+export async function listVendors(opts?: ListVendorsOpts): Promise<Vendor[]> {
   if (!isSupabaseServiceConfigured) return [];
   const admin = createSupabaseAdminClient();
-  let q = admin
-    .from("vendors")
-    .select("*")
-    .order("sort_order", { ascending: true })
-    .order("display_name", { ascending: true });
-  if (opts?.status) q = q.eq("status", opts.status);
-  const { data } = await q;
-  return (data as Vendor[] | null) ?? [];
+  const PAGE = 1000;
+  const LIMIT = 5000; // sane ceiling to bound memory
+  const rows: Vendor[] = [];
+  for (let from = 0; from < LIMIT; from += PAGE) {
+    let q = admin
+      .from("vendors")
+      .select("*")
+      .order("sort_order", { ascending: true })
+      .order("display_name", { ascending: true })
+      .range(from, Math.min(from + PAGE, LIMIT) - 1);
+    if (opts?.status) q = q.eq("status", opts.status);
+    if (opts?.active !== undefined) q = q.eq("is_active", opts.active);
+    if (opts?.hasLicense === true) q = q.not("license_number", "is", null);
+    if (opts?.hasLicense === false) q = q.is("license_number", null);
+    if (opts?.q) {
+      const term = opts.q.replaceAll("%", "\\%").replaceAll(",", " ").trim();
+      if (term) q = q.or(`display_name.ilike.%${term}%,dba.ilike.%${term}%,license_number.ilike.%${term}%`);
+    }
+    const { data, error } = await q;
+    if (error || !data) break;
+    rows.push(...(data as Vendor[]));
+    if (data.length < PAGE) break; // short page => done
+  }
+  return rows;
+}
+
+/**
+ * Inventory-derived vendor facts, for the "My vendors" scope + product-type /
+ * category filters. Reads inventory_lots (paged past the 1000-row cap) and
+ * aggregates per-vendor sets. With zero inventory this returns empty sets and
+ * the page degrades gracefully.
+ */
+export type VendorInventoryFacts = {
+  /** Vendor ids that have at least one inventory lot ("my vendors"). */
+  vendorIds: Set<string>;
+  /** Distinct inventory_type values seen in inventory (sorted). */
+  inventoryTypes: string[];
+  /** Distinct category values seen in inventory (sorted). */
+  categories: string[];
+  /** vendor id -> set of inventory_type values it supplies. */
+  typesByVendor: Map<string, Set<string>>;
+  /** vendor id -> set of category values it supplies. */
+  categoriesByVendor: Map<string, Set<string>>;
+};
+
+export async function vendorInventoryFacts(): Promise<VendorInventoryFacts> {
+  const empty: VendorInventoryFacts = {
+    vendorIds: new Set(),
+    inventoryTypes: [],
+    categories: [],
+    typesByVendor: new Map(),
+    categoriesByVendor: new Map(),
+  };
+  if (!isSupabaseServiceConfigured) return empty;
+  const admin = createSupabaseAdminClient();
+  const PAGE = 1000;
+  const LIMIT = 20000;
+  type LotRow = { vendor_id: string | null; inventory_type: string | null; category: string | null };
+  const facts = empty;
+  const typeSet = new Set<string>();
+  const catSet = new Set<string>();
+  for (let from = 0; from < LIMIT; from += PAGE) {
+    const { data, error } = await admin
+      .from("inventory_lots")
+      .select("vendor_id, inventory_type, category")
+      .not("vendor_id", "is", null)
+      .range(from, Math.min(from + PAGE, LIMIT) - 1);
+    if (error || !data) break;
+    for (const r of data as LotRow[]) {
+      if (!r.vendor_id) continue;
+      facts.vendorIds.add(r.vendor_id);
+      const t = r.inventory_type?.trim();
+      if (t) {
+        typeSet.add(t);
+        if (!facts.typesByVendor.has(r.vendor_id)) facts.typesByVendor.set(r.vendor_id, new Set());
+        facts.typesByVendor.get(r.vendor_id)!.add(t);
+      }
+      const c = r.category?.trim();
+      if (c) {
+        catSet.add(c);
+        if (!facts.categoriesByVendor.has(r.vendor_id)) facts.categoriesByVendor.set(r.vendor_id, new Set());
+        facts.categoriesByVendor.get(r.vendor_id)!.add(c);
+      }
+    }
+    if (data.length < PAGE) break;
+  }
+  facts.inventoryTypes = [...typeSet].sort((a, b) => a.localeCompare(b));
+  facts.categories = [...catSet].sort((a, b) => a.localeCompare(b));
+  return facts;
 }
 
 export async function countVendors(): Promise<{ total: number; published: number }> {
