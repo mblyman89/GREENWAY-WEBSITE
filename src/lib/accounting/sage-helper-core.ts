@@ -386,6 +386,36 @@ IMPORT ORDER: Chart of Accounts (and customer/vendor lists) must exist before im
 OUR BACK OFFICE FILE: the Accounting (Sage 50) tab builds a daily General Journal CSV from completed sales using the store's chart-of-accounts mapping. Each day = one balanced transaction (debits positive, credits negative, summing to zero). Header row: Date, Reference, Transaction Number, G/L Account ID, Description, Amount — so enable "First Row Contains Headings" on import.
 
 .PTB BACKUPS: a .ptb is a proprietary compressed Sage company backup, NOT a readable report; it cannot be parsed outside Sage 50. To let the assistant use book data, export specific reports (General Ledger, Trial Balance) to CSV/PDF and upload those instead.
+
+IMPORT ORDER (authoritative, from Sage Import/Export Tips): import LISTS first — Chart of Accounts, then Employee list, Vendor list, Customer list, Inventory Item list — THEN journals in this order: General Journal, Purchase Orders, Purchases (must precede sales so item costing is right), Assemblies, Inventory Adjustments, Sales Orders, Sales, Payments, Cash Receipts, Payroll. Purchase transactions MUST be imported before sales transactions for inventory costing to compute correctly.
+
+IMPORT/EXPORT TIPS (verified):
+- No DOUBLE QUOTES inside memos, notes, or descriptions — Sage treats quotes as field delimiters and the import fails or corrupts.
+- Blank values become 0 (numeric) or False (boolean). Include Date Due on purchases/sales or aging reports will be wrong.
+- Duplicate invoice numbers for the SAME customer/vendor are rejected.
+- You cannot import journal entries dated past the end of the SECOND open fiscal year; close the first year before importing future-dated entries.
+- Sales tax IDs and tax agencies CANNOT be imported (stored in taxcode.dat/taxauth.dat); set them up in Sage manually and reference the IDs in import files.
+- When rebuilding a company, use identical accounting-period dates and the same number of custom fields, and export with date range ALL from several years back.
+
+CASH RECEIPTS IMPORT (RECEIPTS.CSV): Reference, Date, Cash Account, Number of Distributions (1–147), Amount are required. For Apply-to-Revenues receipts, G/L Account and Amount are required per distribution; Quantity/Item ID/Unit Price/Tax Type optional. Cash Amount, Inventory Account, Cost of Sales Account/Amount are EXPORT-ONLY (computed on import). Positive amount = debit, negative = credit.
+
+PAYMENTS IMPORT (PAYMENTS.CSV): Date, Cash Account, Detailed Payment (Yes/No), Number of Distributions (1–147), Amount required. Payment Method must already exist in Vendor Defaults. For Apply-to-Invoices, Vendor ID + Invoice Paid + Total Paid on Invoice(s) are needed; for Apply-to-Expenses, G/L Account + Amount.
+
+PURCHASES IMPORT (PURCHASE.CSV): Vendor ID, Date, Date Due, Accounts Payable Account, Number of Distributions, G/L Account, Amount required. Accounts Payable Amount is EXPORT-ONLY (computed). Duplicate invoice # per vendor rejected.
+
+INVENTORY ADJUSTMENTS IMPORT (ADJUST.CSV): Item ID, Date, Number of Distributions (always 1), G/L Source Account (usually COS), Quantity, Amount required. Amount should be NEGATIVE (credit to the source account); a NEGATIVE Quantity is what triggers the reversing debit. Requires a Sage Item ID per row — our back office has no Sage item mapping, so it exports adjustments as balanced General Journal entries instead (DR COGS / CR inventory for shrink, reversed for count-ups).
+
+PAYROLL IMPORT (PAYROLL.CSV): needs Employee ID, Check Number, Date, Cash Account, Pay Period End, and per-pay-field amounts/accounts (fields 1–20 gross, 21–60 employee taxes/deductions, 61–100 employer). The back office only stores net/gross/taxes totals per employee, NOT the per-field detail, so per the store's rule there is NO payroll upload — keep entering payroll in Sage directly (or via your payroll service).
+
+THIS STORE'S REAL BOOKS (verified from the owner's own Sage exports):
+- Sales are keyed as daily CASH RECEIPTS per category "customer": 01-CONCENTRATE/EDIBLE/FLOWER/LIQUID/NON CANNABIS/PREROLL/TOPICAL. Each receipt's cash account is 10000-GRNWY (cash on hand) and its distributions are: WA LIQUOR & CANNABIS BOARD (excise 37%) → 31000-GRNWY (agency WA_LCB01), LOCAL SALES TAX → 31001-GRNWY (WA_DOR02), STATE SALES TAX → 31001-GRNWY (WA_DOR01), and SALES → the category income account (50000–50006-GRNWY), all as credits.
+- Daily COGS is a separate receipt per category under the 07-* customers: "cash account" = the category COGS account (60000–60006-GRNWY, debit) and one distribution crediting the category inventory account (20000–20006-GRNWY).
+- Vendor invoices (manifests) post to AP 30000-GRNWY with lines at 20009-GRNWY (default purchases/inventory entry). Vendor payments come out of checking 10005-GRNWY (methods: Cash / Check / Electronic).
+- The Accounting tab's "Sage 50 imports" section generates these exact files from back-office data (orders, manifests, vendor payments, adjustments, vendor list). Review each file before importing; anything unmapped is flagged, never guessed.
+
+ACCOUNT RECONCILIATION (Tasks > Account Reconciliation): choose the account, enter the statement ending balance and statement date, then check off cleared checks/deposits/withdrawals until Unreconciled Difference is 0.00. Add missing transactions (bank fees, interest) via Adjust. Reconcile every bank/cash account monthly — this is the #1 habit for professional books.
+
+FISCAL YEAR-END (Tasks > System > Year-End Wizard): Sage keeps TWO open fiscal years. Close the first year when you need to enter transactions beyond the second. If the payroll year is the calendar year, close payroll first (after W-2s/941/940). Before closing: post/print everything, reconcile accounts, back up the company (the wizard requires a backup), and review reports. Closing is permanent — transactions in the closed year become read-only.
 `.trim();
 
 /** Build the system prompt for the Sage 50 chat assistant. */

@@ -16,6 +16,18 @@ import { DateRangePicker } from "@/components/admin/reports/DateRangePicker";
 import { AccountingSettingsForm } from "@/components/admin/reports/AccountingSettingsForm";
 import { resolveRange } from "@/lib/reports/range";
 import { buildSage50Journal, getAccountingSettings, type DayJournalSummary } from "@/lib/accounting/sage50";
+import {
+  SAGE_EXPORT_KINDS,
+  getSageCategoryAccounts,
+  getSageExportSettings,
+  listSageCategoryMapEntries,
+  listUnmappedCategories,
+} from "@/lib/accounting/sage-exports";
+import {
+  SageExportSettingsForm,
+  SageCategoryAccountsForm,
+  SageCategoryMapForm,
+} from "@/components/admin/reports/SageExportMappingForms";
 import { listSageUploads, getSageChatHistory } from "@/lib/accounting/sage-helper";
 import { SAGE_REPORT_KINDS, sageReportKindLabel } from "@/lib/accounting/sage-helper-core";
 import { isAiConfigured } from "@/lib/ai/provider";
@@ -74,6 +86,13 @@ export default async function AccountingPage({
   const built = isSupabaseServiceConfigured ? await buildSage50Journal(range.fromISO, range.toISO) : null;
   const uploads = await listSageUploads(25);
   const chatHistory = await getSageChatHistory(40);
+  const [sageAccounts, sageExportSettings, categoryMapEntries, unmappedCategories] = await Promise.all([
+    getSageCategoryAccounts(),
+    getSageExportSettings(),
+    listSageCategoryMapEntries(),
+    listUnmappedCategories(),
+  ]);
+  const sageAccountRows = Object.values(sageAccounts).sort((a, b) => a.bucket.localeCompare(b.bucket));
 
   const totals = (built?.summaries ?? []).reduce(
     (acc, s) => {
@@ -135,6 +154,59 @@ export default async function AccountingPage({
         ) : (
           <p className="text-xs text-white/40">Generating the journal requires the “Change settings” permission.</p>
         )}
+      </Section>
+
+      {/* Sage 50 export pipeline — Sage-importable CSVs matching the store's real books */}
+      <Section
+        title="Sage 50 imports — download by data type"
+        subtitle="Each file matches the official Sage 50 import spec AND your company's real layout (category customers, G/L trios, tax agencies). Import lists before journals, and Purchases before Receipts so costing lands right."
+      >
+        {canEdit ? (
+          <div className="flex flex-wrap items-center gap-2">
+            {SAGE_EXPORT_KINDS.map((k) => (
+              <Link
+                key={k.value}
+                href={`/admin/reports/accounting/sage-export?kind=${k.value}&${qs}`}
+                prefetch={false}
+                className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-bold text-white/80 transition hover:border-[var(--admin-accent)]/50 hover:text-white"
+              >
+                ⬇ {k.label}
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-white/40">Generating Sage exports requires the “Change settings” permission.</p>
+        )}
+        <p className="mt-3 text-[0.7rem] leading-relaxed text-white/35">
+          Import order in Sage 50 (File ▸ Select Import/Export): 1) Vendor list · 2) Purchases · 3) Payments ·
+          4) Cash Receipts · 5) Inventory-adjustment General Journal. On the Fields tab check Show for exactly the
+          columns in the file, in the same order, and enable “First Row Contains Headings”. Review every file before
+          importing — these are drafts for your books, not auto-posted entries.
+        </p>
+      </Section>
+
+      {/* Store-wide Sage export settings (0091) */}
+      <Section
+        title="Sage export settings"
+        subtitle="Store-wide accounts used by the export files. Pre-seeded from your real Sage company; edit if your chart changes."
+      >
+        <SageExportSettingsForm settings={sageExportSettings} canEdit={canEdit} />
+      </Section>
+
+      {/* Per-bucket category mapping (0091) */}
+      <Section
+        title="Sage category buckets"
+        subtitle="Each bucket maps to its Sage category customer (01-/07-) and G/L trio (sales 5000x · COGS 6000x · inventory 2000x), exactly like your books."
+      >
+        <SageCategoryAccountsForm accounts={sageAccountRows} canEdit={canEdit} />
+      </Section>
+
+      {/* Menu category → bucket map (0091) */}
+      <Section
+        title="Menu category → Sage bucket"
+        subtitle="Tell the exports which Sage bucket each back-office menu category belongs to. Unmapped categories are flagged — nothing is guessed."
+      >
+        <SageCategoryMapForm entries={categoryMapEntries} unmappedCategories={unmappedCategories} canEdit={canEdit} />
       </Section>
 
       {/* GL mapping */}

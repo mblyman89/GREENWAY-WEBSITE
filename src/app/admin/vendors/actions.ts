@@ -88,6 +88,18 @@ export async function updateVendor(formData: FormData): Promise<void> {
   const { error } = await admin.from("vendors").update(update).eq("id", id);
   if (error) redirect(`/admin/vendors/${id}?error=` + encodeURIComponent(error.message));
 
+  // Sage Vendor ID (migration 0091) — saved separately and best-effort so the
+  // profile form keeps working even before the column exists.
+  if (formData.has("sage_vendor_id")) {
+    const { error: sageErr } = await admin
+      .from("vendors")
+      .update({ sage_vendor_id: orNull(formData.get("sage_vendor_id")) })
+      .eq("id", id);
+    if (sageErr) {
+      console.warn("vendors.sage_vendor_id not saved (apply migration 0091):", sageErr.message);
+    }
+  }
+
   await recordAudit({
     actorId: session.userId,
     actorEmail: session.email,
