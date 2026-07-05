@@ -22,10 +22,12 @@ import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import {
   SEED_TERPENES,
   SEED_CANNABINOIDS,
+  SEED_EFFECTS,
   SEED_CATEGORIES,
   type SeedStrain,
   type SeedTerpene,
   type SeedCannabinoid,
+  type SeedEffect,
   type SeedCategory,
 } from "./seed";
 import { STRAINS_RICH, type SeedStrainRich } from "./strains-data";
@@ -172,6 +174,73 @@ async function loadCannabinoids(): Promise<SeedCannabinoid[]> {
   } catch {
     return SEED_CANNABINOIDS;
   }
+}
+
+type EffectRow = {
+  slug: string;
+  name: string;
+  category: string | null;
+  definition: string | null;
+  house_note: string | null;
+  aliases: string[] | null;
+};
+
+/**
+ * Load the active, published effect vocabulary (migration 0086). Falls back to
+ * the in-code SEED_EFFECTS if the table is empty / not migrated, so effect
+ * grounding works on day one — mirrors loadCannabinoids(). Reads only
+ * published rows; drafts never surface to copy.
+ */
+async function loadEffects(): Promise<SeedEffect[]> {
+  if (!isSupabaseServiceConfigured) return SEED_EFFECTS;
+  try {
+    const admin = createSupabaseAdminClient();
+    // Try the full status-filtered read first; fall back to no status filter
+    // if the column is unknown (pre-0086), then to the seed set.
+    let rows: EffectRow[] | null = null;
+    const full = await admin
+      .from("kb_effects")
+      .select("slug,name,category,definition,house_note,aliases")
+      .eq("active", true)
+      .eq("status", "published");
+    if (!full.error && full.data) {
+      rows = full.data as EffectRow[];
+    } else {
+      const base = await admin
+        .from("kb_effects")
+        .select("slug,name,category,definition,house_note,aliases")
+        .eq("active", true);
+      if (!base.error && base.data) rows = base.data as EffectRow[];
+    }
+    if (!rows || rows.length === 0) return SEED_EFFECTS;
+    return rows.map((r) => ({
+      slug: r.slug,
+      name: r.name,
+      category: (r.category as SeedEffect["category"]) ?? "character",
+      definition: r.definition ?? "",
+      house_note: r.house_note ?? "",
+      aliases: r.aliases ?? [],
+      sources: [],
+      confidence: 0,
+    }));
+  } catch {
+    return SEED_EFFECTS;
+  }
+}
+
+/**
+ * Build a lookup from any known effect token (slug, name, or alias, all
+ * normalized) to its canonical SeedEffect, so free-text effects[] tags on
+ * strains/products can be matched to a defined vocabulary entry.
+ */
+function buildEffectIndex(effects: SeedEffect[]): Map<string, SeedEffect> {
+  const idx = new Map<string, SeedEffect>();
+  for (const e of effects) {
+    idx.set(e.slug.toLowerCase(), e);
+    idx.set(e.name.toLowerCase(), e);
+    for (const a of e.aliases) idx.set(a.toLowerCase(), e);
+  }
+  return idx;
 }
 
 type CategoryRow = { category: string; display_name: string | null; formats: string[] | null; format_words: string[] | null; sensory_words: string[] | null; notes: string | null };
@@ -405,11 +474,12 @@ export type GroundedFacts = {
  * notes into a compact list the model must stay within.
  */
 export async function buildGroundedFacts(facts: ProductFacts): Promise<GroundedFacts> {
-  const [strains, terpenes, cannabinoids, categories, brandFact, notes, kbProduct, kbCategory] =
+  const [strains, terpenes, cannabinoids, effectVocab, categories, brandFact, notes, kbProduct, kbCategory] =
     await Promise.all([
       loadStrains(),
       loadTerpenes(),
       loadCannabinoids(),
+      loadEffects(),
       loadCategories(),
       loadBrandFact(facts.brand, facts.vendor),
       loadNotes(),
@@ -417,6 +487,25 @@ export async function buildGroundedFacts(facts: ProductFacts): Promise<GroundedF
       loadKbProductFact(facts),
       loadKbProductCategory(facts.category),
     ]);
+
+  // Alias-aware index so free-text effects[] tags resolve to defined vocabulary.
+  const effectIndex = buildEffectIndex(effectVocab);
+  const surfacedEffects = new Set<string>();
+  /** Emit a defined, house-voiced grounding line for each recognized effect. */
+  const groundEffects = (tags: string[] | null | undefined) => {
+    if (!tags?.length) return;
+    for (const raw of tags) {
+      const e = effectIndex.get(norm(raw));
+      if (!e || surfacedEffects.has(e.slug)) continue;
+      surfacedEffects.add(e.slug);
+      sources.push(`kb:effect:${e.slug}`);
+      const def = e.definition ? ` ${e.definition}` : "";
+      const note = e.house_note ? ` House voice: ${e.house_note}` : "";
+      lines.push(
+        `Effect "${e.name}" (experience only, not medical):${def}${note}`.trim(),
+      );
+    }
+  };
 
   const sources: string[] = [];
   const lines: string[] = [];
@@ -446,7 +535,10 @@ export async function buildGroundedFacts(facts: ProductFacts): Promise<GroundedF
       );
       sources.push("kb:potency:lab_results");
     }
-    if (r.effects?.length) lines.push(`Curated experiential character: ${r.effects.join(", ")} (experience only, not medical).`);
+    if (r.effects?.length) {
+      lines.push(`Curated experiential character: ${r.effects.join(", ")} (experience only, not medical).`);
+      groundEffects(r.effects);
+    }
   }
 
   // --- Strain ---

@@ -177,6 +177,13 @@ export default async function KnowledgeBasePage({
               accent="muted"
             />
             <KbNavCard
+              href="/admin/knowledge-base/effects"
+              title="Effects"
+              description="How each product tends to feel — plain, non-medical definitions plus our house voice. Grounds experiential copy. Reference only."
+              count={counts.effects}
+              accent="muted"
+            />
+            <KbNavCard
               href="/admin/inventory/noncannabis"
               title="Non-cannabis catalog"
               description="Glass, accessories, papers & devices — tracked with smart SKUs and connected to the KB."

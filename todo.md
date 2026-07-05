@@ -176,12 +176,18 @@ see `docs/COMMAND_CENTER_ENHANCEMENTS_TASKLIST.md`.
 - [x] TASK B — Merge PR #255 (squash, --admin, delete branch). Merged ac43c5c; main synced. (Migrations 0083/0084/0085 remain MANUAL for owner.)
 - [ ] TASK C — Open branch feat/kb-hardening-v2; build 5 recommendations IN ORDER:
 
-### Slice 1 — Effects/experience vocabulary (culture voice, compliance-gated)  [NEXT]
-- [ ] Deep research: WA-legal effect/experience descriptors; what is FACT vs medical claim
-- [ ] Migration 0086: kb_effects table (drafts/provenance parity; status default published)
-- [ ] Seed: factual, non-medical, culture-voiced effect vocabulary (compliance-gated)
-- [ ] Wire: store CRUD + retrieval grounding + admin read-only cards + health coverage
-- [ ] Verify tsc/eslint/build -> rm -rf .next; commit; push
+### Slice 1 — Effects/experience vocabulary (culture voice, compliance-gated)  [SHIPPED]
+> Owner voice brief (verbatim): "we are a professional group of experienced cannabis users who cater to all ages over 21. So the language and tone should reflect that of a sophisticated pot head. So yes, relaxed and knowledgeable, friendly, with some fun creative terms and such. I want it to be enjoyable and funny in a way, but professional still ... I want it to be fun and professional." + "right high quality curated set ... quality over quantity."
+> KEY FINDING (verified, not guessed): effects[] free-text arrays ALREADY exist on kb_products/kb_strains/kb_product_categories (migration 0071) and surface as a bare list. The code ALSO has an authoritative ALLOWED_EFFECTS allow-list + checkEffects gate (src/lib/ai/compliance.ts). So Slice 1 = a CONTROLLED VOCABULARY (kb_effects) those arrays resolve to; every seeded slug is a verbatim ALLOWED_EFFECTS member so vocab + gate can never disagree.
+- [x] Research: Leafly effect taxonomy + Amsterdam Genetics body/head-high article; grounded, non-medical (docs/KB_EFFECTS_SEED_SOURCES.md). Verified all 16 slugs ∈ ALLOWED_EFFECTS.
+- [x] Migration 0086_kb_effects.sql: kb_effects (slug/name/category/definition/house_note/aliases/sources/confidence) + drafts/provenance parity (status default 'published' + status check; source; backfill source='manual'); indexes; RLS is_staff; updated_at trigger. Idempotent, MANUAL apply.
+- [x] Seed: SeedEffect type + SEED_EFFECTS (16 curated effects across 4 families calming/uplifting/energizing/character). Factual non-medical definition + fun-but-professional house_note + neutral aliases. All ∈ ALLOWED_EFFECTS.
+- [x] Wire store.ts: effectRows in seedKnowledgeBase (r7, degrades pre-0086) + KbCounts.effects + inserted.effects + KbEffectRow/listKbEffectsFull/getKbEffectBySlug/UpsertKbEffectInput/upsertKbEffect/setEffectActive.
+- [x] Wire retrieval.ts: loadEffects() (published-only, FULL→no-status fallback→seed) + buildEffectIndex (slug/name/alias→canonical) + groundEffects() emits "Effect \"X\" (experience only, not medical): <definition> House voice: <house_note>" with kb:effect:<slug> source tag; called on product effects[].
+- [x] Wire health.ts: effectCoverage {present,expected} from counts.effects vs SEED_EFFECTS.length.
+- [x] Admin: read-only /admin/knowledge-base/effects card page (CategoryBadge + definition + house voice + aliases + sources + status/source provenance + non-medical footer); KB-landing nav card added after Cannabinoids.
+- [x] Verify tsc 0 → eslint 0 → next build OK → rm -rf .next.
+- [x] Commit → push feat/kb-hardening-v2. Migration 0086 is MANUAL (owner applies then re-runs Seed to load the 16 effects).
 
 ### Slice 2 — Consumption methods / product formats (DEEP WA-specific research)
 - [ ] Deep internet research: WA I-502 product categories/formats + consumption methods (factual)

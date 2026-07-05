@@ -14,6 +14,7 @@ import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import {
   SEED_TERPENES,
   SEED_CANNABINOIDS,
+  SEED_EFFECTS,
   SEED_CATEGORIES,
   SEED_BANNED_PHRASES,
 } from "./seed";
@@ -25,6 +26,8 @@ export type KbCounts = {
   terpenes: number;
   /** Cannabinoid compounds (migration 0083). */
   cannabinoids: number;
+  /** Experiential-effect vocabulary (migration 0086). */
+  effects: number;
   categories: number;
   brands: number;
   banned: number;
@@ -51,6 +54,7 @@ export async function getKbCounts(): Promise<KbCounts> {
     strains: 0,
     terpenes: 0,
     cannabinoids: 0,
+    effects: 0,
     categories: 0,
     brands: 0,
     banned: 0,
@@ -60,11 +64,12 @@ export async function getKbCounts(): Promise<KbCounts> {
     notesMigrated: false,
   };
   if (!isSupabaseServiceConfigured) return empty;
-  const [strains, terpenes, cannabinoids, categories, brands, banned, notes, nonCannabis] =
+  const [strains, terpenes, cannabinoids, effects, categories, brands, banned, notes, nonCannabis] =
     await Promise.all([
       tableCount("kb_strains"),
       tableCount("kb_terpenes"),
       tableCount("kb_cannabinoids"),
+      tableCount("kb_effects"),
       tableCount("kb_category_terms"),
       tableCount("kb_brands"),
       tableCount("kb_banned_phrases"),
@@ -76,6 +81,7 @@ export async function getKbCounts(): Promise<KbCounts> {
     strains: strains ?? 0,
     terpenes: terpenes ?? 0,
     cannabinoids: cannabinoids ?? 0,
+    effects: effects ?? 0,
     categories: categories ?? 0,
     brands: brands ?? 0,
     banned: banned ?? 0,
@@ -118,7 +124,7 @@ export async function listKbNonCannabis(limit = 1000): Promise<KbNonCannabisRow[
 export type SeedReport = {
   ok: boolean;
   message: string;
-  inserted: { strains: number; terpenes: number; cannabinoids: number; categories: number; banned: number; productCategories: number };
+  inserted: { strains: number; terpenes: number; cannabinoids: number; effects: number; categories: number; banned: number; productCategories: number };
 };
 
 /**
@@ -128,7 +134,7 @@ export type SeedReport = {
  */
 export async function seedKnowledgeBase(actorId: string | null): Promise<SeedReport> {
   if (!isSupabaseServiceConfigured) {
-    return { ok: false, message: "The database isn't connected yet.", inserted: { strains: 0, terpenes: 0, cannabinoids: 0, categories: 0, banned: 0, productCategories: 0 } };
+    return { ok: false, message: "The database isn't connected yet.", inserted: { strains: 0, terpenes: 0, cannabinoids: 0, effects: 0, categories: 0, banned: 0, productCategories: 0 } };
   }
   const admin = createSupabaseAdminClient();
 
@@ -174,6 +180,21 @@ export async function seedKnowledgeBase(actorId: string | null): Promise<SeedRep
     also_found_in: c.also_found_in ?? null,
     sources: c.sources,
     confidence: c.confidence,
+    active: true,
+    created_by: actorId,
+    updated_by: actorId,
+  }));
+  const effectRows = SEED_EFFECTS.map((e) => ({
+    slug: e.slug,
+    name: e.name,
+    category: e.category,
+    definition: e.definition,
+    house_note: e.house_note,
+    aliases: e.aliases,
+    sources: e.sources,
+    confidence: e.confidence,
+    source: "manual",
+    status: "published",
     active: true,
     created_by: actorId,
     updated_by: actorId,
@@ -252,11 +273,23 @@ export async function seedKnowledgeBase(actorId: string | null): Promise<SeedRep
     cannabinoidsSeeded = cannabinoidRows.length;
   }
 
+  // Effects vocabulary lives behind migration 0086. Degrade gracefully so
+  // seeding still works before the owner applies 0086.
+  let effectsSeeded = 0;
+  const r7 = await admin
+    .from("kb_effects")
+    .upsert(effectRows, { onConflict: "slug" });
+  if (r7.error) {
+    warnings.push(`effects not seeded (apply migration 0086): ${r7.error.message}`);
+  } else {
+    effectsSeeded = effectRows.length;
+  }
+
   if (errors.length) {
     return {
       ok: false,
       message: `Some data couldn't be saved. Make sure the knowledge-base setup has been run. (${errors.join("; ")})`,
-      inserted: { strains: 0, terpenes: 0, cannabinoids: 0, categories: 0, banned: 0, productCategories: 0 },
+      inserted: { strains: 0, terpenes: 0, cannabinoids: 0, effects: 0, categories: 0, banned: 0, productCategories: 0 },
     };
   }
   const okMessage =
@@ -269,6 +302,7 @@ export async function seedKnowledgeBase(actorId: string | null): Promise<SeedRep
       strains: strainRows.length,
       terpenes: terpeneRows.length,
       cannabinoids: cannabinoidsSeeded,
+      effects: effectsSeeded,
       categories: categoryRows.length,
       banned: bannedRows.length,
       productCategories: productCategoriesSeeded,
@@ -561,6 +595,131 @@ export async function setCannabinoidActive(
     const admin = createSupabaseAdminClient();
     const { error } = await admin
       .from("kb_cannabinoids")
+      .update({ active, updated_by: actorId })
+      .eq("slug", slug.trim().toLowerCase());
+    if (error) return { ok: false, message: error.message };
+    return { ok: true, message: active ? "Shown." : "Hidden." };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Unexpected error." };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Experiential EFFECTS vocabulary (migration 0086). Reads/writes degrade safely
+// pre-migration like the other KB helpers. SUBJECTIVE experience only — the
+// compliance gate strips any medical framing before it can surface.
+// ---------------------------------------------------------------------------
+export type KbEffectRow = {
+  id: string;
+  slug: string;
+  name: string;
+  category: string | null;
+  definition: string | null;
+  house_note: string | null;
+  aliases: string[];
+  sources: string[];
+  confidence: number | null;
+  source: string | null;
+  status: string;
+  active: boolean;
+};
+
+const KB_EFFECT_COLUMNS =
+  "id,slug,name,category,definition,house_note,aliases,sources,confidence,source,status,active";
+
+/** List all effect reference rows (active first, alphabetical). Degrades to []. */
+export async function listKbEffectsFull(limit = 200): Promise<KbEffectRow[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("kb_effects")
+      .select(KB_EFFECT_COLUMNS)
+      .order("active", { ascending: false })
+      .order("name", { ascending: true })
+      .limit(limit);
+    if (error || !data) return [];
+    return data as unknown as KbEffectRow[];
+  } catch {
+    return [];
+  }
+}
+
+/** Fetch one effect by slug. Returns null if missing. */
+export async function getKbEffectBySlug(slug: string): Promise<KbEffectRow | null> {
+  if (!isSupabaseServiceConfigured) return null;
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("kb_effects")
+      .select(KB_EFFECT_COLUMNS)
+      .eq("slug", slug)
+      .maybeSingle();
+    if (error || !data) return null;
+    return data as unknown as KbEffectRow;
+  } catch {
+    return null;
+  }
+}
+
+export type UpsertKbEffectInput = {
+  slug: string;
+  name: string;
+  category?: string | null;
+  definition?: string | null;
+  house_note?: string | null;
+  aliases?: string[];
+  sources?: string[];
+  confidence?: number | null;
+};
+
+/** Idempotent upsert of a single effect on slug. Curated edits stay published. */
+export async function upsertKbEffect(
+  input: UpsertKbEffectInput,
+  actorId: string | null,
+): Promise<{ ok: boolean; message: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, message: "The database isn't connected yet." };
+  const slug = input.slug.trim().toLowerCase();
+  if (!slug) return { ok: false, message: "A slug is required." };
+  if (!input.name.trim()) return { ok: false, message: "A name is required." };
+  try {
+    const admin = createSupabaseAdminClient();
+    const { error } = await admin.from("kb_effects").upsert(
+      {
+        slug,
+        name: input.name.trim(),
+        category: input.category?.trim() || null,
+        definition: input.definition?.trim() || null,
+        house_note: input.house_note?.trim() || null,
+        aliases: input.aliases ?? [],
+        sources: input.sources ?? [],
+        confidence: input.confidence ?? null,
+        source: "manual",
+        status: "published",
+        updated_by: actorId,
+      },
+      { onConflict: "slug" },
+    );
+    if (error) {
+      return { ok: false, message: `Couldn't save (apply migration 0086 if needed): ${error.message}` };
+    }
+    return { ok: true, message: `Saved ${input.name.trim()}.` };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Unexpected error." };
+  }
+}
+
+/** Toggle an effect active/hidden. */
+export async function setEffectActive(
+  slug: string,
+  active: boolean,
+  actorId: string | null,
+): Promise<{ ok: boolean; message: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, message: "The database isn't connected yet." };
+  try {
+    const admin = createSupabaseAdminClient();
+    const { error } = await admin
+      .from("kb_effects")
       .update({ active, updated_by: actorId })
       .eq("slug", slug.trim().toLowerCase());
     if (error) return { ok: false, message: error.message };

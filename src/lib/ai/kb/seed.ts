@@ -58,6 +58,21 @@ export type SeedCannabinoid = {
   confidence: number;
 };
 
+export type SeedEffect = {
+  slug: string;
+  name: string;
+  /** UI grouping ONLY, not a medical category: calming | uplifting | energizing | character. */
+  category: "calming" | "uplifting" | "energizing" | "character";
+  /** Factual, non-medical description of the SUBJECTIVE experience. Compliance-gated on surface. */
+  definition: string;
+  /** House-voiced budtender blurb (fun-but-professional, non-medical). Compliance-gated on surface. */
+  house_note: string;
+  /** Neutral synonyms / adjacent terms that map to this effect (for matching effects[] tags). */
+  aliases: string[];
+  sources: string[];
+  confidence: number;
+};
+
 export type SeedCategory = {
   category: string;
   display_name: string;
@@ -244,6 +259,249 @@ export const SEED_CANNABINOIDS: SeedCannabinoid[] = [
     also_found_in: "trace amounts, more common in some hemp-type cultivars",
     sources: [`${WIKI}Cannabidivarin`],
     confidence: 0.9,
+  },
+];
+
+// ---------------------------------------------------------------------------
+// Experiential EFFECTS vocabulary — SUBJECTIVE EXPERIENCE only (how it tends
+// to feel), never a medical/therapeutic claim. Every slug is a verbatim member
+// of ALLOWED_EFFECTS (src/lib/ai/compliance.ts) so the vocabulary and the
+// compliance gate can never disagree. `house_note` carries the house voice:
+// fun-but-professional, a sophisticated-budtender tone (owner brief). All prose
+// is routed through checkCompliance + checkEffects before it can surface.
+// Curated core set (quality over quantity) — see docs/KB_EFFECTS_SEED_SOURCES.md.
+// ---------------------------------------------------------------------------
+const LEAFLY_EFFECTS = "https://www.leafly.com/strains/lists/effect";
+const AG_EFFECTS = "https://www.amsterdamgenetics.com/choosing-cannabis-effects";
+
+export const SEED_EFFECTS: SeedEffect[] = [
+  // ---- Calming / body ------------------------------------------------------
+  {
+    slug: "relaxed",
+    name: "Relaxed",
+    category: "calming",
+    definition:
+      "A mellow, settled, tension-melting body feeling — the classic wind-down experience most " +
+      "people picture. Describes the subjective feel, not a health outcome.",
+    house_note:
+      "The house classic. That easy exhale where your shoulders drop, the day gets quieter, and " +
+      "sinking into the couch suddenly sounds like a great idea. Slow-burn, low-key, no rush.",
+    aliases: ["relaxing", "calm", "calming", "chill", "mellow", "soothing"],
+    sources: [`${LEAFLY_EFFECTS}/relaxed`, AG_EFFECTS],
+    confidence: 0.97,
+  },
+  {
+    slug: "sleepy",
+    name: "Sleepy",
+    category: "calming",
+    definition:
+      "Heavy-eyed, winding-down drowsiness — the kind that shows up as the night gets late. " +
+      "A subjective experience descriptor, not a sleep-aid claim.",
+    house_note:
+      "The nightcap end of the shelf. Heavy eyelids, cozy blanket energy, one-more-episode-becomes-zero. " +
+      "Save this one for when you're already headed toward the pillow.",
+    aliases: ["sedate", "sedating", "drowsy"],
+    sources: [AG_EFFECTS],
+    confidence: 0.95,
+  },
+  {
+    slug: "couch-lock",
+    name: "Couch-lock",
+    category: "calming",
+    definition:
+      "That pleasantly pinned-to-the-cushions heaviness where getting up feels entirely optional. " +
+      "A subjective intensity descriptor for deeply body-relaxing experiences.",
+    house_note:
+      "The stuff of legend. When the couch quietly becomes home base and the remote is the furthest " +
+      "you plan to reach. Deeply chill — grab your snacks before you sit down.",
+    aliases: ["heavy", "body high"],
+    sources: [`${LEAFLY_EFFECTS}/relaxed`, AG_EFFECTS],
+    confidence: 0.94,
+  },
+  {
+    slug: "dreamy",
+    name: "Dreamy",
+    category: "calming",
+    definition:
+      "A soft, floaty, gently-in-your-head haze — relaxed but with a light, drifting quality. " +
+      "Describes the subjective feel only.",
+    house_note:
+      "Soft-focus vibes. A little floaty, a little heady, the good kind of daydream where time gets " +
+      "pleasantly loose. Great with music and zero obligations.",
+    aliases: [],
+    sources: [`${LEAFLY_EFFECTS}/relaxed`],
+    confidence: 0.9,
+  },
+  // ---- Uplifting / social --------------------------------------------------
+  {
+    slug: "happy",
+    name: "Happy",
+    category: "uplifting",
+    definition:
+      "A light, good-mood lift — brighter and a little more buoyant than baseline. A subjective " +
+      "mood descriptor, not a treatment claim.",
+    house_note:
+      "Simple and lovely: a gentle mood bump that makes the ordinary stuff a little more fun. The " +
+      "kind of pleasant you don't overthink.",
+    aliases: [],
+    sources: [`${LEAFLY_EFFECTS}/euphoric`, AG_EFFECTS],
+    confidence: 0.95,
+  },
+  {
+    slug: "euphoric",
+    name: "Euphoric",
+    category: "uplifting",
+    definition:
+      "A bigger, brighter wave of feel-good — a noticeable rush of positivity. Describes the " +
+      "subjective experience, not a health benefit.",
+    house_note:
+      "The mood-lifter with the volume turned up. A bright, buoyant wave that makes everything feel " +
+      "a few shades more golden. Crowd-pleaser energy.",
+    aliases: ["uplifted", "uplifting"],
+    sources: [`${LEAFLY_EFFECTS}/euphoric`, AG_EFFECTS],
+    confidence: 0.95,
+  },
+  {
+    slug: "giggly",
+    name: "Giggly",
+    category: "uplifting",
+    definition:
+      "The experience where everyday things get funnier than they have any right to be. A " +
+      "subjective mood descriptor only.",
+    house_note:
+      "Warning: dad jokes may become elite. Everything's suddenly a little funnier, and you're along " +
+      "for the ride. Best enjoyed with good company and a comedy queued up.",
+    aliases: [],
+    sources: [AG_EFFECTS],
+    confidence: 0.92,
+  },
+  {
+    slug: "talkative",
+    name: "Talkative",
+    category: "uplifting",
+    definition:
+      "Chatty, sociable, easy-conversation energy — words flow and hangs feel effortless. A " +
+      "subjective social descriptor.",
+    house_note:
+      "The one that turns a quiet kickback into a three-hour conversation about everything and " +
+      "nothing. Great for game nights and long porch sits.",
+    aliases: ["sociable", "social"],
+    sources: [AG_EFFECTS],
+    confidence: 0.92,
+  },
+  // ---- Energizing / active -------------------------------------------------
+  {
+    slug: "energetic",
+    name: "Energetic",
+    category: "energizing",
+    definition:
+      "Get-up-and-go, do-the-thing energy — a lively, motivated feel rather than a settled one. " +
+      "Describes the subjective experience only.",
+    house_note:
+      "The daytime driver. A lively, let's-actually-do-stuff spark — chores, a walk, a project you've " +
+      "been putting off. Sunshine-in-a-jar type of vibe.",
+    aliases: ["energizing", "buzzy"],
+    sources: [`${LEAFLY_EFFECTS}/energetic`, AG_EFFECTS],
+    confidence: 0.93,
+  },
+  {
+    slug: "focused",
+    name: "Focused",
+    category: "energizing",
+    definition:
+      "A dialed-in, heads-down clarity — attention feels a little easier to point at one thing. " +
+      "A subjective descriptor, not a cognitive/medical claim.",
+    house_note:
+      "The clean, dialed-in one. Good for getting in the zone — a task, a playlist, a tidy corner of " +
+      "the garage. Clear-headed, not couch-bound.",
+    aliases: [],
+    sources: [`${LEAFLY_EFFECTS}/focused`],
+    confidence: 0.9,
+  },
+  {
+    slug: "creative",
+    name: "Creative",
+    category: "energizing",
+    definition:
+      "An ideas-flowing, color-outside-the-lines headspace where connections come a little easier. " +
+      "Describes the subjective feel only.",
+    house_note:
+      "The muse in a jar. Ideas start bouncing, the sketchbook or the studio starts calling, and the " +
+      "usual filter loosens up. Makers and daydreamers, this one's for you.",
+    aliases: [],
+    sources: [`${LEAFLY_EFFECTS}/creative`, AG_EFFECTS],
+    confidence: 0.9,
+  },
+  {
+    slug: "hungry",
+    name: "Hungry",
+    category: "energizing",
+    definition:
+      "An appetite nudge — food suddenly sounds like a very good idea. A subjective experience " +
+      "descriptor, affectionately known as 'the munchies'.",
+    house_note:
+      "Yes, the munchies. Snacks ascend to a higher plane and the fridge becomes a place of wonder. " +
+      "Line up the good stuff before, not after.",
+    aliases: [],
+    sources: [`${LEAFLY_EFFECTS}/hungry`],
+    confidence: 0.9,
+  },
+  // ---- Character / intensity ----------------------------------------------
+  {
+    slug: "cerebral",
+    name: "Cerebral",
+    category: "character",
+    definition:
+      "A heady, up-top experience — felt more in the mind than the body, often thoughtful or " +
+      "buzzy. A subjective character descriptor.",
+    house_note:
+      "The head-forward one. Lives up top — thoughts get lively and a little zippy. Pairs well with " +
+      "good conversation or a deep-dive rabbit hole.",
+    aliases: ["head high"],
+    sources: [AG_EFFECTS],
+    confidence: 0.9,
+  },
+  {
+    slug: "body high",
+    name: "Body high",
+    category: "character",
+    definition:
+      "The physical pole of the experience — felt in the limbs and shoulders rather than the head. " +
+      "A subjective character descriptor.",
+    house_note:
+      "The opposite of heady: this one settles into the body. Loose shoulders, easy limbs, that " +
+      "warm physical hum. The classic 'feel it, don't think it' lane.",
+    aliases: [],
+    sources: [`${LEAFLY_EFFECTS}/relaxed`, AG_EFFECTS],
+    confidence: 0.9,
+  },
+  {
+    slug: "potent",
+    name: "Potent",
+    category: "character",
+    definition:
+      "A heads-up that this one comes on strong — a note about intensity, not a quality or health " +
+      "claim. Pace yourself and start low.",
+    house_note:
+      "Respect the green. This one doesn't tiptoe — a little goes a long way, so start low and go " +
+      "slow. Seasoned heads know the drill; newcomers, ease in.",
+    aliases: ["stoney", "strong"],
+    sources: [`${LEAFLY_EFFECTS}/euphoric`],
+    confidence: 0.9,
+  },
+  {
+    slug: "tingly",
+    name: "Tingly",
+    category: "character",
+    definition:
+      "A light, pleasant physical fizz or buzz — a gentle bodily sensation. A subjective descriptor " +
+      "only.",
+    house_note:
+      "A little sparkle in the body — that gentle, pleasant fizz some people love. Subtle, not " +
+      "startling; more 'ooh, nice' than anything else.",
+    aliases: [],
+    sources: [`${LEAFLY_EFFECTS}/relaxed`],
+    confidence: 0.88,
   },
 ];
 
