@@ -139,8 +139,9 @@ overwriting curated work. The KB is the backbone; treat it that way.
 - [x] Unit-checkable dry-run mode (no writes) for the enrichment engine
       (`SEED_DRY_RUN`-style env or an options flag).
 - [x] `tsc` / `eslint` / `next build` clean; `rm -rf .next`.
-- [ ] PR opened with audit summary; **HELD for owner review** (KB is the
-      backbone — owner approves before merge).
+- [x] PR opened with audit summary; **HELD for owner review** (KB is the
+      backbone — owner approves before merge). → **PR #254** (owner: apply
+      migration 0082 first, then review + squash-merge).
 
 ### Follow-ups (deliberately out of scope, listed for handoff)
 - [ ] KB-powered vendor filter upgrade: once CCRS data exists, extend the
@@ -160,4 +161,4 @@ overwriting curated work. The KB is the backbone; treat it that way.
 
 ## Definition of done
 Slice A: owner can see and filter all 1,775 vendors, incl. "My vendors" (inventory-driven) and product-type/category filters; page stays fast. ✅ DONE
-Slice B: importing state data automatically proposes KB drafts with provenance; nothing curated is ever overwritten; owner reviews drafts in the KB UI.
+Slice B: importing state data automatically proposes KB drafts with provenance; nothing curated is ever overwritten; owner reviews drafts in the KB UI. ✅ BUILT — PR #254 held for owner review (apply migration 0082, then merge).
