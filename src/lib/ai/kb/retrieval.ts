@@ -24,12 +24,14 @@ import {
   SEED_CANNABINOIDS,
   SEED_EFFECTS,
   SEED_PRODUCT_FORMATS,
+  SEED_COMPLIANCE_RULES,
   SEED_CATEGORIES,
   type SeedStrain,
   type SeedTerpene,
   type SeedCannabinoid,
   type SeedEffect,
   type SeedProductFormat,
+  type SeedComplianceRule,
   type SeedCategory,
 } from "./seed";
 import { STRAINS_RICH, type SeedStrainRich } from "./strains-data";
@@ -312,6 +314,57 @@ function buildFormatIndex(formats: SeedProductFormat[]): Map<string, SeedProduct
   return idx;
 }
 
+type ComplianceRuleRow = {
+  slug: string;
+  title: string;
+  category: string | null;
+  rule: string | null;
+  house_note: string | null;
+  severity: string | null;
+};
+
+/**
+ * Load the active, published compliance-rule reference (migration 0088). Falls
+ * back to the in-code SEED_COMPLIANCE_RULES if the table is empty / not
+ * migrated. Reads only published rows; drafts never surface. This is the
+ * REFERENCE/education layer — it does NOT enforce anything (enforcement lives in
+ * sales-limits-core.ts).
+ */
+async function loadComplianceRules(): Promise<SeedComplianceRule[]> {
+  if (!isSupabaseServiceConfigured) return SEED_COMPLIANCE_RULES;
+  try {
+    const admin = createSupabaseAdminClient();
+    const cols = "slug,title,category,rule,house_note,severity";
+    let rows: ComplianceRuleRow[] | null = null;
+    const full = await admin
+      .from("kb_compliance_rules")
+      .select(cols)
+      .eq("active", true)
+      .eq("status", "published");
+    if (!full.error && full.data) {
+      rows = full.data as ComplianceRuleRow[];
+    } else {
+      const base = await admin.from("kb_compliance_rules").select(cols).eq("active", true);
+      if (!base.error && base.data) rows = base.data as ComplianceRuleRow[];
+    }
+    if (!rows || rows.length === 0) return SEED_COMPLIANCE_RULES;
+    return rows.map((r) => ({
+      slug: r.slug,
+      title: r.title,
+      category: (r.category as SeedComplianceRule["category"]) ?? "public-use",
+      rule: r.rule ?? "",
+      house_note: r.house_note ?? "",
+      severity: (r.severity as SeedComplianceRule["severity"]) ?? "info",
+      citation: "",
+      sources: [],
+      confidence: 0,
+      sort_order: 100,
+    }));
+  } catch {
+    return SEED_COMPLIANCE_RULES;
+  }
+}
+
 type CategoryRow = { category: string; display_name: string | null; formats: string[] | null; format_words: string[] | null; sensory_words: string[] | null; notes: string | null };
 
 async function loadCategories(): Promise<SeedCategory[]> {
@@ -543,13 +596,14 @@ export type GroundedFacts = {
  * notes into a compact list the model must stay within.
  */
 export async function buildGroundedFacts(facts: ProductFacts): Promise<GroundedFacts> {
-  const [strains, terpenes, cannabinoids, effectVocab, formatVocab, categories, brandFact, notes, kbProduct, kbCategory] =
+  const [strains, terpenes, cannabinoids, effectVocab, formatVocab, complianceRules, categories, brandFact, notes, kbProduct, kbCategory] =
     await Promise.all([
       loadStrains(),
       loadTerpenes(),
       loadCannabinoids(),
       loadEffects(),
       loadProductFormats(),
+      loadComplianceRules(),
       loadCategories(),
       loadBrandFact(facts.brand, facts.vendor),
       loadNotes(),
@@ -675,6 +729,20 @@ export async function buildGroundedFacts(facts: ProductFacts): Promise<GroundedF
     }
     if (matchedFormat.house_note) {
       lines.push(`${matchedFormat.name} house voice: ${matchedFormat.house_note}`);
+    }
+
+    // --- Helpful safety surfacing (kb_compliance_rules, migration 0088) ---
+    // For INGESTED formats, offer the "start low, go slow" edibles-safety rule
+    // as a customer-safety note the copy may weave in. Reference/education only
+    // — factual, never a dosing directive.
+    if (matchedFormat.category === "ingested") {
+      const edibleRule = complianceRules.find((r) => r.category === "edibles-safety");
+      if (edibleRule) {
+        sources.push(`kb:compliance:${edibleRule.slug}`);
+        lines.push(
+          `Customer-safety note (${edibleRule.title}): ${edibleRule.rule} House voice: ${edibleRule.house_note}`,
+        );
+      }
     }
   }
 

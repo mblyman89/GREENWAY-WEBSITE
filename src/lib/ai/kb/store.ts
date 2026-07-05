@@ -16,6 +16,7 @@ import {
   SEED_CANNABINOIDS,
   SEED_EFFECTS,
   SEED_PRODUCT_FORMATS,
+  SEED_COMPLIANCE_RULES,
   SEED_CATEGORIES,
   SEED_BANNED_PHRASES,
 } from "./seed";
@@ -31,6 +32,8 @@ export type KbCounts = {
   effects: number;
   /** Product-format / consumption-method vocabulary (migration 0087). */
   productFormats: number;
+  /** Compliance/safety reference rules (migration 0088). */
+  complianceRules: number;
   categories: number;
   brands: number;
   banned: number;
@@ -59,6 +62,7 @@ export async function getKbCounts(): Promise<KbCounts> {
     cannabinoids: 0,
     effects: 0,
     productFormats: 0,
+    complianceRules: 0,
     categories: 0,
     brands: 0,
     banned: 0,
@@ -68,13 +72,14 @@ export async function getKbCounts(): Promise<KbCounts> {
     notesMigrated: false,
   };
   if (!isSupabaseServiceConfigured) return empty;
-  const [strains, terpenes, cannabinoids, effects, productFormats, categories, brands, banned, notes, nonCannabis] =
+  const [strains, terpenes, cannabinoids, effects, productFormats, complianceRules, categories, brands, banned, notes, nonCannabis] =
     await Promise.all([
       tableCount("kb_strains"),
       tableCount("kb_terpenes"),
       tableCount("kb_cannabinoids"),
       tableCount("kb_effects"),
       tableCount("kb_product_formats"),
+      tableCount("kb_compliance_rules"),
       tableCount("kb_category_terms"),
       tableCount("kb_brands"),
       tableCount("kb_banned_phrases"),
@@ -88,6 +93,7 @@ export async function getKbCounts(): Promise<KbCounts> {
     cannabinoids: cannabinoids ?? 0,
     effects: effects ?? 0,
     productFormats: productFormats ?? 0,
+    complianceRules: complianceRules ?? 0,
     categories: categories ?? 0,
     brands: brands ?? 0,
     banned: banned ?? 0,
@@ -130,7 +136,7 @@ export async function listKbNonCannabis(limit = 1000): Promise<KbNonCannabisRow[
 export type SeedReport = {
   ok: boolean;
   message: string;
-  inserted: { strains: number; terpenes: number; cannabinoids: number; effects: number; productFormats: number; categories: number; banned: number; productCategories: number };
+  inserted: { strains: number; terpenes: number; cannabinoids: number; effects: number; productFormats: number; complianceRules: number; categories: number; banned: number; productCategories: number };
 };
 
 /**
@@ -140,7 +146,7 @@ export type SeedReport = {
  */
 export async function seedKnowledgeBase(actorId: string | null): Promise<SeedReport> {
   if (!isSupabaseServiceConfigured) {
-    return { ok: false, message: "The database isn't connected yet.", inserted: { strains: 0, terpenes: 0, cannabinoids: 0, effects: 0, productFormats: 0, categories: 0, banned: 0, productCategories: 0 } };
+    return { ok: false, message: "The database isn't connected yet.", inserted: { strains: 0, terpenes: 0, cannabinoids: 0, effects: 0, productFormats: 0, complianceRules: 0, categories: 0, banned: 0, productCategories: 0 } };
   }
   const admin = createSupabaseAdminClient();
 
@@ -216,6 +222,23 @@ export async function seedKnowledgeBase(actorId: string | null): Promise<SeedRep
     aliases: f.aliases,
     sources: f.sources,
     confidence: f.confidence,
+    source: "manual",
+    status: "published",
+    active: true,
+    created_by: actorId,
+    updated_by: actorId,
+  }));
+  const complianceRuleRows = SEED_COMPLIANCE_RULES.map((r) => ({
+    slug: r.slug,
+    title: r.title,
+    category: r.category,
+    rule: r.rule,
+    house_note: r.house_note,
+    severity: r.severity,
+    citation: r.citation,
+    sources: r.sources,
+    confidence: r.confidence,
+    sort_order: r.sort_order,
     source: "manual",
     status: "published",
     active: true,
@@ -320,11 +343,23 @@ export async function seedKnowledgeBase(actorId: string | null): Promise<SeedRep
     productFormatsSeeded = productFormatRows.length;
   }
 
+  // Compliance-rule reference lives behind migration 0088. Degrade gracefully
+  // so seeding still works before the owner applies 0088.
+  let complianceRulesSeeded = 0;
+  const r9 = await admin
+    .from("kb_compliance_rules")
+    .upsert(complianceRuleRows, { onConflict: "slug" });
+  if (r9.error) {
+    warnings.push(`compliance rules not seeded (apply migration 0088): ${r9.error.message}`);
+  } else {
+    complianceRulesSeeded = complianceRuleRows.length;
+  }
+
   if (errors.length) {
     return {
       ok: false,
       message: `Some data couldn't be saved. Make sure the knowledge-base setup has been run. (${errors.join("; ")})`,
-      inserted: { strains: 0, terpenes: 0, cannabinoids: 0, effects: 0, productFormats: 0, categories: 0, banned: 0, productCategories: 0 },
+      inserted: { strains: 0, terpenes: 0, cannabinoids: 0, effects: 0, productFormats: 0, complianceRules: 0, categories: 0, banned: 0, productCategories: 0 },
     };
   }
   const okMessage =
@@ -339,6 +374,7 @@ export async function seedKnowledgeBase(actorId: string | null): Promise<SeedRep
       cannabinoids: cannabinoidsSeeded,
       effects: effectsSeeded,
       productFormats: productFormatsSeeded,
+      complianceRules: complianceRulesSeeded,
       categories: categoryRows.length,
       banned: bannedRows.length,
       productCategories: productCategoriesSeeded,
@@ -887,6 +923,138 @@ export async function setProductFormatActive(
     const admin = createSupabaseAdminClient();
     const { error } = await admin
       .from("kb_product_formats")
+      .update({ active, updated_by: actorId })
+      .eq("slug", slug.trim().toLowerCase());
+    if (error) return { ok: false, message: error.message };
+    return { ok: true, message: active ? "Shown." : "Hidden." };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Unexpected error." };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Compliance rules (migration 0088). REFERENCE/education layer — read-only list
+// for the admin card plus idempotent upsert / active toggle for future curation.
+// Reads degrade to []/null pre-migration. NOT the enforcement path (that stays
+// in sales-limits-core.ts).
+// ---------------------------------------------------------------------------
+export type KbComplianceRuleRow = {
+  id: string;
+  slug: string;
+  title: string;
+  category: string | null;
+  rule: string | null;
+  house_note: string | null;
+  severity: string;
+  citation: string | null;
+  sources: string[];
+  confidence: number | null;
+  sort_order: number;
+  source: string | null;
+  status: string;
+  active: boolean;
+};
+
+const KB_COMPLIANCE_RULE_COLUMNS =
+  "id,slug,title,category,rule,house_note,severity,citation,sources,confidence,sort_order,source,status,active";
+
+/** List all compliance-rule rows (active first, by sort_order). Degrades to []. */
+export async function listKbComplianceRulesFull(limit = 200): Promise<KbComplianceRuleRow[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("kb_compliance_rules")
+      .select(KB_COMPLIANCE_RULE_COLUMNS)
+      .order("active", { ascending: false })
+      .order("sort_order", { ascending: true })
+      .limit(limit);
+    if (error || !data) return [];
+    return data as unknown as KbComplianceRuleRow[];
+  } catch {
+    return [];
+  }
+}
+
+/** Fetch one compliance rule by slug. Returns null if missing. */
+export async function getKbComplianceRuleBySlug(slug: string): Promise<KbComplianceRuleRow | null> {
+  if (!isSupabaseServiceConfigured) return null;
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("kb_compliance_rules")
+      .select(KB_COMPLIANCE_RULE_COLUMNS)
+      .eq("slug", slug)
+      .maybeSingle();
+    if (error || !data) return null;
+    return data as unknown as KbComplianceRuleRow;
+  } catch {
+    return null;
+  }
+}
+
+export type UpsertKbComplianceRuleInput = {
+  slug: string;
+  title: string;
+  category?: string | null;
+  rule?: string | null;
+  house_note?: string | null;
+  severity?: "info" | "important" | "critical";
+  citation?: string | null;
+  sources?: string[];
+  confidence?: number | null;
+  sort_order?: number;
+};
+
+/** Idempotent upsert of a single compliance rule on slug. Curated edits stay published. */
+export async function upsertKbComplianceRule(
+  input: UpsertKbComplianceRuleInput,
+  actorId: string | null,
+): Promise<{ ok: boolean; message: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, message: "The database isn't connected yet." };
+  const slug = input.slug.trim().toLowerCase();
+  if (!slug) return { ok: false, message: "A slug is required." };
+  if (!input.title.trim()) return { ok: false, message: "A title is required." };
+  try {
+    const admin = createSupabaseAdminClient();
+    const { error } = await admin.from("kb_compliance_rules").upsert(
+      {
+        slug,
+        title: input.title.trim(),
+        category: input.category?.trim() || null,
+        rule: input.rule?.trim() || null,
+        house_note: input.house_note?.trim() || null,
+        severity: input.severity ?? "info",
+        citation: input.citation?.trim() || null,
+        sources: input.sources ?? [],
+        confidence: input.confidence ?? null,
+        sort_order: input.sort_order ?? 100,
+        source: "manual",
+        status: "published",
+        updated_by: actorId,
+      },
+      { onConflict: "slug" },
+    );
+    if (error) {
+      return { ok: false, message: `Couldn't save (apply migration 0088 if needed): ${error.message}` };
+    }
+    return { ok: true, message: `Saved ${input.title.trim()}.` };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Unexpected error." };
+  }
+}
+
+/** Toggle a compliance rule active/hidden. */
+export async function setComplianceRuleActive(
+  slug: string,
+  active: boolean,
+  actorId: string | null,
+): Promise<{ ok: boolean; message: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, message: "The database isn't connected yet." };
+  try {
+    const admin = createSupabaseAdminClient();
+    const { error } = await admin
+      .from("kb_compliance_rules")
       .update({ active, updated_by: actorId })
       .eq("slug", slug.trim().toLowerCase());
     if (error) return { ok: false, message: error.message };

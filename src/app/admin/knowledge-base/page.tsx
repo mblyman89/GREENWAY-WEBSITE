@@ -191,6 +191,13 @@ export default async function KnowledgeBasePage({
               accent="muted"
             />
             <KbNavCard
+              href="/admin/knowledge-base/rules"
+              title="WA rules & safety"
+              description="Know-before-you-go facts we surface helpfully — 21+, limits, no public use, don't drive high, edibles start-low-go-slow. Education, not enforcement."
+              count={counts.complianceRules}
+              accent="orange"
+            />
+            <KbNavCard
               href="/admin/inventory/noncannabis"
               title="Non-cannabis catalog"
               description="Glass, accessories, papers & devices — tracked with smart SKUs and connected to the KB."

@@ -21,6 +21,12 @@
  * server code alike.
  */
 
+// sales-limits-core is PURE (no server-only, no DB). We import the ENFORCED WA
+// limit constants so the KB compliance-rule reference (Slice 3) derives its
+// purchase-limit numbers from the same single source of truth checkout uses —
+// the KB reference can never drift from what is actually enforced.
+import { RECREATIONAL_LIMITS, gramsToOunces } from "@/lib/compliance/sales-limits-core";
+
 export type SeedStrain = {
   slug: string;
   name: string;
@@ -90,6 +96,32 @@ export type SeedProductFormat = {
   aliases: string[];
   sources: string[];
   confidence: number;
+};
+
+export type SeedComplianceRule = {
+  slug: string;
+  title: string;
+  /** UI grouping ONLY: age | purchase-limit | possession | public-use | driving | edibles-safety | storage | transport. */
+  category:
+    | "age"
+    | "purchase-limit"
+    | "possession"
+    | "public-use"
+    | "driving"
+    | "edibles-safety"
+    | "storage"
+    | "transport";
+  /** Factual legal/safety statement (neutral education). Compliance-gated on surface. */
+  rule: string;
+  /** Friendly plain-language "what that means for you" (house voice, non-medical). Compliance-gated. */
+  house_note: string;
+  /** UI emphasis only, not a legal grade. */
+  severity: "info" | "important" | "critical";
+  /** Statute/rule citation string. */
+  citation: string;
+  sources: string[];
+  confidence: number;
+  sort_order: number;
 };
 
 export type SeedCategory = {
@@ -776,6 +808,165 @@ export const SEED_PRODUCT_FORMATS: SeedProductFormat[] = [
     aliases: ["transdermal", "patch", "patches", "transdermal patch", "skin patch"],
     sources: [WSLCB_PRODUCTS],
     confidence: 0.88,
+  },
+];
+
+// ---------------------------------------------------------------------------
+// Compliance rules — Washington safety / purchase / use FACTS, surfaced
+// HELPFULLY to keep customers safe. This is a REFERENCE / EDUCATION layer, NOT
+// a second enforcement mechanism (checkout enforcement lives in
+// sales-limits-core.ts). The purchase & possession limit NUMBERS are derived
+// from RECREATIONAL_LIMITS at eval time so the KB can never drift from what is
+// enforced. Every rule is sourced from WA statute/rule — see
+// docs/KB_COMPLIANCE_RULES_SEED_SOURCES.md.
+//
+// COMPLIANCE (WA I-502): factual legal/safety education only. No medical claims,
+// no product-specific dosing directive. Milligram figures are spelled in words
+// to stay clear of the compliance gate's dosing-pattern flag. All prose is
+// compliance-gated before it can surface.
+// ---------------------------------------------------------------------------
+const WSLCB_USING = "https://lcb.wa.gov/education/using_and_having_cannabis";
+
+// Derived from the ENFORCED constants (single source of truth).
+const REC_USABLE_OZ = gramsToOunces(RECREATIONAL_LIMITS.usable); // 1
+const REC_SOLID_OZ = gramsToOunces(RECREATIONAL_LIMITS.solid_edible); // 16
+const REC_LIQUID_OZ = gramsToOunces(RECREATIONAL_LIMITS.liquid_edible); // 72
+const REC_CONC_G = RECREATIONAL_LIMITS.concentrate; // 7
+
+export const SEED_COMPLIANCE_RULES: SeedComplianceRule[] = [
+  {
+    slug: "age-21-plus",
+    title: "Adults 21 and over only",
+    category: "age",
+    rule:
+      "Only adults 21 and over may buy or possess recreational cannabis in Washington. A valid " +
+      "government-issued photo ID is required to enter and to purchase.",
+    house_note:
+      "House rule and state law, same thing: bring a valid ID every single time, no exceptions — even " +
+      "if we already know your face. Under 21 can't come in. It keeps our license clean and the whole " +
+      "shop above board.",
+    severity: "critical",
+    citation: "RCW 69.50.360",
+    sources: [WSLCB_USING],
+    confidence: 0.99,
+    sort_order: 10,
+  },
+  {
+    slug: "purchase-limits",
+    title: "Single-transaction purchase limits",
+    category: "purchase-limit",
+    rule:
+      `Washington caps one recreational transaction at ${REC_USABLE_OZ} ounce of useable cannabis, ` +
+      `${REC_CONC_G} grams of concentrate/extract for inhalation, ${REC_SOLID_OZ} ounces of solid ` +
+      `infused edibles, and ${REC_LIQUID_OZ} ounces of infused liquids.`,
+    house_note:
+      "Think of it as a per-visit basket limit set by the state. Our register keeps the math honest so " +
+      "you never have to — if a cart runs over, we'll help you adjust. Registered medical patients get " +
+      "higher limits.",
+    severity: "important",
+    citation: "WAC 314-55-095",
+    sources: [WSLCB_USING],
+    confidence: 0.99,
+    sort_order: 20,
+  },
+  {
+    slug: "possession-limits",
+    title: "How much you can carry",
+    category: "possession",
+    rule:
+      `An adult 21+ may lawfully possess up to ${REC_USABLE_OZ} ounce of useable cannabis, ` +
+      `${REC_CONC_G} grams of concentrate, ${REC_SOLID_OZ} ounces of solid edibles, and ` +
+      `${REC_LIQUID_OZ} ounces of infused liquids — the same amounts as the transaction limit.`,
+    house_note:
+      "Basically: what you can buy in a trip is about what you can carry. Easy to remember, easy to stay " +
+      "on the right side of.",
+    severity: "important",
+    citation: "RCW 69.50.4013",
+    sources: [WSLCB_USING],
+    confidence: 0.98,
+    sort_order: 30,
+  },
+  {
+    slug: "no-public-use",
+    title: "No consuming in public",
+    category: "public-use",
+    rule:
+      "Consuming cannabis in view of the general public or in public places is illegal in Washington. " +
+      "Enjoy it at a private residence where it's allowed.",
+    house_note:
+      "Keep the session private — no lighting up on the sidewalk, in the car, or in the parking lot. " +
+      "Save it for home. Nobody wants a ticket to cap off a good day.",
+    severity: "important",
+    citation: "RCW 69.50.445",
+    sources: [WSLCB_USING],
+    confidence: 0.98,
+    sort_order: 40,
+  },
+  {
+    slug: "no-impaired-driving",
+    title: "Never drive impaired",
+    category: "driving",
+    rule:
+      "Driving under the influence of cannabis is illegal; Washington enforces a per-se THC blood limit. " +
+      "Keep product in a sealed container, ideally in the trunk, while it's in the vehicle.",
+    house_note:
+      "Simple one: don't drive high, full stop. Pop your purchase in the trunk sealed up, get home, then " +
+      "enjoy. Plan your ride like you would for any night out.",
+    severity: "critical",
+    citation: "RCW 46.61.502 / RCW 69.50.445",
+    sources: [WSLCB_USING],
+    confidence: 0.98,
+    sort_order: 50,
+  },
+  {
+    slug: "edibles-start-low",
+    title: "Edibles: start low, go slow",
+    category: "edibles-safety",
+    rule:
+      "Washington caps infused edibles at ten milligrams of active THC in a single serving and one " +
+      "hundred milligrams total per package. Edibles come on more slowly than inhalation and can last " +
+      "longer, so their timing is easy to misjudge.",
+    house_note:
+      "The number-one thing we tell folks about edibles: begin with a single serving and give it a good " +
+      "while before you even think about more. They sneak up on you — patience beats a rough night every " +
+      "time. (This is a safety heads-up, not medical advice.)",
+    severity: "critical",
+    citation: "WAC 314-55-095",
+    sources: [WSLCB_USING, WAC_EDIBLE_CAP],
+    confidence: 0.98,
+    sort_order: 60,
+  },
+  {
+    slug: "store-safely",
+    title: "Store it safely",
+    category: "storage",
+    rule:
+      "Keep cannabis in its original labeled, resealable packaging and store it well out of reach of " +
+      "anyone underage and of pets.",
+    house_note:
+      "Store it like you would anything you wouldn't want little hands or curious paws getting into — " +
+      "keep it in its own packaging, up high or locked away. Peace of mind is free.",
+    severity: "important",
+    citation: "WSLCB safety guidance",
+    sources: [WSLCB_USING],
+    confidence: 0.95,
+    sort_order: 70,
+  },
+  {
+    slug: "no-crossing-state-lines",
+    title: "Don't cross state lines",
+    category: "transport",
+    rule:
+      "Cannabis remains illegal under federal law, so taking it across a state border is prohibited — " +
+      "even to another state where it is legal.",
+    house_note:
+      "What's bought in Washington stays in Washington. Road trip? Leave it home. Crossing a border with " +
+      "it — even into another legal state — is a federal no-go.",
+    severity: "important",
+    citation: "Federal law / WSLCB",
+    sources: [WSLCB_USING],
+    confidence: 0.95,
+    sort_order: 80,
   },
 ];
 
