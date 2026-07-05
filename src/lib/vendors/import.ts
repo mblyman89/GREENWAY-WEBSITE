@@ -52,6 +52,24 @@ export type VendorImportRow = {
   instagram: string | null;
   facebook: string | null;
   internal_notes: string | null;
+  // Contact / address + ops facts (Cultivera export, migration 0081).
+  vendor_number: string | null;
+  dba: string | null;
+  external_id: string | null;
+  shipping_address1: string | null;
+  shipping_address2: string | null;
+  shipping_city: string | null;
+  shipping_state: string | null;
+  shipping_zip: string | null;
+  billing_address1: string | null;
+  billing_address2: string | null;
+  billing_city: string | null;
+  billing_state: string | null;
+  billing_zip: string | null;
+  billing_same_as_shipping: boolean | null;
+  is_active: boolean | null;
+  total_accepted_ytd_cents: number | null;
+  last_accepted_at: string | null;
 };
 
 export type BrandImportRow = {
@@ -74,10 +92,16 @@ export type ParsedVendorBrandImport = {
 };
 
 // ── Header synonym maps (lowercased). Extend when the real file arrives. ───────
-const VENDOR_HEADERS: Record<keyof Omit<VendorImportRow, "slug">, string[]> = {
-  display_name: ["vendor", "vendor name", "display name", "name", "company", "company name", "supplier", "supplier name"],
-  legal_name: ["legal name", "legal", "dba", "legal business name"],
-  license_number: ["license", "license number", "license #", "ubi", "wslcb license", "lcb license", "traceability license"],
+// String-mappable columns. Typed fields (booleans, cents, dates) are handled by
+// the dedicated seed script, not the generic CSV paste importer.
+type VendorStringField = Exclude<
+  keyof Omit<VendorImportRow, "slug">,
+  "billing_same_as_shipping" | "is_active" | "total_accepted_ytd_cents" | "last_accepted_at"
+>;
+const VENDOR_HEADERS: Record<VendorStringField, string[]> = {
+  display_name: ["vendor", "vendor name", "display name", "name", "company", "company name", "supplier", "supplier name", "tradename", "trade name"],
+  legal_name: ["legal name", "legal", "legal business name"],
+  license_number: ["license", "license number", "license #", "ubi", "wslcb license", "lcb license", "traceability license", "licenseno", "license no"],
   mission_statement: ["mission", "mission statement", "tagline"],
   about: ["about", "description", "bio", "notes", "overview"],
   website: ["website", "url", "web", "site"],
@@ -86,6 +110,19 @@ const VENDOR_HEADERS: Record<keyof Omit<VendorImportRow, "slug">, string[]> = {
   instagram: ["instagram", "ig", "instagram handle"],
   facebook: ["facebook", "fb"],
   internal_notes: ["internal notes", "internal", "staff notes"],
+  vendor_number: ["vendor number", "vendorno", "vendor no", "vendor #"],
+  dba: ["dba", "doing business as"],
+  external_id: ["id", "external id", "source id"],
+  shipping_address1: ["shipping address1", "shipping address 1", "shippingaddress1", "ship address 1"],
+  shipping_address2: ["shipping address2", "shipping address 2", "shippingaddress2", "ship address 2"],
+  shipping_city: ["shipping city", "shippingcity", "ship city"],
+  shipping_state: ["shipping state", "shippingstate", "ship state"],
+  shipping_zip: ["shipping zip", "shippingzip", "ship zip"],
+  billing_address1: ["billing address1", "billing address 1", "billingaddress1"],
+  billing_address2: ["billing address2", "billing address 2", "billingaddress2"],
+  billing_city: ["billing city", "billingcity"],
+  billing_state: ["billing state", "billingstate"],
+  billing_zip: ["billing zip", "billingzip"],
 };
 
 const BRAND_HEADERS: Record<keyof Omit<BrandImportRow, "slug">, string[]> = {
@@ -173,6 +210,24 @@ export function mapVendorBrandCsv(text: string): ParsedVendorBrandImport {
         instagram: at(row, cols.instagram),
         facebook: at(row, cols.facebook),
         internal_notes: at(row, cols.internal_notes),
+        vendor_number: at(row, cols.vendor_number),
+        dba: at(row, cols.dba),
+        external_id: at(row, cols.external_id),
+        shipping_address1: at(row, cols.shipping_address1),
+        shipping_address2: at(row, cols.shipping_address2),
+        shipping_city: at(row, cols.shipping_city),
+        shipping_state: at(row, cols.shipping_state),
+        shipping_zip: at(row, cols.shipping_zip),
+        billing_address1: at(row, cols.billing_address1),
+        billing_address2: at(row, cols.billing_address2),
+        billing_city: at(row, cols.billing_city),
+        billing_state: at(row, cols.billing_state),
+        billing_zip: at(row, cols.billing_zip),
+        // Typed fields are not parsed from generic paste; seed script sets them.
+        billing_same_as_shipping: null,
+        is_active: null,
+        total_accepted_ytd_cents: null,
+        last_accepted_at: null,
       });
     }
     if (vendors.length === 0) warnings.push("No vendor rows with a name were found.");
@@ -261,6 +316,23 @@ export async function importVendors(
         phone: r.phone,
         social_json: social,
         internal_notes: r.internal_notes,
+        vendor_number: r.vendor_number,
+        dba: r.dba,
+        external_id: r.external_id,
+        shipping_address1: r.shipping_address1,
+        shipping_address2: r.shipping_address2,
+        shipping_city: r.shipping_city,
+        shipping_state: r.shipping_state,
+        shipping_zip: r.shipping_zip,
+        billing_address1: r.billing_address1,
+        billing_address2: r.billing_address2,
+        billing_city: r.billing_city,
+        billing_state: r.billing_state,
+        billing_zip: r.billing_zip,
+        billing_same_as_shipping: r.billing_same_as_shipping,
+        is_active: r.is_active,
+        total_accepted_ytd_cents: r.total_accepted_ytd_cents,
+        last_accepted_at: r.last_accepted_at,
         status: "draft",
         created_by: actorId,
         updated_by: actorId,
@@ -280,6 +352,23 @@ export async function importVendors(
       email: r.email,
       phone: r.phone,
       internal_notes: r.internal_notes,
+      vendor_number: r.vendor_number,
+      dba: r.dba,
+      external_id: r.external_id,
+      shipping_address1: r.shipping_address1,
+      shipping_address2: r.shipping_address2,
+      shipping_city: r.shipping_city,
+      shipping_state: r.shipping_state,
+      shipping_zip: r.shipping_zip,
+      billing_address1: r.billing_address1,
+      billing_address2: r.billing_address2,
+      billing_city: r.billing_city,
+      billing_state: r.billing_state,
+      billing_zip: r.billing_zip,
+      billing_same_as_shipping: r.billing_same_as_shipping,
+      is_active: r.is_active,
+      total_accepted_ytd_cents: r.total_accepted_ytd_cents,
+      last_accepted_at: r.last_accepted_at,
     };
     const patch = gapFillPatch(existing as Record<string, unknown>, incoming);
 

@@ -45,6 +45,19 @@ export async function updateVendor(formData: FormData): Promise<void> {
     vendor_day_notes: orNull(formData.get("vendor_day_notes")),
     internal_notes: orNull(formData.get("internal_notes")),
     social_json: socialFromForm(formData),
+    // Contact / address + ops facts (0081).
+    vendor_number: orNull(formData.get("vendor_number")),
+    dba: orNull(formData.get("dba")),
+    shipping_address1: orNull(formData.get("shipping_address1")),
+    shipping_address2: orNull(formData.get("shipping_address2")),
+    shipping_city: orNull(formData.get("shipping_city")),
+    shipping_state: orNull(formData.get("shipping_state")),
+    shipping_zip: orNull(formData.get("shipping_zip")),
+    billing_address1: orNull(formData.get("billing_address1")),
+    billing_address2: orNull(formData.get("billing_address2")),
+    billing_city: orNull(formData.get("billing_city")),
+    billing_state: orNull(formData.get("billing_state")),
+    billing_zip: orNull(formData.get("billing_zip")),
     updated_by: session.userId,
   };
 

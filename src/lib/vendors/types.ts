@@ -26,6 +26,24 @@ export type Vendor = {
   social_json: SocialLinks;
   internal_notes: string | null;
   vendor_day_notes: string | null;
+  // Contact / address + ops facts (migration 0081, from the Cultivera export).
+  vendor_number: string | null;
+  dba: string | null;
+  external_id: string | null;
+  shipping_address1: string | null;
+  shipping_address2: string | null;
+  shipping_city: string | null;
+  shipping_state: string | null;
+  shipping_zip: string | null;
+  billing_address1: string | null;
+  billing_address2: string | null;
+  billing_city: string | null;
+  billing_state: string | null;
+  billing_zip: string | null;
+  billing_same_as_shipping: boolean | null;
+  is_active: boolean | null;
+  total_accepted_ytd_cents: number | null;
+  last_accepted_at: string | null;
   logo_media_id: string | null;
   hero_media_id: string | null;
   product_count: number;

@@ -280,6 +280,8 @@ export default async function VendorEditPage({
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="flex flex-col gap-1"><span className={label}>Display name</span><input name="display_name" defaultValue={vendor.display_name} className={field} /></label>
                 <label className="flex flex-col gap-1"><span className={label}>Legal name</span><input name="legal_name" defaultValue={vendor.legal_name ?? ""} className={field} /></label>
+                <label className="flex flex-col gap-1"><span className={label}>DBA (doing business as)</span><input name="dba" defaultValue={vendor.dba ?? ""} className={field} /></label>
+                <label className="flex flex-col gap-1"><span className={label}>Vendor number</span><input name="vendor_number" defaultValue={vendor.vendor_number ?? ""} placeholder="Cultivera VendorNo" className={field} /></label>
                 <label className="flex flex-col gap-1"><span className={label}>WA license number</span><input name="license_number" defaultValue={vendor.license_number ?? ""} placeholder="Origin licensee number (auto-fills manifests)" className={field} /></label>
                 <label className="flex flex-col gap-1"><span className={label}>Website</span><input name="website" defaultValue={vendor.website ?? ""} placeholder="https://" className={field} /></label>
                 <label className="flex flex-col gap-1"><span className={label}>Email</span><input name="email" defaultValue={vendor.email ?? ""} className={field} /></label>
@@ -290,6 +292,42 @@ export default async function VendorEditPage({
 
               <label className="flex flex-col gap-1"><span className={label}>Mission statement</span><textarea name="mission_statement" defaultValue={vendor.mission_statement ?? ""} rows={2} className={field} /></label>
               <label className="flex flex-col gap-1"><span className={label}>About</span><textarea name="about" defaultValue={vendor.about ?? ""} rows={4} className={field} /></label>
+              {/* Shipping address */}
+              <div className="rounded-lg border border-white/10 p-4">
+                <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-white/50">Shipping address</h3>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="flex flex-col gap-1 sm:col-span-2"><span className={label}>Address line 1</span><input name="shipping_address1" defaultValue={vendor.shipping_address1 ?? ""} className={field} /></label>
+                  <label className="flex flex-col gap-1 sm:col-span-2"><span className={label}>Address line 2</span><input name="shipping_address2" defaultValue={vendor.shipping_address2 ?? ""} className={field} /></label>
+                  <label className="flex flex-col gap-1"><span className={label}>City</span><input name="shipping_city" defaultValue={vendor.shipping_city ?? ""} className={field} /></label>
+                  <label className="flex flex-col gap-1"><span className={label}>State</span><input name="shipping_state" defaultValue={vendor.shipping_state ?? ""} className={field} /></label>
+                  <label className="flex flex-col gap-1"><span className={label}>ZIP</span><input name="shipping_zip" defaultValue={vendor.shipping_zip ?? ""} className={field} /></label>
+                </div>
+              </div>
+
+              {/* Billing address */}
+              <div className="rounded-lg border border-white/10 p-4">
+                <h3 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-white/50">
+                  Billing address
+                  {vendor.billing_same_as_shipping ? <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-medium normal-case text-white/60">same as shipping</span> : null}
+                </h3>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="flex flex-col gap-1 sm:col-span-2"><span className={label}>Address line 1</span><input name="billing_address1" defaultValue={vendor.billing_address1 ?? ""} className={field} /></label>
+                  <label className="flex flex-col gap-1 sm:col-span-2"><span className={label}>Address line 2</span><input name="billing_address2" defaultValue={vendor.billing_address2 ?? ""} className={field} /></label>
+                  <label className="flex flex-col gap-1"><span className={label}>City</span><input name="billing_city" defaultValue={vendor.billing_city ?? ""} className={field} /></label>
+                  <label className="flex flex-col gap-1"><span className={label}>State</span><input name="billing_state" defaultValue={vendor.billing_state ?? ""} className={field} /></label>
+                  <label className="flex flex-col gap-1"><span className={label}>ZIP</span><input name="billing_zip" defaultValue={vendor.billing_zip ?? ""} className={field} /></label>
+                </div>
+              </div>
+
+              {/* Ops facts (read-only, from the POS export) */}
+              {(vendor.is_active !== null || vendor.total_accepted_ytd_cents !== null || vendor.last_accepted_at) ? (
+                <div className="flex flex-wrap gap-x-6 gap-y-1 rounded-lg border border-white/10 p-4 text-xs text-white/60">
+                  {vendor.is_active !== null ? <span>Status: <span className={vendor.is_active ? "text-[#7ed957]" : "text-white/40"}>{vendor.is_active ? "Active" : "Inactive"}</span></span> : null}
+                  {vendor.total_accepted_ytd_cents !== null ? <span>Accepted YTD: <span className="text-white">${(vendor.total_accepted_ytd_cents / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></span> : null}
+                  {vendor.last_accepted_at ? <span>Last accepted: <span className="text-white">{new Date(vendor.last_accepted_at).toLocaleDateString()}</span></span> : null}
+                </div>
+              ) : null}
+
               <label className="flex flex-col gap-1"><span className={label}>Vendor-day notes (internal)</span><input name="vendor_day_notes" defaultValue={vendor.vendor_day_notes ?? ""} className={field} /></label>
               <label className="flex flex-col gap-1"><span className={label}>Internal notes (never public)</span><textarea name="internal_notes" defaultValue={vendor.internal_notes ?? ""} rows={2} className={field} /></label>
 
