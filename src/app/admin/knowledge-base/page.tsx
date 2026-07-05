@@ -177,6 +177,41 @@ export default async function KnowledgeBasePage({
               accent="muted"
             />
             <KbNavCard
+              href="/admin/knowledge-base/effects"
+              title="Effects"
+              description="How each product tends to feel — plain, non-medical definitions plus our house voice. Grounds experiential copy. Reference only."
+              count={counts.effects}
+              accent="muted"
+            />
+            <KbNavCard
+              href="/admin/knowledge-base/formats"
+              title="Formats"
+              description="What each product is and how it's used — flower, vape, dabs, edibles & more, with WA-verified potency and our house voice. Reference only."
+              count={counts.productFormats}
+              accent="muted"
+            />
+            <KbNavCard
+              href="/admin/knowledge-base/rules"
+              title="WA rules & safety"
+              description="Know-before-you-go facts we surface helpfully — 21+, limits, no public use, don't drive high, edibles start-low-go-slow. Education, not enforcement."
+              count={counts.complianceRules}
+              accent="orange"
+            />
+            <KbNavCard
+              href="/admin/knowledge-base/about"
+              title="About us & store facts"
+              description="Everything the concierge should know about Greenway — hours, address, payment, delivery, mission & more. Add your own any time."
+              count={counts.storeFacts}
+              accent="green"
+            />
+            <KbNavCard
+              href="/admin/knowledge-base/faqs"
+              title="FAQ pack"
+              description="The questions customers actually ask, answered in our voice — hours, ID, payment, limits, returns, price match, loyalty. Owner-editable."
+              count={counts.faqs}
+              accent="gold"
+            />
+            <KbNavCard
               href="/admin/inventory/noncannabis"
               title="Non-cannabis catalog"
               description="Glass, accessories, papers & devices — tracked with smart SKUs and connected to the KB."

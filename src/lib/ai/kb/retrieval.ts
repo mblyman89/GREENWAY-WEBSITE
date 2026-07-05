@@ -22,12 +22,29 @@ import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import {
   SEED_TERPENES,
   SEED_CANNABINOIDS,
+  SEED_EFFECTS,
+  SEED_PRODUCT_FORMATS,
+  SEED_COMPLIANCE_RULES,
+  SEED_STORE_FACTS,
+  SEED_FAQS,
   SEED_CATEGORIES,
   type SeedStrain,
   type SeedTerpene,
   type SeedCannabinoid,
+  type SeedEffect,
+  type SeedProductFormat,
+  type SeedComplianceRule,
+  type SeedStoreFact,
+  type SeedFaq,
   type SeedCategory,
 } from "./seed";
+import {
+  listActiveKbStoreFacts,
+  listActiveKbFaqs,
+  type KbStoreFactRow,
+  type KbFaqRow,
+} from "./store";
+import { getConfig as getLoyaltyConfig } from "@/lib/loyalty/loyalty-store";
 import { STRAINS_RICH, type SeedStrainRich } from "./strains-data";
 import { renderNoteFacts, type KbNote, type NoteMatchFacts } from "./kb-notes-core";
 import type { ProductFacts } from "../suggestions";
@@ -106,23 +123,49 @@ async function loadStrains(): Promise<SeedStrainRich[]> {
   }
 }
 
-type TerpeneRow = { slug: string; name: string; aroma_notes: string[] | null; flavor_notes: string[] | null; also_found_in: string | null };
+type TerpeneRow = {
+  slug: string;
+  name: string;
+  aroma_notes: string[] | null;
+  flavor_notes: string[] | null;
+  also_found_in: string | null;
+  // Slice 5: aroma-family cross-map, added in migration 0089. May be absent on
+  // databases that haven't applied 0089 yet — handled by the fallback select.
+  aroma_families?: string[] | null;
+};
 
 async function loadTerpenes(): Promise<SeedTerpene[]> {
   if (!isSupabaseServiceConfigured) return SEED_TERPENES;
   try {
     const admin = createSupabaseAdminClient();
-    const { data, error } = await admin
+    // Prefer the enriched select (with aroma_families). If migration 0089 hasn't
+    // been applied, that column is unknown and PostgREST errors — fall back to the
+    // base select so grounding still works day one (mirrors the seed degrade path).
+    let data:
+      | TerpeneRow[]
+      | null = null;
+    const enriched = await admin
       .from("kb_terpenes")
-      .select("slug,name,aroma_notes,flavor_notes,also_found_in")
+      .select("slug,name,aroma_notes,flavor_notes,also_found_in,aroma_families")
       .eq("active", true);
-    if (error || !data || data.length === 0) return SEED_TERPENES;
-    return (data as TerpeneRow[]).map((r) => ({
+    if (enriched.error) {
+      const base = await admin
+        .from("kb_terpenes")
+        .select("slug,name,aroma_notes,flavor_notes,also_found_in")
+        .eq("active", true);
+      if (base.error || !base.data || base.data.length === 0) return SEED_TERPENES;
+      data = base.data as TerpeneRow[];
+    } else {
+      if (!enriched.data || enriched.data.length === 0) return SEED_TERPENES;
+      data = enriched.data as TerpeneRow[];
+    }
+    return data.map((r) => ({
       slug: r.slug,
       name: r.name,
       aroma_notes: r.aroma_notes ?? [],
       flavor_notes: r.flavor_notes ?? [],
       also_found_in: r.also_found_in ?? undefined,
+      aroma_families: r.aroma_families ?? [],
     }));
   } catch {
     return SEED_TERPENES;
@@ -171,6 +214,191 @@ async function loadCannabinoids(): Promise<SeedCannabinoid[]> {
     }));
   } catch {
     return SEED_CANNABINOIDS;
+  }
+}
+
+type EffectRow = {
+  slug: string;
+  name: string;
+  category: string | null;
+  definition: string | null;
+  house_note: string | null;
+  aliases: string[] | null;
+};
+
+/**
+ * Load the active, published effect vocabulary (migration 0086). Falls back to
+ * the in-code SEED_EFFECTS if the table is empty / not migrated, so effect
+ * grounding works on day one — mirrors loadCannabinoids(). Reads only
+ * published rows; drafts never surface to copy.
+ */
+async function loadEffects(): Promise<SeedEffect[]> {
+  if (!isSupabaseServiceConfigured) return SEED_EFFECTS;
+  try {
+    const admin = createSupabaseAdminClient();
+    // Try the full status-filtered read first; fall back to no status filter
+    // if the column is unknown (pre-0086), then to the seed set.
+    let rows: EffectRow[] | null = null;
+    const full = await admin
+      .from("kb_effects")
+      .select("slug,name,category,definition,house_note,aliases")
+      .eq("active", true)
+      .eq("status", "published");
+    if (!full.error && full.data) {
+      rows = full.data as EffectRow[];
+    } else {
+      const base = await admin
+        .from("kb_effects")
+        .select("slug,name,category,definition,house_note,aliases")
+        .eq("active", true);
+      if (!base.error && base.data) rows = base.data as EffectRow[];
+    }
+    if (!rows || rows.length === 0) return SEED_EFFECTS;
+    return rows.map((r) => ({
+      slug: r.slug,
+      name: r.name,
+      category: (r.category as SeedEffect["category"]) ?? "character",
+      definition: r.definition ?? "",
+      house_note: r.house_note ?? "",
+      aliases: r.aliases ?? [],
+      sources: [],
+      confidence: 0,
+    }));
+  } catch {
+    return SEED_EFFECTS;
+  }
+}
+
+/**
+ * Build a lookup from any known effect token (slug, name, or alias, all
+ * normalized) to its canonical SeedEffect, so free-text effects[] tags on
+ * strains/products can be matched to a defined vocabulary entry.
+ */
+function buildEffectIndex(effects: SeedEffect[]): Map<string, SeedEffect> {
+  const idx = new Map<string, SeedEffect>();
+  for (const e of effects) {
+    idx.set(e.slug.toLowerCase(), e);
+    idx.set(e.name.toLowerCase(), e);
+    for (const a of e.aliases) idx.set(a.toLowerCase(), e);
+  }
+  return idx;
+}
+
+type ProductFormatRow = {
+  slug: string;
+  name: string;
+  category: string | null;
+  definition: string | null;
+  consumption: string | null;
+  potency_note: string | null;
+  house_note: string | null;
+  aliases: string[] | null;
+};
+
+/**
+ * Load the active, published product-format vocabulary (migration 0087). Falls
+ * back to the in-code SEED_PRODUCT_FORMATS if the table is empty / not migrated,
+ * so format grounding works on day one — mirrors loadEffects(). Reads only
+ * published rows; drafts never surface to copy.
+ */
+async function loadProductFormats(): Promise<SeedProductFormat[]> {
+  if (!isSupabaseServiceConfigured) return SEED_PRODUCT_FORMATS;
+  try {
+    const admin = createSupabaseAdminClient();
+    const cols = "slug,name,category,definition,consumption,potency_note,house_note,aliases";
+    let rows: ProductFormatRow[] | null = null;
+    const full = await admin
+      .from("kb_product_formats")
+      .select(cols)
+      .eq("active", true)
+      .eq("status", "published");
+    if (!full.error && full.data) {
+      rows = full.data as ProductFormatRow[];
+    } else {
+      const base = await admin.from("kb_product_formats").select(cols).eq("active", true);
+      if (!base.error && base.data) rows = base.data as ProductFormatRow[];
+    }
+    if (!rows || rows.length === 0) return SEED_PRODUCT_FORMATS;
+    return rows.map((r) => ({
+      slug: r.slug,
+      name: r.name,
+      category: (r.category as SeedProductFormat["category"]) ?? "inhaled",
+      definition: r.definition ?? "",
+      consumption: r.consumption ?? "",
+      potency_note: r.potency_note ?? "",
+      house_note: r.house_note ?? "",
+      aliases: r.aliases ?? [],
+      sources: [],
+      confidence: 0,
+    }));
+  } catch {
+    return SEED_PRODUCT_FORMATS;
+  }
+}
+
+/**
+ * Build a lookup from any known format token (slug, name, or alias, all
+ * normalized) to its canonical SeedProductFormat, so a product's category/type
+ * text resolves to a defined format entry.
+ */
+function buildFormatIndex(formats: SeedProductFormat[]): Map<string, SeedProductFormat> {
+  const idx = new Map<string, SeedProductFormat>();
+  for (const f of formats) {
+    idx.set(f.slug.toLowerCase(), f);
+    idx.set(f.name.toLowerCase(), f);
+    for (const a of f.aliases) idx.set(a.toLowerCase(), f);
+  }
+  return idx;
+}
+
+type ComplianceRuleRow = {
+  slug: string;
+  title: string;
+  category: string | null;
+  rule: string | null;
+  house_note: string | null;
+  severity: string | null;
+};
+
+/**
+ * Load the active, published compliance-rule reference (migration 0088). Falls
+ * back to the in-code SEED_COMPLIANCE_RULES if the table is empty / not
+ * migrated. Reads only published rows; drafts never surface. This is the
+ * REFERENCE/education layer — it does NOT enforce anything (enforcement lives in
+ * sales-limits-core.ts).
+ */
+async function loadComplianceRules(): Promise<SeedComplianceRule[]> {
+  if (!isSupabaseServiceConfigured) return SEED_COMPLIANCE_RULES;
+  try {
+    const admin = createSupabaseAdminClient();
+    const cols = "slug,title,category,rule,house_note,severity";
+    let rows: ComplianceRuleRow[] | null = null;
+    const full = await admin
+      .from("kb_compliance_rules")
+      .select(cols)
+      .eq("active", true)
+      .eq("status", "published");
+    if (!full.error && full.data) {
+      rows = full.data as ComplianceRuleRow[];
+    } else {
+      const base = await admin.from("kb_compliance_rules").select(cols).eq("active", true);
+      if (!base.error && base.data) rows = base.data as ComplianceRuleRow[];
+    }
+    if (!rows || rows.length === 0) return SEED_COMPLIANCE_RULES;
+    return rows.map((r) => ({
+      slug: r.slug,
+      title: r.title,
+      category: (r.category as SeedComplianceRule["category"]) ?? "public-use",
+      rule: r.rule ?? "",
+      house_note: r.house_note ?? "",
+      severity: (r.severity as SeedComplianceRule["severity"]) ?? "info",
+      citation: "",
+      sources: [],
+      confidence: 0,
+      sort_order: 100,
+    }));
+  } catch {
+    return SEED_COMPLIANCE_RULES;
   }
 }
 
@@ -405,11 +633,14 @@ export type GroundedFacts = {
  * notes into a compact list the model must stay within.
  */
 export async function buildGroundedFacts(facts: ProductFacts): Promise<GroundedFacts> {
-  const [strains, terpenes, cannabinoids, categories, brandFact, notes, kbProduct, kbCategory] =
+  const [strains, terpenes, cannabinoids, effectVocab, formatVocab, complianceRules, categories, brandFact, notes, kbProduct, kbCategory] =
     await Promise.all([
       loadStrains(),
       loadTerpenes(),
       loadCannabinoids(),
+      loadEffects(),
+      loadProductFormats(),
+      loadComplianceRules(),
       loadCategories(),
       loadBrandFact(facts.brand, facts.vendor),
       loadNotes(),
@@ -417,6 +648,25 @@ export async function buildGroundedFacts(facts: ProductFacts): Promise<GroundedF
       loadKbProductFact(facts),
       loadKbProductCategory(facts.category),
     ]);
+
+  // Alias-aware index so free-text effects[] tags resolve to defined vocabulary.
+  const effectIndex = buildEffectIndex(effectVocab);
+  const surfacedEffects = new Set<string>();
+  /** Emit a defined, house-voiced grounding line for each recognized effect. */
+  const groundEffects = (tags: string[] | null | undefined) => {
+    if (!tags?.length) return;
+    for (const raw of tags) {
+      const e = effectIndex.get(norm(raw));
+      if (!e || surfacedEffects.has(e.slug)) continue;
+      surfacedEffects.add(e.slug);
+      sources.push(`kb:effect:${e.slug}`);
+      const def = e.definition ? ` ${e.definition}` : "";
+      const note = e.house_note ? ` House voice: ${e.house_note}` : "";
+      lines.push(
+        `Effect "${e.name}" (experience only, not medical):${def}${note}`.trim(),
+      );
+    }
+  };
 
   const sources: string[] = [];
   const lines: string[] = [];
@@ -446,7 +696,10 @@ export async function buildGroundedFacts(facts: ProductFacts): Promise<GroundedF
       );
       sources.push("kb:potency:lab_results");
     }
-    if (r.effects?.length) lines.push(`Curated experiential character: ${r.effects.join(", ")} (experience only, not medical).`);
+    if (r.effects?.length) {
+      lines.push(`Curated experiential character: ${r.effects.join(", ")} (experience only, not medical).`);
+      groundEffects(r.effects);
+    }
   }
 
   // --- Strain ---
@@ -484,6 +737,52 @@ export async function buildGroundedFacts(facts: ProductFacts): Promise<GroundedF
     if (cat.notes) lines.push(`${cat.display_name} guidance: ${cat.notes}`);
   }
 
+  // --- Product format / consumption method (kb_product_formats, migration 0087) ---
+  // Resolve the product's category/type text to a defined FORM so the model can
+  // speak accurately about what it is, how it's used, and its WA potency band.
+  // Factual/descriptive only — never dosing advice or a medical claim.
+  const formatIndex = buildFormatIndex(formatVocab);
+  const formatTokens = [facts.category, catKey, kbCategory?.slug, kbCategory?.name]
+    .filter((t): t is string => !!t)
+    .map(norm);
+  let matchedFormat: SeedProductFormat | undefined;
+  for (const tok of formatTokens) {
+    const f = formatIndex.get(tok);
+    if (f) {
+      matchedFormat = f;
+      break;
+    }
+  }
+  if (matchedFormat) {
+    sources.push(`kb:format:${matchedFormat.slug}`);
+    if (matchedFormat.definition) {
+      lines.push(`Product format "${matchedFormat.name}": ${matchedFormat.definition}`);
+    }
+    if (matchedFormat.consumption) {
+      lines.push(`${matchedFormat.name} is used by: ${matchedFormat.consumption} (factual, not dosing advice).`);
+    }
+    if (matchedFormat.potency_note) {
+      lines.push(`${matchedFormat.name} typical potency (WA market fact): ${matchedFormat.potency_note}`);
+    }
+    if (matchedFormat.house_note) {
+      lines.push(`${matchedFormat.name} house voice: ${matchedFormat.house_note}`);
+    }
+
+    // --- Helpful safety surfacing (kb_compliance_rules, migration 0088) ---
+    // For INGESTED formats, offer the "start low, go slow" edibles-safety rule
+    // as a customer-safety note the copy may weave in. Reference/education only
+    // — factual, never a dosing directive.
+    if (matchedFormat.category === "ingested") {
+      const edibleRule = complianceRules.find((r) => r.category === "edibles-safety");
+      if (edibleRule) {
+        sources.push(`kb:compliance:${edibleRule.slug}`);
+        lines.push(
+          `Customer-safety note (${edibleRule.title}): ${edibleRule.rule} House voice: ${edibleRule.house_note}`,
+        );
+      }
+    }
+  }
+
   // --- Deep product-type taxonomy (kb_product_categories) ---
   if (kbCategory) {
     sources.push(`kb:product-category:${kbCategory.slug}`);
@@ -492,16 +791,84 @@ export async function buildGroundedFacts(facts: ProductFacts): Promise<GroundedF
     if (kbCategory.aliases?.length) lines.push(`"${name}" is also called: ${kbCategory.aliases.join(", ")}.`);
   }
 
-  // --- Terpene aroma/flavor map (only for terpenes the strain/facts mention) ---
+  // --- Terpene aroma/flavor map + aroma-family cross-map (Slice 5) ---------
+  // Fire for terpenes named on the strain family AND on the exact KB product
+  // record, so we ground on whichever the customer is actually holding.
   const terpNames = new Set<string>([
     ...(strain?.terpenes ?? []).map(norm),
+    ...(kbProduct?.row.terpenes ?? []).map(norm),
   ]);
+  const matchedTerpeneSlugs = new Set<string>();
   if (terpNames.size) {
     const matched = terpenes.filter((t) => terpNames.has(t.slug) || terpNames.has(norm(t.name)));
     for (const t of matched) {
+      matchedTerpeneSlugs.add(t.slug);
       sources.push(`kb:terpene:${t.slug}`);
       const notes = [...t.aroma_notes, ...t.flavor_notes];
       if (notes.length) lines.push(`Terpene ${t.name} reads as: ${Array.from(new Set(notes)).join(", ")}.`);
+      // Aroma-family + real-world hook: "the citrus side... the same terpene
+      // you'd also meet in citrus rind, juniper" — factual scent chemistry, no
+      // effect/medical claim implied.
+      const fams = t.aroma_families ?? [];
+      if (fams.length) {
+        const hook = t.also_found_in ? ` — the same terpene you'd also meet in ${t.also_found_in}` : "";
+        lines.push(
+          `Terpene ${t.name} sits in the ${fams.join(" / ")} aroma family${hook} (scent chemistry, not an effect claim).`,
+        );
+      }
+    }
+  }
+
+  // Reverse aroma cross-map: take the aroma/flavor words the strain or product
+  // already carries, resolve them to normalized aroma families, and name the
+  // terpenes that typically drive that family. Lets the model connect a scent
+  // the customer mentions ("something citrusy") to the underlying chemistry
+  // without inventing anything — every line is grounded in curated terpene data.
+  const AROMA_FAMILY_KEYWORDS: Record<string, string[]> = {
+    citrus: ["citrus", "lemon", "orange", "lime", "grapefruit", "tangy", "tangerine"],
+    pine: ["pine", "piney", "forest", "fir", "cedar"],
+    earthy: ["earthy", "earth", "soil", "musky", "musk"],
+    floral: ["floral", "flower", "lavender", "rose", "lilac", "jasmine"],
+    spicy: ["spicy", "spice", "pepper", "peppery", "clove", "cinnamon"],
+    minty: ["minty", "mint", "menthol", "cooling", "eucalyptus", "camphor"],
+    herbal: ["herbal", "herb", "sage", "basil", "rosemary", "thyme"],
+    woody: ["woody", "wood", "oak", "sandalwood"],
+    sweet: ["sweet", "honey", "fruity", "fruit", "berry", "tropical", "mango"],
+    hoppy: ["hoppy", "hops"],
+  };
+  const aromaWords = new Set<string>(
+    [
+      ...(strain?.aroma_notes ?? []),
+      ...(strain?.flavor_notes ?? []),
+      ...(kbProduct?.row.aroma_notes ?? []),
+      ...(kbProduct?.row.flavor_notes ?? []),
+    ].map(norm),
+  );
+  if (aromaWords.size && terpenes.length) {
+    const detectedFamilies = new Set<string>();
+    for (const [fam, keywords] of Object.entries(AROMA_FAMILY_KEYWORDS)) {
+      for (const w of aromaWords) {
+        if (keywords.some((k) => w.includes(k))) {
+          detectedFamilies.add(fam);
+          break;
+        }
+      }
+    }
+    for (const fam of detectedFamilies) {
+      // Terpenes carrying this family, preferring ones NOT already surfaced above
+      // so we add signal rather than repeat. Cap at three to keep grounding tight.
+      const carriers = terpenes
+        .filter((t) => (t.aroma_families ?? []).includes(fam))
+        .filter((t) => !matchedTerpeneSlugs.has(t.slug))
+        .slice(0, 3);
+      if (carriers.length) {
+        for (const t of carriers) sources.push(`kb:terpene:${t.slug}`);
+        lines.push(
+          `That ${fam} note usually traces back to terpenes like ${carriers
+            .map((t) => t.name)
+            .join(", ")} (aroma cross-map — describes smell, makes no effect claim).`,
+        );
+      }
     }
   }
 
@@ -597,4 +964,133 @@ export async function loadBannedPhrases(): Promise<BannedPhrase[]> {
   } catch {
     return [];
   }
+}
+
+// ===========================================================================
+// STORE CONTEXT (Slice 4) — store/brand facts + FAQ pack for a customer-facing
+// concierge or any "about us" question. This is STORE-WIDE context, distinct
+// from buildGroundedFacts() which grounds a single product's copy. It is kept
+// separate so per-SKU prompts stay tight and so a concierge can pull the store
+// facts on demand.
+//
+// The loyalty answer is composed with the LIVE earn rate from loyalty_config,
+// never a hard-coded number, so the concierge can never quote a stale rate.
+// ===========================================================================
+
+export type StoreContext = {
+  /** Prompt-ready block of store facts + FAQ (or "" if nothing available). */
+  block: string;
+  /** Provenance tags (kb:fact:<key>, kb:faq:<slug>). */
+  sources: string[];
+};
+
+type StoreFactLike = Pick<KbStoreFactRow, "key" | "label" | "category" | "body">;
+type FaqLike = Pick<KbFaqRow, "slug" | "question" | "answer" | "category">;
+
+/** Load active store facts (DB published → in-code seed fallback). */
+async function loadStoreFacts(): Promise<StoreFactLike[]> {
+  if (isSupabaseServiceConfigured) {
+    try {
+      const rows = await listActiveKbStoreFacts();
+      if (rows.length) {
+        return rows.map((r) => ({ key: r.key, label: r.label, category: r.category, body: r.body }));
+      }
+    } catch {
+      /* fall through to seed */
+    }
+  }
+  return SEED_STORE_FACTS.map((f: SeedStoreFact) => ({
+    key: f.key,
+    label: f.label,
+    category: f.category,
+    body: f.body,
+  }));
+}
+
+/** Load active FAQs (DB published → in-code seed fallback). */
+async function loadFaqs(): Promise<FaqLike[]> {
+  if (isSupabaseServiceConfigured) {
+    try {
+      const rows = await listActiveKbFaqs();
+      if (rows.length) {
+        return rows.map((r) => ({ slug: r.slug, question: r.question, answer: r.answer, category: r.category }));
+      }
+    } catch {
+      /* fall through to seed */
+    }
+  }
+  return SEED_FAQS.map((q: SeedFaq) => ({
+    slug: q.slug,
+    question: q.question,
+    answer: q.answer,
+    category: q.category,
+  }));
+}
+
+/**
+ * Compose the LIVE loyalty earn-rate sentence from loyalty_config. Returns "" if
+ * the config isn't available so we never fabricate a rate. pointsPerDollar and
+ * pointValueMinor come straight from the owner-editable program config.
+ */
+async function liveLoyaltySentence(): Promise<string> {
+  try {
+    const cfg = await getLoyaltyConfig();
+    if (!cfg || !Number.isFinite(cfg.pointsPerDollar) || cfg.pointsPerDollar <= 0) return "";
+    const ppd = cfg.pointsPerDollar;
+    const ptLabel = ppd === 1 ? "point" : "points";
+    // pointValueMinor is the redemption value of ONE point, in cents.
+    const centsPerPoint = Number.isFinite(cfg.pointValueMinor) ? cfg.pointValueMinor : null;
+    let redeem = "";
+    if (centsPerPoint && centsPerPoint > 0) {
+      const dollarsPerPoint = centsPerPoint / 100;
+      redeem = ` Each point is worth about $${dollarsPerPoint.toFixed(2)} toward a future purchase.`;
+    }
+    const minRedeem =
+      Number.isFinite(cfg.minRedeemPoints) && cfg.minRedeemPoints > 0
+        ? ` You can start redeeming once you've banked ${cfg.minRedeemPoints} points.`
+        : "";
+    return `Current loyalty earn rate: ${ppd} ${ptLabel} per $1 spent (pretax).${redeem}${minRedeem}`.trim();
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Build the store-wide context block: store facts + FAQ pack, with the LIVE
+ * loyalty rate stitched into the loyalty FAQ. Best-effort; never throws.
+ */
+export async function buildStoreContext(): Promise<StoreContext> {
+  const [facts, faqs, loyaltyLine] = await Promise.all([
+    loadStoreFacts(),
+    loadFaqs(),
+    liveLoyaltySentence(),
+  ]);
+
+  const sources: string[] = [];
+  const lines: string[] = [];
+
+  if (facts.length) {
+    lines.push("Greenway store facts (use these verbatim for 'about us' questions; never invent store details):");
+    for (const f of facts) {
+      sources.push(`kb:fact:${f.key}`);
+      lines.push(`- ${f.label}: ${f.body}`);
+    }
+  }
+
+  if (faqs.length) {
+    lines.push("");
+    lines.push("Greenway FAQ (answer in this voice; if a customer asks something not covered, say you'll check with the team rather than guess):");
+    for (const q of faqs) {
+      sources.push(`kb:faq:${q.slug}`);
+      let answer = q.answer;
+      // Stitch the LIVE loyalty rate into the loyalty answer so it can't drift.
+      if (q.slug === "loyalty-program" && loyaltyLine) {
+        answer = `${answer} ${loyaltyLine}`;
+      }
+      lines.push(`Q: ${q.question}`);
+      lines.push(`A: ${answer}`);
+    }
+  }
+
+  return { block: lines.join("\n").trim(), sources };
 }

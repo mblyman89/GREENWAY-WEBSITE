@@ -27,7 +27,7 @@
 import { listKbStrainsFull, listKbProducts, countKbProductDrafts, getKbCounts } from "./store";
 import { listBrandsWithFacts, listVendors, countBrands, countVendors } from "@/lib/vendors/store";
 import { scoreStrain, scoreBrand, scoreProduct, scoreVendor } from "./quality";
-import { SEED_CANNABINOIDS } from "./seed";
+import { SEED_CANNABINOIDS, SEED_EFFECTS, SEED_PRODUCT_FORMATS, SEED_COMPLIANCE_RULES, SEED_STORE_FACTS, SEED_FAQS } from "./seed";
 
 export type KbHealth = {
   strainCompleteness: number; // 0–100 average
@@ -43,6 +43,31 @@ export type KbHealth = {
    * the KB vs. the expected reference set. `expected` = the in-code seed set.
    */
   cannabinoidCoverage: { present: number; expected: number };
+  /**
+   * Experiential-effect vocabulary coverage (migration 0086): how many effects
+   * are in the KB vs. the expected curated set. `expected` = the in-code seed set.
+   */
+  effectCoverage: { present: number; expected: number };
+  /**
+   * Product-format / consumption-method vocabulary coverage (migration 0087):
+   * how many formats are in the KB vs. the expected curated set.
+   */
+  productFormatCoverage: { present: number; expected: number };
+  /**
+   * Compliance/safety reference-rule coverage (migration 0088): how many rules
+   * are in the KB vs. the expected curated set.
+   */
+  complianceRuleCoverage: { present: number; expected: number };
+  /**
+   * Store/brand fact coverage (migration 0090): how many "about us" fact cards
+   * are in the KB vs. the expected curated set.
+   */
+  storeFactCoverage: { present: number; expected: number };
+  /**
+   * FAQ pack coverage (migration 0090): how many FAQ entries are in the KB vs.
+   * the expected curated set.
+   */
+  faqCoverage: { present: number; expected: number };
   /**
    * Strain drafts awaiting human review (migration 0085 lifecycle). A
    * machine-suggested strain lands as status='draft' until promoted; curated
@@ -91,6 +116,11 @@ export async function getKbHealth(): Promise<KbHealth> {
     vendorsNeedingAttention: vendorScores.filter((s) => s.quality < ATTENTION_THRESHOLD).length,
     draftReviews,
     cannabinoidCoverage: { present: counts.cannabinoids, expected: SEED_CANNABINOIDS.length },
+    effectCoverage: { present: counts.effects, expected: SEED_EFFECTS.length },
+    productFormatCoverage: { present: counts.productFormats, expected: SEED_PRODUCT_FORMATS.length },
+    complianceRuleCoverage: { present: counts.complianceRules, expected: SEED_COMPLIANCE_RULES.length },
+    storeFactCoverage: { present: counts.storeFacts, expected: SEED_STORE_FACTS.length },
+    faqCoverage: { present: counts.faqs, expected: SEED_FAQS.length },
     strainDrafts: strains.filter((s) => s.status === "draft").length,
     totals: {
       strains: counts.strains,

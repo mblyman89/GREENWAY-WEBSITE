@@ -14,6 +14,11 @@ import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import {
   SEED_TERPENES,
   SEED_CANNABINOIDS,
+  SEED_EFFECTS,
+  SEED_PRODUCT_FORMATS,
+  SEED_COMPLIANCE_RULES,
+  SEED_STORE_FACTS,
+  SEED_FAQS,
   SEED_CATEGORIES,
   SEED_BANNED_PHRASES,
 } from "./seed";
@@ -25,6 +30,16 @@ export type KbCounts = {
   terpenes: number;
   /** Cannabinoid compounds (migration 0083). */
   cannabinoids: number;
+  /** Experiential-effect vocabulary (migration 0086). */
+  effects: number;
+  /** Product-format / consumption-method vocabulary (migration 0087). */
+  productFormats: number;
+  /** Compliance/safety reference rules (migration 0088). */
+  complianceRules: number;
+  /** Store/brand fact cards — hours, address, payment, etc. (migration 0090). */
+  storeFacts: number;
+  /** Curated FAQ pack (migration 0090). */
+  faqs: number;
   categories: number;
   brands: number;
   banned: number;
@@ -51,6 +66,11 @@ export async function getKbCounts(): Promise<KbCounts> {
     strains: 0,
     terpenes: 0,
     cannabinoids: 0,
+    effects: 0,
+    productFormats: 0,
+    complianceRules: 0,
+    storeFacts: 0,
+    faqs: 0,
     categories: 0,
     brands: 0,
     banned: 0,
@@ -60,11 +80,16 @@ export async function getKbCounts(): Promise<KbCounts> {
     notesMigrated: false,
   };
   if (!isSupabaseServiceConfigured) return empty;
-  const [strains, terpenes, cannabinoids, categories, brands, banned, notes, nonCannabis] =
+  const [strains, terpenes, cannabinoids, effects, productFormats, complianceRules, storeFacts, faqs, categories, brands, banned, notes, nonCannabis] =
     await Promise.all([
       tableCount("kb_strains"),
       tableCount("kb_terpenes"),
       tableCount("kb_cannabinoids"),
+      tableCount("kb_effects"),
+      tableCount("kb_product_formats"),
+      tableCount("kb_compliance_rules"),
+      tableCount("kb_store_facts"),
+      tableCount("kb_faqs"),
       tableCount("kb_category_terms"),
       tableCount("kb_brands"),
       tableCount("kb_banned_phrases"),
@@ -76,6 +101,11 @@ export async function getKbCounts(): Promise<KbCounts> {
     strains: strains ?? 0,
     terpenes: terpenes ?? 0,
     cannabinoids: cannabinoids ?? 0,
+    effects: effects ?? 0,
+    productFormats: productFormats ?? 0,
+    complianceRules: complianceRules ?? 0,
+    storeFacts: storeFacts ?? 0,
+    faqs: faqs ?? 0,
     categories: categories ?? 0,
     brands: brands ?? 0,
     banned: banned ?? 0,
@@ -118,7 +148,7 @@ export async function listKbNonCannabis(limit = 1000): Promise<KbNonCannabisRow[
 export type SeedReport = {
   ok: boolean;
   message: string;
-  inserted: { strains: number; terpenes: number; cannabinoids: number; categories: number; banned: number; productCategories: number };
+  inserted: { strains: number; terpenes: number; cannabinoids: number; effects: number; productFormats: number; complianceRules: number; storeFacts: number; faqs: number; categories: number; banned: number; productCategories: number };
 };
 
 /**
@@ -128,7 +158,7 @@ export type SeedReport = {
  */
 export async function seedKnowledgeBase(actorId: string | null): Promise<SeedReport> {
   if (!isSupabaseServiceConfigured) {
-    return { ok: false, message: "The database isn't connected yet.", inserted: { strains: 0, terpenes: 0, cannabinoids: 0, categories: 0, banned: 0, productCategories: 0 } };
+    return { ok: false, message: "The database isn't connected yet.", inserted: { strains: 0, terpenes: 0, cannabinoids: 0, effects: 0, productFormats: 0, complianceRules: 0, storeFacts: 0, faqs: 0, categories: 0, banned: 0, productCategories: 0 } };
   }
   const admin = createSupabaseAdminClient();
 
@@ -158,6 +188,8 @@ export async function seedKnowledgeBase(actorId: string | null): Promise<SeedRep
     aroma_notes: t.aroma_notes,
     flavor_notes: t.flavor_notes,
     also_found_in: t.also_found_in ?? null,
+    // Slice 5: aroma-family cross-map. Column added in migration 0089 (default '{}').
+    aroma_families: t.aroma_families ?? [],
     active: true,
     created_by: actorId,
     updated_by: actorId,
@@ -174,6 +206,85 @@ export async function seedKnowledgeBase(actorId: string | null): Promise<SeedRep
     also_found_in: c.also_found_in ?? null,
     sources: c.sources,
     confidence: c.confidence,
+    active: true,
+    created_by: actorId,
+    updated_by: actorId,
+  }));
+  const effectRows = SEED_EFFECTS.map((e) => ({
+    slug: e.slug,
+    name: e.name,
+    category: e.category,
+    definition: e.definition,
+    house_note: e.house_note,
+    aliases: e.aliases,
+    sources: e.sources,
+    confidence: e.confidence,
+    source: "manual",
+    status: "published",
+    active: true,
+    created_by: actorId,
+    updated_by: actorId,
+  }));
+  const productFormatRows = SEED_PRODUCT_FORMATS.map((f) => ({
+    slug: f.slug,
+    name: f.name,
+    category: f.category,
+    definition: f.definition,
+    consumption: f.consumption,
+    potency_note: f.potency_note,
+    house_note: f.house_note,
+    aliases: f.aliases,
+    sources: f.sources,
+    confidence: f.confidence,
+    source: "manual",
+    status: "published",
+    active: true,
+    created_by: actorId,
+    updated_by: actorId,
+  }));
+  const complianceRuleRows = SEED_COMPLIANCE_RULES.map((r) => ({
+    slug: r.slug,
+    title: r.title,
+    category: r.category,
+    rule: r.rule,
+    house_note: r.house_note,
+    severity: r.severity,
+    citation: r.citation,
+    sources: r.sources,
+    confidence: r.confidence,
+    sort_order: r.sort_order,
+    source: "manual",
+    status: "published",
+    active: true,
+    created_by: actorId,
+    updated_by: actorId,
+  }));
+  const storeFactRows = SEED_STORE_FACTS.map((f) => ({
+    key: f.key,
+    label: f.label,
+    category: f.category,
+    body: f.body,
+    tags: f.tags,
+    sort_order: f.sort_order,
+    sources: f.sources,
+    confidence: f.confidence,
+    source: "manual",
+    status: "published",
+    active: true,
+    created_by: actorId,
+    updated_by: actorId,
+  }));
+  const faqRows = SEED_FAQS.map((q) => ({
+    slug: q.slug,
+    question: q.question,
+    answer: q.answer,
+    category: q.category,
+    tags: q.tags,
+    sort_order: q.sort_order,
+    sources: q.sources,
+    confidence: q.confidence,
+    source: "manual",
+    status: "published",
     active: true,
     created_by: actorId,
     updated_by: actorId,
@@ -217,7 +328,33 @@ export async function seedKnowledgeBase(actorId: string | null): Promise<SeedRep
   const r1 = await admin.from("kb_strains").upsert(strainRows, { onConflict: "slug" });
   if (r1.error) errors.push(`strains: ${r1.error.message}`);
   const r2 = await admin.from("kb_terpenes").upsert(terpeneRows, { onConflict: "slug" });
-  if (r2.error) errors.push(`terpenes: ${r2.error.message}`);
+  if (r2.error) {
+    // Slice 5: aroma_families lives behind migration 0089. If that column isn't
+    // there yet, don't fail the whole terpene seed — retry without it (matches the
+    // pre-migration degrade pattern). Any OTHER error is still surfaced.
+    const missingAromaFamilies =
+      /aroma_families/i.test(r2.error.message) &&
+      /(column|does not exist|schema cache)/i.test(r2.error.message);
+    if (missingAromaFamilies) {
+      const terpeneRowsNoFamilies = terpeneRows.map((row) => {
+        const rest: Record<string, unknown> = { ...row };
+        delete rest.aroma_families;
+        return rest;
+      });
+      const r2b = await admin
+        .from("kb_terpenes")
+        .upsert(terpeneRowsNoFamilies, { onConflict: "slug" });
+      if (r2b.error) {
+        errors.push(`terpenes: ${r2b.error.message}`);
+      } else {
+        warnings.push(
+          "terpenes: aroma_families column not found — seeded without the aroma cross-map. Apply migration 0089, then reseed.",
+        );
+      }
+    } else {
+      errors.push(`terpenes: ${r2.error.message}`);
+    }
+  }
   const r3 = await admin.from("kb_category_terms").upsert(categoryRows, { onConflict: "category" });
   if (r3.error) errors.push(`categories: ${r3.error.message}`);
   const r4 = await admin.from("kb_banned_phrases").upsert(bannedRows, { onConflict: "phrase" });
@@ -252,11 +389,71 @@ export async function seedKnowledgeBase(actorId: string | null): Promise<SeedRep
     cannabinoidsSeeded = cannabinoidRows.length;
   }
 
+  // Effects vocabulary lives behind migration 0086. Degrade gracefully so
+  // seeding still works before the owner applies 0086.
+  let effectsSeeded = 0;
+  const r7 = await admin
+    .from("kb_effects")
+    .upsert(effectRows, { onConflict: "slug" });
+  if (r7.error) {
+    warnings.push(`effects not seeded (apply migration 0086): ${r7.error.message}`);
+  } else {
+    effectsSeeded = effectRows.length;
+  }
+
+  // Product-format vocabulary lives behind migration 0087. Degrade gracefully
+  // so seeding still works before the owner applies 0087.
+  let productFormatsSeeded = 0;
+  const r8 = await admin
+    .from("kb_product_formats")
+    .upsert(productFormatRows, { onConflict: "slug" });
+  if (r8.error) {
+    warnings.push(`product formats not seeded (apply migration 0087): ${r8.error.message}`);
+  } else {
+    productFormatsSeeded = productFormatRows.length;
+  }
+
+  // Compliance-rule reference lives behind migration 0088. Degrade gracefully
+  // so seeding still works before the owner applies 0088.
+  let complianceRulesSeeded = 0;
+  const r9 = await admin
+    .from("kb_compliance_rules")
+    .upsert(complianceRuleRows, { onConflict: "slug" });
+  if (r9.error) {
+    warnings.push(`compliance rules not seeded (apply migration 0088): ${r9.error.message}`);
+  } else {
+    complianceRulesSeeded = complianceRuleRows.length;
+  }
+
+  // Store/brand facts live behind migration 0090. Degrade gracefully so seeding
+  // still works before the owner applies 0090.
+  let storeFactsSeeded = 0;
+  const r10 = await admin
+    .from("kb_store_facts")
+    .upsert(storeFactRows, { onConflict: "key" });
+  if (r10.error) {
+    warnings.push(`store facts not seeded (apply migration 0090): ${r10.error.message}`);
+  } else {
+    storeFactsSeeded = storeFactRows.length;
+  }
+
+  // FAQ pack lives behind migration 0090. Degrade gracefully so seeding still
+  // works before the owner applies 0090.
+  let faqsSeeded = 0;
+  const r11 = await admin
+    .from("kb_faqs")
+    .upsert(faqRows, { onConflict: "slug" });
+  if (r11.error) {
+    warnings.push(`FAQs not seeded (apply migration 0090): ${r11.error.message}`);
+  } else {
+    faqsSeeded = faqRows.length;
+  }
+
   if (errors.length) {
     return {
       ok: false,
       message: `Some data couldn't be saved. Make sure the knowledge-base setup has been run. (${errors.join("; ")})`,
-      inserted: { strains: 0, terpenes: 0, cannabinoids: 0, categories: 0, banned: 0, productCategories: 0 },
+      inserted: { strains: 0, terpenes: 0, cannabinoids: 0, effects: 0, productFormats: 0, complianceRules: 0, storeFacts: 0, faqs: 0, categories: 0, banned: 0, productCategories: 0 },
     };
   }
   const okMessage =
@@ -269,6 +466,11 @@ export async function seedKnowledgeBase(actorId: string | null): Promise<SeedRep
       strains: strainRows.length,
       terpenes: terpeneRows.length,
       cannabinoids: cannabinoidsSeeded,
+      effects: effectsSeeded,
+      productFormats: productFormatsSeeded,
+      complianceRules: complianceRulesSeeded,
+      storeFacts: storeFactsSeeded,
+      faqs: faqsSeeded,
       categories: categoryRows.length,
       banned: bannedRows.length,
       productCategories: productCategoriesSeeded,
@@ -561,6 +763,394 @@ export async function setCannabinoidActive(
     const admin = createSupabaseAdminClient();
     const { error } = await admin
       .from("kb_cannabinoids")
+      .update({ active, updated_by: actorId })
+      .eq("slug", slug.trim().toLowerCase());
+    if (error) return { ok: false, message: error.message };
+    return { ok: true, message: active ? "Shown." : "Hidden." };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Unexpected error." };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Experiential EFFECTS vocabulary (migration 0086). Reads/writes degrade safely
+// pre-migration like the other KB helpers. SUBJECTIVE experience only — the
+// compliance gate strips any medical framing before it can surface.
+// ---------------------------------------------------------------------------
+export type KbEffectRow = {
+  id: string;
+  slug: string;
+  name: string;
+  category: string | null;
+  definition: string | null;
+  house_note: string | null;
+  aliases: string[];
+  sources: string[];
+  confidence: number | null;
+  source: string | null;
+  status: string;
+  active: boolean;
+};
+
+const KB_EFFECT_COLUMNS =
+  "id,slug,name,category,definition,house_note,aliases,sources,confidence,source,status,active";
+
+/** List all effect reference rows (active first, alphabetical). Degrades to []. */
+export async function listKbEffectsFull(limit = 200): Promise<KbEffectRow[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("kb_effects")
+      .select(KB_EFFECT_COLUMNS)
+      .order("active", { ascending: false })
+      .order("name", { ascending: true })
+      .limit(limit);
+    if (error || !data) return [];
+    return data as unknown as KbEffectRow[];
+  } catch {
+    return [];
+  }
+}
+
+/** Fetch one effect by slug. Returns null if missing. */
+export async function getKbEffectBySlug(slug: string): Promise<KbEffectRow | null> {
+  if (!isSupabaseServiceConfigured) return null;
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("kb_effects")
+      .select(KB_EFFECT_COLUMNS)
+      .eq("slug", slug)
+      .maybeSingle();
+    if (error || !data) return null;
+    return data as unknown as KbEffectRow;
+  } catch {
+    return null;
+  }
+}
+
+export type UpsertKbEffectInput = {
+  slug: string;
+  name: string;
+  category?: string | null;
+  definition?: string | null;
+  house_note?: string | null;
+  aliases?: string[];
+  sources?: string[];
+  confidence?: number | null;
+};
+
+/** Idempotent upsert of a single effect on slug. Curated edits stay published. */
+export async function upsertKbEffect(
+  input: UpsertKbEffectInput,
+  actorId: string | null,
+): Promise<{ ok: boolean; message: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, message: "The database isn't connected yet." };
+  const slug = input.slug.trim().toLowerCase();
+  if (!slug) return { ok: false, message: "A slug is required." };
+  if (!input.name.trim()) return { ok: false, message: "A name is required." };
+  try {
+    const admin = createSupabaseAdminClient();
+    const { error } = await admin.from("kb_effects").upsert(
+      {
+        slug,
+        name: input.name.trim(),
+        category: input.category?.trim() || null,
+        definition: input.definition?.trim() || null,
+        house_note: input.house_note?.trim() || null,
+        aliases: input.aliases ?? [],
+        sources: input.sources ?? [],
+        confidence: input.confidence ?? null,
+        source: "manual",
+        status: "published",
+        updated_by: actorId,
+      },
+      { onConflict: "slug" },
+    );
+    if (error) {
+      return { ok: false, message: `Couldn't save (apply migration 0086 if needed): ${error.message}` };
+    }
+    return { ok: true, message: `Saved ${input.name.trim()}.` };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Unexpected error." };
+  }
+}
+
+/** Toggle an effect active/hidden. */
+export async function setEffectActive(
+  slug: string,
+  active: boolean,
+  actorId: string | null,
+): Promise<{ ok: boolean; message: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, message: "The database isn't connected yet." };
+  try {
+    const admin = createSupabaseAdminClient();
+    const { error } = await admin
+      .from("kb_effects")
+      .update({ active, updated_by: actorId })
+      .eq("slug", slug.trim().toLowerCase());
+    if (error) return { ok: false, message: error.message };
+    return { ok: true, message: active ? "Shown." : "Hidden." };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Unexpected error." };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Product formats / consumption methods (migration 0087). Mirrors the effects
+// CRUD above: read-only list/get for the admin card, plus idempotent upsert and
+// active toggle for future curation. All reads degrade to []/null pre-migration.
+// ---------------------------------------------------------------------------
+export type KbProductFormatRow = {
+  id: string;
+  slug: string;
+  name: string;
+  category: string | null;
+  definition: string | null;
+  consumption: string | null;
+  potency_note: string | null;
+  house_note: string | null;
+  aliases: string[];
+  sources: string[];
+  confidence: number | null;
+  source: string | null;
+  status: string;
+  active: boolean;
+};
+
+const KB_PRODUCT_FORMAT_COLUMNS =
+  "id,slug,name,category,definition,consumption,potency_note,house_note,aliases,sources,confidence,source,status,active";
+
+/** List all product-format rows (active first, alphabetical). Degrades to []. */
+export async function listKbProductFormatsFull(limit = 200): Promise<KbProductFormatRow[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("kb_product_formats")
+      .select(KB_PRODUCT_FORMAT_COLUMNS)
+      .order("active", { ascending: false })
+      .order("name", { ascending: true })
+      .limit(limit);
+    if (error || !data) return [];
+    return data as unknown as KbProductFormatRow[];
+  } catch {
+    return [];
+  }
+}
+
+/** Fetch one product format by slug. Returns null if missing. */
+export async function getKbProductFormatBySlug(slug: string): Promise<KbProductFormatRow | null> {
+  if (!isSupabaseServiceConfigured) return null;
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("kb_product_formats")
+      .select(KB_PRODUCT_FORMAT_COLUMNS)
+      .eq("slug", slug)
+      .maybeSingle();
+    if (error || !data) return null;
+    return data as unknown as KbProductFormatRow;
+  } catch {
+    return null;
+  }
+}
+
+export type UpsertKbProductFormatInput = {
+  slug: string;
+  name: string;
+  category?: string | null;
+  definition?: string | null;
+  consumption?: string | null;
+  potency_note?: string | null;
+  house_note?: string | null;
+  aliases?: string[];
+  sources?: string[];
+  confidence?: number | null;
+};
+
+/** Idempotent upsert of a single product format on slug. Curated edits stay published. */
+export async function upsertKbProductFormat(
+  input: UpsertKbProductFormatInput,
+  actorId: string | null,
+): Promise<{ ok: boolean; message: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, message: "The database isn't connected yet." };
+  const slug = input.slug.trim().toLowerCase();
+  if (!slug) return { ok: false, message: "A slug is required." };
+  if (!input.name.trim()) return { ok: false, message: "A name is required." };
+  try {
+    const admin = createSupabaseAdminClient();
+    const { error } = await admin.from("kb_product_formats").upsert(
+      {
+        slug,
+        name: input.name.trim(),
+        category: input.category?.trim() || null,
+        definition: input.definition?.trim() || null,
+        consumption: input.consumption?.trim() || null,
+        potency_note: input.potency_note?.trim() || null,
+        house_note: input.house_note?.trim() || null,
+        aliases: input.aliases ?? [],
+        sources: input.sources ?? [],
+        confidence: input.confidence ?? null,
+        source: "manual",
+        status: "published",
+        updated_by: actorId,
+      },
+      { onConflict: "slug" },
+    );
+    if (error) {
+      return { ok: false, message: `Couldn't save (apply migration 0087 if needed): ${error.message}` };
+    }
+    return { ok: true, message: `Saved ${input.name.trim()}.` };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Unexpected error." };
+  }
+}
+
+/** Toggle a product format active/hidden. */
+export async function setProductFormatActive(
+  slug: string,
+  active: boolean,
+  actorId: string | null,
+): Promise<{ ok: boolean; message: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, message: "The database isn't connected yet." };
+  try {
+    const admin = createSupabaseAdminClient();
+    const { error } = await admin
+      .from("kb_product_formats")
+      .update({ active, updated_by: actorId })
+      .eq("slug", slug.trim().toLowerCase());
+    if (error) return { ok: false, message: error.message };
+    return { ok: true, message: active ? "Shown." : "Hidden." };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Unexpected error." };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Compliance rules (migration 0088). REFERENCE/education layer — read-only list
+// for the admin card plus idempotent upsert / active toggle for future curation.
+// Reads degrade to []/null pre-migration. NOT the enforcement path (that stays
+// in sales-limits-core.ts).
+// ---------------------------------------------------------------------------
+export type KbComplianceRuleRow = {
+  id: string;
+  slug: string;
+  title: string;
+  category: string | null;
+  rule: string | null;
+  house_note: string | null;
+  severity: string;
+  citation: string | null;
+  sources: string[];
+  confidence: number | null;
+  sort_order: number;
+  source: string | null;
+  status: string;
+  active: boolean;
+};
+
+const KB_COMPLIANCE_RULE_COLUMNS =
+  "id,slug,title,category,rule,house_note,severity,citation,sources,confidence,sort_order,source,status,active";
+
+/** List all compliance-rule rows (active first, by sort_order). Degrades to []. */
+export async function listKbComplianceRulesFull(limit = 200): Promise<KbComplianceRuleRow[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("kb_compliance_rules")
+      .select(KB_COMPLIANCE_RULE_COLUMNS)
+      .order("active", { ascending: false })
+      .order("sort_order", { ascending: true })
+      .limit(limit);
+    if (error || !data) return [];
+    return data as unknown as KbComplianceRuleRow[];
+  } catch {
+    return [];
+  }
+}
+
+/** Fetch one compliance rule by slug. Returns null if missing. */
+export async function getKbComplianceRuleBySlug(slug: string): Promise<KbComplianceRuleRow | null> {
+  if (!isSupabaseServiceConfigured) return null;
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("kb_compliance_rules")
+      .select(KB_COMPLIANCE_RULE_COLUMNS)
+      .eq("slug", slug)
+      .maybeSingle();
+    if (error || !data) return null;
+    return data as unknown as KbComplianceRuleRow;
+  } catch {
+    return null;
+  }
+}
+
+export type UpsertKbComplianceRuleInput = {
+  slug: string;
+  title: string;
+  category?: string | null;
+  rule?: string | null;
+  house_note?: string | null;
+  severity?: "info" | "important" | "critical";
+  citation?: string | null;
+  sources?: string[];
+  confidence?: number | null;
+  sort_order?: number;
+};
+
+/** Idempotent upsert of a single compliance rule on slug. Curated edits stay published. */
+export async function upsertKbComplianceRule(
+  input: UpsertKbComplianceRuleInput,
+  actorId: string | null,
+): Promise<{ ok: boolean; message: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, message: "The database isn't connected yet." };
+  const slug = input.slug.trim().toLowerCase();
+  if (!slug) return { ok: false, message: "A slug is required." };
+  if (!input.title.trim()) return { ok: false, message: "A title is required." };
+  try {
+    const admin = createSupabaseAdminClient();
+    const { error } = await admin.from("kb_compliance_rules").upsert(
+      {
+        slug,
+        title: input.title.trim(),
+        category: input.category?.trim() || null,
+        rule: input.rule?.trim() || null,
+        house_note: input.house_note?.trim() || null,
+        severity: input.severity ?? "info",
+        citation: input.citation?.trim() || null,
+        sources: input.sources ?? [],
+        confidence: input.confidence ?? null,
+        sort_order: input.sort_order ?? 100,
+        source: "manual",
+        status: "published",
+        updated_by: actorId,
+      },
+      { onConflict: "slug" },
+    );
+    if (error) {
+      return { ok: false, message: `Couldn't save (apply migration 0088 if needed): ${error.message}` };
+    }
+    return { ok: true, message: `Saved ${input.title.trim()}.` };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Unexpected error." };
+  }
+}
+
+/** Toggle a compliance rule active/hidden. */
+export async function setComplianceRuleActive(
+  slug: string,
+  active: boolean,
+  actorId: string | null,
+): Promise<{ ok: boolean; message: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, message: "The database isn't connected yet." };
+  try {
+    const admin = createSupabaseAdminClient();
+    const { error } = await admin
+      .from("kb_compliance_rules")
       .update({ active, updated_by: actorId })
       .eq("slug", slug.trim().toLowerCase());
     if (error) return { ok: false, message: error.message };
@@ -1189,4 +1779,295 @@ export async function reviewKbProduct(
         : { status: "draft", active: false, updated_by: actorId };
   const { error } = await admin.from("kb_products").update(patch).eq("id", id);
   if (error) throw new Error(error.message);
+}
+
+// ---------------------------------------------------------------------------
+// Store/brand facts (migration 0090). Owner-extendable "about us" cards: hours,
+// address, phone, payment, delivery, mission, etc. Read helpers degrade to
+// []/null pre-migration; upsert/toggle let the owner add + curate their own.
+// ---------------------------------------------------------------------------
+export type KbStoreFactRow = {
+  id: string;
+  key: string;
+  label: string;
+  category: string;
+  body: string;
+  tags: string[];
+  sort_order: number;
+  sources: string[];
+  confidence: number | null;
+  source: string | null;
+  status: string;
+  active: boolean;
+};
+
+const KB_STORE_FACT_COLUMNS =
+  "id,key,label,category,body,tags,sort_order,sources,confidence,source,status,active";
+
+/** List all store-fact rows (active first, by category then sort_order). Degrades to []. */
+export async function listKbStoreFactsFull(limit = 200): Promise<KbStoreFactRow[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("kb_store_facts")
+      .select(KB_STORE_FACT_COLUMNS)
+      .order("active", { ascending: false })
+      .order("category", { ascending: true })
+      .order("sort_order", { ascending: true })
+      .limit(limit);
+    if (error || !data) return [];
+    return data as unknown as KbStoreFactRow[];
+  } catch {
+    return [];
+  }
+}
+
+/** Active, published store facts for retrieval grounding. Degrades to []. */
+export async function listActiveKbStoreFacts(): Promise<KbStoreFactRow[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("kb_store_facts")
+      .select(KB_STORE_FACT_COLUMNS)
+      .eq("active", true)
+      .eq("status", "published")
+      .order("category", { ascending: true })
+      .order("sort_order", { ascending: true });
+    if (error || !data) return [];
+    return data as unknown as KbStoreFactRow[];
+  } catch {
+    return [];
+  }
+}
+
+/** Fetch one store fact by key. Returns null if missing. */
+export async function getKbStoreFactByKey(key: string): Promise<KbStoreFactRow | null> {
+  if (!isSupabaseServiceConfigured) return null;
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("kb_store_facts")
+      .select(KB_STORE_FACT_COLUMNS)
+      .eq("key", key)
+      .maybeSingle();
+    if (error || !data) return null;
+    return data as unknown as KbStoreFactRow;
+  } catch {
+    return null;
+  }
+}
+
+export type UpsertKbStoreFactInput = {
+  key: string;
+  label: string;
+  category?: string | null;
+  body: string;
+  tags?: string[];
+  sort_order?: number;
+  sources?: string[];
+  confidence?: number | null;
+};
+
+/** Idempotent upsert of a single store fact on key. Curated edits stay published. */
+export async function upsertKbStoreFact(
+  input: UpsertKbStoreFactInput,
+  actorId: string | null,
+): Promise<{ ok: boolean; message: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, message: "The database isn't connected yet." };
+  const key = input.key.trim().toLowerCase();
+  if (!key) return { ok: false, message: "A key is required." };
+  if (!input.label.trim()) return { ok: false, message: "A label is required." };
+  if (!input.body.trim()) return { ok: false, message: "The fact body can't be empty." };
+  try {
+    const admin = createSupabaseAdminClient();
+    const { error } = await admin.from("kb_store_facts").upsert(
+      {
+        key,
+        label: input.label.trim(),
+        category: (input.category?.trim() || "basics"),
+        body: input.body.trim(),
+        tags: input.tags ?? [],
+        sort_order: input.sort_order ?? 100,
+        sources: input.sources ?? [],
+        confidence: input.confidence ?? null,
+        source: "manual",
+        status: "published",
+        updated_by: actorId,
+      },
+      { onConflict: "key" },
+    );
+    if (error) {
+      return { ok: false, message: `Couldn't save (apply migration 0090 if needed): ${error.message}` };
+    }
+    return { ok: true, message: `Saved ${input.label.trim()}.` };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Unexpected error." };
+  }
+}
+
+/** Toggle a store fact active/hidden. */
+export async function setStoreFactActive(
+  key: string,
+  active: boolean,
+  actorId: string | null,
+): Promise<{ ok: boolean; message: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, message: "The database isn't connected yet." };
+  try {
+    const admin = createSupabaseAdminClient();
+    const { error } = await admin
+      .from("kb_store_facts")
+      .update({ active, updated_by: actorId })
+      .eq("key", key.trim().toLowerCase());
+    if (error) return { ok: false, message: error.message };
+    return { ok: true, message: active ? "Shown." : "Hidden." };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Unexpected error." };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// FAQ pack (migration 0090). Curated + owner-extendable Q&A. Read helpers
+// degrade to []/null pre-migration; upsert/toggle let the owner add + curate.
+// ---------------------------------------------------------------------------
+export type KbFaqRow = {
+  id: string;
+  slug: string;
+  question: string;
+  answer: string;
+  category: string;
+  tags: string[];
+  sort_order: number;
+  sources: string[];
+  confidence: number | null;
+  source: string | null;
+  status: string;
+  active: boolean;
+};
+
+const KB_FAQ_COLUMNS =
+  "id,slug,question,answer,category,tags,sort_order,sources,confidence,source,status,active";
+
+/** List all FAQ rows (active first, by category then sort_order). Degrades to []. */
+export async function listKbFaqsFull(limit = 300): Promise<KbFaqRow[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("kb_faqs")
+      .select(KB_FAQ_COLUMNS)
+      .order("active", { ascending: false })
+      .order("category", { ascending: true })
+      .order("sort_order", { ascending: true })
+      .limit(limit);
+    if (error || !data) return [];
+    return data as unknown as KbFaqRow[];
+  } catch {
+    return [];
+  }
+}
+
+/** Active, published FAQs for retrieval grounding. Degrades to []. */
+export async function listActiveKbFaqs(): Promise<KbFaqRow[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("kb_faqs")
+      .select(KB_FAQ_COLUMNS)
+      .eq("active", true)
+      .eq("status", "published")
+      .order("category", { ascending: true })
+      .order("sort_order", { ascending: true });
+    if (error || !data) return [];
+    return data as unknown as KbFaqRow[];
+  } catch {
+    return [];
+  }
+}
+
+/** Fetch one FAQ by slug. Returns null if missing. */
+export async function getKbFaqBySlug(slug: string): Promise<KbFaqRow | null> {
+  if (!isSupabaseServiceConfigured) return null;
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("kb_faqs")
+      .select(KB_FAQ_COLUMNS)
+      .eq("slug", slug)
+      .maybeSingle();
+    if (error || !data) return null;
+    return data as unknown as KbFaqRow;
+  } catch {
+    return null;
+  }
+}
+
+export type UpsertKbFaqInput = {
+  slug: string;
+  question: string;
+  answer: string;
+  category?: string | null;
+  tags?: string[];
+  sort_order?: number;
+  sources?: string[];
+  confidence?: number | null;
+};
+
+/** Idempotent upsert of a single FAQ on slug. Curated edits stay published. */
+export async function upsertKbFaq(
+  input: UpsertKbFaqInput,
+  actorId: string | null,
+): Promise<{ ok: boolean; message: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, message: "The database isn't connected yet." };
+  const slug = input.slug.trim().toLowerCase();
+  if (!slug) return { ok: false, message: "A slug is required." };
+  if (!input.question.trim()) return { ok: false, message: "A question is required." };
+  if (!input.answer.trim()) return { ok: false, message: "An answer is required." };
+  try {
+    const admin = createSupabaseAdminClient();
+    const { error } = await admin.from("kb_faqs").upsert(
+      {
+        slug,
+        question: input.question.trim(),
+        answer: input.answer.trim(),
+        category: (input.category?.trim() || "basics"),
+        tags: input.tags ?? [],
+        sort_order: input.sort_order ?? 100,
+        sources: input.sources ?? [],
+        confidence: input.confidence ?? null,
+        source: "manual",
+        status: "published",
+        updated_by: actorId,
+      },
+      { onConflict: "slug" },
+    );
+    if (error) {
+      return { ok: false, message: `Couldn't save (apply migration 0090 if needed): ${error.message}` };
+    }
+    return { ok: true, message: `Saved "${input.question.trim()}".` };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Unexpected error." };
+  }
+}
+
+/** Toggle an FAQ active/hidden. */
+export async function setFaqActive(
+  slug: string,
+  active: boolean,
+  actorId: string | null,
+): Promise<{ ok: boolean; message: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, message: "The database isn't connected yet." };
+  try {
+    const admin = createSupabaseAdminClient();
+    const { error } = await admin
+      .from("kb_faqs")
+      .update({ active, updated_by: actorId })
+      .eq("slug", slug.trim().toLowerCase());
+    if (error) return { ok: false, message: error.message };
+    return { ok: true, message: active ? "Shown." : "Hidden." };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Unexpected error." };
+  }
 }

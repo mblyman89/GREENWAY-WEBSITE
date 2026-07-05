@@ -167,3 +167,71 @@ see `docs/COMMAND_CENTER_ENHANCEMENTS_TASKLIST.md`.
 - [x] Code: store.ts KbStrainFull + listKbStrainsFull FULL→BASE fallback add status/source; StrainEditor Status column shows Draft/Archived pill + provenance source (no-op pre-0085); health.ts strainDrafts count. (No standalone review queue built: writeback only enriches EXISTING published rows — it never creates strain drafts today — so a promote-queue would be speculative; parity + auditability + a Draft signal cover GAP 6.)
 - [x] Verify tsc 0 → eslint 0 → next build OK → rm -rf .next; audit GAP 6 updated
 - [x] Commit → push (same branch, folds into PR #255); migration 0085 is MANUAL
+
+## KB HARDENING v2 (post-#255) — branch feat/kb-hardening-v2
+> Owner (verbatim, msg): "please change the labels, 'intoxicating' and 'non intoxicating' to be 'Psychoactive' and 'non psychoactive'. then you can merge the open pr. then open a new branch so we can continue hardening the kb. i want to add all of your recommendations to the kb. start with the effects/ experience. please do quality research on this, i want it to be factual, but i also want it to be read by a cannabis user, which means it should sound and flow like how we would expect it to. it needs to have personality and vibe with our culture. then move on to number 2, i want you to go back to the internet and deep research washington state products specifically so you can add quality and relevant consumption methods and product format facts. then move on to number 3. i want to add all the compliance related stuff to the kb and have it use it in a useful helpful way to keep use safe. for number 4, i like this. i am not exactly sure what this means, but i like the sound of it. lets make it its own slice after the other 4 slices are finished. finally do the 5th item on the list. the terpenes and cross map enrichment. please proceed, follow all the standing rules, and never guess. please do what ever a professional an expert would do. do not cut corners, i want it done the right way, even if it is harder."
+> Owner (verbatim, follow-up): "label cbd as non psychoactive please. its how we all in the industry label it and describe it when selling cbd type products. the other one that is mildly psychoactive, please leave as is, i think that is fine. please continue."
+
+- [x] TASK A — Relabel intoxicating/non-intoxicating -> psychoactive/non-psychoactive (CBN stays mildly-psychoactive). Values only; column name 'intoxication' unchanged (no destructive migration). WA-mandated warning text + sourced mechanism prose preserved. Labeling note added. Commit b0f69de pushed. tsc/eslint/build clean.
+- [x] TASK B — Merge PR #255 (squash, --admin, delete branch). Merged ac43c5c; main synced. (Migrations 0083/0084/0085 remain MANUAL for owner.)
+- [ ] TASK C — Open branch feat/kb-hardening-v2; build 5 recommendations IN ORDER:
+
+### Slice 1 — Effects/experience vocabulary (culture voice, compliance-gated)  [SHIPPED]
+> Owner voice brief (verbatim): "we are a professional group of experienced cannabis users who cater to all ages over 21. So the language and tone should reflect that of a sophisticated pot head. So yes, relaxed and knowledgeable, friendly, with some fun creative terms and such. I want it to be enjoyable and funny in a way, but professional still ... I want it to be fun and professional." + "right high quality curated set ... quality over quantity."
+> KEY FINDING (verified, not guessed): effects[] free-text arrays ALREADY exist on kb_products/kb_strains/kb_product_categories (migration 0071) and surface as a bare list. The code ALSO has an authoritative ALLOWED_EFFECTS allow-list + checkEffects gate (src/lib/ai/compliance.ts). So Slice 1 = a CONTROLLED VOCABULARY (kb_effects) those arrays resolve to; every seeded slug is a verbatim ALLOWED_EFFECTS member so vocab + gate can never disagree.
+- [x] Research: Leafly effect taxonomy + Amsterdam Genetics body/head-high article; grounded, non-medical (docs/KB_EFFECTS_SEED_SOURCES.md). Verified all 16 slugs ∈ ALLOWED_EFFECTS.
+- [x] Migration 0086_kb_effects.sql: kb_effects (slug/name/category/definition/house_note/aliases/sources/confidence) + drafts/provenance parity (status default 'published' + status check; source; backfill source='manual'); indexes; RLS is_staff; updated_at trigger. Idempotent, MANUAL apply.
+- [x] Seed: SeedEffect type + SEED_EFFECTS (16 curated effects across 4 families calming/uplifting/energizing/character). Factual non-medical definition + fun-but-professional house_note + neutral aliases. All ∈ ALLOWED_EFFECTS.
+- [x] Wire store.ts: effectRows in seedKnowledgeBase (r7, degrades pre-0086) + KbCounts.effects + inserted.effects + KbEffectRow/listKbEffectsFull/getKbEffectBySlug/UpsertKbEffectInput/upsertKbEffect/setEffectActive.
+- [x] Wire retrieval.ts: loadEffects() (published-only, FULL→no-status fallback→seed) + buildEffectIndex (slug/name/alias→canonical) + groundEffects() emits "Effect \"X\" (experience only, not medical): <definition> House voice: <house_note>" with kb:effect:<slug> source tag; called on product effects[].
+- [x] Wire health.ts: effectCoverage {present,expected} from counts.effects vs SEED_EFFECTS.length.
+- [x] Admin: read-only /admin/knowledge-base/effects card page (CategoryBadge + definition + house voice + aliases + sources + status/source provenance + non-medical footer); KB-landing nav card added after Cannabinoids.
+- [x] Verify tsc 0 → eslint 0 → next build OK → rm -rf .next.
+- [x] Commit → push feat/kb-hardening-v2. Migration 0086 is MANUAL (owner applies then re-runs Seed to load the 16 effects).
+
+### Slice 2 — Consumption methods / product formats (DEEP WA-specific research)  [SHIPPED]
+> KEY FINDING (verified, not guessed): kb_category_terms + kb_product_categories existed but carried NO WA-market facts (how it's consumed, potency band). Slice 2 = new controlled vocabulary kb_product_formats (14 forms: inhaled/ingested/topical) with factual definition + consumption + WA-VERIFIED potency band + house voice. WA facts from WSLCB "Types of Products" (flower 15-25%+, kief/hash 30-60%, shatter/wax/dabs 60-90%), WAC 314-55-095 edible cap (10mg/serving, 100mg/pkg), RCW possession limits. All 14 formats pass checkCompliance with 0 blocking / 0 warnings (copy tightened: cured->well-aged, dropped "hard candy", "10mg per serving"->spelled in words, "great for"/"best"/"top-shelf" rephrased).
+- [x] Deep WA-specific research: WSLCB product taxonomy + potency ranges + edible cap + limits (VERIFIED, sourced in docs/KB_PRODUCT_FORMATS_SEED_SOURCES.md)
+- [x] Migration 0087_kb_product_formats.sql (idempotent, MANUAL, drafts/provenance parity, RLS is_staff, trigger, indexes)
+- [x] seed.ts SeedProductFormat + SEED_PRODUCT_FORMATS (14)
+- [x] store.ts counts + seed upsert (r8, degrades pre-0087) + CRUD (list/get/upsert/setActive)
+- [x] retrieval.ts loadProductFormats + buildFormatIndex + format grounding (kb:format:<slug>)
+- [x] health.ts productFormatCoverage
+- [x] admin read-only page /admin/knowledge-base/formats + KB landing nav card
+- [x] Verify: tsc 0 · eslint 0 · next build OK · compliance 0 blocking/0 warn. Commit 2cfd113, pushed to feat/kb-hardening-v2.
+
+### Slice 3 — Compliance rules reference in KB (used helpfully to keep customers safe)  [SHIPPED]
+> KEY FINDING (verified, not guessed): the repo ALREADY enforces WA single-transaction limits operationally (src/lib/compliance/sales-limits-core.ts RECREATIONAL_LIMITS/MEDICAL_LIMITS, checked at checkout; /admin/compliance/sales-limits). So Slice 3 is NOT a second enforcement path — it's a curated REFERENCE/education layer (kb_compliance_rules, 8 rules). The purchase/possession limit NUMBERS are DERIVED from RECREATIONAL_LIMITS at seed time so KB can never drift from enforcement. WA facts from WSLCB Using-and-Having, WAC 314-55-095, RCW 69.50.360/.4013/.445. All 8 rules pass checkCompliance 0 blocking/0 warn (copy tightened: "everybody safe"->"above board", child-resistant/children->resealable/anyone underage, "treat it like"->"store it like", mg spelled in words).
+- [x] Verified WA safety/purchase/use facts, sourced in docs/KB_COMPLIANCE_RULES_SEED_SOURCES.md
+- [x] Migration 0088_kb_compliance_rules.sql (idempotent, MANUAL, severity+status checks, RLS is_staff, trigger, indexes)
+- [x] seed.ts SeedComplianceRule + SEED_COMPLIANCE_RULES (8), limits derived from RECREATIONAL_LIMITS
+- [x] store.ts counts + seed upsert (r9) + CRUD (list/get/upsert/setActive)
+- [x] retrieval.ts loadComplianceRules + surface edibles-safety rule for ingested formats (kb:compliance:<slug>)
+- [x] health.ts complianceRuleCoverage
+- [x] admin read-only page /admin/knowledge-base/rules + KB landing nav card
+- [x] Verify: tsc 0 · eslint 0 · next build OK · compliance 0 blocking/0 warn. Commit cc7f7d2, pushed.
+
+### Slice 5 — Terpene -> aroma cross-map enrichment  [SHIPPED]
+> KEY FINDING (verified, not guessed): kb_terpenes (migration 0019) already had aroma_notes[]/flavor_notes[]/also_found_in for 22 terpenes, but retrieval only fired terpene grounding for terpenes the STRAIN listed, emitted bare words, and had NO reverse map (aroma word -> terpene). Slice 5 enriches this SENSORY-ONLY (no effects/entourage/medical — the rule since 0019 is preserved).
+- [x] Migration 0089_kb_terpene_aroma_crossmap.sql — idempotent, NON-DESTRUCTIVE single column add `aroma_families text[] not null default '{}'` + comment (MANUAL apply)
+- [x] seed.ts: `aroma_families?: string[]` on SeedTerpene; all 22 SEED_TERPENES enriched with normalized families (citrus/pine/earthy/floral/spicy/minty/herbal/woody/sweet/hoppy) derived from each terpene's own notes
+- [x] store.ts: terpeneRows upserts aroma_families; DEGRADE-SAFE retry (strips aroma_families + warns) if column absent (pre-0089)
+- [x] retrieval.ts: enriched loadTerpenes() with base-select fallback; WIDENED trigger to include kbProduct.row.terpenes; forward lines add aroma family + botanical hook ("same terpene you'd meet in lemon rind"); REVERSE aroma->terpene cross-map from strain/product aroma/flavor words (capped 3/family, prefers un-surfaced terpenes; every line labelled "describes smell, makes no effect claim")
+- [x] docs/KB_TERPENE_AROMA_CROSSMAP_SOURCES.md (cross-map table + rationale + sources)
+- [x] Verify: tsc 0 · eslint 0 (0 warnings) · next build OK · .next removed (disk 90%, held). Commit f073400, pushed to feat/kb-hardening-v2.
+- [x] Roadmap + todo marked SHIPPED; 0089 added to owner MANUAL steps.
+
+> ✅ STOP POINT CLEARED: owner briefed on Slice 4 and gave direction (facts + FAQ + owner-editable). Slice 4 built below.
+
+### Slice 4 — Store/brand voice & FAQ pack (LAST, own slice)  [SHIPPED]
+> OWNER-CONFIRMED FACTS (verbatim, do NOT guess): Hours 8am–11pm every day. Address: 4851 Geiger Rd SE, Port Orchard, WA 98367. Phone: 360-443-6988. Payment: CASH ONLY; on-site ATM $2.50 fee. Delivery: NONE (illegal in WA). Price-match → mirrored from PriceMatchContent.tsx. Loyalty earn rate → LIVE from loyalty_config via getConfig() (NOT hardcoded). Returns → from src/content/faq.ts (WAC 314-55-079, 15 days). Owner can ADD facts/FAQs manually. Voice preserved.
+- [x] RESEARCH (never guessed): loyalty earn rate = loyalty_config (getConfig, owner-editable, live-composed); price-match terms = PriceMatchContent.tsx (8 terms, Port Orchard); returns + all Q&A = src/content/faq.ts; hours/address/phone owner-confirmed. FLAGGED site typo: static FAQ price-match answer says "Uncle Ike's"/"Seattle" (copy-paste from another shop) — seed uses correct Greenway/Port Orchard, owner should fix site copy.
+- [x] Migration 0090_kb_store_voice_faq.sql: kb_store_facts (upsert on key) + kb_faqs (upsert on slug). Idempotent, non-destructive, RLS is_staff, trigger, status checks, indexes. MANUAL apply.
+- [x] seed.ts: SeedStoreFact + SeedFaq types + SEED_STORE_FACTS (6) + SEED_FAQS (17). Compliance 0 blocking (5 non-blocking price/loyalty "heads-up" warns inherent to topic — documented).
+- [x] store.ts: counts (storeFacts, faqs) + seed upserts (r10/r11, degrade pre-0090) + full CRUD both (listFull/listActive/get/upsert/setActive).
+- [x] retrieval.ts: NEW store-wide buildStoreContext() (distinct from per-SKU buildGroundedFacts) — loads facts+FAQs (DB→seed), stitches LIVE loyalty rate onto loyalty FAQ, kb:fact:<key>/kb:faq:<slug> provenance. For future concierge (Slice 79).
+- [x] health.ts: storeFactCoverage + faqCoverage.
+- [x] admin: /admin/knowledge-base/about (facts add/edit/hide) + /admin/knowledge-base/faqs (add/edit/hide) + 2 KB landing nav cards. actions.ts: 4 audited server actions.
+- [x] docs/KB_STORE_VOICE_FAQ_SOURCES.md (sources + flagged site typo).
+- [x] Verify: tsc 0 · eslint 0 · next build OK (both routes present) · .next removed · compliance 0 blocking.
+- [ ] MERGE whole feat/kb-hardening-v2 branch (PR → squash) so owner can move on
