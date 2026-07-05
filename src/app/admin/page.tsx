@@ -7,6 +7,8 @@ import { Section } from "@/components/admin/ui/Section";
 import { Card, CardHeader } from "@/components/admin/ui/Card";
 import { Button } from "@/components/admin/ui/Button";
 import { getCockpitSnapshot } from "@/lib/admin/cockpit-data";
+import { getSetupStatus } from "@/lib/admin/setup-status";
+import { WorkspaceTour } from "@/components/admin/WorkspaceTour";
 import {
   formatMoneyMinor,
   deltaLabel,
@@ -28,7 +30,11 @@ function deltaAccent(d: Delta): "green" | "orange" | "muted" {
 
 export default async function AdminDashboardPage() {
   const session = await requireStaff();
-  const snap = await getCockpitSnapshot();
+  const [snap, setup] = await Promise.all([
+    getCockpitSnapshot(),
+    getSetupStatus(),
+  ]);
+  const setupComplete = setup.completed >= setup.total;
 
   const firstName =
     (session.profile.full_name ?? session.email).split(/[\s@]/)[0] || "there";
@@ -65,6 +71,42 @@ export default async function AdminDashboardPage() {
       />
 
       <div className="space-y-10 px-5 py-6 sm:px-8">
+        {/* ── Setup progress nudge (only until fully set up) ─────────────────
+            Top POS onboarding keeps the checklist one click away from home
+            until the store is live. Once every step is done, this disappears. */}
+        {!setupComplete && (
+          <Link
+            href="/admin/getting-started"
+            className="admin-card-interactive flex flex-wrap items-center gap-4 rounded-[var(--admin-radius-lg)] border border-[var(--admin-accent)]/30 bg-[var(--admin-accent)]/[0.06] px-5 py-4"
+          >
+            <span className="text-2xl" aria-hidden="true">
+              🧭
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-[var(--admin-text)]">
+                Finish setting up your store
+              </p>
+              <p className="text-xs text-[var(--admin-text-muted)]">
+                {setup.completed} of {setup.total} steps done
+                {setup.nextAction ? ` · next: ${setup.nextAction.label}` : ""}
+              </p>
+            </div>
+            <div className="hidden w-40 sm:block">
+              <div className="h-2 overflow-hidden rounded-full bg-white/10">
+                <div
+                  className="h-full rounded-full bg-[var(--admin-accent)]"
+                  style={{
+                    width: `${Math.round((setup.completed / Math.max(setup.total, 1)) * 100)}%`,
+                  }}
+                />
+              </div>
+            </div>
+            <span className="shrink-0 text-sm font-medium text-[var(--admin-accent)]">
+              Continue setup →
+            </span>
+          </Link>
+        )}
+
         {/* ── Needs your attention ─────────────────────────────────────── */}
         {flags.length > 0 && (
           <Section title="Needs your attention">
@@ -335,6 +377,21 @@ export default async function AdminDashboardPage() {
               </div>
             </div>
           )}
+        </Section>
+
+        {/* ── Explore your back office (quick navigation) ────────────────────
+            A compact launcher to every workspace, role-filtered. Best-in-class
+            POS homes offer fast "jump back in" navigation beyond the KPIs. */}
+        <Section
+          title="Explore your back office"
+          description="Jump straight into any area."
+          action={
+            <Button href="/admin/getting-started" variant="neutral" size="sm">
+              Guided tour
+            </Button>
+          }
+        >
+          <WorkspaceTour role={session.profile.role} variant="compact" />
         </Section>
       </div>
     </div>
