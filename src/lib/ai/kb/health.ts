@@ -27,6 +27,7 @@
 import { listKbStrainsFull, listKbProducts, countKbProductDrafts, getKbCounts } from "./store";
 import { listBrandsWithFacts, listVendors, countBrands, countVendors } from "@/lib/vendors/store";
 import { scoreStrain, scoreBrand, scoreProduct, scoreVendor } from "./quality";
+import { SEED_CANNABINOIDS } from "./seed";
 
 export type KbHealth = {
   strainCompleteness: number; // 0–100 average
@@ -37,6 +38,18 @@ export type KbHealth = {
   brandsNeedingAttention: number;
   vendorsNeedingAttention: number;
   draftReviews: number;
+  /**
+   * Cannabinoid compound coverage (migration 0083): how many compounds are in
+   * the KB vs. the expected reference set. `expected` = the in-code seed set.
+   */
+  cannabinoidCoverage: { present: number; expected: number };
+  /**
+   * Strain drafts awaiting human review (migration 0085 lifecycle). A
+   * machine-suggested strain lands as status='draft' until promoted; curated
+   * rows are 'published'. Counted within the sample; 0 pre-migration (the
+   * `status` column is absent, so nothing reads as 'draft').
+   */
+  strainDrafts: number;
   /** TRUE totals per domain (exact counts, not the sampled page). */
   totals: { strains: number; brands: number; products: number; vendors: number };
   /** How many rows were actually scored (the completeness sample size). */
@@ -77,6 +90,8 @@ export async function getKbHealth(): Promise<KbHealth> {
     brandsNeedingAttention: brandScores.filter((s) => s.quality < ATTENTION_THRESHOLD).length,
     vendorsNeedingAttention: vendorScores.filter((s) => s.quality < ATTENTION_THRESHOLD).length,
     draftReviews,
+    cannabinoidCoverage: { present: counts.cannabinoids, expected: SEED_CANNABINOIDS.length },
+    strainDrafts: strains.filter((s) => s.status === "draft").length,
     totals: {
       strains: counts.strains,
       brands: brandTotal,

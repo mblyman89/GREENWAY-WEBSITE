@@ -134,3 +134,36 @@ see `docs/COMMAND_CENTER_ENHANCEMENTS_TASKLIST.md`.
 - [x] Slice 97 — Vendor intake review summary summarizeIntakeForReview (drafts-only) — MED
 - [x] Slice 98 — Vendor ACH draft vendorPaymentsToNacha (reuse nacha-core, drafts-only) — MED
 - [x] ROUND COMPLETE — Slices 93–98 merged (PRs #201–#206). CCRS batch now trustworthy end-to-end + safe vendor drafts.
+
+## BATCH KB-CANNABINOIDS (Slice C) — one branch feat/kb-cannabinoids-and-potency, all sub-slices until done
+> Owner (verbatim): "Before we merge the last or, Will you add the kb cannabis cannabinoid compounds. Will you also walk the file tree to make sure the kb is fully connected to everything and all validated information is flowing into it. Please provide a comprehensive report for yourself to patch all the gaps you find, if any. No code edits yet. Please proceed, follow the standing rules and never guess."
+> Owner answers (verbatim): "I think it's fine to pre seed the kb. Will you pre seed it with full descriptions and explanations of what each compound is and what it does... I would like the pre seeded version with research backed factual info from reputable sources. For number two, I think we should do it now. For number three, let's do it all in one pr branch, tackling all slices until it's done. For number four, please merge the open pr and begin working on this new branch."
+> DECISIONS: (1) pre-seed 8 cannabinoids w/ FULL factual descriptions + cited sources (NO medical claims, compliance-gated); (2) YES add kb_strains.cannabinoids[]; (3) ALL in one branch/PR; (4) PR #254 merged (DONE — commit 1ea485b).
+> Compliance constraint: cannabinoid descriptions = FACTUAL pharmacology/chemistry only (intoxicating vs non-intoxicating, acidic precursor→decarboxylation). NEVER treats/helps/relieves. Routed through checkCompliance gate.
+> Authoritative 8-compound vocabulary (verified convention-core.ts + leafly/types.ts): thc, thca, cbd, cbda, cbg, cbn, cbdv, cbc. (THCV appears NOWHERE — NOT seeded.)
+
+- [x] Audit doc docs/KB_CONNECTIVITY_AUDIT.md (analysis only; 7 GAPS)
+- [x] Merge PR #254 (Slice B CCRS→KB enrichment) — main 1ea485b
+- [x] Research: cited factual facts for all 8 compounds → docs/CANNABINOID_SEED_SOURCES.md
+- [x] Migration 0083 kb_cannabinoids + kb_products.cannabinoids[] + kb_strains.cannabinoids[] (idempotent)
+- [x] Migration 0084 kb_products potency (verified lab_results.potency_json shape first)
+- [x] Code: SEED_CANNABINOIDS + SeedCannabinoid in seed.ts (8 compounds, factual desc + sources)
+- [x] Code: store.ts CRUD + seedKnowledgeBase writes kb_cannabinoids + getKbCounts/KbCounts include cannabinoids
+- [x] Code: retrieval.ts loadCannabinoids + fallback + grounding block + kb:cannabinoid tags + measured potency FACT line
+- [x] Code: health.ts cannabinoid coverage
+- [x] Code: admin /admin/knowledge-base/cannabinoids page (read-only factual cards: name/full_name/intoxication badge/chemistry acidic→decarbs_to/notes/description/sources + non-medical footer); KB landing nav card added after Terpenes; seed action reused (seedKbAction→seedKnowledgeBase already writes kb_cannabinoids via r6 + reports count)
+- [x] Code: potency inflow (GAP 5) writeback.ts gap-fills kb_products potency from linked lab_results (VERIFIED chain inventory_lots.pos_product_key→lab_result_id→lab_results total_thc_pct/total_cbd_pct/potency_json; drafts-only, never clobber, potency_source='lab_results:<id>', potency_confidence=0.99; defensive per-column presence checks so pre-0084 upsert never fails); review page shows Potency (COA) with source (listKbProducts FULL→BASE column fallback)
+- [x] Verify tsc 0 → eslint 0 → next build OK (all admin routes incl. /admin/knowledge-base/cannabinoids present) → rm -rf .next; update audit checkboxes
+- [x] Commit f39bbb3 → push feat/kb-cannabinoids-and-potency → PR #255 opened HELD for owner review (manual migrations 0083 + 0084 must be applied first; owner then runs Seed + merges); reminded owner to ROTATE service_role key
+
+## GAP 6 (Slice 6) — kb_strains drafts/provenance parity — same branch feat/kb-cannabinoids-and-potency
+> Owner (verbatim): "Yes please complete slice 6, then I'll inspect. Is there anything else that should be in the kb that you can think of? You are the professional and expert, I rely and appreciate your opinion and input. Complete slice 6 then let's talk about any remaining gaps. Please proceed follow the standing rules and never guess."
+> VERIFIED before build: kb_strains (0019) has `active` but NO `status`; writeback.ts (~248) union-merges sensory arrays onto an EXISTING curated strain in place (never creates/flips), downstream of a human publish/accept gate; retrieval loadStrains() reads WHERE active=true. Precedent = migration 0082 which brought kb_brands to the SAME parity (status default 'published' so curated rows stay authoritative; machine writers set 'draft'; source/confidence/sources provenance; backfill source='manual').
+> DESIGN (mirror 0082 exactly, non-destructive): (1) Migration 0085 adds kb_strains status default 'published' + status check + source/confidence/sources + indexes + backfill source='manual'; (2) writeback tags every strain union with provenance (source='enrichment', confidence, sources) — auditable machine touch; (3) retrieval loadStrains filters status<>'archived' AND active; strain reads/writes stay gap-fill only (never clobber curated).
+
+- [x] Migration 0085 kb_strains status+provenance parity (idempotent, mirrors 0082 exactly; status default 'published' + status check + source scalar; backfill source='manual'; idx_kb_strains_status)
+- [x] Code: writeback strain union stamps provenance (source only when empty → never overwrite curated 'manual'/'seed'; sources[] UNION; status NEVER touched — only enriches existing published rows); defensive tableUsable('kb_strains','source') gate
+- [x] Code: retrieval loadStrains filters .neq('status','archived') with defensive fallback to no-filter when column unknown (pre-0085)
+- [x] Code: store.ts KbStrainFull + listKbStrainsFull FULL→BASE fallback add status/source; StrainEditor Status column shows Draft/Archived pill + provenance source (no-op pre-0085); health.ts strainDrafts count. (No standalone review queue built: writeback only enriches EXISTING published rows — it never creates strain drafts today — so a promote-queue would be speculative; parity + auditability + a Draft signal cover GAP 6.)
+- [x] Verify tsc 0 → eslint 0 → next build OK → rm -rf .next; audit GAP 6 updated
+- [x] Commit → push (same branch, folds into PR #255); migration 0085 is MANUAL
