@@ -134,3 +134,24 @@ see `docs/COMMAND_CENTER_ENHANCEMENTS_TASKLIST.md`.
 - [x] Slice 97 — Vendor intake review summary summarizeIntakeForReview (drafts-only) — MED
 - [x] Slice 98 — Vendor ACH draft vendorPaymentsToNacha (reuse nacha-core, drafts-only) — MED
 - [x] ROUND COMPLETE — Slices 93–98 merged (PRs #201–#206). CCRS batch now trustworthy end-to-end + safe vendor drafts.
+
+## BATCH KB-CANNABINOIDS (Slice C) — one branch feat/kb-cannabinoids-and-potency, all sub-slices until done
+> Owner (verbatim): "Before we merge the last or, Will you add the kb cannabis cannabinoid compounds. Will you also walk the file tree to make sure the kb is fully connected to everything and all validated information is flowing into it. Please provide a comprehensive report for yourself to patch all the gaps you find, if any. No code edits yet. Please proceed, follow the standing rules and never guess."
+> Owner answers (verbatim): "I think it's fine to pre seed the kb. Will you pre seed it with full descriptions and explanations of what each compound is and what it does... I would like the pre seeded version with research backed factual info from reputable sources. For number two, I think we should do it now. For number three, let's do it all in one pr branch, tackling all slices until it's done. For number four, please merge the open pr and begin working on this new branch."
+> DECISIONS: (1) pre-seed 8 cannabinoids w/ FULL factual descriptions + cited sources (NO medical claims, compliance-gated); (2) YES add kb_strains.cannabinoids[]; (3) ALL in one branch/PR; (4) PR #254 merged (DONE — commit 1ea485b).
+> Compliance constraint: cannabinoid descriptions = FACTUAL pharmacology/chemistry only (intoxicating vs non-intoxicating, acidic precursor→decarboxylation). NEVER treats/helps/relieves. Routed through checkCompliance gate.
+> Authoritative 8-compound vocabulary (verified convention-core.ts + leafly/types.ts): thc, thca, cbd, cbda, cbg, cbn, cbdv, cbc. (THCV appears NOWHERE — NOT seeded.)
+
+- [x] Audit doc docs/KB_CONNECTIVITY_AUDIT.md (analysis only; 7 GAPS)
+- [x] Merge PR #254 (Slice B CCRS→KB enrichment) — main 1ea485b
+- [x] Research: cited factual facts for all 8 compounds → docs/CANNABINOID_SEED_SOURCES.md
+- [x] Migration 0083 kb_cannabinoids + kb_products.cannabinoids[] + kb_strains.cannabinoids[] (idempotent)
+- [x] Migration 0084 kb_products potency (verified lab_results.potency_json shape first)
+- [x] Code: SEED_CANNABINOIDS + SeedCannabinoid in seed.ts (8 compounds, factual desc + sources)
+- [x] Code: store.ts CRUD + seedKnowledgeBase writes kb_cannabinoids + getKbCounts/KbCounts include cannabinoids
+- [x] Code: retrieval.ts loadCannabinoids + fallback + grounding block + kb:cannabinoid tags + measured potency FACT line
+- [x] Code: health.ts cannabinoid coverage
+- [x] Code: admin /admin/knowledge-base/cannabinoids page (read-only factual cards: name/full_name/intoxication badge/chemistry acidic→decarbs_to/notes/description/sources + non-medical footer); KB landing nav card added after Terpenes; seed action reused (seedKbAction→seedKnowledgeBase already writes kb_cannabinoids via r6 + reports count)
+- [x] Code: potency inflow (GAP 5) writeback.ts gap-fills kb_products potency from linked lab_results (VERIFIED chain inventory_lots.pos_product_key→lab_result_id→lab_results total_thc_pct/total_cbd_pct/potency_json; drafts-only, never clobber, potency_source='lab_results:<id>', potency_confidence=0.99; defensive per-column presence checks so pre-0084 upsert never fails); review page shows Potency (COA) with source (listKbProducts FULL→BASE column fallback)
+- [x] Verify tsc 0 → eslint 0 → next build OK (all admin routes incl. /admin/knowledge-base/cannabinoids present) → rm -rf .next; update audit checkboxes
+- [ ] Commit → push → open PR HELD for owner review (manual migrations 0083 + 0084); remind owner to ROTATE service_role key

@@ -245,6 +245,20 @@ export default async function KbReviewPage({
                     {row.effects.length ? (
                       <span><b>Effects:</b> {row.effects.join(", ")}</span>
                     ) : null}
+                    {row.total_thc_pct != null || row.total_cbd_pct != null ? (
+                      <span>
+                        <b>Potency (COA):</b>{" "}
+                        {[
+                          row.total_thc_pct != null ? `THC ${row.total_thc_pct}%` : null,
+                          row.total_cbd_pct != null ? `CBD ${row.total_cbd_pct}%` : null,
+                        ]
+                          .filter(Boolean)
+                          .join(", ")}
+                        {row.potency_source ? (
+                          <span className="text-[var(--admin-text-faint)]"> · {row.potency_source}</span>
+                        ) : null}
+                      </span>
+                    ) : null}
                     {row.image_media_ids.length ? (
                       <span><b>Images:</b> {row.image_media_ids.length}</span>
                     ) : null}

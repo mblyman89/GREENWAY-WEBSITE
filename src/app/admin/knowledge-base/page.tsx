@@ -170,6 +170,13 @@ export default async function KnowledgeBasePage({
               accent="muted"
             />
             <KbNavCard
+              href="/admin/knowledge-base/cannabinoids"
+              title="Cannabinoids"
+              description="Research-backed compound facts (intoxicating vs non-intoxicating, acidic precursors). Grounds potency & copy. Reference only."
+              count={counts.cannabinoids}
+              accent="muted"
+            />
+            <KbNavCard
               href="/admin/inventory/noncannabis"
               title="Non-cannabis catalog"
               description="Glass, accessories, papers & devices — tracked with smart SKUs and connected to the KB."

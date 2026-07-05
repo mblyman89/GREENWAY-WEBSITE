@@ -97,6 +97,68 @@ async function tableUsable(table: string, column = "id"): Promise<boolean> {
 }
 
 /**
+ * GAP 5 (potency inflow) — measured potency for a product, resolved from the
+ * COA-backed lab_results linked through its inventory lot.
+ *
+ * VERIFIED LINK CHAIN (grounded, not guessed):
+ *   inventory_lots.pos_product_key  →  inventory_lots.lab_result_id  →
+ *   lab_results(total_thc_pct, total_cbd_pct, potency_json)
+ * This is the same lab_result_id → lab_results potency lookup already used by
+ * src/lib/inventory/catalog-drafts.ts. We take the most recently intaked lot
+ * that actually has a lab_result_id so we ground on the freshest COA.
+ *
+ * Returns null when there is no linked COA — the caller then leaves the
+ * kb_products potency columns untouched (never fabricate a number).
+ */
+type MeasuredPotency = {
+  total_thc_pct: number | null;
+  total_cbd_pct: number | null;
+  potency_json: Record<string, number> | null;
+  labResultId: string;
+};
+
+async function loadMeasuredPotency(posProductKey: string): Promise<MeasuredPotency | null> {
+  try {
+    const admin = createSupabaseAdminClient();
+    // Newest lot with a linked COA for this POS key. created_at exists on
+    // inventory_lots (0023); if the ordering column is unknown the query still
+    // returns rows and we just take the first with a lab_result_id.
+    const { data: lots, error: lotErr } = await admin
+      .from("inventory_lots")
+      .select("lab_result_id, created_at")
+      .eq("pos_product_key", posProductKey)
+      .not("lab_result_id", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(1);
+    if (lotErr || !lots || lots.length === 0) return null;
+    const labResultId = (lots[0] as { lab_result_id: string | null }).lab_result_id;
+    if (!labResultId) return null;
+
+    const { data: lab, error: labErr } = await admin
+      .from("lab_results")
+      .select("total_thc_pct, total_cbd_pct, potency_json")
+      .eq("id", labResultId)
+      .maybeSingle();
+    if (labErr || !lab) return null;
+    const d = lab as {
+      total_thc_pct: number | null;
+      total_cbd_pct: number | null;
+      potency_json: Record<string, number> | null;
+    };
+    // Only meaningful if the COA carries at least one measured value.
+    if (d.total_thc_pct == null && d.total_cbd_pct == null && !d.potency_json) return null;
+    return {
+      total_thc_pct: d.total_thc_pct,
+      total_cbd_pct: d.total_cbd_pct,
+      potency_json: d.potency_json,
+      labResultId,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * 7c.1 \u2014 Resolve the kb_brands golden-record id for a brand slug (best-effort).
  * kb_products.kb_brand_id \u2192 kb_brands.id. Returns null when the KB brand table
  * isn't available or no match exists. Never throws.
@@ -260,6 +322,63 @@ export async function writeBackProductFacts(
     ? (existing?.product_category_id as string | null) ?? (await resolveProductCategoryId(facts.category))
     : null;
 
+  // --- GAP 5: potency inflow (drafts-only, non-destructive) -----------------
+  // Gap-fill kb_products measured potency from the linked COA (lab_results),
+  // ONLY when migration 0084 columns exist AND the existing curated row has no
+  // potency yet. Populated potency is never clobbered. If a column is absent we
+  // omit it entirely (an unknown column would fail the whole upsert).
+  const potencyJsonCol = await tableUsable("kb_products", "potency_json");
+  const totalThcCol = await tableUsable("kb_products", "total_thc_pct");
+  const totalCbdCol = await tableUsable("kb_products", "total_cbd_pct");
+  const potencySourceCol = await tableUsable("kb_products", "potency_source");
+  const potencyConfidenceCol = await tableUsable("kb_products", "potency_confidence");
+  const potencyColsPresent =
+    potencyJsonCol || totalThcCol || totalCbdCol || potencySourceCol || potencyConfidenceCol;
+
+  // Only bother resolving a COA when at least one 0084 column exists and the
+  // existing row hasn't already been given potency (empty → value).
+  const existingHasPotency =
+    (existing?.potency_json as unknown) != null ||
+    (existing?.total_thc_pct as number | null) != null ||
+    (existing?.total_cbd_pct as number | null) != null;
+  const measured =
+    potencyColsPresent && !existingHasPotency
+      ? await loadMeasuredPotency(facts.posProductKey)
+      : null;
+
+  const potencyPatch: Record<string, unknown> = {};
+  if (potencyColsPresent) {
+    if (measured) {
+      if (potencyJsonCol)
+        potencyPatch.potency_json =
+          (existing?.potency_json as Record<string, number> | null) ?? measured.potency_json;
+      if (totalThcCol)
+        potencyPatch.total_thc_pct =
+          (existing?.total_thc_pct as number | null) ?? measured.total_thc_pct;
+      if (totalCbdCol)
+        potencyPatch.total_cbd_pct =
+          (existing?.total_cbd_pct as number | null) ?? measured.total_cbd_pct;
+      if (potencySourceCol)
+        potencyPatch.potency_source =
+          (existing?.potency_source as string | null) ?? `lab_results:${measured.labResultId}`;
+      if (potencyConfidenceCol)
+        // COA-backed measured value — high confidence, but preserve any existing.
+        potencyPatch.potency_confidence =
+          (existing?.potency_confidence as number | null) ?? 0.99;
+    } else {
+      // No new COA: carry forward whatever the existing row already has so an
+      // upsert never nulls a previously populated potency column.
+      if (potencyJsonCol)
+        potencyPatch.potency_json = (existing?.potency_json as Record<string, number> | null) ?? null;
+      if (totalThcCol) potencyPatch.total_thc_pct = (existing?.total_thc_pct as number | null) ?? null;
+      if (totalCbdCol) potencyPatch.total_cbd_pct = (existing?.total_cbd_pct as number | null) ?? null;
+      if (potencySourceCol)
+        potencyPatch.potency_source = (existing?.potency_source as string | null) ?? null;
+      if (potencyConfidenceCol)
+        potencyPatch.potency_confidence = (existing?.potency_confidence as number | null) ?? null;
+    }
+  }
+
   const row = {
     brand_slug: brandSlug,
     product_slug: productSlug,
@@ -289,6 +408,8 @@ export async function writeBackProductFacts(
       facts.confidence === null || facts.confidence === undefined
         ? (existing?.confidence as number | null) ?? null
         : Math.max(0, Math.min(1, facts.confidence)),
+    // GAP 5: COA-backed measured potency (gap-fill only; omitted pre-0084).
+    ...potencyPatch,
     // DRAFTS-ONLY: never auto-publish. Preserve an already-published row's state.
     status: (existing?.status as string) ?? "draft",
     active: (existing?.active as boolean) ?? false,

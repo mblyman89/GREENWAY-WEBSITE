@@ -21,9 +21,11 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import {
   SEED_TERPENES,
+  SEED_CANNABINOIDS,
   SEED_CATEGORIES,
   type SeedStrain,
   type SeedTerpene,
+  type SeedCannabinoid,
   type SeedCategory,
 } from "./seed";
 import { STRAINS_RICH, type SeedStrainRich } from "./strains-data";
@@ -115,6 +117,51 @@ async function loadTerpenes(): Promise<SeedTerpene[]> {
     }));
   } catch {
     return SEED_TERPENES;
+  }
+}
+
+type CannabinoidRow = {
+  slug: string;
+  name: string;
+  full_name: string | null;
+  intoxication: string | null;
+  is_acidic: boolean;
+  decarbs_to: string | null;
+  character_notes: string[] | null;
+  description: string | null;
+};
+
+/**
+ * Load the active cannabinoid compounds (migration 0083). Falls back to the
+ * in-code SEED_CANNABINOIDS if the table is empty / not migrated, so cannabinoid
+ * grounding works on day one — mirrors loadTerpenes().
+ */
+async function loadCannabinoids(): Promise<SeedCannabinoid[]> {
+  if (!isSupabaseServiceConfigured) return SEED_CANNABINOIDS;
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("kb_cannabinoids")
+      .select("slug,name,full_name,intoxication,is_acidic,decarbs_to,character_notes,description")
+      .eq("active", true);
+    if (error || !data || data.length === 0) return SEED_CANNABINOIDS;
+    return (data as CannabinoidRow[]).map((r) => ({
+      slug: r.slug,
+      name: r.name,
+      full_name: r.full_name ?? undefined,
+      intoxication:
+        r.intoxication === "intoxicating" || r.intoxication === "mildly-psychoactive"
+          ? r.intoxication
+          : "non-intoxicating",
+      is_acidic: r.is_acidic,
+      decarbs_to: r.decarbs_to ?? undefined,
+      character_notes: r.character_notes ?? [],
+      description: r.description ?? "",
+      sources: [],
+      confidence: 0,
+    }));
+  } catch {
+    return SEED_CANNABINOIDS;
   }
 }
 
@@ -230,7 +277,11 @@ type KbProductFactRow = {
   aroma_notes: string[] | null;
   flavor_notes: string[] | null;
   terpenes: string[] | null;
+  cannabinoids: string[] | null;
   effects: string[] | null;
+  total_thc_pct: number | null;
+  total_cbd_pct: number | null;
+  potency_source: string | null;
   status: string | null;
 };
 
@@ -247,16 +298,24 @@ async function loadKbProductFact(facts: ProductFacts): Promise<{ row: KbProductF
   const brandSlug = facts.brand ? slugifyDashed(facts.brand) : "";
   const productSlug = slugifyDashed(productName);
   if (!productSlug) return null;
+  // Full column set includes the potency (0084) + cannabinoids (0083) columns.
+  // If those migrations aren't applied yet, PostgREST errors on the unknown
+  // columns, so we fall back to the base column set (pre-migration safe).
+  const FULL_COLS =
+    "display_name,description,short_description,aroma_notes,flavor_notes,terpenes,cannabinoids,effects,total_thc_pct,total_cbd_pct,potency_source,status";
+  const BASE_COLS =
+    "display_name,description,short_description,aroma_notes,flavor_notes,terpenes,effects,status";
   try {
     const admin = createSupabaseAdminClient();
-    let q = admin
-      .from("kb_products")
-      .select("display_name,description,short_description,aroma_notes,flavor_notes,terpenes,effects,status")
-      .eq("product_slug", productSlug);
-    if (brandSlug) q = q.eq("brand_slug", brandSlug);
-    const { data, error } = await q.limit(5);
+    const runQuery = async (cols: string) => {
+      let q = admin.from("kb_products").select(cols).eq("product_slug", productSlug);
+      if (brandSlug) q = q.eq("brand_slug", brandSlug);
+      return q.limit(5);
+    };
+    let { data, error } = await runQuery(FULL_COLS);
+    if (error) ({ data, error } = await runQuery(BASE_COLS));
     if (error || !data || data.length === 0) return null;
-    const rows = data as KbProductFactRow[];
+    const rows = data as unknown as KbProductFactRow[];
     const published = rows.find((r) => r.status === "published");
     if (published) return { row: published, draft: false };
     return { row: rows[0], draft: true };
@@ -337,16 +396,18 @@ export type GroundedFacts = {
  * notes into a compact list the model must stay within.
  */
 export async function buildGroundedFacts(facts: ProductFacts): Promise<GroundedFacts> {
-  const [strains, terpenes, categories, brandFact, notes, kbProduct, kbCategory] = await Promise.all([
-    loadStrains(),
-    loadTerpenes(),
-    loadCategories(),
-    loadBrandFact(facts.brand, facts.vendor),
-    loadNotes(),
-    // 7e: the two richest curated tables (exact per-SKU record + deep taxonomy).
-    loadKbProductFact(facts),
-    loadKbProductCategory(facts.category),
-  ]);
+  const [strains, terpenes, cannabinoids, categories, brandFact, notes, kbProduct, kbCategory] =
+    await Promise.all([
+      loadStrains(),
+      loadTerpenes(),
+      loadCannabinoids(),
+      loadCategories(),
+      loadBrandFact(facts.brand, facts.vendor),
+      loadNotes(),
+      // 7e: the two richest curated tables (exact per-SKU record + deep taxonomy).
+      loadKbProductFact(facts),
+      loadKbProductCategory(facts.category),
+    ]);
 
   const sources: string[] = [];
   const lines: string[] = [];
@@ -364,6 +425,18 @@ export async function buildGroundedFacts(facts: ProductFacts): Promise<GroundedF
     if (r.aroma_notes?.length) lines.push(`Curated aroma: ${r.aroma_notes.join(", ")}.`);
     if (r.flavor_notes?.length) lines.push(`Curated flavor: ${r.flavor_notes.join(", ")}.`);
     if (r.terpenes?.length) lines.push(`Curated terpenes: ${r.terpenes.join(", ")}.`);
+    if (r.cannabinoids?.length) lines.push(`Curated cannabinoids present: ${r.cannabinoids.join(", ")}.`);
+    // GAP 5: measured potency copied from the linked lab_results (COA-backed).
+    const potBits: string[] = [];
+    if (r.total_thc_pct != null) potBits.push(`total THC ${r.total_thc_pct}%`);
+    if (r.total_cbd_pct != null) potBits.push(`total CBD ${r.total_cbd_pct}%`);
+    if (potBits.length) {
+      lines.push(
+        `Measured potency (from COA/lab result): ${potBits.join(", ")}` +
+          `${r.potency_source ? ` [source: ${r.potency_source}]` : ""}.`,
+      );
+      sources.push("kb:potency:lab_results");
+    }
     if (r.effects?.length) lines.push(`Curated experiential character: ${r.effects.join(", ")} (experience only, not medical).`);
   }
 
@@ -420,6 +493,41 @@ export async function buildGroundedFacts(facts: ProductFacts): Promise<GroundedF
       sources.push(`kb:terpene:${t.slug}`);
       const notes = [...t.aroma_notes, ...t.flavor_notes];
       if (notes.length) lines.push(`Terpene ${t.name} reads as: ${Array.from(new Set(notes)).join(", ")}.`);
+    }
+  }
+
+  // --- Cannabinoid compounds (factual chemistry; NO medical claims) ---
+  // Fire for compounds named on the exact KB product record and for the
+  // strain's dominant cannabinoid, so the model can speak accurately about
+  // intoxicating vs non-intoxicating / acidic precursors.
+  const cannaSlugs = new Set<string>();
+  if (kbProduct?.row.cannabinoids?.length) {
+    for (const c of kbProduct.row.cannabinoids) cannaSlugs.add(norm(c));
+  }
+  if (strain?.dominant_cannabinoid) {
+    const dc = norm(strain.dominant_cannabinoid);
+    // 'balanced' is not a compound; map to the two headline compounds.
+    if (dc === "balanced") {
+      cannaSlugs.add("thc");
+      cannaSlugs.add("cbd");
+    } else if (dc) {
+      cannaSlugs.add(dc);
+    }
+  }
+  if (cannaSlugs.size) {
+    const matchedCanna = cannabinoids.filter(
+      (c) => cannaSlugs.has(norm(c.slug)) || cannaSlugs.has(norm(c.name)),
+    );
+    for (const c of matchedCanna) {
+      sources.push(`kb:cannabinoid:${c.slug}`);
+      const cls =
+        c.intoxication === "intoxicating"
+          ? "intoxicating"
+          : c.intoxication === "mildly-psychoactive"
+            ? "mildly psychoactive"
+            : "non-intoxicating";
+      const decarb = c.is_acidic && c.decarbs_to ? ` (acidic precursor; decarboxylates to ${c.decarbs_to.toUpperCase()})` : "";
+      lines.push(`Cannabinoid ${c.name}${c.full_name ? ` (${c.full_name})` : ""}: ${cls}${decarb}.`);
     }
   }
 

@@ -13,6 +13,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import {
   SEED_TERPENES,
+  SEED_CANNABINOIDS,
   SEED_CATEGORIES,
   SEED_BANNED_PHRASES,
 } from "./seed";
@@ -22,6 +23,8 @@ import { PRODUCT_CATEGORIES } from "./product-categories-data";
 export type KbCounts = {
   strains: number;
   terpenes: number;
+  /** Cannabinoid compounds (migration 0083). */
+  cannabinoids: number;
   categories: number;
   brands: number;
   banned: number;
@@ -47,6 +50,7 @@ export async function getKbCounts(): Promise<KbCounts> {
   const empty: KbCounts = {
     strains: 0,
     terpenes: 0,
+    cannabinoids: 0,
     categories: 0,
     brands: 0,
     banned: 0,
@@ -56,19 +60,22 @@ export async function getKbCounts(): Promise<KbCounts> {
     notesMigrated: false,
   };
   if (!isSupabaseServiceConfigured) return empty;
-  const [strains, terpenes, categories, brands, banned, notes, nonCannabis] = await Promise.all([
-    tableCount("kb_strains"),
-    tableCount("kb_terpenes"),
-    tableCount("kb_category_terms"),
-    tableCount("kb_brands"),
-    tableCount("kb_banned_phrases"),
-    tableCount("kb_notes"),
-    tableCount("noncannabis_products"),
-  ]);
+  const [strains, terpenes, cannabinoids, categories, brands, banned, notes, nonCannabis] =
+    await Promise.all([
+      tableCount("kb_strains"),
+      tableCount("kb_terpenes"),
+      tableCount("kb_cannabinoids"),
+      tableCount("kb_category_terms"),
+      tableCount("kb_brands"),
+      tableCount("kb_banned_phrases"),
+      tableCount("kb_notes"),
+      tableCount("noncannabis_products"),
+    ]);
   const migrated = strains !== null; // kb_strains query succeeded
   return {
     strains: strains ?? 0,
     terpenes: terpenes ?? 0,
+    cannabinoids: cannabinoids ?? 0,
     categories: categories ?? 0,
     brands: brands ?? 0,
     banned: banned ?? 0,
@@ -111,7 +118,7 @@ export async function listKbNonCannabis(limit = 1000): Promise<KbNonCannabisRow[
 export type SeedReport = {
   ok: boolean;
   message: string;
-  inserted: { strains: number; terpenes: number; categories: number; banned: number; productCategories: number };
+  inserted: { strains: number; terpenes: number; cannabinoids: number; categories: number; banned: number; productCategories: number };
 };
 
 /**
@@ -121,7 +128,7 @@ export type SeedReport = {
  */
 export async function seedKnowledgeBase(actorId: string | null): Promise<SeedReport> {
   if (!isSupabaseServiceConfigured) {
-    return { ok: false, message: "The database isn't connected yet.", inserted: { strains: 0, terpenes: 0, categories: 0, banned: 0, productCategories: 0 } };
+    return { ok: false, message: "The database isn't connected yet.", inserted: { strains: 0, terpenes: 0, cannabinoids: 0, categories: 0, banned: 0, productCategories: 0 } };
   }
   const admin = createSupabaseAdminClient();
 
@@ -151,6 +158,22 @@ export async function seedKnowledgeBase(actorId: string | null): Promise<SeedRep
     aroma_notes: t.aroma_notes,
     flavor_notes: t.flavor_notes,
     also_found_in: t.also_found_in ?? null,
+    active: true,
+    created_by: actorId,
+    updated_by: actorId,
+  }));
+  const cannabinoidRows = SEED_CANNABINOIDS.map((c) => ({
+    slug: c.slug,
+    name: c.name,
+    full_name: c.full_name ?? null,
+    intoxication: c.intoxication,
+    is_acidic: c.is_acidic,
+    decarbs_to: c.decarbs_to ?? null,
+    character_notes: c.character_notes,
+    description: c.description,
+    also_found_in: c.also_found_in ?? null,
+    sources: c.sources,
+    confidence: c.confidence,
     active: true,
     created_by: actorId,
     updated_by: actorId,
@@ -215,11 +238,25 @@ export async function seedKnowledgeBase(actorId: string | null): Promise<SeedRep
     productCategoriesSeeded = productCategoryRows.length;
   }
 
+  // Cannabinoid compounds live behind migration 0083. Degrade gracefully (like
+  // product categories) so seeding still works before the owner applies 0083.
+  let cannabinoidsSeeded = 0;
+  const r6 = await admin
+    .from("kb_cannabinoids")
+    .upsert(cannabinoidRows, { onConflict: "slug" });
+  if (r6.error) {
+    warnings.push(
+      `cannabinoids not seeded (apply migration 0083): ${r6.error.message}`,
+    );
+  } else {
+    cannabinoidsSeeded = cannabinoidRows.length;
+  }
+
   if (errors.length) {
     return {
       ok: false,
       message: `Some data couldn't be saved. Make sure the knowledge-base setup has been run. (${errors.join("; ")})`,
-      inserted: { strains: 0, terpenes: 0, categories: 0, banned: 0, productCategories: 0 },
+      inserted: { strains: 0, terpenes: 0, cannabinoids: 0, categories: 0, banned: 0, productCategories: 0 },
     };
   }
   const okMessage =
@@ -231,6 +268,7 @@ export async function seedKnowledgeBase(actorId: string | null): Promise<SeedRep
     inserted: {
       strains: strainRows.length,
       terpenes: terpeneRows.length,
+      cannabinoids: cannabinoidsSeeded,
       categories: categoryRows.length,
       banned: bannedRows.length,
       productCategories: productCategoriesSeeded,
@@ -381,6 +419,135 @@ export async function getKbTerpeneBySlug(slug: string): Promise<KbTerpeneRow | n
     return data as unknown as KbTerpeneRow;
   } catch {
     return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Cannabinoid compounds (migration 0083). Reads/writes degrade safely
+// pre-migration like the other KB helpers.
+// ---------------------------------------------------------------------------
+export type KbCannabinoidRow = {
+  id: string;
+  slug: string;
+  name: string;
+  full_name: string | null;
+  intoxication: string | null;
+  is_acidic: boolean;
+  decarbs_to: string | null;
+  character_notes: string[];
+  description: string | null;
+  also_found_in: string | null;
+  sources: string[];
+  confidence: number | null;
+  active: boolean;
+};
+
+const KB_CANNABINOID_COLUMNS =
+  "id,slug,name,full_name,intoxication,is_acidic,decarbs_to,character_notes,description,also_found_in,sources,confidence,active";
+
+/** List all cannabinoid reference rows (active first, alphabetical). Degrades to []. */
+export async function listKbCannabinoidsFull(limit = 100): Promise<KbCannabinoidRow[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("kb_cannabinoids")
+      .select(KB_CANNABINOID_COLUMNS)
+      .order("active", { ascending: false })
+      .order("name", { ascending: true })
+      .limit(limit);
+    if (error || !data) return [];
+    return data as unknown as KbCannabinoidRow[];
+  } catch {
+    return [];
+  }
+}
+
+/** Fetch one cannabinoid by slug (for the detail/editor page). Returns null if missing. */
+export async function getKbCannabinoidBySlug(slug: string): Promise<KbCannabinoidRow | null> {
+  if (!isSupabaseServiceConfigured) return null;
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("kb_cannabinoids")
+      .select(KB_CANNABINOID_COLUMNS)
+      .eq("slug", slug)
+      .maybeSingle();
+    if (error || !data) return null;
+    return data as unknown as KbCannabinoidRow;
+  } catch {
+    return null;
+  }
+}
+
+export type UpsertKbCannabinoidInput = {
+  slug: string;
+  name: string;
+  full_name?: string | null;
+  intoxication?: string | null;
+  is_acidic?: boolean;
+  decarbs_to?: string | null;
+  character_notes?: string[];
+  description?: string | null;
+  also_found_in?: string | null;
+  sources?: string[];
+  confidence?: number | null;
+};
+
+/** Idempotent upsert of a single cannabinoid on slug. Returns ok + message. */
+export async function upsertKbCannabinoid(
+  input: UpsertKbCannabinoidInput,
+  actorId: string | null,
+): Promise<{ ok: boolean; message: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, message: "The database isn't connected yet." };
+  const slug = input.slug.trim().toLowerCase();
+  if (!slug) return { ok: false, message: "A slug is required." };
+  if (!input.name.trim()) return { ok: false, message: "A name is required." };
+  try {
+    const admin = createSupabaseAdminClient();
+    const { error } = await admin.from("kb_cannabinoids").upsert(
+      {
+        slug,
+        name: input.name.trim(),
+        full_name: input.full_name?.trim() || null,
+        intoxication: input.intoxication?.trim() || null,
+        is_acidic: input.is_acidic ?? false,
+        decarbs_to: input.decarbs_to?.trim() || null,
+        character_notes: input.character_notes ?? [],
+        description: input.description?.trim() || null,
+        also_found_in: input.also_found_in?.trim() || null,
+        sources: input.sources ?? [],
+        confidence: input.confidence ?? null,
+        updated_by: actorId,
+      },
+      { onConflict: "slug" },
+    );
+    if (error) {
+      return { ok: false, message: `Couldn't save (apply migration 0083 if needed): ${error.message}` };
+    }
+    return { ok: true, message: `Saved ${input.name.trim()}.` };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Unexpected error." };
+  }
+}
+
+/** Toggle a cannabinoid active/hidden. */
+export async function setCannabinoidActive(
+  slug: string,
+  active: boolean,
+  actorId: string | null,
+): Promise<{ ok: boolean; message: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, message: "The database isn't connected yet." };
+  try {
+    const admin = createSupabaseAdminClient();
+    const { error } = await admin
+      .from("kb_cannabinoids")
+      .update({ active, updated_by: actorId })
+      .eq("slug", slug.trim().toLowerCase());
+    if (error) return { ok: false, message: error.message };
+    return { ok: true, message: active ? "Shown." : "Hidden." };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Unexpected error." };
   }
 }
 
@@ -882,7 +1049,15 @@ export type KbProductRow = {
   status: string;
   active: boolean;
   updated_at: string;
+  // GAP 5 potency (migration 0084). Optional so the type is valid pre-migration.
+  total_thc_pct?: number | null;
+  total_cbd_pct?: number | null;
+  potency_source?: string | null;
 };
+
+const KB_PRODUCT_BASE_COLS =
+  "id, brand_slug, product_slug, variant_label, display_name, category, aroma_notes, flavor_notes, terpenes, effects, description, short_description, image_media_ids, primary_media_id, source, confidence, status, active, updated_at";
+const KB_PRODUCT_FULL_COLS = `${KB_PRODUCT_BASE_COLS}, total_thc_pct, total_cbd_pct, potency_source`;
 
 /** List kb_products by status (default: draft = the review queue). */
 export async function listKbProducts(
@@ -892,17 +1067,23 @@ export async function listKbProducts(
   if (!isSupabaseServiceConfigured) return [];
   try {
     const admin = createSupabaseAdminClient();
-    let q = admin
-      .from("kb_products")
-      .select(
-        "id, brand_slug, product_slug, variant_label, display_name, category, aroma_notes, flavor_notes, terpenes, effects, description, short_description, image_media_ids, primary_media_id, source, confidence, status, active, updated_at",
-      )
-      .order("updated_at", { ascending: false })
-      .limit(limit);
-    if (status !== "all") q = q.eq("status", status);
-    const { data, error } = await q;
+    const run = (cols: string) => {
+      let q = admin
+        .from("kb_products")
+        .select(cols)
+        .order("updated_at", { ascending: false })
+        .limit(limit);
+      if (status !== "all") q = q.eq("status", status);
+      return q;
+    };
+    // Try the potency-aware columns first; if 0084 isn't applied yet the column
+    // is unknown → retry with the base column set so the page still renders.
+    let { data, error } = await run(KB_PRODUCT_FULL_COLS);
+    if (error) {
+      ({ data, error } = await run(KB_PRODUCT_BASE_COLS));
+    }
     if (error || !data) return [];
-    return data as KbProductRow[];
+    return data as unknown as KbProductRow[];
   } catch {
     return [];
   }
