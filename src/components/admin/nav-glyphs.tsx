@@ -49,15 +49,23 @@ function Svg({
 }
 
 /**
- * Cannabis (pot) leaf — traced from the owner's uploaded reference
- * (IMG_1060): a symmetrical 7-leaflet fan with serrated leaflets and a slim
- * central stem. Solid fill so it reads clearly at small sizes.
+ * Cannabis (pot) leaf — a clean, hand-authored 7-leaflet palmate silhouette
+ * inspired by the owner's uploaded reference (IMG_1060).
+ *
+ * Design note: rather than tracing a photo (which packs hundreds of tiny
+ * serrations that turn into visual noise / a "starburst" blob at the ~12–16px
+ * nav size), each of the seven leaflets is drawn as a smooth lance/teardrop
+ * with quadratic Béziers. The palmate fan silhouette — one tall center, three
+ * mirrored pairs stepping down to a near-horizontal lower pair — is what makes
+ * it read unmistakably as cannabis, and the smooth edges stay crisp when the
+ * glyph is scaled down. Solid fill (currentColor) so it tints with the nav
+ * state (muted / green-active) and works on light or dark chrome.
  */
 export function PotLeafGlyph({ className, title }: GlyphProps) {
   return (
     <Svg className={className} title={title}>
       <path
-        d="M12 1.6c-.5 1.3-1 3-1 4.7 0 .9.1 1.7.3 2.5-.9-1-2-2.4-2.7-4-.3.9-.4 2-.2 3.1-1-.8-2.1-1.9-2.9-3.2-.2 1.1-.1 2.5.4 3.8-1.1-.4-2.4-1.1-3.5-2 .2 1.3.9 2.8 2 4-1-.1-2.2-.4-3.3-1 .8 1.4 2.3 2.7 3.9 3.4-1 .3-2.2.4-3.4.2 1.1 1.1 2.9 1.9 4.6 1.9.2 0 .5 0 .7-.1-.6.6-1.4 1.2-2.4 1.6 1 .3 2.3.2 3.5-.3-.3.6-.8 1.3-1.5 1.9.9 0 2-.4 2.9-1.1-.1.9-.1 1.9-.1 2.9h1.6c0-1 0-2-.1-2.9.9.7 2 1.1 2.9 1.1-.7-.6-1.2-1.3-1.5-1.9 1.2.5 2.5.6 3.5.3-1-.4-1.8-1-2.4-1.6.2.1.5.1.7.1 1.7 0 3.5-.8 4.6-1.9-1.2.2-2.4.1-3.4-.2 1.6-.7 3.1-2 3.9-3.4-1.1.6-2.3.9-3.3 1 1.1-1.2 1.8-2.7 2-4-1.1.9-2.4 1.6-3.5 2 .5-1.3.6-2.7.4-3.8-.8 1.3-1.9 2.4-2.9 3.2.2-1.1.1-2.2-.2-3.1-.7 1.6-1.8 3-2.7 4 .2-.8.3-1.6.3-2.5 0-1.7-.5-3.4-1-4.7z"
+        d="M12.00 20.20Q14.13 18.48 15.05 13.32Q13.28 7.82 12.00 3.00Q10.72 7.82 8.95 13.32Q9.87 18.48 12.00 20.20ZM12.00 20.20Q14.45 19.95 17.35 16.64Q18.22 11.82 19.20 7.73Q16.15 10.62 12.41 13.79Q10.99 17.96 12.00 20.20ZM12.00 20.20Q13.01 17.96 11.59 13.79Q7.85 10.62 4.80 7.73Q5.78 11.82 6.65 16.64Q9.55 19.95 12.00 20.20ZM12.00 20.20Q13.88 21.18 17.22 20.13Q19.64 17.02 21.87 14.50Q18.57 15.17 14.67 15.71Q12.09 18.08 12.00 20.20ZM12.00 20.20Q11.91 18.08 9.33 15.71Q5.43 15.17 2.13 14.50Q4.36 17.02 6.78 20.13Q10.12 21.18 12.00 20.20ZM12.00 20.20Q12.79 21.70 15.28 22.42Q18.01 21.29 20.39 20.49Q18.08 19.53 15.43 18.22Q12.89 18.76 12.00 20.20ZM12.00 20.20Q11.11 18.76 8.57 18.22Q5.92 19.53 3.61 20.49Q5.99 21.29 8.72 22.42Q11.21 21.70 12.00 20.20ZM11.50 19.90L12.50 19.90L12.32 23.2L11.68 23.2Z"
       />
     </Svg>
   );
