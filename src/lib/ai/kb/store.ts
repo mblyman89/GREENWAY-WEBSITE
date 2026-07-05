@@ -333,12 +333,17 @@ export type KbStrainFull = {
   ruderalis_pct: number | null;
   leaning: string | null;
   ratio_source: string | null;
+  // Drafts-only lifecycle + provenance (migration 0085). Optional so the type
+  // stays valid pre-migration; the loader falls back to the base columns then.
+  status?: string | null;
+  source?: string | null;
 };
 
-const KB_STRAIN_FULL_COLUMNS =
+const KB_STRAIN_BASE_COLUMNS =
   "id,slug,name,aliases,strain_type,lineage,aroma_notes,flavor_notes,terpenes,summary," +
   "dominant_cannabinoid,potency_note,bud_structure,origin,sources,confidence,active," +
   "indica_pct,sativa_pct,ruderalis_pct,leaning,ratio_source";
+const KB_STRAIN_FULL_COLUMNS = `${KB_STRAIN_BASE_COLUMNS},status,source`;
 
 /**
  * Read full strain rows (all editable fields) for the manage/edit table.
@@ -354,13 +359,27 @@ export async function listKbStrainsFull(limit = 5000): Promise<KbStrainFull[]> {
     const admin = createSupabaseAdminClient();
     const PAGE = 1000;
     const rows: KbStrainFull[] = [];
+    // Try the provenance-aware columns first; if migration 0085 isn't applied
+    // yet the status/source columns are unknown → fall back to the base set so
+    // the manage page still renders (defensive FULL→BASE fallback).
+    let cols = KB_STRAIN_FULL_COLUMNS;
     for (let from = 0; from < limit; from += PAGE) {
       const to = Math.min(from + PAGE, limit) - 1;
-      const { data, error } = await admin
+      let { data, error } = await admin
         .from("kb_strains")
-        .select(KB_STRAIN_FULL_COLUMNS)
+        .select(cols)
         .order("name", { ascending: true })
         .range(from, to);
+      if (error && cols === KB_STRAIN_FULL_COLUMNS) {
+        // Unknown column (pre-0085) → retry this page with the base set and
+        // keep using the base set for the remaining pages.
+        cols = KB_STRAIN_BASE_COLUMNS;
+        ({ data, error } = await admin
+          .from("kb_strains")
+          .select(cols)
+          .order("name", { ascending: true })
+          .range(from, to));
+      }
       if (error || !data) break;
       rows.push(...(data as unknown as KbStrainFull[]));
       // Short page => no more rows to fetch.

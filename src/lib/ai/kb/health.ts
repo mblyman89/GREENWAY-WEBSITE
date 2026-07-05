@@ -43,6 +43,13 @@ export type KbHealth = {
    * the KB vs. the expected reference set. `expected` = the in-code seed set.
    */
   cannabinoidCoverage: { present: number; expected: number };
+  /**
+   * Strain drafts awaiting human review (migration 0085 lifecycle). A
+   * machine-suggested strain lands as status='draft' until promoted; curated
+   * rows are 'published'. Counted within the sample; 0 pre-migration (the
+   * `status` column is absent, so nothing reads as 'draft').
+   */
+  strainDrafts: number;
   /** TRUE totals per domain (exact counts, not the sampled page). */
   totals: { strains: number; brands: number; products: number; vendors: number };
   /** How many rows were actually scored (the completeness sample size). */
@@ -84,6 +91,7 @@ export async function getKbHealth(): Promise<KbHealth> {
     vendorsNeedingAttention: vendorScores.filter((s) => s.quality < ATTENTION_THRESHOLD).length,
     draftReviews,
     cannabinoidCoverage: { present: counts.cannabinoids, expected: SEED_CANNABINOIDS.length },
+    strainDrafts: strains.filter((s) => s.status === "draft").length,
     totals: {
       strains: counts.strains,
       brands: brandTotal,

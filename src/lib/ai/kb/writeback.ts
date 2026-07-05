@@ -276,6 +276,28 @@ export async function writeBackProductFacts(
           .maybeSingle();
         patch.effects = unionNotes((withEff?.effects as string[]) ?? [], safeEffects);
       }
+      // GAP 6: tag this machine touch with provenance so it is auditable, at
+      // parity with kb_products/kb_brands (migration 0085). NON-DESTRUCTIVE:
+      //   • source — only stamp 'enrichment' when the existing scalar is empty
+      //     (never overwrite a curated 'manual'/'seed' provenance).
+      //   • sources[] — UNION corroborating refs (never drop existing ones).
+      //   • status — NEVER touched here: we only enrich an existing curated
+      //     (published) row; we never create or demote a strain row.
+      // Each column is added only when 0085 is applied (unknown column would
+      // fail the whole update), so this degrades safely pre-migration.
+      const hasStrainSource = await tableUsable("kb_strains", "source");
+      if (hasStrainSource) {
+        const { data: prov } = await admin
+          .from("kb_strains")
+          .select("source, sources")
+          .eq("id", kbStrainId)
+          .maybeSingle();
+        if (!((prov?.source as string | null) ?? "").trim()) {
+          patch.source = facts.source ?? "enrichment";
+        }
+        const incomingSource = facts.source ? [`writeback:${facts.source}`] : ["writeback:enrichment"];
+        patch.sources = unionNotes((prov?.sources as string[]) ?? [], incomingSource);
+      }
       const { error } = await admin.from("kb_strains").update(patch).eq("id", kbStrainId);
       if (!error) result.wroteStrain = true;
     }

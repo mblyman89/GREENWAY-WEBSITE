@@ -547,7 +547,33 @@ export function StrainEditor({
                       {(s.terpenes ?? []).join(", ") || "—"}
                     </td>
                     <td className="py-2 pr-4 text-[var(--admin-text-muted)]">
-                      {s.active ? "Active" : "Hidden"}
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span>{s.active ? "Active" : "Hidden"}</span>
+                        {/* GAP 6 (migration 0085): drafts-only lifecycle + provenance.
+                            A machine-suggested strain lands as 'draft' until a human
+                            promotes it; curated rows are 'published'. Only render when
+                            the column exists (undefined pre-0085 → no pill). */}
+                        {s.status === "draft" ? (
+                          <span
+                            className="rounded-full bg-[var(--admin-orange-soft,rgba(180,83,9,0.12))] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--admin-orange,#b45309)]"
+                            title="Machine-suggested — needs human review before it grounds the AI"
+                          >
+                            Draft
+                          </span>
+                        ) : s.status === "archived" ? (
+                          <span className="rounded-full bg-[var(--admin-bg)] px-2 py-0.5 text-[10px] uppercase tracking-wide text-[var(--admin-text-faint)]">
+                            Archived
+                          </span>
+                        ) : null}
+                        {s.source && s.source !== "manual" ? (
+                          <span
+                            className="rounded-full bg-[var(--admin-bg)] px-2 py-0.5 text-[10px] text-[var(--admin-text-faint)]"
+                            title={`Provenance: ${s.source}`}
+                          >
+                            {s.source}
+                          </span>
+                        ) : null}
+                      </div>
                     </td>
                     <td className="py-2 pr-4">
                       <div className="flex items-center gap-3">

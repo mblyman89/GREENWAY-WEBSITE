@@ -70,12 +70,21 @@ async function loadStrains(): Promise<SeedStrainRich[]> {
   if (!isSupabaseServiceConfigured) return STRAINS_RICH;
   try {
     const admin = createSupabaseAdminClient();
-    const { data, error } = await admin
+    const cols =
+      "slug,name,aliases,strain_type,lineage,aroma_notes,flavor_notes,terpenes,summary,dominant_cannabinoid,potency_note,bud_structure,origin";
+    // GAP 6 (migration 0085): trust only non-archived strains. A curated row's
+    // status defaults to 'published'; a machine-created draft strain (if ever)
+    // stays out of the grounding brain until a human promotes it. If 0085 isn't
+    // applied yet the `status` column is unknown → retry without the filter so
+    // grounding still works (defensive FULL→BASE fallback).
+    let { data, error } = await admin
       .from("kb_strains")
-      .select(
-        "slug,name,aliases,strain_type,lineage,aroma_notes,flavor_notes,terpenes,summary,dominant_cannabinoid,potency_note,bud_structure,origin",
-      )
-      .eq("active", true);
+      .select(cols)
+      .eq("active", true)
+      .neq("status", "archived");
+    if (error) {
+      ({ data, error } = await admin.from("kb_strains").select(cols).eq("active", true));
+    }
     if (error || !data || data.length === 0) return STRAINS_RICH;
     return (data as StrainRow[]).map((r) => ({
       slug: r.slug,

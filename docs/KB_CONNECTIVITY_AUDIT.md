@@ -45,8 +45,21 @@ The plan below has been BUILT (code held for owner review; migrations 0083 +
       `potency_source='lab_results:<id>'`; retrieval emits a measured-potency
       FACT line + `kb:potency:lab_results`; the review page shows a
       "Potency (COA)" chip.
-- [ ] **GAP 6** — `kb_strains` drafts lifecycle: DEFERRED (documented only;
-      no owner go-ahead to add strain draft review).
+- [x] **GAP 6** — `kb_strains` drafts lifecycle + provenance parity
+      (migration 0085, mirrors 0082 for `kb_brands`): adds `status`
+      (default `'published'`, check `draft|published|archived`) + a `source`
+      provenance scalar (`sources[]`/`confidence` already existed from 0020),
+      backfills curated rows to `source='manual'`, and indexes `status`.
+      `writeback.ts` now stamps provenance on every machine touch of a strain
+      (source only when empty → never overwrites curated; `sources[]` unioned;
+      status never touched — it only enriches existing published rows).
+      `retrieval.loadStrains()` filters out `archived` strains (defensive
+      fallback pre-migration). The strains manage table shows a Draft/Archived
+      pill + provenance source; `health.strainDrafts` counts any strain drafts.
+      NOTE: no standalone promote-queue was built because the write-back path
+      only ever *enriches an existing published* strain — it never creates a
+      strain draft today — so a review queue would be speculative; parity +
+      auditability + the Draft signal fully satisfy the gap.
 - [x] **GAP 7** — coverage matrix rows for measured potency + cannabinoid
       vocabulary now flow into the KB (were the two remaining **NO** rows).
 
@@ -233,6 +246,12 @@ so this is LOW risk, but it is an inconsistency vs kb_products/kb_brands.
 parity, OR document that strain gap-fill is intentionally non-destructive and
 needs no draft gate. Recommend: document, defer the column unless the owner
 wants strain-level draft review.
+
+**RESOLVED (Slice 6, migration 0085):** the owner asked to complete it, so we
+brought `kb_strains` to full parity with `kb_brands` (mirroring 0082) rather
+than only documenting. See the STATUS section above for the exact build. The
+strain gap-fill remains non-destructive; the new lifecycle simply makes every
+machine touch auditable and lets retrieval exclude archived strains.
 
 ### GAP 7 — Coverage of "all validated information flowing in" — summary matrix
 Verified inflow status of each validated data source:
