@@ -189,9 +189,16 @@ see `docs/COMMAND_CENTER_ENHANCEMENTS_TASKLIST.md`.
 - [x] Verify tsc 0 → eslint 0 → next build OK → rm -rf .next.
 - [x] Commit → push feat/kb-hardening-v2. Migration 0086 is MANUAL (owner applies then re-runs Seed to load the 16 effects).
 
-### Slice 2 — Consumption methods / product formats (DEEP WA-specific research)
-- [ ] Deep internet research: WA I-502 product categories/formats + consumption methods (factual)
-- [ ] Migration + seed + wire + admin + verify
+### Slice 2 — Consumption methods / product formats (DEEP WA-specific research)  [SHIPPED]
+> KEY FINDING (verified, not guessed): kb_category_terms + kb_product_categories existed but carried NO WA-market facts (how it's consumed, potency band). Slice 2 = new controlled vocabulary kb_product_formats (14 forms: inhaled/ingested/topical) with factual definition + consumption + WA-VERIFIED potency band + house voice. WA facts from WSLCB "Types of Products" (flower 15-25%+, kief/hash 30-60%, shatter/wax/dabs 60-90%), WAC 314-55-095 edible cap (10mg/serving, 100mg/pkg), RCW possession limits. All 14 formats pass checkCompliance with 0 blocking / 0 warnings (copy tightened: cured->well-aged, dropped "hard candy", "10mg per serving"->spelled in words, "great for"/"best"/"top-shelf" rephrased).
+- [x] Deep WA-specific research: WSLCB product taxonomy + potency ranges + edible cap + limits (VERIFIED, sourced in docs/KB_PRODUCT_FORMATS_SEED_SOURCES.md)
+- [x] Migration 0087_kb_product_formats.sql (idempotent, MANUAL, drafts/provenance parity, RLS is_staff, trigger, indexes)
+- [x] seed.ts SeedProductFormat + SEED_PRODUCT_FORMATS (14)
+- [x] store.ts counts + seed upsert (r8, degrades pre-0087) + CRUD (list/get/upsert/setActive)
+- [x] retrieval.ts loadProductFormats + buildFormatIndex + format grounding (kb:format:<slug>)
+- [x] health.ts productFormatCoverage
+- [x] admin read-only page /admin/knowledge-base/formats + KB landing nav card
+- [x] Verify: tsc 0 · eslint 0 · next build OK · compliance 0 blocking/0 warn. Commit 2cfd113, pushed to feat/kb-hardening-v2.
 
 ### Slice 3 — Compliance rules reference in KB (used helpfully to keep customers safe)
 - [ ] Encode WA I-502 / DOH / CCRS-relevant safety + purchase rules as KB facts; surface helpfully
