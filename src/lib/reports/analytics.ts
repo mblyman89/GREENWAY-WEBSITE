@@ -11,6 +11,7 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import { chunkedIn, pagedAll } from "@/lib/supabase/chunked-in";
 import { getPublishedVersion, getVersionItems } from "@/lib/pos/menu-version";
 import type { OrderStatus } from "@/lib/orders/types";
 import { pacificDayKey, pacificToday, addPacificDays, pacificWallTimeToUtcISO } from "@/lib/reports/timezone";
@@ -95,21 +96,23 @@ export async function getOrdersReport(days = 30): Promise<OrdersReport> {
   const admin = createSupabaseAdminClient();
   const startISO = rangeStartISO(days);
 
-  const { data: orders } = await admin
-    .from("orders")
-    .select("id, status, total_minor_units, item_count, placed_at")
-    .gte("placed_at", startISO);
-
-  const orderRows =
-    (orders as
-      | {
-          id: string;
-          status: OrderStatus;
-          total_minor_units: number;
-          item_count: number;
-          placed_at: string;
-        }[]
-      | null) ?? [];
+  // S-7: paged past the PostgREST per-response row cap.
+  type AnalyticsOrderRow = {
+    id: string;
+    status: OrderStatus;
+    total_minor_units: number;
+    item_count: number;
+    placed_at: string;
+  };
+  const orderRows = await pagedAll<AnalyticsOrderRow>(async (from, to) => {
+    const { data } = await admin
+      .from("orders")
+      .select("id, status, total_minor_units, item_count, placed_at")
+      .gte("placed_at", startISO)
+      .order("id", { ascending: true })
+      .range(from, to);
+    return (data as AnalyticsOrderRow[] | null) ?? [];
+  });
 
   const ordersByDay = emptyDaySeries(days);
   const revenueByDay = emptyDaySeries(days);
@@ -150,20 +153,22 @@ export async function getOrdersReport(days = 30): Promise<OrdersReport> {
 
   // Top products / brands from the non-cancelled orders' lines.
   if (orderIds.length) {
-    const { data: lines } = await admin
-      .from("order_lines")
-      .select("product_name, brand, quantity, price_minor_units, order_id")
-      .in("order_id", orderIds.slice(0, 1000));
-
-    const lineRows =
-      (lines as
-        | {
-            product_name: string;
-            brand: string | null;
-            quantity: number;
-            price_minor_units: number;
-          }[]
-        | null) ?? [];
+    // S-7: chunked + paginated — top products/brands see every line.
+    type AnalyticsLineRow = {
+      product_name: string;
+      brand: string | null;
+      quantity: number;
+      price_minor_units: number;
+    };
+    const lineRows = await chunkedIn<string, AnalyticsLineRow>(orderIds, async (chunk, from, to) => {
+      const { data } = await admin
+        .from("order_lines")
+        .select("product_name, brand, quantity, price_minor_units, order_id")
+        .in("order_id", chunk)
+        .order("id", { ascending: true })
+        .range(from, to);
+      return (data as AnalyticsLineRow[] | null) ?? [];
+    });
 
     const productMap = new Map<string, number>();
     const brandMap = new Map<string, number>();

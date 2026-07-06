@@ -36,6 +36,7 @@ import "server-only";
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import { chunkedIn, pagedAll } from "@/lib/supabase/chunked-in";
 import { pacificDayKey } from "@/lib/reports/timezone";
 
 // ---------------------------------------------------------------------------
@@ -170,15 +171,21 @@ export async function getCustomersReport(fromISO: string, toISO: string): Promis
   const admin = createSupabaseAdminClient();
 
   // Orders in window (exclude cancelled from revenue + classification).
-  const { data: windowData } = await admin
-    .from("orders")
-    .select(
-      "id, status, customer_email, customer_first_name, customer_last_name, total_minor_units, item_count, placed_at",
-    )
-    .gte("placed_at", fromISO)
-    .lte("placed_at", toISO);
+  // S-7: paged past the PostgREST per-response row cap.
+  const windowRows = await pagedAll<OrderRow>(async (from, to) => {
+    const { data } = await admin
+      .from("orders")
+      .select(
+        "id, status, customer_email, customer_first_name, customer_last_name, total_minor_units, item_count, placed_at",
+      )
+      .gte("placed_at", fromISO)
+      .lte("placed_at", toISO)
+      .order("id", { ascending: true })
+      .range(from, to);
+    return (data as OrderRow[] | null) ?? [];
+  });
 
-  const windowOrders = ((windowData as OrderRow[] | null) ?? []).filter((o) => o.status !== "cancelled");
+  const windowOrders = windowRows.filter((o) => o.status !== "cancelled");
   if (windowOrders.length === 0) return { ...EMPTY_CUSTOMERS_REPORT };
 
   // Distinct emails in window — used to look back across ALL history to decide
@@ -190,11 +197,17 @@ export async function getCustomersReport(fromISO: string, toISO: string): Promis
   // History (lifetime) for those emails — earliest order date per email.
   const firstOrderByEmail = new Map<string, string>(); // email -> earliest placed_at ISO
   if (emails.length) {
-    const { data: histData } = await admin
-      .from("orders")
-      .select("customer_email, placed_at, status")
-      .in("customer_email", emails.slice(0, 2000));
-    const hist = (histData as { customer_email: string | null; placed_at: string; status: string }[] | null) ?? [];
+    // S-7: chunked + paginated — new-vs-returning must see EVERY email's history.
+    type HistRow = { customer_email: string | null; placed_at: string; status: string };
+    const hist = await chunkedIn<string, HistRow>(emails, async (chunk, from, to) => {
+      const { data } = await admin
+        .from("orders")
+        .select("customer_email, placed_at, status")
+        .in("customer_email", chunk)
+        .order("id", { ascending: true })
+        .range(from, to);
+      return (data as HistRow[] | null) ?? [];
+    });
     for (const h of hist) {
       if (h.status === "cancelled") continue;
       const k = emailKey(h.customer_email);

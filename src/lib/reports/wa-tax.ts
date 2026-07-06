@@ -18,13 +18,19 @@ import "server-only";
  *   line as cannabis/non-cannabis via the menu_items category snapshot and the
  *   tax_category_rules table, then run the shared tax engine.
  *
- * Everything is computed from NON-cancelled orders, bucketed by calendar month
- * of placed_at (Pacific time). Money in MINOR UNITS (cents). State/local split is
- * pro-rated from the configured basis points.
+ * Everything is computed from COMPLETED orders, bucketed by calendar month of
+ * completed_at (Pacific time) — the CANONICAL period basis shared with the
+ * LIQ-1295 excise return and the CCRS Sale.csv (see docs/PERIOD_BASIS.md), so
+ * the three filings always reconcile. Money in MINOR UNITS (cents). State/local
+ * split is pro-rated from the configured basis points.
+ *
+ * S-8: lines covered by a WAC 314-55-090(2) medical exempt-sale record report
+ * their exempted tax as ZERO here and the exempted amounts separately.
  */
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import { chunkedIn, pagedAll } from "@/lib/supabase/chunked-in";
 import { pacificMonthKey } from "@/lib/reports/timezone";
 import {
   getTaxSettings,
@@ -95,6 +101,19 @@ export type WaTaxReport = {
   // non-cannabis section. Excise never applies to these.
   nonCannabisSalesTaxMinor: number;
   nonCannabisUnits: number;
+  // S-8 — medical exemptions (WAC 314-55-090(2), RCW 69.51A.230). The LIQ-1295
+  // needs BOTH the taxable figure and the exempt figure, so exempted amounts
+  // are reported separately and EXCLUDED from the tax totals above.
+  /** Pre-tax base of lines covered by a medical exempt-sale record. */
+  medicalExemptBaseMinor: number;
+  /** 37% excise NOT collected because the line was excise-exempt. */
+  medicalExemptExciseMinor: number;
+  /** Sales tax NOT collected because the line was sales-tax-exempt. */
+  medicalExemptSalesTaxMinor: number;
+  /** Lines matched to a medical exempt-sale record in the range. */
+  medicalExemptLines: number;
+  /** Exempt records in range that could not be matched to a sold line. */
+  medicalExemptUnmatchedRecords: number;
   // Breakdowns
   byMonth: WaTaxMonthRow[];
   byCategory: WaTaxCategoryRow[];
@@ -136,20 +155,24 @@ async function buildCategoryLookup(
   admin: ReturnType<typeof createSupabaseAdminClient>,
 ): Promise<ProductLookup> {
   const lookup: ProductLookup = new Map();
-  const { data } = await admin
-    .from("menu_items")
-    .select("source_item_id, category, pos_inventory_type, pos_inventory_category, created_at")
-    .order("created_at", { ascending: false })
-    .limit(20000);
-  const rows =
-    (data as
-      | {
-          source_item_id: string;
-          category: string | null;
-          pos_inventory_type: string | null;
-          pos_inventory_category: string | null;
-        }[]
-      | null) ?? [];
+  // S-7: page past the PostgREST per-response row cap so no product's
+  // category snapshot is silently dropped (a dropped row misclassifies its
+  // lines as non-cannabis and understates excise).
+  type MenuRow = {
+    source_item_id: string;
+    category: string | null;
+    pos_inventory_type: string | null;
+    pos_inventory_category: string | null;
+  };
+  const rows = await pagedAll<MenuRow>(async (from, to) => {
+    const { data } = await admin
+      .from("menu_items")
+      .select("source_item_id, category, pos_inventory_type, pos_inventory_category, created_at")
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: true })
+      .range(from, to);
+    return (data as MenuRow[] | null) ?? [];
+  });
   for (const r of rows) {
     if (!r.source_item_id || lookup.has(r.source_item_id)) continue;
     const category = r.category?.trim() || "";
@@ -194,6 +217,11 @@ export async function getWaTaxReport(fromISO: string, toISO: string): Promise<Wa
     orders: 0,
     nonCannabisSalesTaxMinor: 0,
     nonCannabisUnits: 0,
+    medicalExemptBaseMinor: 0,
+    medicalExemptExciseMinor: 0,
+    medicalExemptSalesTaxMinor: 0,
+    medicalExemptLines: 0,
+    medicalExemptUnmatchedRecords: 0,
     byMonth: [],
     byCategory: [],
     byType: [],
@@ -207,26 +235,44 @@ export async function getWaTaxReport(fromISO: string, toISO: string): Promise<Wa
     buildCategoryLookup(admin),
   ]);
 
-  const { data: ordersData } = await admin
-    .from("orders")
-    .select("id, status, placed_at, subtotal_minor_units, estimated_tax_minor_units, total_minor_units")
-    .gte("placed_at", fromISO)
-    .lte("placed_at", toISO);
-  const orders =
-    (ordersData as
-      | {
-          id: string;
-          status: string;
-          placed_at: string;
-          subtotal_minor_units: number | null;
-          estimated_tax_minor_units: number | null;
-          total_minor_units: number | null;
-        }[]
-      | null) ?? [];
-  const valid = orders.filter((o) => o.status !== "cancelled");
+  // S-7: page the base query too — PostgREST caps any single response at
+  // db.max_rows (default 1000), so a busy range would silently drop orders.
+  //
+  // S-8 canonical period basis (docs/PERIOD_BASIS.md): tax filings are based
+  // on COMPLETED orders bucketed by completed_at — the same basis the
+  // LIQ-1295 builder (excise-return.ts) and the CCRS Sale.csv use, so the
+  // three always reconcile. Previously this report used placed_at over all
+  // non-cancelled orders, which could overstate tax with never-completed
+  // orders and disagree with the excise return by a day at month boundaries.
+  type OrderRow = {
+    id: string;
+    status: string;
+    placed_at: string;
+    completed_at: string | null;
+    subtotal_minor_units: number | null;
+    estimated_tax_minor_units: number | null;
+    total_minor_units: number | null;
+  };
+  const orders = await pagedAll<OrderRow>(async (from, to) => {
+    const { data } = await admin
+      .from("orders")
+      .select("id, status, placed_at, completed_at, subtotal_minor_units, estimated_tax_minor_units, total_minor_units")
+      .eq("status", "completed")
+      // completed_at basis with a placed_at fallback for legacy completed
+      // orders that predate the completed_at column (docs/PERIOD_BASIS.md).
+      .or(
+        `and(completed_at.gte.${fromISO},completed_at.lte.${toISO}),and(completed_at.is.null,placed_at.gte.${fromISO},placed_at.lte.${toISO})`,
+      )
+      .order("id", { ascending: true })
+      .range(from, to);
+    return (data as OrderRow[] | null) ?? [];
+  });
+  // Base query already filters to completed orders (canonical period basis).
+  const valid = orders;
   if (valid.length === 0) return empty;
 
-  const placedById = new Map(valid.map((o) => [o.id, o.placed_at]));
+  // Month bucketing follows the same canonical basis: completed_at.
+  const placedById = new Map(valid.map((o) => [o.id, o.completed_at ?? o.placed_at]));
   // Per-order tax-inclusive resolution (only consulted in "auto" mode).
   const inclusiveByOrder = new Map<string, boolean>();
   if (resolvedSettings.taxBaseMode === "auto") {
@@ -241,14 +287,55 @@ export async function getWaTaxReport(fromISO: string, toISO: string): Promise<Wa
   }
   const orderIds = valid.map((o) => o.id);
 
-  const { data: linesData } = await admin
-    .from("order_lines")
-    .select("order_id, product_id, quantity, price_minor_units")
-    .in("order_id", orderIds.slice(0, 2000));
-  const lines =
-    (linesData as
-      | { order_id: string; product_id: string | null; quantity: number; price_minor_units: number }[]
-      | null) ?? [];
+  // S-7: chunked + paginated — every line of every order in range, no caps.
+  type LineRow = { order_id: string; product_id: string | null; quantity: number; price_minor_units: number };
+  const lines = await chunkedIn<string, LineRow>(orderIds, async (chunk, from, to) => {
+    const { data } = await admin
+      .from("order_lines")
+      .select("order_id, product_id, quantity, price_minor_units")
+      .in("order_id", chunk)
+      .order("id", { ascending: true })
+      .range(from, to);
+    return (data as LineRow[] | null) ?? [];
+  });
+
+  // S-8: medical exemptions — join medical_exempt_sales (WAC 314-55-090(2))
+  // by (order_id, product_sku=product_id) so exempt lines contribute ZERO to
+  // the collected-tax totals and their exempted amounts are reported
+  // separately (the LIQ-1295 needs both numbers).
+  const exemptByOrderSku = new Map<string, { salesExempt: boolean; exciseExempt: boolean; matched: boolean }>();
+  {
+    type ExemptRow = {
+      order_id: string | null;
+      product_sku: string | null;
+      sales_tax_exempt: boolean | null;
+      excise_tax_exempt: boolean | null;
+    };
+    const exemptRows = await pagedAll<ExemptRow>(async (from, to) => {
+      const { data } = await admin
+        .from("medical_exempt_sales")
+        .select("order_id, product_sku, sales_tax_exempt, excise_tax_exempt, sale_date, id")
+        .gte("sale_date", fromISO.slice(0, 10))
+        .lte("sale_date", toISO.slice(0, 10))
+        .order("id", { ascending: true })
+        .range(from, to);
+      return (data as ExemptRow[] | null) ?? [];
+    });
+    for (const r of exemptRows) {
+      if (!r.order_id || !r.product_sku) continue;
+      const key = `${r.order_id}|${r.product_sku}`;
+      const prev = exemptByOrderSku.get(key);
+      exemptByOrderSku.set(key, {
+        salesExempt: (prev?.salesExempt ?? false) || r.sales_tax_exempt === true,
+        exciseExempt: (prev?.exciseExempt ?? false) || r.excise_tax_exempt === true,
+        matched: prev?.matched ?? false,
+      });
+    }
+  }
+  let medicalExemptBase = 0;
+  let medicalExemptExcise = 0;
+  let medicalExemptSalesTax = 0;
+  let medicalExemptLines = 0;
 
   // Pro-rate the combined sales tax into state vs local for reporting clarity.
   const stateBps = resolvedSettings.stateSalesRateBps;
@@ -284,11 +371,26 @@ export async function getWaTaxReport(fromISO: string, toISO: string): Promise<Wa
       resolvedInclusive: inclusiveByOrder.get(l.order_id),
     });
 
-    // Tax engine (recreational; medical exemption handled per-sale elsewhere).
-    const tax = computeLineTax({ taxableBaseMinor: base, isCannabis }, resolvedSettings);
-    // Split sales tax into state/local by basis points.
-    const lineStateTax = applyBps(base, stateBps);
-    const lineLocalTax = applyBps(base, localBps);
+    // Tax engine (recreational rates first).
+    const recTax = computeLineTax({ taxableBaseMinor: base, isCannabis }, resolvedSettings);
+    // S-8: apply the WAC 314-55-090(2) medical exemptions per line. The two
+    // exemptions are independent (sales tax vs 37% excise): zero what was
+    // exempted at the register and track it separately for the LIQ-1295.
+    const exemptKey = l.product_id ? `${l.order_id}|${l.product_id}` : null;
+    const exempt = exemptKey ? exemptByOrderSku.get(exemptKey) : undefined;
+    const salesExempt = exempt?.salesExempt === true;
+    const exciseExempt = exempt?.exciseExempt === true;
+    if (exempt) {
+      exempt.matched = true;
+      medicalExemptLines += 1;
+      medicalExemptBase += base;
+      if (salesExempt) medicalExemptSalesTax += applyBps(base, stateBps) + applyBps(base, localBps);
+      if (exciseExempt) medicalExemptExcise += recTax.exciseTaxMinor;
+    }
+    const tax = { ...recTax, exciseTaxMinor: exciseExempt ? 0 : recTax.exciseTaxMinor };
+    // Split sales tax into state/local by basis points (zeroed when exempt).
+    const lineStateTax = salesExempt ? 0 : applyBps(base, stateBps);
+    const lineLocalTax = salesExempt ? 0 : applyBps(base, localBps);
 
     if (isCannabis) {
       cannabisBase += base;
@@ -367,6 +469,13 @@ export async function getWaTaxReport(fromISO: string, toISO: string): Promise<Wa
   const totalTax = salesTax + exciseTax;
   const totalBase = cannabisBase + nonCannabisBase;
 
+  // S-8: exempt records that never matched a sold line (wrong/missing SKU or
+  // order id) — surfaced so the owner can fix the record before filing.
+  let medicalExemptUnmatchedRecords = 0;
+  for (const v of exemptByOrderSku.values()) {
+    if (!v.matched) medicalExemptUnmatchedRecords += 1;
+  }
+
   const byMonth = [...monthMap.values()].sort((a, b) => a.month.localeCompare(b.month));
   const byCategory = [...catMap.values()].sort((a, b) => b.baseMinor - a.baseMinor);
   const byType = [...typeMap.values()].sort((a, b) => b.baseMinor - a.baseMinor);
@@ -387,6 +496,11 @@ export async function getWaTaxReport(fromISO: string, toISO: string): Promise<Wa
     orders: valid.length,
     nonCannabisSalesTaxMinor: nonCannabisSalesTax,
     nonCannabisUnits,
+    medicalExemptBaseMinor: medicalExemptBase,
+    medicalExemptExciseMinor: medicalExemptExcise,
+    medicalExemptSalesTaxMinor: medicalExemptSalesTax,
+    medicalExemptLines,
+    medicalExemptUnmatchedRecords,
     byMonth,
     byCategory,
     byType,

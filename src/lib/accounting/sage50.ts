@@ -25,6 +25,7 @@ import "server-only";
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import { chunkedIn, pagedAll } from "@/lib/supabase/chunked-in";
 import { getTaxSettings, getCannabisCategorySet, isCannabisCategory, applyBps } from "@/lib/reports/tax";
 import { pacificDayKey } from "@/lib/reports/timezone";
 import {
@@ -93,25 +94,36 @@ export async function getAccountingSettings(): Promise<AccountingSettings> {
 async function buildCategoryAndCostLookup(admin: ReturnType<typeof createSupabaseAdminClient>) {
   // category lookup
   const catLookup = new Map<string, string>();
-  const { data: menuData } = await admin
-    .from("menu_items")
-    .select("source_item_id, category, created_at")
-    .order("created_at", { ascending: false })
-    .limit(20000);
-  for (const r of (menuData as { source_item_id: string; category: string | null }[] | null) ?? []) {
+  // S-7: page past the PostgREST per-response row cap.
+  type MenuRow = { source_item_id: string; category: string | null };
+  const menuRows = await pagedAll<MenuRow>(async (from, to) => {
+    const { data } = await admin
+      .from("menu_items")
+      .select("source_item_id, category, created_at")
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: true })
+      .range(from, to);
+    return (data as MenuRow[] | null) ?? [];
+  });
+  for (const r of menuRows) {
     if (!r.source_item_id || catLookup.has(r.source_item_id)) continue;
     catLookup.set(r.source_item_id, r.category?.trim() || "");
   }
-  // weighted-avg cost lookup
-  const { data: lotData } = await admin
-    .from("inventory_lots")
-    .select("pos_product_key, received_qty, unit_cost_minor_units")
-    .limit(50000);
+  // weighted-avg cost lookup (S-7: paged)
+  type LotCostRow = { pos_product_key: string | null; received_qty: number | null; unit_cost_minor_units: number | null };
+  const lotData = await pagedAll<LotCostRow>(async (from, to) => {
+    const { data } = await admin
+      .from("inventory_lots")
+      .select("pos_product_key, received_qty, unit_cost_minor_units, id")
+      .order("id", { ascending: true })
+      .range(from, to);
+    return (data as LotCostRow[] | null) ?? [];
+  });
   const num = new Map<string, number>();
   const den = new Map<string, number>();
   const simpleSum = new Map<string, number>();
   const simpleCount = new Map<string, number>();
-  for (const l of (lotData as { pos_product_key: string | null; received_qty: number | null; unit_cost_minor_units: number | null }[] | null) ?? []) {
+  for (const l of lotData) {
     const key = l.pos_product_key;
     if (!key || l.unit_cost_minor_units == null) continue;
     const cost = l.unit_cost_minor_units;
@@ -176,14 +188,18 @@ export async function buildSage50Journal(fromISO: string, toISO: string): Promis
   ]);
   const combinedSalesBps = tax.stateSalesRateBps + tax.localSalesRateBps;
 
-  // Completed orders in range.
-  const { data: ordersData } = await admin
-    .from("orders")
-    .select("id, status, placed_at, completed_at")
-    .gte("placed_at", fromISO)
-    .lte("placed_at", toISO);
-  const orders =
-    (ordersData as { id: string; status: string; placed_at: string; completed_at: string | null }[] | null) ?? [];
+  // Completed orders in range. S-7: paged so busy months post completely.
+  type Sage50OrderRow = { id: string; status: string; placed_at: string; completed_at: string | null };
+  const orders = await pagedAll<Sage50OrderRow>(async (from, to) => {
+    const { data } = await admin
+      .from("orders")
+      .select("id, status, placed_at, completed_at")
+      .gte("placed_at", fromISO)
+      .lte("placed_at", toISO)
+      .order("id", { ascending: true })
+      .range(from, to);
+    return (data as Sage50OrderRow[] | null) ?? [];
+  });
   const completed = orders.filter((o) => o.status === "completed");
   if (completed.length === 0) {
     warnings.push("No completed orders in the selected range.");
@@ -198,14 +214,17 @@ export async function buildSage50Journal(fromISO: string, toISO: string): Promis
   }
   const orderIds = completed.map((o) => o.id);
 
-  const { data: linesData } = await admin
-    .from("order_lines")
-    .select("order_id, product_id, quantity, price_minor_units, regular_price_minor_units")
-    .in("order_id", orderIds.slice(0, 2000));
-  const lines =
-    (linesData as
-      | { order_id: string; product_id: string | null; quantity: number; price_minor_units: number; regular_price_minor_units: number | null }[]
-      | null) ?? [];
+  // S-7: chunked + paginated — the GL journal must include every line.
+  type Sage50LineRow = { order_id: string; product_id: string | null; quantity: number; price_minor_units: number; regular_price_minor_units: number | null };
+  const lines = await chunkedIn<string, Sage50LineRow>(orderIds, async (chunk, from, to) => {
+    const { data } = await admin
+      .from("order_lines")
+      .select("order_id, product_id, quantity, price_minor_units, regular_price_minor_units")
+      .in("order_id", chunk)
+      .order("id", { ascending: true })
+      .range(from, to);
+    return (data as Sage50LineRow[] | null) ?? [];
+  });
 
   // Accumulate per day.
   const byDay = new Map<string, DayJournalSummary>();

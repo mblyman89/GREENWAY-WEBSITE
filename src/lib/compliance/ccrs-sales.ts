@@ -26,6 +26,7 @@ import "server-only";
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import { chunkedIn, pagedAll } from "@/lib/supabase/chunked-in";
 import { getTaxSettings, getCannabisCategorySet, isCannabisCategory, applyBps } from "@/lib/reports/tax";
 import {
   deriveInventoryExternalId,
@@ -105,12 +106,18 @@ async function buildCategoryLookup(
   admin: ReturnType<typeof createSupabaseAdminClient>,
 ): Promise<Map<string, string>> {
   const lookup = new Map<string, string>();
-  const { data } = await admin
-    .from("menu_items")
-    .select("source_item_id, category, created_at")
-    .order("created_at", { ascending: false })
-    .limit(20000);
-  const rows = (data as { source_item_id: string; category: string | null }[] | null) ?? [];
+  // S-7: page past the PostgREST per-response row cap (a dropped catalog row
+  // misclassifies its lines as non-cannabis → OtherTax under-reported).
+  type MenuRow = { source_item_id: string; category: string | null };
+  const rows = await pagedAll<MenuRow>(async (from, to) => {
+    const { data } = await admin
+      .from("menu_items")
+      .select("source_item_id, category, created_at")
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: true })
+      .range(from, to);
+    return (data as MenuRow[] | null) ?? [];
+  });
   for (const r of rows) {
     if (!r.source_item_id || lookup.has(r.source_item_id)) continue;
     lookup.set(r.source_item_id, r.category?.trim() || "");
@@ -129,21 +136,24 @@ async function buildLotIndex(
   admin: ReturnType<typeof createSupabaseAdminClient>,
 ): Promise<Map<string, LotInfo>> {
   const index = new Map<string, LotInfo>();
-  const { data } = await admin
-    .from("inventory_lots")
-    .select("id, pos_product_key, lot_code, ccrs_inventory_external_id, status, created_at")
-    .order("created_at", { ascending: false })
-    .limit(50000);
-  const rows =
-    (data as
-      | {
-          id: string;
-          pos_product_key: string | null;
-          lot_code: string | null;
-          ccrs_inventory_external_id: string | null;
-          status: string | null;
-        }[]
-      | null) ?? [];
+  // S-7: page past the PostgREST per-response row cap (the .limit(50000)
+  // never returned more than db.max_rows per response anyway).
+  type LotRowRaw = {
+    id: string;
+    pos_product_key: string | null;
+    lot_code: string | null;
+    ccrs_inventory_external_id: string | null;
+    status: string | null;
+  };
+  const rows = await pagedAll<LotRowRaw>(async (from, to) => {
+    const { data } = await admin
+      .from("inventory_lots")
+      .select("id, pos_product_key, lot_code, ccrs_inventory_external_id, status, created_at")
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: true })
+      .range(from, to);
+    return (data as LotRowRaw[] | null) ?? [];
+  });
   for (const r of rows) {
     const key = r.pos_product_key;
     if (!key) continue;
@@ -201,30 +211,67 @@ export async function buildCcrsSaleCsv(fromISO: string, toISO: string): Promise<
   ]);
   const combinedSalesBps = settings.stateSalesRateBps + settings.localSalesRateBps;
 
-  // Completed (or at least non-cancelled) sales in range.
-  const { data: ordersData } = await admin
-    .from("orders")
-    .select("id, order_number, status, placed_at, completed_at")
-    .gte("placed_at", fromISO)
-    .lte("placed_at", toISO);
-  const orders =
-    (ordersData as
-      | { id: string; order_number: string; status: string; placed_at: string; completed_at: string | null }[]
-      | null) ?? [];
+  // Completed sales in range. S-7: paged so a busy filing period can never
+  // silently drop orders from the CCRS upload.
+  //
+  // S-8 canonical period basis (docs/PERIOD_BASIS.md): completed orders by
+  // completed_at (placed_at fallback for legacy rows) — the same basis as
+  // wa-tax and the LIQ-1295, and the same timestamp the SaleDate column
+  // already reports, so the file's date range matches its own rows.
+  type CcrsOrderRow = { id: string; order_number: string; status: string; placed_at: string; completed_at: string | null };
+  const orders = await pagedAll<CcrsOrderRow>(async (from, to) => {
+    const { data } = await admin
+      .from("orders")
+      .select("id, order_number, status, placed_at, completed_at")
+      .eq("status", "completed")
+      .or(
+        `and(completed_at.gte.${fromISO},completed_at.lte.${toISO}),and(completed_at.is.null,placed_at.gte.${fromISO},placed_at.lte.${toISO})`,
+      )
+      .order("id", { ascending: true })
+      .range(from, to);
+    return (data as CcrsOrderRow[] | null) ?? [];
+  });
 
   // B1: an order is a MEDICAL sale (SaleType = RecreationalMedical) when it has
   // WAC 314-55-090(2) exempt-sale records tied to it — the authoritative,
   // schema-grounded signal (there is no orders.medical column). We look up the
   // set of order ids that appear in medical_exempt_sales for this range.
+  //
+  // S-8: we also key each exempt record by (order_id, product_sku) so the
+  // matching sold LINE reports SalesTax/OtherTax = 0 in the CCRS Sale.csv.
+  // Convention (documented on recordExemptSale): product_sku MUST equal the
+  // order line's product_id (the POS product key), or the line-level zeroing
+  // cannot match.
   const medicalOrderIds = new Set<string>();
+  const exemptByOrderSku = new Map<string, { salesExempt: boolean; exciseExempt: boolean }>();
   {
-    const { data: exemptData } = await admin
-      .from("medical_exempt_sales")
-      .select("order_id, sale_date")
-      .gte("sale_date", fromISO.slice(0, 10))
-      .lte("sale_date", toISO.slice(0, 10));
-    for (const r of (exemptData as { order_id: string | null }[] | null) ?? []) {
-      if (r.order_id) medicalOrderIds.add(r.order_id);
+    type ExemptRow = {
+      order_id: string | null;
+      product_sku: string | null;
+      sales_tax_exempt: boolean | null;
+      excise_tax_exempt: boolean | null;
+    };
+    const exemptRows = await pagedAll<ExemptRow>(async (from, to) => {
+      const { data } = await admin
+        .from("medical_exempt_sales")
+        .select("order_id, product_sku, sales_tax_exempt, excise_tax_exempt, sale_date")
+        .gte("sale_date", fromISO.slice(0, 10))
+        .lte("sale_date", toISO.slice(0, 10))
+        .order("id", { ascending: true })
+        .range(from, to);
+      return (data as ExemptRow[] | null) ?? [];
+    });
+    for (const r of exemptRows) {
+      if (!r.order_id) continue;
+      medicalOrderIds.add(r.order_id);
+      if (r.product_sku) {
+        const key = `${r.order_id}|${r.product_sku}`;
+        const prev = exemptByOrderSku.get(key);
+        exemptByOrderSku.set(key, {
+          salesExempt: (prev?.salesExempt ?? false) || r.sales_tax_exempt === true,
+          exciseExempt: (prev?.exciseExempt ?? false) || r.excise_tax_exempt === true,
+        });
+      }
     }
   }
   const reportable = orders.filter((o) => o.status === "completed");
@@ -238,24 +285,27 @@ export async function buildCcrsSaleCsv(fromISO: string, toISO: string): Promise<
   const orderById = new Map(reportable.map((o) => [o.id, o]));
   const orderIds = reportable.map((o) => o.id);
 
-  const { data: linesData } = await admin
-    .from("order_lines")
-    .select(
-      "id, order_id, product_id, quantity, price_minor_units, regular_price_minor_units, ccrs_inventory_external_id",
-    )
-    .in("order_id", orderIds.slice(0, 2000));
-  const lines =
-    (linesData as
-      | {
-          id: string;
-          order_id: string;
-          product_id: string | null;
-          quantity: number;
-          price_minor_units: number;
-          regular_price_minor_units: number | null;
-          ccrs_inventory_external_id: string | null;
-        }[]
-      | null) ?? [];
+  // S-7: chunked + paginated — a CCRS Sale.csv must contain EVERY line.
+  type CcrsLineRow = {
+    id: string;
+    order_id: string;
+    product_id: string | null;
+    quantity: number;
+    price_minor_units: number;
+    regular_price_minor_units: number | null;
+    ccrs_inventory_external_id: string | null;
+  };
+  const lines = await chunkedIn<string, CcrsLineRow>(orderIds, async (chunk, from, to) => {
+    const { data } = await admin
+      .from("order_lines")
+      .select(
+        "id, order_id, product_id, quantity, price_minor_units, regular_price_minor_units, ccrs_inventory_external_id",
+      )
+      .in("order_id", chunk)
+      .order("id", { ascending: true })
+      .range(from, to);
+    return (data as CcrsLineRow[] | null) ?? [];
+  });
 
   const rows: string[][] = [];
   let missingInvIds = 0;
@@ -264,6 +314,7 @@ export async function buildCcrsSaleCsv(fromISO: string, toISO: string): Promise<
   let fallbackKeyIds = 0;
   let skipped = 0;
   let medicalLines = 0;
+  let exemptZeroedLines = 0;
 
   for (const l of lines) {
     const qty = l.quantity ?? 0;
@@ -294,8 +345,15 @@ export async function buildCcrsSaleCsv(fromISO: string, toISO: string): Promise<
     const category = (l.product_id ? categoryLookup.get(l.product_id) : "") || "";
     const isCannabis = isCannabisCategory(category, cannabisSet);
 
-    const salesTaxCents = applyBps(baseCents, combinedSalesBps);
-    const exciseCents = isCannabis ? applyBps(baseCents, settings.exciseRateBps) : 0;
+    // S-8: a line covered by a WAC 314-55-090(2) exempt-sale record reports
+    // its exempted tax as 0 (sales tax and/or excise "OtherTax"), so the CCRS
+    // Sale.csv matches what was actually charged at the register and what the
+    // LIQ-1295 Box 2 deduction claims.
+    const exempt = l.product_id ? exemptByOrderSku.get(`${l.order_id}|${l.product_id}`) : undefined;
+    const salesTaxCents = exempt?.salesExempt ? 0 : applyBps(baseCents, combinedSalesBps);
+    const exciseCents =
+      isCannabis && !exempt?.exciseExempt ? applyBps(baseCents, settings.exciseRateBps) : 0;
+    if (exempt?.salesExempt || exempt?.exciseExempt) exemptZeroedLines += 1;
 
     // External identifiers (deterministic, stable, idempotent), hardened to the
     // CCRS spec: prefer the line's explicit id, then the matched lot's canonical
@@ -373,6 +431,16 @@ export async function buildCcrsSaleCsv(fromISO: string, toISO: string): Promise<
   if (medicalLines > 0) {
     warnings.push(
       `${medicalLines} line(s) are reported as SaleType "RecreationalMedical" because their order has WAC 314-55-090(2) medical exempt-sale records. Confirm each was a qualifying DOH-authorized medical sale before uploading.`,
+    );
+  }
+  if (exemptZeroedLines > 0) {
+    warnings.push(
+      `${exemptZeroedLines} line(s) had their exempted tax reported as $0.00 (S-8): sales tax and/or the 37% excise "OtherTax" was zeroed because a matching medical exempt-sale record (order + product SKU) covers the line.`,
+    );
+  }
+  if (medicalLines > 0 && exemptZeroedLines === 0) {
+    warnings.push(
+      `Medical orders were found but NO line matched an exempt record by product SKU — the exempt records' product_sku must equal the sold line's product id (POS product key) for line-level tax zeroing. Taxes were reported at full rates for those lines.`,
     );
   }
 

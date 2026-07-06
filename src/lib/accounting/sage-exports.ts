@@ -18,6 +18,7 @@ import "server-only";
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import { chunkedIn, pagedAll } from "@/lib/supabase/chunked-in";
 import { getTaxSettings, getCannabisCategorySet, isCannabisCategory, applyBps } from "@/lib/reports/tax";
 import { pacificDayKey } from "@/lib/reports/timezone";
 import {
@@ -168,12 +169,18 @@ type Admin = ReturnType<typeof createSupabaseAdminClient>;
 /** menu source_item_id → category (newest wins), same pattern as sage50.ts. */
 async function buildCategoryLookup(admin: Admin): Promise<Map<string, string>> {
   const catLookup = new Map<string, string>();
-  const { data } = await admin
-    .from("menu_items")
-    .select("source_item_id, category, created_at")
-    .order("created_at", { ascending: false })
-    .limit(20000);
-  for (const r of (data as { source_item_id: string; category: string | null }[] | null) ?? []) {
+  // S-7: page past the PostgREST per-response row cap.
+  type MenuRow = { source_item_id: string; category: string | null };
+  const rows = await pagedAll<MenuRow>(async (from, to) => {
+    const { data } = await admin
+      .from("menu_items")
+      .select("source_item_id, category, created_at")
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: true })
+      .range(from, to);
+    return (data as MenuRow[] | null) ?? [];
+  });
+  for (const r of rows) {
     if (!r.source_item_id || catLookup.has(r.source_item_id)) continue;
     catLookup.set(r.source_item_id, r.category?.trim() || "");
   }
@@ -182,15 +189,21 @@ async function buildCategoryLookup(admin: Admin): Promise<Map<string, string>> {
 
 /** pos_product_key → weighted-average unit cost (minor units). */
 async function buildCostLookup(admin: Admin): Promise<Map<string, number>> {
-  const { data } = await admin
-    .from("inventory_lots")
-    .select("pos_product_key, received_qty, unit_cost_minor_units")
-    .limit(50000);
+  // S-7: page past the PostgREST per-response row cap.
+  type LotCostRow = { pos_product_key: string | null; received_qty: number | null; unit_cost_minor_units: number | null };
+  const lotRows = await pagedAll<LotCostRow>(async (from, to) => {
+    const { data } = await admin
+      .from("inventory_lots")
+      .select("pos_product_key, received_qty, unit_cost_minor_units, id")
+      .order("id", { ascending: true })
+      .range(from, to);
+    return (data as LotCostRow[] | null) ?? [];
+  });
   const num = new Map<string, number>();
   const den = new Map<string, number>();
   const simpleSum = new Map<string, number>();
   const simpleCount = new Map<string, number>();
-  for (const l of (data as { pos_product_key: string | null; received_qty: number | null; unit_cost_minor_units: number | null }[] | null) ?? []) {
+  for (const l of lotRows) {
     const key = l.pos_product_key;
     if (!key || l.unit_cost_minor_units == null) continue;
     const qty = Number(l.received_qty ?? 0);
@@ -281,14 +294,19 @@ export async function buildSageReceiptsExport(fromISO: string, toISO: string): P
     buildCostLookup(admin),
   ]);
 
-  const { data: ordersData } = await admin
-    .from("orders")
-    .select("id, status, placed_at, completed_at")
-    .gte("placed_at", fromISO)
-    .lte("placed_at", toISO);
-  const completed = ((ordersData as { id: string; status: string; placed_at: string; completed_at: string | null }[] | null) ?? []).filter(
-    (o) => o.status === "completed",
-  );
+  // S-7: paged so busy ranges post completely.
+  type SageOrderRow = { id: string; status: string; placed_at: string; completed_at: string | null };
+  const ordersAll = await pagedAll<SageOrderRow>(async (from, to) => {
+    const { data } = await admin
+      .from("orders")
+      .select("id, status, placed_at, completed_at")
+      .gte("placed_at", fromISO)
+      .lte("placed_at", toISO)
+      .order("id", { ascending: true })
+      .range(from, to);
+    return (data as SageOrderRow[] | null) ?? [];
+  });
+  const completed = ordersAll.filter((o) => o.status === "completed");
   if (completed.length === 0) {
     empty.warnings.push("No completed orders in the selected range.");
     return empty;
@@ -296,18 +314,26 @@ export async function buildSageReceiptsExport(fromISO: string, toISO: string): P
   const dayByOrder = new Map<string, string>();
   for (const o of completed) dayByOrder.set(o.id, pacificDayKey(o.completed_at ?? o.placed_at));
 
-  const { data: linesData } = await admin
-    .from("order_lines")
-    .select("order_id, product_id, quantity, price_minor_units, regular_price_minor_units")
-    .in("order_id", completed.map((o) => o.id).slice(0, 2000));
-  const lines =
-    (linesData as {
-      order_id: string;
-      product_id: string | null;
-      quantity: number;
-      price_minor_units: number;
-      regular_price_minor_units: number | null;
-    }[] | null) ?? [];
+  // S-7: chunked + paginated — the receipts journal must include every line.
+  type SageLineRow = {
+    order_id: string;
+    product_id: string | null;
+    quantity: number;
+    price_minor_units: number;
+    regular_price_minor_units: number | null;
+  };
+  const lines = await chunkedIn<string, SageLineRow>(
+    completed.map((o) => o.id),
+    async (chunk, from, to) => {
+      const { data } = await admin
+        .from("order_lines")
+        .select("order_id, product_id, quantity, price_minor_units, regular_price_minor_units")
+        .in("order_id", chunk)
+        .order("id", { ascending: true })
+        .range(from, to);
+      return (data as SageLineRow[] | null) ?? [];
+    },
+  );
 
   const unmapped = new Set<string>();
   const knownBuckets = new Set(Object.keys(accounts));
@@ -379,35 +405,49 @@ export async function buildSagePurchasesExport(fromISO: string, toISO: string): 
   // vendor-ach-core.ts). For partially-accepted manifests the invoice is built
   // from the ACCEPTED lots only — rejected-at-dock lots were never received and
   // must not be booked as cost.
-  const { data: manifestsData } = await admin
-    .from("inbound_manifests")
-    .select("id, manifest_number, vendor_id, vendor_label, transfer_date, status, created_at")
-    .in("status", ["accepted", "partially_accepted"])
-    .gte("created_at", fromISO)
-    .lte("created_at", toISO)
-    .order("created_at", { ascending: true })
-    .limit(2000);
-  const manifests =
-    (manifestsData as {
-      id: string;
-      manifest_number: string | null;
-      vendor_id: string | null;
-      vendor_label: string | null;
-      transfer_date: string | null;
-      status: string;
-      created_at: string;
-    }[] | null) ?? [];
+  // S-7: paged past the PostgREST per-response row cap.
+  type ManifestRow = {
+    id: string;
+    manifest_number: string | null;
+    vendor_id: string | null;
+    vendor_label: string | null;
+    transfer_date: string | null;
+    status: string;
+    created_at: string;
+  };
+  const manifests = await pagedAll<ManifestRow>(async (from, to) => {
+    const { data } = await admin
+      .from("inbound_manifests")
+      .select("id, manifest_number, vendor_id, vendor_label, transfer_date, status, created_at")
+      .in("status", ["accepted", "partially_accepted"])
+      .gte("created_at", fromISO)
+      .lte("created_at", toISO)
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, to);
+    return (data as ManifestRow[] | null) ?? [];
+  });
   if (manifests.length === 0) {
     empty.warnings.push("No accepted or partially-accepted manifests in the selected range.");
     return empty;
   }
 
-  const { data: lotsData } = await admin
-    .from("inventory_lots")
-    .select("manifest_id, product_name, received_qty, unit_cost_minor_units, disposition, status")
-    .in("manifest_id", manifests.map((m) => m.id).slice(0, 1000));
+  // S-7: chunked + paginated — every manifest's lots are costed.
+  type ManifestLotRow = { manifest_id: string | null; product_name: string | null; received_qty: number | null; unit_cost_minor_units: number | null; disposition: string | null; status: string | null };
+  const lotsData = await chunkedIn<string, ManifestLotRow>(
+    manifests.map((m) => m.id),
+    async (chunk, from, to) => {
+      const { data } = await admin
+        .from("inventory_lots")
+        .select("manifest_id, product_name, received_qty, unit_cost_minor_units, disposition, status, id")
+        .in("manifest_id", chunk)
+        .order("id", { ascending: true })
+        .range(from, to);
+      return (data as ManifestLotRow[] | null) ?? [];
+    },
+  );
   const lotsByManifest = new Map<string, { product_name: string | null; received_qty: number | null; unit_cost_minor_units: number | null }[]>();
-  for (const l of (lotsData as { manifest_id: string | null; product_name: string | null; received_qty: number | null; unit_cost_minor_units: number | null; disposition: string | null; status: string | null }[] | null) ?? []) {
+  for (const l of lotsData) {
     if (!l.manifest_id) continue;
     // Accepted-lots-only cost basis: skip lots rejected at the dock (their
     // product went back on the truck — no cost was incurred).
@@ -480,23 +520,27 @@ export async function buildSagePaymentsExport(fromISO: string, toISO: string): P
   const admin = createSupabaseAdminClient();
   const vendorSageIds = await buildVendorSageIdLookup(admin);
 
-  const { data } = await admin
-    .from("vendor_manifest_payments")
-    .select("vendor_id, vendor_name, manifest_number, amount_minor_units, ach_batch_ref, note, created_at")
-    .gte("created_at", fromISO)
-    .lte("created_at", toISO)
-    .order("created_at", { ascending: true })
-    .limit(2000);
-  const rows =
-    (data as {
-      vendor_id: string | null;
-      vendor_name: string;
-      manifest_number: string;
-      amount_minor_units: number;
-      ach_batch_ref: string | null;
-      note: string | null;
-      created_at: string;
-    }[] | null) ?? [];
+  // S-7: paged past the PostgREST per-response row cap.
+  type PaymentRow = {
+    vendor_id: string | null;
+    vendor_name: string;
+    manifest_number: string;
+    amount_minor_units: number;
+    ach_batch_ref: string | null;
+    note: string | null;
+    created_at: string;
+  };
+  const rows = await pagedAll<PaymentRow>(async (from, to) => {
+    const { data } = await admin
+      .from("vendor_manifest_payments")
+      .select("vendor_id, vendor_name, manifest_number, amount_minor_units, ach_batch_ref, note, created_at, id")
+      .gte("created_at", fromISO)
+      .lte("created_at", toISO)
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, to);
+    return (data as PaymentRow[] | null) ?? [];
+  });
   if (rows.length === 0) {
     empty.warnings.push("No vendor payments in the selected range.");
     return empty;
@@ -555,31 +599,38 @@ export async function buildSageAdjustmentsExport(fromISO: string, toISO: string)
     buildCategoryLookup(admin),
   ]);
 
-  const { data: adjData } = await admin
-    .from("inventory_adjustments")
-    .select("lot_id, qty_delta, reason, note, created_at")
-    .gte("created_at", fromISO)
-    .lte("created_at", toISO)
-    .neq("reason", "receive")
-    .order("created_at", { ascending: true })
-    .limit(5000);
-  const adjustments =
-    (adjData as { lot_id: string; qty_delta: number; reason: string; note: string | null; created_at: string }[] | null) ?? [];
+  // S-7: paged past the PostgREST per-response row cap.
+  type AdjRow = { lot_id: string; qty_delta: number; reason: string; note: string | null; created_at: string };
+  const adjustments = await pagedAll<AdjRow>(async (from, to) => {
+    const { data } = await admin
+      .from("inventory_adjustments")
+      .select("lot_id, qty_delta, reason, note, created_at, id")
+      .gte("created_at", fromISO)
+      .lte("created_at", toISO)
+      .neq("reason", "receive")
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, to);
+    return (data as AdjRow[] | null) ?? [];
+  });
   if (adjustments.length === 0) {
     empty.warnings.push("No inventory adjustments (excluding receives) in the selected range.");
     return empty;
   }
 
+  // S-7: chunked + paginated — every adjusted lot resolves its cost.
   const lotIds = [...new Set(adjustments.map((a) => a.lot_id))];
-  const { data: lotsData } = await admin
-    .from("inventory_lots")
-    .select("id, pos_product_key, product_name, unit_cost_minor_units")
-    .in("id", lotIds.slice(0, 1000));
-  const lotById = new Map(
-    ((lotsData as { id: string; pos_product_key: string | null; product_name: string | null; unit_cost_minor_units: number | null }[] | null) ?? []).map(
-      (l) => [l.id, l],
-    ),
-  );
+  type AdjLotRow = { id: string; pos_product_key: string | null; product_name: string | null; unit_cost_minor_units: number | null };
+  const lotsData = await chunkedIn<string, AdjLotRow>(lotIds, async (chunk, from, to) => {
+    const { data } = await admin
+      .from("inventory_lots")
+      .select("id, pos_product_key, product_name, unit_cost_minor_units")
+      .in("id", chunk)
+      .order("id", { ascending: true })
+      .range(from, to);
+    return (data as AdjLotRow[] | null) ?? [];
+  });
+  const lotById = new Map(lotsData.map((l) => [l.id, l]));
 
   const unmapped = new Set<string>();
   const noCost = new Set<string>();

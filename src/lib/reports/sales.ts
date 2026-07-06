@@ -26,6 +26,7 @@ import "server-only";
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import { chunkedIn, pagedAll } from "@/lib/supabase/chunked-in";
 import { pacificDayKey, pacificHour, addPacificDays, formatHourLabel } from "@/lib/reports/timezone";
 
 // ---------------------------------------------------------------------------
@@ -179,23 +180,25 @@ async function buildProductLookup(
   admin: ReturnType<typeof createSupabaseAdminClient>,
 ): Promise<Map<string, ProductMeta>> {
   const lookup = new Map<string, ProductMeta>();
-  const { data } = await admin
-    .from("menu_items")
-    .select("source_item_id, category, pos_inventory_type, pos_inventory_category, vendor_name, brand_name, created_at")
-    .order("created_at", { ascending: false })
-    .limit(20000);
-
-  const rows =
-    (data as
-      | {
-          source_item_id: string;
-          category: string | null;
-          pos_inventory_type: string | null;
-          pos_inventory_category: string | null;
-          vendor_name: string | null;
-          brand_name: string | null;
-        }[]
-      | null) ?? [];
+  // S-7: page past the PostgREST per-response row cap (a dropped catalog row
+  // silently miscategorizes its sold lines).
+  type MenuRow = {
+    source_item_id: string;
+    category: string | null;
+    pos_inventory_type: string | null;
+    pos_inventory_category: string | null;
+    vendor_name: string | null;
+    brand_name: string | null;
+  };
+  const rows = await pagedAll<MenuRow>(async (from, to) => {
+    const { data } = await admin
+      .from("menu_items")
+      .select("source_item_id, category, pos_inventory_type, pos_inventory_category, vendor_name, brand_name, created_at")
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: true })
+      .range(from, to);
+    return (data as MenuRow[] | null) ?? [];
+  });
 
   for (const r of rows) {
     if (!r.source_item_id || lookup.has(r.source_item_id)) continue;
@@ -223,17 +226,19 @@ export async function getSalesReport(fromISO: string, toISO: string): Promise<Sa
 
   const admin = createSupabaseAdminClient();
 
-  // 1) Orders in range (exclude cancelled from revenue).
-  const { data: ordersData } = await admin
-    .from("orders")
-    .select("id, status, customer_email, placed_at")
-    .gte("placed_at", fromISO)
-    .lte("placed_at", toISO);
-
-  const orders =
-    (ordersData as
-      | { id: string; status: string; customer_email: string | null; placed_at: string }[]
-      | null) ?? [];
+  // 1) Orders in range (exclude cancelled from revenue). S-7: paged past the
+  // PostgREST per-response row cap so busy ranges are complete.
+  type ReportOrderRow = { id: string; status: string; customer_email: string | null; placed_at: string };
+  const orders = await pagedAll<ReportOrderRow>(async (from, to) => {
+    const { data } = await admin
+      .from("orders")
+      .select("id, status, customer_email, placed_at")
+      .gte("placed_at", fromISO)
+      .lte("placed_at", toISO)
+      .order("id", { ascending: true })
+      .range(from, to);
+    return (data as ReportOrderRow[] | null) ?? [];
+  });
 
   const validOrders = orders.filter((o) => o.status !== "cancelled");
   if (validOrders.length === 0) return { ...EMPTY_SALES_REPORT };
@@ -241,24 +246,25 @@ export async function getSalesReport(fromISO: string, toISO: string): Promise<Sa
   const orderById = new Map(validOrders.map((o) => [o.id, o]));
   const orderIds = validOrders.map((o) => o.id);
 
-  // 2) Lines for those orders.
-  const { data: linesData } = await admin
-    .from("order_lines")
-    .select("order_id, product_id, product_name, brand, quantity, price_minor_units, regular_price_minor_units")
-    .in("order_id", orderIds.slice(0, 2000));
-
-  const lines =
-    (linesData as
-      | {
-          order_id: string;
-          product_id: string | null;
-          product_name: string;
-          brand: string | null;
-          quantity: number;
-          price_minor_units: number;
-          regular_price_minor_units: number | null;
-        }[]
-      | null) ?? [];
+  // 2) Lines for those orders. S-7: chunked + paginated — no truncation.
+  type LineRow = {
+    order_id: string;
+    product_id: string | null;
+    product_name: string;
+    brand: string | null;
+    quantity: number;
+    price_minor_units: number;
+    regular_price_minor_units: number | null;
+  };
+  const lines = await chunkedIn<string, LineRow>(orderIds, async (chunk, from, to) => {
+    const { data } = await admin
+      .from("order_lines")
+      .select("order_id, product_id, product_name, brand, quantity, price_minor_units, regular_price_minor_units")
+      .in("order_id", chunk)
+      .order("id", { ascending: true })
+      .range(from, to);
+    return (data as LineRow[] | null) ?? [];
+  });
 
   // 3) Product → category/vendor lookup.
   const lookup = await buildProductLookup(admin);
