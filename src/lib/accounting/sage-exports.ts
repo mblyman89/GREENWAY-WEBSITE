@@ -374,10 +374,15 @@ export async function buildSagePurchasesExport(fromISO: string, toISO: string): 
   const admin = createSupabaseAdminClient();
   const vendorSageIds = await buildVendorSageIdLookup(admin);
 
+  // S-13 (GAP M-10): include BOTH accepted and partially_accepted manifests so
+  // this export agrees with vendor payables (PAYABLE_MANIFEST_STATUSES in
+  // vendor-ach-core.ts). For partially-accepted manifests the invoice is built
+  // from the ACCEPTED lots only — rejected-at-dock lots were never received and
+  // must not be booked as cost.
   const { data: manifestsData } = await admin
     .from("inbound_manifests")
     .select("id, manifest_number, vendor_id, vendor_label, transfer_date, status, created_at")
-    .eq("status", "accepted")
+    .in("status", ["accepted", "partially_accepted"])
     .gte("created_at", fromISO)
     .lte("created_at", toISO)
     .order("created_at", { ascending: true })
@@ -389,20 +394,24 @@ export async function buildSagePurchasesExport(fromISO: string, toISO: string): 
       vendor_id: string | null;
       vendor_label: string | null;
       transfer_date: string | null;
+      status: string;
       created_at: string;
     }[] | null) ?? [];
   if (manifests.length === 0) {
-    empty.warnings.push("No accepted manifests in the selected range.");
+    empty.warnings.push("No accepted or partially-accepted manifests in the selected range.");
     return empty;
   }
 
   const { data: lotsData } = await admin
     .from("inventory_lots")
-    .select("manifest_id, product_name, received_qty, unit_cost_minor_units")
+    .select("manifest_id, product_name, received_qty, unit_cost_minor_units, disposition, status")
     .in("manifest_id", manifests.map((m) => m.id).slice(0, 1000));
   const lotsByManifest = new Map<string, { product_name: string | null; received_qty: number | null; unit_cost_minor_units: number | null }[]>();
-  for (const l of (lotsData as { manifest_id: string | null; product_name: string | null; received_qty: number | null; unit_cost_minor_units: number | null }[] | null) ?? []) {
+  for (const l of (lotsData as { manifest_id: string | null; product_name: string | null; received_qty: number | null; unit_cost_minor_units: number | null; disposition: string | null; status: string | null }[] | null) ?? []) {
     if (!l.manifest_id) continue;
+    // Accepted-lots-only cost basis: skip lots rejected at the dock (their
+    // product went back on the truck — no cost was incurred).
+    if (l.disposition === "rejected_at_dock" || l.status === "rejected") continue;
     const arr = lotsByManifest.get(l.manifest_id) ?? [];
     arr.push(l);
     lotsByManifest.set(l.manifest_id, arr);

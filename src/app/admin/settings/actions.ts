@@ -169,30 +169,49 @@ export async function savePricingSettingsAction(fd: FormData): Promise<ActionRes
  * members / enrichments, brands, vendors, promotions, people/hardware, or the
  * audit log.
  *
- * Double-gated: settings.manage permission + a typed confirmation phrase. The
- * result (per-table counts) is recorded in the audit log.
+ * Triple-gated (S-6, WAC 314-55-087 three-year record retention):
+ *   1. settings.manage permission,
+ *   2. a typed confirmation phrase NAMING the rule,
+ *   3. an export-first attestation checkbox. The attestation is forwarded to
+ *      the DB function as acknowledge_wac_314_55_087 — without it, the guarded
+ *      function (migration 0097) refuses whenever completed orders or CCRS
+ *      batches exist.
+ * The result (per-table counts) + the attestation are recorded in the audit log.
  */
 export async function resetOperationalDataAction(fd: FormData): Promise<void> {
   const session = await requirePermission("settings.manage");
 
   const confirm = String(fd.get("confirm") ?? "").trim().toUpperCase();
-  if (confirm !== "RESET OPERATIONAL DATA") {
+  if (confirm !== "RESET OPERATIONAL DATA (WAC 314-55-087)") {
     redirect(
       "/admin/settings/reset?error=" +
-        encodeURIComponent("To confirm, type exactly: RESET OPERATIONAL DATA"),
+        encodeURIComponent("To confirm, type exactly: RESET OPERATIONAL DATA (WAC 314-55-087)"),
+    );
+  }
+
+  const attested = String(fd.get("retention_attestation") ?? "") === "1";
+  if (!attested) {
+    redirect(
+      "/admin/settings/reset?error=" +
+        encodeURIComponent(
+          "You must attest that all records required by WAC 314-55-087 (3-year retention) have been exported before resetting.",
+        ),
     );
   }
 
   let summaryMsg: string;
   try {
-    const summary = await resetOperationalData();
+    const summary = await resetOperationalData(attested);
     await recordAudit({
       actorId: session.profile.id,
       actorEmail: session.email,
       action: "ops.reset_operational_data",
       entityType: "database",
       entityId: "operational",
-      after: summary as unknown as Record<string, unknown>,
+      after: {
+        ...(summary as unknown as Record<string, unknown>),
+        retention_attestation_wac_314_55_087: attested,
+      },
     });
     summaryMsg = `${summary.totalRowsDeleted} row(s) removed across ${Object.keys(summary.tables).length} table(s). Settings and knowledge base untouched.`;
   } catch (err) {

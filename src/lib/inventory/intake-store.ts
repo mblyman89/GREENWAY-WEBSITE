@@ -221,70 +221,11 @@ export async function stageManifest(
   return { ok: true, manifestId };
 }
 
-/** Accept a pending manifest: lots quarantine → active + receive adjustments. */
-export async function acceptManifest(
-  manifestId: string,
-  actorId: string | null,
-): Promise<
-  | { ok: true; activated: number; draftsCreated: number }
-  | { ok: false; error: string }
-> {
-  if (!isSupabaseServiceConfigured) {
-    return { ok: false, error: "Supabase service role not configured." };
-  }
-  const admin = createSupabaseAdminClient();
-
-  const { data: lots } = await admin
-    .from("inventory_lots")
-    .select("id, received_qty, status")
-    .eq("manifest_id", manifestId);
-  const rows = (lots as { id: string; received_qty: number; status: string }[] | null) ?? [];
-
-  let activated = 0;
-  for (const lot of rows) {
-    if (lot.status !== "quarantine") continue;
-    await admin
-      .from("inventory_lots")
-      .update({ status: "active", updated_by: actorId })
-      .eq("id", lot.id);
-    await admin.from("inventory_adjustments").insert({
-      lot_id: lot.id,
-      qty_delta: lot.received_qty,
-      reason: "receive",
-      note: "Accepted from vendor manifest intake.",
-      actor_id: actorId,
-    });
-    activated += 1;
-  }
-
-  const { error } = await admin
-    .from("inbound_manifests")
-    .update({ status: "accepted", accepted_at: new Date().toISOString(), updated_by: actorId })
-    .eq("id", manifestId);
-  if (error) return { ok: false, error: error.message };
-  await logManifestEvent(manifestId, "accepted", `Accepted ${activated} lot(s).`, actorId);
-
-  // Seed catalog product drafts for any received lot that doesn't match a
-  // product in the published menu. Drafts are never auto-live — an employee
-  // validates and publishes them. Failure here must not fail the accept.
-  let draftsCreated = 0;
-  try {
-    const match = await seedDraftsForManifest(manifestId, actorId);
-    draftsCreated = match.unmatched;
-  } catch (err) {
-    console.error("[intake-store] seedDraftsForManifest failed:", err);
-  }
-
-  // Archive each COA PDF into private storage for our records. Best-effort:
-  // a failed download must never fail the accept.
-  try {
-    await archiveCoasForManifest(manifestId);
-  } catch (err) {
-    console.error("[intake-store] archiveCoasForManifest failed:", err);
-  }
-
-  return { ok: true, activated, draftsCreated };
-}
+// S-11 (GAP M-8): the legacy acceptManifest() helper was DELETED. It activated
+// every quarantined lot with NO compliance gate. The only activation path is
+// finalizeManifestDispositions() below, which runs evaluateLotBatchActivation
+// on every accepted lot (CCRS id + COA + passing lab result) and HOLDS dirty
+// lots in quarantine.
 
 /**
  * Reject the WHOLE manifest (refuse-at-dock).
