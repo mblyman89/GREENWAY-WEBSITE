@@ -3,6 +3,7 @@ import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { BankingSettingsForm } from "@/components/admin/settings/BankingSettingsForm";
 import { getAchCompanySettings } from "@/lib/payroll/payroll-store";
+import { maskAccountTail } from "@/lib/security/at-rest-crypto";
 
 export const dynamic = "force-dynamic";
 
@@ -87,7 +88,14 @@ export default async function BankingSettingsPage({
         ) : null}
 
         <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
-          <BankingSettingsForm settings={resolved} />
+          {/* S-10: render the funding account MASKED — submitting the mask (or
+              leaving it blank) keeps the stored value; typing replaces it. */}
+          <BankingSettingsForm
+            settings={{
+              ...resolved,
+              company_account_number: maskAccountTail(resolved.company_account_number),
+            }}
+          />
         </div>
       </div>
     </div>

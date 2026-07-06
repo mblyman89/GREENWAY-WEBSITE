@@ -158,7 +158,17 @@ function InboundEmailPanel({ rows }: { rows: InboundEmailLogRow[] }) {
             {rows.map((r) => (
               <tr key={r.id} className="border-t border-[var(--admin-border)]">
                 <td className="px-4 py-2 text-[var(--admin-text-muted)]">{r.received_at.slice(0, 16).replace("T", " ")}</td>
-                <td className="px-4 py-2 text-[var(--admin-text-muted)]">{r.from_address ?? "—"}</td>
+                <td className="px-4 py-2 text-[var(--admin-text-muted)]">
+                  <span className="inline-flex items-center gap-2">
+                    {r.from_address ?? "—"}
+                    {r.signature_ok !== true ? (
+                      // S-9: signature failed (false) or was skipped because the
+                      // secret was unset (null) — either way the sender is NOT
+                      // verified. Treat the attached draft with suspicion.
+                      <Badge tone="gold">Unverified sender</Badge>
+                    ) : null}
+                  </span>
+                </td>
                 <td className="px-4 py-2 text-[var(--admin-text)]">
                   {r.manifest_id ? (
                     <Link

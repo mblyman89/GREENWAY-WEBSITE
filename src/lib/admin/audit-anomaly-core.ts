@@ -17,8 +17,10 @@
  *      these computed findings — it never invents events.
  *
  * Everything here works on a minimal, PII-light row shape so it can be reused by
- * the page, the AI grounding, and the tests.
+ * the page, the AI grounding, and the tests. The only import is the PURE
+ * Pacific-time helper (S-12): off-hours must be judged on the store's clock.
  */
+import { storeHour } from "@/lib/reports/timezone";
 
 // ---------------------------------------------------------------------------
 // Row shape (subset of audit_logs)
@@ -229,8 +231,9 @@ const DEFAULTS: Required<Omit<AnomalyOptions, "burstWindowMinutes">> & {
 };
 
 function hourOf(iso: string): number {
-  const d = new Date(iso);
-  return d.getHours();
+  // S-12: off-hours detection must use the STORE's wall clock (Pacific), not
+  // the server's local timezone (UTC on most hosts ⇒ ~7-8h drift).
+  return storeHour(iso);
 }
 
 function actorKey(row: AuditRow): string {

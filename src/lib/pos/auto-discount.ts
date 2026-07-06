@@ -16,6 +16,7 @@ import "server-only";
 import type { PublishedPromotion } from "@/lib/promotions/types";
 import type { GreenwayCategory } from "@/lib/leafly/types";
 import { getPublishedPromotions } from "@/lib/promotions/promotions-store";
+import { storeWeekday } from "@/lib/reports/timezone";
 
 export type PosCartLine = {
   lineId: string;
@@ -64,7 +65,9 @@ function norm(s: string | null | undefined): string {
 export function isPromoActive(p: PublishedPromotion, now: Date): boolean {
   if (p.startsAt && new Date(p.startsAt) > now) return false;
   if (p.endsAt && new Date(p.endsAt) < now) return false;
-  if (p.weekday != null && p.weekday !== now.getDay()) return false;
+  // S-12: weekday targeting is a STORE-day concept — compare against the
+  // Pacific wall-clock weekday, not the server's local weekday.
+  if (p.weekday != null && p.weekday !== storeWeekday(now)) return false;
   return true;
 }
 

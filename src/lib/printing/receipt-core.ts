@@ -9,7 +9,12 @@
  * newline + form feed and auto-cut after the job, so plain text is all we need.
  *
  * Money is in MINOR UNITS (cents) everywhere, matching the rest of the app.
+ *
+ * S-12: timestamps on receipts print the STORE's wall clock (America/
+ * Los_Angeles) via the PURE Pacific-time helper — a customer-facing receipt
+ * must never show UTC.
  */
+import { pacificParts } from "@/lib/reports/timezone";
 
 export type ReceiptLineInput = {
   productName: string;
@@ -77,7 +82,10 @@ export function twoColumn(label: string, amount: string, columns = DEFAULT_COLUM
   return trimmedLabel + " ".repeat(Math.max(1, gap)) + amount;
 }
 
-/** Format an ISO timestamp into a local-ish "Mon DD, YYYY h:mm AM/PM" string. */
+/**
+ * Format an ISO timestamp into the STORE's wall clock (America/Los_Angeles) as
+ * "Mon DD, YYYY h:mm AM/PM PT". Receipts are customer-facing — never UTC (S-12).
+ */
 export function formatReceiptTimestamp(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
@@ -85,15 +93,13 @@ export function formatReceiptTimestamp(iso: string): string {
     "Jan", "Feb", "Mar", "Apr", "May", "Jun",
     "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
   ];
-  const month = months[d.getUTCMonth()];
-  const day = d.getUTCDate();
-  const year = d.getUTCFullYear();
-  let h = d.getUTCHours();
-  const m = d.getUTCMinutes().toString().padStart(2, "0");
-  const ampm = h >= 12 ? "PM" : "AM";
-  h = h % 12;
+  const p = pacificParts(d);
+  const month = months[p.month - 1];
+  const m = String(p.minute).padStart(2, "0");
+  const ampm = p.hour >= 12 ? "PM" : "AM";
+  let h = p.hour % 12;
   if (h === 0) h = 12;
-  return `${month} ${day}, ${year} ${h}:${m} ${ampm} UTC`;
+  return `${month} ${p.day}, ${p.year} ${h}:${m} ${ampm} PT`;
 }
 
 /**
@@ -201,12 +207,19 @@ export function __runReceiptCoreTests(): void {
   expect("twoColumn long truncates to width", tcLong.length === 20);
   expect("twoColumn long keeps amount", tcLong.endsWith("$5.00"));
 
-  // timestamp
+  // timestamp — S-12: printed in STORE (Pacific) wall clock, never UTC.
+  // 2024-01-15T13:05Z = Jan 15 5:05 AM PST.
   const ts = formatReceiptTimestamp("2024-01-15T13:05:00.000Z");
-  expect("timestamp month", ts.includes("Jan 15, 2024"));
-  expect("timestamp pm", ts.includes("1:05 PM"));
+  expect("timestamp month (Pacific)", ts.includes("Jan 15, 2024"));
+  expect("timestamp am (Pacific)", ts.includes("5:05 AM"));
+  expect("timestamp zone label", ts.endsWith("PT"));
+  // 2024-01-15T00:00Z = Jan 14 4:00 PM PST — the Pacific DAY rolls back.
   const tsMid = formatReceiptTimestamp("2024-01-15T00:00:00.000Z");
-  expect("timestamp midnight 12 AM", tsMid.includes("12:00 AM"));
+  expect("timestamp UTC-midnight is Pacific prior evening", tsMid.includes("Jan 14, 2024"));
+  expect("timestamp UTC-midnight 4 PM Pacific", tsMid.includes("4:00 PM"));
+  // 2024-07-15T13:05Z = Jul 15 6:05 AM PDT (DST-aware).
+  const tsDst = formatReceiptTimestamp("2024-07-15T13:05:00.000Z");
+  expect("timestamp DST-aware (PDT)", tsDst.includes("6:05 AM"));
   expect("timestamp invalid passthrough", formatReceiptTimestamp("not-a-date") === "not-a-date");
 
   // receiptTitle

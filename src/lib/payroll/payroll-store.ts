@@ -23,6 +23,7 @@ import {
   type EmployeePaymentHistory,
   type GuardrailReport,
 } from "@/lib/payroll/payroll-guardrails-core";
+import { decryptSecret, encryptSecret } from "@/lib/security/at-rest-crypto";
 
 export type AchCompanySettings = {
   destination_routing: string;
@@ -60,7 +61,11 @@ export async function getAchCompanySettings(): Promise<AchCompanySettings> {
       .eq("id", true)
       .maybeSingle();
     if (error || !data) return { ...EMPTY_SETTINGS };
-    return { ...EMPTY_SETTINGS, ...(data as Partial<AchCompanySettings>) };
+    const merged = { ...EMPTY_SETTINGS, ...(data as Partial<AchCompanySettings>) };
+    // S-10: the funding account number is envelope-encrypted at rest (encv1:);
+    // legacy plaintext passes through unchanged.
+    merged.company_account_number = decryptSecret(merged.company_account_number);
+    return merged;
   } catch {
     return { ...EMPTY_SETTINGS };
   }
@@ -72,9 +77,15 @@ export async function saveAchCompanySettings(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not connected." };
   const admin = createSupabaseAdminClient();
+  // S-10: encrypt the funding account number at rest (no-op until
+  // DATA_ENCRYPTION_KEY is set; already-encrypted values pass through).
+  const toStore = {
+    ...input,
+    company_account_number: encryptSecret(input.company_account_number),
+  };
   const { error } = await admin
     .from("ach_company_settings")
-    .update({ ...input, updated_by: actorId })
+    .update({ ...toStore, updated_by: actorId })
     .eq("id", true);
   if (error) return { ok: false, error: error.message };
   return { ok: true };
@@ -87,11 +98,14 @@ export async function saveEmployeeBanking(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not connected." };
   const admin = createSupabaseAdminClient();
+  // S-10: employee banking is envelope-encrypted at rest (no-op until
+  // DATA_ENCRYPTION_KEY is set). Reads go through listEmployeeBanking(), the
+  // dedicated payroll-only path, which decrypts.
   const { error } = await admin
     .from("employees")
     .update({
-      bank_routing: banking.routing || null,
-      bank_account_number: banking.accountNumber || null,
+      bank_routing: banking.routing ? encryptSecret(banking.routing) : null,
+      bank_account_number: banking.accountNumber ? encryptSecret(banking.accountNumber) : null,
       bank_account_type: banking.accountType,
     })
     .eq("id", employeeId);
@@ -179,9 +193,18 @@ export async function getPayrollRun(runId: string): Promise<PayrollRunDetail> {
     .select("id,employee_id,employee_name,net_pay_cents,gross_pay_cents,taxes_cents,deductions_cents,bank_routing,bank_account_number,bank_account_type")
     .eq("run_id", runId)
     .order("employee_name", { ascending: true });
+  // S-10: line banking snapshots are envelope-encrypted at rest; decrypt for
+  // the payroll editor + NACHA generation (legacy plaintext passes through).
+  const decrypted = ((lines ?? []) as PayrollLineRow[]).map((l) => ({
+    ...l,
+    bank_routing: l.bank_routing ? decryptSecret(l.bank_routing) || null : null,
+    bank_account_number: l.bank_account_number
+      ? decryptSecret(l.bank_account_number) || null
+      : null,
+  }));
   return {
     run: run as PayrollRunFull,
-    lines: (lines ?? []) as PayrollLineRow[],
+    lines: decrypted,
   };
 }
 
@@ -305,8 +328,9 @@ export async function savePayrollLines(
       gross_pay_cents: l.grossPayCents ?? null,
       taxes_cents: l.taxesCents ?? null,
       deductions_cents: l.deductionsCents ?? null,
-      bank_routing: l.routing || null,
-      bank_account_number: l.accountNumber || null,
+      // S-10: encrypt banking snapshots at rest (no-op until the key is set).
+      bank_routing: l.routing ? encryptSecret(l.routing) : null,
+      bank_account_number: l.accountNumber ? encryptSecret(l.accountNumber) : null,
       bank_account_type: l.accountType,
     }));
     const { error } = await admin.from("payroll_run_lines").insert(rows);
@@ -376,8 +400,12 @@ export async function evaluateRunGuardrails(
           employeeId: empId,
           lastPaidDate: pr?.pay_date ?? null,
           lastPaidNetCents: row.net_pay_cents ?? null,
-          lastRouting: row.bank_routing ?? null,
-          lastAccountNumber: row.bank_account_number ?? null,
+          // S-10: stored snapshots may be encrypted — decrypt so the
+          // banking-change guardrail compares real values, not ciphertexts.
+          lastRouting: row.bank_routing ? decryptSecret(row.bank_routing) || null : null,
+          lastAccountNumber: row.bank_account_number
+            ? decryptSecret(row.bank_account_number) || null
+            : null,
         });
       }
     }

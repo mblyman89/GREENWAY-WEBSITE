@@ -77,6 +77,38 @@ export function pacificHour(input: Date | string): number {
   return pacificParts(input).hour;
 }
 
+// ---------------------------------------------------------------------------
+// Store-time helpers (S-12) — ALL business-day logic must use these instead of
+// `new Date().getDay()` / `.getHours()`, which are server-local (UTC on most
+// hosts) and drift 7–8 hours from the store's wall clock in Port Orchard, WA.
+// ---------------------------------------------------------------------------
+
+/** The current instant. Exists so business code reads `storeNow()` and test
+ *  code can pass explicit instants to the helpers below. */
+export function storeNow(): Date {
+  return new Date();
+}
+
+/**
+ * Weekday (0 = Sunday … 6 = Saturday) of the STORE's wall clock
+ * (America/Los_Angeles) at the given instant. Replaces `Date#getDay()` in
+ * business logic (promotions weekday targeting, daily deals, schedules).
+ *
+ * Implementation: take the Pacific wall-clock Y/M/D and ask what weekday that
+ * calendar date is (pure UTC arithmetic on the date label — no zone math).
+ */
+export function storeWeekday(input: Date | string = storeNow()): number {
+  const p = pacificParts(input);
+  return new Date(Date.UTC(p.year, p.month - 1, p.day)).getUTCDay();
+}
+
+/** Hour-of-day (0-23) of the STORE's wall clock at the given instant.
+ *  Replaces `Date#getHours()` in business logic (off-hours detection,
+ *  sales-hours gate). */
+export function storeHour(input: Date | string = storeNow()): number {
+  return pacificParts(input).hour;
+}
+
 function pad2(n: number): string {
   return String(n).padStart(2, "0");
 }

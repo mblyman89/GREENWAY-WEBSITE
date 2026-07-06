@@ -7,16 +7,18 @@
  * first-class second provider alongside Resend — both feed the same normalized
  * table, so the stats work with either.
  *
- * Security: verifies the Signed Event Webhook ECDSA signature using
- * SENDGRID_WEBHOOK_PUBLIC_KEY (the account's verification public key, base64
- * DER or PEM). If the key is configured, bad/missing signatures are rejected
- * (401). If not set, verification is skipped with a warning so the endpoint can
- * be wired first (always set the key in production).
+ * Security (S-9, fail closed): verifies the Signed Event Webhook ECDSA
+ * signature using SENDGRID_WEBHOOK_PUBLIC_KEY (the account's verification
+ * public key, base64 DER or PEM). Bad/missing signatures are rejected (401).
+ * In PRODUCTION an unset key makes the endpoint refuse with 503 — it never
+ * silently accepts unsigned traffic. In development only, an unset key skips
+ * verification with a warning so local testing works.
  *
  * Idempotent: dedup on sg_event_id.
  */
 import { NextResponse } from "next/server";
 import { verifySendgridSignature } from "@/lib/cms/email-events/verify-core";
+import { shouldRefuseWhenSecretMissing } from "@/lib/security/fail-closed";
 import { mapSendgridBatch } from "@/lib/cms/email-events/normalize-core";
 import { ingestEmailEvents } from "@/lib/cms/email-events/ingest-store";
 
@@ -32,6 +34,14 @@ export async function POST(request: Request) {
   const signature = request.headers.get(SIGNATURE_HEADER);
   const timestamp = request.headers.get(TIMESTAMP_HEADER);
   const publicKey = process.env.SENDGRID_WEBHOOK_PUBLIC_KEY ?? "";
+
+  // S-9: fail CLOSED in production — never accept unsigned traffic.
+  if (shouldRefuseWhenSecretMissing(publicKey)) {
+    return NextResponse.json(
+      { ok: false, error: "webhook key not configured (set SENDGRID_WEBHOOK_PUBLIC_KEY)" },
+      { status: 503 },
+    );
+  }
 
   if (publicKey) {
     const ok = verifySendgridSignature({ rawBody, signature, timestamp, publicKey });

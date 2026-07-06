@@ -20,6 +20,7 @@
  * Protocol reference: Star CloudPRNT Protocol Guide 2.5.2.
  */
 import { NextResponse, type NextRequest } from "next/server";
+import { shouldRefuseWhenSecretMissing } from "@/lib/security/fail-closed";
 import {
   getPrinterSettings,
   claimNextJob,
@@ -49,11 +50,27 @@ function extractToken(req: NextRequest): string | null {
   return null;
 }
 
-/** Returns a 401 response if a token is configured and the request fails it. */
+/**
+ * Returns a refusal response when the request is not authorized, or null when
+ * it may proceed.
+ *
+ * S-9 (fail closed): receipt bodies contain customer name/phone, so in
+ * PRODUCTION an empty poll token refuses with 503 until the owner sets one in
+ * the printer settings. In development only, an empty token allows requests so
+ * initial printer setup is painless.
+ */
 async function authFail(req: NextRequest): Promise<NextResponse | null> {
   const settings = await getPrinterSettings();
   const expected = settings?.poll_token ?? "";
-  if (!expected) return null; // no token configured yet — allow (initial setup)
+  if (!expected) {
+    if (shouldRefuseWhenSecretMissing(expected)) {
+      return NextResponse.json(
+        { error: "printer poll token not configured (set it in Admin → Equipment → Receipt printer)" },
+        { status: 503 },
+      );
+    }
+    return null; // dev only: no token configured yet — allow (initial setup)
+  }
   const provided = extractToken(req);
   if (provided === expected) return null;
   return NextResponse.json(

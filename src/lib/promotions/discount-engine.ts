@@ -18,6 +18,7 @@ import "server-only";
 import { getPublishedPromotions } from "./promotions-store";
 import type { PublishedPromotion, Weekday } from "./types";
 import { getPublishedVersion, getVersionItems } from "@/lib/pos/menu-version";
+import { storeWeekday } from "@/lib/reports/timezone";
 import {
   computePromotions,
   type EngineRule,
@@ -98,7 +99,10 @@ export function promotionToRule(p: PublishedPromotion, config: EngineConfig = {}
 /** Is a published promotion active at `when`? (weekday recurring OR date window) */
 export function isActiveNow(p: PublishedPromotion, when: Date): boolean {
   if (p.weekday != null) {
-    return p.weekday === (when.getDay() as Weekday);
+    // S-12: weekday recurring promos follow the STORE's (Pacific) weekday.
+    // Server-local getDay() drifts ~7-8h/day on UTC hosts, making the
+    // advertised deal differ from the charged deal in the evening.
+    return p.weekday === (storeWeekday(when) as Weekday);
   }
   const startsOk = !p.startsAt || new Date(p.startsAt).getTime() <= when.getTime();
   const endsOk = !p.endsAt || new Date(p.endsAt).getTime() >= when.getTime();

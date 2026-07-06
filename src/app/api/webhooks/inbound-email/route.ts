@@ -17,9 +17,11 @@
  *       SendGrid credentials arrive: set the two envs and point the Parse MX +
  *       webhook URL here. No code change required.
  *
- * SECURITY: if the relevant secret/token is configured, a bad/missing signature
- * or token is rejected 401. If it is NOT set, we skip the check with a warning
- * so the endpoint can be wired first — but ALWAYS set it in production.
+ * SECURITY (S-9, fail closed): if the relevant secret/token is configured, a
+ * bad/missing signature or token is rejected 401. In PRODUCTION an unset
+ * secret/token makes the endpoint refuse with 503 — it never silently accepts
+ * unauthenticated mail. In development only, an unset secret skips the check
+ * with a warning so local testing works.
  *
  * DRAFTS-ONLY (standing rule): every arrival is logged to inbound_email_log;
  * any attachment that parses as a vendor manifest (JSON transfer or CCRS CSV) is
@@ -29,6 +31,7 @@
  */
 import { NextResponse } from "next/server";
 import { verifyResendSignature } from "@/lib/cms/email-events/verify-core";
+import { shouldRefuseWhenSecretMissing } from "@/lib/security/fail-closed";
 import {
   normalizeInboundEmail,
   isForIntakeMailbox,
@@ -70,6 +73,14 @@ async function handleResend(request: Request) {
   const secret =
     process.env.RESEND_INBOUND_SECRET ?? process.env.RESEND_WEBHOOK_SECRET ?? "";
 
+  // S-9: fail CLOSED in production — never accept unsigned inbound mail.
+  if (shouldRefuseWhenSecretMissing(secret)) {
+    return NextResponse.json(
+      { ok: false, error: "inbound secret not configured (set RESEND_INBOUND_SECRET)" },
+      { status: 503 },
+    );
+  }
+
   let signatureOk: boolean | null = null;
   if (secret) {
     signatureOk = verifyResendSignature({
@@ -103,6 +114,15 @@ async function handleResend(request: Request) {
 async function handleSendgrid(request: Request) {
   // Shared-secret token in the URL query (Inbound Parse cannot sign requests).
   const token = process.env.SENDGRID_INBOUND_TOKEN ?? "";
+
+  // S-9: fail CLOSED in production — never accept unauthenticated inbound mail.
+  if (shouldRefuseWhenSecretMissing(token)) {
+    return NextResponse.json(
+      { ok: false, error: "inbound token not configured (set SENDGRID_INBOUND_TOKEN)" },
+      { status: 503 },
+    );
+  }
+
   let signatureOk: boolean | null = null;
   if (token) {
     const url = new URL(request.url);

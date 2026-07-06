@@ -22,6 +22,8 @@ import { recordAudit } from "@/lib/auth/audit";
 import { setOrderStatus, updateStaffNote, getOrder } from "@/lib/orders/orders-store";
 import { verifyStoredOrderForCompletion } from "@/lib/orders/order-pricing";
 import { enforceSalesLimitForSale } from "@/lib/compliance/sales-limits";
+import { evaluateSalesHours } from "@/lib/compliance/sales-hours-core";
+import { getSalesHoursWindow } from "@/lib/compliance/sales-hours-store";
 import type { OrderStatus } from "@/lib/orders/types";
 
 const VALID_STATUSES: OrderStatus[] = [
@@ -51,6 +53,17 @@ async function runCompletionGate(opts: {
   const order = await getOrder(opts.orderId);
   if (!order) return "Order not found.";
   if (order.status === "completed") return null; // idempotent re-complete
+
+  // ── S-12: sales-hours gate (WAC 314-55-147) ─────────────────────────────
+  // A sale may only complete 8:00 AM–midnight on the STORE's (Pacific) wall
+  // clock; the owner may configure a TIGHTER window in Settings → Sales hours.
+  // This is a HARD block — the statute has no override; a tighter owner
+  // window is widened in Settings, never bypassed at the register.
+  const hoursWindow = await getSalesHoursWindow();
+  const hoursVerdict = evaluateSalesHours(new Date(), hoursWindow);
+  if (!hoursVerdict.allowed) {
+    return `Sale blocked outside sales hours. ${hoursVerdict.reason}`;
+  }
 
   // ── S-2b: money recompute gate ─────────────────────────────────────────
   const check = await verifyStoredOrderForCompletion(order);

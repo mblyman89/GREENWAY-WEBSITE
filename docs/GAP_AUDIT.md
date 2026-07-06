@@ -113,4 +113,23 @@
 - **Footer warning text matches WAC-mandated language**; age gate; honest "representative image" badges.
 - **ACH hard-gated on source documents**; typed-confirm destructive ops; soft-delete pattern for types.
 
+## Resolution log (per Roadmap "definition of done" — findings above kept verbatim)
+
+| Finding | Slice | Resolved in | Resolution |
+| --- | --- | --- | --- |
+| H-1 | S-1 | PR #268 | `runCompletionGate` in `admin/orders/actions.ts` hard-gates the completed transition through `enforceSalesLimitForSale`; soft evaluation at placement; `sales_limit_events` written; permission-gated manager override; pure gate self-tests. |
+| H-2 | S-2 | PR #268 | Server-side reprice at placement from the published menu version; completion-time recompute gate (mismatch ⇒ block); client totals demoted to cross-check; pure order-pricing self-tests. |
+| H-3 | S-3 | PR #268 | Global cannabis unit-price floor (> $0 and ≥ acquisition cost) applied in the cart discount engine and at server reprice/completion; promo percent capped for cannabis. |
+| M-1 | S-4 | PR #269 | All five AI accept paths re-run `checkCompliance` at accept time and block on blocking flags. |
+| M-2 | S-4/S-5 | PR #269 | Crawler compliance mirror re-synced with shared fixture parity check; SSRF hardening (private-IP/non-http blocked, domain allow-list required). |
+| M-3 | S-6 | PR #270 | `reset_operational_data` guarded: blocked once CCRS submissions or completed real sales exist. |
+| M-4 | S-7 | PR #271 | `.in()` truncation family eliminated via chunked pagination (`chunkedIn`) across wa-tax/sales/cogs/receipts/ccrs-sales/sage exports; pure self-tests. |
+| M-5 | S-8 | PR #271 | Medical-exempt sales cross-wired into wa-tax excise math (exempt rows excluded per WAC 314-55-090(2)); canonical period basis documented in `docs/PERIOD_BASIS.md`; pure self-tests. |
+| M-6 | S-9 | PR-E | Webhooks fail CLOSED in production: Resend/SendGrid/inbound-email return 503 when their secret is unset (`lib/security/fail-closed.ts`); CloudPRNT auth failure ⇒ 503 in prod; dev keeps warn-and-continue; admin dashboard banner lists missing webhook secrets; unverified inbound senders badged in the intake panel. |
+| M-7 | S-10 | PR-E | At-rest AES-256-GCM envelope encryption (`encv1:`; key from `DATA_ENCRYPTION_KEY`, see `.env.example`) for employee bank routing/account, company ACH account, payroll line snapshots, and integration API secrets; legacy plaintext reads pass through and re-encrypt on save. Clock PINs now salted-scrypt hashed with constant-time verify, legacy plaintext upgraded on use, and in-memory throttle (5 fails/60s ⇒ 60s lock). `listEmployees` column-restricted (no `select *` banking leak); the only banking read path is `listEmployeeBanking()`; account numbers render masked (`•••• + last4`). Admin banner when the key is unset. |
+| M-8 | S-11 | PR #270 | Legacy ungated `acceptManifest()` retired; only the gated finalize path (lot-activation gate) remains. |
+| M-9 | S-12 | PR-E | All business weekday/hour logic pinned to America/Los_Angeles via `storeNow/storeWeekday/storeHour` in `lib/reports/timezone.ts` (promotions engine, auto-discounts, promotions admin page, audit-anomaly off-hours); receipt timestamps print Pacific ("PT"). Bonus: WAC 314-55-147 sales-hours gate — pure core (`lib/compliance/sales-hours-core.ts`, statutory 8:00–24:00 clamp, owner window can only narrow) + settings page (`/admin/settings/sales-hours`) + hard block in the order completion gate. |
+| M-10 | S-13 | PR #270 | Sage purchases export includes `partially_accepted` manifests with accepted-lots-only cost basis, matching the payables store. |
+| M-11 | S-14 | pending (PR-F) | Compliance test harness with golden files — in progress. |
+
 — END OF GAP AUDIT —
