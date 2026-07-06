@@ -1,21 +1,34 @@
 """WA I-502 compliance scan — a faithful Python mirror of the site's
 `src/lib/ai/compliance.ts` `checkCompliance`.
 
-Kept deliberately in lock-step with the TypeScript version: same patterns, same
-severities, same labels. If the site's rules change, change them here too. The
-crawler runs this on every extracted text field so a non-compliant draft is
+SINGLE SOURCE OF TRUTH: both sides load the SAME pattern fixture.
+  • Site:    src/lib/ai/compliance-patterns.json
+  • Crawler: crawler/app/compliance_patterns.json (byte-identical copy)
+
+If the rules change, edit the site fixture and copy it here. Parity tests
+(`crawler/tests/test_compliance_parity.py` here, and
+`scripts/compliance/check-pattern-parity.ts` on the site) fail loudly when the
+two copies drift, so the crawler can never silently run stale rules. All
+patterns are written to be valid in BOTH JS RegExp and Python `re` syntax
+(no lookbehind, no named groups).
+
+The crawler runs this on every extracted text field so a non-compliant draft is
 flagged (and blocking drafts are suppressed) before it ever reaches the review
 queue.
 """
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass, field
+from pathlib import Path
 
 # Mirrors COMPLIANCE_SYSTEM's PROMPT_VERSION in compliance.ts.
 PROMPT_VERSION = "v2-grounded"
 
 Severity = str  # "block" | "warn"
+
+_PATTERNS_FILE = Path(__file__).resolve().parent / "compliance_patterns.json"
 
 
 @dataclass(frozen=True)
@@ -25,29 +38,20 @@ class _Pattern:
     severity: Severity
 
 
-# Mirror of RISKY_PATTERNS in compliance.ts (same order, labels, severities).
-_RISKY_PATTERNS: list[_Pattern] = [
-    _Pattern(re.compile(r"\b(cure|cures|curing|heal|heals|healing|treat|treats|treating|remedy)\b", re.I),
-             "medical claim (cure/treat/heal)", "block"),
-    _Pattern(re.compile(r"\b(relieve|relieves|relief|reduces? (pain|anxiety|stress|inflammation))\b", re.I),
-             "symptom-relief claim", "block"),
-    _Pattern(re.compile(r"\b(pain|anxiety|depression|insomnia|ptsd|cancer|arthritis|migraine|nausea|seizure|adhd)\b", re.I),
-             "named medical condition", "block"),
-    _Pattern(re.compile(r"\b(safe|healthy|good for you|non-?addictive|harmless|wellness)\b", re.I),
-             "safety/efficacy claim", "block"),
-    _Pattern(re.compile(r"\b(dose|dosage|take \d|mg per|how much to (take|consume)|start with \d)\b", re.I),
-             "dosing advice", "block"),
-    _Pattern(re.compile(r"\b(candy|gummy bears?|kid|kids|children|cartoon|toy)\b", re.I),
-             "appeal-to-minors language", "block"),
-    _Pattern(re.compile(r"\b(alcohol|beer|wine|whiskey|tobacco|cigarette|nicotine|vodka)\b", re.I),
-             "alcohol/tobacco association", "block"),
-    _Pattern(re.compile(r"\b(guarantee|guaranteed|miracle|clinically proven|doctor recommended)\b", re.I),
-             "unsubstantiated claim", "block"),
-    _Pattern(re.compile(r"\b(best|amazing|incredible|unbeatable|world-?class)\b", re.I),
-             "empty hype wording", "warn"),
-    _Pattern(re.compile(r"\$\s?\d|\bprice\b|\bdiscount\b|\bsale\b", re.I),
-             "price/discount mention", "warn"),
-]
+def _load_patterns() -> tuple[int, list[_Pattern]]:
+    """Load the shared fixture. Fails loudly if the file is missing/invalid —
+    the crawler must NEVER run without its compliance rules."""
+    data = json.loads(_PATTERNS_FILE.read_text("utf-8"))
+    version = int(data["patternsVersion"])
+    patterns: list[_Pattern] = []
+    for raw in data["patterns"]:
+        flags = re.IGNORECASE if "i" in raw.get("flags", "") else 0
+        severity = "block" if raw.get("severity") == "block" else "warn"
+        patterns.append(_Pattern(re.compile(raw["pattern"], flags), raw["label"], severity))
+    return version, patterns
+
+
+PATTERNS_VERSION, _RISKY_PATTERNS = _load_patterns()
 
 
 @dataclass

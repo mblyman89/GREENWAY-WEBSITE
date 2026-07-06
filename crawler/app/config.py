@@ -21,6 +21,13 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
+    # --- Environment ------------------------------------------------------------
+    # "production" tightens hard-security requirements: CRAWL_ALLOW_DOMAINS must
+    # be set (S-5) so the crawler can only ever research explicitly-approved
+    # hosts. Anything else ("development", default) keeps the permissive
+    # operator-trust behavior for local testing.
+    crawler_env: str = Field(default="development", alias="CRAWLER_ENV")
+
     # --- Auth -----------------------------------------------------------------
     crawler_shared_secret: str = Field(default="", alias="CRAWLER_SHARED_SECRET")
 
@@ -97,6 +104,10 @@ class Settings(BaseSettings):
     @property
     def allow_domains(self) -> list[str]:
         return [d.strip().lower() for d in self.crawl_allow_domains.split(",") if d.strip()]
+
+    @property
+    def is_production(self) -> bool:
+        return self.crawler_env.strip().lower() in ("production", "prod")
 
     @property
     def proxy_url(self) -> str:

@@ -1,0 +1,96 @@
+{
+  "$comment": "SINGLE SOURCE OF TRUTH for the WA I-502 compliance regex scan. Consumed by BOTH src/lib/ai/compliance.ts (TypeScript, new RegExp(pattern, flags)) and crawler/app/compliance.py (Python, re.compile). The crawler ships a byte-identical copy at crawler/app/compliance_patterns.json; parity tests (scripts/compliance/check-pattern-parity.ts and crawler/tests/test_compliance_parity.py) fail when the two files drift. Patterns MUST stay valid in both JS RegExp and Python re syntax: no lookbehind, no named groups, no JS-only or Python-only constructs.",
+  "patternsVersion": 3,
+  "patterns": [
+    {
+      "pattern": "\\b(cure|cures|cured|curing|heal|heals|healed|healing|treat|treats|treated|treating|remedy|remedies|prevent|prevents|preventing|diagnose|diagnoses)\\b",
+      "flags": "i",
+      "label": "medical claim (cure/treat/heal/prevent)",
+      "severity": "block"
+    },
+    {
+      "pattern": "\\b(therapeutic|therapy|medicinal(?:ly)?|medicine for|medical(?:ly)? (?:grade|proven|benefit))\\b",
+      "flags": "i",
+      "label": "therapeutic/medicinal claim",
+      "severity": "block"
+    },
+    {
+      "pattern": "\\b(relieves?|relief|reduces?|lowers?|eases?|soothes?|alleviates?)\\s+(your\\s+)?(pain|anxiety|stress|inflammation|nausea|depression|insomnia|cramps?|spasms?|blood pressure|symptoms?)\\b",
+      "flags": "i",
+      "label": "symptom-relief claim",
+      "severity": "block"
+    },
+    {
+      "pattern": "\\b(pain[- ]relief|anti-?inflammatory|anti-?anxiety|antidepressant|antiemetic|analgesic|blood pressure|immune system|kills? cancer)\\b",
+      "flags": "i",
+      "label": "physiological/medical-outcome claim",
+      "severity": "block"
+    },
+    {
+      "pattern": "\\b(treats?|cures?|heals?|helps?\\s+with|good\\s+for|for\\s+your)\\s+(chronic\\s+)?(pain|anxiety|depression|insomnia|ptsd|cancer|arthritis|migraines?|nausea|seizures?|epilepsy|glaucoma|adhd|inflammation)\\b",
+      "flags": "i",
+      "label": "treats-a-condition claim",
+      "severity": "block"
+    },
+    {
+      "pattern": "\\b(ptsd|cancer|epilepsy|glaucoma|arthritis)\\b",
+      "flags": "i",
+      "label": "named disease/condition",
+      "severity": "block"
+    },
+    {
+      "pattern": "\\b(safe|healthy|good for you|non-?addictive|harmless|no side effects|wellness benefit)\\b",
+      "flags": "i",
+      "label": "safety/efficacy claim",
+      "severity": "block"
+    },
+    {
+      "pattern": "\\b(dose|dosage|dosing|take \\d|\\d+\\s*mg per|how much to (take|consume)|start with \\d)\\b",
+      "flags": "i",
+      "label": "dosing advice",
+      "severity": "block"
+    },
+    {
+      "pattern": "\\b(candy|gummy bears?|kid|kids|children|childhood|cartoon|toy|mascot)\\b",
+      "flags": "i",
+      "label": "appeal-to-minors language",
+      "severity": "block"
+    },
+    {
+      "pattern": "\\b(alcohol|beer|wine|whiskey|tobacco|cigarette|nicotine|vodka|liquor)\\b",
+      "flags": "i",
+      "label": "alcohol/tobacco association",
+      "severity": "block"
+    },
+    {
+      "pattern": "\\b(guarantee|guaranteed|miracle|clinically proven|doctor recommended|physician recommended|fda[- ]approved|pharmaceutical)\\b",
+      "flags": "i",
+      "label": "unsubstantiated/medical-authority claim",
+      "severity": "block"
+    },
+    {
+      "pattern": "\\b(get (?:really )?(?:high|blazed|wasted)|as much as you can|binge|over-?consume|chug|megadose)\\b",
+      "flags": "i",
+      "label": "over-consumption encouragement",
+      "severity": "block"
+    },
+    {
+      "pattern": "\\b(helps?\\s+(?:you\\s+)?(?:sleep|relax|unwind|de-?stress)|aids?\\b|helps?\\s+with|great\\s+for\\b)",
+      "flags": "i",
+      "label": "borderline therapeutic-leaning phrasing (review)",
+      "severity": "warn"
+    },
+    {
+      "pattern": "\\b(best|amazing|incredible|unbeatable|world-?class|premium quality|top-?shelf)\\b",
+      "flags": "i",
+      "label": "empty hype wording",
+      "severity": "warn"
+    },
+    {
+      "pattern": "\\$\\s?\\d|\\bprice\\b|\\bdiscount\\b|\\bsale\\b|\\bdeal\\b|\\bcheap\\b",
+      "flags": "i",
+      "label": "price/discount mention",
+      "severity": "warn"
+    }
+  ]
+}

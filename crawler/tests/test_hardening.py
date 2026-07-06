@@ -16,7 +16,7 @@ import httpx  # noqa: E402
 from app.config import Settings  # noqa: E402
 from app.css_extract import extract_css  # noqa: E402
 from app.discovery import discover_feed_urls  # noqa: E402
-from app.fetcher import _retry_after_seconds, domain_allowed  # noqa: E402
+from app.fetcher import _retry_after_seconds, domain_allowed, url_is_safe  # noqa: E402
 from app.http_identity import browser_headers, pick_user_agent  # noqa: E402
 
 
@@ -30,6 +30,44 @@ def test_allow_list_enforced():
     assert domain_allowed(s, "https://goodbrand.com/about") is True
     assert domain_allowed(s, "https://shop.goodbrand.com/p") is True  # subdomain ok
     assert domain_allowed(s, "https://evil.example.com/") is False
+
+
+def test_allow_list_required_in_production():
+    # S-5: production with NO allow-list refuses every host.
+    s = Settings(CRAWLER_ENV="production", CRAWL_ALLOW_DOMAINS="")  # type: ignore
+    assert domain_allowed(s, "https://anything.example.com/x") is False
+    # Production WITH an allow-list behaves normally.
+    s2 = Settings(CRAWLER_ENV="production", CRAWL_ALLOW_DOMAINS="goodbrand.com")  # type: ignore
+    assert domain_allowed(s2, "https://goodbrand.com/about") is True
+    assert domain_allowed(s2, "https://evil.example.com/") is False
+
+
+def test_ssrf_blocks_non_http_schemes():
+    # S-5: only http/https may ever be fetched.
+    assert url_is_safe("file:///etc/passwd")[0] is False
+    assert url_is_safe("ftp://example.com/x")[0] is False
+    assert url_is_safe("gopher://example.com/")[0] is False
+    assert url_is_safe("javascript:alert(1)")[0] is False
+
+
+def test_ssrf_blocks_private_loopback_linklocal_ips():
+    # S-5: literal internal addresses are refused without any DNS round-trip.
+    assert url_is_safe("http://127.0.0.1/admin")[0] is False        # loopback
+    assert url_is_safe("http://10.0.0.5/")[0] is False              # RFC1918
+    assert url_is_safe("http://172.16.0.1/")[0] is False            # RFC1918
+    assert url_is_safe("http://192.168.1.1/router")[0] is False     # RFC1918
+    assert url_is_safe("http://169.254.169.254/latest/meta-data/")[0] is False  # cloud metadata
+    assert url_is_safe("http://[::1]/")[0] is False                 # IPv6 loopback
+    assert url_is_safe("http://0.0.0.0/")[0] is False               # unspecified
+
+
+def test_ssrf_allows_global_ip():
+    ok, reason = url_is_safe("https://93.184.216.34/")  # example.com's classic global IP
+    assert ok is True, reason
+
+
+def test_ssrf_rejects_hostless_url():
+    assert url_is_safe("http:///path-only")[0] is False
 
 
 def test_retry_after_seconds_numeric():

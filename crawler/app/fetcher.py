@@ -14,8 +14,10 @@ steps can do CSS-first extraction (HTML) and LLM extraction (markdown).
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import json
 import random
+import socket
 import time
 import urllib.robotparser as robotparser
 from dataclasses import dataclass, field
@@ -52,13 +54,60 @@ def _domain(url: str) -> str:
 def domain_allowed(settings: Settings, url: str) -> bool:
     """If an allow-list is configured, only those hosts may be researched.
 
-    Empty allow-list = allow whatever host the operator submits (the operator
-    is a trusted staff member typing a URL into the back office)."""
+    In DEVELOPMENT an empty allow-list allows whatever host the operator
+    submits (the operator is a trusted staff member typing a URL into the back
+    office). In PRODUCTION (CRAWLER_ENV=production) an allow-list is REQUIRED
+    (S-5): with none configured, every fetch is refused."""
     allow = settings.allow_domains
     if not allow:
-        return True
+        return not settings.is_production
     host = _domain(url)
+    # Strip a :port suffix so "host:8080" still matches the allow-list entry.
+    host = host.rsplit(":", 1)[0] if ":" in host and not host.endswith("]") else host
     return any(host == d or host.endswith("." + d) for d in allow)
+
+
+def url_is_safe(url: str) -> tuple[bool, str]:
+    """S-5 SSRF guard: refuse non-http(s) schemes and any host that resolves to
+    a private, loopback, link-local, or otherwise non-global address.
+
+    Every address a hostname resolves to must be globally routable — a single
+    internal A/AAAA record rejects the URL (DNS-rebinding-style tricks where a
+    public name points at 169.254.169.254 or 10.x.x.x are the classic SSRF
+    vector against cloud metadata endpoints and internal services).
+    Returns (ok, reason)."""
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return False, "unparseable URL"
+    if parsed.scheme not in ("http", "https"):
+        return False, f"scheme '{parsed.scheme or '(none)'}' not allowed (http/https only)"
+    host = parsed.hostname
+    if not host:
+        return False, "URL has no host"
+    # Literal IP? Validate directly (no DNS round-trip).
+    try:
+        ip = ipaddress.ip_address(host)
+        if not ip.is_global:
+            return False, f"IP {ip} is not globally routable (private/loopback/link-local)"
+        return True, ""
+    except ValueError:
+        pass  # a hostname — resolve it
+    try:
+        infos = socket.getaddrinfo(host, None, proto=socket.IPPROTO_TCP)
+    except socket.gaierror as e:
+        return False, f"DNS resolution failed: {e}"
+    addresses = {info[4][0] for info in infos}
+    if not addresses:
+        return False, "hostname resolved to no addresses"
+    for addr in addresses:
+        try:
+            ip = ipaddress.ip_address(addr.split("%")[0])  # strip IPv6 zone id
+        except ValueError:
+            return False, f"unparseable resolved address {addr!r}"
+        if not ip.is_global:
+            return False, f"{host} resolves to non-global address {ip} (SSRF blocked)"
+    return True, ""
 
 
 def _request_headers(settings: Settings) -> dict[str, str]:
@@ -291,7 +340,16 @@ async def fetch_page(url: str, *, prefer_browser: bool = True, settings: Setting
     """Politely fetch a single page. Honors robots + rate limit + cache."""
     settings = settings or get_settings()
 
+    # S-5: SSRF guard first (scheme + private/loopback/link-local addresses)…
+    safe, reason = url_is_safe(url)
+    if not safe:
+        return FetchResult(url=url, ok=False, error=f"unsafe URL: {reason}")
+
+    # …then the domain allow-list (REQUIRED in production).
     if not domain_allowed(settings, url):
+        if settings.is_production and not settings.allow_domains:
+            return FetchResult(url=url, ok=False,
+                               error="CRAWL_ALLOW_DOMAINS is required in production (S-5)")
         return FetchResult(url=url, ok=False, error="domain not in allow-list")
 
     cached = _read_cache(settings, url)

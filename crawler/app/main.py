@@ -24,6 +24,21 @@ log = logging.getLogger("greenway.crawler")
 app = FastAPI(title="Greenway Crawler", version=__version__)
 
 
+@app.on_event("startup")
+def _enforce_production_config() -> None:
+    """S-5: in production, an explicit domain allow-list is REQUIRED.
+
+    Fail fast at boot (not silently per-request) so a misconfigured deploy is
+    obvious. fetch_page ALSO refuses every fetch under this condition, so even
+    if the startup hook were bypassed, nothing can be fetched."""
+    s = get_settings()
+    if s.is_production and not s.allow_domains:
+        raise RuntimeError(
+            "CRAWLER_ENV=production requires CRAWL_ALLOW_DOMAINS to be set "
+            "(comma-separated hostnames the crawler may research). Refusing to start."
+        )
+
+
 class ResearchRequest(BaseModel):
     url: str = Field(..., description="The page to research.")
     entity_type: str = Field(..., description="vendor | brand | product")

@@ -35,11 +35,11 @@ export default async function BlogEditorPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ saved?: string; ai?: string; topic?: string }>;
+  searchParams: Promise<{ saved?: string; ai?: string; topic?: string; error?: string }>;
 }) {
   await requirePermission("blog.manage");
   const { id } = await params;
-  const { saved, ai, topic } = await searchParams;
+  const { saved, ai, topic, error } = await searchParams;
   const topicSeed = (topic ?? "").slice(0, 300);
 
   if (!isSupabaseServiceConfigured) notFound();
@@ -98,6 +98,11 @@ export default async function BlogEditorPage({
       />
 
       <div className="mx-auto w-full max-w-5xl space-y-6 px-5 py-6 sm:px-8">
+        {error && (
+          <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-2 text-sm text-red-300">
+            {error}
+          </div>
+        )}
         {saved && (
           <div className="rounded-lg border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]">
             Saved.

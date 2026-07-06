@@ -32,6 +32,7 @@ import {
   type BlogIdea,
   type BlogIdeaKind,
 } from "@/lib/cms/ai-blog-ideas";
+import { acceptWithComplianceGate } from "@/lib/ai/accept-gate";
 
 const MAX_IMG_BYTES = 5 * 1024 * 1024;
 const IMAGE_MIME = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
@@ -323,6 +324,20 @@ export async function acceptBlogSuggestionAction(formData: FormData): Promise<vo
   const post = await getPostById(id);
   if (!suggestion || !post) redirect(`/admin/blog/${id}`);
 
+  // S-4: compliance RE-SCAN at accept — blocking flags refuse the accept.
+  const gate = await acceptWithComplianceGate(suggestion!);
+  if (!gate.ok) {
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "blog.ai.accept_blocked",
+      entityType: "blog_post",
+      entityId: id,
+      after: { field: suggestion!.field_key, ...gate.audit },
+    });
+    redirect(`/admin/blog/${id}?error=` + encodeURIComponent(gate.message));
+  }
+
   if (suggestion.field_key === "body") {
     await updatePost(id, {
       body: bodyFromText(suggestion.suggested_value ?? ""),
@@ -344,7 +359,7 @@ export async function acceptBlogSuggestionAction(formData: FormData): Promise<vo
     action: "blog.ai.accept",
     entityType: "blog_post",
     entityId: id,
-    after: { field: suggestion.field_key },
+    after: { field: suggestion.field_key, ...gate.audit },
   });
 
   revalidatePath(`/admin/blog/${id}`);
