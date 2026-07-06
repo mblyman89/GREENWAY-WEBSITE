@@ -15,6 +15,12 @@ import {
 import { isValidPin } from "@/lib/staffing/time";
 import { parsePunchEdit, composeEditNote } from "@/lib/staffing/timeclock-core";
 import { pacificWallTimeToUtcISO } from "@/lib/reports/timezone";
+import {
+  hashPin,
+  pinThrottleBlocked,
+  recordPinFailure,
+  recordPinSuccess,
+} from "@/lib/security/pin-hash";
 
 const BASE = "/admin/staffing";
 
@@ -47,10 +53,17 @@ export async function clockToggleAction(formData: FormData): Promise<void> {
 /** Clock in/out via PIN at a shared station. */
 export async function clockByPinAction(formData: FormData): Promise<void> {
   await requirePermission("loyalty.view");
+  // S-10: brute-force throttle on the shared PIN pad.
+  const locked = pinThrottleBlocked();
+  if (locked) redirect(`${BASE}?error=` + encodeURIComponent(locked));
   const pin = str(formData, "pin");
   if (!isValidPin(pin)) redirect(`${BASE}?error=` + encodeURIComponent("Enter a valid 4–6 digit PIN."));
   const emp = await getEmployeeByPin(pin);
-  if (!emp) redirect(`${BASE}?error=` + encodeURIComponent("No active employee for that PIN."));
+  if (!emp) {
+    recordPinFailure();
+    redirect(`${BASE}?error=` + encodeURIComponent("No active employee for that PIN."));
+  }
+  recordPinSuccess();
   const result = await toggleClock(emp.id, "station");
   if (!result.ok) redirect(`${BASE}?error=` + encodeURIComponent(result.error));
   await recordAudit({
@@ -74,9 +87,16 @@ export async function clockByPinPhoneAction(formData: FormData): Promise<void> {
   await requirePermission("loyalty.view");
   const pin = str(formData, "pin");
   const CLOCK = `${BASE}/clock`;
+  // S-10: brute-force throttle on the PIN entry (shared with the station pad).
+  const locked = pinThrottleBlocked();
+  if (locked) redirect(`${CLOCK}?error=` + encodeURIComponent(locked));
   if (!isValidPin(pin)) redirect(`${CLOCK}?error=` + encodeURIComponent("Enter a valid 4–6 digit PIN."));
   const emp = await getEmployeeByPin(pin);
-  if (!emp) redirect(`${CLOCK}?error=` + encodeURIComponent("No active employee for that PIN."));
+  if (!emp) {
+    recordPinFailure();
+    redirect(`${CLOCK}?error=` + encodeURIComponent("No active employee for that PIN."));
+  }
+  recordPinSuccess();
   const result = await toggleClock(emp.id, "phone");
   if (!result.ok) redirect(`${CLOCK}?error=` + encodeURIComponent(result.error));
   await recordAudit({
@@ -101,10 +121,16 @@ export async function createEmployeeAction(formData: FormData): Promise<void> {
   if (!fullName) redirect(`${BASE}/employees?error=` + encodeURIComponent("Name is required."));
   const pin = str(formData, "clock_pin");
   if (pin && !isValidPin(pin)) redirect(`${BASE}/employees?error=` + encodeURIComponent("PIN must be 4–6 digits."));
+  // S-10: PINs are stored as salted scrypt hashes, so the old unique index
+  // cannot catch duplicates — check by verification before saving.
+  if (pin) {
+    const holder = await getEmployeeByPin(pin);
+    if (holder) redirect(`${BASE}/employees?error=` + encodeURIComponent("That PIN is already in use."));
+  }
   const admin = createSupabaseAdminClient();
   const { error } = await admin.from("employees").insert({
     full_name: fullName,
-    clock_pin: pin || null,
+    clock_pin: pin ? hashPin(pin) : null,
     job_role: str(formData, "job_role") || "sales",
     active: true,
   });
@@ -127,19 +153,27 @@ export async function updateEmployeeAction(formData: FormData): Promise<void> {
   const session = await requirePermission("staffing.manage");
   const id = str(formData, "id");
   if (!id) redirect(`${BASE}/employees?error=` + encodeURIComponent("Missing id."));
+  // S-10: hashes are never shown, so the PIN field is now write-only —
+  // blank = keep the current PIN; the "remove PIN" checkbox clears it.
   const pin = str(formData, "clock_pin");
+  const clearPin = formData.get("clear_pin") === "on";
   if (pin && !isValidPin(pin)) redirect(`${BASE}/employees?error=` + encodeURIComponent("PIN must be 4–6 digits."));
+  if (pin) {
+    const holder = await getEmployeeByPin(pin);
+    if (holder && holder.id !== id) {
+      redirect(`${BASE}/employees?error=` + encodeURIComponent("That PIN is already in use."));
+    }
+  }
+  const update: Record<string, unknown> = {
+    full_name: str(formData, "full_name"),
+    job_role: str(formData, "job_role") || "sales",
+    active: formData.get("active") === "on" || formData.get("active") === "true",
+    notes: str(formData, "notes") || null,
+  };
+  if (clearPin) update.clock_pin = null;
+  else if (pin) update.clock_pin = hashPin(pin);
   const admin = createSupabaseAdminClient();
-  const { error } = await admin
-    .from("employees")
-    .update({
-      full_name: str(formData, "full_name"),
-      clock_pin: pin || null,
-      job_role: str(formData, "job_role") || "sales",
-      active: formData.get("active") === "on" || formData.get("active") === "true",
-      notes: str(formData, "notes") || null,
-    })
-    .eq("id", id);
+  const { error } = await admin.from("employees").update(update).eq("id", id);
   if (error) {
     const msg = error.code === "23505" ? "That PIN is already in use." : error.message;
     redirect(`${BASE}/employees?error=` + encodeURIComponent(msg));

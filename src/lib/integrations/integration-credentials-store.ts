@@ -14,6 +14,7 @@ import "server-only";
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import { decryptSecret, encryptSecret } from "@/lib/security/at-rest-crypto";
 import {
   EMPTY_CREDENTIALS_ROW,
   applyCredentialsUpdate,
@@ -31,6 +32,20 @@ import {
 } from "./integration-credentials-core";
 
 const TABLE = "integration_credentials";
+
+/**
+ * S-10: the columns that hold true SECRETS (keys/tokens — not ids/urls) are
+ * envelope-encrypted at rest. Encrypt on write, decrypt on read; legacy
+ * plaintext rows pass through unchanged until next saved. No-op until
+ * DATA_ENCRYPTION_KEY is set.
+ */
+const SECRET_COLUMNS = [
+  "leafly_menu_integration_key",
+  "leafly_client_secret",
+  "weedmaps_client_secret",
+  "weedmaps_access_token",
+  "flux_api_key",
+] as const satisfies readonly (keyof IntegrationCredentialsRow)[];
 
 /** Read the raw env fallback (server-only). */
 export function readIntegrationEnv(): IntegrationEnv {
@@ -86,7 +101,12 @@ export async function getIntegrationCredentialsRow(): Promise<IntegrationCredent
   const admin = createSupabaseAdminClient();
   const { data, error } = await admin.from(TABLE).select("*").eq("id", true).maybeSingle();
   if (error || !data) return { ...EMPTY_CREDENTIALS_ROW };
-  return coerceRow(data as Record<string, unknown>);
+  const row = coerceRow(data as Record<string, unknown>);
+  // S-10: decrypt secret columns (legacy plaintext passes through).
+  for (const col of SECRET_COLUMNS) {
+    row[col] = decryptSecret(row[col]);
+  }
+  return row;
 }
 
 /** Masked, display-safe view of the current credentials (DB merged over env). */
@@ -129,10 +149,15 @@ export async function updateIntegrationCredentials(
   }
   const current = await getIntegrationCredentialsRow();
   const next = applyCredentialsUpdate(current, form);
+  // S-10: encrypt secret columns at rest before writing (no-op without key).
+  const toStore = { ...next };
+  for (const col of SECRET_COLUMNS) {
+    toStore[col] = toStore[col] ? encryptSecret(toStore[col]) : toStore[col];
+  }
   const admin = createSupabaseAdminClient();
   const { error } = await admin
     .from(TABLE)
-    .upsert({ id: true, ...next }, { onConflict: "id" });
+    .upsert({ id: true, ...toStore }, { onConflict: "id" });
   if (error) {
     return { ok: false, error: error.message };
   }

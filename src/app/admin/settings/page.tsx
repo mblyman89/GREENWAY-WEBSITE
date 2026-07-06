@@ -102,6 +102,13 @@ export default async function SettingsHomePage() {
           icon: "⚖",
         },
         {
+          href: "/admin/settings/sales-hours",
+          title: "Sales hours",
+          description:
+            "When sales may complete (WAC 314-55-147, 8 AM–midnight) — tighten to your store hours.",
+          icon: "🕗",
+        },
+        {
           href: "/admin/compliance/health",
           title: "Compliance health",
           description:

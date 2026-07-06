@@ -10,8 +10,9 @@ import {
   getAchCompanySettings,
   evaluateRunGuardrails,
 } from "@/lib/payroll/payroll-store";
-import { listEmployees } from "@/lib/staffing/store";
+import { listEmployees, listEmployeeBanking } from "@/lib/staffing/store";
 import { centsToDollars } from "@/lib/payroll/payroll-core";
+import { maskAccountTail } from "@/lib/security/at-rest-crypto";
 import {
   PayrollEntryTable,
   type EmployeeRow,
@@ -57,11 +58,15 @@ export default async function PayrollRunPage({
   if (!detail) notFound();
   const { run, lines } = detail;
 
-  const [employees, settings, guard] = await Promise.all([
+  const [employees, banking, settings, guard] = await Promise.all([
     listEmployees(),
+    // S-10: banking comes ONLY from the dedicated payroll read path — the
+    // default employee selection excludes the bank_* columns entirely.
+    listEmployeeBanking(),
     getAchCompanySettings(),
     evaluateRunGuardrails(id),
   ]);
+  const bankingByEmployee = new Map(banking.map((b) => [b.employee_id, b]));
   const report = guard?.report ?? null;
 
   const readOnly = run.status !== "draft";
@@ -83,10 +88,11 @@ export default async function PayrollRunPage({
 
   const rows: EmployeeRow[] = employees.map((emp) => {
     const line = linesByEmployee.get(emp.id);
-    const routing = line?.bank_routing ?? emp.bank_routing ?? "";
-    const account = line?.bank_account_number ?? emp.bank_account_number ?? "";
+    const saved = bankingByEmployee.get(emp.id);
+    const routing = line?.bank_routing ?? saved?.bank_routing ?? "";
+    const account = line?.bank_account_number ?? saved?.bank_account_number ?? "";
     const accountType =
-      line?.bank_account_type ?? emp.bank_account_type ?? "checking";
+      line?.bank_account_type ?? saved?.bank_account_type ?? "checking";
     return {
       id: emp.id,
       name: emp.full_name,
@@ -96,7 +102,9 @@ export default async function PayrollRunPage({
       deductions:
         line?.deductions_cents != null ? centsToDollars(line.deductions_cents) : "",
       routing,
-      account,
+      // S-10: account numbers render MASKED (••••1234). Submitting the mask
+      // keeps the stored value; typing a new number replaces it.
+      account: maskAccountTail(account),
       accountType: accountType as "checking" | "savings",
     };
   });

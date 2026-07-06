@@ -8,17 +8,25 @@ import { createHash } from "node:crypto";
 import {
   saveEmployeeBanking,
   createPayrollRun,
+  getPayrollRun,
   savePayrollLines,
   generatePayrollNacha,
   createPayrollSourceDocument,
   setRunSourceDocument,
 } from "@/lib/payroll/payroll-store";
 import { dollarsToCents, type PayrollLineInput } from "@/lib/payroll/payroll-core";
+import { listEmployeeBanking } from "@/lib/staffing/store";
 
 const ROOT = "/admin/payroll";
 
 function accountType(v: FormDataEntryValue | null): "checking" | "savings" {
   return String(v ?? "checking") === "savings" ? "savings" : "checking";
+}
+
+/** S-10: a still-masked submission (••••1234) means "keep the stored number". */
+function resolveAccount(submitted: string, stored: string): string {
+  if (submitted.startsWith("••••")) return stored || "";
+  return submitted;
 }
 
 // The originating bank / company ACH settings now live on their own Banking
@@ -48,6 +56,21 @@ export async function saveRunLinesAction(runId: string, formData: FormData): Pro
   const session = await requirePermission("settings.manage");
   const ids = String(formData.get("emp_ids") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
 
+  // S-10: account numbers render MASKED (••••1234) in the editor. A submitted
+  // value that is still masked means "keep the stored number" — resolved in
+  // the same order the editor prefills: this run's saved line snapshot first,
+  // then the employee's stored banking.
+  const [employeeBanking, runDetail] = await Promise.all([
+    listEmployeeBanking(),
+    getPayrollRun(runId),
+  ]);
+  const savedBanking = new Map(employeeBanking.map((b) => [b.employee_id, b]));
+  const lineAccounts = new Map(
+    (runDetail?.lines ?? [])
+      .filter((l) => l.employee_id)
+      .map((l) => [l.employee_id as string, l.bank_account_number ?? ""]),
+  );
+
   const lines: PayrollLineInput[] = [];
   for (const id of ids) {
     const net = dollarsToCents(String(formData.get(`net_${id}`) ?? ""));
@@ -62,7 +85,10 @@ export async function saveRunLinesAction(runId: string, formData: FormData): Pro
       deductionsCents: dollarsToCents(String(formData.get(`deductions_${id}`) ?? "")),
       accountType: accountType(formData.get(`acct_type_${id}`)),
       routing: String(formData.get(`routing_${id}`) ?? "").replace(/\D/g, ""),
-      accountNumber: String(formData.get(`account_${id}`) ?? "").trim(),
+      accountNumber: resolveAccount(
+        String(formData.get(`account_${id}`) ?? "").trim(),
+        lineAccounts.get(id) || (savedBanking.get(id)?.bank_account_number ?? ""),
+      ),
     };
     lines.push(line);
 

@@ -18,6 +18,8 @@ import {
   type Delta,
 } from "@/lib/admin/cockpit-core";
 import { formatDateTime } from "@/lib/pos/format";
+import { missingWebhookSecrets } from "@/lib/security/fail-closed";
+import { isAtRestEncryptionConfigured } from "@/lib/security/at-rest-crypto";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +37,13 @@ export default async function AdminDashboardPage() {
     getSetupStatus(),
   ]);
   const setupComplete = setup.completed >= setup.total;
+
+  // S-9: surface unset webhook secrets loudly. In production those endpoints
+  // now refuse (fail closed), so this banner tells the owner exactly which env
+  // vars to set to bring the surfaces back online.
+  const missingSecrets = missingWebhookSecrets();
+  // S-10: nag until at-rest encryption for banking/credentials is keyed.
+  const encryptionKeyMissing = !isAtRestEncryptionConfigured();
 
   const firstName =
     (session.profile.full_name ?? session.email).split(/[\s@]/)[0] || "there";
@@ -71,6 +80,36 @@ export default async function AdminDashboardPage() {
       />
 
       <div className="space-y-10 px-5 py-6 sm:px-8">
+        {/* ── S-9: missing webhook secrets (fail-closed surfaces offline) ── */}
+        {missingSecrets.length > 0 && (
+          <div className="rounded-[var(--admin-radius-lg)] border border-amber-500/30 bg-amber-500/[0.06] px-5 py-4">
+            <p className="text-sm font-semibold text-amber-300">
+              Webhook secrets missing — those endpoints refuse traffic in production
+            </p>
+            <ul className="mt-1 list-inside list-disc text-xs text-amber-200/90">
+              {missingSecrets.map((m) => (
+                <li key={m.envVar}>
+                  {m.surface}: set <code className="font-mono">{m.envVar}</code>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* ── S-10: at-rest encryption key not set ── */}
+        {encryptionKeyMissing && (
+          <div className="rounded-[var(--admin-radius-lg)] border border-amber-500/30 bg-amber-500/[0.06] px-5 py-4">
+            <p className="text-sm font-semibold text-amber-300">
+              At-rest encryption is off — banking details and API secrets are stored unencrypted
+            </p>
+            <p className="mt-1 text-xs text-amber-200/90">
+              Set <code className="font-mono">DATA_ENCRYPTION_KEY</code> (any long random string) in the
+              server environment. New saves of employee banking, the ACH funding account, and
+              integration secrets are then encrypted automatically.
+            </p>
+          </div>
+        )}
+
         {/* ── Setup progress nudge (only until fully set up) ─────────────────
             Top POS onboarding keeps the checklist one click away from home
             until the store is live. Once every step is done, this disappears. */}

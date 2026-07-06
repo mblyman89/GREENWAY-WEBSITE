@@ -11,22 +11,41 @@ import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { punchMinutes, businessDayFor } from "@/lib/staffing/time";
 import { pacificWallTimeToUtcISO } from "@/lib/reports/timezone";
 import { type Hm, shiftDurationMinutes } from "@/lib/staffing/schedule-core";
+import { hashPin, isPinHash, verifyPin } from "@/lib/security/pin-hash";
+import { decryptSecret } from "@/lib/security/at-rest-crypto";
 
 export type Employee = {
   id: string;
   full_name: string;
   staff_id: string | null;
+  /**
+   * Stored PIN credential. S-10: new saves are salted scrypt hashes
+   * (`scrypt$...`); legacy rows may still hold the plaintext digits until the
+   * PIN is next saved. NEVER render this value — the UI only shows "PIN set".
+   */
   clock_pin: string | null;
   job_role: "sales" | "manager" | "lead" | "other";
   active: boolean;
   notes: string | null;
-  // Optional direct-deposit banking (added in migration 0057). Present because
-  // listEmployees/getEmployee select "*". May be null until an admin fills them in.
-  bank_routing?: string | null;
-  bank_account_number?: string | null;
-  bank_account_type?: "checking" | "savings" | null;
   created_at: string;
   updated_at: string;
+};
+
+/**
+ * S-10: the DEFAULT employee selection EXCLUDES the direct-deposit banking
+ * columns (migration 0057) so account numbers never flow into rosters,
+ * schedules, sample logs, oversight views, etc. Payroll uses the dedicated
+ * banking read below.
+ */
+const EMPLOYEE_COLUMNS =
+  "id, full_name, staff_id, clock_pin, job_role, active, notes, created_at, updated_at";
+
+/** Per-employee direct-deposit banking — payroll/NACHA path ONLY. */
+export type EmployeeBanking = {
+  employee_id: string;
+  bank_routing: string | null;
+  bank_account_number: string | null;
+  bank_account_type: "checking" | "savings" | null;
 };
 
 export type Shift = {
@@ -61,7 +80,10 @@ export type TimePunch = {
 export async function listEmployees(opts?: { includeInactive?: boolean }): Promise<Employee[]> {
   if (!isSupabaseServiceConfigured) return [];
   const admin = createSupabaseAdminClient();
-  let q = admin.from("employees").select("*").order("full_name", { ascending: true });
+  let q = admin
+    .from("employees")
+    .select(EMPLOYEE_COLUMNS)
+    .order("full_name", { ascending: true });
   if (!opts?.includeInactive) q = q.eq("active", true);
   const { data } = await q;
   return (data as Employee[] | null) ?? [];
@@ -70,20 +92,76 @@ export async function listEmployees(opts?: { includeInactive?: boolean }): Promi
 export async function getEmployee(id: string): Promise<Employee | null> {
   if (!isSupabaseServiceConfigured) return null;
   const admin = createSupabaseAdminClient();
-  const { data } = await admin.from("employees").select("*").eq("id", id).maybeSingle();
+  const { data } = await admin
+    .from("employees")
+    .select(EMPLOYEE_COLUMNS)
+    .eq("id", id)
+    .maybeSingle();
   return (data as Employee | null) ?? null;
 }
 
+/**
+ * Resolve an employee from their clock PIN. S-10: PINs are stored as salted
+ * scrypt hashes, so there is no direct `.eq("clock_pin", pin)` lookup any
+ * more — we fetch the (small) active roster and verify each candidate.
+ * Legacy plaintext rows still match by string equality until re-saved; when a
+ * legacy row matches, it is transparently upgraded to a hash.
+ */
 export async function getEmployeeByPin(pin: string): Promise<Employee | null> {
   if (!isSupabaseServiceConfigured) return null;
   const admin = createSupabaseAdminClient();
   const { data } = await admin
     .from("employees")
-    .select("*")
-    .eq("clock_pin", pin)
+    .select(EMPLOYEE_COLUMNS)
     .eq("active", true)
-    .maybeSingle();
-  return (data as Employee | null) ?? null;
+    .not("clock_pin", "is", null);
+  const candidates = (data as Employee[] | null) ?? [];
+  for (const emp of candidates) {
+    const stored = emp.clock_pin ?? "";
+    if (isPinHash(stored)) {
+      if (verifyPin(pin, stored)) return emp;
+    } else if (stored === pin) {
+      // Legacy plaintext match — upgrade to a hash on the spot (best-effort).
+      await admin
+        .from("employees")
+        .update({ clock_pin: hashPin(pin) })
+        .eq("id", emp.id)
+        .then(() => {}, () => {});
+      return emp;
+    }
+  }
+  return null;
+}
+
+/**
+ * S-10: the ONLY read path for employee direct-deposit banking. Used by the
+ * payroll editor + NACHA generation exclusively; nothing else may select the
+ * bank_* columns. Values encrypted at rest (encv1:) are decrypted here;
+ * legacy plaintext passes through.
+ */
+export async function listEmployeeBanking(): Promise<EmployeeBanking[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  const admin = createSupabaseAdminClient();
+  const { data } = await admin
+    .from("employees")
+    .select("id, bank_routing, bank_account_number, bank_account_type");
+  const rows =
+    (data as
+      | {
+          id: string;
+          bank_routing: string | null;
+          bank_account_number: string | null;
+          bank_account_type: "checking" | "savings" | null;
+        }[]
+      | null) ?? [];
+  return rows.map((r) => ({
+    employee_id: r.id,
+    bank_routing: r.bank_routing ? decryptSecret(r.bank_routing) || null : null,
+    bank_account_number: r.bank_account_number
+      ? decryptSecret(r.bank_account_number) || null
+      : null,
+    bank_account_type: r.bank_account_type ?? null,
+  }));
 }
 
 // ---------------------------------------------------------------------------
@@ -120,7 +198,7 @@ export async function onTheClock(): Promise<
   const punches = (data as TimePunch[] | null) ?? [];
   if (punches.length === 0) return [];
   const ids = [...new Set(punches.map((p) => p.employee_id))];
-  const { data: emps } = await admin.from("employees").select("*").in("id", ids);
+  const { data: emps } = await admin.from("employees").select(EMPLOYEE_COLUMNS).in("id", ids);
   const byId = new Map(((emps as Employee[] | null) ?? []).map((e) => [e.id, e]));
   return punches
     .map((p) => ({ employee: byId.get(p.employee_id), punch: p }))

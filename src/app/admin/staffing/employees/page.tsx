@@ -98,9 +98,22 @@ export default async function EmployeesPage({
                         {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
                       </Select>
                     </Field>
-                    <Field label="Clock PIN" help="4–6 digits.">
-                      <Input name="clock_pin" defaultValue={e.clock_pin ?? ""} inputMode="numeric" pattern="\d{4,6}" autoComplete="off" />
+                    <Field
+                      label={e.clock_pin ? "New clock PIN" : "Clock PIN"}
+                      help={
+                        e.clock_pin
+                          ? "PIN is set (stored hashed — it can't be shown). Leave blank to keep it, or enter a new 4–6 digit PIN."
+                          : "4–6 digits."
+                      }
+                    >
+                      <Input name="clock_pin" inputMode="numeric" pattern="\d{4,6}" autoComplete="off" placeholder={e.clock_pin ? "••••" : "e.g. 1234"} />
                     </Field>
+                    {e.clock_pin ? (
+                      <label className="flex items-end gap-2 text-sm text-white/70">
+                        <input type="checkbox" name="clear_pin" className="mb-2 h-4 w-4" />
+                        Remove PIN
+                      </label>
+                    ) : null}
                     <Field label="Notes" className="lg:col-span-3">
                       <Textarea name="notes" defaultValue={e.notes ?? ""} />
                     </Field>

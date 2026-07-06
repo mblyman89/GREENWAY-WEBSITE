@@ -5,11 +5,11 @@
  * bounced, complained, delivery_delayed, failed) and stores them in
  * newsletter_email_events for the newsletter statistics suite.
  *
- * Security: verifies the Svix signature using RESEND_WEBHOOK_SECRET. If the
- * secret is configured, a bad/missing signature is rejected (401). If the
- * secret is NOT set, we skip verification but log a warning — this lets the
- * owner wire the endpoint first and add the secret second, without losing
- * events. (Always set RESEND_WEBHOOK_SECRET in production.)
+ * Security (S-9, fail closed): verifies the Svix signature using
+ * RESEND_WEBHOOK_SECRET. A bad/missing signature is rejected (401). In
+ * PRODUCTION an unset secret makes the endpoint refuse with 503 — it never
+ * silently accepts unsigned traffic. In development only, an unset secret
+ * skips verification with a warning so local testing works.
  *
  * Idempotent: dedup on the Svix message id. Always returns 200 on accepted
  * payloads so Resend does not retry storms; returns 401 only on signature
@@ -17,6 +17,7 @@
  */
 import { NextResponse } from "next/server";
 import { verifyResendSignature } from "@/lib/cms/email-events/verify-core";
+import { shouldRefuseWhenSecretMissing } from "@/lib/security/fail-closed";
 import { mapResendEvent } from "@/lib/cms/email-events/normalize-core";
 import { ingestEmailEvents } from "@/lib/cms/email-events/ingest-store";
 
@@ -30,6 +31,14 @@ export async function POST(request: Request) {
   const svixTimestamp = request.headers.get("svix-timestamp");
   const svixSignature = request.headers.get("svix-signature");
   const secret = process.env.RESEND_WEBHOOK_SECRET ?? "";
+
+  // S-9: fail CLOSED in production — never accept unsigned traffic.
+  if (shouldRefuseWhenSecretMissing(secret)) {
+    return NextResponse.json(
+      { ok: false, error: "webhook secret not configured (set RESEND_WEBHOOK_SECRET)" },
+      { status: 503 },
+    );
+  }
 
   if (secret) {
     const ok = verifyResendSignature({

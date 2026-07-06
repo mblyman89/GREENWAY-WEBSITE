@@ -7,6 +7,7 @@ import { StatCard } from "@/components/admin/StatCard";
 import { listPromotions, detectConflicts } from "@/lib/promotions/promotions-store";
 import { WEEKDAY_LABELS, DISCOUNT_TYPE_LABELS } from "@/lib/promotions/types";
 import type { Weekday } from "@/lib/promotions/types";
+import { storeWeekday } from "@/lib/reports/timezone";
 import { WeeklyScheduleStrip } from "@/components/admin/promotions/WeeklyScheduleStrip";
 
 export const dynamic = "force-dynamic";
@@ -40,7 +41,8 @@ export default async function PromotionsAdminPage() {
   const scheduleItems = promos
     .filter((p) => p.status !== "archived")
     .map((p) => ({ id: p.id, title: p.title, status: p.status, weekday: p.weekday }));
-  const todayWeekday = new Date().getDay() as Weekday;
+  // S-12: "today" on the schedule strip is the STORE's (Pacific) weekday.
+  const todayWeekday = storeWeekday() as Weekday;
 
   return (
     <div>
