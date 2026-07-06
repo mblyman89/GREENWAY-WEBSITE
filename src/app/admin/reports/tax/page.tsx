@@ -244,6 +244,45 @@ export default async function TaxReportPage({
         />
       </section>
 
+      {(report.medicalExemptLines > 0 || report.medicalExemptUnmatchedRecords > 0) && (
+        <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+          <div className="mb-4">
+            <h2 className="text-sm font-bold uppercase tracking-widest text-white/60">
+              Medical exemptions (WAC 314-55-090(2))
+            </h2>
+            <p className="mt-1 text-xs text-white/40">
+              Exempted amounts are excluded from the collected-tax totals above and reported here separately — the
+              LIQ-1295 needs both the taxable figure and the exempt deduction.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <StatCard
+              label="Exempt sales base"
+              value={formatMinorCurrency(report.medicalExemptBaseMinor)}
+              accent="muted"
+            />
+            <StatCard
+              label="Excise exempted (37%)"
+              value={formatMinorCurrency(report.medicalExemptExciseMinor)}
+              accent="gold"
+            />
+            <StatCard
+              label="Sales tax exempted"
+              value={formatMinorCurrency(report.medicalExemptSalesTaxMinor)}
+              accent="muted"
+            />
+            <StatCard label="Exempt lines" value={report.medicalExemptLines.toLocaleString()} accent="muted" />
+          </div>
+          {report.medicalExemptUnmatchedRecords > 0 && (
+            <p className="mt-3 rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-200">
+              {report.medicalExemptUnmatchedRecords} exempt-sale record(s) in this range could not be matched to a sold
+              line (the record&apos;s product SKU must equal the order line&apos;s product id). Those lines are still
+              reported at full recreational tax — fix the records before filing.
+            </p>
+          )}
+        </section>
+      )}
+
       <p className="px-1 text-[0.7rem] leading-relaxed text-white/30">
         Excise is charged on cannabis products only; sales tax applies to all retail goods. Medical sales with a valid
         card are exempt from both taxes when the store holds the medical endorsement. These figures are computed from

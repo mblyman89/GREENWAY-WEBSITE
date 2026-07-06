@@ -30,6 +30,7 @@ import "server-only";
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import { chunkedIn, pagedAll } from "@/lib/supabase/chunked-in";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -148,24 +149,26 @@ async function buildProductLookup(
   admin: ReturnType<typeof createSupabaseAdminClient>,
 ): Promise<Map<string, ProductMeta>> {
   const lookup = new Map<string, ProductMeta>();
-  const { data } = await admin
-    .from("menu_items")
-    .select(
-      "source_item_id, category, pos_inventory_type, pos_inventory_category, vendor_name, brand_name, created_at",
-    )
-    .order("created_at", { ascending: false })
-    .limit(20000);
-  const rows =
-    (data as
-      | {
-          source_item_id: string;
-          category: string | null;
-          pos_inventory_type: string | null;
-          pos_inventory_category: string | null;
-          vendor_name: string | null;
-          brand_name: string | null;
-        }[]
-      | null) ?? [];
+  // S-7: page past the PostgREST per-response row cap.
+  type MenuRow = {
+    source_item_id: string;
+    category: string | null;
+    pos_inventory_type: string | null;
+    pos_inventory_category: string | null;
+    vendor_name: string | null;
+    brand_name: string | null;
+  };
+  const rows = await pagedAll<MenuRow>(async (from, to) => {
+    const { data } = await admin
+      .from("menu_items")
+      .select(
+        "source_item_id, category, pos_inventory_type, pos_inventory_category, vendor_name, brand_name, created_at",
+      )
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: true })
+      .range(from, to);
+    return (data as MenuRow[] | null) ?? [];
+  });
   for (const r of rows) {
     if (!r.source_item_id || lookup.has(r.source_item_id)) continue;
     // Detailed POS type mirrors the Sales report: prefer pos_inventory_type, then
@@ -303,12 +306,17 @@ export async function getCogsReport(fromISO: string, toISO: string): Promise<Cog
   if (!isSupabaseServiceConfigured) return { ...EMPTY_COGS_REPORT };
   const admin = createSupabaseAdminClient();
 
-  // Lots (active inventory for valuation + cost map across all statuses for COGS).
-  const { data: lotsData } = await admin
-    .from("inventory_lots")
-    .select("pos_product_key, product_name, received_qty, on_hand_qty, unit_cost_minor_units, expires_on, status")
-    .limit(50000);
-  const lots = (lotsData as LotRow[] | null) ?? [];
+  // Lots (active inventory for valuation + cost map across all statuses for
+  // COGS). S-7: paged — the old .limit(50000) was still capped at the
+  // PostgREST per-response max (default 1000), silently dropping lot costs.
+  const lots = await pagedAll<LotRow>(async (from, to) => {
+    const { data } = await admin
+      .from("inventory_lots")
+      .select("pos_product_key, product_name, received_qty, on_hand_qty, unit_cost_minor_units, expires_on, status, id")
+      .order("id", { ascending: true })
+      .range(from, to);
+    return (data as LotRow[] | null) ?? [];
+  });
 
   const costMap = buildCostMap(lots);
   const lookup = await buildProductLookup(admin);
@@ -316,13 +324,18 @@ export async function getCogsReport(fromISO: string, toISO: string): Promise<Cog
   // Diagnostics for $0-COGS lines.
   const missingMap = new Map<string, { name: string; units: number; revenue: number; reason: string }>();
 
-  // Orders in range (non-cancelled).
-  const { data: ordersData } = await admin
-    .from("orders")
-    .select("id, status, placed_at")
-    .gte("placed_at", fromISO)
-    .lte("placed_at", toISO);
-  const orders = (ordersData as { id: string; status: string; placed_at: string }[] | null) ?? [];
+  // Orders in range (non-cancelled). S-7: paged for complete busy ranges.
+  type CogsOrderRow = { id: string; status: string; placed_at: string };
+  const orders = await pagedAll<CogsOrderRow>(async (from, to) => {
+    const { data } = await admin
+      .from("orders")
+      .select("id, status, placed_at")
+      .gte("placed_at", fromISO)
+      .lte("placed_at", toISO)
+      .order("id", { ascending: true })
+      .range(from, to);
+    return (data as CogsOrderRow[] | null) ?? [];
+  });
   const validOrderIds = orders.filter((o) => o.status !== "cancelled").map((o) => o.id);
 
   const byCategory = new Map<string, Acc>();
@@ -334,21 +347,24 @@ export async function getCogsReport(fromISO: string, toISO: string): Promise<Cog
   let unitsSold = 0;
 
   if (validOrderIds.length) {
-    const { data: linesData } = await admin
-      .from("order_lines")
-      .select("order_id, product_id, product_name, brand, quantity, price_minor_units")
-      .in("order_id", validOrderIds.slice(0, 2000));
-    const lines =
-      (linesData as
-        | {
-            order_id: string;
-            product_id: string | null;
-            product_name: string | null;
-            brand: string | null;
-            quantity: number;
-            price_minor_units: number;
-          }[]
-        | null) ?? [];
+    // S-7: chunked + paginated — every sold line contributes to COGS.
+    type CogsLineRow = {
+      order_id: string;
+      product_id: string | null;
+      product_name: string | null;
+      brand: string | null;
+      quantity: number;
+      price_minor_units: number;
+    };
+    const lines = await chunkedIn<string, CogsLineRow>(validOrderIds, async (chunk, from, to) => {
+      const { data } = await admin
+        .from("order_lines")
+        .select("order_id, product_id, product_name, brand, quantity, price_minor_units")
+        .in("order_id", chunk)
+        .order("id", { ascending: true })
+        .range(from, to);
+      return (data as CogsLineRow[] | null) ?? [];
+    });
 
     for (const l of lines) {
       const qty = l.quantity ?? 0;

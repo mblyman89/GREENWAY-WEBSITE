@@ -336,6 +336,15 @@ export type ExemptSaleInput = {
   exciseAmountExemptMinor: number;
 };
 
+/**
+ * Persist a WAC 314-55-090(2) medical exempt-sale record.
+ *
+ * S-8 LINE-MATCHING CONVENTION: `productSku` MUST equal the sold order line's
+ * `product_id` (the POS product key). The wa-tax report and the CCRS Sale.csv
+ * join exempt records to sold lines by (order_id, product_sku=product_id) to
+ * zero the exempted tax on exactly the covered line — a record with any other
+ * SKU value cannot be matched and the line reports full recreational taxes.
+ */
 export async function recordExemptSale(
   input: ExemptSaleInput,
   actorId: string | null,
