@@ -141,22 +141,47 @@ export async function setOrderStatusAction(formData: FormData): Promise<void> {
     }
   }
 
-  const updated = await setOrderStatus(id, toStatus, {
+  // ── S-15 lifecycle: any REVERSAL (reopening a closed order or moving
+  //    backward) must carry a written reason; the store enforces the matrix.
+  const reversalReason = String(formData.get("reversalReason") ?? "").trim() || null;
+
+  const result = await setOrderStatus(id, toStatus, {
     actorId: session.profile.id,
     actorLabel: actorLabel(session.email, session.profile.full_name),
     note,
+    reversalReason,
   });
 
-  if (updated) {
-    await recordAudit({
-      actorId: session.profile.id,
-      actorEmail: session.email,
-      action: "order.status_changed",
-      entityType: "order",
-      entityId: id,
-      after: { status: toStatus, order_number: updated.order_number, note },
-    });
+  if (!result.ok) {
+    if (result.refusal) {
+      await recordAudit({
+        actorId: session.profile.id,
+        actorEmail: session.email,
+        action: "order.transition_blocked",
+        entityType: "order",
+        entityId: id,
+        after: { attempted: toStatus, reason: result.refusal },
+      });
+      revalidatePath(`/admin/orders/${id}`);
+      redirect(`/admin/orders/${id}?blocked=${encodeURIComponent(result.refusal.slice(0, 500))}`);
+    }
+    revalidatePath(`/admin/orders/${id}`);
+    return;
   }
+
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: "order.status_changed",
+    entityType: "order",
+    entityId: id,
+    after: {
+      status: toStatus,
+      order_number: result.order.order_number,
+      note,
+      ...(reversalReason ? { reversalReason } : {}),
+    },
+  });
 
   revalidatePath("/admin/orders");
   revalidatePath(`/admin/orders/${id}`);

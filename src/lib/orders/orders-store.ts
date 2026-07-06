@@ -28,6 +28,7 @@ import type {
   PersistOrderInput,
   PlacedOrderResult,
 } from "./types";
+import { evaluateOrderTransition } from "./order-lifecycle-core";
 
 // ---------------------------------------------------------------------------
 // Placement (guest, no auth) — input is SERVER-PRICED (see order-pricing.ts)
@@ -237,14 +238,23 @@ export type SetStatusOptions = {
   actorId?: string | null;
   actorLabel?: string | null;
   note?: string | null;
+  /**
+   * Written reason required for any REVERSAL (reopening a closed order or
+   * moving backward in the active chain). See order-lifecycle-core.ts (S-15).
+   */
+  reversalReason?: string | null;
 };
+
+export type SetOrderStatusResult =
+  | { ok: true; order: OrderRow }
+  | { ok: false; refusal: string | null };
 
 export async function setOrderStatus(
   id: string,
   toStatus: OrderStatus,
   opts: SetStatusOptions = {},
-): Promise<OrderRow | null> {
-  if (!isSupabaseServiceConfigured) return null;
+): Promise<SetOrderStatusResult> {
+  if (!isSupabaseServiceConfigured) return { ok: false, refusal: null };
   const admin = createSupabaseAdminClient();
 
   const { data: current } = await admin
@@ -252,8 +262,26 @@ export async function setOrderStatus(
     .select("status")
     .eq("id", id)
     .maybeSingle<{ status: OrderStatus }>();
-  if (!current) return null;
+  if (!current) return { ok: false, refusal: null };
   const fromStatus = current.status;
+
+  // ── S-15 lifecycle gate: enforce the legal transition matrix at the STORE
+  //    layer so no caller can rewind a closed sale without a reasoned,
+  //    audited reversal (completed→new was previously possible).
+  const verdict = evaluateOrderTransition(fromStatus, toStatus, {
+    reversalReason: opts.reversalReason ?? null,
+  });
+  if (!verdict.allowed) {
+    return { ok: false, refusal: verdict.reason ?? "Status change not permitted." };
+  }
+  if (verdict.kind === "noop") {
+    const { data: same } = await admin
+      .from("orders")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle<OrderRow>();
+    return same ? { ok: true, order: same } : { ok: false, refusal: null };
+  }
 
   const patch: Record<string, unknown> = {
     status: toStatus,
@@ -263,6 +291,15 @@ export async function setOrderStatus(
   if (toStatus === "acknowledged") patch.acknowledged_at = now;
   if (toStatus === "ready") patch.ready_at = now;
   if (toStatus === "completed") patch.completed_at = now;
+  // Reversals rewind history — clear the timestamps of statuses being undone
+  // so the row reflects the true current position in the workflow.
+  if (verdict.kind === "reversal") {
+    if (fromStatus === "completed") patch.completed_at = null;
+    if (toStatus === "new" || toStatus === "acknowledged" || toStatus === "preparing") {
+      patch.ready_at = null;
+    }
+    if (toStatus === "new") patch.acknowledged_at = null;
+  }
 
   const { data: updated } = await admin
     .from("orders")
@@ -270,14 +307,18 @@ export async function setOrderStatus(
     .eq("id", id)
     .select("*")
     .maybeSingle<OrderRow>();
-  if (!updated) return null;
+  if (!updated) return { ok: false, refusal: null };
 
+  const reversalNote =
+    verdict.kind === "reversal"
+      ? `REVERSAL (${fromStatus} → ${toStatus}): ${(opts.reversalReason ?? "").trim()}`
+      : null;
   await admin.from("order_events").insert({
     order_id: id,
     event_type: "status_changed",
     from_status: fromStatus,
     to_status: toStatus,
-    note: opts.note ?? null,
+    note: reversalNote ?? opts.note ?? null,
     actor_id: opts.actorId ?? null,
     actor_label: opts.actorLabel ?? null,
   });
@@ -302,7 +343,7 @@ export async function setOrderStatus(
     }
   }
 
-  return updated;
+  return { ok: true, order: updated };
 }
 
 export async function updateStaffNote(

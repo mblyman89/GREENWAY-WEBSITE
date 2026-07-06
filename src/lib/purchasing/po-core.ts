@@ -224,6 +224,60 @@ export function makePoNumber(seq: number, date = new Date()): string {
 }
 
 // ---------------------------------------------------------------------------
+// PO status lifecycle (GAP LOW / Roadmap S-15) — PURE transition matrix.
+// draft → submitted → sent → partial → received, with cancel available from
+// any non-terminal status. received and cancelled are TERMINAL. Skipping
+// forward is allowed (a draft may be marked sent directly when the manager
+// emails it outside the app). Backward moves are never allowed — receiving
+// mistakes are corrected by adjusting line received_qty, not by rewinding the
+// document status.
+// ---------------------------------------------------------------------------
+export type PoStatus = "draft" | "submitted" | "sent" | "partial" | "received" | "cancelled";
+
+const PO_CHAIN: PoStatus[] = ["draft", "submitted", "sent", "partial", "received"];
+const PO_TERMINAL: PoStatus[] = ["received", "cancelled"];
+
+export type PoTransitionVerdict = {
+  allowed: boolean;
+  /** Human-readable refusal (present when !allowed). */
+  reason?: string;
+};
+
+export function evaluatePoTransition(from: PoStatus, to: PoStatus): PoTransitionVerdict {
+  if (from === to) return { allowed: true }; // idempotent no-op
+  if (PO_TERMINAL.includes(from)) {
+    return {
+      allowed: false,
+      reason: `A ${from} purchase order is final and cannot change status. Create a new PO instead.`,
+    };
+  }
+  if (to === "cancelled") return { allowed: true };
+  const fromIdx = PO_CHAIN.indexOf(from);
+  const toIdx = PO_CHAIN.indexOf(to);
+  if (toIdx > fromIdx) return { allowed: true };
+  return {
+    allowed: false,
+    reason: `Cannot move a purchase order backward (${from} → ${to}). Correct received quantities on the lines instead.`,
+  };
+}
+
+export function isValidPoStatus(s: string): s is PoStatus {
+  return (PO_CHAIN as string[]).includes(s) || s === "cancelled";
+}
+
+/**
+ * Parse the numeric sequence out of a `PO-YYYYMM-0007` number. Returns 0 for
+ * anything unparseable so callers can safely take a max().
+ */
+export function parsePoNumberSeq(poNumber: string | null | undefined): number {
+  if (!poNumber) return 0;
+  const m = /^PO-\d{6}-(\d+)$/.exec(poNumber.trim());
+  if (!m) return 0;
+  const n = Number(m[1]);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+}
+
+// ---------------------------------------------------------------------------
 // Plain-text PO rendering (for email body / export)
 // ---------------------------------------------------------------------------
 export type PoRenderLine = {

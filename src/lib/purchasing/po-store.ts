@@ -23,6 +23,8 @@ import {
   poSubtotalMinor,
   lineTotalMinor,
   makePoNumber,
+  parsePoNumberSeq,
+  evaluatePoTransition,
   type PoFilter,
   type CandidateRow,
   type ReorderResult,
@@ -288,13 +290,23 @@ export async function getPurchaseOrder(id: string): Promise<PurchaseOrderWithLin
   return { ...(po as PurchaseOrder), lines: (lines as PurchaseOrderLine[]) ?? [] };
 }
 
-async function nextPoNumber(): Promise<string> {
-  if (!isSupabaseServiceConfigured) return makePoNumber(1);
+/**
+ * Next PO number (S-15 fix). Previously this counted rows, which is a RACE
+ * (two concurrent creates get the same number) and breaks after any deletion
+ * (count drops below the max issued sequence ⇒ duplicate ⇒ silent insert
+ * failure on the unique po_number constraint). Now: take max(sequence) across
+ * existing numbers + 1. The DB `unique` constraint on po_number remains the
+ * backstop; createPurchaseOrder retries with a bumped sequence on conflict.
+ */
+async function nextPoNumber(bump = 0): Promise<string> {
+  if (!isSupabaseServiceConfigured) return makePoNumber(1 + bump);
   const admin = createSupabaseAdminClient();
-  const { count } = await admin
-    .from("purchase_orders")
-    .select("id", { count: "exact", head: true });
-  return makePoNumber((count ?? 0) + 1);
+  const { data } = await admin.from("purchase_orders").select("po_number");
+  const maxSeq = ((data as { po_number: string | null }[]) ?? []).reduce(
+    (max, row) => Math.max(max, parsePoNumberSeq(row.po_number)),
+    0,
+  );
+  return makePoNumber(maxSeq + 1 + bump);
 }
 
 export type NewPoLine = {
@@ -326,31 +338,42 @@ export async function createPurchaseOrder(input: {
 }): Promise<string | null> {
   if (!isSupabaseServiceConfigured) return null;
   const admin = createSupabaseAdminClient();
-  const poNumber = await nextPoNumber();
   const subtotal = poSubtotalMinor(input.lines.map((l) => ({ order_qty: l.orderQty, unit_cost_minor_units: l.unitCostMinor })));
 
-  const { data: po, error } = await admin
-    .from("purchase_orders")
-    .insert({
-      po_number: poNumber,
-      vendor_id: input.vendorId,
-      vendor_name: input.vendorName,
-      vendor_email: input.vendorEmail ?? null,
-      status: "draft",
-      origin: input.origin ?? "manual",
-      lead_time_days: input.leadTimeDays ?? null,
-      target_days_supply: input.targetDaysSupply ?? null,
-      note: input.note ?? null,
-      internal_note: input.internalNote ?? null,
-      expected_date: input.expectedDate ?? null,
-      subtotal_minor_units: subtotal,
-      line_count: input.lines.length,
-      created_by: input.createdBy ?? null,
-    })
-    .select("id")
-    .maybeSingle();
-  if (error || !po) return null;
-  const poId = (po as { id: string }).id;
+  // Race-safe numbering: max(seq)+1, retrying with a bumped sequence if a
+  // concurrent create wins the unique po_number constraint (S-15).
+  let po: { id: string } | null = null;
+  let error: unknown = null;
+  for (let attempt = 0; attempt < 3 && !po; attempt++) {
+    const poNumber = await nextPoNumber(attempt);
+    const res = await admin
+      .from("purchase_orders")
+      .insert({
+        po_number: poNumber,
+        vendor_id: input.vendorId,
+        vendor_name: input.vendorName,
+        vendor_email: input.vendorEmail ?? null,
+        status: "draft",
+        origin: input.origin ?? "manual",
+        lead_time_days: input.leadTimeDays ?? null,
+        target_days_supply: input.targetDaysSupply ?? null,
+        note: input.note ?? null,
+        internal_note: input.internalNote ?? null,
+        expected_date: input.expectedDate ?? null,
+        subtotal_minor_units: subtotal,
+        line_count: input.lines.length,
+        created_by: input.createdBy ?? null,
+      })
+      .select("id")
+      .maybeSingle();
+    error = res.error;
+    po = (res.data as { id: string } | null) ?? null;
+    // Retry only on unique-violation (duplicate po_number from a race).
+    if (!po && (res.error?.code ?? "") !== "23505") break;
+  }
+  if (error && !po) return null;
+  if (!po) return null;
+  const poId = po.id;
 
   if (input.lines.length) {
     const rows = input.lines.map((l) => ({
@@ -373,15 +396,41 @@ export async function createPurchaseOrder(input: {
   return poId;
 }
 
-export async function setPurchaseOrderStatus(id: string, status: PurchaseOrderStatus): Promise<void> {
-  if (!isSupabaseServiceConfigured) return;
+export type SetPoStatusResult = { ok: true } | { ok: false; refusal: string | null };
+
+/**
+ * Change a PO's status. Enforces the PURE transition matrix from po-core
+ * (S-15): forward-only along draft→submitted→sent→partial→received, cancel
+ * from any non-terminal status, received/cancelled terminal. Returns a
+ * refusal message instead of silently applying an illegal change.
+ */
+export async function setPurchaseOrderStatus(
+  id: string,
+  status: PurchaseOrderStatus,
+): Promise<SetPoStatusResult> {
+  if (!isSupabaseServiceConfigured) return { ok: false, refusal: null };
   const admin = createSupabaseAdminClient();
+
+  const { data: current } = await admin
+    .from("purchase_orders")
+    .select("status")
+    .eq("id", id)
+    .maybeSingle<{ status: PurchaseOrderStatus }>();
+  if (!current) return { ok: false, refusal: null };
+
+  const verdict = evaluatePoTransition(current.status, status);
+  if (!verdict.allowed) {
+    return { ok: false, refusal: verdict.reason ?? "Status change not permitted." };
+  }
+  if (current.status === status) return { ok: true }; // idempotent no-op
+
   const patch: Record<string, unknown> = { status };
   const now = new Date().toISOString();
   if (status === "submitted") patch.submitted_at = now;
   if (status === "sent") patch.sent_at = now;
   if (status === "received") patch.received_at = now;
-  await admin.from("purchase_orders").update(patch).eq("id", id);
+  const { error } = await admin.from("purchase_orders").update(patch).eq("id", id);
+  return error ? { ok: false, refusal: null } : { ok: true };
 }
 
 /** Receive a quantity against a PO line; bumps PO to partial/received. */
@@ -409,8 +458,34 @@ export async function receivePoLine(lineId: string, receivedQty: number): Promis
   await setPurchaseOrderStatus(poId, fullyReceived ? "received" : anyReceived ? "partial" : "sent");
 }
 
-export async function deletePurchaseOrder(id: string): Promise<void> {
-  if (!isSupabaseServiceConfigured) return;
+export type DeletePoResult = { ok: true } | { ok: false; refusal: string | null };
+
+/**
+ * Delete a purchase order (S-15 fix — was an unconditional hard delete).
+ * Only a DRAFT may be physically deleted: it was never issued to a vendor and
+ * is not yet a business record. Anything submitted or beyond keeps its
+ * numbered document — cancel it instead (the cancelled row stays queryable
+ * and the po_number stays burned, so the numbering sequence never reuses it).
+ * Returns the deleted row snapshot so callers can audit before/after.
+ */
+export async function deletePurchaseOrder(
+  id: string,
+): Promise<DeletePoResult & { snapshot?: Record<string, unknown> }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, refusal: null };
   const admin = createSupabaseAdminClient();
-  await admin.from("purchase_orders").delete().eq("id", id);
+  const { data: po } = await admin
+    .from("purchase_orders")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle<PurchaseOrder>();
+  if (!po) return { ok: false, refusal: null };
+  if (po.status !== "draft") {
+    return {
+      ok: false,
+      refusal: `Only draft purchase orders can be deleted. ${po.po_number ?? "This PO"} is ${po.status} — cancel it instead so the numbered record is preserved.`,
+    };
+  }
+  const { error } = await admin.from("purchase_orders").delete().eq("id", id);
+  if (error) return { ok: false, refusal: null };
+  return { ok: true, snapshot: po as unknown as Record<string, unknown> };
 }
