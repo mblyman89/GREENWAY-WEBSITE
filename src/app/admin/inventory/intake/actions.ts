@@ -7,7 +7,6 @@ import { parseVendorJson, type ParsedManifest } from "@/lib/inventory/intake-par
 import { fetchTransferJson } from "@/lib/inventory/transfer-fetch";
 import {
   stageManifest,
-  acceptManifest,
   rejectManifest,
   setLotDisposition,
   finalizeManifestDispositions,
@@ -157,19 +156,13 @@ export async function importManifestCsvAction(formData: FormData) {
   redirect(`/admin/inventory/intake/${staged.manifestId}?staged=1&csv=1`);
 }
 
-export async function acceptManifestAction(manifestId: string) {
-  const session = await requirePermission("inventory.manage");
-  const result = await acceptManifest(manifestId, session.userId);
-  revalidatePath(`/admin/inventory/intake/${manifestId}`);
-  revalidatePath("/admin/inventory/intake");
-  revalidatePath("/admin/inventory");
-  if (!result.ok) {
-    redirect(`/admin/inventory/intake/${manifestId}?error=accept`);
-  }
-  redirect(
-    `/admin/inventory/intake/${manifestId}?accepted=${result.activated}&drafts=${result.draftsCreated}`,
-  );
-}
+// S-11 (GAP M-8): the legacy acceptManifestAction was RETIRED. It flipped every
+// quarantined lot to active WITHOUT the lot-activation compliance gate (CCRS id,
+// COA on record, passing lab result). All manifest acceptance now goes through
+// finalizeManifestAction → finalizeManifestDispositions, which evaluates every
+// accepted lot against evaluateLotBatchActivation and HOLDS dirty lots.
+// A grep-guard (scripts/compliance/check-activation-gate.ts) fails the checks
+// if an ungated activation path ever reappears.
 
 export async function setManifestLifecycleAction(manifestId: string, status: "in_transit" | "received") {
   const session = await requirePermission("inventory.manage");

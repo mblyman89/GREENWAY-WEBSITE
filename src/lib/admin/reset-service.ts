@@ -27,10 +27,27 @@ export type ResetOperationalDataSummary = {
 /**
  * Execute the full operational-data reset. Throws with a readable message on
  * failure so the server action can surface it to the admin.
+ *
+ * S-6 retention guard (migration 0097): when completed orders or CCRS batches
+ * exist, the DB function refuses unless `acknowledgeRetention` is true — the
+ * caller must have collected the export-first attestation (WAC 314-55-087
+ * three-year record retention) before passing it.
+ *
+ * Backward-compatible: if 0097 hasn't been applied yet the guarded signature
+ * doesn't exist, so we retry the legacy zero-argument call (owner applies
+ * migrations manually).
  */
-export async function resetOperationalData(): Promise<ResetOperationalDataSummary> {
+export async function resetOperationalData(
+  acknowledgeRetention = false,
+): Promise<ResetOperationalDataSummary> {
   const admin = createSupabaseAdminClient();
-  const { data, error } = await admin.rpc("reset_operational_data");
+  let { data, error } = await admin.rpc("reset_operational_data", {
+    acknowledge_wac_314_55_087: acknowledgeRetention,
+  });
+  if (error && /function|parameter|argument|acknowledge_wac_314_55_087|schema cache/i.test(error.message)) {
+    // Migration 0097 not applied yet — fall back to the legacy 0069 signature.
+    ({ data, error } = await admin.rpc("reset_operational_data"));
+  }
   if (error) throw new Error(`Reset failed: ${error.message}`);
 
   const raw = (data ?? {}) as {

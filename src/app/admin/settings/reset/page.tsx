@@ -104,27 +104,48 @@ export default async function ResetDataSettingsPage({
         <section className="rounded-xl border border-white/10 bg-white/5 p-5">
           <h2 className="text-sm font-semibold text-white">Confirm reset</h2>
           <p className="mt-1 text-sm text-white/60">
-            This cannot be undone. To proceed, type{" "}
-            <code className="rounded bg-black/40 px-1.5 py-0.5 text-red-300">RESET OPERATIONAL DATA</code>{" "}
-            exactly, then run the reset.
+            This cannot be undone. Washington requires licensees to keep sales, inventory, transport,
+            and destruction records for <strong className="text-white/80">three years</strong> (WAC
+            314-55-087). If completed sales or CCRS submissions exist, the reset refuses unless you
+            attest that everything has been exported first.
           </p>
-          <form action={resetOperationalDataAction} className="mt-4 flex flex-wrap items-end gap-3">
-            <label className="flex-1 min-w-[16rem]">
-              <span className="mb-1 block text-xs font-medium text-white/60">Confirmation phrase</span>
+          <form action={resetOperationalDataAction} className="mt-4 space-y-4">
+            <label className="flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-3">
               <input
-                name="confirm"
-                autoComplete="off"
-                spellCheck={false}
-                placeholder="RESET OPERATIONAL DATA"
-                className="w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-red-400"
+                type="checkbox"
+                name="retention_attestation"
+                value="1"
+                className="mt-0.5 h-4 w-4 accent-amber-500"
               />
+              <span className="text-sm text-amber-100/90">
+                I attest that all records required by <strong>WAC 314-55-087</strong> (sales, inventory,
+                manifests, destruction — 3-year retention) have been <strong>exported and stored
+                outside this system</strong> before this reset.
+              </span>
             </label>
-            <button
-              type="submit"
-              className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-500"
-            >
-              Reset operational data
-            </button>
+            <div className="flex flex-wrap items-end gap-3">
+              <label className="flex-1 min-w-[16rem]">
+                <span className="mb-1 block text-xs font-medium text-white/60">
+                  Type exactly:{" "}
+                  <code className="rounded bg-black/40 px-1.5 py-0.5 text-red-300">
+                    RESET OPERATIONAL DATA (WAC 314-55-087)
+                  </code>
+                </span>
+                <input
+                  name="confirm"
+                  autoComplete="off"
+                  spellCheck={false}
+                  placeholder="RESET OPERATIONAL DATA (WAC 314-55-087)"
+                  className="w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-red-400"
+                />
+              </label>
+              <button
+                type="submit"
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-500"
+              >
+                Reset operational data
+              </button>
+            </div>
           </form>
         </section>
       </div>
