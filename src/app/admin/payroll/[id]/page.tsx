@@ -4,15 +4,21 @@ import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
-import { Button, Badge } from "@/components/admin/ui";
-import { getPayrollRun, getAchCompanySettings } from "@/lib/payroll/payroll-store";
+import { Badge } from "@/components/admin/ui";
+import {
+  getPayrollRun,
+  getAchCompanySettings,
+  evaluateRunGuardrails,
+} from "@/lib/payroll/payroll-store";
 import { listEmployees } from "@/lib/staffing/store";
 import { centsToDollars } from "@/lib/payroll/payroll-core";
 import {
   PayrollEntryTable,
   type EmployeeRow,
 } from "@/components/admin/payroll/PayrollEntryTable";
-import { saveRunLinesAction, generateRunAction } from "../actions";
+import { PayrollSourceDocPanel } from "@/components/admin/payroll/PayrollSourceDocPanel";
+import { PayrollGuardrailPanel } from "@/components/admin/payroll/PayrollGuardrailPanel";
+import { saveRunLinesAction, generateRunAction, uploadSourceDocAction } from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -51,10 +57,12 @@ export default async function PayrollRunPage({
   if (!detail) notFound();
   const { run, lines } = detail;
 
-  const [employees, settings] = await Promise.all([
+  const [employees, settings, guard] = await Promise.all([
     listEmployees(),
     getAchCompanySettings(),
+    evaluateRunGuardrails(id),
   ]);
+  const report = guard?.report ?? null;
 
   const readOnly = run.status !== "draft";
   const settingsComplete = Boolean(
@@ -172,15 +180,28 @@ export default async function PayrollRunPage({
         readOnly={readOnly}
       />
 
-      <div className="flex flex-wrap items-center gap-3 border-t border-[var(--admin-border)] pt-5">
-        {run.status === "draft" ? (
-          <form action={generateRunAction.bind(null, id)}>
-            <Button type="submit" variant="primary" size="sm" disabled={!settingsComplete}>
-              Generate ACH file
-            </Button>
-          </form>
-        ) : null}
+      {/* Source document — required before a file can be generated. */}
+      {run.status === "draft" ? (
+        <PayrollSourceDocPanel
+          runId={id}
+          hasDocument={!!run.source_document_id}
+          uploadAction={uploadSourceDocAction}
+        />
+      ) : null}
 
+      {/* Guardrail review — the compliance gate. */}
+      {run.status === "draft" && report ? (
+        <PayrollGuardrailPanel
+          runId={id}
+          findings={report.findings}
+          hasHardBlock={report.hasHardBlock}
+          hasWarnings={report.hasWarnings}
+          settingsComplete={settingsComplete}
+          generateAction={generateRunAction}
+        />
+      ) : null}
+
+      <div className="flex flex-wrap items-center gap-3 border-t border-[var(--admin-border)] pt-5">
         {run.nacha_filename ? (
           <Link
             href={`/admin/payroll/${id}/download`}
@@ -193,7 +214,7 @@ export default async function PayrollRunPage({
 
         <span className="text-xs text-[var(--admin-text-faint)]">
           {run.status === "draft"
-            ? "Save your entries, then generate the file. Generating locks the run."
+            ? "Attach the payroll source document, clear the guardrails, then generate the file. Generating locks the run."
             : "This run is locked. Download the file above, or the file has already been submitted."}
         </span>
       </div>
