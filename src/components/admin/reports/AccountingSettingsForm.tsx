@@ -12,7 +12,7 @@ const FIELDS: { name: string; key: keyof AccountingSettings; label: string; hint
   { name: "gl_excise_tax_payable", key: "glExciseTaxPayable", label: "Excise tax payable", hint: "Credit — 37%" },
   { name: "gl_cogs", key: "glCogs", label: "Cost of goods sold", hint: "Debit" },
   { name: "gl_inventory", key: "glInventory", label: "Inventory asset", hint: "Credit — relief" },
-  { name: "gl_discounts", key: "glDiscounts", label: "Sales discounts (optional)", hint: "Informational" },
+  { name: "gl_discounts", key: "glDiscounts", label: "Sales discounts (contra-revenue)", hint: "Debit — when set, Sage receipts export gross sales + a discounts line" },
 ];
 
 export function AccountingSettingsForm({
