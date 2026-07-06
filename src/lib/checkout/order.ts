@@ -30,6 +30,11 @@ export type CompletedOrder = {
   estimatedTaxMinorUnits: number;
   savingsMinorUnits: number;
   totalMinorUnits: number;
+  /**
+   * Set when the placement-time WAC 314-55-095 soft check flagged the cart as
+   * over a statutory limit — a polite "we'll adjust at pickup" notice.
+   */
+  limitNotice?: string;
 };
 
 /** Generate a customer-facing order number, e.g. GWY-4F9C2A. */

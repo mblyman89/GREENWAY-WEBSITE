@@ -25,15 +25,21 @@ import type {
   OrderEventRow,
   OrderWithLines,
   OrderStatus,
-  NewOrderInput,
+  PersistOrderInput,
   PlacedOrderResult,
 } from "./types";
 
 // ---------------------------------------------------------------------------
-// Placement (guest, no auth)
+// Placement (guest, no auth) — input is SERVER-PRICED (see order-pricing.ts)
 // ---------------------------------------------------------------------------
 
-export async function createOrder(input: NewOrderInput): Promise<PlacedOrderResult | null> {
+/** True when a PostgREST error looks like "column does not exist" (migration 0096 not applied yet). */
+function isMissingColumnError(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false;
+  return error.code === "42703" || /column .* does not exist|could not find .* column/i.test(error.message ?? "");
+}
+
+export async function createOrder(input: PersistOrderInput): Promise<PlacedOrderResult | null> {
   if (!isSupabaseServiceConfigured) return null;
   if (!input.lines.length) return null;
 
@@ -42,41 +48,58 @@ export async function createOrder(input: NewOrderInput): Promise<PlacedOrderResu
   // Soft reservation window: 24h advisory hold (POS/cart engine remain truth).
   const reservationExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 
-  const { data: order, error } = await admin
+  const baseOrderRow = {
+    status: "new",
+    customer_first_name: input.customerFirstName.trim(),
+    customer_last_name: input.customerLastName?.trim() || null,
+    customer_email: input.customerEmail?.trim() || null,
+    customer_phone: input.customerPhone?.trim() || null,
+    customer_birthday: input.customerBirthday?.trim() || null,
+    customer_note: input.customerNote?.trim() || null,
+    subtotal_minor_units: input.subtotalMinorUnits,
+    estimated_tax_minor_units: input.estimatedTaxMinorUnits,
+    savings_minor_units: input.savingsMinorUnits,
+    total_minor_units: input.totalMinorUnits,
+    item_count: input.lines.reduce((sum, l) => sum + l.quantity, 0),
+    reservation_expires_at: reservationExpiresAt,
+  };
+
+  // Preferred shape includes the 0096 limit-flag columns; fall back to the
+  // legacy shape when the owner has not applied the migration yet.
+  let { data: order, error } = await admin
     .from("orders")
-    .insert({
-      status: "new",
-      customer_first_name: input.customerFirstName.trim(),
-      customer_last_name: input.customerLastName?.trim() || null,
-      customer_email: input.customerEmail?.trim() || null,
-      customer_phone: input.customerPhone?.trim() || null,
-      customer_birthday: input.customerBirthday?.trim() || null,
-      customer_note: input.customerNote?.trim() || null,
-      subtotal_minor_units: input.subtotalMinorUnits,
-      estimated_tax_minor_units: input.estimatedTaxMinorUnits,
-      savings_minor_units: input.savingsMinorUnits,
-      total_minor_units: input.totalMinorUnits,
-      item_count: input.lines.reduce((sum, l) => sum + l.quantity, 0),
-      reservation_expires_at: reservationExpiresAt,
-    })
+    .insert({ ...baseOrderRow, limit_flag: input.limitFlag, limit_reasons: input.limitReasons })
     .select("id, order_number, public_token")
     .single<Pick<OrderRow, "id" | "order_number" | "public_token">>();
 
+  if (error && isMissingColumnError(error)) {
+    ({ data: order, error } = await admin
+      .from("orders")
+      .insert(baseOrderRow)
+      .select("id, order_number, public_token")
+      .single<Pick<OrderRow, "id" | "order_number" | "public_token">>());
+  }
+
   if (error || !order) return null;
 
-  const lineRows = input.lines.map((l) => ({
-    order_id: order.id,
-    product_id: l.productId ?? null,
-    variant_id: l.variantId ?? null,
-    product_name: l.productName,
-    brand: l.brand ?? null,
-    variant_label: l.variantLabel ?? null,
-    quantity: l.quantity,
-    price_minor_units: l.priceMinorUnits,
-    regular_price_minor_units: l.regularPriceMinorUnits ?? null,
-  }));
+  const buildLineRows = (withCategory: boolean) =>
+    input.lines.map((l) => ({
+      order_id: order!.id,
+      product_id: l.productId ?? null,
+      variant_id: l.variantId ?? null,
+      product_name: l.productName,
+      brand: l.brand ?? null,
+      variant_label: l.variantLabel ?? null,
+      ...(withCategory ? { category: l.category } : {}),
+      quantity: l.quantity,
+      price_minor_units: l.priceMinorUnits,
+      regular_price_minor_units: l.regularPriceMinorUnits ?? null,
+    }));
 
-  const { error: linesError } = await admin.from("order_lines").insert(lineRows);
+  let { error: linesError } = await admin.from("order_lines").insert(buildLineRows(true));
+  if (linesError && isMissingColumnError(linesError)) {
+    ({ error: linesError } = await admin.from("order_lines").insert(buildLineRows(false)));
+  }
   if (linesError) {
     // Roll back the orphaned order so we never strand a header with no lines.
     await admin.from("orders").delete().eq("id", order.id);

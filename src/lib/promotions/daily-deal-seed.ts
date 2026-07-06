@@ -122,12 +122,13 @@ export const DAILY_DEAL_SEEDS: DailyDealSeed[] = [
   {
     promoKey: "daily.sunday",
     title: "Ice Cream Sunday",
-    description: "Buy 3 for the price of 2 — a basket-level deal finalized in store.",
+    description:
+      "Buy any 3, pay the equivalent of 2 — the savings are spread across the basket as a percent so every item keeps a price (finalized in store).",
     weekday: 0,
     discountType: "basket",
     discountPercent: 0,
     perItemSale: false,
-    bonusNote: "buy 3 for 2",
+    bonusNote: "3-for-2 equivalent savings",
     priority: 10,
     storewide: true,
   },

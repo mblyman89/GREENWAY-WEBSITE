@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
+import { can } from "@/lib/auth/roles";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { OrderStatusFlow } from "@/components/admin/orders/OrderStatusFlow";
@@ -28,11 +29,15 @@ const STATUS_STYLES: Record<OrderStatus, string> = {
 
 export default async function OrderDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<{ blocked?: string }>;
 }) {
-  await requirePermission("orders.view");
+  const session = await requirePermission("orders.view");
   const { id } = await params;
+  const sp = searchParams ? await searchParams : {};
+  const blockedMessage = typeof sp.blocked === "string" ? sp.blocked : null;
 
   if (!isSupabaseServiceConfigured) notFound();
   const order = await getOrder(id);
@@ -40,6 +45,9 @@ export default async function OrderDetailPage({
 
   const next = ORDER_FORWARD_TRANSITIONS[order.status];
   const isClosed = CLOSED_ORDER_STATUSES.includes(order.status);
+  const limitFlagged = order.limit_flag === true;
+  const limitReasons = Array.isArray(order.limit_reasons) ? order.limit_reasons : [];
+  const canOverrideLimit = can(session.profile.role, "sales_limit.override");
 
   return (
     <div>
@@ -65,6 +73,28 @@ export default async function OrderDetailPage({
       />
 
       <div className="px-5 pt-6 sm:px-8">
+        {blockedMessage ? (
+          <div className="mb-5 rounded-2xl border border-red-500/40 bg-red-500/10 p-5">
+            <p className="text-xs font-black uppercase tracking-[0.14em] text-red-300">
+              Completion blocked — compliance gate
+            </p>
+            <p className="mt-2 text-sm leading-6 text-red-200">{blockedMessage}</p>
+          </div>
+        ) : null}
+        {limitFlagged && !isClosed ? (
+          <div className="mb-5 rounded-2xl border border-[#ffd700]/40 bg-[#ffd700]/10 p-5">
+            <p className="text-xs font-black uppercase tracking-[0.14em] text-[#ffd700]">
+              Placed over the WAC 314-55-095 sales limit
+            </p>
+            <ul className="mt-2 space-y-1 text-sm leading-6 text-[#ffd700]/90">
+              {limitReasons.length > 0 ? (
+                limitReasons.map((reason, i) => <li key={i}>{reason}</li>)
+              ) : (
+                <li>Adjust quantities at pickup before completing this order.</li>
+              )}
+            </ul>
+          </div>
+        ) : null}
         <div className="rounded-2xl border border-white/10 bg-[#0d0d0d] p-5">
           <p className="mb-3 text-xs font-black uppercase tracking-[0.14em] text-white/40">Status flow</p>
           <OrderStatusFlow status={order.status} size="md" />
@@ -130,6 +160,27 @@ export default async function OrderDetailPage({
                       className="rounded-lg bg-[#7ed957] px-4 py-2.5 text-sm font-black uppercase tracking-[0.08em] text-black transition hover:brightness-110"
                     >
                       Mark {ORDER_STATUS_LABELS[next]}
+                    </button>
+                  </form>
+                ) : null}
+                {next === "completed" && limitFlagged && canOverrideLimit ? (
+                  <form action={setOrderStatusAction} className="flex w-full flex-wrap items-center gap-2">
+                    <input type="hidden" name="id" value={order.id} />
+                    <input type="hidden" name="status" value="completed" />
+                    <input type="hidden" name="override" value="1" />
+                    <input
+                      type="text"
+                      name="overrideReason"
+                      required
+                      minLength={5}
+                      placeholder="Manager override reason (logged for audit)"
+                      className="min-w-0 flex-1 rounded-lg border border-[#ffd700]/40 bg-black/40 px-3 py-2.5 text-sm text-white placeholder:text-white/30"
+                    />
+                    <button
+                      type="submit"
+                      className="rounded-lg border border-[#ffd700]/50 bg-[#ffd700]/15 px-4 py-2.5 text-sm font-black uppercase tracking-[0.08em] text-[#ffd700] transition hover:bg-[#ffd700]/25"
+                    >
+                      Complete with logged override
                     </button>
                   </form>
                 ) : null}

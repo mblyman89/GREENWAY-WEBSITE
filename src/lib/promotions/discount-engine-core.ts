@@ -26,7 +26,15 @@
  * This module is unit-tested via __runDiscountEngineTests() and is the planned
  * single source of truth the storefront/cart, checkout, and the admin
  * simulator all consume.
+ *
+ * COMPLIANCE (GAP H-3, RCW 69.50.357 / WAC 314-55-155): cannabis product may
+ * never be given away. Every mechanic in this engine clamps discounted
+ * cannabis unit prices to a positive floor: percent discounts cap at 99% for
+ * cannabis targets, BOGO "get 100% off" resolves to 99% for cannabis, and
+ * basket N-for-M distributes savings without letting any unit reach $0. True
+ * freebies remain possible ONLY for merch/accessories/paraphernalia.
  */
+import { clampCannabisUnitPrice } from "@/lib/orders/order-pricing-core";
 
 export type DiscountType =
   | "percent"
@@ -164,6 +172,17 @@ function isMerch(line: EngineCartLine): boolean {
   return line.categories.some((c) => MERCH_TOKENS.includes(c.toLowerCase()));
 }
 
+/**
+ * Clamp a discounted unit price to the cannabis price floor (RCW 69.50.357).
+ * Engine lines carry multiple category tokens, so the shared single-category
+ * clamp is applied with a representative token: merch lines stay clampable to
+ * $0, everything else is cannabis and keeps a positive price.
+ */
+function clampEngineUnit(line: EngineCartLine, unitPrice: number): number {
+  const category = isMerch(line) ? "merch" : "flower";
+  return clampCannabisUnitPrice(category, unitPrice, line.regularPriceMinorUnits);
+}
+
 function hasCi(list: string[], value: string | null | undefined): boolean {
   if (!value) return false;
   const v = value.trim().toLowerCase();
@@ -196,8 +215,10 @@ export function ruleMatchesLine(rule: EngineRule, line: EngineCartLine): boolean
 type LineDiscount = { unitPrice: number; percent: number; label: string };
 
 function flatPercentDiscount(line: EngineCartLine, percent: number, label: string): LineDiscount {
-  const p = Math.max(0, Math.min(100, percent));
-  const unit = round(line.regularPriceMinorUnits * (1 - p / 100));
+  // Cannabis lines cap at 99% (never free — RCW 69.50.357); merch may hit 100%.
+  const cap = isMerch(line) ? 100 : 99;
+  const p = Math.max(0, Math.min(cap, percent));
+  const unit = clampEngineUnit(line, round(line.regularPriceMinorUnits * (1 - p / 100)));
   return { unitPrice: unit, percent: p, label: `${label} · ${p}% off` };
 }
 
@@ -225,7 +246,7 @@ export function applyOnePromotion(
       const off = Math.max(0, rule.discountFixed);
       if (off <= 0) break;
       for (const l of eligible) {
-        const unit = Math.max(0, l.regularPriceMinorUnits - off);
+        const unit = clampEngineUnit(l, Math.max(0, l.regularPriceMinorUnits - off));
         const pct = l.regularPriceMinorUnits > 0 ? round(((l.regularPriceMinorUnits - unit) / l.regularPriceMinorUnits) * 100) : 0;
         out.set(l.lineId, { unitPrice: unit, percent: pct, label: `${rule.title} · $${(off / 100).toFixed(2)} off` });
       }
@@ -257,12 +278,14 @@ export function applyOnePromotion(
     }
     case "bogo": {
       // Expand units ascending; the cheapest `getQty` per `buyQty+getQty` group
-      // get `getPercent`% off. Default: buy 1 get 1 free.
+      // get `getPercent`% off. COMPLIANCE: cannabis units cap at 99% off (no
+      // free cannabis — RCW 69.50.357); merch-only lines may still reach 100%.
       const cfg = rule.config.bogo ?? { buyQty: 1, getQty: 1, getPercent: 100 };
       const groupSize = Math.max(1, cfg.buyQty + cfg.getQty);
-      const units: { lineId: string; price: number }[] = [];
+      const units: { lineId: string; price: number; merch: boolean }[] = [];
       for (const l of eligible) {
-        for (let i = 0; i < l.quantity; i += 1) units.push({ lineId: l.lineId, price: l.regularPriceMinorUnits });
+        const merch = isMerch(l);
+        for (let i = 0; i < l.quantity; i += 1) units.push({ lineId: l.lineId, price: l.regularPriceMinorUnits, merch });
       }
       units.sort((a, b) => a.price - b.price);
       const groups = Math.floor(units.length / groupSize);
@@ -270,7 +293,8 @@ export function applyOnePromotion(
       const savingsByLine = new Map<string, number>();
       for (let i = 0; i < discountUnits; i += 1) {
         const u = units[i];
-        savingsByLine.set(u.lineId, (savingsByLine.get(u.lineId) ?? 0) + round(u.price * (cfg.getPercent / 100)));
+        const pct = Math.min(u.merch ? 100 : 99, Math.max(0, cfg.getPercent));
+        savingsByLine.set(u.lineId, (savingsByLine.get(u.lineId) ?? 0) + round(u.price * (pct / 100)));
       }
       blendSavings(eligible, savingsByLine, out, `${rule.title} · BOGO`);
       break;
@@ -295,7 +319,7 @@ export function applyOnePromotion(
               const oneAtTop = round(l.regularPriceMinorUnits * (1 - topPercent / 100));
               const restAt = round(l.regularPriceMinorUnits * (1 - restPercent / 100));
               const blendedTotal = oneAtTop + restAt * (l.quantity - 1);
-              const blendedUnit = round(blendedTotal / l.quantity);
+              const blendedUnit = clampEngineUnit(l, round(blendedTotal / l.quantity));
               out.set(l.lineId, {
                 unitPrice: blendedUnit,
                 percent: restPercent,
@@ -332,7 +356,11 @@ export function applyOnePromotion(
   return out;
 }
 
-/** Distribute a per-line total-savings map into blended per-unit discounts. */
+/**
+ * Distribute a per-line total-savings map into blended per-unit discounts.
+ * COMPLIANCE: the blended unit price is clamped to the cannabis price floor so
+ * no basket/BOGO mechanic can zero out a cannabis unit (RCW 69.50.357).
+ */
 function blendSavings(
   eligible: EngineCartLine[],
   savingsByLine: Map<string, number>,
@@ -344,7 +372,7 @@ function blendSavings(
     if (sav <= 0) continue;
     const regularLineTotal = l.regularPriceMinorUnits * l.quantity;
     const discountedLineTotal = Math.max(0, regularLineTotal - sav);
-    const blendedUnit = round(discountedLineTotal / l.quantity);
+    const blendedUnit = clampEngineUnit(l, round(discountedLineTotal / l.quantity));
     const pct = l.regularPriceMinorUnits > 0
       ? round(((l.regularPriceMinorUnits - blendedUnit) / l.regularPriceMinorUnits) * 100)
       : 0;
@@ -386,7 +414,8 @@ export function computePromotions(
 
       if (rule.stackable && current.unitSavingsMinorUnits > 0) {
         // Stack: apply this percentage on top of the already-discounted price.
-        const stackedUnit = round(current.unitPriceMinorUnits * (1 - d.percent / 100));
+        // Clamped so stacked promos can never push a cannabis unit to $0.
+        const stackedUnit = clampEngineUnit(line, round(current.unitPriceMinorUnits * (1 - d.percent / 100)));
         const totalSavingsUnit = line.regularPriceMinorUnits - stackedUnit;
         best.set(lineId, {
           ...current,
@@ -559,7 +588,8 @@ export function __runDiscountEngineTests(): void {
     expect("spend 15000 => 30%", r.lines[0].unitPriceMinorUnits === 3500);
   }
 
-  // bogo: 2 units, BOGO free → 1 free (cheapest)
+  // bogo on CANNABIS: "get 100% off" caps at 99% — the cheapest unit is
+  // discounted to a POSITIVE price, never free (RCW 69.50.357).
   {
     const rule = baseRule({ discountType: "bogo", targetCategories: ["flower"], config: { bogo: { buyQty: 1, getQty: 1, getPercent: 100 } } });
     const lines: EngineCartLine[] = [
@@ -567,10 +597,23 @@ export function __runDiscountEngineTests(): void {
       { lineId: "b", regularPriceMinorUnits: 2000, quantity: 1, categories: ["flower"] },
     ];
     const r = computePromotions(lines, [rule]);
-    // Cheapest (a, $10) is free.
-    expect("bogo cheapest free", r.lines.find((l) => l.lineId === "a")!.unitPriceMinorUnits === 0);
+    const a = r.lines.find((l) => l.lineId === "a")!;
+    // Cheapest (a, $10) gets 99% off => 10 minor units, never 0.
+    expect("bogo cannabis never free", a.unitPriceMinorUnits > 0);
+    expect("bogo cannabis 99% cap", a.unitPriceMinorUnits === 10);
     expect("bogo other full", r.lines.find((l) => l.lineId === "b")!.unitPriceMinorUnits === 2000);
-    expect("bogo savings", r.totalSavingsMinorUnits === 1000);
+    expect("bogo savings", r.totalSavingsMinorUnits === 990);
+  }
+
+  // bogo on MERCH: true freebies remain possible for non-cannabis goods.
+  {
+    const rule = baseRule({ discountType: "bogo", targetCategories: ["merch"], config: { bogo: { buyQty: 1, getQty: 1, getPercent: 100 } } });
+    const lines: EngineCartLine[] = [
+      { lineId: "a", regularPriceMinorUnits: 1000, quantity: 1, categories: ["merch"] },
+      { lineId: "b", regularPriceMinorUnits: 2000, quantity: 1, categories: ["merch"] },
+    ];
+    const r = computePromotions(lines, [rule]);
+    expect("bogo merch may be free", r.lines.find((l) => l.lineId === "a")!.unitPriceMinorUnits === 0);
   }
 
   // basket top-item (Super Saturday): top 30%, rest 15%
@@ -585,16 +628,27 @@ export function __runDiscountEngineTests(): void {
     expect("basket rest 15%", r.lines.find((l) => l.lineId === "a")!.unitPriceMinorUnits === 850);
   }
 
-  // basket N-for-M (Ice Cream Sunday): 3 units → cheapest free
+  // basket N-for-M (Ice Cream Sunday): savings are BLENDED across the line so
+  // no unit is ever $0 — the customer pays ~2/3, every unit keeps a price.
   {
     const rule = baseRule({ discountType: "basket", storewide: true, config: { basketNforM: { n: 3, m: 2 } } });
     const lines: EngineCartLine[] = [
       { lineId: "a", regularPriceMinorUnits: 1000, quantity: 3, categories: ["edible-solid"] },
     ];
     const r = computePromotions(lines, [rule]);
-    // 3 units, 1 free → line total 2000 over 3 units → blended 667 (×3 = 2001),
-    // so reported savings is 999 after per-unit rounding (POS rounds per unit).
+    // 3 units, group savings 1000 → line total 2000 over 3 units → blended 667
+    // (×3 = 2001) → reported savings 999 after per-unit rounding.
     expect("basket 3for2 savings", r.totalSavingsMinorUnits === 999);
+    expect("basket 3for2 unit never $0", r.lines[0].unitPriceMinorUnits > 0);
+  }
+  // basket N-for-M floor: single cheap cannabis line can never blend to $0.
+  {
+    const rule = baseRule({ discountType: "basket", storewide: true, config: { basketNforM: { n: 3, m: 0 } } });
+    const lines: EngineCartLine[] = [
+      { lineId: "a", regularPriceMinorUnits: 100, quantity: 3, categories: ["flower"] },
+    ];
+    const r = computePromotions(lines, [rule]);
+    expect("basket floor holds", r.lines[0].unitPriceMinorUnits > 0);
   }
 
   // storewide skips merch

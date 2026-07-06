@@ -65,6 +65,10 @@ export type OrderRow = {
   estimated_tax_minor_units: number;
   savings_minor_units: number;
   total_minor_units: number;
+  /** Placement-time WAC 314-55-095 soft-check flag (migration 0096). */
+  limit_flag?: boolean;
+  /** Placement-time per-bucket overage reasons (migration 0096). */
+  limit_reasons?: string[] | null;
   item_count: number;
   customer_note: string | null;
   staff_note: string | null;
@@ -86,6 +90,8 @@ export type OrderLineRow = {
   product_name: string;
   brand: string | null;
   variant_label: string | null;
+  /** Placement-time category slug snapshot (migration 0096). Null on legacy rows. */
+  category?: string | null;
   quantity: number;
   price_minor_units: number;
   regular_price_minor_units: number | null;
@@ -117,8 +123,24 @@ export type NewOrderLineInput = {
   brand?: string | null;
   variantLabel?: string | null;
   quantity: number;
+  /** CLIENT-claimed unit price — a cross-check only; the server reprices. */
   priceMinorUnits: number;
   regularPriceMinorUnits?: number | null;
+};
+
+/** A line as persisted by the server after authoritative repricing (S-2a). */
+export type PricedNewOrderLine = {
+  productId: string | null;
+  variantId: string | null;
+  productName: string;
+  brand: string | null;
+  variantLabel: string | null;
+  /** Server-resolved category slug snapshot (limit bucket + tax divisor). */
+  category: string;
+  quantity: number;
+  /** SERVER-computed final unit price (minor units, tax-inclusive). */
+  priceMinorUnits: number;
+  regularPriceMinorUnits: number;
 };
 
 export type NewOrderInput = {
@@ -133,6 +155,27 @@ export type NewOrderInput = {
   savingsMinorUnits: number;
   totalMinorUnits: number;
   lines: NewOrderLineInput[];
+};
+
+/**
+ * What the server persists after authoritative repricing + the placement-time
+ * sales-limit soft check (S-1a / S-2a). Money fields here are SERVER-computed.
+ */
+export type PersistOrderInput = {
+  customerFirstName: string;
+  customerLastName?: string | null;
+  customerEmail?: string | null;
+  customerPhone?: string | null;
+  customerBirthday?: string | null;
+  customerNote?: string | null;
+  subtotalMinorUnits: number;
+  estimatedTaxMinorUnits: number;
+  savingsMinorUnits: number;
+  totalMinorUnits: number;
+  /** WAC 314-55-095 placement soft-check result. */
+  limitFlag: boolean;
+  limitReasons: string[];
+  lines: PricedNewOrderLine[];
 };
 
 /** What POST /api/orders returns to the client on success. */

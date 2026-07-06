@@ -163,7 +163,10 @@ const dailyDeals: DailyDeal[] = [
     titleLines: ["Ice Cream", "Sunday"],
     offer: "33% off",
     desktopOffer: "33%",
-    details: ["Buy 3 for the price of 2 store wide for 33% off.", "Items must be of similar type and price."],
+    details: [
+      "Buy any 3 store wide and pay the equivalent of 2 — the ~33% savings are spread across your basket.",
+      "Items must be of similar type and price.",
+    ],
     href: "/menu",
     categoryLabel: "store wide",
     tone: tones.violet,
