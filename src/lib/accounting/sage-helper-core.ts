@@ -17,6 +17,7 @@ export const SAGE_REPORT_KINDS = [
   { value: "pos_summary", label: "POS daily summary" },
   { value: "gl_export", label: "Sage GL export (CSV)" },
   { value: "trial_balance", label: "Trial balance export" },
+  { value: "aged_payables", label: "Aged Payables (open vendor invoices)" },
   { value: "other", label: "Other report" },
 ] as const;
 
@@ -131,6 +132,8 @@ export type SageUploadSummary = {
   /** Columns that look monetary/numeric with their totals, for AI mapping hints. */
   numericTotals: { header: string; total: number }[];
   note?: string;
+  /** Kind-aware findings (e.g. trial-balance tie-out) — see analyzeUploadByKind. */
+  analysis?: string[];
 };
 
 /** Parse a plausibly-numeric cell (strips $ , and surrounding spaces). */
@@ -347,6 +350,181 @@ export function validateGlMappingAgainstCoa(
 }
 
 // ---------------------------------------------------------------------------
+// Restructure-prep report analyzers (Trial Balance / Aged Payables) — PURE.
+// Sage report exports vary by version/options, so columns are located by
+// candidate headers and the parse degrades gracefully with warnings — the
+// analyzers never assume a layout they can't see.
+// ---------------------------------------------------------------------------
+
+export type TrialBalanceParse = {
+  ok: boolean;
+  accountCount: number;
+  totalDebits: number;
+  totalCredits: number;
+  /** debits − credits, rounded to cents. 0 means the TB ties out. */
+  difference: number;
+  balanced: boolean;
+  warnings: string[];
+};
+
+/**
+ * Parse a Sage 50 Trial Balance export (CSV). Locates Account ID / Debit /
+ * Credit columns by header (tolerant of "Debit Amt", "Debit Amount", …).
+ * Rows without an Account ID (e.g. a Total line) are skipped so totals are
+ * computed from account rows only — then debits vs credits are tied out.
+ */
+export function parseTrialBalance(text: string, maxRows = 100_000): TrialBalanceParse {
+  const warnings: string[] = [];
+  const fail = (w: string): TrialBalanceParse => ({
+    ok: false, accountCount: 0, totalDebits: 0, totalCredits: 0, difference: 0, balanced: false, warnings: [...warnings, w],
+  });
+  const lines = text.split(/\r\n|\n|\r/).filter((l) => l.trim().length > 0);
+  if (lines.length === 0) return fail("Empty file.");
+
+  // The header row may not be the first line (report title/date lines above it).
+  let headerIdx = -1;
+  let iId = -1;
+  let iDebit = -1;
+  let iCredit = -1;
+  for (let i = 0; i < Math.min(lines.length, 10); i += 1) {
+    const cells = splitCsvLine(lines[i]).map((c) => c.trim());
+    const id = findHeaderIndex(cells, ["Account ID", "Account Id", "Account No", "Account"]);
+    const d = findHeaderIndex(cells, ["Debit Amt", "Debit Amount", "Debit", "Debits"]);
+    const c = findHeaderIndex(cells, ["Credit Amt", "Credit Amount", "Credit", "Credits"]);
+    if (id >= 0 && d >= 0 && c >= 0) {
+      headerIdx = i; iId = id; iDebit = d; iCredit = c;
+      break;
+    }
+  }
+  if (headerIdx < 0) {
+    return fail("Could not find Account ID + Debit + Credit columns — is this the General Ledger Trial Balance export (CSV)?");
+  }
+
+  let accountCount = 0;
+  let totalDebits = 0;
+  let totalCredits = 0;
+  for (const line of lines.slice(headerIdx + 1, headerIdx + 1 + maxRows)) {
+    const cells = splitCsvLine(line);
+    const id = (cells[iId] ?? "").trim();
+    if (!id) continue; // Total / blank / footer rows carry no Account ID.
+    const d = parseNumericCell(cells[iDebit] ?? "") ?? 0;
+    const c = parseNumericCell(cells[iCredit] ?? "") ?? 0;
+    accountCount += 1;
+    totalDebits += d;
+    totalCredits += c;
+  }
+  if (accountCount === 0) return fail("Header found but no account rows with an Account ID.");
+
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  totalDebits = round2(totalDebits);
+  totalCredits = round2(totalCredits);
+  const difference = round2(totalDebits - totalCredits);
+  return { ok: true, accountCount, totalDebits, totalCredits, difference, balanced: difference === 0, warnings };
+}
+
+export type AgedPayablesParse = {
+  ok: boolean;
+  vendorCount: number;
+  invoiceCount: number;
+  /** Sum of the located total/amount-due column, or null when not identifiable. */
+  totalDue: number | null;
+  warnings: string[];
+};
+
+/**
+ * Parse a Sage 50 Aged Payables export (CSV). Locates the Vendor / Invoice /
+ * total columns by candidate headers; when a total column can't be identified
+ * the parse still reports vendor + invoice counts and says so honestly.
+ */
+export function parseAgedPayables(text: string, maxRows = 100_000): AgedPayablesParse {
+  const warnings: string[] = [];
+  const lines = text.split(/\r\n|\n|\r/).filter((l) => l.trim().length > 0);
+  if (lines.length === 0) {
+    return { ok: false, vendorCount: 0, invoiceCount: 0, totalDue: null, warnings: ["Empty file."] };
+  }
+
+  let headerIdx = -1;
+  let iVendor = -1;
+  let iInvoice = -1;
+  let iTotal = -1;
+  for (let i = 0; i < Math.min(lines.length, 10); i += 1) {
+    const cells = splitCsvLine(lines[i]).map((c) => c.trim());
+    const v = findHeaderIndex(cells, ["Vendor ID", "Vendor Id", "Vendor"]);
+    if (v >= 0) {
+      headerIdx = i;
+      iVendor = v;
+      iInvoice = findHeaderIndex(cells, ["Invoice/CM #", "Invoice/CM No", "Invoice No", "Invoice #", "Invoice Number", "Invoice"]);
+      iTotal = findHeaderIndex(cells, ["Total", "Amount Due", "Balance Due", "Balance", "Amount"]);
+      break;
+    }
+  }
+  if (headerIdx < 0) {
+    return { ok: false, vendorCount: 0, invoiceCount: 0, totalDue: null, warnings: ["Could not find a Vendor ID column — is this the Aged Payables export (CSV)?"] };
+  }
+  if (iInvoice < 0) warnings.push("No invoice-number column identified — invoice count unavailable.");
+  if (iTotal < 0) warnings.push("No total/amount-due column identified — total not computed (the assistant can still use the generic column totals).");
+
+  const vendors = new Set<string>();
+  let invoiceCount = 0;
+  let totalDue = 0;
+  let lastVendor = "";
+  for (const line of lines.slice(headerIdx + 1, headerIdx + 1 + maxRows)) {
+    const cells = splitCsvLine(line);
+    const vendor = (cells[iVendor] ?? "").trim();
+    if (vendor) {
+      lastVendor = vendor;
+      vendors.add(vendor.toLowerCase());
+    }
+    const invoice = iInvoice >= 0 ? (cells[iInvoice] ?? "").trim() : "";
+    if (invoice) {
+      if (!vendor && !lastVendor) continue; // detail row before any vendor — ignore defensively
+      invoiceCount += 1;
+      if (iTotal >= 0) totalDue += parseNumericCell(cells[iTotal] ?? "") ?? 0;
+    }
+  }
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  return {
+    ok: vendors.size > 0,
+    vendorCount: vendors.size,
+    invoiceCount,
+    totalDue: iTotal >= 0 ? round2(totalDue) : null,
+    warnings,
+  };
+}
+
+/**
+ * Kind-aware analysis lines for an uploaded report (PURE). Returns
+ * human-readable findings for the UI + assistant context, or null when the
+ * kind has no dedicated analyzer (the generic CSV summary still applies).
+ */
+export function analyzeUploadByKind(kind: string, text: string): string[] | null {
+  if (kind === "trial_balance") {
+    const tb = parseTrialBalance(text);
+    if (!tb.ok) return [`Trial balance: ${tb.warnings.join(" ")}`];
+    const money = (n: number) => n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const lines = [
+      `Trial balance: ${tb.accountCount} accounts · debits ${money(tb.totalDebits)} · credits ${money(tb.totalCredits)}.`,
+      tb.balanced
+        ? "Tie-out PASSED — total debits equal total credits. Ready to key beginning balances (Phase 4)."
+        : `Tie-out FAILED — debits minus credits = ${money(tb.difference)}. Resolve this in the old company BEFORE keying beginning balances, or Sage will park the difference in Beginning Balance Equity.`,
+      ...tb.warnings,
+    ];
+    return lines;
+  }
+  if (kind === "aged_payables") {
+    const ap = parseAgedPayables(text);
+    if (!ap.ok) return [`Aged payables: ${ap.warnings.join(" ")}`];
+    const money = (n: number) => n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return [
+      `Aged payables: ${ap.vendorCount} vendors${ap.invoiceCount > 0 ? ` · ${ap.invoiceCount} open invoices` : ""}${ap.totalDue != null ? ` · total due ${money(ap.totalDue)}` : ""}.`,
+      "Each open invoice must be entered INDIVIDUALLY in the new company (so payments can apply to them) — not as one lump sum.",
+      ...ap.warnings,
+    ];
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
 // Grounded Sage 50 AI system prompt.
 // ---------------------------------------------------------------------------
 
@@ -439,6 +617,8 @@ Phase 6 — GO-FORWARD RHYTHM: daily/weekly — import back-office Cash Receipts
 TWO HONEST BOOKKEEPING MODELS (owner must choose, don't guess for them): (A) SUMMARY MODEL (recommended for a high-SKU dispensary) — the back office remains the perpetual inventory system; Sage receives daily summary receipts (gross sales, discounts, taxes, COGS by category) exactly as the export builds them; no Sage inventory items needed; monthly inventory tie-out. (B) ITEM MODEL — every product is a Sage Stock item; purchases and sales flow item-by-item and Sage computes COGS automatically; most accurate inside Sage but heavy data entry/import volume for thousands of cannabis SKUs. Deloitte-grade practice for retail POS environments is model A with strict monthly reconciliation.
 
 THE OWNER'S CHOSEN MODEL (decision on record — do not re-ask): Model A (summary model) with DETAILED category tracking. Sales/COGS are tracked by the store's detailed product categories (rosin, cartridges, infused pre-rolls, and so on), not just the seven broad types (flower, pre-rolls, concentrates, vape, edibles, topicals, other). The back office supports this via migration 0092 (dynamic category buckets): the seven broad buckets remain as seeds, and new detailed buckets are added on the Accounting reports page ("Sage category buckets" section → "+ New category"). RULE for every new detailed category: FIRST create the matching accounts in Sage — an income account (5xxxx range, e.g. 50010 ROSIN SALES), a COGS account (6xxxx, e.g. 60010 ROSIN COGS), and an inventory/asset account (2xxxx, e.g. 20010 ROSIN INVENTORY) via Maintain > Chart of Accounts — THEN add the bucket in the back office with those account IDs. If keeping the legacy 01-*/07-* category-customer convention, also create the matching 01-* (sales) and 07-* (COGS) customers in Sage; otherwise leave the customer fields set and post as direct sales. Once the bucket exists, map each POS category name to it in the "Sage category map" so exports post to the right accounts. Exports will warn about any unmapped categories.
+
+RESTRUCTURE-PREP UPLOADS (how the back office receives the source documents): the "Upload reports for Sage import" section accepts the three restructure source documents whenever the owner is ready — no rush; the owner is finishing the POS build first. (1) TRIAL BALANCE (kind "Trial balance export"): export from Sage via Reports & Forms > General Ledger > General Ledger Trial Balance, dated the day BEFORE the chosen start date, to CSV. On upload the back office automatically ties out total debits vs total credits per account row; if they differ, that must be fixed in the OLD company before keying beginning balances (otherwise Sage parks the difference in Beginning Balance Equity). (2) AGED PAYABLES (kind "Aged Payables (open vendor invoices)"): Reports & Forms > Accounts Payable > Aged Payables, to CSV. On upload the back office counts vendors/open invoices and totals the amount due; remind the owner every open invoice is entered INDIVIDUALLY in the new company so payments can apply to them. (3) CHART OF ACCOUNTS (kind "Sage Chart of Accounts (CHART.CSV)"): validates the store's mapped G/L accounts against it. When these uploads appear in the context, USE their findings (tie-out result, vendor/invoice counts, totals) to guide the restructure phases — and if a needed report is not uploaded yet, say which one and give the exact Sage menu path.
 
 FISCAL YEAR-END (Tasks > System > Year-End Wizard): Sage keeps TWO open fiscal years. Close the first year when you need to enter transactions beyond the second. If the payroll year is the calendar year, close payroll first (after W-2s/941/940). Before closing: post/print everything, reconcile accounts, back up the company (the wizard requires a backup), and review reports. Closing is permanent — transactions in the closed year become read-only.
 `.trim();
@@ -563,6 +743,50 @@ export function __runSageHelperCoreTests(): void {
   const inact = validateGlMappingAgainstCoa([{ label: "Old", accountId: "9999" }], coa);
   eq(inact.inactive.length, 1, "inactive mapping detected");
   ok(inact.allValid === false, "inactive => not valid");
+
+  // trial balance parsing + tie-out
+  const tbCsv =
+    "Greenway Marijuana\nGeneral Ledger Trial Balance\nAs of Dec 31, 2025\n" +
+    "Account ID,Account Description,Debit Amt,Credit Amt\n" +
+    "10000,CASH ON HAND,\"1,500.00\",\n" +
+    "30000,ACCOUNTS PAYABLE,,\"1,000.00\"\n" +
+    "39000,RETAINED EARNINGS,,500.00\n" +
+    ",Total,\"1,500.00\",\"1,500.00\"\n";
+  const tb = parseTrialBalance(tbCsv);
+  ok(tb.ok, "tb parsed");
+  eq(tb.accountCount, 3, "tb 3 accounts (Total row skipped)");
+  eq(tb.totalDebits, 1500, "tb debits 1500");
+  eq(tb.totalCredits, 1500, "tb credits 1500");
+  ok(tb.balanced && tb.difference === 0, "tb balanced");
+  const tbBad = parseTrialBalance(tbCsv.replace("500.00\n,Total", "400.00\n,Total"));
+  ok(tbBad.ok && !tbBad.balanced && tbBad.difference === 100, "tb imbalance detected (+100)");
+  ok(!parseTrialBalance("Nope,Nada\n1,2\n").ok, "tb rejects non-TB csv");
+
+  // aged payables parsing
+  const apCsv =
+    "Aged Payables\nAs of Dec 31, 2025\n" +
+    "Vendor ID,Vendor,Invoice/CM #,Date,0-30,31-60,Total\n" +
+    "V001,TWO HEADS FARMS,INV-1,12/01/25,250.00,,250.00\n" +
+    ",,INV-2,12/15/25,\"1,250.50\",,\"1,250.50\"\n" +
+    "V002,FAIRWINDS,INV-9,12/20/25,,100.00,100.00\n";
+  const ap = parseAgedPayables(apCsv);
+  ok(ap.ok, "ap parsed");
+  eq(ap.vendorCount, 2, "ap 2 vendors");
+  eq(ap.invoiceCount, 3, "ap 3 invoices (blank-vendor detail row counted)");
+  eq(ap.totalDue, 1600.5, "ap total 1600.50");
+  ok(!parseAgedPayables("Foo,Bar\n1,2\n").ok, "ap rejects non-AP csv");
+  const apNoTotal = parseAgedPayables("Vendor ID,Invoice No\nV1,I1\n");
+  ok(apNoTotal.ok && apNoTotal.totalDue === null && apNoTotal.warnings.length > 0, "ap no-total warns, null total");
+
+  // kind-aware analysis
+  const anTb = analyzeUploadByKind("trial_balance", tbCsv);
+  ok(anTb !== null && anTb.some((l) => l.includes("PASSED")), "analysis tb passed line");
+  const anTbBad = analyzeUploadByKind("trial_balance", tbCsv.replace("500.00\n,Total", "400.00\n,Total"));
+  ok(anTbBad !== null && anTbBad.some((l) => l.includes("FAILED")), "analysis tb failed line");
+  const anAp = analyzeUploadByKind("aged_payables", apCsv);
+  ok(anAp !== null && anAp.some((l) => l.includes("2 vendors")), "analysis ap vendors line");
+  ok(analyzeUploadByKind("cultivera_sales", tbCsv) === null, "analysis null for generic kinds");
+  ok(isSageReportKind("aged_payables"), "aged_payables is a kind");
 
   console.log(`sage-helper-core: ${pass} assertions passed`);
 }

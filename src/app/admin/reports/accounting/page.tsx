@@ -253,7 +253,7 @@ export default async function AccountingPage({
 
       <Section
         title="Upload reports for Sage import"
-        subtitle="Upload the reports you use to key data into Sage (Cultivera / POS exports, or a Sage report export). Choose “Sage Chart of Accounts (CHART.CSV)” to validate your mapped GL accounts. CSV/Excel/PDF — a .ptb backup can't be read outside Sage, so export a report instead."
+        subtitle="Upload the reports you use to key data into Sage (Cultivera / POS exports, or a Sage report export). Choose “Sage Chart of Accounts (CHART.CSV)” to validate your mapped GL accounts. For the fresh-start restructure, upload the Trial Balance (debits/credits are tied out automatically) and Aged Payables (open vendor invoices) — the assistant reads their findings. CSV/Excel/PDF — a .ptb backup can't be read outside Sage, so export a report instead."
       >
         <form action={uploadSageReportAction} className="flex flex-wrap items-end gap-3">
           <label className="flex flex-col gap-1 text-xs text-white/60">
@@ -316,6 +316,24 @@ export default async function AccountingPage({
                         .map((t) => `${t.header}=${t.total.toLocaleString()}`)
                         .join(" · ")}
                     </div>
+                  ) : null}
+                  {u.summary?.analysis && u.summary.analysis.length > 0 ? (
+                    <ul className="mt-1 space-y-0.5">
+                      {u.summary.analysis.map((a, i) => (
+                        <li
+                          key={i}
+                          className={`text-[11px] ${
+                            a.includes("FAILED") || a.includes("Resolve")
+                              ? "text-amber-300/90"
+                              : a.includes("PASSED")
+                                ? "text-emerald-300/80"
+                                : "text-white/45"
+                          }`}
+                        >
+                          {a}
+                        </li>
+                      ))}
+                    </ul>
                   ) : null}
                   {u.report_kind === "chart_of_accounts" ? (
                     <ChartOfAccountsValidator uploadId={u.id} />
