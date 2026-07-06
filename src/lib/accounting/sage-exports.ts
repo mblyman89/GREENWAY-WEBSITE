@@ -124,7 +124,7 @@ export async function getSageExportSettings(): Promise<SageExportSettings> {
     const { data, error } = await admin
       .from("accounting_settings")
       .select(
-        "gl_ap_account, gl_bank_account, gl_purchases_default, gl_cash_on_hand, gl_excise_tax_payable, gl_sales_tax_payable, sales_tax_id_cannabis, sales_tax_id_other",
+        "gl_ap_account, gl_bank_account, gl_purchases_default, gl_cash_on_hand, gl_excise_tax_payable, gl_sales_tax_payable, sales_tax_id_cannabis, sales_tax_id_other, gl_discounts",
       )
       .eq("id", true)
       .maybeSingle();
@@ -138,6 +138,7 @@ export async function getSageExportSettings(): Promise<SageExportSettings> {
       glSalesTaxPayable: data.gl_sales_tax_payable ?? "",
       salesTaxIdCannabis: data.sales_tax_id_cannabis ?? "",
       salesTaxIdOther: data.sales_tax_id_other ?? "",
+      glSalesDiscounts: (data as { gl_discounts?: string | null }).gl_discounts ?? "",
     };
   } catch {
     return { ...DEFAULT_SAGE_EXPORT_SETTINGS };
@@ -291,10 +292,16 @@ export async function buildSageReceiptsExport(fromISO: string, toISO: string): P
 
   const { data: linesData } = await admin
     .from("order_lines")
-    .select("order_id, product_id, quantity, price_minor_units")
+    .select("order_id, product_id, quantity, price_minor_units, regular_price_minor_units")
     .in("order_id", completed.map((o) => o.id).slice(0, 2000));
   const lines =
-    (linesData as { order_id: string; product_id: string | null; quantity: number; price_minor_units: number }[] | null) ?? [];
+    (linesData as {
+      order_id: string;
+      product_id: string | null;
+      quantity: number;
+      price_minor_units: number;
+      regular_price_minor_units: number | null;
+    }[] | null) ?? [];
 
   const unmapped = new Set<string>();
   const byKey = new Map<string, DayBucketSales>(); // `${date}|${bucket}`
@@ -305,6 +312,9 @@ export async function buildSageReceiptsExport(fromISO: string, toISO: string): P
     if (qty <= 0) continue;
     const base = (l.price_minor_units ?? 0) * qty;
     if (base <= 0) continue;
+    // Discount = (regular − discounted) × qty; regular_price is null/equal when no sale.
+    const regular = l.regular_price_minor_units ?? l.price_minor_units ?? 0;
+    const discount = Math.max(0, (regular - (l.price_minor_units ?? 0)) * qty);
 
     const category = (l.product_id ? catLookup.get(l.product_id) : "") || "";
     const bucket = resolveBucket(category, categoryMap, cannabisSet, unmapped);
@@ -320,7 +330,7 @@ export async function buildSageReceiptsExport(fromISO: string, toISO: string): P
     const key = `${ymd}|${bucket}`;
     let row = byKey.get(key);
     if (!row) {
-      row = { date: ymd, bucket, units: 0, salesMinor: 0, exciseMinor: 0, stateTaxMinor: 0, localTaxMinor: 0, cogsMinor: 0 };
+      row = { date: ymd, bucket, units: 0, salesMinor: 0, exciseMinor: 0, stateTaxMinor: 0, localTaxMinor: 0, cogsMinor: 0, discountMinor: 0 };
       byKey.set(key, row);
     }
     row.units += qty;
@@ -329,6 +339,7 @@ export async function buildSageReceiptsExport(fromISO: string, toISO: string): P
     row.stateTaxMinor += stateTax;
     row.localTaxMinor += localTax;
     row.cogsMinor += unitCost * qty;
+    row.discountMinor += discount;
   }
 
   const result = buildCashReceiptsCsv([...byKey.values()], accounts, settings);

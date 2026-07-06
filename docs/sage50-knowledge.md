@@ -26,6 +26,26 @@
 >   https://help-sage50.na.sage.com/en-us/2024/Content/Banking_General_Ledger/Account_Reconciliation/Account_Reconciliation.htm
 > - Close Fiscal Year (Year-End Wizard):
 >   https://help-sage50.na.sage.com/en-us/2019/Content/Company_Maintenance/Close_Fiscal_Year.htm
+> - About Bank Feeds (US):
+>   https://help-sage50.na.sage.com/en-us/2024/Content/ConnectedServices/BankingService/About_Bank_Feeds.htm
+> - Set Up Bank Feeds:
+>   https://help-sage50.na.sage.com/en-us/2024/Content/ConnectedServices/BankingService/Connect_Bank_Feeds.htm
+> - How to reconcile using Bank Feeds (Sage KB 225924450087415):
+>   https://us-kb.sage.com/portal/app/portlets/results/viewsolution.jsp?solutionid=225924450087415
+> - Item Class (all inventory classes, incl. Master/Substock/Serialized):
+>   https://help-sage50.na.sage.com/en-us/2019/Content/Inventory/ItemClass.htm
+> - Set Up Master Stock and Substock Items:
+>   https://help-sage50.na.sage.com/en-us/2022/Content/Inventory/Set_Up_Master_Stock_and_Substock_Items.htm
+> - General tab, Maintain Inventory Items (item G/L accounts, costing methods):
+>   https://help-sage50.na.sage.com/en-us/2019/Content/Inventory/Maintain_Inventory_Items_General.htm
+> - Enter Beginning Balances for Inventory:
+>   https://help-sage50.na.sage.com/en-us/2019/Content/Inventory/Enter_Beginning_Balances_for_Inventory.htm
+> - Enter General Ledger Account Beginning Balances:
+>   https://help-sage50.na.sage.com/en-us/2026/Content/Banking_General_Ledger/Enter_Beginning_Balances_GL_Accounts.htm
+> - Set Up Terms and Credit / Customer Defaults (Discount % + Discount G/L account):
+>   https://help-sage50.na.sage.com/en-us/2022/Content/Transactions/Accounts_Receivable/Terms_and_Credit_Customer_Defaults.htm
+> - Receive Money fields (direct sales with blank Customer ID; Discount + Discount Account):
+>   https://help-sage50.na.sage.com/en-us/2023/Content/Transactions/Accounts_Receivable/Payments_Receipts_Refunds/Receipts_Fields.htm
 
 ## 1. General Journal — import field specification (authoritative)
 
@@ -233,3 +253,105 @@ no exports are generated for them.
   calendar year (after W-2/941/940); the wizard forces a backup; closing is permanent.
 - **Import hygiene:** always review generated CSVs before importing; import into a
   freshly-backed-up company; Sage reports the failing line number on error.
+
+## 12. Bank Feeds — connecting a bank and reconciling with it (verified)
+
+Bank Feeds (US banks only; requires a Sage service plan with Bank Services)
+automatically retrieves bank transactions into Sage 50. **It does not create
+transactions** — downloaded records appear only inside Account Reconciliation
+and are matched against what you have already entered.
+
+**Setup** (Apps & Services ▸ Bank Feeds, or Account Reconciliation ▸ Bank Feeds ▸
+Connect to Bank Feed): confirm an email (cannot be changed later) → accept terms +
+CAPTCHA → pick the bank (popular list / search / submit missing bank) → sign in
+with online-banking credentials → choose the account type matching the G/L
+account → pick a **Start date** → Process. Start-date rules: default 90 days back,
+maximum two years, no future dates, and **never include a period you already
+reconciled** — the bank itself may cap how far back it serves.
+
+**Matching:** records that match already-entered transactions auto-clear.
+Unmatched ones appear as *New Bank Records* → right-click ▸ **Manual Match** (link
+to an existing transaction) or **Create New** (make the missing one). Connect each
+G/L bank account separately (e.g. checking `10005-GRNWY`). Disconnecting keeps
+already-downloaded records.
+
+## 13. Inventory the professional way — one item per product, not per lot (verified)
+
+- Item **class** is chosen once on the General tab of Maintain Inventory Items and
+  **cannot be changed after saving**. Classes: Stock, Master Stock + Substock
+  (Premium+), Serialized Stock (Premium+), Non-stock, Service, Labor,
+  Activity/Charge, Description-only, Assembly / Serialized Assembly.
+- Sage 50 US has **no native lot-tracking**. A new received lot is **not** a new
+  item — it is a new **cost layer** on the same Stock item. The item's costing
+  method (Average / FIFO / LIFO, or Specific Unit on Premium+) values each sale
+  automatically. Sage's guidance: generally use the **same costing method for all
+  items** (confirm with the CPA).
+- Each Stock item carries three G/L accounts: **GL Sales** (credited on sale),
+  **GL Inventory** (debited on purchase, credited on sale), **GL Cost of Sales**
+  (debited on sale). Selling through Sales/Invoicing or Receive Money with the
+  item on the line posts COGS automatically — the professional replacement for
+  manually keyed 07-* COGS receipts.
+- **Master Stock + Substock** (Premium+): one master defines attribute sets (e.g.
+  Size × Flavor) and Sage auto-generates the substocks; substocks cannot be
+  created or deleted directly (remove the attribute instead).
+- Lot-level traceability stays in the POS/back office (the WA seed-to-sale system
+  of record); Sage carries the financial view.
+
+## 14. Discounts — early-payment terms vs POS promo discounts (verified)
+
+1. **Early-payment (terms) discounts:** Maintain ▸ Default Information ▸ Customers ▸
+   *Terms and Credit* holds Discount % / Discount-in-N-days plus the **G/L link
+   accounts**: default Sales account, **Discount G/L account** (required; posted
+   whenever a customer takes an early-pay discount), and Cash account. In Receive
+   Money the Discount is computed from the customer's terms and the Discount
+   Account is a required, editable field.
+2. **POS/promo discounts (what this store gives):** professional treatment is
+   **gross sales credited to income** and the discount **debited to a contra-revenue
+   "Sales Discounts" account**, so the P&L shows gross revenue → discounts → net.
+   The back-office receipts export does this automatically once the *Sales
+   discounts* G/L account is set in Accounting settings (per day/bucket it credits
+   SALES at the pre-discount amount and adds a positive SALES DISCOUNTS line, using
+   `order_lines.regular_price_minor_units − price_minor_units`). If the account is
+   blank, sales export **net** and the export warns about untracked discounts.
+
+## 15. Beginning balances (verified)
+
+- **G/L:** Maintain ▸ Chart of Accounts ▸ **Beginning Balances** → pick the period →
+  type amounts in the white cells (minus = credit-side). Balances roll forward:
+  changing Period 1 updates later periods, not vice-versa. If transactions have
+  already been posted, the same button records **prior-period adjustments**.
+- **Inventory:** Maintain Inventory Items ▸ General ▸ **Beginning Balances** → per
+  item enter quantity, unit cost, total cost (serialized items also need serial
+  numbers). Only used at startup.
+- Source documents: the old company's **trial balance** (as of the day before the
+  start date), Aged Payables, and the back-office inventory valuation. Debits must
+  equal credits or Sage plugs the difference into **Beginning Balance Equity** —
+  drive that account to zero before going live.
+
+## 16. Fresh-start restructure playbook (the assistant walks the owner through this)
+
+| Phase | What happens |
+|---|---|
+| 0 — Close out the old | Pick a clean start date (month/fiscal start). Old company: post everything, reconcile all cash/bank accounts, run Trial Balance (day before start), Aged Payables, back-office inventory valuation. Keep the old company forever as read-only history. |
+| 1 — New company | File ▸ New Company; match fiscal periods to the start date; build the chart (keep 10000/10005/20000s/30000/31000/31001/50000s/60000s; add a Sales Discounts contra-revenue account, e.g. 50007). |
+| 2 — Defaults first | Vendor defaults (methods Cash/Check/Electronic, terms), Customer defaults (Terms & Credit + G/L links incl. Discount account), Inventory Item defaults (one costing method, CPA-confirmed), and manual sales-tax IDs/agencies (WA_LCB01, WA_DOR01/02 — not importable). |
+| 3 — Lists | Vendor list (back-office export), real customers only (walk-in retail needs none — blank Customer ID = direct sale), inventory items only if adopting the item model. |
+| 4 — Beginning balances | G/L from the trial balance; each open vendor invoice entered individually; inventory qty+cost if using items; Beginning Balance Equity must end at zero; balance sheet ties to old books. |
+| 5 — Connect & reconcile | Bank Feeds on checking; first reconciliation = first statement after start date; monthly cadence. |
+| 6 — Go-forward rhythm | Daily/weekly: import back-office Receipts / Purchases / Payments. Monthly: reconcile all cash accounts, review P&L + Balance Sheet, tie inventory G/L to back-office valuation (one adjustment if needed). Quarterly: excise/sales-tax filings tie to 31000/31001. Yearly: Year-End Wizard after CPA review. |
+
+**Two honest models (owner chooses; never guessed):**
+- **A — Summary model (recommended for a high-SKU dispensary):** back office stays
+  the perpetual inventory system; Sage receives daily summary receipts (gross
+  sales, discounts, taxes, COGS by category) exactly as the exports build them;
+  no Sage items; monthly inventory tie-out.
+- **B — Item model:** every product is a Sage Stock item; purchases/sales flow
+  item-by-item and Sage computes COGS automatically; most accurate inside Sage but
+  heavy import volume for thousands of cannabis SKUs.
+
+**On the 01-*/07-* "category customers":** verified — leaving Customer ID blank in
+Receive Money records a **direct sale** applied straight to revenue accounts, so
+daily summary receipts never required category customers. The old pattern is a
+harmless grouping convention, but the fresh start should use direct-sale daily
+receipts (or a single DAILY SALES reference customer if grouping is wanted) and
+item-driven or export-driven COGS — not a customer per category.

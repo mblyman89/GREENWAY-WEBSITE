@@ -71,6 +71,14 @@ export type SageExportSettings = {
   glSalesTaxPayable: string; // e.g. "31001-GRNWY"
   salesTaxIdCannabis: string; // e.g. "WA_LCB01"
   salesTaxIdOther: string; // e.g. "WA_DOR01"
+  /**
+   * Optional contra-revenue account for POS discounts (accounting_settings.gl_discounts,
+   * present since migration 0032). When set, receipts credit SALES at the GROSS
+   * (pre-discount) amount and add a positive "SALES DISCOUNTS" debit line, so
+   * discounts are visible on the income statement. When blank, sales export net
+   * of discounts (legacy behavior) and a warning is raised if discounts exist.
+   */
+  glSalesDiscounts: string;
 };
 
 export const DEFAULT_SAGE_EXPORT_SETTINGS: SageExportSettings = {
@@ -82,6 +90,7 @@ export const DEFAULT_SAGE_EXPORT_SETTINGS: SageExportSettings = {
   glSalesTaxPayable: "",
   salesTaxIdCannabis: "",
   salesTaxIdOther: "",
+  glSalesDiscounts: "",
 };
 
 /** One business day × bucket of summarized sales (minor units). */
@@ -94,6 +103,8 @@ export type DayBucketSales = {
   stateTaxMinor: number; // state sales tax portion
   localTaxMinor: number; // local sales tax portion
   cogsMinor: number; // weighted-average cost of the units sold
+  /** Promo/POS discounts given (regular price − discounted price), minor units, >= 0. */
+  discountMinor: number;
 };
 
 export type SageCsvResult = {
@@ -184,6 +195,7 @@ export function buildCashReceiptsCsv(
   const sorted = [...rows].sort((a, b) => a.date.localeCompare(b.date) || a.bucket.localeCompare(b.bucket));
 
   const skippedBuckets = new Set<string>();
+  let discountsWithoutAccount = 0;
   for (const r of sorted) {
     const acct = accounts[r.bucket];
     if (!acct || !acct.salesCustomerId || !acct.glSales) {
@@ -205,8 +217,20 @@ export function buildCashReceiptsCsv(
     if (r.stateTaxMinor !== 0) {
       dists.push({ qty: 0, desc: "STATE SALES TAX", gl: settings.glSalesTaxPayable, unit: "0.00", taxType: 0, amountMinor: -r.stateTaxMinor });
     }
-    if (r.salesMinor !== 0) {
-      dists.push({ qty: r.units, desc: "SALES", gl: acct.glSales, unit: unitPrice(r.salesMinor, r.units), taxType: 1, amountMinor: -r.salesMinor });
+    const discount = r.discountMinor > 0 ? r.discountMinor : 0;
+    const trackDiscounts = discount > 0 && !!settings.glSalesDiscounts;
+    if (discount > 0 && !settings.glSalesDiscounts) {
+      discountsWithoutAccount += discount;
+    }
+    // With discount tracking: credit SALES at GROSS, debit SALES DISCOUNTS
+    // (contra-revenue). Cash received is unchanged; the income statement now
+    // shows gross revenue and discounts separately (professional treatment).
+    const grossSalesMinor = trackDiscounts ? r.salesMinor + discount : r.salesMinor;
+    if (grossSalesMinor !== 0) {
+      dists.push({ qty: r.units, desc: "SALES", gl: acct.glSales, unit: unitPrice(grossSalesMinor, r.units), taxType: 1, amountMinor: -grossSalesMinor });
+    }
+    if (trackDiscounts) {
+      dists.push({ qty: 0, desc: "SALES DISCOUNTS", gl: settings.glSalesDiscounts, unit: "0.00", taxType: 0, amountMinor: discount });
     }
     if (dists.length > 0) {
       receipts += 1;
@@ -259,6 +283,11 @@ export function buildCashReceiptsCsv(
   if (skippedBuckets.size > 0) {
     warnings.push(
       `Skipped buckets with incomplete Sage mapping: ${[...skippedBuckets].sort().join(", ")}. Fix them in the Sage category mapping.`,
+    );
+  }
+  if (discountsWithoutAccount > 0) {
+    warnings.push(
+      `${dollars(discountsWithoutAccount)} of POS discounts were folded into net SALES because no "Sales discounts" G/L account is set in Accounting settings. Set one (e.g. a contra-revenue account) to track discounts separately.`,
     );
   }
 
@@ -611,6 +640,7 @@ export function __runSageExportsCoreTests(): void {
     glSalesTaxPayable: "31001-GRNWY",
     salesTaxIdCannabis: "WA_LCB01",
     salesTaxIdOther: "WA_DOR01",
+    glSalesDiscounts: "",
   };
   const flower: SageCategoryAccount = {
     bucket: "flower",
@@ -636,6 +666,7 @@ export function __runSageExportsCoreTests(): void {
           stateTaxMinor: 6086,
           localTaxMinor: 2622,
           cogsMinor: 54360,
+          discountMinor: 0,
         },
       ],
       { flower },
@@ -658,7 +689,7 @@ export function __runSageExportsCoreTests(): void {
   {
     const nc: SageCategoryAccount = { ...flower, bucket: "non_cannabis", label: "NON-CANNABIS", salesCustomerId: "01-NON CANNABIS", cogsCustomerId: "07-NON CANNABIS", glSales: "50004-GRNWY", glCogs: "60004-GRNWY", glInventory: "20004-GRNWY", isCannabis: false };
     const res = buildCashReceiptsCsv(
-      [{ date: "2026-01-01", bucket: "non_cannabis", units: 12, salesMinor: 9249, exciseMinor: 0, stateTaxMinor: 601, localTaxMinor: 259, cogsMinor: 0 }],
+      [{ date: "2026-01-01", bucket: "non_cannabis", units: 12, salesMinor: 9249, exciseMinor: 0, stateTaxMinor: 601, localTaxMinor: 259, cogsMinor: 0, discountMinor: 0 }],
       { non_cannabis: nc },
       settings,
     );
@@ -670,12 +701,40 @@ export function __runSageExportsCoreTests(): void {
   // ── Cash receipts: unmapped bucket → skipped + warning
   {
     const res = buildCashReceiptsCsv(
-      [{ date: "2026-01-01", bucket: "edible", units: 1, salesMinor: 100, exciseMinor: 37, stateTaxMinor: 7, localTaxMinor: 3, cogsMinor: 50 }],
+      [{ date: "2026-01-01", bucket: "edible", units: 1, salesMinor: 100, exciseMinor: 37, stateTaxMinor: 7, localTaxMinor: 3, cogsMinor: 50, discountMinor: 0 }],
       {},
       settings,
     );
     ok(res.rowCount === 0, "unmapped bucket emits nothing");
     ok(res.warnings.some((w) => w.includes("edible")), "unmapped bucket warned");
+  }
+
+  // ── Cash receipts: discounts tracked when gl_discounts is set (gross sales + contra line)
+  {
+    const s2: SageExportSettings = { ...settings, glSalesDiscounts: "50007-GRNWY" };
+    const res = buildCashReceiptsCsv(
+      [{ date: "2026-01-02", bucket: "flower", units: 10, salesMinor: 9000, exciseMinor: 3330, stateTaxMinor: 585, localTaxMinor: 252, cogsMinor: 0, discountMinor: 1000 }],
+      { flower },
+      s2,
+    );
+    ok(res.rowCount === 5, "discounts: 5 dists (excise, local, state, gross sales, discount)");
+    const l = res.csv.split("\n");
+    ok(l[4].includes("SALES,50002-GRNWY") && l[4].endsWith("-100.00"), "gross sales credit 100.00");
+    ok(l[5].includes("SALES DISCOUNTS,50007-GRNWY") && l[5].endsWith("10.00"), "discount debit 10.00");
+    // Receipt still nets to cash of 90 + taxes: -100 + 10 + taxes = same as net.
+    ok(res.warnings.length === 0, "discounts tracked: no warnings");
+  }
+
+  // ── Cash receipts: discounts WITHOUT gl_discounts fold into net + warn
+  {
+    const res = buildCashReceiptsCsv(
+      [{ date: "2026-01-02", bucket: "flower", units: 10, salesMinor: 9000, exciseMinor: 3330, stateTaxMinor: 585, localTaxMinor: 252, cogsMinor: 0, discountMinor: 1000 }],
+      { flower },
+      settings,
+    );
+    ok(res.rowCount === 4, "no discount acct: 4 dists");
+    ok(res.csv.includes("-90.00"), "net sales credit 90.00");
+    ok(res.warnings.some((w) => w.includes("Sales discounts")), "warned about untracked discounts");
   }
 
   // ── Purchases
