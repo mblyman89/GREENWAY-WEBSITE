@@ -17,6 +17,12 @@ import {
   type PayrollLineInput,
 } from "@/lib/payroll/payroll-core";
 import { buildNachaFile, type AchOriginator } from "@/lib/payments/nacha-core";
+import {
+  evaluatePayrollGuardrails,
+  guardrailsPermitGeneration,
+  type EmployeePaymentHistory,
+  type GuardrailReport,
+} from "@/lib/payroll/payroll-guardrails-core";
 
 export type AchCompanySettings = {
   destination_routing: string;
@@ -135,6 +141,13 @@ export type PayrollRunFull = {
   file_id_modifier: string;
   generated_at: string | null;
   notes: string | null;
+  /** Guardrail columns (migration 0094). Optional so reads degrade pre-migration. */
+  source_document_id?: string | null;
+  approved_by?: string | null;
+  approved_at?: string | null;
+  guardrail_override?: boolean | null;
+  guardrail_override_reason?: string | null;
+  created_by?: string | null;
 };
 
 export type PayrollLineRow = {
@@ -170,6 +183,92 @@ export async function getPayrollRun(runId: string): Promise<PayrollRunDetail> {
     run: run as PayrollRunFull,
     lines: (lines ?? []) as PayrollLineRow[],
   };
+}
+
+// ---------------------------------------------------------------------------
+// Source documents (the uploaded payroll data a run must be tied to)
+// ---------------------------------------------------------------------------
+export type PayrollSourceDocRow = {
+  id: string;
+  label: string | null;
+  file_name: string;
+  mime_type: string | null;
+  byte_size: number | null;
+  storage_path: string | null;
+  content_sha256: string | null;
+  period_start: string | null;
+  period_end: string | null;
+  notes: string | null;
+  created_at: string;
+};
+
+export async function listPayrollSourceDocuments(limit = 100): Promise<PayrollSourceDocRow[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("payroll_source_documents")
+      .select("id,label,file_name,mime_type,byte_size,storage_path,content_sha256,period_start,period_end,notes,created_at")
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    if (error || !data) return [];
+    return data as PayrollSourceDocRow[];
+  } catch {
+    return [];
+  }
+}
+
+/** Record an uploaded payroll source document (metadata + content hash). */
+export async function createPayrollSourceDocument(
+  input: {
+    label: string | null;
+    fileName: string;
+    mimeType: string | null;
+    byteSize: number | null;
+    storagePath: string | null;
+    contentSha256: string | null;
+    periodStart: string | null;
+    periodEnd: string | null;
+    notes: string | null;
+  },
+  actorId: string | null,
+): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not connected." };
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("payroll_source_documents")
+    .insert({
+      label: input.label,
+      file_name: input.fileName,
+      mime_type: input.mimeType,
+      byte_size: input.byteSize,
+      storage_path: input.storagePath,
+      content_sha256: input.contentSha256,
+      period_start: input.periodStart,
+      period_end: input.periodEnd,
+      notes: input.notes,
+      uploaded_by: actorId,
+    })
+    .select("id")
+    .single();
+  if (error || !data) return { ok: false, error: error?.message ?? "Failed to save document." };
+  return { ok: true, id: (data as { id: string }).id };
+}
+
+/** Tie (or untie) a source document to a run. */
+export async function setRunSourceDocument(
+  runId: string,
+  sourceDocumentId: string | null,
+  actorId: string | null,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not connected." };
+  const admin = createSupabaseAdminClient();
+  const { error } = await admin
+    .from("payroll_runs")
+    .update({ source_document_id: sourceDocumentId, updated_by: actorId })
+    .eq("id", runId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
 }
 
 /** Create an empty draft run. */
@@ -227,6 +326,97 @@ export async function savePayrollLines(
   return { ok: true };
 }
 
+// ---------------------------------------------------------------------------
+// Guardrail fact gathering + evaluation
+// ---------------------------------------------------------------------------
+/**
+ * Gather the recent-history facts the PURE guardrail evaluator needs, then run
+ * it. Used both by the UI (to preview findings) and by generatePayrollNacha (to
+ * enforce them). Degrades to "no history" if the guardrail migration/tables are
+ * absent, so nothing breaks pre-migration.
+ */
+export async function evaluateRunGuardrails(
+  runId: string,
+  opts: { releaserId?: string | null } = {},
+): Promise<{ report: GuardrailReport } | null> {
+  if (!isSupabaseServiceConfigured) return null;
+  const detail = await getPayrollRun(runId);
+  if (!detail) return null;
+  const admin = createSupabaseAdminClient();
+
+  // Employees on this run.
+  const empIds = Array.from(
+    new Set(detail.lines.map((l) => l.employee_id).filter((x): x is string => !!x)),
+  );
+
+  // Per-employee last generated payment (from other runs' lines whose run is
+  // file_generated/submitted). Best-effort — falls back to empty history.
+  const history: EmployeePaymentHistory[] = [];
+  try {
+    for (const empId of empIds) {
+      const { data } = await admin
+        .from("payroll_run_lines")
+        .select("net_pay_cents,bank_routing,bank_account_number,run_id,payroll_runs!inner(pay_date,status,id)")
+        .eq("employee_id", empId)
+        .neq("run_id", runId)
+        .in("payroll_runs.status", ["file_generated", "submitted"])
+        .order("payroll_runs(pay_date)", { ascending: false })
+        .limit(1);
+      const row = (data ?? [])[0] as
+        | {
+            net_pay_cents: number;
+            bank_routing: string | null;
+            bank_account_number: string | null;
+            payroll_runs: { pay_date: string } | { pay_date: string }[];
+          }
+        | undefined;
+      if (row) {
+        const pr = Array.isArray(row.payroll_runs) ? row.payroll_runs[0] : row.payroll_runs;
+        history.push({
+          employeeId: empId,
+          lastPaidDate: pr?.pay_date ?? null,
+          lastPaidNetCents: row.net_pay_cents ?? null,
+          lastRouting: row.bank_routing ?? null,
+          lastAccountNumber: row.bank_account_number ?? null,
+        });
+      }
+    }
+  } catch {
+    // No guardrail history available — evaluator will treat as first payment.
+  }
+
+  // Other generated runs' pay dates (for the period-cadence block).
+  let otherGeneratedRunDates: string[] = [];
+  try {
+    const { data } = await admin
+      .from("payroll_runs")
+      .select("pay_date,status,id")
+      .neq("id", runId)
+      .in("status", ["file_generated", "submitted"]);
+    otherGeneratedRunDates = ((data ?? []) as { pay_date: string }[]).map((r) => r.pay_date);
+  } catch {
+    otherGeneratedRunDates = [];
+  }
+
+  const report = evaluatePayrollGuardrails({
+    payDate: detail.run.pay_date,
+    lines: detail.lines.map((l) => ({
+      employeeId: l.employee_id ?? l.id,
+      employeeName: l.employee_name,
+      netPayCents: l.net_pay_cents,
+      routing: l.bank_routing ?? "",
+      accountNumber: l.bank_account_number ?? "",
+    })),
+    hasSourceDocument: !!detail.run.source_document_id,
+    otherGeneratedRunDates,
+    history,
+    releaserIsCreator:
+      !!opts.releaserId && !!detail.run.created_by && opts.releaserId === detail.run.created_by,
+  });
+
+  return { report };
+}
+
 export type GenerateResult =
   | { ok: true; filename: string; file: string; totalCents: number; entryCount: number }
   | { ok: false; error: string };
@@ -239,6 +429,7 @@ export type GenerateResult =
 export async function generatePayrollNacha(
   runId: string,
   actorId: string | null,
+  opts: { overrideWarnings?: boolean; overrideReason?: string | null } = {},
 ): Promise<GenerateResult> {
   if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not connected." };
   const detail = await getPayrollRun(runId);
@@ -261,6 +452,25 @@ export async function generatePayrollNacha(
   if (!validation.ok) {
     const first = validation.errors[0] ?? validation.lines.flatMap((l) => l.errors)[0];
     return { ok: false, error: first ?? "Payroll run has validation errors." };
+  }
+
+  // GUARDRAILS — the compliance gate. This enforces the owner's rules (source
+  // document required; one payment per employee per two weeks; one file per
+  // two-week period) plus the research-backed fraud red flags. Hard blocks can
+  // never be bypassed; soft warnings require an explicit, recorded override.
+  const guard = await evaluateRunGuardrails(runId, { releaserId: actorId });
+  if (guard) {
+    const { report } = guard;
+    if (!guardrailsPermitGeneration(report, !!opts.overrideWarnings)) {
+      const block = report.findings.find((f) => f.severity === "block" && !f.overridable);
+      const warn = report.findings.find((f) => f.severity === "warn");
+      const msg = block
+        ? block.message
+        : warn
+          ? `${warn.message} Review the warnings and confirm the override to continue.`
+          : "Payroll guardrails blocked this file.";
+      return { ok: false, error: msg };
+    }
   }
 
   const originator: AchOriginator = {
@@ -286,12 +496,20 @@ export async function generatePayrollNacha(
 
   const filename = `payroll_${detail.run.pay_date}_${runId.slice(0, 8)}.ach`;
   const admin = createSupabaseAdminClient();
+  const nowIso = new Date().toISOString();
   await admin
     .from("payroll_runs")
     .update({
       status: "file_generated",
       nacha_filename: filename,
-      generated_at: new Date().toISOString(),
+      generated_at: nowIso,
+      // Dual control: the actor who released the file (self-approval logged).
+      approved_by: actorId,
+      approved_at: nowIso,
+      // Record any conscious override of soft warnings.
+      guardrail_override: !!opts.overrideWarnings,
+      guardrail_override_reason: opts.overrideWarnings ? (opts.overrideReason ?? null) : null,
+      guardrail_override_by: opts.overrideWarnings ? actorId : null,
       updated_by: actorId,
     })
     .eq("id", runId);
