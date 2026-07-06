@@ -17,6 +17,7 @@ import { generate, isAiConfigured, aiModelId } from "@/lib/ai/provider";
 import { getAccountingSettings } from "@/lib/accounting/sage50";
 import {
   summarizeCsv,
+  analyzeUploadByKind,
   buildSageSystemPrompt,
   isRejectedSageFile,
   isAcceptedSageFile,
@@ -100,7 +101,11 @@ export async function uploadSageReport(
   const ext = fileExtension(input.fileName);
   if (ext === ".csv" || ext === ".txt") {
     try {
-      summary = summarizeCsv(input.buffer.toString("utf8"));
+      const text = input.buffer.toString("utf8");
+      summary = summarizeCsv(text);
+      // Kind-aware analysis (trial balance tie-out, aged payables totals, …).
+      const analysis = analyzeUploadByKind(reportKind, text);
+      if (analysis && analysis.length > 0) summary.analysis = analysis;
     } catch {
       summary = null;
     }
@@ -239,6 +244,7 @@ async function buildStoreContext(): Promise<string> {
       lines.push(
         `  • ${u.file_name} [${sageReportKindLabel(u.report_kind)}] — ${u.summary?.rowCount ?? 0} rows, ${u.summary?.columnCount ?? 0} cols${totals ? `; totals: ${totals}` : ""}`,
       );
+      for (const a of u.summary?.analysis ?? []) lines.push(`      ↳ ${a}`);
     }
   }
   return lines.join("\n");

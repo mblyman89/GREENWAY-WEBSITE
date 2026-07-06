@@ -385,3 +385,29 @@ The exports group each day's sales, discounts, taxes, and COGS by these buckets,
 so the Sage P&L shows gross revenue, discounts, and COGS per detailed category —
 professional summary-level books with the back office as the perpetual
 inventory system (monthly tie-out per the playbook in §16).
+
+## 18. Restructure-prep uploads (Trial Balance / Aged Payables analyzers)
+
+The owner will start the fresh-start restructure later (POS build comes first).
+So the back office is ready the moment he is, the upload flow now understands
+the three restructure source documents and analyzes them on upload:
+
+| Report kind | Sage export path | What the back office does on upload |
+| --- | --- | --- |
+| Trial balance export | Reports & Forms → General Ledger → General Ledger Trial Balance (dated the day BEFORE the start date) → CSV | Locates the Account ID / Debit / Credit columns (headers may sit below title lines), sums account rows (Total/footer rows without an Account ID are skipped), and ties out debits vs credits. PASSED/FAILED verdict is shown on the upload row and fed to the assistant. A failed tie-out must be fixed in the OLD company before Phase 4, or Sage parks the difference in Beginning Balance Equity. |
+| Aged Payables (open vendor invoices) | Reports & Forms → Accounts Payable → Aged Payables → CSV | Counts distinct vendors and open invoices (detail rows under a vendor are attributed to it) and totals the amount-due column when identifiable; warns honestly when a column can't be located instead of guessing. Reminder attached: every open invoice is keyed INDIVIDUALLY in the new company so payments can apply. |
+| Sage Chart of Accounts (CHART.CSV) | Reports & Forms → General Ledger → Chart of Accounts (or File → Select Import/Export export) | Existing validator — cross-checks the store's mapped G/L accounts against the CoA (missing/inactive accounts flagged). |
+
+Implementation notes (verified, not guessed):
+- Sage's official help documents the Trial Balance report as "each account and
+  its balance as of the date or period you select" and the Aged Payables report
+  as "outstanding payables, broken down by aging categories" — but the help does
+  NOT publish a fixed CSV column layout for either report (layouts vary by
+  version and report options). The parsers therefore locate columns by candidate
+  headers (e.g. "Debit Amt"/"Debit Amount"/"Debit") and degrade gracefully with
+  explicit warnings when a column can't be found. Sources:
+  help-sage50.na.sage.com GeneralLedgerTrialBalance.htm, AgedPayables.htm.
+- Findings are stored in the upload's `summary.analysis` (aggregate text only,
+  same no-PII posture as the generic CSV summary) and injected into the
+  assistant's store context, so the Sage AI can reference the tie-out result and
+  AP totals when coaching the restructure phases.
