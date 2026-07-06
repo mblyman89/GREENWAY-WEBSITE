@@ -92,6 +92,7 @@ export const adminNav: AdminNavItem[] = [
 
   // CCRS: standalone top-header button → Compliance Health (direct link, no dropdown).
   { label: "Compliance Health", href: "/admin/compliance/health", permission: "reports.view", icon: "\ud83d\udee1\ufe0f", group: "CCRS" }, // 🛡️ compliance shield
+  { label: "Compliance Calendar", href: "/admin/compliance/calendar", permission: "settings.manage", icon: "\ud83d\udcc5", group: "Admin" }, // 📅 S-18 recurring obligations
 
   // Website: media + site content, then public page editors + menu imports.
   // Media Library is pinned to the TOP with Site Content directly under it.
