@@ -14,6 +14,7 @@ import {
   saveSageCategoryAccountAction,
   saveSageCategoryMapAction,
   deleteSageCategoryMapAction,
+  createSageCategoryBucketAction,
   type SageMappingResult,
 } from "@/app/admin/reports/accounting/sage-mapping-actions";
 import type { SageCategoryAccount, SageExportSettings, SageBucket } from "@/lib/accounting/sage-exports-core";
@@ -154,7 +155,67 @@ export function SageCategoryAccountsForm({
       {accounts.map((a) => (
         <BucketRow key={a.bucket} acct={a} canEdit={canEdit} />
       ))}
+      {canEdit ? <AddBucketForm /> : null}
     </div>
+  );
+}
+
+/**
+ * Add a new DETAILED category bucket (dynamic buckets — migration 0092).
+ * e.g. ROSIN, VAPE CARTRIDGES, GUMMIES with their own customers + G/L trio.
+ */
+function AddBucketForm() {
+  const [pending, startTransition] = useTransition();
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  function onSubmit(formData: FormData) {
+    setMsg(null);
+    startTransition(async () => {
+      const res = await createSageCategoryBucketAction(formData);
+      setMsg(res.ok ? { ok: true, text: "Category added." } : { ok: false, text: res.error });
+    });
+  }
+
+  return (
+    <form
+      action={onSubmit}
+      className="grid items-end gap-2 rounded-xl border border-dashed border-white/15 bg-black/10 p-3 sm:grid-cols-2 lg:grid-cols-8"
+    >
+      <div className="lg:col-span-1">
+        <span className="mb-1 block text-[0.65rem] font-black uppercase tracking-[0.1em] text-[var(--admin-accent)]">
+          + New category
+        </span>
+        <label className="flex items-center gap-1 text-[0.65rem] text-white/40">
+          <input type="checkbox" name="is_cannabis" defaultChecked className="accent-[var(--admin-accent)]" />
+          cannabis (37% excise)
+        </label>
+      </div>
+      {(
+        [
+          ["label", "Label", "e.g. ROSIN"],
+          ["sales_customer_id", "Sales customer", "e.g. 01-ROSIN"],
+          ["cogs_customer_id", "COGS customer", "e.g. 07-ROSIN"],
+          ["gl_sales", "G/L sales", "e.g. 50010-GRNWY"],
+          ["gl_cogs", "G/L COGS", "e.g. 60010-GRNWY"],
+          ["gl_inventory", "G/L inventory", "e.g. 20010-GRNWY"],
+        ] as const
+      ).map(([name, label, placeholder]) => (
+        <label key={name} className="block">
+          <span className="mb-1 block text-[0.6rem] uppercase tracking-[0.08em] text-white/35">{label}</span>
+          <input name={name} placeholder={placeholder} className={`${inputCls} px-2 py-1.5 text-xs`} />
+        </label>
+      ))}
+      <div className="flex items-center gap-2">
+        <button type="submit" disabled={pending} className={`${btnCls} px-3 py-1.5 text-xs`}>
+          {pending ? "…" : "Add"}
+        </button>
+        <StatusMsg msg={msg} />
+      </div>
+      <p className="text-[0.65rem] text-white/35 sm:col-span-2 lg:col-span-8">
+        Create the matching income / COGS / inventory accounts (and 01-*/07-* customers if you keep that convention) in
+        Sage first, then add the category here. Requires migration 0092.
+      </p>
+    </form>
   );
 }
 
@@ -166,11 +227,15 @@ export function SageCategoryMapForm({
   entries,
   unmappedCategories,
   canEdit,
+  buckets,
 }: {
   entries: { source: string; bucket: SageBucket }[];
   unmappedCategories: string[];
   canEdit: boolean;
+  /** Configured bucket keys (dynamic since 0092); falls back to the 7 standard. */
+  buckets?: string[];
 }) {
+  const bucketOptions = buckets && buckets.length > 0 ? buckets : [...SAGE_BUCKETS];
   const [pending, startTransition] = useTransition();
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -235,10 +300,10 @@ export function SageCategoryMapForm({
           </label>
           <label className="flex flex-col gap-1 text-xs text-white/60">
             Sage bucket
-            <select name="bucket" className={inputCls} defaultValue="flower">
-              {SAGE_BUCKETS.map((b) => (
+            <select name="bucket" className={inputCls} defaultValue={bucketOptions.includes("flower") ? "flower" : bucketOptions[0]}>
+              {bucketOptions.map((b) => (
                 <option key={b} value={b}>
-                  {b.replace("_", "-")}
+                  {b.replace(/_/g, "-")}
                 </option>
               ))}
             </select>
