@@ -1,0 +1,29 @@
+# S-14 (GAP M-11) — compliance test harness on every PR and push to main.
+# Pure-module tests only: no database, no browser, no secrets. This is the
+# WAC 314-55-509 mitigation evidence — statute-encoding modules cannot drift
+# without a red X on the PR.
+name: compliance-tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  compliance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Compliance test harness (vitest + golden files)
+        run: npm run test:compliance
+      - name: Pure self-test runner (tsx)
+        run: npx tsx scripts/compliance/run-pure-selftests.ts
+      - name: Lint
+        run: npm run lint

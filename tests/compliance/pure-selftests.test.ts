@@ -1,0 +1,54 @@
+/**
+ * tests/compliance/pure-selftests.test.ts  (S-14 / GAP M-11)
+ *
+ * Runs every embedded __run*Tests() self-test suite under vitest so the whole
+ * pure-module regression net executes in CI on every PR (same coverage as
+ * scripts/compliance/run-pure-selftests.ts, which remains for quick local
+ * runs). Each suite throws on its first failure.
+ */
+import { describe, it, expect } from "vitest";
+import { __runOrderPricingTests } from "@/lib/orders/order-pricing-core";
+import { __runDiscountEngineTests } from "@/lib/promotions/discount-engine-core";
+import { __runSalesLimitTests } from "@/lib/compliance/sales-limits-core";
+import { __runSalesLimitGateTests } from "@/lib/compliance/sales-limit-gate-core";
+import { __runChunkedInTests } from "@/lib/supabase/chunked-in";
+import { __runExemptSaleRecordTests } from "@/lib/medical/exempt-sale-record-core";
+import { __runSalesHoursCoreTests } from "@/lib/compliance/sales-hours-core";
+import { __runReceiptCoreTests } from "@/lib/printing/receipt-core";
+import { __runPinHashTests } from "@/lib/security/pin-hash";
+import { __runAtRestCryptoTests } from "@/lib/security/at-rest-crypto";
+
+describe("embedded pure self-test suites", () => {
+  it("order-pricing-core (S-2/S-3 money math + floor)", () => {
+    expect(() => __runOrderPricingTests()).not.toThrow();
+  });
+  it("discount-engine-core (promotions engine)", () => {
+    expect(() => __runDiscountEngineTests()).not.toThrow();
+  });
+  it("sales-limits-core (WAC 314-55-095 buckets)", () => {
+    expect(() => __runSalesLimitTests()).not.toThrow();
+  });
+  it("sales-limit-gate-core (S-1 completion gate)", () => {
+    expect(() => __runSalesLimitGateTests()).not.toThrow();
+  });
+  it("chunked-in (S-7 pagination)", async () => {
+    await expect(__runChunkedInTests()).resolves.not.toThrow();
+  });
+  it("exempt-sale-record-core (S-8 / WAC 314-55-090(2))", () => {
+    const r = __runExemptSaleRecordTests();
+    expect(r.failed).toBe(0);
+    expect(r.passed).toBeGreaterThan(0);
+  });
+  it("sales-hours-core (WAC 314-55-147 window)", () => {
+    expect(() => __runSalesHoursCoreTests()).not.toThrow();
+  });
+  it("receipt-core (Pacific timestamps, receipt shape)", () => {
+    expect(() => __runReceiptCoreTests()).not.toThrow();
+  });
+  it("pin-hash (S-10 scrypt + throttle)", () => {
+    expect(() => __runPinHashTests()).not.toThrow();
+  });
+  it("at-rest-crypto (S-10 AES-256-GCM envelope)", () => {
+    expect(() => __runAtRestCryptoTests()).not.toThrow();
+  });
+});
