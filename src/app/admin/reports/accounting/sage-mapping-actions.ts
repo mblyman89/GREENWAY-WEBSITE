@@ -12,7 +12,7 @@ import { revalidatePath } from "next/cache";
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { isSageBucket, normalizeCategory, SAGE_BUCKETS } from "@/lib/accounting/sage-exports-core";
+import { isValidBucketKey, normalizeBucketKey, normalizeCategory } from "@/lib/accounting/sage-exports-core";
 
 export type SageMappingResult = { ok: true } | { ok: false; error: string };
 
@@ -22,7 +22,7 @@ export async function saveSageCategoryAccountAction(formData: FormData): Promise
   const get = (k: string) => String(formData.get(k) ?? "").trim();
 
   const bucket = get("bucket");
-  if (!isSageBucket(bucket)) return { ok: false, error: "Unknown bucket." };
+  if (!isValidBucketKey(bucket)) return { ok: false, error: "Unknown bucket." };
 
   const patch = {
     label: get("label"),
@@ -59,7 +59,7 @@ export async function saveSageCategoryMapAction(formData: FormData): Promise<Sag
   const source = normalizeCategory(String(formData.get("source_category") ?? ""));
   const bucket = String(formData.get("bucket") ?? "").trim();
   if (!source) return { ok: false, error: "Category is required." };
-  if (!isSageBucket(bucket)) return { ok: false, error: `Bucket must be one of: ${SAGE_BUCKETS.join(", ")}.` };
+  if (!isValidBucketKey(bucket)) return { ok: false, error: "Bucket key must be a lowercase slug (e.g. rosin, vape_cartridges)." };
 
   try {
     const admin = createSupabaseAdminClient();
@@ -130,5 +130,79 @@ export async function saveSageExportSettingsAction(formData: FormData): Promise<
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Failed to save." };
+  }
+}
+
+/**
+ * Create a new detailed category bucket (dynamic buckets, migration 0092).
+ * The key is slugified from the label; fails with a clear message pre-0092
+ * (the DB check constraint on the 7 seeded buckets rejects new keys).
+ */
+export async function createSageCategoryBucketAction(formData: FormData): Promise<SageMappingResult> {
+  const session = await requirePermission("settings.manage");
+  const get = (k: string) => String(formData.get(k) ?? "").trim();
+
+  const label = get("label");
+  if (!label) return { ok: false, error: "Label is required (e.g. ROSIN)." };
+  const bucket = normalizeBucketKey(get("bucket") || label);
+  if (!isValidBucketKey(bucket)) {
+    return { ok: false, error: "Bucket key must be a lowercase slug (e.g. rosin, vape_cartridges)." };
+  }
+
+  const row = {
+    bucket,
+    label,
+    sales_customer_id: get("sales_customer_id"),
+    cogs_customer_id: get("cogs_customer_id"),
+    gl_sales: get("gl_sales"),
+    gl_cogs: get("gl_cogs"),
+    gl_inventory: get("gl_inventory"),
+    is_cannabis: get("is_cannabis") === "on" || get("is_cannabis") === "true",
+    active: true,
+  };
+
+  try {
+    const admin = createSupabaseAdminClient();
+    const { error } = await admin.from("sage_category_accounts").insert(row);
+    if (error) {
+      if (error.message.includes("bucket_check")) {
+        return { ok: false, error: "Apply migration 0092_sage50_dynamic_buckets.sql first — the database still limits buckets to the original seven." };
+      }
+      if (error.code === "23505") return { ok: false, error: `Bucket "${bucket}" already exists.` };
+      return { ok: false, error: error.message };
+    }
+    await recordAudit({
+      actorId: session.profile.id,
+      action: "sage_category_accounts.create",
+      entityType: "sage_category_accounts",
+      entityId: bucket,
+      after: row,
+    });
+    revalidatePath("/admin/reports/accounting");
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Failed to create bucket." };
+  }
+}
+
+/** Deactivate a category bucket (kept in the table; excluded from exports/forms). */
+export async function deactivateSageCategoryBucketAction(formData: FormData): Promise<SageMappingResult> {
+  const session = await requirePermission("settings.manage");
+  const bucket = String(formData.get("bucket") ?? "").trim();
+  if (!isValidBucketKey(bucket)) return { ok: false, error: "Unknown bucket." };
+  try {
+    const admin = createSupabaseAdminClient();
+    const { error } = await admin.from("sage_category_accounts").update({ active: false }).eq("bucket", bucket);
+    if (error) return { ok: false, error: error.message };
+    await recordAudit({
+      actorId: session.profile.id,
+      action: "sage_category_accounts.deactivate",
+      entityType: "sage_category_accounts",
+      entityId: bucket,
+    });
+    revalidatePath("/admin/reports/accounting");
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Failed to deactivate." };
   }
 }

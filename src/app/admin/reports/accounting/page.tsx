@@ -92,7 +92,9 @@ export default async function AccountingPage({
     listSageCategoryMapEntries(),
     listUnmappedCategories(),
   ]);
-  const sageAccountRows = Object.values(sageAccounts).sort((a, b) => a.bucket.localeCompare(b.bucket));
+  const sageAccountRows = Object.values(sageAccounts)
+    .filter((a): a is NonNullable<typeof a> => a !== undefined)
+    .sort((a, b) => a.bucket.localeCompare(b.bucket));
 
   const totals = (built?.summaries ?? []).reduce(
     (acc, s) => {
@@ -193,10 +195,10 @@ export default async function AccountingPage({
         <SageExportSettingsForm settings={sageExportSettings} canEdit={canEdit} />
       </Section>
 
-      {/* Per-bucket category mapping (0091) */}
+      {/* Per-bucket category mapping (0091, dynamic since 0092) */}
       <Section
         title="Sage category buckets"
-        subtitle="Each bucket maps to its Sage category customer (01-/07-) and G/L trio (sales 5000x · COGS 6000x · inventory 2000x), exactly like your books."
+        subtitle="Each category maps to its Sage customers (01-/07-) and G/L trio (sales · COGS · inventory). Add detailed categories (rosin, cartridges, …) below — requires migration 0092."
       >
         <SageCategoryAccountsForm accounts={sageAccountRows} canEdit={canEdit} />
       </Section>
@@ -204,9 +206,14 @@ export default async function AccountingPage({
       {/* Menu category → bucket map (0091) */}
       <Section
         title="Menu category → Sage bucket"
-        subtitle="Tell the exports which Sage bucket each back-office menu category belongs to. Unmapped categories are flagged — nothing is guessed."
+        subtitle="Tell the exports which Sage category each back-office menu category belongs to. Unmapped categories are flagged — nothing is guessed."
       >
-        <SageCategoryMapForm entries={categoryMapEntries} unmappedCategories={unmappedCategories} canEdit={canEdit} />
+        <SageCategoryMapForm
+          entries={categoryMapEntries}
+          unmappedCategories={unmappedCategories}
+          canEdit={canEdit}
+          buckets={sageAccountRows.map((a) => a.bucket)}
+        />
       </Section>
 
       {/* GL mapping */}

@@ -355,3 +355,33 @@ daily summary receipts never required category customers. The old pattern is a
 harmless grouping convention, but the fresh start should use direct-sale daily
 receipts (or a single DAILY SALES reference customer if grouping is wanted) and
 item-driven or export-driven COGS — not a customer per category.
+
+## 17. Owner's decision: Model A with DETAILED categories (migration 0092)
+
+The owner chose **Model A (summary model)** with **detailed** category tracking —
+sales and COGS are summarized by the store's detailed product categories (rosin,
+cartridges, infused pre-rolls, …), not only the seven broad types.
+
+**Migration `0092_sage50_dynamic_buckets.sql`** (apply manually, AFTER 0091)
+removes the fixed 7-value CHECK constraints on `sage_category_accounts.bucket`
+and `sage_category_map.bucket` and replaces them with a slug-format constraint
+(`^[a-z0-9][a-z0-9_-]{0,39}$`). The seven broad buckets remain as seeds; any
+number of detailed buckets may be added.
+
+**Workflow for adding a detailed category (e.g. ROSIN):**
+1. In Sage, create the three G/L accounts first via Maintain → Chart of Accounts:
+   an income account (e.g. `50010` ROSIN SALES, type Income), a COGS account
+   (e.g. `60010` ROSIN COGS, type Cost of Sales), and an inventory account
+   (e.g. `20010` ROSIN INVENTORY, type Inventory).
+2. If keeping the 01-*/07-* customer convention, also create `01-ROSIN` and
+   `07-ROSIN` customers in Sage; otherwise direct sales work with the fields set.
+3. In the back office, Admin → Reports → Accounting → "Sage category buckets" →
+   **+ New category**: enter the label and the account/customer IDs from step 1–2.
+4. Map each POS category name to the new bucket in "Sage category map".
+   Exports warn about unmapped categories and about buckets whose G/L accounts
+   are blank — nothing posts to a guessed account.
+
+The exports group each day's sales, discounts, taxes, and COGS by these buckets,
+so the Sage P&L shows gross revenue, discounts, and COGS per detailed category —
+professional summary-level books with the back office as the perpetual
+inventory system (monthly tie-out per the playbook in §16).

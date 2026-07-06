@@ -33,7 +33,12 @@ import { dollars, csvCell, clean } from "@/lib/accounting/sage50-core";
 // Types
 // ---------------------------------------------------------------------------
 
-/** The seven category buckets in the owner's Sage company. */
+/**
+ * The seven STANDARD buckets seeded by migration 0091 (the owner's original
+ * category types). Since migration 0092 buckets are DYNAMIC: the owner can add
+ * detailed categories (rosin, cartridges, gummies, ...) from the admin UI, so a
+ * bucket is any valid slug key — these seven are seeds/suggestions, not a limit.
+ */
 export const SAGE_BUCKETS = [
   "concentrate",
   "edible",
@@ -43,10 +48,36 @@ export const SAGE_BUCKETS = [
   "preroll",
   "topical",
 ] as const;
-export type SageBucket = (typeof SAGE_BUCKETS)[number];
 
-export function isSageBucket(v: string): v is SageBucket {
+/** A Sage category bucket key (dynamic since 0092 — any valid slug). */
+export type SageBucket = string;
+
+/** True when v is one of the seven standard seeded buckets. */
+export function isStandardSageBucket(v: string): boolean {
   return (SAGE_BUCKETS as readonly string[]).includes(v);
+}
+
+/**
+ * Valid bucket-key format (mirrors the 0092 DB check constraint):
+ * lowercase slug, starts alphanumeric, then a-z 0-9 _ -, max 40 chars.
+ */
+export function isValidBucketKey(v: string): boolean {
+  return /^[a-z0-9][a-z0-9_-]{0,39}$/.test(v);
+}
+
+/** Slugify a label/category into a bucket key ("Vape Cartridges" → "vape_cartridges"). */
+export function normalizeBucketKey(input: string): string {
+  return input
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 40);
+}
+
+/** Back-compat alias (previous name); true when v is a standard bucket. */
+export function isSageBucket(v: string): boolean {
+  return isStandardSageBucket(v);
 }
 
 /** Per-bucket Sage mapping (from sage_category_accounts). */
@@ -857,6 +888,22 @@ export function __runSageExportsCoreTests(): void {
   // normalizeCategory
   ok(normalizeCategory("  Pre-Roll ") === "pre-roll", "normalizeCategory");
   ok(isSageBucket("flower") && !isSageBucket("vape"), "isSageBucket");
+
+  // dynamic bucket keys (0092)
+  ok(isStandardSageBucket("edible") && !isStandardSageBucket("rosin"), "isStandardSageBucket");
+  ok(
+    isValidBucketKey("rosin") && isValidBucketKey("vape_cartridges") && isValidBucketKey("pre-rolls_2g"),
+    "isValidBucketKey: accepts slugs",
+  );
+  ok(
+    !isValidBucketKey("") && !isValidBucketKey("Rosin") && !isValidBucketKey("_rosin") &&
+      !isValidBucketKey("rosin!") && !isValidBucketKey("a".repeat(41)),
+    "isValidBucketKey: rejects bad keys",
+  );
+  ok(normalizeBucketKey("Vape Cartridges") === "vape_cartridges", "normalizeBucketKey: slugify");
+  ok(normalizeBucketKey("  ROSIN!!  ") === "rosin", "normalizeBucketKey: trim + strip");
+  ok(normalizeBucketKey("x".repeat(50)).length === 40, "normalizeBucketKey: max 40");
+  ok(isValidBucketKey(normalizeBucketKey("Infused Pre-Rolls (2g)")), "normalizeBucketKey output valid");
 
   console.log(`sage-exports-core: ${pass} assertions passed`);
 }

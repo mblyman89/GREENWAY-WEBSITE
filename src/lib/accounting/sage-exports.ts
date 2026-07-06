@@ -32,6 +32,8 @@ import {
   type SageCsvResult,
   DEFAULT_SAGE_EXPORT_SETTINGS,
   isSageBucket,
+  isValidBucketKey,
+  normalizeBucketKey,
   normalizeCategory,
   buildCashReceiptsCsv,
   buildPurchasesCsv,
@@ -107,7 +109,7 @@ export async function getSageCategoryMap(): Promise<Map<string, SageBucket>> {
     const { data, error } = await admin.from("sage_category_map").select("source_category, bucket, active");
     if (error || !data) return map;
     for (const r of data as { source_category: string; bucket: string; active: boolean }[]) {
-      if (!r.active || !isSageBucket(r.bucket)) continue;
+      if (!r.active || !isValidBucketKey(r.bucket)) continue;
       map.set(normalizeCategory(r.source_category), r.bucket);
     }
     return map;
@@ -229,11 +231,15 @@ function resolveBucket(
   categoryMap: Map<string, SageBucket>,
   cannabisSet: Set<string> | null,
   unmapped: Set<string>,
+  knownBuckets?: Set<string>,
 ): SageBucket | null {
   const norm = normalizeCategory(category);
   const mapped = categoryMap.get(norm);
   if (mapped) return mapped;
-  if (norm && isSageBucket(norm)) return norm;
+  // Identity match: a category whose slug IS a configured bucket key (covers
+  // both the seven standard buckets and owner-added detailed buckets).
+  const slug = normalizeBucketKey(norm);
+  if (slug && (knownBuckets ? knownBuckets.has(slug) : isSageBucket(slug))) return slug;
   // Never guess a cannabis bucket. Non-cannabis is safe only when the tax
   // engine also says the category is non-cannabis.
   if (norm && !isCannabisCategory(category, cannabisSet)) {
@@ -304,6 +310,7 @@ export async function buildSageReceiptsExport(fromISO: string, toISO: string): P
     }[] | null) ?? [];
 
   const unmapped = new Set<string>();
+  const knownBuckets = new Set(Object.keys(accounts));
   const byKey = new Map<string, DayBucketSales>(); // `${date}|${bucket}`
   for (const l of lines) {
     const ymd = dayByOrder.get(l.order_id);
@@ -317,7 +324,7 @@ export async function buildSageReceiptsExport(fromISO: string, toISO: string): P
     const discount = Math.max(0, (regular - (l.price_minor_units ?? 0)) * qty);
 
     const category = (l.product_id ? catLookup.get(l.product_id) : "") || "";
-    const bucket = resolveBucket(category, categoryMap, cannabisSet, unmapped);
+    const bucket = resolveBucket(category, categoryMap, cannabisSet, unmapped, knownBuckets);
     if (!bucket) continue;
 
     const acct = accounts[bucket];
@@ -576,7 +583,7 @@ export async function buildSageAdjustmentsExport(fromISO: string, toISO: string)
       continue;
     }
     const category = (lot.pos_product_key ? catLookup.get(lot.pos_product_key) : "") || "";
-    const bucket = resolveBucket(category, categoryMap, cannabisSet, unmapped);
+    const bucket = resolveBucket(category, categoryMap, cannabisSet, unmapped, new Set(Object.keys(accounts)));
     const acct = bucket ? accounts[bucket] : undefined;
     if (!acct || !acct.glCogs || !acct.glInventory) continue;
     const valueMinor = Math.round(Math.abs(a.qty_delta) * lot.unit_cost_minor_units);
@@ -673,16 +680,18 @@ export async function listUnmappedCategories(): Promise<string[]> {
   if (!isSupabaseServiceConfigured) return [];
   try {
     const admin = createSupabaseAdminClient();
-    const [categoryMap, { data }] = await Promise.all([
+    const [categoryMap, accounts, { data }] = await Promise.all([
       getSageCategoryMap(),
+      getSageCategoryAccounts(),
       admin.from("menu_items").select("category").limit(20000),
     ]);
+    const knownBuckets = new Set(Object.keys(accounts));
     const seen = new Map<string, string>(); // normalized → original casing
     for (const r of (data as { category: string | null }[] | null) ?? []) {
       const cat = r.category?.trim();
       if (!cat) continue;
       const norm = normalizeCategory(cat);
-      if (categoryMap.has(norm) || isSageBucket(norm)) continue;
+      if (categoryMap.has(norm) || knownBuckets.has(normalizeBucketKey(norm)) || isSageBucket(norm)) continue;
       if (!seen.has(norm)) seen.set(norm, cat);
     }
     return [...seen.values()].sort((a, b) => a.localeCompare(b));
