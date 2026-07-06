@@ -13,6 +13,7 @@ import {
   CLOSED_ORDER_STATUSES,
   type OrderStatus,
 } from "@/lib/orders/types";
+import { ORDER_REVERSAL_TARGETS } from "@/lib/orders/order-lifecycle-core";
 import { setOrderStatusAction, updateOrderNoteAction } from "../actions";
 
 export const dynamic = "force-dynamic";
@@ -206,7 +207,40 @@ export default async function OrderDetailPage({
                 </form>
               </div>
             </div>
-          ) : null}
+          ) : (
+            <div className="rounded-2xl border border-white/10 bg-[#0d0d0d] p-5">
+              <h2 className="text-sm font-black uppercase tracking-[0.14em] text-white/70">
+                Reopen (logged reversal)
+              </h2>
+              <p className="mt-2 text-xs leading-5 text-white/40">
+                This order is closed ({ORDER_STATUS_LABELS[order.status]}). Reopening rewinds a
+                recorded outcome, so it requires a written reason and is logged to the order
+                timeline and the audit trail.
+              </p>
+              <form action={setOrderStatusAction} className="mt-4 flex flex-wrap items-center gap-2">
+                <input type="hidden" name="id" value={order.id} />
+                <input
+                  type="hidden"
+                  name="status"
+                  value={ORDER_REVERSAL_TARGETS[order.status] ?? "new"}
+                />
+                <input
+                  type="text"
+                  name="reversalReason"
+                  required
+                  minLength={5}
+                  placeholder="Reason for reopening (logged for audit)"
+                  className="min-w-0 flex-1 rounded-lg border border-white/15 bg-black/40 px-3 py-2.5 text-sm text-white placeholder:text-white/30"
+                />
+                <button
+                  type="submit"
+                  className="rounded-lg border border-white/20 bg-white/5 px-4 py-2.5 text-sm font-black uppercase tracking-[0.08em] text-white/80 transition hover:bg-white/10"
+                >
+                  Reopen as {ORDER_STATUS_LABELS[ORDER_REVERSAL_TARGETS[order.status] ?? "new"]}
+                </button>
+              </form>
+            </div>
+          )}
 
           {/* Timeline */}
           {order.events && order.events.length > 0 ? (

@@ -43,6 +43,7 @@ export default async function PurchaseOrderDetailPage({
 
   const sent = (Array.isArray(sp.sent) ? sp.sent[0] : sp.sent) === "1";
   const marked = (Array.isArray(sp.marked) ? sp.marked[0] : sp.marked) === "1";
+  const errorMessage = Array.isArray(sp.error) ? sp.error[0] : sp.error;
 
   const totalReceived = po.lines.reduce((s, l) => s + l.received_qty, 0);
   const totalOrdered = po.lines.reduce((s, l) => s + l.order_qty, 0);
@@ -79,6 +80,11 @@ export default async function PurchaseOrderDetailPage({
         {marked ? (
           <div className="rounded-[var(--admin-radius)] border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
             Marked as Sent. (Email was not sent — no vendor email on file or email not configured. Export/print to send manually.)
+          </div>
+        ) : null}
+        {errorMessage ? (
+          <div className="rounded-[var(--admin-radius)] border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
+            {errorMessage}
           </div>
         ) : null}
 
@@ -118,10 +124,12 @@ export default async function PurchaseOrderDetailPage({
               </form>
             ) : null}
 
-            <form action={deletePurchaseOrderAction} className="ml-auto">
-              <input type="hidden" name="po_id" value={po.id} />
-              <Button type="submit" variant="neutral" size="sm">Delete</Button>
-            </form>
+            {po.status === "draft" ? (
+              <form action={deletePurchaseOrderAction} className="ml-auto">
+                <input type="hidden" name="po_id" value={po.id} />
+                <Button type="submit" variant="neutral" size="sm">Delete draft</Button>
+              </form>
+            ) : null}
           </div>
           {po.vendor_email ? (
             <p className="mt-3 text-xs text-stone-500">Vendor email: {po.vendor_email}</p>

@@ -12,6 +12,7 @@ import {
   updateReorderSettings,
   getPurchaseOrder,
   renderPoText,
+  isValidPoStatus,
   type NewPoLine,
 } from "@/lib/purchasing/po-store";
 import { sendPurchaseOrderEmail } from "@/lib/purchasing/po-notify";
@@ -215,8 +216,26 @@ export async function setStatusAction(formData: FormData): Promise<void> {
   const session = await requirePermission("inventory.manage");
   const id = str(formData, "po_id");
   const status = str(formData, "status");
-  if (id && status) {
-    await setPurchaseOrderStatus(id, status as never);
+  // S-15: validate the posted status against the real enum (was `as never`)
+  // and enforce the lifecycle matrix in the store.
+  if (id && status && isValidPoStatus(status)) {
+    const result = await setPurchaseOrderStatus(id, status);
+    if (!result.ok) {
+      if (result.refusal) {
+        await recordAudit({
+          actorId: session.userId,
+          actorEmail: session.email,
+          action: "purchase_order.transition_blocked",
+          entityType: "purchase_orders",
+          entityId: id,
+          after: { attempted: status, reason: result.refusal },
+        });
+        revalidatePath(`${BASE}/${id}`);
+        redirect(`${BASE}/${id}?error=${encodeURIComponent(result.refusal.slice(0, 300))}`);
+      }
+      revalidatePath(`${BASE}/${id}`);
+      redirect(`${BASE}/${id}`);
+    }
     await recordAudit({
       actorId: session.userId,
       actorEmail: session.email,
@@ -297,13 +316,33 @@ export async function deletePurchaseOrderAction(formData: FormData): Promise<voi
   const session = await requirePermission("inventory.manage");
   const id = str(formData, "po_id");
   if (id) {
-    await deletePurchaseOrder(id);
+    // S-15: only DRAFTS may be hard-deleted; issued POs must be cancelled so
+    // the numbered document survives as a record. The store enforces this and
+    // returns the deleted snapshot for the audit trail.
+    const result = await deletePurchaseOrder(id);
+    if (!result.ok) {
+      if (result.refusal) {
+        await recordAudit({
+          actorId: session.userId,
+          actorEmail: session.email,
+          action: "purchase_order.delete_blocked",
+          entityType: "purchase_orders",
+          entityId: id,
+          after: { reason: result.refusal },
+        });
+        revalidatePath(`${BASE}/${id}`);
+        redirect(`${BASE}/${id}?error=${encodeURIComponent(result.refusal.slice(0, 300))}`);
+      }
+      revalidatePath(BASE);
+      redirect(BASE);
+    }
     await recordAudit({
       actorId: session.userId,
       actorEmail: session.email,
       action: "purchase_order.delete",
       entityType: "purchase_orders",
       entityId: id,
+      before: result.snapshot ?? null,
     });
   }
   revalidatePath(BASE);
