@@ -87,6 +87,12 @@ export function OrderConfirmation() {
             A confirmation has been sent to your email — if you don&apos;t see it, please check your spam folder.
           </p>
 
+          {order?.limitNotice ? (
+            <div className="mx-auto mt-4 max-w-md rounded-2xl border border-[#ffd700]/40 bg-[#ffd700]/10 p-4 text-left">
+              <p className="text-sm font-bold leading-6 text-[#ffd700]">{order.limitNotice}</p>
+            </div>
+          ) : null}
+
           {/* Receipt */}
           {hydrated && order && order.lines.length > 0 ? (
             <div className="mt-6 rounded-2xl border border-white/10 bg-black/40 p-5 text-left">

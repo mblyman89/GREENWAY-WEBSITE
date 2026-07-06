@@ -55,6 +55,7 @@ export function CheckoutFlow() {
   const [infoSaved, setInfoSaved] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [showErrors, setShowErrors] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
 
   const valid = useMemo(() => isValid(info), [info]);
 
@@ -77,6 +78,7 @@ export function CheckoutFlow() {
       return;
     }
     if (items.length === 0 || submitting) return;
+    setServerError(null);
     setSubmitting(true);
 
     const lines = items.map((item) => ({
@@ -95,8 +97,13 @@ export function CheckoutFlow() {
     // number + a private token. If the server is unavailable (e.g. Supabase not
     // configured yet during rollout) we fall back to a locally generated number
     // so checkout always succeeds for the customer.
+    //
+    // COMPLIANCE (Phase A): the server REPRICES every line against the
+    // published menu. A 409 means prices/items changed (or the payload was
+    // stale) — we must STOP, tell the customer, and let them review the cart.
     let orderNumber = generateOrderNumber();
     let publicToken: string | undefined;
+    let limitNotice: string | undefined;
     try {
       const res = await fetch("/api/orders", {
         method: "POST",
@@ -115,10 +122,36 @@ export function CheckoutFlow() {
         }),
       });
       if (res.ok) {
-        const data = (await res.json()) as { orderNumber?: string; publicToken?: string };
+        const data = (await res.json()) as {
+          orderNumber?: string;
+          publicToken?: string;
+          limitFlag?: boolean;
+          limitReasons?: string[];
+        };
         if (data.orderNumber) orderNumber = data.orderNumber;
         if (data.publicToken) publicToken = data.publicToken;
+        if (data.limitFlag) {
+          limitNotice =
+            "Heads up: this order is over Washington's per-transaction purchase limit. We'll adjust the quantities with you at pickup.";
+        }
+      } else if (res.status === 409 || res.status === 400) {
+        // Server refused the order (stale prices / unavailable items / invalid
+        // payload). Surface the reason and DO NOT pretend the order succeeded.
+        let message = "Prices or availability changed while you were shopping. Please review your cart and try again.";
+        try {
+          const data = (await res.json()) as { error?: string; problems?: string[] };
+          if (data.error) message = data.error;
+          if (Array.isArray(data.problems) && data.problems.length > 0) {
+            message += ` ${data.problems.join(" ")}`;
+          }
+        } catch {
+          /* keep the default message */
+        }
+        setServerError(message);
+        setSubmitting(false);
+        return;
       }
+      // Other failures (e.g. 503 during rollout) keep the local fallback below.
     } catch {
       // network error — keep the locally generated number
     }
@@ -142,6 +175,7 @@ export function CheckoutFlow() {
       estimatedTaxMinorUnits,
       savingsMinorUnits,
       totalMinorUnits,
+      limitNotice,
     });
     clearCart();
     const params = new URLSearchParams({ order: orderNumber });
@@ -273,6 +307,12 @@ export function CheckoutFlow() {
             </div>
           </dl>
         </div>
+
+        {serverError ? (
+          <div className="mt-5 rounded-2xl border border-red-500/40 bg-red-500/10 p-4">
+            <p className="text-sm font-bold leading-6 text-red-300">{serverError}</p>
+          </div>
+        ) : null}
 
         <button
           type="button"

@@ -1,9 +1,18 @@
 /**
  * POST /api/orders — guest pickup-order placement (no auth).
  *
- * Validates the JSON payload from the checkout flow, persists the order via the
- * service-role orders store (DB generates the GWY number + private token), fires
- * a best-effort notification, and returns { orderNumber, publicToken }.
+ * SERVER-AUTHORITATIVE since Phase A (GAP H-1 / H-2):
+ *   1. Every line is re-resolved + re-priced against the CURRENT published
+ *      menu (src/lib/orders/order-pricing.ts). Client prices are a cross-check
+ *      only; a mismatch beyond rounding returns 409 with the fresh totals so
+ *      the storefront can refresh its cart.
+ *   2. The WAC 314-55-095 sales-limit SOFT check runs at placement. An
+ *      over-limit cart is still accepted as a pickup reservation but the order
+ *      is flagged (limit_flag + limit_reasons) and the customer is told the
+ *      quantity will be adjusted at pickup. The COMPLETION hard gate lives in
+ *      the admin order action.
+ *   3. The order is persisted via the service-role orders store (the anon
+ *      insert RLS policies were dropped in migration 0096).
  *
  * NO online payment is captured — this is a pickup reservation; final
  * price/tax/limits are confirmed in store.
@@ -12,7 +21,9 @@ import { NextResponse } from "next/server";
 import { createOrder } from "@/lib/orders/orders-store";
 import { notifyOrderPlaced } from "@/lib/orders/notify";
 import { queueOrderReceipt } from "@/lib/printing/printer-store";
-import type { NewOrderInput, NewOrderLineInput } from "@/lib/orders/types";
+import { repriceOrderLines, clientTotalsMatch } from "@/lib/orders/order-pricing";
+import { evaluateCartWithSettings, logSalesLimitEvent } from "@/lib/compliance/sales-limits";
+import type { NewOrderLineInput, PersistOrderInput } from "@/lib/orders/types";
 
 export const runtime = "nodejs";
 
@@ -58,27 +69,88 @@ export async function POST(request: Request) {
   }
 
   const firstName = asString(body.customerFirstName).trim();
-  const lines = parseLines(body.lines);
+  const rawLines = parseLines(body.lines);
 
   if (!firstName) {
     return NextResponse.json({ error: "A first name is required." }, { status: 400 });
   }
-  if (lines.length === 0) {
+  if (rawLines.length === 0) {
     return NextResponse.json({ error: "The order has no items." }, { status: 400 });
   }
 
-  const input: NewOrderInput = {
+  // ── S-2a: SERVER-AUTHORITATIVE REPRICE ───────────────────────────────────
+  // Resolve every line against the published menu, recompute discounts with
+  // the shared engine, apply the cannabis price floor, and rebuild totals.
+  const repriced = await repriceOrderLines(rawLines);
+  if (!repriced.ok) {
+    return NextResponse.json(
+      { error: repriced.error, problems: repriced.problems },
+      { status: repriced.status },
+    );
+  }
+
+  // Cross-check the client's claimed totals. Beyond rounding tolerance =>
+  // stale prices or a tampered payload; refuse with the fresh totals.
+  const clientTotals = {
+    subtotalMinorUnits: asInt(body.subtotalMinorUnits, 0),
+    estimatedTaxMinorUnits: asInt(body.estimatedTaxMinorUnits, 0),
+    totalMinorUnits: asInt(body.totalMinorUnits, 0),
+  };
+  if (!clientTotalsMatch(clientTotals, repriced.totals)) {
+    return NextResponse.json(
+      {
+        error: "Prices changed while you were shopping. Please review your cart and try again.",
+        freshTotals: repriced.totals,
+      },
+      { status: 409 },
+    );
+  }
+
+  // ── S-1a: PLACEMENT SALES-LIMIT SOFT CHECK (WAC 314-55-095) ─────────────
+  // Online guests are recreational by default (medical status is verified in
+  // store). Over-limit carts are flagged — never silently accepted.
+  let limitFlag = false;
+  let limitReasons: string[] = [];
+  try {
+    const evaluation = await evaluateCartWithSettings(repriced.limitLines, "recreational");
+    if (evaluation.blocked || evaluation.reasons.length > 0) {
+      limitFlag = evaluation.reasons.length > 0;
+      limitReasons = evaluation.reasons;
+      if (limitFlag) {
+        await logSalesLimitEvent(evaluation, { orderId: null, actorId: null });
+      }
+    }
+  } catch (err) {
+    // The soft check must never break placement; the completion hard gate
+    // re-evaluates with full settings.
+    console.error("[orders] placement limit check failed:", err);
+  }
+
+  const input: PersistOrderInput = {
     customerFirstName: firstName,
     customerLastName: asString(body.customerLastName).trim() || null,
     customerEmail: asString(body.customerEmail).trim() || null,
     customerPhone: asString(body.customerPhone).trim() || null,
     customerBirthday: asString(body.customerBirthday).trim() || null,
     customerNote: asString(body.customerNote).trim() || null,
-    subtotalMinorUnits: asInt(body.subtotalMinorUnits, 0),
-    estimatedTaxMinorUnits: asInt(body.estimatedTaxMinorUnits, 0),
-    savingsMinorUnits: asInt(body.savingsMinorUnits, 0),
-    totalMinorUnits: asInt(body.totalMinorUnits, 0),
-    lines,
+    // SERVER-computed money — the client payload is never persisted.
+    subtotalMinorUnits: repriced.totals.subtotalMinorUnits,
+    estimatedTaxMinorUnits: repriced.totals.estimatedTaxMinorUnits,
+    savingsMinorUnits: repriced.totals.savingsMinorUnits,
+    totalMinorUnits: repriced.totals.totalMinorUnits,
+    limitFlag,
+    limitReasons,
+    lines: repriced.lines.map((l) => ({
+      productId: l.productId,
+      variantId: l.variantId,
+      productName: l.productName,
+      brand: l.brand,
+      variantLabel: l.variantLabel,
+      category: l.category,
+      quantity: l.quantity,
+      priceMinorUnits: l.priceMinorUnits,
+      regularPriceMinorUnits: l.regularPriceMinorUnits,
+    })),
   };
 
   const result = await createOrder(input);
@@ -93,7 +165,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const itemCount = lines.reduce((sum, l) => sum + l.quantity, 0);
+  const itemCount = input.lines.reduce((sum, l) => sum + l.quantity, 0);
 
   // Best-effort notification; never blocks the customer response.
   notifyOrderPlaced({
@@ -114,7 +186,7 @@ export async function POST(request: Request) {
       .join(" ")
       .trim(),
     customerPhone: input.customerPhone ?? null,
-    lines: lines.map((l) => ({
+    lines: input.lines.map((l) => ({
       productName: l.productName,
       brand: l.brand ?? null,
       variantLabel: l.variantLabel ?? null,
@@ -129,5 +201,15 @@ export async function POST(request: Request) {
     itemCount,
   }).catch(() => {});
 
-  return NextResponse.json(result, { status: 201 });
+  return NextResponse.json(
+    {
+      ...result,
+      // Surface the placement soft-check so the storefront can show the
+      // polite "we'll adjust at pickup" note (S-1a).
+      limitFlag,
+      limitReasons,
+      totals: repriced.totals,
+    },
+    { status: 201 },
+  );
 }

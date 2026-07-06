@@ -148,7 +148,9 @@ export function parseTierDraft(input: {
 
   const discountBps = parseInt0(input.discountBps);
   if (!Number.isFinite(discountBps) || discountBps < 0) errors.push("Tier discount must be 0% or more.");
-  else if (discountBps > 10000) errors.push("Tier discount cannot exceed 100%.");
+  // COMPLIANCE (RCW 69.50.357): a loyalty tier can never make cannabis free —
+  // cap standing discounts below 100%.
+  else if (discountBps >= 10000) errors.push("Tier discount must stay below 100% — cannabis can never be free (RCW 69.50.357).");
 
   if (errors.length) return { ok: false, errors };
   return { ok: true, value: { name, minPoints, discountBps } };

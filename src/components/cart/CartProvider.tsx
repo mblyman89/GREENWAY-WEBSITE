@@ -35,16 +35,25 @@ import { useStoreWeekday } from "@/lib/specials/useStoreWeekday";
 const CART_STORAGE_KEY = "greenway-cart-v1";
 const INVENTORY_STORAGE_KEY = "greenway-inventory-ledger-v1";
 // Combined effective tax already INCLUDED in the displayed card price.
-export const CANNABIS_EXCISE_TAX_RATE = 0.37; // WSLCB excise
-export const LOCAL_SALES_TAX_RATE = 0.093; // WA state + Port Orchard local
-export const COMBINED_INCLUSIVE_TAX_RATE = CANNABIS_EXCISE_TAX_RATE + LOCAL_SALES_TAX_RATE; // 0.463
-// Back-out divisor: card price (tax-inclusive) / (1 + 0.463) => pre-tax subtotal.
-export const TAX_INCLUSIVE_DIVISOR = 1 + COMBINED_INCLUSIVE_TAX_RATE; // 1.463
-// Non-cannabis goods (merch, accessories, paraphernalia) carry only the local
-// retail sales tax — NO cannabis excise — so they back out at a different rate.
-export const NON_CANNABIS_TAX_INCLUSIVE_DIVISOR = 1 + LOCAL_SALES_TAX_RATE; // 1.093
-// Categories that are NOT subject to the WSLCB cannabis excise tax.
-const NON_CANNABIS_TAX_CATEGORIES = new Set(["merch", "accessories", "accessory", "paraphernalia"]);
+// Tax model constants now live in the SHARED pure module so the client cart
+// and the server reprice (src/lib/orders/order-pricing.ts) compute money
+// IDENTICALLY. Re-exported here for existing importers.
+import {
+  CANNABIS_EXCISE_TAX_RATE,
+  LOCAL_SALES_TAX_RATE,
+  COMBINED_INCLUSIVE_TAX_RATE,
+  TAX_INCLUSIVE_DIVISOR,
+  NON_CANNABIS_TAX_INCLUSIVE_DIVISOR,
+  isNonCannabisCategory,
+} from "@/lib/orders/order-pricing-core";
+
+export {
+  CANNABIS_EXCISE_TAX_RATE,
+  LOCAL_SALES_TAX_RATE,
+  COMBINED_INCLUSIVE_TAX_RATE,
+  TAX_INCLUSIVE_DIVISOR,
+  NON_CANNABIS_TAX_INCLUSIVE_DIVISOR,
+};
 
 type CartItemInput = {
   productId: string;
@@ -205,7 +214,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const subtotalMinorUnits = useMemo(() => {
     const sum = pricedItems.reduce((acc, item) => {
       const lineTotal = item.effectivePriceMinorUnits * item.quantity;
-      const divisor = NON_CANNABIS_TAX_CATEGORIES.has((item.category ?? "").toLowerCase())
+      const divisor = isNonCannabisCategory(item.category)
         ? NON_CANNABIS_TAX_INCLUSIVE_DIVISOR
         : TAX_INCLUSIVE_DIVISOR;
       return acc + lineTotal / divisor;

@@ -93,6 +93,22 @@
 
 ---
 
+## Phase A — Sale-path integrity (compliance blockers)
+
+- [ ] **`supabase/migrations/0096_sale_path_gates.sql`** — Phase A (GAP H-1/H-2):
+  adds `order_lines.category` (placement-time category snapshot used by the
+  completion limit gate + tax math), `orders.limit_flag` + `orders.limit_reasons`
+  (placement-time WAC 314-55-095 soft-check annotation), and **DROPS the
+  anonymous INSERT RLS policies** on `orders` / `order_lines` / `order_events`
+  (placement now runs exclusively through the service-role `POST /api/orders`
+  route, which reprices every line server-side). No data backfill; legacy order
+  lines without a category are resolved from the live menu (or conservatively
+  counted as useable cannabis) by the completion gate. **Until this is run, the
+  code falls back to the legacy insert shape (orders still work), but the
+  limit-flag banner and the anon-insert lockdown are not active.**
+
+---
+
 ### How to run
 1. Open the Supabase project → **SQL editor**.
 2. Paste the full contents of the migration file.

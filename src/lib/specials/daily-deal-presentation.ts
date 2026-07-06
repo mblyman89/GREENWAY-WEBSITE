@@ -56,7 +56,7 @@ const PRESENTATION: Record<StoreWeekday, Omit<DailyDealPresentation, "weekday">>
   },
   sunday: {
     title: "Ice Cream Sunday",
-    subtitle: "Buy 3 for the price of 2 storewide",
+    subtitle: "Buy any 3, pay the equivalent of 2 storewide",
     menuHref: "/menu",
   },
 };

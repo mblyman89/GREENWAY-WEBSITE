@@ -26,6 +26,7 @@ import {
   tuesdayDoobieCategories,
   waxWednesdayCategories,
 } from "@/lib/specials/daily-deals";
+import { clampCannabisUnitPrice } from "@/lib/orders/order-pricing-core";
 
 export type DiscountCartLine = {
   lineId: string;
@@ -133,15 +134,19 @@ function noDiscountLine(line: DiscountCartLine): DiscountedLineResult {
 
 function applyPercentLine(line: DiscountCartLine, percent: number, label: string): DiscountedLineResult {
   if (percent <= 0) return noDiscountLine(line);
-  const discounted = round(line.regularPriceMinorUnits * (1 - percent / 100));
+  // GLOBAL CANNABIS PRICE FLOOR (RCW 69.50.357): a cannabis unit can never be
+  // discounted to $0. Percent is also capped below 100 for cannabis lines.
+  const cappedPercent = Math.min(percent, 99);
+  const raw = round(line.regularPriceMinorUnits * (1 - cappedPercent / 100));
+  const discounted = clampCannabisUnitPrice(line.category, raw, line.regularPriceMinorUnits);
   return {
     lineId: line.lineId,
     unitPriceMinorUnits: discounted,
     regularPriceMinorUnits: line.regularPriceMinorUnits,
     quantity: line.quantity,
     unitSavingsMinorUnits: line.regularPriceMinorUnits - discounted,
-    appliedLabel: `${label} · ${percent}% off`,
-    appliedPercent: percent,
+    appliedLabel: `${label} · ${cappedPercent}% off`,
+    appliedPercent: cappedPercent,
   };
 }
 
@@ -229,7 +234,11 @@ export function computeCartDiscounts(
             const oneAt30 = round(line.regularPriceMinorUnits * 0.7);
             const restAt15 = round(line.regularPriceMinorUnits * 0.85);
             const blendedTotal = oneAt30 + restAt15 * (line.quantity - 1);
-            const blendedUnit = round(blendedTotal / line.quantity);
+            const blendedUnit = clampCannabisUnitPrice(
+              line.category,
+              round(blendedTotal / line.quantity),
+              line.regularPriceMinorUnits,
+            );
             resultMap.set(line.lineId, {
               lineId: line.lineId,
               unitPriceMinorUnits: blendedUnit,
@@ -247,35 +256,38 @@ export function computeCartDiscounts(
       break;
     }
     case "sunday": {
-      // Ice Cream Sunday: buy 3 for the price of 2 (cheapest free) per group of
-      // 3 across all eligible cannabis units. Distribute the savings per line.
+      // Ice Cream Sunday — COMPLIANT "3 for 2 equivalent" (RCW 69.50.357 / WAC
+      // 314-55-155): a licensee may not give cannabis away, so instead of
+      // making the cheapest unit FREE we convert the same total savings into
+      // an equivalent PERCENT spread across the whole eligible basket. Every
+      // unit keeps a positive price; the customer pays the same "3 for the
+      // price of 2" total.
       const eligible = cartLines.filter((l) => !isMerchOrAccessory(l));
-      // Expand into per-unit prices, ascending so the cheapest are made free.
-      const units: { lineId: string; price: number }[] = [];
+      const units: { price: number }[] = [];
+      let eligibleRegularTotal = 0;
       for (const line of eligible) {
-        for (let i = 0; i < line.quantity; i += 1) units.push({ lineId: line.lineId, price: line.regularPriceMinorUnits });
+        eligibleRegularTotal += line.regularPriceMinorUnits * line.quantity;
+        for (let i = 0; i < line.quantity; i += 1) units.push({ price: line.regularPriceMinorUnits });
       }
       units.sort((a, b) => a.price - b.price);
-      const freeCount = Math.floor(units.length / 3);
-      const savingsByLine = new Map<string, number>();
-      for (let i = 0; i < freeCount; i += 1) {
-        const freeUnit = units[i];
-        savingsByLine.set(freeUnit.lineId, (savingsByLine.get(freeUnit.lineId) ?? 0) + freeUnit.price);
-      }
+      const groupCount = Math.floor(units.length / 3);
+      if (groupCount <= 0 || eligibleRegularTotal <= 0) break;
+      let targetSavings = 0;
+      for (let i = 0; i < groupCount; i += 1) targetSavings += units[i].price;
+      // Equivalent basket-wide percent (capped so no unit ever reaches $0).
+      const percent = Math.min(99, Math.floor((targetSavings / eligibleRegularTotal) * 100));
+      if (percent <= 0) break;
       for (const line of eligible) {
-        const lineSavings = savingsByLine.get(line.lineId) ?? 0;
-        if (lineSavings <= 0) continue;
-        const regularLineTotal = line.regularPriceMinorUnits * line.quantity;
-        const discountedLineTotal = Math.max(0, regularLineTotal - lineSavings);
-        const blendedUnit = round(discountedLineTotal / line.quantity);
+        const raw = round(line.regularPriceMinorUnits * (1 - percent / 100));
+        const discounted = clampCannabisUnitPrice(line.category, raw, line.regularPriceMinorUnits);
         resultMap.set(line.lineId, {
           lineId: line.lineId,
-          unitPriceMinorUnits: blendedUnit,
+          unitPriceMinorUnits: discounted,
           regularPriceMinorUnits: line.regularPriceMinorUnits,
           quantity: line.quantity,
-          unitSavingsMinorUnits: line.regularPriceMinorUnits - blendedUnit,
-          appliedLabel: "Ice Cream Sunday · 3 for 2",
-          appliedPercent: 0,
+          unitSavingsMinorUnits: line.regularPriceMinorUnits - discounted,
+          appliedLabel: `Ice Cream Sunday · 3-for-2 equivalent (${percent}% off basket)`,
+          appliedPercent: percent,
         });
       }
       break;
