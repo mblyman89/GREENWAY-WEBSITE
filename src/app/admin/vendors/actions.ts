@@ -10,6 +10,7 @@ import type { SocialLinks } from "@/lib/vendors/types";
 import { getVendorById, getBrandById } from "@/lib/vendors/store";
 import { generateVendorProfile } from "@/lib/ai/ai-vendor";
 import { persistSuggestion, reviewSuggestion, getSuggestion } from "@/lib/ai/suggestions";
+import { acceptWithComplianceGate } from "@/lib/ai/accept-gate";
 import { AiNotConfiguredError } from "@/lib/ai/provider";
 import { researchUrl, researchSocial, isCrawlerConfigured, CrawlerNotConfiguredError } from "@/lib/ai/crawler-client";
 
@@ -293,6 +294,20 @@ export async function acceptVendorSuggestionAction(formData: FormData): Promise<
     redirect(`/admin/vendors/${vendorId}?error=` + encodeURIComponent("Unsupported field."));
   }
 
+  // S-4: compliance RE-SCAN at accept — blocking flags refuse the accept.
+  const gate = await acceptWithComplianceGate(suggestion!);
+  if (!gate.ok) {
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "vendor.ai_accept_blocked",
+      entityType: "vendor",
+      entityId: vendorId,
+      after: { field: suggestion!.field_key, ...gate.audit },
+    });
+    redirect(`/admin/vendors/${vendorId}?error=` + encodeURIComponent(gate.message) + "#ai-drafts");
+  }
+
   const admin = createSupabaseAdminClient();
   const { error } = await admin
     .from("vendors")
@@ -307,7 +322,7 @@ export async function acceptVendorSuggestionAction(formData: FormData): Promise<
     action: "vendor.ai_accepted",
     entityType: "vendor",
     entityId: vendorId,
-    after: { field: suggestion!.field_key },
+    after: { field: suggestion!.field_key, ...gate.audit },
   });
 
   revalidatePath(`/admin/vendors/${vendorId}`);
@@ -429,6 +444,20 @@ export async function acceptBrandSuggestionAction(formData: FormData): Promise<v
     redirect(`/admin/vendors/${vendorId}?error=` + encodeURIComponent("Unsupported field."));
   }
 
+  // S-4: compliance RE-SCAN at accept — blocking flags refuse the accept.
+  const gate = await acceptWithComplianceGate(suggestion!);
+  if (!gate.ok) {
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "brand.ai_accept_blocked",
+      entityType: "brand",
+      entityId: brandId,
+      after: { field: suggestion!.field_key, ...gate.audit },
+    });
+    redirect(`/admin/vendors/${vendorId}?error=` + encodeURIComponent(gate.message) + `#brand-${brandId}`);
+  }
+
   const admin = createSupabaseAdminClient();
   const { error } = await admin
     .from("brands")
@@ -443,7 +472,7 @@ export async function acceptBrandSuggestionAction(formData: FormData): Promise<v
     action: "brand.ai_accepted",
     entityType: "brand",
     entityId: brandId,
-    after: { field: suggestion!.field_key },
+    after: { field: suggestion!.field_key, ...gate.audit },
   });
 
   revalidatePath(`/admin/vendors/${vendorId}`);

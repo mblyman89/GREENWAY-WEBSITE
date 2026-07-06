@@ -14,6 +14,14 @@
  */
 import "server-only";
 
+// SINGLE SOURCE OF TRUTH for the regex scan: the patterns live in
+// compliance-patterns.json so the Python crawler (crawler/app/compliance.py)
+// can consume the exact same rules. Parity tests (scripts/compliance/
+// check-pattern-parity.ts on the site side, crawler/tests/
+// test_compliance_parity.py on the crawler side) fail when the site fixture and
+// the crawler's copy drift. Edit the JSON, not this file.
+import compliancePatternsJson from "./compliance-patterns.json";
+
 // Bump when the system rules change so we can A/B accept-rate by prompt_version.
 export const PROMPT_VERSION = "v2-grounded";
 
@@ -93,28 +101,17 @@ export type ComplianceSeverity = "block" | "warn";
  *   should review (helps with / aids / good for your ___ / eases), plus empty
  *   hype and price/discount mentions.
  */
-const RISKY_PATTERNS: { pattern: RegExp; label: string; severity: ComplianceSeverity }[] = [
-  // --- BLOCK: curative / therapeutic verbs -------------------------------------
-  { pattern: /\b(cure|cures|cured|curing|heal|heals|healed|healing|treat|treats|treated|treating|remedy|remedies|prevent|prevents|preventing|diagnose|diagnoses)\b/i, label: "medical claim (cure/treat/heal/prevent)", severity: "block" },
-  { pattern: /\b(therapeutic|therapy|medicinal(?:ly)?|medicine for|medical(?:ly)? (?:grade|proven|benefit))\b/i, label: "therapeutic/medicinal claim", severity: "block" },
-  // symptom-relief / physiological outcomes
-  { pattern: /\b(relieves?|relief|reduces?|lowers?|eases?|soothes?|alleviates?)\s+(your\s+)?(pain|anxiety|stress|inflammation|nausea|depression|insomnia|cramps?|spasms?|blood pressure|symptoms?)\b/i, label: "symptom-relief claim", severity: "block" },
-  { pattern: /\b(pain[- ]relief|anti-?inflammatory|anti-?anxiety|antidepressant|antiemetic|analgesic|blood pressure|immune system|kills? cancer)\b/i, label: "physiological/medical-outcome claim", severity: "block" },
-  // condition FRAMED as treated (treat-verb near a condition, or "<condition> relief")
-  { pattern: /\b(treats?|cures?|heals?|helps?\s+with|good\s+for|for\s+your)\s+(chronic\s+)?(pain|anxiety|depression|insomnia|ptsd|cancer|arthritis|migraines?|nausea|seizures?|epilepsy|glaucoma|adhd|inflammation)\b/i, label: "treats-a-condition claim", severity: "block" },
-  { pattern: /\b(ptsd|cancer|epilepsy|glaucoma|arthritis)\b/i, label: "named disease/condition", severity: "block" },
-  // --- BLOCK: other hard statutory prohibitions --------------------------------
-  { pattern: /\b(safe|healthy|good for you|non-?addictive|harmless|no side effects|wellness benefit)\b/i, label: "safety/efficacy claim", severity: "block" },
-  { pattern: /\b(dose|dosage|dosing|take \d|\d+\s*mg per|how much to (take|consume)|start with \d)\b/i, label: "dosing advice", severity: "block" },
-  { pattern: /\b(candy|gummy bears?|kid|kids|children|childhood|cartoon|toy|mascot)\b/i, label: "appeal-to-minors language", severity: "block" },
-  { pattern: /\b(alcohol|beer|wine|whiskey|tobacco|cigarette|nicotine|vodka|liquor)\b/i, label: "alcohol/tobacco association", severity: "block" },
-  { pattern: /\b(guarantee|guaranteed|miracle|clinically proven|doctor recommended|physician recommended|fda[- ]approved|pharmaceutical)\b/i, label: "unsubstantiated/medical-authority claim", severity: "block" },
-  { pattern: /\b(get (?:really )?(?:high|blazed|wasted)|as much as you can|binge|over-?consume|chug|megadose)\b/i, label: "over-consumption encouragement", severity: "block" },
-  // --- WARN: borderline therapeutic-leaning or promotional ---------------------
-  { pattern: /\b(helps?\s+(?:you\s+)?(?:sleep|relax|unwind|de-?stress)|aids?\b|helps?\s+with|great\s+for\b)/i, label: "borderline therapeutic-leaning phrasing (review)", severity: "warn" },
-  { pattern: /\b(best|amazing|incredible|unbeatable|world-?class|premium quality|top-?shelf)\b/i, label: "empty hype wording", severity: "warn" },
-  { pattern: /\$\s?\d|\bprice\b|\bdiscount\b|\bsale\b|\bdeal\b|\bcheap\b/i, label: "price/discount mention", severity: "warn" },
-];
+type RawPattern = { pattern: string; flags: string; label: string; severity: string };
+
+const RISKY_PATTERNS: { pattern: RegExp; label: string; severity: ComplianceSeverity }[] =
+  (compliancePatternsJson.patterns as RawPattern[]).map((p) => ({
+    pattern: new RegExp(p.pattern, p.flags),
+    label: p.label,
+    severity: p.severity === "block" ? "block" : "warn",
+  }));
+
+/** Version stamp of the shared pattern fixture (bumped when rules change). */
+export const COMPLIANCE_PATTERNS_VERSION: number = compliancePatternsJson.patternsVersion;
 
 export type ComplianceResult = {
   ok: boolean; // no blocking flags

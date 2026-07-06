@@ -43,12 +43,14 @@ cp .env.example .env
 
 | Variable | What to put |
 |---|---|
+| `CRAWLER_ENV` | `production` on the real deployment. Production **hard-requires** `CRAWL_ALLOW_DOMAINS` (S-5) — the worker refuses to start without it. |
 | `CRAWLER_SHARED_SECRET` | A long random string. Generate: `python -c "import secrets; print(secrets.token_urlsafe(40))"`. The **same** value goes in the site's env as `CRAWLER_SHARED_SECRET`. |
 | `SUPABASE_URL` | Your project URL (`https://xxxx.supabase.co`). |
-| `SUPABASE_SERVICE_ROLE_KEY` | Service-role key (Project Settings → API). Server-side only — this worker is never public. |
+| `SUPABASE_SERVICE_ROLE_KEY` | Service-role key (Project Settings → API). Server-side only — this worker is never public. **Least-privilege upgrade (recommended, S-5):** instead of the service-role key, create a dedicated Postgres role scoped to exactly what the worker needs — `GRANT INSERT ON ai_suggestions` + `GRANT SELECT ON kb_banned_phrases` — issue it a JWT signed with the project's JWT secret (`role` claim = that role name), and put that token here. If Supabase's key model makes that awkward, the alternative is proxying draft writes through an authenticated site API route so the worker never holds a DB credential at all. |
 | `AI_BASE_URL` / `AI_MODEL` / `AI_API_KEY` | Same OpenAI-compatible provider the site uses. **Leave `AI_API_KEY` empty** to run CSS-only (no model cost) for a first dry run. |
 | `CRAWL_USER_AGENT` | Keep a real contact email so site owners can reach you. |
 | `CRAWL_RESPECT_ROBOTS` | `true` in production. |
+| `CRAWL_ALLOW_DOMAINS` | Comma-separated hostnames the worker may research (subdomains included automatically). **Required when `CRAWLER_ENV=production`.** |
 
 ---
 
@@ -125,6 +127,12 @@ brand page calls the worker; results land as drafts in the review queue with a
   unsupported facts are dropped. Compliance-blocking text is dropped too.
 - **Politeness:** robots.txt is respected and each domain is rate-limited
   (`CRAWL_MIN_DELAY_SECONDS`).
+- **SSRF-hardened (S-5):** only `http`/`https` URLs are fetched, and any host
+  that resolves to a private, loopback, link-local, or otherwise non-global
+  address (e.g. `127.0.0.1`, `10.x`, `192.168.x`, `169.254.169.254` cloud
+  metadata) is refused — including sitemap URLs a target site declares in its
+  own robots.txt. In production the explicit `CRAWL_ALLOW_DOMAINS` allow-list is
+  mandatory on top of that.
 
 ---
 

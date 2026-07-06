@@ -16,6 +16,7 @@ import {
   type ProductFacts,
 } from "@/lib/ai/suggestions";
 import { writeBackOnPublish } from "@/lib/ai/kb/writeback";
+import { acceptWithComplianceGate } from "@/lib/ai/accept-gate";
 
 const ALLOWED_TAGS = new Set([
   "new-arrival",
@@ -207,6 +208,20 @@ export async function acceptSuggestion(formData: FormData): Promise<void> {
   const sugg = await getSuggestion(id);
   if (!sugg) redirect(`/admin/products/${encodeURIComponent(key)}?error=` + encodeURIComponent("Suggestion not found."));
 
+  // S-4: compliance RE-SCAN at accept — blocking flags refuse the accept.
+  const gate = await acceptWithComplianceGate(sugg!);
+  if (!gate.ok) {
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "product.ai_accept_blocked",
+      entityType: "product",
+      entityId: key,
+      after: { field: sugg!.field_key, ...gate.audit },
+    });
+    redirect(`/admin/products/${encodeURIComponent(key)}?error=` + encodeURIComponent(gate.message) + "#ai");
+  }
+
   await ensureEnrichment(key, {}, session.userId);
 
   if (sugg!.field_key === "description") {
@@ -233,7 +248,7 @@ export async function acceptSuggestion(formData: FormData): Promise<void> {
     action: "product.ai_accepted",
     entityType: "product",
     entityId: key,
-    after: { field: sugg!.field_key, kb_writeback: writeback ?? undefined },
+    after: { field: sugg!.field_key, kb_writeback: writeback ?? undefined, ...gate.audit },
   });
 
   revalidatePath(`/admin/products/${encodeURIComponent(key)}`);

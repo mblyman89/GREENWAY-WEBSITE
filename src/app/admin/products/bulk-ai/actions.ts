@@ -15,6 +15,7 @@ import {
 } from "@/lib/ai/suggestions";
 import { isAiConfigured } from "@/lib/ai/provider";
 import { writeBackOnPublish } from "@/lib/ai/kb/writeback";
+import { acceptWithComplianceGate } from "@/lib/ai/accept-gate";
 
 /**
  * Bulk AI: generate draft DESCRIPTIONS for a set of selected products in one
@@ -82,6 +83,20 @@ export async function bulkAcceptSuggestionAction(formData: FormData): Promise<vo
   const sugg = await getSuggestion(id);
   if (!sugg || !key) redirect("/admin/products/bulk-ai");
 
+  // S-4: compliance RE-SCAN at accept — blocking flags refuse the accept.
+  const gate = await acceptWithComplianceGate(sugg!);
+  if (!gate.ok) {
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "product.bulk_ai_accept_blocked",
+      entityType: "product",
+      entityId: key,
+      after: { suggestionId: id, ...gate.audit },
+    });
+    redirect("/admin/products/bulk-ai?error=" + encodeURIComponent(gate.message) + "#review");
+  }
+
   await ensureEnrichment(key, {}, session.userId);
   if (sugg!.field_key === "description") {
     await updateEnrichment(key, { description: sugg!.suggested_value }, session.userId);
@@ -97,7 +112,7 @@ export async function bulkAcceptSuggestionAction(formData: FormData): Promise<vo
     action: "product.bulk_ai_accepted",
     entityType: "product",
     entityId: key,
-    after: { suggestionId: id, kb_writeback: writeback ?? undefined },
+    after: { suggestionId: id, kb_writeback: writeback ?? undefined, ...gate.audit },
   });
 
   revalidatePath("/admin/products/bulk-ai");

@@ -15,6 +15,7 @@ from urllib.parse import urljoin, urlparse
 import httpx
 
 from .config import Settings
+from .fetcher import url_is_safe
 from .http_identity import browser_headers, pick_user_agent
 
 # Keywords that suggest a page is worth researching for vendor/brand copy.
@@ -69,6 +70,10 @@ def discover_sitemap_urls(url: str, settings: Settings, *, limit: int = 50) -> l
                 if sm in seen_maps:
                     continue
                 seen_maps.add(sm)
+                # S-5: robots.txt-declared sitemap URLs are attacker-influenced
+                # content — run the same SSRF guard as fetch_page.
+                if not url_is_safe(sm)[0]:
+                    continue
                 try:
                     r = c.get(sm)
                     if r.status_code != 200:
@@ -78,6 +83,8 @@ def discover_sitemap_urls(url: str, settings: Settings, *, limit: int = 50) -> l
                     child_maps = [l for l in locs if l.lower().endswith(".xml")]
                     if child_maps and "<sitemapindex" in r.text.lower():
                         for child in child_maps[:3]:
+                            if not url_is_safe(child)[0]:  # S-5 SSRF guard
+                                continue
                             try:
                                 cr = c.get(child)
                                 if cr.status_code == 200:
