@@ -44,6 +44,8 @@ export type Vendor = {
   is_active: boolean | null;
   total_accepted_ytd_cents: number | null;
   last_accepted_at: string | null;
+  /** Vendor ID in the owner's Sage 50 company (migration 0091), e.g. "01-TWO HEADS". */
+  sage_vendor_id?: string | null;
   logo_media_id: string | null;
   hero_media_id: string | null;
   product_count: number;

@@ -328,6 +328,7 @@ export default async function VendorEditPage({
                 </div>
               ) : null}
 
+              <label className="flex flex-col gap-1"><span className={label}>Sage 50 Vendor ID</span><input name="sage_vendor_id" defaultValue={vendor.sage_vendor_id ?? ""} placeholder="e.g. 01-TWO HEADS" className={field} /><span className="text-[10px] text-white/35">Must match this vendor&apos;s ID in your Sage 50 company. Required for Purchases/Payments exports on the Accounting tab.</span></label>
               <label className="flex flex-col gap-1"><span className={label}>Vendor-day notes (internal)</span><input name="vendor_day_notes" defaultValue={vendor.vendor_day_notes ?? ""} className={field} /></label>
               <label className="flex flex-col gap-1"><span className={label}>Internal notes (never public)</span><textarea name="internal_notes" defaultValue={vendor.internal_notes ?? ""} rows={2} className={field} /></label>
 

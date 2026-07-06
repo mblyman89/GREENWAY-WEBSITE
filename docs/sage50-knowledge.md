@@ -10,6 +10,22 @@
 >   https://help-sage50.na.sage.com/en-us/2019/Content/Importing_Exporting/Import_Export_Fields/IEFIELDS_General_Journal.htm
 > - Import Data into Sage 50 (procedure):
 >   https://help-sage50.na.sage.com/en-us/2019/Content/Importing_Exporting/Import_Data_into_Sage50.htm
+> - Cash Receipts Journal fields:
+>   https://help-sage50.na.sage.com/en-us/2022/Content/Importing_Exporting/Import_Export_Fields/Import_Export_Fields_Cash_Receipts_Journal.htm
+> - Payments Journal fields:
+>   https://help-sage50.na.sage.com/en-us/2019/Content/Importing_Exporting/Import_Export_Fields/IEFIELDS_Cash_Disbursements_Journal.htm
+> - Purchases Journal fields:
+>   https://help-sage50.na.sage.com/en-us/2019/Content/Importing_Exporting/Import_Export_Fields/IEFIELDS_Purchase_Journal.htm
+> - Inventory Adjustments Journal fields:
+>   https://help-sage50.na.sage.com/en-us/2019/Content/Importing_Exporting/Import_Export_Fields/IEFIELDS_Inventory_Adjustments_Journal.htm
+> - Payroll Journal fields:
+>   https://help-sage50.na.sage.com/en-us/2019/Content/Importing_Exporting/Import_Export_Fields/IEFIELDS_Payroll_Journal.htm
+> - Import/Export Tips (incl. authoritative import ORDER):
+>   https://help-sage50.na.sage.com/en-us/2019/Content/Importing_Exporting/IEFIELDS_General_Import_Export_Field_Tips.htm
+> - Account Reconciliation:
+>   https://help-sage50.na.sage.com/en-us/2024/Content/Banking_General_Ledger/Account_Reconciliation/Account_Reconciliation.htm
+> - Close Fiscal Year (Year-End Wizard):
+>   https://help-sage50.na.sage.com/en-us/2019/Content/Company_Maintenance/Close_Fiscal_Year.htm
 
 ## 1. General Journal — import field specification (authoritative)
 
@@ -117,3 +133,103 @@ parsed into usable data outside Sage 50 itself. We therefore **do not** attempt 
 ingest `.ptb` files. If the owner wants the AI to use their book data, the correct path is
 to **export the specific reports** from Sage (e.g. General Ledger, Trial Balance) to CSV/PDF
 and upload those. This is stated plainly to the owner rather than pretending `.ptb` works.
+
+---
+
+# Sage 50 export pipeline (this build)
+
+The sections below document the **new export pipeline** added with migration
+`0091_sage50_exports.sql`. Every format decision is verified against BOTH the
+official Sage 50 import specifications above AND the owner's own Sage company
+exports (CHART_OF_ACCOUNTS / CUSTOMERS / VENDORS / RECEIPTS_JOURNAL /
+PURCHASE_JOURNAL / PAYMENTS_JOURNAL / PAYROLL_JOURNAL, uploaded by the owner).
+
+## 7. Import order (authoritative — Import/Export Tips)
+
+Lists first, journals second:
+
+1. **Lists:** Chart of Accounts → Employee list → Vendor list → Customer list →
+   Inventory Item list.
+2. **Journals:** General Journal → Purchase Orders → **Purchases** → Assemblies →
+   Inventory Adjustments → Sales Orders → Sales → **Payments** → **Cash Receipts** →
+   Payroll. Purchases must precede sales so inventory costing computes correctly.
+
+Other verified tips:
+- **No double quotes** in memos/notes/descriptions (quotes delimit fields).
+- Blank values import as `0` / `False`. Always include **Date Due** or AP/AR aging breaks.
+- **Duplicate invoice numbers** for the same customer/vendor are rejected.
+- You cannot import entries dated past the end of the **second open fiscal year**.
+- **Sales tax IDs/agencies cannot be imported** (`taxcode.dat` / `taxauth.dat`);
+  they must exist in Sage already and are referenced by ID in import files.
+
+## 8. The store's REAL bookkeeping pattern (verified from the owner's exports)
+
+- **Daily sales = Cash Receipts per category "customer"** `01-CONCENTRATE`,
+  `01-EDIBLE`, `01-FLOWER`, `01-LIQUID`, `01-NON CANNABIS`, `01-PREROLL`,
+  `01-TOPICAL`. Cash account `10000-GRNWY` (cash on hand). Distributions:
+  - `WA LIQUOR & CANNABIS BOARD` → `31000-GRNWY` (agency `WA_LCB01`) — 37% excise, cannabis only
+  - `LOCAL SALES TAX` → `31001-GRNWY` (agency `WA_DOR02`)
+  - `STATE SALES TAX` → `31001-GRNWY` (agency `WA_DOR01`)
+  - `SALES` → category income account `50000`–`50006-GRNWY` (Tax Type 1, with units + unit price)
+- **Daily COGS = separate Cash Receipt per category** under `07-*` customers:
+  "cash account" = category **COGS** account `60000`–`60006-GRNWY` (the debit), one
+  distribution crediting the category **inventory** account `20000`–`20006-GRNWY`.
+- **Vendor invoices** post to AP `30000-GRNWY`; manifest line items at
+  `20009-GRNWY` (the owner's default purchases/inventory account).
+- **Vendor payments** come out of checking `10005-GRNWY`; payment methods in the
+  company are `Cash`, `Check`, `Electronic`.
+- Sage vendor IDs look like `01-TWO HEADS`, `03-LOWES`, `06-IRS`, `08-PAYPAL`.
+
+## 9. What the back office exports (and what it deliberately does NOT)
+
+Rule from the owner: **if the back office doesn't hold the data, there is no Sage
+upload for it.** The Accounting tab therefore offers exactly five downloads:
+
+| Export | Source data | Sage import template |
+|---|---|---|
+| Cash Receipts (daily sales + COGS) | completed orders + menu categories + lot costs | Receipts (Accounts Receivable ▸ Cash Receipts Journal) |
+| Purchases (vendor invoices) | accepted inbound manifests + lots | Purchases Journal (Accounts Payable) |
+| Payments (vendor payments) | vendor manifest payments (ACH register) | Payments Journal (Accounts Payable) |
+| Inventory adjustments | inventory_adjustments (excluding `receive`) | **General Journal** — see below |
+| Vendor list | vendors with a Sage Vendor ID set | Vendor List (Accounts Payable) |
+
+**Why adjustments go through the General Journal:** Sage's Inventory Adjustments
+import (ADJUST.CSV) **requires a Sage Item ID** per row, and the back office has no
+mapping to Sage inventory items. Rather than guess item ids, each adjustment is
+exported as a balanced GL entry — DR category COGS / CR category inventory for
+shrink (reversed for count-ups) — valued at the lot's unit cost.
+
+**Why there is NO payroll upload:** PAYROLL.CSV needs per-pay-field amounts and
+accounts (fields 1–20 gross, 21–60 employee withholdings, 61–100 employer). The
+back office stores only net/gross/taxes/deductions totals per employee, so a
+faithful payroll import is impossible without inventing data. Payroll stays keyed
+in Sage directly.
+
+**Sales / Sales Orders / POs / BOM / Time / U-M:** the owner's own exports of these
+journals are empty (his sales flow through Cash Receipts, not invoiced Sales), so
+no exports are generated for them.
+
+## 10. Mapping tables (migration 0091 — apply manually)
+
+- `sage_category_accounts` — one row per bucket with the category customers
+  (`01-*` / `07-*`) and the G/L trio (sales/COGS/inventory). **Seeded verbatim**
+  from the owner's chart; editable on the Accounting tab.
+- `sage_category_map` — normalized back-office menu category → bucket. Only
+  identity matches are seeded; **unmapped categories are flagged in the UI and
+  excluded** (never guessed).
+- `accounting_settings` new columns — `gl_ap_account`, `gl_bank_account`,
+  `gl_purchases_default`, `gl_cash_on_hand`, `sales_tax_id_cannabis`,
+  `sales_tax_id_other` (gap-filled with the owner's real values).
+- `vendors.sage_vendor_id` — set per vendor on the vendor admin page; manifests
+  and payments for vendors without one are skipped **with a warning**.
+
+## 11. Professional bookkeeping habits (verified topics the assistant coaches on)
+
+- **Reconcile monthly** (Tasks ▸ Account Reconciliation): statement ending balance
+  + date, tick cleared items until Unreconciled Difference = 0.00, add bank
+  fees/interest via Adjust.
+- **Year-end** (Tasks ▸ System ▸ Year-End Wizard): two open fiscal years; close the
+  first when you need the third; close the **payroll year first** when it's the
+  calendar year (after W-2/941/940); the wizard forces a backup; closing is permanent.
+- **Import hygiene:** always review generated CSVs before importing; import into a
+  freshly-backed-up company; Sage reports the failing line number on error.
