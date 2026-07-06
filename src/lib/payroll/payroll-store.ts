@@ -26,6 +26,9 @@ export type AchCompanySettings = {
   company_id: string;
   originating_dfi: string;
   entry_description: string;
+  /** Your OWN funding account at the ODFI (not written to the NACHA header). */
+  company_account_number: string;
+  company_account_type: "checking" | "savings";
 };
 
 const EMPTY_SETTINGS: AchCompanySettings = {
@@ -36,6 +39,8 @@ const EMPTY_SETTINGS: AchCompanySettings = {
   company_id: "",
   originating_dfi: "",
   entry_description: "PAYROLL",
+  company_account_number: "",
+  company_account_type: "checking",
 };
 
 /** Read the ACH originating-company settings singleton (best-effort). */
@@ -45,7 +50,7 @@ export async function getAchCompanySettings(): Promise<AchCompanySettings> {
     const admin = createSupabaseAdminClient();
     const { data, error } = await admin
       .from("ach_company_settings")
-      .select("destination_routing,destination_name,immediate_origin,company_name,company_id,originating_dfi,entry_description")
+      .select("destination_routing,destination_name,immediate_origin,company_name,company_id,originating_dfi,entry_description,company_account_number,company_account_type")
       .eq("id", true)
       .maybeSingle();
     if (error || !data) return { ...EMPTY_SETTINGS };

@@ -5,12 +5,10 @@ import { redirect } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import {
-  saveAchCompanySettings,
   saveEmployeeBanking,
   createPayrollRun,
   savePayrollLines,
   generatePayrollNacha,
-  type AchCompanySettings,
 } from "@/lib/payroll/payroll-store";
 import { dollarsToCents, type PayrollLineInput } from "@/lib/payroll/payroll-core";
 
@@ -20,23 +18,11 @@ function accountType(v: FormDataEntryValue | null): "checking" | "savings" {
   return String(v ?? "checking") === "savings" ? "savings" : "checking";
 }
 
-/** Save the originating bank / company settings (Timberland via Jack Henry). */
-export async function saveAchSettingsAction(formData: FormData): Promise<void> {
-  const session = await requirePermission("settings.manage");
-  const input: AchCompanySettings = {
-    destination_routing: String(formData.get("destination_routing") ?? "").trim(),
-    destination_name: String(formData.get("destination_name") ?? "").trim(),
-    immediate_origin: String(formData.get("immediate_origin") ?? "").trim(),
-    company_name: String(formData.get("company_name") ?? "").trim(),
-    company_id: String(formData.get("company_id") ?? "").trim(),
-    originating_dfi: String(formData.get("originating_dfi") ?? "").trim(),
-    entry_description: String(formData.get("entry_description") ?? "PAYROLL").trim() || "PAYROLL",
-  };
-  const res = await saveAchCompanySettings(input, session.profile.id);
-  await recordAudit({ actorId: session.profile.id, action: "payroll.settings.save", entityType: "ach_company_settings" }).catch(() => {});
-  revalidatePath(ROOT);
-  redirect(res.ok ? `${ROOT}?msg=${encodeURIComponent("Bank settings saved.")}` : `${ROOT}?error=${encodeURIComponent(res.error)}`);
-}
+// The originating bank / company ACH settings now live on their own Banking
+// settings page (/admin/settings/banking, saveBankingSettingsAction) so they
+// are shared by both payroll and vendor (AP) ACH files and can capture the
+// funding account number. The old inline payroll form + saveAchSettingsAction
+// were removed to keep a single write path.
 
 /** Create a new draft payroll run and open it. */
 export async function createRunAction(formData: FormData): Promise<void> {
