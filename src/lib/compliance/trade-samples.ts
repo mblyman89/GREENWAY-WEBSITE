@@ -401,6 +401,46 @@ export async function getSampleImport(id: string): Promise<SampleImport | null> 
 }
 
 // ---------------------------------------------------------------------------
+// Employee sample history (read-only): every sample an employee RECEIVED —
+// trade outgoing + all IQC — across quarters, for the Sample History page.
+// ---------------------------------------------------------------------------
+
+import type { HistoryEvent } from "@/lib/compliance/sample-history-core";
+
+/**
+ * Fetch employee-receipt sample events (trade outgoing to an employee + all
+ * IQC assignments). Incoming-from-processor rows are NOT an employee receipt
+ * and are excluded. Newest first; caller filters/sorts in the pure layer.
+ */
+export async function listEmployeeSampleHistory(limit = 2000): Promise<HistoryEvent[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  const admin = createSupabaseAdminClient();
+  // Employee receipts = anything NOT incoming (i.e. outgoing trade + all IQC).
+  const { data } = await admin
+    .from("trade_sample_events")
+    .select("*")
+    .neq("direction", "incoming")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  const rows = (data as SampleEvent[] | null) ?? [];
+  return rows.map((e) => ({
+    id: e.id,
+    category: e.category,
+    productType: e.product_type,
+    unitCount: e.unit_count,
+    unitSizeGrams: e.unit_size_grams,
+    unitSizeMg: e.unit_size_mg,
+    thcMgPerServing: e.thc_mg_per_serving,
+    quarterKey: e.quarter_key,
+    employeeId: e.employee_id,
+    employeeName: e.employee_name,
+    fromSampleJar: e.from_sample_jar,
+    note: e.note,
+    createdAt: e.created_at,
+  }));
+}
+
+// ---------------------------------------------------------------------------
 // Distribution-capacity snapshot ("can we take in any more samples?").
 // The real gate is total OUTBOUND capacity across active staff, not the
 // per-processor intake cap — a sample we can't place before quarter-end is
