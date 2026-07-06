@@ -19,12 +19,32 @@
 export const WAC_CITATION = "WAC 314-55-096 (WSR 25-08-032, eff. 4/26/25)";
 
 export type SampleDirection = "incoming" | "outgoing";
-export type SampleProductType = "useable" | "concentrate" | "infused";
+
+/**
+ * Sample CATEGORY — the two SEPARATE quarterly buckets a WA retailer's employee
+ * has (verified against WAC 314-55-096 + Foster Garvey alert):
+ *   • "trade" — ≤ 30 units/employee/quarter                   [096(1)(j)(vi)]
+ *   • "iqc"   — internal quality control, ≤ 50 units/employee/quarter with a
+ *              ≤ 25 concentrate sub-cap                        [096(3)(c)]
+ * There is NO unlimited category and NO job-title exemption; the purchasing
+ * manager's product-evaluation samples ARE the (larger, still-capped) IQC bucket.
+ */
+export type SampleCategory = "trade" | "iqc";
+
+/** Product types. "flower" is an IQC-only type (1 g cap) distinct from the
+ * trade-sample "useable" (3.5 g cap); the statute lists both for IQC. */
+export type SampleProductType = "useable" | "concentrate" | "infused" | "flower";
 
 export const PRODUCT_TYPE_LABELS: Record<SampleProductType, string> = {
-  useable: "Useable cannabis (flower)",
+  useable: "Useable cannabis",
+  flower: "Cannabis flower",
   concentrate: "Concentrate",
   infused: "Infused product",
+};
+
+export const CATEGORY_LABELS: Record<SampleCategory, string> = {
+  trade: "Trade sample",
+  iqc: "Internal quality control (IQC)",
 };
 
 /** Statutory defaults (mirrored by the trade_sample_settings row defaults). */
@@ -35,6 +55,13 @@ export const SAMPLE_DEFAULTS = {
   maxConcentrateGrams: 1,
   maxInfusedMg: 100,
   maxThcMgPerServing: 10,
+  // Internal quality control (IQC) — the second, larger bucket [096(3)].
+  iqcUnitsPerEmployee: 50, // ≤ 50 units / employee / quarter
+  iqcConcentrateSubcap: 25, // ≤ 25 concentrate units / employee / quarter
+  iqcMaxFlowerGrams: 1, // 1 g cannabis flower / unit
+  iqcMaxUseableGrams: 1, // 1 g useable / unit
+  iqcMaxConcentrateGrams: 1, // 1 g concentrate / unit
+  iqcMaxInfusedThcMg: 10, // 10 mg THC in edible/liquid / unit
 } as const;
 
 export type SampleSettings = {
@@ -46,6 +73,13 @@ export type SampleSettings = {
   maxConcentrateGrams: number;
   maxInfusedMg: number;
   maxThcMgPerServing: number;
+  // IQC bucket.
+  iqcUnitsPerEmployee: number;
+  iqcConcentrateSubcap: number;
+  iqcMaxFlowerGrams: number;
+  iqcMaxUseableGrams: number;
+  iqcMaxConcentrateGrams: number;
+  iqcMaxInfusedThcMg: number;
 };
 
 // ---------------------------------------------------------------------------
@@ -79,22 +113,51 @@ export function quarterLabel(key: string): string {
 
 export type UnitSizeInput = {
   productType: SampleProductType;
-  unitSizeGrams?: number | null; // useable/concentrate
-  unitSizeMg?: number | null; // infused
+  category?: SampleCategory; // defaults to "trade"
+  unitSizeGrams?: number | null; // useable/concentrate/flower
+  unitSizeMg?: number | null; // infused (trade)
   thcMgPerServing?: number | null; // infused
 };
 
 export type ValidationResult = { ok: true } | { ok: false; errors: string[] };
 
-/** Validate a single sample unit's size against the per-unit statutory caps. */
+/** Validate a single sample unit's size against the per-unit statutory caps.
+ * TRADE and IQC have DIFFERENT caps:
+ *   trade: 3.5 g useable · 1 g concentrate · 100 mg infused (≤10 mg THC/serving)
+ *   iqc:   1 g flower · 1 g useable · 1 g concentrate · 10 mg THC infused        */
 export function validateUnitSize(input: UnitSizeInput, settings: SampleSettings): ValidationResult {
   const errors: string[] = [];
   const { productType } = input;
+  const category: SampleCategory = input.category ?? "trade";
 
-  if (productType === "useable") {
+  if (category === "iqc") {
+    // IQC caps (all grams except infused which is THC mg per unit).
+    if (productType === "flower") {
+      const g = num(input.unitSizeGrams);
+      if (g === null || g <= 0) errors.push("Enter the per-unit weight in grams.");
+      else if (g > settings.iqcMaxFlowerGrams) errors.push(`Each IQC flower unit must be ≤ ${settings.iqcMaxFlowerGrams} g (${WAC_CITATION}, §096(3)).`);
+    } else if (productType === "useable") {
+      const g = num(input.unitSizeGrams);
+      if (g === null || g <= 0) errors.push("Enter the per-unit weight in grams.");
+      else if (g > settings.iqcMaxUseableGrams) errors.push(`Each IQC useable unit must be ≤ ${settings.iqcMaxUseableGrams} g (${WAC_CITATION}, §096(3)).`);
+    } else if (productType === "concentrate") {
+      const g = num(input.unitSizeGrams);
+      if (g === null || g <= 0) errors.push("Enter the per-unit weight in grams.");
+      else if (g > settings.iqcMaxConcentrateGrams) errors.push(`Each IQC concentrate unit must be ≤ ${settings.iqcMaxConcentrateGrams} g (${WAC_CITATION}, §096(3)).`);
+    } else {
+      // infused: IQC is capped by THC mg per unit (10 mg), not total weight.
+      const thc = num(input.thcMgPerServing);
+      if (thc === null || thc <= 0) errors.push("Enter the THC (mg) for this IQC infused unit.");
+      else if (thc > settings.iqcMaxInfusedThcMg) errors.push(`Each IQC infused unit must be ≤ ${settings.iqcMaxInfusedThcMg} mg THC (${WAC_CITATION}, §096(3)).`);
+    }
+    return errors.length ? { ok: false, errors } : { ok: true };
+  }
+
+  // TRADE caps.
+  if (productType === "useable" || productType === "flower") {
     const g = num(input.unitSizeGrams);
     if (g === null || g <= 0) errors.push("Enter the per-unit weight in grams.");
-    else if (g > settings.maxFlowerGrams) errors.push(`Each useable unit must be ≤ ${settings.maxFlowerGrams} g (${WAC_CITATION}).`);
+    else if (g > settings.maxFlowerGrams) errors.push(`Each useable/flower unit must be ≤ ${settings.maxFlowerGrams} g (${WAC_CITATION}).`);
   } else if (productType === "concentrate") {
     const g = num(input.unitSizeGrams);
     if (g === null || g <= 0) errors.push("Enter the per-unit weight in grams.");
@@ -184,12 +247,65 @@ export function capTone(used: number, cap: number): "green" | "amber" | "red" {
   return "green";
 }
 
+/**
+ * Evaluate an IQC (internal quality control) sample assignment to one employee.
+ * IQC has TWO caps per employee per quarter: a total-unit cap (50) AND a
+ * concentrate sub-cap (25). Blocks if EITHER would be exceeded.
+ */
+export function evaluateIqcCap(args: {
+  usedTotalUnits: number; // all IQC units used by this employee this quarter
+  usedConcentrateUnits: number; // of which, concentrate units
+  addUnits: number;
+  addIsConcentrate: boolean;
+  settings: SampleSettings;
+}): CapEvaluation & { subcapOver: boolean } {
+  const { usedTotalUnits, usedConcentrateUnits, addUnits, addIsConcentrate, settings } = args;
+  const totalCap = settings.iqcUnitsPerEmployee;
+  const subCap = settings.iqcConcentrateSubcap;
+
+  const projectedTotal = usedTotalUnits + addUnits;
+  const projectedConc = usedConcentrateUnits + (addIsConcentrate ? addUnits : 0);
+
+  const totalOver = projectedTotal > totalCap;
+  const subcapOver = addIsConcentrate && projectedConc > subCap;
+  const overCap = totalOver || subcapOver;
+
+  const remaining = Math.max(0, totalCap - usedTotalUnits);
+  const nearCap = totalCap > 0 && usedTotalUnits / totalCap >= 0.8;
+  const block = overCap && settings.enforce && settings.hardBlock;
+
+  let message: string;
+  if (subcapOver) {
+    message = `Blocked: ${projectedConc} IQC concentrate units would exceed the ${subCap}-unit concentrate sub-cap for this employee this quarter. ${WAC_CITATION}, §096(3).`;
+  } else if (totalOver) {
+    message = `Blocked: ${projectedTotal} IQC units would exceed the ${totalCap}-unit quarterly cap for this employee (${remaining} remaining). ${WAC_CITATION}, §096(3).`;
+  } else if (nearCap) {
+    message = `Warning: this employee is near the ${totalCap}-unit IQC quarterly cap (${remaining} remaining after this).`;
+  } else {
+    message = `${projectedTotal} of ${totalCap} IQC units used this quarter for this employee (${totalCap - projectedTotal} remaining).`;
+  }
+
+  return {
+    usedUnits: usedTotalUnits,
+    capUnits: totalCap,
+    addUnits,
+    projectedUnits: projectedTotal,
+    overCap,
+    subcapOver,
+    nearCap,
+    remaining,
+    block,
+    message,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Draft parsing for the record form
 // ---------------------------------------------------------------------------
 
 export type RecordDraft = {
   direction: string;
+  category?: string; // "trade" (default) | "iqc"
   productType: string;
   unitCount: string;
   unitSizeGrams?: string;
@@ -204,6 +320,7 @@ export type RecordDraft = {
 
 export type ParsedRecord = {
   direction: SampleDirection;
+  category: SampleCategory;
   productType: SampleProductType;
   unitCount: number;
   unitSizeGrams: number | null;
@@ -222,13 +339,18 @@ export type ParseResult = { ok: true; value: ParsedRecord } | { ok: false; error
 export function parseRecordDraft(draft: RecordDraft, settings: SampleSettings): ParseResult {
   const errors: string[] = [];
 
-  const direction = draft.direction === "incoming" || draft.direction === "outgoing" ? (draft.direction as SampleDirection) : null;
+  const category: SampleCategory = draft.category === "iqc" ? "iqc" : "trade";
+
+  // IQC is inherently self-sampling by the retailer's own employees → always
+  // "outgoing" to an employee. Trade samples can be incoming or outgoing.
+  const rawDirection = category === "iqc" ? "outgoing" : draft.direction;
+  const direction = rawDirection === "incoming" || rawDirection === "outgoing" ? (rawDirection as SampleDirection) : null;
   if (!direction) errors.push("Choose a direction (incoming or outgoing).");
 
-  const productType =
-    draft.productType === "useable" || draft.productType === "concentrate" || draft.productType === "infused"
-      ? (draft.productType as SampleProductType)
-      : null;
+  const validTypes: SampleProductType[] = ["useable", "concentrate", "infused", "flower"];
+  const productType = validTypes.includes(draft.productType as SampleProductType)
+    ? (draft.productType as SampleProductType)
+    : null;
   if (!productType) errors.push("Choose a product type.");
 
   const unitCount = Math.trunc(Number(draft.unitCount));
@@ -244,12 +366,17 @@ export function parseRecordDraft(draft: RecordDraft, settings: SampleSettings): 
     errors.push("Enter the supplying processor's name for incoming samples.");
   }
   if (direction === "outgoing" && !(draft.employeeId ?? "").trim()) {
-    errors.push("Choose the receiving employee for outgoing samples.");
+    errors.push("Choose the receiving employee.");
+  }
+
+  // IQC cannot be incoming (it's the retailer's own self-sampling).
+  if (category === "iqc" && direction === "incoming") {
+    errors.push("Internal quality control samples are assigned to employees, not received from a processor.");
   }
 
   if (productType) {
     const sizeCheck = validateUnitSize(
-      { productType, unitSizeGrams, unitSizeMg, thcMgPerServing },
+      { productType, category, unitSizeGrams, unitSizeMg, thcMgPerServing },
       settings,
     );
     if (!sizeCheck.ok) errors.push(...sizeCheck.errors);
@@ -257,15 +384,18 @@ export function parseRecordDraft(draft: RecordDraft, settings: SampleSettings): 
 
   if (errors.length) return { ok: false, errors };
 
+  // For IQC, infused is captured by THC mg (thcMgPerServing); size grams n/a.
+  const isInfused = productType === "infused";
   return {
     ok: true,
     value: {
       direction: direction!,
+      category,
       productType: productType!,
       unitCount,
-      unitSizeGrams: productType === "infused" ? null : unitSizeGrams,
-      unitSizeMg: productType === "infused" ? unitSizeMg : null,
-      thcMgPerServing: productType === "infused" ? thcMgPerServing : null,
+      unitSizeGrams: isInfused ? null : unitSizeGrams,
+      unitSizeMg: category === "trade" && isInfused ? unitSizeMg : null,
+      thcMgPerServing: isInfused ? thcMgPerServing : null,
       quarterKey: quarterKeyFromYmd(draft.ymd),
       processorName: direction === "incoming" ? (draft.processorName ?? "").trim() || null : null,
       employeeId: direction === "outgoing" ? (draft.employeeId ?? "").trim() || null : null,
@@ -273,6 +403,107 @@ export function parseRecordDraft(draft: RecordDraft, settings: SampleSettings): 
       note: (draft.note ?? "").trim() || null,
     },
   };
+}
+
+// ---------------------------------------------------------------------------
+// Sample JSON import ("samples come to us like regular products, with its own
+// json to upload"). We parse a permissive shape into normalized incoming lots.
+// ---------------------------------------------------------------------------
+
+export type SampleJsonLot = {
+  productType: SampleProductType;
+  unitCount: number;
+  unitSizeGrams: number | null;
+  unitSizeMg: number | null;
+  thcMgPerServing: number | null;
+  processorName: string | null;
+  productName: string | null;
+  lotRef: string | null;
+};
+
+export type SampleJsonParse =
+  | { ok: true; lots: SampleJsonLot[]; totalUnits: number; warnings: string[] }
+  | { ok: false; errors: string[] };
+
+function coerceType(v: unknown): SampleProductType | null {
+  const s = String(v ?? "").trim().toLowerCase();
+  if (s === "useable" || s === "usable") return "useable";
+  if (s === "flower") return "flower";
+  if (s === "concentrate" || s === "extract") return "concentrate";
+  if (s === "infused" || s === "edible") return "infused";
+  return null;
+}
+
+function numOrNull(v: unknown): number | null {
+  if (v === null || v === undefined || v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Parse an uploaded sample JSON payload. Accepts either a bare array of lots or
+ * an object with a `samples`/`lots`/`items` array. Each lot is permissive about
+ * field names (product_type|productType|type, unit_count|units|quantity, etc.).
+ * Returns normalized incoming lots the owner can then record + assign.
+ */
+export function parseSampleJson(input: unknown): SampleJsonParse {
+  const warnings: string[] = [];
+
+  // Accept a raw JSON string (uploaded file contents) or an already-parsed value.
+  let parsed: unknown = input;
+  if (typeof input === "string") {
+    const trimmed = input.trim();
+    if (!trimmed) return { ok: false, errors: ["The file is empty."] };
+    try {
+      parsed = JSON.parse(trimmed);
+    } catch {
+      return { ok: false, errors: ["The file is not valid JSON."] };
+    }
+  }
+
+  let arr: unknown[] | null = null;
+  if (Array.isArray(parsed)) arr = parsed;
+  else if (parsed && typeof parsed === "object") {
+    const o = parsed as Record<string, unknown>;
+    const cand = o.samples ?? o.lots ?? o.items ?? o.data;
+    if (Array.isArray(cand)) arr = cand;
+  }
+  if (!arr) return { ok: false, errors: ["JSON must be an array of samples, or an object with a 'samples' array."] };
+  if (arr.length === 0) return { ok: false, errors: ["No sample lots found in the file."] };
+
+  const lots: SampleJsonLot[] = [];
+  arr.forEach((rawItem, i) => {
+    if (!rawItem || typeof rawItem !== "object") {
+      warnings.push(`Row ${i + 1}: skipped (not an object).`);
+      return;
+    }
+    const r = rawItem as Record<string, unknown>;
+    const productType = coerceType(r.product_type ?? r.productType ?? r.type ?? r.category);
+    if (!productType) {
+      warnings.push(`Row ${i + 1}: skipped (unknown product type "${String(r.product_type ?? r.type ?? "")}").`);
+      return;
+    }
+    const unitCountRaw = numOrNull(r.unit_count ?? r.units ?? r.quantity ?? r.qty ?? 1);
+    const unitCount = Math.trunc(unitCountRaw ?? 1);
+    if (unitCount <= 0) {
+      warnings.push(`Row ${i + 1}: skipped (unit count must be ≥ 1).`);
+      return;
+    }
+    lots.push({
+      productType,
+      unitCount,
+      unitSizeGrams: numOrNull(r.unit_size_grams ?? r.unitSizeGrams ?? r.grams ?? r.size_g),
+      unitSizeMg: numOrNull(r.unit_size_mg ?? r.unitSizeMg ?? r.mg ?? r.size_mg),
+      thcMgPerServing: numOrNull(r.thc_mg ?? r.thcMgPerServing ?? r.thc_per_serving ?? r.thc),
+      processorName: String(r.processor_name ?? r.processor ?? r.vendor ?? r.supplier ?? "").trim() || null,
+      productName: String(r.product_name ?? r.productName ?? r.name ?? r.strain ?? "").trim() || null,
+      lotRef: String(r.lot ?? r.lot_ref ?? r.lotRef ?? r.batch ?? r.uid ?? "").trim() || null,
+    });
+  });
+
+  if (lots.length === 0) return { ok: false, errors: ["No valid sample lots could be parsed.", ...warnings] };
+  const totalUnits = lots.reduce((s, l) => s + l.unitCount, 0);
+  return { ok: true, lots, totalUnits, warnings };
 }
 
 // ---------------------------------------------------------------------------
@@ -292,6 +523,12 @@ const TEST_SETTINGS: SampleSettings = {
   maxConcentrateGrams: 1,
   maxInfusedMg: 100,
   maxThcMgPerServing: 10,
+  iqcUnitsPerEmployee: 50,
+  iqcConcentrateSubcap: 25,
+  iqcMaxFlowerGrams: 1,
+  iqcMaxUseableGrams: 1,
+  iqcMaxConcentrateGrams: 1,
+  iqcMaxInfusedThcMg: 10,
 };
 
 export function __runTradeSamplesCoreTests(): string {
@@ -358,6 +595,93 @@ export function __runTradeSamplesCoreTests(): string {
     TEST_SETTINGS,
   );
   assert(badSize.ok === false, "over-size unit rejected");
+
+  // -------------------------------------------------------------------------
+  // IQC per-unit size caps (differ from trade)
+  // -------------------------------------------------------------------------
+  assert(validateUnitSize({ productType: "flower", category: "iqc", unitSizeGrams: 1 }, TEST_SETTINGS).ok === true, "iqc flower 1g ok");
+  assert(validateUnitSize({ productType: "flower", category: "iqc", unitSizeGrams: 1.5 }, TEST_SETTINGS).ok === false, "iqc flower 1.5g over");
+  assert(validateUnitSize({ productType: "useable", category: "iqc", unitSizeGrams: 1 }, TEST_SETTINGS).ok === true, "iqc useable 1g ok");
+  assert(validateUnitSize({ productType: "useable", category: "iqc", unitSizeGrams: 3.5 }, TEST_SETTINGS).ok === false, "iqc useable 3.5g over (trade limit, not iqc)");
+  assert(validateUnitSize({ productType: "concentrate", category: "iqc", unitSizeGrams: 1 }, TEST_SETTINGS).ok === true, "iqc conc 1g ok");
+  assert(validateUnitSize({ productType: "concentrate", category: "iqc", unitSizeGrams: 1.1 }, TEST_SETTINGS).ok === false, "iqc conc 1.1g over");
+  assert(validateUnitSize({ productType: "infused", category: "iqc", thcMgPerServing: 10 }, TEST_SETTINGS).ok === true, "iqc infused 10mg thc ok");
+  assert(validateUnitSize({ productType: "infused", category: "iqc", thcMgPerServing: 11 }, TEST_SETTINGS).ok === false, "iqc infused 11mg thc over");
+
+  // -------------------------------------------------------------------------
+  // IQC quarterly cap evaluation (50 total, 25 concentrate sub-cap)
+  // -------------------------------------------------------------------------
+  const iqcOk = evaluateIqcCap({ usedTotalUnits: 10, usedConcentrateUnits: 0, addUnits: 5, addIsConcentrate: false, settings: TEST_SETTINGS });
+  assert(iqcOk.overCap === false && iqcOk.block === false && iqcOk.remaining === 40, "iqc 15/50 ok");
+
+  const iqcNear = evaluateIqcCap({ usedTotalUnits: 42, usedConcentrateUnits: 0, addUnits: 4, addIsConcentrate: false, settings: TEST_SETTINGS });
+  assert(iqcNear.nearCap === true && iqcNear.overCap === false, "iqc 42 near cap");
+
+  const iqcTotalOver = evaluateIqcCap({ usedTotalUnits: 48, usedConcentrateUnits: 0, addUnits: 5, addIsConcentrate: false, settings: TEST_SETTINGS });
+  assert(iqcTotalOver.overCap === true && iqcTotalOver.subcapOver === false && iqcTotalOver.block === true, "iqc 53 over 50-cap blocks");
+
+  const iqcSubOver = evaluateIqcCap({ usedTotalUnits: 20, usedConcentrateUnits: 24, addUnits: 3, addIsConcentrate: true, settings: TEST_SETTINGS });
+  assert(iqcSubOver.subcapOver === true && iqcSubOver.overCap === true && iqcSubOver.block === true, "iqc 27 concentrate over 25 sub-cap blocks");
+
+  const iqcSubOkTotalRoom = evaluateIqcCap({ usedTotalUnits: 20, usedConcentrateUnits: 24, addUnits: 1, addIsConcentrate: true, settings: TEST_SETTINGS });
+  assert(iqcSubOkTotalRoom.subcapOver === false && iqcSubOkTotalRoom.overCap === false, "iqc 25 concentrate exactly at sub-cap ok");
+
+  // soft mode: over cap warns but does not block
+  const iqcSoft = evaluateIqcCap({ usedTotalUnits: 48, usedConcentrateUnits: 0, addUnits: 5, addIsConcentrate: false, settings: { ...TEST_SETTINGS, hardBlock: false } });
+  assert(iqcSoft.overCap === true && iqcSoft.block === false, "iqc soft over warns not blocks");
+
+  // -------------------------------------------------------------------------
+  // Category-aware parseRecordDraft (IQC forced outgoing, incoming rejected)
+  // -------------------------------------------------------------------------
+  const iqcParse = parseRecordDraft(
+    { direction: "incoming", category: "iqc", productType: "flower", unitCount: "2", unitSizeGrams: "1", ymd: "2025-05-14", employeeId: "emp-1" },
+    TEST_SETTINGS,
+  );
+  assert(iqcParse.ok === true, "iqc parse ok (direction coerced to outgoing)");
+  if (iqcParse.ok) assert(iqcParse.value.direction === "outgoing" && iqcParse.value.category === "iqc" && iqcParse.value.employeeId === "emp-1", "iqc parse fields");
+
+  const iqcNoEmp = parseRecordDraft(
+    { direction: "outgoing", category: "iqc", productType: "flower", unitCount: "1", unitSizeGrams: "1", ymd: "2025-05-14" },
+    TEST_SETTINGS,
+  );
+  assert(iqcNoEmp.ok === false, "iqc requires employee");
+
+  const iqcOversize = parseRecordDraft(
+    { direction: "outgoing", category: "iqc", productType: "useable", unitCount: "1", unitSizeGrams: "3.5", ymd: "2025-05-14", employeeId: "emp-1" },
+    TEST_SETTINGS,
+  );
+  assert(iqcOversize.ok === false, "iqc useable 3.5g rejected (over 1g iqc cap)");
+
+  const iqcInfusedParse = parseRecordDraft(
+    { direction: "outgoing", category: "iqc", productType: "infused", unitCount: "1", thcMgPerServing: "10", ymd: "2025-05-14", employeeId: "emp-1" },
+    TEST_SETTINGS,
+  );
+  assert(iqcInfusedParse.ok === true, "iqc infused parse ok");
+  if (iqcInfusedParse.ok) assert(iqcInfusedParse.value.unitSizeMg === null && iqcInfusedParse.value.thcMgPerServing === 10, "iqc infused stores thc mg, not size mg");
+
+  // -------------------------------------------------------------------------
+  // parseSampleJson
+  // -------------------------------------------------------------------------
+  const jsonOk = parseSampleJson(JSON.stringify([
+    { product_type: "useable", unit_count: 10, unit_size_grams: 3.5, processor: "Acme Farms", strain: "OG", lot: "L1" },
+    { type: "concentrate", units: 5, grams: 1, vendor: "Dab Co" },
+  ]));
+  assert(jsonOk.ok === true, "json parse ok");
+  if (jsonOk.ok) assert(jsonOk.lots.length === 2 && jsonOk.totalUnits === 15, "json parse totals");
+
+  const jsonWrapped = parseSampleJson(JSON.stringify({ lots: [{ product_type: "infused", qty: 3, thc_mg: 10 }] }));
+  assert(jsonWrapped.ok === true, "json parse wrapped object ok");
+  if (jsonWrapped.ok) assert(jsonWrapped.lots.length === 1 && jsonWrapped.lots[0]!.thcMgPerServing === 10, "json wrapped fields");
+
+  const jsonBad = parseSampleJson("not json at all {");
+  assert(jsonBad.ok === false, "json invalid rejected");
+
+  const jsonEmpty = parseSampleJson("[]");
+  assert(jsonEmpty.ok === false, "json empty rejected");
+
+  const jsonPartial = parseSampleJson(JSON.stringify([{ product_type: "banana", units: 2 }, { product_type: "useable", units: 4, grams: 3.5 }]));
+  assert(jsonPartial.ok === true, "json with one bad row still parses good rows");
+  if (jsonPartial.ok) assert(jsonPartial.lots.length === 1 && (jsonPartial.warnings?.length ?? 0) >= 1, "json partial warns on bad row");
 
   return "OK: trade-samples-core tests passed";
 }
