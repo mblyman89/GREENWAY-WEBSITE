@@ -67,7 +67,9 @@ export async function POST(req: Request) {
       expectedChallenge: challenge.challenge,
       expectedOrigin: origin,
       expectedRPID: rpID,
-      requireUserVerification: false,
+      // S-19: staff passkeys must be user-verified (biometric/PIN), not just
+      // present — this is a POS back-office credential.
+      requireUserVerification: true,
       credential: {
         id: credential.id,
         // decodeByteaHex guarantees an ArrayBuffer-backed copy.

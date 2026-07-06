@@ -52,7 +52,7 @@ export async function POST(req: Request) {
   // browser will simply find no matching passkey and the ceremony ends locally.
   const options = await generateAuthenticationOptions({
     rpID,
-    userVerification: "preferred",
+    userVerification: "required", // S-19: biometric/PIN check is mandatory
     allowCredentials: creds.map((c) => ({ id: c.id, transports: c.transports })),
   });
 

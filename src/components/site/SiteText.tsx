@@ -11,6 +11,7 @@
  */
 import { type ElementType } from "react";
 import { getContentForRender, isPreviewActive } from "@/lib/cms/render-content";
+import { sanitizeStaffHtml } from "@/lib/security/html-sanitize";
 
 export async function SiteText({
   blockKey,
@@ -37,11 +38,14 @@ export async function SiteText({
     : {};
 
   if (html) {
+    // S-19: staff-authored rich blocks pass through the allowlist sanitizer
+    // before hitting dangerouslySetInnerHTML — a pasted snippet can't smuggle
+    // <script>, event handlers, or javascript: URLs onto the public site.
     return (
       <Tag
         className={className}
         {...previewProps}
-        dangerouslySetInnerHTML={{ __html: value }}
+        dangerouslySetInnerHTML={{ __html: sanitizeStaffHtml(value) }}
       />
     );
   }

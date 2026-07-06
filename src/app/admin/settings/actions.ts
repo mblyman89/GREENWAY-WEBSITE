@@ -83,6 +83,16 @@ export async function saveTaxSettingsAction(fd: FormData): Promise<ActionResult>
     taxBaseMode,
   };
 
+  // S-19 (fat-finger guard): the WA cannabis excise is 37% by statute
+  // (RCW 69.50.535). Any other value needs an explicit typed confirmation —
+  // the client asks for it; the server refuses without it.
+  if (next.exciseRateBps !== 3700 && String(fd.get("confirmExciseDeviation") ?? "") !== "1") {
+    return {
+      ok: false,
+      error: `Excise is set to ${(next.exciseRateBps / 100).toFixed(2)}% but the WA statutory rate is 37% (RCW 69.50.535). Confirm the deviation to save anyway.`,
+    };
+  }
+
   const res = await saveTaxSettings(next);
   if (!res.ok) return { ok: false, error: res.error };
 

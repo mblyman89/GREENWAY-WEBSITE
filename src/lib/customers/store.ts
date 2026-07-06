@@ -125,12 +125,33 @@ export async function updateCustomer(
   return (data as Customer) ?? null;
 }
 
-/** True when a yyyy-mm-dd birthdate is at least 21 years ago (age-gate helper). */
+/**
+ * True when a yyyy-mm-dd birthdate is at least 21 years ago (age-gate helper).
+ *
+ * S-20 timezone fix: `new Date("yyyy-mm-dd")` parses as UTC MIDNIGHT, but the
+ * old cutoff was built in the SERVER's local zone — on a UTC server that could
+ * flip the answer for someone whose 21st birthday is "today" in Pacific time.
+ * Now both sides are compared as plain calendar dates in the STORE's
+ * (America/Los_Angeles) wall-clock — no Date-parsing of the birthdate at all.
+ */
 export function isAtLeast21(birthdate: string | null | undefined): boolean | null {
   if (!birthdate) return null;
-  const dob = new Date(birthdate);
-  if (Number.isNaN(dob.getTime())) return null;
-  const today = new Date();
-  const cutoff = new Date(today.getFullYear() - 21, today.getMonth(), today.getDate());
-  return dob.getTime() <= cutoff.getTime();
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(birthdate.trim());
+  if (!m) return null;
+  const [dobY, dobM, dobD] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  if (dobM < 1 || dobM > 12 || dobD < 1 || dobD > 31) return null;
+
+  // Today's calendar date on the store's Pacific wall clock.
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Los_Angeles",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+  const [nowY, nowM, nowD] = parts.split("-").map(Number);
+
+  // 21st birthday as a comparable yyyymmdd number vs today.
+  const birthdayPlus21 = (dobY + 21) * 10000 + dobM * 100 + dobD;
+  const today = nowY * 10000 + nowM * 100 + nowD;
+  return birthdayPlus21 <= today;
 }

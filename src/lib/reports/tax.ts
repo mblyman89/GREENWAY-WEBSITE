@@ -19,6 +19,11 @@
  */
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import {
+  CANNABIS_EXCISE_TAX_BPS,
+  STATE_SALES_TAX_BPS,
+  LOCAL_CITY_SALES_TAX_BPS,
+} from "@/lib/orders/order-pricing-core";
 
 /**
  * How the stored line price relates to tax.
@@ -46,9 +51,11 @@ export type TaxSettings = {
 };
 
 export const DEFAULT_TAX_SETTINGS: TaxSettings = {
-  exciseRateBps: 3700,
-  stateSalesRateBps: 650,
-  localSalesRateBps: 280,
+  // S-19/S-20: single source of truth — these mirror the cart's inclusive-tax
+  // divisors (order-pricing-core.ts) so the client and server can never drift.
+  exciseRateBps: CANNABIS_EXCISE_TAX_BPS, // 3700
+  stateSalesRateBps: STATE_SALES_TAX_BPS, // 650
+  localSalesRateBps: LOCAL_CITY_SALES_TAX_BPS, // 280
   medicalEndorsement: false,
   taxBaseMode: "pre_tax",
 };

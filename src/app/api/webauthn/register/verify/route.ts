@@ -56,7 +56,9 @@ export async function POST(req: Request) {
       expectedChallenge: challenge.challenge,
       expectedOrigin: origin,
       expectedRPID: rpID,
-      requireUserVerification: false,
+      // S-19: staff passkeys must be user-verified (biometric/PIN), not just
+      // present — this is a POS back-office credential.
+      requireUserVerification: true,
     });
   } catch {
     return NextResponse.json({ error: "Could not verify this passkey." }, { status: 400 });

@@ -18,8 +18,20 @@
  *   tax       = total − subtotal                            (exact by construction)
  */
 
-export const CANNABIS_EXCISE_TAX_RATE = 0.37; // WSLCB excise (RCW 69.50.535)
-export const LOCAL_SALES_TAX_RATE = 0.093; // WA state + Port Orchard local
+// ── SINGLE SOURCE OF TRUTH for the statutory tax rates (S-19/S-20 fix) ──────
+// Previously the client used 0.093 here while the server report engine
+// carried its own 650+280 bps defaults in lib/reports/tax.ts — two hardcoded
+// twins that could drift. Now both derive from THESE basis-point constants
+// (tax.ts imports them for its defaults; the DB-backed tax_settings row can
+// still override the server engine, and the settings page warns on excise
+// deviation from the statutory 37%).
+export const CANNABIS_EXCISE_TAX_BPS = 3700; // WSLCB excise (RCW 69.50.535)
+export const STATE_SALES_TAX_BPS = 650; // WA state portion (6.5%)
+export const LOCAL_CITY_SALES_TAX_BPS = 280; // Port Orchard local portion (2.8%)
+export const COMBINED_SALES_TAX_BPS = STATE_SALES_TAX_BPS + LOCAL_CITY_SALES_TAX_BPS; // 930
+
+export const CANNABIS_EXCISE_TAX_RATE = CANNABIS_EXCISE_TAX_BPS / 10000; // 0.37
+export const LOCAL_SALES_TAX_RATE = COMBINED_SALES_TAX_BPS / 10000; // 0.093 (state + local)
 export const COMBINED_INCLUSIVE_TAX_RATE = CANNABIS_EXCISE_TAX_RATE + LOCAL_SALES_TAX_RATE; // 0.463
 /** Back-out divisor: cannabis card price (tax-inclusive) / 1.463 => pre-tax subtotal. */
 export const TAX_INCLUSIVE_DIVISOR = 1 + COMBINED_INCLUSIVE_TAX_RATE; // 1.463

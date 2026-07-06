@@ -32,6 +32,17 @@ export function TaxSettingsForm({
   function onSaveRates(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
+    // S-19 fat-finger guard: WA cannabis excise is 37% by statute
+    // (RCW 69.50.535). Any other value requires an explicit confirmation,
+    // which the server also enforces.
+    const excisePct = Number(String(fd.get("excisePct") ?? "").trim());
+    if (Number.isFinite(excisePct) && Math.round(excisePct * 100) !== 3700) {
+      const confirmed = window.confirm(
+        `You are setting the cannabis excise to ${excisePct}%, but the WA statutory rate is 37% (RCW 69.50.535).\n\nEvery excise report and the POS tax engine will use this rate. Are you sure?`,
+      );
+      if (!confirmed) return;
+      fd.set("confirmExciseDeviation", "1");
+    }
     startRates(async () => {
       const res = await saveTaxSettingsAction(fd);
       toast(

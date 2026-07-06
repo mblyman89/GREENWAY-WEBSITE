@@ -20,6 +20,7 @@ import {
   isAiConfigured,
 } from "@/lib/cms/ai-content";
 import { generateSeoMeta } from "@/lib/cms/ai-seo";
+import { WARNING_BLOCK_KEY, validateWarningBlock } from "@/lib/compliance/warning-text-core";
 
 /**
  * Revalidate the public page(s) affected by a content block on a given `page`.
@@ -212,6 +213,27 @@ export async function saveContentDraftAction(formData: FormData): Promise<void> 
   const block = await getContentBlock(blockKey);
   if (!block) redirect("/admin/content");
 
+  // S-19: the footer compliance warning must keep every WA-mandated sentence.
+  // Formatting is free; deleting a required line hard-fails the save.
+  if (blockKey === WARNING_BLOCK_KEY) {
+    const check = validateWarningBlock(draftValue);
+    if (!check.ok) {
+      await recordAudit({
+        actorId: session.userId,
+        actorEmail: session.email,
+        action: "content.warning_block_rejected",
+        entityType: "content_block",
+        entityId: blockKey,
+        after: { missing: check.missing },
+      });
+      redirect(
+        `/admin/content?warning_error=${encodeURIComponent(
+          `Required WA warning language missing: ${check.missing.join(" | ")}`.slice(0, 600),
+        )}`,
+      );
+    }
+  }
+
   await saveContentDraft(blockKey, draftValue, session.userId);
   await recordAudit({
     actorId: session.userId,
@@ -231,6 +253,28 @@ export async function publishContentBlockAction(formData: FormData): Promise<voi
   const blockKey = String(formData.get("block_key") ?? "");
   const block = await getContentBlock(blockKey);
   if (!block) redirect("/admin/content");
+
+  // S-19: same mandated-language gate at publish time (covers a pre-existing
+  // bad draft or a restore from history).
+  if (blockKey === WARNING_BLOCK_KEY) {
+    const candidate = block.draft_value ?? block.published_value ?? "";
+    const check = validateWarningBlock(candidate);
+    if (!check.ok) {
+      await recordAudit({
+        actorId: session.userId,
+        actorEmail: session.email,
+        action: "content.warning_block_rejected",
+        entityType: "content_block",
+        entityId: blockKey,
+        after: { missing: check.missing, phase: "publish" },
+      });
+      redirect(
+        `/admin/content?warning_error=${encodeURIComponent(
+          `Cannot publish — required WA warning language missing: ${check.missing.join(" | ")}`.slice(0, 600),
+        )}`,
+      );
+    }
+  }
 
   await publishContentBlock(blockKey, session.userId, {
     actorEmail: session.email,

@@ -248,6 +248,9 @@ export function buildNewsletterEmail(n: {
 // Sending
 // ---------------------------------------------------------------------------
 
+/** Minimum time between broadcasts of the SAME newsletter (S-20 guard). */
+export const BROADCAST_COOLDOWN_MS = 60 * 60 * 1000; // 1 hour
+
 export type SendResult =
   | { ok: true; sendId: string; recipientCount: number; delivered: number; failed: number; status: string }
   | { ok: false; error: string };
@@ -307,6 +310,30 @@ export async function sendNewsletter(params: {
   }
 
   const isTest = Boolean(params.testEmail);
+
+  // S-20 double-send guard: a BROADCAST of the same newsletter within the
+  // cooldown window is refused (double-click, impatient re-submit, or two
+  // staff sending simultaneously). Tests are exempt. Deliberate re-sends are
+  // possible after the cooldown elapses.
+  if (!isTest) {
+    const admin0 = createSupabaseAdminClient();
+    const cutoff = new Date(Date.now() - BROADCAST_COOLDOWN_MS).toISOString();
+    const { data: recent } = await admin0
+      .from("newsletter_sends")
+      .select("id, created_at, status")
+      .eq("post_id", n.id)
+      .eq("send_kind", "broadcast")
+      .gte("created_at", cutoff)
+      .limit(1);
+    if (recent && recent.length > 0) {
+      return {
+        ok: false,
+        error:
+          "This newsletter was already broadcast in the last hour. To prevent duplicate emails, wait for the cooldown before re-sending.",
+      };
+    }
+  }
+
   const recipients: Recipient[] = isTest
     ? [{ email: String(params.testEmail).trim().toLowerCase(), token: null }]
     : await getNewsletterRecipients();
