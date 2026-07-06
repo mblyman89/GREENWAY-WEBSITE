@@ -77,10 +77,11 @@ export default async function SiteContentPage({
     restored?: string;
     published_all?: string;
     discarded?: string;
+    warning_error?: string;
   }>;
 }) {
   await requirePermission("content.edit");
-  const { saved, published, seeded, restored, published_all, discarded } =
+  const { saved, published, seeded, restored, published_all, discarded, warning_error } =
     await searchParams;
 
   if (!isSupabaseServiceConfigured) {
@@ -241,6 +242,11 @@ export default async function SiteContentPage({
       </div>
 
       <div className="space-y-6 px-5 py-6 sm:px-8">
+        {warning_error ? (
+          <div className="rounded-[var(--admin-radius-sm)] border border-red-300 bg-red-50 px-4 py-2 text-sm text-red-800">
+            <strong>Blocked:</strong> {warning_error}
+          </div>
+        ) : null}
         {(saved || published || seeded || restored || published_all || discarded) && (
           <div className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]">
             {published

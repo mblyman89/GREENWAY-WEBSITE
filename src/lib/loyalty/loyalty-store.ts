@@ -210,10 +210,19 @@ async function applyLedger(opts: {
     created_by: opts.actorId ?? null,
   });
 
-  const account = await getAccount(opts.accountId);
-  if (!account) return;
-  const newBalance = account.balance_points + opts.points;
-  const newLifetime = opts.points > 0 ? account.lifetime_points + opts.points : account.lifetime_points;
+  // S-20 race fix: the cached balance/lifetime were previously incremented
+  // from a value read moments earlier (read-modify-write), so two concurrent
+  // ledger writes could both base on the stale balance and lose one update.
+  // Now we RECOMPUTE both caches from the ledger itself (the source of
+  // truth) — concurrent writers converge because the last one to recompute
+  // sums a ledger that already contains every inserted row. Self-healing.
+  const { data: rows } = await admin
+    .from("loyalty_ledger")
+    .select("points")
+    .eq("account_id", opts.accountId);
+  const ledger = (rows as { points: number }[] | null) ?? [];
+  const newBalance = ledger.reduce((sum, r) => sum + (r.points ?? 0), 0);
+  const newLifetime = ledger.reduce((sum, r) => sum + Math.max(0, r.points ?? 0), 0);
   const tiers = await listTiers();
   const tier = tierForPoints(newLifetime, tiers);
   await admin
@@ -409,10 +418,18 @@ export async function markRedemptionUsed(
   const row = await lookupRedeemableCode(code);
   if (!row) return { ok: false, error: "Code not found, expired, or already used" };
   const admin = createSupabaseAdminClient();
-  await admin
+  // S-20 race fix: the update is CONDITIONAL on status still being 'issued',
+  // so two registers presenting the same code at once can't both win — the
+  // second update matches zero rows and is refused.
+  const { data: updated } = await admin
     .from("loyalty_redemptions")
     .update({ status: "redeemed", redeemed_at: new Date().toISOString(), redeemed_order_id: orderId })
-    .eq("id", row.id);
+    .eq("id", row.id)
+    .eq("status", "issued")
+    .select("id");
+  if (!updated || updated.length === 0) {
+    return { ok: false, error: "Code was just used — it can only be redeemed once." };
+  }
   return { ok: true };
 }
 

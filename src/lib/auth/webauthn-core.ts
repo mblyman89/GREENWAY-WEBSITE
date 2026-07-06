@@ -89,10 +89,16 @@ export function defaultPasskeyLabel(userAgent: string | null | undefined): strin
  *  (Ed25519) per SimpleWebAuthn guidance to avoid Node/Firefox verify issues. */
 export const SUPPORTED_ALGORITHM_IDS = [-7, -257];
 
-/** Recommended authenticatorSelection for platform biometrics (Face ID/Touch ID). */
+/**
+ * Recommended authenticatorSelection for platform biometrics (Face ID/Touch ID).
+ * S-19 DECISION: userVerification is REQUIRED. These passkeys gate staff access
+ * to a cannabis POS back office, and platform authenticators always perform the
+ * biometric/PIN check anyway — requiring it closes the "silent presence-only
+ * assertion" gap flagged in the GAP audit (requireUserVerification:false).
+ */
 export const PLATFORM_AUTHENTICATOR_SELECTION = {
   residentKey: "preferred",
-  userVerification: "preferred",
+  userVerification: "required",
   authenticatorAttachment: "platform",
 } as const;
 
@@ -137,6 +143,7 @@ export function __runWebauthnCoreTests(): { passed: number; failed: number } {
 
   ok(SUPPORTED_ALGORITHM_IDS.includes(-7) && !SUPPORTED_ALGORITHM_IDS.includes(-8), "algs include ES256, exclude Ed25519");
   ok(PLATFORM_AUTHENTICATOR_SELECTION.authenticatorAttachment === "platform", "platform attachment");
+  ok(PLATFORM_AUTHENTICATOR_SELECTION.userVerification === "required", "user verification required (S-19)");
 
   return { passed, failed };
 }
