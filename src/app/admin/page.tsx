@@ -20,6 +20,7 @@ import {
 import { formatDateTime } from "@/lib/pos/format";
 import { missingWebhookSecrets } from "@/lib/security/fail-closed";
 import { isAtRestEncryptionConfigured } from "@/lib/security/at-rest-crypto";
+import { getOverdueComplianceCount } from "@/lib/compliance/compliance-calendar-store";
 
 export const dynamic = "force-dynamic";
 
@@ -32,9 +33,10 @@ function deltaAccent(d: Delta): "green" | "orange" | "muted" {
 
 export default async function AdminDashboardPage() {
   const session = await requireStaff();
-  const [snap, setup] = await Promise.all([
+  const [snap, setup, overdueCompliance] = await Promise.all([
     getCockpitSnapshot(),
     getSetupStatus(),
+    getOverdueComplianceCount(),
   ]);
   const setupComplete = setup.completed >= setup.total;
 
@@ -94,6 +96,22 @@ export default async function AdminDashboardPage() {
               ))}
             </ul>
           </div>
+        )}
+
+        {/* ── S-18: overdue compliance-calendar obligations ── */}
+        {overdueCompliance > 0 && (
+          <Link
+            href="/admin/compliance/calendar"
+            className="admin-card-interactive block rounded-[var(--admin-radius-lg)] border border-red-500/40 bg-red-500/[0.08] px-5 py-4"
+          >
+            <p className="text-sm font-semibold text-red-300">
+              {overdueCompliance} compliance obligation{overdueCompliance === 1 ? " is" : "s are"} past due
+            </p>
+            <p className="mt-1 text-xs text-red-200/90">
+              Open the compliance calendar to see what&apos;s overdue (LIQ-1295, weekly CCRS,
+              CCTV retention check, …) and sign it off once done.
+            </p>
+          </Link>
         )}
 
         {/* ── S-10: at-rest encryption key not set ── */}
