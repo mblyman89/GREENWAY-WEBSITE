@@ -27,6 +27,13 @@ import {
   type ParsedRecord,
   type SampleJsonLot,
 } from "@/lib/compliance/trade-samples-core";
+import {
+  computeSampleCapacity,
+  daysLeftInQuarter,
+  type SampleCapacity,
+} from "@/lib/compliance/sample-capacity-core";
+import { listEmployees } from "@/lib/staffing/store";
+import { pacificToday } from "@/lib/reports/timezone";
 
 export * from "@/lib/compliance/trade-samples-core";
 
@@ -391,4 +398,38 @@ export async function getSampleImport(id: string): Promise<SampleImport | null> 
     .eq("id", id)
     .maybeSingle();
   return (data as SampleImport | null) ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// Distribution-capacity snapshot ("can we take in any more samples?").
+// The real gate is total OUTBOUND capacity across active staff, not the
+// per-processor intake cap — a sample we can't place before quarter-end is
+// wasted product. Advisory only (soft), never a hard block.
+// ---------------------------------------------------------------------------
+
+/**
+ * Compute the current-quarter sample distribution-capacity snapshot: how many
+ * trade + IQC units we can still place across our ACTIVE employees this
+ * quarter, and how close each lane is to its ceiling.
+ */
+export async function getSampleCapacity(
+  quarterKey: string,
+  settings: SampleSettings,
+): Promise<SampleCapacity> {
+  const [employees, usage] = await Promise.all([listEmployees(), quarterUsage(quarterKey, settings)]);
+  const activeEmployees = employees.length; // listEmployees() returns active only
+  const tradeUsed = usage.outgoingByEmployee.reduce((s, r) => s + r.used, 0);
+  const iqcUsed = usage.iqcByEmployee.reduce((s, r) => s + r.used, 0);
+  const iqcConcentrateUsed = usage.iqcByEmployee.reduce((s, r) => s + r.concentrate, 0);
+
+  return computeSampleCapacity({
+    activeEmployees,
+    tradeUsed,
+    iqcUsed,
+    iqcConcentrateUsed,
+    tradePerEmployee: settings.outgoingUnitsPerEmployee,
+    iqcPerEmployee: settings.iqcUnitsPerEmployee,
+    iqcConcentratePerEmployee: settings.iqcConcentrateSubcap,
+    daysLeftInQuarter: daysLeftInQuarter(pacificToday()),
+  });
 }

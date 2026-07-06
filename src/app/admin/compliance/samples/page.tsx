@@ -7,6 +7,7 @@ import { Button, Card, Field, Input, Textarea, Badge } from "@/components/admin/
 import { listEmployees } from "@/lib/staffing/store";
 import {
   getSampleSettings,
+  getSampleCapacity,
   quarterUsage,
   listSampleEvents,
   listSampleImports,
@@ -21,6 +22,7 @@ import {
 } from "@/lib/compliance/trade-samples";
 import { pacificToday } from "@/lib/reports/timezone";
 import { SampleRecorder, type EmployeeOption } from "@/components/admin/compliance/SampleRecorder";
+import { SampleCapacityGauge } from "@/components/admin/compliance/SampleCapacityGauge";
 import { SampleImportUploader } from "@/components/admin/compliance/SampleImportUploader";
 import { updateSampleSettingsAction } from "./actions";
 
@@ -56,11 +58,12 @@ export default async function SamplesPage({
   const quarter = quarterKeyFromYmd(today);
   const settings = await getSampleSettings();
 
-  const [employees, usage, recent, imports] = await Promise.all([
+  const [employees, usage, recent, imports, capacity] = await Promise.all([
     listEmployees(),
     quarterUsage(quarter, settings),
     listSampleEvents({ quarterKey: quarter, limit: 50 }),
     listSampleImports(10),
+    getSampleCapacity(quarter, settings),
   ]);
 
   const empOptions: EmployeeOption[] = employees.map((e) => ({ id: e.id, name: e.full_name }));
@@ -124,6 +127,9 @@ export default async function SamplesPage({
           </div>
         )}
 
+        {/* Distribution-capacity gauge — "can we take in more?" */}
+        <SampleCapacityGauge capacity={capacity} citation={WAC_CITATION} />
+
         {/* No-customer notice */}
         <div className="rounded-lg border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-4 py-3 text-xs text-white/60">
           <strong className="text-white/80">Customers:</strong> Washington retailers may not provide free samples to customers ({WAC_CITATION}, §096(2)). This module has no customer path by design.
@@ -133,7 +139,7 @@ export default async function SamplesPage({
 
         <SampleRecorder employees={empOptions} today={today} />
 
-        <SampleImportUploader />
+        <SampleImportUploader capacity={capacity} />
 
         {/* Recent imports */}
         {imports.length > 0 && (
