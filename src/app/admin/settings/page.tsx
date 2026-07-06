@@ -112,8 +112,15 @@ export default async function SettingsHomePage() {
     },
     {
       name: "Money & accounting",
-      blurb: "Bookkeeping export configuration and AI cost visibility.",
+      blurb: "Banking, bookkeeping export configuration, and AI cost visibility.",
       links: [
+        {
+          href: "/admin/settings/banking",
+          title: "Banking settings",
+          description:
+            "Your bank details for payroll and vendor ACH files — routing, account number, and the NACHA origination IDs your bank assigns.",
+          icon: "🏦",
+        },
         {
           href: "/admin/reports/accounting",
           title: "Accounting settings",

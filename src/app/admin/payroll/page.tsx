@@ -10,7 +10,7 @@ import {
   listPayrollRuns,
 } from "@/lib/payroll/payroll-store";
 import { centsToDollars } from "@/lib/payroll/payroll-core";
-import { saveAchSettingsAction, createRunAction } from "./actions";
+import { createRunAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -146,39 +146,20 @@ export default async function PayrollPage({
           )}
         </div>
 
-        {/* Bank block settings */}
+        {/* Bank block settings — now live on their own Banking settings page. */}
         <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
           <h2 className="mb-1 text-sm font-bold text-[var(--admin-text)]">Originating bank &amp; company (one-time)</h2>
           <p className="mb-4 text-xs text-[var(--admin-text-muted)]">
-            These go in the ACH file header. Your bank (Timberland / Jack Henry) gives you the exact
-            values — routing, company ID, and originating DFI. Enter them once.
+            Your bank details for the ACH file header — routing, account number, company ID, and
+            originating DFI — now live on their own <span className="font-semibold">Banking settings</span> page so
+            they are shared by both payroll and vendor payments. {settingsComplete ? "They are set up." : "They still need to be filled in before you can generate a file."}
           </p>
-          <form action={saveAchSettingsAction} className="grid gap-3 sm:grid-cols-2">
-            <Field label="Bank name" help="Immediate Destination Name">
-              <Input name="destination_name" defaultValue={settings.destination_name} placeholder="Timberland Bank" />
-            </Field>
-            <Field label="Bank routing (ABA)" help="Immediate Destination — 9 digits">
-              <Input name="destination_routing" defaultValue={settings.destination_routing} placeholder="123456780" />
-            </Field>
-            <Field label="Company name" help="Prints on employee statements">
-              <Input name="company_name" defaultValue={settings.company_name} placeholder="Greenway Marijuana" />
-            </Field>
-            <Field label="Company ID" help="Usually “1” + your EIN">
-              <Input name="company_id" defaultValue={settings.company_id} placeholder="1911234567" />
-            </Field>
-            <Field label="Immediate Origin" help="Usually “1” + your EIN (from the bank)">
-              <Input name="immediate_origin" defaultValue={settings.immediate_origin} placeholder="1911234567" />
-            </Field>
-            <Field label="Originating DFI" help="First 8 digits of your routing at the ODFI">
-              <Input name="originating_dfi" defaultValue={settings.originating_dfi} placeholder="12345678" />
-            </Field>
-            <Field label="Statement description" help="Prints on employee statements">
-              <Input name="entry_description" defaultValue={settings.entry_description} placeholder="PAYROLL" />
-            </Field>
-            <div className="sm:col-span-2">
-              <Button type="submit" variant="save" size="sm">Save bank settings</Button>
-            </div>
-          </form>
+          <Link
+            href="/admin/settings/banking"
+            className="inline-flex items-center gap-2 rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-4 py-2 text-sm font-semibold text-[var(--admin-text)] transition hover:border-white/30"
+          >
+            🏦 Open Banking settings
+          </Link>
         </div>
       </div>
     </div>
