@@ -35,6 +35,24 @@ class VendorBrandExtraction(BaseModel):
     used_generic_language: bool = Field(default=False, description="True if the page was thin and you generalized.")
 
 
+class ProductLine(BaseModel):
+    """One product/strain the brand lists on its site (e.g. a rosin strain with
+    lineage and flavor notes). Facts from the page ONLY — every item is verified
+    against the page text downstream and dropped if unsupported."""
+
+    name: str = Field(..., description="Product or strain name exactly as the page shows it.")
+    category: str = Field(default="", description="Product line/category if shown, e.g. 'rosin', 'edibles', 'vape'.")
+    lineage: str = Field(default="", description="Genetics/cross if the page states it, e.g. 'Papaya x Mimosa V6'.")
+    notes: str = Field(default="", description="Aroma/flavor descriptors from the page, comma-separated. Sensory only — never effects/medical.")
+
+
+class ProductLineupExtraction(BaseModel):
+    """The product/strain lineup a vendor or brand publishes on its site."""
+
+    products: list[ProductLine] = Field(default_factory=list, description="Every product/strain the pages list. Empty if none shown.")
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+
+
 class ProductExtraction(BaseModel):
     """Sensory + descriptive facts for a specific product page. Sensory language
     only — never effects/medical (the compliance scan enforces this too)."""

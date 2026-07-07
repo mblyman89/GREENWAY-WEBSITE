@@ -66,6 +66,7 @@ class ResearchResponse(BaseModel):
     from_cache: bool
     fields: list[FieldOut]
     image_candidates: list[str]
+    pages: list[str] = []  # every page actually read during deep research
     drafts_written: int = 0
     drafts_skipped: int = 0
     supabase_configured: bool = False
@@ -102,6 +103,7 @@ def _build_response(result: ResearchResult, *, write: bool) -> ResearchResponse:
         from_cache=result.from_cache,
         fields=fields,
         image_candidates=result.image_candidates,
+        pages=result.pages,
         drafts_written=written,
         drafts_skipped=skipped,
         supabase_configured=configured,

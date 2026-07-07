@@ -72,6 +72,12 @@ class Settings(BaseSettings):
     # the operator submits. When set, only listed domains may be researched.
     crawl_allow_domains: str = Field(default="", alias="CRAWL_ALLOW_DOMAINS")
 
+    # Deep research: maximum TOTAL pages fetched per research request (the
+    # target page + the most promising same-site pages found via nav links and
+    # the sitemap — about/story/products/strains/etc.). Politeness (robots +
+    # per-domain delay) applies to every one of them.
+    crawl_max_pages: int = Field(default=5, alias="CRAWL_MAX_PAGES")
+
     # --- Social (Meta Graph API — sanctioned, DF-9) ---------------------------
     # A long-lived access token for a Greenway-owned Facebook Page linked to a
     # Greenway Instagram BUSINESS account. Used ONLY for the sanctioned

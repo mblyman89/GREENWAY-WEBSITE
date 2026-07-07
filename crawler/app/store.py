@@ -47,10 +47,16 @@ def fetch_banned_phrases(settings: Settings | None = None) -> list[str]:
 
 
 def _pending_exists(client, row: DraftRow) -> bool:
+    """True only if an IDENTICAL pending draft (same value) already exists.
+
+    Value-compared on purpose: re-researching after a crawler upgrade (deep
+    crawl, richer extraction) must be able to add a BETTER draft for a field
+    even while an older thin draft is still pending — the reviewer sees both
+    and picks. Only exact duplicates are skipped."""
     try:
         res = (
             client.table("ai_suggestions")
-            .select("id")
+            .select("id, suggested_value")
             .eq("entity_type", row.entity_type)
             .eq("entity_id", row.entity_id)
             .eq("field_key", row.field_key)
@@ -58,10 +64,10 @@ def _pending_exists(client, row: DraftRow) -> bool:
             .limit(50)
             .execute()
         )
+        target = row.suggested_value.strip()
         for r in res.data or []:
-            # cheap dedup: same field already pending → skip (value compared below
-            # only if the API returns it; we keep this conservative).
-            return True
+            if (r.get("suggested_value") or "").strip() == target:
+                return True
         return False
     except Exception:
         return False

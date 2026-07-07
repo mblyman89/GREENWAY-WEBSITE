@@ -558,8 +558,8 @@ export async function crawlVendorAction(formData: FormData): Promise<void> {
     }
     const msg =
       result.drafts_written > 0
-        ? `Researched ${url} — ${result.drafts_written} draft(s) added for review.`
-        : `Researched ${url} — no new drafts (nothing verifiable found, or already pending).`;
+        ? `Researched ${result.pages?.length ?? 1} page(s) on ${url} — ${result.drafts_written} draft(s) added for review.`
+        : `Researched ${result.pages?.length ?? 1} page(s) on ${url} — no new drafts (nothing verifiable found, or already pending).`;
     revalidatePath(`/admin/vendors/${id}`);
     redirect(`/admin/vendors/${id}?saved=1&note=${encodeURIComponent(msg)}#ai-drafts`);
   } catch (err) {
@@ -607,8 +607,8 @@ export async function crawlBrandAction(formData: FormData): Promise<void> {
     }
     const msg =
       result.drafts_written > 0
-        ? `Researched ${url} — ${result.drafts_written} brand draft(s) added for review.`
-        : `Researched ${url} — no new drafts (nothing verifiable found, or already pending).`;
+        ? `Researched ${result.pages?.length ?? 1} page(s) on ${url} — ${result.drafts_written} brand draft(s) added for review.`
+        : `Researched ${result.pages?.length ?? 1} page(s) on ${url} — no new drafts (nothing verifiable found, or already pending).`;
     revalidatePath(`/admin/vendors/${vendorId}`);
     redirect(`/admin/vendors/${vendorId}?saved=1&note=${encodeURIComponent(msg)}#brand-${brandId}`);
   } catch (err) {

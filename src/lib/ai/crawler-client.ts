@@ -46,6 +46,8 @@ export type CrawlResearchResult = {
   from_cache: boolean;
   fields: CrawlFieldOutcome[];
   image_candidates: string[];
+  /** Every page the deep-research crawl actually read (target + same-site pages). */
+  pages?: string[];
   drafts_written: number;
   drafts_skipped: number;
   supabase_configured: boolean;
@@ -74,7 +76,9 @@ export async function researchUrl(input: {
   if (!isCrawlerConfigured()) throw new CrawlerNotConfiguredError();
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), input.timeoutMs ?? 120_000);
+  // Deep research reads several pages politely (robots + per-domain delay),
+  // so give the worker room to finish before we abort.
+  const timeout = setTimeout(() => controller.abort(), input.timeoutMs ?? 240_000);
   try {
     const res = await fetch(`${crawlerBaseUrl}/research`, {
       method: "POST",

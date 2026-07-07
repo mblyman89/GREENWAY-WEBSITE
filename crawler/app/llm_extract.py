@@ -43,8 +43,10 @@ def _json_schema_for(model: Type[BaseModel]) -> dict:
 def _build_user_prompt(model: Type[BaseModel], page_text: str, hint: str) -> str:
     schema = _json_schema_for(model)
     trimmed = page_text.strip()
-    if len(trimmed) > 12_000:  # keep input cheap; CSS step already grabbed structured bits
-        trimmed = trimmed[:12_000]
+    # Deep research feeds a multi-page corpus; ~28k chars ≈ 7k tokens is still
+    # cheap on gpt-4o-mini-class models and keeps whole product lineups intact.
+    if len(trimmed) > 28_000:
+        trimmed = trimmed[:28_000]
     return (
         f"{hint}\n\n"
         f"Return JSON conforming to this JSON Schema:\n{json.dumps(schema)}\n\n"

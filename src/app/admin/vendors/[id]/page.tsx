@@ -29,6 +29,10 @@ import {
 import { isCrawlerConfigured, crawlerHealth } from "@/lib/ai/crawler-client";
 
 export const dynamic = "force-dynamic";
+// Deep crawler research reads several pages politely (robots + per-domain
+// delays), which can take a few minutes; the crawl server actions submitted
+// from this page inherit this budget on Vercel.
+export const maxDuration = 300;
 
 const field = "rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#7ed957]";
 const label = "text-xs font-medium text-white/60";
@@ -37,7 +41,13 @@ const FIELD_LABELS: Record<string, string> = {
   mission_statement: "Mission statement",
   about: "About",
   product_philosophy: "Product philosophy",
+  research_products: "Product lineup found on their site (reference)",
+  research_images: "Image candidates found on their site (reference)",
 };
+
+/** Crawler research drafts that are reference-only: staff read/copy from them,
+ * they can never be accepted into a profile field. */
+const REFERENCE_FIELDS = new Set(["research_products", "research_images"]);
 
 async function logoUrlForMediaId(mediaId: string | null): Promise<string | null> {
   if (!mediaId) return null;
@@ -251,6 +261,13 @@ export default async function VendorEditPage({
                       acceptAction={acceptVendorSuggestionAction}
                       rejectAction={rejectVendorSuggestionAction}
                       hiddenFields={{ suggestionId: s.id, vendorId: vendor.id }}
+                      referenceOnly={
+                        REFERENCE_FIELDS.has(s.field_key) ||
+                        // Vendors have no product_philosophy column (brands do);
+                        // show the crawler's find as copyable reference instead
+                        // of an Accept that would fail.
+                        s.field_key === "product_philosophy"
+                      }
                     />
                   ))}
                 </div>
@@ -405,6 +422,7 @@ export default async function VendorEditPage({
                             rejectAction={rejectBrandSuggestionAction}
                             hiddenFields={{ suggestionId: s.id, brandId: b.id, vendorId: vendor.id }}
                             acceptLabel="✓ Accept"
+                            referenceOnly={REFERENCE_FIELDS.has(s.field_key)}
                           />
                         ))}
                       </div>
