@@ -29,11 +29,10 @@ import { acceptWithComplianceGate } from "@/lib/ai/accept-gate";
 import type { AiSuggestion } from "@/lib/enrichment/types";
 import {
   ACCEPTABLE_FIELDS,
-  FAST_LANE_MIN_CHARS,
-  FAST_LANE_MIN_CONFIDENCE,
   isProspectTarget,
   newestPerField,
 } from "@/lib/kb/review-lanes-core";
+import { loadHarvestSettings } from "@/lib/kb/harvest-settings";
 
 const REVIEW_PATH = "/admin/knowledge-base/harvest/review";
 
@@ -134,22 +133,22 @@ export async function rejectDraftAction(formData: FormData): Promise<void> {
   back({ msg: "Draft rejected." });
 }
 
-/** Per-batch cap so one click stays responsive and bounded. */
-const BATCH_ACCEPT_CAP = 50;
-
 /**
  * Batch-accept every submitted FAST-lane draft for one vendor. Every id is
  * re-verified server-side (pending, writable, fast-lane bars, S-4 gate) — a
  * draft that fails any bar is skipped and reported, never force-accepted.
+ * The batch cap and fast-lane bars are tunable (Slice H7, kb_harvest_settings)
+ * and fail open to the vetted defaults.
  */
 export async function batchAcceptVendorAction(formData: FormData): Promise<void> {
   const session = await requirePermission("vendors.manage");
+  const settings = await loadHarvestSettings();
   const vendorLabel = String(formData.get("vendorLabel") ?? "vendor");
   const ids = formData
     .getAll("suggestionIds")
     .map((v) => String(v))
     .filter(Boolean)
-    .slice(0, BATCH_ACCEPT_CAP);
+    .slice(0, settings.batchAcceptCap);
   if (ids.length === 0) back({ error: "No drafts selected." });
 
   let accepted = 0;
@@ -163,7 +162,7 @@ export async function batchAcceptVendorAction(formData: FormData): Promise<void>
     // Server-side fast-lane re-check — never trust the client's lane label.
     const conf = typeof s.confidence === "number" ? s.confidence : 0;
     const len = String(s.suggested_value ?? "").trim().length;
-    if (conf < FAST_LANE_MIN_CONFIDENCE || len < FAST_LANE_MIN_CHARS) {
+    if (conf < settings.fastLaneMinConfidence || len < settings.fastLaneMinChars) {
       skipped.push(`${s.field_key}: not fast-lane eligible`);
       continue;
     }
@@ -198,9 +197,10 @@ export async function batchAcceptVendorAction(formData: FormData): Promise<void>
 export async function closeSupersededAction(): Promise<void> {
   const session = await requirePermission("vendors.manage");
 
+  const settingsForClose = await loadHarvestSettings();
   const [vendorDrafts, brandDrafts] = await Promise.all([
-    listPendingByType("vendor", 1000),
-    listPendingByType("brand", 1000),
+    listPendingByType("vendor", settingsForClose.pendingLimit),
+    listPendingByType("brand", settingsForClose.pendingLimit),
   ]);
   const { superseded } = newestPerField([...vendorDrafts, ...brandDrafts]);
 

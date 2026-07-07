@@ -19,16 +19,28 @@ import {
   CrawlerNotConfiguredError,
   type HarvestTargetInput,
 } from "@/lib/ai/crawler-client";
-import { loadHarvestFreshness, selectDueTargets, STALE_AFTER_DAYS } from "@/lib/kb/harvest-freshness";
+import { loadHarvestFreshness, selectDueTargets } from "@/lib/kb/harvest-freshness";
+import { loadHarvestSettings, type HarvestSettings } from "@/lib/kb/harvest-settings";
 
 const BASE = "/admin/knowledge-base/harvest";
 
-/** Tier presets — depths straight from the harvest strategy. */
-const TIERS: Record<string, { maxPages: number; delay: number; label: string }> = {
-  "1": { maxPages: 25, delay: 0, label: "Tier 1 — current vendors (deep)" },
-  "2": { maxPages: 10, delay: 0, label: "Tier 2 — prospects (medium)" },
-  "3": { maxPages: 3, delay: 60, label: "Tier 3 — whole market (shallow trickle)" },
-};
+/**
+ * Tier presets — depths from the harvest strategy, tunable since Slice H7
+ * (kb_harvest_settings; fails open to the vetted defaults).
+ */
+function tierPresets(
+  s: HarvestSettings,
+): Record<string, { maxPages: number; delay: number; label: string }> {
+  return {
+    "1": { maxPages: s.tier1MaxPages, delay: 0, label: "Tier 1 — current vendors (deep)" },
+    "2": { maxPages: s.tier2MaxPages, delay: 0, label: "Tier 2 — prospects (medium)" },
+    "3": {
+      maxPages: s.tier3MaxPages,
+      delay: s.tier3DelaySeconds,
+      label: "Tier 3 — whole market (shallow trickle)",
+    },
+  };
+}
 
 function fail(msg: string): never {
   redirect(`${BASE}?error=` + encodeURIComponent(msg));
@@ -43,6 +55,7 @@ export async function startHarvestAction(formData: FormData): Promise<void> {
   const session = await requirePermission("vendors.manage");
   if (!isCrawlerConfigured()) fail("Crawler isn't set up (CRAWLER_BASE_URL / CRAWLER_SHARED_SECRET).");
 
+  const TIERS = tierPresets(await loadHarvestSettings());
   const tier = String(formData.get("tier") ?? "1");
   const preset = TIERS[tier] ?? TIERS["1"];
 
@@ -95,29 +108,26 @@ export async function startHarvestAction(formData: FormData): Promise<void> {
  * through the same H1 worker with the strategy's tier depths.
  * ------------------------------------------------------------------ */
 
-/** Sites per trickle click — a slow background hum, not a burst. */
-const TRICKLE_BATCH = 25;
-/** Sites per refresh click — quarterly Tier-1 upkeep, bounded. */
-const REFRESH_BATCH = 25;
-
 /**
  * Tier-3 market trickle: shallow-pass the next due batch of unmatched
  * discovery leads (never-harvested first, then stalest). Repeated clicks
  * walk the whole WA market over weeks. Drafts stay dark (prospect lane)
- * until a lead is promoted.
+ * until a lead is promoted. Batch size, depth, delay, and the staleness
+ * cadence are tunable (Slice H7).
  */
 export async function startTrickleAction(): Promise<void> {
   const session = await requirePermission("vendors.manage");
   if (!isCrawlerConfigured()) fail("Crawler isn't set up (CRAWLER_BASE_URL / CRAWLER_SHARED_SECRET).");
 
-  const preset = TIERS["3"];
+  const settings = await loadHarvestSettings();
+  const preset = tierPresets(settings)["3"];
   const { leads } = await loadHarvestFreshness();
-  const due = selectDueTargets(leads, Date.now(), TRICKLE_BATCH);
+  const due = selectDueTargets(leads, Date.now(), settings.trickleBatch, settings.staleAfterDays);
   if (due.length === 0) {
     redirect(
       `${BASE}?msg=` +
         encodeURIComponent(
-          `Market trickle is caught up — every lead site was harvested within ${STALE_AFTER_DAYS} days.`,
+          `Market trickle is caught up — every lead site was harvested within ${settings.staleAfterDays} days.`,
         ),
     );
   }
@@ -164,19 +174,21 @@ export async function startTrickleAction(): Promise<void> {
 /**
  * Tier-1 quarterly refresh: deep-harvest the current vendors whose last
  * harvest is older than the cadence (or who were never harvested).
+ * Batch size, depth, and cadence are tunable (Slice H7).
  */
 export async function startRefreshAction(): Promise<void> {
   const session = await requirePermission("vendors.manage");
   if (!isCrawlerConfigured()) fail("Crawler isn't set up (CRAWLER_BASE_URL / CRAWLER_SHARED_SECRET).");
 
-  const preset = TIERS["1"];
+  const settings = await loadHarvestSettings();
+  const preset = tierPresets(settings)["1"];
   const { vendors } = await loadHarvestFreshness();
-  const due = selectDueTargets(vendors, Date.now(), REFRESH_BATCH);
+  const due = selectDueTargets(vendors, Date.now(), settings.refreshBatch, settings.staleAfterDays);
   if (due.length === 0) {
     redirect(
       `${BASE}?msg=` +
         encodeURIComponent(
-          `Vendors are fresh — every vendor site was harvested within ${STALE_AFTER_DAYS} days.`,
+          `Vendors are fresh — every vendor site was harvested within ${settings.staleAfterDays} days.`,
         ),
     );
   }

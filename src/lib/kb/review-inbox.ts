@@ -28,6 +28,7 @@ import {
   isProspectTarget,
   type ReviewLane,
 } from "./review-lanes-core";
+import { loadHarvestSettings } from "./harvest-settings";
 
 export type InboxDraft = AiSuggestion & {
   lane: ReviewLane;
@@ -55,13 +56,15 @@ export type HarvestInbox = {
   totals: { fast: number; standard: number; reference: number; prospect: number };
 };
 
-const PENDING_LIMIT = 1000;
-
 /** Load + triage the pending harvest inbox (vendor + brand drafts). */
 export async function loadHarvestInbox(): Promise<HarvestInbox> {
+  // Tunable knobs (Slice H7): pending limit + fast-lane bars. Fails open to
+  // the vetted defaults when the settings table isn't provisioned yet.
+  const settings = await loadHarvestSettings();
+
   const [vendorDrafts, brandDrafts, banned] = await Promise.all([
-    listPendingByType("vendor", PENDING_LIMIT),
-    listPendingByType("brand", PENDING_LIMIT),
+    listPendingByType("vendor", settings.pendingLimit),
+    listPendingByType("brand", settings.pendingLimit),
     loadBannedPhrases().catch(() => []),
   ]);
   const all = [...vendorDrafts, ...brandDrafts];
@@ -73,7 +76,11 @@ export async function loadHarvestInbox(): Promise<HarvestInbox> {
   const laneCache = new Map<string, ReviewLane>();
   const drafts: InboxDraft[] = primary.map((s) => {
     const scan = checkCompliance(String(s.suggested_value ?? ""), banned);
-    const lane = classifyLane(s, { hasBlockingFlags: scan.blockingFlags.length > 0 });
+    const lane = classifyLane(s, {
+      hasBlockingFlags: scan.blockingFlags.length > 0,
+      minConfidence: settings.fastLaneMinConfidence,
+      minChars: settings.fastLaneMinChars,
+    });
     laneCache.set(s.id, lane);
     return { ...s, lane, complianceFlags: scan.flags, blockingFlags: scan.blockingFlags };
   });

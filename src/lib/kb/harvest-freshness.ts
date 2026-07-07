@@ -19,6 +19,7 @@ import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { listVendors } from "@/lib/vendors/store";
 import { listVendorLeads } from "@/lib/discovery/store";
 import { summarizeFreshness, type FreshnessTarget } from "./harvest-freshness-core";
+import { loadHarvestSettings } from "./harvest-settings";
 
 export {
   STALE_AFTER_DAYS,
@@ -63,15 +64,24 @@ export type HarvestFreshness = {
   /** Cadence summaries computed at load time (pages must not call Date.now()). */
   vendorSummary: FreshnessSummary;
   leadSummary: FreshnessSummary;
+  /** Effective cadence used for the summaries (tunable since Slice H7). */
+  staleAfterDays: number;
 };
 
 export type FreshnessSummary = { never: number; stale: number; fresh: number; due: number };
 
 /** Load freshness facts for every harvestable vendor and market lead. */
 export async function loadHarvestFreshness(): Promise<HarvestFreshness> {
+  const settings = await loadHarvestSettings();
   if (!isSupabaseServiceConfigured) {
     const empty = { never: 0, stale: 0, fresh: 0, due: 0 };
-    return { vendors: [], leads: [], vendorSummary: empty, leadSummary: empty };
+    return {
+      vendors: [],
+      leads: [],
+      vendorSummary: empty,
+      leadSummary: empty,
+      staleAfterDays: settings.staleAfterDays,
+    };
   }
 
   const [vendors, leads, lastByEntity] = await Promise.all([
@@ -104,7 +114,8 @@ export async function loadHarvestFreshness(): Promise<HarvestFreshness> {
   return {
     vendors: vendorTargets,
     leads: leadTargets,
-    vendorSummary: summarizeFreshness(vendorTargets, now),
-    leadSummary: summarizeFreshness(leadTargets, now),
+    vendorSummary: summarizeFreshness(vendorTargets, now, settings.staleAfterDays),
+    leadSummary: summarizeFreshness(leadTargets, now, settings.staleAfterDays),
+    staleAfterDays: settings.staleAfterDays,
   };
 }

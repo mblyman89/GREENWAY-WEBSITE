@@ -31,7 +31,8 @@ import {
   startTrickleAction,
   startRefreshAction,
 } from "./actions";
-import { loadHarvestFreshness, STALE_AFTER_DAYS } from "@/lib/kb/harvest-freshness";
+import { loadHarvestFreshness } from "@/lib/kb/harvest-freshness";
+import { loadHarvestSettings } from "@/lib/kb/harvest-settings";
 
 export const dynamic = "force-dynamic";
 
@@ -51,15 +52,17 @@ export default async function HarvestConsolePage({
   const { msg, error } = await searchParams;
 
   const crawlerOn = isCrawlerConfigured();
-  const [health, vendors, leads, coverage, freshness] = await Promise.all([
+  const [health, vendors, leads, coverage, freshness, tuning] = await Promise.all([
     crawlerOn ? crawlerHealth() : Promise.resolve({ ok: false, detail: "not configured" }),
     listVendors(),
     listVendorLeads({ limit: 500 }),
     computeHarvestCoverage(),
     loadHarvestFreshness(),
+    loadHarvestSettings(),
   ]);
   const vendorFresh = freshness.vendorSummary;
   const leadFresh = freshness.leadSummary;
+  const STALE_AFTER_DAYS = tuning.staleAfterDays;
 
   const vendorTargets = vendors.filter((v) => v.website && /^https?:\/\//i.test(v.website));
   const leadTargets = leads.filter(
@@ -94,11 +97,24 @@ export default async function HarvestConsolePage({
               vendor pages, logos & images as visual picks. Nothing publishes without your click.
             </p>
             <p className="mt-2">
-              <strong>Tiers set the depth:</strong> Tier 1 reads up to ~25 pages per site (your current
-              vendors deserve rich profiles), Tier 2 ~10 (prospects), Tier 3 ~3 pages with a one-minute
-              pause between sites (whole-market background trickle).
+              <strong>Tiers set the depth:</strong> Tier 1 reads up to ~{tuning.tier1MaxPages} pages per
+              site (your current vendors deserve rich profiles), Tier 2 ~{tuning.tier2MaxPages}{" "}
+              (prospects), Tier 3 ~{tuning.tier3MaxPages} pages with a {tuning.tier3DelaySeconds}s pause
+              between sites (whole-market background trickle). All of these are adjustable on the{" "}
+              <a href="/admin/knowledge-base/harvest/settings" className="underline">
+                Harvest Tuning
+              </a>{" "}
+              page.
             </p>
           </HelpPanel>
+        }
+        action={
+          <a
+            href="/admin/knowledge-base/harvest/settings"
+            className="rounded-full border border-white/15 px-4 py-2 text-xs font-semibold text-white/70 transition hover:border-[#7ed957] hover:text-[#7ed957]"
+          >
+            ⚙ Harvest Tuning
+          </a>
         }
       />
 
@@ -149,7 +165,7 @@ export default async function HarvestConsolePage({
                   disabled={!crawlerOn || vendorFresh.due === 0}
                   className="rounded-full bg-[#7ed957] px-5 py-2 text-xs font-bold text-black transition hover:brightness-110 disabled:opacity-40"
                 >
-                  ⛏ Refresh next {Math.min(vendorFresh.due, 25) || 25} due vendors
+                  ⛏ Refresh next {Math.min(vendorFresh.due, tuning.refreshBatch) || tuning.refreshBatch} due vendors
                 </button>
               </form>
             </div>
@@ -158,7 +174,9 @@ export default async function HarvestConsolePage({
             <div className="rounded-xl border border-white/10 bg-[#0a0a0a] p-5">
               <div className="mb-2 flex items-center justify-between gap-2">
                 <h3 className="text-sm font-bold text-white">🌊 Market trickle (Tier 3, shallow)</h3>
-                <span className="text-[10px] text-white/40">3 pages/site · 60s between sites</span>
+                <span className="text-[10px] text-white/40">
+                  {tuning.tier3MaxPages} pages/site · {tuning.tier3DelaySeconds}s between sites
+                </span>
               </div>
               <p className="mb-3 text-xs text-white/60">
                 {leadFresh.due === 0
@@ -171,7 +189,7 @@ export default async function HarvestConsolePage({
                   disabled={!crawlerOn || leadFresh.due === 0}
                   className="rounded-full bg-[#5ec1ff] px-5 py-2 text-xs font-bold text-black transition hover:brightness-110 disabled:opacity-40"
                 >
-                  🌊 Trickle next {Math.min(leadFresh.due, 25) || 25} due leads
+                  🌊 Trickle next {Math.min(leadFresh.due, tuning.trickleBatch) || tuning.trickleBatch} due leads
                 </button>
               </form>
             </div>
@@ -197,9 +215,12 @@ export default async function HarvestConsolePage({
                 defaultValue="1"
                 className="rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#7ed957]"
               >
-                <option value="1">Tier 1 — deep (~25 pages/site) · current vendors</option>
-                <option value="2">Tier 2 — medium (~10 pages/site) · prospects</option>
-                <option value="3">Tier 3 — shallow trickle (~3 pages/site, 60s between sites)</option>
+                <option value="1">Tier 1 — deep (~{tuning.tier1MaxPages} pages/site) · current vendors</option>
+                <option value="2">Tier 2 — medium (~{tuning.tier2MaxPages} pages/site) · prospects</option>
+                <option value="3">
+                  Tier 3 — shallow trickle (~{tuning.tier3MaxPages} pages/site, {tuning.tier3DelaySeconds}s
+                  between sites)
+                </option>
               </select>
               <button
                 type="submit"

@@ -48,7 +48,12 @@ export const REFERENCE_FIELDS: ReadonlySet<string> = new Set([
   "research_logos",
 ]);
 
-/** Fast-lane bars (strategy §5: "confidence lanes"). */
+/**
+ * Fast-lane bars (strategy §5: "confidence lanes") — the vetted DEFAULTS.
+ * Since Slice H7 the effective bars are tunable on the Harvest Tuning page
+ * (kb_harvest_settings); callers pass the loaded values via `opts`. These
+ * constants remain the fail-open fallback and the "Reset to defaults" values.
+ */
 export const FAST_LANE_MIN_CONFIDENCE = 0.8;
 export const FAST_LANE_MIN_CHARS = 40;
 
@@ -64,10 +69,13 @@ export function isProspectTarget(entityId: string): boolean {
  * the caller (server wrapper) against the live rules — a blocking draft can
  * never ride the fast lane, though the S-4 accept gate re-checks at accept
  * time regardless (defense in depth).
+ *
+ * `minConfidence` / `minChars` override the fast-lane bars (Slice H7 tuning);
+ * when omitted the vetted defaults apply, so existing behavior is unchanged.
  */
 export function classifyLane(
   s: LaneSuggestionInput,
-  opts?: { hasBlockingFlags?: boolean },
+  opts?: { hasBlockingFlags?: boolean; minConfidence?: number; minChars?: number },
 ): ReviewLane {
   if (isProspectTarget(s.entity_id)) return "prospect";
   if (REFERENCE_FIELDS.has(s.field_key)) return "reference";
@@ -76,10 +84,12 @@ export function classifyLane(
   if (!writable) return "reference"; // unknown fields are read-only, never writable
 
   if (opts?.hasBlockingFlags) return "standard";
+  const minConfidence = opts?.minConfidence ?? FAST_LANE_MIN_CONFIDENCE;
+  const minChars = opts?.minChars ?? FAST_LANE_MIN_CHARS;
   const conf = typeof s.confidence === "number" ? s.confidence : 0;
-  if (conf < FAST_LANE_MIN_CONFIDENCE) return "standard";
+  if (conf < minConfidence) return "standard";
   const len = (s.suggested_value ?? "").trim().length;
-  if (len < FAST_LANE_MIN_CHARS) return "standard";
+  if (len < minChars) return "standard";
   return "fast";
 }
 
