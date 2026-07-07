@@ -25,7 +25,9 @@ import {
   crawlBrandAction,
   crawlVendorSocialAction,
   crawlBrandSocialAction,
+  importHarvestImageAction,
 } from "../actions";
+import { HarvestImagePicker, parseImageLines } from "@/components/admin/ai/HarvestImagePicker";
 import { isCrawlerConfigured, crawlerHealth } from "@/lib/ai/crawler-client";
 
 export const dynamic = "force-dynamic";
@@ -43,11 +45,16 @@ const FIELD_LABELS: Record<string, string> = {
   product_philosophy: "Product philosophy",
   research_products: "Product lineup found on their site (reference)",
   research_images: "Image candidates found on their site (reference)",
+  research_logos: "Logo candidates found on their site (pick one)",
 };
 
 /** Crawler research drafts that are reference-only: staff read/copy from them,
  * they can never be accepted into a profile field. */
-const REFERENCE_FIELDS = new Set(["research_products", "research_images"]);
+const REFERENCE_FIELDS = new Set(["research_products", "research_images", "research_logos"]);
+
+/** Crawler drafts that get the visual picker (Slice H3): thumbnails with
+ * one-click Save / Set-as-logo instead of a wall of URLs. */
+const IMAGE_FIELDS = new Set(["research_images", "research_logos"]);
 
 async function logoUrlForMediaId(mediaId: string | null): Promise<string | null> {
   if (!mediaId) return null;
@@ -254,7 +261,7 @@ export default async function VendorEditPage({
                     <AiDraftCard
                       key={s.id}
                       fieldLabel={FIELD_LABELS[s.field_key] ?? s.field_key}
-                      value={s.suggested_value}
+                      value={IMAGE_FIELDS.has(s.field_key) ? null : s.suggested_value}
                       model={s.model}
                       source={s.source}
                       confidence={s.confidence}
@@ -267,6 +274,17 @@ export default async function VendorEditPage({
                         // show the crawler's find as copyable reference instead
                         // of an Accept that would fail.
                         s.field_key === "product_philosophy"
+                      }
+                      footer={
+                        IMAGE_FIELDS.has(s.field_key) ? (
+                          <HarvestImagePicker
+                            items={parseImageLines(s.suggested_value)}
+                            entityType="vendor"
+                            entityId={vendor.id}
+                            vendorId={vendor.id}
+                            importAction={importHarvestImageAction}
+                          />
+                        ) : undefined
                       }
                     />
                   ))}
@@ -414,7 +432,7 @@ export default async function VendorEditPage({
                           <AiDraftCard
                             key={s.id}
                             fieldLabel={FIELD_LABELS[s.field_key] ?? s.field_key}
-                            value={s.suggested_value}
+                            value={IMAGE_FIELDS.has(s.field_key) ? null : s.suggested_value}
                             model={s.model}
                             source={s.source}
                             confidence={s.confidence}
@@ -423,6 +441,17 @@ export default async function VendorEditPage({
                             hiddenFields={{ suggestionId: s.id, brandId: b.id, vendorId: vendor.id }}
                             acceptLabel="✓ Accept"
                             referenceOnly={REFERENCE_FIELDS.has(s.field_key)}
+                            footer={
+                              IMAGE_FIELDS.has(s.field_key) ? (
+                                <HarvestImagePicker
+                                  items={parseImageLines(s.suggested_value)}
+                                  entityType="brand"
+                                  entityId={b.id}
+                                  vendorId={vendor.id}
+                                  importAction={importHarvestImageAction}
+                                />
+                              ) : undefined
+                            }
                           />
                         ))}
                       </div>

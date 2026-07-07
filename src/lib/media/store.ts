@@ -66,6 +66,10 @@ export type UploadMediaInput = {
   tags?: string[];
   uploadedBy: string | null;
   status?: "draft" | "published";
+  /** Provenance, e.g. `crawl:<url>` for harvested images (Slice H3). */
+  source?: string;
+  /** e.g. "pending-review" for harvested images awaiting a rights check. */
+  licenseStatus?: string;
 };
 
 export async function uploadMedia(input: UploadMediaInput): Promise<MediaAsset> {
@@ -102,6 +106,8 @@ export async function uploadMedia(input: UploadMediaInput): Promise<MediaAsset> 
       usage_type: input.usageType ?? null,
       tags: input.tags ?? [],
       status: input.status ?? "draft",
+      source: input.source ?? null,
+      license_status: input.licenseStatus ?? null,
       uploaded_by: input.uploadedBy,
     })
     .select("*")

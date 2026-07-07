@@ -13,6 +13,7 @@ import { persistSuggestion, reviewSuggestion, getSuggestion } from "@/lib/ai/sug
 import { acceptWithComplianceGate } from "@/lib/ai/accept-gate";
 import { AiNotConfiguredError } from "@/lib/ai/provider";
 import { researchUrl, researchSocial, isCrawlerConfigured, CrawlerNotConfiguredError } from "@/lib/ai/crawler-client";
+import { importImageFromUrl, HarvestImageError } from "@/lib/media/harvest";
 
 const MAX_LOGO_BYTES = 5 * 1024 * 1024;
 const IMAGE_MIME = new Set(["image/png", "image/jpeg", "image/webp", "image/svg+xml", "image/gif"]);
@@ -709,5 +710,85 @@ export async function crawlBrandSocialAction(formData: FormData): Promise<void> 
   } catch (err) {
     unstable_rethrow(err); // let NEXT_REDIRECT (success path) propagate
     redirect(`/admin/vendors/${vendorId}?error=` + encodeURIComponent(crawlFailureMessage(err)));
+  }
+}
+
+/* ------------------------------------------------------------------
+ * Slice H3 — logo & image pipeline: one-click "save to Media Library"
+ * for crawler-discovered image candidates, and one-click "set as logo".
+ *
+ * The crawler only ever REPORTS image URLs (research_logos /
+ * research_images reference drafts). Downloading is a human decision:
+ * these actions fetch the image server-side (size/MIME capped,
+ * private hosts refused), content-hash dedupe it, and store it as a
+ * media_assets DRAFT with source=crawl:<url> and
+ * license_status='pending-review'. Assigning it as a vendor/brand
+ * logo is a separate explicit click that also publishes the asset —
+ * mirroring the manual logo-upload path.
+ * ------------------------------------------------------------------ */
+
+/** Import one crawler-found image into the Media Library (draft). */
+export async function importHarvestImageAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("vendors.manage");
+  const vendorId = String(formData.get("vendorId") ?? "");
+  const entityType = String(formData.get("entityType") ?? ""); // "vendor" | "brand"
+  const entityId = String(formData.get("entityId") ?? "");
+  const imageUrl = String(formData.get("imageUrl") ?? "").trim();
+  const assign = String(formData.get("assign") ?? "") === "logo";
+  const back = `/admin/vendors/${vendorId}`;
+
+  if (!vendorId || !entityId || !imageUrl || (entityType !== "vendor" && entityType !== "brand")) {
+    redirect(`${back}?error=` + encodeURIComponent("Missing image details."));
+  }
+
+  const entity =
+    entityType === "vendor" ? await getVendorById(entityId) : await getBrandById(entityId);
+  if (!entity) redirect(`${back}?error=` + encodeURIComponent("Vendor/brand not found."));
+  const displayName = entity!.display_name;
+
+  try {
+    const { asset, deduped } = await importImageFromUrl({
+      imageUrl,
+      usageType: entityType === "vendor" ? "vendor-logo" : "brand-logo",
+      title: `${displayName} (harvested)`,
+      altText: `${displayName} logo`,
+      uploadedBy: session.userId,
+      tags: [entityType === "vendor" ? "vendor-logo" : "brand-logo"],
+    });
+
+    let note: string;
+    if (assign) {
+      // Assigning as logo is the human's explicit publish decision.
+      const admin = createSupabaseAdminClient();
+      const table = entityType === "vendor" ? "vendors" : "brands";
+      const { error } = await admin
+        .from(table)
+        .update({ logo_media_id: asset.id })
+        .eq("id", entityId);
+      if (error) redirect(`${back}?error=` + encodeURIComponent(error.message));
+      await admin.from("media_assets").update({ status: "published" }).eq("id", asset.id);
+      await recordUsage(asset.id, entityType, entityId, "logo");
+      note = `Logo saved${deduped ? " (already in the library — reused)" : ""} and assigned to ${displayName}.`;
+    } else {
+      note = deduped
+        ? "That image is already in the Media Library — reused the existing copy."
+        : "Image saved to the Media Library as a draft (license: pending review).";
+    }
+
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: assign ? `${entityType}.harvest_logo_assigned` : `${entityType}.harvest_image_saved`,
+      entityType,
+      entityId,
+      after: { imageUrl, mediaAssetId: asset.id, deduped },
+    });
+
+    revalidatePath(back);
+    redirect(`${back}?saved=1&note=${encodeURIComponent(note)}`);
+  } catch (err) {
+    unstable_rethrow(err); // let NEXT_REDIRECT (success path) propagate
+    const msg = err instanceof HarvestImageError ? err.message : "Couldn't import that image.";
+    redirect(`${back}?error=` + encodeURIComponent(msg));
   }
 }
