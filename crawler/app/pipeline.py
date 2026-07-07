@@ -18,7 +18,8 @@ from dataclasses import dataclass, field
 from .compliance import check_compliance
 from .config import Settings, get_settings
 from .css_extract import extract_css
-from .discovery import discover_nav_links, discover_sitemap_urls, page_interest_score
+from .discovery import discover_nav_links, discover_sitemap_urls
+from .seeding import merge_candidates, seed_site_urls
 from .fetcher import fetch_page
 from .llm_extract import extract_with_llm, supported_by_source
 from .schemas import ProductExtraction, ProductLine, ProductLineupExtraction, VendorBrandExtraction
@@ -184,26 +185,26 @@ async def research_target(
 
     # ---- DEEP RESEARCH: read the site the way a human does -------------------
     # Follow the site's own nav links (Our Story, Rosin, Edibles, ...) plus the
-    # sitemap, most-promising first, up to CRAWL_MAX_PAGES total pages. Every
-    # fetch stays inside robots.txt + per-domain rate limits. Products are a
-    # single-page lookup, so deep crawl applies to vendor/brand only.
+    # sitemap and the H2 URL-seeder inventory, most-promising first, up to the
+    # page budget (CRAWL_MAX_PAGES or the harvest job's max_pages override).
+    # Every fetch stays inside robots.txt + per-domain rate limits. Products
+    # are a single-page lookup, so deep crawl applies to vendor/brand only.
     if not is_product and page_budget > 1:
         nav = discover_nav_links(fetched.html, url, limit=20)
         sitemap = discover_sitemap_urls(url, settings, limit=30)
-        queue: list[str] = []
-        seen = {url.rstrip("/")}
-        for u in nav + sitemap:
-            key = u.rstrip("/")
-            if key in seen:
-                continue
-            seen.add(key)
-            if page_interest_score(u) < 0:
-                continue
-            queue.append(u)
-        queue.sort(key=page_interest_score, reverse=True)
-
-        budget = max(0, settings.crawl_max_pages - 1)
-        for extra_url in queue[:budget]:
+        # Slice H2: cheap URL inventory (sitemap / Common Crawl — no page
+        # fetches) scored by BM25 against the KB target fields. Best-effort;
+        # returns [] on old crawl4ai or any seeder error.
+        try:
+            seeded = await seed_site_urls(url, settings=settings)
+        except Exception:
+            seeded = []
+        # NOTE: budget is derived from page_budget (the per-job override from
+        # harvest jobs), not settings.crawl_max_pages — fixes an H1 latent bug
+        # where the override gated the `if` above but not the loop budget.
+        budget = max(0, page_budget - 1)
+        queue = merge_candidates(url, nav, sitemap, seeded, budget=budget)
+        for extra_url in queue:
             sub = await fetch_page(extra_url, prefer_browser=True, settings=settings)
             if not sub.ok:
                 continue

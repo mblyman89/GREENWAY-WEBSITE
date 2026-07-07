@@ -52,6 +52,31 @@ as **pending drafts** in `ai_suggestions` — drafts-only, always.
 prospects ≈ 8–15, whole-market directory pass ≈ 2–4 with a
 `delay_between_targets` trickle).
 
+## URL seeding (Slice H2)
+
+Deep research used to discover extra pages only from **nav links + the
+sitemap**. With seeding enabled the pipeline also asks crawl4ai's
+`AsyncUrlSeeder` for the site's full URL inventory (sitemap and/or the Common
+Crawl index — **no page fetches**, near-zero cost), scores every candidate
+with BM25 against a query tuned for the seven KB target fields
+(`about story mission company brand products menu strains flower`), merges all
+three sources (same-origin only, deduped, boring URLs dropped), and spends the
+crawl budget on the **best pages first**. Two-phase cost control: cheap
+inventory + scoring first, expensive browser crawl second.
+
+Env knobs (all optional):
+
+| Var | Default | Meaning |
+| --- | --- | --- |
+| `CRAWL_SEED_ENABLED` | `true` | Master switch for the seeder. |
+| `CRAWL_SEED_SOURCE` | `sitemap` | `sitemap`, `cc` (Common Crawl), or `sitemap+cc`. |
+| `CRAWL_SEED_MAX_URLS` | `100` | Max candidate URLs pulled from the seeder. |
+
+Seeding **soft-disables** (contributes zero candidates; nav + sitemap
+discovery still work) when crawl4ai < 0.7 is installed or the seeder errors —
+it can never break a crawl. `pip install -r requirements.txt` now pulls a
+seeder-capable crawl4ai.
+
 ## Quick start
 
 For a temporary desktop / work-VM test, start with **[`docs/LOCAL_TESTING_GUIDE.md`](docs/LOCAL_TESTING_GUIDE.md)**.
