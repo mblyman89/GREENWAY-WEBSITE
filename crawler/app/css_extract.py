@@ -41,11 +41,26 @@ class CssExtraction:
 # is still literally-on-the-page ground truth — no model involved.
 # ---------------------------------------------------------------------------
 
-_H_ABOUT = ("our story", "about us", "about", "who we are", "the story")
+_H_ABOUT = (
+    "our story", "about us", "about", "who we are", "the story",
+    "our history", "our journey", "our family", "our farm", "our team",
+    "meet the", "our roots", "where it", "how it started", "our beginning",
+)
 _H_MISSION = ("mission", "our mission", "values", "our values", "why we")
 _H_PHILOSOPHY = (
     "our grow", "our hash", "our craft", "our process", "philosophy",
     "how we", "our approach", "what we do", "our products", "the process",
+    "our rosin", "our flower", "our edibles", "our extracts", "our methods",
+    "solventless", "living soil", "small batch", "handcrafted", "craft cannabis",
+    "cultivation", "our genetics", "the craft", "quality",
+)
+
+# Path fragments that mark a page as "about-like" — on these pages, substantial
+# body copy is worth capturing even when it isn't under a recognizable heading
+# (many builders render story copy in bare styled divs with decorative headings).
+_ABOUT_PATHS = (
+    "about", "our-story", "story", "who-we-are", "mission", "our-farm",
+    "our-team", "history", "roots",
 )
 
 _HEADINGS = ("h1", "h2", "h3", "h4")
@@ -231,9 +246,27 @@ def extract_css(html: str, base_url: str) -> CssExtraction:
     if sections.get("mission_statement") and not out.mission_statement:
         out.mission_statement = sections["mission_statement"]
         out.evidence["mission_statement"] = sections["mission_statement"]
-    if sections.get("product_philosophy") and not out.product_philosophy:
-        out.product_philosophy = sections["product_philosophy"]
-        out.evidence["product_philosophy"] = sections["product_philosophy"]
+    sec_phil = sections.get("product_philosophy", "")
+    if sec_phil and (not out.product_philosophy or len(sec_phil) > len(out.product_philosophy)):
+        out.product_philosophy = sec_phil
+        out.evidence["product_philosophy"] = sec_phil
+
+    # --- About-page full-body capture (aggressive mode) ------------------------
+    # On a page whose PATH says it's the about/story page, the whole visible
+    # body copy IS the about content — capture every substantial paragraph even
+    # when the headings are decorative and matched nothing above. Still literal
+    # page text; the pipeline's dedupe/thin-replacement logic picks the best.
+    path_low = base_url.lower()
+    if any(f"/{frag}" in path_low for frag in _ABOUT_PATHS):
+        paras = [
+            p.get_text(" ", strip=True)
+            for p in soup.find_all("p")
+            if len(p.get_text(" ", strip=True)) > 80
+        ]
+        body = " ".join(paras)[:2000]
+        if len(body) > max(len(out.about), 160):
+            out.about = body
+            out.evidence["about"] = body
 
     # --- Content images with alt text (skip icons/sprites/data URIs) ----------
     for img in soup.find_all("img"):

@@ -20,6 +20,8 @@ export type Vendor = {
   license_number: string | null;
   mission_statement: string | null;
   about: string | null;
+  /** How they approach/make their products (migration 0099; nullable until applied). */
+  product_philosophy?: string | null;
   website: string | null;
   email: string | null;
   phone: string | null;

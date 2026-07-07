@@ -65,7 +65,9 @@ export type VendorProfileSuggestion = {
 function buildPrompt(brief: VendorBrief): string {
   const isBrand = brief.kind === "brand";
   const noun = isBrand ? "cannabis product brand" : "cannabis vendor/supplier";
-  const pieces = isBrand ? "three short pieces" : "two short pieces";
+  // H9a: vendors gained product_philosophy (migration 0099), so both kinds
+  // draft all three pieces now.
+  const pieces = "three short pieces";
   const lines = [
     `You are writing ${pieces} of website copy about a ${noun} carried by a licensed Washington State cannabis retailer.`,
     `Name: "${brief.displayName}".`,
@@ -79,11 +81,9 @@ function buildPrompt(brief: VendorBrief): string {
     `MISSION: <one inviting sentence, max ~20 words, no period required>`,
     `ABOUT: <one short paragraph, 2-4 sentences, warm and professional>`,
   ];
-  if (isBrand) {
-    lines.push(
-      `PHILOSOPHY: <one short paragraph, 2-3 sentences, about their craft / approach to making product (cultivation, sourcing, process) without medical or effect claims>`,
-    );
-  }
+  lines.push(
+    `PHILOSOPHY: <one short paragraph, 2-3 sentences, about their craft / approach to making product (cultivation, sourcing, process) without medical or effect claims>`,
+  );
   lines.push(
     ``,
     `Rules: confident, welcoming, adult-oriented, premium-but-approachable. No emojis. No quotes. Do NOT invent specific awards, exact founding years, dollar figures, or medical claims. Do not target minors. Keep it honest and general enough that a human can verify and edit it. If you are unsure of facts, stay descriptive rather than specific.`,

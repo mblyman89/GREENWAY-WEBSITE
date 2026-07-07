@@ -48,8 +48,12 @@ function draft(over: Partial<LaneSuggestionInput> & { id: string }): LaneSuggest
 // classifyLane — the routing matrix
 // ---------------------------------------------------------------------------
 describe("classifyLane — writable fields per entity type", () => {
-  it("mirrors the accept actions: vendor about/mission, brand +product_philosophy", () => {
-    expect([...ACCEPTABLE_FIELDS.vendor].sort()).toEqual(["about", "mission_statement"]);
+  it("mirrors the accept actions: about/mission/product_philosophy for vendor AND brand (H9a)", () => {
+    expect([...ACCEPTABLE_FIELDS.vendor].sort()).toEqual([
+      "about",
+      "mission_statement",
+      "product_philosophy",
+    ]);
     expect([...ACCEPTABLE_FIELDS.brand].sort()).toEqual([
       "about",
       "mission_statement",
@@ -70,9 +74,9 @@ describe("classifyLane — reference fields are never writable", () => {
     expect(classifyLane(draft({ id: "r", field_key: key, confidence: 1.0 }))).toBe("reference");
   });
 
-  it("product_philosophy on a VENDOR draft is not writable (fails closed)", () => {
-    // Vendors have no product_philosophy column — brand-only field.
-    expect(classifyLane(draft({ id: "x", field_key: "product_philosophy" }))).toBe("reference");
+  it("product_philosophy on a VENDOR draft is writable since migration 0099 (H9a)", () => {
+    // Vendors gained product_philosophy in 0099 — same accept flow as brands.
+    expect(classifyLane(draft({ id: "x", field_key: "product_philosophy" }))).toBe("fast");
   });
 
   it("unknown field keys fail CLOSED to reference", () => {

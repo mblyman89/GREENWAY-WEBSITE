@@ -144,3 +144,29 @@ def test_format_product_lines():
     ])
     assert "Papaya BX (Mango #33 x Afghani #1) — rosin · papaya, earthy" in txt
     assert txt.count("\n") == 0
+
+
+ABOUT_PAGE_HTML = """<!doctype html><html><head><title>About</title></head><body>
+<h1>Reaching for the stars</h1>
+<p>Constellation began as a family dream in a small Washington town, growing a
+handful of plants with a focus on genetics, patience, and craft above all.</p>
+<h3>Decorative heading that matches nothing</h3>
+<p>Today the family still hand-selects every phenotype, washes small batches of
+ice water hash, and cold cures every jar of rosin before it leaves the building.</p>
+</body></html>
+"""
+
+
+def test_about_path_full_body_capture_h9():
+    # H9: on an about-like PATH, substantial paragraphs are captured as `about`
+    # even when no heading matches the keyword lists.
+    css = extract_css(ABOUT_PAGE_HTML, "https://brand.example/our-story/")
+    assert "family dream" in css.about
+    assert "cold cures" in css.about
+    assert len(css.about) > 160
+
+
+def test_non_about_path_does_not_full_body_capture_h9():
+    # Same HTML on a random path: no heading matches, no path match -> no grab.
+    css = extract_css(ABOUT_PAGE_HTML, "https://brand.example/checkout/")
+    assert "family dream" not in css.about

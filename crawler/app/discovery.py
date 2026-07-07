@@ -22,6 +22,10 @@ from .http_identity import browser_headers, pick_user_agent
 _INTEREST = (
     "about", "our-story", "story", "mission", "who-we-are", "company",
     "brand", "philosophy", "values", "products", "shop", "menu", "strains",
+    # H9: product-line and catalog pages carry the lineup + product images the
+    # owner wants harvested (e.g. /rosin/, /edibles/, /catalog/, /genetics/).
+    "catalog", "genetics", "rosin", "edibles", "flower", "vape", "concentrate",
+    "preroll", "pre-roll", "gummies", "lineup", "farm", "grow", "process",
 )
 
 # Paths that are never worth a research fetch (legal/checkout/account noise).

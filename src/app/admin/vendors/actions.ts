@@ -102,6 +102,18 @@ export async function updateVendor(formData: FormData): Promise<void> {
     }
   }
 
+  // Separate update so a not-yet-applied migration 0099 can't fail the whole
+  // vendor save (same fail-soft pattern as sage_vendor_id above).
+  if (formData.has("product_philosophy")) {
+    const { error: philErr } = await admin
+      .from("vendors")
+      .update({ product_philosophy: orNull(formData.get("product_philosophy")) })
+      .eq("id", id);
+    if (philErr) {
+      console.warn("vendors.product_philosophy not saved (apply migration 0099):", philErr.message);
+    }
+  }
+
   await recordAudit({
     actorId: session.userId,
     actorEmail: session.email,
@@ -254,6 +266,18 @@ export async function researchVendorAction(formData: FormData): Promise<void> {
         source: draft.source,
       });
     }
+    if (draft.philosophy) {
+      await persistSuggestion({
+        entity_type: "vendor",
+        entity_id: id,
+        field_key: "product_philosophy",
+        suggested_value: draft.philosophy,
+        input_summary: `${vendor.display_name} · philosophy${instruction ? " · " + instruction : ""}`,
+        generated_by: session.userId,
+        confidence: draft.confidence,
+        source: draft.source,
+      });
+    }
 
     await recordAudit({
       actorId: session.userId,
@@ -261,7 +285,7 @@ export async function researchVendorAction(formData: FormData): Promise<void> {
       action: "vendor.ai_drafted",
       entityType: "vendor",
       entityId: id,
-      after: { fields: ["mission_statement", "about"], flags: draft.complianceFlags },
+      after: { fields: ["mission_statement", "about", "product_philosophy"], flags: draft.complianceFlags },
     });
   } catch (err) {
     const msg =
@@ -289,8 +313,9 @@ export async function acceptVendorSuggestionAction(formData: FormData): Promise<
     redirect(`/admin/vendors/${vendorId}?error=` + encodeURIComponent("Suggestion not found."));
   }
 
-  // Only allow writing the two known profile fields.
-  const allowed = new Set(["mission_statement", "about"]);
+  // Only allow writing the known profile fields (product_philosophy since
+  // migration 0099 — same field brands have always had).
+  const allowed = new Set(["mission_statement", "about", "product_philosophy"]);
   if (!allowed.has(suggestion!.field_key)) {
     redirect(`/admin/vendors/${vendorId}?error=` + encodeURIComponent("Unsupported field."));
   }

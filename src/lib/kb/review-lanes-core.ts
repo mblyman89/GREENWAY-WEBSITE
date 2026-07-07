@@ -35,9 +35,13 @@ export type LaneSuggestionInput = {
 
 export type ReviewLane = "fast" | "standard" | "reference" | "prospect";
 
-/** Profile fields a human may accept, per entity type (mirrors the accept actions). */
+/** Profile fields a human may accept, per entity type (mirrors the accept actions).
+ * H9a: vendors gained product_philosophy (migration 0099) — the crawler finds
+ * philosophy copy on producer/processor sites and the owner needs Accept, not
+ * just Dismiss. If 0099 hasn't been applied yet the accept fails with the DB's
+ * "column does not exist" message rather than silently writing nowhere. */
 export const ACCEPTABLE_FIELDS: Record<string, ReadonlySet<string>> = {
-  vendor: new Set(["about", "mission_statement"]),
+  vendor: new Set(["about", "mission_statement", "product_philosophy"]),
   brand: new Set(["about", "mission_statement", "product_philosophy"]),
 };
 

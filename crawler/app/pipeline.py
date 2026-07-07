@@ -34,9 +34,11 @@ PRODUCT_FIELDS = ["description"]
 # a longer LLM synthesis (verified against the real page text) may replace it.
 THIN_VALUE_CHARS = 240
 # Max product lines included in the product-lineup research draft.
-MAX_PRODUCT_LINES = 30
+# H9: raised 30 -> 80 (Constellation alone lists 60+ SKUs across lines).
+MAX_PRODUCT_LINES = 80
 # Max image candidates included in the image research draft.
-MAX_IMAGE_LINES = 12
+# H9: raised 12 -> 40 so product shots from catalog pages survive the cut.
+MAX_IMAGE_LINES = 40
 
 
 @dataclass
@@ -269,10 +271,13 @@ async def research_target(
     if not is_product and settings.ai_enabled and corpus.strip():
         lineup = extract_with_llm(
             ProductLineupExtraction, corpus,
-            f"List every product/strain that {display_name or 'this company'}'s "
-            f"pages show, with lineage/genetics and sensory (aroma/flavor) notes "
-            f"when stated. Facts from the text ONLY. No effects, no medical "
-            f"language, no prices.",
+            f"List EVERY product, strain, and product line that "
+            f"{display_name or 'this company'}'s pages show — flower, rosin, "
+            f"hash, vapes, edibles, prerolls, capsules, drinks, all of them — "
+            f"with the product line/category, lineage/genetics, and sensory "
+            f"(aroma/flavor) notes when stated. Be exhaustive: a long complete "
+            f"list is better than a short summary. Facts from the text ONLY. "
+            f"No effects, no medical language, no prices.",
             settings=settings,
         )
         if lineup and lineup.products:
@@ -337,10 +342,18 @@ async def research_target(
     # the ones worth keeping. Reference data for the media workflow — nothing
     # is fetched or attached automatically.
     if not is_product:
-        interesting = [
+        # H9: alt-text images first (self-describing), then alt-less content
+        # images (product shots on catalog pages routinely ship without alt).
+        with_alt = [
             (u, alt) for u, alt in image_pairs
             if alt and len(alt) > 2 and not u.lower().endswith(".svg")
         ]
+        seen_urls = {u for u, _ in with_alt}
+        without_alt = [
+            (u, "") for u, alt in image_pairs
+            if u not in seen_urls and not u.lower().endswith(".svg")
+        ]
+        interesting = with_alt + without_alt
         if not interesting:
             interesting = [(u, "") for u in result.image_candidates[:MAX_IMAGE_LINES]]
         if interesting:
