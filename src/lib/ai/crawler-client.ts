@@ -191,6 +191,134 @@ export async function crawlerHealth(timeoutMs = 5_000): Promise<CrawlerHealth> {
   }
 }
 
+/* ------------------------------------------------------------------
+ * Batch harvest (Slices H1/H4) — multi-target jobs on the worker.
+ * The worker crawls one job at a time, persists state after every
+ * target (crash-safe), and writes the same drafts-only output as
+ * /research. We submit, then poll.
+ * ------------------------------------------------------------------ */
+
+export type HarvestTargetInput = {
+  url: string;
+  entityType: CrawlEntityType;
+  /** Supabase id the drafts belong to (vendor/brand id — or a lead id for
+   * prospect harvests, whose drafts stay "dark" until the lead is promoted). */
+  entityId: string;
+  displayName?: string;
+};
+
+export type HarvestTargetState = {
+  url: string;
+  entity_type: string;
+  entity_id: string;
+  display_name: string;
+  status: "pending" | "running" | "done" | "failed";
+  pages: number;
+  drafts_written: number;
+  drafts_skipped: number;
+  error: string;
+};
+
+export type HarvestJob = {
+  id: string;
+  label: string;
+  status: "queued" | "running" | "completed" | "cancelled" | "failed";
+  write: boolean;
+  max_pages_per_site: number | null;
+  delay_between_targets: number;
+  created_at: number;
+  started_at: number;
+  finished_at: number;
+  cancel_requested: boolean;
+  targets: HarvestTargetState[];
+  counts: { pending: number; running: number; done: number; failed: number };
+  total_targets: number;
+  total_drafts_written: number;
+};
+
+async function harvestFetch(path: string, init?: RequestInit, timeoutMs = 20_000): Promise<Response> {
+  if (!isCrawlerConfigured()) throw new CrawlerNotConfiguredError();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(`${crawlerBaseUrl}${path}`, {
+      ...init,
+      headers: {
+        "Content-Type": "application/json",
+        "X-Crawler-Secret": crawlerSecret,
+        ...(init?.headers ?? {}),
+      },
+      signal: controller.signal,
+      cache: "no-store",
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/** Submit a batch harvest job (returns immediately; poll for progress). */
+export async function startHarvest(input: {
+  targets: HarvestTargetInput[];
+  maxPagesPerSite?: number;
+  delayBetweenTargets?: number;
+  label?: string;
+  write?: boolean;
+}): Promise<HarvestJob> {
+  const res = await harvestFetch("/harvest", {
+    method: "POST",
+    body: JSON.stringify({
+      targets: input.targets.map((t) => ({
+        url: t.url,
+        entity_type: t.entityType,
+        entity_id: t.entityId,
+        display_name: t.displayName ?? "",
+      })),
+      write: input.write ?? true,
+      max_pages_per_site: input.maxPagesPerSite ?? null,
+      delay_between_targets: input.delayBetweenTargets ?? 0,
+      label: input.label ?? "",
+    }),
+  });
+  if (!res.ok) throw new Error(`Crawler responded ${res.status}: ${await safeDetail(res)}`);
+  const data = (await res.json()) as { ok: boolean; job: HarvestJob };
+  return data.job;
+}
+
+/** List recent harvest jobs (newest first). */
+export async function listHarvestJobs(): Promise<HarvestJob[]> {
+  const res = await harvestFetch("/harvest");
+  if (!res.ok) throw new Error(`Crawler responded ${res.status}: ${await safeDetail(res)}`);
+  const data = (await res.json()) as { ok: boolean; jobs: HarvestJob[] };
+  return data.jobs ?? [];
+}
+
+/** Fetch one harvest job's live state. */
+export async function getHarvestJob(jobId: string): Promise<HarvestJob | null> {
+  const res = await harvestFetch(`/harvest/${encodeURIComponent(jobId)}`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`Crawler responded ${res.status}: ${await safeDetail(res)}`);
+  const data = (await res.json()) as { ok: boolean; job: HarvestJob };
+  return data.job;
+}
+
+/** Ask a running job to stop after the current site. */
+export async function cancelHarvestJob(jobId: string): Promise<HarvestJob | null> {
+  const res = await harvestFetch(`/harvest/${encodeURIComponent(jobId)}/cancel`, { method: "POST" });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`Crawler responded ${res.status}: ${await safeDetail(res)}`);
+  const data = (await res.json()) as { ok: boolean; job: HarvestJob };
+  return data.job;
+}
+
+/** Resume an interrupted job (e.g. after a worker restart). */
+export async function resumeHarvestJob(jobId: string): Promise<HarvestJob | null> {
+  const res = await harvestFetch(`/harvest/${encodeURIComponent(jobId)}/resume`, { method: "POST" });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`Crawler responded ${res.status}: ${await safeDetail(res)}`);
+  const data = (await res.json()) as { ok: boolean; job: HarvestJob };
+  return data.job;
+}
+
 async function safeDetail(res: Response): Promise<string> {
   try {
     const data = (await res.json()) as { detail?: string };
