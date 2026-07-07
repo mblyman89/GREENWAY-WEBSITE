@@ -50,6 +50,10 @@ export const REFERENCE_FIELDS: ReadonlySet<string> = new Set([
   "research_products",
   "research_images",
   "research_logos",
+  // H9e: vendor-website discovery leads — candidate first-party sites + contact
+  // info found by keyword search. Read-only; the owner reviews before feeding
+  // any URL into the batch crawler. Never written into a profile column.
+  "research_discovery",
 ]);
 
 /**

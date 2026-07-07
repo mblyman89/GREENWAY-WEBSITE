@@ -100,6 +100,19 @@ describe("classifyLane — prospect drafts are dark inventory", () => {
       classifyLane(draft({ id: "p2", entity_id: "lead:abc", field_key: "research_images" })),
     ).toBe("prospect");
   });
+
+  it("H9e: research_discovery is a reference field, and on a lead target stays prospect", () => {
+    // Discovery leads land as research_discovery drafts under a lead:<slug>
+    // target. They must be reference-only (never accepted into a profile column)
+    // AND — because they target a lead — sit in the prospect lane for review.
+    expect(REFERENCE_FIELDS.has("research_discovery")).toBe(true);
+    expect(classifyLane(draft({ id: "d", field_key: "research_discovery" }))).toBe("reference");
+    expect(
+      classifyLane(
+        draft({ id: "d2", entity_id: "lead:sticky-frog", field_key: "research_discovery" }),
+      ),
+    ).toBe("prospect");
+  });
 });
 
 describe("classifyLane — fast-lane bars (batch-accept safety)", () => {

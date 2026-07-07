@@ -26,9 +26,10 @@ from .harvest import (
     request_cancel,
     schedule_job,
 )
-from .kb_products import build_product_rows, write_product_drafts
+from .discovery_search import discover_vendor_sites, format_discovery_draft
+from .kb_products import build_product_rows, slugify_dashed, write_product_drafts
 from .pipeline import ResearchResult, research_social, research_target, result_to_draft_rows
-from .store import fetch_banned_phrases, write_drafts
+from .store import DraftRow, fetch_banned_phrases, write_drafts
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("greenway.crawler")
@@ -318,3 +319,96 @@ async def research_social_endpoint(
         display_name=req.display_name,
     )
     return _build_response(result, write=req.write)
+
+
+# ---------------------------------------------------------------------------
+# Slice H9e — vendor-website DISCOVERY: keyword search finds a vendor's OWN
+# first-party site + contact info. Returns candidates for the owner to REVIEW
+# before feeding any URL into the batch crawler; never auto-crawls. Third-party
+# marketplaces (Jane/Leafly/Weedmaps/...) are always excluded.
+# ---------------------------------------------------------------------------
+
+class DiscoverRequest(BaseModel):
+    name: str = Field(..., description="Vendor/brand name to search for.")
+    location: str = Field(default="", description="Optional city/state to disambiguate.")
+    # When true, write a research_discovery reference draft under a lead:<slug>
+    # target so the candidates land in the review inbox. Off = preview only.
+    write: bool = Field(default=True)
+
+
+class DiscoverCandidateOut(BaseModel):
+    url: str
+    host: str
+    title: str = ""
+    score: int = 0
+
+
+class DiscoverResponse(BaseModel):
+    ok: bool
+    name: str
+    queries: list[str]
+    candidates: list[DiscoverCandidateOut]
+    emails: list[str] = []
+    phones: list[str] = []
+    lead_id: str = ""
+    drafts_written: int = 0
+    supabase_configured: bool = False
+    error: str = ""
+
+
+@app.post("/discover", response_model=DiscoverResponse)
+async def discover_endpoint(
+    req: DiscoverRequest,
+    x_crawler_secret: str | None = Header(default=None),
+) -> DiscoverResponse:
+    """Keyword-targeted search for a vendor's OWN website + contact info.
+
+    Drafts-only: results are written as a single `research_discovery` reference
+    draft under a `lead:<slug>` target, which the review inbox renders read-only.
+    The owner then decides which URL (if any) to feed into the batch crawler."""
+    _require_secret(x_crawler_secret)
+
+    s = get_settings()
+    if not s.discovery_enabled:
+        raise HTTPException(status_code=503, detail="Discovery disabled (DISCOVERY_ENABLED=false).")
+
+    log.info("discover %r (%s)", req.name, req.location or "-")
+    result = await discover_vendor_sites(
+        req.name, location=req.location, settings=s,
+        limit=s.discovery_max_results,
+    )
+
+    lead_id = "lead:" + slugify_dashed(req.name) if req.name.strip() else ""
+    written = 0
+    configured = False
+    if req.write and result.candidates and lead_id:
+        body = format_discovery_draft(req.name, result.candidates, result.contact)
+        top = result.candidates[0].url
+        row = DraftRow(
+            entity_type="vendor",
+            entity_id=lead_id,
+            field_key="research_discovery",
+            suggested_value=body,
+            input_summary=f"discovery {req.name!r} · {len(result.candidates)} candidate(s)",
+            confidence=float(result.candidates[0].score) / 10.0 if result.candidates else 0.0,
+            source=f"discover:{top}",
+        )
+        summary = write_drafts([row])
+        written = summary.get("written", 0)
+        configured = summary.get("configured", False)
+
+    return DiscoverResponse(
+        ok=result.fetched_ok,
+        name=result.name,
+        queries=result.queries,
+        candidates=[
+            DiscoverCandidateOut(url=c.url, host=c.host, title=c.title, score=c.score)
+            for c in result.candidates
+        ],
+        emails=result.contact.emails,
+        phones=result.contact.phones,
+        lead_id=lead_id,
+        drafts_written=written,
+        supabase_configured=configured,
+        error=result.error,
+    )

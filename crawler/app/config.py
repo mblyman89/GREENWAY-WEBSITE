@@ -118,6 +118,15 @@ class Settings(BaseSettings):
     follow_social_links: bool = Field(default=True, alias="FOLLOW_SOCIAL_LINKS")
     social_links_max_follow: int = Field(default=4, ge=0, le=15, alias="SOCIAL_LINKS_MAX_FOLLOW")
 
+    # --- Slice H9e: vendor-website discovery ----------------------------------
+    # Keyword-targeted search (keyless DuckDuckGo HTML) that FINDS a vendor's own
+    # first-party website + contact info. Returns candidates for the owner to
+    # REVIEW before feeding any URL into the batch crawler — never auto-crawls.
+    # Third-party marketplaces (Jane/Leafly/Weedmaps/...) are always excluded.
+    # Opt-out with DISCOVERY_ENABLED=false; cap results with DISCOVERY_MAX_RESULTS.
+    discovery_enabled: bool = Field(default=True, alias="DISCOVERY_ENABLED")
+    discovery_max_results: int = Field(default=10, ge=1, le=50, alias="DISCOVERY_MAX_RESULTS")
+
     # --- Service --------------------------------------------------------------
     crawler_port: int = Field(default=8200, alias="CRAWLER_PORT")
     crawl_cache_dir: str = Field(default=".cache", alias="CRAWL_CACHE_DIR")
