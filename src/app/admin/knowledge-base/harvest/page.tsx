@@ -24,7 +24,14 @@ import { listVendorLeads } from "@/lib/discovery/store";
 import { computeHarvestCoverage, COVERAGE_COLUMNS } from "@/lib/kb/harvest-coverage";
 import { isCrawlerConfigured, crawlerHealth } from "@/lib/ai/crawler-client";
 import { HarvestJobsLive } from "@/components/admin/kb/HarvestJobsLive";
-import { startHarvestAction, cancelHarvestAction, resumeHarvestAction } from "./actions";
+import {
+  startHarvestAction,
+  cancelHarvestAction,
+  resumeHarvestAction,
+  startTrickleAction,
+  startRefreshAction,
+} from "./actions";
+import { loadHarvestFreshness, STALE_AFTER_DAYS } from "@/lib/kb/harvest-freshness";
 
 export const dynamic = "force-dynamic";
 
@@ -44,12 +51,15 @@ export default async function HarvestConsolePage({
   const { msg, error } = await searchParams;
 
   const crawlerOn = isCrawlerConfigured();
-  const [health, vendors, leads, coverage] = await Promise.all([
+  const [health, vendors, leads, coverage, freshness] = await Promise.all([
     crawlerOn ? crawlerHealth() : Promise.resolve({ ok: false, detail: "not configured" }),
     listVendors(),
     listVendorLeads({ limit: 500 }),
     computeHarvestCoverage(),
+    loadHarvestFreshness(),
   ]);
+  const vendorFresh = freshness.vendorSummary;
+  const leadFresh = freshness.leadSummary;
 
   const vendorTargets = vendors.filter((v) => v.website && /^https?:\/\//i.test(v.website));
   const leadTargets = leads.filter(
@@ -114,6 +124,63 @@ export default async function HarvestConsolePage({
         <section className="space-y-3">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-white/40">Jobs</h2>
           <HarvestJobsLive cancelAction={cancelHarvestAction} resumeAction={resumeHarvestAction} />
+        </section>
+
+        {/* Cadence — Tier-1 refresh + Tier-3 market trickle (Slice H6) */}
+        <section className="space-y-3">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-white/40">
+            Cadence — keep the KB fresh without thinking about it
+          </h2>
+          <div className="grid gap-4 lg:grid-cols-2">
+            {/* Tier-1 quarterly refresh */}
+            <div className="rounded-xl border border-white/10 bg-[#0a0a0a] p-5">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <h3 className="text-sm font-bold text-white">🔄 Vendor refresh (Tier 1, deep)</h3>
+                <span className="text-[10px] text-white/40">every {STALE_AFTER_DAYS} days</span>
+              </div>
+              <p className="mb-3 text-xs text-white/60">
+                {vendorFresh.due === 0
+                  ? `All ${vendorFresh.fresh} harvestable vendor sites are fresh.`
+                  : `${vendorFresh.due} vendor site${vendorFresh.due === 1 ? "" : "s"} due — ${vendorFresh.never} never harvested, ${vendorFresh.stale} older than ${STALE_AFTER_DAYS} days (${vendorFresh.fresh} fresh).`}
+              </p>
+              <form action={startRefreshAction}>
+                <button
+                  type="submit"
+                  disabled={!crawlerOn || vendorFresh.due === 0}
+                  className="rounded-full bg-[#7ed957] px-5 py-2 text-xs font-bold text-black transition hover:brightness-110 disabled:opacity-40"
+                >
+                  ⛏ Refresh next {Math.min(vendorFresh.due, 25) || 25} due vendors
+                </button>
+              </form>
+            </div>
+
+            {/* Tier-3 market trickle */}
+            <div className="rounded-xl border border-white/10 bg-[#0a0a0a] p-5">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <h3 className="text-sm font-bold text-white">🌊 Market trickle (Tier 3, shallow)</h3>
+                <span className="text-[10px] text-white/40">3 pages/site · 60s between sites</span>
+              </div>
+              <p className="mb-3 text-xs text-white/60">
+                {leadFresh.due === 0
+                  ? `All ${leadFresh.fresh} lead sites were touched within ${STALE_AFTER_DAYS} days.`
+                  : `${leadFresh.due} lead site${leadFresh.due === 1 ? "" : "s"} due — ${leadFresh.never} never harvested, ${leadFresh.stale} stale (${leadFresh.fresh} fresh). Repeated clicks walk the whole market; drafts stay dark until a lead is promoted.`}
+              </p>
+              <form action={startTrickleAction}>
+                <button
+                  type="submit"
+                  disabled={!crawlerOn || leadFresh.due === 0}
+                  className="rounded-full bg-[#5ec1ff] px-5 py-2 text-xs font-bold text-black transition hover:brightness-110 disabled:opacity-40"
+                >
+                  🌊 Trickle next {Math.min(leadFresh.due, 25) || 25} due leads
+                </button>
+              </form>
+            </div>
+          </div>
+          <p className="text-[10px] text-white/35">
+            Pursuing a lead on the Discovery page (status → contacted/qualified) auto-queues a deeper
+            Tier-2 harvest of their site; onboarding a matched lead moves its dark drafts into the
+            vendor&apos;s review lanes.
+          </p>
         </section>
 
         {/* Start a harvest */}

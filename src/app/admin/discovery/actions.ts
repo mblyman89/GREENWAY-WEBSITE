@@ -31,6 +31,7 @@ import { enrichKbFromCcrsDataset } from "@/lib/kb/enrich-from-discovery";
 import { listVendorLeads, listProductLeads } from "@/lib/discovery/store";
 import { listDatasets } from "@/lib/discovery/ingest";
 import { computeCompetitorProfiles, rollUpAreas } from "@/lib/discovery/competitors";
+import { bumpLeadHarvestDepth, isPursuingStatus, unlockLeadDrafts } from "@/lib/kb/lead-promotion";
 import {
   generateLeadsAdvice,
   isAiConfigured as isLeadsAiConfigured,
@@ -129,20 +130,60 @@ export async function updateVendorLeadStatusAction(formData: FormData): Promise<
   if (!id) redirect(BASE);
   const status = str(formData, "status") as DiscoveryVendorStatus | null;
   const prio = str(formData, "priority") as DiscoveryPriority | null;
+  // Read the lead BEFORE the update so the H6 hooks see the transition
+  // (previous status + website + matched vendor), not just the new state.
+  const before = await getVendorLead(id!);
   const patch: Parameters<typeof updateVendorLead>[1] = { updated_by: session.userId };
   if (status) patch.status = status;
   if (prio) patch.priority = prio;
   if (formData.has("note")) patch.note = str(formData, "note");
-  await updateVendorLead(id, patch);
+  await updateVendorLead(id!, patch);
+
+  // Slice H6 — lead-promotion hooks (both best-effort; never block the update):
+  //  • entering a pursuing status (contacted/qualified) auto-bumps the lead's
+  //    site from Tier-3 shallow to Tier-2 depth so the dossier is ready before
+  //    the rep meeting;
+  //  • onboarding with a matched vendor re-keys the lead's dark prospect
+  //    drafts to the real vendor id, unlocking them into the review lanes
+  //    (still pending — every accept passes the S-4 compliance gate).
+  let depthBumpJobId: string | null = null;
+  let draftsUnlocked = 0;
+  if (before && status) {
+    if (isPursuingStatus(status) && !isPursuingStatus(before.status)) {
+      depthBumpJobId = await bumpLeadHarvestDepth(before);
+    }
+    if (status === "onboarded" && before.matched_vendor_id) {
+      draftsUnlocked = await unlockLeadDrafts(before.id, before.matched_vendor_id);
+    }
+  }
+
   await recordAudit({
     actorId: session.userId,
     actorEmail: session.email,
     action: "discovery.vendor_lead.update",
     entityType: "discovery_vendor_leads",
     entityId: id,
-    after: patch as Record<string, unknown>,
+    after: {
+      ...(patch as Record<string, unknown>),
+      ...(depthBumpJobId ? { harvest_depth_bump_job: depthBumpJobId } : {}),
+      ...(draftsUnlocked > 0 ? { harvest_drafts_unlocked: draftsUnlocked } : {}),
+    },
   });
   revalidatePath(BASE);
+  if (draftsUnlocked > 0) {
+    redirect(
+      `${BASE}?msg=` +
+        encodeURIComponent(
+          `Lead onboarded — ${draftsUnlocked} harvested draft${draftsUnlocked === 1 ? "" : "s"} moved to the vendor's review lanes.`,
+        ),
+    );
+  }
+  if (depthBumpJobId) {
+    redirect(
+      `${BASE}?msg=` +
+        encodeURIComponent("Lead updated — a deeper Tier-2 harvest of their site was queued."),
+    );
+  }
   redirect(BASE);
 }
 
