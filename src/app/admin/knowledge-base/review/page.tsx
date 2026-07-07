@@ -27,7 +27,12 @@ import {
 import { scoreProduct, labelForField } from "@/lib/ai/kb/quality";
 import { QualityBadge } from "../QualityBadge";
 import { KbFlash } from "../KbFlash";
-import { reviewKbProductAction, reviewKbBrandAction, bulkReviewCcrsDraftsAction } from "../actions";
+import {
+  reviewKbProductAction,
+  reviewKbBrandAction,
+  bulkReviewCcrsDraftsAction,
+  attachKbProductImageAction,
+} from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -263,6 +268,28 @@ export default async function KbReviewPage({
                       <span><b>Images:</b> {row.image_media_ids.length}</span>
                     ) : null}
                   </div>
+
+                  {/* H9c — attach a product image harvested from the vendor's own page.
+                      Paste a first-party image URL (the crawler surfaces these in
+                      the Image candidates reference draft). It's downloaded as a
+                      draft media asset and added to this product's gallery. */}
+                  <form
+                    action={attachKbProductImageAction}
+                    className="mt-3 flex flex-wrap items-center gap-2"
+                  >
+                    <input type="hidden" name="productId" value={row.id} />
+                    <input type="hidden" name="displayName" value={row.display_name} />
+                    <input
+                      type="url"
+                      name="imageUrl"
+                      required
+                      placeholder="Paste a product image URL from the vendor's page…"
+                      className="min-w-[220px] flex-1 rounded-md border border-[var(--admin-border)] bg-[var(--admin-bg)] px-2.5 py-1.5 text-[0.8rem] text-[var(--admin-text)] placeholder:text-[var(--admin-text-faint)]"
+                    />
+                    <Button variant="neutral" size="sm" type="submit">
+                      {row.image_media_ids.length ? "Add image" : "Attach cover image"}
+                    </Button>
+                  </form>
 
                   {/* What's still thin — guides the survivorship decision */}
                   {score.missing.length > 0 ? (

@@ -24,6 +24,7 @@ import {
 } from "./seed";
 import { STRAINS_RICH } from "./strains-data";
 import { PRODUCT_CATEGORIES } from "./product-categories-data";
+import { attachImageToGallery } from "./product-images-core";
 
 export type KbCounts = {
   strains: number;
@@ -1696,6 +1697,50 @@ export async function listKbProducts(
   } catch {
     return [];
   }
+}
+
+/**
+ * Slice H9c — attach an imported media asset to a kb_products row's gallery.
+ * Reads the current gallery, applies the pure merge (append + set primary when
+ * empty; never reorder/remove), and writes back. Returns a small summary for
+ * the UI. Never publishes the product — this only enriches a draft/record's
+ * images; the human still publishes separately.
+ */
+export async function attachKbProductImage(
+  productId: string,
+  mediaId: string,
+  actorId: string | null,
+): Promise<{ ok: boolean; becamePrimary: boolean; alreadyPresent: boolean; error?: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, becamePrimary: false, alreadyPresent: false, error: "Supabase not configured." };
+  const admin = createSupabaseAdminClient();
+  const { data: row, error: readErr } = await admin
+    .from("kb_products")
+    .select("id, image_media_ids, primary_media_id")
+    .eq("id", productId)
+    .maybeSingle();
+  if (readErr) return { ok: false, becamePrimary: false, alreadyPresent: false, error: readErr.message };
+  if (!row) return { ok: false, becamePrimary: false, alreadyPresent: false, error: "Product not found." };
+
+  const merge = attachImageToGallery(
+    {
+      image_media_ids: (row as { image_media_ids?: string[] }).image_media_ids ?? [],
+      primary_media_id: (row as { primary_media_id?: string | null }).primary_media_id ?? null,
+    },
+    mediaId,
+  );
+  if (merge.alreadyPresent) {
+    return { ok: true, becamePrimary: false, alreadyPresent: true };
+  }
+  const { error: writeErr } = await admin
+    .from("kb_products")
+    .update({
+      image_media_ids: merge.image_media_ids,
+      primary_media_id: merge.primary_media_id,
+      updated_by: actorId,
+    })
+    .eq("id", productId);
+  if (writeErr) return { ok: false, becamePrimary: false, alreadyPresent: false, error: writeErr.message };
+  return { ok: true, becamePrimary: merge.becamePrimary, alreadyPresent: false };
 }
 
 /** Count draft kb_products (for the review-queue badge). */
