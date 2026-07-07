@@ -101,6 +101,7 @@ export default async function DiscoveryPage({ searchParams }: { searchParams: Pr
   const added = one(sp, "added");
   const errorMsg = one(sp, "error");
   const reconciled = one(sp, "reconciled");
+  const infoMsg = one(sp, "msg");
 
   return (
     <div>
@@ -146,6 +147,11 @@ export default async function DiscoveryPage({ searchParams }: { searchParams: Pr
         {reconciled != null ? (
           <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-text)]">
             Reconciliation complete — {reconciled} lead{reconciled === "1" ? "" : "s"} updated against your vendor list.
+          </div>
+        ) : null}
+        {infoMsg ? (
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-text)]">
+            {infoMsg}
           </div>
         ) : null}
         {errorMsg ? (
