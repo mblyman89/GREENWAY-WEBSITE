@@ -109,6 +109,15 @@ class Settings(BaseSettings):
     # by setting HARVEST_PRODUCTS_ENABLED=false. Requires Supabase configured.
     harvest_products_enabled: bool = Field(default=True, alias="HARVEST_PRODUCTS_ENABLED")
 
+    # --- Slice H9d: social-link following -------------------------------------
+    # After scraping a vendor's own site, detect the social-profile links they
+    # advertise (the "follow us" icons) and politely fetch each profile page
+    # (logged-out, through the SAME robots/SSRF/allow-list/rate-limit path as any
+    # page) to harvest a public about/bio candidate. No paid API, no login.
+    # Opt-out with FOLLOW_SOCIAL_LINKS=false. Bounded by SOCIAL_LINKS_MAX_FOLLOW.
+    follow_social_links: bool = Field(default=True, alias="FOLLOW_SOCIAL_LINKS")
+    social_links_max_follow: int = Field(default=4, ge=0, le=15, alias="SOCIAL_LINKS_MAX_FOLLOW")
+
     # --- Service --------------------------------------------------------------
     crawler_port: int = Field(default=8200, alias="CRAWLER_PORT")
     crawl_cache_dir: str = Field(default=".cache", alias="CRAWL_CACHE_DIR")
