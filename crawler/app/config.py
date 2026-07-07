@@ -102,6 +102,13 @@ class Settings(BaseSettings):
     meta_ig_business_id: str = Field(default="", alias="META_IG_BUSINESS_ID")
     meta_graph_version: str = Field(default="v21.0", alias="META_GRAPH_VERSION")
 
+    # --- Slice H9b: structured product harvesting -----------------------------
+    # When true, a vendor/brand crawl ALSO writes the verified product lineup as
+    # structured kb_products DRAFT rows (drafts-only, ON CONFLICT DO NOTHING), in
+    # addition to the human-readable research_products reference draft. Opt-out
+    # by setting HARVEST_PRODUCTS_ENABLED=false. Requires Supabase configured.
+    harvest_products_enabled: bool = Field(default=True, alias="HARVEST_PRODUCTS_ENABLED")
+
     # --- Service --------------------------------------------------------------
     crawler_port: int = Field(default=8200, alias="CRAWLER_PORT")
     crawl_cache_dir: str = Field(default=".cache", alias="CRAWL_CACHE_DIR")

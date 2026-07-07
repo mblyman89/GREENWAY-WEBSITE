@@ -59,9 +59,14 @@ class ResearchResult:
     entity_id: str
     fetched_ok: bool
     from_cache: bool
+    display_name: str = ""  # H9b: seeds kb_products.brand_slug for harvested products
     fields: list[FieldOutcome] = field(default_factory=list)
     image_candidates: list[str] = field(default_factory=list)
     pages: list[str] = field(default_factory=list)  # every page actually read
+    # H9b: the VERIFIED product lineup (names confirmed to appear in page text).
+    # Carried so the API can write structured kb_products DRAFT rows in addition
+    # to the human-readable research_products reference draft.
+    products: list[ProductLine] = field(default_factory=list)
     error: str = ""
 
     @property
@@ -224,6 +229,7 @@ async def research_target(
     result = ResearchResult(
         url=url, entity_type=entity_type, entity_id=entity_id,
         fetched_ok=True, from_cache=fetched.from_cache,
+        display_name=display_name,
         image_candidates=list(dict.fromkeys(image_candidates))[:30],
         pages=pages_read,
     )
@@ -283,6 +289,9 @@ async def research_target(
         if lineup and lineup.products:
             verified = _verify_product_lines(lineup.products, corpus)
             lineup_text = _format_product_lines(verified)
+            # H9b: carry the verified lineup so the API can also write structured
+            # kb_products DRAFT rows (not just the research_products text blob).
+            result.products = verified[:MAX_PRODUCT_LINES]
 
     # ---- Evaluate every candidate (verify + compliance) ---------------------
     # If the LLM produced a richer verified value for a field, prefer it and

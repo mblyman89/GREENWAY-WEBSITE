@@ -51,6 +51,8 @@ export type CrawlResearchResult = {
   drafts_written: number;
   drafts_skipped: number;
   supabase_configured: boolean;
+  /** H9b: structured kb_products DRAFT rows staged from the verified lineup. */
+  products_written?: number;
   error: string;
 };
 
@@ -229,6 +231,8 @@ export type HarvestTargetState = {
   pages: number;
   drafts_written: number;
   drafts_skipped: number;
+  /** H9b: structured kb_products DRAFT rows staged from the verified lineup. */
+  products_written?: number;
   error: string;
 };
 
@@ -247,6 +251,8 @@ export type HarvestJob = {
   counts: { pending: number; running: number; done: number; failed: number };
   total_targets: number;
   total_drafts_written: number;
+  /** H9b: sum of structured kb_products DRAFT rows staged across targets. */
+  total_products_written?: number;
 };
 
 async function harvestFetch(path: string, init?: RequestInit, timeoutMs = 20_000): Promise<Response> {

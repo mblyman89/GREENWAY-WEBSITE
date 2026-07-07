@@ -34,8 +34,9 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from .config import Settings, get_settings
+from .kb_products import build_product_rows, write_product_drafts
 from .pipeline import research_target, result_to_draft_rows
-from .store import write_drafts
+from .store import fetch_banned_phrases, write_drafts
 
 log = logging.getLogger("greenway.crawler.harvest")
 
@@ -64,6 +65,7 @@ class TargetState:
     pages: int = 0
     drafts_written: int = 0
     drafts_skipped: int = 0
+    products_written: int = 0  # H9b: structured kb_products draft rows staged
     error: str = ""
 
 
@@ -95,6 +97,7 @@ class JobState:
         d["counts"] = self.counts()
         d["total_targets"] = len(self.targets)
         d["total_drafts_written"] = sum(t.drafts_written for t in self.targets)
+        d["total_products_written"] = sum(t.products_written for t in self.targets)
         return d
 
 
@@ -135,6 +138,7 @@ def load_job(job_id: str, settings: Settings | None = None) -> JobState | None:
     data.pop("counts", None)
     data.pop("total_targets", None)
     data.pop("total_drafts_written", None)
+    data.pop("total_products_written", None)
     return JobState(targets=targets, **data)
 
 
@@ -327,6 +331,19 @@ async def run_job(job_id: str, *, settings: Settings | None = None) -> JobState 
                         summary = write_drafts(result_to_draft_rows(result), settings=settings)
                         t.drafts_written = summary.get("written", 0)
                         t.drafts_skipped = summary.get("skipped", 0)
+                        # H9b: also stage structured kb_products DRAFT rows from
+                        # the verified lineup (opt-out via HARVEST_PRODUCTS_ENABLED).
+                        if settings.harvest_products_enabled and result.products:
+                            built = build_product_rows(
+                                result.products,
+                                entity_type=result.entity_type,
+                                entity_id=result.entity_id,
+                                display_name=result.display_name,
+                                source_url=result.url,
+                                banned=fetch_banned_phrases(settings),
+                            )
+                            prod = write_product_drafts(built.rows, settings=settings)
+                            t.products_written = prod.get("written", 0)
                     t.status = "done"
             except Exception as e:  # noqa: BLE001 — one bad site never kills the batch
                 t.status = "failed"
