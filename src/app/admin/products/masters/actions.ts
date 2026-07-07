@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -36,6 +36,7 @@ export async function generateSuggestions(): Promise<void> {
     revalidatePath(BASE);
     redirect(`${BASE}?tab=suggestions&generated=${result.created}&clusters=${result.clustersConsidered}`);
   } catch (err) {
+    unstable_rethrow(err); // let NEXT_REDIRECT (success path) propagate
     if (err instanceof AiNotConfiguredError) {
       // Deterministic suggestions still ran; AI just didn't. Re-run without AI is
       // already covered inside the service (it handles unconfigured AI), so this

@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -508,6 +508,20 @@ export async function rejectBrandSuggestionAction(formData: FormData): Promise<v
  * Drafts-only: nothing is written to the vendor/brand record here.
  * ------------------------------------------------------------------ */
 
+/**
+ * Map a crawl failure to a user-facing message. IMPORTANT: callers must call
+ * `unstable_rethrow(err)` BEFORE this, so Next.js control-flow errors (the
+ * success-path `redirect()` throws NEXT_REDIRECT internally) propagate instead
+ * of being swallowed and shown as "Crawler error: NEXT_REDIRECT".
+ */
+function crawlFailureMessage(err: unknown): string {
+  if (err instanceof CrawlerNotConfiguredError) return "Crawler isn't set up yet.";
+  if (err instanceof Error && err.name === "AbortError") {
+    return "Crawler timed out — the page may be slow or blocking robots. Try again, or try a simpler page (e.g. the About page).";
+  }
+  return `Crawler error: ${err instanceof Error ? err.message : "please try again"}`;
+}
+
 /** Crawl a URL for a VENDOR → pending drafts in the review queue. */
 export async function crawlVendorAction(formData: FormData): Promise<void> {
   const session = await requirePermission("vendors.manage");
@@ -549,11 +563,8 @@ export async function crawlVendorAction(formData: FormData): Promise<void> {
     revalidatePath(`/admin/vendors/${id}`);
     redirect(`/admin/vendors/${id}?saved=1&note=${encodeURIComponent(msg)}#ai-drafts`);
   } catch (err) {
-    const msg =
-      err instanceof CrawlerNotConfiguredError
-        ? "Crawler isn't set up yet."
-        : `Crawler error: ${err instanceof Error ? err.message : "please try again"}`;
-    redirect(`/admin/vendors/${id}?error=` + encodeURIComponent(msg));
+    unstable_rethrow(err); // let NEXT_REDIRECT (success path) propagate
+    redirect(`/admin/vendors/${id}?error=` + encodeURIComponent(crawlFailureMessage(err)));
   }
 }
 
@@ -601,11 +612,8 @@ export async function crawlBrandAction(formData: FormData): Promise<void> {
     revalidatePath(`/admin/vendors/${vendorId}`);
     redirect(`/admin/vendors/${vendorId}?saved=1&note=${encodeURIComponent(msg)}#brand-${brandId}`);
   } catch (err) {
-    const msg =
-      err instanceof CrawlerNotConfiguredError
-        ? "Crawler isn't set up yet."
-        : `Crawler error: ${err instanceof Error ? err.message : "please try again"}`;
-    redirect(`/admin/vendors/${vendorId}?error=` + encodeURIComponent(msg));
+    unstable_rethrow(err); // let NEXT_REDIRECT (success path) propagate
+    redirect(`/admin/vendors/${vendorId}?error=` + encodeURIComponent(crawlFailureMessage(err)));
   }
 }
 
@@ -650,11 +658,8 @@ export async function crawlVendorSocialAction(formData: FormData): Promise<void>
     revalidatePath(`/admin/vendors/${id}`);
     redirect(`/admin/vendors/${id}?saved=1&note=${encodeURIComponent(msg)}#ai-drafts`);
   } catch (err) {
-    const msg =
-      err instanceof CrawlerNotConfiguredError
-        ? "Crawler isn't set up yet."
-        : `Crawler error: ${err instanceof Error ? err.message : "please try again"}`;
-    redirect(`/admin/vendors/${id}?error=` + encodeURIComponent(msg));
+    unstable_rethrow(err); // let NEXT_REDIRECT (success path) propagate
+    redirect(`/admin/vendors/${id}?error=` + encodeURIComponent(crawlFailureMessage(err)));
   }
 }
 
@@ -702,10 +707,7 @@ export async function crawlBrandSocialAction(formData: FormData): Promise<void> 
     revalidatePath(`/admin/vendors/${vendorId}`);
     redirect(`/admin/vendors/${vendorId}?saved=1&note=${encodeURIComponent(msg)}#brand-${brandId}`);
   } catch (err) {
-    const msg =
-      err instanceof CrawlerNotConfiguredError
-        ? "Crawler isn't set up yet."
-        : `Crawler error: ${err instanceof Error ? err.message : "please try again"}`;
-    redirect(`/admin/vendors/${vendorId}?error=` + encodeURIComponent(msg));
+    unstable_rethrow(err); // let NEXT_REDIRECT (success path) propagate
+    redirect(`/admin/vendors/${vendorId}?error=` + encodeURIComponent(crawlFailureMessage(err)));
   }
 }
