@@ -78,6 +78,20 @@ class Settings(BaseSettings):
     # per-domain delay) applies to every one of them.
     crawl_max_pages: int = Field(default=5, alias="CRAWL_MAX_PAGES")
 
+    # --- URL seeding (Slice H2) ------------------------------------------------
+    # Two-phase cost control: BEFORE spending expensive browser fetches, ask
+    # crawl4ai's AsyncUrlSeeder for the site's full URL inventory (sitemap
+    # and/or Common Crawl index — no page fetches) and score candidates with
+    # BM25 against the seven KB target fields. The crawl budget then goes to
+    # the BEST pages instead of the first ones we stumble on. Soft-disables
+    # when crawl4ai < 0.7 is installed (AsyncUrlSeeder missing) or on any
+    # seeder error — nav + sitemap discovery still work.
+    crawl_seed_enabled: bool = Field(default=True, alias="CRAWL_SEED_ENABLED")
+    # "sitemap" (polite, reads the site's own map), "cc" (Common Crawl index —
+    # zero traffic to the site), or "sitemap+cc" (both).
+    crawl_seed_source: str = Field(default="sitemap", alias="CRAWL_SEED_SOURCE")
+    crawl_seed_max_urls: int = Field(default=100, alias="CRAWL_SEED_MAX_URLS")
+
     # --- Social (Meta Graph API — sanctioned, DF-9) ---------------------------
     # A long-lived access token for a Greenway-owned Facebook Page linked to a
     # Greenway Instagram BUSINESS account. Used ONLY for the sanctioned
