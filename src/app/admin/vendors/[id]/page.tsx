@@ -152,7 +152,7 @@ export default async function VendorEditPage({
                   )}
                 </h2>
                 <p className="mt-1 text-xs text-white/50">
-                  Drafts a mission statement + about paragraph as a <strong>suggestion</strong>. Nothing is saved until
+                  Drafts a mission statement, about, and product-philosophy paragraph as <strong>suggestions</strong>. Nothing is saved until
                   you click <em>Accept</em>. The AI writes a tasteful starting point from the name — always read and edit
                   it before publishing.
                 </p>
@@ -268,13 +268,7 @@ export default async function VendorEditPage({
                       acceptAction={acceptVendorSuggestionAction}
                       rejectAction={rejectVendorSuggestionAction}
                       hiddenFields={{ suggestionId: s.id, vendorId: vendor.id }}
-                      referenceOnly={
-                        REFERENCE_FIELDS.has(s.field_key) ||
-                        // Vendors have no product_philosophy column (brands do);
-                        // show the crawler's find as copyable reference instead
-                        // of an Accept that would fail.
-                        s.field_key === "product_philosophy"
-                      }
+                      referenceOnly={REFERENCE_FIELDS.has(s.field_key)}
                       footer={
                         IMAGE_FIELDS.has(s.field_key) ? (
                           <HarvestImagePicker
@@ -327,6 +321,7 @@ export default async function VendorEditPage({
 
               <label className="flex flex-col gap-1"><span className={label}>Mission statement</span><textarea name="mission_statement" defaultValue={vendor.mission_statement ?? ""} rows={2} className={field} /></label>
               <label className="flex flex-col gap-1"><span className={label}>About</span><textarea name="about" defaultValue={vendor.about ?? ""} rows={4} className={field} /></label>
+              <label className="flex flex-col gap-1"><span className={label}>Product philosophy</span><textarea name="product_philosophy" defaultValue={vendor.product_philosophy ?? ""} rows={2} className={field} /></label>
               {/* Shipping address */}
               <div className="rounded-lg border border-white/10 p-4">
                 <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-white/50">Shipping address</h3>
