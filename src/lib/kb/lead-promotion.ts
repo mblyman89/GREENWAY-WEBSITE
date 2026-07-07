@@ -21,10 +21,8 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { isCrawlerConfigured, startHarvest } from "@/lib/ai/crawler-client";
+import { loadHarvestSettings } from "@/lib/kb/harvest-settings";
 import type { DiscoveryVendorStatus } from "@/lib/discovery/types";
-
-/** Tier-2 depth (strategy §3: prospects, ~8–15 pages — H4 preset uses 10). */
-const TIER2_MAX_PAGES = 10;
 
 /** Statuses that mean "we started pursuing this vendor". */
 const PURSUING_STATUSES: ReadonlySet<DiscoveryVendorStatus> = new Set(["contacted", "qualified"]);
@@ -45,6 +43,8 @@ export async function bumpLeadHarvestDepth(lead: {
   if (!isCrawlerConfigured()) return null;
   if (!lead.website || !/^https?:\/\//i.test(lead.website)) return null;
   try {
+    // Tier-2 depth is tunable (Slice H7); fails open to the vetted default.
+    const settings = await loadHarvestSettings();
     const job = await startHarvest({
       targets: [
         {
@@ -54,7 +54,7 @@ export async function bumpLeadHarvestDepth(lead: {
           displayName: lead.display_name,
         },
       ],
-      maxPagesPerSite: TIER2_MAX_PAGES,
+      maxPagesPerSite: settings.tier2MaxPages,
       label: `Tier 2 — depth bump · ${lead.display_name}`,
     });
     return job.id;
