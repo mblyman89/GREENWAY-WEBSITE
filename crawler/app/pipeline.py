@@ -156,9 +156,14 @@ async def research_target(
     entity_id: str,
     display_name: str = "",
     settings: Settings | None = None,
+    max_pages: int | None = None,
 ) -> ResearchResult:
+    """Research one target. `max_pages` (when given) overrides the worker-wide
+    CRAWL_MAX_PAGES budget for THIS run only — harvest jobs use it to give
+    Tier-1 vendors a deeper read and Tier-3 directory passes a shallow one."""
     settings = settings or get_settings()
     is_product = entity_type == "product"
+    page_budget = max_pages if (max_pages and max_pages > 0) else settings.crawl_max_pages
 
     fetched = await fetch_page(url, prefer_browser=True, settings=settings)
     if not fetched.ok:
@@ -182,7 +187,7 @@ async def research_target(
     # sitemap, most-promising first, up to CRAWL_MAX_PAGES total pages. Every
     # fetch stays inside robots.txt + per-domain rate limits. Products are a
     # single-page lookup, so deep crawl applies to vendor/brand only.
-    if not is_product and settings.crawl_max_pages > 1:
+    if not is_product and page_budget > 1:
         nav = discover_nav_links(fetched.html, url, limit=20)
         sitemap = discover_sitemap_urls(url, settings, limit=30)
         queue: list[str] = []
