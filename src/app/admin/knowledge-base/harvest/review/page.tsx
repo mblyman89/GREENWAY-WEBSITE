@@ -42,6 +42,7 @@ const FIELD_LABELS: Record<string, string> = {
   research_products: "Product lineup (reference)",
   research_images: "Image candidates (reference)",
   research_logos: "Logo candidates (reference)",
+  research_discovery: "Candidate websites found by search (reference)",
 };
 
 function fieldLabel(key: string): string {
