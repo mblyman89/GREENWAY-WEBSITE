@@ -26,6 +26,7 @@ export function AiDraftCard({
   hiddenFields,
   acceptLabel = "✓ Accept & save",
   rejectLabel = "✕ Reject",
+  referenceOnly = false,
   footer,
 }: {
   fieldLabel: string;
@@ -42,6 +43,13 @@ export function AiDraftCard({
   hiddenFields: Record<string, string>;
   acceptLabel?: string;
   rejectLabel?: string;
+  /**
+   * Reference-only drafts (e.g. the crawler's research_products lineup or
+   * research_images candidates) are for staff to READ and copy from — they
+   * never write to a profile field, so the Accept button is hidden and the
+   * reject button becomes "Dismiss".
+   */
+  referenceOnly?: boolean;
   footer?: ReactNode;
 }) {
   const hidden = Object.entries(hiddenFields);
@@ -63,17 +71,19 @@ export function AiDraftCard({
       )}
 
       <div className="mt-3 flex flex-wrap gap-2">
-        <form action={acceptAction}>
-          {hidden.map(([k, v]) => (
-            <input key={k} type="hidden" name={k} value={v} />
-          ))}
-          <button
-            type="submit"
-            className="rounded-full bg-[#7ed957] px-4 py-1.5 text-xs font-bold text-black transition hover:brightness-110"
-          >
-            {acceptLabel}
-          </button>
-        </form>
+        {!referenceOnly && (
+          <form action={acceptAction}>
+            {hidden.map(([k, v]) => (
+              <input key={k} type="hidden" name={k} value={v} />
+            ))}
+            <button
+              type="submit"
+              className="rounded-full bg-[#7ed957] px-4 py-1.5 text-xs font-bold text-black transition hover:brightness-110"
+            >
+              {acceptLabel}
+            </button>
+          </form>
+        )}
         <form action={rejectAction}>
           {hidden.map(([k, v]) => (
             <input key={k} type="hidden" name={k} value={v} />
@@ -82,7 +92,7 @@ export function AiDraftCard({
             type="submit"
             className="rounded-full border border-white/20 px-4 py-1.5 text-xs font-semibold text-white/70 transition hover:border-red-400 hover:text-red-300"
           >
-            {rejectLabel}
+            {referenceOnly ? "✕ Dismiss" : rejectLabel}
           </button>
         </form>
       </div>

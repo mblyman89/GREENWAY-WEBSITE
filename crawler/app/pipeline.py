@@ -18,15 +18,23 @@ from dataclasses import dataclass, field
 from .compliance import check_compliance
 from .config import Settings, get_settings
 from .css_extract import extract_css
-from .discovery import discover_sitemap_urls
+from .discovery import discover_nav_links, discover_sitemap_urls, page_interest_score
 from .fetcher import fetch_page
 from .llm_extract import extract_with_llm, supported_by_source
-from .schemas import ProductExtraction, VendorBrandExtraction
+from .schemas import ProductExtraction, ProductLine, ProductLineupExtraction, VendorBrandExtraction
 from .store import DraftRow, fetch_banned_phrases
 
 # Which fields each entity kind can produce, and their human labels.
 VENDOR_BRAND_FIELDS = ["about", "mission_statement", "product_philosophy"]
 PRODUCT_FIELDS = ["description"]
+
+# A CSS-found value shorter than this is "thin" (e.g. a one-line og:description);
+# a longer LLM synthesis (verified against the real page text) may replace it.
+THIN_VALUE_CHARS = 240
+# Max product lines included in the product-lineup research draft.
+MAX_PRODUCT_LINES = 30
+# Max image candidates included in the image research draft.
+MAX_IMAGE_LINES = 12
 
 
 @dataclass
@@ -49,6 +57,7 @@ class ResearchResult:
     from_cache: bool
     fields: list[FieldOutcome] = field(default_factory=list)
     image_candidates: list[str] = field(default_factory=list)
+    pages: list[str] = field(default_factory=list)  # every page actually read
     error: str = ""
 
     @property
@@ -82,6 +91,64 @@ def _evaluate_field(
     return FieldOutcome(field_key, value, confidence, via, accepted=True, flags=comp.flags)
 
 
+def _merge_css_values(css_values: dict[str, str], page_css, *, is_product: bool) -> None:
+    """Fold one page's CSS extraction into the running best values.
+
+    A longer (richer) value REPLACES a thin one for the same field — both are
+    literal page text, and the owner wants the substantial copy, not the
+    one-line meta description."""
+    if is_product:
+        candidates = {"description": page_css.description}
+    else:
+        candidates = {
+            "about": page_css.about,
+            "mission_statement": page_css.mission_statement,
+            "product_philosophy": page_css.product_philosophy,
+        }
+    for fkey, value in candidates.items():
+        value = (value or "").strip()
+        if not value:
+            continue
+        current = css_values.get(fkey, "")
+        if not current or (len(current) < THIN_VALUE_CHARS and len(value) > len(current)):
+            css_values[fkey] = value
+
+
+def _format_product_lines(products: list[ProductLine]) -> str:
+    """Human-readable product lineup for a single reviewable draft."""
+    lines: list[str] = []
+    for p in products[:MAX_PRODUCT_LINES]:
+        name = (p.name or "").strip()
+        if not name:
+            continue
+        bits = [name]
+        if p.lineage.strip():
+            bits.append(f"({p.lineage.strip()})")
+        if p.category.strip():
+            bits.append(f"— {p.category.strip()}")
+        if p.notes.strip():
+            bits.append(f"· {p.notes.strip()}")
+        lines.append(" ".join(bits))
+    return "\n".join(lines)
+
+
+def _verify_product_lines(products: list[ProductLine], corpus: str) -> list[ProductLine]:
+    """Anti-hallucination for the lineup: every product NAME must literally
+    appear in the crawled text; unsupported lineage/notes are stripped."""
+    corpus_lower = corpus.lower()
+    kept: list[ProductLine] = []
+    for p in products:
+        name = (p.name or "").strip()
+        if not name or name.lower() not in corpus_lower:
+            continue
+        if p.lineage.strip() and not supported_by_source(p.lineage, corpus):
+            p.lineage = ""
+        if p.notes.strip() and not supported_by_source(p.notes, corpus):
+            p.notes = ""
+        kept.append(p)
+    return kept
+
+
 async def research_target(
     *,
     url: str,
@@ -98,91 +165,167 @@ async def research_target(
         return ResearchResult(url=url, entity_type=entity_type, entity_id=entity_id,
                               fetched_ok=False, from_cache=fetched.from_cache, error=fetched.error)
 
-    page_text = fetched.markdown or ""
-    css = extract_css(fetched.html, url)
     banned = fetch_banned_phrases(settings)
-    image_candidates = list(css.image_urls) + list(fetched.image_urls)
+    css = extract_css(fetched.html, url)
 
-    # ---- Collect CSS-first candidates ---------------------------------------
+    pages_read: list[str] = [url]
+    # Per-page text corpus: verification ground truth + LLM grounding.
+    corpus_parts: list[str] = [fetched.markdown or ""]
+    image_pairs: list[tuple[str, str]] = list(css.images)
+    image_candidates: list[str] = list(css.image_urls) + list(fetched.image_urls)
+
     css_values: dict[str, str] = {}
-    if is_product:
-        if css.description:
-            css_values["description"] = css.description
-    else:
-        if css.about:
-            css_values["about"] = css.about
-        if css.mission_statement:
-            css_values["mission_statement"] = css.mission_statement
-        if css.product_philosophy:
-            css_values["product_philosophy"] = css.product_philosophy
+    _merge_css_values(css_values, css, is_product=is_product)
 
-    # ---- Bare landing page? Discover a richer page via the site's sitemap ----
-    # If a vendor/brand landing page gave us nothing useful, the real "about"
-    # copy often lives at /about, /our-story, etc. The site's own sitemap.xml
-    # lists those pages — we read what the site explicitly publishes for crawlers.
-    extra_pages: list[str] = []
-    if not is_product and not css_values:
-        candidates = discover_sitemap_urls(url, settings, limit=30)
-        wanted = ("about", "our-story", "story", "mission", "who-we-are", "company")
-        extra_pages = [u for u in candidates if any(w in u.lower() for w in wanted)][:2]
-        for extra_url in extra_pages:
+    # ---- DEEP RESEARCH: read the site the way a human does -------------------
+    # Follow the site's own nav links (Our Story, Rosin, Edibles, ...) plus the
+    # sitemap, most-promising first, up to CRAWL_MAX_PAGES total pages. Every
+    # fetch stays inside robots.txt + per-domain rate limits. Products are a
+    # single-page lookup, so deep crawl applies to vendor/brand only.
+    if not is_product and settings.crawl_max_pages > 1:
+        nav = discover_nav_links(fetched.html, url, limit=20)
+        sitemap = discover_sitemap_urls(url, settings, limit=30)
+        queue: list[str] = []
+        seen = {url.rstrip("/")}
+        for u in nav + sitemap:
+            key = u.rstrip("/")
+            if key in seen:
+                continue
+            seen.add(key)
+            if page_interest_score(u) < 0:
+                continue
+            queue.append(u)
+        queue.sort(key=page_interest_score, reverse=True)
+
+        budget = max(0, settings.crawl_max_pages - 1)
+        for extra_url in queue[:budget]:
             sub = await fetch_page(extra_url, prefer_browser=True, settings=settings)
             if not sub.ok:
                 continue
+            pages_read.append(extra_url)
             sub_css = extract_css(sub.html, extra_url)
+            _merge_css_values(css_values, sub_css, is_product=False)
+            image_pairs += sub_css.images
             image_candidates += sub_css.image_urls + sub.image_urls
-            if sub_css.about and "about" not in css_values:
-                css_values["about"] = sub_css.about
-            if sub_css.mission_statement and "mission_statement" not in css_values:
-                css_values["mission_statement"] = sub_css.mission_statement
-            if sub_css.product_philosophy and "product_philosophy" not in css_values:
-                css_values["product_philosophy"] = sub_css.product_philosophy
-            # Use the richest sub-page text for LLM grounding + verification.
-            if sub.markdown and len(sub.markdown) > len(page_text):
-                page_text = sub.markdown
-            if css_values:
-                break
+            if sub.markdown:
+                corpus_parts.append(sub.markdown)
+
+    corpus = "\n\n".join(p for p in corpus_parts if p)
 
     result = ResearchResult(
         url=url, entity_type=entity_type, entity_id=entity_id,
         fetched_ok=True, from_cache=fetched.from_cache,
-        image_candidates=image_candidates[:30],
+        image_candidates=list(dict.fromkeys(image_candidates))[:30],
+        pages=pages_read,
     )
 
-    # ---- LLM fills ONLY the remaining gaps ----------------------------------
+    # ---- LLM synthesis over the WHOLE crawled corpus --------------------------
+    # Runs for every field that's missing OR thin (a one-line og:description is
+    # not the rich profile the owner wants). Verified against the corpus; a
+    # hallucinated synthesis gets dropped, and the CSS value stays as fallback.
     target_fields = PRODUCT_FIELDS if is_product else VENDOR_BRAND_FIELDS
-    missing = [f for f in target_fields if not css_values.get(f)]
+    wanted = [f for f in target_fields
+              if not css_values.get(f) or len(css_values[f]) < THIN_VALUE_CHARS]
     llm_values: dict[str, str] = {}
     llm_conf = 0.0
-    if missing and settings.ai_enabled:
+    if wanted and settings.ai_enabled and corpus.strip():
         hint = (
             f"Extract the requested fields for the {entity_type} "
-            f"\"{display_name or url}\" from the page content. "
-            f"Focus on: {', '.join(missing)}. Leave anything not on the page empty."
+            f"\"{display_name or url}\" from the page content (multiple pages of "
+            f"the same site, concatenated). Focus on: {', '.join(wanted)}. "
+            f"Write 2-5 sentence summaries grounded ONLY in the text. "
+            f"Leave anything not on the pages empty."
         )
         if is_product:
-            extracted = extract_with_llm(ProductExtraction, page_text, hint, settings=settings)
+            extracted = extract_with_llm(ProductExtraction, corpus, hint, settings=settings)
             if extracted:
                 llm_conf = extracted.confidence
-                if "description" in missing and extracted.description:
+                if "description" in wanted and extracted.description:
                     llm_values["description"] = extracted.description
         else:
-            extracted = extract_with_llm(VendorBrandExtraction, page_text, hint, settings=settings)
+            extracted = extract_with_llm(VendorBrandExtraction, corpus, hint, settings=settings)
             if extracted:
                 llm_conf = extracted.confidence
-                if "about" in missing and extracted.about:
+                if "about" in wanted and extracted.about:
                     llm_values["about"] = extracted.about
-                if "mission_statement" in missing and extracted.mission_statement:
+                if "mission_statement" in wanted and extracted.mission_statement:
                     llm_values["mission_statement"] = extracted.mission_statement
-                if "product_philosophy" in missing and extracted.product_philosophy:
+                if "product_philosophy" in wanted and extracted.product_philosophy:
                     llm_values["product_philosophy"] = extracted.product_philosophy
 
+    # ---- Product lineup (vendor/brand): what do they make? -------------------
+    # LLM lists the products/strains the crawled pages show; every product name
+    # is then verified to literally appear in the corpus (dropped otherwise).
+    # Shipped as ONE research_products draft for staff — reference data, not an
+    # auto-import.
+    lineup_text = ""
+    if not is_product and settings.ai_enabled and corpus.strip():
+        lineup = extract_with_llm(
+            ProductLineupExtraction, corpus,
+            f"List every product/strain that {display_name or 'this company'}'s "
+            f"pages show, with lineage/genetics and sensory (aroma/flavor) notes "
+            f"when stated. Facts from the text ONLY. No effects, no medical "
+            f"language, no prices.",
+            settings=settings,
+        )
+        if lineup and lineup.products:
+            verified = _verify_product_lines(lineup.products, corpus)
+            lineup_text = _format_product_lines(verified)
+
     # ---- Evaluate every candidate (verify + compliance) ---------------------
+    # If the LLM produced a richer verified value for a field, prefer it and
+    # skip the thin CSS one (one draft per field, the best we found).
     for fkey, value in css_values.items():
-        # CSS values are highly grounded → confident.
-        result.fields.append(_evaluate_field(fkey, value, 0.9, "css", page_text, banned))
+        if fkey in llm_values and len(llm_values[fkey]) > len(value):
+            continue
+        result.fields.append(_evaluate_field(fkey, value, 0.9, "css", corpus, banned))
+    emitted = {f.field_key for f in result.fields if f.accepted}
     for fkey, value in llm_values.items():
-        result.fields.append(_evaluate_field(fkey, value, max(0.3, min(0.85, llm_conf)), "llm", page_text, banned))
+        if fkey in emitted:
+            continue
+        result.fields.append(_evaluate_field(fkey, value, max(0.3, min(0.85, llm_conf)), "llm", corpus, banned))
+
+    if lineup_text:
+        # INTERNAL REFERENCE DATA: research_products can never be accepted into
+        # a public profile field (the site's accept actions allowlist only the
+        # profile fields), so compliance findings are attached as FLAGS for the
+        # reviewer rather than suppressing the draft — strain names like "Sour
+        # Candy" legitimately trip the minors-appeal scanner but staff still
+        # need to see the lineup. Anything staff publish later goes through the
+        # normal compliance gates on those workflows.
+        comp = check_compliance(lineup_text, banned)
+        result.fields.append(FieldOutcome(
+            field_key="research_products",
+            value=lineup_text,
+            confidence=0.8,
+            via="llm",
+            accepted=True,
+            reason="",
+            flags=comp.flags,
+        ))
+
+    # ---- Image candidates as ONE reviewable draft ----------------------------
+    # The reviewer sees each image URL with its alt text and can open/download
+    # the ones worth keeping. Reference data for the media workflow — nothing
+    # is fetched or attached automatically.
+    if not is_product:
+        interesting = [
+            (u, alt) for u, alt in image_pairs
+            if alt and len(alt) > 2 and not u.lower().endswith(".svg")
+        ]
+        if not interesting:
+            interesting = [(u, "") for u in result.image_candidates[:MAX_IMAGE_LINES]]
+        if interesting:
+            img_lines = [f"{alt or '(no alt text)'} — {u}" for u, alt in interesting[:MAX_IMAGE_LINES]]
+            result.fields.append(FieldOutcome(
+                field_key="research_images",
+                value="\n".join(img_lines),
+                confidence=0.9,
+                via="css",
+                accepted=True,
+                reason="",
+                flags=[],
+            ))
 
     return result
 

@@ -26,8 +26,73 @@ class CssExtraction:
     website: str = ""
     title: str = ""
     image_urls: list[str] = field(default_factory=list)
+    # Structured image candidates: (url, alt) pairs so the reviewer sees what
+    # each image claims to be. Superset of image_urls' info; both are kept for
+    # backward compatibility.
+    images: list[tuple[str, str]] = field(default_factory=list)
     # evidence: field_key -> verbatim snippet, for verify-against-source.
     evidence: dict[str, str] = field(default_factory=dict)
+
+
+# ---------------------------------------------------------------------------
+# Heading-section mining: many brand sites (WordPress/Squarespace/Wix) put the
+# real copy under headings like "OUR STORY", "OUR GROW", "OUR HASH", "ABOUT US"
+# with no meta/JSON-LD at all. Reading the paragraphs that follow such headings
+# is still literally-on-the-page ground truth — no model involved.
+# ---------------------------------------------------------------------------
+
+_H_ABOUT = ("our story", "about us", "about", "who we are", "the story")
+_H_MISSION = ("mission", "our mission", "values", "our values", "why we")
+_H_PHILOSOPHY = (
+    "our grow", "our hash", "our craft", "our process", "philosophy",
+    "how we", "our approach", "what we do", "our products", "the process",
+)
+
+_HEADINGS = ("h1", "h2", "h3", "h4")
+
+
+def _section_text_after(heading, *, max_chars: int = 1200) -> str:
+    """Collect paragraph/list text that follows a heading, stopping at the next
+    heading. This is the visible section body a human reads under that title."""
+    parts: list[str] = []
+    for el in heading.find_all_next():
+        if el.name in _HEADINGS:
+            break
+        if el.name in ("p", "li"):
+            txt = el.get_text(" ", strip=True)
+            if txt:
+                parts.append(txt)
+        total = sum(len(p) for p in parts)
+        if total >= max_chars:
+            break
+    text = " ".join(parts).strip()
+    return text[:max_chars]
+
+
+def _extract_heading_sections(soup: BeautifulSoup) -> dict[str, str]:
+    """Map about/mission/product_philosophy from heading-titled sections."""
+    out: dict[str, str] = {}
+    philosophy_parts: list[str] = []
+    for h in soup.find_all(_HEADINGS):
+        title = h.get_text(" ", strip=True).lower()
+        if not title or len(title) > 60:
+            continue
+        body = ""
+        if any(k in title for k in _H_ABOUT):
+            body = _section_text_after(h)
+            if len(body) > 80 and ("about" not in out or len(body) > len(out["about"])):
+                out["about"] = body
+        elif any(k in title for k in _H_MISSION):
+            body = _section_text_after(h, max_chars=600)
+            if len(body) > 40 and "mission_statement" not in out:
+                out["mission_statement"] = body
+        elif any(k in title for k in _H_PHILOSOPHY):
+            body = _section_text_after(h)
+            if len(body) > 80:
+                philosophy_parts.append(body)
+    if philosophy_parts and "product_philosophy" not in out:
+        out["product_philosophy"] = " ".join(philosophy_parts)[:1200]
+    return out
 
 
 def _meta(soup: BeautifulSoup, **attrs) -> str:
@@ -151,6 +216,47 @@ def extract_css(html: str, base_url: str) -> CssExtraction:
                     out.about = text[:800]
                     out.evidence["about"] = text[:800]
 
+    # --- Heading-titled sections ("OUR STORY", "OUR GROW", ...) ---------------
+    # The richest visible copy usually lives here. A substantial section body
+    # BEATS a one-line meta description: if the section text is meaningfully
+    # longer than what meta gave us, prefer it (both are literal page text).
+    sections = _extract_heading_sections(soup)
+    sec_about = sections.get("about", "")
+    if sec_about and len(sec_about) > max(len(out.about), 120):
+        out.about = sec_about
+        out.evidence["about"] = sec_about
+    elif sec_about and not out.about:
+        out.about = sec_about
+        out.evidence["about"] = sec_about
+    if sections.get("mission_statement") and not out.mission_statement:
+        out.mission_statement = sections["mission_statement"]
+        out.evidence["mission_statement"] = sections["mission_statement"]
+    if sections.get("product_philosophy") and not out.product_philosophy:
+        out.product_philosophy = sections["product_philosophy"]
+        out.evidence["product_philosophy"] = sections["product_philosophy"]
+
+    # --- Content images with alt text (skip icons/sprites/data URIs) ----------
+    for img in soup.find_all("img"):
+        src = img.get("src") or img.get("data-src") or ""
+        # Prefer the largest candidate in srcset when present.
+        srcset = img.get("srcset") or img.get("data-srcset") or ""
+        if srcset:
+            try:
+                candidates = [s.strip().split(" ")[0] for s in srcset.split(",") if s.strip()]
+                if candidates:
+                    src = candidates[-1]
+            except Exception:
+                pass
+        if not src or src.startswith("data:"):
+            continue
+        low = src.lower()
+        if any(bad in low for bad in ("sprite", "1x1", "pixel", "tracking", "blank.", "spacer")):
+            continue
+        alt = (img.get("alt") or "").strip()
+        absolute = urljoin(base_url, src)
+        out.image_urls.append(absolute)
+        out.images.append((absolute, alt))
+
     # De-dup images, keep order.
     seen: set[str] = set()
     deduped: list[str] = []
@@ -159,4 +265,11 @@ def extract_css(html: str, base_url: str) -> CssExtraction:
             seen.add(u)
             deduped.append(u)
     out.image_urls = deduped
+    seen.clear()
+    dl: list[tuple[str, str]] = []
+    for u, alt in out.images:
+        if u and u not in seen:
+            seen.add(u)
+            dl.append((u, alt))
+    out.images = dl
     return out

@@ -24,6 +24,65 @@ _INTEREST = (
     "brand", "philosophy", "values", "products", "shop", "menu", "strains",
 )
 
+# Paths that are never worth a research fetch (legal/checkout/account noise).
+_BORING = (
+    "privacy", "terms", "cookie", "cart", "checkout", "account", "login",
+    "signup", "sign-up", "careers", "jobs", "wp-json", "feed", "tag/",
+    "category/", "author/", "search", "sitemap", ".xml", ".pdf", ".jpg",
+    ".jpeg", ".png", ".webp", ".svg", ".gif", "mailto:", "tel:",
+)
+
+
+def page_interest_score(u: str) -> int:
+    """How promising a same-site URL looks for vendor/brand/product research."""
+    low = u.lower()
+    if any(b in low for b in _BORING):
+        return -1
+    score = sum(2 for k in _INTEREST if k in low)
+    # Short, top-level paths (/rosin/, /edibles/) are often product-line pages
+    # even without an interest keyword in the slug.
+    path = urlparse(u).path.strip("/")
+    if path and path.count("/") == 0 and len(path) <= 24:
+        score += 1
+    return score
+
+
+def discover_nav_links(html: str, base_url: str, *, limit: int = 20) -> list[str]:
+    """Same-site links from a page's own navigation/anchors, ranked by interest.
+
+    This is what a human does: look at the site's menu tabs (Our Story, Rosin,
+    Edibles, ...) and click through. We read only same-origin http(s) links the
+    page itself offers, drop fragments/query noise, and rank by interest.
+    """
+    if not html:
+        return []
+    from bs4 import BeautifulSoup
+
+    origin_host = urlparse(base_url).netloc.lower().removeprefix("www.")
+    soup = BeautifulSoup(html, "lxml")
+    found: list[str] = []
+    seen: set[str] = set()
+    for a in soup.find_all("a", href=True):
+        href = (a["href"] or "").strip()
+        if not href or href.startswith("#"):
+            continue
+        absolute = urljoin(base_url, href)
+        p = urlparse(absolute)
+        if p.scheme not in ("http", "https"):
+            continue
+        host = p.netloc.lower().removeprefix("www.")
+        if host != origin_host:
+            continue  # same site only — we never wander off-domain
+        clean = f"{p.scheme}://{p.netloc}{p.path}"
+        if clean.rstrip("/") == base_url.rstrip("/"):
+            continue
+        if clean in seen:
+            continue
+        seen.add(clean)
+        found.append(clean)
+    ranked = sorted(found, key=page_interest_score, reverse=True)
+    return [u for u in ranked if page_interest_score(u) >= 0][:limit]
+
 
 def _client(settings: Settings) -> httpx.Client:
     ua = pick_user_agent(realistic=settings.crawl_realistic_headers, fallback=settings.crawl_user_agent)
