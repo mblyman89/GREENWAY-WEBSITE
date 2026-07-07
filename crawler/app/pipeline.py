@@ -19,6 +19,7 @@ from .compliance import check_compliance
 from .config import Settings, get_settings
 from .css_extract import extract_css
 from .discovery import discover_nav_links, discover_sitemap_urls
+from .logos import detect_logo_candidates
 from .seeding import merge_candidates, seed_site_urls
 from .fetcher import fetch_page
 from .llm_extract import extract_with_llm, supported_by_source
@@ -309,6 +310,27 @@ async def research_target(
             reason="",
             flags=comp.flags,
         ))
+
+    # ---- Logo candidates as ONE reviewable draft (Slice H3) -------------------
+    # The four predictable spots (JSON-LD Organization.logo, header/nav <img>
+    # with "logo", touch/fav icons, og:image) — pure CSS/metadata, zero LLM
+    # cost. Reference draft: the back office shows these visually and a human
+    # picks the right one. Nothing is downloaded or attached automatically.
+    if not is_product:
+        logo_candidates = detect_logo_candidates(fetched.html, url, limit=8)
+        if logo_candidates:
+            logo_lines = [
+                f"[{c.source}] {c.detail or '(no context)'} — {c.url}" for c in logo_candidates
+            ]
+            result.fields.append(FieldOutcome(
+                field_key="research_logos",
+                value="\n".join(logo_lines),
+                confidence=0.9,
+                via="css",
+                accepted=True,
+                reason="",
+                flags=[],
+            ))
 
     # ---- Image candidates as ONE reviewable draft ----------------------------
     # The reviewer sees each image URL with its alt text and can open/download
