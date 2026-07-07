@@ -32,6 +32,7 @@ type Job = {
   counts: { pending: number; running: number; done: number; failed: number };
   total_targets: number;
   total_drafts_written: number;
+  total_products_written?: number;
 };
 
 const ACTIVE_POLL_MS = 5_000;
@@ -133,6 +134,12 @@ export function HarvestJobsLive({
                 {finished}/{job.total_targets} sites · {job.counts.done} ok
                 {job.counts.failed > 0 ? ` · ${job.counts.failed} failed` : ""} ·{" "}
                 <strong className="text-[#7ed957]">{job.total_drafts_written} drafts</strong> written
+                {(job.total_products_written ?? 0) > 0 ? (
+                  <>
+                    {" · "}
+                    <strong className="text-[#5ec1ff]">{job.total_products_written} products</strong> staged
+                  </>
+                ) : null}
               </span>
               {running && (
                 <span className="truncate text-[#5ec1ff]" title={running.url}>

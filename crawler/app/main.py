@@ -26,8 +26,9 @@ from .harvest import (
     request_cancel,
     schedule_job,
 )
+from .kb_products import build_product_rows, write_product_drafts
 from .pipeline import ResearchResult, research_social, research_target, result_to_draft_rows
-from .store import write_drafts
+from .store import fetch_banned_phrases, write_drafts
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("greenway.crawler")
@@ -81,6 +82,8 @@ class ResearchResponse(BaseModel):
     drafts_written: int = 0
     drafts_skipped: int = 0
     supabase_configured: bool = False
+    # H9b: structured kb_products DRAFT rows written from the verified lineup.
+    products_written: int = 0
     error: str = ""
 
 
@@ -101,11 +104,26 @@ def _build_response(result: ResearchResult, *, write: bool) -> ResearchResponse:
     ]
     written = skipped = 0
     configured = False
+    products_written = 0
     if result.fetched_ok and write:
         summary = write_drafts(result_to_draft_rows(result))
         written = summary.get("written", 0)
         skipped = summary.get("skipped", 0)
         configured = summary.get("configured", False)
+        # H9b: also stage structured kb_products DRAFT rows from the verified
+        # lineup (opt-out via HARVEST_PRODUCTS_ENABLED). Best-effort + drafts-only.
+        settings = get_settings()
+        if settings.harvest_products_enabled and result.products:
+            built = build_product_rows(
+                result.products,
+                entity_type=result.entity_type,
+                entity_id=result.entity_id,
+                display_name=result.display_name,
+                source_url=result.url,
+                banned=fetch_banned_phrases(settings),
+            )
+            prod_summary = write_product_drafts(built.rows, settings=settings)
+            products_written = prod_summary.get("written", 0)
     return ResearchResponse(
         ok=result.fetched_ok,
         url=result.url,
@@ -118,6 +136,7 @@ def _build_response(result: ResearchResult, *, write: bool) -> ResearchResponse:
         drafts_written=written,
         drafts_skipped=skipped,
         supabase_configured=configured,
+        products_written=products_written,
         error=result.error,
     )
 
