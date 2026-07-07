@@ -24,6 +24,12 @@ from .seeding import merge_candidates, seed_site_urls
 from .fetcher import fetch_page
 from .llm_extract import extract_with_llm, supported_by_source
 from .schemas import ProductExtraction, ProductLine, ProductLineupExtraction, VendorBrandExtraction
+from .social_links import (
+    SocialLink,
+    detect_social_links,
+    format_social_links,
+    instagram_handle,
+)
 from .store import DraftRow, fetch_banned_phrases
 
 # Which fields each entity kind can produce, and their human labels.
@@ -67,6 +73,10 @@ class ResearchResult:
     # Carried so the API can write structured kb_products DRAFT rows in addition
     # to the human-readable research_products reference draft.
     products: list[ProductLine] = field(default_factory=list)
+    # H9d: social channels the vendor advertises on their OWN pages (detected via
+    # link-following, no paid API). Carried for the API/summary; also emitted as a
+    # single research_social reference draft.
+    social_links: list[SocialLink] = field(default_factory=list)
     error: str = ""
 
     @property
@@ -187,6 +197,9 @@ async def research_target(
     corpus_parts: list[str] = [fetched.markdown or ""]
     image_pairs: list[tuple[str, str]] = list(css.images)
     image_candidates: list[str] = list(css.image_urls) + list(fetched.image_urls)
+    # H9d: keep each page's (url, html) so we can detect the social-profile links
+    # the vendor advertises (usually in the header/footer of any page).
+    html_pages: list[tuple[str, str]] = [(url, fetched.html)]
 
     css_values: dict[str, str] = {}
     _merge_css_values(css_values, css, is_product=is_product)
@@ -217,6 +230,7 @@ async def research_target(
             if not sub.ok:
                 continue
             pages_read.append(extra_url)
+            html_pages.append((extra_url, sub.html))
             sub_css = extract_css(sub.html, extra_url)
             _merge_css_values(css_values, sub_css, is_product=False)
             image_pairs += sub_css.images
@@ -377,7 +391,102 @@ async def research_target(
                 flags=[],
             ))
 
+    # ---- Social-link following (Slice H9d) -----------------------------------
+    # Detect the social-profile links the vendor advertises on their OWN pages
+    # ("click the social media buttons"), then politely follow each — a
+    # LOGGED-OUT public fetch through the same safe path as any web page — to
+    # harvest a public about/bio candidate. No login, no paid API, no scraping
+    # behind an auth wall. Instagram prefers the sanctioned Business Discovery
+    # API when a Meta token is configured; otherwise it uses the public fetch.
+    if not is_product and settings.follow_social_links:
+        social: list[SocialLink] = []
+        seen_social: set[str] = set()
+        for page_url, page_html in html_pages:
+            for link in detect_social_links(page_html, page_url, limit=20):
+                if link.url not in seen_social:
+                    seen_social.add(link.url)
+                    social.append(link)
+        if social:
+            # (a) One research_social reference draft listing every channel.
+            comp = check_compliance(format_social_links(social), banned)
+            result.fields.append(FieldOutcome(
+                field_key="research_social",
+                value=format_social_links(social),
+                confidence=0.9,
+                via="css",
+                accepted=True,
+                reason="",
+                flags=comp.flags,
+            ))
+            result.social_links = social
+            # (b) Follow a bounded set of profiles for a public about/bio draft.
+            await _follow_social_profiles(
+                social, result=result, banned=banned, settings=settings,
+            )
+
     return result
+
+
+async def _follow_social_profiles(
+    social: list[SocialLink],
+    *,
+    result: "ResearchResult",
+    banned: list[str],
+    settings: Settings,
+) -> None:
+    """Fetch a bounded set of the detected social profiles (logged-out) and turn
+    any public bio/about text into a verified, compliance-gated draft candidate.
+
+    Instagram: prefer the sanctioned Business Discovery API (social.py) when a
+    Meta token is configured; otherwise fall back to the public page fetch.
+    Every non-IG profile is a plain polite fetch through fetch_page (robots +
+    SSRF + allow-list + rate-limit). Only ONE 'about' candidate is emitted (the
+    best/first non-empty), so this augments the website draft rather than
+    flooding the reviewer."""
+    budget = settings.social_links_max_follow
+    if budget <= 0:
+        return
+    already_have_about = any(
+        f.field_key == "about" and f.accepted for f in result.fields
+    )
+
+    # Prefer the sanctioned IG path first when available.
+    ig_handle = instagram_handle(social)
+    if ig_handle and settings.social_enabled and not already_have_about:
+        from .social import fetch_instagram_business, profile_text_blob
+        profile = fetch_instagram_business(ig_handle, settings=settings)
+        if profile.ok and profile.biography:
+            outcome = _evaluate_field(
+                "about", profile.biography, 0.7, "social",
+                profile_text_blob(profile), banned,
+            )
+            if outcome.accepted:
+                result.fields.append(outcome)
+                already_have_about = True
+
+    # Public logged-out fetch of the remaining profiles (bounded).
+    followed = 0
+    for link in social:
+        if followed >= budget:
+            break
+        # Skip IG if the sanctioned path already produced an about draft.
+        if link.platform == "instagram" and already_have_about:
+            continue
+        fetched = await fetch_page(link.url, prefer_browser=True, settings=settings)
+        followed += 1
+        if not fetched.ok:
+            continue
+        page_text = fetched.markdown or ""
+        css = extract_css(fetched.html, link.url)
+        # A social page's og:description / about blurb is the vendor's own public
+        # self-description — the best "about" candidate a logged-out view offers.
+        candidate = (css.about or css.mission_statement or "").strip()
+        if not candidate or already_have_about:
+            continue
+        outcome = _evaluate_field("about", candidate, 0.6, "social", page_text, banned)
+        if outcome.accepted:
+            result.fields.append(outcome)
+            already_have_about = True
 
 
 async def research_social(
