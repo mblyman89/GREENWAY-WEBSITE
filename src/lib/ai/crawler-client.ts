@@ -157,6 +157,11 @@ export type CrawlerHealth = {
   aiEnabled?: boolean;
   socialConfigured?: boolean;
   proxyEnabled?: boolean;
+  /** Worker facts already exposed by GET /health (Slice H8 reference panel). */
+  version?: string;
+  supabaseConfigured?: boolean;
+  respectRobots?: boolean;
+  allowDomains?: string[];
 };
 
 /** Lightweight health probe so the admin UI can show worker status + capabilities. */
@@ -173,16 +178,24 @@ export async function crawlerHealth(timeoutMs = 5_000): Promise<CrawlerHealth> {
     if (!res.ok) return { ok: false, detail: `HTTP ${res.status}` };
     const data = (await res.json()) as {
       ok?: boolean;
+      version?: string;
       ai_enabled?: boolean;
+      supabase_configured?: boolean;
       social_configured?: boolean;
+      respect_robots?: boolean;
       proxy_enabled?: boolean;
+      allow_domains?: string[];
     };
     return {
       ok: Boolean(data.ok),
       detail: "reachable",
+      version: data.version,
       aiEnabled: data.ai_enabled,
+      supabaseConfigured: data.supabase_configured,
       socialConfigured: data.social_configured,
+      respectRobots: data.respect_robots,
       proxyEnabled: data.proxy_enabled,
+      allowDomains: data.allow_domains,
     };
   } catch (e) {
     return { ok: false, detail: e instanceof Error ? e.message : "unreachable" };

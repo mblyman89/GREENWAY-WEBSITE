@@ -24,7 +24,9 @@ import {
   type HarvestSettings,
 } from "@/lib/kb/harvest-settings-core";
 import { loadHarvestSettings } from "@/lib/kb/harvest-settings";
+import { isCrawlerConfigured, crawlerHealth } from "@/lib/ai/crawler-client";
 import { saveHarvestSettingsAction, resetHarvestSettingsAction } from "./actions";
+import { CrawlerEnvReference } from "./CrawlerEnvReference";
 
 export const dynamic = "force-dynamic";
 
@@ -200,7 +202,11 @@ export default async function HarvestTuningPage({
   await requirePermission("settings.manage");
   const { msg, error } = await searchParams;
 
-  const settings = await loadHarvestSettings();
+  const crawlerOn = isCrawlerConfigured();
+  const [settings, health] = await Promise.all([
+    loadHarvestSettings(),
+    crawlerOn ? crawlerHealth() : Promise.resolve({ ok: false, detail: "not configured" }),
+  ]);
   const allDefaults = isAllDefaults(settings);
 
   return (
@@ -387,6 +393,10 @@ export default async function HarvestTuningPage({
             audited like any other save.
           </p>
         </form>
+
+        {/* H8: crawler-side .env reference — read-only. These live on the crawler VM,
+            not in the database; the page documents them and shows live worker state. */}
+        <CrawlerEnvReference health={health} />
       </div>
     </div>
   );
