@@ -17,6 +17,7 @@ import {
   setProductCategoryActive,
   reviewKbProduct,
   reviewKbBrand,
+  attachKbProductImage,
   bulkReviewKbDraftsBySource,
   upsertKbStoreFact,
   setStoreFactActive,
@@ -33,6 +34,7 @@ import {
   deleteImageSubstitute,
   type SubstituteScope,
 } from "@/lib/ai/kb/image-substitutes";
+import { importImageFromUrl, HarvestImageError } from "@/lib/media/harvest";
 
 const PATH = "/admin/knowledge-base";
 
@@ -417,6 +419,56 @@ export async function reviewKbProductAction(formData: FormData): Promise<void> {
         ? "Record archived."
         : "Record returned to draft.",
   );
+}
+
+/**
+ * Slice H9c — attach a product image harvested from a vendor's OWN page to a
+ * kb_products row. The crawler only ever REPORTS first-party image URLs
+ * (research_images); downloading is this explicit human click. We fetch the
+ * image server-side (size/MIME capped, private hosts refused, content-hash
+ * deduped) into a media_assets DRAFT (usage_type='product', license pending
+ * review), then append it to the product's gallery (first image becomes the
+ * cover). Drafts-only: the product itself is NOT published by this action.
+ */
+export async function attachKbProductImageAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("products.enrich");
+  const productId = String(formData.get("productId") ?? "").trim();
+  const imageUrl = String(formData.get("imageUrl") ?? "").trim();
+  const displayName = String(formData.get("displayName") ?? "").trim() || "product";
+  if (!productId || !imageUrl) backReview("Missing product or image URL.", false);
+  if (!/^https?:\/\//i.test(imageUrl)) backReview("Enter a valid http(s) image URL.", false);
+
+  try {
+    const { asset, deduped } = await importImageFromUrl({
+      imageUrl,
+      usageType: "product",
+      title: `${displayName} (harvested)`,
+      altText: `${displayName} product image`,
+      uploadedBy: session.profile.id,
+      tags: ["product"],
+    });
+    const res = await attachKbProductImage(productId, asset.id, session.profile.id);
+    if (!res.ok) backReview(res.error ?? "Couldn't attach the image.", false);
+
+    await recordAudit({
+      actorId: session.profile.id,
+      action: "kb.product.image_attached",
+      entityType: "kb_product",
+      entityId: productId,
+      after: { imageUrl, mediaAssetId: asset.id, deduped, becamePrimary: res.becamePrimary },
+    }).catch(() => {});
+
+    revalidatePath(REVIEW_PATH);
+    const note = res.alreadyPresent
+      ? "That image is already on this product."
+      : res.becamePrimary
+        ? `Image saved and set as the cover for ${displayName} (license: pending review).`
+        : `Image saved and added to ${displayName}'s gallery (license: pending review).`;
+    backReview(note);
+  } catch (err) {
+    if (err instanceof HarvestImageError) backReview(err.message, false);
+    throw err; // let NEXT_REDIRECT (success path) propagate
+  }
 }
 
 /** Slice B — validate a staged kb_brands row into published/active, or archive it. */
