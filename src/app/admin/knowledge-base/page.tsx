@@ -161,6 +161,12 @@ export default async function KnowledgeBasePage({
               accent="green"
             />
             <KbNavCard
+              href="/admin/knowledge-base/harvest/review"
+              title="Harvest review"
+              description="Vendor-grouped drafts in confidence lanes — batch-accept the clean ones, focus on the rest."
+              accent="gold"
+            />
+            <KbNavCard
               href="/admin/knowledge-base/pipeline"
               title="Data pipeline"
               description="Bronze intake → Silver review → Gold published. Approve write-backs before they publish."
