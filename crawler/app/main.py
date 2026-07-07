@@ -15,6 +15,17 @@ from pydantic import BaseModel, Field
 
 from . import __version__
 from .config import get_settings
+from .harvest import (
+    MAX_PAGES_PER_SITE,
+    MAX_TARGETS_PER_JOB,
+    HarvestValidationError,
+    create_job,
+    list_jobs,
+    load_job,
+    prepare_resume,
+    request_cancel,
+    schedule_job,
+)
 from .pipeline import ResearchResult, research_social, research_target, result_to_draft_rows
 from .store import write_drafts
 
@@ -153,6 +164,115 @@ async def research(
         display_name=req.display_name,
     )
     return _build_response(result, write=req.write)
+
+
+# ---------------------------------------------------------------------------
+# Slice H1 — batch HARVEST: many targets, one crash-safe background job.
+# Same auth, same drafts-only landing as /research; jobs run one at a time.
+# ---------------------------------------------------------------------------
+
+class HarvestTarget(BaseModel):
+    url: str = Field(..., description="The site to research.")
+    entity_type: str = Field(..., description="vendor | brand | product")
+    entity_id: str = Field(..., description="Supabase id of the entity the drafts belong to.")
+    display_name: str = Field(default="")
+
+
+class HarvestRequest(BaseModel):
+    targets: list[HarvestTarget] = Field(..., description=f"1..{MAX_TARGETS_PER_JOB} sites to research.")
+    write: bool = Field(default=True, description="False = dry-run (no drafts written).")
+    max_pages_per_site: int | None = Field(
+        default=None, ge=1, le=MAX_PAGES_PER_SITE,
+        description="Per-site page budget for THIS job (None = worker default). "
+                    "Tier 1 ≈ 15-40, Tier 2 ≈ 8-15, Tier 3 ≈ 2-4.",
+    )
+    delay_between_targets: float = Field(
+        default=0.0, ge=0.0, le=3600.0,
+        description="Extra pause (s) between sites — Tier-3 trickle mode.",
+    )
+    label: str = Field(default="", description="Human label shown in the job list.")
+
+
+class HarvestJobResponse(BaseModel):
+    ok: bool
+    job: dict
+
+
+class HarvestJobListResponse(BaseModel):
+    ok: bool
+    jobs: list[dict]
+
+
+@app.post("/harvest", response_model=HarvestJobResponse, status_code=202)
+async def harvest_start(
+    req: HarvestRequest,
+    x_crawler_secret: str | None = Header(default=None),
+) -> HarvestJobResponse:
+    """Enqueue a batch job. Returns 202 + the job snapshot immediately; poll
+    GET /harvest/{id} for progress. Only one job crawls at a time — additional
+    jobs wait their turn (politeness is per-domain and the VM is one box)."""
+    _require_secret(x_crawler_secret)
+    try:
+        job = create_job(
+            [t.model_dump() for t in req.targets],
+            write=req.write,
+            max_pages_per_site=req.max_pages_per_site,
+            delay_between_targets=req.delay_between_targets,
+            label=req.label,
+        )
+    except HarvestValidationError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    schedule_job(job.id)
+    log.info("harvest job %s queued (%d targets)", job.id, len(job.targets))
+    return HarvestJobResponse(ok=True, job=job.to_dict())
+
+
+@app.get("/harvest", response_model=HarvestJobListResponse)
+def harvest_list(x_crawler_secret: str | None = Header(default=None)) -> HarvestJobListResponse:
+    _require_secret(x_crawler_secret)
+    return HarvestJobListResponse(ok=True, jobs=[j.to_dict() for j in list_jobs(limit=20)])
+
+
+@app.get("/harvest/{job_id}", response_model=HarvestJobResponse)
+def harvest_status(
+    job_id: str,
+    x_crawler_secret: str | None = Header(default=None),
+) -> HarvestJobResponse:
+    _require_secret(x_crawler_secret)
+    job = load_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Unknown job id.")
+    return HarvestJobResponse(ok=True, job=job.to_dict())
+
+
+@app.post("/harvest/{job_id}/cancel", response_model=HarvestJobResponse)
+def harvest_cancel(
+    job_id: str,
+    x_crawler_secret: str | None = Header(default=None),
+) -> HarvestJobResponse:
+    """Flag a job for cancellation (takes effect between targets — a site is
+    either fully researched or untouched, never half-written)."""
+    _require_secret(x_crawler_secret)
+    job = request_cancel(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Unknown job id.")
+    return HarvestJobResponse(ok=True, job=job.to_dict())
+
+
+@app.post("/harvest/{job_id}/resume", response_model=HarvestJobResponse)
+async def harvest_resume(
+    job_id: str,
+    x_crawler_secret: str | None = Header(default=None),
+) -> HarvestJobResponse:
+    """Crash recovery: re-queue the pending/interrupted targets of a job that
+    died mid-run (e.g. the VM rebooted). Finished targets are never redone."""
+    _require_secret(x_crawler_secret)
+    job = prepare_resume(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Unknown job id.")
+    if job.status == "queued":
+        schedule_job(job.id)
+    return HarvestJobResponse(ok=True, job=job.to_dict())
 
 
 @app.post("/research-social", response_model=ResearchResponse)

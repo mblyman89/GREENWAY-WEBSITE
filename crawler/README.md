@@ -29,6 +29,29 @@ For every target URL:
 7. **Write drafts** — `ai_suggestions` rows with `source=crawl:<url>`, a grounding
    `confidence`, and image candidates. Status `pending`. A human accepts/rejects.
 
+## Batch harvest (Slice H1)
+
+Beyond the single-target `/research`, the worker can work through a **list** of
+sites unattended — the KB harvest fleet:
+
+- `POST /harvest` — submit `{ targets: [{url, entity_type, entity_id, display_name}], max_pages_per_site?, delay_between_targets?, write?, label? }`.
+  Returns `202` + a job snapshot immediately.
+- `GET /harvest` — recent jobs. `GET /harvest/{id}` — live progress.
+- `POST /harvest/{id}/cancel` — stop between targets (a site is either fully
+  researched or untouched).
+- `POST /harvest/{id}/resume` — crash recovery: after a VM reboot, pending /
+  interrupted targets re-queue; finished targets are never redone.
+
+Guarantees: **one job crawls at a time** (politeness is per-domain and the VM
+is one box; extra jobs wait in line), state is persisted to
+`.cache/jobs/job_<id>.json` after **every** target (crash-safe), every target
+goes through the exact same honest pipeline as `/research` (robots.txt, SSRF
+guard, rate limits, verify-against-source, compliance), and everything lands
+as **pending drafts** in `ai_suggestions` — drafts-only, always.
+`max_pages_per_site` sets the per-job depth (Tier 1 vendors ≈ 15–40,
+prospects ≈ 8–15, whole-market directory pass ≈ 2–4 with a
+`delay_between_targets` trickle).
+
 ## Quick start
 
 For a temporary desktop / work-VM test, start with **[`docs/LOCAL_TESTING_GUIDE.md`](docs/LOCAL_TESTING_GUIDE.md)**.
