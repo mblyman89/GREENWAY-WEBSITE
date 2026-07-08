@@ -485,7 +485,9 @@ export async function suggestMediaAllAction(id: string): Promise<MediaSuggestAll
         user: instruction,
         imageUrl: imageUrl!,
         temperature: 0.4,
-        maxTokens: 320,
+        // H12b: three extra label fields in the JSON — headroom so the reply
+        // never truncates mid-object (parse would fall back to prose salvage).
+        maxTokens: 400,
         context: { ...ctx, feature: "media.suggest_all" },
       });
     } else {
@@ -494,7 +496,7 @@ export async function suggestMediaAllAction(id: string): Promise<MediaSuggestAll
         system: COMPLIANCE_SYSTEM,
         user: instruction,
         temperature: 0.4,
-        maxTokens: 320,
+        maxTokens: 400,
         context: { ...ctx, feature: "media.suggest_all" },
       });
     }
@@ -516,6 +518,12 @@ export async function suggestMediaAllAction(id: string): Promise<MediaSuggestAll
     };
     const cls = classifyMediaAsset(signals);
     const tags = suggestTags(cls, signals);
+    // H12b: label facts the vision call read off the packaging become tags so
+    // the library is filterable by strain / strain type ("hybrid", "blue-dream").
+    for (const t of [parsed.labelStrain, parsed.labelStrainType]) {
+      const n = t.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40);
+      if (n && !tags.includes(n) && tags.length < 12) tags.push(n);
+    }
 
     const combinedText = [parsed.title, parsed.description, parsed.altText].filter(Boolean).join(" ");
     const flags = checkCompliance(combinedText).flags;
@@ -532,6 +540,9 @@ export async function suggestMediaAllAction(id: string): Promise<MediaSuggestAll
         confidence: cls.confidence,
         overturnsPrior: cls.overturnsPrior,
         visionSubject: parsed.visionSubject,
+        labelRatio: parsed.labelRatio || undefined,
+        labelStrain: parsed.labelStrain || undefined,
+        labelStrainType: parsed.labelStrainType || undefined,
         sources: [...grounded.sources, ...entity.sources],
         complianceFlags: flags,
       },
@@ -545,7 +556,13 @@ export async function suggestMediaAllAction(id: string): Promise<MediaSuggestAll
       usageType: cls.usageType,
       tags: tags.join(", "),
       confidence: cls.confidence,
-      reasons: cls.reasons,
+      reasons: [
+        ...cls.reasons,
+        // H12b: show the owner exactly what was read off the packaging.
+        ...(parsed.labelRatio ? [`Label ratio read from packaging: ${parsed.labelRatio}`] : []),
+        ...(parsed.labelStrain ? [`Strain on label: ${parsed.labelStrain}`] : []),
+        ...(parsed.labelStrainType ? [`Strain type on label: ${parsed.labelStrainType}`] : []),
+      ],
       overturnsPrior: cls.overturnsPrior,
       complianceFlags: flags,
       method,

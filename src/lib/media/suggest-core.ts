@@ -74,6 +74,109 @@ export function nameFromFilename(filename: string | null | undefined): string {
 }
 
 // ---------------------------------------------------------------------------
+// Label facts (H12b) — what is PRINTED on the packaging.
+//
+// Owner: "a lot of constellation products are 1:1 THC:CBD or 2:1:1
+// THC:CBG:CBN … adding these ratios in the name would be beneficial. Also …
+// the shots specifically say what the strain is and even the strain type
+// (hybrid, indica, sativa)."
+//
+// The model is asked to READ the label and report these as structured fields;
+// everything is validated against closed vocabularies here so a hallucinated
+// ratio or made-up strain type can never reach the form. Never-guess: a fact
+// that isn't legible on the packaging stays "".
+// ---------------------------------------------------------------------------
+
+/** Cannabinoids that legitimately appear in on-label ratios. Closed set. */
+export const RATIO_CANNABINOIDS = [
+  "THC", "CBD", "CBG", "CBN", "CBC", "THCV", "CBDV", "THCA", "CBDA",
+] as const;
+
+/** On-label strain types. Closed set (dominant-hybrids normalize below). */
+export const STRAIN_TYPES = ["indica", "sativa", "hybrid", "indica-hybrid", "sativa-hybrid"] as const;
+export type StrainType = (typeof STRAIN_TYPES)[number];
+
+/**
+ * Normalize a model-reported strain type to the closed vocabulary; "" when it
+ * isn't one ("energetic", "loud", …). "Indica-dominant hybrid" and friends
+ * fold into indica-hybrid / sativa-hybrid.
+ */
+export function normalizeStrainType(raw: string | null | undefined): StrainType | "" {
+  const s = String(raw ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+  if (!s) return "";
+  if ((STRAIN_TYPES as readonly string[]).includes(s)) return s as StrainType;
+  if (/^indica[ -]dominant( hybrid)?$/.test(s) || s === "hybrid indica" || s === "hybrid-indica") return "indica-hybrid";
+  if (/^sativa[ -]dominant( hybrid)?$/.test(s) || s === "hybrid sativa" || s === "hybrid-sativa") return "sativa-hybrid";
+  return "";
+}
+
+/**
+ * Validate + normalize a cannabinoid ratio as printed on packaging:
+ * "1:1 THC:CBD", "2:1:1 THC:CBG:CBN", "10:1 CBD:THC". Rules:
+ *  • the number list and the cannabinoid list must be the same length (2-4);
+ *  • every compound must be in RATIO_CANNABINOIDS (uppercased);
+ *  • numbers are 1-3 digits (no percentages, no mg — those aren't ratios).
+ * Returns "" when anything is off — never a repaired guess.
+ */
+export function normalizeCannabinoidRatio(raw: string | null | undefined): string {
+  const s = String(raw ?? "").trim();
+  if (!s) return "";
+  const m = /^(\d{1,3}(?::\d{1,3}){1,3})\s+([A-Za-z]{3,5}(?::[A-Za-z]{3,5}){1,3})$/.exec(s);
+  if (!m) return "";
+  const nums = m[1].split(":");
+  const names = m[2].split(":").map((n) => n.toUpperCase());
+  if (nums.length !== names.length) return "";
+  const known = RATIO_CANNABINOIDS as readonly string[];
+  if (!names.every((n) => known.includes(n))) return "";
+  return `${nums.join(":")} ${names.join(":")}`;
+}
+
+/**
+ * Put the on-label ratio into the suggested title (owner request). Appended,
+ * not injected mid-phrase, and skipped when the title already carries the
+ * same ratio digits so re-runs never produce "… 1:1 THC:CBD 1:1 THC:CBD".
+ */
+export function titleWithRatio(title: string, ratio: string): string {
+  const t = title.trim();
+  const r = ratio.trim();
+  if (!r) return t;
+  if (!t) return r;
+  const digits = r.split(" ")[0]; // "1:1"
+  if (t.includes(digits)) return t;
+  return `${t} ${r}`;
+}
+
+/**
+ * Append the strain facts to the description when the model read them off the
+ * label and the description doesn't already mention them. Factual, no effects
+ * language — compliance scanning still runs on the combined copy downstream.
+ */
+export function descriptionWithStrainFacts(
+  description: string,
+  strain: string,
+  strainType: StrainType | "",
+): string {
+  const d = description.trim();
+  const s = strain.trim();
+  const parts: string[] = [];
+  if (s && !d.toLowerCase().includes(s.toLowerCase())) parts.push(s);
+  if (strainType && !d.toLowerCase().includes(strainType)) parts.push(strainType);
+  if (parts.length === 0) return d;
+  const sentence = `Label lists strain: ${parts.join(", ")}.`;
+  return d ? `${d} ${sentence}` : sentence;
+}
+
+/** Sanitize a model-reported strain name: printable text only, no URLs/JSON. */
+export function cleanStrainField(raw: string | null | undefined): string {
+  const s = String(raw ?? "").replace(/\s+/g, " ").trim();
+  if (!s || s.length > 60) return "";
+  if (/https?:\/\/|[{}[\]<>]/.test(s)) return "";
+  // "unknown"/"n/a"/"none" style non-answers are not facts.
+  if (/^(unknown|none|n\/?a|not (visible|legible|shown|printed)|null)$/i.test(s)) return "";
+  return s;
+}
+
+// ---------------------------------------------------------------------------
 // The single structured instruction
 // ---------------------------------------------------------------------------
 
@@ -109,7 +212,8 @@ export function buildMediaSuggestInstruction(input: MediaSuggestPromptInput): st
   return [
     `You are cataloguing one image for a licensed Washington cannabis retailer's media library.`,
     `Return STRICT JSON only — no markdown, no commentary:`,
-    `{"vision_subject": "...", "title": "...", "description": "...", "alt_text": "..."}`,
+    `{"vision_subject": "...", "title": "...", "description": "...", "alt_text": "...",`,
+    ` "label_ratio": "...", "label_strain": "...", "label_strain_type": "..."}`,
     ``,
     `vision_subject — what the image ACTUALLY IS, exactly one of:`,
     VISION_SUBJECTS.map((s) => `  - ${s}`).join("\n"),
@@ -122,6 +226,16 @@ export function buildMediaSuggestInstruction(input: MediaSuggestPromptInput): st
     `mention appearance only when it identifies the item (e.g. the flavor on the label).`,
     `alt_text — one sentence, 8-16 words, for screen readers: name the subject specifically`,
     `(product name + form, or company + "logo"), no "image of"/"photo of" prefix.`,
+    ``,
+    `READ THE PACKAGING TEXT — three extra fields, "" when not clearly printed on the label:`,
+    `label_ratio — the cannabinoid ratio EXACTLY as printed, digits then compounds,`,
+    `e.g. "1:1 THC:CBD" or "2:1:1 THC:CBG:CBN". "" unless a ratio is legible. Never compute`,
+    `one from mg amounts, never guess.`,
+    `label_strain — the strain name printed on the label (e.g. "Blue Dream"), "" if none.`,
+    `label_strain_type — exactly one of: indica, sativa, hybrid, indica-hybrid, sativa-hybrid`,
+    `— only if the label itself says so; "" otherwise.`,
+    `When label_ratio is present, include it in the title (e.g. "Constellation CBD Shot 1:1 THC:CBD")`,
+    `and mention the ratio and any strain facts in the description.`,
     ``,
     `Known signals:`,
     facts.length ? facts.join("\n") : "(none)",
@@ -143,6 +257,12 @@ export type ParsedMediaSuggestion = {
   title: string;
   description: string;
   altText: string;
+  /** H12b: validated on-label cannabinoid ratio ("" when absent/invalid). */
+  labelRatio: string;
+  /** H12b: strain name printed on the label ("" when absent). */
+  labelStrain: string;
+  /** H12b: closed-vocabulary strain type from the label ("" when absent). */
+  labelStrainType: StrainType | "";
 };
 
 /**
@@ -151,7 +271,15 @@ export type ParsedMediaSuggestion = {
  * Never throws.
  */
 export function parseMediaSuggestResponse(raw: string): ParsedMediaSuggestion {
-  const out: ParsedMediaSuggestion = { visionSubject: null, title: "", description: "", altText: "" };
+  const out: ParsedMediaSuggestion = {
+    visionSubject: null,
+    title: "",
+    description: "",
+    altText: "",
+    labelRatio: "",
+    labelStrain: "",
+    labelStrainType: "",
+  };
   const s = (raw ?? "").trim();
   if (!s) return out;
   try {
@@ -165,6 +293,15 @@ export function parseMediaSuggestResponse(raw: string): ParsedMediaSuggestion {
       out.title = clean(String(o.title ?? ""));
       out.description = clean(String(o.description ?? ""));
       out.altText = clean(String(o.alt_text ?? o.altText ?? ""));
+      // H12b: label facts — each validated against a closed vocabulary so a
+      // hallucinated ratio or invented strain type can never reach the form.
+      out.labelRatio = normalizeCannabinoidRatio(clean(String(o.label_ratio ?? "")));
+      out.labelStrain = cleanStrainField(clean(String(o.label_strain ?? "")));
+      out.labelStrainType = normalizeStrainType(clean(String(o.label_strain_type ?? "")));
+      // Belt & braces: even if the model ignored the "put the ratio in the
+      // title" instruction, the validated facts are folded in here.
+      out.title = titleWithRatio(out.title, out.labelRatio);
+      out.description = descriptionWithStrainFacts(out.description, out.labelStrain, out.labelStrainType);
     }
   } catch {
     // Not JSON at all: salvage the text as a description so the human still
