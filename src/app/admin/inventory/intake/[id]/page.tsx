@@ -20,6 +20,7 @@ import {
   updateManifestTransportAction,
   setLotDispositionAction,
   finalizeManifestAction,
+  promoteManifestToKbAction,
 } from "../actions";
 
 /** Format an ISO timestamp into the value a datetime-local input expects. */
@@ -54,12 +55,28 @@ export default async function ManifestReviewPage({
     finalized?: string;
     lot?: string;
     held?: string;
+    kb?: string;
+    kbstrains?: string;
+    kblicense?: string;
   }>;
 }) {
   await requirePermission("inventory.manage");
   const { id } = await params;
-  const { staged, accepted, drafts, rejected, archived, transport, error, finalized, lot, held } =
-    await searchParams;
+  const {
+    staged,
+    accepted,
+    drafts,
+    rejected,
+    archived,
+    transport,
+    error,
+    finalized,
+    lot,
+    held,
+    kb,
+    kbstrains,
+    kblicense,
+  } = await searchParams;
 
   const manifest = await getManifestById(id);
   if (!manifest) notFound();
@@ -114,6 +131,7 @@ export default async function ManifestReviewPage({
   const rejectAction = rejectManifestAction.bind(null, id);
   const finalizeAction = finalizeManifestAction.bind(null, id);
   const archiveAction = archiveCoasAction.bind(null, id);
+  const promoteKbAction = promoteManifestToKbAction.bind(null, id);
   const markInTransitAction = setManifestLifecycleAction.bind(null, id, "in_transit");
   const markReceivedAction = setManifestLifecycleAction.bind(null, id, "received");
   const transportAction = updateManifestTransportAction.bind(null, id);
@@ -214,6 +232,14 @@ export default async function ManifestReviewPage({
         {error && (
           <div className="rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/10 px-4 py-2 text-sm text-[var(--admin-danger)]">
             Something went wrong with that action.
+          </div>
+        )}
+        {kb != null && (
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]">
+            KB write-back complete — {kb} product fact{kb === "1" ? "" : "s"} promoted as KB drafts
+            {kbstrains && kbstrains !== "0" ? `, ${kbstrains} strain(s) gap-filled` : ""}
+            {kblicense === "1" ? ", vendor license number captured" : ""}. Nothing was published —
+            validate the drafts in the KB review lanes.
           </div>
         )}
 
@@ -585,6 +611,27 @@ export default async function ManifestReviewPage({
               </form>
             </div>
           ) : null}
+        </div>
+
+        {/* Slice H11a — Manifest → KB bridge (drafts-only, idempotent) */}
+        <div className="flex flex-wrap items-center gap-3 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
+          <div className="flex-1">
+            <h2 className="text-sm font-bold text-[var(--admin-text)]">
+              Promote to Knowledge Base{" "}
+              <span className="text-[var(--admin-text-faint)]">(drafts-only)</span>
+            </h2>
+            <p className="mt-1 text-xs text-[var(--admin-text-muted)]">
+              Push this transfer&apos;s verified product facts — name, strain, category, vendor,
+              COA-backed potency — into KB product drafts for the crawler and AI to enrich. Runs
+              automatically when you finalize an accepted intake; use this for older manifests or to
+              re-run after fixing a vendor/brand link. Gap-fill only; nothing is published.
+            </p>
+          </div>
+          <form action={promoteKbAction}>
+            <Button type="submit" variant="neutral" size="sm">
+              ⚡ Promote to KB drafts
+            </Button>
+          </form>
         </div>
 
         {/* Accept / reject controls */}

@@ -20,6 +20,7 @@ import { extractCoaLinks } from "@/lib/inventory/intake-parser";
 import type { InboundManifest, ManifestTransportInput } from "@/lib/inventory/types";
 import { seedDraftsForManifest } from "@/lib/inventory/catalog-drafts";
 import { archiveCoasForManifest } from "@/lib/inventory/coa-archive";
+import { promoteManifestToKb } from "@/lib/inventory/manifest-kb-bridge";
 import { deriveInventoryExternalId } from "@/lib/compliance/ccrs-identifiers";
 import {
   countStages,
@@ -505,6 +506,15 @@ export async function finalizeManifestDispositions(
       await archiveCoasForManifest(manifestId);
     } catch (err) {
       console.error("[intake-store] archiveCoasForManifest failed:", err);
+    }
+    // Slice H11a: promote the accepted manifest's ground-truth product facts
+    // (name/strain/category/vendor + COA-backed potency) into the KB as
+    // DRAFTS via the existing non-destructive merge. Best-effort — a KB write
+    // hiccup must never break intake finalization.
+    try {
+      await promoteManifestToKb(manifestId, actorId);
+    } catch (err) {
+      console.error("[intake-store] promoteManifestToKb failed:", err);
     }
   }
 

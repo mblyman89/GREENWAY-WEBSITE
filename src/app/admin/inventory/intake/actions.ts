@@ -277,6 +277,42 @@ export async function setLotDispositionAction(
  * refused ones out of inventory, and stamp the derived status
  * (accepted | rejected | partially_accepted).
  */
+/**
+ * Slice H11a — promote ONE manifest's product facts into KB drafts on demand.
+ * Useful for manifests staged before this bridge existed, or a re-run after a
+ * vendor/brand link was fixed. Drafts-only + idempotent (safe to repeat).
+ */
+export async function promoteManifestToKbAction(manifestId: string) {
+  const session = await requirePermission("inventory.manage");
+  const { promoteManifestToKb } = await import("@/lib/inventory/manifest-kb-bridge");
+  const result = await promoteManifestToKb(manifestId, session.userId);
+  revalidatePath(`/admin/inventory/intake/${manifestId}`);
+  if (!result.ok) {
+    redirect(`/admin/inventory/intake/${manifestId}?error=kbpromote`);
+  }
+  redirect(
+    `/admin/inventory/intake/${manifestId}?kb=${result.outcome.promoted}&kbstrains=${result.outcome.strainsEnriched}&kblicense=${result.outcome.vendorLicenseFilled ? 1 : 0}`,
+  );
+}
+
+/**
+ * Slice H11a — BACKFILL: promote every staged manifest (except whole-manifest
+ * rejections) into KB drafts. Built for the owner's historical upload of
+ * hundreds of transfer JSONs: upload/stage them all, click once. Idempotent.
+ */
+export async function backfillKbFromManifestsAction() {
+  const session = await requirePermission("inventory.manage");
+  const { backfillKbFromManifests } = await import("@/lib/inventory/manifest-kb-bridge");
+  const result = await backfillKbFromManifests(session.userId);
+  revalidatePath("/admin/inventory/intake");
+  if (!result.ok) {
+    redirect(`/admin/inventory/intake?error=kbbackfill`);
+  }
+  redirect(
+    `/admin/inventory/intake?kbdone=${result.result.manifestsProcessed}&kbnew=${result.result.promoted}&kberr=${result.result.errors}`,
+  );
+}
+
 export async function finalizeManifestAction(manifestId: string) {
   const session = await requirePermission("inventory.manage");
   const result = await finalizeManifestDispositions(manifestId, session.userId);

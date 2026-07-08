@@ -21,6 +21,7 @@ import {
   importManifestAction,
   importManifestFromUrlAction,
   importManifestCsvAction,
+  backfillKbFromManifestsAction,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -197,10 +198,10 @@ function InboundEmailPanel({ rows }: { rows: InboundEmailLogRow[] }) {
 export default async function IntakePage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; kbdone?: string; kbnew?: string; kberr?: string }>;
 }) {
   await requirePermission("inventory.manage");
-  const { error } = await searchParams;
+  const { error, kbdone, kbnew, kberr } = await searchParams;
 
   if (!isSupabaseServiceConfigured) {
     return (
@@ -254,7 +255,9 @@ export default async function IntakePage({
                   ? "That text isn't a valid CCRS manifest.csv (no item header row found)."
                   : error === "save"
                     ? "Something went wrong staging the manifest."
-                    : null;
+                    : error === "kbbackfill"
+                      ? "The KB backfill couldn't run — check the server logs."
+                      : null;
 
   const stageMeta = (s: ManifestStage) => STAGE_META[s];
 
@@ -355,6 +358,15 @@ export default async function IntakePage({
           </div>
         )}
 
+        {kbdone && (
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]">
+            KB backfill finished — {kbdone} manifest{kbdone === "1" ? "" : "s"} processed,{" "}
+            {kbnew ?? 0} product fact{kbnew === "1" ? "" : "s"} promoted as KB drafts
+            {kberr && kberr !== "0" ? ` (${kberr} manifest(s) had errors — see server logs)` : ""}.
+            Nothing was published — validate the drafts in the KB review lanes.
+          </div>
+        )}
+
         {/* Import by Transfer Data Link (preferred) */}
         <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-accent)]/30 bg-[var(--admin-accent-soft)] p-5">
           <h2 className="mb-1 text-sm font-bold text-[var(--admin-text)]">
@@ -440,6 +452,27 @@ export default async function IntakePage({
             </Field>
             <Button type="submit" variant="save" size="sm">
               Parse CSV & stage for review
+            </Button>
+          </form>
+        </div>
+
+        {/* Slice H11a — Manifest → KB bridge backfill (drafts-only) */}
+        <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
+          <h2 className="mb-1 text-sm font-bold text-[var(--admin-text)]">
+            Promote manifests → Knowledge Base{" "}
+            <span className="text-[var(--admin-text-faint)]">(drafts-only)</span>
+          </h2>
+          <p className="mb-4 text-xs text-[var(--admin-text-muted)]">
+            Every product line on your staged manifests carries verified facts from the signed
+            transfer document — product name, strain, category, vendor, and COA-backed potency.
+            This promotes them all into <strong>KB product drafts</strong> so the crawler and AI
+            suggester have skeletons to enrich. New intakes do this automatically on accept; run
+            this after bulk-uploading historical transfer JSONs. Idempotent — safe to re-run;
+            existing KB data is gap-filled, never overwritten, and nothing is published.
+          </p>
+          <form action={backfillKbFromManifestsAction}>
+            <Button type="submit" variant="save" size="sm">
+              ⚡ Promote all manifests to KB drafts
             </Button>
           </form>
         </div>
