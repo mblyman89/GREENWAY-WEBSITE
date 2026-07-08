@@ -57,3 +57,9 @@ outputs/
 # Python bytecode
 __pycache__/
 *.pyc
+
+# Gmail link-harvest script (H11c) — OAuth secrets + harvested output stay local
+/scripts/gmail-link-harvest/credentials.json
+/scripts/gmail-link-harvest/token.json
+/scripts/gmail-link-harvest/transfer-links.txt
+/scripts/gmail-link-harvest/transfer-links.csv
