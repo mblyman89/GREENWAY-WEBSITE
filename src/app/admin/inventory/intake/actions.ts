@@ -278,6 +278,147 @@ export async function setLotDispositionAction(
  * (accepted | rejected | partially_accepted).
  */
 /**
+ * Slice H11b — batch Transfer-Link importer. Fetches + stages a CHUNK of
+ * transfer URLs (the client panel slices the pasted list into small chunks so
+ * hundreds of links never hit one serverless timeout). Returns structured
+ * per-URL results instead of redirecting.
+ *
+ * DRAFTS-ONLY: every staged manifest lands status='pending' with quarantine
+ * lots, exactly like the single-URL importer — a human still reviews and
+ * finalizes each one. Duplicate detection: a URL whose source_url was already
+ * imported, or whose parsed manifest_number already exists, is skipped so
+ * re-pasting an overlapping list never double-stages.
+ */
+export async function importManifestBatchAction(
+  urls: string[],
+): Promise<import("@/lib/inventory/batch-import-core").BatchUrlResult[]> {
+  const session = await requirePermission("inventory.manage");
+  const { parseUrlList, MAX_BATCH_URLS } = await import("@/lib/inventory/batch-import-core");
+  const { createSupabaseAdminClient } = await import("@/lib/supabase/admin");
+  const { isSupabaseServiceConfigured } = await import("@/lib/supabase/env");
+
+  type BatchUrlResult = import("@/lib/inventory/batch-import-core").BatchUrlResult;
+  const results: BatchUrlResult[] = [];
+  if (!isSupabaseServiceConfigured) {
+    return (Array.isArray(urls) ? urls : []).map((url) => ({
+      url: String(url),
+      status: "save_failed" as const,
+      detail: "Supabase service role not configured.",
+      manifestId: null,
+    }));
+  }
+
+  // Re-validate server-side (never trust the client list): clean, http(s),
+  // de-duplicated, capped.
+  const cleaned = parseUrlList((Array.isArray(urls) ? urls : []).join("\n"));
+  const admin = createSupabaseAdminClient();
+
+  for (const url of cleaned.urls.slice(0, MAX_BATCH_URLS)) {
+    // 1) Duplicate by source_url (exact match on the cleaned URL).
+    const { data: byUrl } = await admin
+      .from("inbound_manifests")
+      .select("id, manifest_number")
+      .eq("source_url", url)
+      .limit(1);
+    const urlHit = (byUrl as { id: string; manifest_number: string | null }[] | null)?.[0];
+    if (urlHit) {
+      results.push({
+        url,
+        status: "duplicate",
+        detail: urlHit.manifest_number
+          ? `Already imported as ${urlHit.manifest_number}.`
+          : "This link was already imported.",
+        manifestId: urlHit.id,
+      });
+      continue;
+    }
+
+    // 2) Fetch the transfer JSON (collapses the doubled-prefix bug, 15s cap).
+    const fetched = await fetchTransferJson(url);
+    if (!fetched.ok) {
+      results.push({ url, status: "fetch_failed", detail: fetched.error, manifestId: null });
+      continue;
+    }
+
+    // 3) Parse.
+    const parsed = parseVendorJson(fetched.jsonText);
+    if (!parsed.ok) {
+      results.push({
+        url,
+        status: "parse_failed",
+        detail: "The JSON didn't parse as a vendor manifest.",
+        manifestId: null,
+      });
+      continue;
+    }
+    if (parsed.manifest.lines.length === 0) {
+      results.push({
+        url,
+        status: "no_lines",
+        detail: "No line items were found in that transfer.",
+        manifestId: null,
+      });
+      continue;
+    }
+
+    // 4) Duplicate by manifest number (same transfer re-shared under a new URL).
+    if (parsed.manifest.manifest_number) {
+      const { data: byNum } = await admin
+        .from("inbound_manifests")
+        .select("id")
+        .eq("manifest_number", parsed.manifest.manifest_number)
+        .limit(1);
+      const numHit = (byNum as { id: string }[] | null)?.[0];
+      if (numHit) {
+        results.push({
+          url,
+          status: "duplicate",
+          detail: `Manifest ${parsed.manifest.manifest_number} was already imported.`,
+          manifestId: numHit.id,
+        });
+        continue;
+      }
+    }
+
+    // 5) Stage as a pending draft (same path as the single-URL importer).
+    let rawPayload: unknown = fetched.jsonText;
+    try {
+      rawPayload = JSON.parse(fetched.jsonText);
+    } catch {
+      rawPayload = fetched.jsonText;
+    }
+    const staged = await stageManifest(parsed.manifest, rawPayload, session.userId, {
+      sourceUrl: fetched.finalUrl,
+    });
+    if (!staged.ok) {
+      results.push({ url, status: "save_failed", detail: staged.error, manifestId: null });
+      continue;
+    }
+    results.push({
+      url,
+      status: "staged",
+      detail: parsed.manifest.manifest_number
+        ? `Staged ${parsed.manifest.manifest_number} (${parsed.manifest.lines.length} lines).`
+        : `Staged (${parsed.manifest.lines.length} lines).`,
+      manifestId: staged.manifestId,
+    });
+  }
+
+  // Surface anything the server-side re-validation dropped so counts add up.
+  for (const bad of cleaned.invalid) {
+    results.push({
+      url: bad,
+      status: "fetch_failed",
+      detail: "Not a valid http(s) URL.",
+      manifestId: null,
+    });
+  }
+
+  revalidatePath("/admin/inventory/intake");
+  return results;
+}
+
+/**
  * Slice H11a — promote ONE manifest's product facts into KB drafts on demand.
  * Useful for manifests staged before this bridge existed, or a re-run after a
  * vendor/brand link was fixed. Drafts-only + idempotent (safe to repeat).
