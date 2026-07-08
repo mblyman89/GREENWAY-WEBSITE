@@ -269,8 +269,15 @@ def extract_css(html: str, base_url: str) -> CssExtraction:
             out.evidence["about"] = body
 
     # --- Content images with alt text (skip icons/sprites/data URIs) ----------
+    # H10a: read the common lazy-load data-* attributes too — product catalogs
+    # (especially long edibles galleries) defer below-the-fold images behind
+    # them, so src/data-src alone misses most of the lineup.
+    _lazy_attrs = (
+        "src", "data-src", "data-lazy-src", "data-original", "data-lazy",
+        "data-image", "data-full-url", "data-large_image", "data-zoom-image",
+    )
     for img in soup.find_all("img"):
-        src = img.get("src") or img.get("data-src") or ""
+        src = ""
         # Prefer the largest candidate in srcset when present.
         srcset = img.get("srcset") or img.get("data-srcset") or ""
         if srcset:
@@ -280,12 +287,45 @@ def extract_css(html: str, base_url: str) -> CssExtraction:
                     src = candidates[-1]
             except Exception:
                 pass
+        if not src:
+            for attr in _lazy_attrs:
+                v = img.get(attr)
+                if v:
+                    src = v
+                    break
         if not src or src.startswith("data:"):
             continue
         low = src.lower()
-        if any(bad in low for bad in ("sprite", "1x1", "pixel", "tracking", "blank.", "spacer")):
+        if any(bad in low for bad in ("sprite", "1x1", "pixel", "tracking", "blank.", "spacer", "placeholder")):
             continue
         alt = (img.get("alt") or "").strip()
+        absolute = urljoin(base_url, src)
+        out.image_urls.append(absolute)
+        out.images.append((absolute, alt))
+
+    # <picture><source srcset> — responsive galleries put the real image here;
+    # the sibling <img src> is often a tiny placeholder. Alt comes from the
+    # sibling <img> when present.
+    for source in soup.find_all("source"):
+        srcset = source.get("srcset") or source.get("data-srcset") or ""
+        if not srcset:
+            continue
+        try:
+            candidates = [s.strip().split(" ")[0] for s in srcset.split(",") if s.strip()]
+            src = candidates[-1] if candidates else ""
+        except Exception:
+            src = ""
+        if not src or src.startswith("data:"):
+            continue
+        low = src.lower()
+        if any(bad in low for bad in ("sprite", "1x1", "pixel", "tracking", "blank.", "spacer", "placeholder")):
+            continue
+        alt = ""
+        parent = source.find_parent("picture")
+        if parent is not None:
+            sibling = parent.find("img")
+            if sibling is not None:
+                alt = (sibling.get("alt") or "").strip()
         absolute = urljoin(base_url, src)
         out.image_urls.append(absolute)
         out.images.append((absolute, alt))
