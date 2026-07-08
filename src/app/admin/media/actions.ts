@@ -9,6 +9,7 @@ import { uploadMedia, updateMediaMeta, setMediaStatus, whereUsed, getMedia, publ
 import { generate, generateVision, isAiConfigured } from "@/lib/ai/provider";
 import { COMPLIANCE_SYSTEM, checkCompliance } from "@/lib/ai/compliance";
 import { normalizeTags } from "@/lib/media/taxonomy";
+import { safeAdminPath, appendQuery } from "@/lib/media/return-state-core";
 import { classifyMediaAsset, suggestTags, crawlPath } from "@/lib/media/classify-core";
 import {
   entityNameFromTitle,
@@ -129,7 +130,10 @@ export async function updateMediaMetaAction(formData: FormData): Promise<void> {
 
   revalidatePath("/admin/media");
   revalidatePath(`/admin/media/${id}`);
-  redirect(`/admin/media/${id}?saved=1`);
+  // H12d: land back where the form said (carries the library filters); the
+  // path is validated to same-app admin routes only.
+  const returnTo = safeAdminPath(String(formData.get("returnTo") ?? ""), `/admin/media/${id}`);
+  redirect(appendQuery(returnTo, { saved: "1" }));
 }
 
 /** Publish / unpublish / archive an asset. */
@@ -138,7 +142,8 @@ export async function setMediaStatusAction(formData: FormData): Promise<void> {
   const id = String(formData.get("id") ?? "");
   const raw = String(formData.get("status") ?? "draft");
   const status = raw === "published" ? "published" : raw === "archived" ? "archived" : "draft";
-  const returnTo = String(formData.get("returnTo") ?? `/admin/media/${id}`);
+  // H12d: validated same-app return path (may carry the library filters).
+  const returnTo = safeAdminPath(String(formData.get("returnTo") ?? ""), `/admin/media/${id}`);
   if (!id) redirect("/admin/media?error=" + encodeURIComponent("Missing media id."));
 
   await setMediaStatus(id, status);
@@ -153,7 +158,7 @@ export async function setMediaStatusAction(formData: FormData): Promise<void> {
 
   revalidatePath("/admin/media");
   revalidatePath(`/admin/media/${id}`);
-  redirect(`${returnTo}?saved=1`);
+  redirect(appendQuery(returnTo, { saved: "1" }));
 }
 
 /**
@@ -189,7 +194,9 @@ export async function deleteMediaAction(formData: FormData): Promise<void> {
   });
 
   revalidatePath("/admin/media");
-  redirect("/admin/media?deleted=1");
+  // H12d: after delete, land back on the (possibly filtered) library view.
+  const returnTo = safeAdminPath(String(formData.get("returnTo") ?? ""), "/admin/media");
+  redirect(appendQuery(returnTo, { deleted: "1" }));
 }
 
 /**

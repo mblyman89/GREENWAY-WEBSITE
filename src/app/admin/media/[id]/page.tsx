@@ -19,6 +19,7 @@ import {
   pendingProductLinks,
 } from "../actions";
 import { ProductLinkPanel } from "@/components/admin/media/ProductLinkPanel";
+import { pickListParams, withListParams } from "@/lib/media/return-state-core";
 
 export const dynamic = "force-dynamic";
 
@@ -38,11 +39,18 @@ export default async function MediaDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ saved?: string; error?: string; note?: string }>;
+  searchParams: Promise<{ saved?: string; error?: string; note?: string; q?: string; status?: string; usage?: string }>;
 }) {
   await requirePermission("media.manage");
   const { id } = await params;
-  const { saved, error, note } = await searchParams;
+  const sp = await searchParams;
+  const { saved, error, note } = sp;
+  // H12d: the library's filter state rides along in the URL — the back link
+  // returns to the exact filtered view, and every form round-trips it via
+  // returnTo so saving/publishing never loses the filters.
+  const listParams = pickListParams(sp);
+  const backHref = withListParams("/admin/media", listParams);
+  const selfHref = withListParams(`/admin/media/${id}`, listParams);
 
   const asset = await getMedia(id);
   if (!asset) notFound();
@@ -115,7 +123,7 @@ export default async function MediaDetailPage({
             {/* Status controls */}
             <form action={setMediaStatusAction} className="flex flex-wrap gap-2 rounded-xl border border-white/10 bg-[#0a0a0a] p-4">
               <input type="hidden" name="id" value={asset.id} />
-              <input type="hidden" name="returnTo" value={`/admin/media/${asset.id}`} />
+              <input type="hidden" name="returnTo" value={selfHref} />
               <span className="w-full text-xs font-medium text-white/50">Visibility</span>
               <button name="status" value="published" className="rounded-full bg-[#7ed957] px-3 py-1.5 text-xs font-semibold text-black hover:bg-[#6cc746]">Publish</button>
               <button name="status" value="draft" className="rounded-full border border-white/20 px-3 py-1.5 text-xs font-semibold text-white/80 hover:border-white/40">Draft</button>
@@ -178,6 +186,7 @@ export default async function MediaDetailPage({
             {/* Delete */}
             <form action={deleteMediaAction} className="rounded-xl border border-[#ff7f00]/20 bg-[#ff7f00]/5 p-5">
               <input type="hidden" name="id" value={asset.id} />
+              <input type="hidden" name="returnTo" value={backHref} />
               <p className="text-sm font-semibold text-[#ff7f00]">Danger zone</p>
               <p className="mt-1 text-xs text-white/50">
                 {inUse

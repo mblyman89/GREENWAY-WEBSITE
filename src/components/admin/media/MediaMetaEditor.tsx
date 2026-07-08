@@ -36,8 +36,11 @@ export function MediaMetaEditor({
   suggestAlt,
   suggestMeta,
   suggestAll,
+  returnTo,
 }: {
   id: string;
+  /** H12d: where the save action should land (carries the library filters). */
+  returnTo?: string;
   initial: {
     title: string;
     description: string;
@@ -131,6 +134,7 @@ export function MediaMetaEditor({
   return (
     <form action={formAction} className="space-y-4 rounded-xl border border-white/10 bg-[#0a0a0a] p-5">
       <input type="hidden" name="id" value={id} />
+      {returnTo ? <input type="hidden" name="returnTo" value={returnTo} /> : null}
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm font-semibold text-white">Smart metadata</p>
