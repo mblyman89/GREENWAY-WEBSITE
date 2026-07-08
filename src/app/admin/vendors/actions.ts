@@ -13,6 +13,7 @@ import {
   summarizeSocialAccept,
   SOCIAL_DRAFT_PLATFORMS,
 } from "@/lib/vendors/social-draft-core";
+import { websitePatch } from "@/lib/vendors/website-core";
 import { getVendorById, getBrandById } from "@/lib/vendors/store";
 import { generateVendorProfile } from "@/lib/ai/ai-vendor";
 import { persistSuggestion, reviewSuggestion, getSuggestion } from "@/lib/ai/suggestions";
@@ -669,10 +670,33 @@ export async function crawlVendorAction(formData: FormData): Promise<void> {
     if (!result.ok) {
       redirect(`/admin/vendors/${id}?error=` + encodeURIComponent(`Couldn't research that page: ${result.error || "unknown error"}`));
     }
+    // H12c: the crawl SUCCEEDED on this URL — gap-fill the vendor's empty
+    // website field with the site root (a hand-entered website is never
+    // overwritten; websitePatch returns null in that case).
+    let websiteNote = "";
+    const site = websitePatch(vendor!.website, url);
+    if (site) {
+      const admin = createSupabaseAdminClient();
+      const { error: siteError } = await admin
+        .from("vendors")
+        .update({ website: site, updated_by: session.userId })
+        .eq("id", id);
+      if (!siteError) {
+        websiteNote = ` Website field set to ${site}.`;
+        await recordAudit({
+          actorId: session.userId,
+          actorEmail: session.email,
+          action: "vendor.website_autofilled",
+          entityType: "vendor",
+          entityId: id,
+          after: { website: site, via: "crawl" },
+        });
+      }
+    }
     const msg =
-      result.drafts_written > 0
+      (result.drafts_written > 0
         ? `Researched ${result.pages?.length ?? 1} page(s) on ${url} — ${result.drafts_written} draft(s) added for review.`
-        : `Researched ${result.pages?.length ?? 1} page(s) on ${url} — no new drafts (nothing verifiable found, or already pending).`;
+        : `Researched ${result.pages?.length ?? 1} page(s) on ${url} — no new drafts (nothing verifiable found, or already pending).`) + websiteNote;
     revalidatePath(`/admin/vendors/${id}`);
     redirect(`/admin/vendors/${id}?saved=1&note=${encodeURIComponent(msg)}#ai-drafts`);
   } catch (err) {
@@ -718,10 +742,32 @@ export async function crawlBrandAction(formData: FormData): Promise<void> {
     if (!result.ok) {
       redirect(`/admin/vendors/${vendorId}?error=` + encodeURIComponent(`Couldn't research that page: ${result.error || "unknown error"}`));
     }
+    // H12c: gap-fill the brand's empty website field with the crawled site
+    // root (never overwrites a hand-entered value).
+    let websiteNote = "";
+    const site = websitePatch(brand!.website, url);
+    if (site) {
+      const admin = createSupabaseAdminClient();
+      const { error: siteError } = await admin
+        .from("brands")
+        .update({ website: site, updated_by: session.userId })
+        .eq("id", brandId);
+      if (!siteError) {
+        websiteNote = ` Website field set to ${site}.`;
+        await recordAudit({
+          actorId: session.userId,
+          actorEmail: session.email,
+          action: "brand.website_autofilled",
+          entityType: "brand",
+          entityId: brandId,
+          after: { website: site, via: "crawl" },
+        });
+      }
+    }
     const msg =
-      result.drafts_written > 0
+      (result.drafts_written > 0
         ? `Researched ${result.pages?.length ?? 1} page(s) on ${url} — ${result.drafts_written} brand draft(s) added for review.`
-        : `Researched ${result.pages?.length ?? 1} page(s) on ${url} — no new drafts (nothing verifiable found, or already pending).`;
+        : `Researched ${result.pages?.length ?? 1} page(s) on ${url} — no new drafts (nothing verifiable found, or already pending).`) + websiteNote;
     revalidatePath(`/admin/vendors/${vendorId}`);
     redirect(`/admin/vendors/${vendorId}?saved=1&note=${encodeURIComponent(msg)}#brand-${brandId}`);
   } catch (err) {
