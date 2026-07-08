@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * src/components/admin/ux/ScrollKeeper.tsx — Slice H12e.
+ * src/components/admin/ux/ScrollKeeper.tsx — Slice H12e, updated H13a.
  *
  * Admin-wide scroll preservation for server-action form saves. Every admin
  * save posts a <form action={serverAction}> that ends in redirect(), which
@@ -11,16 +11,25 @@
  * Mechanism (zero per-page wiring):
  *  • a capture-phase `submit` listener records {path, scrollY, time} in
  *    sessionStorage for ANY form on the page;
- *  • after the redirect lands, a usePathname effect consults decideRestore():
- *    same path + fresh + no #hash → restore the exact scroll position.
- *    Real navigations (different path) leave scroll alone; explicit anchors
- *    (#ai-drafts) win; stale records never fire.
+ *  • after the redirect lands, decideRestore() says whether to restore. A
+ *    fresh record for the SAME path always restores — even when the save
+ *    redirected to a #hash (the vendor page saves land on "#ai-drafts", which
+ *    sits near the top; letting the browser jump to that anchor was exactly
+ *    the "scrolls to top" bug the owner hit). A #hash still wins only when the
+ *    record is for a DIFFERENT path (a genuine anchor navigation).
+ *
+ * H13a timing fix: saves on a long page redirect to the SAME pathname (only
+ * the query string / hash change). usePathname() does NOT change in that case,
+ * so keying the restore effect on pathname alone meant repeated saves never
+ * re-ran it. We now key on the full location (pathname + search + hash) via
+ * useSearchParams so every save triggers a restore, and we override the
+ * browser's native anchor jump.
  *
  * Renders nothing. Decision rules live in the PURE core
  * (src/lib/admin/scroll-keeper-core.ts) and are pinned in tests/compliance.
  */
 import { useEffect } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import {
   SCROLL_KEEPER_KEY,
   parseScrollRecord,
@@ -30,6 +39,11 @@ import {
 
 export function ScrollKeeper() {
   const pathname = usePathname();
+  // useSearchParams changes on every query-string change, so the restore
+  // effect re-runs even when the pathname is unchanged (repeated saves on the
+  // same page all redirect to "?saved=1#…" on the same path).
+  const searchParams = useSearchParams();
+  const search = searchParams?.toString() ?? "";
 
   // Record scroll position on ANY form submit (capture phase sees it even
   // when the submitter is a nested client component).
@@ -69,13 +83,22 @@ export function ScrollKeeper() {
       // ignore
     }
     if (decision.action === "restore") {
-      // Double rAF: let the fresh server-rendered content lay out first so
-      // the target offset exists before we jump to it.
+      const { y } = decision;
+      // The browser natively jumps to a #anchor (e.g. #ai-drafts) on load, so
+      // we override it across a few frames to make sure our restore is the
+      // final word even after layout + anchor scrolling settle.
+      const jump = () => window.scrollTo({ top: y, behavior: "instant" as ScrollBehavior });
       requestAnimationFrame(() => {
-        requestAnimationFrame(() => window.scrollTo({ top: decision.y, behavior: "instant" as ScrollBehavior }));
+        jump();
+        requestAnimationFrame(jump);
       });
+      // One more override after the current task queue in case the browser's
+      // anchor scroll fires late (fresh server-rendered content).
+      setTimeout(jump, 0);
     }
-  }, [pathname]);
+    // pathname + search are in the dep array so this re-runs on every save,
+    // even when only the query string / hash changed on the same page.
+  }, [pathname, search]);
 
   return null;
 }

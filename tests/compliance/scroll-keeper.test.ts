@@ -41,15 +41,30 @@ describe("decideRestore", () => {
       y: 800,
     });
   });
-  it("an explicit #anchor in the landing URL wins (e.g. #ai-drafts)", () => {
+  it("H13a: save on the SAME page restores even when the redirect added a #hash", () => {
+    // The vendor page's accept/save actions redirect to "?saved=1#ai-drafts".
+    // A fresh same-path record means the user just saved here, so their real
+    // scroll position must beat the server-appended anchor (which sits near
+    // the top and was the cause of the 'jumps to top after every save' bug).
     expect(
-      decideRestore(rec, { path: "/admin/media/abc", hash: "#ai-drafts", now: NOW + 500 }),
+      decideRestore(rec, { path: "/admin/vendors/v1", hash: "#ai-drafts", now: NOW + 500 }),
     ).toEqual({ action: "drop" });
+    const vendorRec = makeScrollRecord("/admin/vendors/v1", 800, NOW);
+    expect(
+      decideRestore(vendorRec, { path: "/admin/vendors/v1", hash: "#ai-drafts", now: NOW + 500 }),
+    ).toEqual({ action: "restore", y: 800 });
   });
-  it("a different path keeps the record (redirect still in flight)", () => {
+  it("a different path (no hash) keeps the record (redirect still in flight)", () => {
     expect(decideRestore(rec, { path: "/admin/media", hash: "", now: NOW + 500 })).toEqual({
       action: "keep",
     });
+  });
+  it("a different path WITH a #anchor drops (genuine anchor navigation elsewhere)", () => {
+    // The record is for /admin/media/abc but we landed on a different page at
+    // an anchor — that anchor is the intended target; this record is not ours.
+    expect(
+      decideRestore(rec, { path: "/admin/other", hash: "#section", now: NOW + 500 }),
+    ).toEqual({ action: "drop" });
   });
   it("stale records never fire", () => {
     expect(
