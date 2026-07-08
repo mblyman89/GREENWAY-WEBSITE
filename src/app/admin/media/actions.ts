@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { uploadMedia, updateMediaMeta, setMediaStatus, whereUsed, getMedia, publicUrlForKey } from "@/lib/media/store";
+import { uploadMedia, updateMediaMeta, setMediaStatus, whereUsed, getMedia, publicUrlForKey, recordUsage } from "@/lib/media/store";
 import { generate, generateVision, isAiConfigured } from "@/lib/ai/provider";
 import { COMPLIANCE_SYSTEM, checkCompliance } from "@/lib/ai/compliance";
 import { normalizeTags } from "@/lib/media/taxonomy";
@@ -19,6 +19,17 @@ import {
 } from "@/lib/media/suggest-core";
 import { buildGroundedFacts } from "@/lib/ai/kb/retrieval";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import {
+  bestProductMatches,
+  buildProductLinkPayload,
+  parseProductLinkPayload,
+  isLogoUsage,
+  withLogoReviewTag,
+  type ProductForMatch,
+} from "@/lib/media/product-link-core";
+import { persistSuggestion, reviewSuggestion, getSuggestion, listSuggestions } from "@/lib/ai/suggestions";
+import { attachKbProductImage, listKbProducts } from "@/lib/ai/kb/store";
+import type { AiSuggestion } from "@/lib/enrichment/types";
 
 const MAX_BYTES = 10 * 1024 * 1024; // 10 MB ceiling for the library
 const ALLOWED_MIME = new Set([
@@ -543,4 +554,239 @@ export async function suggestMediaAllAction(id: string): Promise<MediaSuggestAll
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "AI suggestion failed." };
   }
+}
+
+/* ------------------------------------------------------------------
+ * Slice H10d — product-image → product link (drafts-only) + logo
+ * validator routing.
+ *
+ * "if its a product image, we need to link it to a product … vendor
+ * logos should be flagged and sent to a logo validator" — owner.
+ *
+ * suggestProductLinksAction matches the asset against kb_products
+ * (conservative token overlap, scored + reasoned) and persists the
+ * best candidates as PENDING ai_suggestions rows (field_key
+ * "media_product_link"). NOTHING attaches until the owner clicks
+ * Accept, which runs the existing attachKbProductImage() from H9c.
+ *
+ * routeLogoForReviewAction stamps the needs-logo-review tag so logo
+ * assets surface in the validation lane (tag-searchable in the
+ * library) — idempotent, keeps every existing tag.
+ * ------------------------------------------------------------------ */
+
+export type ProductLinkSuggestion = {
+  suggestionId: string;
+  productId: string;
+  productName: string;
+  brandSlug: string;
+  score: number;
+  reasons: string[];
+};
+
+export type ProductLinkResult =
+  | { ok: true; suggestions: ProductLinkSuggestion[]; note: string }
+  | { ok: false; error: string };
+
+/** Find likely kb_products for this image and save drafts-only link suggestions. */
+export async function suggestProductLinksAction(id: string): Promise<ProductLinkResult> {
+  const session = await requirePermission("media.manage");
+  const asset = await getMedia(id);
+  if (!asset) return { ok: false, error: "Asset not found." };
+
+  const entityName = entityNameFromTitle(asset.title);
+  const derivedName = nameFromFilename(asset.filename);
+  if (!derivedName && !entityName) {
+    return { ok: false, error: "Not enough signals (no usable filename or title) to match a product." };
+  }
+
+  // Candidates: every non-archived KB product (drafts included — the owner is
+  // usually enriching drafts when harvested images arrive).
+  const rows = await listKbProducts("all", 1000);
+  const candidates: ProductForMatch[] = rows
+    .filter((r) => r.status !== "archived")
+    .map((r) => ({
+      id: r.id,
+      brand_slug: r.brand_slug,
+      product_slug: r.product_slug,
+      variant_label: r.variant_label,
+      display_name: r.display_name,
+      category: r.category,
+      status: r.status,
+    }));
+  if (candidates.length === 0) {
+    return { ok: false, error: "No KB products to match against yet." };
+  }
+
+  const matches = bestProductMatches(
+    { derivedName, entityName, extraText: (asset.tags ?? []).join(" ") },
+    candidates,
+  );
+  if (matches.length === 0) {
+    return { ok: false, error: "No confident product match — link it manually from the product page." };
+  }
+
+  // Skip candidates that already have a pending suggestion for this asset.
+  const existing = await listSuggestions("media_asset", id, "pending");
+  const alreadySuggested = new Set(
+    existing
+      .filter((s) => s.field_key === "media_product_link")
+      .map((s) => parseProductLinkPayload(s.suggested_value)?.product_id)
+      .filter(Boolean),
+  );
+
+  const out: ProductLinkSuggestion[] = [];
+  for (const m of matches) {
+    if (alreadySuggested.has(m.product.id)) {
+      continue;
+    }
+    const saved = await persistSuggestion({
+      entity_type: "media_asset",
+      entity_id: id,
+      field_key: "media_product_link",
+      suggested_value: buildProductLinkPayload(id, m),
+      input_summary: `Match ${derivedName || entityName} → ${m.product.display_name} (${m.product.brand_slug})`,
+      generated_by: session.userId,
+      confidence: m.score,
+      source: asset.source ?? "kb",
+    });
+    out.push({
+      suggestionId: saved.id,
+      productId: m.product.id,
+      productName: m.product.display_name,
+      brandSlug: m.product.brand_slug,
+      score: m.score,
+      reasons: m.reasons,
+    });
+  }
+
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "media.product_link_suggested",
+    entityType: "media_asset",
+    entityId: id,
+    after: { count: out.length, productIds: out.map((s) => s.productId) },
+  });
+
+  const note =
+    out.length > 0
+      ? `${out.length} product link${out.length === 1 ? "" : "s"} suggested — review below and accept to attach.`
+      : "Matches found but all were already suggested — review the pending suggestions below.";
+  revalidatePath(`/admin/media/${id}`);
+  return { ok: true, suggestions: out, note };
+}
+
+/** List pending product-link suggestions for one asset (server page helper). */
+export async function pendingProductLinks(id: string): Promise<
+  { suggestion: AiSuggestion; productId: string; productName: string; brandSlug: string; score: number; reasons: string[] }[]
+> {
+  const rows = await listSuggestions("media_asset", id, "pending");
+  const out = [];
+  for (const s of rows) {
+    if (s.field_key !== "media_product_link") continue;
+    const p = parseProductLinkPayload(s.suggested_value);
+    if (!p) continue;
+    out.push({
+      suggestion: s,
+      productId: p.product_id,
+      productName: p.product_display_name,
+      brandSlug: p.brand_slug,
+      score: p.score,
+      reasons: p.reasons,
+    });
+  }
+  return out;
+}
+
+/** Owner ACCEPTS a product-link draft → attach via the H9c gallery merge. */
+export async function acceptProductLinkAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("media.manage");
+  const suggestionId = String(formData.get("suggestionId") ?? "");
+  const mediaId = String(formData.get("mediaId") ?? "");
+  const back = `/admin/media/${mediaId}`;
+  if (!suggestionId || !mediaId) redirect(`${back}?error=` + encodeURIComponent("Missing suggestion details."));
+
+  const suggestion = await getSuggestion(suggestionId);
+  if (!suggestion || suggestion.entity_id !== mediaId || suggestion.field_key !== "media_product_link") {
+    redirect(`${back}?error=` + encodeURIComponent("Suggestion not found."));
+  }
+  const payload = parseProductLinkPayload(suggestion!.suggested_value);
+  if (!payload) redirect(`${back}?error=` + encodeURIComponent("Suggestion payload unreadable."));
+
+  const res = await attachKbProductImage(payload!.product_id, mediaId, session.userId);
+  if (!res.ok) redirect(`${back}?error=` + encodeURIComponent(res.error ?? "Attach failed."));
+
+  await reviewSuggestion(suggestionId, "accepted", session.userId);
+  await recordUsage(mediaId, "kb_product", payload!.product_id, "gallery");
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "media.product_link_accepted",
+    entityType: "media_asset",
+    entityId: mediaId,
+    after: { productId: payload!.product_id, becamePrimary: res.becamePrimary, alreadyPresent: res.alreadyPresent },
+  });
+
+  revalidatePath(back);
+  redirect(
+    `${back}?saved=1&note=` +
+      encodeURIComponent(
+        `Attached to ${payload!.product_display_name}${res.becamePrimary ? " (set as primary image)" : ""}.`,
+      ),
+  );
+}
+
+/** Owner REJECTS a product-link draft — nothing attaches. */
+export async function rejectProductLinkAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("media.manage");
+  const suggestionId = String(formData.get("suggestionId") ?? "");
+  const mediaId = String(formData.get("mediaId") ?? "");
+  const back = `/admin/media/${mediaId}`;
+  if (!suggestionId || !mediaId) redirect(`${back}?error=` + encodeURIComponent("Missing suggestion details."));
+
+  const suggestion = await getSuggestion(suggestionId);
+  if (!suggestion || suggestion.entity_id !== mediaId || suggestion.field_key !== "media_product_link") {
+    redirect(`${back}?error=` + encodeURIComponent("Suggestion not found."));
+  }
+  await reviewSuggestion(suggestionId, "rejected", session.userId);
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "media.product_link_rejected",
+    entityType: "media_asset",
+    entityId: mediaId,
+  });
+  revalidatePath(back);
+  redirect(`${back}?saved=1&note=` + encodeURIComponent("Product link rejected."));
+}
+
+/** Route a logo asset to the validation lane (needs-logo-review tag). */
+export async function routeLogoForReviewAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("media.manage");
+  const id = String(formData.get("id") ?? "");
+  const back = `/admin/media/${id}`;
+  if (!id) redirect("/admin/media?error=" + encodeURIComponent("Missing asset id."));
+
+  const asset = await getMedia(id);
+  if (!asset) redirect(`${back}?error=` + encodeURIComponent("Asset not found."));
+  if (!isLogoUsage(asset!.usage_type)) {
+    redirect(`${back}?error=` + encodeURIComponent("Only logo-type assets can be routed to logo review."));
+  }
+
+  const admin = createSupabaseAdminClient();
+  const { error } = await admin
+    .from("media_assets")
+    .update({ tags: withLogoReviewTag(asset!.tags) })
+    .eq("id", id);
+  if (error) redirect(`${back}?error=` + encodeURIComponent(error.message));
+
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "media.logo_routed_for_review",
+    entityType: "media_asset",
+    entityId: id,
+  });
+  revalidatePath(back);
+  redirect(`${back}?saved=1&note=` + encodeURIComponent("Flagged for logo validation (needs-logo-review)."));
 }

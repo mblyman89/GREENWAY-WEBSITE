@@ -12,7 +12,13 @@ import {
   suggestMediaAltAction,
   suggestMediaMetaAction,
   suggestMediaAllAction,
+  suggestProductLinksAction,
+  acceptProductLinkAction,
+  rejectProductLinkAction,
+  routeLogoForReviewAction,
+  pendingProductLinks,
 } from "../actions";
+import { ProductLinkPanel } from "@/components/admin/media/ProductLinkPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -32,11 +38,11 @@ export default async function MediaDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ saved?: string; error?: string }>;
+  searchParams: Promise<{ saved?: string; error?: string; note?: string }>;
 }) {
   await requirePermission("media.manage");
   const { id } = await params;
-  const { saved, error } = await searchParams;
+  const { saved, error, note } = await searchParams;
 
   const asset = await getMedia(id);
   if (!asset) notFound();
@@ -44,6 +50,17 @@ export default async function MediaDetailPage({
   const url = publicUrlForKey(asset.storage_key);
   const usages = await whereUsed(id);
   const inUse = usages.length > 0;
+
+  // H10d: pending drafts-only product-link suggestions for this asset.
+  const pendingLinks = (await pendingProductLinks(id)).map((p) => ({
+    suggestionId: p.suggestion.id,
+    productId: p.productId,
+    productName: p.productName,
+    brandSlug: p.brandSlug,
+    score: p.score,
+    reasons: p.reasons,
+  }));
+  const hasLogoReviewTag = (asset.tags ?? []).includes("needs-logo-review");
 
   return (
     <div>
@@ -62,7 +79,7 @@ export default async function MediaDetailPage({
 
       <div className="space-y-6 px-5 py-6 sm:px-8">
         {saved && (
-          <div className="rounded-lg border border-[#7ed957]/40 bg-[#7ed957]/10 px-4 py-2 text-sm text-[#7ed957]">Saved.</div>
+          <div className="rounded-lg border border-[#7ed957]/40 bg-[#7ed957]/10 px-4 py-2 text-sm text-[#7ed957]">{note || "Saved."}</div>
         )}
         {error && (
           <div className="rounded-lg border border-[#ff7f00]/40 bg-[#ff7f00]/10 px-4 py-2 text-sm text-[#ff7f00]">{error}</div>
@@ -124,6 +141,18 @@ export default async function MediaDetailPage({
               suggestAlt={suggestMediaAltAction}
               suggestMeta={suggestMediaMetaAction}
               suggestAll={suggestMediaAllAction}
+            />
+
+            {/* H10d: product-link drafts + logo-validation routing */}
+            <ProductLinkPanel
+              mediaId={asset.id}
+              usageType={asset.usage_type}
+              pending={pendingLinks}
+              hasLogoReviewTag={hasLogoReviewTag}
+              suggestLinks={suggestProductLinksAction}
+              acceptAction={acceptProductLinkAction}
+              rejectAction={rejectProductLinkAction}
+              routeLogoAction={routeLogoForReviewAction}
             />
 
             {/* Where used */}
