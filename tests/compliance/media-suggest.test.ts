@@ -15,6 +15,11 @@ import {
   buildMediaSuggestInstruction,
   parseMediaSuggestResponse,
   safeUsageType,
+  normalizeCannabinoidRatio,
+  normalizeStrainType,
+  titleWithRatio,
+  descriptionWithStrainFacts,
+  cleanStrainField,
 } from "@/lib/media/suggest-core";
 import { VISION_SUBJECTS } from "@/lib/media/classify-core";
 
@@ -144,6 +149,9 @@ describe("parseMediaSuggestResponse", () => {
       title: "",
       description: "",
       altText: "",
+      labelRatio: "",
+      labelStrain: "",
+      labelStrainType: "",
     });
   });
 
@@ -162,5 +170,151 @@ describe("safeUsageType", () => {
     expect(safeUsageType("vendor-logo")).toBe("vendor-logo");
     expect(safeUsageType("spaceship")).toBe("");
     expect(safeUsageType(null)).toBe("");
+  });
+});
+
+/* ------------------------------------------------------------------
+ * H12b — label facts: ratios + strain read off the packaging.
+ * ------------------------------------------------------------------ */
+
+describe("normalizeCannabinoidRatio (H12b)", () => {
+  it("accepts the owner's Constellation examples", () => {
+    expect(normalizeCannabinoidRatio("1:1 THC:CBD")).toBe("1:1 THC:CBD");
+    expect(normalizeCannabinoidRatio("2:1:1 THC:CBG:CBN")).toBe("2:1:1 THC:CBG:CBN");
+  });
+  it("uppercases compounds and keeps digit order", () => {
+    expect(normalizeCannabinoidRatio("10:1 cbd:thc")).toBe("10:1 CBD:THC");
+  });
+  it("rejects count/compound mismatches — never repairs a guess", () => {
+    expect(normalizeCannabinoidRatio("1:1:1 THC:CBD")).toBe("");
+    expect(normalizeCannabinoidRatio("1:1 THC:CBD:CBN")).toBe("");
+  });
+  it("rejects unknown compounds, mg amounts, percentages, and prose", () => {
+    expect(normalizeCannabinoidRatio("1:1 THC:XYZ")).toBe("");
+    expect(normalizeCannabinoidRatio("100mg THC")).toBe("");
+    expect(normalizeCannabinoidRatio("21% THC")).toBe("");
+    expect(normalizeCannabinoidRatio("a balanced 1:1 blend")).toBe("");
+    expect(normalizeCannabinoidRatio("")).toBe("");
+    expect(normalizeCannabinoidRatio(null)).toBe("");
+  });
+});
+
+describe("normalizeStrainType (H12b)", () => {
+  it("passes the closed vocabulary through", () => {
+    expect(normalizeStrainType("hybrid")).toBe("hybrid");
+    expect(normalizeStrainType("Indica")).toBe("indica");
+    expect(normalizeStrainType("SATIVA")).toBe("sativa");
+  });
+  it("folds dominant-hybrid phrasings", () => {
+    expect(normalizeStrainType("indica-dominant hybrid")).toBe("indica-hybrid");
+    expect(normalizeStrainType("Sativa Dominant")).toBe("sativa-hybrid");
+  });
+  it("blanks anything off-vocabulary — a made-up type never reaches the form", () => {
+    expect(normalizeStrainType("energetic")).toBe("");
+    expect(normalizeStrainType("loud")).toBe("");
+    expect(normalizeStrainType(null)).toBe("");
+  });
+});
+
+describe("titleWithRatio (H12b)", () => {
+  it("appends the ratio to the title", () => {
+    expect(titleWithRatio("Constellation CBD Shot", "1:1 THC:CBD")).toBe(
+      "Constellation CBD Shot 1:1 THC:CBD",
+    );
+  });
+  it("is idempotent — a title already carrying the digits is untouched", () => {
+    expect(titleWithRatio("Constellation Shot 1:1 THC:CBD", "1:1 THC:CBD")).toBe(
+      "Constellation Shot 1:1 THC:CBD",
+    );
+  });
+  it("no ratio → title unchanged; no title → ratio stands alone", () => {
+    expect(titleWithRatio("Constellation Shot", "")).toBe("Constellation Shot");
+    expect(titleWithRatio("", "1:1 THC:CBD")).toBe("1:1 THC:CBD");
+  });
+});
+
+describe("descriptionWithStrainFacts (H12b)", () => {
+  it("appends strain name + type when the description lacks them", () => {
+    expect(descriptionWithStrainFacts("A rosin-infused shot.", "Blue Dream", "hybrid")).toBe(
+      "A rosin-infused shot. Label lists strain: Blue Dream, hybrid.",
+    );
+  });
+  it("skips facts the description already mentions (case-insensitive)", () => {
+    expect(
+      descriptionWithStrainFacts("A Blue Dream hybrid shot.", "Blue Dream", "hybrid"),
+    ).toBe("A Blue Dream hybrid shot.");
+  });
+  it("nothing to add → description unchanged", () => {
+    expect(descriptionWithStrainFacts("A shot.", "", "")).toBe("A shot.");
+  });
+});
+
+describe("cleanStrainField (H12b)", () => {
+  it("passes real strain names and squashes whitespace", () => {
+    expect(cleanStrainField("  Blue   Dream ")).toBe("Blue Dream");
+  });
+  it("blanks non-answers, URLs, JSON-ish junk, and over-long strings", () => {
+    expect(cleanStrainField("unknown")).toBe("");
+    expect(cleanStrainField("N/A")).toBe("");
+    expect(cleanStrainField("not visible")).toBe("");
+    expect(cleanStrainField("https://example.com/strain")).toBe("");
+    expect(cleanStrainField('{"strain":"x"}')).toBe("");
+    expect(cleanStrainField("x".repeat(61))).toBe("");
+  });
+});
+
+describe("parseMediaSuggestResponse — label facts (H12b)", () => {
+  it("parses and validates the three label fields, folding them into title/description", () => {
+    const parsed = parseMediaSuggestResponse(
+      JSON.stringify({
+        vision_subject: "product-packaging",
+        title: "Constellation CBD Shot",
+        description: "A rosin-infused beverage shot.",
+        alt_text: "Constellation cannabis beverage shot bottle with ratio label",
+        label_ratio: "1:1 thc:cbd",
+        label_strain: "Blue Dream",
+        label_strain_type: "Hybrid",
+      }),
+    );
+    expect(parsed.labelRatio).toBe("1:1 THC:CBD");
+    expect(parsed.labelStrain).toBe("Blue Dream");
+    expect(parsed.labelStrainType).toBe("hybrid");
+    expect(parsed.title).toBe("Constellation CBD Shot 1:1 THC:CBD");
+    expect(parsed.description).toBe(
+      "A rosin-infused beverage shot. Label lists strain: Blue Dream, hybrid.",
+    );
+  });
+  it("invalid label facts are dropped and the copy stays untouched", () => {
+    const parsed = parseMediaSuggestResponse(
+      JSON.stringify({
+        vision_subject: "product-packaging",
+        title: "Shot",
+        description: "A shot.",
+        alt_text: "a",
+        label_ratio: "about 1 to 1",
+        label_strain: "unknown",
+        label_strain_type: "energetic",
+      }),
+    );
+    expect(parsed.labelRatio).toBe("");
+    expect(parsed.labelStrain).toBe("");
+    expect(parsed.labelStrainType).toBe("");
+    expect(parsed.title).toBe("Shot");
+    expect(parsed.description).toBe("A shot.");
+  });
+  it("replies without the new fields still parse (backward compatible)", () => {
+    const parsed = parseMediaSuggestResponse(
+      JSON.stringify({ vision_subject: "logo-wordmark", title: "Fairwinds Logo", description: "d", alt_text: "a" }),
+    );
+    expect(parsed.labelRatio).toBe("");
+    expect(parsed.title).toBe("Fairwinds Logo");
+  });
+  it("the instruction asks for the label fields and the never-guess rule", () => {
+    const p = buildMediaSuggestInstruction({ filename: "shot.png" });
+    expect(p).toContain("label_ratio");
+    expect(p).toContain("label_strain");
+    expect(p).toContain("label_strain_type");
+    expect(p).toContain("never guess");
+    expect(p).toContain("indica, sativa, hybrid, indica-hybrid, sativa-hybrid");
   });
 });
