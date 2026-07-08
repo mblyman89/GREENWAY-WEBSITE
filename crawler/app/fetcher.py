@@ -17,6 +17,7 @@ import hashlib
 import ipaddress
 import json
 import random
+import re
 import socket
 import time
 import urllib.robotparser as robotparser
@@ -221,32 +222,88 @@ def _respect_rate_limit(settings: Settings, url: str) -> None:
     _last_fetch_at[dom] = time.time()
 
 
+# Lazy-load attributes used by the common gallery/lightbox/theme libraries
+# (lazysizes, WooCommerce, Shopify, Wix, Squarespace, Elementor, ...). Product
+# catalogs — especially long edibles galleries — routinely defer every image
+# below the fold behind one of these, so reading only src/data-src misses most
+# of the catalog (H10a: the owner saw every rosin but only ONE of many edibles).
+_LAZY_IMG_ATTRS = (
+    "src", "data-src", "data-lazy-src", "data-original", "data-lazy",
+    "data-image", "data-full-url", "data-large_image", "data-zoom-image",
+)
+
+_MAX_IMAGES_PER_PAGE = 80  # was 40 — long edible/product catalogs exceed it
+
+
+def _pick_from_srcset(srcset: str) -> str:
+    """Largest candidate from a srcset/data-srcset string ('url 1x, url 2x')."""
+    try:
+        candidates = [s.strip().split(" ")[0] for s in srcset.split(",") if s.strip()]
+        return candidates[-1] if candidates else ""
+    except Exception:
+        return ""
+
+
+_CSS_BG_RE = re.compile(r"background(?:-image)?\s*:[^;]*url\(\s*['\"]?([^'\")]+)['\"]?\s*\)", re.I)
+
+
 def _extract_image_urls(html: str, base_url: str) -> list[str]:
-    """Pull <img>/og:image candidates from raw HTML (no LLM)."""
+    """Pull image candidates from raw HTML (no LLM).
+
+    Reads, in order of signal: og:image metas, <img> (src + srcset + the
+    common lazy-load data-* attributes), <picture><source srcset>, and inline
+    CSS background-image styles. De-duped, order kept, junk dropped.
+    """
     from bs4 import BeautifulSoup
     from urllib.parse import urljoin
 
     soup = BeautifulSoup(html, "lxml")
     urls: list[str] = []
+
     for og in soup.find_all("meta", attrs={"property": "og:image"}):
         c = og.get("content")
         if c:
             urls.append(urljoin(base_url, c))
+
     for img in soup.find_all("img"):
-        src = img.get("src") or img.get("data-src")
-        if src:
-            urls.append(urljoin(base_url, src))
-    # De-dup, keep order, drop obvious sprites/pixels.
+        # Highest-resolution first: srcset beats src for catalog thumbnails.
+        srcset = img.get("srcset") or img.get("data-srcset") or ""
+        best = _pick_from_srcset(srcset) if srcset else ""
+        if not best:
+            for attr in _LAZY_IMG_ATTRS:
+                v = img.get(attr)
+                if v:
+                    best = v
+                    break
+        if best:
+            urls.append(urljoin(base_url, best))
+
+    # <picture><source srcset="..."> — responsive product galleries put the
+    # real image here and leave <img src> as a tiny placeholder.
+    for source in soup.find_all("source"):
+        srcset = source.get("srcset") or source.get("data-srcset") or ""
+        best = _pick_from_srcset(srcset)
+        if best:
+            urls.append(urljoin(base_url, best))
+
+    # Inline CSS background images (hero/product tiles on builder themes).
+    for el in soup.find_all(style=True):
+        m = _CSS_BG_RE.search(el.get("style") or "")
+        if m and not m.group(1).startswith("data:"):
+            urls.append(urljoin(base_url, m.group(1)))
+
+    # De-dup, keep order, drop obvious sprites/pixels/placeholders.
     seen: set[str] = set()
     out: list[str] = []
     for u in urls:
-        if u in seen:
+        if not u or u.startswith("data:") or u in seen:
             continue
-        if any(bad in u.lower() for bad in ("sprite", "1x1", "pixel", "tracking")):
+        low = u.lower()
+        if any(bad in low for bad in ("sprite", "1x1", "pixel", "tracking", "blank.", "spacer", "placeholder")):
             continue
         seen.add(u)
         out.append(u)
-    return out[:40]
+    return out[:_MAX_IMAGES_PER_PAGE]
 
 
 async def _fetch_with_crawl4ai(settings: Settings, url: str) -> FetchResult | None:

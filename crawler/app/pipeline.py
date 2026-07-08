@@ -44,7 +44,9 @@ THIN_VALUE_CHARS = 240
 MAX_PRODUCT_LINES = 80
 # Max image candidates included in the image research draft.
 # H9: raised 12 -> 40 so product shots from catalog pages survive the cut.
-MAX_IMAGE_LINES = 40
+# H10a: raised 40 -> 80 — long edible/product catalogs exceeded 40 and the
+# overflow (most of the edibles lineup) was silently dropped.
+MAX_IMAGE_LINES = 80
 
 
 @dataclass
@@ -244,7 +246,9 @@ async def research_target(
         url=url, entity_type=entity_type, entity_id=entity_id,
         fetched_ok=True, from_cache=fetched.from_cache,
         display_name=display_name,
-        image_candidates=list(dict.fromkeys(image_candidates))[:30],
+        # H10a: raised 30 -> 80 to match MAX_IMAGE_LINES — a long catalog crawl
+        # collected far more than 30 candidates and lost the rest right here.
+        image_candidates=list(dict.fromkeys(image_candidates))[:MAX_IMAGE_LINES],
         pages=pages_read,
     )
 
