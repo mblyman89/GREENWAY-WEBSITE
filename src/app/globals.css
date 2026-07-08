@@ -266,6 +266,79 @@ h1, h2, h3, h4, h5, h6 {
   }
 }
 
+/* ---------------------------------------------------------------------------
+ * PENDING FEEDBACK (Slice H12f) — instant response to every admin click.
+ * PendingKeeper puts `gw-submit-busy` on the pressed submit button and shows
+ * the slim `gw-pending-bar` across the top until the action/navigation lands.
+ * ------------------------------------------------------------------------- */
+.gw-pending-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 9999;
+  background: rgba(126, 217, 87, 0.15);
+  pointer-events: none;
+  overflow: hidden;
+}
+.gw-pending-bar-fill {
+  height: 100%;
+  width: 40%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, #7ed957 30%, #7ed957 70%, transparent);
+  box-shadow: 0 0 8px rgba(126, 217, 87, 0.7);
+  animation: gw-pending-slide 1.1s ease-in-out infinite;
+}
+@keyframes gw-pending-slide {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(350%);
+  }
+}
+
+/* The pressed button: dim + block re-clicks + spinner (::after keeps it
+   working on any button markup without touching its children). */
+.gw-submit-busy {
+  position: relative;
+  opacity: 0.65;
+  pointer-events: none;
+  cursor: wait !important;
+}
+.gw-submit-busy::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  width: 12px;
+  height: 12px;
+  margin-top: -6px;
+  border-radius: 999px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  animation: gw-pending-spin 0.7s linear infinite;
+}
+@keyframes gw-pending-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gw-pending-bar-fill {
+    animation: none;
+    width: 100%;
+    background: rgba(126, 217, 87, 0.6);
+  }
+  .gw-submit-busy::after {
+    animation: none;
+    border-top-color: currentColor;
+    opacity: 0.5;
+  }
+}
+
 /* Preview-mode badge glow (Slice E10) — pulses between a soft and a bright
    green so a previewer always notices they are in preview mode. Respects
    reduced-motion preferences. */
