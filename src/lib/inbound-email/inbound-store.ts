@@ -29,7 +29,8 @@ import type {
   NormalizedInboundEmail,
   NormalizedAttachment,
 } from "@/lib/inbound-email/inbound-normalize-core";
-import { manifestCandidates } from "@/lib/inbound-email/inbound-normalize-core";
+import { manifestCandidates, pdfCandidates } from "@/lib/inbound-email/inbound-normalize-core";
+import { parsePdfManifestFromBase64 } from "@/lib/inventory/pdf-extract";
 
 export type InboundDisposition =
   | "received"
@@ -124,10 +125,12 @@ export async function stageManifestsFromEmail(
   actorId: string | null,
 ): Promise<StageFromEmailResult> {
   const result: StageFromEmailResult = { staged: 0, manifestIds: [], parseFailures: 0 };
-  const candidates = manifestCandidates(email);
-  if (candidates.length === 0) return result;
+  const textCandidates = manifestCandidates(email);
+  const pdfCands = pdfCandidates(email);
+  if (textCandidates.length === 0 && pdfCands.length === 0) return result;
 
-  for (const att of candidates) {
+  // 1) Textual attachments (JSON / CCRS CSV).
+  for (const att of textCandidates) {
     const manifest = parseAttachmentToManifest(att);
     if (!manifest) {
       result.parseFailures += 1;
@@ -145,6 +148,25 @@ export async function stageManifestsFromEmail(
     } else {
       result.parseFailures += 1;
       console.error("[inbound-email] stageManifest failed:", staged.error);
+    }
+  }
+
+  // 2) PDF attachments (WA LCB Internal Shipping Document). Text is extracted
+  //    out-of-band via unpdf, then run through the same drafts-only staging.
+  for (const att of pdfCands) {
+    const parsed = await parsePdfManifestFromBase64(att.base64 as string);
+    if (!parsed.ok) {
+      result.parseFailures += 1;
+      console.warn("[inbound-email] PDF manifest parse failed:", parsed.error);
+      continue;
+    }
+    const staged = await stageManifest(parsed.manifest, parsed.text, actorId, { sourceUrl: null });
+    if (staged.ok) {
+      result.staged += 1;
+      result.manifestIds.push(staged.manifestId);
+    } else {
+      result.parseFailures += 1;
+      console.error("[inbound-email] stageManifest (pdf) failed:", staged.error);
     }
   }
   return result;

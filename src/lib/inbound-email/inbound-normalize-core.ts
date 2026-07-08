@@ -204,6 +204,18 @@ export function manifestCandidates(email: NormalizedInboundEmail): NormalizedAtt
   );
 }
 
+/** Is this attachment a PDF (by content-type or filename)? PURE. */
+export function isPdfAttachment(a: NormalizedAttachment): boolean {
+  const ct = lc(a.contentType);
+  const fn = lc(a.filename);
+  return ct.includes("pdf") || fn.endsWith(".pdf");
+}
+
+/** The PDF attachments (which need out-of-band text extraction). PURE. */
+export function pdfCandidates(email: NormalizedInboundEmail): NormalizedAttachment[] {
+  return email.attachments.filter((a) => isPdfAttachment(a) && !!a.base64);
+}
+
 // ---------------------------------------------------------------------------
 // Self-tests (run via tsx). Pure — no I/O.
 // ---------------------------------------------------------------------------

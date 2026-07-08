@@ -17,6 +17,7 @@ import {
   parseCcrsManifestCsv,
   ccrsToParsedManifest,
 } from "@/lib/inventory/ccrs-manifest-csv-core";
+import { parsePdfManifest } from "@/lib/inventory/pdf-extract";
 
 /** Shared: parse + stage a JSON payload, redirect on each failure mode. */
 async function stageJsonText(
@@ -154,6 +155,45 @@ export async function importManifestCsvAction(formData: FormData) {
   }
 
   redirect(`/admin/inventory/intake/${staged.manifestId}?staged=1&csv=1`);
+}
+
+/**
+ * Import a WA LCB "Internal Shipping Document (Third Party)" PDF (the manifest a
+ * vendor emails as a PDF instead of, or alongside, the JSON). Text is extracted
+ * with unpdf (serverless-safe) and parsed by pdf-manifest-core. The PDF carries
+ * NO price/COA, so the staged lines are SPARSE DRAFTS (lot id, product name,
+ * type, shipped qty) that staff enrich during review — same drafts-only rule as
+ * the CSV path. Prefer the JSON when available; this is for PDF-only manifests.
+ */
+export async function importManifestPdfAction(formData: FormData) {
+  const session = await requirePermission("inventory.manage");
+  const file = formData.get("pdf_file");
+  if (!(file instanceof File) || file.size === 0) {
+    redirect("/admin/inventory/intake?error=emptypdf");
+  }
+  const f = file as File;
+  const name = (f.name ?? "").toLowerCase();
+  const type = (f.type ?? "").toLowerCase();
+  if (!name.endsWith(".pdf") && !type.includes("pdf")) {
+    redirect("/admin/inventory/intake?error=notpdf");
+  }
+
+  const bytes = new Uint8Array(await f.arrayBuffer());
+  const parsed = await parsePdfManifest(bytes);
+  if (!parsed.ok) {
+    // Distinguish "not a manifest" from "unreadable/scanned" for the reviewer.
+    const code = parsed.text == null ? "pdfscanned" : "pdfparse";
+    redirect(`/admin/inventory/intake?error=${code}`);
+  }
+
+  const staged = await stageManifest(parsed.manifest, parsed.text, session.userId, {
+    sourceUrl: null,
+  });
+  revalidatePath("/admin/inventory/intake");
+  if (!staged.ok) {
+    redirect("/admin/inventory/intake?error=save");
+  }
+  redirect(`/admin/inventory/intake/${staged.manifestId}?staged=1&pdf=1`);
 }
 
 // S-11 (GAP M-8): the legacy acceptManifestAction was RETIRED. It flipped every
