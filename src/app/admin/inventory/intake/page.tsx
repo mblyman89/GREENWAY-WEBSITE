@@ -21,8 +21,10 @@ import {
   importManifestAction,
   importManifestFromUrlAction,
   importManifestCsvAction,
+  importManifestBatchAction,
   backfillKbFromManifestsAction,
 } from "./actions";
+import { BatchTransferImport } from "@/components/admin/inventory/BatchTransferImport";
 
 export const dynamic = "force-dynamic";
 
@@ -394,6 +396,21 @@ export default async function IntakePage({
               Fetch & stage for review
             </Button>
           </form>
+        </div>
+
+        {/* Slice H11b — batch import: hundreds of Transfer Data Links at once */}
+        <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-accent)]/30 bg-[var(--admin-surface)] p-5">
+          <h2 className="mb-1 text-sm font-bold text-[var(--admin-text)]">
+            Batch import — paste many Transfer Data Links{" "}
+            <span className="text-[var(--admin-accent)]">(for the historical archive)</span>
+          </h2>
+          <p className="mb-4 text-xs text-[var(--admin-text-muted)]">
+            Collect the &ldquo;Transfer Data Link&rdquo; from each order email (12+ months of
+            them, one per line) and import them all in one run. Links already imported are
+            detected and skipped, so re-running an overlapping list never double-stages. Every
+            manifest lands as a <strong>pending draft</strong> for review — nothing activates.
+          </p>
+          <BatchTransferImport importBatch={importManifestBatchAction} />
         </div>
 
         {/* Import by pasting raw JSON (fallback) */}
