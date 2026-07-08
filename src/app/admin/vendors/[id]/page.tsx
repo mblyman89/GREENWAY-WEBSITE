@@ -18,6 +18,7 @@ import {
   researchVendorAction,
   acceptVendorSuggestionAction,
   rejectVendorSuggestionAction,
+  acceptSocialDraftAction,
   researchBrandAction,
   acceptBrandSuggestionAction,
   rejectBrandSuggestionAction,
@@ -266,9 +267,10 @@ export default async function VendorEditPage({
                       model={s.model}
                       source={s.source}
                       confidence={s.confidence}
-                      acceptAction={acceptVendorSuggestionAction}
+                      acceptAction={s.field_key === "research_social" ? acceptSocialDraftAction : acceptVendorSuggestionAction}
                       rejectAction={rejectVendorSuggestionAction}
                       hiddenFields={{ suggestionId: s.id, vendorId: vendor.id }}
+                      acceptLabel={s.field_key === "research_social" ? "✓ Save handles to profile" : undefined}
                       referenceOnly={REFERENCE_FIELDS.has(s.field_key)}
                       footer={
                         IMAGE_FIELDS.has(s.field_key) ? (
@@ -318,6 +320,14 @@ export default async function VendorEditPage({
                 <label className="flex flex-col gap-1"><span className={label}>Phone</span><input name="phone" defaultValue={vendor.phone ?? ""} className={field} /></label>
                 <label className="flex flex-col gap-1"><span className={label}>Instagram</span><input name="instagram" defaultValue={vendor.social_json?.instagram ?? ""} placeholder="@handle or URL" className={field} /></label>
                 <label className="flex flex-col gap-1"><span className={label}>Facebook</span><input name="facebook" defaultValue={vendor.social_json?.facebook ?? ""} className={field} /></label>
+                {/* H12a: the full typed platform set. The profile save rebuilds
+                    social_json from these inputs, so every platform the
+                    research_social accept can write MUST round-trip here or it
+                    would be wiped on the next save. */}
+                <label className="flex flex-col gap-1"><span className={label}>Twitter / X</span><input name="twitter" defaultValue={vendor.social_json?.twitter ?? ""} placeholder="@handle or URL" className={field} /></label>
+                <label className="flex flex-col gap-1"><span className={label}>TikTok</span><input name="tiktok" defaultValue={vendor.social_json?.tiktok ?? ""} placeholder="@handle or URL" className={field} /></label>
+                <label className="flex flex-col gap-1"><span className={label}>YouTube</span><input name="youtube" defaultValue={vendor.social_json?.youtube ?? ""} placeholder="channel URL" className={field} /></label>
+                <label className="flex flex-col gap-1"><span className={label}>LinkedIn</span><input name="linkedin" defaultValue={vendor.social_json?.linkedin ?? ""} placeholder="company URL" className={field} /></label>
               </div>
 
               <label className="flex flex-col gap-1"><span className={label}>Mission statement</span><textarea name="mission_statement" defaultValue={vendor.mission_statement ?? ""} rows={2} className={field} /></label>
@@ -432,10 +442,10 @@ export default async function VendorEditPage({
                             model={s.model}
                             source={s.source}
                             confidence={s.confidence}
-                            acceptAction={acceptBrandSuggestionAction}
+                            acceptAction={s.field_key === "research_social" ? acceptSocialDraftAction : acceptBrandSuggestionAction}
                             rejectAction={rejectBrandSuggestionAction}
                             hiddenFields={{ suggestionId: s.id, brandId: b.id, vendorId: vendor.id }}
-                            acceptLabel="✓ Accept"
+                            acceptLabel={s.field_key === "research_social" ? "✓ Save handles to profile" : "✓ Accept"}
                             referenceOnly={REFERENCE_FIELDS.has(s.field_key)}
                             footer={
                               IMAGE_FIELDS.has(s.field_key) ? (
