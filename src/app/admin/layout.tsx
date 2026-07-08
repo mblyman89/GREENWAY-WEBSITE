@@ -3,7 +3,7 @@ import { getStaffSession } from "@/lib/auth/session";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { AdminTopNav } from "@/components/admin/AdminTopNav";
 import { AdminSetupNotice } from "@/components/admin/AdminSetupNotice";
-import { ToastProvider } from "@/components/admin/ux";
+import { ToastProvider, ScrollKeeper } from "@/components/admin/ux";
 import { HelpLauncher } from "@/components/admin/HelpLauncher";
 import { CommandPalette } from "@/components/admin/CommandPalette";
 import { ConciergeWidget } from "@/components/admin/ConciergeWidget";
@@ -60,6 +60,9 @@ export default async function AdminLayout({
         />
       </div>
       <main className="admin-main min-w-0 flex-1">
+        {/* H12e: restore the scroll position after server-action saves —
+            redirect() otherwise jumps every save back to the top. */}
+        <ScrollKeeper />
         <ToastProvider>{children}</ToastProvider>
       </main>
       <div className="admin-chrome">
