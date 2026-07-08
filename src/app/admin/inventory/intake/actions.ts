@@ -440,6 +440,11 @@ export async function promoteManifestToKbAction(manifestId: string) {
  * Slice H11a — BACKFILL: promote every staged manifest (except whole-manifest
  * rejections) into KB drafts. Built for the owner's historical upload of
  * hundreds of transfer JSONs: upload/stage them all, click once. Idempotent.
+ *
+ * H12g: kept for API compatibility, but the intake page now uses the CHUNKED
+ * client panel below (listKbBackfillManifestIdsAction +
+ * promoteManifestChunkToKbAction) — one giant serverless sweep could outlive
+ * the function timeout, which is why the owner never saw a confirmation.
  */
 export async function backfillKbFromManifestsAction() {
   const session = await requirePermission("inventory.manage");
@@ -452,6 +457,78 @@ export async function backfillKbFromManifestsAction() {
   redirect(
     `/admin/inventory/intake?kbdone=${result.result.manifestsProcessed}&kbnew=${result.result.promoted}&kberr=${result.result.errors}`,
   );
+}
+
+/**
+ * Slice H12g — list the manifests the KB backfill would process (every
+ * staged manifest except whole-manifest rejections, oldest first). The
+ * client panel chunks these ids and promotes them a few at a time so every
+ * server call finishes fast and progress is visible.
+ */
+export async function listKbBackfillManifestIdsAction(): Promise<
+  { ok: true; ids: string[] } | { ok: false; error: string }
+> {
+  await requirePermission("inventory.manage");
+  const { isSupabaseServiceConfigured } = await import("@/lib/supabase/env");
+  if (!isSupabaseServiceConfigured) {
+    return { ok: false, error: "Supabase service role not configured." };
+  }
+  const { createSupabaseAdminClient } = await import("@/lib/supabase/admin");
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("inbound_manifests")
+    .select("id")
+    .neq("status", "rejected")
+    .order("created_at", { ascending: true })
+    .limit(1000);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, ids: ((data as { id: string }[] | null) ?? []).map((r) => r.id) };
+}
+
+/**
+ * Slice H12g — promote a small CHUNK of manifests into KB drafts and return
+ * structured per-manifest outcomes (no redirect — the client panel renders
+ * live progress and the final confirmation). Drafts-only + idempotent,
+ * exactly like the single-manifest promote.
+ */
+export async function promoteManifestChunkToKbAction(
+  manifestIds: string[],
+): Promise<import("@/lib/inventory/kb-backfill-core").KbChunkOutcome[]> {
+  const session = await requirePermission("inventory.manage");
+  const { KB_BACKFILL_CHUNK_SIZE } = await import("@/lib/inventory/kb-backfill-core");
+  const { promoteManifestToKb } = await import("@/lib/inventory/manifest-kb-bridge");
+
+  // Server-side re-validation: never trust the client's chunking.
+  const ids = [...new Set((manifestIds ?? []).map((s) => String(s).trim()).filter(Boolean))].slice(
+    0,
+    KB_BACKFILL_CHUNK_SIZE,
+  );
+
+  const outcomes: import("@/lib/inventory/kb-backfill-core").KbChunkOutcome[] = [];
+  for (const manifestId of ids) {
+    const res = await promoteManifestToKb(manifestId, session.userId);
+    if (res.ok) {
+      outcomes.push({
+        manifestId,
+        ok: true,
+        promoted: res.outcome.promoted,
+        strainsEnriched: res.outcome.strainsEnriched,
+        vendorLicenseFilled: res.outcome.vendorLicenseFilled,
+        error: null,
+      });
+    } else {
+      outcomes.push({
+        manifestId,
+        ok: false,
+        promoted: 0,
+        strainsEnriched: 0,
+        vendorLicenseFilled: false,
+        error: res.error,
+      });
+    }
+  }
+  revalidatePath("/admin/inventory/intake");
+  return outcomes;
 }
 
 export async function finalizeManifestAction(manifestId: string) {

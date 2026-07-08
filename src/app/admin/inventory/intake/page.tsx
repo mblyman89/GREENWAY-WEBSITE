@@ -22,9 +22,11 @@ import {
   importManifestFromUrlAction,
   importManifestCsvAction,
   importManifestBatchAction,
-  backfillKbFromManifestsAction,
+  listKbBackfillManifestIdsAction,
+  promoteManifestChunkToKbAction,
 } from "./actions";
 import { BatchTransferImport } from "@/components/admin/inventory/BatchTransferImport";
+import { KbBackfillPanel } from "@/components/admin/inventory/KbBackfillPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -487,11 +489,14 @@ export default async function IntakePage({
             this after bulk-uploading historical transfer JSONs. Idempotent — safe to re-run;
             existing KB data is gap-filled, never overwritten, and nothing is published.
           </p>
-          <form action={backfillKbFromManifestsAction}>
-            <Button type="submit" variant="save" size="sm">
-              ⚡ Promote all manifests to KB drafts
-            </Button>
-          </form>
+          {/* H12g: chunked client panel — live progress + unmissable
+              confirmation with a link to the KB Review inbox. Replaces the
+              one-shot form action whose redirect banner could be lost to a
+              serverless timeout on big backlogs. */}
+          <KbBackfillPanel
+            listIds={listKbBackfillManifestIdsAction}
+            promoteChunk={promoteManifestChunkToKbAction}
+          />
         </div>
 
         {/* Pipeline queues — worked in priority order */}
