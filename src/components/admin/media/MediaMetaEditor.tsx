@@ -16,7 +16,7 @@ import {
   checkMediaMeta,
   type MediaWarning,
 } from "@/lib/media/taxonomy";
-import type { MediaAltResult, MediaMetaResult } from "@/app/admin/media/actions";
+import type { MediaAltResult, MediaMetaResult, MediaSuggestAllResult } from "@/app/admin/media/actions";
 
 // NOTE: these are type-only imports from the server actions module — no server
 // code is bundled into the client; only the action functions passed as props
@@ -35,6 +35,7 @@ export function MediaMetaEditor({
   formAction,
   suggestAlt,
   suggestMeta,
+  suggestAll,
 }: {
   id: string;
   initial: {
@@ -50,6 +51,8 @@ export function MediaMetaEditor({
   formAction: (formData: FormData) => void | Promise<void>;
   suggestAlt: (id: string) => Promise<MediaAltResult>;
   suggestMeta: (id: string) => Promise<MediaMetaResult>;
+  /** H10c: KB-grounded one-click "suggest all fields" (optional). */
+  suggestAll?: (id: string) => Promise<MediaSuggestAllResult>;
 }) {
   const [title, setTitle] = useState(initial.title);
   const [description, setDescription] = useState(initial.description);
@@ -59,6 +62,7 @@ export function MediaMetaEditor({
 
   const [pending, startTransition] = useTransition();
   const [note, setNote] = useState<string | null>(null);
+  const [aiReasons, setAiReasons] = useState<string[]>([]);
 
   const warnings: MediaWarning[] = checkMediaMeta({
     filename,
@@ -70,8 +74,33 @@ export function MediaMetaEditor({
     mime_type: mimeType,
   });
 
+  function runAll() {
+    setNote(null);
+    setAiReasons([]);
+    startTransition(async () => {
+      if (!suggestAll) return;
+      const res = await suggestAll(id);
+      if (!res.ok) {
+        setNote(res.error);
+        return;
+      }
+      if (res.title) setTitle(res.title);
+      if (res.description) setDescription(res.description);
+      if (res.altText) setAltText(res.altText);
+      if (res.usageType) setPurpose(res.usageType);
+      if (res.tags) setTags(res.tags);
+      setAiReasons(res.reasons);
+      const pct = Math.round(res.confidence * 100);
+      setNote(
+        `All fields suggested from ${res.method === "vision" ? "the image + knowledge base" : "the knowledge base"} ` +
+          `(${pct}% confident${res.overturnsPrior ? " — category CHANGED from the import-time value" : ""}). Review & save.`,
+      );
+    });
+  }
+
   function runMeta() {
     setNote(null);
+    setAiReasons([]);
     startTransition(async () => {
       const res = await suggestMeta(id);
       if (!res.ok) {
@@ -105,20 +134,40 @@ export function MediaMetaEditor({
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm font-semibold text-white">Smart metadata</p>
-        {aiEnabled ? (
-          <button
-            type="button"
-            onClick={runMeta}
-            disabled={pending}
-            className="rounded-full border border-[#7ed957]/40 px-3 py-1.5 text-xs font-semibold text-[#7ed957] hover:bg-[#7ed957]/10 disabled:opacity-50"
-          >
-            {pending ? "Thinking…" : "✨ Auto-fill title & description"}
-          </button>
-        ) : null}
+        <div className="flex flex-wrap gap-2">
+          {aiEnabled && suggestAll ? (
+            <button
+              type="button"
+              onClick={runAll}
+              disabled={pending}
+              className="rounded-full bg-[#7ed957] px-3 py-1.5 text-xs font-semibold text-black hover:bg-[#6cc746] disabled:opacity-50"
+            >
+              {pending ? "Thinking…" : "✨ Suggest ALL fields"}
+            </button>
+          ) : null}
+          {aiEnabled ? (
+            <button
+              type="button"
+              onClick={runMeta}
+              disabled={pending}
+              className="rounded-full border border-[#7ed957]/40 px-3 py-1.5 text-xs font-semibold text-[#7ed957] hover:bg-[#7ed957]/10 disabled:opacity-50"
+            >
+              {pending ? "Thinking…" : "✨ Title & description"}
+            </button>
+          ) : null}
+        </div>
       </div>
 
       {note ? (
         <p className="rounded-lg border border-[#7ed957]/30 bg-[#7ed957]/10 px-3 py-2 text-xs text-[#7ed957]">{note}</p>
+      ) : null}
+
+      {aiReasons.length > 0 ? (
+        <ul className="space-y-1 rounded-lg border border-white/10 bg-white/[0.03] p-3 text-[11px] text-white/60">
+          {aiReasons.map((r, i) => (
+            <li key={i}>• {r}</li>
+          ))}
+        </ul>
       ) : null}
 
       {/* WHAT */}

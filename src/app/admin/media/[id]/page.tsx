@@ -11,6 +11,7 @@ import {
   deleteMediaAction,
   suggestMediaAltAction,
   suggestMediaMetaAction,
+  suggestMediaAllAction,
 } from "../actions";
 
 export const dynamic = "force-dynamic";
@@ -122,6 +123,7 @@ export default async function MediaDetailPage({
               formAction={updateMediaMetaAction}
               suggestAlt={suggestMediaAltAction}
               suggestMeta={suggestMediaMetaAction}
+              suggestAll={suggestMediaAllAction}
             />
 
             {/* Where used */}

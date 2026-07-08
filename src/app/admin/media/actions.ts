@@ -9,6 +9,16 @@ import { uploadMedia, updateMediaMeta, setMediaStatus, whereUsed, getMedia, publ
 import { generate, generateVision, isAiConfigured } from "@/lib/ai/provider";
 import { COMPLIANCE_SYSTEM, checkCompliance } from "@/lib/ai/compliance";
 import { normalizeTags } from "@/lib/media/taxonomy";
+import { classifyMediaAsset, suggestTags, crawlPath } from "@/lib/media/classify-core";
+import {
+  entityNameFromTitle,
+  deriveCategoryWord,
+  nameFromFilename,
+  buildMediaSuggestInstruction,
+  parseMediaSuggestResponse,
+} from "@/lib/media/suggest-core";
+import { buildGroundedFacts } from "@/lib/ai/kb/retrieval";
+import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 
 const MAX_BYTES = 10 * 1024 * 1024; // 10 MB ceiling for the library
 const ALLOWED_MIME = new Set([
@@ -332,6 +342,204 @@ export async function suggestMediaMetaAction(id: string): Promise<MediaMetaResul
       after: { method },
     });
     return { ok: true, title, description, method };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "AI suggestion failed." };
+  }
+}
+
+/* ------------------------------------------------------------------
+ * Slice H10c — KB-grounded "suggest EVERYTHING" for a media asset.
+ *
+ * ONE structured call fills every field: title + description + alt text
+ * (grounded in KB knowledge — category vocabulary like rosin/edibles,
+ * vendor/brand about/mission/philosophy — instead of literal pixels),
+ * plus a usage_type verdict and placement tags from the H10b classifier
+ * (the vision verdict feeds the classifier, which may OVERTURN the
+ * import-time stamp — e.g. a product can misfiled as "Vendor logo").
+ *
+ * Drafts-only: the result pre-fills the editor form; the staffer
+ * reviews/edits and clicks Save. Nothing is written here.
+ * ------------------------------------------------------------------ */
+
+export type MediaSuggestAllResult =
+  | {
+      ok: true;
+      title: string;
+      description: string;
+      altText: string;
+      usageType: string;
+      /** Comma-joined for the tags input. */
+      tags: string;
+      confidence: number;
+      reasons: string[];
+      /** True when the suggested usage_type contradicts the current one. */
+      overturnsPrior: boolean;
+      complianceFlags: string[];
+      method: "vision" | "context";
+      /** Which KB sources grounded the copy (kb:category:…, entity:about…). */
+      sources: string[];
+    }
+  | { ok: false; error: string };
+
+/** Best-effort vendor/brand about+mission+philosophy for grounding. */
+async function loadEntityFacts(entityName: string): Promise<{ block: string; sources: string[] }> {
+  if (!entityName || !isSupabaseServiceConfigured) return { block: "", sources: [] };
+  const lines: string[] = [];
+  const sources: string[] = [];
+  try {
+    const admin = createSupabaseAdminClient();
+    const needle = entityName.toLowerCase();
+    // Vendors carry mission_statement/about/product_philosophy (0003 + 0099).
+    const { data: vendors } = await admin
+      .from("vendors")
+      .select("display_name,about,mission_statement,product_philosophy")
+      .limit(500);
+    const v = (vendors ?? []).find(
+      (r) => String(r.display_name ?? "").toLowerCase() === needle,
+    );
+    if (v) {
+      if (v.about) { lines.push(`About ${v.display_name}: ${v.about}`); sources.push("entity:vendor:about"); }
+      if (v.mission_statement) { lines.push(`${v.display_name} mission: ${v.mission_statement}`); sources.push("entity:vendor:mission"); }
+      if (v.product_philosophy) { lines.push(`${v.display_name} product philosophy: ${v.product_philosophy}`); sources.push("entity:vendor:philosophy"); }
+    }
+    // Brands carry about/mission_statement/product_philosophy (0003).
+    const { data: brands } = await admin
+      .from("brands")
+      .select("display_name,about,mission_statement,product_philosophy")
+      .limit(500);
+    const b = (brands ?? []).find(
+      (r) => String(r.display_name ?? "").toLowerCase() === needle,
+    );
+    if (b) {
+      if (b.about) { lines.push(`About ${b.display_name}: ${b.about}`); sources.push("entity:brand:about"); }
+      if (b.mission_statement) { lines.push(`${b.display_name} mission: ${b.mission_statement}`); sources.push("entity:brand:mission"); }
+      if (b.product_philosophy) { lines.push(`${b.display_name} product philosophy: ${b.product_philosophy}`); sources.push("entity:brand:philosophy"); }
+    }
+  } catch {
+    // Best-effort: grounding is thinner, never fails the suggestion.
+  }
+  return { block: lines.join("\n"), sources };
+}
+
+export async function suggestMediaAllAction(id: string): Promise<MediaSuggestAllResult> {
+  const session = await requirePermission("media.manage");
+  if (!isAiConfigured) {
+    return { ok: false, error: "AI is not configured. Set AI_API_KEY to enable suggestions." };
+  }
+  const asset = await getMedia(id);
+  if (!asset) return { ok: false, error: "Asset not found." };
+
+  // --- 1) Derive the grounding query from the asset's own signals -----------
+  const entityName = entityNameFromTitle(asset.title);
+  const derivedName = nameFromFilename(asset.filename);
+  const path = crawlPath(asset.source);
+  const categoryWord = deriveCategoryWord({
+    path,
+    filename: asset.filename,
+    tags: asset.tags,
+  });
+
+  // --- 2) Pull KB knowledge (category vocab + brand notes + entity copy) ----
+  const [grounded, entity] = await Promise.all([
+    buildGroundedFacts({
+      name: derivedName || entityName || asset.filename || "media asset",
+      brand: entityName || null,
+      vendor: entityName || null,
+      category: categoryWord || null,
+    }),
+    loadEntityFacts(entityName),
+  ]);
+
+  // --- 3) ONE structured call: vision verdict + title + description + alt ---
+  const instruction = buildMediaSuggestInstruction({
+    groundedBlock: grounded.block,
+    entityBlock: entity.block,
+    entityName: entityName || null,
+    derivedName: derivedName || null,
+    filename: asset.filename,
+    currentUsageType: asset.usage_type,
+  });
+
+  const imageUrl = asset.public_url ?? publicUrlForKey(asset.storage_key);
+  const canUseVision = Boolean(imageUrl) && VISION_MIME.has((asset.mime_type ?? "").toLowerCase());
+  const ctx = { entityType: "media", entityId: id, actorId: session.userId, actorEmail: session.email };
+
+  try {
+    let raw: string;
+    let method: "vision" | "context";
+    if (canUseVision) {
+      method = "vision";
+      raw = await generateVision({
+        system: COMPLIANCE_SYSTEM,
+        user: instruction,
+        imageUrl: imageUrl!,
+        temperature: 0.4,
+        maxTokens: 320,
+        context: { ...ctx, feature: "media.suggest_all" },
+      });
+    } else {
+      method = "context";
+      raw = await generate({
+        system: COMPLIANCE_SYSTEM,
+        user: instruction,
+        temperature: 0.4,
+        maxTokens: 320,
+        context: { ...ctx, feature: "media.suggest_all" },
+      });
+    }
+
+    const parsed = parseMediaSuggestResponse(raw);
+
+    // --- 4) Classify (vision verdict + row signals; may overturn the prior) --
+    const signals = {
+      filename: asset.filename,
+      source: asset.source,
+      title: asset.title,
+      tags: asset.tags,
+      mimeType: asset.mime_type,
+      width: asset.width,
+      height: asset.height,
+      currentUsageType: asset.usage_type,
+      visionSubject: method === "vision" ? parsed.visionSubject : null,
+      entityName: entityName || null,
+    };
+    const cls = classifyMediaAsset(signals);
+    const tags = suggestTags(cls, signals);
+
+    const combinedText = [parsed.title, parsed.description, parsed.altText].filter(Boolean).join(" ");
+    const flags = checkCompliance(combinedText).flags;
+
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "media.ai_suggest_all",
+      entityType: "media_asset",
+      entityId: id,
+      after: {
+        method,
+        usageType: cls.usageType,
+        confidence: cls.confidence,
+        overturnsPrior: cls.overturnsPrior,
+        visionSubject: parsed.visionSubject,
+        sources: [...grounded.sources, ...entity.sources],
+        complianceFlags: flags,
+      },
+    });
+
+    return {
+      ok: true,
+      title: parsed.title,
+      description: parsed.description,
+      altText: parsed.altText,
+      usageType: cls.usageType,
+      tags: tags.join(", "),
+      confidence: cls.confidence,
+      reasons: cls.reasons,
+      overturnsPrior: cls.overturnsPrior,
+      complianceFlags: flags,
+      method,
+      sources: [...grounded.sources, ...entity.sources],
+    };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "AI suggestion failed." };
   }
