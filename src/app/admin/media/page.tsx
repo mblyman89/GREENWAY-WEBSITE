@@ -8,6 +8,7 @@ import { listMedia, countMedia, publicUrlForKey } from "@/lib/media/store";
 import type { MediaAsset } from "@/lib/supabase/types";
 import { MediaDropzone } from "@/components/admin/media/MediaDropzone";
 import { MEDIA_PURPOSES, purposeLabel } from "@/lib/media/taxonomy";
+import { pickListParams, withListParams } from "@/lib/media/return-state-core";
 import { uploadMediaAction } from "./actions";
 import { Button } from "@/components/admin/ui/Button";
 import { Input, Select } from "@/components/admin/ui/Field";
@@ -33,6 +34,9 @@ export default async function MediaPage({
 }) {
   await requirePermission("media.manage");
   const { q, status, usage, saved, deleted, error } = await searchParams;
+  // H12d: the active filters travel with every grid link so the detail page
+  // can send the owner back to this exact filtered view.
+  const listParams = pickListParams({ q, status, usage });
 
   if (!isSupabaseServiceConfigured) {
     return (
