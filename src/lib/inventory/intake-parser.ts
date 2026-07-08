@@ -68,8 +68,9 @@ export type ParsedManifest = {
   vendor_license: string | null;
   transfer_date: string | null;
   /** "wcia" when we recognized the WCIA Transfer Schema, "ccrs-csv" for the
-   * official CCRS manifest.csv, else "generic". */
-  source_format: "wcia" | "generic" | "ccrs-csv";
+   * official CCRS manifest.csv, "pdf-manifest" for a WA LCB Internal Shipping
+   * Document PDF, else "generic". */
+  source_format: "wcia" | "generic" | "ccrs-csv" | "pdf-manifest";
   lines: ParsedLine[];
   /** Manifest-level warnings (e.g. no lines found). */
   warnings: string[];

@@ -21,6 +21,7 @@ import {
   importManifestAction,
   importManifestFromUrlAction,
   importManifestCsvAction,
+  importManifestPdfAction,
   importManifestBatchAction,
   listKbBackfillManifestIdsAction,
   promoteManifestChunkToKbAction,
@@ -257,11 +258,19 @@ export default async function IntakePage({
                 ? "Paste the CCRS manifest.csv before importing."
                 : error === "csvparse"
                   ? "That text isn't a valid CCRS manifest.csv (no item header row found)."
-                  : error === "save"
-                    ? "Something went wrong staging the manifest."
-                    : error === "kbbackfill"
-                      ? "The KB backfill couldn't run — check the server logs."
-                      : null;
+                  : error === "emptypdf"
+                    ? "Choose a PDF manifest file before uploading."
+                    : error === "notpdf"
+                      ? "That file isn't a PDF. Upload the manifest PDF the vendor emailed."
+                      : error === "pdfscanned"
+                        ? "That PDF has no readable text (it looks like a scanned image). Paste the JSON/CSV manifest instead."
+                        : error === "pdfparse"
+                          ? "Couldn't read a WA LCB shipping document from that PDF (no Manifest ID / item table found)."
+                          : error === "save"
+                            ? "Something went wrong staging the manifest."
+                            : error === "kbbackfill"
+                              ? "The KB backfill couldn't run — check the server logs."
+                              : null;
 
   const stageMeta = (s: ManifestStage) => STAGE_META[s];
 
@@ -471,6 +480,41 @@ export default async function IntakePage({
             </Field>
             <Button type="submit" variant="save" size="sm">
               Parse CSV & stage for review
+            </Button>
+          </form>
+        </div>
+
+        {/* H14a — Upload a PDF manifest (WA LCB Internal Shipping Document) */}
+        <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
+          <h2 className="mb-1 text-sm font-bold text-[var(--admin-text)]">
+            Or upload a PDF manifest
+          </h2>
+          <p className="mb-4 text-xs text-[var(--admin-text-muted)]">
+            Upload the WA LCB <strong>Internal Shipping Document (Third Party)</strong> PDF a
+            vendor emailed you. We read the Manifest ID, sending licensee, date, and every item
+            row (lot ID, product, type, shipped qty). The PDF carries{" "}
+            <strong>no prices or COAs</strong>, so each staged line is a sparse draft you enrich
+            during review. Prefer the JSON when you have it — this is for PDF-only manifests. Text
+            (not scanned/image) PDFs only.
+          </p>
+          <form action={importManifestPdfAction} className="space-y-4">
+            <Field
+              label="Manifest PDF"
+              help="Select the .pdf file the vendor attached to their email."
+              htmlFor="pdf_file"
+              required
+            >
+              <input
+                id="pdf_file"
+                name="pdf_file"
+                type="file"
+                accept="application/pdf,.pdf"
+                required
+                className="block w-full text-sm text-[var(--admin-text)] file:mr-3 file:rounded-[var(--admin-radius)] file:border-0 file:bg-[var(--admin-accent)] file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:opacity-90"
+              />
+            </Field>
+            <Button type="submit" variant="save" size="sm">
+              Parse PDF & stage for review
             </Button>
           </form>
         </div>
