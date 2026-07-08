@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { getStaffSession } from "@/lib/auth/session";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { AdminTopNav } from "@/components/admin/AdminTopNav";
@@ -60,13 +61,18 @@ export default async function AdminLayout({
         />
       </div>
       <main className="admin-main min-w-0 flex-1">
-        {/* H12e: restore the scroll position after server-action saves —
-            redirect() otherwise jumps every save back to the top. */}
-        <ScrollKeeper />
-        {/* H12f: instant click feedback — spinner on the pressed button,
-            double-submit guard, and a top progress bar until the response
-            lands. Zero per-page wiring. */}
-        <PendingKeeper />
+        {/* H12e/H13a: restore the scroll position after server-action saves —
+            redirect() otherwise jumps every save back to the top (or to the
+            #ai-drafts anchor on the vendor page). H12f: instant click feedback
+            — spinner on the pressed button, double-submit guard, and a top
+            progress bar until the response lands. Both read the URL via
+            useSearchParams, so they live behind a Suspense boundary to avoid
+            bailing the whole admin layout out of static rendering. Zero
+            per-page wiring. */}
+        <Suspense fallback={null}>
+          <ScrollKeeper />
+          <PendingKeeper />
+        </Suspense>
         <ToastProvider>{children}</ToastProvider>
       </main>
       <div className="admin-chrome">

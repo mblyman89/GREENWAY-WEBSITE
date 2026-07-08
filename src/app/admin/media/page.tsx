@@ -151,7 +151,11 @@ export default async function MediaPage({
             return (
               <Link
                 key={m.id}
-                href={`/admin/media/${m.id}`}
+                // H13a: carry the active filters into the detail URL so the
+                // detail page's back link + breadcrumb can return to this exact
+                // filtered view (H12d's chain was broken here — the link had no
+                // filters, so the detail page always computed a bare backHref).
+                href={withListParams(`/admin/media/${m.id}`, listParams)}
                 className="group admin-card-interactive overflow-hidden rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)]"
               >
                 <div className="relative flex aspect-square items-center justify-center bg-black p-2">

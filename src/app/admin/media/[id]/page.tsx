@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { Breadcrumbs } from "@/components/admin/ux";
 import { getMedia, whereUsed, publicUrlForKey } from "@/lib/media/store";
 import { isAiConfigured } from "@/lib/ai/provider";
 import { MediaMetaEditor } from "@/components/admin/media/MediaMetaEditor";
@@ -75,9 +76,20 @@ export default async function MediaDetailPage({
       <AdminPageHeader
         title={asset.title || asset.filename}
         subtitle="Edit metadata, control visibility, and review where this asset is used."
+        // H13a: breadcrumb + back link both return to the FILTERED library
+        // (backHref carries q/status/usage), so the in-page back button and the
+        // breadcrumb behave like the browser back button did.
+        breadcrumbs={
+          <Breadcrumbs
+            items={[
+              { label: "Media Library", href: backHref },
+              { label: asset.title || asset.filename },
+            ]}
+          />
+        }
         action={
           <Link
-            href="/admin/media"
+            href={backHref}
             className="rounded-full border border-white/15 px-4 py-2 text-sm text-white/80 hover:border-[#7ed957] hover:text-white"
           >
             ← Back to library
