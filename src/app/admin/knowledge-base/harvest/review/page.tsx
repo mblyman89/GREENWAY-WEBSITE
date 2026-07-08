@@ -39,6 +39,7 @@ const FIELD_LABELS: Record<string, string> = {
   about: "About",
   mission_statement: "Mission statement",
   product_philosophy: "Product philosophy",
+  research_social: "Social channels (accept on the vendor page)",
   research_products: "Product lineup (reference)",
   research_images: "Image candidates (reference)",
   research_logos: "Logo candidates (reference)",

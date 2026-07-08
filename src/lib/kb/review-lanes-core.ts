@@ -50,6 +50,10 @@ export const REFERENCE_FIELDS: ReadonlySet<string> = new Set([
   "research_products",
   "research_images",
   "research_logos",
+  // H12a: the crawler's social-channel sweep. Not writable into a prose
+  // column here — the vendor page has a DEDICATED accept
+  // (acceptSocialDraftAction) that parses the handles into social_json.
+  "research_social",
   // H9e: vendor-website discovery leads — candidate first-party sites + contact
   // info found by keyword search. Read-only; the owner reviews before feeding
   // any URL into the batch crawler. Never written into a profile column.

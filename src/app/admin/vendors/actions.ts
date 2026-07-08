@@ -7,6 +7,12 @@ import { recordAudit } from "@/lib/auth/audit";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { uploadMedia, recordUsage } from "@/lib/media/store";
 import type { SocialLinks } from "@/lib/vendors/types";
+import {
+  parseSocialDraft,
+  mergeSocialLinks,
+  summarizeSocialAccept,
+  SOCIAL_DRAFT_PLATFORMS,
+} from "@/lib/vendors/social-draft-core";
 import { getVendorById, getBrandById } from "@/lib/vendors/store";
 import { generateVendorProfile } from "@/lib/ai/ai-vendor";
 import { persistSuggestion, reviewSuggestion, getSuggestion } from "@/lib/ai/suggestions";
@@ -18,12 +24,18 @@ import { importImageFromUrl, HarvestImageError } from "@/lib/media/harvest";
 const MAX_LOGO_BYTES = 5 * 1024 * 1024;
 const IMAGE_MIME = new Set(["image/png", "image/jpeg", "image/webp", "image/svg+xml", "image/gif"]);
 
+/**
+ * H12a: read EVERY typed social platform from the profile form. Previously only
+ * instagram/facebook round-tripped, so a tiktok/youtube handle saved onto
+ * social_json (e.g. by the research_social accept below) would be silently
+ * WIPED on the next profile save. The form now has inputs for all six.
+ */
 function socialFromForm(formData: FormData): SocialLinks {
   const s: SocialLinks = {};
-  const ig = String(formData.get("instagram") ?? "").trim();
-  const fb = String(formData.get("facebook") ?? "").trim();
-  if (ig) s.instagram = ig;
-  if (fb) s.facebook = fb;
+  for (const key of SOCIAL_DRAFT_PLATFORMS) {
+    const v = String(formData.get(key) ?? "").trim();
+    if (v) s[key] = v;
+  }
   return s;
 }
 
@@ -353,6 +365,81 @@ export async function acceptVendorSuggestionAction(formData: FormData): Promise<
 
   revalidatePath(`/admin/vendors/${vendorId}`);
   redirect(`/admin/vendors/${vendorId}?saved=1#ai-drafts`);
+}
+
+/**
+ * H12a: accept a `research_social` reference draft — the crawler's social-link
+ * sweep. There is no single profile COLUMN for it (which is why the generic
+ * accept said "Unsupported field."); instead the draft body is parsed back
+ * into structured links and GAP-FILLED into social_json on the vendor or
+ * brand. Existing values are never overwritten — the owner's hand-entered
+ * handles always win. Drafts-only lifecycle preserved: a human clicked Accept,
+ * the draft is marked accepted, and the audit records exactly what changed.
+ */
+export async function acceptSocialDraftAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("vendors.manage");
+  const suggestionId = String(formData.get("suggestionId") ?? "");
+  const vendorId = String(formData.get("vendorId") ?? "");
+  if (!suggestionId || !vendorId) {
+    redirect(`/admin/vendors/${vendorId}?error=` + encodeURIComponent("Missing suggestion."));
+  }
+
+  const suggestion = await getSuggestion(suggestionId);
+  if (!suggestion || suggestion.field_key !== "research_social") {
+    redirect(`/admin/vendors/${vendorId}?error=` + encodeURIComponent("Suggestion not found."));
+  }
+  const entityType = suggestion!.entity_type;
+  const entityId = suggestion!.entity_id;
+  const table = entityType === "vendor" ? "vendors" : entityType === "brand" ? "brands" : null;
+  if (!table || (entityType === "vendor" && entityId !== vendorId)) {
+    redirect(`/admin/vendors/${vendorId}?error=` + encodeURIComponent("Unsupported suggestion target."));
+  }
+
+  const parsed = parseSocialDraft(suggestion!.suggested_value);
+  if (Object.keys(parsed.links).length === 0 && parsed.unsupported.length === 0) {
+    redirect(`/admin/vendors/${vendorId}?error=` + encodeURIComponent("No social links found in this draft."));
+  }
+
+  const admin = createSupabaseAdminClient();
+  const { data: row, error: loadError } = await admin
+    .from(table!)
+    .select("id, social_json")
+    .eq("id", entityId)
+    .maybeSingle();
+  if (loadError || !row) {
+    redirect(`/admin/vendors/${vendorId}?error=` + encodeURIComponent(loadError?.message ?? "Record not found."));
+  }
+
+  const mergeResult = mergeSocialLinks(
+    (row as { social_json: SocialLinks | null }).social_json,
+    parsed.links,
+  );
+  if (mergeResult.filled.length > 0) {
+    const { error } = await admin
+      .from(table!)
+      .update({ social_json: mergeResult.merged, updated_by: session.userId })
+      .eq("id", entityId);
+    if (error) redirect(`/admin/vendors/${vendorId}?error=` + encodeURIComponent(error.message));
+  }
+
+  await reviewSuggestion(suggestionId, "accepted", session.userId);
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: `${entityType}.social_accepted`,
+    entityType,
+    entityId,
+    after: {
+      field: "research_social",
+      filled: mergeResult.filled,
+      alreadySet: mergeResult.alreadySet,
+      unsupported: parsed.unsupported,
+    },
+  });
+
+  const msg = summarizeSocialAccept(mergeResult, parsed.unsupported);
+  revalidatePath(`/admin/vendors/${vendorId}`);
+  redirect(`/admin/vendors/${vendorId}?saved=1&note=${encodeURIComponent(msg)}#ai-drafts`);
 }
 
 /** Reject an AI vendor-profile suggestion (no write to the vendor). */
