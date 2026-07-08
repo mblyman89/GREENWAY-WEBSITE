@@ -23,3 +23,4 @@ export { Breadcrumbs, type Crumb } from "./Breadcrumbs";
 export { ToastProvider, useToast } from "./Toast";
 export { ConfirmDialog } from "./ConfirmDialog";
 export { StickyActionBar } from "./StickyActionBar";
+export { ScrollKeeper } from "./ScrollKeeper";
