@@ -16,6 +16,8 @@ from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup
 
+from .image_urls import best_image_url, is_placeholder_url, parse_srcset
+
 
 @dataclass
 class CssExtraction:
@@ -272,31 +274,13 @@ def extract_css(html: str, base_url: str) -> CssExtraction:
     # H10a: read the common lazy-load data-* attributes too — product catalogs
     # (especially long edibles galleries) defer below-the-fold images behind
     # them, so src/data-src alone misses most of the lineup.
-    _lazy_attrs = (
-        "src", "data-src", "data-lazy-src", "data-original", "data-lazy",
-        "data-image", "data-full-url", "data-large_image", "data-zoom-image",
-    )
     for img in soup.find_all("img"):
-        src = ""
-        # Prefer the largest candidate in srcset when present.
-        srcset = img.get("srcset") or img.get("data-srcset") or ""
-        if srcset:
-            try:
-                candidates = [s.strip().split(" ")[0] for s in srcset.split(",") if s.strip()]
-                if candidates:
-                    src = candidates[-1]
-            except Exception:
-                pass
+        # H10b: prefer a REAL lazy/srcset image over a placeholder ``src`` and
+        # apply the broadened placeholder filter, via the shared selector — so a
+        # lazy-loaded catalog no longer records the tiny inline placeholder (the
+        # black-square bug). best_image_url returns "" when nothing real.
+        src = best_image_url(img.get)
         if not src:
-            for attr in _lazy_attrs:
-                v = img.get(attr)
-                if v:
-                    src = v
-                    break
-        if not src or src.startswith("data:"):
-            continue
-        low = src.lower()
-        if any(bad in low for bad in ("sprite", "1x1", "pixel", "tracking", "blank.", "spacer", "placeholder")):
             continue
         alt = (img.get("alt") or "").strip()
         absolute = urljoin(base_url, src)
@@ -308,17 +292,8 @@ def extract_css(html: str, base_url: str) -> CssExtraction:
     # sibling <img> when present.
     for source in soup.find_all("source"):
         srcset = source.get("srcset") or source.get("data-srcset") or ""
-        if not srcset:
-            continue
-        try:
-            candidates = [s.strip().split(" ")[0] for s in srcset.split(",") if s.strip()]
-            src = candidates[-1] if candidates else ""
-        except Exception:
-            src = ""
-        if not src or src.startswith("data:"):
-            continue
-        low = src.lower()
-        if any(bad in low for bad in ("sprite", "1x1", "pixel", "tracking", "blank.", "spacer", "placeholder")):
+        src = parse_srcset(srcset)
+        if not src or is_placeholder_url(src):
             continue
         alt = ""
         parent = source.find_parent("picture")
@@ -330,18 +305,20 @@ def extract_css(html: str, base_url: str) -> CssExtraction:
         out.image_urls.append(absolute)
         out.images.append((absolute, alt))
 
-    # De-dup images, keep order.
+    # De-dup images, keep order, and drop placeholders/data-URIs (H10b) — this
+    # is the single choke point for out.image_urls, so JSON-LD logo, product
+    # image, og:image and microdata placeholders are filtered here too.
     seen: set[str] = set()
     deduped: list[str] = []
     for u in out.image_urls:
-        if u and u not in seen:
+        if u and u not in seen and not is_placeholder_url(u):
             seen.add(u)
             deduped.append(u)
     out.image_urls = deduped
     seen.clear()
     dl: list[tuple[str, str]] = []
     for u, alt in out.images:
-        if u and u not in seen:
+        if u and u not in seen and not is_placeholder_url(u):
             seen.add(u)
             dl.append((u, alt))
     out.images = dl

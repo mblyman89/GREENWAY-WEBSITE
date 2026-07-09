@@ -21,6 +21,8 @@ from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup
 
+from .image_urls import best_image_url
+
 # Ordered by how likely the spot is to be the actual logo.
 _SOURCE_RANK = {"jsonld": 0, "header-img": 1, "apple-touch-icon": 2, "icon": 3, "og:image": 4}
 
@@ -87,8 +89,9 @@ def detect_logo_candidates(html: str, base_url: str, *, limit: int = 8) -> list[
     # 2) Header/nav <img> with "logo" in class/src/alt.
     for container in soup.find_all(["header", "nav"]):
         for img in container.find_all("img"):
-            src = img.get("src") or img.get("data-src") or ""
-            if not src or src.startswith("data:"):
+            # H10b: prefer a real lazy/srcset image over a placeholder ``src``.
+            src = best_image_url(img.get)
+            if not src:
                 continue
             hay = " ".join([
                 src,
@@ -105,8 +108,8 @@ def detect_logo_candidates(html: str, base_url: str, *, limit: int = 8) -> list[
 
     # Also catch <img class="site-logo"> outside header/nav (common on Squarespace).
     for img in soup.find_all("img", class_=_LOGO_HINT):
-        src = img.get("src") or img.get("data-src") or ""
-        if src and not src.startswith("data:"):
+        src = best_image_url(img.get)
+        if src:
             found.append(LogoCandidate(
                 url=urljoin(base_url, src),
                 source="header-img",
