@@ -16,7 +16,7 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import type { ParsedManifest } from "@/lib/inventory/intake-parser";
-import { extractCoaLinks } from "@/lib/inventory/intake-parser";
+import { extractCoaLinks, transportHasData } from "@/lib/inventory/intake-parser";
 import type { InboundManifest, ManifestTransportInput } from "@/lib/inventory/types";
 import { seedDraftsForManifest } from "@/lib/inventory/catalog-drafts";
 import { archiveCoasForManifest } from "@/lib/inventory/coa-archive";
@@ -135,6 +135,11 @@ export async function stageManifest(
     return { ok: false, error: mErr?.message ?? "Failed to create manifest." };
   }
   const manifestId = (mData as { id: string }).id;
+
+  // H15a: seed transport / ETA drafts when the parser lifted them from the
+  // document (WCIA est_*/route/transporter, PDF Depart/Arrive, CCRS header).
+  // Best-effort — never blocks staging.
+  await seedTransportFromParsed(manifestId, parsed, actorId);
 
   // Dedupe lab_results within this manifest by external id (the WCIA file shares
   // one lab_result_id across multiple lots — items 17/18, 27/28 in the example).
@@ -719,6 +724,7 @@ export async function updateManifestTransport(
   manifestId: string,
   input: ManifestTransportInput,
   actorId: string | null,
+  noteOverride?: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!isSupabaseServiceConfigured) {
     return { ok: false, error: "Supabase service role not configured." };
@@ -762,10 +768,48 @@ export async function updateManifestTransport(
   await logManifestEvent(
     manifestId,
     "transport",
-    `Transport details recorded (${who}).`,
+    noteOverride ?? `Transport details recorded (${who}).`,
     actorId,
   );
   return { ok: true };
+}
+
+/**
+ * H15a — seed transport / ETA drafts from the parsed document at staging time.
+ * Best-effort: skips silently when the parser found nothing; never fails the
+ * stage (staging already succeeded — transport is enrichment, not a gate).
+ * Uses updateManifestTransport so the same normalisation + audit-trail path
+ * applies whether a human or the parser recorded the details.
+ */
+export async function seedTransportFromParsed(
+  manifestId: string,
+  parsed: ParsedManifest,
+  actorId: string | null,
+): Promise<void> {
+  const t = parsed.transport;
+  if (!transportHasData(t)) return;
+  try {
+    await updateManifestTransport(
+      manifestId,
+      {
+        transporter_name: t.transporter_name,
+        transporter_license: t.transporter_license,
+        driver_name: t.driver_name,
+        driver_license_number: t.driver_license_number,
+        vehicle_description: t.vehicle_description,
+        vehicle_plate: t.vehicle_plate,
+        vehicle_vin: t.vehicle_vin,
+        departed_at: t.departed_at,
+        arrived_at: t.arrived_at,
+        route_notes: t.route_notes,
+        eta_date: t.eta_date,
+      },
+      actorId,
+      `Transport details auto-filled from the ${parsed.source_format} document (draft — verify during review).`,
+    );
+  } catch {
+    // best-effort: a transport-seed failure must never break staging
+  }
 }
 
 /** The lifecycle timeline for a manifest, oldest first. */

@@ -62,6 +62,71 @@ export type ParsedLine = {
   raw: unknown;
 };
 
+/**
+ * Transport / chain-of-custody details lifted from the source document (H15a).
+ * Structurally identical to ManifestTransportInput (src/lib/inventory/types.ts)
+ * but defined here so the parser stays PURE with zero imports. Everything is a
+ * DRAFT seed for the transport form — staff verify/correct during review.
+ * Timestamps are passed through as the source provided them (ISO or vendor
+ * format); the store's updateManifestTransport normalises them.
+ */
+export type ParsedTransport = {
+  transporter_name: string | null;
+  transporter_license: string | null;
+  driver_name: string | null;
+  driver_license_number: string | null;
+  vehicle_description: string | null;
+  vehicle_plate: string | null;
+  vehicle_vin: string | null;
+  departed_at: string | null;
+  arrived_at: string | null;
+  route_notes: string | null;
+  /** YYYY-MM-DD estimated arrival date. */
+  eta_date: string | null;
+};
+
+/** An all-null ParsedTransport, for parsers to fill in what they found. */
+export function emptyTransport(): ParsedTransport {
+  return {
+    transporter_name: null,
+    transporter_license: null,
+    driver_name: null,
+    driver_license_number: null,
+    vehicle_description: null,
+    vehicle_plate: null,
+    vehicle_vin: null,
+    departed_at: null,
+    arrived_at: null,
+    route_notes: null,
+    eta_date: null,
+  };
+}
+
+/** True if any transport field carries data (worth seeding into the DB). */
+export function transportHasData(t: ParsedTransport | null | undefined): t is ParsedTransport {
+  if (!t) return false;
+  return Object.values(t).some((v) => v !== null && String(v).trim() !== "");
+}
+
+/**
+ * Combine an ISO date (YYYY-MM-DD) with a 12-hour clock time ("7:10am",
+ * "12:00 am") into a local-naive ISO datetime ("YYYY-MM-DDTHH:mm") that
+ * `new Date(...)` parses reliably. Returns just the date when the time is
+ * missing/unreadable, and null when the date is missing. PURE.
+ */
+export function combineDateAndTime(dateIso: string | null, timeRaw: string | null): string | null {
+  if (!dateIso) return null;
+  const m = (timeRaw ?? "").match(/(\d{1,2}):(\d{2})\s*([ap])\.?m/i);
+  if (!m) return dateIso;
+  let hh = Number(m[1]);
+  const mm = m[2];
+  const mer = m[3].toLowerCase();
+  if (hh < 1 || hh > 12 || Number(mm) > 59) return dateIso;
+  if (mer === "p" && hh !== 12) hh += 12;
+  if (mer === "a" && hh === 12) hh = 0;
+  return `${dateIso}T${String(hh).padStart(2, "0")}:${mm}`;
+}
+
 export type ParsedManifest = {
   manifest_number: string | null;
   vendor_label: string | null;
@@ -74,6 +139,9 @@ export type ParsedManifest = {
   lines: ParsedLine[];
   /** Manifest-level warnings (e.g. no lines found). */
   warnings: string[];
+  /** Transport / ETA seed lifted from the document, when the format carries it
+   * (WCIA JSON est_* + route + transporter; PDF Depart/Arrive; CCRS header). */
+  transport?: ParsedTransport;
 };
 
 export type ParseResult =
@@ -324,6 +392,20 @@ function parseWcia(root: Obj): ParsedManifest {
   const warnings: string[] = [];
   if (lines.length === 0) warnings.push("No inventory_transfer_items found.");
 
+  // ── transport / ETA seed (H15a) ────────────────────────────────────────────
+  // WCIA 2.1.0 carries est_departed_at / est_arrival_at / route and (GrowFlow)
+  // transporter_name / transporter_license. est_arrival_at is an ESTIMATE, so
+  // it seeds eta_date — NEVER arrived_at (that's the actual-arrival stamp staff
+  // set when the truck shows up). est_departed_at seeds departed_at the same
+  // way the CCRS DepartureDateTime header does (planned departure — a draft the
+  // reviewer can correct). All fields are DRAFT seeds.
+  const transport = emptyTransport();
+  transport.transporter_name = asString(pick(root, ["transporter_name"]));
+  transport.transporter_license = asString(pick(root, ["transporter_license"]));
+  transport.departed_at = asString(pick(root, ["est_departed_at"]));
+  transport.route_notes = asString(pick(root, ["route"]));
+  transport.eta_date = asDate(pick(root, ["est_arrival_at"]));
+
   return {
     manifest_number,
     vendor_label,
@@ -332,6 +414,7 @@ function parseWcia(root: Obj): ParsedManifest {
     source_format: "wcia",
     lines,
     warnings,
+    transport,
   };
 }
 
