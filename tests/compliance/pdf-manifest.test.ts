@@ -26,6 +26,12 @@ import {
   pdfCandidates,
   manifestCandidates,
 } from "@/lib/inbound-email/inbound-normalize-core";
+import {
+  parseOpenThcInvoiceManifest,
+  looksLikeOpenThcInvoiceManifest,
+  parseOpenThcDate,
+  __runOpenThcManifestTests,
+} from "@/lib/inventory/pdf-openthc-manifest-core";
 
 const sample = readFileSync(
   join(__dirname, "fixtures", "pdf-manifest-sample.txt"),
@@ -124,5 +130,49 @@ describe("inbound-normalize PDF routing (H14a)", () => {
     expect(pdfs[0].filename).toBe("manifest.pdf");
     // The .txt remains a text manifest candidate; the PDF is excluded from it.
     expect(manifestCandidates(email).map((a) => a.filename)).toEqual(["notes.txt"]);
+  });
+});
+
+describe("OpenTHC invoice-manifest PDF parser (H15-PRE-c)", () => {
+  // Flattened text of the owner's real High End Farms invoice-manifest.
+  const hef =
+    "Invoice #01KQ 7GS6 EXA3 DV5M Sold By: HIGH END FARMS #415771 Address: 2515 HARTFORD DR STE B, LAKE STEVENS, WA 982580000 Phone: +1 425-789-1672 Email: highendfarms.manifests@gmail.com Ship To: GREENWAY MARIJUANA #413541 Address: 4851 GEIGER RD SE, PORT ORCHARD, WA 983669350 Phone: +1 360-443-6988 Depart: Wed Apr, 29, 2026 07:10am Arrive: Wed Apr, 29, 2026 04:20pm Inventory Lot Details # Lot ID Product QA Count $/ea $/full 1 01KQ 7GMB 2345 SZ7W Lemon Skunk / Flower 3.5g / Eighth - Jar 23.53% 20 13.50 270.00 2 01KQ 7GMH 20Q4 8A5H Sour Tangie / Flower 3.5g / Eighth - Jar 16.21% 10 13.50 135.00 3 01KQ 7GMP 81K9 BKX4 Sex Panther / Flower 3.5g / Eighth - Jar 25.59% 10 13.50 135.00 4 01KQ 7GN9 4DWP KTXT Lemon Skunk / Flower 7g / Quarter 23.53% 6 26.00 156.00 5 01KQ 7GNE 43ZW 3ADR Sour Tangie / Flower 7g / Quarter 16.21% 3 26.00 78.00 6 01KQ 7GNN 3BZH Y2W1 Sex Panther / Flower 7g / Quarter 25.59% 3 26.00 78.00 7 01KQ 7GNX XRQT 0PW6 Lemon Skunk / Flower 14g / Half 23.53% 2 49.00 98.00 8 01KQ 7GP3 EV35 MQP1 Sour Tangie / Flower 14g / Half 16.21% 2 49.00 98.00 9 01KQ 7GP8 H2Q3 ESEX Sex Panther / Flower 14g / Half 25.59% 2 49.00 98.00 9 Invoice Total: 1,146.00 Delivered By: Received By: Date: Page:1 of 1 Powered by TCPDF (www.tcpdf.org)";
+
+  it("passes the embedded self-test suite", () => {
+    const { failed } = __runOpenThcManifestTests();
+    expect(failed).toBe(0);
+  });
+
+  it("recognizes the combined invoice-manifest but not a plain invoice or an LCB doc", () => {
+    expect(looksLikeOpenThcInvoiceManifest(hef)).toBe(true);
+    // GrowFlow's separate invoice has no "Inventory Lot Details" table.
+    expect(
+      looksLikeOpenThcInvoiceManifest(
+        "Invoice Order #: 29127 Bill To: Greenway License: 413541 Product Qty Total",
+      ),
+    ).toBe(false);
+    expect(
+      looksLikeOpenThcInvoiceManifest("Internal Shipping Document Manifest ID: 1137 Batch"),
+    ).toBe(false);
+  });
+
+  it("extracts the header, transport date, and all 9 lot lines with price in minor units", () => {
+    const m = parseOpenThcInvoiceManifest(hef)!;
+    expect(m.manifest_number).toBe("01KQ7GS6EXA3DV5M");
+    expect(m.vendor_label).toBe("HIGH END FARMS");
+    expect(m.vendor_license).toBe("415771");
+    expect(m.transfer_date).toBe("2026-04-29");
+    expect(m.source_format).toBe("pdf-manifest");
+    expect(m.lines).toHaveLength(9);
+    expect(m.lines[0].lot_code).toBe("01KQ7GMB2345SZ7W");
+    expect(m.lines[0].product_name).toContain("Lemon Skunk");
+    expect(m.lines[0].received_qty).toBe(20);
+    expect(m.lines[0].unit_cost_minor_units).toBe(1350); // $13.50 -> cents
+    expect(m.lines[8].lot_code).toBe("01KQ7GP8H2Q3ESEX");
+  });
+
+  it("parseOpenThcDate handles the 'Wed Apr, 29, 2026 07:10am' shape", () => {
+    expect(parseOpenThcDate("Wed Apr, 29, 2026 07:10am")).toBe("2026-04-29");
+    expect(parseOpenThcDate(null)).toBeNull();
   });
 });
