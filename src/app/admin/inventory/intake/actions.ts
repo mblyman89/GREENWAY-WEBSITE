@@ -10,12 +10,12 @@ import {
   rejectManifest,
   setLotDisposition,
   finalizeManifestDispositions,
-  updateManifestTransport,
 } from "@/lib/inventory/intake-store";
 import { normalizeRejection } from "@/lib/inventory/intake-disposition-core";
 import {
   parseCcrsManifestCsv,
   ccrsToParsedManifest,
+  ccrsTransportToParsed,
 } from "@/lib/inventory/ccrs-manifest-csv-core";
 import { parsePdfManifest } from "@/lib/inventory/pdf-extract";
 
@@ -104,7 +104,10 @@ export async function importManifestCsvAction(formData: FormData) {
     redirect("/admin/inventory/intake?error=nolines");
   }
 
-  // Adapt to the shared ParsedManifest shape stageManifest expects.
+  // Adapt to the shared ParsedManifest shape stageManifest expects. The CCRS
+  // header's transport block rides along on the H15a `transport` channel, so
+  // stageManifest seeds chain-of-custody + ETA the same way it does for WCIA
+  // JSON and PDF manifests (one path, one audit-trail note).
   const manifest: ParsedManifest = {
     manifest_number: mapped.manifest_number,
     vendor_label: mapped.vendor_label,
@@ -113,6 +116,7 @@ export async function importManifestCsvAction(formData: FormData) {
     source_format: "ccrs-csv",
     lines: mapped.lines,
     warnings: mapped.warnings,
+    transport: ccrsTransportToParsed(mapped.transport),
   };
 
   const staged = await stageManifest(manifest, csvText, session.userId, {
@@ -121,37 +125,6 @@ export async function importManifestCsvAction(formData: FormData) {
   revalidatePath("/admin/inventory/intake");
   if (!staged.ok) {
     redirect("/admin/inventory/intake?error=save");
-  }
-
-  // Seed transport chain-of-custody + ETA from the CCRS header (best-effort).
-  const t = mapped.transport;
-  if (
-    t.driver_name ||
-    t.vehicle_plate ||
-    t.vehicle_vin ||
-    t.vehicle_description ||
-    t.transporter_license ||
-    t.departed_at ||
-    t.arrived_at ||
-    t.eta_date
-  ) {
-    await updateManifestTransport(
-      staged.manifestId,
-      {
-        transporter_name: null,
-        transporter_license: t.transporter_license,
-        driver_name: t.driver_name,
-        driver_license_number: null,
-        vehicle_description: t.vehicle_description,
-        vehicle_plate: t.vehicle_plate,
-        vehicle_vin: t.vehicle_vin,
-        departed_at: t.departed_at,
-        arrived_at: t.arrived_at,
-        route_notes: null,
-        eta_date: t.eta_date,
-      },
-      session.userId,
-    );
   }
 
   redirect(`/admin/inventory/intake/${staged.manifestId}?staged=1&csv=1`);

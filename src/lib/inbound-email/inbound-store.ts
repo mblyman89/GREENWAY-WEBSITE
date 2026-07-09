@@ -23,6 +23,7 @@ import { parseVendorJson, type ParsedManifest } from "@/lib/inventory/intake-par
 import {
   parseCcrsManifestCsv,
   ccrsToParsedManifest,
+  ccrsTransportToParsed,
 } from "@/lib/inventory/ccrs-manifest-csv-core";
 import { stageManifest } from "@/lib/inventory/intake-store";
 import type {
@@ -84,6 +85,9 @@ export function parseAttachmentToManifest(att: NormalizedAttachment): ParsedMani
           source_format: "ccrs-csv",
           lines: mapped.lines,
           warnings: mapped.warnings,
+          // H15a: ride the CCRS header transport along so stageManifest seeds
+          // chain-of-custody + ETA for emailed CSVs too.
+          transport: ccrsTransportToParsed(mapped.transport),
         };
       }
     }

@@ -34,6 +34,7 @@
  */
 
 import type { ParsedManifest, ParsedLine } from "@/lib/inventory/intake-parser";
+import { emptyTransport, combineDateAndTime } from "@/lib/inventory/intake-parser";
 
 /** A blank sparse line pre-filled for the PDF path (no lab / price data). */
 function blankPdfLine(raw: unknown, warnings: string[]): ParsedLine {
@@ -167,6 +168,35 @@ export function parseShippingManifestText(text: string): ParsedManifest | null {
   const destination_license =
     flat.match(/Destination Licensee\s*#\s*:\s*(\d{4,})/i)?.[1]?.trim() ?? null;
 
+  // ── transport / ETA seed (H15a) ─────────────────────────────────────────
+  // Anchors verified against the real unpdf blob of the owner's sample:
+  //  • "Internal Shipping Document (Third Party) <m/d/yy h:mm am>" — that
+  //    datetime is the Transporter Departure Time (unpdf drifts it up here).
+  //  • "Travel Route <m/d/yy h:mm am>" — that datetime is the Delivery
+  //    Deadline (latest arrival), which seeds eta_date. NEVER arrived_at —
+  //    staff stamp the actual arrival when the truck shows up.
+  //  • The transport company name sits between the clumped "Departure Time:"
+  //    and "Delivery Deadline:" labels (e.g. "TERPENE TRANSIT").
+  // Vehicle/driver fields are blank on this layout's sample, so we honestly
+  // leave them null rather than guess at anchors. All values are DRAFTS.
+  const DT_RE = /(\d{1,2}\/\d{1,2}\/\d{2,4})\s+(\d{1,2}:\d{2}\s*[ap]m)/i;
+  const departM = flat
+    .match(new RegExp(`Internal Shipping Document \\(Third Party\\)\\s+${DT_RE.source}`, "i"));
+  const deadlineM = flat.match(new RegExp(`Travel Route\\s+${DT_RE.source}`, "i"));
+  const transporterM = flat.match(
+    /Departure Time\s*:\s*([A-Z][A-Za-z0-9&.'()\- ]{2,60}?)\s*Delivery Deadline/,
+  );
+  const transport = emptyTransport();
+  transport.departed_at = departM
+    ? combineDateAndTime(normalizePdfDate(departM[1]), departM[2])
+    : null;
+  transport.eta_date = deadlineM ? normalizePdfDate(deadlineM[1]) : null;
+  {
+    const name = transporterM?.[1]?.trim() ?? null;
+    // Reject anything date-like so a drifted datetime can't masquerade as a name.
+    transport.transporter_name = name && !/\d{1,2}\/\d{1,2}\/\d{2,4}/.test(name) ? name : null;
+  }
+
   // ── line items ─────────────────────────────────────────────────────────
   // Anchor on 17-digit lot ids. For each, the description runs up to the shipped
   // qty ("20.00"); a trailing digit run after the qty is the NEXT row's line #.
@@ -231,6 +261,7 @@ export function parseShippingManifestText(text: string): ParsedManifest | null {
     source_format: "pdf-manifest",
     lines: parsedLines,
     warnings,
+    transport,
   };
 }
 
@@ -283,6 +314,15 @@ export function __runPdfManifestTests(sampleText: string): { passed: number; fai
     (m?.lines[0].warnings.some((w) => w.includes("no COA/price")) ?? false) === true,
     "sparse-line warning present",
   );
+
+  // H15a — transport / ETA seed from the real sample:
+  //   Transporter Departure Time 6/26/26 12:00 am; Delivery Deadline 6/29/26
+  //   8:00 am; Third Party Transport Company TERPENE TRANSIT.
+  ok(m?.transport?.departed_at === "2026-06-26T00:00", `departure time seeded (got ${m?.transport?.departed_at})`);
+  ok(m?.transport?.eta_date === "2026-06-29", `eta from delivery deadline (got ${m?.transport?.eta_date})`);
+  ok(m?.transport?.transporter_name === "TERPENE TRANSIT", `transporter name read (got ${m?.transport?.transporter_name})`);
+  ok(m?.transport?.arrived_at === null, "arrived_at NOT guessed (staff stamp actual arrival)");
+  ok(m?.transport?.driver_name === null, "driver name honestly null (blank on this layout)");
 
   if (failed === 0) console.log(`pdf-manifest-core: all ${passed} tests passed`);
   return { passed, failed };

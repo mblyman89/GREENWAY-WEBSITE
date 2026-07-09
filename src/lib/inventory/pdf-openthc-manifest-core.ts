@@ -30,6 +30,7 @@
  */
 
 import type { ParsedLine, ParsedManifest } from "@/lib/inventory/intake-parser";
+import { emptyTransport, combineDateAndTime } from "@/lib/inventory/intake-parser";
 import { splitStrainType } from "@/lib/inventory/pdf-manifest-core";
 
 /** Greenway's own WA license — used to tell "sold by" (vendor) from "ship to" (us). */
@@ -102,6 +103,16 @@ export function parseOpenThcInvoiceManifest(text: string): ParsedManifest | null
   // Depart/Arrive -> transfer date (departure day) for the row.
   const departRaw = flat.match(/Depart\s*:\s*([^]*?)\s*Arrive\s*:/i)?.[1] ?? null;
   const transfer_date = parseOpenThcDate(departRaw);
+
+  // H15a — transport / ETA seed. Depart feeds departed_at (planned departure,
+  // date + 12-hour time), Arrive feeds eta_date ONLY (it's an estimate — the
+  // actual arrived_at is stamped by staff when the truck shows up). Drafts.
+  const arriveRaw =
+    flat.match(/Arrive\s*:\s*([A-Za-z]{3}\s+[A-Za-z]{3},?\s*\d{1,2},?\s*\d{4}\s*\d{1,2}:\d{2}\s*[ap]m)/i)?.[1] ??
+    null;
+  const transport = emptyTransport();
+  transport.departed_at = combineDateAndTime(transfer_date, departRaw);
+  transport.eta_date = parseOpenThcDate(arriveRaw);
 
   // ── line items ──────────────────────────────────────────────────────────
   // Rows sit inside the "Inventory Lot Details ... $/full" table. Each row:
@@ -204,6 +215,7 @@ export function parseOpenThcInvoiceManifest(text: string): ParsedManifest | null
     source_format: "pdf-manifest",
     lines: parsedLines,
     warnings,
+    transport,
   };
 }
 
@@ -257,6 +269,14 @@ export function __runOpenThcManifestTests(): { passed: number; failed: number } 
   ok(parseOpenThcDate("Wed Apr, 29, 2026 07:10am") === "2026-04-29", "date parse");
   ok(parseOpenThcDate(null) === null, "null date -> null");
   ok(parseOpenThcDate("no date here") === null, "unparseable date -> null");
+
+  // H15a — transport / ETA seed: Depart 07:10am -> departed_at (date+time),
+  // Arrive 04:20pm same day -> eta_date ONLY (estimate; actual arrival is
+  // stamped by staff), everything else honestly null on this layout.
+  ok(m?.transport?.departed_at === "2026-04-29T07:10", `depart seeded (got ${m?.transport?.departed_at})`);
+  ok(m?.transport?.eta_date === "2026-04-29", `eta from Arrive (got ${m?.transport?.eta_date})`);
+  ok(m?.transport?.arrived_at === null, "arrived_at NOT guessed");
+  ok(m?.transport?.transporter_name === null, "transporter honestly null (not on this layout)");
 
   if (failed === 0) console.log(`pdf-openthc-manifest-core: all ${passed} tests passed`);
   return { passed, failed };

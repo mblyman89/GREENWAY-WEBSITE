@@ -400,6 +400,42 @@ export type CcrsParsedLine = {
   raw: unknown;
 };
 
+/**
+ * H15a — adapt the CCRS header transport block to the shared ParsedTransport
+ * channel on ParsedManifest, so stageManifest seeds chain-of-custody + ETA
+ * uniformly for every source format. CCRS carries no transporter NAME (only
+ * the license), no driver license #, and no route text — honest nulls.
+ * (Structurally mirrors ParsedTransport from intake-parser.ts, keeping this
+ * module import-free per the design note above.)
+ */
+export function ccrsTransportToParsed(t: CcrsParsedManifest["transport"]): {
+  transporter_name: string | null;
+  transporter_license: string | null;
+  driver_name: string | null;
+  driver_license_number: string | null;
+  vehicle_description: string | null;
+  vehicle_plate: string | null;
+  vehicle_vin: string | null;
+  departed_at: string | null;
+  arrived_at: string | null;
+  route_notes: string | null;
+  eta_date: string | null;
+} {
+  return {
+    transporter_name: null,
+    transporter_license: t.transporter_license,
+    driver_name: t.driver_name,
+    driver_license_number: null,
+    vehicle_description: t.vehicle_description,
+    vehicle_plate: t.vehicle_plate,
+    vehicle_vin: t.vehicle_vin,
+    departed_at: t.departed_at,
+    arrived_at: t.arrived_at,
+    route_notes: null,
+    eta_date: t.eta_date,
+  };
+}
+
 export type CcrsParsedManifest = {
   manifest_number: string | null;
   vendor_label: string | null;
@@ -651,6 +687,17 @@ export function __runCcrsManifestCsvTests(): { passed: number; failed: number } 
     ok(pm.transport.driver_name === "Sam Driver", "map: transport driver");
     ok(pm.transport.vehicle_plate === "ABC1234", "map: transport plate");
     ok(pm.transport.eta_date === "2024-06-15", "map: eta from arrival");
+
+    // H15a — ParsedTransport adapter carries the header through and leaves
+    // fields CCRS doesn't have (name / driver license / route) honestly null.
+    const pt2 = ccrsTransportToParsed(pm.transport);
+    ok(pt2.driver_name === "Sam Driver", "adapter: driver carried");
+    ok(pt2.vehicle_plate === "ABC1234", "adapter: plate carried");
+    ok(pt2.eta_date === "2024-06-15", "adapter: eta carried");
+    ok(pt2.transporter_license === pm.transport.transporter_license, "adapter: transporter license carried");
+    ok(pt2.transporter_name === null, "adapter: transporter NAME null (CCRS has license only)");
+    ok(pt2.driver_license_number === null, "adapter: driver license null");
+    ok(pt2.route_notes === null, "adapter: route null");
     ok(
       pm.warnings.some((x) => x.includes("412345")),
       "map: origin license surfaced as warning",
