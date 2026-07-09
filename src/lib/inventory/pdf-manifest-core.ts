@@ -158,10 +158,23 @@ export function parseShippingManifestText(text: string): ParsedManifest | null {
   // In this layout the true manifest date is the one printed immediately before
   // the barcode glyph (¶<manifest-id>...). Prefer that; then the labelled value;
   // then a date that is NOT the delivery-deadline / departure lines.
+  //
+  // H16b-2 fix: the Cultivera variant prints a fixed "8/6/91" inside the
+  // DISCLAIMER preamble. The old generic fallback grabbed THAT (yielding a bogus
+  // 2091-08-06). So the generic fallback now searches only AFTER the disclaimer
+  // (past "Instructions:" when present) and rejects the 8/6/91 literal.
+  const afterDisclaimer = (() => {
+    const idx = flat.search(/Instructions:/i);
+    return idx >= 0 ? flat.slice(idx) : flat;
+  })();
+  const firstRealDate =
+    [...afterDisclaimer.matchAll(/\b(\d{1,2}\/\d{1,2}\/\d{2,4})\b/g)]
+      .map((m) => m[1])
+      .find((d) => d !== "8/6/91") ?? null;
   const transfer_date = normalizePdfDate(
     flat.match(/(\d{1,2}\/\d{1,2}\/\d{2,4})\s*\u00b6/)?.[1] ??
       flat.match(/Date\s*:\s*(\d{1,2}\/\d{1,2}\/\d{2,4})/i)?.[1] ??
-      flat.match(/\b(\d{1,2}\/\d{1,2}\/\d{2,4})\b/)?.[1] ??
+      firstRealDate ??
       null,
   );
 
@@ -195,6 +208,78 @@ export function parseShippingManifestText(text: string): ParsedManifest | null {
     const name = transporterM?.[1]?.trim() ?? null;
     // Reject anything date-like so a drifted datetime can't masquerade as a name.
     transport.transporter_name = name && !/\d{1,2}\/\d{1,2}\/\d{2,4}/.test(name) ? name : null;
+  }
+
+  // ── Cultivera "Internal Shipping Document" layout (H16b-2) ──────────────────
+  // Verified against the owner's REAL Everigreene manifest. This variant uses
+  // different anchors than the (Third Party) one above:
+  //  • "Transporter Name:" ... the driver/transporter name (e.g. "Tyler hart").
+  //    The value drifts after the "Transporter Date of Birth:" label in the
+  //    unpdf blob, so we accept the Title-case token that follows either label.
+  //  • "Vehicle Color / Make / Model / License Plate:" ... one clumped value
+  //    (e.g. "2006 blue subaru impreza chb65209") — the last token is the plate.
+  //  • The route + the two "Approx. Departure/Arrival Date/Time" values sit as a
+  //    clumped run right before the barcode glyph: "<route text> <dep date time>
+  //    <arr date time> <date> ¶<manifest-id>". First datetime = departure,
+  //    second = the arrival ESTIMATE → eta_date only, never arrived_at.
+  //  • "Travel Route <turn-by-turn> ... will be on the left" → route_notes.
+  // Only fill fields the (Third Party) anchors above did NOT already find, so we
+  // never clobber the existing sample. DRAFTS, honest nulls, no guessing.
+  {
+    // Two clumped "m/d/yy h:mm am" datetimes just before the barcode glyph.
+    const clump = flat.match(
+      new RegExp(`${DT_RE.source}\\s+${DT_RE.source}\\s+\\d{1,2}\\/\\d{1,2}\\/\\d{2,4}[^\\u00b6]*\\u00b6`, "i"),
+    );
+    if (clump) {
+      if (!transport.departed_at) {
+        transport.departed_at = combineDateAndTime(normalizePdfDate(clump[1]), clump[2]);
+      }
+      if (!transport.eta_date) transport.eta_date = normalizePdfDate(clump[3]);
+    }
+
+    if (!transport.transporter_name) {
+      // "Transporter Name:" then (optionally) "Transporter Date of Birth:" then
+      // the actual name value (unpdf drifts the value after the DOB label).
+      const tm =
+        flat.match(
+          /Transporter Name:\s*(?:Transporter Date of Birth:\s*)?([A-Za-z][A-Za-z.'\- ]{1,50}?)\s*(?:Approx\.|Page |License |Destination)/i,
+        ) ?? flat.match(/Transporter Name:\s*([A-Za-z][A-Za-z.'\- ]{1,50}?)\s{2,}/i);
+      const name = tm?.[1]?.trim() ?? null;
+      transport.transporter_name =
+        name && !/\d/.test(name) && !/date of birth/i.test(name) ? name : null;
+    }
+
+    // Vehicle line: "<year> <color> <make> <model> <plate>" clumped after the
+    // "Licensee Phone:" that precedes it in this layout, e.g.
+    //   "Licensee Phone: 360-451-7357 2006 blue subaru impreza chb65209".
+    // We require a plausible model YEAR (19xx/20xx) followed by a lowercase
+    // COLOR WORD then make/model then a plate — this deliberately EXCLUDES a
+    // street address like "4851 GEIGER RD SE" (4851 isn't a 19xx/20xx year and
+    // "GEIGER" is upper-case). The last token is the license plate.
+    if (!transport.vehicle_description) {
+      const vm = flat.match(
+        /\b((?:19|20)\d{2}\s+[a-z]{3,}\s+[a-z][a-z0-9]{2,}\s+[a-z][a-z0-9]{1,}\s+[a-z0-9]{5,8})\b/,
+      );
+      if (vm) {
+        const parts = vm[1].trim().split(/\s+/);
+        const plate = parts[parts.length - 1];
+        transport.vehicle_description = parts.slice(0, -1).join(" ").trim() || null;
+        if (!transport.vehicle_plate && /^[a-z0-9]{5,8}$/i.test(plate)) {
+          transport.vehicle_plate = plate.toUpperCase();
+        }
+      }
+    }
+
+    if (!transport.route_notes) {
+      const routeM = flat.match(
+        /Travel Route\s+([A-Z][\s\S]*?(?:will be on the left|Destination will be on the left))/i,
+      );
+      if (routeM) {
+        const note = routeM[1].replace(/\s+/g, " ").trim();
+        // Only keep if it reads like directions, not a bare datetime.
+        if (note.length > 15 && /[a-z]/.test(note)) transport.route_notes = note;
+      }
+    }
   }
 
   // ── line items ─────────────────────────────────────────────────────────
@@ -325,5 +410,61 @@ export function __runPdfManifestTests(sampleText: string): { passed: number; fai
   ok(m?.transport?.driver_name === null, "driver name honestly null (blank on this layout)");
 
   if (failed === 0) console.log(`pdf-manifest-core: all ${passed} tests passed`);
+  return { passed, failed };
+}
+
+// ---------------------------------------------------------------------------
+// H16b-2 — self-tests for the Cultivera "Internal Shipping Document" variant.
+// The fixture is the exact unpdf output of the owner's real Everigreene sample.
+// This layout uses "Approx. Departure/Arrival Date/Time", "Transporter Name:",
+// and a clumped vehicle line — distinct from the (Third Party) sample above.
+// ---------------------------------------------------------------------------
+export function __runCultiveraManifestTests(sampleText: string): {
+  passed: number;
+  failed: number;
+} {
+  let passed = 0;
+  let failed = 0;
+  const ok = (cond: boolean, msg: string) => {
+    if (cond) passed += 1;
+    else {
+      failed += 1;
+      console.error("FAIL:", msg);
+    }
+  };
+
+  ok(looksLikeShippingManifest(sampleText) === true, "cultivera sample recognized as manifest");
+
+  const m = parseShippingManifestText(sampleText);
+  ok(m !== null, "cultivera sample parses");
+  ok(m?.manifest_number === "21544390883723306", `manifest id (got ${m?.manifest_number})`);
+  ok(m?.vendor_label === "EVERIGREENE", `vendor label (got ${m?.vendor_label})`);
+  ok(m?.vendor_license === "431776", `vendor license (got ${m?.vendor_license})`);
+  // The bug this slice fixes: the "8/6/91" disclaimer date must NOT win.
+  ok(m?.transfer_date === "2026-07-08", `transfer date not the 8/6/91 disclaimer (got ${m?.transfer_date})`);
+  ok(m?.lines.length === 28, `all 28 lines parsed (got ${m?.lines.length})`);
+  ok(m?.lines[0].lot_code === "21544340930295135", `line 1 lot (got ${m?.lines[0].lot_code})`);
+  ok(
+    m?.lines[0].product_name === "Packaged Flower - BananaConda - 3.5g",
+    `line 1 name (got ${m?.lines[0].product_name})`,
+  );
+  ok(m?.lines[27].lot_code === "21544341009022449", `line 28 lot (got ${m?.lines[27].lot_code})`);
+
+  // Transport — the fields that were ALL NULL before this slice.
+  ok(m?.transport?.transporter_name === "Tyler hart", `transporter name (got ${m?.transport?.transporter_name})`);
+  ok(
+    m?.transport?.vehicle_description === "2006 blue subaru impreza",
+    `vehicle description (got ${m?.transport?.vehicle_description})`,
+  );
+  ok(m?.transport?.vehicle_plate === "CHB65209", `vehicle plate (got ${m?.transport?.vehicle_plate})`);
+  ok(m?.transport?.departed_at === "2026-07-08T09:00", `departure datetime (got ${m?.transport?.departed_at})`);
+  ok(m?.transport?.eta_date === "2026-07-08", `eta from arrival estimate (got ${m?.transport?.eta_date})`);
+  ok(m?.transport?.arrived_at === null, "arrived_at NOT guessed");
+  ok(
+    (m?.transport?.route_notes ?? "").includes("US-12 E"),
+    "route notes captured the turn-by-turn directions",
+  );
+
+  if (failed === 0) console.log(`pdf-manifest-core (cultivera): all ${passed} tests passed`);
   return { passed, failed };
 }
