@@ -198,6 +198,27 @@ export type InboundEmailLogRow = {
 };
 
 /**
+ * H14-attachments-fetch: pull the invoice/manifest/transfer links out of the
+ * log `note`. The webhook records a fetch trail like
+ *   "... — fetched WCIA Transfer Data Link JSON; invoice link: https://...;
+ *    manifest link: https://..."
+ * so a human reviewing the inbound panel can open the invoice/manifest PDFs even
+ * when Gmail forwarding stripped the file attachments. PURE string parsing.
+ */
+export function extractLinksFromNote(note: string | null): {
+  invoiceUrl: string | null;
+  manifestUrl: string | null;
+} {
+  const s = note ?? "";
+  const grab = (label: string): string | null => {
+    const re = new RegExp(`${label} link:\\s*(https?://[^\\s;]+)`, "i");
+    const m = s.match(re);
+    return m ? m[1] : null;
+  };
+  return { invoiceUrl: grab("invoice"), manifestUrl: grab("manifest") };
+}
+
+/**
  * Recent inbound vendor_intake@ emails for the intake review queue. Read-only.
  * Surfaces provenance ("this draft arrived by email") and, crucially, the
  * `parse_failed` / `no_manifest` rows a human should chase down. Never throws.
@@ -210,7 +231,7 @@ export async function listInboundEmails(limit = 25): Promise<InboundEmailLogRow[
       .from("inbound_email_log")
       .select(
         "id, provider, from_address, to_addresses, subject, received_at, signature_ok, to_intake, attachment_count, disposition, manifest_id, note",
-      )
+      ) // note carries the fetch trail incl. invoice/manifest links (H14)
       .order("received_at", { ascending: false })
       .limit(limit);
     if (error || !data) return [];

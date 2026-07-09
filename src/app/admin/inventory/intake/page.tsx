@@ -7,7 +7,11 @@ import { StatCard } from "@/components/admin/StatCard";
 import { Field, Input, Textarea, Button, Badge } from "@/components/admin/ui";
 import { CatalogStageStrip } from "@/components/admin/catalog/CatalogStageStrip";
 import { listManifests, countManifestsByStatus } from "@/lib/inventory/intake-store";
-import { listInboundEmails, type InboundEmailLogRow } from "@/lib/inbound-email/inbound-store";
+import {
+  listInboundEmails,
+  extractLinksFromNote,
+  type InboundEmailLogRow,
+} from "@/lib/inbound-email/inbound-store";
 import type { InboundManifest } from "@/lib/inventory/types";
 import {
   groupPipeline,
@@ -161,38 +165,73 @@ function InboundEmailPanel({ rows }: { rows: InboundEmailLogRow[] }) {
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
-              <tr key={r.id} className="border-t border-[var(--admin-border)]">
-                <td className="px-4 py-2 text-[var(--admin-text-muted)]">{r.received_at.slice(0, 16).replace("T", " ")}</td>
-                <td className="px-4 py-2 text-[var(--admin-text-muted)]">
-                  <span className="inline-flex items-center gap-2">
-                    {r.from_address ?? "—"}
-                    {r.signature_ok !== true ? (
-                      // S-9: signature failed (false) or was skipped because the
-                      // secret was unset (null) — either way the sender is NOT
-                      // verified. Treat the attached draft with suspicion.
-                      <Badge tone="gold">Unverified sender</Badge>
-                    ) : null}
-                  </span>
-                </td>
-                <td className="px-4 py-2 text-[var(--admin-text)]">
-                  {r.manifest_id ? (
-                    <Link
-                      href={`/admin/inventory/intake/${r.manifest_id}`}
-                      className="hover:text-[var(--admin-accent)]"
-                    >
-                      {r.subject ?? "(no subject)"}
-                    </Link>
-                  ) : (
-                    (r.subject ?? "(no subject)")
-                  )}
-                </td>
-                <td className="px-4 py-2 text-[var(--admin-text-muted)]">{r.attachment_count}</td>
-                <td className="px-4 py-2">
-                  <Badge tone={tone(r.disposition)}>{label(r.disposition)}</Badge>
-                </td>
-              </tr>
-            ))}
+            {rows.map((r) => {
+              // H14-attachments-fetch: surface the invoice/manifest download
+              // links the webhook pulled from the email body (Gmail forwarding
+              // keeps these links even when it drops the file attachments), so a
+              // reviewer can open the PDFs straight from the panel.
+              const links = extractLinksFromNote(r.note);
+              return (
+                <tr key={r.id} className="border-t border-[var(--admin-border)]">
+                  <td className="px-4 py-2 align-top text-[var(--admin-text-muted)]">
+                    {r.received_at.slice(0, 16).replace("T", " ")}
+                  </td>
+                  <td className="px-4 py-2 align-top text-[var(--admin-text-muted)]">
+                    <span className="inline-flex items-center gap-2">
+                      {r.from_address ?? "—"}
+                      {r.signature_ok !== true ? (
+                        // S-9: signature failed (false) or was skipped because the
+                        // secret was unset (null) — either way the sender is NOT
+                        // verified. Treat the attached draft with suspicion.
+                        <Badge tone="gold">Unverified sender</Badge>
+                      ) : null}
+                    </span>
+                  </td>
+                  <td className="px-4 py-2 align-top text-[var(--admin-text)]">
+                    {r.manifest_id ? (
+                      <Link
+                        href={`/admin/inventory/intake/${r.manifest_id}`}
+                        className="font-medium hover:text-[var(--admin-accent)]"
+                      >
+                        {r.subject ?? "(no subject)"}
+                      </Link>
+                    ) : (
+                      (r.subject ?? "(no subject)")
+                    )}
+                    {(links.invoiceUrl || links.manifestUrl) && (
+                      <div className="mt-1 flex flex-wrap gap-3 text-xs">
+                        {links.manifestUrl && (
+                          <a
+                            href={links.manifestUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-[var(--admin-accent)] hover:underline"
+                          >
+                            ⬇ Manifest PDF
+                          </a>
+                        )}
+                        {links.invoiceUrl && (
+                          <a
+                            href={links.invoiceUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-[var(--admin-accent)] hover:underline"
+                          >
+                            ⬇ Invoice PDF
+                          </a>
+                        )}
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-4 py-2 align-top text-[var(--admin-text-muted)]">
+                    {r.attachment_count}
+                  </td>
+                  <td className="px-4 py-2 align-top">
+                    <Badge tone={tone(r.disposition)}>{label(r.disposition)}</Badge>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
