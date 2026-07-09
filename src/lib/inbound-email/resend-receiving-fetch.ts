@@ -42,7 +42,7 @@ import {
   decodeDataUriHtml,
   type ReceivingAttachmentMeta,
 } from "@/lib/inbound-email/resend-receiving-core";
-import { fetchTransferJson } from "@/lib/inventory/transfer-fetch";
+import { fetchTransferJson, fetchPdfBytes } from "@/lib/inventory/transfer-fetch";
 import { cleanUrl } from "@/lib/inventory/intake-parser";
 
 const RESEND_API = "https://api.resend.com";
@@ -242,6 +242,41 @@ export async function enrichResendInbound(
   }
   if (links.invoiceUrl) notes.push(`invoice link: ${links.invoiceUrl}`);
   if (links.manifestUrl) notes.push(`manifest link: ${links.manifestUrl}`);
+
+  // 4) LINK-ONLY PDF FALLBACK (H16b-6). When the WCIA transfer JSON is dead or
+  //    absent AND the email carried no usable PDF/JSON attachment (Gmail
+  //    forwarding stripped the files but left the "download the invoice/manifest"
+  //    links), fetch those PDF links server-side and add them as attachments so
+  //    staging can parse + merge them exactly like a direct send. We only reach
+  //    for this fallback when we don't already have something parseable, to avoid
+  //    duplicate work on healthy direct-send emails.
+  const haveParseableAttachment = attachments.some((a) => {
+    const ct = (a.contentType ?? "").toLowerCase();
+    if (ct.includes("json") && a.text != null) return true;
+    if (ct.includes("pdf") && a.base64) return true;
+    return false;
+  });
+  if (!haveParseableAttachment) {
+    for (const [label, rawLink] of [
+      ["manifest", links.manifestUrl],
+      ["invoice", links.invoiceUrl],
+    ] as const) {
+      if (!rawLink) continue;
+      const cleanedLink = cleanUrl(rawLink) ?? rawLink;
+      const pdf = await fetchPdfBytes(cleanedLink);
+      if (pdf.ok) {
+        attachments.push({
+          filename: filenameFromUrl(cleanedLink) ?? `${label}.pdf`,
+          contentType: pdf.contentType || "application/pdf",
+          text: null,
+          base64: pdf.base64,
+        });
+        notes.push(`fetched ${label} PDF from link (${pdf.bytes} bytes)`);
+      } else {
+        notes.push(`${label} link found but PDF fetch failed (${pdf.error})`);
+      }
+    }
+  }
 
   const email: NormalizedInboundEmail = {
     provider: "resend",

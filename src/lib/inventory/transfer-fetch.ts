@@ -93,3 +93,87 @@ export async function fetchTransferJson(rawUrl: string): Promise<TransferFetchRe
 
   return { ok: true, jsonText: text, finalUrl: url.toString() };
 }
+
+/** Result of attempting to fetch a vendor PDF (invoice / manifest / COA) link. */
+export type PdfFetchResult =
+  | { ok: true; base64: string; contentType: string; finalUrl: string; bytes: number }
+  | { ok: false; error: string };
+
+const MAX_PDF_BYTES = 25 * 1024 * 1024; // 25 MB guard — COA PDFs can be large.
+
+/**
+ * Fetch a vendor invoice/manifest/COA PDF link server-side and return its bytes
+ * as base64 so the inbound-email path can treat it exactly like a MIME
+ * attachment (H16b-6 link-only fallback). Used ONLY when the richer WCIA
+ * transfer JSON is dead/absent AND no PDF was MIME-attached (Gmail forwarding
+ * stripped the files but left the download links).
+ *
+ * Validates it's actually a PDF (magic bytes "%PDF") since a dead link may
+ * return an HTML error page. Never throws.
+ */
+export async function fetchPdfBytes(rawUrl: string): Promise<PdfFetchResult> {
+  const cleaned = cleanUrl(rawUrl);
+  if (!cleaned) return { ok: false, error: "That doesn't look like a URL." };
+
+  let url: URL;
+  try {
+    url = new URL(cleaned);
+  } catch {
+    return { ok: false, error: "That doesn't look like a valid URL." };
+  }
+  if (url.protocol !== "https:" && url.protocol !== "http:") {
+    return { ok: false, error: "Only http(s) links are supported." };
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch(url.toString(), {
+      method: "GET",
+      redirect: "follow",
+      signal: controller.signal,
+      headers: { Accept: "application/pdf, application/octet-stream, */*" },
+      cache: "no-store",
+    });
+  } catch (err) {
+    clearTimeout(timer);
+    const msg =
+      err instanceof Error && err.name === "AbortError"
+        ? "The link took too long to respond (timed out)."
+        : "Couldn't reach that link from the server.";
+    return { ok: false, error: msg };
+  }
+  clearTimeout(timer);
+
+  if (!res.ok) {
+    return { ok: false, error: `The link returned an error (HTTP ${res.status}).` };
+  }
+  const len = Number(res.headers.get("content-length") ?? "0");
+  if (len > MAX_PDF_BYTES) {
+    return { ok: false, error: "That file is too large to import automatically." };
+  }
+
+  let buf: ArrayBuffer;
+  try {
+    buf = await res.arrayBuffer();
+  } catch {
+    return { ok: false, error: "Couldn't read the response from that link." };
+  }
+  const bytes = new Uint8Array(buf);
+  if (bytes.byteLength > MAX_PDF_BYTES) {
+    return { ok: false, error: "That file is too large to import automatically." };
+  }
+  // Validate PDF magic bytes ("%PDF") — a dead link often returns an HTML page.
+  if (bytes.byteLength < 5 || bytes[0] !== 0x25 || bytes[1] !== 0x50 || bytes[2] !== 0x44 || bytes[3] !== 0x46) {
+    return { ok: false, error: "The link didn't return a PDF (it may be dead or an HTML page)." };
+  }
+  const contentType = (res.headers.get("content-type") ?? "application/pdf").split(";")[0].trim();
+  return {
+    ok: true,
+    base64: Buffer.from(bytes).toString("base64"),
+    contentType: contentType || "application/pdf",
+    finalUrl: url.toString(),
+    bytes: bytes.byteLength,
+  };
+}
