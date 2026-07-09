@@ -14,6 +14,11 @@ import { ManifestTimeline } from "@/components/admin/inventory/ManifestTimeline"
 import { ManifestLotDisposition } from "@/components/admin/inventory/ManifestLotDisposition";
 import { manifestStatusBadge } from "@/lib/inventory/intake-disposition-core";
 import {
+  parseUsualTransport,
+  suggestTransportDefaults,
+  describeSuggestion,
+} from "@/lib/inventory/vendor-transport-core";
+import {
   rejectManifestAction,
   archiveCoasAction,
   setManifestLifecycleAction,
@@ -86,10 +91,20 @@ export default async function ManifestReviewPage({
   // own saved value always wins (manual override preserved); the vendor supplies
   // only the DEFAULT when the manifest field is still blank.
   const linkedVendor = manifest.vendor_id ? await getVendorById(manifest.vendor_id) : null;
-  const originLicenseDefault =
-    manifest.transporter_license ?? linkedVendor?.license_number ?? "";
+
+  // H15e: layer in the vendor's remembered "usual transport" (carrier/driver/
+  // vehicle from their last accepted delivery). Precedence per field:
+  // manifest's own saved/auto-filled value (the record) → vendor usual
+  // transport (a SUGGESTION, flagged below) → E7 origin-license fallback.
+  const usualTransport = parseUsualTransport(linkedVendor?.usual_transport);
+  const transportSuggestion = suggestTransportDefaults(manifest, usualTransport);
+  const td = transportSuggestion.defaults;
+  const suggested = new Set(transportSuggestion.suggestedFields);
+  const vendorDisplay =
+    linkedVendor?.display_name ?? manifest.vendor_label ?? "this vendor";
+  const originLicenseDefault = td.transporter_license ?? linkedVendor?.license_number ?? "";
   const originNameDefault =
-    manifest.transporter_name ??
+    td.transporter_name ??
     linkedVendor?.legal_name ??
     linkedVendor?.display_name ??
     manifest.vendor_label ??
@@ -494,11 +509,26 @@ export default async function ManifestReviewPage({
             actually delivered this load and on what vehicle. Saved with the manifest so it
             prints with the intake record.
           </p>
+          {transportSuggestion.usedUsual && (
+            <div className="mb-4 rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/40 bg-[var(--admin-gold-soft)] px-4 py-2 text-xs text-[var(--admin-gold)]">
+              💡 {describeSuggestion(vendorDisplay, transportSuggestion.suggestedFields)}{" "}
+              <span className="opacity-80">
+                (Remembered from their last accepted delivery — nothing is saved until you hit
+                Save.)
+              </span>
+            </div>
+          )}
           <form action={transportAction} className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <Field
                 label="Transporter / carrier"
-                help={linkedVendor ? "Pre-filled from the linked vendor — edit if a different carrier delivered" : "Business that moved the load"}
+                help={
+                  suggested.has("transporter_name")
+                    ? `Suggested — ${vendorDisplay}'s usual carrier from their last accepted delivery`
+                    : linkedVendor
+                      ? "Pre-filled from the linked vendor — edit if a different carrier delivered"
+                      : "Business that moved the load"
+                }
               >
                 <Input
                   name="transporter_name"
@@ -508,7 +538,13 @@ export default async function ManifestReviewPage({
               </Field>
               <Field
                 label="Origin / transporter license #"
-                help={linkedVendor?.license_number ? "Auto-filled from the vendor's WA license number" : undefined}
+                help={
+                  suggested.has("transporter_license")
+                    ? "Suggested from the vendor's usual transport"
+                    : linkedVendor?.license_number
+                      ? "Auto-filled from the vendor's WA license number"
+                      : undefined
+                }
               >
                 <Input
                   name="transporter_license"
@@ -516,38 +552,53 @@ export default async function ManifestReviewPage({
                   placeholder="WA license number"
                 />
               </Field>
-              <Field label="Driver name">
+              <Field
+                label="Driver name"
+                help={suggested.has("driver_name") ? `Suggested — ${vendorDisplay}'s usual driver` : undefined}
+              >
                 <Input
                   name="driver_name"
-                  defaultValue={manifest.driver_name ?? ""}
+                  defaultValue={td.driver_name ?? ""}
                   placeholder="Person who delivered"
                 />
               </Field>
-              <Field label="Driver license #">
+              <Field
+                label="Driver license #"
+                help={suggested.has("driver_license_number") ? "Suggested from the vendor's usual transport" : undefined}
+              >
                 <Input
                   name="driver_license_number"
-                  defaultValue={manifest.driver_license_number ?? ""}
+                  defaultValue={td.driver_license_number ?? ""}
                   placeholder="Driver's license number"
                 />
               </Field>
-              <Field label="Vehicle description" help="Make / model / color">
+              <Field
+                label="Vehicle description"
+                help={suggested.has("vehicle_description") ? `Suggested — ${vendorDisplay}'s usual vehicle` : "Make / model / color"}
+              >
                 <Input
                   name="vehicle_description"
-                  defaultValue={manifest.vehicle_description ?? ""}
+                  defaultValue={td.vehicle_description ?? ""}
                   placeholder="e.g. White Ford Transit van"
                 />
               </Field>
-              <Field label="License plate">
+              <Field
+                label="License plate"
+                help={suggested.has("vehicle_plate") ? "Suggested from the vendor's usual transport" : undefined}
+              >
                 <Input
                   name="vehicle_plate"
-                  defaultValue={manifest.vehicle_plate ?? ""}
+                  defaultValue={td.vehicle_plate ?? ""}
                   placeholder="Plate number"
                 />
               </Field>
-              <Field label="Vehicle VIN">
+              <Field
+                label="Vehicle VIN"
+                help={suggested.has("vehicle_vin") ? "Suggested from the vendor's usual transport" : undefined}
+              >
                 <Input
                   name="vehicle_vin"
-                  defaultValue={manifest.vehicle_vin ?? ""}
+                  defaultValue={td.vehicle_vin ?? ""}
                   placeholder="Optional"
                 />
               </Field>

@@ -33,6 +33,11 @@ import {
   type LotGateFacts,
   type LotGateVerdict,
 } from "@/lib/inventory/lot-activation-gate-core";
+import {
+  usualTransportFromManifest,
+  parseUsualTransport,
+  mergeUsualTransport,
+} from "@/lib/inventory/vendor-transport-core";
 
 export async function listManifests(opts?: {
   status?: string;
@@ -521,9 +526,72 @@ export async function finalizeManifestDispositions(
     } catch (err) {
       console.error("[intake-store] promoteManifestToKb failed:", err);
     }
+    // Slice H15e: remember this vendor's carrier/driver/vehicle as their
+    // "usual transport" so the next delivery pre-suggests it. Best-effort.
+    try {
+      await rememberVendorUsualTransport(manifestId, actorId);
+    } catch (err) {
+      console.error("[intake-store] rememberVendorUsualTransport failed:", err);
+    }
   }
 
   return { ok: true, derivedStatus, activated, rejected, draftsCreated, blocked };
+}
+
+/**
+ * Slice H15e — write an accepted manifest's carrier/driver/vehicle back to the
+ * linked vendor as their "usual transport" (vendors.usual_transport, migration
+ * 0100), merged so a field this manifest left blank keeps the previously-known
+ * value. Per-shipment facts (departed/arrived/eta/route) are never remembered.
+ * Best-effort by contract: callers wrap in try/catch; a missing column (0100
+ * not applied yet) or a missing vendor link just logs a timeline note-free
+ * no-op and must never break intake finalization.
+ */
+export async function rememberVendorUsualTransport(
+  manifestId: string,
+  actorId: string | null,
+): Promise<{ remembered: boolean }> {
+  if (!isSupabaseServiceConfigured) return { remembered: false };
+  const admin = createSupabaseAdminClient();
+
+  const { data: m } = await admin
+    .from("inbound_manifests")
+    .select(
+      "vendor_id, vendor_label, transporter_name, transporter_license, driver_name, driver_license_number, vehicle_description, vehicle_plate, vehicle_vin",
+    )
+    .eq("id", manifestId)
+    .maybeSingle();
+  if (!m || !m.vendor_id) return { remembered: false };
+
+  const incoming = usualTransportFromManifest(m);
+  if (!incoming) return { remembered: false }; // nothing rememberable recorded
+
+  const { data: v, error: vErr } = await admin
+    .from("vendors")
+    .select("usual_transport")
+    .eq("id", m.vendor_id)
+    .maybeSingle();
+  // Column missing (migration 0100 not applied) or vendor gone: quiet no-op.
+  if (vErr || !v) return { remembered: false };
+
+  const merged = mergeUsualTransport(parseUsualTransport(v.usual_transport), incoming);
+  const { error } = await admin
+    .from("vendors")
+    .update({
+      usual_transport: merged,
+      usual_transport_updated_at: new Date().toISOString(),
+      updated_by: actorId,
+    })
+    .eq("id", m.vendor_id);
+  if (error) return { remembered: false };
+
+  await logManifestEvent(
+    manifestId,
+    "note",
+    `Saved this delivery's carrier/driver/vehicle to ${m.vendor_label ?? "the vendor"}'s profile as their usual transport — it will be pre-suggested on their next manifest.`,
+    actorId,
+  );
+  return { remembered: true };
 }
 
 /** Lots tied to a manifest, for the review screen. */

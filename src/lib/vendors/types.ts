@@ -48,6 +48,15 @@ export type Vendor = {
   last_accepted_at: string | null;
   /** Vendor ID in the owner's Sage 50 company (migration 0091), e.g. "01-TWO HEADS". */
   sage_vendor_id?: string | null;
+  /**
+   * H15e (migration 0100; nullable until applied): the vendor's usual
+   * carrier/driver/vehicle, remembered from their last accepted manifest with
+   * transport recorded. Shape owned by
+   * src/lib/inventory/vendor-transport-core.ts (parse with parseUsualTransport
+   * — stored as jsonb, may arrive as object or string).
+   */
+  usual_transport?: unknown;
+  usual_transport_updated_at?: string | null;
   logo_media_id: string | null;
   hero_media_id: string | null;
   product_count: number;
