@@ -11,11 +11,11 @@
  * Controlling rule: WAC 314-55-096 (WSR 25-08-032, eff 4/26/25).
  *   • INCOMING (processor → retailer): ≤ 120 units/qtr/PROCESSOR. [096(1)(f)(ii)]
  *   • OUTGOING trade (retailer → employee): ≤ 30 units/qtr/EMPLOYEE. [096(1)(j)(vi)]
- *   • IQC (retailer → employee): ≤ 50 units/qtr/EMPLOYEE, ≤ 25 concentrate. [096(3)(c)]
  *
- * DISTRIBUTION capacity therefore scales with the number of ACTIVE employees:
+ * RETAILER SCOPE (H16b Samples Slice C): IQC is producer/processor-only [096(3)]
+ * and was RETIRED — retailers have only the TRADE lane. DISTRIBUTION capacity
+ * therefore scales with the number of ACTIVE employees:
  *   trade outbound capacity = activeEmployees × 30
- *   iqc   outbound capacity = activeEmployees × 50 (concentrate sub = × 25)
  *
  * This module compares proposed intake against REMAINING distribution capacity
  * and returns a traffic-light verdict. It is ADVISORY ONLY (soft warning) —
@@ -28,7 +28,7 @@ export { WAC_CITATION };
 
 export type CapacityTone = "green" | "amber" | "red";
 
-/** One capacity "lane" (trade or IQC): the aggregate outbound headroom. */
+/** One capacity "lane" (trade): the aggregate outbound headroom. */
 export type CapacityLane = {
   /** Total outbound capacity this quarter = activeEmployees × perEmployeeCap. */
   capacity: number;
@@ -44,12 +44,9 @@ export type CapacityLane = {
 export type SampleCapacity = {
   activeEmployees: number;
   trade: CapacityLane;
-  iqc: CapacityLane;
-  /** IQC concentrate sub-capacity (activeEmployees × 25). */
-  iqcConcentrate: CapacityLane;
   /** Days remaining in the current calendar quarter (inclusive of today). */
   daysLeftInQuarter: number;
-  /** Overall headline tone (worst of the lanes, tempered by days left). */
+  /** Overall headline tone (the trade lane, tempered by days left). */
   tone: CapacityTone;
   /** Plain-language headline for the dashboard gauge. */
   headline: string;
@@ -71,55 +68,41 @@ function makeLane(capacity: number, used: number): CapacityLane {
   return { capacity: cap, used: u, remaining, ratio, tone: laneTone(remaining, cap) };
 }
 
-const WORST: Record<CapacityTone, number> = { green: 0, amber: 1, red: 2 };
-function worstTone(...tones: CapacityTone[]): CapacityTone {
-  return tones.reduce((acc, t) => (WORST[t] > WORST[acc] ? t : acc), "green" as CapacityTone);
-}
-
 /**
  * Compute the current-quarter distribution capacity snapshot.
  *
  * @param activeEmployees   number of CURRENT paid employees (the denominator)
- * @param usage             per-quarter tallies already recorded
- * @param caps              per-employee caps (default 30 trade / 50 iqc / 25 conc)
+ * @param tradeUsed         trade units already distributed this quarter
+ * @param tradePerEmployee  per-employee trade cap (default 30)
  * @param daysLeftInQuarter days remaining (inclusive) in the calendar quarter
  */
 export function computeSampleCapacity(args: {
   activeEmployees: number;
   tradeUsed: number;
-  iqcUsed: number;
-  iqcConcentrateUsed: number;
   tradePerEmployee: number;
-  iqcPerEmployee: number;
-  iqcConcentratePerEmployee: number;
   daysLeftInQuarter: number;
 }): SampleCapacity {
   const n = Math.max(0, Math.trunc(args.activeEmployees));
   const trade = makeLane(n * args.tradePerEmployee, args.tradeUsed);
-  const iqc = makeLane(n * args.iqcPerEmployee, args.iqcUsed);
-  const iqcConcentrate = makeLane(n * args.iqcConcentratePerEmployee, args.iqcConcentrateUsed);
 
-  let tone = worstTone(trade.tone, iqc.tone);
-  // Late in the quarter, tighten: if any lane is amber and few days remain, treat
-  // as more urgent (still not red unless truly full). Advisory only.
+  let tone = trade.tone;
+  // Late in the quarter, tighten: if the lane is amber and few days remain,
+  // treat as more urgent (still not red unless truly full). Advisory only.
   const lateQuarter = args.daysLeftInQuarter <= 14;
 
   let headline: string;
   if (n === 0) {
     tone = "red";
     headline = "No active employees — you have no one to give samples to. Do not accept new samples.";
-  } else if (trade.remaining <= 0 && iqc.remaining <= 0) {
+  } else if (trade.remaining <= 0) {
     tone = "red";
     headline = "No distribution capacity left this quarter — accepting more samples risks waste.";
   } else {
-    const bits: string[] = [];
-    bits.push(`${trade.remaining} trade unit(s) can still be placed`);
-    bits.push(`${iqc.remaining} IQC unit(s) (${iqcConcentrate.remaining} concentrate)`);
-    headline = `Room to place ${bits.join(" · ")} across ${n} employee(s) this quarter.`;
-    if (lateQuarter && tone === "green" && (trade.tone === "amber" || iqc.tone === "amber")) {
+    headline = `Room to place ${trade.remaining} trade unit(s) across ${n} employee(s) this quarter.`;
+    if (lateQuarter && tone === "green" && trade.tone === "amber") {
       tone = "amber";
     }
-    if (lateQuarter && (trade.remaining > 0 || iqc.remaining > 0)) {
+    if (lateQuarter && trade.remaining > 0) {
       headline += ` Only ${args.daysLeftInQuarter} day(s) left in the quarter — caps reset and cannot be banked.`;
     }
   }
@@ -127,8 +110,6 @@ export function computeSampleCapacity(args: {
   return {
     activeEmployees: n,
     trade,
-    iqc,
-    iqcConcentrate,
     daysLeftInQuarter: args.daysLeftInQuarter,
     tone,
     headline,
@@ -148,9 +129,7 @@ export type BatchVerdict = {
 
 /**
  * Evaluate a proposed INCOMING batch against remaining TRADE distribution
- * capacity. (Incoming sample lots are trade-category product a retailer receives
- * from a processor; IQC is self-generated, not received — so intake pressure
- * lands on the trade outbound lane.) Advisory soft warning, never a hard block.
+ * capacity. Advisory soft warning, never a hard block.
  */
 export function evaluateIncomingBatch(args: {
   batchUnits: number;
@@ -224,27 +203,22 @@ function assert(cond: boolean, msg: string): void {
 }
 
 export function __runSampleCapacityCoreTests(): string {
-  const baseCaps = { tradePerEmployee: 30, iqcPerEmployee: 50, iqcConcentratePerEmployee: 25 };
+  const baseCaps = { tradePerEmployee: 30 };
 
   // 6 employees, nothing used, mid-quarter.
   const c1 = computeSampleCapacity({
     activeEmployees: 6,
     tradeUsed: 0,
-    iqcUsed: 0,
-    iqcConcentrateUsed: 0,
     ...baseCaps,
     daysLeftInQuarter: 60,
   });
   assert(c1.trade.capacity === 180 && c1.trade.remaining === 180, "6 emp → 180 trade capacity");
-  assert(c1.iqc.capacity === 300 && c1.iqcConcentrate.capacity === 150, "6 emp → 300 iqc / 150 conc");
   assert(c1.tone === "green", "fresh quarter green");
 
   // Used 100 trade → 80 remaining.
   const c2 = computeSampleCapacity({
     activeEmployees: 6,
     tradeUsed: 100,
-    iqcUsed: 0,
-    iqcConcentrateUsed: 0,
     ...baseCaps,
     daysLeftInQuarter: 60,
   });
@@ -254,8 +228,6 @@ export function __runSampleCapacityCoreTests(): string {
   const c3 = computeSampleCapacity({
     activeEmployees: 6,
     tradeUsed: 150,
-    iqcUsed: 0,
-    iqcConcentrateUsed: 0,
     ...baseCaps,
     daysLeftInQuarter: 60,
   });
@@ -265,8 +237,6 @@ export function __runSampleCapacityCoreTests(): string {
   const c0 = computeSampleCapacity({
     activeEmployees: 0,
     tradeUsed: 0,
-    iqcUsed: 0,
-    iqcConcentrateUsed: 0,
     ...baseCaps,
     daysLeftInQuarter: 60,
   });
@@ -276,19 +246,15 @@ export function __runSampleCapacityCoreTests(): string {
   const cFull = computeSampleCapacity({
     activeEmployees: 2,
     tradeUsed: 60,
-    iqcUsed: 100,
-    iqcConcentrateUsed: 50,
     ...baseCaps,
     daysLeftInQuarter: 30,
   });
-  assert(cFull.tone === "red" && cFull.trade.remaining === 0 && cFull.iqc.remaining === 0, "full → red");
+  assert(cFull.tone === "red" && cFull.trade.remaining === 0, "full → red");
 
   // Late-quarter amber promotion.
   const cLate = computeSampleCapacity({
     activeEmployees: 6,
     tradeUsed: 150, // amber lane
-    iqcUsed: 0,
-    iqcConcentrateUsed: 0,
     ...baseCaps,
     daysLeftInQuarter: 5,
   });
@@ -299,8 +265,6 @@ export function __runSampleCapacityCoreTests(): string {
   const cap80 = computeSampleCapacity({
     activeEmployees: 6,
     tradeUsed: 100, // 80 remaining
-    iqcUsed: 0,
-    iqcConcentrateUsed: 0,
     ...baseCaps,
     daysLeftInQuarter: 60,
   });
@@ -313,8 +277,6 @@ export function __runSampleCapacityCoreTests(): string {
   const capFull = computeSampleCapacity({
     activeEmployees: 6,
     tradeUsed: 180,
-    iqcUsed: 0,
-    iqcConcentrateUsed: 0,
     ...baseCaps,
     daysLeftInQuarter: 60,
   });

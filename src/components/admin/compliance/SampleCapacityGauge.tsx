@@ -4,10 +4,11 @@ import type { SampleCapacity, CapacityTone } from "@/lib/compliance/sample-capac
 /**
  * SampleCapacityGauge — "can we take in any more samples?"
  *
- * Shows DISTRIBUTION capacity (the real gate): how many trade + IQC units we can
+ * Shows DISTRIBUTION capacity (the real gate): how many trade units we can
  * still place across active employees this quarter, with a traffic-light verdict.
  * Server-component friendly (presentational only). Advisory — receiving isn't
- * unlawful; over-GIVING to an employee is.
+ * unlawful; over-GIVING to an employee is. IQC is producer/processor-only
+ * [WAC 314-55-096(3)] and is not available to a retailer.
  */
 
 const TONE_BADGE: Record<CapacityTone, "green" | "orange" | "danger"> = {
@@ -73,16 +74,8 @@ export function SampleCapacityGauge({ capacity, citation }: { capacity: SampleCa
         {capacity.headline}
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3">
         {lane("Trade outbound", capacity.trade.used, capacity.trade.capacity, capacity.trade.remaining, capacity.trade.tone)}
-        {lane("IQC outbound", capacity.iqc.used, capacity.iqc.capacity, capacity.iqc.remaining, capacity.iqc.tone)}
-        {lane(
-          "IQC concentrate",
-          capacity.iqcConcentrate.used,
-          capacity.iqcConcentrate.capacity,
-          capacity.iqcConcentrate.remaining,
-          capacity.iqcConcentrate.tone,
-        )}
       </div>
 
       <p className="mt-3 text-xs text-white/40">

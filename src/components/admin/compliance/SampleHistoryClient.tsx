@@ -3,9 +3,12 @@
 /**
  * SampleHistoryClient — WAC 314-55-096
  *
- * Read-only, POS-grade view of every employee sample RECEIPT (outgoing trade +
- * all IQC). All filtering / sorting / CSV happen client-side in the pure
+ * Read-only, POS-grade view of every employee TRADE sample RECEIPT (outgoing to
+ * a paid employee). All filtering / sorting / CSV happen client-side in the pure
  * `sample-history-core` layer, so the page fetches once and stays snappy.
+ *
+ * IQC is producer/processor-only [096(3)] and is not available to a retailer,
+ * so it has been fully retired from this view.
  *
  * Nothing here mutates data or the ledger — it is a reporting surface only.
  */
@@ -21,17 +24,14 @@ import {
   historyToCsv,
   quarterLabel,
   PRODUCT_TYPE_LABELS,
-  CATEGORY_LABELS,
   type HistoryEvent,
   type HistorySort,
   type HistoryFilters,
 } from "@/lib/compliance/sample-history-core";
-import type { SampleCategory, SampleProductType } from "@/lib/compliance/trade-samples-core";
+import type { SampleProductType } from "@/lib/compliance/trade-samples-core";
 
 export type SampleHistoryCaps = {
   tradeCap: number;
-  iqcCap: number;
-  iqcConcentrateCap: number;
 };
 
 const SORT_OPTIONS: { value: HistorySort; label: string }[] = [
@@ -43,7 +43,7 @@ const SORT_OPTIONS: { value: HistorySort; label: string }[] = [
   { value: "type_asc", label: "Type" },
 ];
 
-const PRODUCT_TYPES: SampleProductType[] = ["useable", "concentrate", "infused", "flower"];
+const PRODUCT_TYPES: SampleProductType[] = ["useable", "concentrate", "infused"];
 
 function toneForRatio(used: number, cap: number): "green" | "orange" | "danger" {
   if (cap <= 0) return "green";
@@ -86,7 +86,6 @@ export function SampleHistoryClient({
 }) {
   const [employeeId, setEmployeeId] = useState<string>("all");
   const [quarterKey, setQuarterKey] = useState<string>("all");
-  const [category, setCategory] = useState<SampleCategory | "all">("all");
   const [productType, setProductType] = useState<SampleProductType | "all">("all");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<HistorySort>("date_desc");
@@ -97,11 +96,10 @@ export function SampleHistoryClient({
     () => ({
       employeeId: employeeId === "all" ? null : employeeId,
       quarterKey: quarterKey === "all" ? null : quarterKey,
-      category,
       productType,
       search,
     }),
-    [employeeId, quarterKey, category, productType, search],
+    [employeeId, quarterKey, productType, search],
   );
 
   const rows = useMemo(() => queryHistory(events, filters, sort), [events, filters, sort]);
@@ -110,8 +108,6 @@ export function SampleHistoryClient({
     () =>
       rollupByEmployeeQuarter(rows, {
         tradeCap: caps.tradeCap,
-        iqcCap: caps.iqcCap,
-        iqcConcentrateCap: caps.iqcConcentrateCap,
       }),
     [rows, caps],
   );
@@ -119,14 +115,12 @@ export function SampleHistoryClient({
   const filtersActive =
     employeeId !== "all" ||
     quarterKey !== "all" ||
-    category !== "all" ||
     productType !== "all" ||
     search.trim() !== "";
 
   function resetFilters() {
     setEmployeeId("all");
     setQuarterKey("all");
-    setCategory("all");
     setProductType("all");
     setSearch("");
     setSort("date_desc");
@@ -149,16 +143,10 @@ export function SampleHistoryClient({
   return (
     <div className="space-y-6">
       {/* Summary tiles */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard label="Events shown" value={totals.events} accent="muted" />
         <StatCard label="Total units" value={totals.totalUnits} accent="gold" />
         <StatCard label="Trade units" value={totals.tradeUnits} accent="green" />
-        <StatCard
-          label="IQC units"
-          value={totals.iqcUnits}
-          hint={`${totals.iqcConcentrateUnits} concentrate`}
-          accent="green"
-        />
         <StatCard label="From sample jar" value={totals.fromJarUnits} accent="muted" />
       </div>
 
@@ -166,7 +154,7 @@ export function SampleHistoryClient({
       <Card>
         <CardHeader
           title="Filters"
-          subtitle="Narrow the history by employee, quarter, category, product type, or free-text search."
+          subtitle="Narrow the history by employee, quarter, product type, or free-text search."
           action={
             <div className="flex gap-2">
               {filtersActive ? (
@@ -199,16 +187,6 @@ export function SampleHistoryClient({
                   {quarterLabel(q)}
                 </option>
               ))}
-            </Select>
-          </Field>
-          <Field label="Category">
-            <Select
-              value={category}
-              onChange={(e) => setCategory(e.target.value as SampleCategory | "all")}
-            >
-              <option value="all">All categories</option>
-              <option value="trade">{CATEGORY_LABELS.trade}</option>
-              <option value="iqc">{CATEGORY_LABELS.iqc}</option>
             </Select>
           </Field>
           <Field label="Product type">
@@ -276,24 +254,6 @@ export function SampleHistoryClient({
                     </div>
                     <CapBar used={r.tradeUnits} cap={r.tradeCap} />
                   </div>
-                  <div>
-                    <div className="mb-1 flex items-center justify-between text-xs">
-                      <span className="text-[var(--admin-text-muted)]">IQC</span>
-                      <Badge tone={toneForRatio(r.iqcUnits, r.iqcCap)}>
-                        {r.iqcUnits} / {r.iqcCap}
-                      </Badge>
-                    </div>
-                    <CapBar used={r.iqcUnits} cap={r.iqcCap} />
-                  </div>
-                  <div>
-                    <div className="mb-1 flex items-center justify-between text-xs">
-                      <span className="text-[var(--admin-text-muted)]">IQC concentrate</span>
-                      <Badge tone={toneForRatio(r.iqcConcentrateUnits, r.iqcConcentrateCap)}>
-                        {r.iqcConcentrateUnits} / {r.iqcConcentrateCap}
-                      </Badge>
-                    </div>
-                    <CapBar used={r.iqcConcentrateUnits} cap={r.iqcConcentrateCap} />
-                  </div>
                 </div>
               </div>
             ))}
@@ -316,7 +276,7 @@ export function SampleHistoryClient({
               description={
                 filtersActive
                   ? "Try clearing or loosening the filters above."
-                  : "Once you record trade-outgoing or IQC samples for an employee, they will appear here."
+                  : "Once you record trade-outgoing samples for an employee, they will appear here."
               }
             />
           </div>
@@ -327,7 +287,6 @@ export function SampleHistoryClient({
                 <tr className="border-b border-white/10 text-left text-xs uppercase tracking-wide text-[var(--admin-text-muted)]">
                   <th className="px-5 py-3 font-medium">Date</th>
                   <th className="px-5 py-3 font-medium">Employee</th>
-                  <th className="px-5 py-3 font-medium">Category</th>
                   <th className="px-5 py-3 font-medium">Product</th>
                   <th className="px-5 py-3 text-right font-medium">Units</th>
                   <th className="px-5 py-3 text-right font-medium">Unit size</th>
@@ -344,11 +303,6 @@ export function SampleHistoryClient({
                   >
                     <td className="whitespace-nowrap px-5 py-3 tabular-nums">{fmtDate(e.createdAt)}</td>
                     <td className="px-5 py-3">{e.employeeName ?? "—"}</td>
-                    <td className="px-5 py-3">
-                      <Badge tone={e.category === "iqc" ? "gold" : "green"}>
-                        {CATEGORY_LABELS[e.category]}
-                      </Badge>
-                    </td>
                     <td className="px-5 py-3">{PRODUCT_TYPE_LABELS[e.productType]}</td>
                     <td className="px-5 py-3 text-right tabular-nums">{e.unitCount}</td>
                     <td className="whitespace-nowrap px-5 py-3 text-right tabular-nums text-[var(--admin-text-muted)]">
