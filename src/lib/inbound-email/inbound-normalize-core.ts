@@ -216,6 +216,57 @@ export function pdfCandidates(email: NormalizedInboundEmail): NormalizedAttachme
   return email.attachments.filter((a) => isPdfAttachment(a) && !!a.base64);
 }
 
+/**
+ * The role an attachment plays in a vendor transfer email. Verified against three
+ * real vendor systems (Cultivera/SUBX, GrowFlow, OpenTHC/High End Farms):
+ *  - "manifest": the shipping/transfer document (GrowFlow names it `TransferLog_*`;
+ *    LCB/Cultivera name it `Manifest*` / `*Transfer*`).
+ *  - "invoice":  the invoice. NOTE: for OpenTHC the invoice PDF *is* the manifest
+ *    (it carries Sold By/Ship To licenses, Depart/Arrive times and the lot table),
+ *    so invoice-role attachments are also tried as manifests downstream.
+ *  - "coa":      the lab / QA / COA summary (`QA_*`, `*Lab_Results*`, `COA*`).
+ *  - "unknown":  everything else.
+ */
+export type AttachmentRole = "manifest" | "invoice" | "coa" | "unknown";
+
+/**
+ * Classify an attachment's role by filename (case-insensitive). PURE. Ordered so
+ * the most specific signals win. Content-type isn't decisive here (vendors all
+ * send `application/pdf`); filename is the reliable signal.
+ */
+export function classifyAttachmentRole(a: NormalizedAttachment): AttachmentRole {
+  const fn = lc(a.filename);
+  // COA / lab first — "QA_...", "..._Lab_Results", "COA Summary", "certificate".
+  if (
+    /(^|[^a-z])qa([^a-z]|$)/.test(fn) ||
+    fn.includes("lab_result") ||
+    fn.includes("lab-result") ||
+    fn.includes("lab result") ||
+    fn.includes("labresult") ||
+    fn.includes("coa") ||
+    fn.includes("certificate") ||
+    fn.includes("test_result") ||
+    fn.includes("results")
+  ) {
+    return "coa";
+  }
+  // Manifest / transfer document — GrowFlow "TransferLog", LCB "Manifest".
+  if (
+    fn.includes("transferlog") ||
+    fn.includes("transfer_log") ||
+    fn.includes("manifest") ||
+    fn.includes("transfer") ||
+    fn.includes("shipping")
+  ) {
+    return "manifest";
+  }
+  // Invoice (may double as a manifest for OpenTHC).
+  if (fn.includes("invoice") || fn.includes("bill")) {
+    return "invoice";
+  }
+  return "unknown";
+}
+
 // ---------------------------------------------------------------------------
 // Self-tests (run via tsx). Pure — no I/O.
 // ---------------------------------------------------------------------------
@@ -284,6 +335,33 @@ export function __runInboundNormalizeTests(): { passed: number; failed: number }
   ok(parseRecipients("a@b.com, c@d.com; e@f.com").length === 3, "parseRecipients multi");
   ok(parseRecipients([{ email: "g@h.com" }])[0] === "g@h.com", "parseRecipients object form");
   ok(parseRecipients("not-an-email").length === 0, "parseRecipients rejects non-address");
+
+  // Attachment role classification (H15-PRE-b) — filenames from real vendor emails.
+  const att = (filename: string): NormalizedAttachment => ({
+    filename,
+    contentType: "application/pdf",
+    text: null,
+    base64: "x",
+  });
+  // GrowFlow set: TransferLog (manifest), Invoice, QA (coa).
+  ok(classifyAttachmentRole(att("TransferLog_303xxxx.pdf")) === "manifest", "growflow TransferLog -> manifest");
+  ok(classifyAttachmentRole(att("Invoice_2026-07-07T18_37_52.pdf")) === "invoice", "growflow Invoice -> invoice");
+  ok(classifyAttachmentRole(att("QA_2026-07-07T18_37_52.pdf")) === "coa", "growflow QA -> coa");
+  // High End Farms / OpenTHC set: Invoice (which is also the manifest), Lab_Results (coa).
+  ok(
+    classifyAttachmentRole(att("Greenway_Marijuana_-_260429_-_Invoice_01KQ7GS6EXA3DV5M.pdf")) === "invoice",
+    "openthc Invoice -> invoice (tried as manifest downstream)",
+  );
+  ok(
+    classifyAttachmentRole(att("Greenway_Marijuana_-_260429_-_01KQ7GS6EXA3DV5M-Lab_Results.pdf")) === "coa",
+    "openthc Lab_Results -> coa",
+  );
+  // LCB / Cultivera manifest naming.
+  ok(classifyAttachmentRole(att("Greenway_Manifest.pdf")) === "manifest", "LCB Manifest -> manifest");
+  ok(classifyAttachmentRole(att("COA_Summary.pdf")) === "coa", "COA Summary -> coa");
+  ok(classifyAttachmentRole(att("random_flyer.pdf")) === "unknown", "unrelated -> unknown");
+  // "results" in a COA summary filename must classify as coa, not be mistaken.
+  ok(classifyAttachmentRole(att("Sale_01KQ_COA_Summary_results.pdf")) === "coa", "results keyword -> coa");
 
   if (failed === 0) console.log(`inbound-normalize-core: all ${passed} tests passed`);
   return { passed, failed };

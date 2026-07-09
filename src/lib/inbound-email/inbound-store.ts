@@ -29,7 +29,26 @@ import type {
   NormalizedInboundEmail,
   NormalizedAttachment,
 } from "@/lib/inbound-email/inbound-normalize-core";
-import { manifestCandidates, pdfCandidates } from "@/lib/inbound-email/inbound-normalize-core";
+import {
+  manifestCandidates,
+  pdfCandidates,
+  classifyAttachmentRole,
+  type AttachmentRole,
+} from "@/lib/inbound-email/inbound-normalize-core";
+
+/** Order PDFs so we try the likeliest manifest first: manifest > invoice > unknown. */
+function pdfRoleRank(role: AttachmentRole): number {
+  switch (role) {
+    case "manifest":
+      return 0;
+    case "invoice":
+      return 1;
+    case "unknown":
+      return 2;
+    default:
+      return 3; // coa (skipped anyway)
+  }
+}
 import { parsePdfManifestFromBase64 } from "@/lib/inventory/pdf-extract";
 
 export type InboundDisposition =
@@ -151,19 +170,42 @@ export async function stageManifestsFromEmail(
     }
   }
 
-  // 2) PDF attachments (WA LCB Internal Shipping Document). Text is extracted
-  //    out-of-band via unpdf, then run through the same drafts-only staging.
-  for (const att of pdfCands) {
+  // 2) PDF attachments. Classify each PDF's role (H15-PRE-b) so we only try the
+  //    ones that can be a manifest — a vendor email carries several PDFs and only
+  //    one is the shipping document:
+  //      - manifest role (GrowFlow "TransferLog_*", LCB "Manifest*")  -> try first
+  //      - invoice role (OpenTHC invoice IS the manifest)             -> try as fallback
+  //      - coa role     (QA / Lab Results / COA Summary)              -> SKIP (never a manifest)
+  //    Skipping COAs means they are NOT counted as parse failures (they're not
+  //    supposed to be manifests). And if a manifest already staged from the JSON
+  //    transfer link or another PDF, we DON'T stage a duplicate from a second PDF.
+  const rankedPdfs = [...pdfCands].sort(
+    (a, b) => pdfRoleRank(classifyAttachmentRole(a)) - pdfRoleRank(classifyAttachmentRole(b)),
+  );
+  const stagedFromJson = result.staged > 0;
+  let stagedFromPdf = false;
+  for (const att of rankedPdfs) {
+    const role = classifyAttachmentRole(att);
+    if (role === "coa") continue; // a COA/QA PDF is never a manifest — skip, no failure.
+    // Once we have a real manifest (from JSON or an earlier PDF), don't create a
+    // duplicate from another PDF in the same email.
+    if (stagedFromJson || stagedFromPdf) continue;
+
     const parsed = await parsePdfManifestFromBase64(att.base64 as string);
     if (!parsed.ok) {
-      result.parseFailures += 1;
-      console.warn("[inbound-email] PDF manifest parse failed:", parsed.error);
+      // Only an unparseable manifest-role PDF is a genuine failure worth flagging.
+      // An invoice/unknown PDF that doesn't parse as a manifest is expected noise.
+      if (role === "manifest") {
+        result.parseFailures += 1;
+        console.warn("[inbound-email] PDF manifest parse failed:", parsed.error);
+      }
       continue;
     }
     const staged = await stageManifest(parsed.manifest, parsed.text, actorId, { sourceUrl: null });
     if (staged.ok) {
       result.staged += 1;
       result.manifestIds.push(staged.manifestId);
+      stagedFromPdf = true;
     } else {
       result.parseFailures += 1;
       console.error("[inbound-email] stageManifest (pdf) failed:", staged.error);
