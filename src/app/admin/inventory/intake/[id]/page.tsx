@@ -19,6 +19,12 @@ import {
   describeSuggestion,
 } from "@/lib/inventory/vendor-transport-core";
 import {
+  transportWasAutoFilled,
+  fromManifestChips,
+  CONCIERGE_HINTS,
+} from "@/lib/inventory/guided-accept-core";
+import { GuidedAcceptRibbon } from "@/components/admin/inventory/GuidedAcceptRibbon";
+import {
   rejectManifestAction,
   archiveCoasAction,
   setManifestLifecycleAction,
@@ -112,6 +118,13 @@ export default async function ManifestReviewPage({
 
   const lots = await listManifestLots(id);
   const events = await listManifestEvents(id);
+
+  // H15f — the guided-accept ribbon's green "from the manifest" chips.
+  // Identity fields always come from the parsed document; transport fields are
+  // chipped ONLY when the H15a auto-fill audit event proves the system seeded
+  // them (never guess whether a human typed a value).
+  const autoFilled = transportWasAutoFilled(events);
+  const manifestChips = fromManifestChips(manifest, autoFilled);
 
   // Convert each intake line's raw LCB classification to OUR website category
   // for display (Request B). Read-only — never mutates the stored CCRS values.
@@ -258,6 +271,10 @@ export default async function ManifestReviewPage({
           </div>
         )}
 
+        {/* H15f — guided accept: ① Arrived → ② Verify counts → ③ Accept,
+            plain-English stage guidance + green "from the manifest" chips. */}
+        <GuidedAcceptRibbon status={manifest.status} etaDate={manifest.eta_date} chips={manifestChips} />
+
         <div className="grid gap-4 sm:grid-cols-5">
           <StatCard label="Lines" value={lots.length} accent="muted" />
           <StatCard label="With COA" value={`${withCoa}/${lots.length}`} accent={missingCoa > 0 ? "orange" : "green"} />
@@ -308,11 +325,19 @@ export default async function ManifestReviewPage({
             <thead className="bg-[var(--admin-surface-2)] text-left text-xs uppercase tracking-wide text-[var(--admin-text-faint)]">
               <tr>
                 <th className="px-4 py-3">Product / lot</th>
-                <th className="px-4 py-3 text-right">Qty</th>
-                <th className="px-4 py-3 text-center">COA</th>
+                <th className="cursor-help px-4 py-3 text-right" title={CONCIERGE_HINTS.qty}>
+                  Qty
+                </th>
+                <th className="cursor-help px-4 py-3 text-center" title={CONCIERGE_HINTS.coa}>
+                  COA
+                </th>
                 <th className="px-4 py-3 text-center">Catalog</th>
                 <th className="px-4 py-3">Expires</th>
-                {inProgress && <th className="px-4 py-3">Decision</th>}
+                {inProgress && (
+                  <th className="cursor-help px-4 py-3" title={CONCIERGE_HINTS.decision}>
+                    Decision
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--admin-border)]">
@@ -530,11 +555,13 @@ export default async function ManifestReviewPage({
                       : "Business that moved the load"
                 }
               >
-                <Input
-                  name="transporter_name"
-                  defaultValue={originNameDefault}
-                  placeholder="e.g. Acme Cannabis Logistics"
-                />
+                <div title={CONCIERGE_HINTS.transporter}>
+                  <Input
+                    name="transporter_name"
+                    defaultValue={originNameDefault}
+                    placeholder="e.g. Acme Cannabis Logistics"
+                  />
+                </div>
               </Field>
               <Field
                 label="Origin / transporter license #"
@@ -603,19 +630,23 @@ export default async function ManifestReviewPage({
                 />
               </Field>
               <Field label="Expected arrival (ETA)" help="When you expect it to reach the store">
-                <Input
-                  type="date"
-                  name="eta_date"
-                  defaultValue={manifest.eta_date ?? ""}
-                />
+                <div title={CONCIERGE_HINTS.eta}>
+                  <Input
+                    type="date"
+                    name="eta_date"
+                    defaultValue={manifest.eta_date ?? ""}
+                  />
+                </div>
               </Field>
               <div className="hidden sm:block" />
               <Field label="Departed" help="When it left the vendor">
-                <Input
-                  type="datetime-local"
-                  name="departed_at"
-                  defaultValue={toLocalInput(manifest.departed_at)}
-                />
+                <div title={CONCIERGE_HINTS.departed}>
+                  <Input
+                    type="datetime-local"
+                    name="departed_at"
+                    defaultValue={toLocalInput(manifest.departed_at)}
+                  />
+                </div>
               </Field>
               <Field label="Arrived" help="When it reached the store">
                 <Input
@@ -711,7 +742,7 @@ export default async function ManifestReviewPage({
                 Decide each line above, then <strong>Finalize intake</strong> to activate the
                 accepted lots. Lines left undecided are accepted by default.
               </p>
-              <form action={finalizeAction}>
+              <form action={finalizeAction} title={CONCIERGE_HINTS.finalize}>
                 <Button type="submit" variant="save" size="sm">
                   ✓ Finalize intake
                 </Button>
