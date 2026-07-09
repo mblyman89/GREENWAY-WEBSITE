@@ -62,6 +62,10 @@ export type InboundDisposition =
   | "ignored"
   | "no_manifest"
   | "staged"
+  // H16b-7: the email's manifest(s) were already live in intake (a re-send /
+  // duplicate) so nothing new was staged. Distinct from parse_failed: this is a
+  // safe skip, not an error.
+  | "duplicate"
   | "parse_failed";
 
 /**
@@ -192,6 +196,13 @@ export type StageFromEmailResult = {
   staged: number;
   manifestIds: string[];
   parseFailures: number;
+  /**
+   * H16b-7: manifests that were NOT staged because an identical one is already
+   * live in intake (a re-sent email / duplicate). These are intentionally kept
+   * SEPARATE from parseFailures \u2014 a skipped duplicate is expected, safe
+   * behavior, not an error worth alarming on.
+   */
+  duplicates: number;
 };
 
 /**
@@ -202,7 +213,12 @@ export async function stageManifestsFromEmail(
   email: NormalizedInboundEmail,
   actorId: string | null,
 ): Promise<StageFromEmailResult> {
-  const result: StageFromEmailResult = { staged: 0, manifestIds: [], parseFailures: 0 };
+  const result: StageFromEmailResult = {
+    staged: 0,
+    manifestIds: [],
+    parseFailures: 0,
+    duplicates: 0,
+  };
   const textCandidates = manifestCandidates(email);
   const pdfCands = pdfCandidates(email);
   if (textCandidates.length === 0 && pdfCands.length === 0) return result;
@@ -229,6 +245,10 @@ export async function stageManifestsFromEmail(
       result.staged += 1;
       result.manifestIds.push(staged.manifestId);
       await autoAdvanceInTransit(staged.manifestId, actorId);
+    } else if (staged.duplicate) {
+      // Re-sent / duplicate manifest already live in intake: skip, don't alarm.
+      result.duplicates += 1;
+      console.warn("[inbound-email] duplicate manifest skipped:", staged.error);
     } else {
       result.parseFailures += 1;
       console.error("[inbound-email] stageManifest failed:", staged.error);
@@ -315,6 +335,10 @@ export async function stageManifestsFromEmail(
         result.staged += 1;
         result.manifestIds.push(staged.manifestId);
         await autoAdvanceInTransit(staged.manifestId, actorId);
+      } else if (staged.duplicate) {
+        // Re-sent / duplicate manifest already live in intake: skip, don't alarm.
+        result.duplicates += 1;
+        console.warn("[inbound-email] duplicate manifest (pdf) skipped:", staged.error);
       } else {
         result.parseFailures += 1;
         console.error("[inbound-email] stageManifest (pdf) failed:", staged.error);

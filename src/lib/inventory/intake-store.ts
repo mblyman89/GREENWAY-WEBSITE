@@ -38,6 +38,11 @@ import {
   parseUsualTransport,
   mergeUsualTransport,
 } from "@/lib/inventory/vendor-transport-core";
+import {
+  buildManifestIdentity,
+  findBlockingDuplicate,
+  type ExistingManifestRow,
+} from "@/lib/inventory/manifest-dedupe-core";
 
 export async function listManifests(opts?: {
   status?: string;
@@ -106,13 +111,49 @@ export async function stageManifest(
   rawPayload: unknown,
   actorId: string | null,
   meta?: { sourceUrl?: string | null },
-): Promise<{ ok: true; manifestId: string } | { ok: false; error: string }> {
+): Promise<
+  | { ok: true; manifestId: string }
+  | { ok: false; error: string; duplicate?: true; existingManifestId?: string }
+> {
   if (!isSupabaseServiceConfigured) {
     return { ok: false, error: "Supabase service role not configured." };
   }
   const admin = createSupabaseAdminClient();
 
   const vendorId = await resolveVendorId(admin, parsed.vendor_label);
+
+  // H16b-7 DEDUPE: prevent the SAME manifest entering the table twice (owner:
+  // "if for what ever reason the vendor sends us the email twice or something, I
+  // dont want to accidentally accept the manifest twice"). Identity = normalized
+  // manifest_number + vendor. We query the rows that share this manifest_number
+  // and let the PURE findBlockingDuplicate decide: a LIVE row (pending /
+  // in_transit / accepted) with the same vendor blocks re-staging; a previously
+  // REJECTED row does NOT (a corrected re-send is allowed). A manifest with no
+  // number has no reliable identity and is never deduped (staging proceeds so we
+  // never silently drop a real, distinct transfer).
+  const identity = buildManifestIdentity({
+    manifest_number: parsed.manifest_number,
+    vendor_label: parsed.vendor_label,
+  });
+  if (identity) {
+    const { data: dupRows } = await admin
+      .from("inbound_manifests")
+      .select("id, manifest_number, vendor_label, status")
+      .eq("manifest_number", parsed.manifest_number)
+      .limit(50);
+    const existing = (dupRows as ExistingManifestRow[] | null) ?? [];
+    const blockingId = findBlockingDuplicate(identity, existing);
+    if (blockingId) {
+      return {
+        ok: false,
+        duplicate: true,
+        existingManifestId: blockingId,
+        error: `Duplicate manifest ${parsed.manifest_number} from ${
+          parsed.vendor_label ?? "this vendor"
+        } is already in intake (manifest ${blockingId}); not staged again.`,
+      };
+    }
+  }
 
   // Snapshot the COA references so they're preserved in our KB even if the
   // vendor's links later expire. De-duplicated by coa_url.
