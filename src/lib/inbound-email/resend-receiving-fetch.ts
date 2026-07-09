@@ -34,7 +34,7 @@ import type {
   NormalizedInboundEmail,
   NormalizedAttachment,
 } from "@/lib/inbound-email/inbound-normalize-core";
-import { parseRecipients } from "@/lib/inbound-email/inbound-normalize-core";
+import { parseRecipients, classifyAttachmentRole } from "@/lib/inbound-email/inbound-normalize-core";
 import {
   extractEmailIdFromWebhook,
   extractTransferLinksFromBody,
@@ -308,6 +308,39 @@ export async function enrichResendInbound(
       } else {
         notes.push(`${label} link found but PDF fetch failed (${pdf.error})`);
       }
+    }
+  }
+
+  // 5) COA LINK FALLBACK (H16b-3). Independently of the manifest/invoice
+  //    fallback above, if the body offers a COA / lab-results DOWNLOAD link and
+  //    the email carried no COA-role attachment, fetch it server-side and add it
+  //    so staging reads + merges its potency/PASS/expiry by Lot ID and archives
+  //    the certificate (H16b-2). We ALWAYS try this when a COA is missing —
+  //    even on an otherwise-healthy manifest send — because a COA is a distinct
+  //    document from the manifest/invoice and its absence is what we're fixing.
+  const haveCoaAttachment = attachments.some(
+    (a) => classifyAttachmentRole(a) === "coa",
+  );
+  if (!haveCoaAttachment && links.coaUrl) {
+    const cleanedCoa = cleanUrl(links.coaUrl) ?? links.coaUrl;
+    const pdf = await fetchPdfBytes(cleanedCoa);
+    if (pdf.ok) {
+      // Force a COA-classifying filename so classifyAttachmentRole tags it "coa"
+      // regardless of the signed-URL path (a generic path would misclassify).
+      const urlName = filenameFromUrl(cleanedCoa);
+      const filename =
+        urlName && classifyAttachmentRole({ filename: urlName, contentType: null, text: null, base64: null }) === "coa"
+          ? urlName
+          : "coa.pdf";
+      attachments.push({
+        filename,
+        contentType: pdf.contentType || "application/pdf",
+        text: null,
+        base64: pdf.base64,
+      });
+      notes.push(`fetched coa PDF from link (${pdf.bytes} bytes)`);
+    } else {
+      notes.push(`coa link found but PDF fetch failed (${pdf.error})`);
     }
   }
 

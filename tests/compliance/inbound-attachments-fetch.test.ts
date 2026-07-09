@@ -173,6 +173,39 @@ describe("resend-receiving-core (H14-attachments-fetch)", () => {
     expect(links.manifestUrl).toBe("https://files.cultivera.com/dl/manifest/2796.pdf");
   });
 
+  it("extracts a COA / lab-results download link separate from invoice & manifest (H16b-3)", () => {
+    const html = [
+      '<a href="https://files.cultivera.com/abc/Cultivera_ORD-1_413541.json">WCIA Transfer Data Link</a>',
+      '<p>Click <a href="https://files.cultivera.com/dl/invoice/2796.pdf">here</a> to download the invoice.</p>',
+      '<p>Click <a href="https://files.cultivera.com/dl/manifest/2796.pdf">here</a> to download the manifest.</p>',
+      '<p>Download the <a href="https://files.cultivera.com/dl/coa/2796.pdf">lab COAs</a> for this order.</p>',
+    ].join("\n");
+    const links = extractTransferLinksFromBody(html, null);
+    expect(links.coaUrl).toBe("https://files.cultivera.com/dl/coa/2796.pdf");
+    // The COA link must NOT collide with invoice/manifest/transfer links.
+    expect(links.invoiceUrl).toBe("https://files.cultivera.com/dl/invoice/2796.pdf");
+    expect(links.manifestUrl).toBe("https://files.cultivera.com/dl/manifest/2796.pdf");
+  });
+
+  it("matches a 'Certificate of Analysis' anchor and never returns the transfer JSON as the COA", () => {
+    const html = [
+      '<div>JSON link: <a href="https://app.openfhc.com/pub/b2b/01KQ7GS6EXA3DV5MSHHXWVAZRB/wcia.json">wcia.json</a></div>',
+      '<p>Your <a href="https://app.openfhc.com/dl/coa/01KQ7.pdf">Certificate of Analysis</a> is available here.</p>',
+    ].join("\n");
+    const links = extractTransferLinksFromBody(html, null);
+    expect(links.coaUrl).toBe("https://app.openfhc.com/dl/coa/01KQ7.pdf");
+    // wcia.json is the transfer link, never the COA.
+    expect(links.transferJsonUrl).toBe(
+      "https://app.openfhc.com/pub/b2b/01KQ7GS6EXA3DV5MSHHXWVAZRB/wcia.json",
+    );
+  });
+
+  it("returns a null COA link when the body offers none", () => {
+    const html =
+      '<a href="https://files.cultivera.com/abc/Cultivera_ORD-1_413541.json">WCIA Transfer Data Link</a>';
+    expect(extractTransferLinksFromBody(html, null).coaUrl).toBeNull();
+  });
+
   it("classifies attachment roles from the real vendor filenames", () => {
     const att = (filename: string): NormalizedAttachment => ({
       filename,
