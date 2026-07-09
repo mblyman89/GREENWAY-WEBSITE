@@ -1,0 +1,334 @@
+/**
+ * src/lib/inbound-email/resend-receiving-core.ts  (H14-attachments-fetch)
+ *
+ * PURE, I/O-free helpers for turning Resend's INBOUND ("receiving") API responses
+ * into the same shapes the rest of the inbound pipeline already understands, plus
+ * link extraction from the email body. No SDK, no `server-only`, no network — so
+ * this is unit-testable with tsx (run via __runResendReceivingTests).
+ *
+ * WHY THIS EXISTS
+ * ---------------
+ * Resend's `email.received` webhook is METADATA ONLY — it carries no body, no
+ * headers, and no attachment bytes (see docs/webhooks/emails/received: "Webhooks
+ * do not include the email body, headers, or attachments, only their metadata.
+ * You must call the Received emails API or the Attachments API to retrieve
+ * them."). The prior Slice-99 normalizer assumed the webhook body contained
+ * inline base64 `content`, which the real API never provides. The result: real
+ * inbound mail (including Gmail-forwarded vendor emails) logged with 0
+ * attachments / "no manifest".
+ *
+ * The fix fetches the real content out-of-band via two documented endpoints:
+ *   GET https://api.resend.com/emails/receiving/:email_id
+ *       -> { id, from, to[], subject, html, html_format, text, headers,
+ *            received_for[], attachments:[{id,filename,content_type,...}] }
+ *   GET https://api.resend.com/emails/receiving/:email_id/attachments
+ *       -> { object:"list", data:[{id,filename,content_type,download_url,...}] }
+ * then downloads each attachment's signed `download_url` to bytes.
+ *
+ * This module does the PURE parts:
+ *   1) extractEmailIdFromWebhook   — pull data.email_id from the webhook payload.
+ *   2) extractTransferLinksFromBody — find the WCIA "Transfer Data Link" (.json
+ *      import URL) + invoice/manifest "download here" links in the html/text body.
+ *   3) mapReceivingAttachments      — receiving-API attachment metadata -> a plain
+ *      shape the fetcher fills with bytes.
+ *   4) decodeDataUriHtml            — Resend serves inline images as data: URIs and
+ *      can serve the whole html body as a data_uri; normalize to plain HTML text.
+ *
+ * The server-only fetcher (resend-receiving-fetch.ts) does the network I/O and
+ * assembles a NormalizedInboundEmail from these pieces.
+ */
+
+/** The WCIA Transfer Data Link + the invoice/manifest download links found in a body. */
+export type ExtractedTransferLinks = {
+  /** The WCIA Transfer Data Link — a Cultivera .json import URL (the full manifest). */
+  transferJsonUrl: string | null;
+  /** "Click here to download the invoice" href, when present. */
+  invoiceUrl: string | null;
+  /** "Click here to download the manifest" href, when present. */
+  manifestUrl: string | null;
+};
+
+/** Attachment metadata from Resend's receiving API, pre-download. PURE shape. */
+export type ReceivingAttachmentMeta = {
+  id: string;
+  filename: string | null;
+  contentType: string | null;
+  /** Signed CDN URL to download the bytes (valid ~1hr). */
+  downloadUrl: string | null;
+};
+
+/**
+ * Pull the received-email id out of a Resend `email.received` webhook payload.
+ * Tolerates both the documented `data.email_id` and a couple of plausible
+ * aliases (`data.id`, top-level `email_id`) so a minor payload change doesn't
+ * silently break the fetch. Returns null when nothing usable is present. PURE.
+ */
+export function extractEmailIdFromWebhook(raw: Record<string, unknown>): string | null {
+  const data =
+    raw.data && typeof raw.data === "object" ? (raw.data as Record<string, unknown>) : {};
+  const candidates = [data.email_id, data.id, raw.email_id, raw.id];
+  for (const c of candidates) {
+    if (typeof c === "string" && c.trim()) return c.trim();
+  }
+  return null;
+}
+
+/**
+ * If a string is a `data:...;base64,....` or `data:...,<url-encoded>` URI (the
+ * form Resend uses when `html_format` is the default `data_uri`), decode it to
+ * plain text. Otherwise return the string unchanged. PURE (Node Buffer only).
+ */
+export function decodeDataUriHtml(value: string | null | undefined): string {
+  const s = typeof value === "string" ? value : "";
+  if (!s.startsWith("data:")) return s;
+  const comma = s.indexOf(",");
+  if (comma === -1) return s;
+  const meta = s.slice(5, comma); // between "data:" and ","
+  const payload = s.slice(comma + 1);
+  try {
+    if (/;base64/i.test(meta)) {
+      return Buffer.from(payload, "base64").toString("utf8");
+    }
+    return decodeURIComponent(payload);
+  } catch {
+    return s;
+  }
+}
+
+// A Cultivera/WCIA transfer link is an https URL that ends in `.json` (optionally
+// with a query string). The real vendor email shows:
+//   https://files.cultivera.com/<id>/import/<n>/<file>_ORD-<order>_<license>.json
+// We match any https .json URL and prefer cultivera/wcia hosts. The link also
+// arrives doubled sometimes (https://host/https://host/...); callers collapse it
+// with cleanUrl before fetching.
+const JSON_URL_RE = /https?:\/\/[^\s"'<>()]+\.json(?:\?[^\s"'<>()]*)?/gi;
+const ANY_URL_RE = /https?:\/\/[^\s"'<>()]+/gi;
+
+function hostLooksVendor(url: string): boolean {
+  return /cultivera|wcia|wecomply|leaftrack/i.test(url);
+}
+
+/**
+ * Extract the WCIA Transfer Data Link and the invoice/manifest download links
+ * from an email body. Accepts BOTH the HTML body (preferred — anchors carry the
+ * real hrefs) and the plaintext body (fallback). PURE.
+ *
+ * Strategy, grounded in the real vendor email:
+ *  - transferJsonUrl: the first https URL ending in `.json`. Prefer a vendor host
+ *    (cultivera/wcia). This is the single link that contains every product + COA.
+ *  - invoiceUrl / manifestUrl: the href of the anchor whose visible text or
+ *    surrounding words mention "invoice"/"manifest" (the "Click here to download
+ *    the invoice/manifest." lines). Best-effort; may be null when forwarding
+ *    strips them.
+ */
+export function extractTransferLinksFromBody(
+  html: string | null | undefined,
+  text: string | null | undefined,
+): ExtractedTransferLinks {
+  const htmlStr = decodeDataUriHtml(html);
+  const textStr = typeof text === "string" ? text : "";
+  const combined = `${htmlStr}\n${textStr}`;
+
+  // 1) Transfer Data Link (.json) — prefer a vendor host, else the first .json.
+  let transferJsonUrl: string | null = null;
+  const jsonMatches = combined.match(JSON_URL_RE) ?? [];
+  const cleanedJson = jsonMatches.map(stripTrailingPunct);
+  transferJsonUrl =
+    cleanedJson.find(hostLooksVendor) ?? cleanedJson[0] ?? null;
+
+  // 2) invoice / manifest links. Prefer parsing HTML anchors so we read the real
+  //    href behind the word "here"; fall back to nearby-URL heuristics on text.
+  const invoiceUrl = findLabeledLink(htmlStr, textStr, "invoice");
+  const manifestUrl = findLabeledLink(htmlStr, textStr, "manifest");
+
+  return { transferJsonUrl, invoiceUrl, manifestUrl };
+}
+
+/** Trim trailing punctuation that regexes commonly over-capture (., ), etc.). */
+function stripTrailingPunct(u: string): string {
+  return u.replace(/[.,;:)\]}>'"]+$/, "");
+}
+
+/**
+ * Find the href of a download link associated with `keyword` (invoice|manifest).
+ * Reads HTML <a href> anchors first: an anchor counts when the keyword appears in
+ * the anchor text OR within ~60 chars before the anchor (covers "Click here to
+ * download the invoice." where "here" is the anchor text). Falls back to scanning
+ * the plaintext for a URL on/adjacent to a line mentioning the keyword.
+ */
+function findLabeledLink(html: string, text: string, keyword: string): string | null {
+  const kw = keyword.toLowerCase();
+
+  // HTML anchors with context window.
+  // Note: [\s\S] instead of the `s` (dotAll) flag — the project's TS target
+  // predates es2018, so the `s` flag isn't available.
+  const anchorRe = /<a\b[^>]*?href\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = anchorRe.exec(html)) !== null) {
+    const href = m[1];
+    const inner = stripTags(m[2]).toLowerCase();
+    const start = m.index;
+    const end = m.index + m[0].length;
+    // "Click here to download the invoice." puts the keyword AFTER the anchor,
+    // so scan a window on both sides of the <a>...</a> (plus the anchor text).
+    const before = html.slice(Math.max(0, start - 60), start).toLowerCase();
+    const after = html.slice(end, Math.min(html.length, end + 60)).toLowerCase();
+    if (
+      (inner.includes(kw) || before.includes(kw) || after.includes(kw)) &&
+      /^https?:\/\//i.test(href)
+    ) {
+      return stripTrailingPunct(href);
+    }
+  }
+
+  // Plaintext fallback: a URL on a line that mentions the keyword.
+  for (const line of text.split(/\r?\n/)) {
+    if (!line.toLowerCase().includes(kw)) continue;
+    const url = line.match(ANY_URL_RE)?.[0];
+    if (url) return stripTrailingPunct(url);
+  }
+  return null;
+}
+
+function stripTags(s: string): string {
+  return s.replace(/<[^>]*>/g, " ").replace(/&nbsp;/gi, " ").trim();
+}
+
+/**
+ * Map the `data[]` array from the receiving Attachments API into our pre-download
+ * shape. Skips entries with no id. PURE.
+ */
+export function mapReceivingAttachments(apiListData: unknown): ReceivingAttachmentMeta[] {
+  const arr = Array.isArray(apiListData) ? apiListData : [];
+  const out: ReceivingAttachmentMeta[] = [];
+  for (const item of arr) {
+    if (!item || typeof item !== "object") continue;
+    const a = item as Record<string, unknown>;
+    const id = typeof a.id === "string" ? a.id : null;
+    if (!id) continue;
+    out.push({
+      id,
+      filename: typeof a.filename === "string" ? a.filename : null,
+      contentType: typeof a.content_type === "string" ? a.content_type : null,
+      downloadUrl: typeof a.download_url === "string" ? a.download_url : null,
+    });
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// Self-tests (run via tsx). PURE — no I/O.
+// ---------------------------------------------------------------------------
+export function __runResendReceivingTests(): { passed: number; failed: number } {
+  let passed = 0;
+  let failed = 0;
+  const ok = (cond: boolean, msg: string) => {
+    if (cond) passed += 1;
+    else {
+      failed += 1;
+      console.error("FAIL:", msg);
+    }
+  };
+
+  // extractEmailIdFromWebhook
+  ok(
+    extractEmailIdFromWebhook({ type: "email.received", data: { email_id: "abc-123" } }) ===
+      "abc-123",
+    "email_id from data.email_id",
+  );
+  ok(
+    extractEmailIdFromWebhook({ data: { id: "xyz" } }) === "xyz",
+    "email_id falls back to data.id",
+  );
+  ok(extractEmailIdFromWebhook({ data: {} }) === null, "no email_id -> null");
+
+  // decodeDataUriHtml
+  const b64 = Buffer.from("<p>Hello</p>", "utf8").toString("base64");
+  ok(
+    decodeDataUriHtml(`data:text/html;base64,${b64}`) === "<p>Hello</p>",
+    "decode base64 data uri",
+  );
+  ok(
+    decodeDataUriHtml("data:text/html,%3Cp%3EHi%3C%2Fp%3E") === "<p>Hi</p>",
+    "decode url-encoded data uri",
+  );
+  ok(decodeDataUriHtml("<p>plain</p>") === "<p>plain</p>", "plain html passthrough");
+  ok(decodeDataUriHtml(null) === "", "null html -> empty");
+
+  // extractTransferLinksFromBody — grounded in the REAL vendor email layout.
+  const realHtml = `
+    <p>Dear Greenway Marijuana,</p>
+    <p>Attached is the final invoice for Order# - 17635 from SUBX.</p>
+    <p>Copy and paste the following
+      <a href="https://files.cultivera.com/4355253420573363534/import/2621/M93YNE081YSEODZA/Cultivera_ORD-17635_413541.json">WCIA Transfer Data Link</a>
+      into your system to import your order:</p>
+    <p>https://files.cultivera.com/4355253420573363534/import/2621/M93YNE081YSEODZA/Cultivera_ORD-17635_413541.json</p>
+    <p>Click <a href="https://files.cultivera.com/dl/invoice/2796.pdf">here</a> to download the invoice.</p>
+    <p>Click <a href="https://files.cultivera.com/dl/manifest/2796.pdf">here</a> to download the manifest.</p>
+  `;
+  const links = extractTransferLinksFromBody(realHtml, null);
+  ok(
+    links.transferJsonUrl ===
+      "https://files.cultivera.com/4355253420573363534/import/2621/M93YNE081YSEODZA/Cultivera_ORD-17635_413541.json",
+    "transfer .json link extracted",
+  );
+  ok(
+    links.invoiceUrl === "https://files.cultivera.com/dl/invoice/2796.pdf",
+    "invoice download link extracted from anchor context",
+  );
+  ok(
+    links.manifestUrl === "https://files.cultivera.com/dl/manifest/2796.pdf",
+    "manifest download link extracted from anchor context",
+  );
+
+  // Plaintext fallback (forwarded emails sometimes deliver only text).
+  const textOnly = [
+    "Copy and paste the following WCIA Transfer Data Link into your system:",
+    "https://files.cultivera.com/abc/import/9/Cultivera_ORD-1_413541.json",
+    "Click here to download the invoice. https://x.cultivera.com/inv/1.pdf",
+    "Click here to download the manifest. https://x.cultivera.com/man/1.pdf",
+  ].join("\n");
+  const tlinks = extractTransferLinksFromBody(null, textOnly);
+  ok(tlinks.transferJsonUrl?.endsWith(".json") === true, "text: transfer json found");
+  ok(tlinks.invoiceUrl === "https://x.cultivera.com/inv/1.pdf", "text: invoice url found");
+  ok(tlinks.manifestUrl === "https://x.cultivera.com/man/1.pdf", "text: manifest url found");
+
+  // Trailing punctuation is stripped (json URL followed by a period).
+  const punct = extractTransferLinksFromBody(
+    "See https://files.cultivera.com/a/b/c.json.",
+    null,
+  );
+  ok(punct.transferJsonUrl === "https://files.cultivera.com/a/b/c.json", "trailing period stripped");
+
+  // Prefer a vendor host over an unrelated .json.
+  const twoJson = extractTransferLinksFromBody(
+    "cfg https://cdn.example.com/tracking.json and https://files.cultivera.com/real.json",
+    null,
+  );
+  ok(twoJson.transferJsonUrl === "https://files.cultivera.com/real.json", "vendor host preferred");
+
+  // No links at all -> all null.
+  const none = extractTransferLinksFromBody("<p>Just a note, no links.</p>", null);
+  ok(
+    none.transferJsonUrl === null && none.invoiceUrl === null && none.manifestUrl === null,
+    "no links -> nulls",
+  );
+
+  // mapReceivingAttachments
+  const mapped = mapReceivingAttachments([
+    {
+      id: "att-1",
+      filename: "manifest.pdf",
+      content_type: "application/pdf",
+      download_url: "https://inbound-cdn.resend.com/e/attachments/att-1?sig=x",
+    },
+    { filename: "no-id.pdf" }, // skipped (no id)
+    { id: "att-2", filename: null, content_type: "application/json", download_url: null },
+  ]);
+  ok(mapped.length === 2, "map skips entries without id");
+  ok(mapped[0].downloadUrl?.includes("inbound-cdn") === true, "map keeps download_url");
+  ok(mapped[1].contentType === "application/json", "map keeps content_type");
+
+  if (failed === 0) console.log(`resend-receiving-core: all ${passed} tests passed`);
+  return { passed, failed };
+}

@@ -43,6 +43,7 @@ import {
   stageManifestsFromEmail,
   type InboundDisposition,
 } from "@/lib/inbound-email/inbound-store";
+import { enrichResendInbound } from "@/lib/inbound-email/resend-receiving-fetch";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -106,6 +107,23 @@ async function handleResend(request: Request) {
 
   const raw =
     parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
+
+  // Resend's inbound webhook is METADATA ONLY — no body, no attachment bytes
+  // (docs/webhooks/emails/received). The old normalizer assumed inline base64
+  // `content`, so real inbound mail (incl. Gmail-forwarded vendor emails) staged
+  // 0 attachments. For the received event we now fetch the real content
+  // out-of-band via the receiving API (RESEND_API_KEY): the email body (to pull
+  // the WCIA Transfer Data Link) + each attachment's signed download_url. Other
+  // event shapes (or when the API key is unset) fall back to metadata-only.
+  const type = typeof raw.type === "string" ? raw.type.toLowerCase() : "";
+  const isReceived = type.includes("received") || type.includes("inbound");
+
+  if (isReceived) {
+    const enriched = await enrichResendInbound(raw);
+    return finish(enriched.email, signatureOk, enriched.fetchNote);
+  }
+
+  // Non-received Resend payloads (or a bare data object): metadata-only path.
   const email = normalizeInboundEmail("resend", raw);
   return finish(email, signatureOk);
 }
@@ -175,7 +193,11 @@ async function handleSendgrid(request: Request) {
 }
 
 // ── Shared: route + stage + log ─────────────────────────────────────────────
-async function finish(email: NormalizedInboundEmail | null, signatureOk: boolean | null) {
+async function finish(
+  email: NormalizedInboundEmail | null,
+  signatureOk: boolean | null,
+  fetchNote?: string,
+) {
   if (!email) {
     return NextResponse.json({ ok: true, ignored: "not-an-email" }, { status: 200 });
   }
@@ -201,18 +223,23 @@ async function finish(email: NormalizedInboundEmail | null, signatureOk: boolean
   else if (staged.parseFailures > 0) disposition = "parse_failed";
   else disposition = "no_manifest";
 
+  const baseNote =
+    staged.staged > 0
+      ? `staged ${staged.staged} draft manifest(s)`
+      : staged.parseFailures > 0
+        ? `${staged.parseFailures} attachment(s) failed to parse`
+        : "no manifest attachment found";
+
   await logInboundEmail({
     email,
     signatureOk,
     toIntake: true,
     disposition,
     manifestId: staged.manifestIds[0] ?? null,
-    note:
-      staged.staged > 0
-        ? `staged ${staged.staged} draft manifest(s)`
-        : staged.parseFailures > 0
-          ? `${staged.parseFailures} attachment(s) failed to parse`
-          : "no manifest attachment found",
+    // Append the fetch trail (what we pulled from Resend's receiving API + any
+    // invoice/manifest links) so a human reviewing the inbound panel can see
+    // exactly what arrived even when nothing parsed into a manifest.
+    note: fetchNote ? `${baseNote} — ${fetchNote}` : baseNote,
   });
 
   return NextResponse.json(
