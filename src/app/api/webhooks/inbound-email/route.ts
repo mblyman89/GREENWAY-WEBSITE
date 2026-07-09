@@ -221,14 +221,19 @@ async function finish(
   let disposition: InboundDisposition;
   if (staged.staged > 0) disposition = "staged";
   else if (staged.parseFailures > 0) disposition = "parse_failed";
+  else if (staged.duplicates > 0) disposition = "duplicate";
   else disposition = "no_manifest";
 
+  const dupSuffix =
+    staged.duplicates > 0 ? ` (${staged.duplicates} duplicate manifest(s) already in intake \u2014 skipped)` : "";
   const baseNote =
     staged.staged > 0
-      ? `staged ${staged.staged} draft manifest(s)`
+      ? `staged ${staged.staged} draft manifest(s)${dupSuffix}`
       : staged.parseFailures > 0
-        ? `${staged.parseFailures} attachment(s) failed to parse`
-        : "no manifest attachment found";
+        ? `${staged.parseFailures} attachment(s) failed to parse${dupSuffix}`
+        : staged.duplicates > 0
+          ? `${staged.duplicates} duplicate manifest(s) already in intake \u2014 skipped`
+          : "no manifest attachment found";
 
   await logInboundEmail({
     email,
