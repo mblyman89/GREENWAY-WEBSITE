@@ -19,6 +19,15 @@ import {
   parseOpenThcInvoiceManifest,
   looksLikeOpenThcInvoiceManifest,
 } from "@/lib/inventory/pdf-openthc-manifest-core";
+import {
+  parseGrowFlowManifest,
+  looksLikeGrowFlowManifest,
+} from "@/lib/inventory/pdf-growflow-manifest-core";
+import {
+  parseTransferLog,
+  looksLikeTransferLog,
+} from "@/lib/inventory/pdf-transferlog-core";
+import { parseCoaSummary, looksLikeCoaSummary } from "@/lib/inventory/pdf-coa-core";
 
 /** Extract the merged plain text from a PDF given its raw bytes. */
 export async function extractPdfText(bytes: Uint8Array): Promise<string> {
@@ -62,10 +71,31 @@ export async function parsePdfManifest(bytes: Uint8Array): Promise<PdfManifestRe
     };
   }
 
-  // Two supported PDF layouts (tried in order):
-  //   1) WA LCB "Internal Shipping Document" (pdf-manifest-core)
-  //   2) OpenTHC / "old method" combined invoice-manifest (pdf-openthc-manifest-core)
-  //      — the format where the invoice IS the manifest (e.g. High End Farms).
+  // Supported PDF layouts (tried most-specific first):
+  //   1) old-method "Transfer Log (This document is NOT a manifest)"      (H16b-3)
+  //   2) GrowFlow "Manifest" document                                     (H16b-1)
+  //   3) WA LCB / Cultivera "Internal Shipping Document" (pdf-manifest-core)
+  //   4) OpenTHC / "old method" combined invoice-manifest — invoice IS the manifest
+  //
+  // The Transfer Log and GrowFlow layouts are checked before the LCB check
+  // because they carry their own unmistakable headers; the LCB classifier is
+  // broad enough that ordering matters.
+  if (looksLikeTransferLog(text)) {
+    const manifest = parseTransferLog(text);
+    if (manifest && manifest.lines.length > 0) {
+      return { ok: true, manifest, text };
+    }
+    return { ok: false, error: "No line items could be read from the Transfer Log PDF.", text };
+  }
+
+  if (looksLikeGrowFlowManifest(text)) {
+    const manifest = parseGrowFlowManifest(text);
+    if (manifest && manifest.lines.length > 0) {
+      return { ok: true, manifest, text };
+    }
+    return { ok: false, error: "No line items could be read from the GrowFlow manifest PDF.", text };
+  }
+
   if (looksLikeShippingManifest(text)) {
     const manifest = parseShippingManifestText(text);
     if (manifest && manifest.lines.length > 0) {
@@ -103,4 +133,40 @@ export async function parsePdfManifestFromBase64(base64: string): Promise<PdfMan
     return { ok: false, error: "Attachment was not valid base64.", text: null };
   }
   return parsePdfManifest(bytes);
+}
+
+/** COA parse result (H16b-4/-5). ParsedCoaSummary carries byLot/expiresByLot. */
+export type PdfCoaResult =
+  | { ok: true; coa: NonNullable<ReturnType<typeof parseCoaSummary>>; text: string }
+  | { ok: false; error: string; text: string | null };
+
+/**
+ * Extract text from a COA PDF and parse it as a COA Summary (H16b-4). Returns
+ * the Lot -> ParsedLab enrichment map so the wiring can merge potency/PASS/
+ * expiry onto the manifest's lines by Lot ID. Never throws.
+ */
+export async function parseCoaFromBase64(base64: string): Promise<PdfCoaResult> {
+  let bytes: Uint8Array;
+  try {
+    bytes = new Uint8Array(Buffer.from(base64, "base64"));
+  } catch {
+    return { ok: false, error: "Attachment was not valid base64.", text: null };
+  }
+  let text: string;
+  try {
+    text = await extractPdfText(bytes);
+  } catch {
+    return { ok: false, error: "Could not read the COA PDF (likely a scanned image).", text: null };
+  }
+  if (!text.trim()) {
+    return { ok: false, error: "The COA PDF has no extractable text.", text: "" };
+  }
+  if (!looksLikeCoaSummary(text)) {
+    return { ok: false, error: "This PDF doesn't look like a COA Summary.", text };
+  }
+  const coa = parseCoaSummary(text);
+  if (!coa || Object.keys(coa.byLot).length === 0) {
+    return { ok: false, error: "No COA lots could be read from the PDF.", text };
+  }
+  return { ok: true, coa, text };
 }

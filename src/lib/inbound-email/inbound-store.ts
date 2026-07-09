@@ -54,7 +54,8 @@ function pdfRoleRank(role: AttachmentRole): number {
       return 3; // coa (skipped anyway)
   }
 }
-import { parsePdfManifestFromBase64 } from "@/lib/inventory/pdf-extract";
+import { parsePdfManifestFromBase64, parseCoaFromBase64 } from "@/lib/inventory/pdf-extract";
+import { mergeInvoicePricesByLot, mergeCoaByLot } from "@/lib/inventory/manifest-merge-core";
 
 export type InboundDisposition =
   | "received"
@@ -243,37 +244,85 @@ export async function stageManifestsFromEmail(
   //    Skipping COAs means they are NOT counted as parse failures (they're not
   //    supposed to be manifests). And if a manifest already staged from the JSON
   //    transfer link or another PDF, we DON'T stage a duplicate from a second PDF.
-  const rankedPdfs = [...pdfCands].sort(
-    (a, b) => pdfRoleRank(classifyAttachmentRole(a)) - pdfRoleRank(classifyAttachmentRole(b)),
-  );
+  //    H16b-5 (owner-confirmed merge strategy): a vendor email is a BUNDLE — a
+  //    shipping document (LCB / GrowFlow / old-method Transfer Log) that is the
+  //    legal chain-of-custody, sometimes an OpenTHC invoice carrying the PRICES,
+  //    and a COA Summary PDF carrying potency/PASS/expiry. We no longer stage
+  //    the first PDF and drop the rest. Instead:
+  //      (a) parse the highest-ranked manifest-capable PDF as the PRIMARY;
+  //      (b) if another PDF parsed as an OpenTHC invoice, merge its PRICES onto
+  //          the primary's lines by Lot ID (fill-only-when-empty);
+  //      (c) read the COA PDF (no longer skipped) and merge potency/PASS/expiry
+  //          onto lines by EXACT Lot ID;
+  //    then stage exactly ONE manifest per email (Q4).
   const stagedFromJson = result.staged > 0;
-  let stagedFromPdf = false;
-  for (const att of rankedPdfs) {
-    const role = classifyAttachmentRole(att);
-    if (role === "coa") continue; // a COA/QA PDF is never a manifest — skip, no failure.
-    // Once we have a real manifest (from JSON or an earlier PDF), don't create a
-    // duplicate from another PDF in the same email.
-    if (stagedFromJson || stagedFromPdf) continue;
+  if (!stagedFromJson) {
+    const rankedPdfs = [...pdfCands].sort(
+      (a, b) => pdfRoleRank(classifyAttachmentRole(a)) - pdfRoleRank(classifyAttachmentRole(b)),
+    );
 
-    const parsed = await parsePdfManifestFromBase64(att.base64 as string);
-    if (!parsed.ok) {
-      // Only an unparseable manifest-role PDF is a genuine failure worth flagging.
-      // An invoice/unknown PDF that doesn't parse as a manifest is expected noise.
-      if (role === "manifest") {
-        result.parseFailures += 1;
-        console.warn("[inbound-email] PDF manifest parse failed:", parsed.error);
+    // (a) find the PRIMARY manifest: try each non-COA PDF in rank order until one
+    //     parses as a manifest. Keep the OTHER manifest-parses around so an
+    //     invoice can donate prices even if a richer doc won the primary slot.
+    let primary: { manifest: ParsedManifest; text: string } | null = null;
+    const invoiceParses: ParsedManifest[] = [];
+    let sawManifestRolePdf = false;
+    let manifestRoleParseFailed = false;
+
+    for (const att of rankedPdfs) {
+      const role = classifyAttachmentRole(att);
+      if (role === "coa") continue; // handled separately below
+      if (role === "manifest") sawManifestRolePdf = true;
+      const parsed = await parsePdfManifestFromBase64(att.base64 as string);
+      if (!parsed.ok) {
+        if (role === "manifest") {
+          manifestRoleParseFailed = true;
+          console.warn("[inbound-email] PDF manifest parse failed:", parsed.error);
+        }
+        continue;
       }
-      continue;
+      if (!primary) {
+        primary = { manifest: parsed.manifest, text: parsed.text };
+      } else {
+        // A second manifest-capable PDF: keep OpenTHC invoices as price donors.
+        invoiceParses.push(parsed.manifest);
+      }
     }
-    const staged = await stageManifest(parsed.manifest, parsed.text, actorId, { sourceUrl: null });
-    if (staged.ok) {
-      result.staged += 1;
-      result.manifestIds.push(staged.manifestId);
-      stagedFromPdf = true;
-      await autoAdvanceInTransit(staged.manifestId, actorId);
-    } else {
+
+    if (primary) {
+      let merged: ParsedManifest = primary.manifest;
+
+      // (b) merge invoice prices (and descriptive blanks) by Lot ID.
+      for (const inv of invoiceParses) {
+        const priceRes = mergeInvoicePricesByLot(merged, inv);
+        merged = priceRes.manifest;
+      }
+
+      // (c) read + merge the COA PDF (no longer skipped).
+      const coaAtt = rankedPdfs.find((a) => classifyAttachmentRole(a) === "coa");
+      if (coaAtt) {
+        const coaRes = await parseCoaFromBase64(coaAtt.base64 as string);
+        if (coaRes.ok) {
+          const cm = mergeCoaByLot(merged, coaRes.coa.byLot, coaRes.coa.expiresByLot);
+          merged = cm.manifest;
+        } else {
+          console.warn("[inbound-email] COA parse (for merge) skipped:", coaRes.error);
+        }
+      }
+
+      const staged = await stageManifest(merged, primary.text, actorId, { sourceUrl: null });
+      if (staged.ok) {
+        result.staged += 1;
+        result.manifestIds.push(staged.manifestId);
+        await autoAdvanceInTransit(staged.manifestId, actorId);
+      } else {
+        result.parseFailures += 1;
+        console.error("[inbound-email] stageManifest (pdf) failed:", staged.error);
+      }
+    } else if (sawManifestRolePdf && manifestRoleParseFailed) {
+      // Only a manifest-ROLE PDF that failed to parse is a genuine failure worth
+      // flagging. An invoice/unknown/COA-only email is expected noise.
       result.parseFailures += 1;
-      console.error("[inbound-email] stageManifest (pdf) failed:", staged.error);
     }
   }
   return result;
