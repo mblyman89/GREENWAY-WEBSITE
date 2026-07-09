@@ -10,7 +10,6 @@ import { listManifests, countManifestsByStatus } from "@/lib/inventory/intake-st
 import {
   listInboundEmails,
   extractLinksFromNote,
-  type InboundEmailLogRow,
 } from "@/lib/inbound-email/inbound-store";
 import type { InboundManifest } from "@/lib/inventory/types";
 import {
@@ -123,121 +122,6 @@ function QueueTable({
             {rows.map((m) => (
               <QueueRow key={m.id} m={m} />
             ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Slice 104 — surface the inbound vendor_intake@ email log so staff can see
- * which drafts arrived by email and, importantly, chase down anything that
- * failed to parse. Read-only; the staged drafts themselves live in the queues
- * below (drafts-only — nothing auto-commits).
- */
-function InboundEmailPanel({ rows }: { rows: InboundEmailLogRow[] }) {
-  if (rows.length === 0) return null;
-  const tone = (d: string): "green" | "danger" | "neutral" | "gold" =>
-    d === "staged" ? "green" : d === "parse_failed" ? "danger" : d === "ignored" ? "neutral" : "gold";
-  const label = (d: string) =>
-    d === "staged"
-      ? "Staged draft"
-      : d === "parse_failed"
-        ? "Parse failed"
-        : d === "no_manifest"
-          ? "No manifest"
-          : d === "ignored"
-            ? "Ignored"
-            : "Received";
-  return (
-    <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)]">
-      <div className="border-b border-[var(--admin-border)] px-4 py-3">
-        <h3 className="text-sm font-semibold text-[var(--admin-text)]">Inbound email (vendor_intake@)</h3>
-        <p className="text-xs text-[var(--admin-text-muted)]">
-          Emails received at the intake mailbox. Attachments that parse become staged drafts in the queues
-          below. Rows marked <span className="font-medium">Parse failed</span> need a human to import manually.
-        </p>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-xs uppercase tracking-wide text-[var(--admin-text-faint)]">
-              <th className="px-4 py-2">Received</th>
-              <th className="px-4 py-2">From</th>
-              <th className="px-4 py-2">Subject</th>
-              <th className="px-4 py-2">Attach</th>
-              <th className="px-4 py-2">Result</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => {
-              // H14-attachments-fetch: surface the invoice/manifest download
-              // links the webhook pulled from the email body (Gmail forwarding
-              // keeps these links even when it drops the file attachments), so a
-              // reviewer can open the PDFs straight from the panel.
-              const links = extractLinksFromNote(r.note);
-              return (
-                <tr key={r.id} className="border-t border-[var(--admin-border)]">
-                  <td className="px-4 py-2 align-top text-[var(--admin-text-muted)]">
-                    {r.received_at.slice(0, 16).replace("T", " ")}
-                  </td>
-                  <td className="px-4 py-2 align-top text-[var(--admin-text-muted)]">
-                    <span className="inline-flex items-center gap-2">
-                      {r.from_address ?? "—"}
-                      {r.signature_ok !== true ? (
-                        // S-9: signature failed (false) or was skipped because the
-                        // secret was unset (null) — either way the sender is NOT
-                        // verified. Treat the attached draft with suspicion.
-                        <Badge tone="gold">Unverified sender</Badge>
-                      ) : null}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2 align-top text-[var(--admin-text)]">
-                    {r.manifest_id ? (
-                      <Link
-                        href={`/admin/inventory/intake/${r.manifest_id}`}
-                        className="font-medium hover:text-[var(--admin-accent)]"
-                      >
-                        {r.subject ?? "(no subject)"}
-                      </Link>
-                    ) : (
-                      (r.subject ?? "(no subject)")
-                    )}
-                    {(links.invoiceUrl || links.manifestUrl) && (
-                      <div className="mt-1 flex flex-wrap gap-3 text-xs">
-                        {links.manifestUrl && (
-                          <a
-                            href={links.manifestUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-[var(--admin-accent)] hover:underline"
-                          >
-                            ⬇ Manifest PDF
-                          </a>
-                        )}
-                        {links.invoiceUrl && (
-                          <a
-                            href={links.invoiceUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-[var(--admin-accent)] hover:underline"
-                          >
-                            ⬇ Invoice PDF
-                          </a>
-                        )}
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-4 py-2 align-top text-[var(--admin-text-muted)]">
-                    {r.attachment_count}
-                  </td>
-                  <td className="px-4 py-2 align-top">
-                    <Badge tone={tone(r.disposition)}>{label(r.disposition)}</Badge>
-                  </td>
-                </tr>
-              );
-            })}
           </tbody>
         </table>
       </div>
@@ -502,10 +386,6 @@ export default async function IntakePage({
             />
           </div>
         )}
-
-        <div className="mt-6">
-          <InboundEmailPanel rows={inboundEmails} />
-        </div>
           </>
         ) : (
           <>
