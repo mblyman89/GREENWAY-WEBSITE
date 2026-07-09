@@ -63,6 +63,7 @@ export default async function ManifestReviewPage({
     archived?: string;
     transport?: string;
     error?: string;
+    capmsg?: string;
     finalized?: string;
     lot?: string;
     held?: string;
@@ -81,6 +82,7 @@ export default async function ManifestReviewPage({
     archived,
     transport,
     error,
+    capmsg,
     finalized,
     lot,
     held,
@@ -257,7 +259,17 @@ export default async function ManifestReviewPage({
             Transport details saved to the chain-of-custody record.
           </div>
         )}
-        {error && (
+        {error === "sample_cap" && (
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/10 px-4 py-3 text-sm text-[var(--admin-danger)]">
+            <strong>Accept refused — quarterly sample cap.</strong>{" "}
+            {capmsg
+              ? capmsg
+              : "Accepting this manifest would exceed the processor's 120-unit quarterly sample cap (WAC 314-55-096). Nothing was activated."}{" "}
+            No lots were activated and no sample event was recorded. The processor must not send more sample
+            units this quarter, or an owner may adjust the sample-cap enforcement settings.
+          </div>
+        )}
+        {error && error !== "sample_cap" && (
           <div className="rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/10 px-4 py-2 text-sm text-[var(--admin-danger)]">
             Something went wrong with that action.
           </div>
