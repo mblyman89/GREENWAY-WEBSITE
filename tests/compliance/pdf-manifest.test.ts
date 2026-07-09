@@ -19,6 +19,7 @@ import {
   splitStrainType,
   normalizePdfDate,
   __runPdfManifestTests,
+  __runCultiveraManifestTests,
 } from "@/lib/inventory/pdf-manifest-core";
 import {
   normalizeResendInbound,
@@ -35,6 +36,11 @@ import {
 
 const sample = readFileSync(
   join(__dirname, "fixtures", "pdf-manifest-sample.txt"),
+  "utf8",
+);
+
+const cultiveraSample = readFileSync(
+  join(__dirname, "fixtures", "pdf-manifest-cultivera-sample.txt"),
   "utf8",
 );
 
@@ -100,6 +106,51 @@ describe("pdf-manifest-core (H14a — WA LCB Internal Shipping Document)", () =>
 
   it("passes the embedded self-test suite", () => {
     const r = __runPdfManifestTests(sample);
+    expect(r.failed).toBe(0);
+  });
+});
+
+describe("pdf-manifest-core (H16b-2 — Cultivera Internal Shipping Document)", () => {
+  it("parses the Everigreene manifest header, lines, and transport", () => {
+    const m = parseShippingManifestText(cultiveraSample)!;
+    expect(m).not.toBeNull();
+    expect(m.manifest_number).toBe("21544390883723306");
+    expect(m.vendor_label).toBe("EVERIGREENE");
+    expect(m.vendor_license).toBe("431776");
+    expect(m.lines).toHaveLength(28);
+    expect(m.lines[0].lot_code).toBe("21544340930295135");
+    expect(m.lines[0].product_name).toBe("Packaged Flower - BananaConda - 3.5g");
+    expect(m.lines[27].lot_code).toBe("21544341009022449");
+  });
+
+  it("does NOT mistake the fixed '8/6/91' disclaimer date for the transfer date", () => {
+    const m = parseShippingManifestText(cultiveraSample)!;
+    // Was 2091-08-06 before this slice; the real departure date is 7/8/26.
+    expect(m.transfer_date).toBe("2026-07-08");
+  });
+
+  it("extracts the Cultivera-layout transport (transporter, vehicle, dep/eta, route)", () => {
+    const t = parseShippingManifestText(cultiveraSample)!.transport!;
+    expect(t.transporter_name).toBe("Tyler hart");
+    expect(t.vehicle_description).toBe("2006 blue subaru impreza");
+    expect(t.vehicle_plate).toBe("CHB65209");
+    expect(t.departed_at).toBe("2026-07-08T09:00");
+    // The manifest arrival is the ESTIMATE → eta_date only, never arrived_at.
+    expect(t.eta_date).toBe("2026-07-08");
+    expect(t.arrived_at).toBeNull();
+    expect(t.route_notes).toContain("US-12 E");
+  });
+
+  it("does not regress the (Third Party) sample's transport (no false address as vehicle)", () => {
+    // Guard the regression fixed in this slice: the destination street address
+    // "4851 GEIGER RD SE" must NOT be captured as a vehicle description.
+    const t = parseShippingManifestText(sample)!.transport!;
+    expect(t.vehicle_description).toBeNull();
+    expect(t.transporter_name).toBe("TERPENE TRANSIT");
+  });
+
+  it("passes the embedded Cultivera self-test suite", () => {
+    const r = __runCultiveraManifestTests(cultiveraSample);
     expect(r.failed).toBe(0);
   });
 });
