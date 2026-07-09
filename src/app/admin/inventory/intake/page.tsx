@@ -32,6 +32,10 @@ import {
 } from "./actions";
 import { BatchTransferImport } from "@/components/admin/inventory/BatchTransferImport";
 import { KbBackfillPanel } from "@/components/admin/inventory/KbBackfillPanel";
+import {
+  EmailIntakeTable,
+  type ManifestDownloadLinks,
+} from "@/components/admin/inventory/EmailIntakeTable";
 
 export const dynamic = "force-dynamic";
 
@@ -282,6 +286,17 @@ export default async function IntakePage({
   // Overdue in-transit manifests bubble up as a banner.
   const overdue = pipeline.inTransit.filter((m) => classifyEta(m.eta_date) === "overdue");
 
+  // H15c — join the email fetch trail's download links (manifest/invoice PDFs)
+  // onto their staged manifests for the hero table's ⬇ buttons.
+  const linksByManifestId = new Map<string, ManifestDownloadLinks>();
+  for (const r of inboundEmails) {
+    if (!r.manifest_id || linksByManifestId.has(r.manifest_id)) continue;
+    const links = extractLinksFromNote(r.note);
+    if (links.invoiceUrl || links.manifestUrl) {
+      linksByManifestId.set(r.manifest_id, links);
+    }
+  }
+
   const errorMsg =
     error === "empty"
       ? "Paste the vendor JSON before importing."
@@ -409,6 +424,11 @@ export default async function IntakePage({
             {errorMsg}
           </div>
         )}
+
+        {/* H15c — the hero table: one row per real manifest, moving badge,
+            invoice # + downloads. The strict H15b gate guarantees only real
+            manifests appear here. */}
+        <EmailIntakeTable rows={manifests} linksByManifestId={linksByManifestId} />
 
         {kbdone && (
           <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]">

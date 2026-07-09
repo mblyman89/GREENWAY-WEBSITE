@@ -29,7 +29,7 @@ import {
   ccrsToParsedManifest,
   ccrsTransportToParsed,
 } from "@/lib/inventory/ccrs-manifest-csv-core";
-import { stageManifest } from "@/lib/inventory/intake-store";
+import { stageManifest, setManifestLifecycle } from "@/lib/inventory/intake-store";
 import type {
   NormalizedInboundEmail,
   NormalizedAttachment,
@@ -227,6 +227,7 @@ export async function stageManifestsFromEmail(
     if (staged.ok) {
       result.staged += 1;
       result.manifestIds.push(staged.manifestId);
+      await autoAdvanceInTransit(staged.manifestId, actorId);
     } else {
       result.parseFailures += 1;
       console.error("[inbound-email] stageManifest failed:", staged.error);
@@ -269,12 +270,35 @@ export async function stageManifestsFromEmail(
       result.staged += 1;
       result.manifestIds.push(staged.manifestId);
       stagedFromPdf = true;
+      await autoAdvanceInTransit(staged.manifestId, actorId);
     } else {
       result.parseFailures += 1;
       console.error("[inbound-email] stageManifest (pdf) failed:", staged.error);
     }
   }
   return result;
+}
+
+/**
+ * H15c (owner-approved): a manifest that arrives BY EMAIL is, by definition, a
+ * transfer the vendor has dispatched — the document says it's an in-flight
+ * delivery with an ETA. Auto-advance it from "pending" to "in_transit" so the
+ * hero table reflects reality without a click. Manual imports keep starting at
+ * "pending" (a human typed those in and decides). Best-effort — a lifecycle
+ * hiccup never fails the staging. Still drafts-only: in_transit is an interim
+ * state; nothing activates until a human accepts.
+ */
+async function autoAdvanceInTransit(manifestId: string, actorId: string | null): Promise<void> {
+  try {
+    await setManifestLifecycle(
+      manifestId,
+      "in_transit",
+      actorId,
+      "Auto-advanced to In transit (arrived via vendor email — delivery already dispatched).",
+    );
+  } catch (err) {
+    console.error("[inbound-email] auto-advance in_transit failed:", err);
+  }
 }
 
 function safeJson(text: string): unknown {
