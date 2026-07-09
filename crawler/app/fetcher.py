@@ -29,6 +29,7 @@ import httpx
 
 from .config import Settings, get_settings
 from .http_identity import browser_headers, pick_user_agent
+from .image_urls import best_image_url, is_placeholder_url, parse_srcset
 
 # Per-domain last-fetch timestamps for rate limiting (process-local).
 _last_fetch_at: dict[str, float] = {}
@@ -236,12 +237,12 @@ _MAX_IMAGES_PER_PAGE = 80  # was 40 — long edible/product catalogs exceed it
 
 
 def _pick_from_srcset(srcset: str) -> str:
-    """Largest candidate from a srcset/data-srcset string ('url 1x, url 2x')."""
-    try:
-        candidates = [s.strip().split(" ")[0] for s in srcset.split(",") if s.strip()]
-        return candidates[-1] if candidates else ""
-    except Exception:
-        return ""
+    """Largest real candidate from a srcset/data-srcset string.
+
+    H10b: delegates to the shared, descriptor-aware parser (picks by w/x weight,
+    skips placeholders) instead of taking the positionally-last entry.
+    """
+    return parse_srcset(srcset)
 
 
 _CSS_BG_RE = re.compile(r"background(?:-image)?\s*:[^;]*url\(\s*['\"]?([^'\")]+)['\"]?\s*\)", re.I)
@@ -266,15 +267,10 @@ def _extract_image_urls(html: str, base_url: str) -> list[str]:
             urls.append(urljoin(base_url, c))
 
     for img in soup.find_all("img"):
-        # Highest-resolution first: srcset beats src for catalog thumbnails.
-        srcset = img.get("srcset") or img.get("data-srcset") or ""
-        best = _pick_from_srcset(srcset) if srcset else ""
-        if not best:
-            for attr in _LAZY_IMG_ATTRS:
-                v = img.get(attr)
-                if v:
-                    best = v
-                    break
+        # H10b: prefer a REAL lazy/srcset image over a placeholder ``src`` so a
+        # lazy-loaded catalog no longer harvests the tiny inline placeholder
+        # (the black-square bug). best_image_url returns "" when nothing real.
+        best = best_image_url(img.get)
         if best:
             urls.append(urljoin(base_url, best))
 
@@ -282,7 +278,7 @@ def _extract_image_urls(html: str, base_url: str) -> list[str]:
     # real image here and leave <img src> as a tiny placeholder.
     for source in soup.find_all("source"):
         srcset = source.get("srcset") or source.get("data-srcset") or ""
-        best = _pick_from_srcset(srcset)
+        best = parse_srcset(srcset)
         if best:
             urls.append(urljoin(base_url, best))
 
@@ -292,14 +288,12 @@ def _extract_image_urls(html: str, base_url: str) -> list[str]:
         if m and not m.group(1).startswith("data:"):
             urls.append(urljoin(base_url, m.group(1)))
 
-    # De-dup, keep order, drop obvious sprites/pixels/placeholders.
+    # De-dup, keep order, drop placeholders/sprites/pixels (H10b broadened set,
+    # incl. data: URIs, lazy/loading/loader/default/no-image/dummy/... names).
     seen: set[str] = set()
     out: list[str] = []
     for u in urls:
-        if not u or u.startswith("data:") or u in seen:
-            continue
-        low = u.lower()
-        if any(bad in low for bad in ("sprite", "1x1", "pixel", "tracking", "blank.", "spacer", "placeholder")):
+        if not u or u in seen or is_placeholder_url(u):
             continue
         seen.add(u)
         out.append(u)
