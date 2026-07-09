@@ -25,6 +25,7 @@ import { deriveInventoryExternalId } from "@/lib/compliance/ccrs-identifiers";
 import { quarterKeyFromYmd } from "@/lib/compliance/trade-samples-core";
 import { getSampleSettings, incomingUnitsForProcessor } from "@/lib/compliance/trade-samples";
 import { sampleProductTypeForLine } from "@/lib/compliance/sample-product-type-core";
+import type { SampleCapNoticeInput } from "@/lib/compliance/sample-cap-notice-core";
 import {
   evaluateIntakeSampleCap,
   type IntakeSampleLine,
@@ -414,7 +415,17 @@ export async function setLotDisposition(
  */
 export async function preflightManifestSampleCap(
   manifestId: string,
-): Promise<{ blocked: boolean; addUnits: number; message: string | null } | null> {
+): Promise<{
+  blocked: boolean;
+  addUnits: number;
+  message: string | null;
+  /** H16b vendor-notice: numbers + identity the notice/email needs. Additive. */
+  usedUnits: number;
+  capUnits: number;
+  processorName: string | null;
+  quarterKey: string;
+  vendorId: string | null;
+} | null> {
   if (!isSupabaseServiceConfigured) return null;
   const admin = createSupabaseAdminClient();
 
@@ -425,6 +436,7 @@ export async function preflightManifestSampleCap(
     .eq("id", manifestId)
     .maybeSingle();
   const processorName: string = ((m?.vendor_label as string | null) ?? "").trim();
+  const vendorId = (m?.vendor_id as string | null) ?? null;
   // Quarter of the (pending) accept date: use the manifest's accepted_at if it
   // already has one (re-finalize), else today — the same rule Slice A uses.
   const acceptedIso = (m?.accepted_at as string | null) ?? new Date().toISOString();
@@ -453,11 +465,22 @@ export async function preflightManifestSampleCap(
     lab_results: { passed: boolean | null } | { passed: boolean | null }[] | null;
   };
   const rows = (lots as PreflightLotRow[] | null) ?? [];
-  if (rows.length === 0) return { blocked: false, addUnits: 0, message: null };
+  // Nothing addable → never blocked; identity fields carried for a uniform shape.
+  const nothingToAdd = {
+    blocked: false,
+    addUnits: 0,
+    message: null,
+    usedUnits: 0,
+    capUnits: 0,
+    processorName: processorName || null,
+    quarterKey,
+    vendorId,
+  };
+  if (rows.length === 0) return nothingToAdd;
 
   // Only lines that will actually be ACCEPTED (not refused at dock).
   const accepting = rows.filter((r) => r.disposition !== "rejected_at_dock");
-  if (accepting.length === 0) return { blocked: false, addUnits: 0, message: null };
+  if (accepting.length === 0) return nothingToAdd;
 
   // A dirty lot the activation gate would HOLD never goes live — exclude it, so
   // the pre-flight counts exactly what Slice A will seed (clean, activatable).
@@ -506,7 +529,72 @@ export async function preflightManifestSampleCap(
   const settings = await getSampleSettings();
   const usedUnits = await incomingUnitsForProcessor(processorName, quarterKey);
   const verdict = evaluateIntakeSampleCap({ lines, usedUnits, settings });
-  return { blocked: verdict.blocked, addUnits: verdict.addUnits, message: verdict.message };
+  return {
+    blocked: verdict.blocked,
+    addUnits: verdict.addUnits,
+    message: verdict.message,
+    usedUnits,
+    capUnits: verdict.capUnits,
+    processorName: processorName || null,
+    quarterKey,
+    vendorId,
+  };
+}
+
+/**
+ * H16b Samples vendor-notice: gather everything the processor-facing sample-cap
+ * notice + its email need for a manifest whose finalize was refused by the
+ * incoming cap. Reuses preflightManifestSampleCap (single source of truth for
+ * the numbers) and looks up the vendor's email + the manifest number.
+ *
+ * Returns null when Supabase is not configured. `blocked` echoes the pre-flight
+ * so the caller can refuse to send a notice for a manifest that would not
+ * actually be over cap (defense against a stale banner / double click).
+ */
+export async function gatherSampleCapNotice(manifestId: string): Promise<
+  | {
+      blocked: boolean;
+      vendorEmail: string | null;
+      notice: SampleCapNoticeInput;
+    }
+  | null
+> {
+  if (!isSupabaseServiceConfigured) return null;
+  const cap = await preflightManifestSampleCap(manifestId);
+  if (!cap) return null;
+  const admin = createSupabaseAdminClient();
+
+  // Manifest number (vendor's reference) for the notice.
+  const { data: m } = await admin
+    .from("inbound_manifests")
+    .select("manifest_number")
+    .eq("id", manifestId)
+    .maybeSingle();
+  const manifestNumber = ((m?.manifest_number as string | null) ?? "").trim() || null;
+
+  // Vendor email (owner-approved: TO the vendor when on file, else internal only).
+  let vendorEmail: string | null = null;
+  if (cap.vendorId) {
+    const { data: v } = await admin
+      .from("vendors")
+      .select("email")
+      .eq("id", cap.vendorId)
+      .maybeSingle();
+    vendorEmail = ((v?.email as string | null) ?? "").trim() || null;
+  }
+
+  return {
+    blocked: cap.blocked,
+    vendorEmail,
+    notice: {
+      processorName: cap.processorName,
+      usedUnits: cap.usedUnits,
+      capUnits: cap.capUnits,
+      addUnits: cap.addUnits,
+      quarterKey: cap.quarterKey,
+      manifestNumber,
+    },
+  };
 }
 
 /**

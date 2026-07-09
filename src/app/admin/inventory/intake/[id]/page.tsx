@@ -32,6 +32,7 @@ import {
   setLotDispositionAction,
   finalizeManifestAction,
   promoteManifestToKbAction,
+  notifyVendorSampleCapAction,
 } from "../actions";
 
 /** Format an ISO timestamp into the value a datetime-local input expects. */
@@ -64,6 +65,7 @@ export default async function ManifestReviewPage({
     transport?: string;
     error?: string;
     capmsg?: string;
+    notified?: string;
     finalized?: string;
     lot?: string;
     held?: string;
@@ -83,6 +85,7 @@ export default async function ManifestReviewPage({
     transport,
     error,
     capmsg,
+    notified,
     finalized,
     lot,
     held,
@@ -160,6 +163,7 @@ export default async function ManifestReviewPage({
 
   const rejectAction = rejectManifestAction.bind(null, id);
   const finalizeAction = finalizeManifestAction.bind(null, id);
+  const notifyVendorAction = notifyVendorSampleCapAction.bind(null, id);
   const archiveAction = archiveCoasAction.bind(null, id);
   const promoteKbAction = promoteManifestToKbAction.bind(null, id);
   const markInTransitAction = setManifestLifecycleAction.bind(null, id, "in_transit");
@@ -267,11 +271,52 @@ export default async function ManifestReviewPage({
               : "Accepting this manifest would exceed the processor's 120-unit quarterly sample cap (WAC 314-55-096). Nothing was activated."}{" "}
             No lots were activated and no sample event was recorded. The processor must not send more sample
             units this quarter, or an owner may adjust the sample-cap enforcement settings.
+            <form action={notifyVendorAction} className="mt-3">
+              <Button type="submit" variant="neutral" size="sm">
+                ✉️ Notify vendor (sample delivery on hold)
+              </Button>
+            </form>
+            <p className="mt-2 text-xs text-[var(--admin-text-muted)]">
+              Emails the processor that their delivery is on hold and asks them to hold the samples until
+              next quarter. Cites WAC 314-55-096 — no dollar amounts or customer data. An internal copy is
+              kept for staff.
+            </p>
           </div>
         )}
-        {error && error !== "sample_cap" && (
+        {notified === "sent" && (
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]">
+            Sample-cap notice emailed to the vendor (an internal copy was kept). Logged on the timeline.
+          </div>
+        )}
+        {notified === "noemail" && (
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-orange)]/40 bg-[var(--admin-orange)]/10 px-4 py-2 text-sm text-[var(--admin-orange)]">
+            No email is on file for this vendor — an internal copy was sent to staff instead. Add a vendor
+            email to notify them directly next time.
+          </div>
+        )}
+        {notified === "unconfigured" && (
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-orange)]/40 bg-[var(--admin-orange)]/10 px-4 py-2 text-sm text-[var(--admin-orange)]">
+            Email is not configured, so no notice was sent. The refusal is still recorded on the timeline.
+          </div>
+        )}
+        {notified === "failed" && (
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/10 px-4 py-2 text-sm text-[var(--admin-danger)]">
+            The notice could not be delivered to the vendor. Please try again or contact them directly.
+          </div>
+        )}
+        {error && error !== "sample_cap" && !error.startsWith("notify_") && (
           <div className="rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/10 px-4 py-2 text-sm text-[var(--admin-danger)]">
             Something went wrong with that action.
+          </div>
+        )}
+        {error === "notify_notblocked" && (
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-orange)]/40 bg-[var(--admin-orange)]/10 px-4 py-2 text-sm text-[var(--admin-orange)]">
+            This manifest is no longer over the quarterly sample cap, so no vendor notice was sent.
+          </div>
+        )}
+        {error === "notify_unavailable" && (
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-orange)]/40 bg-[var(--admin-orange)]/10 px-4 py-2 text-sm text-[var(--admin-orange)]">
+            The vendor notice is unavailable right now (the records service is not configured).
           </div>
         )}
         {kb != null && (

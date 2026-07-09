@@ -10,7 +10,10 @@ import {
   rejectManifest,
   setLotDisposition,
   finalizeManifestDispositions,
+  gatherSampleCapNotice,
+  logManifestEvent,
 } from "@/lib/inventory/intake-store";
+import { sendSampleCapVendorNotice } from "@/lib/compliance/sample-cap-notify";
 import { normalizeRejection } from "@/lib/inventory/intake-disposition-core";
 import {
   parseCcrsManifestCsv,
@@ -565,4 +568,54 @@ export async function finalizeManifestAction(manifestId: string) {
   redirect(
     `/admin/inventory/intake/${manifestId}?finalized=${result.derivedStatus}&accepted=${result.activated}&rejected=${result.rejected}&drafts=${result.draftsCreated}&held=${result.blocked.length}`,
   );
+}
+
+/**
+ * H16b Samples vendor-notice: email the supplying processor that their sample
+ * delivery is on hold because accepting it would exceed the WAC 314-55-096
+ * quarterly incoming cap (the Slice B block). Manual, owner-approved: the
+ * reviewer clicks "Notify vendor" on the blocked banner. Sends TO the vendor
+ * (when an email is on file) + an internal copy to ORDER_STAFF_EMAILS, logs a
+ * `sample_cap_vendor_notified` manifest event, and redirects with a result
+ * flag. Never sends for a manifest that is not actually over cap.
+ */
+export async function notifyVendorSampleCapAction(manifestId: string) {
+  const session = await requirePermission("inventory.manage");
+  const gathered = await gatherSampleCapNotice(manifestId);
+  revalidatePath(`/admin/inventory/intake/${manifestId}`);
+
+  // Nothing to notify: not configured, or the manifest is not (or no longer)
+  // over cap. Refuse rather than send a misleading notice.
+  if (!gathered) {
+    redirect(`/admin/inventory/intake/${manifestId}?error=notify_unavailable`);
+  }
+  if (!gathered.blocked) {
+    redirect(`/admin/inventory/intake/${manifestId}?error=notify_notblocked`);
+  }
+
+  const sent = await sendSampleCapVendorNotice({
+    vendorEmail: gathered.vendorEmail,
+    notice: gathered.notice,
+  });
+
+  // Audit trail: record what actually went out (or why it did not).
+  const note = !sent.configured
+    ? "Sample-cap vendor notice NOT sent: email is not configured (RESEND_API_KEY / ORDER_EMAIL_FROM)."
+    : sent.missingVendorEmail
+      ? `Sample-cap vendor notice: no vendor email on file — internal copy ${
+          sent.sentToStaff ? "sent to staff" : "NOT sent"
+        }.`
+      : `Sample-cap vendor notice sent to ${gathered.vendorEmail}${
+          sent.sentToStaff ? " (internal copy sent)" : ""
+        }.`;
+  await logManifestEvent(manifestId, "sample_cap_vendor_notified", note, session.userId);
+
+  const flag = !sent.configured
+    ? "unconfigured"
+    : sent.missingVendorEmail
+      ? "noemail"
+      : sent.sentToVendor
+        ? "sent"
+        : "failed";
+  redirect(`/admin/inventory/intake/${manifestId}?notified=${flag}`);
 }
