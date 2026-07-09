@@ -19,6 +19,7 @@ import { describe, it, expect } from "vitest";
 import {
   extractEmailIdFromWebhook,
   extractTransferLinksFromBody,
+  extractAllTransferLinksFromBody,
   mapReceivingAttachments,
   decodeDataUriHtml,
   __runResendReceivingTests,
@@ -74,6 +75,43 @@ describe("resend-receiving-core (H14-attachments-fetch)", () => {
     );
     expect(links.invoiceUrl).toBe("https://files.cultivera.com/dl/invoice/2796.pdf");
     expect(links.manifestUrl).toBe("https://files.cultivera.com/dl/manifest/2796.pdf");
+  });
+
+  it("harvests ALL transfer links from a multi-vendor email (Lilac/Kush/Mako edge case)", () => {
+    // H16b-8(b): ONE email from Alec (Cascade Green Distribution) bundling three
+    // distinct vendor transfers — Lilac Labs (Cultivera .json), Kush Family
+    // Originals + Mako Farms (GrowFlow tokenized endpoints). The single-link
+    // picker returned only Lilac; the harvest must return all three so we stage
+    // one manifest per transfer.
+    const html = [
+      "<p>Hi Greenway, here are three transfers for delivery:</p>",
+      '<p>Lilac Labs: <a href="https://files.cultivera.com/aaa/import/1/Cultivera_ORD-7208_413541.json">Transfer Data Link</a></p>',
+      '<p>Kush Family Originals: <a href="https://go.growflow.com/wa/wcia/transfer?token=KUSHTOKEN111">Transfer Data Link</a></p>',
+      '<p>Mako Farms: <a href="https://go.growflow.com/wa/wcia/transfer?token=MAKOTOKEN222">Transfer Data Link</a></p>',
+    ].join("\n");
+    const all = extractAllTransferLinksFromBody(html, null);
+    expect(all).toHaveLength(3);
+    expect(all).toContain("https://files.cultivera.com/aaa/import/1/Cultivera_ORD-7208_413541.json");
+    expect(all).toContain("https://go.growflow.com/wa/wcia/transfer?token=KUSHTOKEN111");
+    expect(all).toContain("https://go.growflow.com/wa/wcia/transfer?token=MAKOTOKEN222");
+    // The single-link picker still returns just the first/best (Lilac's .json).
+    expect(extractTransferLinksFromBody(html, null).transferJsonUrl).toBe(
+      "https://files.cultivera.com/aaa/import/1/Cultivera_ORD-7208_413541.json",
+    );
+  });
+
+  it("de-dupes a repeated transfer link and excludes unrelated .json from the harvest", () => {
+    const dup = extractAllTransferLinksFromBody(
+      '<a href="https://files.cultivera.com/x/Cultivera_ORD-1_413541.json">link</a> https://files.cultivera.com/x/Cultivera_ORD-1_413541.json',
+      null,
+    );
+    expect(dup).toHaveLength(1);
+    const noisy = extractAllTransferLinksFromBody(
+      "cfg https://cdn.example.com/tracking.json and https://files.cultivera.com/real.json",
+      null,
+    );
+    expect(noisy).toEqual(["https://files.cultivera.com/real.json"]);
+    expect(extractAllTransferLinksFromBody("<p>no links</p>", null)).toEqual([]);
   });
 
   it("extracts GrowFlow's tokenized WCIA transfer endpoint (no .json extension)", () => {

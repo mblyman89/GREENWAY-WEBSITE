@@ -38,6 +38,7 @@ import { parseRecipients } from "@/lib/inbound-email/inbound-normalize-core";
 import {
   extractEmailIdFromWebhook,
   extractTransferLinksFromBody,
+  extractAllTransferLinksFromBody,
   mapReceivingAttachments,
   decodeDataUriHtml,
   type ReceivingAttachmentMeta,
@@ -215,29 +216,61 @@ export async function enrichResendInbound(
     notes.push(`downloaded ${fetched}/${attMetas.length} attachment(s)`);
   }
 
-  // 3) The WCIA Transfer Data Link (.json) + invoice/manifest links from the body.
-  //    Gmail-forwarded vendor emails typically carry these as LINKS, not files —
-  //    this is the fix for "forwarded shows 0 attachments". The .json is richest.
+  // 3) The WCIA Transfer Data Link(s) (.json / tokenized endpoint) + invoice /
+  //    manifest links from the body. Gmail-forwarded vendor emails typically
+  //    carry these as LINKS, not files — this is the fix for "forwarded shows 0
+  //    attachments". The transfer JSON is the richest source.
+  //
+  //    H16b-8(b) MULTI-VENDOR: one email can bundle SEVERAL distinct vendor
+  //    transfers as multiple body links (the real Lilac / Kush Family / Mako
+  //    edge case — the old single-link picker grabbed only Lilac). We now
+  //    harvest EVERY recognized transfer link and fetch each as its own JSON
+  //    attachment, so stageManifestsFromEmail stages ONE manifest per transfer.
+  //    The H16b-7 dedupe guard protects against an accidental duplicate; genuine
+  //    distinct transfers carry distinct manifest numbers and all stage.
   const links = extractTransferLinksFromBody(html, text);
-  if (links.transferJsonUrl) {
-    const cleaned = cleanUrl(links.transferJsonUrl) ?? links.transferJsonUrl;
-    // Only fetch if we don't already have a JSON manifest attachment.
-    const alreadyHaveJson = attachments.some(
-      (a) => (a.contentType ?? "").toLowerCase().includes("json") && a.text != null,
-    );
-    if (!alreadyHaveJson) {
+  const allTransferLinks = extractAllTransferLinksFromBody(html, text);
+  // Only fetch transfer JSON links if we don't already have a JSON manifest
+  // attachment from a real MIME attachment (a healthy direct send).
+  const alreadyHaveJson = attachments.some(
+    (a) => (a.contentType ?? "").toLowerCase().includes("json") && a.text != null,
+  );
+  if (!alreadyHaveJson && allTransferLinks.length > 0) {
+    // De-dupe by the CLEANED URL (collapses the doubled-prefix link bug) so the
+    // same transfer echoed as anchor + plaintext is fetched once.
+    const seen = new Set<string>();
+    let fetchedTransfers = 0;
+    let idx = 0;
+    for (const rawLink of allTransferLinks) {
+      const cleaned = cleanUrl(rawLink) ?? rawLink;
+      if (seen.has(cleaned)) continue;
+      seen.add(cleaned);
       const res = await fetchTransferJson(cleaned);
       if (res.ok) {
+        // Guarantee a distinct filename even for two GrowFlow endpoints that
+        // both resolve to a path ending in "transfer" (no per-link filename).
+        const base = filenameFromUrl(cleaned) ?? "transfer";
+        const filename = base.toLowerCase().endsWith(".json")
+          ? base
+          : `${base}-${idx + 1}.json`;
         attachments.push({
-          filename: filenameFromUrl(cleaned) ?? "transfer.json",
+          filename,
           contentType: "application/json",
           text: res.jsonText,
           base64: Buffer.from(res.jsonText, "utf8").toString("base64"),
         });
-        notes.push("fetched WCIA Transfer Data Link JSON");
+        fetchedTransfers += 1;
       } else {
         notes.push(`transfer link found but fetch failed (${res.error})`);
       }
+      idx += 1;
+    }
+    if (fetchedTransfers > 0) {
+      notes.push(
+        fetchedTransfers === 1
+          ? "fetched WCIA Transfer Data Link JSON"
+          : `fetched ${fetchedTransfers} WCIA Transfer Data Link JSONs (multi-vendor email)`,
+      );
     }
   }
   if (links.invoiceUrl) notes.push(`invoice link: ${links.invoiceUrl}`);
