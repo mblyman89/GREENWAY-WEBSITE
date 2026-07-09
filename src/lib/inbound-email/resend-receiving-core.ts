@@ -173,10 +173,21 @@ export function extractTransferLinksFromBody(
     allCandidates[0] ??
     null;
 
-  // 2) invoice / manifest links. Prefer parsing HTML anchors so we read the real
-  //    href behind the word "here"; fall back to nearby-URL heuristics on text.
-  const invoiceUrl = findLabeledLink(htmlStr, textStr, "invoice");
-  const manifestUrl = findLabeledLink(htmlStr, textStr, "manifest");
+  // 2) invoice / manifest DOWNLOAD links (PDFs). Prefer parsing HTML anchors so we
+  //    read the real href behind the word "here"; fall back to nearby-URL
+  //    heuristics on text.
+  //
+  //    CRITICAL (H15-PRE-b): the invoice/manifest links are meant to be the
+  //    downloadable PDFs, NOT the WCIA transfer JSON. In some vendor emails (e.g.
+  //    High End Farms / OpenTHC) the body reads "...The invoice and lab COAs are
+  //    attached." immediately before the "JSON link:" anchor, so a naive keyword
+  //    window would return the transfer .json URL as the "invoice" link — which is
+  //    why clicking Invoice in the back office opened raw JSON. We exclude the
+  //    transfer link (and any WCIA transfer URL) from the invoice/manifest results.
+  const excluded = new Set<string>();
+  if (transferJsonUrl) excluded.add(transferJsonUrl);
+  const invoiceUrl = findLabeledLink(htmlStr, textStr, "invoice", excluded);
+  const manifestUrl = findLabeledLink(htmlStr, textStr, "manifest", excluded);
 
   return { transferJsonUrl, invoiceUrl, manifestUrl };
 }
@@ -193,8 +204,24 @@ function stripTrailingPunct(u: string): string {
  * download the invoice." where "here" is the anchor text). Falls back to scanning
  * the plaintext for a URL on/adjacent to a line mentioning the keyword.
  */
-function findLabeledLink(html: string, text: string, keyword: string): string | null {
+function findLabeledLink(
+  html: string,
+  text: string,
+  keyword: string,
+  excluded?: Set<string>,
+): string | null {
   const kw = keyword.toLowerCase();
+
+  // A labeled invoice/manifest link must be a downloadable document, NOT the WCIA
+  // transfer data (a `.json` file or a `.../wcia/transfer?...` endpoint). Reject
+  // those and anything explicitly excluded (e.g. the already-chosen transfer link).
+  const isUsable = (url: string): boolean => {
+    const clean = stripTrailingPunct(url);
+    if (!/^https?:\/\//i.test(clean)) return false;
+    if (excluded?.has(clean)) return false;
+    if (isWciaTransferUrl(clean)) return false;
+    return true;
+  };
 
   // HTML anchors with context window.
   // Note: [\s\S] instead of the `s` (dotAll) flag — the project's TS target
@@ -212,7 +239,7 @@ function findLabeledLink(html: string, text: string, keyword: string): string | 
     const after = html.slice(end, Math.min(html.length, end + 60)).toLowerCase();
     if (
       (inner.includes(kw) || before.includes(kw) || after.includes(kw)) &&
-      /^https?:\/\//i.test(href)
+      isUsable(href)
     ) {
       return stripTrailingPunct(href);
     }
@@ -221,10 +248,24 @@ function findLabeledLink(html: string, text: string, keyword: string): string | 
   // Plaintext fallback: a URL on a line that mentions the keyword.
   for (const line of text.split(/\r?\n/)) {
     if (!line.toLowerCase().includes(kw)) continue;
-    const url = line.match(ANY_URL_RE)?.[0];
-    if (url) return stripTrailingPunct(url);
+    const urls = line.match(ANY_URL_RE) ?? [];
+    for (const url of urls) {
+      if (isUsable(url)) return stripTrailingPunct(url);
+    }
   }
   return null;
+}
+
+/**
+ * True when a URL is a WCIA transfer-data link (the manifest JSON), not a
+ * downloadable invoice/manifest PDF. Covers both `.json` files and tokenized
+ * transfer endpoints (GrowFlow). PURE.
+ */
+function isWciaTransferUrl(url: string): boolean {
+  const clean = stripTrailingPunct(url);
+  if (/\.json(?:\?|$)/i.test(clean)) return true;
+  if (/\/(?:wa\/)?wcia\/transfer\?/i.test(clean)) return true;
+  return false;
 }
 
 function stripTags(s: string): string {

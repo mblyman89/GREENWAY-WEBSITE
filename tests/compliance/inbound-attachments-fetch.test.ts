@@ -24,6 +24,11 @@ import {
   __runResendReceivingTests,
 } from "@/lib/inbound-email/resend-receiving-core";
 import { extractLinksFromNote } from "@/lib/inbound-email/inbound-store";
+import {
+  classifyAttachmentRole,
+  __runInboundNormalizeTests,
+  type NormalizedAttachment,
+} from "@/lib/inbound-email/inbound-normalize-core";
 
 describe("resend-receiving-core (H14-attachments-fetch)", () => {
   it("passes the embedded self-test suite", () => {
@@ -99,6 +104,60 @@ describe("resend-receiving-core (H14-attachments-fetch)", () => {
     expect(links.transferJsonUrl).toBe(
       "https://app.openfhc.com/pub/b2b/01KQ7GS6EXA3DV5MSHHXWVAZRB/wcia.json",
     );
+  });
+
+  it("NEVER mislabels the WCIA transfer JSON as the invoice link (H15-PRE-b)", () => {
+    // Real High End Farms body: "...The invoice and lab COAs are attached." sits
+    // right before the JSON link, which previously made the invoice link resolve
+    // to the wcia.json — that's why clicking Invoice opened raw JSON. The transfer
+    // JSON must never surface as an invoice/manifest download link.
+    const html = [
+      "<div>Your order is scheduled to be delivered Wednesday, 4/29. The invoice and lab COAs are attached.</div>",
+      '<div>JSON link: <a href="https://app.openfhc.com/pub/b2b/01KQ7GS6EXA3DV5MSHHXWVAZRB/wcia.json">wcia.json</a></div>',
+    ].join("\n");
+    const links = extractTransferLinksFromBody(html, null);
+    expect(links.transferJsonUrl).toBe(
+      "https://app.openfhc.com/pub/b2b/01KQ7GS6EXA3DV5MSHHXWVAZRB/wcia.json",
+    );
+    expect(links.invoiceUrl).toBeNull();
+    expect(links.manifestUrl).toBeNull();
+  });
+
+  it("still finds real invoice/manifest PDF download links alongside the transfer JSON", () => {
+    // Cultivera: the .json is the transfer link; the PDFs are the real downloads.
+    const html = [
+      '<a href="https://files.cultivera.com/abc/Cultivera_ORD-1_413541.json">WCIA Transfer Data Link</a>',
+      '<p>Click <a href="https://files.cultivera.com/dl/invoice/2796.pdf">here</a> to download the invoice.</p>',
+      '<p>Click <a href="https://files.cultivera.com/dl/manifest/2796.pdf">here</a> to download the manifest.</p>',
+    ].join("\n");
+    const links = extractTransferLinksFromBody(html, null);
+    expect(links.invoiceUrl).toBe("https://files.cultivera.com/dl/invoice/2796.pdf");
+    expect(links.manifestUrl).toBe("https://files.cultivera.com/dl/manifest/2796.pdf");
+  });
+
+  it("classifies attachment roles from the real vendor filenames", () => {
+    const att = (filename: string): NormalizedAttachment => ({
+      filename,
+      contentType: "application/pdf",
+      text: null,
+      base64: "x",
+    });
+    // GrowFlow: TransferLog (manifest) + Invoice + QA (coa).
+    expect(classifyAttachmentRole(att("TransferLog_303xxxx.pdf"))).toBe("manifest");
+    expect(classifyAttachmentRole(att("Invoice_2026-07-07T18_37_52.pdf"))).toBe("invoice");
+    expect(classifyAttachmentRole(att("QA_2026-07-07T18_37_52.pdf"))).toBe("coa");
+    // High End Farms: Invoice (which is also the manifest) + Lab_Results (coa).
+    expect(
+      classifyAttachmentRole(att("Greenway_Marijuana_-_260429_-_Invoice_01KQ7GS6EXA3DV5M.pdf")),
+    ).toBe("invoice");
+    expect(
+      classifyAttachmentRole(att("Greenway_Marijuana_-_260429_-_01KQ7GS6EXA3DV5M-Lab_Results.pdf")),
+    ).toBe("coa");
+  });
+
+  it("passes the inbound-normalize-core embedded self-tests", () => {
+    const { failed } = __runInboundNormalizeTests();
+    expect(failed).toBe(0);
   });
 
   it("decodes the data_uri html body Resend serves by default", () => {
