@@ -46,6 +46,12 @@ export type ExtractedTransferLinks = {
   invoiceUrl: string | null;
   /** "Click here to download the manifest" href, when present. */
   manifestUrl: string | null;
+  /**
+   * A COA / lab-results download link, when the body offers one instead of
+   * attaching the PDF (H16b-3). Matched on COA-ish anchor text ("COA", "lab
+   * results", "certificate of analysis", "lab"). Never the WCIA transfer JSON.
+   */
+  coaUrl: string | null;
 };
 
 /** Attachment metadata from Resend's receiving API, pre-download. PURE shape. */
@@ -223,7 +229,20 @@ export function extractTransferLinksFromBody(
   const invoiceUrl = findLabeledLink(htmlStr, textStr, "invoice", excluded);
   const manifestUrl = findLabeledLink(htmlStr, textStr, "manifest", excluded);
 
-  return { transferJsonUrl, invoiceUrl, manifestUrl };
+  // 3) COA / lab-results DOWNLOAD link (H16b-3). Some vendor emails link the
+  //    lab COAs rather than attaching them. Exclude the invoice/manifest URLs we
+  //    already claimed so a shared "here" anchor isn't double-counted. Try the
+  //    most specific COA phrasing first, then broaden to "lab".
+  const coaExcluded = new Set(excluded);
+  if (invoiceUrl) coaExcluded.add(invoiceUrl);
+  if (manifestUrl) coaExcluded.add(manifestUrl);
+  const coaUrl =
+    findLabeledLink(htmlStr, textStr, "certificate of analysis", coaExcluded) ??
+    findLabeledLink(htmlStr, textStr, "lab results", coaExcluded) ??
+    findLabeledLink(htmlStr, textStr, "coa", coaExcluded) ??
+    findLabeledLink(htmlStr, textStr, "lab", coaExcluded);
+
+  return { transferJsonUrl, invoiceUrl, manifestUrl, coaUrl };
 }
 
 /** Trim trailing punctuation that regexes commonly over-capture (., ), etc.). */
