@@ -19,7 +19,11 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
-import { parseVendorJson, type ParsedManifest } from "@/lib/inventory/intake-parser";
+import {
+  parseVendorJson,
+  looksLikeWciaTransferStrict,
+  type ParsedManifest,
+} from "@/lib/inventory/intake-parser";
 import {
   parseCcrsManifestCsv,
   ccrsToParsedManifest,
@@ -60,17 +64,37 @@ export type InboundDisposition =
   | "parse_failed";
 
 /**
- * Try to turn one textual attachment into a ParsedManifest. We attempt CCRS CSV
- * when it looks like CSV, otherwise the vendor JSON parser. Returns null if it
- * doesn't parse into at least one line.
+ * H15b — the outcome of trying to read one textual attachment on the
+ * UNATTENDED email path. Three-way so junk is distinguished from failure:
+ *  - "manifest":    verifiably a manifest (strict WCIA JSON or CCRS CSV) with
+ *                   at least one line — stage it.
+ *  - "junk":        readable data that is verifiably NOT a manifest (tracking
+ *                   exports, receipts, arbitrary JSON/CSV) — log, never stage,
+ *                   and do NOT count as a parse failure (it wasn't supposed to
+ *                   be one).
+ *  - "unparseable": something that SHOULD have been a manifest (a .json that
+ *                   won't parse, or a real WCIA transfer with zero items) —
+ *                   a genuine failure a human should chase.
  */
-export function parseAttachmentToManifest(att: NormalizedAttachment): ParsedManifest | null {
+export type AttachmentParseOutcome =
+  | { kind: "manifest"; manifest: ParsedManifest }
+  | { kind: "junk" }
+  | { kind: "unparseable" };
+
+/**
+ * Classify + parse one textual attachment for the email path (H15b strict
+ * manifests-only gate). Manual paste/import paths keep the tolerant
+ * parseVendorJson on purpose — there a HUMAN chose the payload; here nothing
+ * has been reviewed yet, so only verifiable manifests may create rows.
+ */
+export function parseAttachmentStrict(att: NormalizedAttachment): AttachmentParseOutcome {
   const text = att.text;
-  if (!text || !text.trim()) return null;
+  if (!text || !text.trim()) return { kind: "junk" };
 
   const fn = (att.filename ?? "").toLowerCase();
   const ct = (att.contentType ?? "").toLowerCase();
   const looksCsv = ct.includes("csv") || fn.endsWith(".csv");
+  const looksJson = ct.includes("json") || fn.endsWith(".json");
 
   if (looksCsv) {
     const parsed = parseCcrsManifestCsv(text);
@@ -78,27 +102,57 @@ export function parseAttachmentToManifest(att: NormalizedAttachment): ParsedMani
       const mapped = ccrsToParsedManifest(parsed);
       if (mapped.lines.length > 0) {
         return {
-          manifest_number: mapped.manifest_number,
-          vendor_label: mapped.vendor_label,
-          vendor_license: mapped.vendor_license,
-          transfer_date: mapped.transfer_date,
-          source_format: "ccrs-csv",
-          lines: mapped.lines,
-          warnings: mapped.warnings,
-          // H15a: ride the CCRS header transport along so stageManifest seeds
-          // chain-of-custody + ETA for emailed CSVs too.
-          transport: ccrsTransportToParsed(mapped.transport),
+          kind: "manifest",
+          manifest: {
+            manifest_number: mapped.manifest_number,
+            vendor_label: mapped.vendor_label,
+            vendor_license: mapped.vendor_license,
+            transfer_date: mapped.transfer_date,
+            source_format: "ccrs-csv",
+            lines: mapped.lines,
+            warnings: mapped.warnings,
+            // H15a: ride the CCRS header transport along so stageManifest seeds
+            // chain-of-custody + ETA for emailed CSVs too.
+            transport: ccrsTransportToParsed(mapped.transport),
+          },
         };
       }
+      // Structurally a CCRS manifest but zero items (e.g. the blank LCB
+      // template) — nothing to stage, nothing failed.
+      return { kind: "junk" };
     }
     // fall through: some CSV exports are actually JSON mislabeled — try JSON too
   }
 
+  // JSON: parse the root ourselves so we can apply the STRICT WCIA check
+  // before the tolerant parser gets a chance to invent a "generic" manifest
+  // out of arbitrary JSON (the junk-staging hole this gate closes).
+  let root: unknown;
+  try {
+    root = JSON.parse(text);
+  } catch {
+    // A file that claims to be JSON but doesn't parse is a genuine failure;
+    // any other unreadable text is just junk in the mailbox.
+    return looksJson ? { kind: "unparseable" } : { kind: "junk" };
+  }
+  if (!looksLikeWciaTransferStrict(root)) return { kind: "junk" };
+
   const json = parseVendorJson(text);
   if (json.ok && json.manifest.lines.length > 0) {
-    return json.manifest;
+    return { kind: "manifest", manifest: json.manifest };
   }
-  return null;
+  // Verifiably a WCIA transfer but no usable lines — that's a real failure.
+  return { kind: "unparseable" };
+}
+
+/**
+ * Back-compat helper: the manifest if the attachment strictly parses as one,
+ * else null. (The email loop uses parseAttachmentStrict directly so junk is
+ * not miscounted as failure.)
+ */
+export function parseAttachmentToManifest(att: NormalizedAttachment): ParsedManifest | null {
+  const outcome = parseAttachmentStrict(att);
+  return outcome.kind === "manifest" ? outcome.manifest : null;
 }
 
 /** Persist the inbound-email audit row. Best-effort; never throws. */
@@ -152,13 +206,18 @@ export async function stageManifestsFromEmail(
   const pdfCands = pdfCandidates(email);
   if (textCandidates.length === 0 && pdfCands.length === 0) return result;
 
-  // 1) Textual attachments (JSON / CCRS CSV).
+  // 1) Textual attachments (JSON / CCRS CSV). H15b strict gate: only
+  //    verifiable manifests stage; junk (tracking exports, receipts, random
+  //    JSON) is skipped WITHOUT counting as a failure — it's logged on the
+  //    email row and never creates a manifest, so there's nothing to delete.
   for (const att of textCandidates) {
-    const manifest = parseAttachmentToManifest(att);
-    if (!manifest) {
+    const outcome = parseAttachmentStrict(att);
+    if (outcome.kind === "junk") continue;
+    if (outcome.kind === "unparseable") {
       result.parseFailures += 1;
       continue;
     }
+    const manifest = outcome.manifest;
     // Keep the original text as raw payload for provenance in the KB snapshot.
     const rawPayload =
       att.text && att.contentType && att.contentType.toLowerCase().includes("json")

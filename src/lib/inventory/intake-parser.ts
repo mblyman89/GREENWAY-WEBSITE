@@ -237,6 +237,30 @@ function isWciaTransfer(root: Obj): boolean {
   return false;
 }
 
+/**
+ * H15b — STRICT WCIA detection for the unattended email path. Unlike the
+ * tolerant isWciaTransfer above (kept for manual paste, where a human chose
+ * the payload), this only accepts JSON that is verifiably a WCIA transfer:
+ *   • document_name contains "wcia" + "transfer" (all three verified vendor
+ *     systems emit "WCIA Transfer Schema"), OR
+ *   • document_schema_version present (WCIA-specific field), OR
+ *   • structural proof: transfer_id AND from_license_number AND at least one
+ *     inventory_transfer_items entry.
+ * Anything else (tracking exports, receipts, arbitrary JSON) is junk for the
+ * mailbox: logged, never staged. PURE.
+ */
+export function looksLikeWciaTransferStrict(root: unknown): boolean {
+  if (!isObj(root)) return false;
+  const name = asString(pick(root, ["document_name"]))?.toLowerCase() ?? "";
+  if (name.includes("wcia") && name.includes("transfer")) return true;
+  if (asString(pick(root, ["document_schema_version"]))) return true;
+  const items = pick(root, ["inventory_transfer_items"]);
+  const hasItems = Array.isArray(items) && items.length > 0;
+  const transferId = asString(pick(root, ["transfer_id"]));
+  const fromLicense = asString(pick(root, ["from_license_number"]));
+  return Boolean(hasItems && transferId && fromLicense);
+}
+
 /** Parse a WCIA lab_result_data block into our ParsedLab. */
 function parseWciaLab(item: Obj): ParsedLab | null {
   const data = pick(item, ["lab_result_data"]);
