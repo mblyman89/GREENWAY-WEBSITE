@@ -23,7 +23,12 @@ import { archiveCoasForManifest } from "@/lib/inventory/coa-archive";
 import { promoteManifestToKb } from "@/lib/inventory/manifest-kb-bridge";
 import { deriveInventoryExternalId } from "@/lib/compliance/ccrs-identifiers";
 import { quarterKeyFromYmd } from "@/lib/compliance/trade-samples-core";
+import { getSampleSettings, incomingUnitsForProcessor } from "@/lib/compliance/trade-samples";
 import { sampleProductTypeForLine } from "@/lib/compliance/sample-product-type-core";
+import {
+  evaluateIntakeSampleCap,
+  type IntakeSampleLine,
+} from "@/lib/inventory/sample-intake-cap-core";
 import {
   countStages,
   emptyStageCounts,
@@ -379,6 +384,132 @@ export async function setLotDisposition(
 }
 
 /**
+ * H16b Samples Slice B — PRE-FLIGHT incoming trade-sample cap check.
+ *
+ * WAC 314-55-096(1)(f)(ii): a processor may transfer no more than 120 sample
+ * units per quarter to a given retailer. Slice A auto-records EVERY accepted
+ * sample line as an incoming trade_sample_events row, so we cannot partially
+ * accept sample lines through this flow — the only way to guarantee the cap is
+ * never breached is to refuse the WHOLE finalize BEFORE anything activates when
+ * accepting this manifest would push the vendor over 120 units this quarter.
+ *
+ * This mirrors EXACTLY what Slice A will seed, so the pre-flight and the ledger
+ * never disagree:
+ *   • only is_sample = true lots that are being ACCEPTED (disposition is not
+ *     rejected_at_dock) count;
+ *   • a "dirty" lot that the activation gate would HOLD in quarantine never goes
+ *     live and Slice A never seeds it, so it does NOT count here either;
+ *   • a line whose LCB type/name doesn't map to a lawful cannabis sample product
+ *     (accessory/merch) is skipped (product_type null), matching Slice A;
+ *   • a lot that ALREADY has an incoming event (idempotent re-finalize) is NOT
+ *     re-counted, so re-running finalize on an already-accepted manifest never
+ *     falsely blocks.
+ *
+ * The block honors the owner-tunable settings: it only hard-blocks when
+ * `enforce && hardBlock` are on (evaluateCap.block). Warn-only mode never blocks.
+ * A manifest with zero addable sample units is never blocked.
+ *
+ * Returns the cap evaluation (or null when there is nothing to check / Supabase
+ * is not configured). `blocked` is true only when the finalize must be refused.
+ */
+export async function preflightManifestSampleCap(
+  manifestId: string,
+): Promise<{ blocked: boolean; addUnits: number; message: string | null } | null> {
+  if (!isSupabaseServiceConfigured) return null;
+  const admin = createSupabaseAdminClient();
+
+  // Supplying processor (vendor) + the quarter this accept would land in.
+  const { data: m } = await admin
+    .from("inbound_manifests")
+    .select("vendor_id, vendor_label, accepted_at")
+    .eq("id", manifestId)
+    .maybeSingle();
+  const processorName: string = ((m?.vendor_label as string | null) ?? "").trim();
+  // Quarter of the (pending) accept date: use the manifest's accepted_at if it
+  // already has one (re-finalize), else today — the same rule Slice A uses.
+  const acceptedIso = (m?.accepted_at as string | null) ?? new Date().toISOString();
+  const quarterKey = quarterKeyFromYmd(acceptedIso.slice(0, 10));
+
+  // Every sample line on this manifest, with the fields the activation gate and
+  // the product-type mapper need. We look at ALL non-terminal lots (the ones a
+  // finalize could still flip to active), not just those already active.
+  const { data: lots } = await admin
+    .from("inventory_lots")
+    .select(
+      "id, product_name, inventory_type, received_qty, is_sample, status, disposition, ccrs_inventory_external_id, lab_result_id, lab_results ( passed )",
+    )
+    .eq("manifest_id", manifestId)
+    .eq("is_sample", true);
+  type PreflightLotRow = {
+    id: string;
+    product_name: string | null;
+    inventory_type: string | null;
+    received_qty: number | null;
+    is_sample: boolean;
+    status: string;
+    disposition: string | null;
+    ccrs_inventory_external_id: string | null;
+    lab_result_id: string | null;
+    lab_results: { passed: boolean | null } | { passed: boolean | null }[] | null;
+  };
+  const rows = (lots as PreflightLotRow[] | null) ?? [];
+  if (rows.length === 0) return { blocked: false, addUnits: 0, message: null };
+
+  // Only lines that will actually be ACCEPTED (not refused at dock).
+  const accepting = rows.filter((r) => r.disposition !== "rejected_at_dock");
+  if (accepting.length === 0) return { blocked: false, addUnits: 0, message: null };
+
+  // A dirty lot the activation gate would HOLD never goes live — exclude it, so
+  // the pre-flight counts exactly what Slice A will seed (clean, activatable).
+  const facts: LotGateFacts[] = accepting.map((r) => {
+    const lab = Array.isArray(r.lab_results) ? r.lab_results[0] : r.lab_results;
+    return {
+      id: r.id,
+      label: r.product_name || null,
+      ccrsExternalId: r.ccrs_inventory_external_id,
+      hasLabResult: r.lab_result_id != null,
+      labPassed: lab ? lab.passed : null,
+    };
+  });
+  const canActivate = new Map<string, boolean>();
+  for (const v of evaluateLotBatchActivation(facts).verdicts) canActivate.set(v.lotId, v.canActivate);
+
+  // Idempotency: lots that already have an incoming event were counted before —
+  // never re-count them (re-finalize must not falsely block).
+  const acceptIds = accepting.map((r) => r.id);
+  const { data: existing } = await admin
+    .from("trade_sample_events")
+    .select("lot_id")
+    .eq("direction", "incoming")
+    .in("lot_id", acceptIds);
+  const alreadySeeded = new Set(
+    ((existing as { lot_id: string | null }[] | null) ?? [])
+      .map((e) => e.lot_id)
+      .filter((x): x is string => !!x),
+  );
+
+  // Reduce each accepting sample lot to the fields the PURE cap core needs, then
+  // let the core do the deterministic summation + block decision (same rules the
+  // Slice A ledger uses, so pre-flight and ledger can never disagree).
+  const lines: IntakeSampleLine[] = accepting.map((lot) => ({
+    receivedQty: Number(lot.received_qty) || 0,
+    rejectedAtDock: false, // `accepting` already excludes rejected_at_dock
+    canActivate: canActivate.get(lot.id) !== false,
+    alreadyRecorded: alreadySeeded.has(lot.id),
+    productType: sampleProductTypeForLine({
+      productName: lot.product_name,
+      inventoryType: lot.inventory_type,
+    }),
+  }));
+
+  // Evaluate against the vendor's existing quarter usage + owner settings.
+  const settings = await getSampleSettings();
+  const usedUnits = await incomingUnitsForProcessor(processorName, quarterKey);
+  const verdict = evaluateIntakeSampleCap({ lines, usedUnits, settings });
+  return { blocked: verdict.blocked, addUnits: verdict.addUnits, message: verdict.message };
+}
+
+/**
  * Finalize a manifest after per-lot dispositions are set: activate ACCEPTED lots
  * (quarantine → active + a `receive` adjustment), leave REJECTED lots out of
  * inventory (status `rejected`, never destroyed), seed drafts + archive COAs for
@@ -388,6 +519,12 @@ export async function setLotDisposition(
  * Any lot left `pending` is treated as ACCEPTED by default (an employee who
  * finalizes without explicitly rejecting a line is accepting it). Callers that
  * want stricter behavior can require all lots to be dispositioned first.
+ *
+ * H16b Samples Slice B: BEFORE any lot is activated, a pre-flight incoming
+ * trade-sample cap check runs (preflightManifestSampleCap). If accepting this
+ * manifest would push the supplying processor over the 120-unit/quarter cap AND
+ * enforcement is on (enforce && hardBlock), the ENTIRE finalize is refused
+ * (returns ok:false) so nothing activates and no sample event is recorded.
  */
 export async function finalizeManifestDispositions(
   manifestId: string,
@@ -409,6 +546,29 @@ export async function finalizeManifestDispositions(
   }
   const admin = createSupabaseAdminClient();
   const nowIso = new Date().toISOString();
+
+  // H16b Samples Slice B: HARD-BLOCK the whole finalize BEFORE touching any lot
+  // if accepting this manifest's sample lines would exceed the supplying
+  // processor's 120-unit/quarter incoming cap (WAC 314-55-096(1)(f)(ii)).
+  // Nothing activates and no sample event is recorded when this trips. A
+  // best-effort guard failure never breaks a normal (non-sample) finalize.
+  try {
+    const capCheck = await preflightManifestSampleCap(manifestId);
+    if (capCheck?.blocked) {
+      await logManifestEvent(
+        manifestId,
+        "sample_cap_block",
+        `Finalize refused: accepting would exceed the processor's quarterly sample cap. ${capCheck.message ?? ""}`.trim(),
+        actorId,
+      );
+      return {
+        ok: false,
+        error: capCheck.message ?? "Blocked: this would exceed the processor's quarterly sample cap.",
+      };
+    }
+  } catch (err) {
+    console.error("[intake-store] preflightManifestSampleCap failed:", err);
+  }
 
   // Slice 107: pull the compliance-critical fields so a "dirty" lot (no CCRS
   // identifier, no COA on record, or a FAILED lab result) can NEVER be flipped

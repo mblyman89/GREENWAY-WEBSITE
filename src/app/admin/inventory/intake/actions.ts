@@ -551,6 +551,15 @@ export async function finalizeManifestAction(manifestId: string) {
   revalidatePath("/admin/inventory/intake");
   revalidatePath("/admin/inventory");
   if (!result.ok) {
+    // H16b Samples Slice B: a sample-cap hard block is a DISTINCT, explainable
+    // refusal (WAC 314-55-096 quarterly cap) — surface the specific reason so the
+    // reviewer knows the manifest cannot be accepted (not a generic error).
+    const isCapBlock = /quarterly\s+.*cap|314-55-096/i.test(result.error);
+    if (isCapBlock) {
+      redirect(
+        `/admin/inventory/intake/${manifestId}?error=sample_cap&capmsg=${encodeURIComponent(result.error)}`,
+      );
+    }
     redirect(`/admin/inventory/intake/${manifestId}?error=finalize`);
   }
   redirect(
