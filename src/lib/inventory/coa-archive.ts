@@ -157,3 +157,90 @@ export async function archiveCoasForManifest(manifestId: string): Promise<number
   }
   return archived;
 }
+
+/**
+ * H16b-2: archive a COA PDF that arrived as an EMAIL ATTACHMENT (bytes, no
+ * external URL). `archiveCoasForManifest` above can only re-download a COA from
+ * a `coa_url`; a bundled COA Summary PDF has none (its ParsedLab.coa_url is
+ * null), so its potency is merged but the certificate itself would otherwise be
+ * discarded. This uploads the raw bytes once to the private `coa` bucket and
+ * links it to every lab_result on the manifest that is not yet archived and has
+ * no coa_url (the emailed-only case) so LCB enforcement can always see the
+ * certificate we relied on.
+ *
+ * Best-effort + idempotent: a lab row that is already archived is skipped, and
+ * re-running upserts the same object. Never throws.
+ */
+export async function archiveEmailedCoaForManifest(
+  manifestId: string,
+  base64: string,
+): Promise<number> {
+  if (!isSupabaseServiceConfigured) return 0;
+  if (!base64 || typeof base64 !== "string") return 0;
+
+  let buf: Buffer;
+  try {
+    buf = Buffer.from(base64, "base64");
+  } catch {
+    return 0;
+  }
+  const bytes = buf.byteLength;
+  if (bytes === 0 || bytes > MAX_BYTES) return 0;
+
+  const admin = createSupabaseAdminClient();
+
+  // The distinct lab_results referenced by this manifest's lots.
+  const { data: lotRows } = await admin
+    .from("inventory_lots")
+    .select("lab_result_id")
+    .eq("manifest_id", manifestId)
+    .not("lab_result_id", "is", null);
+  const labIds = Array.from(
+    new Set(
+      ((lotRows as { lab_result_id: string | null }[] | null) ?? [])
+        .map((r) => r.lab_result_id)
+        .filter((x): x is string => Boolean(x)),
+    ),
+  );
+  if (labIds.length === 0) return 0;
+
+  const { data: labs } = await admin
+    .from("lab_results")
+    .select("id, labtest_external_identifier, coa_url, coa_storage_path")
+    .in("id", labIds);
+  const rows =
+    (labs as
+      | {
+          id: string;
+          labtest_external_identifier: string | null;
+          coa_url: string | null;
+          coa_storage_path: string | null;
+        }[]
+      | null) ?? [];
+
+  let archived = 0;
+  for (const lab of rows) {
+    if (lab.coa_storage_path) continue; // already archived (this pass or a prior)
+    // Only own the emailed-only case: a lab row that has a real coa_url is left
+    // to archiveCoasForManifest so we keep the vendor's canonical certificate.
+    if (lab.coa_url) continue;
+
+    const base = safeName(lab.labtest_external_identifier ?? lab.id);
+    const path = `${lab.id}/${base}.pdf`;
+    const { error: upErr } = await admin.storage
+      .from(COA_BUCKET)
+      .upload(path, buf, { contentType: "application/pdf", upsert: true });
+    if (upErr) continue;
+
+    await admin
+      .from("lab_results")
+      .update({
+        coa_storage_path: path,
+        coa_file_bytes: bytes,
+        coa_archived_at: new Date().toISOString(),
+      })
+      .eq("id", lab.id);
+    archived += 1;
+  }
+  return archived;
+}

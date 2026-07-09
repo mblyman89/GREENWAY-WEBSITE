@@ -51,11 +51,12 @@ function pdfRoleRank(role: AttachmentRole): number {
     case "unknown":
       return 2;
     default:
-      return 3; // coa (skipped anyway)
+      return 3; // coa — never a manifest candidate (still read + merged + archived separately)
   }
 }
 import { parsePdfManifestFromBase64, parseCoaFromBase64 } from "@/lib/inventory/pdf-extract";
 import { mergeInvoicePricesByLot, mergeCoaByLot } from "@/lib/inventory/manifest-merge-core";
+import { archiveEmailedCoaForManifest } from "@/lib/inventory/coa-archive";
 
 export type InboundDisposition =
   | "received"
@@ -318,13 +319,17 @@ export async function stageManifestsFromEmail(
         merged = priceRes.manifest;
       }
 
-      // (c) read + merge the COA PDF (no longer skipped).
+      // (c) read + merge the COA PDF (no longer skipped). Keep the raw bytes so
+      //     we can ARCHIVE the certificate itself after staging (H16b-2) — a
+      //     bundled COA has no coa_url, so archiveCoasForManifest can't fetch it.
       const coaAtt = rankedPdfs.find((a) => classifyAttachmentRole(a) === "coa");
+      let coaArchiveBase64: string | null = null;
       if (coaAtt) {
         const coaRes = await parseCoaFromBase64(coaAtt.base64 as string);
         if (coaRes.ok) {
           const cm = mergeCoaByLot(merged, coaRes.coa.byLot, coaRes.coa.expiresByLot);
           merged = cm.manifest;
+          coaArchiveBase64 = coaAtt.base64 as string;
         } else {
           console.warn("[inbound-email] COA parse (for merge) skipped:", coaRes.error);
         }
@@ -334,6 +339,15 @@ export async function stageManifestsFromEmail(
       if (staged.ok) {
         result.staged += 1;
         result.manifestIds.push(staged.manifestId);
+        // H16b-2: retain the emailed COA PDF (bytes → private `coa` bucket)
+        // linked to the manifest's lab rows. Best-effort — never fail staging.
+        if (coaArchiveBase64) {
+          try {
+            await archiveEmailedCoaForManifest(staged.manifestId, coaArchiveBase64);
+          } catch (err) {
+            console.warn("[inbound-email] emailed COA archive skipped:", err);
+          }
+        }
         await autoAdvanceInTransit(staged.manifestId, actorId);
       } else if (staged.duplicate) {
         // Re-sent / duplicate manifest already live in intake: skip, don't alarm.
