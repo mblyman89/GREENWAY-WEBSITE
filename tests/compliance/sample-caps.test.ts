@@ -2,8 +2,11 @@
  * tests/compliance/sample-caps.test.ts  (S-14 / GAP M-11)
  *
  * WAC 314-55-096 sample caps. Pins the pure capacity math in
- * sample-capacity-core: per-employee caps × active employees, lane tones,
+ * sample-capacity-core: per-employee trade cap × active employees, lane tone,
  * incoming-batch verdicts, and the quarter clock.
+ *
+ * IQC is producer/processor-only [096(3)] and is not available to a retailer,
+ * so it has been fully retired — only the TRADE lane remains.
  */
 import { describe, it, expect } from "vitest";
 import {
@@ -13,27 +16,23 @@ import {
   __runSampleCapacityCoreTests,
 } from "@/lib/compliance/sample-capacity-core";
 
-/** Default per-employee caps used across the app (30 trade / 50 IQC / 25 conc). */
-const CAPS = { tradePerEmployee: 30, iqcPerEmployee: 50, iqcConcentratePerEmployee: 25 };
+/** Default per-employee trade cap used across the app (30 trade). */
+const CAPS = { tradePerEmployee: 30 };
 
 function capacity(overrides: Partial<Parameters<typeof computeSampleCapacity>[0]> = {}) {
   return computeSampleCapacity({
     activeEmployees: 4,
     tradeUsed: 0,
-    iqcUsed: 0,
-    iqcConcentrateUsed: 0,
     daysLeftInQuarter: 45,
     ...CAPS,
     ...overrides,
   });
 }
 
-describe("capacity = activeEmployees × per-employee cap", () => {
-  it("4 employees ⇒ 120 trade / 200 IQC / 100 IQC-concentrate", () => {
+describe("capacity = activeEmployees × per-employee trade cap", () => {
+  it("4 employees ⇒ 120 trade", () => {
     const c = capacity();
     expect(c.trade.capacity).toBe(120);
-    expect(c.iqc.capacity).toBe(200);
-    expect(c.iqcConcentrate.capacity).toBe(100);
     expect(c.tone).toBe("green");
   });
   it("zero employees ⇒ red, zero capacity, do-not-accept headline", () => {
@@ -55,12 +54,12 @@ describe("lane accounting and tones", () => {
     expect(over.trade.remaining).toBe(0);
     expect(over.trade.tone).toBe("red");
   });
-  it("≥80% used turns a lane amber", () => {
+  it("≥80% used turns the lane amber", () => {
     const c = capacity({ tradeUsed: 96 }); // 96/120 = 80%
     expect(c.trade.tone).toBe("amber");
   });
-  it("both lanes exhausted ⇒ red with a hard warning headline", () => {
-    const c = capacity({ tradeUsed: 120, iqcUsed: 200 });
+  it("trade lane exhausted ⇒ red with a hard warning headline", () => {
+    const c = capacity({ tradeUsed: 120 });
     expect(c.tone).toBe("red");
     expect(c.headline).toMatch(/No distribution capacity left/i);
   });

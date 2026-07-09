@@ -23,11 +23,13 @@ export type SampleActionResult =
   | { ok: false; error?: string; errors?: string[]; blocked?: boolean };
 
 /**
- * Record a sample event (trade incoming/outgoing OR IQC to an employee).
- * Validates per-unit size caps + fields via the pure core, then HARD-ENFORCES
- * the applicable quarterly cap in the store (trade: 30/employee; IQC: 50/
- * employee with a 25 concentrate sub-cap). Every event is audited. Customer
- * samples are impossible by design (no customer direction) per WAC 314-55-096(2).
+ * Record a TRADE sample event (incoming from processor, or outgoing to a paid
+ * employee). Validates per-unit size caps + fields via the pure core, then
+ * HARD-ENFORCES the applicable quarterly cap in the store (incoming: 120/
+ * processor; outgoing: 30/employee). IQC is producer/processor-only [096(3)]
+ * and is not available to a retailer, so it has been fully retired. Every event
+ * is audited. Customer samples are impossible by design (no customer direction)
+ * per WAC 314-55-096(2).
  */
 export async function recordSampleAction(draft: RecordDraft): Promise<SampleActionResult> {
   const session = await requirePermission("settings.manage");
@@ -36,7 +38,7 @@ export async function recordSampleAction(draft: RecordDraft): Promise<SampleActi
   const parsed = parseRecordDraft(draft, settings);
   if (!parsed.ok) return { ok: false, errors: parsed.errors };
 
-  // Resolve employee name for outgoing / IQC (for the ledger + audit).
+  // Resolve employee name for outgoing (for the ledger + audit).
   let employeeName: string | null = null;
   if (parsed.value.direction === "outgoing" && parsed.value.employeeId) {
     const emp = await getEmployee(parsed.value.employeeId);
@@ -128,7 +130,7 @@ export async function uploadSampleJsonAction(input: {
   };
 }
 
-/** Owner-only: tune the sample settings (caps + enforcement) for BOTH buckets. */
+/** Owner-only: tune the trade sample settings (caps + enforcement). */
 export async function updateSampleSettingsAction(formData: FormData): Promise<void> {
   const session = await requirePermission("settings.manage");
   if (!isOwnerRole(session.profile.role)) {
@@ -148,13 +150,6 @@ export async function updateSampleSettingsAction(formData: FormData): Promise<vo
       maxConcentrateGrams: numOr("max_concentrate_grams", 1),
       maxInfusedMg: numOr("max_infused_mg", 100),
       maxThcMgPerServing: numOr("max_thc_mg_per_serving", 10),
-      // IQC bucket — statutory ceilings are 50 / 25; the owner may only LOWER.
-      iqcUnitsPerEmployee: Math.min(50, Math.trunc(numOr("iqc_units_per_employee", 50))),
-      iqcConcentrateSubcap: Math.min(25, Math.trunc(numOr("iqc_concentrate_subcap", 25))),
-      iqcMaxFlowerGrams: Math.min(1, numOr("iqc_max_flower_grams", 1)),
-      iqcMaxUseableGrams: Math.min(1, numOr("iqc_max_useable_grams", 1)),
-      iqcMaxConcentrateGrams: Math.min(1, numOr("iqc_max_concentrate_grams", 1)),
-      iqcMaxInfusedThcMg: Math.min(10, numOr("iqc_max_infused_thc_mg", 10)),
       notes: (formData.get("notes") as string | null)?.trim() || null,
     },
     session.userId,

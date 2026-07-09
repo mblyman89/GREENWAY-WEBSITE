@@ -6,11 +6,11 @@
  * `trade_sample_events` (migration 0054 + 0095). Enforces the WAC 314-55-096
  * quarterly caps as HARD BLOCKS when recording events.
  *
- * Two SEPARATE per-employee quarterly buckets (verified against WAC 314-55-096
- * WSR 25-08-032 + Foster Garvey alert):
- *   • TRADE  — ≤ 30 units/employee/quarter                    [096(1)(j)(vi)]
- *   • IQC    — ≤ 50 units/employee/quarter, ≤ 25 concentrate  [096(3)(c)]
- * There is NO unlimited category / job-title exemption.
+ * RETAILER SCOPE (H16b Samples Slice C): retailers have ONE sample category —
+ * the TRADE sample:
+ *   • incoming (processor → retailer): ≤ 120 units/quarter/processor [096(1)(f)(ii)]
+ *   • outgoing (retailer → employee):  ≤ 30 units/quarter/employee    [096(1)(j)(vi)]
+ * IQC is producer/processor-only [096(3)] and was RETIRED (owner "kill it").
  */
 import "server-only";
 import { createHash } from "node:crypto";
@@ -18,7 +18,6 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import {
   evaluateCap,
-  evaluateIqcCap,
   SAMPLE_DEFAULTS,
   type SampleSettings,
   type SampleDirection,
@@ -46,12 +45,6 @@ export const DEFAULT_SAMPLE_SETTINGS: SampleSettings = {
   maxConcentrateGrams: SAMPLE_DEFAULTS.maxConcentrateGrams,
   maxInfusedMg: SAMPLE_DEFAULTS.maxInfusedMg,
   maxThcMgPerServing: SAMPLE_DEFAULTS.maxThcMgPerServing,
-  iqcUnitsPerEmployee: SAMPLE_DEFAULTS.iqcUnitsPerEmployee,
-  iqcConcentrateSubcap: SAMPLE_DEFAULTS.iqcConcentrateSubcap,
-  iqcMaxFlowerGrams: SAMPLE_DEFAULTS.iqcMaxFlowerGrams,
-  iqcMaxUseableGrams: SAMPLE_DEFAULTS.iqcMaxUseableGrams,
-  iqcMaxConcentrateGrams: SAMPLE_DEFAULTS.iqcMaxConcentrateGrams,
-  iqcMaxInfusedThcMg: SAMPLE_DEFAULTS.iqcMaxInfusedThcMg,
 };
 
 type SettingsRow = {
@@ -63,12 +56,6 @@ type SettingsRow = {
   max_concentrate_grams: number;
   max_infused_mg: number;
   max_thc_mg_per_serving: number;
-  iqc_units_per_employee: number | null;
-  iqc_concentrate_subcap: number | null;
-  iqc_max_flower_grams: number | null;
-  iqc_max_useable_grams: number | null;
-  iqc_max_concentrate_grams: number | null;
-  iqc_max_infused_thc_mg: number | null;
   notes: string | null;
   updated_at: string | null;
 };
@@ -88,12 +75,6 @@ export async function getSampleSettings(): Promise<SampleSettings & { notes: str
     maxConcentrateGrams: Number(r.max_concentrate_grams),
     maxInfusedMg: Number(r.max_infused_mg),
     maxThcMgPerServing: Number(r.max_thc_mg_per_serving),
-    iqcUnitsPerEmployee: r.iqc_units_per_employee ?? SAMPLE_DEFAULTS.iqcUnitsPerEmployee,
-    iqcConcentrateSubcap: r.iqc_concentrate_subcap ?? SAMPLE_DEFAULTS.iqcConcentrateSubcap,
-    iqcMaxFlowerGrams: r.iqc_max_flower_grams != null ? Number(r.iqc_max_flower_grams) : SAMPLE_DEFAULTS.iqcMaxFlowerGrams,
-    iqcMaxUseableGrams: r.iqc_max_useable_grams != null ? Number(r.iqc_max_useable_grams) : SAMPLE_DEFAULTS.iqcMaxUseableGrams,
-    iqcMaxConcentrateGrams: r.iqc_max_concentrate_grams != null ? Number(r.iqc_max_concentrate_grams) : SAMPLE_DEFAULTS.iqcMaxConcentrateGrams,
-    iqcMaxInfusedThcMg: r.iqc_max_infused_thc_mg != null ? Number(r.iqc_max_infused_thc_mg) : SAMPLE_DEFAULTS.iqcMaxInfusedThcMg,
     notes: r.notes,
     updatedAt: r.updated_at,
   };
@@ -114,12 +95,6 @@ export async function updateSampleSettings(
   if (patch.maxConcentrateGrams !== undefined) row.max_concentrate_grams = patch.maxConcentrateGrams;
   if (patch.maxInfusedMg !== undefined) row.max_infused_mg = patch.maxInfusedMg;
   if (patch.maxThcMgPerServing !== undefined) row.max_thc_mg_per_serving = patch.maxThcMgPerServing;
-  if (patch.iqcUnitsPerEmployee !== undefined) row.iqc_units_per_employee = patch.iqcUnitsPerEmployee;
-  if (patch.iqcConcentrateSubcap !== undefined) row.iqc_concentrate_subcap = patch.iqcConcentrateSubcap;
-  if (patch.iqcMaxFlowerGrams !== undefined) row.iqc_max_flower_grams = patch.iqcMaxFlowerGrams;
-  if (patch.iqcMaxUseableGrams !== undefined) row.iqc_max_useable_grams = patch.iqcMaxUseableGrams;
-  if (patch.iqcMaxConcentrateGrams !== undefined) row.iqc_max_concentrate_grams = patch.iqcMaxConcentrateGrams;
-  if (patch.iqcMaxInfusedThcMg !== undefined) row.iqc_max_infused_thc_mg = patch.iqcMaxInfusedThcMg;
   if (patch.notes !== undefined) row.notes = patch.notes;
   const { error } = await admin.from("trade_sample_settings").upsert(row, { onConflict: "id" });
   if (error) return { ok: false, error: error.message };
@@ -184,30 +159,6 @@ export async function outgoingUnitsForEmployee(employeeId: string, quarterKey: s
   return sumUnits(data);
 }
 
-/** IQC units already assigned to an employee in a quarter (vs 50-cap + 25-concentrate sub-cap). */
-export async function iqcUnitsForEmployee(
-  employeeId: string,
-  quarterKey: string,
-): Promise<{ total: number; concentrate: number }> {
-  if (!isSupabaseServiceConfigured) return { total: 0, concentrate: 0 };
-  const admin = createSupabaseAdminClient();
-  const { data } = await admin
-    .from("trade_sample_events")
-    .select("unit_count, product_type")
-    .eq("category", "iqc")
-    .eq("quarter_key", quarterKey)
-    .eq("employee_id", employeeId);
-  const rows = (data as { unit_count: number; product_type: string }[] | null) ?? [];
-  let total = 0;
-  let concentrate = 0;
-  for (const r of rows) {
-    const u = Number(r.unit_count) || 0;
-    total += u;
-    if (r.product_type === "concentrate") concentrate += u;
-  }
-  return { total, concentrate };
-}
-
 function sumUnits(data: unknown): number {
   const rows = (data as { unit_count: number }[] | null) ?? [];
   return rows.reduce((s, r) => s + (Number(r.unit_count) || 0), 0);
@@ -216,25 +167,14 @@ function sumUnits(data: unknown): number {
 export type QuarterUsage = {
   incomingByProcessor: { name: string; used: number; cap: number }[];
   outgoingByEmployee: { employeeId: string | null; name: string; used: number; cap: number }[];
-  iqcByEmployee: { employeeId: string | null; name: string; used: number; concentrate: number; cap: number; concentrateCap: number }[];
 };
 
-/** Aggregate per-quarter usage for the insight dashboard (trade + IQC buckets). */
+/** Aggregate per-quarter usage for the insight dashboard (trade bucket only). */
 export async function quarterUsage(quarterKey: string, settings: SampleSettings): Promise<QuarterUsage> {
   const events = await listSampleEvents({ quarterKey, limit: 2000 });
   const incMap = new Map<string, number>();
   const outMap = new Map<string, { name: string; used: number }>();
-  const iqcMap = new Map<string, { name: string; used: number; concentrate: number }>();
   for (const e of events) {
-    if (e.category === "iqc") {
-      const key = e.employee_id ?? e.employee_name ?? "(unknown)";
-      const cur = iqcMap.get(key) ?? { name: e.employee_name ?? "(unknown)", used: 0, concentrate: 0 };
-      cur.used += e.unit_count;
-      if (e.product_type === "concentrate") cur.concentrate += e.unit_count;
-      if (e.employee_name) cur.name = e.employee_name;
-      iqcMap.set(key, cur);
-      continue;
-    }
     if (e.direction === "incoming") {
       const key = e.processor_name ?? "(unnamed processor)";
       incMap.set(key, (incMap.get(key) ?? 0) + e.unit_count);
@@ -253,16 +193,6 @@ export async function quarterUsage(quarterKey: string, settings: SampleSettings)
     outgoingByEmployee: [...outMap.entries()]
       .map(([employeeId, v]) => ({ employeeId, name: v.name, used: v.used, cap: settings.outgoingUnitsPerEmployee }))
       .sort((a, b) => b.used - a.used),
-    iqcByEmployee: [...iqcMap.entries()]
-      .map(([employeeId, v]) => ({
-        employeeId,
-        name: v.name,
-        used: v.used,
-        concentrate: v.concentrate,
-        cap: settings.iqcUnitsPerEmployee,
-        concentrateCap: settings.iqcConcentrateSubcap,
-      }))
-      .sort((a, b) => b.used - a.used),
   };
 }
 
@@ -271,10 +201,10 @@ export type RecordResult =
   | { ok: false; error: string; blocked?: boolean };
 
 /**
- * Record a sample event, HARD-ENFORCING the applicable quarterly cap.
+ * Record a trade-sample event, HARD-ENFORCING the applicable quarterly cap.
  * The caller has already run parseRecordDraft (size caps + field validation);
- * here we tally the quarter and block if over cap. IQC events use the
- * two-part (50 total + 25 concentrate) cap; trade events use the single cap.
+ * here we tally the quarter and block if over cap: incoming uses the 120/qtr
+ * per-processor cap, outgoing uses the 30/qtr per-employee cap.
  */
 export async function recordSampleEvent(
   rec: ParsedRecord,
@@ -283,29 +213,15 @@ export async function recordSampleEvent(
   if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not configured." };
   const settings = await getSampleSettings();
 
-  let message: string;
-  if (rec.category === "iqc") {
-    const used = await iqcUnitsForEmployee(rec.employeeId ?? "", rec.quarterKey);
-    const evaln = evaluateIqcCap({
-      usedTotalUnits: used.total,
-      usedConcentrateUnits: used.concentrate,
-      addUnits: rec.unitCount,
-      addIsConcentrate: rec.productType === "concentrate",
-      settings,
-    });
-    if (evaln.block) return { ok: false, error: evaln.message, blocked: true };
-    message = evaln.message;
+  let usedUnits = 0;
+  if (rec.direction === "incoming") {
+    usedUnits = await incomingUnitsForProcessor(rec.processorName ?? "", rec.quarterKey);
   } else {
-    let usedUnits = 0;
-    if (rec.direction === "incoming") {
-      usedUnits = await incomingUnitsForProcessor(rec.processorName ?? "", rec.quarterKey);
-    } else {
-      usedUnits = await outgoingUnitsForEmployee(rec.employeeId ?? "", rec.quarterKey);
-    }
-    const evaln = evaluateCap({ direction: rec.direction, usedUnits, addUnits: rec.unitCount, settings });
-    if (evaln.block) return { ok: false, error: evaln.message, blocked: true };
-    message = evaln.message;
+    usedUnits = await outgoingUnitsForEmployee(rec.employeeId ?? "", rec.quarterKey);
   }
+  const evaln = evaluateCap({ direction: rec.direction, usedUnits, addUnits: rec.unitCount, settings });
+  if (evaln.block) return { ok: false, error: evaln.message, blocked: true };
+  const message = evaln.message;
 
   const admin = createSupabaseAdminClient();
   const { data, error } = await admin
@@ -402,20 +318,20 @@ export async function getSampleImport(id: string): Promise<SampleImport | null> 
 
 // ---------------------------------------------------------------------------
 // Employee sample history (read-only): every sample an employee RECEIVED —
-// trade outgoing + all IQC — across quarters, for the Sample History page.
+// trade outgoing to an employee — across quarters, for the Sample History page.
 // ---------------------------------------------------------------------------
 
 import type { HistoryEvent } from "@/lib/compliance/sample-history-core";
 
 /**
- * Fetch employee-receipt sample events (trade outgoing to an employee + all
- * IQC assignments). Incoming-from-processor rows are NOT an employee receipt
- * and are excluded. Newest first; caller filters/sorts in the pure layer.
+ * Fetch employee-receipt sample events (trade outgoing to an employee).
+ * Incoming-from-processor rows are NOT an employee receipt and are excluded.
+ * Newest first; caller filters/sorts in the pure layer.
  */
 export async function listEmployeeSampleHistory(limit = 2000): Promise<HistoryEvent[]> {
   if (!isSupabaseServiceConfigured) return [];
   const admin = createSupabaseAdminClient();
-  // Employee receipts = anything NOT incoming (i.e. outgoing trade + all IQC).
+  // Employee receipts = outgoing trade samples to an employee.
   const { data } = await admin
     .from("trade_sample_events")
     .select("*")
@@ -449,8 +365,8 @@ export async function listEmployeeSampleHistory(limit = 2000): Promise<HistoryEv
 
 /**
  * Compute the current-quarter sample distribution-capacity snapshot: how many
- * trade + IQC units we can still place across our ACTIVE employees this
- * quarter, and how close each lane is to its ceiling.
+ * trade units we can still place across our ACTIVE employees this quarter, and
+ * how close the trade lane is to its ceiling.
  */
 export async function getSampleCapacity(
   quarterKey: string,
@@ -459,17 +375,11 @@ export async function getSampleCapacity(
   const [employees, usage] = await Promise.all([listEmployees(), quarterUsage(quarterKey, settings)]);
   const activeEmployees = employees.length; // listEmployees() returns active only
   const tradeUsed = usage.outgoingByEmployee.reduce((s, r) => s + r.used, 0);
-  const iqcUsed = usage.iqcByEmployee.reduce((s, r) => s + r.used, 0);
-  const iqcConcentrateUsed = usage.iqcByEmployee.reduce((s, r) => s + r.concentrate, 0);
 
   return computeSampleCapacity({
     activeEmployees,
     tradeUsed,
-    iqcUsed,
-    iqcConcentrateUsed,
     tradePerEmployee: settings.outgoingUnitsPerEmployee,
-    iqcPerEmployee: settings.iqcUnitsPerEmployee,
-    iqcConcentratePerEmployee: settings.iqcConcentrateSubcap,
     daysLeftInQuarter: daysLeftInQuarter(pacificToday()),
   });
 }

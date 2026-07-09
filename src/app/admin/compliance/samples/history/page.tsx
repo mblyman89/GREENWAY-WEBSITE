@@ -16,10 +16,11 @@ export const dynamic = "force-dynamic";
 /**
  * Employee Sample History — read-only reporting surface (WAC 314-55-096).
  *
- * Shows every sample RECEIPT by a paid employee (outgoing trade + all IQC).
+ * Shows every TRADE sample RECEIPT by a paid employee (outgoing trade).
  * Incoming-from-processor rows are excluded server-side (they aren't an
- * employee receipt). All filtering / sorting / CSV happen client-side; nothing
- * on this page mutates data.
+ * employee receipt). IQC is producer/processor-only [096(3)] and is not
+ * available to a retailer, so it has been fully retired. All filtering /
+ * sorting / CSV happen client-side; nothing on this page mutates data.
  */
 export default async function SampleHistoryPage() {
   await requirePermission("settings.manage");
@@ -31,8 +32,6 @@ export default async function SampleHistoryPage() {
 
   const caps: SampleHistoryCaps = {
     tradeCap: settings.outgoingUnitsPerEmployee,
-    iqcCap: settings.iqcUnitsPerEmployee,
-    iqcConcentrateCap: settings.iqcConcentrateSubcap,
   };
 
   // Distinct employees present in the history (for the filter dropdown), A–Z.
@@ -48,7 +47,7 @@ export default async function SampleHistoryPage() {
     <div className="pb-12">
       <AdminPageHeader
         title="Employee sample history"
-        subtitle={`Every trade-outgoing and IQC sample given to an employee — ${WAC_CITATION}`}
+        subtitle={`Every trade-outgoing sample given to an employee — ${WAC_CITATION}`}
         breadcrumbs={
           <Breadcrumbs
             items={[
@@ -63,9 +62,9 @@ export default async function SampleHistoryPage() {
             id="sample-history"
             title="Reading the sample history"
             steps={[
-              "This page lists every sample RECEIVED by a paid employee — trade-outgoing plus all IQC. Samples coming IN from a processor are not shown here (they are not an employee receipt).",
-              "Use the filters to narrow by employee, quarter, category, or product type; the free-text search matches employee name and note.",
-              "The per-employee quarter cards show units given vs the statutory caps (30 trade / 50 IQC / 25 IQC-concentrate) for the rows currently in view — green under 80%, amber at 80%, red at or over the cap.",
+              "This page lists every TRADE sample RECEIVED by a paid employee (trade-outgoing). Samples coming IN from a processor are not shown here (they are not an employee receipt). IQC is producer/processor-only and is not available to a retailer.",
+              "Use the filters to narrow by employee, quarter, or product type; the free-text search matches employee name and note.",
+              "The per-employee quarter cards show units given vs the statutory cap (30 trade/employee/quarter) for the rows currently in view — green under 80%, amber at 80%, red at or over the cap.",
               "Export CSV downloads exactly the rows you are currently viewing (after filters and sort).",
             ]}
           >

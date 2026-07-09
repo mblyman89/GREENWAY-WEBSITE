@@ -4,11 +4,12 @@
  * PURE filtering / sorting / summarizing for the Employee Sample History page
  * (no server-only imports → tsx-testable). Operates on already-fetched sample
  * events. Only OUTGOING-to-employee events matter for an employee's history
- * (trade outgoing + all IQC); incoming-from-processor events are not "an
- * employee received" records and are excluded by the server query.
+ * (trade outgoing); incoming-from-processor events are not "an employee
+ * received" records and are excluded by the server query.
  *
- * Controlling caps (WAC 314-55-096): trade 30 / IQC 50 (25 concentrate) per
- * employee per calendar quarter.
+ * Controlling cap (WAC 314-55-096(1)(j)(vi)): trade 30 units per employee per
+ * calendar quarter. IQC is producer/processor-only [096(3)] and is not
+ * available to a retailer, so it has been fully retired from this module.
  */
 import {
   quarterLabel,
@@ -109,8 +110,6 @@ export type HistoryTotals = {
   events: number;
   totalUnits: number;
   tradeUnits: number;
-  iqcUnits: number;
-  iqcConcentrateUnits: number;
   fromJarUnits: number;
 };
 
@@ -120,18 +119,11 @@ export function summarizeHistory(events: HistoryEvent[]): HistoryTotals {
     events: events.length,
     totalUnits: 0,
     tradeUnits: 0,
-    iqcUnits: 0,
-    iqcConcentrateUnits: 0,
     fromJarUnits: 0,
   };
   for (const e of events) {
     t.totalUnits += e.unitCount;
-    if (e.category === "iqc") {
-      t.iqcUnits += e.unitCount;
-      if (e.productType === "concentrate") t.iqcConcentrateUnits += e.unitCount;
-    } else {
-      t.tradeUnits += e.unitCount;
-    }
+    t.tradeUnits += e.unitCount;
     if (e.fromSampleJar) t.fromJarUnits += e.unitCount;
   }
   return t;
@@ -143,16 +135,12 @@ export type EmployeeQuarterRollup = {
   employeeName: string;
   quarterKey: string;
   tradeUnits: number;
-  iqcUnits: number;
-  iqcConcentrateUnits: number;
   tradeCap: number;
-  iqcCap: number;
-  iqcConcentrateCap: number;
 };
 
 export function rollupByEmployeeQuarter(
   events: HistoryEvent[],
-  caps: { tradeCap: number; iqcCap: number; iqcConcentrateCap: number },
+  caps: { tradeCap: number },
 ): EmployeeQuarterRollup[] {
   const map = new Map<string, EmployeeQuarterRollup>();
   for (const e of events) {
@@ -164,18 +152,9 @@ export function rollupByEmployeeQuarter(
         employeeName: e.employeeName ?? "(unknown)",
         quarterKey: e.quarterKey,
         tradeUnits: 0,
-        iqcUnits: 0,
-        iqcConcentrateUnits: 0,
         tradeCap: caps.tradeCap,
-        iqcCap: caps.iqcCap,
-        iqcConcentrateCap: caps.iqcConcentrateCap,
       } satisfies EmployeeQuarterRollup);
-    if (e.category === "iqc") {
-      cur.iqcUnits += e.unitCount;
-      if (e.productType === "concentrate") cur.iqcConcentrateUnits += e.unitCount;
-    } else {
-      cur.tradeUnits += e.unitCount;
-    }
+    cur.tradeUnits += e.unitCount;
     if (e.employeeName) cur.employeeName = e.employeeName;
     map.set(key, cur);
   }
@@ -263,8 +242,8 @@ function ev(p: Partial<HistoryEvent> & { id: string }): HistoryEvent {
 export function __runSampleHistoryCoreTests(): string {
   const events: HistoryEvent[] = [
     ev({ id: "1", employeeId: "e1", employeeName: "Alice", category: "trade", productType: "useable", unitCount: 5, createdAt: "2026-07-01T10:00:00Z", quarterKey: "2026-Q3" }),
-    ev({ id: "2", employeeId: "e2", employeeName: "Bob", category: "iqc", productType: "concentrate", unitCount: 3, createdAt: "2026-07-05T10:00:00Z", quarterKey: "2026-Q3" }),
-    ev({ id: "3", employeeId: "e1", employeeName: "Alice", category: "iqc", productType: "flower", unitCount: 10, createdAt: "2026-04-10T10:00:00Z", quarterKey: "2026-Q2", fromSampleJar: false }),
+    ev({ id: "2", employeeId: "e2", employeeName: "Bob", category: "trade", productType: "concentrate", unitCount: 3, createdAt: "2026-07-05T10:00:00Z", quarterKey: "2026-Q3" }),
+    ev({ id: "3", employeeId: "e1", employeeName: "Alice", category: "trade", productType: "useable", unitCount: 10, createdAt: "2026-04-10T10:00:00Z", quarterKey: "2026-Q2", fromSampleJar: false }),
     ev({ id: "4", employeeId: "e1", employeeName: "Alice", category: "trade", productType: "concentrate", unitCount: 2, createdAt: "2026-07-03T10:00:00Z", quarterKey: "2026-Q3", fromSampleJar: true, note: "jar leftovers" }),
   ];
 
@@ -275,9 +254,8 @@ export function __runSampleHistoryCoreTests(): string {
   // filter by quarter
   assert(filterHistory(events, { quarterKey: "2026-Q3" }).length === 3, "filter Q3 → 3");
 
-  // filter by category
-  assert(filterHistory(events, { category: "iqc" }).length === 2, "filter iqc → 2");
-  assert(filterHistory(events, { category: "trade" }).length === 2, "filter trade → 2");
+  // filter by category (only trade remains; "all" is a superset)
+  assert(filterHistory(events, { category: "trade" }).length === 4, "filter trade → 4");
   assert(filterHistory(events, { category: "all" }).length === 4, "filter all → 4");
 
   // filter by product type
@@ -288,7 +266,7 @@ export function __runSampleHistoryCoreTests(): string {
   assert(filterHistory(events, { search: "bob" }).length === 1, "search name");
 
   // combined AND
-  assert(filterHistory(events, { employeeId: "e1", category: "trade" }).length === 2, "e1 + trade → 2");
+  assert(filterHistory(events, { employeeId: "e1", category: "trade" }).length === 3, "e1 + trade → 3");
 
   // sort by units desc
   const su = sortHistory(events, "units_desc");
@@ -306,18 +284,18 @@ export function __runSampleHistoryCoreTests(): string {
   sortHistory(events, "units_desc");
   assert(events.map((e) => e.id).join(",") === before, "sort does not mutate");
 
-  // summarize
+  // summarize (all units are trade now)
   const totalsAll = summarizeHistory(events);
-  assert(totalsAll.totalUnits === 20 && totalsAll.tradeUnits === 7 && totalsAll.iqcUnits === 13, "totals");
-  assert(totalsAll.iqcConcentrateUnits === 3 && totalsAll.fromJarUnits === 2, "iqc conc + jar totals");
+  assert(totalsAll.totalUnits === 20 && totalsAll.tradeUnits === 20, "totals");
+  assert(totalsAll.fromJarUnits === 2, "jar totals");
 
   // rollup by employee/quarter
-  const caps = { tradeCap: 30, iqcCap: 50, iqcConcentrateCap: 25 };
+  const caps = { tradeCap: 30 };
   const roll = rollupByEmployeeQuarter(events, caps);
   const aliceQ3 = roll.find((r) => r.employeeId === "e1" && r.quarterKey === "2026-Q3");
-  assert(!!aliceQ3 && aliceQ3.tradeUnits === 7 && aliceQ3.iqcUnits === 0, "alice Q3 rollup");
+  assert(!!aliceQ3 && aliceQ3.tradeUnits === 7, "alice Q3 rollup");
   const aliceQ2 = roll.find((r) => r.employeeId === "e1" && r.quarterKey === "2026-Q2");
-  assert(!!aliceQ2 && aliceQ2.iqcUnits === 10, "alice Q2 iqc rollup");
+  assert(!!aliceQ2 && aliceQ2.tradeUnits === 10, "alice Q2 rollup");
   assert(roll[0]!.quarterKey === "2026-Q3", "rollup newest quarter first");
 
   // distinct quarters

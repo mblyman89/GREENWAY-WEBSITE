@@ -15,9 +15,7 @@ import {
   quarterLabel,
   capTone,
   PRODUCT_TYPE_LABELS,
-  CATEGORY_LABELS,
   WAC_CITATION,
-  type SampleCategory,
   type SampleProductType,
 } from "@/lib/compliance/trade-samples";
 import { pacificToday } from "@/lib/reports/timezone";
@@ -69,16 +67,14 @@ export default async function SamplesPage({
   const empOptions: EmployeeOption[] = employees.map((e) => ({ id: e.id, name: e.full_name }));
   const totalIncoming = usage.incomingByProcessor.reduce((s, r) => s + r.used, 0);
   const totalOutgoing = usage.outgoingByEmployee.reduce((s, r) => s + r.used, 0);
-  const totalIqc = usage.iqcByEmployee.reduce((s, r) => s + r.used, 0);
   const anyOver =
     usage.incomingByProcessor.some((r) => r.used > r.cap) ||
-    usage.outgoingByEmployee.some((r) => r.used > r.cap) ||
-    usage.iqcByEmployee.some((r) => r.used > r.cap || r.concentrate > r.concentrateCap);
+    usage.outgoingByEmployee.some((r) => r.used > r.cap);
 
   return (
     <div>
       <AdminPageHeader
-        title="Trade & IQC samples"
+        title="Trade samples"
         subtitle={`WSLCB sample limits enforced as hard blocks — ${WAC_CITATION}`}
         breadcrumbs={
           <Breadcrumbs
@@ -95,8 +91,8 @@ export default async function SamplesPage({
             steps={[
               "TRADE: record every sample coming IN from a processor and every sample going OUT to an employee.",
               "TRADE incoming is capped at 120 units per processor per calendar quarter; outgoing at 30 units per employee (sample-jar leftovers count).",
-              "IQC (internal quality control) is a SEPARATE per-employee bucket: 50 units/quarter with a 25 concentrate sub-cap. This is where the purchasing manager's product-evaluation samples go — it is not unlimited.",
-              "Per-unit sizes: TRADE 3.5 g useable / 1 g concentrate / 100 mg infused (≤10 mg THC); IQC 1 g flower / 1 g useable / 1 g concentrate / 10 mg THC infused.",
+              "IQC (internal quality control) is producer/processor-only (§096(3)) and is NOT available to a retailer — this store only handles trade samples.",
+              "Per-unit sizes: TRADE 3.5 g useable / 1 g concentrate / 100 mg infused (≤10 mg THC).",
               "Free samples to CUSTOMERS are prohibited — there is no way to record one here.",
             ]}
           >
@@ -113,11 +109,10 @@ export default async function SamplesPage({
           <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">{decodeURIComponent(error)}</div>
         )}
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard label="Quarter" value={quarterLabel(quarter)} accent="gold" />
           <StatCard label="Trade in" value={totalIncoming} accent="muted" />
           <StatCard label="Trade out" value={totalOutgoing} accent="muted" />
-          <StatCard label="IQC assigned" value={totalIqc} accent="muted" />
           <StatCard label="Enforcement" value={settings.enforce ? (settings.hardBlock ? "Hard block" : "Warn only") : "Off"} accent={settings.enforce && settings.hardBlock ? "green" : "muted"} />
         </div>
 
@@ -134,7 +129,7 @@ export default async function SamplesPage({
         <div className="rounded-lg border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-4 py-3 text-xs text-white/60">
           <strong className="text-white/80">Customers:</strong> Washington retailers may not provide free samples to customers ({WAC_CITATION}, §096(2)). This module has no customer path by design.
           <br />
-          <strong className="text-white/80">Purchasing manager:</strong> there is no unlimited sample category and no job-title exemption. His product-evaluation samples are the IQC bucket — a larger (50-unit) but still-capped allowance, assigned to him below like any other employee.
+          <strong className="text-white/80">Purchasing manager:</strong> there is no unlimited sample category and no job-title exemption. IQC (internal quality control) is producer/processor-only (§096(3)) and is not available to a retailer, so his product-evaluation samples must be handled as ordinary trade-outgoing units within the 30/employee/quarter cap below.
         </div>
 
         <SampleRecorder employees={empOptions} today={today} />
@@ -212,32 +207,6 @@ export default async function SamplesPage({
           )}
         </div>
 
-        {/* Insight: IQC per employee (dual bucket: total + concentrate sub-cap) */}
-        <div>
-          <h3 className="mb-1 text-sm font-semibold text-white">IQC this quarter — cap {settings.iqcUnitsPerEmployee}/employee ({settings.iqcConcentrateSubcap} concentrate)</h3>
-          <p className="mb-3 text-xs text-white/40">Internal quality control — the purchasing manager&apos;s (and any employee&apos;s) product-evaluation bucket. Blocks at 50 total or 25 concentrate. §096(3).</p>
-          {usage.iqcByEmployee.length === 0 ? (
-            <p className="rounded-lg border border-[var(--admin-border)] bg-[var(--admin-surface)] px-4 py-6 text-center text-sm text-white/40">No IQC samples assigned this quarter.</p>
-          ) : (
-            <div className="space-y-3">
-              {usage.iqcByEmployee.map((r) => (
-                <div key={r.employeeId ?? r.name} className="rounded-lg border border-[var(--admin-border)] bg-[var(--admin-surface)] px-4 py-3">
-                  <div className="mb-2 flex items-center justify-between text-sm">
-                    <span className="font-semibold text-white">{r.name}</span>
-                    {toneBadge(r.used, r.cap)}
-                  </div>
-                  {bar(r.used, r.cap)}
-                  <div className="mt-2 flex items-center justify-between text-xs text-white/50">
-                    <span>Concentrate sub-cap</span>
-                    {toneBadge(r.concentrate, r.concentrateCap)}
-                  </div>
-                  <div className="mt-1">{bar(r.concentrate, r.concentrateCap)}</div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
         {/* Recent ledger */}
         <div>
           <h3 className="mb-3 text-sm font-semibold text-white">Recent events this quarter</h3>
@@ -248,7 +217,6 @@ export default async function SamplesPage({
               <table className="w-full text-left text-sm">
                 <thead className="bg-[var(--admin-surface-2)] text-xs uppercase tracking-wide text-white/50">
                   <tr>
-                    <th className="px-4 py-2">Category</th>
                     <th className="px-4 py-2">Direction</th>
                     <th className="px-4 py-2">Product</th>
                     <th className="px-4 py-2">Units</th>
@@ -259,9 +227,6 @@ export default async function SamplesPage({
                 <tbody>
                   {recent.map((e) => (
                     <tr key={e.id} className="border-t border-[var(--admin-border)]">
-                      <td className="px-4 py-2">
-                        <Badge tone={e.category === "iqc" ? "gold" : "neutral"}>{CATEGORY_LABELS[e.category as SampleCategory] ?? e.category}</Badge>
-                      </td>
                       <td className="px-4 py-2">
                         <Badge tone={e.direction === "incoming" ? "outline" : "gold"}>{e.direction}</Badge>
                       </td>
@@ -281,7 +246,7 @@ export default async function SamplesPage({
         {isOwner && (
           <Card>
             <h3 className="mb-1 text-sm font-semibold text-white">Sample settings (owner)</h3>
-            <p className="mb-4 text-xs text-white/40">Defaults match {WAC_CITATION}. Only lower these below the statutory maximums; do not raise them above the law. IQC caps are clamped to the statutory 50 / 25 ceilings.</p>
+            <p className="mb-4 text-xs text-white/40">Defaults match {WAC_CITATION}. Only lower these below the statutory maximums; do not raise them above the law.</p>
             <form action={updateSampleSettingsAction} className="space-y-4">
               <div className="flex flex-wrap gap-6">
                 <label className="flex items-center gap-2 text-sm text-white/70">
@@ -310,27 +275,6 @@ export default async function SamplesPage({
                 </Field>
                 <Field label="Max THC mg / serving">
                   <Input type="number" name="max_thc_mg_per_serving" min={0} step="any" defaultValue={settings.maxThcMgPerServing} />
-                </Field>
-              </div>
-              <h4 className="text-xs font-semibold uppercase tracking-wide text-white/50">Internal quality control (IQC)</h4>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                <Field label="IQC units / quarter (per employee, ≤ 50)">
-                  <Input type="number" name="iqc_units_per_employee" min={0} max={50} step={1} defaultValue={settings.iqcUnitsPerEmployee} />
-                </Field>
-                <Field label="IQC concentrate sub-cap (≤ 25)">
-                  <Input type="number" name="iqc_concentrate_subcap" min={0} max={25} step={1} defaultValue={settings.iqcConcentrateSubcap} />
-                </Field>
-                <Field label="IQC max flower g / unit (≤ 1)">
-                  <Input type="number" name="iqc_max_flower_grams" min={0} max={1} step="any" defaultValue={settings.iqcMaxFlowerGrams} />
-                </Field>
-                <Field label="IQC max useable g / unit (≤ 1)">
-                  <Input type="number" name="iqc_max_useable_grams" min={0} max={1} step="any" defaultValue={settings.iqcMaxUseableGrams} />
-                </Field>
-                <Field label="IQC max concentrate g / unit (≤ 1)">
-                  <Input type="number" name="iqc_max_concentrate_grams" min={0} max={1} step="any" defaultValue={settings.iqcMaxConcentrateGrams} />
-                </Field>
-                <Field label="IQC max THC mg infused / unit (≤ 10)">
-                  <Input type="number" name="iqc_max_infused_thc_mg" min={0} max={10} step="any" defaultValue={settings.iqcMaxInfusedThcMg} />
                 </Field>
               </div>
               <Field label="Notes">

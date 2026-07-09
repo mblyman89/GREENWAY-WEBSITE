@@ -11,6 +11,12 @@
  *   • PER-UNIT size caps: ≤ 3.5 g useable; ≤ 1 g concentrate; ≤ 100 mg infused
  *     (≤ 10 mg active delta-9 THC / serving). [096(1)(e)]
  *
+ * RETAILER SCOPE (H16b Samples Slice C): IQC (internal quality control) is a
+ * PRODUCER/PROCESSOR-only allowance under §096(3) — retailers are NOT eligible.
+ * The IQC bucket was therefore RETIRED entirely (owner decision, "kill it").
+ * The only sample category a WA retailer has is the TRADE sample. This module
+ * models TRADE samples only.
+ *
  * This module computes quarter keys, validates per-unit sizes, and evaluates
  * whether a proposed event would breach a quarterly cap. The server layer does
  * the DB tally + the actual block/audit.
@@ -21,30 +27,26 @@ export const WAC_CITATION = "WAC 314-55-096 (WSR 25-08-032, eff. 4/26/25)";
 export type SampleDirection = "incoming" | "outgoing";
 
 /**
- * Sample CATEGORY — the two SEPARATE quarterly buckets a WA retailer's employee
- * has (verified against WAC 314-55-096 + Foster Garvey alert):
- *   • "trade" — ≤ 30 units/employee/quarter                   [096(1)(j)(vi)]
- *   • "iqc"   — internal quality control, ≤ 50 units/employee/quarter with a
- *              ≤ 25 concentrate sub-cap                        [096(3)(c)]
- * There is NO unlimited category and NO job-title exemption; the purchasing
- * manager's product-evaluation samples ARE the (larger, still-capped) IQC bucket.
+ * Sample CATEGORY. Retailers have exactly ONE sample category — the TRADE
+ * sample (≤ 30 units/employee/quarter outgoing, ≤ 120 units/quarter/processor
+ * incoming) [096(1)(f)(ii), 096(1)(j)(vi)]. IQC is producer/processor-only
+ * [096(3)] and is NOT available to retailers — retired in Slice C. The type is
+ * retained as a single-value union so the DB `category` column stays explicit.
  */
-export type SampleCategory = "trade" | "iqc";
+export type SampleCategory = "trade";
 
-/** Product types. "flower" is an IQC-only type (1 g cap) distinct from the
- * trade-sample "useable" (3.5 g cap); the statute lists both for IQC. */
-export type SampleProductType = "useable" | "concentrate" | "infused" | "flower";
+/** Trade-sample product types. Retailer trade samples are useable cannabis,
+ * concentrate, or infused product. (IQC-only "flower" retired in Slice C.) */
+export type SampleProductType = "useable" | "concentrate" | "infused";
 
 export const PRODUCT_TYPE_LABELS: Record<SampleProductType, string> = {
   useable: "Useable cannabis",
-  flower: "Cannabis flower",
   concentrate: "Concentrate",
   infused: "Infused product",
 };
 
 export const CATEGORY_LABELS: Record<SampleCategory, string> = {
   trade: "Trade sample",
-  iqc: "Internal quality control (IQC)",
 };
 
 /** Statutory defaults (mirrored by the trade_sample_settings row defaults). */
@@ -55,13 +57,6 @@ export const SAMPLE_DEFAULTS = {
   maxConcentrateGrams: 1,
   maxInfusedMg: 100,
   maxThcMgPerServing: 10,
-  // Internal quality control (IQC) — the second, larger bucket [096(3)].
-  iqcUnitsPerEmployee: 50, // ≤ 50 units / employee / quarter
-  iqcConcentrateSubcap: 25, // ≤ 25 concentrate units / employee / quarter
-  iqcMaxFlowerGrams: 1, // 1 g cannabis flower / unit
-  iqcMaxUseableGrams: 1, // 1 g useable / unit
-  iqcMaxConcentrateGrams: 1, // 1 g concentrate / unit
-  iqcMaxInfusedThcMg: 10, // 10 mg THC in edible/liquid / unit
 } as const;
 
 export type SampleSettings = {
@@ -73,13 +68,6 @@ export type SampleSettings = {
   maxConcentrateGrams: number;
   maxInfusedMg: number;
   maxThcMgPerServing: number;
-  // IQC bucket.
-  iqcUnitsPerEmployee: number;
-  iqcConcentrateSubcap: number;
-  iqcMaxFlowerGrams: number;
-  iqcMaxUseableGrams: number;
-  iqcMaxConcentrateGrams: number;
-  iqcMaxInfusedThcMg: number;
 };
 
 // ---------------------------------------------------------------------------
@@ -114,50 +102,23 @@ export function quarterLabel(key: string): string {
 export type UnitSizeInput = {
   productType: SampleProductType;
   category?: SampleCategory; // defaults to "trade"
-  unitSizeGrams?: number | null; // useable/concentrate/flower
-  unitSizeMg?: number | null; // infused (trade)
+  unitSizeGrams?: number | null; // useable/concentrate
+  unitSizeMg?: number | null; // infused
   thcMgPerServing?: number | null; // infused
 };
 
 export type ValidationResult = { ok: true } | { ok: false; errors: string[] };
 
-/** Validate a single sample unit's size against the per-unit statutory caps.
- * TRADE and IQC have DIFFERENT caps:
- *   trade: 3.5 g useable · 1 g concentrate · 100 mg infused (≤10 mg THC/serving)
- *   iqc:   1 g flower · 1 g useable · 1 g concentrate · 10 mg THC infused        */
+/** Validate a single trade-sample unit's size against the per-unit statutory
+ * caps: 3.5 g useable · 1 g concentrate · 100 mg infused (≤ 10 mg THC/serving). */
 export function validateUnitSize(input: UnitSizeInput, settings: SampleSettings): ValidationResult {
   const errors: string[] = [];
   const { productType } = input;
-  const category: SampleCategory = input.category ?? "trade";
 
-  if (category === "iqc") {
-    // IQC caps (all grams except infused which is THC mg per unit).
-    if (productType === "flower") {
-      const g = num(input.unitSizeGrams);
-      if (g === null || g <= 0) errors.push("Enter the per-unit weight in grams.");
-      else if (g > settings.iqcMaxFlowerGrams) errors.push(`Each IQC flower unit must be ≤ ${settings.iqcMaxFlowerGrams} g (${WAC_CITATION}, §096(3)).`);
-    } else if (productType === "useable") {
-      const g = num(input.unitSizeGrams);
-      if (g === null || g <= 0) errors.push("Enter the per-unit weight in grams.");
-      else if (g > settings.iqcMaxUseableGrams) errors.push(`Each IQC useable unit must be ≤ ${settings.iqcMaxUseableGrams} g (${WAC_CITATION}, §096(3)).`);
-    } else if (productType === "concentrate") {
-      const g = num(input.unitSizeGrams);
-      if (g === null || g <= 0) errors.push("Enter the per-unit weight in grams.");
-      else if (g > settings.iqcMaxConcentrateGrams) errors.push(`Each IQC concentrate unit must be ≤ ${settings.iqcMaxConcentrateGrams} g (${WAC_CITATION}, §096(3)).`);
-    } else {
-      // infused: IQC is capped by THC mg per unit (10 mg), not total weight.
-      const thc = num(input.thcMgPerServing);
-      if (thc === null || thc <= 0) errors.push("Enter the THC (mg) for this IQC infused unit.");
-      else if (thc > settings.iqcMaxInfusedThcMg) errors.push(`Each IQC infused unit must be ≤ ${settings.iqcMaxInfusedThcMg} mg THC (${WAC_CITATION}, §096(3)).`);
-    }
-    return errors.length ? { ok: false, errors } : { ok: true };
-  }
-
-  // TRADE caps.
-  if (productType === "useable" || productType === "flower") {
+  if (productType === "useable") {
     const g = num(input.unitSizeGrams);
     if (g === null || g <= 0) errors.push("Enter the per-unit weight in grams.");
-    else if (g > settings.maxFlowerGrams) errors.push(`Each useable/flower unit must be ≤ ${settings.maxFlowerGrams} g (${WAC_CITATION}).`);
+    else if (g > settings.maxFlowerGrams) errors.push(`Each useable unit must be ≤ ${settings.maxFlowerGrams} g (${WAC_CITATION}).`);
   } else if (productType === "concentrate") {
     const g = num(input.unitSizeGrams);
     if (g === null || g <= 0) errors.push("Enter the per-unit weight in grams.");
@@ -247,65 +208,12 @@ export function capTone(used: number, cap: number): "green" | "amber" | "red" {
   return "green";
 }
 
-/**
- * Evaluate an IQC (internal quality control) sample assignment to one employee.
- * IQC has TWO caps per employee per quarter: a total-unit cap (50) AND a
- * concentrate sub-cap (25). Blocks if EITHER would be exceeded.
- */
-export function evaluateIqcCap(args: {
-  usedTotalUnits: number; // all IQC units used by this employee this quarter
-  usedConcentrateUnits: number; // of which, concentrate units
-  addUnits: number;
-  addIsConcentrate: boolean;
-  settings: SampleSettings;
-}): CapEvaluation & { subcapOver: boolean } {
-  const { usedTotalUnits, usedConcentrateUnits, addUnits, addIsConcentrate, settings } = args;
-  const totalCap = settings.iqcUnitsPerEmployee;
-  const subCap = settings.iqcConcentrateSubcap;
-
-  const projectedTotal = usedTotalUnits + addUnits;
-  const projectedConc = usedConcentrateUnits + (addIsConcentrate ? addUnits : 0);
-
-  const totalOver = projectedTotal > totalCap;
-  const subcapOver = addIsConcentrate && projectedConc > subCap;
-  const overCap = totalOver || subcapOver;
-
-  const remaining = Math.max(0, totalCap - usedTotalUnits);
-  const nearCap = totalCap > 0 && usedTotalUnits / totalCap >= 0.8;
-  const block = overCap && settings.enforce && settings.hardBlock;
-
-  let message: string;
-  if (subcapOver) {
-    message = `Blocked: ${projectedConc} IQC concentrate units would exceed the ${subCap}-unit concentrate sub-cap for this employee this quarter. ${WAC_CITATION}, §096(3).`;
-  } else if (totalOver) {
-    message = `Blocked: ${projectedTotal} IQC units would exceed the ${totalCap}-unit quarterly cap for this employee (${remaining} remaining). ${WAC_CITATION}, §096(3).`;
-  } else if (nearCap) {
-    message = `Warning: this employee is near the ${totalCap}-unit IQC quarterly cap (${remaining} remaining after this).`;
-  } else {
-    message = `${projectedTotal} of ${totalCap} IQC units used this quarter for this employee (${totalCap - projectedTotal} remaining).`;
-  }
-
-  return {
-    usedUnits: usedTotalUnits,
-    capUnits: totalCap,
-    addUnits,
-    projectedUnits: projectedTotal,
-    overCap,
-    subcapOver,
-    nearCap,
-    remaining,
-    block,
-    message,
-  };
-}
-
 // ---------------------------------------------------------------------------
 // Draft parsing for the record form
 // ---------------------------------------------------------------------------
 
 export type RecordDraft = {
   direction: string;
-  category?: string; // "trade" (default) | "iqc"
   productType: string;
   unitCount: string;
   unitSizeGrams?: string;
@@ -339,15 +247,10 @@ export type ParseResult = { ok: true; value: ParsedRecord } | { ok: false; error
 export function parseRecordDraft(draft: RecordDraft, settings: SampleSettings): ParseResult {
   const errors: string[] = [];
 
-  const category: SampleCategory = draft.category === "iqc" ? "iqc" : "trade";
-
-  // IQC is inherently self-sampling by the retailer's own employees → always
-  // "outgoing" to an employee. Trade samples can be incoming or outgoing.
-  const rawDirection = category === "iqc" ? "outgoing" : draft.direction;
-  const direction = rawDirection === "incoming" || rawDirection === "outgoing" ? (rawDirection as SampleDirection) : null;
+  const direction = draft.direction === "incoming" || draft.direction === "outgoing" ? (draft.direction as SampleDirection) : null;
   if (!direction) errors.push("Choose a direction (incoming or outgoing).");
 
-  const validTypes: SampleProductType[] = ["useable", "concentrate", "infused", "flower"];
+  const validTypes: SampleProductType[] = ["useable", "concentrate", "infused"];
   const productType = validTypes.includes(draft.productType as SampleProductType)
     ? (draft.productType as SampleProductType)
     : null;
@@ -369,14 +272,9 @@ export function parseRecordDraft(draft: RecordDraft, settings: SampleSettings): 
     errors.push("Choose the receiving employee.");
   }
 
-  // IQC cannot be incoming (it's the retailer's own self-sampling).
-  if (category === "iqc" && direction === "incoming") {
-    errors.push("Internal quality control samples are assigned to employees, not received from a processor.");
-  }
-
   if (productType) {
     const sizeCheck = validateUnitSize(
-      { productType, category, unitSizeGrams, unitSizeMg, thcMgPerServing },
+      { productType, category: "trade", unitSizeGrams, unitSizeMg, thcMgPerServing },
       settings,
     );
     if (!sizeCheck.ok) errors.push(...sizeCheck.errors);
@@ -384,17 +282,16 @@ export function parseRecordDraft(draft: RecordDraft, settings: SampleSettings): 
 
   if (errors.length) return { ok: false, errors };
 
-  // For IQC, infused is captured by THC mg (thcMgPerServing); size grams n/a.
   const isInfused = productType === "infused";
   return {
     ok: true,
     value: {
       direction: direction!,
-      category,
+      category: "trade",
       productType: productType!,
       unitCount,
       unitSizeGrams: isInfused ? null : unitSizeGrams,
-      unitSizeMg: category === "trade" && isInfused ? unitSizeMg : null,
+      unitSizeMg: isInfused ? unitSizeMg : null,
       thcMgPerServing: isInfused ? thcMgPerServing : null,
       quarterKey: quarterKeyFromYmd(draft.ymd),
       processorName: direction === "incoming" ? (draft.processorName ?? "").trim() || null : null,
@@ -427,8 +324,7 @@ export type SampleJsonParse =
 
 function coerceType(v: unknown): SampleProductType | null {
   const s = String(v ?? "").trim().toLowerCase();
-  if (s === "useable" || s === "usable") return "useable";
-  if (s === "flower") return "flower";
+  if (s === "useable" || s === "usable" || s === "flower") return "useable";
   if (s === "concentrate" || s === "extract") return "concentrate";
   if (s === "infused" || s === "edible") return "infused";
   return null;
@@ -523,12 +419,6 @@ const TEST_SETTINGS: SampleSettings = {
   maxConcentrateGrams: 1,
   maxInfusedMg: 100,
   maxThcMgPerServing: 10,
-  iqcUnitsPerEmployee: 50,
-  iqcConcentrateSubcap: 25,
-  iqcMaxFlowerGrams: 1,
-  iqcMaxUseableGrams: 1,
-  iqcMaxConcentrateGrams: 1,
-  iqcMaxInfusedThcMg: 10,
 };
 
 export function __runTradeSamplesCoreTests(): string {
@@ -538,9 +428,9 @@ export function __runTradeSamplesCoreTests(): string {
   assert(quarterKeyFromYmd("2025-01-01") === "2025-Q1", "quarterKey Q1");
   assert(quarterLabel("2025-Q2").includes("Apr–Jun"), "quarter label");
 
-  // per-unit size caps
-  assert(validateUnitSize({ productType: "useable", unitSizeGrams: 3.5 }, TEST_SETTINGS).ok === true, "flower 3.5g ok");
-  assert(validateUnitSize({ productType: "useable", unitSizeGrams: 4 }, TEST_SETTINGS).ok === false, "flower 4g over");
+  // per-unit size caps (TRADE)
+  assert(validateUnitSize({ productType: "useable", unitSizeGrams: 3.5 }, TEST_SETTINGS).ok === true, "useable 3.5g ok");
+  assert(validateUnitSize({ productType: "useable", unitSizeGrams: 4 }, TEST_SETTINGS).ok === false, "useable 4g over");
   assert(validateUnitSize({ productType: "concentrate", unitSizeGrams: 1 }, TEST_SETTINGS).ok === true, "conc 1g ok");
   assert(validateUnitSize({ productType: "concentrate", unitSizeGrams: 1.5 }, TEST_SETTINGS).ok === false, "conc 1.5g over");
   assert(validateUnitSize({ productType: "infused", unitSizeMg: 100, thcMgPerServing: 10 }, TEST_SETTINGS).ok === true, "infused 100mg/10mg ok");
@@ -573,7 +463,7 @@ export function __runTradeSamplesCoreTests(): string {
     TEST_SETTINGS,
   );
   assert(okIn.ok === true, "parse incoming ok");
-  if (okIn.ok) assert(okIn.value.quarterKey === "2025-Q2" && okIn.value.processorName === "Acme Farms", "parse incoming fields");
+  if (okIn.ok) assert(okIn.value.quarterKey === "2025-Q2" && okIn.value.processorName === "Acme Farms" && okIn.value.category === "trade", "parse incoming fields");
 
   // parse missing processor
   const badIn = parseRecordDraft(
@@ -596,71 +486,23 @@ export function __runTradeSamplesCoreTests(): string {
   );
   assert(badSize.ok === false, "over-size unit rejected");
 
-  // -------------------------------------------------------------------------
-  // IQC per-unit size caps (differ from trade)
-  // -------------------------------------------------------------------------
-  assert(validateUnitSize({ productType: "flower", category: "iqc", unitSizeGrams: 1 }, TEST_SETTINGS).ok === true, "iqc flower 1g ok");
-  assert(validateUnitSize({ productType: "flower", category: "iqc", unitSizeGrams: 1.5 }, TEST_SETTINGS).ok === false, "iqc flower 1.5g over");
-  assert(validateUnitSize({ productType: "useable", category: "iqc", unitSizeGrams: 1 }, TEST_SETTINGS).ok === true, "iqc useable 1g ok");
-  assert(validateUnitSize({ productType: "useable", category: "iqc", unitSizeGrams: 3.5 }, TEST_SETTINGS).ok === false, "iqc useable 3.5g over (trade limit, not iqc)");
-  assert(validateUnitSize({ productType: "concentrate", category: "iqc", unitSizeGrams: 1 }, TEST_SETTINGS).ok === true, "iqc conc 1g ok");
-  assert(validateUnitSize({ productType: "concentrate", category: "iqc", unitSizeGrams: 1.1 }, TEST_SETTINGS).ok === false, "iqc conc 1.1g over");
-  assert(validateUnitSize({ productType: "infused", category: "iqc", thcMgPerServing: 10 }, TEST_SETTINGS).ok === true, "iqc infused 10mg thc ok");
-  assert(validateUnitSize({ productType: "infused", category: "iqc", thcMgPerServing: 11 }, TEST_SETTINGS).ok === false, "iqc infused 11mg thc over");
-
-  // -------------------------------------------------------------------------
-  // IQC quarterly cap evaluation (50 total, 25 concentrate sub-cap)
-  // -------------------------------------------------------------------------
-  const iqcOk = evaluateIqcCap({ usedTotalUnits: 10, usedConcentrateUnits: 0, addUnits: 5, addIsConcentrate: false, settings: TEST_SETTINGS });
-  assert(iqcOk.overCap === false && iqcOk.block === false && iqcOk.remaining === 40, "iqc 15/50 ok");
-
-  const iqcNear = evaluateIqcCap({ usedTotalUnits: 42, usedConcentrateUnits: 0, addUnits: 4, addIsConcentrate: false, settings: TEST_SETTINGS });
-  assert(iqcNear.nearCap === true && iqcNear.overCap === false, "iqc 42 near cap");
-
-  const iqcTotalOver = evaluateIqcCap({ usedTotalUnits: 48, usedConcentrateUnits: 0, addUnits: 5, addIsConcentrate: false, settings: TEST_SETTINGS });
-  assert(iqcTotalOver.overCap === true && iqcTotalOver.subcapOver === false && iqcTotalOver.block === true, "iqc 53 over 50-cap blocks");
-
-  const iqcSubOver = evaluateIqcCap({ usedTotalUnits: 20, usedConcentrateUnits: 24, addUnits: 3, addIsConcentrate: true, settings: TEST_SETTINGS });
-  assert(iqcSubOver.subcapOver === true && iqcSubOver.overCap === true && iqcSubOver.block === true, "iqc 27 concentrate over 25 sub-cap blocks");
-
-  const iqcSubOkTotalRoom = evaluateIqcCap({ usedTotalUnits: 20, usedConcentrateUnits: 24, addUnits: 1, addIsConcentrate: true, settings: TEST_SETTINGS });
-  assert(iqcSubOkTotalRoom.subcapOver === false && iqcSubOkTotalRoom.overCap === false, "iqc 25 concentrate exactly at sub-cap ok");
-
-  // soft mode: over cap warns but does not block
-  const iqcSoft = evaluateIqcCap({ usedTotalUnits: 48, usedConcentrateUnits: 0, addUnits: 5, addIsConcentrate: false, settings: { ...TEST_SETTINGS, hardBlock: false } });
-  assert(iqcSoft.overCap === true && iqcSoft.block === false, "iqc soft over warns not blocks");
-
-  // -------------------------------------------------------------------------
-  // Category-aware parseRecordDraft (IQC forced outgoing, incoming rejected)
-  // -------------------------------------------------------------------------
-  const iqcParse = parseRecordDraft(
-    { direction: "incoming", category: "iqc", productType: "flower", unitCount: "2", unitSizeGrams: "1", ymd: "2025-05-14", employeeId: "emp-1" },
+  // infused stores thc mg + size mg, not grams
+  const infusedParse = parseRecordDraft(
+    { direction: "outgoing", productType: "infused", unitCount: "1", unitSizeMg: "50", thcMgPerServing: "10", ymd: "2025-05-14", employeeId: "emp-1" },
     TEST_SETTINGS,
   );
-  assert(iqcParse.ok === true, "iqc parse ok (direction coerced to outgoing)");
-  if (iqcParse.ok) assert(iqcParse.value.direction === "outgoing" && iqcParse.value.category === "iqc" && iqcParse.value.employeeId === "emp-1", "iqc parse fields");
+  assert(infusedParse.ok === true, "infused parse ok");
+  if (infusedParse.ok) assert(infusedParse.value.unitSizeGrams === null && infusedParse.value.unitSizeMg === 50 && infusedParse.value.thcMgPerServing === 10, "infused stores mg not grams");
 
-  const iqcNoEmp = parseRecordDraft(
-    { direction: "outgoing", category: "iqc", productType: "flower", unitCount: "1", unitSizeGrams: "1", ymd: "2025-05-14" },
+  // "flower" product type is no longer valid (IQC retired) → coerced away / rejected in draft
+  const flowerRejected = parseRecordDraft(
+    { direction: "incoming", productType: "flower", unitCount: "1", unitSizeGrams: "1", ymd: "2025-05-14", processorName: "X" },
     TEST_SETTINGS,
   );
-  assert(iqcNoEmp.ok === false, "iqc requires employee");
-
-  const iqcOversize = parseRecordDraft(
-    { direction: "outgoing", category: "iqc", productType: "useable", unitCount: "1", unitSizeGrams: "3.5", ymd: "2025-05-14", employeeId: "emp-1" },
-    TEST_SETTINGS,
-  );
-  assert(iqcOversize.ok === false, "iqc useable 3.5g rejected (over 1g iqc cap)");
-
-  const iqcInfusedParse = parseRecordDraft(
-    { direction: "outgoing", category: "iqc", productType: "infused", unitCount: "1", thcMgPerServing: "10", ymd: "2025-05-14", employeeId: "emp-1" },
-    TEST_SETTINGS,
-  );
-  assert(iqcInfusedParse.ok === true, "iqc infused parse ok");
-  if (iqcInfusedParse.ok) assert(iqcInfusedParse.value.unitSizeMg === null && iqcInfusedParse.value.thcMgPerServing === 10, "iqc infused stores thc mg, not size mg");
+  assert(flowerRejected.ok === false, "flower product type rejected (IQC retired)");
 
   // -------------------------------------------------------------------------
-  // parseSampleJson
+  // parseSampleJson (legacy "flower" type coerced to useable)
   // -------------------------------------------------------------------------
   const jsonOk = parseSampleJson(JSON.stringify([
     { product_type: "useable", unit_count: 10, unit_size_grams: 3.5, processor: "Acme Farms", strain: "OG", lot: "L1" },
@@ -668,6 +510,10 @@ export function __runTradeSamplesCoreTests(): string {
   ]));
   assert(jsonOk.ok === true, "json parse ok");
   if (jsonOk.ok) assert(jsonOk.lots.length === 2 && jsonOk.totalUnits === 15, "json parse totals");
+
+  const jsonFlower = parseSampleJson(JSON.stringify([{ product_type: "flower", units: 2, grams: 3.5 }]));
+  assert(jsonFlower.ok === true, "json legacy flower type accepted");
+  if (jsonFlower.ok) assert(jsonFlower.lots[0]!.productType === "useable", "json legacy flower coerced to useable");
 
   const jsonWrapped = parseSampleJson(JSON.stringify({ lots: [{ product_type: "infused", qty: 3, thc_mg: 10 }] }));
   assert(jsonWrapped.ok === true, "json parse wrapped object ok");
