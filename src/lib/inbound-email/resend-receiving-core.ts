@@ -95,17 +95,34 @@ export function decodeDataUriHtml(value: string | null | undefined): string {
   }
 }
 
-// A Cultivera/WCIA transfer link is an https URL that ends in `.json` (optionally
-// with a query string). The real vendor email shows:
-//   https://files.cultivera.com/<id>/import/<n>/<file>_ORD-<order>_<license>.json
-// We match any https .json URL and prefer cultivera/wcia hosts. The link also
-// arrives doubled sometimes (https://host/https://host/...); callers collapse it
-// with cleanUrl before fetching.
+// A WCIA "Transfer Data Link" points at the full transfer JSON. Different vendor
+// back-office systems serve that link three verified ways (all confirmed against
+// real Greenway vendor emails):
+//   1) Cultivera / SUBX:  https://files.cultivera.com/<id>/import/<n>/<file>_ORD-<order>_<license>.json
+//   2) OpenTHC ("old"):   https://app.openfhc.com/pub/b2b/<id>/wcia.json
+//   3) GrowFlow:          https://go.growflow.com/wa/wcia/transfer?token=<token>   (NO .json extension)
+// (1) and (2) end in `.json`; (3) is a tokenized endpoint that returns raw WCIA
+// JSON 2.1.0 when fetched (owner verified: opening it shows raw JSON). So we can
+// no longer require a `.json` extension — we must also match known WCIA transfer
+// endpoints. The fetch layer (fetchTransferJson) fetches any URL and validates by
+// JSON.parse, so once the link is *found* here, all three vendors flow through.
+//
+// The link also arrives doubled sometimes (https://host/https://host/...);
+// callers collapse it with cleanUrl before fetching.
 const JSON_URL_RE = /https?:\/\/[^\s"'<>()]+\.json(?:\?[^\s"'<>()]*)?/gi;
+// Known WCIA transfer endpoints that serve JSON without a `.json` extension.
+// Matched on the URL path so query strings/tokens are included. Extensible: add
+// new vendor endpoint shapes here as they are verified against a real email.
+const WCIA_ENDPOINT_RE =
+  /https?:\/\/[^\s"'<>()]*\/(?:wa\/)?wcia\/transfer\?[^\s"'<>()]+/gi;
 const ANY_URL_RE = /https?:\/\/[^\s"'<>()]+/gi;
 
+// Hosts/paths we recognize as WCIA transfer sources. Used to PREFER a real
+// transfer link over an unrelated `.json` (e.g. a tracking-pixel config).
+// Verified vendors: Cultivera (files.cultivera.com), WCIA, WeComply, LeafTrack,
+// GrowFlow (go.growflow.com), OpenTHC (app.openfhc.com / openthc.pub).
 function hostLooksVendor(url: string): boolean {
-  return /cultivera|wcia|wecomply|leaftrack/i.test(url);
+  return /cultivera|wcia|wecomply|leaftrack|growflow|openfhc|openthc/i.test(url);
 }
 
 /**
@@ -129,12 +146,32 @@ export function extractTransferLinksFromBody(
   const textStr = typeof text === "string" ? text : "";
   const combined = `${htmlStr}\n${textStr}`;
 
-  // 1) Transfer Data Link (.json) — prefer a vendor host, else the first .json.
+  // 1) Transfer Data Link — accept BOTH `.json` URLs (Cultivera, OpenTHC) AND
+  //    known WCIA transfer endpoints that serve JSON without a `.json` extension
+  //    (GrowFlow's `.../wcia/transfer?token=...`). Prefer a recognized vendor
+  //    link; among those, prefer a `.json` (richest/most direct) over an endpoint,
+  //    else fall back to the first candidate found.
   let transferJsonUrl: string | null = null;
-  const jsonMatches = combined.match(JSON_URL_RE) ?? [];
-  const cleanedJson = jsonMatches.map(stripTrailingPunct);
+  const jsonMatches = (combined.match(JSON_URL_RE) ?? []).map(stripTrailingPunct);
+  const endpointMatches = (combined.match(WCIA_ENDPOINT_RE) ?? []).map(
+    stripTrailingPunct,
+  );
+  // De-dupe while preserving order; a URL can match both regexes only rarely.
+  const allCandidates = Array.from(new Set([...jsonMatches, ...endpointMatches]));
   transferJsonUrl =
-    cleanedJson.find(hostLooksVendor) ?? cleanedJson[0] ?? null;
+    // Priority (most trustworthy first):
+    //   1) a vendor-recognized `.json` (Cultivera / OpenTHC — the direct file),
+    //   2) a vendor-recognized transfer endpoint (GrowFlow token URL),
+    //   3) any transfer endpoint (structurally a WCIA transfer, even if the host
+    //      isn't on our vendor list yet — still beats an unrelated `.json`),
+    //   4) any `.json` at all (last-resort fallback),
+    //   5) the first candidate found.
+    jsonMatches.find(hostLooksVendor) ??
+    endpointMatches.find(hostLooksVendor) ??
+    endpointMatches[0] ??
+    jsonMatches[0] ??
+    allCandidates[0] ??
+    null;
 
   // 2) invoice / manifest links. Prefer parsing HTML anchors so we read the real
   //    href behind the word "here"; fall back to nearby-URL heuristics on text.
@@ -306,6 +343,61 @@ export function __runResendReceivingTests(): { passed: number; failed: number } 
     null,
   );
   ok(twoJson.transferJsonUrl === "https://files.cultivera.com/real.json", "vendor host preferred");
+
+  // GrowFlow: tokenized WCIA endpoint with NO `.json` extension. Verified from a
+  // real Greenway GrowFlow order email ("New order INV-29127"); opening the link
+  // shows raw WCIA JSON 2.1.0. This is the format that PARSE FAILED before H15-PRE-a.
+  const growflowHtml = `
+    <div>growflow</div>
+    <p>Please find the transfer documentation from Green Labs for INV-29127 attached.</p>
+    <p><strong>WCIA Transfer Data Link (JSON):</strong></p>
+    <p>Copy entire link in the box below and paste into your system</p>
+    <p>https://go.growflow.com/wa/wcia/transfer?token=EAAAAAITSbL7TP6d2qbsaRvzc2l0Oh8vN2Fa0k</p>
+  `;
+  const gf = extractTransferLinksFromBody(growflowHtml, null);
+  ok(
+    gf.transferJsonUrl ===
+      "https://go.growflow.com/wa/wcia/transfer?token=EAAAAAITSbL7TP6d2qbsaRvzc2l0Oh8vN2Fa0k",
+    "growflow tokenized transfer endpoint (no .json) extracted",
+  );
+
+  // GrowFlow endpoint present as an anchor href (HTML anchor form).
+  const gfAnchor = extractTransferLinksFromBody(
+    `<a href="https://go.growflow.com/wa/wcia/transfer?token=ABC123">WCIA Transfer Data Link</a>`,
+    null,
+  );
+  ok(
+    gfAnchor.transferJsonUrl ===
+      "https://go.growflow.com/wa/wcia/transfer?token=ABC123",
+    "growflow transfer endpoint from anchor href extracted",
+  );
+
+  // OpenTHC / High End Farms "old method": `.json` on a non-Cultivera host.
+  // Verified from a real "High End Farms Delivery 4/29" email. Must be treated as
+  // a vendor transfer link (host is now recognized), not passed over.
+  const openThcText = [
+    "Your order is scheduled to be delivered Wednesday, 4/29. The invoice and lab COAs are attached.",
+    "JSON link: https://app.openfhc.com/pub/b2b/01KQ7GS6EXA3DV5MSHHXWVAZRB/wcia.json",
+    "Order total: $1,146.00",
+  ].join("\n");
+  const oth = extractTransferLinksFromBody(null, openThcText);
+  ok(
+    oth.transferJsonUrl ===
+      "https://app.openfhc.com/pub/b2b/01KQ7GS6EXA3DV5MSHHXWVAZRB/wcia.json",
+    "openthc .json transfer link extracted",
+  );
+  ok(hostLooksVendor(oth.transferJsonUrl ?? "") === true, "openthc host recognized as vendor");
+
+  // Prefer a real `.json` over a GrowFlow endpoint when both appear (json is the
+  // most direct/richest); and prefer the transfer endpoint over an unrelated json.
+  const mixPref = extractTransferLinksFromBody(
+    "cfg https://cdn.example.com/tracking.json see https://go.growflow.com/wa/wcia/transfer?token=Z9",
+    null,
+  );
+  ok(
+    mixPref.transferJsonUrl === "https://go.growflow.com/wa/wcia/transfer?token=Z9",
+    "growflow endpoint preferred over unrelated tracking.json",
+  );
 
   // No links at all -> all null.
   const none = extractTransferLinksFromBody("<p>Just a note, no links.</p>", null);

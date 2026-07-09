@@ -71,6 +71,36 @@ describe("resend-receiving-core (H14-attachments-fetch)", () => {
     expect(links.manifestUrl).toBe("https://files.cultivera.com/dl/manifest/2796.pdf");
   });
 
+  it("extracts GrowFlow's tokenized WCIA transfer endpoint (no .json extension)", () => {
+    // Verified from a real Greenway GrowFlow order email ("New order INV-29127").
+    // Opening the link shows raw WCIA JSON 2.1.0. This format PARSE FAILED before
+    // H15-PRE-a because the old matcher required a `.json` extension.
+    const html = [
+      "<div>growflow</div>",
+      "<p>Please find the transfer documentation from Green Labs for INV-29127 attached.</p>",
+      "<p><strong>WCIA Transfer Data Link (JSON):</strong></p>",
+      "<p>https://go.growflow.com/wa/wcia/transfer?token=EAAAAAITSbL7TP6d2qbsaRvzc2l0Oh8vN2Fa0k</p>",
+    ].join("\n");
+    const links = extractTransferLinksFromBody(html, null);
+    expect(links.transferJsonUrl).toBe(
+      "https://go.growflow.com/wa/wcia/transfer?token=EAAAAAITSbL7TP6d2qbsaRvzc2l0Oh8vN2Fa0k",
+    );
+  });
+
+  it("extracts the OpenTHC / High End Farms '.json' transfer link on a non-Cultivera host", () => {
+    // Verified from a real "High End Farms Delivery 4/29" email; host is openfhc,
+    // not Cultivera. Was previously only partially handled.
+    const text = [
+      "Your order is scheduled to be delivered Wednesday, 4/29. The invoice and lab COAs are attached.",
+      "JSON link: https://app.openfhc.com/pub/b2b/01KQ7GS6EXA3DV5MSHHXWVAZRB/wcia.json",
+      "Order total: $1,146.00",
+    ].join("\n");
+    const links = extractTransferLinksFromBody(null, text);
+    expect(links.transferJsonUrl).toBe(
+      "https://app.openfhc.com/pub/b2b/01KQ7GS6EXA3DV5MSHHXWVAZRB/wcia.json",
+    );
+  });
+
   it("decodes the data_uri html body Resend serves by default", () => {
     const b64 = Buffer.from("<p>WCIA</p>", "utf8").toString("base64");
     expect(decodeDataUriHtml(`data:text/html;base64,${b64}`)).toBe("<p>WCIA</p>");
