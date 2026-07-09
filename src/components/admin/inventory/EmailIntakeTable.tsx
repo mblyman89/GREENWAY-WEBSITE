@@ -29,6 +29,7 @@ import {
   movingBadge,
   fmtPulledIn,
 } from "@/lib/inventory/manifest-table-core";
+import { CONCIERGE_HINTS } from "@/lib/inventory/guided-accept-core";
 
 export type ManifestDownloadLinks = {
   manifestUrl: string | null;
@@ -65,13 +66,23 @@ export function EmailIntakeTable({
           <table className="w-full text-sm">
             <thead className="bg-[var(--admin-surface-2)] text-left text-xs uppercase tracking-wide text-[var(--admin-text-faint)]">
               <tr>
-                <th className="px-4 py-3">Manifest #</th>
-                <th className="px-4 py-3">Invoice #</th>
+                <th className="cursor-help px-4 py-3" title={CONCIERGE_HINTS.manifest_number}>
+                  Manifest #
+                </th>
+                <th className="cursor-help px-4 py-3" title={CONCIERGE_HINTS.invoice_number}>
+                  Invoice #
+                </th>
                 <th className="px-4 py-3">Vendor</th>
-                <th className="px-4 py-3">Pulled in</th>
-                <th className="px-4 py-3 text-center">ETA</th>
+                <th className="cursor-help px-4 py-3" title="When the email landed in vendor_intake@ and the system staged this draft.">
+                  Pulled in
+                </th>
+                <th className="cursor-help px-4 py-3 text-center" title={CONCIERGE_HINTS.eta}>
+                  ETA
+                </th>
                 <th className="px-4 py-3 text-center">Status</th>
-                <th className="px-4 py-3 text-right">Docs</th>
+                <th className="cursor-help px-4 py-3 text-right" title="The manifest / invoice PDFs pulled from the vendor's email, plus the review screen.">
+                  Docs
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--admin-border)]">
