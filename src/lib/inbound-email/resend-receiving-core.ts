@@ -138,6 +138,40 @@ function hostLooksVendor(url: string): boolean {
  *    the invoice/manifest." lines). Best-effort; may be null when forwarding
  *    strips them.
  */
+/**
+ * H16b-8(b) — harvest EVERY distinct WCIA Transfer Data Link in a body, not just
+ * the single best one. One vendor email sometimes bundles THREE different vendor
+ * transfers as three body links (the real Lilac / Kush Family / Mako edge case:
+ * a Cultivera `.json` + two GrowFlow `.../wcia/transfer?token=` endpoints). The
+ * old single-link picker returned only the first, silently dropping the other
+ * two transfers. This returns all recognized transfer links, order-preserved and
+ * de-duplicated, so the caller can fetch + stage one manifest PER transfer.
+ *
+ * A link qualifies as a transfer link when it is EITHER a `.json` URL OR a WCIA
+ * transfer endpoint AND its host is a recognized vendor. We intentionally do NOT
+ * include unrelated `.json` URLs (tracking-pixel configs, etc.) here — the
+ * single-link picker keeps its last-resort "any .json" fallback for the common
+ * one-transfer email, but the multi-link harvest must be conservative so we
+ * never fan out staging on noise. PURE.
+ */
+export function extractAllTransferLinksFromBody(
+  html: string | null | undefined,
+  text: string | null | undefined,
+): string[] {
+  const htmlStr = decodeDataUriHtml(html);
+  const textStr = typeof text === "string" ? text : "";
+  const combined = `${htmlStr}\n${textStr}`;
+
+  const jsonMatches = (combined.match(JSON_URL_RE) ?? []).map(stripTrailingPunct);
+  const endpointMatches = (combined.match(WCIA_ENDPOINT_RE) ?? []).map(stripTrailingPunct);
+
+  // Only VENDOR-recognized links are treated as distinct transfers to fan out on.
+  // Order-preserve as they appear (json first, then endpoints — matching how the
+  // single-link picker prioritizes), de-duplicated.
+  const vendorLinks = [...jsonMatches, ...endpointMatches].filter(hostLooksVendor);
+  return Array.from(new Set(vendorLinks));
+}
+
 export function extractTransferLinksFromBody(
   html: string | null | undefined,
   text: string | null | undefined,
@@ -446,6 +480,57 @@ export function __runResendReceivingTests(): { passed: number; failed: number } 
     none.transferJsonUrl === null && none.invoiceUrl === null && none.manifestUrl === null,
     "no links -> nulls",
   );
+
+  // extractAllTransferLinksFromBody (H16b-8b) — the REAL 3-vendor edge case:
+  // ONE email from Alec (Cascade Green Distribution) bundling THREE distinct
+  // vendor transfers as three body links (Lilac Labs = Cultivera .json; Kush
+  // Family Originals + Mako Farms = GrowFlow tokenized endpoints). The old
+  // single-link picker returned only Lilac; this must return all three.
+  const threeVendorHtml = `
+    <p>Hi Greenway, here are three transfers for delivery:</p>
+    <p>Lilac Labs: <a href="https://files.cultivera.com/aaa/import/1/Cultivera_ORD-7208_413541.json">Transfer Data Link</a></p>
+    <p>Kush Family Originals: <a href="https://go.growflow.com/wa/wcia/transfer?token=KUSHTOKEN111">Transfer Data Link</a></p>
+    <p>Mako Farms: <a href="https://go.growflow.com/wa/wcia/transfer?token=MAKOTOKEN222">Transfer Data Link</a></p>
+  `;
+  const allLinks = extractAllTransferLinksFromBody(threeVendorHtml, null);
+  ok(allLinks.length === 3, "three distinct vendor transfers harvested");
+  ok(
+    allLinks.includes("https://files.cultivera.com/aaa/import/1/Cultivera_ORD-7208_413541.json"),
+    "harvest includes Lilac Cultivera .json",
+  );
+  ok(
+    allLinks.includes("https://go.growflow.com/wa/wcia/transfer?token=KUSHTOKEN111"),
+    "harvest includes Kush GrowFlow endpoint",
+  );
+  ok(
+    allLinks.includes("https://go.growflow.com/wa/wcia/transfer?token=MAKOTOKEN222"),
+    "harvest includes Mako GrowFlow endpoint",
+  );
+  // json listed before endpoints (order-preserved by regex group).
+  ok(allLinks[0].endsWith(".json"), "harvest lists the .json first");
+
+  // De-dupe: the same transfer link repeated (anchor href + plaintext echo) is
+  // returned once — so we never stage the same transfer twice from one email.
+  const dupEcho = extractAllTransferLinksFromBody(
+    `<a href="https://files.cultivera.com/x/Cultivera_ORD-1_413541.json">link</a>
+     https://files.cultivera.com/x/Cultivera_ORD-1_413541.json`,
+    null,
+  );
+  ok(dupEcho.length === 1, "repeated identical transfer link de-duped to one");
+
+  // Conservative: an UNRELATED (non-vendor) .json is NOT harvested as a transfer
+  // (tracking config etc.) — only vendor-recognized transfer links fan out.
+  const noisy = extractAllTransferLinksFromBody(
+    `cfg https://cdn.example.com/tracking.json and https://files.cultivera.com/real.json`,
+    null,
+  );
+  ok(
+    noisy.length === 1 && noisy[0] === "https://files.cultivera.com/real.json",
+    "unrelated .json excluded; only the vendor transfer link harvested",
+  );
+
+  // No links -> empty array (never null).
+  ok(extractAllTransferLinksFromBody("<p>no links here</p>", null).length === 0, "no links -> empty harvest");
 
   // mapReceivingAttachments
   const mapped = mapReceivingAttachments([
