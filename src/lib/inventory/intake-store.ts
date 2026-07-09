@@ -22,6 +22,8 @@ import { seedDraftsForManifest } from "@/lib/inventory/catalog-drafts";
 import { archiveCoasForManifest } from "@/lib/inventory/coa-archive";
 import { promoteManifestToKb } from "@/lib/inventory/manifest-kb-bridge";
 import { deriveInventoryExternalId } from "@/lib/compliance/ccrs-identifiers";
+import { quarterKeyFromYmd } from "@/lib/compliance/trade-samples-core";
+import { sampleProductTypeForLine } from "@/lib/compliance/sample-product-type-core";
 import {
   countStages,
   emptyStageCounts,
@@ -574,9 +576,130 @@ export async function finalizeManifestDispositions(
     } catch (err) {
       console.error("[intake-store] rememberVendorUsualTransport failed:", err);
     }
+    // H16b Samples Slice A: for every ACCEPTED sample line, seed an INCOMING
+    // trade_sample_events row so the WAC 314-55-096 sample ledger reflects what
+    // actually arrived. Idempotent (keyed on lot_id) + best-effort.
+    try {
+      await seedIncomingSampleEvents(manifestId, actorId);
+    } catch (err) {
+      console.error("[intake-store] seedIncomingSampleEvents failed:", err);
+    }
   }
 
   return { ok: true, derivedStatus, activated, rejected, draftsCreated, blocked };
+}
+
+/**
+ * H16b Samples Slice A — after a manifest is finalized, record every ACCEPTED
+ * sample line as an INCOMING trade sample event (WAC 314-55-096). A sample line
+ * is an inventory_lot with is_sample = true that is now `active` (accepted &
+ * clean). Each becomes one trade_sample_events row:
+ *   • direction     = 'incoming'
+ *   • category      = 'trade' (a retailer's only sample category; IQC retired)
+ *   • processor_name= the manifest's supplying vendor label
+ *   • vendor_id     = the linked vendor (when known)
+ *   • unit_count    = received_qty (the number of sample PACKAGES/units)
+ *   • product_type  = mapped from the LCB inventory_type + name via the H16b-9
+ *                     resolver (useable | concentrate | infused); lines that do
+ *                     not map to a lawful cannabis sample product are skipped.
+ *   • quarter_key   = the calendar quarter of the accept date
+ *   • lot_id        = the source lot (also the IDEMPOTENCY key)
+ *
+ * DRAFTS-ONLY / SAFE: this writes to the sample LEDGER only; it does not touch
+ * CCRS. It is idempotent — a lot that already has an incoming event is skipped —
+ * so re-running finalize never double-counts. Slice A does NOT hard-block on the
+ * 120/qtr cap; that enforcement is Slice B.
+ */
+export async function seedIncomingSampleEvents(
+  manifestId: string,
+  actorId: string | null,
+): Promise<{ seeded: number; skipped: number }> {
+  if (!isSupabaseServiceConfigured) return { seeded: 0, skipped: 0 };
+  const admin = createSupabaseAdminClient();
+
+  // Supplying processor (vendor) for the incoming rows.
+  const { data: m } = await admin
+    .from("inbound_manifests")
+    .select("vendor_id, vendor_label, accepted_at")
+    .eq("id", manifestId)
+    .maybeSingle();
+  const processorName: string | null = (m?.vendor_label as string | null) ?? null;
+  const vendorId: string | null = (m?.vendor_id as string | null) ?? null;
+  // Quarter is derived from the accept date (Pacific YMD slice of accepted_at),
+  // falling back to today if the manifest has no accepted_at yet.
+  const acceptedIso = (m?.accepted_at as string | null) ?? new Date().toISOString();
+  const quarterKey = quarterKeyFromYmd(acceptedIso.slice(0, 10));
+
+  // Only ACCEPTED (active) sample lots for this manifest.
+  const { data: lots } = await admin
+    .from("inventory_lots")
+    .select("id, product_name, inventory_type, received_qty, is_sample, status")
+    .eq("manifest_id", manifestId)
+    .eq("is_sample", true)
+    .eq("status", "active");
+  type SampleLotRow = {
+    id: string;
+    product_name: string | null;
+    inventory_type: string | null;
+    received_qty: number | null;
+    is_sample: boolean;
+    status: string;
+  };
+  const rows = (lots as SampleLotRow[] | null) ?? [];
+  if (rows.length === 0) return { seeded: 0, skipped: 0 };
+
+  // Idempotency: which of these lots already have an incoming sample event?
+  const lotIds = rows.map((r) => r.id);
+  const { data: existing } = await admin
+    .from("trade_sample_events")
+    .select("lot_id")
+    .eq("direction", "incoming")
+    .in("lot_id", lotIds);
+  const alreadySeeded = new Set(
+    ((existing as { lot_id: string | null }[] | null) ?? [])
+      .map((e) => e.lot_id)
+      .filter((x): x is string => !!x),
+  );
+
+  let seeded = 0;
+  let skipped = 0;
+  for (const lot of rows) {
+    if (alreadySeeded.has(lot.id)) {
+      skipped += 1;
+      continue;
+    }
+    const productType = sampleProductTypeForLine({
+      productName: lot.product_name,
+      inventoryType: lot.inventory_type,
+    });
+    // A line that isn't a lawful cannabis sample product (accessory/merch, or
+    // an unmappable type) is not recorded to the sample ledger.
+    if (!productType) {
+      skipped += 1;
+      continue;
+    }
+    const unitCount = Math.max(1, Math.trunc(Number(lot.received_qty) || 0));
+    const { error } = await admin.from("trade_sample_events").insert({
+      category: "trade",
+      direction: "incoming",
+      product_type: productType,
+      unit_count: unitCount,
+      quarter_key: quarterKey,
+      processor_name: processorName,
+      vendor_id: vendorId,
+      lot_id: lot.id,
+      from_sample_jar: false,
+      note: "Auto-recorded from accepted vendor manifest sample line (H16b Slice A).",
+      created_by: actorId,
+    });
+    if (error) {
+      console.error("[intake-store] seedIncomingSampleEvents insert failed:", error.message);
+      skipped += 1;
+      continue;
+    }
+    seeded += 1;
+  }
+  return { seeded, skipped };
 }
 
 /**
