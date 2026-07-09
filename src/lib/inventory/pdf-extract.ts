@@ -15,6 +15,10 @@ import {
   parseShippingManifestText,
   looksLikeShippingManifest,
 } from "@/lib/inventory/pdf-manifest-core";
+import {
+  parseOpenThcInvoiceManifest,
+  looksLikeOpenThcInvoiceManifest,
+} from "@/lib/inventory/pdf-openthc-manifest-core";
 
 /** Extract the merged plain text from a PDF given its raw bytes. */
 export async function extractPdfText(bytes: Uint8Array): Promise<string> {
@@ -58,20 +62,36 @@ export async function parsePdfManifest(bytes: Uint8Array): Promise<PdfManifestRe
     };
   }
 
-  if (!looksLikeShippingManifest(text)) {
+  // Two supported PDF layouts (tried in order):
+  //   1) WA LCB "Internal Shipping Document" (pdf-manifest-core)
+  //   2) OpenTHC / "old method" combined invoice-manifest (pdf-openthc-manifest-core)
+  //      — the format where the invoice IS the manifest (e.g. High End Farms).
+  if (looksLikeShippingManifest(text)) {
+    const manifest = parseShippingManifestText(text);
+    if (manifest && manifest.lines.length > 0) {
+      return { ok: true, manifest, text };
+    }
+    return { ok: false, error: "No line items could be read from the PDF manifest.", text };
+  }
+
+  if (looksLikeOpenThcInvoiceManifest(text)) {
+    const manifest = parseOpenThcInvoiceManifest(text);
+    if (manifest && manifest.lines.length > 0) {
+      return { ok: true, manifest, text };
+    }
     return {
       ok: false,
-      error:
-        "This PDF doesn't look like a WA LCB Internal Shipping Document (no Manifest ID / item table found).",
+      error: "No line items could be read from the invoice-manifest PDF.",
       text,
     };
   }
 
-  const manifest = parseShippingManifestText(text);
-  if (!manifest || manifest.lines.length === 0) {
-    return { ok: false, error: "No line items could be read from the PDF manifest.", text };
-  }
-  return { ok: true, manifest, text };
+  return {
+    ok: false,
+    error:
+      "This PDF doesn't look like a WA LCB Internal Shipping Document or an OpenTHC invoice-manifest (no Manifest ID / Inventory Lot Details table found).",
+    text,
+  };
 }
 
 /** Convenience: parse from a base64 string (as inbound-email attachments store). */
