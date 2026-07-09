@@ -36,6 +36,8 @@ import {
   EmailIntakeTable,
   type ManifestDownloadLinks,
 } from "@/components/admin/inventory/EmailIntakeTable";
+import { ReceivingTabs } from "@/components/admin/inventory/ReceivingTabs";
+import { resolveReceivingTab } from "@/lib/inventory/receiving-tabs-core";
 
 export const dynamic = "force-dynamic";
 
@@ -246,10 +248,21 @@ function InboundEmailPanel({ rows }: { rows: InboundEmailLogRow[] }) {
 export default async function IntakePage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; kbdone?: string; kbnew?: string; kberr?: string }>;
+  searchParams: Promise<{
+    error?: string;
+    kbdone?: string;
+    kbnew?: string;
+    kberr?: string;
+    tab?: string;
+  }>;
 }) {
   await requirePermission("inventory.manage");
-  const { error, kbdone, kbnew, kberr } = await searchParams;
+  const { error, kbdone, kbnew, kberr, tab } = await searchParams;
+
+  // H15d — which tab is showing. Explicit ?tab= wins; a manual-form error
+  // redirect (or a KB-backfill result banner) auto-opens Manual tools so its
+  // banner lands next to the form that produced it; default is the email hero.
+  const activeTab = resolveReceivingTab({ tab, error, kbdone });
 
   if (!isSupabaseServiceConfigured) {
     return (
@@ -419,16 +432,14 @@ export default async function IntakePage({
           </div>
         )}
 
+        {/* Result banners stay ABOVE the tabs so they can never be hidden
+            behind the other tab; resolveReceivingTab additionally auto-opens
+            Manual tools so the form that produced the error is on screen. */}
         {errorMsg && (
           <div className="rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/10 px-4 py-2 text-sm text-[var(--admin-danger)]">
             {errorMsg}
           </div>
         )}
-
-        {/* H15c — the hero table: one row per real manifest, moving badge,
-            invoice # + downloads. The strict H15b gate guarantees only real
-            manifests appear here. */}
-        <EmailIntakeTable rows={manifests} linksByManifestId={linksByManifestId} />
 
         {kbdone && (
           <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]">
@@ -439,6 +450,65 @@ export default async function IntakePage({
           </div>
         )}
 
+        {/* H15d — two tabs: the "Incoming (email)" hero view staff live on,
+            and the "Manual tools" drawer holding the wall of import forms. */}
+        <ReceivingTabs active={activeTab} />
+
+        {activeTab === "email" ? (
+          <>
+        {/* H15c — the hero table: one row per real manifest, moving badge,
+            invoice # + downloads. The strict H15b gate guarantees only real
+            manifests appear here. */}
+        <EmailIntakeTable rows={manifests} linksByManifestId={linksByManifestId} />
+
+        {/* Pipeline queues — worked in priority order */}
+        {manifests.length === 0 ? (
+          <EmptyState
+            icon="📥"
+            title="No imports yet"
+            description="Manifests emailed to vendor_intake@ appear here automatically — or stage one yourself under Manual tools."
+          />
+        ) : (
+          <div className="space-y-6">
+            <QueueTable
+              title="Awaiting intake"
+              accent="var(--admin-gold)"
+              blurb="Physically here — verify counts and accept."
+              rows={pipeline.awaitingIntake}
+            />
+            <QueueTable
+              title="In transit"
+              accent="var(--admin-gold)"
+              blurb="On the way — watch the ETA."
+              rows={pipeline.inTransit}
+            />
+            <QueueTable
+              title="Pending"
+              accent="var(--admin-gold)"
+              blurb="Imported/entered, not yet moving."
+              rows={pipeline.pending}
+            />
+            <QueueTable
+              title="Accepted"
+              accent="var(--admin-accent)"
+              blurb="Lots activated."
+              rows={pipeline.accepted}
+            />
+            <QueueTable
+              title="Rejected"
+              accent="var(--admin-text-faint)"
+              blurb="Discarded."
+              rows={pipeline.rejected}
+            />
+          </div>
+        )}
+
+        <div className="mt-6">
+          <InboundEmailPanel rows={inboundEmails} />
+        </div>
+          </>
+        ) : (
+          <>
         {/* Import by Transfer Data Link (preferred) */}
         <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-accent)]/30 bg-[var(--admin-accent-soft)] p-5">
           <h2 className="mb-1 text-sm font-bold text-[var(--admin-text)]">
@@ -601,52 +671,8 @@ export default async function IntakePage({
             promoteChunk={promoteManifestChunkToKbAction}
           />
         </div>
-
-        {/* Pipeline queues — worked in priority order */}
-        {manifests.length === 0 ? (
-          <EmptyState
-            icon="📥"
-            title="No imports yet"
-            description="Paste a vendor JSON above to stage your first manifest."
-          />
-        ) : (
-          <div className="space-y-6">
-            <QueueTable
-              title="Awaiting intake"
-              accent="var(--admin-gold)"
-              blurb="Physically here — verify counts and accept."
-              rows={pipeline.awaitingIntake}
-            />
-            <QueueTable
-              title="In transit"
-              accent="var(--admin-gold)"
-              blurb="On the way — watch the ETA."
-              rows={pipeline.inTransit}
-            />
-            <QueueTable
-              title="Pending"
-              accent="var(--admin-gold)"
-              blurb="Imported/entered, not yet moving."
-              rows={pipeline.pending}
-            />
-            <QueueTable
-              title="Accepted"
-              accent="var(--admin-accent)"
-              blurb="Lots activated."
-              rows={pipeline.accepted}
-            />
-            <QueueTable
-              title="Rejected"
-              accent="var(--admin-text-faint)"
-              blurb="Discarded."
-              rows={pipeline.rejected}
-            />
-          </div>
+          </>
         )}
-
-        <div className="mt-6">
-          <InboundEmailPanel rows={inboundEmails} />
-        </div>
       </div>
     </div>
   );
