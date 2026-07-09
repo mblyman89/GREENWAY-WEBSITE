@@ -139,6 +139,111 @@ function includesAny(haystack: string, needles: string[]): boolean {
   return needles.some((n) => haystack.includes(n));
 }
 
+// ---------------------------------------------------------------------------
+// H16b-9 name-readers for MULTI-CATEGORY LCB types (owner-directed).
+//
+// The CCRS "Cannabis Mix Infused" / legacy "Marijuana Mix Infused" type is a
+// MULTI-category bucket: the same LCB type covers infused prerolls, infused
+// blunts, infused (multi-)packs, AND infused flower in a jar / moon rocks.
+// The LCB type alone can't disambiguate, so we READ THE PRODUCT NAME.
+//
+// Owner mapping (H16b-9, confirmed verbatim):
+//   name has pack / pk / N-pack           -> infused-preroll-pack
+//   name has preroll / pre-roll / joint / blunt -> infused-preroll
+//   name has moon rock / caviar / iceberg / jar / flower / bud / dipped /
+//     rolled / nug (or nothing else matched, ambiguous) -> infused-flower
+// ---------------------------------------------------------------------------
+
+/** Multi-pack signal in a product name: "3pk", "5 pack", "2-pack", "10 packs". */
+const PACK_NAME_RE = /\b\d+\s*(?:-\s*)?(?:pk|pack|packs)\b/i;
+/** Single preroll / blunt / joint signal in a product name. */
+const PREROLL_NAME_RE = /\b(?:pre[-\s]?rolls?|prerolls?|joints?|blunts?)\b/i;
+/** Infused-flower-form signal in a product name (moon rocks, caviar, jar, etc). */
+const INFUSED_FLOWER_FORM_KEYWORDS = [
+  "moon rock",
+  "moonrock",
+  "caviar",
+  "iceberg",
+  "infused flower",
+  "infused bud",
+  "flower",
+  "bud",
+  "nug",
+  "jar",
+  "dipped",
+  "rolled",
+];
+
+/**
+ * Resolve a "Mix Infused" LCB type by reading the product name. NEVER returns
+ * null — a Mix-Infused line is definitively an infused product, so the safe
+ * default when the name gives no other clue is infused-flower (owner-confirmed).
+ */
+export function readMixInfusedByName(productName: string | null | undefined): string {
+  const name = (productName ?? "").toLowerCase();
+  // Pack beats single preroll (a "5pk infused preroll" is a pack).
+  if (PACK_NAME_RE.test(name)) return "infused-preroll-pack";
+  if (PREROLL_NAME_RE.test(name)) return "infused-preroll";
+  if (includesAny(name, INFUSED_FLOWER_FORM_KEYWORDS)) return "infused-flower";
+  // Ambiguous infused product → infused-flower (owner-confirmed default).
+  return "infused-flower";
+}
+
+/**
+ * Sample-jar sub-type + form detection (owner E). A "Sample Jar" LCB type is
+ * whatever product FORM the name describes, for tracking; a smell/sniff jar is
+ * a distinct sub-type we flag but still track by its underlying form (flower).
+ */
+export type SampleJarReading = {
+  /** true when the name identifies this as a smell/sniff jar specifically. */
+  smellJar: boolean;
+  /** website category for the underlying product form (never null). */
+  formCategory: string;
+};
+
+const SMELL_JAR_RE = /\b(?:smell|sniff|scent|nose)\s*jar\b/i;
+
+/**
+ * Infer a product FORM (website category) purely from a product name — used for
+ * sample-jar tracking where no useful LCB type distinguishes the contents.
+ * Conservative: returns null when the name gives no clear form signal.
+ */
+export function readFormByName(productName: string | null | undefined): string | null {
+  const name = (productName ?? "").toLowerCase();
+  if (!name) return null;
+  if (includesAny(name, INFUSED_FLOWER_KEYWORDS)) return "infused-flower";
+  if (includesAny(name, POPCORN_KEYWORDS)) return "popcorn-bud";
+  if (PACK_NAME_RE.test(name) && PREROLL_NAME_RE.test(name)) return "preroll-pack";
+  if (PREROLL_NAME_RE.test(name)) return "preroll";
+  // NOTE: keywords are PREFIX-anchored (leading \b, no trailing \b) so plurals /
+  // inflections match (e.g. "gummies" via "gumm", "cartridges" via "cart").
+  if (/\b(?:cartridge|cart|vape|pod)/i.test(name)) return "cartridge";
+  if (/\b(?:rosin|resin|shatter|badder|batter|budder|wax|hash|bho|distillate|diamond|sugar|crumble|sauce|rso|concentrate|extract)/i.test(name)) {
+    return "concentrate";
+  }
+  if (/\b(?:soda|beverage|drink|shot|juice|lemonade|punch|seltzer)/i.test(name)) return "edible-liquid";
+  if (/\b(?:gumm|chocolate|candy|chew|mint|caramel|cookie|brownie|edible|capsule|tablet|lozenge)/i.test(name)) return "edible-solid";
+  if (/\btincture/i.test(name)) return "tincture";
+  if (/\b(?:topical|balm|lotion|salve|ointment|cream|patch|transdermal|suppository)/i.test(name)) return "topical";
+  if (/\b(?:trim|shake)/i.test(name)) return "trim";
+  if (/\b(?:flower|bud|nug|jar|gram|eighth|quarter|ounce)/i.test(name) || /\b\d+(?:\.\d+)?\s*g\b/i.test(name)) return "flower";
+  return null;
+}
+
+export function readSampleJarByName(productName: string | null | undefined): SampleJarReading {
+  const name = (productName ?? "").toLowerCase();
+  const smellJar = SMELL_JAR_RE.test(name);
+  // Smell/sniff jars are always useable flower. Otherwise read the product FORM
+  // from the name so we track it under the correct category. Default: flower.
+  let formCategory: string | null;
+  if (smellJar) {
+    formCategory = "flower";
+  } else {
+    formCategory = readFormByName(productName) ?? "flower";
+  }
+  return { smellJar, formCategory };
+}
+
 /**
  * Best-effort website category from a product name + raw LCB type. Returns null
  * when nothing matches (so the caller can flag it unmapped rather than guess).
@@ -158,6 +263,28 @@ export function heuristicWebsiteCategory(
   // do NOT match our finer taxonomy on their own; we only use them as a last
   // resort and keep it conservative.
   if (type) {
+    // H16b-9: "Cannabis Mix Infused" / legacy "Marijuana Mix Infused" is a
+    // MULTI-category type — read the name (infused-preroll / -pack / -flower).
+    // Guard against "Mix Packaged" (non-infused) which must NOT match here.
+    if (type.includes("mix infused") || (type.includes("mix") && type.includes("infused") && !type.includes("packaged"))) {
+      return readMixInfusedByName(productName);
+    }
+    // H16b-9: "Cannabis/Marijuana Mix Packaged" is NON-infused mixed flower /
+    // shake → trim (owner B). Checked before the generic flower branch so the
+    // word "flower" in a name can't pull it into flower.
+    if (type.includes("mix packaged") || (type.includes("mix") && type.includes("packaged"))) {
+      return "trim";
+    }
+    // H16b-9: "Cannabis Mix" intermediate (trim mix) → trim (owner D). Placed
+    // after the infused/packaged checks so those win.
+    if (type.includes("cannabis mix") || type.includes("marijuana mix")) {
+      return "trim";
+    }
+    // H16b-9: "Sample Jar" → resolve by the underlying product FORM (owner E).
+    // Samples never reach the public menu; this is for tracking only.
+    if (type.includes("sample jar")) {
+      return readSampleJarByName(productName).formCategory;
+    }
     if (type.includes("flower") || type.includes("usable")) {
       // "Usable Marijuana" / "Usable Cannabis" / "Flower Lot" → flower, unless the
       // name already flagged infused/popcorn above.
@@ -177,7 +304,9 @@ export function heuristicWebsiteCategory(
     }
     if (type.includes("beverage") || type.includes("drink") || type.includes("soda")) return "edible-liquid";
     if (type.includes("tincture")) return "tincture";
-    if (type.includes("topical")) return "topical";
+    // H16b-9: Suppository / Transdermal (CCRS EndProduct) → topical (owner C).
+    if (type.includes("suppository") || type.includes("transdermal")) return "topical";
+    if (type.includes("topical") || type.includes("ointment")) return "topical";
     if (type.includes("trim") || type.includes("shake")) return "trim";
   }
 
@@ -333,6 +462,104 @@ export function __runWebsiteCategoryResolverTests(): void {
   eq(resolveWebsiteCategory({ inventoryType: "Infused Pre-Roll Lot" }).websiteCategory, "infused-preroll", "(c) infused preroll coarse");
   eq(resolveWebsiteCategory({ inventoryType: "Liquid Edible" }).websiteCategory, "edible-liquid", "(c) liquid edible coarse");
 
+  // -------------------------------------------------------------------------
+  // H16b-9: multi-category "Mix Infused" name-reader (owner A). Same LCB type,
+  // resolved by product NAME. Covers both modern (Cannabis) + legacy (Marijuana).
+  // -------------------------------------------------------------------------
+  const mixInfused = (name: string) =>
+    resolveWebsiteCategory({ inventoryType: "Cannabis Mix Infused", productName: name });
+  eq(mixInfused("Infused Preroll 1g").websiteCategory, "infused-preroll", "H16b-9 mix-infused preroll");
+  eq(mixInfused("Infused Blunt 1.5g").websiteCategory, "infused-preroll", "H16b-9 mix-infused blunt → infused-preroll");
+  eq(mixInfused("Infused Preroll 5-Pack").websiteCategory, "infused-preroll-pack", "H16b-9 mix-infused pack");
+  eq(mixInfused("Infused 3pk Joints").websiteCategory, "infused-preroll-pack", "H16b-9 mix-infused 3pk");
+  eq(mixInfused("Moon Rocks Jar 1g").websiteCategory, "infused-flower", "H16b-9 mix-infused moon rocks → infused-flower");
+  eq(mixInfused("Infused Flower Jar 7g").websiteCategory, "infused-flower", "H16b-9 mix-infused flower-in-jar");
+  eq(mixInfused("Caviar Nug").websiteCategory, "infused-flower", "H16b-9 mix-infused caviar");
+  // ambiguous infused → infused-flower default (owner-confirmed).
+  eq(mixInfused("Special Reserve 1g").websiteCategory, "infused-flower", "H16b-9 mix-infused ambiguous → infused-flower");
+  eq(mixInfused("Infused Preroll 1g").source, "heuristic", "H16b-9 mix-infused via heuristic");
+  // legacy "Marijuana Mix Infused" naming resolves the same way.
+  eq(
+    resolveWebsiteCategory({ inventoryType: "Marijuana Mix Infused", productName: "Infused Blunt" }).websiteCategory,
+    "infused-preroll",
+    "H16b-9 legacy Marijuana Mix Infused blunt",
+  );
+  eq(
+    resolveWebsiteCategory({ inventoryType: "Marijuana Mix Infused", productName: "5pk Infused Prerolls" }).websiteCategory,
+    "infused-preroll-pack",
+    "H16b-9 legacy Marijuana Mix Infused pack",
+  );
+
+  // pack beats single preroll when both words appear.
+  eq(readMixInfusedByName("Infused Preroll 5 Pack"), "infused-preroll-pack", "H16b-9 pack beats single preroll");
+  // direct name-reader unit tests.
+  eq(readMixInfusedByName("2-pack blunts"), "infused-preroll-pack", "H16b-9 2-pack blunts → pack");
+  eq(readMixInfusedByName("Joint"), "infused-preroll", "H16b-9 joint → infused-preroll");
+  eq(readMixInfusedByName(""), "infused-flower", "H16b-9 empty name → infused-flower default");
+
+  // -------------------------------------------------------------------------
+  // H16b-9: "Mix Packaged" (NON-infused mixed flower/shake) → trim (owner B).
+  // Must NOT be pulled into flower by the word "flower" nor into mix-infused.
+  // -------------------------------------------------------------------------
+  eq(
+    resolveWebsiteCategory({ inventoryType: "Cannabis Mix Packaged", productName: "Mixed Flower Bag 14g" }).websiteCategory,
+    "trim",
+    "H16b-9 Cannabis Mix Packaged → trim",
+  );
+  eq(
+    resolveWebsiteCategory({ inventoryType: "Marijuana Mix Packaged", productName: "Shake 28g" }).websiteCategory,
+    "trim",
+    "H16b-9 legacy Marijuana Mix Packaged → trim",
+  );
+
+  // -------------------------------------------------------------------------
+  // H16b-9: Cannabis Mix (intermediate trim mix) → trim (owner D).
+  // -------------------------------------------------------------------------
+  eq(
+    resolveWebsiteCategory({ inventoryType: "Cannabis Mix", productName: "Trim Mix" }).websiteCategory,
+    "trim",
+    "H16b-9 Cannabis Mix intermediate → trim",
+  );
+
+  // -------------------------------------------------------------------------
+  // H16b-9: Suppository / Transdermal (CCRS EndProduct) → topical (owner C).
+  // -------------------------------------------------------------------------
+  eq(resolveWebsiteCategory({ inventoryType: "Suppository", productName: "Suppository 50mg" }).websiteCategory, "topical", "H16b-9 Suppository → topical");
+  eq(resolveWebsiteCategory({ inventoryType: "Transdermal", productName: "Patch 20mg" }).websiteCategory, "topical", "H16b-9 Transdermal → topical");
+  eq(resolveWebsiteCategory({ inventoryType: "Topical Ointment", productName: "Balm" }).websiteCategory, "topical", "H16b-9 Topical Ointment → topical");
+
+  // -------------------------------------------------------------------------
+  // H16b-9: Sample Jar resolves by product FORM (owner E); smell/sniff jar is a
+  // distinct sub-type tracked as flower. Samples never hit the public menu.
+  // -------------------------------------------------------------------------
+  eq(
+    resolveWebsiteCategory({ inventoryType: "Sample Jar", productName: "Blue Dream 3.5g" }).websiteCategory,
+    "flower",
+    "H16b-9 Sample Jar flower → flower",
+  );
+  eq(
+    resolveWebsiteCategory({ inventoryType: "Sample Jar", productName: "Live Resin 1g" }).websiteCategory,
+    "concentrate",
+    "H16b-9 Sample Jar concentrate → concentrate",
+  );
+  eq(
+    resolveWebsiteCategory({ inventoryType: "Sample Jar", productName: "Gummies 100mg" }).websiteCategory,
+    "edible-solid",
+    "H16b-9 Sample Jar edible → edible-solid",
+  );
+  // smell/sniff jar detection + form fallback.
+  const smell = readSampleJarByName("Blue Dream Smell Jar");
+  ok(smell.smellJar, "H16b-9 smell jar detected");
+  eq(smell.formCategory, "flower", "H16b-9 smell jar tracked as flower");
+  const sniff = readSampleJarByName("Sniff Jar - Gelato");
+  ok(sniff.smellJar, "H16b-9 sniff jar detected");
+  eq(sniff.formCategory, "flower", "H16b-9 sniff jar → flower");
+  const notSmell = readSampleJarByName("Live Resin 1g");
+  ok(!notSmell.smellJar, "H16b-9 non-smell sample jar not flagged");
+  eq(notSmell.formCategory, "concentrate", "H16b-9 non-smell sample jar form=concentrate");
+  // Sample Jar with no name clue → flower (safe form default).
+  eq(readSampleJarByName("").formCategory, "flower", "H16b-9 empty sample jar → flower");
+
   // (d) unmapped: unknown gibberish, no name signal → unmapped, raw preserved.
   const d = resolveWebsiteCategory({ inventoryType: "Zorptonium Widget", productName: "Mystery Thing" });
   eq(d.websiteCategory, null, "(d) unknown → null");
@@ -369,6 +596,7 @@ export function __runWebsiteCategoryResolverTests(): void {
 
 // Allow direct execution via tsx for quick verification.
 declare const require: undefined | { main?: unknown };
+// eslint-disable-next-line @next/next/no-assign-module-variable
 declare const module: unknown;
 if (typeof require !== "undefined" && (require as { main?: unknown }).main === (module as unknown)) {
   __runWebsiteCategoryResolverTests();
