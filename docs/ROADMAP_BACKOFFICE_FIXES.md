@@ -319,3 +319,24 @@ Full strategy: `ccrs_data/CCRS_TRANSFORMER_STRATEGY.md` (working notes, not in r
 **Open confirmations before Phase 1:** (a) upload raw ~1 GB zip via browser vs point at GitHub
 release URL; (b) keep all monthly datasets (trend) vs latest only; (c) confirm `discovery_competitors`
 roster is current. **No app code changed yet.**
+
+### Task H — S1 (transformer pure core) — DONE
+**S1 of 6.** New pure, dependency-free modules under `src/lib/discovery/ccrs-extract/`:
+`zip.ts` — random-access ZIP reader over a BlobLike (browser File or Node fd): central-directory
+(+Zip64) parsing, stored/deflate entry streaming via the platform's `DecompressionStream`
+("deflate-raw"), nested-zip support, byte-exact fixtures in tests. Hand-rolled because the
+transformer runs IN THE BROWSER on the dragged ~1 GB file (Vercel body limits forbid uploading raw)
+and needs central-directory random access to process tables in dependency order; no new npm deps.
+`parse.ts` — the REAL monthly-extract format: UTF-16-LE(±BOM)/UTF-8 sniffing, tab-vs-comma sniffing,
+incremental line splitting, VERIFIED table signatures (licensee, sale_header, sale_detail, product,
+inventory, strain, lab_result; self-report template headers deliberately → unknown), typed row
+mappers keyed on normalized column names, string-math `moneyToMinor` (never float×100),
+`streamTable`/`decodeStream` streaming readers, SKIPPED_TABLES for grower/lab-side tables.
+**Verified UnitPrice is PER-UNIT** (per-unit reading → 54.9% COGS vs 7.2% for line-total — only
+per-unit is plausible; wholesale qty-50 @ $2.20 lines corroborate). New CI suite
+`tests/compliance/ccrs-extract-parse.test.ts` (37 tests, fixtures replicate real bytes incl.
+Greenway's actual Licensee row; **816 passing** total). Validation harness
+`scripts/validate-ccrs-extract.mjs` (npx tsx) ran the modules against the REAL May 2026 zip:
+all 49 non-skipped files detected correctly (licensee 1,715 / product 1.6M / inventory 14.05M /
+sale_header 10.74M / sale_detail 10.82M / strains 334K / lab 255K rows) and Greenway's row parsed
+exactly. No app pages touched; no migration.
