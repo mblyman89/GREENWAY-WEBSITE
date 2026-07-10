@@ -50,21 +50,22 @@ export default async function VendorPaymentsPage() {
             title="How vendor payments work"
             steps={[
               "Set your company/bank ACH details once on the Payroll page — they're shared here.",
-              "Confirm the three-way match: the purchase order, the received goods, and the vendor's invoice all agree on quantity and price.",
-              "Add a row per vendor: name, routing #, account #, checking/savings, amount.",
+              "Pick the invoice (an accepted manifest). The amount box auto-fills with what you owe — edit it for a partial delivery.",
+              "If the delivery was linked to a purchase order, a note compares the invoice against what you ordered before you pay.",
               "Click Generate — we validate every row, then build a NACHA (CCD) file.",
               "Download the file and upload it in your bank's ACH portal. Nothing is sent from here.",
             ]}
           >
             <p>
-              Before you pay, do a <strong>three-way match</strong> — confirm the{" "}
-              <Link href="/admin/purchasing" className="text-[var(--admin-accent)] hover:underline">purchase order</Link>,
-              the{" "}
-              <Link href="/admin/inventory/intake" className="text-[var(--admin-accent)] hover:underline">received goods</Link>,
-              and the vendor invoice all agree. That single habit blocks duplicate
-              payments, overbilling, and paying for goods you never received. Amounts
-              are entered in dollars and stored/generated in cents. This is a draft
-              for your review and manual bank upload.
+              The amount box <strong>auto-fills from the invoice total</strong> (the accepted
+              manifest&apos;s cost basis) and stays editable for partial deliveries. When the delivery
+              was{" "}
+              <Link href="/admin/inventory/intake" className="text-[var(--admin-accent)] hover:underline">linked to a purchase order</Link>{" "}
+              at receiving, we compare the invoice against what the{" "}
+              <Link href="/admin/purchasing" className="text-[var(--admin-accent)] hover:underline">PO</Link>{" "}
+              ordered and flag any difference before you pay — overpaying is blocked, partial
+              payments are allowed with a warning. Amounts are entered in dollars and
+              stored/generated in cents. This is a draft for your review and manual bank upload.
             </p>
           </HelpPanel>
         }
@@ -97,8 +98,8 @@ export default async function VendorPaymentsPage() {
           />
           <StatCard
             label="Control"
-            value="3-way match"
-            hint="PO · receipt · invoice must agree"
+            value="Invoice ↔ PO check"
+            hint="linked deliveries compared to the PO before you pay"
             accent="muted"
           />
         </div>

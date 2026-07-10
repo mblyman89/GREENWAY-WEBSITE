@@ -36,6 +36,11 @@ import {
   type PaymentMethod,
 } from "@/lib/payments/vendor-payables-store";
 import { isValidRouting } from "@/lib/payments/nacha-core";
+import { getLinkedPoFactsForManifests } from "@/lib/payments/invoice-po-match";
+import {
+  compareInvoiceToPo,
+  type InvoicePoComparison,
+} from "@/lib/payments/invoice-po-match-core";
 
 export type PayableOption = {
   manifestId: string;
@@ -47,6 +52,11 @@ export type PayableOption = {
   remainingMinorUnits: number;
   acceptedAt: string | null;
   lotCount: number;
+  /**
+   * W8 — invoice ↔ linked-PO cross-check (W5 link; read-only). `hasPo:false`
+   * when the manifest isn't linked to a PO or migration 0102 isn't applied.
+   */
+  poComparison: InvoicePoComparison;
 };
 
 export type VendorPayFormResult = {
@@ -63,6 +73,10 @@ export type VendorPayFormResult = {
 export async function loadPayableOptionsAction(): Promise<PayableOption[]> {
   await requirePermission("settings.manage");
   const rows = await listVendorPayables({ includePaid: false, limit: 300 });
+  // W8: cross-check each invoice against its LINKED purchase order (when the
+  // W5 link exists) so the human sees "invoice vs ordered" before paying.
+  // Best-effort — an empty map (pre-0102 or any failure) just means no chips.
+  const poFacts = await getLinkedPoFactsForManifests(rows.map((r) => r.manifestId));
   return rows.map((r) => ({
     manifestId: r.manifestId,
     manifestNumber: r.manifestNumber,
@@ -73,6 +87,7 @@ export async function loadPayableOptionsAction(): Promise<PayableOption[]> {
     remainingMinorUnits: Math.max(0, r.owedMinorUnits - r.paidMinorUnits),
     acceptedAt: r.acceptedAt,
     lotCount: r.lotCount,
+    poComparison: compareInvoiceToPo(r.owedMinorUnits, poFacts.get(r.manifestId) ?? null),
   }));
 }
 

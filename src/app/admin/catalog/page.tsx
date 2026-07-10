@@ -306,9 +306,10 @@ export default async function CatalogHubPage() {
             <Card accent="green">
               <CardHeader title={stageTitle("pay")} subtitle="Pay the vendor" />
               <p className="mt-1 text-sm text-[var(--admin-text-muted)]">
-                Once a PO is received and reconciled (a three-way match of order,
-                receipt, and invoice), enter what you owe and generate a NACHA file
-                for your bank. Every payment is a draft you review first.
+                Once a delivery is accepted, pick the invoice and pay it — the
+                amount box auto-fills with what you owe, and deliveries linked to
+                a PO are compared against the order before you pay. Every payment
+                is a draft you review first.
               </p>
               <div className="mt-3">
                 <Badge tone="neutral">ACH &amp; manual payments</Badge>

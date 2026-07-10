@@ -60,10 +60,10 @@ export function ManualPaymentForm() {
   useEffect(() => {
     if (state?.ok) {
       load();
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional one-shot form reset after a confirmed successful server action
       setManifestId("");
       setAmount("");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state?.ok, state?.message, state?.warning]);
 
   const byId = useMemo(() => {
@@ -187,6 +187,22 @@ export function ManualPaymentForm() {
             </strong>
           </span>
           <span>{selected.lotCount} lot(s)</span>
+        </div>
+      )}
+
+      {/* W8: invoice vs linked-PO cross-check (read-only suggestion). */}
+      {selected?.poComparison.hasPo && (
+        <div
+          className={
+            selected.poComparison.verdict === "invoice_higher"
+              ? "rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/30 bg-[var(--admin-danger-soft)] px-4 py-3 text-sm text-[var(--admin-danger)]"
+              : selected.poComparison.verdict === "invoice_lower"
+                ? "rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] px-4 py-3 text-sm text-[var(--admin-gold)]"
+                : "rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/30 bg-[var(--admin-accent-soft)] px-4 py-3 text-sm text-[var(--admin-accent)]"
+          }
+        >
+          {selected.poComparison.verdict === "match" ? "✓ " : "⚠ "}
+          {selected.poComparison.message}
         </div>
       )}
 
