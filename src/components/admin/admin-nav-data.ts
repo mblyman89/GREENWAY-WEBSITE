@@ -62,7 +62,7 @@ export const adminNav: AdminNavItem[] = [
   { label: "Product Onboarding", href: "/admin/inventory/drafts", permission: "inventory.manage", icon: "\ud83c\udd95", group: "Product Intake" }, // 🆕 3 · Onboard
   { label: "Product Enrichment", href: "/admin/products", permission: "products.enrich", icon: "\u2728", group: "Product Intake" }, // ✨ 5 · Enrich
   { label: "Product Mastering", href: "/admin/products/masters", permission: "inventory.manage", icon: "\ud83e\uddec", group: "Product Intake" }, // 🧬 6 · Master
-  { label: "Accounts Payable", href: "/admin/vendor-payments", permission: "settings.manage", icon: "\ud83d\udcb3", group: "Product Intake" }, // 💳 7 · Pay
+  { label: "Accounts Payable", href: "/admin/vendor-payments", permission: "payables.manage", icon: "\ud83d\udcb3", group: "Product Intake" }, // 💳 7 · Pay (W10: scoped — purchase manager runs AP)
   { label: "CCRS Benchmarks", href: "/admin/discovery/benchmarks", permission: "inventory.manage", icon: "\ud83d\udcca", group: "Product Intake" }, // 📊 reference — fuel, not a stage
   { label: "Knowledge Base", href: "/admin/knowledge-base", permission: "products.enrich", icon: "\ud83d\udcda", group: "Product Intake" }, // 📚 reference — fuel, not a stage
 

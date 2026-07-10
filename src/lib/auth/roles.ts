@@ -48,6 +48,7 @@ export type Permission =
   | "promotions.manage"
   | "media.manage"
   | "vendors.manage"
+  | "payables.manage"
   | "products.enrich"
   | "content.edit"
   | "blog.manage"
@@ -73,6 +74,12 @@ const MATRIX: Record<Permission, StaffRole[]> = {
   "promotions.manage": ["owner", "admin", "manager"],
   "media.manage": ["owner", "admin", "manager", "content_editor"],
   "vendors.manage": ["owner", "admin", "manager", "content_editor"],
+  // W10 (owner decision, Q2): the purchase manager runs Accounts Payable.
+  // Scoped permission — AP was previously gated behind settings.manage, which
+  // dragged in user management and store settings just to pay a vendor.
+  // Payments remain drafts-only (NACHA file for manual bank upload / recorded
+  // manual payments); nothing is transmitted from the app.
+  "payables.manage": ["owner", "admin", "manager"],
   "products.enrich": ["owner", "admin", "manager", "content_editor"],
   "content.edit": ["owner", "admin", "manager", "content_editor"],
   "blog.manage": ["owner", "admin", "manager", "content_editor"],
@@ -105,6 +112,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   "promotions.manage": "Manage promotions & specials",
   "media.manage": "Manage the media library",
   "vendors.manage": "Manage vendors & brands",
+  "payables.manage": "Pay vendors (accounts payable — drafts only)",
   "products.enrich": "Enrich products (descriptions, photos)",
   "content.edit": "Edit site content & page text",
   "blog.manage": "Write & publish blog posts",
@@ -135,6 +143,7 @@ export const ALL_PERMISSIONS: Permission[] = [
   "promotions.manage",
   "products.enrich",
   "vendors.manage",
+  "payables.manage",
   "content.edit",
   "blog.manage",
   "media.manage",

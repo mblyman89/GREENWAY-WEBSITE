@@ -20,6 +20,8 @@
  *    they are "fuel, not stages" and are intentionally absent here.
  */
 
+import type { Permission } from "@/lib/auth/roles";
+
 export type JourneyStageKey =
   | "discover"
   | "order"
@@ -44,6 +46,13 @@ export type JourneyStage = {
   hint: string;
   /** Longer name used on hub cards. */
   cardTitle: string;
+  /**
+   * W10 — the permission the stage's PRIMARY page actually requires
+   * (verified against each page's requirePermission call). Surfaces like the
+   * hub filter their stage cards with this so staff never see doors they
+   * can't open.
+   */
+  permission: Permission;
 };
 
 export const JOURNEY_STAGES: readonly JourneyStage[] = [
@@ -54,6 +63,7 @@ export const JOURNEY_STAGES: readonly JourneyStage[] = [
     href: "/admin/discovery",
     hint: "Find products & vendors worth pursuing",
     cardTitle: "Product Discovery",
+    permission: "inventory.manage",
   },
   {
     key: "order",
@@ -62,6 +72,7 @@ export const JOURNEY_STAGES: readonly JourneyStage[] = [
     href: "/admin/purchasing",
     hint: "Build a purchase order and send it to the vendor",
     cardTitle: "Purchasing",
+    permission: "inventory.manage",
   },
   {
     key: "receive",
@@ -70,6 +81,7 @@ export const JOURNEY_STAGES: readonly JourneyStage[] = [
     href: "/admin/inventory/intake",
     hint: "Accept inbound transfers + COAs",
     cardTitle: "Receiving",
+    permission: "inventory.manage",
   },
   {
     key: "onboard",
@@ -78,6 +90,7 @@ export const JOURNEY_STAGES: readonly JourneyStage[] = [
     href: "/admin/inventory/drafts",
     hint: "Approve new products onto the menu",
     cardTitle: "Product Onboarding",
+    permission: "inventory.manage",
   },
   {
     key: "publish",
@@ -87,6 +100,7 @@ export const JOURNEY_STAGES: readonly JourneyStage[] = [
     altHref: "/admin/menu-imports",
     hint: "Live, on-hand inventory that's customer-facing",
     cardTitle: "Live Menu",
+    permission: "inventory.manage",
   },
   {
     key: "enrich",
@@ -95,6 +109,7 @@ export const JOURNEY_STAGES: readonly JourneyStage[] = [
     href: "/admin/products",
     hint: "Add photos, descriptions & tags",
     cardTitle: "Product Enrichment",
+    permission: "products.enrich",
   },
   {
     key: "master",
@@ -103,6 +118,7 @@ export const JOURNEY_STAGES: readonly JourneyStage[] = [
     href: "/admin/products/masters",
     hint: "Group sizes into one clean card",
     cardTitle: "Product Mastering",
+    permission: "inventory.manage",
   },
   {
     key: "pay",
@@ -111,6 +127,7 @@ export const JOURNEY_STAGES: readonly JourneyStage[] = [
     href: "/admin/vendor-payments",
     hint: "Match the invoice and pay the vendor",
     cardTitle: "Accounts Payable",
+    permission: "payables.manage",
   },
 ] as const;
 
@@ -166,6 +183,13 @@ export function __runJourneyCoreTests(): { passed: number } {
       "discover,order,receive,onboard,publish,enrich,master,pay",
     "canonical order",
   );
+  // W10: every stage declares the permission its primary page requires, and
+  // Pay is the scoped payables permission (owner Q2) — NOT settings.manage.
+  assert(
+    JOURNEY_STAGES.every((s) => typeof s.permission === "string" && s.permission.length > 0),
+    "every stage has a permission",
+  );
+  assert(journeyStage("pay").permission === "payables.manage", "pay uses scoped payables permission");
   // Lookup works and throws on junk.
   assert(journeyStage("receive").href === "/admin/inventory/intake", "lookup receive");
   let threw = false;

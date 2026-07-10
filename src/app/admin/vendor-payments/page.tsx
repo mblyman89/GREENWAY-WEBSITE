@@ -12,7 +12,7 @@ import { ManualPaymentForm } from "./ManualPaymentForm";
 export const dynamic = "force-dynamic";
 
 export default async function VendorPaymentsPage() {
-  await requirePermission("settings.manage");
+  await requirePermission("payables.manage");
 
   if (!isSupabaseServiceConfigured) {
     return (

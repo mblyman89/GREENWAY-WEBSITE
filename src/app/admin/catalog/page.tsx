@@ -7,7 +7,8 @@ import { Card, CardHeader, Section, Button, Badge } from "@/components/admin/ui"
 import { CatalogStageStrip } from "@/components/admin/catalog/CatalogStageStrip";
 import { getCatalogHub, workQueueInputsFromHub } from "@/lib/catalog/hub";
 import { buildWorkQueue } from "@/lib/catalog/work-queue-core";
-import { journeyStage } from "@/lib/catalog/journey-core";
+import { journeyStage, type JourneyStageKey } from "@/lib/catalog/journey-core";
+import { can } from "@/lib/auth/roles";
 import { formatMoneyMinor } from "@/lib/purchasing/po-store";
 
 /** W1 — hub card titles derive from THE canonical journey (journey-core). */
@@ -19,7 +20,11 @@ function stageTitle(key: Parameters<typeof journeyStage>[0]): string {
 export const dynamic = "force-dynamic";
 
 export default async function CatalogHubPage() {
-  await requirePermission("products.enrich");
+  const session = await requirePermission("products.enrich");
+  // W10 — hub cards are permission-filtered: each stage card only renders if
+  // the viewer can actually open the page behind it (the stage's verified
+  // permission from journey-core). No doors staff can't open.
+  const canSee = (key: JourneyStageKey) => can(session.profile.role, journeyStage(key).permission);
   const hub = await getCatalogHub();
 
   if (!hub.configured) {
@@ -173,6 +178,7 @@ export default async function CatalogHubPage() {
         >
           <div className="grid gap-4 lg:grid-cols-3">
             {/* 0 — Discovery (front door of the funnel) */}
+            {canSee("discover") ? (
             <Card accent="green">
               <CardHeader title={stageTitle("discover")} subtitle="Find products & vendors worth pursuing" />
               <p className="mt-1 text-sm text-[var(--admin-text-muted)]">
@@ -188,8 +194,10 @@ export default async function CatalogHubPage() {
                 <Button href="/admin/discovery" size="sm">Open discovery →</Button>
               </div>
             </Card>
+            ) : null}
 
             {/* 1 — Purchasing */}
+            {canSee("order") ? (
             <Card accent="gold">
               <CardHeader title={stageTitle("order")} subtitle="Order stock from your vendors" />
               <p className="mt-1 text-sm text-[var(--admin-text-muted)]">
@@ -207,8 +215,10 @@ export default async function CatalogHubPage() {
                 <Button href="/admin/purchasing" size="sm">Open purchasing →</Button>
               </div>
             </Card>
+            ) : null}
 
             {/* 2 — Receiving */}
+            {canSee("receive") ? (
             <Card accent="gold">
               <CardHeader title={stageTitle("receive")} subtitle="Accept inbound transfers + COAs" />
               <p className="mt-1 text-sm text-[var(--admin-text-muted)]">
@@ -226,8 +236,10 @@ export default async function CatalogHubPage() {
                 <Button href="/admin/inventory/intake" size="sm">Open receiving →</Button>
               </div>
             </Card>
+            ) : null}
 
             {/* 3 — Onboarding */}
+            {canSee("onboard") ? (
             <Card accent="gold">
               <CardHeader title={stageTitle("onboard")} subtitle="Approve new products onto the menu" />
               <p className="mt-1 text-sm text-[var(--admin-text-muted)]">
@@ -245,8 +257,10 @@ export default async function CatalogHubPage() {
                 <Button href="/admin/inventory/drafts" size="sm">Open onboarding →</Button>
               </div>
             </Card>
+            ) : null}
 
             {/* 4 — Publish (Live Menu) — W1: the stage the old hub skipped. */}
+            {canSee("publish") ? (
             <Card accent="gold">
               <CardHeader title={stageTitle("publish")} subtitle="Publish the menu customers see" />
               <p className="mt-1 text-sm text-[var(--admin-text-muted)]">
@@ -264,8 +278,10 @@ export default async function CatalogHubPage() {
                 <Button href="/admin/inventory" size="sm" variant="neutral">Open inventory →</Button>
               </div>
             </Card>
+            ) : null}
 
             {/* 5 — Enrichment */}
+            {canSee("enrich") ? (
             <Card accent="green">
               <CardHeader title={stageTitle("enrich")} subtitle="Make live products shine online" />
               <p className="mt-1 text-sm text-[var(--admin-text-muted)]">
@@ -283,8 +299,10 @@ export default async function CatalogHubPage() {
                 <Button href="/admin/products" size="sm">Open enrichment →</Button>
               </div>
             </Card>
+            ) : null}
 
             {/* 6 — Mastering */}
+            {canSee("master") ? (
             <Card accent="orange">
               <CardHeader title={stageTitle("master")} subtitle="Group sizes into one clean card" />
               <p className="mt-1 text-sm text-[var(--admin-text-muted)]">
@@ -301,8 +319,10 @@ export default async function CatalogHubPage() {
                 <Button href="/admin/products/masters" size="sm">Open mastering →</Button>
               </div>
             </Card>
+            ) : null}
 
             {/* 7 — Accounts Payable */}
+            {canSee("pay") ? (
             <Card accent="green">
               <CardHeader title={stageTitle("pay")} subtitle="Pay the vendor" />
               <p className="mt-1 text-sm text-[var(--admin-text-muted)]">
@@ -318,6 +338,7 @@ export default async function CatalogHubPage() {
                 <Button href="/admin/vendor-payments" size="sm">Open accounts payable →</Button>
               </div>
             </Card>
+            ) : null}
           </div>
         </Section>
 
