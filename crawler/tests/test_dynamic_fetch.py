@@ -139,7 +139,8 @@ def test_run_config_modern_gets_all_dynamic_kwargs(monkeypatch):
     kw = cfg.kwargs
     assert kw["scan_full_page"] is True
     assert kw["wait_for_images"] is True
-    assert kw["remove_overlay_elements"] is True
+    # C7: overlay removal is OFF by default (it gutted age-gated pages).
+    assert kw["remove_overlay_elements"] is False
     assert kw["js_code"] == _LOAD_MORE_JS
     assert "load" in _LOAD_MORE_JS.lower()  # the click-everything script
     assert kw["page_timeout"] == 90_000  # ms
@@ -190,14 +191,20 @@ def test_run_config_cache_mode_bypass_when_available(monkeypatch):
 
 def test_fetch_prefers_advanced_config_run(monkeypatch):
     _install_fake_crawl4ai(monkeypatch)
+    # C7: a REALISTIC good page (rich text + links) so the C7 thin-shell
+    # fallback does not (correctly) fire. A contentless result would now fall
+    # back, which is the whole point of the age-gate fix.
+    rich = "dynamic content incl. lazy items " * 40
     _FakeCrawler.advanced_result = _Result(
-        html="<html><body>dynamic content incl. lazy items</body></html>",
-        markdown="dynamic content incl. lazy items",
+        html="<html><body>"
+        + "".join(f"<a href='/p{i}'>P{i}</a>" for i in range(10))
+        + f"<main>{rich}</main></body></html>",
+        markdown=rich,
     )
     res = asyncio.run(_fetch_with_crawl4ai(_settings(), "https://example-brand.com/"))
     assert res is not None and res.ok
     assert "dynamic content" in res.html
-    # Exactly one arun call, and it used the advanced config.
+    # Exactly one arun call, and it used the advanced config (no fallback).
     assert len(_FakeCrawler.calls) == 1
     assert _FakeCrawler.calls[0]["config"] is not None
 

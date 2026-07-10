@@ -37,7 +37,7 @@ def client(tmp_path: Path, monkeypatch) -> TestClient:
     monkeypatch.setattr(main_mod, "get_settings", lambda: settings)
     monkeypatch.setattr(harvest_mod, "get_settings", lambda: settings)
 
-    async def fake_research(*, url, entity_type, entity_id, display_name="", settings=None, max_pages=None):
+    async def fake_research(*, url, entity_type, entity_id, display_name="", settings=None, max_pages=None, force_fresh=False):
         return ResearchResult(
             url=url, entity_type=entity_type, entity_id=entity_id,
             fetched_ok=True, from_cache=False, pages=[url],

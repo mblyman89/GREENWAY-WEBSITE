@@ -310,6 +310,58 @@ def _extract_image_urls(html: str, base_url: str) -> list[str]:
 _LOAD_MORE_JS = """
 (async () => {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  // --- C7: age-gate "Yes, I'm 21" nudge -----------------------------------
+  // WA cannabis vendors gate their sites behind an "Are you 21?" modal. The
+  // real content is already loaded UNDERNEATH it (an overlay, not a separate
+  // page), but the confirm click removes the modal + unlocks scrolling, and
+  // some themes only reveal the body after it. We answer the age question the
+  // way a truthful 21+ visitor would: set the common "already verified" flags,
+  // then click the affirmative button (never the "No/Exit/Under 21" one).
+  try {
+    // 1) Pre-set the cookies/localStorage flags dispensary age gates check, so
+    //    a gate that reads state on load simply doesn't show.
+    const AGE_KEYS = [
+      'age_verified','ageVerified','age_gate','ageGate','ageGatePassed',
+      'isOldEnough','old_enough','ageConfirmed','age_ok','over21','is21',
+      'tmz_age_verified','wp-age-verify','ageverification','age-verified'
+    ];
+    for (const k of AGE_KEYS) {
+      try { localStorage.setItem(k, 'true'); } catch (e) {}
+      try { sessionStorage.setItem(k, 'true'); } catch (e) {}
+      try {
+        document.cookie = k + '=true; path=/; max-age=86400';
+        document.cookie = k + '=1; path=/; max-age=86400';
+      } catch (e) {}
+    }
+    // 2) Click the affirmative button. Match by text, but never click a
+    //    negative ("No", "Exit", "Under", "Leave", "I am not").
+    const YES = /\\b(yes|i am 21|i'm 21|i am over 21|over 21|21\\+|enter|i agree|agree|confirm|continue|i am of age|of legal age)\\b/i;
+    const NO = /\\b(no|exit|leave|under|not 21|i am not|decline|go back)\\b/i;
+    for (let round = 0; round < 3; round++) {
+      let clicked = false;
+      const els = document.querySelectorAll(
+        'button, a, input[type="button"], input[type="submit"], [role="button"]'
+      );
+      for (const el of els) {
+        if (el.offsetParent === null) continue; // not visible
+        const label = ((el.innerText || el.value || '') + ' ' +
+                       (el.getAttribute('aria-label') || '')).trim();
+        if (!label || NO.test(label)) continue;
+        if (YES.test(label)) {
+          try { el.click(); clicked = true; } catch (e) {}
+        }
+      }
+      await sleep(500);
+      if (!clicked) break;
+    }
+    // 3) Best-effort: unlock any scroll-lock the gate leaves behind.
+    try {
+      document.documentElement.style.overflow = 'auto';
+      document.body.style.overflow = 'auto';
+    } catch (e) {}
+  } catch (e) {}
+
   const LOAD_MORE = /(load|show|view)\\s*(more|all)|more\\s+(products|items|results)/i;
   for (let round = 0; round < 4; round++) {
     let clicked = false;
@@ -360,8 +412,12 @@ def _crawl4ai_run_config(settings: Settings):
                 "scroll_delay": settings.crawl_scroll_delay_seconds,
                 # Wait for <img> elements to finish loading before capture.
                 "wait_for_images": True,
-                # Dismiss cookie walls / newsletter modals that hide content.
-                "remove_overlay_elements": True,
+                # C7: overlay removal is OFF by default (see config). It was
+                # gutting age-gated dispensary pages (modal + real content
+                # stripped together). We keep the age-gate "click YES" nudge in
+                # _LOAD_MORE_JS instead, which reveals content without deleting
+                # the DOM. Re-enable per-deployment via CRAWL_REMOVE_OVERLAYS.
+                "remove_overlay_elements": settings.crawl_remove_overlays,
                 # Let JS-appended content settle before the HTML snapshot.
                 "delay_before_return_html": settings.crawl_settle_seconds,
                 "page_timeout": int(settings.crawl_page_timeout_seconds * 1000),
@@ -383,6 +439,33 @@ def _crawl4ai_run_config(settings: Settings):
         return CrawlerRunConfig(**filtered)
     except Exception:  # pragma: no cover - defensive; config must never break a fetch
         return None
+
+
+# C7: a "thin shell" heuristic. An age-gate/overlay-stripped page comes back
+# non-empty (so the old EMPTY-only fallback didn't fire) but has almost no real
+# text and almost no same-page links \u2014 that's the "1 page, 0 drafts" symptom.
+# When the advanced browser run yields such a shell we retry with the plain
+# legacy arun (the pre-C3 path that worked), which keeps the real content that
+# lives underneath the modal.
+_THIN_MARKDOWN_CHARS = 400  # less real text than this = suspicious
+_THIN_LINK_COUNT = 3        # fewer than this many <a href> = suspicious
+
+
+def _looks_like_thin_shell(html: str, markdown: str) -> bool:
+    """True when a fetch came back technically non-empty but has no usable
+    content (little text AND almost no links) \u2014 the age-gate/overlay-stripped
+    shell. Pure string/DOM inspection; no network."""
+    text = (markdown or "").strip()
+    if len(text) >= _THIN_MARKDOWN_CHARS:
+        return False  # plenty of real text \u2014 not a shell
+    # Cheap link count without a full parse dependency on the hot path.
+    try:
+        from bs4 import BeautifulSoup
+
+        links = len(BeautifulSoup(html or "", "lxml").find_all("a", href=True))
+    except Exception:  # pragma: no cover - parser edge
+        links = (html or "").lower().count("<a ")
+    return links < _THIN_LINK_COUNT
 
 
 async def _fetch_with_crawl4ai(settings: Settings, url: str) -> FetchResult | None:
@@ -416,16 +499,43 @@ async def _fetch_with_crawl4ai(settings: Settings, url: str) -> FetchResult | No
                     result = await crawler.arun(url=url, config=run_config, user_agent=ua)
                 except Exception:
                     result = None  # advanced path unsupported → legacy arun below
-            if result is None or not (
-                getattr(result, "html", "") or getattr(result, "markdown", "")
-            ):
-                result = await crawler.arun(
+            # C7: fall back to the plain legacy arun when the advanced run is
+            # missing/empty OR came back as a thin shell (age-gate/overlay
+            # stripped the real content). The legacy path keeps the content
+            # that lives underneath the modal \u2014 the pre-C3 behaviour that worked.
+            adv_html = getattr(result, "html", "") if result is not None else ""
+            adv_md = (
+                getattr(result, "fit_markdown", None)
+                or getattr(result, "markdown", None)
+                or ""
+            ) if result is not None else ""
+            if isinstance(adv_md, object) and hasattr(adv_md, "fit_markdown"):
+                adv_md = getattr(adv_md, "fit_markdown", "") or str(adv_md)
+            need_fallback = (
+                result is None
+                or not (adv_html or adv_md)
+                or _looks_like_thin_shell(adv_html, str(adv_md))
+            )
+            if need_fallback:
+                legacy = await crawler.arun(
                     url=url,
                     user_agent=ua,
                     # fit_markdown prunes boilerplate to the meaningful content.
                     word_count_threshold=10,
                     bypass_cache=True,
                 )
+                # Keep whichever run produced the most real content \u2014 never let
+                # the fallback REGRESS a good advanced result (defensive).
+                legacy_md = (
+                    getattr(legacy, "fit_markdown", None)
+                    or getattr(legacy, "markdown", None)
+                    or ""
+                )
+                if isinstance(legacy_md, object) and hasattr(legacy_md, "fit_markdown"):
+                    legacy_md = getattr(legacy_md, "fit_markdown", "") or str(legacy_md)
+                legacy_html = getattr(legacy, "html", "") or ""
+                if len(str(legacy_md)) >= len(str(adv_md)) or (legacy_html and not adv_html):
+                    result = legacy
         html = getattr(result, "html", "") or ""
         markdown = (
             getattr(result, "fit_markdown", None)
@@ -490,8 +600,19 @@ def _html_to_text(html: str) -> str:
     return "\n".join(lines)
 
 
-async def fetch_page(url: str, *, prefer_browser: bool = True, settings: Settings | None = None) -> FetchResult:
-    """Politely fetch a single page. Honors robots + rate limit + cache."""
+async def fetch_page(
+    url: str,
+    *,
+    prefer_browser: bool = True,
+    settings: Settings | None = None,
+    force_fresh: bool = False,
+) -> FetchResult:
+    """Politely fetch a single page. Honors robots + rate limit + cache.
+
+    C7: `force_fresh=True` skips the on-disk page cache read (a fresh fetch is
+    still written back), so a stale age-gate shell cached by the buggy C3 crawl
+    can't mask the fix on a re-crawl. Robots + SSRF + rate-limit are unchanged.
+    """
     settings = settings or get_settings()
 
     # S-5: SSRF guard first (scheme + private/loopback/link-local addresses)…
@@ -506,9 +627,10 @@ async def fetch_page(url: str, *, prefer_browser: bool = True, settings: Setting
                                error="CRAWL_ALLOW_DOMAINS is required in production (S-5)")
         return FetchResult(url=url, ok=False, error="domain not in allow-list")
 
-    cached = _read_cache(settings, url)
-    if cached:
-        return cached
+    if not force_fresh:
+        cached = _read_cache(settings, url)
+        if cached:
+            return cached
 
     if not _robots_allows(settings, url):
         return FetchResult(url=url, ok=False, error="blocked by robots.txt")

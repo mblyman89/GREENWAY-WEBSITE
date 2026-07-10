@@ -65,7 +65,7 @@ def _settings(**over) -> Settings:
 
 
 def _wire(monkeypatch, fetched_log: list[str]):
-    async def fake_fetch(url, *, prefer_browser=True, settings=None):
+    async def fake_fetch(url, *, prefer_browser=True, settings=None, force_fresh=False):
         fetched_log.append(url)
         html = SITE.get(url)
         if html is None:

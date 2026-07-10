@@ -215,6 +215,11 @@ class HarvestRequest(BaseModel):
         default=0.0, ge=0.0, le=3600.0,
         description="Extra pause (s) between sites — Tier-3 trickle mode.",
     )
+    force_fresh: bool = Field(
+        default=False,
+        description="C7: bypass the on-disk page cache for this job so a stale "
+                    "age-gate shell can't mask a re-crawl. Default false.",
+    )
     label: str = Field(default="", description="Human label shown in the job list.")
 
 
@@ -243,6 +248,7 @@ async def harvest_start(
             write=req.write,
             max_pages_per_site=req.max_pages_per_site,
             delay_between_targets=req.delay_between_targets,
+            force_fresh=req.force_fresh,
             label=req.label,
         )
     except HarvestValidationError as e:

@@ -184,15 +184,19 @@ async def research_target(
     display_name: str = "",
     settings: Settings | None = None,
     max_pages: int | None = None,
+    force_fresh: bool = False,
 ) -> ResearchResult:
     """Research one target. `max_pages` (when given) overrides the worker-wide
     CRAWL_MAX_PAGES budget for THIS run only — harvest jobs use it to give
-    Tier-1 vendors a deeper read and Tier-3 directory passes a shallow one."""
+    Tier-1 vendors a deeper read and Tier-3 directory passes a shallow one.
+
+    C7: `force_fresh=True` bypasses the on-disk page cache for every fetch in
+    this crawl, so a stale age-gate shell can't mask the fix on a re-crawl."""
     settings = settings or get_settings()
     is_product = entity_type == "product"
     page_budget = max_pages if (max_pages and max_pages > 0) else settings.crawl_max_pages
 
-    fetched = await fetch_page(url, prefer_browser=True, settings=settings)
+    fetched = await fetch_page(url, prefer_browser=True, settings=settings, force_fresh=force_fresh)
     if not fetched.ok:
         return ResearchResult(url=url, entity_type=entity_type, entity_id=entity_id,
                               fetched_ok=False, from_cache=fetched.from_cache, error=fetched.error)
@@ -255,7 +259,7 @@ async def research_target(
             if extra_url is None:
                 break  # site exhausted — we saw everything reachable
             budget -= 1
-            sub = await fetch_page(extra_url, prefer_browser=True, settings=settings)
+            sub = await fetch_page(extra_url, prefer_browser=True, settings=settings, force_fresh=force_fresh)
             if not sub.ok:
                 failed_pages.append(extra_url)
                 continue

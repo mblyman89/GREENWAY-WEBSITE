@@ -200,14 +200,54 @@ past Cloudflare's ~100 s cutoff → 524. (Cloudflare's 524 timeout is only
 tunable on Enterprise `proxy_read_timeout`, so raising it is not a reliable
 fix; the free/standard tier is fixed at ~100 s.)
 
-- [ ] **C6 — Async single-target research (fixes the 524).** The vendor/brand
-      "Research with the crawler" button no longer holds an HTTP connection
-      open for the whole crawl. It submits a **one-target harvest job** (the
-      already-shipped `/harvest` path returns 202 in <1 s — never hits 524) and
-      redirects to the Harvest Console, where the existing crash-safe live
-      poller (`HarvestJobsLive`, short 20 s polls) shows progress and the same
-      drafts land in `ai_suggestions` for review. Zero worker changes; reuses
-      proven background-job machinery; drafts-only preserved.
+- [x] **C6 — Async single-target research (fixes the 524).** (PR #361) The
+      vendor/brand "Research with the crawler" button no longer holds an HTTP
+      connection open for the whole crawl. It submits a **one-target harvest
+      job** (the already-shipped `/harvest` path returns 202 in <1 s — never
+      hits 524) and redirects to the Harvest Console, where the existing
+      crash-safe live poller (`HarvestJobsLive`, short 20 s polls) shows
+      progress and the same drafts land in `ai_suggestions` for review. Zero
+      worker changes; reuses proven background-job machinery; drafts-only
+      preserved.
+
+## Follow-up: "1 page, 0 drafts" on every (age-gated) vendor site
+
+Owner report (verbatim): *"I tried researching a vendor, and it takes me to
+the harvest console, where it completes job one in a second like you said it
+would … the crawler has been running for over 20 minutes."* — then, after
+diagnosis: the job was actually **`completed` instantly with `0 drafts`**
+(`1/1 sites · 1 ok · 0 drafts written`) on `topshelfwa.com`; the owner
+confirmed **every WA cannabis vendor site has an "Are you 21?" age gate**, and
+that **before the powerhouse upgrade the crawler pulled good results** (just
+not the whole site).
+
+**Verified root cause (git history + the owner's screenshot + the code — no
+guessing):** the age gate is a **modal overlay on top of a fully-rendered
+page** (the real content, YouTube embed and legal footer are visible behind
+it). The pre-C3 crawler read that page fine. The powerhouse upgrade's only
+change to the fetcher was **C3 (PR #358)**, whose advanced `CrawlerRunConfig`
+set **`remove_overlay_elements=True`**. On an age-gated theme crawl4ai's
+overlay remover strips the modal **and the real content wrapper behind it**,
+leaving a **thin shell**: no nav links (so the C2 frontier finds nothing →
+"1 page") and no draftable text (→ "0 drafts"). The C3 fetch ladder only fell
+back to the reliable legacy fetch when the advanced run returned **empty** — a
+**thin-but-non-empty** shell slipped through as "success," so it never
+recovered.
+
+- [ ] **C7 — Fix the C3 age-gate regression.** Four parts, one slice:
+      1. **Overlay removal OFF by default** (`CRAWL_REMOVE_OVERLAYS`, opt-in) —
+         the content is under the modal; deleting it is what broke things.
+      2. **Thin-shell fallback** — a non-empty-but-contentless advanced result
+         (little text AND almost no links) now falls back to the plain legacy
+         fetch (the pre-C3 path that worked), and never regresses a good
+         advanced result.
+      3. **Age-gate "click YES" nudge** in the injected browser JS — sets the
+         common age-verification cookies/localStorage flags and clicks the
+         affirmative button (never "No/Under 21"), the way a truthful 21+
+         visitor would. Belt-and-suspenders on top of (1)+(2).
+      4. **`force_fresh`** — bypass the 24 h on-disk page cache for a job so a
+         stale age-gate shell can't mask the fix on a re-crawl.
+      Worker-only change; no schema/migration; drafts-only preserved.
 
 ## Non-goals / unchanged
 

@@ -93,7 +93,7 @@ def _fake_result(url: str, entity_id: str, *, ok: bool = True, pages: int = 3) -
 def test_run_job_completes_and_isolates_failures(settings: Settings, monkeypatch) -> None:
     calls: list[tuple[str, int | None]] = []
 
-    async def fake_research(*, url, entity_type, entity_id, display_name="", settings=None, max_pages=None):
+    async def fake_research(*, url, entity_type, entity_id, display_name="", settings=None, max_pages=None, force_fresh=False):
         calls.append((url, max_pages))
         if "vendor1" in url:
             raise RuntimeError("site exploded")
