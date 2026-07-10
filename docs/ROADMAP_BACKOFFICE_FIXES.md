@@ -51,9 +51,20 @@ was purely in the picker → action wiring.
 falling back to the previous default only when the source image had no alt text. Verified with
 `tsc --noEmit` (clean) and the full compliance suite (747 passing).
 
-### Task B — Bulk media delete  `[ ]`
+### Task B — Bulk media delete  `[x]`  (PR pending)
 Add select checkboxes to the media library so multiple media items can be selected and
 deleted in one action.
+
+**Implementation (verified by reading code):** the library grid was a plain server component
+of `<Link>` cards (`src/app/admin/media/page.tsx`). Added a client wrapper
+`src/components/admin/media/MediaGrid.tsx` with a "Select" toggle that turns each card into a
+checkbox toggle (out of select mode the cards link to the detail page exactly as before,
+carrying the active filters). A "🗑 Delete selected (N)" action bar submits the chosen ids to a
+new server action `bulkDeleteMediaAction` (`src/app/admin/media/actions.ts`) that guards **each**
+asset exactly like the single delete (`whereUsed` → in-use items are SKIPPED, never
+force-deleted), removes storage + row, audits each deletion, and returns a plain-language
+summary (deleted / skipped-in-use / failed). No schema change. Verified with `tsc` (clean),
+scoped ESLint (clean), and the full compliance suite (747 passing).
 
 ### Task C — Jump-to-vendor button in completed job box  `[ ]`
 In the "completed" job box on the Harvest Console (`HarvestJobsLive.tsx`), add a button to

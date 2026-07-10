@@ -200,6 +200,85 @@ export async function deleteMediaAction(formData: FormData): Promise<void> {
 }
 
 /**
+ * Task B \u2014 bulk delete. Delete several media assets in one action from the
+ * library grid's multi-select. Each asset is guarded exactly like the single
+ * delete: any asset that is currently in use is SKIPPED (never force-deleted),
+ * and the human is told how many were skipped so they can archive/replace those
+ * first. Storage objects are removed best-effort before their rows; each real
+ * deletion is audited individually. Drafts-only philosophy is unchanged \u2014 this
+ * only removes assets the human explicitly selected.
+ */
+export async function bulkDeleteMediaAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("media.manage");
+  const returnTo = safeAdminPath(String(formData.get("returnTo") ?? ""), "/admin/media");
+
+  // De-dupe the selected ids (the form sends one "ids" value per checkbox).
+  const ids = Array.from(
+    new Set(
+      formData
+        .getAll("ids")
+        .map((v) => String(v).trim())
+        .filter(Boolean),
+    ),
+  );
+  if (ids.length === 0) {
+    redirect(appendQuery(returnTo, { error: "Select at least one item to delete." }));
+  }
+
+  const admin = createSupabaseAdminClient();
+  let deleted = 0;
+  const skippedInUse: string[] = [];
+  const failed: string[] = [];
+
+  for (const id of ids) {
+    // Guard: never delete an asset that is still referenced somewhere.
+    const used = await whereUsed(id);
+    if (used.length > 0) {
+      skippedInUse.push(id);
+      continue;
+    }
+
+    const asset = await getMedia(id);
+    if (asset?.storage_key) {
+      // Best-effort storage cleanup; a stale object is harmless vs. a lost row.
+      await admin.storage.from("media").remove([asset.storage_key]);
+    }
+    const { error } = await admin.from("media_assets").delete().eq("id", id);
+    if (error) {
+      failed.push(id);
+      continue;
+    }
+    deleted += 1;
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "media.deleted",
+      entityType: "media_asset",
+      entityId: id,
+      after: { bulk: true },
+    }).catch(() => {});
+  }
+
+  revalidatePath("/admin/media");
+
+  // Build a single, plain-language summary for the owner.
+  const parts: string[] = [];
+  if (deleted > 0) parts.push(`Deleted ${deleted} item${deleted === 1 ? "" : "s"}.`);
+  if (skippedInUse.length > 0) {
+    parts.push(
+      `Skipped ${skippedInUse.length} still in use (archive or replace those first).`,
+    );
+  }
+  if (failed.length > 0) parts.push(`${failed.length} could not be deleted.`);
+
+  if (deleted === 0 && (skippedInUse.length > 0 || failed.length > 0)) {
+    // Nothing was actually removed \u2014 surface as an error banner.
+    redirect(appendQuery(returnTo, { error: parts.join(" ") }));
+  }
+  redirect(appendQuery(returnTo, { deleted: String(deleted), note: parts.join(" ") }));
+}
+
+/**
  * Client-callable: suggest descriptive alt text for an asset. When the image is
  * a publicly-reachable raster (the AI provider can fetch it), this uses true
  * IMAGE VISION — the model actually looks at the picture. Otherwise (SVG, or no

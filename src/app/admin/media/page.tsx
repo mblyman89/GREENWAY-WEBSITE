@@ -7,33 +7,23 @@ import { StatCard } from "@/components/admin/StatCard";
 import { listMedia, countMedia, publicUrlForKey } from "@/lib/media/store";
 import type { MediaAsset } from "@/lib/supabase/types";
 import { MediaDropzone } from "@/components/admin/media/MediaDropzone";
-import { MEDIA_PURPOSES, purposeLabel } from "@/lib/media/taxonomy";
+import { MEDIA_PURPOSES } from "@/lib/media/taxonomy";
 import { pickListParams, withListParams } from "@/lib/media/return-state-core";
-import { uploadMediaAction } from "./actions";
+import { uploadMediaAction, bulkDeleteMediaAction } from "./actions";
 import { Button } from "@/components/admin/ui/Button";
 import { Input, Select } from "@/components/admin/ui/Field";
 import { EmptyState } from "@/components/admin/ux";
+import { MediaGrid } from "@/components/admin/media/MediaGrid";
 
 export const dynamic = "force-dynamic";
-
-function isImage(mime: string | null): boolean {
-  return Boolean(mime && mime.startsWith("image/"));
-}
-
-function prettyBytes(n: number | null): string {
-  if (!n) return "—";
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
-  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
-}
 
 export default async function MediaPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; status?: string; usage?: string; saved?: string; deleted?: string; error?: string }>;
+  searchParams: Promise<{ q?: string; status?: string; usage?: string; saved?: string; deleted?: string; note?: string; error?: string }>;
 }) {
   await requirePermission("media.manage");
-  const { q, status, usage, saved, deleted, error } = await searchParams;
+  const { q, status, usage, saved, deleted, note, error } = await searchParams;
   // H12d: the active filters travel with every grid link so the detail page
   // can send the owner back to this exact filtered view.
   const listParams = pickListParams({ q, status, usage });
@@ -100,7 +90,9 @@ export default async function MediaPage({
           </div>
         )}
         {deleted && (
-          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-border-strong)] bg-white/5 px-4 py-2 text-sm text-[var(--admin-text-muted)]">Asset deleted.</div>
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-border-strong)] bg-white/5 px-4 py-2 text-sm text-[var(--admin-text-muted)]">
+            {note && note.trim() ? note : "Asset deleted."}
+          </div>
         )}
         {error && (
           <div className="rounded-[var(--admin-radius)] border border-[var(--admin-orange)]/40 bg-[var(--admin-orange-soft)] px-4 py-2 text-sm text-[var(--admin-orange)]">{error}</div>
@@ -144,58 +136,20 @@ export default async function MediaPage({
           </form>
         )}
 
-        {/* Grid */}
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-          {filtered.map((m: MediaAsset) => {
-            const url = publicUrlForKey(m.storage_key);
-            return (
-              <Link
-                key={m.id}
-                // H13a: carry the active filters into the detail URL so the
-                // detail page's back link + breadcrumb can return to this exact
-                // filtered view (H12d's chain was broken here — the link had no
-                // filters, so the detail page always computed a bare backHref).
-                href={withListParams(`/admin/media/${m.id}`, listParams)}
-                className="group admin-card-interactive overflow-hidden rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)]"
-              >
-                <div className="relative flex aspect-square items-center justify-center bg-black p-2">
-                  {isImage(m.mime_type) && url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={url} alt={m.alt_text ?? ""} className="h-full w-full object-contain" />
-                  ) : (
-                    <span className="text-4xl">{m.mime_type === "application/pdf" ? "📄" : "🗂"}</span>
-                  )}
-                  <span
-                    className={`absolute right-1.5 top-1.5 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${
-                      m.status === "published"
-                        ? "bg-[var(--admin-accent)]/20 text-[var(--admin-accent)]"
-                        : m.status === "archived"
-                          ? "bg-white/10 text-[var(--admin-text-faint)]"
-                          : "bg-[var(--admin-orange)]/20 text-[var(--admin-orange)]"
-                    }`}
-                  >
-                    {m.status}
-                  </span>
-                  {/* Pixel dimensions — so staff can tell the AI the exact size to make */}
-                  {m.width && m.height ? (
-                    <span className="absolute bottom-1.5 left-1.5 rounded bg-black/70 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-[var(--admin-text)] backdrop-blur">
-                      {m.width}×{m.height}
-                    </span>
-                  ) : null}
-                </div>
-                <div className="p-2">
-                  <p className="truncate text-xs font-medium text-[var(--admin-text)] group-hover:text-[var(--admin-accent)]">
-                    {m.title || m.filename}
-                  </p>
-                  <p className="text-[10px] text-[var(--admin-text-faint)]">
-                    {purposeLabel(m.usage_type)} · {prettyBytes(m.size_bytes)}
-                    {m.width && m.height ? ` · ${m.width}×${m.height}px` : ""}
-                  </p>
-                </div>
-              </Link>
-            );
-          })}
-        </div>
+        {/* Grid — with multi-select bulk delete (Task B). Cards carry the
+            active filters into the detail URL so the detail page's back link +
+            breadcrumb can return to this exact filtered view (H13a). */}
+        {filtered.length > 0 && (
+          <MediaGrid
+            returnTo={withListParams("/admin/media", listParams)}
+            bulkDeleteAction={bulkDeleteMediaAction}
+            items={filtered.map((m: MediaAsset) => ({
+              asset: m,
+              url: publicUrlForKey(m.storage_key),
+              href: withListParams(`/admin/media/${m.id}`, listParams),
+            }))}
+          />
+        )}
 
         {counts.total === 0 && (
           <EmptyState
