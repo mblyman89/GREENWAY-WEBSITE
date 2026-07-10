@@ -5,16 +5,14 @@ import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { SopSheetLink } from "@/components/admin/SopSheetLink";
 import { Breadcrumbs, HelpPanel, EmptyState } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
-import { Field, Input, Textarea, Button, Badge } from "@/components/admin/ui";
+import { Field, Input, Textarea, Button } from "@/components/admin/ui";
 import { CatalogStageStrip } from "@/components/admin/catalog/CatalogStageStrip";
 import { listManifests, countManifestsByStatus } from "@/lib/inventory/intake-store";
 import {
   listInboundEmails,
   extractLinksFromNote,
 } from "@/lib/inbound-email/inbound-store";
-import type { InboundManifest } from "@/lib/inventory/types";
 import {
-  groupPipeline,
   normalizeStage,
   STAGE_META,
   classifyEta,
@@ -40,95 +38,6 @@ import { ReceivingTabs } from "@/components/admin/inventory/ReceivingTabs";
 import { resolveReceivingTab } from "@/lib/inventory/receiving-tabs-core";
 
 export const dynamic = "force-dynamic";
-
-function StatusBadge({ status }: { status: string }) {
-  const stage = normalizeStage(status);
-  const meta = STAGE_META[stage];
-  return <Badge tone={meta.tone}>{meta.label}</Badge>;
-}
-
-function fmtDate(d: string | null): string {
-  if (!d) return "—";
-  return d;
-}
-
-/** A compact row in a pipeline queue with optional ETA emphasis. */
-function QueueRow({ m }: { m: InboundManifest }) {
-  const eta = classifyEta(m.eta_date);
-  return (
-    <tr className="bg-[var(--admin-surface)] transition hover:bg-[var(--admin-surface-hover)]">
-      <td className="px-4 py-3">
-        <Link
-          href={`/admin/inventory/intake/${m.id}`}
-          className="font-medium text-[var(--admin-text)] hover:text-[var(--admin-accent)]"
-        >
-          {m.manifest_number ?? "(no number)"}
-        </Link>
-      </td>
-      <td className="px-4 py-3 text-[var(--admin-text-muted)]">{m.vendor_label ?? "—"}</td>
-      <td className="px-4 py-3 text-[var(--admin-text-muted)]">{fmtDate(m.transfer_date)}</td>
-      <td className="px-4 py-3 text-center">
-        {m.eta_date ? (
-          eta === "overdue" ? (
-            <Badge tone="danger">Overdue · {m.eta_date}</Badge>
-          ) : eta === "today" ? (
-            <Badge tone="gold">Today</Badge>
-          ) : (
-            <span className="text-[var(--admin-text-muted)]">{m.eta_date}</span>
-          )
-        ) : (
-          <span className="text-[var(--admin-text-faint)]">—</span>
-        )}
-      </td>
-      <td className="px-4 py-3 text-center">
-        <StatusBadge status={m.status} />
-      </td>
-    </tr>
-  );
-}
-
-function QueueTable({
-  title,
-  accent,
-  blurb,
-  rows,
-}: {
-  title: string;
-  accent: string;
-  blurb: string;
-  rows: InboundManifest[];
-}) {
-  if (rows.length === 0) return null;
-  return (
-    <div>
-      <div className="mb-2 flex items-baseline justify-between">
-        <h3 className="text-sm font-bold text-[var(--admin-text)]">
-          <span style={{ color: accent }}>●</span> {title}{" "}
-          <span className="text-[var(--admin-text-faint)]">({rows.length})</span>
-        </h3>
-        <p className="text-xs text-[var(--admin-text-faint)]">{blurb}</p>
-      </div>
-      <div className="overflow-hidden rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)]">
-        <table className="w-full text-sm">
-          <thead className="bg-[var(--admin-surface-2)] text-left text-xs uppercase tracking-wide text-[var(--admin-text-faint)]">
-            <tr>
-              <th className="px-4 py-3">Manifest</th>
-              <th className="px-4 py-3">Vendor</th>
-              <th className="px-4 py-3">Transfer date</th>
-              <th className="px-4 py-3 text-center">ETA</th>
-              <th className="px-4 py-3 text-center">Status</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-[var(--admin-border)]">
-            {rows.map((m) => (
-              <QueueRow key={m.id} m={m} />
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
 
 export default async function IntakePage({
   searchParams,
@@ -179,10 +88,11 @@ export default async function IntakePage({
     listInboundEmails(15),
   ]);
 
-  const pipeline = groupPipeline<InboundManifest>(manifests);
-
-  // Overdue in-transit manifests bubble up as a banner.
-  const overdue = pipeline.inTransit.filter((m) => classifyEta(m.eta_date) === "overdue");
+  // Overdue in-transit manifests bubble up as a banner (the one summary the
+  // single Incoming table doesn't call out on its own).
+  const overdue = manifests.filter(
+    (m) => normalizeStage(m.status) === "in_transit" && classifyEta(m.eta_date) === "overdue",
+  );
 
   // H15c — join the email fetch trail's download links (manifest/invoice PDFs)
   // onto their staged manifests for the hero table's ⬇ buttons.
@@ -347,47 +257,18 @@ export default async function IntakePage({
             manifests appear here. */}
         <EmailIntakeTable rows={manifests} linksByManifestId={linksByManifestId} />
 
-        {/* Pipeline queues — worked in priority order */}
+        {/* The single "Incoming (email)" table above is the one source of
+            truth — one row per manifest with a moving status badge, and the
+            stat cards at the top give the per-status counts. The old
+            status-grouped queue tables listed the very same manifests again,
+            so they were removed as redundant (owner request). */}
         {manifests.length === 0 ? (
           <EmptyState
             icon="📥"
             title="No imports yet"
             description="Manifests emailed to vendor_intake@ appear here automatically — or stage one yourself under Manual tools."
           />
-        ) : (
-          <div className="space-y-6">
-            <QueueTable
-              title="Awaiting intake"
-              accent="var(--admin-gold)"
-              blurb="Physically here — verify counts and accept."
-              rows={pipeline.awaitingIntake}
-            />
-            <QueueTable
-              title="In transit"
-              accent="var(--admin-gold)"
-              blurb="On the way — watch the ETA."
-              rows={pipeline.inTransit}
-            />
-            <QueueTable
-              title="Pending"
-              accent="var(--admin-gold)"
-              blurb="Imported/entered, not yet moving."
-              rows={pipeline.pending}
-            />
-            <QueueTable
-              title="Accepted"
-              accent="var(--admin-accent)"
-              blurb="Lots activated."
-              rows={pipeline.accepted}
-            />
-            <QueueTable
-              title="Rejected"
-              accent="var(--admin-text-faint)"
-              blurb="Discarded."
-              rows={pipeline.rejected}
-            />
-          </div>
-        )}
+        ) : null}
           </>
         ) : (
           <>
