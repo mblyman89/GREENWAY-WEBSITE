@@ -19,7 +19,7 @@ import { generateVendorProfile } from "@/lib/ai/ai-vendor";
 import { persistSuggestion, reviewSuggestion, getSuggestion } from "@/lib/ai/suggestions";
 import { acceptWithComplianceGate } from "@/lib/ai/accept-gate";
 import { AiNotConfiguredError } from "@/lib/ai/provider";
-import { researchUrl, researchSocial, isCrawlerConfigured, CrawlerNotConfiguredError } from "@/lib/ai/crawler-client";
+import { researchUrl, researchSocial, isCrawlerConfigured, coverageNote, CrawlerNotConfiguredError } from "@/lib/ai/crawler-client";
 import { importImageFromUrl, HarvestImageError } from "@/lib/media/harvest";
 
 const MAX_LOGO_BYTES = 5 * 1024 * 1024;
@@ -696,7 +696,8 @@ export async function crawlVendorAction(formData: FormData): Promise<void> {
     const msg =
       (result.drafts_written > 0
         ? `Researched ${result.pages?.length ?? 1} page(s) on ${url} — ${result.drafts_written} draft(s) added for review.`
-        : `Researched ${result.pages?.length ?? 1} page(s) on ${url} — no new drafts (nothing verifiable found, or already pending).`) + websiteNote;
+        : `Researched ${result.pages?.length ?? 1} page(s) on ${url} — no new drafts (nothing verifiable found, or already pending).`) +
+      coverageNote(result) + websiteNote;
     revalidatePath(`/admin/vendors/${id}`);
     redirect(`/admin/vendors/${id}?saved=1&note=${encodeURIComponent(msg)}#ai-drafts`);
   } catch (err) {
@@ -767,7 +768,8 @@ export async function crawlBrandAction(formData: FormData): Promise<void> {
     const msg =
       (result.drafts_written > 0
         ? `Researched ${result.pages?.length ?? 1} page(s) on ${url} — ${result.drafts_written} brand draft(s) added for review.`
-        : `Researched ${result.pages?.length ?? 1} page(s) on ${url} — no new drafts (nothing verifiable found, or already pending).`) + websiteNote;
+        : `Researched ${result.pages?.length ?? 1} page(s) on ${url} — no new drafts (nothing verifiable found, or already pending).`) +
+      coverageNote(result) + websiteNote;
     revalidatePath(`/admin/vendors/${vendorId}`);
     redirect(`/admin/vendors/${vendorId}?saved=1&note=${encodeURIComponent(msg)}#brand-${brandId}`);
   } catch (err) {

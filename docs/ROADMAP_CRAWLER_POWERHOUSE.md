@@ -163,19 +163,20 @@ upgrade adds a new write path — richer data lands in the SAME
 
 ## Slice plan (one PR each)
 
-- [ ] **C1 — Image↔adjacent-text intelligence (pure core + wiring).**
+- [x] **C1 (PR #356) — Image↔adjacent-text intelligence (pure core + wiring).**
       `crawler/app/page_intelligence.py` + tests; `css_extract.py` and
       `pipeline.py` emit context-rich `research_images` lines.
-- [ ] **C2 — Full-site frontier deep crawl.** Recursive same-site frontier in
-      `pipeline.py` (links from EVERY fetched page), pagination-aware scoring
-      in `discovery.py`, budget defaults raised, tests.
-- [ ] **C3 — Dynamic-content capture.** `fetcher.py` crawl4ai config upgrade:
+- [x] **C2 (PR #357) — Full-site frontier deep crawl.** Recursive same-site frontier in
+      `pipeline.py` (links from EVERY fetched page); pagination-aware scoring
+      landed in the new `crawler/app/frontier.py` (not `discovery.py` as
+      originally sketched); budget defaults raised, tests.
+- [x] **C3 (PR #358) — Dynamic-content capture.** `fetcher.py` crawl4ai config upgrade:
       scan_full_page/scroll, wait_for_images, overlay removal, load-more
       clicking; signature-filtered kwargs; safe fallback ladder; tests.
-- [ ] **C4 — Completeness validation + coverage report.**
+- [x] **C4 (PR #359) — Completeness validation + coverage report.**
       `crawler/app/coverage.py` (pure) + `research_coverage` reference draft +
       coverage in API response + harvest target state; tests.
-- [ ] **C5 — Back-office surface.** `research_coverage` label/lane, coverage
+- [x] **C5 (this PR) — Back-office surface.** `research_coverage` label/lane, coverage
       display on vendor/brand research results + harvest review, env
       reference rows, crawler README update.
 

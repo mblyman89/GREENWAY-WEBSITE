@@ -48,11 +48,12 @@ const FIELD_LABELS: Record<string, string> = {
   research_images: "Image candidates found on their site (reference)",
   research_logos: "Logo candidates found on their site (pick one)",
   research_discovery: "Candidate websites found by search (review before crawling)",
+  research_coverage: "Crawl coverage report — did we get everything? (reference)",
 };
 
 /** Crawler research drafts that are reference-only: staff read/copy from them,
  * they can never be accepted into a profile field. */
-const REFERENCE_FIELDS = new Set(["research_products", "research_images", "research_logos", "research_discovery"]);
+const REFERENCE_FIELDS = new Set(["research_products", "research_images", "research_logos", "research_discovery", "research_coverage"]);
 
 /** Crawler drafts that get the visual picker (Slice H3): thumbnails with
  * one-click Save / Set-as-logo instead of a wall of URLs. */

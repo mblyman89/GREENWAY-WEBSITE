@@ -48,6 +48,22 @@ export type CrawlResearchResult = {
   image_candidates: string[];
   /** Every page the deep-research crawl actually read (target + same-site pages). */
   pages?: string[];
+  /** C4: crawl completeness snapshot — pages read vs. budget, leftover queue,
+   * failed pages, content saturation, and a one-line human `assessment`.
+   * Null/absent for single-page product lookups and social research. */
+  coverage?: {
+    entry_url: string;
+    page_budget: number;
+    pages_crawled: number;
+    pages_failed: string[];
+    queued_leftover: number;
+    frontier: Record<string, number>;
+    novelty_ratios: number[];
+    saturation: number | null;
+    saturated: boolean;
+    site_exhausted: boolean;
+    assessment: string;
+  } | null;
   drafts_written: number;
   drafts_skipped: number;
   supabase_configured: boolean;
@@ -55,6 +71,25 @@ export type CrawlResearchResult = {
   products_written?: number;
   error: string;
 };
+
+/** C4/C5: one short sentence for success toasts — the crawl's completeness
+ * verdict, worded for a human ("read the whole site" vs. "N pages left —
+ * raise the budget"). Empty string when the result has no coverage snapshot
+ * (products, social) so existing messages are unchanged. */
+export function coverageNote(result: CrawlResearchResult): string {
+  const cov = result.coverage;
+  if (!cov) return "";
+  if (cov.site_exhausted && cov.pages_failed.length === 0) {
+    return " Coverage: read every page the site linked to.";
+  }
+  if (cov.site_exhausted) {
+    return ` Coverage: full site read, but ${cov.pages_failed.length} page(s) failed to fetch (see the coverage report draft).`;
+  }
+  if (cov.saturated) {
+    return ` Coverage: ${cov.queued_leftover} page(s) unread, but the last pages added almost nothing new — likely complete.`;
+  }
+  return ` Coverage: ${cov.queued_leftover} discovered page(s) unread — raise the page budget and re-run for the rest.`;
+}
 
 export class CrawlerNotConfiguredError extends Error {
   constructor() {
@@ -229,6 +264,10 @@ export type HarvestTargetState = {
   display_name: string;
   status: "pending" | "running" | "done" | "failed";
   pages: number;
+  /** C4: discovered same-site pages left unread when the budget ran out (0 = site exhausted). */
+  pages_leftover?: number;
+  /** C4: one-line completeness verdict ("COMPLETE — …" / "BUDGET REACHED — …"). */
+  coverage_assessment?: string;
   drafts_written: number;
   drafts_skipped: number;
   /** H9b: structured kb_products DRAFT rows staged from the verified lineup. */

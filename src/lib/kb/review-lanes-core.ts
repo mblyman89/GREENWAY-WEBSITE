@@ -58,6 +58,11 @@ export const REFERENCE_FIELDS: ReadonlySet<string> = new Set([
   // info found by keyword search. Read-only; the owner reviews before feeding
   // any URL into the batch crawler. Never written into a profile column.
   "research_discovery",
+  // C4: the crawl completeness report — pages read vs. budget, links still
+  // queued, failed pages, content saturation, and a one-line assessment
+  // ("COMPLETE" / "BUDGET REACHED — raise CRAWL_MAX_PAGES"). Pure arithmetic
+  // about our own crawl; reference-only, never a profile value.
+  "research_coverage",
 ]);
 
 /**
