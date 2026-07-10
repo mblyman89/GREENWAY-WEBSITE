@@ -94,8 +94,13 @@ export function BuilderTable({
     return o;
   });
   const [vendorId, setVendorId] = useState<string>(() => {
-    // Prefer a vendor matched by the prefilled lead's vendor name, then any
-    // suggestion row's vendor id.
+    // W11 — prefer the RECONCILED vendor id threaded from Discovery (license-
+    // or name-matched, page-verified against real vendors), then a vendor
+    // matched by the lead's display name, then any suggestion row's vendor id.
+    // The human still confirms the vendor before saving.
+    if (prefill?.vendorId && vendors.some((v) => v.id === prefill.vendorId)) {
+      return prefill.vendorId;
+    }
     if (prefill?.vendorName) {
       const match = vendors.find(
         (v) => v.name.toLowerCase() === prefill.vendorName!.toLowerCase(),

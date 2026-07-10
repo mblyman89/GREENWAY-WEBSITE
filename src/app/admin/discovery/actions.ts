@@ -19,6 +19,7 @@ import {
   isDiscoveryEnabled,
 } from "@/lib/discovery/store";
 import { parseVendorLeadsCsv, parseProductLeadsCsv } from "@/lib/discovery/import";
+import { resolveLeadVendorThread } from "@/lib/discovery/lead-vendor-thread-core";
 import {
   createDataset,
   ingestCcrsText,
@@ -285,11 +286,15 @@ export async function promoteProductLeadAction(formData: FormData): Promise<void
     entityId: id,
   });
 
-  // Resolve an optional vendor name from a linked vendor lead.
-  let vendorName: string | null = null;
+  // W11 — thread the reconciled vendor IDENTITY, not just the name. If the
+  // linked vendor lead was matched against a real vendor (license-confident
+  // or name-possible), the builder pre-selects that vendor exactly; the
+  // manager still confirms before saving. Unmatched leads carry name only —
+  // an id is never invented (see lead-vendor-thread-core).
+  let thread = resolveLeadVendorThread(null);
   if (lead.vendor_lead_id) {
     const vl = await getVendorLead(lead.vendor_lead_id);
-    vendorName = vl?.display_name ?? null;
+    thread = resolveLeadVendorThread(vl);
   }
 
   const params = new URLSearchParams();
@@ -298,7 +303,11 @@ export async function promoteProductLeadAction(formData: FormData): Promise<void
   if (lead.brand) params.set("leadBrand", lead.brand);
   if (lead.category) params.set("leadCategory", lead.category);
   if (lead.est_unit_cost_minor_units != null) params.set("leadCostMinor", String(lead.est_unit_cost_minor_units));
-  if (vendorName) params.set("leadVendorName", vendorName);
+  if (thread.vendorName) params.set("leadVendorName", thread.vendorName);
+  if (thread.vendorId) {
+    params.set("leadVendorId", thread.vendorId);
+    params.set("leadVendorVia", thread.via);
+  }
 
   revalidatePath(BASE);
   redirect(`/admin/purchasing/new?${params.toString()}`);

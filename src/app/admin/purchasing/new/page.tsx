@@ -103,13 +103,19 @@ export default async function NewPurchaseOrderPage({
   const fromLead = one(sp, "fromLead");
   const leadCostMinorRaw = one(sp, "leadCostMinor");
   const leadCostMinor = leadCostMinorRaw ? Math.max(0, Math.round(Number(leadCostMinorRaw) || 0)) : 0;
+  // W11 — the promotion may thread a RECONCILED vendor id (license- or
+  // name-matched in Discovery). Only accept it if it's a real vendor we buy
+  // from (verified against the vendors list) — never trust a raw URL param.
+  const leadVendorIdRaw = one(sp, "leadVendorId");
+  const leadVendorId =
+    leadVendorIdRaw && vendors.some((v) => v.id === leadVendorIdRaw) ? leadVendorIdRaw : null;
   const prefill: SuggestionRow | undefined = fromLead
     ? {
         posProductKey: null,
         productName: one(sp, "leadName") ?? "New product (from lead)",
         brand: one(sp, "leadBrand") ?? null,
         category: one(sp, "leadCategory") ?? null,
-        vendorId: null,
+        vendorId: leadVendorId,
         vendorName: one(sp, "leadVendorName") ?? null,
         onHand: 0,
         unit: "each",
