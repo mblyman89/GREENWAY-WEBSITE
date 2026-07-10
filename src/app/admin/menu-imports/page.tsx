@@ -6,7 +6,7 @@ import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { SopSheetLink } from "@/components/admin/SopSheetLink";
 import { StatCard } from "@/components/admin/StatCard";
 import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
-import { listImports, listVersions, getPublishedVersion } from "@/lib/pos/menu-version";
+import { listImports, listVersions, getPublishedVersion, listIntakeStagedVersions } from "@/lib/pos/menu-version";
 import { countTestData } from "@/lib/pos/import-service";
 import { formatDateTime } from "@/lib/pos/format";
 import type { PosImportStatus, MenuVersionStatus } from "@/lib/pos/db-types";
@@ -58,14 +58,16 @@ export default async function MenuImportsPage({
   let published: Awaited<ReturnType<typeof getPublishedVersion>> = null;
   let versions: Awaited<ReturnType<typeof listVersions>> = [];
   let imports: Awaited<ReturnType<typeof listImports>> = [];
+  let intakeStaged: Awaited<ReturnType<typeof listIntakeStagedVersions>> = [];
   let testCounts = { imports: 0, versions: 0 };
   let loadError: string | null = null;
 
   try {
-    [published, versions, imports, testCounts] = await Promise.all([
+    [published, versions, imports, intakeStaged, testCounts] = await Promise.all([
       getPublishedVersion(),
       listVersions(30),
       listImports(30),
+      listIntakeStagedVersions(30),
       countTestData().catch(() => ({ imports: 0, versions: 0 })),
     ]);
   } catch (err) {
@@ -153,6 +155,57 @@ export default async function MenuImportsPage({
             accent="orange"
           />
         </div>
+
+        {/* Menu drafts auto-carried from receiving (intake-origin, no POS upload) */}
+        <section className="rounded-xl border border-[#7ed957]/25 bg-[#7ed957]/5 p-5">
+          <h2 className="text-sm font-semibold text-white">Menu drafts from receiving</h2>
+          <p className="mt-1 text-xs text-white/50">
+            When you receive products and approve them with a price, they&apos;re automatically carried
+            onto a copy of your live menu here &mdash; <strong>no upload needed</strong>. Review each
+            draft and publish it to make those products show on the website and become sellable at the
+            register.
+          </p>
+          {intakeStaged.length === 0 ? (
+            <p className="mt-3 text-xs text-white/40">
+              No menu drafts waiting from receiving right now. Approve a received product&apos;s price on
+              the Enrich / catalog drafts screen and it will appear here to publish.
+            </p>
+          ) : (
+            <div className="mt-4 divide-y divide-white/10 overflow-hidden rounded-lg border border-white/10">
+              {intakeStaged.map((v) => {
+                const s = (v.summary_json ?? {}) as { added?: number; carried?: number };
+                return (
+                  <div
+                    key={v.id}
+                    className="grid items-center gap-3 px-4 py-3 sm:grid-cols-[1.4fr_1fr_auto]"
+                  >
+                    <div>
+                      <p className="text-sm font-medium text-white">{formatDateTime(v.created_at)}</p>
+                      <p className="text-xs text-white/40">
+                        {s.added ?? 0} new from receiving &middot; {s.carried ?? 0} carried from live menu
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-white/60">
+                      <span className="rounded bg-[#ff7f00]/15 px-2 py-0.5 text-[10px] font-semibold uppercase text-[#ff7f00]">
+                        staged
+                      </span>
+                      {v.item_count} items &middot; {v.variant_count} variants
+                      {v.warning_count > 0 && (
+                        <span className="text-[#ffd700]">{v.warning_count} to fix</span>
+                      )}
+                    </div>
+                    <Link
+                      href={`/admin/menu-imports/version/${v.id}`}
+                      className="admin-focus justify-self-end rounded-[var(--admin-radius-sm)] border border-[#7ed957]/50 bg-[#7ed957]/10 px-3 py-1.5 text-xs font-semibold text-[#7ed957] transition hover:bg-[#7ed957]/20"
+                    >
+                      Review &amp; publish
+                    </Link>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
 
         {/* Upload */}
         <section className="rounded-xl border border-white/10 bg-[#0a0a0a] p-5">
