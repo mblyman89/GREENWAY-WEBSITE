@@ -282,12 +282,13 @@ export function SampleHistoryClient({
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[820px] border-collapse text-sm">
+            <table className="w-full min-w-[960px] border-collapse text-sm">
               <thead>
                 <tr className="border-b border-white/10 text-left text-xs uppercase tracking-wide text-[var(--admin-text-muted)]">
                   <th className="px-5 py-3 font-medium">Date</th>
                   <th className="px-5 py-3 font-medium">Employee</th>
                   <th className="px-5 py-3 font-medium">Product</th>
+                  <th className="px-5 py-3 font-medium">Sample product / lot</th>
                   <th className="px-5 py-3 text-right font-medium">Units</th>
                   <th className="px-5 py-3 text-right font-medium">Unit size</th>
                   <th className="px-5 py-3 font-medium">Quarter</th>
@@ -304,6 +305,18 @@ export function SampleHistoryClient({
                     <td className="whitespace-nowrap px-5 py-3 tabular-nums">{fmtDate(e.createdAt)}</td>
                     <td className="px-5 py-3">{e.employeeName ?? "—"}</td>
                     <td className="px-5 py-3">{PRODUCT_TYPE_LABELS[e.productType]}</td>
+                    <td className="px-5 py-3">
+                      {e.sourceProductName ? (
+                        <span>
+                          {e.sourceProductName}
+                          {e.sourceLotRef ? (
+                            <span className="text-[var(--admin-text-muted)]"> — lot {e.sourceLotRef}</span>
+                          ) : null}
+                        </span>
+                      ) : (
+                        <span className="text-[var(--admin-text-muted)]">—</span>
+                      )}
+                    </td>
                     <td className="px-5 py-3 text-right tabular-nums">{e.unitCount}</td>
                     <td className="whitespace-nowrap px-5 py-3 text-right tabular-nums text-[var(--admin-text-muted)]">
                       {unitSize(e)}

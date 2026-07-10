@@ -224,6 +224,16 @@ export type RecordDraft = {
   employeeId?: string;
   fromSampleJar?: boolean;
   note?: string;
+  /**
+   * OUTGOING (retailer → employee) sample product IDENTITY — the CCRS record
+   * requires the amount + employee + the specific sample product assigned.
+   * `sourceProductName` is the product name/strain; `sourceLotRef` is the
+   * traceability lot / unique-identifier reference. `importId` links the event
+   * back to the sample JSON batch the lot came from (when picked from an import).
+   */
+  sourceProductName?: string;
+  sourceLotRef?: string;
+  importId?: string;
 };
 
 export type ParsedRecord = {
@@ -239,6 +249,10 @@ export type ParsedRecord = {
   employeeId: string | null;
   fromSampleJar: boolean;
   note: string | null;
+  /** OUTGOING sample product identity (CCRS). Always null for incoming rows. */
+  sourceProductName: string | null;
+  sourceLotRef: string | null;
+  importId: string | null;
 };
 
 export type ParseResult = { ok: true; value: ParsedRecord } | { ok: false; errors: string[] };
@@ -271,6 +285,12 @@ export function parseRecordDraft(draft: RecordDraft, settings: SampleSettings): 
   if (direction === "outgoing" && !(draft.employeeId ?? "").trim()) {
     errors.push("Choose the receiving employee.");
   }
+  // CCRS: an OUTGOING trade sample must record WHICH product was assigned to the
+  // employee (WAC 314-55-096). Require the sample product name/strain; the
+  // traceability lot reference is captured when available.
+  if (direction === "outgoing" && !(draft.sourceProductName ?? "").trim()) {
+    errors.push("Choose (or enter) the sample product being given to the employee (WAC 314-55-096 requires the product on the CCRS record).");
+  }
 
   if (productType) {
     const sizeCheck = validateUnitSize(
@@ -298,6 +318,11 @@ export function parseRecordDraft(draft: RecordDraft, settings: SampleSettings): 
       employeeId: direction === "outgoing" ? (draft.employeeId ?? "").trim() || null : null,
       fromSampleJar: Boolean(draft.fromSampleJar),
       note: (draft.note ?? "").trim() || null,
+      // Product identity is an OUTGOING (employee-receipt) concept only. An
+      // incoming-from-processor row never carries an assigned sample product.
+      sourceProductName: direction === "outgoing" ? (draft.sourceProductName ?? "").trim() || null : null,
+      sourceLotRef: direction === "outgoing" ? (draft.sourceLotRef ?? "").trim() || null : null,
+      importId: direction === "outgoing" ? (draft.importId ?? "").trim() || null : null,
     },
   };
 }
@@ -488,11 +513,66 @@ export function __runTradeSamplesCoreTests(): string {
 
   // infused stores thc mg + size mg, not grams
   const infusedParse = parseRecordDraft(
-    { direction: "outgoing", productType: "infused", unitCount: "1", unitSizeMg: "50", thcMgPerServing: "10", ymd: "2025-05-14", employeeId: "emp-1" },
+    { direction: "outgoing", productType: "infused", unitCount: "1", unitSizeMg: "50", thcMgPerServing: "10", ymd: "2025-05-14", employeeId: "emp-1", sourceProductName: "Blue Dream Gummies" },
     TEST_SETTINGS,
   );
   assert(infusedParse.ok === true, "infused parse ok");
   if (infusedParse.ok) assert(infusedParse.value.unitSizeGrams === null && infusedParse.value.unitSizeMg === 50 && infusedParse.value.thcMgPerServing === 10, "infused stores mg not grams");
+
+  // -------------------------------------------------------------------------
+  // OUTGOING sample product identity (CCRS: which product went to the employee)
+  // -------------------------------------------------------------------------
+
+  // outgoing REQUIRES a source product name (CCRS record obligation)
+  const outNoProduct = parseRecordDraft(
+    { direction: "outgoing", productType: "useable", unitCount: "2", unitSizeGrams: "3.5", ymd: "2025-05-14", employeeId: "emp-1" },
+    TEST_SETTINGS,
+  );
+  assert(outNoProduct.ok === false, "outgoing requires a sample product identity");
+
+  // outgoing WITH product identity parses + carries name/lot/import through
+  const outWithProduct = parseRecordDraft(
+    {
+      direction: "outgoing",
+      productType: "useable",
+      unitCount: "2",
+      unitSizeGrams: "3.5",
+      ymd: "2025-05-14",
+      employeeId: "emp-1",
+      sourceProductName: "  OG Kush  ",
+      sourceLotRef: "  L-1042 ",
+      importId: " imp-9 ",
+    },
+    TEST_SETTINGS,
+  );
+  assert(outWithProduct.ok === true, "outgoing with product identity parses");
+  if (outWithProduct.ok) {
+    assert(outWithProduct.value.sourceProductName === "OG Kush", "source product name trimmed");
+    assert(outWithProduct.value.sourceLotRef === "L-1042", "source lot ref trimmed");
+    assert(outWithProduct.value.importId === "imp-9", "import id carried + trimmed");
+  }
+
+  // INCOMING never carries a source product identity (even if one is passed)
+  const inWithProduct = parseRecordDraft(
+    {
+      direction: "incoming",
+      productType: "useable",
+      unitCount: "5",
+      unitSizeGrams: "3.5",
+      ymd: "2025-05-14",
+      processorName: "Acme Farms",
+      sourceProductName: "should be ignored",
+      sourceLotRef: "should be ignored",
+      importId: "should be ignored",
+    },
+    TEST_SETTINGS,
+  );
+  assert(inWithProduct.ok === true, "incoming parse ok (ignores product identity)");
+  if (inWithProduct.ok) {
+    assert(inWithProduct.value.sourceProductName === null, "incoming source product name null");
+    assert(inWithProduct.value.sourceLotRef === null, "incoming source lot ref null");
+    assert(inWithProduct.value.importId === null, "incoming import id null");
+  }
 
   // "flower" product type is no longer valid (IQC retired) → coerced away / rejected in draft
   const flowerRejected = parseRecordDraft(

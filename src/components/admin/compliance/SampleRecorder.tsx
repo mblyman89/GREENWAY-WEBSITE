@@ -23,13 +23,33 @@ import { PRODUCT_TYPE_LABELS, type SampleProductType } from "@/lib/compliance/tr
 
 export type EmployeeOption = { id: string; name: string };
 
+/** A pickable imported sample product (mirrors SampleProductOption on the server). */
+export type SampleProductOption = {
+  key: string;
+  importId: string;
+  productName: string;
+  lotRef: string | null;
+  productType: SampleProductType;
+  unitSizeGrams: number | null;
+  unitSizeMg: number | null;
+  thcMgPerServing: number | null;
+  processorName: string | null;
+  fileName: string | null;
+  importedAt: string;
+};
+
 const TRADE_TYPES: SampleProductType[] = ["useable", "concentrate", "infused"];
+
+/** Sentinel option value for "enter the sample product by hand". */
+const MANUAL_PRODUCT = "__manual__";
 
 export function SampleRecorder({
   employees,
+  products = [],
   today,
 }: {
   employees: EmployeeOption[];
+  products?: SampleProductOption[];
   today: string; // Pacific YMD
 }) {
   const { toast } = useToast();
@@ -48,6 +68,17 @@ export function SampleRecorder({
   const [errors, setErrors] = useState<string[]>([]);
   const [blocked, setBlocked] = useState<string | null>(null);
 
+  // OUTGOING sample product identity (CCRS: WHICH product goes to the employee).
+  const hasImports = products.length > 0;
+  const [productKey, setProductKey] = useState<string>(hasImports ? (products[0]?.key ?? MANUAL_PRODUCT) : MANUAL_PRODUCT);
+  const [manualProductName, setManualProductName] = useState("");
+  const [manualLotRef, setManualLotRef] = useState("");
+
+  const selectedProduct = useMemo(
+    () => (productKey === MANUAL_PRODUCT ? null : products.find((p) => p.key === productKey) ?? null),
+    [productKey, products],
+  );
+
   const types = TRADE_TYPES;
 
   // Keep product type valid.
@@ -60,25 +91,55 @@ export function SampleRecorder({
   function submit() {
     setErrors([]);
     setBlocked(null);
+    // Resolve the OUTGOING product identity (CCRS). A picked import lot supplies
+    // its own name/lot/type/sizes; manual entry uses the typed fields.
+    const isOutgoing = direction === "outgoing";
+    const outType = isOutgoing && selectedProduct ? selectedProduct.productType : safeProductType;
+    const sourceProductName = isOutgoing
+      ? (selectedProduct ? selectedProduct.productName : manualProductName)
+      : undefined;
+    const sourceLotRef = isOutgoing
+      ? (selectedProduct ? selectedProduct.lotRef ?? undefined : manualLotRef || undefined)
+      : undefined;
+    const importId = isOutgoing && selectedProduct ? selectedProduct.importId : undefined;
+    // Prefer the imported lot's recorded sizes so the ledger matches the product.
+    const outGrams =
+      isOutgoing && selectedProduct && selectedProduct.unitSizeGrams != null
+        ? String(selectedProduct.unitSizeGrams)
+        : unitSizeGrams;
+    const outMg =
+      isOutgoing && selectedProduct && selectedProduct.unitSizeMg != null
+        ? String(selectedProduct.unitSizeMg)
+        : unitSizeMg;
+    const outThc =
+      isOutgoing && selectedProduct && selectedProduct.thcMgPerServing != null
+        ? String(selectedProduct.thcMgPerServing)
+        : thc;
+
     start(async () => {
       const res: SampleActionResult = await recordSampleAction({
         direction,
-        productType: safeProductType,
+        productType: outType,
         unitCount,
-        unitSizeGrams: safeProductType === "infused" ? undefined : unitSizeGrams,
-        unitSizeMg: safeProductType === "infused" ? unitSizeMg : undefined,
-        thcMgPerServing: safeProductType === "infused" ? thc : undefined,
+        unitSizeGrams: outType === "infused" ? undefined : outGrams,
+        unitSizeMg: outType === "infused" ? outMg : undefined,
+        thcMgPerServing: outType === "infused" ? outThc : undefined,
         ymd,
         processorName: direction === "incoming" ? processorName : undefined,
         employeeId: direction === "outgoing" ? employeeId : undefined,
         fromSampleJar: fromJar,
         note,
+        sourceProductName,
+        sourceLotRef,
+        importId,
       });
       if (res.ok) {
         toast({ tone: "success", message: "Sample recorded." });
         setUnitCount("1");
         setNote("");
         setFromJar(false);
+        setManualProductName("");
+        setManualLotRef("");
       } else if (res.blocked) {
         setBlocked(res.error ?? "Blocked: quarterly cap exceeded.");
       } else if (res.errors) {
@@ -152,6 +213,52 @@ export function SampleRecorder({
           </Field>
         )}
       </div>
+
+      {direction === "outgoing" && (
+        <div className="mt-4 rounded-lg border border-[var(--admin-border)] bg-[var(--admin-surface-2)] p-4">
+          <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-white/60">Sample product assigned to this employee</h4>
+          <p className="mb-3 text-xs text-white/40">
+            WAC 314-55-096 requires the CCRS record to name the specific sample product (and its traceability lot) given to the employee.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Sample product" className={selectedProduct ? "" : "sm:col-span-2"}>
+              <Select value={productKey} onChange={(e) => setProductKey(e.target.value)}>
+                {hasImports &&
+                  products.map((p) => (
+                    <option key={p.key} value={p.key}>
+                      {p.productName}
+                      {p.lotRef ? ` — lot ${p.lotRef}` : ""}
+                      {` (${PRODUCT_TYPE_LABELS[p.productType]})`}
+                    </option>
+                  ))}
+                <option value={MANUAL_PRODUCT}>{hasImports ? "Enter a product manually…" : "Enter the sample product…"}</option>
+              </Select>
+            </Field>
+
+            {selectedProduct ? (
+              <div className="rounded-md border border-white/10 bg-black/20 px-3 py-2 text-xs text-white/60">
+                <div><span className="text-white/40">Lot / traceability ref:</span> {selectedProduct.lotRef ?? "—"}</div>
+                <div><span className="text-white/40">Type:</span> {PRODUCT_TYPE_LABELS[selectedProduct.productType]}</div>
+                {selectedProduct.processorName && (
+                  <div><span className="text-white/40">Processor:</span> {selectedProduct.processorName}</div>
+                )}
+                {selectedProduct.fileName && (
+                  <div><span className="text-white/40">From import:</span> {selectedProduct.fileName}</div>
+                )}
+              </div>
+            ) : (
+              <>
+                <Field label="Product name / strain">
+                  <Input value={manualProductName} onChange={(e) => setManualProductName(e.target.value)} placeholder="e.g. OG Kush" />
+                </Field>
+                <Field label="Lot / traceability ref (optional)" className="sm:col-span-2">
+                  <Input value={manualLotRef} onChange={(e) => setManualLotRef(e.target.value)} placeholder="e.g. L-1042" />
+                </Field>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {direction === "outgoing" && (
         <label className="mt-3 flex items-center gap-2 text-xs text-white/60">

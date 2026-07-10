@@ -11,6 +11,7 @@ import {
   quarterUsage,
   listSampleEvents,
   listSampleImports,
+  listSampleProductOptions,
   quarterKeyFromYmd,
   quarterLabel,
   capTone,
@@ -56,12 +57,13 @@ export default async function SamplesPage({
   const quarter = quarterKeyFromYmd(today);
   const settings = await getSampleSettings();
 
-  const [employees, usage, recent, imports, capacity] = await Promise.all([
+  const [employees, usage, recent, imports, capacity, productOptions] = await Promise.all([
     listEmployees(),
     quarterUsage(quarter, settings),
     listSampleEvents({ quarterKey: quarter, limit: 50 }),
     listSampleImports(10),
     getSampleCapacity(quarter, settings),
+    listSampleProductOptions(25),
   ]);
 
   const empOptions: EmployeeOption[] = employees.map((e) => ({ id: e.id, name: e.full_name }));
@@ -132,7 +134,7 @@ export default async function SamplesPage({
           <strong className="text-white/80">Purchasing manager:</strong> there is no unlimited sample category and no job-title exemption. IQC (internal quality control) is producer/processor-only (§096(3)) and is not available to a retailer, so his product-evaluation samples must be handled as ordinary trade-outgoing units within the 30/employee/quarter cap below.
         </div>
 
-        <SampleRecorder employees={empOptions} today={today} />
+        <SampleRecorder employees={empOptions} products={productOptions} today={today} />
 
         <SampleImportUploader capacity={capacity} />
 
@@ -219,6 +221,7 @@ export default async function SamplesPage({
                   <tr>
                     <th className="px-4 py-2">Direction</th>
                     <th className="px-4 py-2">Product</th>
+                    <th className="px-4 py-2">Sample product / lot</th>
                     <th className="px-4 py-2">Units</th>
                     <th className="px-4 py-2">To / From</th>
                     <th className="px-4 py-2">When</th>
@@ -231,6 +234,13 @@ export default async function SamplesPage({
                         <Badge tone={e.direction === "incoming" ? "outline" : "gold"}>{e.direction}</Badge>
                       </td>
                       <td className="px-4 py-2 text-white/80">{PRODUCT_TYPE_LABELS[e.product_type as SampleProductType]}</td>
+                      <td className="px-4 py-2 text-white/60">
+                        {e.direction === "outgoing"
+                          ? e.source_product_name
+                            ? `${e.source_product_name}${e.source_lot_ref ? ` — lot ${e.source_lot_ref}` : ""}`
+                            : "—"
+                          : "—"}
+                      </td>
                       <td className="px-4 py-2 text-white/80">{e.unit_count}{e.from_sample_jar ? " (jar)" : ""}</td>
                       <td className="px-4 py-2 text-white/60">{e.direction === "incoming" ? e.processor_name ?? "—" : e.employee_name ?? "—"}</td>
                       <td className="px-4 py-2 text-white/40">{new Date(e.created_at).toLocaleDateString("en-US")}</td>
