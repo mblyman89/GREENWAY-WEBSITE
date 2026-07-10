@@ -189,9 +189,10 @@ export default async function VendorEditPage({
                   )}
                 </h3>
                 <p className="mt-1 text-[11px] text-white/50">
-                  Paste this vendor&rsquo;s official site (or an about page). The crawler reads the page,
-                  extracts only what it can <strong>verify on the page</strong>, runs the same compliance
-                  checks, and adds <strong>drafts</strong> below for your review. Nothing is published.
+                  Paste this vendor&rsquo;s official site. The crawler walks the <strong>whole site</strong> in
+                  the background (a few minutes), extracts only what it can <strong>verify on the page</strong>,
+                  runs the same compliance checks, and adds <strong>drafts</strong> below for your review.
+                  You&rsquo;ll be taken to the Harvest Console to watch progress. Nothing is published.
                 </p>
                 {crawlerOn ? (
                   <form action={crawlVendorAction} className="mt-3 flex flex-col gap-2 sm:flex-row">
@@ -474,9 +475,10 @@ export default async function VendorEditPage({
                       )}
                     </div>
                     <p className="text-[11px] text-white/45">
-                      Reads the brand&rsquo;s official page and drafts <strong>only</strong> what the page actually says
-                      (about, mission, product philosophy). Every field is verified against the source and
-                      compliance-checked. Nothing saves until you Accept.
+                      Walks the brand&rsquo;s official site in the background (a few minutes) and drafts
+                      <strong> only</strong> what the pages actually say (about, mission, product philosophy).
+                      Every field is verified against the source and compliance-checked. You&rsquo;ll be taken to
+                      the Harvest Console to watch progress; nothing saves until you Accept.
                     </p>
                     {crawlerOn ? (
                       <div className="flex flex-wrap items-end gap-2">

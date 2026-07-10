@@ -72,25 +72,6 @@ export type CrawlResearchResult = {
   error: string;
 };
 
-/** C4/C5: one short sentence for success toasts — the crawl's completeness
- * verdict, worded for a human ("read the whole site" vs. "N pages left —
- * raise the budget"). Empty string when the result has no coverage snapshot
- * (products, social) so existing messages are unchanged. */
-export function coverageNote(result: CrawlResearchResult): string {
-  const cov = result.coverage;
-  if (!cov) return "";
-  if (cov.site_exhausted && cov.pages_failed.length === 0) {
-    return " Coverage: read every page the site linked to.";
-  }
-  if (cov.site_exhausted) {
-    return ` Coverage: full site read, but ${cov.pages_failed.length} page(s) failed to fetch (see the coverage report draft).`;
-  }
-  if (cov.saturated) {
-    return ` Coverage: ${cov.queued_leftover} page(s) unread, but the last pages added almost nothing new — likely complete.`;
-  }
-  return ` Coverage: ${cov.queued_leftover} discovered page(s) unread — raise the page budget and re-run for the rest.`;
-}
-
 export class CrawlerNotConfiguredError extends Error {
   constructor() {
     super("Crawler not configured. Set CRAWLER_BASE_URL + CRAWLER_SHARED_SECRET.");
@@ -99,8 +80,18 @@ export class CrawlerNotConfiguredError extends Error {
 }
 
 /**
- * Ask the worker to research a URL for a given entity. `write` defaults to true
- * (drafts written to ai_suggestions); pass false for a preview/dry-run.
+ * Ask the worker to research a URL for a given entity, SYNCHRONOUSLY — this call
+ * blocks until the whole crawl finishes and returns the full result. `write`
+ * defaults to true (drafts written to ai_suggestions); pass false for a
+ * preview/dry-run.
+ *
+ * ⚠️ NOT for the tunnel-fronted UI path. Since the powerhouse upgrade a full
+ * crawl takes minutes, and the production deployment sits behind a Cloudflare
+ * Tunnel that kills any request with no response headers after ~100 s (HTTP
+ * 524). The vendor/brand "Research with the crawler" buttons therefore submit a
+ * one-target harvest job via {@link startHarvest} and poll instead. Keep this
+ * function only for short, local, or dry-run calls that comfortably finish
+ * under the tunnel timeout.
  */
 export async function researchUrl(input: {
   url: string;
