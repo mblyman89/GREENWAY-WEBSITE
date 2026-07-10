@@ -73,10 +73,12 @@ class Settings(BaseSettings):
     crawl_allow_domains: str = Field(default="", alias="CRAWL_ALLOW_DOMAINS")
 
     # Deep research: maximum TOTAL pages fetched per research request (the
-    # target page + the most promising same-site pages found via nav links and
-    # the sitemap — about/story/products/strains/etc.). Politeness (robots +
-    # per-domain delay) applies to every one of them.
-    crawl_max_pages: int = Field(default=5, alias="CRAWL_MAX_PAGES")
+    # target page + same-site pages walked by the C2 frontier crawl — every
+    # fetched page's own links join the queue until this budget is spent).
+    # Politeness (robots + per-domain delay) applies to every one of them.
+    # C2: default raised 5 → 25 — the owner explicitly wants the WHOLE site
+    # read and is fine with a crawl taking several minutes per vendor.
+    crawl_max_pages: int = Field(default=25, alias="CRAWL_MAX_PAGES")
 
     # --- URL seeding (Slice H2) ------------------------------------------------
     # Two-phase cost control: BEFORE spending expensive browser fetches, ask
