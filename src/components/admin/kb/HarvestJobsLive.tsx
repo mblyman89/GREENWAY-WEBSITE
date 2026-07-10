@@ -12,9 +12,27 @@
  * with an "updating paused" note.
  */
 import { useEffect, useState } from "react";
+import Link from "next/link";
+
+/**
+ * A completed target is "jumpable" when it maps to a real vendor page — i.e. an
+ * entity_type of "vendor" with a UUID id (lead targets carry a "lead:" prefix
+ * and have no vendor page yet).
+ */
+function jumpableVendorId(t: { entity_type?: string; entity_id?: string }): string | null {
+  if (t.entity_type !== "vendor") return null;
+  const id = (t.entity_id ?? "").trim();
+  if (!id || id.startsWith("lead:")) return null;
+  return id;
+}
 
 type TargetState = {
   url: string;
+  /** C-task: which entity this target maps back to ("vendor" | "brand"), and
+      its id — used to render a "Jump to vendor" link on completed targets.
+      Lead targets carry an id prefixed "lead:" (no vendor page yet). */
+  entity_type?: string;
+  entity_id?: string;
   display_name: string;
   status: "pending" | "running" | "done" | "failed";
   pages: number;
@@ -190,6 +208,39 @@ export function HarvestJobsLive({
                 </ul>
               </details>
             )}
+
+            {/* Jump to vendor — quick return to the vendor page(s) just
+                crawled, so the owner doesn't have to hunt for them again.
+                Shown for completed vendor targets (leads have no vendor page). */}
+            {(() => {
+              const jumpable = job.targets.filter(
+                (t) => t.status === "done" && jumpableVendorId(t),
+              );
+              if (jumpable.length === 0) return null;
+              return (
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <span className="text-[10px] uppercase tracking-wide text-white/40">
+                    Jump to vendor{jumpable.length > 1 ? "s" : ""}:
+                  </span>
+                  {jumpable.slice(0, 12).map((t) => {
+                    const id = jumpableVendorId(t)!;
+                    return (
+                      <Link
+                        key={id}
+                        href={`/admin/vendors/${id}`}
+                        className="max-w-[220px] truncate rounded-full border border-[#7ed957]/40 px-3 py-1 text-[10px] font-semibold text-[#7ed957] transition hover:bg-[#7ed957]/10"
+                        title={`Open ${t.display_name || t.url}`}
+                      >
+                        → {t.display_name || t.url}
+                      </Link>
+                    );
+                  })}
+                  {jumpable.length > 12 && (
+                    <span className="text-[10px] text-white/35">+{jumpable.length - 12} more</span>
+                  )}
+                </div>
+              );
+            })()}
 
             <div className="mt-3 flex gap-2">
               {active && !job.cancel_requested && (
