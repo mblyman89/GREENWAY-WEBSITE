@@ -48,7 +48,7 @@ export default async function CatalogDraftsPage({
   const [drafts, counts] = await Promise.all([listCatalogDrafts(view), countCatalogDrafts()]);
 
   const banner =
-    approved ? "Approved with its price — staged for the next menu publish. After it publishes, add photos & a description in Product Enrichment."
+    approved ? "Approved with its price — it will be added automatically to the next menu import you stage, and goes live when that version is published. After it publishes, add photos & a description in Product Enrichment."
       : dismissed ? "Draft dismissed."
         : restored ? "Draft restored to the review queue."
           : error === "floor" ? (msg || "Price is below the cost floor.")
@@ -78,7 +78,7 @@ export default async function CatalogDraftsPage({
               "On accepting a manifest, we match each lot to the published menu by its POS key.",
               "Lots that don't match get a DRAFT product, pre-filled from the JSON + COA potency.",
               "Review the details, then Approve (validated) or Dismiss (not a new product).",
-              "Approved drafts are staged for you to include in the next menu publish.",
+              "Approved drafts are added automatically to the next menu import you stage — the import review screen lists each one, and they go live when you publish that version.",
             ]}
           >
             <p>

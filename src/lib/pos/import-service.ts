@@ -18,6 +18,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { transformWorkbooks, type TransformResult } from "@/lib/pos/transform";
 import type { GreenwayMenuItem } from "@/lib/pos/transform";
 import type { MenuVersion, PosImport } from "@/lib/pos/db-types";
+import { injectApprovedDraftsIntoVersion } from "@/lib/pos/draft-injection";
 
 const POS_RAW_BUCKET = "pos-raw";
 
@@ -142,6 +143,17 @@ export async function runImport(input: CreateImportInput): Promise<CreateImportR
 
     // 6. Persist diagnostics in batches.
     await persistDiagnostics(posImport.id, result.diagnostics);
+
+    // 6b. W7 (owner Decision B): append APPROVED onboarding drafts to this
+    // STAGED version so validated new products truly reach the next publish.
+    // POS stays the source of truth (keys already in the export are skipped),
+    // the human still reviews + publishes, and a failure here never fails the
+    // import (best-effort).
+    try {
+      await injectApprovedDraftsIntoVersion(version.id, posImport.id);
+    } catch (err) {
+      console.error("[import-service] injectApprovedDraftsIntoVersion failed:", err);
+    }
 
     // 7. Mark the import staged.
     await admin

@@ -99,7 +99,7 @@ export function draftsWhatDoIDoHere(
   }
   if (view === "approved") {
     return {
-      text: "These products are approved and staged for the menu. Nothing to do here — this tab is your record of what you've validated.",
+      text: "These products are approved. Each is added automatically to the next menu import you stage and goes live when you publish that version. Nothing to do here — this tab is your record of what you've validated.",
       primaryAction: null,
     };
   }
