@@ -112,7 +112,31 @@ link off-app), and uses it for **both** the "← All vendors" button and a new b
 `tests/compliance/vendor-list-state.test.ts` (13 tests). Verified `tsc` (clean), scoped ESLint
 (clean), full compliance (**760 passing**).
 
-### Task F — Combine / merge duplicate vendors  `[ ]`
+### Task F — Combine / merge duplicate vendors  `[x]`
 Add a function/method to combine vendors (dedupe). Producer-processors may carry multiple LCB
 license numbers → multiple vendor cards. The owner wants to merge 2–3 duplicate cards into one
 combined card that carries all info from all the merged cards.
+
+**Done.** New **migration `0104_merge_vendors.sql`** (⚠️ apply MANUALLY in the Supabase SQL
+editor) installs an atomic `merge_vendors(survivor_id, duplicate_ids)` DB function: repoints
+every table referencing `vendors(id)` (vendor_aliases, brands, product_enrichments, kb_brands,
+inbound_manifests, inventory_lots, vendor_returns, purchase_orders, trade_sample_events,
+vendor_manifest_payments, kb_products, discovery_vendor_leads) **plus** entity-scoped rows
+(ai_suggestions, media_usages, seo_entries) from the duplicates to the survivor; gap-fills ONLY
+the survivor's EMPTY fields (curated data never overwritten — same rule as the importer);
+preserves **every license number** as `vendor_aliases` (source `merge`) + Internal-notes stamps;
+sums product counts / YTD cents, ORs is_active, recomputes brand_count; then **archives** the
+duplicates (status=archived, slug suffixed `-merged-<id8>`) — **nothing is deleted**; returns
+per-table jsonb counts. `audit_logs`/`ai_usage` deliberately untouched (history).
+New pure module `src/lib/vendors/merge-core.ts` (duplicate-group detection by identical
+normalized business name — the multi-license case — or identical website host; archived cards
+excluded; survivor suggestion by completeness; merge-plan preview mirroring the DB gap-fill
+rule; selection validation mirroring the DB guards). New `src/lib/vendors/merge-service.ts`
+wraps the RPC with graceful degradation (friendly "apply migration 0104 first" message before
+it's applied). New page **`/admin/vendors/merge`** (linked from Vendors & Brands via a
+"🔀 Combine duplicates" button) lists suggested groups; `MergeGroupCard` lets the owner pick
+the card to keep, tick duplicates, read a plain-language preview of exactly what moves/fills,
+and confirm — nothing merges automatically. New server action `mergeVendorsAction` (permission
+gate, validation, RPC, audit `vendor.merged`, revalidates). Added
+`tests/compliance/vendor-merge-core.test.ts` (19 tests). Verified `tsc` (clean), scoped ESLint
+(clean), full compliance (**779 passing**).
