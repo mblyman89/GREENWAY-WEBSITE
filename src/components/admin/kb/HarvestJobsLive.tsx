@@ -18,6 +18,10 @@ type TargetState = {
   display_name: string;
   status: "pending" | "running" | "done" | "failed";
   pages: number;
+  /** C4: discovered pages left unread when the budget ran out (0 = site exhausted). */
+  pages_leftover?: number;
+  /** C4: one-line completeness verdict ("COMPLETE — …" / "BUDGET REACHED — …"). */
+  coverage_assessment?: string;
   drafts_written: number;
   error: string;
 };
@@ -147,6 +151,27 @@ export function HarvestJobsLive({
                 </span>
               )}
             </div>
+
+            {/* C4/C5: sites whose crawl hit the page budget with links still
+                queued — the honest "you did NOT see everything" signal, with
+                the fix (raise the per-site page budget and re-run). */}
+            {job.targets.some((t) => t.status === "done" && (t.pages_leftover ?? 0) > 0) && (
+              <details className="mt-2">
+                <summary className="cursor-pointer text-[10px] text-white/40 hover:text-white/70">
+                  Incomplete sites (budget reached with pages still queued)
+                </summary>
+                <ul className="mt-1 space-y-0.5 text-[10px] text-[#ffd700]/80">
+                  {job.targets
+                    .filter((t) => t.status === "done" && (t.pages_leftover ?? 0) > 0)
+                    .slice(0, 20)
+                    .map((t) => (
+                      <li key={t.url} className="truncate" title={t.coverage_assessment || t.url}>
+                        {t.display_name || t.url} — {t.pages} read, {t.pages_leftover} left queued
+                      </li>
+                    ))}
+                </ul>
+              </details>
+            )}
 
             {job.counts.failed > 0 && (
               <details className="mt-2">

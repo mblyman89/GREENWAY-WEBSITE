@@ -100,9 +100,26 @@ const ENV_GROUPS: EnvGroup[] = [
       },
       {
         name: "CRAWL_MAX_PAGES",
-        dflt: "5",
-        what: "Pages per SINGLE /research request (the vendor-page “Research with the crawler” button). Batch harvest jobs override this per job with the tier depths you set above.",
-        tune: "Raise to 8 for very content-rich brand sites.",
+        dflt: "25",
+        what: "Pages per SINGLE /research request (the vendor-page “Research with the crawler” button). Since the frontier crawl (C2) every fetched page's own links join the queue, so this budget walks the WHOLE site — category pages, product pages, pagination. Batch harvest jobs override this per job with the tier depths you set above.",
+        tune: "Raise toward 60–120 for very large vendor catalogs. The coverage report draft tells you when a site needed more (“BUDGET REACHED — N pages still queued”).",
+      },
+      {
+        name: "CRAWL_DYNAMIC_CONTENT",
+        dflt: "true",
+        what: "Full-page browser capture (C3): scrolls the whole page so lazy-loaded sections/images render, waits for images, removes cookie/newsletter overlays, and clicks visible “load more / show more / view all” buttons before saving the HTML. Features the installed crawl4ai doesn't support are skipped automatically.",
+        tune: "Set false only if crawls are too slow and the sites are simple static pages.",
+      },
+      {
+        name: "CRAWL_SCROLL_DELAY_SECONDS / CRAWL_SETTLE_SECONDS",
+        dflt: "0.3 / 2.0",
+        what: "Pace of the full-page scroll and the settle time before the HTML snapshot — more time lets lazy content finish loading.",
+        tune: "Raise (0.5 / 3–4) for image-heavy catalogs that still come back incomplete.",
+      },
+      {
+        name: "CRAWL_PAGE_TIMEOUT_SECONDS",
+        dflt: "90",
+        what: "Per-page browser time limit. Generous because full-page scans of big catalog pages legitimately take a while.",
       },
       {
         name: "CRAWL_USER_AGENT",

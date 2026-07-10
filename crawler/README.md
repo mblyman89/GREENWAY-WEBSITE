@@ -52,6 +52,41 @@ as **pending drafts** in `ai_suggestions` — drafts-only, always.
 prospects ≈ 8–15, whole-market directory pass ≈ 2–4 with a
 `delay_between_targets` trickle).
 
+## Full-site frontier crawl (Slices C1–C4)
+
+The deep-research crawl is a **best-first frontier walk of the whole site**,
+not a one-hop link list:
+
+- **C2 — frontier crawl.** Every fetched page's own same-site links (nav,
+  anchors, `rel="next"`/pagination) join a priority queue scored by
+  `page_interest_score`, so `homepage → /products/ → 40 product pages →
+  ?page=2 …` is fully walked until the page budget (`CRAWL_MAX_PAGES`,
+  default 25; per-job override for harvests) is spent or the site is
+  exhausted. Same-origin only, deduped, boring URLs (cart/login/privacy)
+  refused. Every fetch still goes through the exact same politeness gate
+  (robots.txt, SSRF guard, allow-list, per-domain delay).
+- **C1 — image ↔ adjacent-text pairing.** Product pictures almost never carry
+  their description in the image: it's the card heading/body next to the
+  image, the `figcaption`, or the JSON-LD Product entry. `page_intelligence`
+  captures that nearby text with every image, so `research_images` drafts read
+  "GG4 — award-winning gorilla glue phenotype — https://…/gg4.jpg" instead of
+  a bare URL.
+- **C3 — dynamic-content capture.** The browser fetch scrolls the full page
+  (lazy loading), waits for images, removes cookie/newsletter overlays, and
+  best-effort clicks visible "load more / show more / view all" buttons before
+  capturing HTML. Every crawl4ai feature is signature-filtered against the
+  installed version and soft-degrades: advanced config → plain `arun` → httpx.
+  Knobs: `CRAWL_DYNAMIC_CONTENT` (default `true`), `CRAWL_SCROLL_DELAY_SECONDS`,
+  `CRAWL_SETTLE_SECONDS`, `CRAWL_PAGE_TIMEOUT_SECONDS`.
+- **C4 — completeness validation.** After every crawl the pipeline knows
+  exactly how many discovered pages were read / failed / still queued
+  (frontier accounting) and whether the last pages were still adding new
+  content (saturation signal, computed pure — works on the httpx path too).
+  The verdict ships as a `research_coverage` reference draft
+  ("COMPLETE" / "COMPLETE WITH GAPS" / "SATURATED" / "BUDGET REACHED — raise
+  CRAWL_MAX_PAGES"), as a `coverage` object on the `/research` response, and
+  as `pages_leftover` + `coverage_assessment` on harvest targets.
+
 ## URL seeding (Slice H2)
 
 Deep research used to discover extra pages only from **nav links + the
