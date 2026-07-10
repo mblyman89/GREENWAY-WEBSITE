@@ -80,6 +80,10 @@ class ResearchResponse(BaseModel):
     fields: list[FieldOut]
     image_candidates: list[str]
     pages: list[str] = []  # every page actually read during deep research
+    # C4: crawl completeness snapshot (pages read vs. budget, leftover queue,
+    # failed pages, saturation, one-line assessment). None for single-page
+    # product lookups and social research.
+    coverage: dict | None = None
     drafts_written: int = 0
     drafts_skipped: int = 0
     supabase_configured: bool = False
@@ -134,6 +138,7 @@ def _build_response(result: ResearchResult, *, write: bool) -> ResearchResponse:
         fields=fields,
         image_candidates=result.image_candidates,
         pages=result.pages,
+        coverage=result.coverage.as_dict() if result.coverage else None,
         drafts_written=written,
         drafts_skipped=skipped,
         supabase_configured=configured,
