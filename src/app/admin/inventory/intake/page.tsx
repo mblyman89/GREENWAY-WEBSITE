@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { SopSheetLink } from "@/components/admin/SopSheetLink";
 import { Breadcrumbs, HelpPanel, EmptyState } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
 import { Field, Input, Textarea, Button, Badge } from "@/components/admin/ui";
@@ -250,6 +251,7 @@ export default async function IntakePage({
             ]}
           >
             <p>{INBOUND_SOURCE_NOTE}</p>
+            <SopSheetLink slug="receive" />
           </HelpPanel>
         }
       />

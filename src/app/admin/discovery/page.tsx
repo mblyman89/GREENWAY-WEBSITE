@@ -4,6 +4,7 @@ import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { Button, Card, CardHeader, Section, Field, Input, Select, Textarea } from "@/components/admin/ui";
 import { StatCard } from "@/components/admin/StatCard";
+import { SopSheetLink } from "@/components/admin/SopSheetLink";
 import {
   getDiscoverySnapshot,
   listVendorLeads,
@@ -126,6 +127,7 @@ export default async function DiscoveryPage({ searchParams }: { searchParams: Pr
               Onboarding → Enrichment. Everything here is a draft you confirm — nothing is ordered
               or added to your catalog automatically.
             </p>
+            <SopSheetLink slug="discover" />
           </HelpPanel>
         }
       />

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { SopSheetLink } from "@/components/admin/SopSheetLink";
 import { Breadcrumbs, HelpPanel, EmptyState } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
 import { Input, Button } from "@/components/admin/ui";
@@ -103,6 +104,7 @@ export default async function InventoryPage({
               The &quot;Needs attention&quot; panel surfaces recalls, expiring product, and lots missing a
               COA — the compliance + safety risks that matter most.
             </p>
+            <SopSheetLink slug="publish" />
           </HelpPanel>
         }
       />

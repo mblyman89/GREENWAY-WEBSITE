@@ -3,6 +3,7 @@ import { requirePermission } from "@/lib/auth/session";
 import { can } from "@/lib/auth/roles";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { SopSheetLink } from "@/components/admin/SopSheetLink";
 import { StatCard } from "@/components/admin/StatCard";
 import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { listImports, listVersions, getPublishedVersion } from "@/lib/pos/menu-version";
@@ -95,6 +96,7 @@ export default async function MenuImportsPage({
               straight from your POS (don&apos;t rename a .csv to .xlsx) and try
               again.
             </p>
+            <SopSheetLink slug="publish" />
           </HelpPanel>
         }
       />

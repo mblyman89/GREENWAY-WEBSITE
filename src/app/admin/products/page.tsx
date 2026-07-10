@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { SopSheetLink } from "@/components/admin/SopSheetLink";
 import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { CatalogStageStrip } from "@/components/admin/catalog/CatalogStageStrip";
 import { StatCard } from "@/components/admin/StatCard";
@@ -208,6 +209,7 @@ export default async function ProductsPage({
               product look great online — photos, descriptions, tags — is added
               here. The AI helper only writes drafts; you always approve.
             </p>
+            <SopSheetLink slug="enrich" />
           </HelpPanel>
         }
       />
