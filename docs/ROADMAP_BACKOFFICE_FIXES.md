@@ -140,3 +140,53 @@ and confirm — nothing merges automatically. New server action `mergeVendorsAct
 gate, validation, RPC, audit `vendor.merged`, revalidates). Added
 `tests/compliance/vendor-merge-core.test.ts` (19 tests). Verified `tsc` (clean), scoped ESLint
 (clean), full compliance (**779 passing**).
+
+---
+
+## Owner's request (verbatim) — Employee sample-product assignment
+
+> Thank you, I will add the zip file to my git in a release. It's uploading now. While we
+> wait, I want you to help me with the employee samples page. I see i can pick an employee for
+> sample distribution, but I don't see a way to assign an actual sample product to an employee.
+> Can you audit that section so you can see if that's possible currently. If not, please re
+> read the CCRS around samples for retailers specifically and then add the function to assign
+> samples to employees. Please proceed. Follow the standing rules, never guess no cutting
+> corners and be handoff ready. Thank you.
+
+### Task G — Assign a specific sample PRODUCT/lot to an employee  `[x]`
+
+**Audit (verified by reading code):** the Samples page recorder let you pick an *employee* and a
+*product-type category* (useable/concentrate/infused) plus sizes, but there was **no way to
+identify WHICH actual sample product/lot** was given to that employee. The DB `trade_sample_events`
+carried `lot_id` (FK `inventory_lots`) and `import_id` (FK `sample_json_imports`) but neither was
+ever set for outgoing events, and imported sample lots live inside `sample_json_imports.raw`
+(jsonb) — they are **not** `inventory_lots` rows and have no per-lot stable id, so `lot_id` could
+never point at one and `import_id` only links the *batch*, not the individual assigned product.
+`parseSampleJson` already extracted a `productName` + `lotRef` per lot, but nothing persisted them
+onto an assignment.
+
+**CCRS finding (WAC 314-55-096, WSR 25-08-032 eff. 4/26/25):** when a retailer transfers a trade
+sample to a current paid employee, the traceability (CCRS) record must capture the amount, the
+receiving employee, **and the specific sample product** (product name/strain + traceability lot
+reference). This obligation is consistent across rule versions.
+
+**Done.** New **migration `0105_sample_source_product.sql`** (⚠️ apply MANUALLY, after 0104) adds
+two nullable identity columns to `trade_sample_events` — `source_product_name` and
+`source_lot_ref` — snapshotting the assigned product onto the event (denormalised so the record
+survives edits to the import), plus a helper index; `import_id` (0095) is **reused** to link the
+event back to its batch, `lot_id` left untouched. The pure core (`trade-samples-core.ts`) extends
+`RecordDraft`/`ParsedRecord`/`parseRecordDraft` with `sourceProductName`/`sourceLotRef`/`importId`
+and now **requires** a product identity for OUTGOING samples (and strips it from incoming rows).
+The server layer (`trade-samples.ts`) persists the identity in `recordSampleEvent` with **graceful
+degradation** — it tries the insert with the new columns and, if migration 0105 isn't applied yet,
+retries without them (still linking via `import_id`) so nothing breaks before the migration lands.
+New server helper `listSampleProductOptions` re-parses stored sample JSON imports into pickable,
+named product options (only lots that actually carry a product name are offered). The
+`SampleRecorder` gains an outgoing-only **"Sample product assigned to this employee"** picker
+(populated from imports, with a manual product-name/lot fallback so it works with no imports); a
+picked import lot auto-fills the product type + sizes so the ledger matches the product. Product
+identity now shows in the Samples recent-events ledger, the Employee Sample History table + CSV
+(new `sample_product` / `lot_ref` columns), and the history search now matches product name + lot.
+The record action audits the assigned product. Extended the existing sample self-test suites (wired
+into CI via `tests/compliance/sample-core.test.ts`) with outgoing product-identity coverage.
+Verified `tsc` (clean), scoped ESLint (clean), full compliance (**779 passing**).

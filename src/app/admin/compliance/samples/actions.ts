@@ -67,6 +67,9 @@ export async function recordSampleAction(draft: RecordDraft): Promise<SampleActi
       processor_name: parsed.value.processorName,
       employee_id: parsed.value.employeeId,
       from_sample_jar: parsed.value.fromSampleJar,
+      source_product_name: parsed.value.sourceProductName,
+      source_lot_ref: parsed.value.sourceLotRef,
+      import_id: parsed.value.importId,
     },
   });
 

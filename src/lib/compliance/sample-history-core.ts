@@ -35,6 +35,11 @@ export type HistoryEvent = {
   employeeName: string | null;
   fromSampleJar: boolean;
   note: string | null;
+  /** CCRS: the sample product name/strain assigned to the employee (null on
+   * legacy rows recorded before migration 0105). */
+  sourceProductName: string | null;
+  /** CCRS: the traceability lot / unique-identifier reference of the sample. */
+  sourceLotRef: string | null;
   createdAt: string; // ISO
 };
 
@@ -57,7 +62,7 @@ export function filterHistory(events: HistoryEvent[], f: HistoryFilters): Histor
     if (f.category && f.category !== "all" && e.category !== f.category) return false;
     if (f.productType && f.productType !== "all" && e.productType !== f.productType) return false;
     if (search) {
-      const hay = `${e.employeeName ?? ""} ${e.note ?? ""}`.toLowerCase();
+      const hay = `${e.employeeName ?? ""} ${e.note ?? ""} ${e.sourceProductName ?? ""} ${e.sourceLotRef ?? ""}`.toLowerCase();
       if (!hay.includes(search)) return false;
     }
     return true;
@@ -185,6 +190,8 @@ export function historyToCsv(events: HistoryEvent[]): string {
     "employee",
     "category",
     "product_type",
+    "sample_product",
+    "lot_ref",
     "units",
     "unit_size_g",
     "unit_size_mg",
@@ -199,6 +206,8 @@ export function historyToCsv(events: HistoryEvent[]): string {
       e.employeeName ?? "",
       CATEGORY_LABELS[e.category],
       PRODUCT_TYPE_LABELS[e.productType],
+      e.sourceProductName ?? "",
+      e.sourceLotRef ?? "",
       e.unitCount,
       e.unitSizeGrams ?? "",
       e.unitSizeMg ?? "",
@@ -235,6 +244,8 @@ function ev(p: Partial<HistoryEvent> & { id: string }): HistoryEvent {
     employeeName: p.employeeName ?? "Alice",
     fromSampleJar: p.fromSampleJar ?? false,
     note: p.note ?? null,
+    sourceProductName: p.sourceProductName ?? null,
+    sourceLotRef: p.sourceLotRef ?? null,
     createdAt: p.createdAt ?? "2026-07-01T10:00:00.000Z",
   };
 }
@@ -307,11 +318,19 @@ export function __runSampleHistoryCoreTests(): string {
   const lines = csv.split("\n");
   assert(lines.length === 2, "csv header + 1 row");
   assert(lines[0]!.startsWith("date,employee,category"), "csv header");
+  assert(lines[0]!.includes("sample_product") && lines[0]!.includes("lot_ref"), "csv header has product identity columns");
   assert(lines[1]!.includes("jar leftovers"), "csv includes note");
 
   // CSV escaping of commas/quotes
   const tricky = historyToCsv([ev({ id: "x", note: 'a, "quoted", b', employeeName: "O'Neil" })]);
   assert(tricky.includes('"a, ""quoted"", b"'), "csv escapes commas + quotes");
+
+  // product identity surfaces in CSV + search
+  const withProduct = ev({ id: "p1", sourceProductName: "OG Kush", sourceLotRef: "L-1042", note: null });
+  const csvP = historyToCsv([withProduct]);
+  assert(csvP.split("\n")[1]!.includes("OG Kush") && csvP.split("\n")[1]!.includes("L-1042"), "csv includes sample product + lot");
+  assert(filterHistory([withProduct], { search: "og kush" }).length === 1, "search matches sample product name");
+  assert(filterHistory([withProduct], { search: "l-1042" }).length === 1, "search matches lot ref");
 
   return "OK: sample-history-core tests passed";
 }

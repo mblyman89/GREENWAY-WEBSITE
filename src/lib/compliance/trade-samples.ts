@@ -18,6 +18,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import {
   evaluateCap,
+  parseSampleJson,
   SAMPLE_DEFAULTS,
   type SampleSettings,
   type SampleDirection,
@@ -117,6 +118,8 @@ export type SampleEvent = {
   from_sample_jar: boolean;
   note: string | null;
   import_id: string | null;
+  source_product_name: string | null;
+  source_lot_ref: string | null;
   created_at: string;
 };
 
@@ -224,29 +227,57 @@ export async function recordSampleEvent(
   const message = evaln.message;
 
   const admin = createSupabaseAdminClient();
-  const { data, error } = await admin
-    .from("trade_sample_events")
-    .insert({
-      category: rec.category,
-      direction: rec.direction,
-      product_type: rec.productType,
-      unit_count: rec.unitCount,
-      unit_size_grams: rec.unitSizeGrams,
-      unit_size_mg: rec.unitSizeMg,
-      thc_mg_per_serving: rec.thcMgPerServing,
-      quarter_key: rec.quarterKey,
-      processor_name: rec.processorName,
-      employee_id: rec.employeeId,
-      employee_name: meta.employeeName ?? null,
-      from_sample_jar: rec.fromSampleJar,
-      note: rec.note,
-      import_id: meta.importId ?? null,
-      created_by: meta.createdBy,
-    })
-    .select("id")
-    .single();
+
+  // Base row (columns present since migrations 0054/0095).
+  const baseRow: Record<string, unknown> = {
+    category: rec.category,
+    direction: rec.direction,
+    product_type: rec.productType,
+    unit_count: rec.unitCount,
+    unit_size_grams: rec.unitSizeGrams,
+    unit_size_mg: rec.unitSizeMg,
+    thc_mg_per_serving: rec.thcMgPerServing,
+    quarter_key: rec.quarterKey,
+    processor_name: rec.processorName,
+    employee_id: rec.employeeId,
+    employee_name: meta.employeeName ?? null,
+    from_sample_jar: rec.fromSampleJar,
+    note: rec.note,
+    // `import_id` (migration 0095) links the event to the sample JSON batch the
+    // assigned lot came from. Prefer the parsed value; fall back to any caller
+    // override for backwards compatibility.
+    import_id: rec.importId ?? meta.importId ?? null,
+    created_by: meta.createdBy,
+  };
+
+  // CCRS product-identity columns land in migration 0105. Until it is applied,
+  // gracefully degrade: try WITH the columns, and on a missing-column error
+  // retry WITHOUT them (the assignment is still linked via import_id + note).
+  const identityRow: Record<string, unknown> = {
+    ...baseRow,
+    source_product_name: rec.sourceProductName,
+    source_lot_ref: rec.sourceLotRef,
+  };
+
+  let { data, error } = await admin.from("trade_sample_events").insert(identityRow).select("id").single();
+  if (error && isMissingColumnError(error, ["source_product_name", "source_lot_ref"])) {
+    ({ data, error } = await admin.from("trade_sample_events").insert(baseRow).select("id").single());
+  }
   if (error || !data) return { ok: false, error: error?.message ?? "Failed to record sample." };
   return { ok: true, id: (data as { id: string }).id, message };
+}
+
+/** True when a PostgREST/Postgres error is an "unknown column" error for any of
+ * the given column names — used to gracefully degrade before migration 0105. */
+function isMissingColumnError(error: { message?: string; code?: string } | null, cols: string[]): boolean {
+  if (!error) return false;
+  const msg = (error.message ?? "").toLowerCase();
+  // Postgres 42703 = undefined_column; PostgREST surfaces "could not find the
+  // 'x' column" / "column ... does not exist".
+  if (error.code === "42703" || error.code === "PGRST204") {
+    return cols.some((c) => msg.includes(c.toLowerCase()));
+  }
+  return cols.some((c) => msg.includes(c.toLowerCase()) && (msg.includes("does not exist") || msg.includes("could not find") || msg.includes("schema cache")));
 }
 
 // ---------------------------------------------------------------------------
@@ -305,6 +336,55 @@ export async function createSampleImport(args: {
   return { ok: true, id: (data as { id: string }).id };
 }
 
+/**
+ * Pickable sample product options for the OUTGOING recorder. We parse each
+ * stored import's raw JSON back into normalized lots (they already carry a
+ * product name + traceability lot ref) so the owner can ASSIGN a specific
+ * sample product to an employee — satisfying the CCRS record requirement.
+ * Most-recent import first. Only lots that actually have a product name are
+ * offered (a nameless lot can't satisfy the CCRS "which product" record).
+ */
+export type SampleProductOption = {
+  key: string; // stable option key (importId::index)
+  importId: string;
+  productName: string;
+  lotRef: string | null;
+  productType: SampleProductType;
+  unitSizeGrams: number | null;
+  unitSizeMg: number | null;
+  thcMgPerServing: number | null;
+  processorName: string | null;
+  fileName: string | null;
+  importedAt: string;
+};
+
+export async function listSampleProductOptions(limit = 25): Promise<SampleProductOption[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  const imports = await listSampleImports(limit);
+  const options: SampleProductOption[] = [];
+  for (const im of imports) {
+    const parsed = parseSampleJson(im.raw);
+    if (!parsed.ok) continue;
+    parsed.lots.forEach((lot, i) => {
+      if (!lot.productName) return; // CCRS needs a named product
+      options.push({
+        key: `${im.id}::${i}`,
+        importId: im.id,
+        productName: lot.productName,
+        lotRef: lot.lotRef,
+        productType: lot.productType,
+        unitSizeGrams: lot.unitSizeGrams,
+        unitSizeMg: lot.unitSizeMg,
+        thcMgPerServing: lot.thcMgPerServing,
+        processorName: lot.processorName,
+        fileName: im.file_name,
+        importedAt: im.created_at,
+      });
+    });
+  }
+  return options;
+}
+
 export async function getSampleImport(id: string): Promise<SampleImport | null> {
   if (!isSupabaseServiceConfigured) return null;
   const admin = createSupabaseAdminClient();
@@ -352,6 +432,8 @@ export async function listEmployeeSampleHistory(limit = 2000): Promise<HistoryEv
     employeeName: e.employee_name,
     fromSampleJar: e.from_sample_jar,
     note: e.note,
+    sourceProductName: e.source_product_name ?? null,
+    sourceLotRef: e.source_lot_ref ?? null,
     createdAt: e.created_at,
   }));
 }
