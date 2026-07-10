@@ -271,10 +271,11 @@ export async function approveDraftWithPrice(
 
   const { data } = await admin
     .from("catalog_product_drafts")
-    .select("unit_cost_minor_units")
+    .select("unit_cost_minor_units, manifest_id")
     .eq("id", draftId)
     .maybeSingle();
-  const cost = (data as { unit_cost_minor_units: number | null } | null)?.unit_cost_minor_units ?? null;
+  const row = data as { unit_cost_minor_units: number | null; manifest_id: string | null } | null;
+  const cost = row?.unit_cost_minor_units ?? null;
 
   const settings = await getPricingSettings();
   const check = validatePrice(priceMinor, cost, settings);
@@ -287,5 +288,22 @@ export async function approveDraftWithPrice(
     .update({ price_minor_units: priceMinor, status: "approved", updated_by: actorId })
     .eq("id", draftId);
   if (error) return { ok: false, error: error.message };
+
+  // Intake auto-carry (owner Option B, NOT auto-published): the moment a
+  // received product is APPROVED with a price, stage an intake-origin menu
+  // version (current live menu carried forward + this newly approved product)
+  // so it reaches the customer menu + front POS WITHOUT the one-time Cultivera
+  // "Menu Imports" upload. A human still reviews + Publishes. Best-effort +
+  // dynamic import to avoid pulling server-only menu code into every caller of
+  // this module; a staging hiccup must never fail the approval itself.
+  if (row?.manifest_id) {
+    try {
+      const { stageIntakeMenuVersionForManifest } = await import("@/lib/pos/intake-menu-staging");
+      await stageIntakeMenuVersionForManifest(row.manifest_id, actorId);
+    } catch (err) {
+      console.error("[catalog-drafts] intake auto-carry after approve failed:", err);
+    }
+  }
+
   return { ok: true };
 }
