@@ -896,6 +896,10 @@ export async function importHarvestImageAction(formData: FormData): Promise<void
   const entityId = String(formData.get("entityId") ?? "");
   const imageUrl = String(formData.get("imageUrl") ?? "").trim();
   const assign = String(formData.get("assign") ?? "") === "logo";
+  // Task A \u2014 the crawler captures alt text / context for each image and the
+  // picker forwards it here as `caption`. Carry it onto the Media Library draft
+  // so the alt text isn't lost on save. Capped to a sane length.
+  const caption = String(formData.get("caption") ?? "").trim().slice(0, 300);
   const back = `/admin/vendors/${vendorId}`;
 
   if (!vendorId || !entityId || !imageUrl || (entityType !== "vendor" && entityType !== "brand")) {
@@ -912,7 +916,9 @@ export async function importHarvestImageAction(formData: FormData): Promise<void
       imageUrl,
       usageType: entityType === "vendor" ? "vendor-logo" : "brand-logo",
       title: `${displayName} (harvested)`,
-      altText: `${displayName} logo`,
+      // Prefer the crawler-captured alt text/context; fall back to a sensible
+      // default when the source image had no alt text.
+      altText: caption || `${displayName} logo`,
       uploadedBy: session.userId,
       tags: [entityType === "vendor" ? "vendor-logo" : "brand-logo"],
     });
