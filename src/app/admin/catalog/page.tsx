@@ -5,7 +5,8 @@ import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
 import { Card, CardHeader, Section, Button, Badge } from "@/components/admin/ui";
 import { CatalogStageStrip } from "@/components/admin/catalog/CatalogStageStrip";
-import { getCatalogHub } from "@/lib/catalog/hub";
+import { getCatalogHub, workQueueInputsFromHub } from "@/lib/catalog/hub";
+import { buildWorkQueue } from "@/lib/catalog/work-queue-core";
 import { journeyStage } from "@/lib/catalog/journey-core";
 import { formatMoneyMinor } from "@/lib/purchasing/po-store";
 
@@ -36,6 +37,10 @@ export default async function CatalogHubPage() {
   }
 
   const { purchasing, receiving, onboarding, enrichment, mastering } = hub;
+
+  // W2 — the Command Center work queue: verified counts only, priority order,
+  // one action per row. Empty queue = genuinely all clear.
+  const workQueue = buildWorkQueue(workQueueInputsFromHub(hub));
 
   return (
     <div>
@@ -71,6 +76,53 @@ export default async function CatalogHubPage() {
       <div className="space-y-6 px-5 py-6 sm:px-8">
         {/* W1: the hub IS the map — show the whole journey, nothing highlighted. */}
         <CatalogStageStrip />
+
+        {/* W2: the Command Center work queue — do these in order, top to bottom. */}
+        <Section
+          title="Work queue — do these in order"
+          description="Every row is real work waiting on you, sorted by urgency. Press the button, do the thing, come back. Empty means you're all caught up."
+        >
+          {workQueue.length === 0 ? (
+            <div className="rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface)] px-4 py-3 text-sm text-[var(--admin-text-muted)]">
+              ✅ All clear — nothing in the pipeline needs you right now.
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {workQueue.map((row) => (
+                <div
+                  key={row.key}
+                  className={`flex flex-wrap items-center gap-3 rounded-[var(--admin-radius)] border px-4 py-3 ${
+                    row.severity === "critical"
+                      ? "border-[var(--admin-danger)]/40 bg-[var(--admin-danger-soft)]"
+                      : row.severity === "warning"
+                        ? "border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)]"
+                        : "border-[var(--admin-border)] bg-[var(--admin-surface)]"
+                  }`}
+                >
+                  <span aria-hidden className="text-lg">{row.icon}</span>
+                  <span
+                    className={`flex-1 text-sm ${
+                      row.severity === "critical"
+                        ? "text-[var(--admin-danger)]"
+                        : row.severity === "warning"
+                          ? "text-[var(--admin-gold)]"
+                          : "text-[var(--admin-text-muted)]"
+                    }`}
+                  >
+                    {row.text}
+                  </span>
+                  <Button
+                    href={row.actionHref}
+                    size="sm"
+                    variant={row.severity === "info" ? "neutral" : "primary"}
+                  >
+                    {row.actionLabel} →
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </Section>
 
         {!hub.hasPublishedMenu && (
           <div className="rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface)] px-4 py-3 text-sm text-[var(--admin-text-muted)]">
