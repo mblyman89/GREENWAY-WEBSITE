@@ -4,6 +4,7 @@ import type {
   DiscoveryProductStatus,
   DiscoveryPriority,
 } from "@/lib/discovery/types";
+import { LEAD_ARRIVED_LABEL } from "@/lib/discovery/lead-arrival-core";
 
 /**
  * Product leads table (server component). Each row shows the candidate product,
@@ -40,10 +41,17 @@ export function ProductLeadsTable({
   leads,
   updateAction,
   promoteAction,
+  arrivedLeadIds,
 }: {
   leads: DiscoveryProductLead[];
   updateAction: (formData: FormData) => void | Promise<void>;
   promoteAction: (formData: FormData) => void | Promise<void>;
+  /**
+   * W14 (G10): ids of ordered leads whose promoted PO has been RECEIVED —
+   * surfaced as "Arrived — review outcome" so the loop gets closed by a
+   * human (dismiss a dud or keep it) instead of sitting at "ordered" forever.
+   */
+  arrivedLeadIds?: ReadonlySet<string>;
 }) {
   if (leads.length === 0) {
     return (
@@ -87,6 +95,11 @@ export function ProductLeadsTable({
                 <td className="px-3 py-3 text-right text-[var(--admin-text-muted)]">{money(l.est_retail_minor_units)}</td>
                 <td className="px-3 py-3">
                   <Badge tone={statusTone(l.status)}>{l.status}</Badge>
+                  {arrivedLeadIds?.has(l.id) ? (
+                    <div className="mt-1">
+                      <Badge tone="gold">{LEAD_ARRIVED_LABEL}</Badge>
+                    </div>
+                  ) : null}
                   <div className="mt-1">
                     <Badge tone={l.priority === "high" ? "orange" : l.priority === "low" ? "neutral" : "gold"}>
                       {l.priority}

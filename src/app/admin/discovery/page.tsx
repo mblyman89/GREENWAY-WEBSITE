@@ -11,6 +11,8 @@ import {
   listProductLeads,
   listSources,
 } from "@/lib/discovery/store";
+import { getLeadArrivalPoFacts } from "@/lib/discovery/lead-arrival";
+import { resolveLeadArrival } from "@/lib/discovery/lead-arrival-core";
 import {
   addVendorLeadAction,
   updateVendorLeadStatusAction,
@@ -92,6 +94,13 @@ export default async function DiscoveryPage({ searchParams }: { searchParams: Pr
     listProductLeads(),
     listSources(),
   ]);
+
+  // W14 (G10): close the loop when a promoted PO arrives. Read-only + best-
+  // effort — a failed fetch just means no arrival badges this render.
+  const arrivalFacts = await getLeadArrivalPoFacts(productLeads);
+  const arrivedLeadIds = new Set(
+    productLeads.filter((l) => resolveLeadArrival(l, arrivalFacts).arrived).map((l) => l.id),
+  );
 
   // Vendor leads to link products to.
   const vendorLeadOptions = vendorLeads
@@ -278,10 +287,24 @@ export default async function DiscoveryPage({ searchParams }: { searchParams: Pr
           description="Candidate products to pursue. Promote a lead to prefill a new purchase order."
         >
           <div className="space-y-4">
+            {arrivedLeadIds.size > 0 ? (
+              <div className="rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] px-4 py-3 text-sm text-[var(--admin-gold)]">
+                <p className="font-semibold">
+                  {arrivedLeadIds.size === 1
+                    ? "1 ordered lead has arrived — review the outcome."
+                    : `${arrivedLeadIds.size} ordered leads have arrived — review the outcomes.`}
+                </p>
+                <p className="mt-1 text-xs opacity-80">
+                  Their purchase orders were received. Close each loop below: keep the product
+                  (leave it ordered with a note) or dismiss the lead if the bet didn&apos;t pay off.
+                </p>
+              </div>
+            ) : null}
             <ProductLeadsTable
               leads={productLeads}
               updateAction={updateProductLeadStatusAction}
               promoteAction={promoteProductLeadAction}
+              arrivedLeadIds={arrivedLeadIds}
             />
             <Card padding="md">
               <CardHeader title="Add a product lead" subtitle="Estimated costs are optional (in dollars)" />
