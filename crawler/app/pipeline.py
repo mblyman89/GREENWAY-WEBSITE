@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 
 from .compliance import check_compliance
 from .config import Settings, get_settings
+from .coverage import CrawlCoverage, SaturationTracker, build_coverage
 from .css_extract import extract_css
 from .discovery import discover_nav_links, discover_sitemap_urls
 from .frontier import CrawlFrontier, discover_pagination_links
@@ -81,6 +82,9 @@ class ResearchResult:
     # link-following, no paid API). Carried for the API/summary; also emitted as a
     # single research_social reference draft.
     social_links: list[SocialLink] = field(default_factory=list)
+    # C4: crawl completeness snapshot — "did we get everything?" (None for
+    # single-page product lookups and social research, where it's meaningless).
+    coverage: CrawlCoverage | None = None
     error: str = ""
 
     @property
@@ -223,6 +227,10 @@ async def research_target(
     # Products are a single-page lookup, so deep crawl applies to vendor/brand.
     frontier = CrawlFrontier(base_url=url)
     failed_pages: list[str] = []
+    # C4: per-page new-content accounting — the completeness signal. The entry
+    # page is observed first so sub-page novelty is measured against it.
+    saturation = SaturationTracker()
+    saturation.observe_page(fetched.markdown or "", fetched.image_urls)
     if not is_product and page_budget > 1:
         # Seed the frontier from the entry page + the site's own machine maps.
         frontier.add(discover_nav_links(fetched.html, url, limit=60))
@@ -258,6 +266,8 @@ async def research_target(
             image_pairs += sub_css.images
             image_candidates += sub_css.image_urls + sub.image_urls
             image_contexts += extract_image_contexts(sub.html, extra_url)
+            # C4: how much NEW content did this page add? (saturation signal)
+            saturation.observe_page(sub.markdown or "", sub.image_urls)
             if sub.markdown:
                 corpus_parts.append(sub.markdown)
             # THE C2 FIX: this sub-page's own links join the crawl, so the
@@ -267,6 +277,23 @@ async def research_target(
 
     corpus = "\n\n".join(p for p in corpus_parts if p)
 
+    # ---- C4: completeness validation -----------------------------------------
+    # "somehow validate that it has gotten everything" — after the crawl we
+    # know (a) exactly how many discovered same-site pages were read vs. still
+    # queued vs. failed (frontier accounting) and (b) whether the LAST pages
+    # were still adding new content (saturation). Zero extra fetches.
+    coverage: CrawlCoverage | None = None
+    if not is_product:
+        coverage = build_coverage(
+            entry_url=url,
+            page_budget=page_budget,
+            pages_crawled=len(pages_read),
+            pages_failed=failed_pages,
+            queued_leftover=frontier.pending(),
+            frontier_stats=frontier.stats.as_dict(),
+            tracker=saturation,
+        )
+
     result = ResearchResult(
         url=url, entity_type=entity_type, entity_id=entity_id,
         fetched_ok=True, from_cache=fetched.from_cache,
@@ -275,6 +302,7 @@ async def research_target(
         # collected far more than 30 candidates and lost the rest right here.
         image_candidates=list(dict.fromkeys(image_candidates))[:MAX_IMAGE_LINES],
         pages=pages_read,
+        coverage=coverage,
     )
 
     # ---- LLM synthesis over the WHOLE crawled corpus --------------------------
@@ -434,6 +462,23 @@ async def research_target(
                 reason="",
                 flags=[],
             ))
+
+    # ---- Coverage report as ONE reviewable draft (Slice C4) -------------------
+    # INTERNAL REFERENCE DATA (like research_images/research_products): the
+    # reviewer sees exactly how complete the crawl was — pages read vs. budget,
+    # links discovered vs. still queued, failed pages, and whether the last
+    # pages were still adding new content — with an honest one-line assessment
+    # and the fix when incomplete (raise the page budget and re-run).
+    if not is_product and coverage is not None:
+        result.fields.append(FieldOutcome(
+            field_key="research_coverage",
+            value=coverage.draft_text(),
+            confidence=1.0,          # it's arithmetic about our own crawl
+            via="css",
+            accepted=True,
+            reason="",
+            flags=[],
+        ))
 
     # ---- Social-link following (Slice H9d) -----------------------------------
     # Detect the social-profile links the vendor advertises on their OWN pages

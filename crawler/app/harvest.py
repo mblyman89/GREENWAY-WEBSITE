@@ -66,6 +66,11 @@ class TargetState:
     display_name: str = ""
     status: str = "pending"  # pending | running | done | failed
     pages: int = 0
+    # C4: completeness signals from the crawl's coverage report — how many
+    # discovered pages were left unread (0 = site exhausted) and the one-line
+    # human assessment ("COMPLETE — …" / "BUDGET REACHED — …").
+    pages_leftover: int = 0
+    coverage_assessment: str = ""
     drafts_written: int = 0
     drafts_skipped: int = 0
     products_written: int = 0  # H9b: structured kb_products draft rows staged
@@ -326,6 +331,10 @@ async def run_job(job_id: str, *, settings: Settings | None = None) -> JobState 
                     max_pages=job.max_pages_per_site,
                 )
                 t.pages = len(result.pages)
+                # C4: surface the crawl's completeness verdict on the target.
+                if result.coverage is not None:
+                    t.pages_leftover = result.coverage.queued_leftover
+                    t.coverage_assessment = result.coverage.assessment
                 if not result.fetched_ok:
                     t.status = "failed"
                     t.error = result.error or "fetch failed"
