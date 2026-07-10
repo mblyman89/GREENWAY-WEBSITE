@@ -133,11 +133,13 @@ export default async function CatalogHubPage() {
 
         {!hub.hasPublishedMenu && (
           <div className="rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface)] px-4 py-3 text-sm text-[var(--admin-text-muted)]">
-            No published menu yet. Import and publish a menu version under{" "}
+            No published menu yet. Products you receive and approve with a price are carried
+            onto a menu draft automatically &mdash; review and publish it under{" "}
             <Link href="/admin/menu-imports" className="text-[var(--admin-accent)] hover:underline">
-              Menu Imports
+              Menu Imports &rarr; Menu drafts from receiving
             </Link>
-            , then enrichment metrics will appear here.
+            , then enrichment metrics will appear here. (The one-time POS upload on that page is only
+            for the initial Cultivera import.)
           </div>
         )}
 
