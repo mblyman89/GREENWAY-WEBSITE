@@ -18,6 +18,9 @@ import {
   type Delta,
 } from "@/lib/admin/cockpit-core";
 import { formatDateTime } from "@/lib/pos/format";
+import { can } from "@/lib/auth/roles";
+import { getWorkQueueInputs } from "@/lib/catalog/hub";
+import { emptyWorkQueueInputs, workQueueAttentionFlags } from "@/lib/catalog/work-queue-core";
 import { missingWebhookSecrets } from "@/lib/security/fail-closed";
 import { isAtRestEncryptionConfigured } from "@/lib/security/at-rest-crypto";
 import { getOverdueComplianceCount } from "@/lib/compliance/compliance-calendar-store";
@@ -33,10 +36,14 @@ function deltaAccent(d: Delta): "green" | "orange" | "muted" {
 
 export default async function AdminDashboardPage() {
   const session = await requireStaff();
-  const [snap, setup, overdueCompliance] = await Promise.all([
+  // W3: intake work-queue flags only for people who can act on them — every
+  // queue target requires inventory.manage, so gate the fetch the same way.
+  const canWorkIntake = can(session.profile.role, "inventory.manage");
+  const [snap, setup, overdueCompliance, intakeInputs] = await Promise.all([
     getCockpitSnapshot(),
     getSetupStatus(),
     getOverdueComplianceCount(),
+    canWorkIntake ? getWorkQueueInputs() : Promise.resolve(emptyWorkQueueInputs()),
   ]);
   const setupComplete = setup.completed >= setup.total;
 
@@ -50,12 +57,17 @@ export default async function AdminDashboardPage() {
   const firstName =
     (session.profile.full_name ?? session.email).split(/[\s@]/)[0] || "there";
 
-  const flags = buildAttentionFlags({
-    activeOrders: snap.activeOrders,
-    lowStockCount: snap.lowStockCount,
-    drawers: snap.drawers,
-    publishedItems: snap.publishedItems,
-  });
+  // W3: the product-intake pipeline surfaces its work here too — same verified
+  // counts, same priority order, and same copy as the hub's work queue.
+  const flags = [
+    ...buildAttentionFlags({
+      activeOrders: snap.activeOrders,
+      lowStockCount: snap.lowStockCount,
+      drawers: snap.drawers,
+      publishedItems: snap.publishedItems,
+    }),
+    ...workQueueAttentionFlags(intakeInputs),
+  ];
 
   const peak = peakHour(snap.today.byHour);
   const hourBars = toBars(

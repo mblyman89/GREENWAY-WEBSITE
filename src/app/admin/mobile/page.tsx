@@ -1,6 +1,8 @@
 import { requireStaff } from "@/lib/auth/session";
-import { ROLE_LABELS } from "@/lib/auth/roles";
+import { ROLE_LABELS, can } from "@/lib/auth/roles";
 import { getCockpitSnapshot } from "@/lib/admin/cockpit-data";
+import { getWorkQueueInputs } from "@/lib/catalog/hub";
+import { emptyWorkQueueInputs, workQueueAttentionFlags } from "@/lib/catalog/work-queue-core";
 import { mobileKpis, mobileAttention, mobileGlances, visibleShortcuts } from "@/lib/admin/mobile-core";
 import { MobileHome } from "@/components/admin/mobile/MobileHome";
 
@@ -20,13 +22,19 @@ export const dynamic = "force-dynamic";
  */
 export default async function AdminMobilePage() {
   const session = await requireStaff();
-  const snap = await getCockpitSnapshot();
+  // W3: same intake work-queue flags as the desktop dashboard, gated the same
+  // way (every queue target requires inventory.manage).
+  const canWorkIntake = can(session.profile.role, "inventory.manage");
+  const [snap, intakeInputs] = await Promise.all([
+    getCockpitSnapshot(),
+    canWorkIntake ? getWorkQueueInputs() : Promise.resolve(emptyWorkQueueInputs()),
+  ]);
 
   const firstName = (session.profile.full_name ?? session.email).split(/[\s@]/)[0] || "there";
   const roleLabel = ROLE_LABELS[session.profile.role];
 
   const kpis = mobileKpis(snap);
-  const attention = mobileAttention(snap);
+  const attention = [...mobileAttention(snap), ...workQueueAttentionFlags(intakeInputs)];
   const glances = mobileGlances(snap);
   const shortcuts = visibleShortcuts(session.profile.role);
 

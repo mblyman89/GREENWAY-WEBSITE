@@ -19,7 +19,7 @@ import { listPurchaseOrders } from "@/lib/purchasing/po-store";
 import { countManifestsByStatus, listManifests } from "@/lib/inventory/intake-store";
 import { classifyEta } from "@/lib/inventory/manifest-pipeline-core";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import type { WorkQueueInputs } from "@/lib/catalog/work-queue-core";
+import { emptyWorkQueueInputs, type WorkQueueInputs } from "@/lib/catalog/work-queue-core";
 
 export type CatalogHubSnapshot = {
   configured: boolean;
@@ -89,6 +89,66 @@ export function workQueueInputsFromHub(hub: CatalogHubSnapshot): WorkQueueInputs
     posToSend: hub.purchasing.toSend,
     masteringSuggestions: hub.mastering.pendingSuggestions,
   };
+}
+
+/**
+ * W3: gather ONLY the six verified work-queue counts (no enrichment-gap math,
+ * no menu-version join) — cheap enough for the dashboard to call on every load.
+ * Every source is the same one the hub/receiving pages use; on any failure a
+ * count degrades to 0 (a missing flag, never a fabricated one).
+ */
+export async function getWorkQueueInputs(): Promise<WorkQueueInputs> {
+  if (!isSupabaseServiceConfigured) return emptyWorkQueueInputs();
+  const inputs = emptyWorkQueueInputs();
+
+  try {
+    const counts = await countManifestsByStatus();
+    inputs.awaitingIntake = counts.awaitingIntake;
+  } catch {
+    /* leave 0 */
+  }
+
+  try {
+    const inTransit = await listManifests({ status: "in_transit", limit: 500 });
+    inputs.overdueInTransit = inTransit.filter(
+      (m) => classifyEta(m.eta_date) === "overdue",
+    ).length;
+  } catch {
+    /* leave 0 */
+  }
+
+  try {
+    const admin = createSupabaseAdminClient();
+    const { count } = await admin
+      .from("inventory_lots")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "quarantine")
+      .eq("disposition", "accepted");
+    inputs.heldLots = count ?? 0;
+  } catch {
+    /* leave 0 */
+  }
+
+  try {
+    inputs.onboardingDrafts = (await countCatalogDrafts()).draft;
+  } catch {
+    /* leave 0 */
+  }
+
+  try {
+    const pos = await listPurchaseOrders();
+    inputs.posToSend = pos.filter((p) => ["draft", "submitted"].includes(p.status)).length;
+  } catch {
+    /* leave 0 */
+  }
+
+  try {
+    inputs.masteringSuggestions = (await listSuggestions({ status: "pending" })).length;
+  } catch {
+    /* leave 0 */
+  }
+
+  return inputs;
 }
 
 export async function getCatalogHub(): Promise<CatalogHubSnapshot> {

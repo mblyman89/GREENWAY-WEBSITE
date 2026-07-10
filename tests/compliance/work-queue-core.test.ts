@@ -12,6 +12,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildWorkQueue,
   emptyWorkQueueInputs,
+  workQueueAttentionFlags,
   __runWorkQueueCoreTests,
   type WorkQueueInputs,
   type WorkQueueRowKey,
@@ -110,5 +111,32 @@ describe("work-queue-core: buildWorkQueue", () => {
 
   it("embedded self-tests pass", () => {
     expect(__runWorkQueueCoreTests().passed).toBeGreaterThan(0);
+  });
+});
+
+describe("work-queue-core: workQueueAttentionFlags (W3 dashboard bridge)", () => {
+  it("mirrors the queue 1:1 — same order, severity, copy, and target", () => {
+    const rows = buildWorkQueue(FULL);
+    const flags = workQueueAttentionFlags(FULL);
+    expect(flags).toHaveLength(rows.length);
+    rows.forEach((row, i) => {
+      expect(flags[i]).toEqual({
+        severity: row.severity,
+        text: row.text,
+        href: row.actionHref,
+      });
+    });
+  });
+
+  it("is empty when the queue is empty (no padding on the dashboard)", () => {
+    expect(workQueueAttentionFlags(emptyWorkQueueInputs())).toEqual([]);
+  });
+
+  it("matches the cockpit AttentionFlag shape (severity/text/href only)", () => {
+    for (const f of workQueueAttentionFlags(FULL)) {
+      expect(Object.keys(f).sort()).toEqual(["href", "severity", "text"]);
+      expect(["critical", "warning", "info"]).toContain(f.severity);
+      expect(f.href.startsWith("/admin/")).toBe(true);
+    }
   });
 });
