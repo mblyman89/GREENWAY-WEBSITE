@@ -136,10 +136,23 @@ export default async function HarvestConsolePage({
               : "Crawler isn't configured — set CRAWLER_BASE_URL + CRAWLER_SHARED_SECRET to enable harvesting."}
         </div>
 
-        {/* Live jobs */}
+        {/* Live jobs — only what's running right now. Finished crawls live on
+            the separate "Past crawls" tab so this console stays uncluttered. */}
         <section className="space-y-3">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-white/40">Jobs</h2>
-          <HarvestJobsLive cancelAction={cancelHarvestAction} resumeAction={resumeHarvestAction} />
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-white/40">Active jobs</h2>
+            <a
+              href="/admin/knowledge-base/harvest/history"
+              className="rounded-full border border-white/15 px-3 py-1 text-[11px] font-semibold text-white/70 transition hover:border-[#7ed957] hover:text-[#7ed957]"
+            >
+              🕘 Past crawls
+            </a>
+          </div>
+          <HarvestJobsLive
+            cancelAction={cancelHarvestAction}
+            resumeAction={resumeHarvestAction}
+            filter="active"
+          />
         </section>
 
         {/* Cadence — Tier-1 refresh + Tier-3 market trickle (Slice H6) */}
