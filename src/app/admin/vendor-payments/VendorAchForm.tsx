@@ -206,6 +206,22 @@ export function VendorAchForm({
                 </div>
               )}
 
+              {/* W8: invoice vs linked-PO cross-check (read-only suggestion). */}
+              {p?.poComparison.hasPo && (
+                <div
+                  className={
+                    p.poComparison.verdict === "invoice_higher"
+                      ? "mt-2 rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/30 bg-[var(--admin-danger-soft)] px-3 py-2 text-xs text-[var(--admin-danger)]"
+                      : p.poComparison.verdict === "invoice_lower"
+                        ? "mt-2 rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] px-3 py-2 text-xs text-[var(--admin-gold)]"
+                        : "mt-2 rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/30 bg-[var(--admin-accent-soft)] px-3 py-2 text-xs text-[var(--admin-accent)]"
+                  }
+                >
+                  {p.poComparison.verdict === "match" ? "✓ " : "⚠ "}
+                  {p.poComparison.message}
+                </div>
+              )}
+
               {warns.length > 0 && (
                 <ul className="mt-2 space-y-1 text-xs text-[var(--admin-gold)]">
                   {warns.map((w, k) => (
