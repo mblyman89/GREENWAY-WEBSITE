@@ -16,13 +16,30 @@ import { getPublishedVersion, getVersionItems } from "@/lib/pos/menu-version";
 import { getEnrichmentsForKeys, computeGaps, type GapFlags } from "@/lib/enrichment/store";
 import { listSuggestions } from "@/lib/products/masters-store";
 import { listPurchaseOrders } from "@/lib/purchasing/po-store";
-import { countManifestsByStatus } from "@/lib/inventory/intake-store";
+import { countManifestsByStatus, listManifests } from "@/lib/inventory/intake-store";
+import { classifyEta } from "@/lib/inventory/manifest-pipeline-core";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import type { WorkQueueInputs } from "@/lib/catalog/work-queue-core";
 
 export type CatalogHubSnapshot = {
   configured: boolean;
   hasPublishedMenu: boolean;
-  purchasing: { openPos: number; openValueMinor: number; awaitingDelivery: number };
-  receiving: { inTransit: number; awaitingIntake: number; pending: number };
+  purchasing: {
+    openPos: number;
+    openValueMinor: number;
+    awaitingDelivery: number;
+    /** W2: draft/submitted POs the vendor hasn't seen yet (work-queue input). */
+    toSend: number;
+  };
+  receiving: {
+    inTransit: number;
+    awaitingIntake: number;
+    pending: number;
+    /** W2: in-transit manifests whose ETA is strictly past (work-queue input). */
+    overdueInTransit: number;
+  };
+  /** W2: accepted-but-held lots (status=quarantine, disposition=accepted). */
+  heldLots: number;
   onboarding: { needsReview: number; approved: number; dismissed: number };
   enrichment: {
     total: number;
@@ -39,8 +56,9 @@ function emptySnapshot(configured: boolean, hasPublishedMenu = false): CatalogHu
   return {
     configured,
     hasPublishedMenu,
-    purchasing: { openPos: 0, openValueMinor: 0, awaitingDelivery: 0 },
-    receiving: { inTransit: 0, awaitingIntake: 0, pending: 0 },
+    purchasing: { openPos: 0, openValueMinor: 0, awaitingDelivery: 0, toSend: 0 },
+    receiving: { inTransit: 0, awaitingIntake: 0, pending: 0, overdueInTransit: 0 },
+    heldLots: 0,
     onboarding: { needsReview: 0, approved: 0, dismissed: 0 },
     enrichment: {
       total: 0,
@@ -59,6 +77,18 @@ function completenessPct(g: GapFlags): number {
   const signals = [g.hasDescription, g.hasImage, g.hasBrandLink];
   const present = signals.filter(Boolean).length;
   return Math.round((present / signals.length) * 100);
+}
+
+/** W2: map the verified snapshot onto the work-queue's inputs (all real counts). */
+export function workQueueInputsFromHub(hub: CatalogHubSnapshot): WorkQueueInputs {
+  return {
+    overdueInTransit: hub.receiving.overdueInTransit,
+    awaitingIntake: hub.receiving.awaitingIntake,
+    heldLots: hub.heldLots,
+    onboardingDrafts: hub.onboarding.needsReview,
+    posToSend: hub.purchasing.toSend,
+    masteringSuggestions: hub.mastering.pendingSuggestions,
+  };
 }
 
 export async function getCatalogHub(): Promise<CatalogHubSnapshot> {
@@ -118,6 +148,8 @@ export async function getCatalogHub(): Promise<CatalogHubSnapshot> {
       openPos: open.length,
       openValueMinor: open.reduce((s, p) => s + p.subtotal_minor_units, 0),
       awaitingDelivery: pos.filter((p) => ["sent", "partial"].includes(p.status)).length,
+      // W2 work-queue input: the vendor hasn't received these yet.
+      toSend: pos.filter((p) => ["draft", "submitted"].includes(p.status)).length,
     };
   } catch {
     purchasing = emptySnapshot(true).purchasing;
@@ -127,13 +159,36 @@ export async function getCatalogHub(): Promise<CatalogHubSnapshot> {
   let receiving = emptySnapshot(true).receiving;
   try {
     const counts = await countManifestsByStatus();
+    // W2: overdue = in-transit manifests past ETA (same rule as the Receiving
+    // page: classifyEta(m.eta_date) === "overdue").
+    const inTransit = await listManifests({ status: "in_transit", limit: 500 });
+    const overdueInTransit = inTransit.filter(
+      (m) => classifyEta(m.eta_date) === "overdue",
+    ).length;
     receiving = {
       inTransit: counts.in_transit,
       awaitingIntake: counts.awaitingIntake, // received, awaiting verify & accept
       pending: counts.pending,
+      overdueInTransit,
     };
   } catch {
     receiving = emptySnapshot(true).receiving;
+  }
+
+  // W2: held lots — accepted at intake but kept in quarantine by the Slice-107
+  // activation gate (missing CCRS id or passing COA). These are owned but not
+  // sellable, so they belong in the work queue.
+  let heldLots = 0;
+  try {
+    const admin = createSupabaseAdminClient();
+    const { count } = await admin
+      .from("inventory_lots")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "quarantine")
+      .eq("disposition", "accepted");
+    heldLots = count ?? 0;
+  } catch {
+    heldLots = 0;
   }
 
   return {
@@ -141,6 +196,7 @@ export async function getCatalogHub(): Promise<CatalogHubSnapshot> {
     hasPublishedMenu,
     purchasing,
     receiving,
+    heldLots,
     onboarding: {
       needsReview: draftCounts.draft,
       approved: draftCounts.approved,
