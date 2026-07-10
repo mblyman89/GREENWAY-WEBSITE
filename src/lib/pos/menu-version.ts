@@ -75,6 +75,33 @@ export async function listVersions(limit = 50): Promise<MenuVersion[]> {
   }
 }
 
+/**
+ * List STAGED intake-origin menu versions (import_id IS NULL — auto-carried
+ * from an accepted/approved manifest, not a POS-export upload). These are the
+ * "menu drafts from receiving" a manager reviews + publishes without any
+ * Cultivera Menu Imports upload.
+ */
+export async function listIntakeStagedVersions(limit = 30): Promise<MenuVersion[]> {
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("menu_versions")
+      .select("*")
+      .is("import_id", null)
+      .eq("status", "staged")
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    if (error) {
+      console.error("[menu-version] listIntakeStagedVersions error:", error.message);
+      return [];
+    }
+    return (data as MenuVersion[] | null) ?? [];
+  } catch (err) {
+    console.error("[menu-version] listIntakeStagedVersions exception:", err);
+    return [];
+  }
+}
+
 export async function listImports(limit = 50): Promise<PosImport[]> {
   try {
     const admin = createSupabaseAdminClient();
