@@ -51,6 +51,7 @@ import {
   findBlockingDuplicate,
   type ExistingManifestRow,
 } from "@/lib/inventory/manifest-dedupe-core";
+import { autoReceiveManifestPo } from "@/lib/inventory/po-receive-store";
 
 export async function listManifests(opts?: {
   status?: string;
@@ -702,6 +703,10 @@ export async function finalizeManifestDispositions(
 
   let activated = 0;
   let rejected = 0;
+  // W6: lots flipped quarantine/pending → active IN THIS RUN. A lot leaves
+  // quarantine exactly once, so auto-receiving only THESE ids keeps the linked
+  // PO's received quantities idempotent across re-finalizes.
+  const activatedLotIds: string[] = [];
   for (const lot of rows) {
     const decided = lot.disposition === "rejected_at_dock" ? "rejected_at_dock" : "accepted";
     if (decided === "accepted") {
@@ -738,6 +743,7 @@ export async function finalizeManifestDispositions(
           note: "Accepted from vendor manifest intake (partial-accept flow).",
           actor_id: actorId,
         });
+        activatedLotIds.push(lot.id);
       }
       activated += 1;
     } else {
@@ -831,6 +837,19 @@ export async function finalizeManifestDispositions(
       await seedIncomingSampleEvents(manifestId, actorId);
     } catch (err) {
       console.error("[intake-store] seedIncomingSampleEvents failed:", err);
+    }
+    // W6: if this manifest is LINKED to a purchase order (W5 / migration 0102),
+    // auto-receive the lots that just activated against the PO's lines and log
+    // the ordered-vs-delivered picture on the timeline. Idempotent (only THIS
+    // run's activated lot ids are passed), no-op pre-0102, best-effort — a PO
+    // hiccup must never break intake finalization.
+    try {
+      const autoRx = await autoReceiveManifestPo(manifestId, activatedLotIds);
+      if (autoRx.attempted) {
+        await logManifestEvent(manifestId, "po_auto_receive", autoRx.note, actorId);
+      }
+    } catch (err) {
+      console.error("[intake-store] autoReceiveManifestPo failed:", err);
     }
   }
 
