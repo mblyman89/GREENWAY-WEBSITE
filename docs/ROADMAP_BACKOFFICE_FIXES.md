@@ -78,9 +78,19 @@ jump back to the vendor that was just crawled, for quick return.
 `lead:`) and non-vendor targets are excluded since they have no vendor page. No schema change,
 no new endpoint. Verified with `tsc` (clean), scoped ESLint (clean), full compliance (747).
 
-### Task D — Relocate past crawls to a tabbed history page  `[ ]`
+### Task D — Relocate past crawls to a tabbed history page  `[x]`  (PR pending)
 Move the crawl history off the main Harvest Console page into a new tab / sub-page so the
 main console stays uncluttered.
+
+**Implementation (verified by reading code):** `HarvestJobsLive` gained a `filter` prop
+(`"active" | "history" | "all"`, default `all`). The main console now renders `filter="active"`
+(queued/running only) under an "Active jobs" heading with a "🕘 Past crawls" tab link. A new
+route `src/app/admin/knowledge-base/harvest/history/page.tsx` renders the same live cards with
+`filter="history"` (finished jobs, newest-first) and a breadcrumb/back link to the console. The
+poller still fetches all jobs, so a job that finishes while you watch simply moves from the
+console to the history tab on the next poll. Resume and the Task-C jump links still work on
+history cards. No schema change. Verified with `tsc` (clean), scoped ESLint (clean), full
+compliance (747).
 
 ### Task E — Preserve filters/sort on back navigation  `[ ]`
 On the Vendors & Brands page, fix the back buttons and the breadcrumb / in-page return button

@@ -68,12 +68,27 @@ const STATUS_STYLE: Record<Job["status"], string> = {
   failed: "border-red-400/40 bg-red-400/10 text-red-300",
 };
 
+/**
+ * Which slice of jobs to show:
+ *   • "active"  → only queued/running jobs (the live Harvest Console).
+ *   • "history" → only finished jobs (completed/cancelled/failed) — the
+ *                 separate "Past crawls" tab so the main console stays clean.
+ *   • "all"     → everything (previous behaviour; kept for flexibility).
+ */
+export type HarvestJobsFilter = "active" | "history" | "all";
+
+function isActiveJob(j: Job): boolean {
+  return j.status === "queued" || j.status === "running";
+}
+
 export function HarvestJobsLive({
   cancelAction,
   resumeAction,
+  filter = "all",
 }: {
   cancelAction: (formData: FormData) => void | Promise<void>;
   resumeAction: (formData: FormData) => void | Promise<void>;
+  filter?: HarvestJobsFilter;
 }) {
   const [jobs, setJobs] = useState<Job[] | null>(null);
   const [stale, setStale] = useState(false);
@@ -117,8 +132,24 @@ export function HarvestJobsLive({
   if (jobs === null) {
     return <p className="text-xs text-white/40">Loading jobs…</p>;
   }
-  if (jobs.length === 0) {
-    return <p className="text-xs text-white/40">No harvest jobs yet — pick targets below and start one.</p>;
+
+  // Show only the slice this instance is responsible for. History is
+  // newest-first so the most recent crawl is at the top.
+  const visible =
+    filter === "active"
+      ? jobs.filter(isActiveJob)
+      : filter === "history"
+        ? [...jobs].filter((j) => !isActiveJob(j)).sort((a, b) => b.created_at - a.created_at)
+        : jobs;
+
+  if (visible.length === 0) {
+    const emptyMsg =
+      filter === "active"
+        ? "No harvest running right now — pick targets below and start one."
+        : filter === "history"
+          ? "No past crawls yet — finished jobs will appear here."
+          : "No harvest jobs yet — pick targets below and start one.";
+    return <p className="text-xs text-white/40">{emptyMsg}</p>;
   }
 
   return (
@@ -126,7 +157,7 @@ export function HarvestJobsLive({
       {stale && (
         <p className="text-[10px] text-[#ffd700]">Live updates paused (worker unreachable) — showing the last known state.</p>
       )}
-      {jobs.map((job) => {
+      {visible.map((job) => {
         const finished = job.counts.done + job.counts.failed;
         const pct = job.total_targets === 0 ? 0 : Math.round((finished / job.total_targets) * 100);
         const active = job.status === "queued" || job.status === "running";
