@@ -60,6 +60,20 @@ describe("W1 — canonical journey constant", () => {
       expect(s.cardTitle.length).toBeGreaterThan(0);
     }
   });
+
+  it("W10 — every stage declares the permission its page actually requires (verified per page)", () => {
+    const perms: Record<JourneyStageKey, string> = {
+      discover: "inventory.manage", // /admin/discovery
+      order: "inventory.manage", // /admin/purchasing
+      receive: "inventory.manage", // /admin/inventory/intake
+      onboard: "inventory.manage", // /admin/inventory/drafts
+      publish: "inventory.manage", // /admin/inventory (altHref menu-imports is menu.import)
+      enrich: "products.enrich", // /admin/products
+      master: "inventory.manage", // /admin/products/masters
+      pay: "payables.manage", // /admin/vendor-payments — W10 scoped, NOT settings.manage
+    };
+    for (const s of JOURNEY_STAGES) expect(s.permission).toBe(perms[s.key]);
+  });
 });
 
 describe("W1 — legacy alias bridge (old CatalogStageStrip keys keep working)", () => {

@@ -73,7 +73,7 @@ export type VendorPayFormResult = {
 
 /** Load payables for the form (accepted manifests still owing money). */
 export async function loadPayableOptionsAction(): Promise<PayableOption[]> {
-  await requirePermission("settings.manage");
+  await requirePermission("payables.manage");
   const rows = await listVendorPayables({ includePaid: false, limit: 300 });
   // W8: cross-check each invoice against its LINKED purchase order (when the
   // W5 link exists) so the human sees "invoice vs ordered" before paying.
@@ -145,7 +145,7 @@ export async function buildVendorAchAction(
   _prev: VendorPayFormResult | null,
   formData: FormData,
 ): Promise<VendorPayFormResult> {
-  const session = await requirePermission("settings.manage");
+  const session = await requirePermission("payables.manage");
 
   const settings = await getAchCompanySettings();
   const settingsComplete =
@@ -360,7 +360,7 @@ export async function recordManualPaymentAction(
   _prev: ManualPaymentResult | null,
   formData: FormData,
 ): Promise<ManualPaymentResult> {
-  const session = await requirePermission("settings.manage");
+  const session = await requirePermission("payables.manage");
 
   const manifestId = String(formData.get("manifestId") ?? "").trim();
   const methodRaw = String(formData.get("paymentMethod") ?? "").trim().toLowerCase();
