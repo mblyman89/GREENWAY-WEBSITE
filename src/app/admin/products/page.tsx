@@ -116,11 +116,13 @@ export default async function ProductsPage({
             </p>
           </HelpPanel>
           <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-6 text-sm text-[var(--admin-text-muted)]">
-            No published menu yet. Import and publish a menu version under{" "}
+            No published menu yet. Products you receive and approve with a price are carried onto a
+            menu draft automatically &mdash; review and publish it under{" "}
             <Link href="/admin/menu-imports" className="text-[var(--admin-accent)] hover:underline">
-              Menu Imports
+              Menu Imports &rarr; Menu drafts from receiving
             </Link>
-            , then products will appear here for enrichment.
+            , then products will appear here for enrichment. (The one-time POS upload on that page is
+            only for the initial Cultivera import.)
           </div>
         </div>
       </div>
@@ -198,7 +200,7 @@ export default async function ProductsPage({
             id="products"
             title="How product enrichment works"
             steps={[
-              "Products come in automatically from your POS menu upload.",
+              "Products come in automatically when you receive and approve them (or, one time, from the initial Cultivera menu upload).",
               "Open a product to add a photo, description, and tags.",
               "Use the AI helper to draft a description or alt-text, then edit it.",
               "Save — the richer info shows on your public product page.",

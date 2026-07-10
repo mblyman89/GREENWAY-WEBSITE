@@ -84,19 +84,19 @@ export default async function MenuImportsPage({
         help={
           <HelpPanel
             id="menu-imports"
-            title="How menu uploads work"
+            title="How your menu gets published"
             steps={[
-              "In your POS, export your PRODUCTS and INVENTORIES lists as spreadsheet files (.xlsx or .csv).",
-              "Upload both files below — we stage them so nothing changes on your site yet.",
-              "Open the staged version and review the changes (new items, price changes, removals).",
-              "Click Publish when it looks right. Your public menu updates with the new items and prices.",
+              "Day to day: receive products, approve each one with a price, and it is carried onto a menu draft here automatically — no upload.",
+              "Open the draft under 'Menu drafts from receiving' and review what is new vs. your live menu.",
+              "Click Publish when it looks right — those products show on the website and become sellable at the register.",
+              "One time only: the PRODUCTS + INVENTORIES upload below is for your initial Cultivera import; you will not need it after that.",
             ]}
           >
             <p>
-              Your menu always comes from your point-of-sale system, so prices
-              and stock stay accurate. If an upload fails, re-export the files
-              straight from your POS (don&apos;t rename a .csv to .xlsx) and try
-              again.
+              After the initial Cultivera import, your menu is built from what you
+              receive and approve — no more spreadsheet uploads. Prices come from
+              your invoices, manifests, and COAs at approval, and stock comes from
+              the quantity you received.
             </p>
             <SopSheetLink slug="publish" />
           </HelpPanel>

@@ -129,28 +129,28 @@ The one-time Cultivera import keeps using its own workbook qty/price (unchanged)
 
 ## Slice plan (ONE slice per PR)
 
-- [ ] **Slice A1 — PURE staging core.** `src/lib/pos/intake-menu-staging-core.ts`:
+- [x] **Slice A1 — PURE staging core.** `src/lib/pos/intake-menu-staging-core.ts`:
       pure planner `buildIntakeStagedVersionPlan(inputs)` deciding whether an
       intake accept has anything to stage, dedupe/carry-forward the current
       published menu items so a NEW staged version is a full snapshot (published
       items + newly approved intake items), and reuse `buildDraftInjectionPlan`
       for the approved-draft rows. Embedded self-tests + vitest wrapper.
-- [ ] **Slice A2 — server executor.** `src/lib/pos/intake-menu-staging.ts`:
+- [x] **Slice A2 — server executor.** `src/lib/pos/intake-menu-staging.ts`:
       `stageIntakeMenuVersionForManifest(manifestId, actorId)` — reads published
       version items (carry-forward) + approved drafts for the manifest, gathers
       enrichment (reuse the resolver/kb/lot logic), calls the pure planner,
       creates a STAGED `menu_versions` row (import_id NULL, summary_json origin),
       persists items + variants, sets counts + diagnostics into summary_json
       (no pos_import_diagnostics dependency). Best-effort, no-op-safe.
-- [ ] **Slice A3 — wire into finalize.** Add the best-effort call to
+- [x] **Slice A3 — wire into finalize.** Add the best-effort call to
       `finalizeManifestDispositions` in the `activated > 0` chain. No-op when no
       approved drafts exist. Never breaks finalize.
-- [ ] **Slice A4 — review/Publish surface for intake-origin versions.** A staged
+- [x] **Slice A4 — review/Publish surface for intake-origin versions.** A staged
       versions list + review page that finds versions by VERSION id (not
       import_id), shows the diff vs published, and offers Publish (reusing
       `publishVersion`). Handles NULL import_id (no "source files" block; reads
       diagnostics from summary_json).
-- [ ] **Slice A5 — enrich-page + empty-menu copy.** Update the "no published menu
+- [x] **Slice A5 — enrich-page + empty-menu copy.** Update the "no published menu
       yet, import and publish a menu in the menu upload page" guidance so it points
       to the intake auto-carry flow (the Menu Imports page is the throw-away
       one-time tool), so the owner is never told to rely on a fake upload.

@@ -215,9 +215,9 @@ export const SOP_DOCS: readonly SopDoc[] = [
     title: "SOP — Product Enrichment",
     purpose: "Add the photos, descriptions, and tags that make a product look great online.",
     where: journeyStage("enrich").href,
-    before: ["A published menu — products appear here automatically from your POS menu upload."],
+    before: ["A published menu — products appear here automatically once you receive and approve them (or from the one-time Cultivera import)."],
     steps: [
-      "Products come in automatically from your POS menu upload.",
+      "Products come in automatically once you receive and approve them (or, one time, from the initial Cultivera import).",
       "Open a product to add a photo, description, and tags.",
       "Use the AI helper to draft a description or alt-text, then edit it.",
       "Save — the richer info shows on your public product page.",
