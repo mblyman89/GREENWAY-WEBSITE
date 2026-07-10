@@ -1,73 +1,50 @@
 import Link from "next/link";
+import {
+  JOURNEY_STAGES,
+  resolveStageKey,
+  type JourneyStageKey,
+} from "@/lib/catalog/journey-core";
 
 /**
- * CatalogStageStrip — a compact, legible "where am I in the workflow" indicator
- * shown at the top of every catalog surface. It teaches the real product
- * lifecycle at a glance so a new employee instantly understands the sequence and
- * what comes next:
+ * CatalogStageStrip — the compact "where am I in the workflow" indicator shown
+ * at the top of every Product Intake surface.
  *
- *   Receiving → Product Onboarding → Live Menu → Product Enrichment
+ * W1: it now renders the ONE canonical 8-stage journey from journey-core
+ * (Discover → Order → Receive → Onboard → Publish → Enrich → Master → Pay)
+ * instead of a private 4-stage subset, so every page teaches the same mental
+ * model. Every stage is a link to where that work happens; the current stage
+ * is highlighted but stays clickable. Purely navigational — changes no data.
  *
- * Every stage links to the page where that work happens (the Live Menu stage
- * links to Inventory — the live, on-hand, customer-facing stock). The `current`
- * stage is highlighted but stays clickable, so you can jump to any stage from
- * anywhere. This is purely navigational/orientational — it changes no data.
+ * Accepts canonical keys AND the legacy keys ("intake", "onboarding", "menu",
+ * "enrichment") so existing call sites keep working unchanged.
  */
 
-export type CatalogStage = "intake" | "onboarding" | "menu" | "enrichment";
+export type CatalogStage =
+  | JourneyStageKey
+  | "intake"
+  | "onboarding"
+  | "menu"
+  | "enrichment";
 
-type StageDef = {
-  key: CatalogStage;
-  label: string;
-  href: string | null;
-  hint: string;
-};
-
-const STAGES: StageDef[] = [
-  {
-    key: "intake",
-    label: "Receiving",
-    href: "/admin/inventory/intake",
-    hint: "Receive the transfer + COA",
-  },
-  {
-    key: "onboarding",
-    label: "Product Onboarding",
-    href: "/admin/inventory/drafts",
-    hint: "Approve new products onto the menu",
-  },
-  {
-    key: "menu",
-    label: "Live Menu",
-    href: "/admin/inventory",
-    hint: "Live, on-hand inventory that's customer-facing",
-  },
-  {
-    key: "enrichment",
-    label: "Product Enrichment",
-    href: "/admin/products",
-    hint: "Add photos, descriptions & tags",
-  },
-];
-
-export function CatalogStageStrip({ current }: { current: CatalogStage }) {
+export function CatalogStageStrip({ current }: { current?: CatalogStage }) {
+  // No `current` (e.g. on the Catalog Hub, which is the map itself): render
+  // the journey with nothing highlighted.
+  const currentKey = current ? resolveStageKey(current) : null;
   return (
     <nav
-      aria-label="Catalog workflow"
+      aria-label="Product Intake journey"
       className="flex flex-wrap items-center gap-1 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] px-3 py-2 text-xs"
     >
-      {STAGES.map((s, i) => {
-        const isCurrent = s.key === current;
+      {JOURNEY_STAGES.map((s, i) => {
+        const isCurrent = s.key === currentKey;
         const inner = (
           <span
             title={s.hint}
             className={[
-              "inline-flex items-center gap-1.5 rounded-full px-3 py-1 font-semibold transition",
+              "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-semibold transition",
               isCurrent
                 ? "bg-[var(--admin-accent)] text-black"
-                : s.href
-                  ? "text-[var(--admin-text-muted)] hover:bg-white/10 hover:text-[var(--admin-text)]"
-                  : "text-[var(--admin-text-faint)]",
+                : "text-[var(--admin-text-muted)] hover:bg-white/10 hover:text-[var(--admin-text)]",
             ].join(" ")}
           >
             <span
@@ -86,17 +63,12 @@ export function CatalogStageStrip({ current }: { current: CatalogStage }) {
         );
         return (
           <span key={s.key} className="inline-flex items-center gap-1">
-            {s.href ? (
-              // A stage with a destination is ALWAYS a link — even when it's the
-              // current stage — so you can jump straight to it from anywhere
-              // (e.g. the hub highlights "Live Menu" but still lets you open it).
-              <Link href={s.href} aria-current={isCurrent ? "step" : undefined}>
-                {inner}
-              </Link>
-            ) : (
-              <span aria-current={isCurrent ? "step" : undefined}>{inner}</span>
-            )}
-            {i < STAGES.length - 1 && (
+            {/* Every stage is ALWAYS a link — even the current one — so you can
+                jump straight to any stage from anywhere. */}
+            <Link href={s.href} aria-current={isCurrent ? "step" : undefined}>
+              {inner}
+            </Link>
+            {i < JOURNEY_STAGES.length - 1 && (
               <span aria-hidden className="px-0.5 text-[var(--admin-text-faint)]">
                 →
               </span>
