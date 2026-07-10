@@ -80,6 +80,24 @@ class Settings(BaseSettings):
     # read and is fine with a crawl taking several minutes per vendor.
     crawl_max_pages: int = Field(default=25, alias="CRAWL_MAX_PAGES")
 
+    # --- Dynamic-content capture (Slice C3) -------------------------------------
+    # When true (default) the browser fetch scrolls the FULL page (so lazy-loaded
+    # sections and images render), waits for images, removes cookie/newsletter
+    # overlays that hide content, and best-effort clicks visible "load more /
+    # show more / view all" buttons before capturing the HTML. Every knob is
+    # soft-degrading: features the installed crawl4ai doesn't support are simply
+    # skipped (the repo pins a wide crawl4ai range). Set false for the fastest,
+    # plain page-load capture.
+    crawl_dynamic_content: bool = Field(default=True, alias="CRAWL_DYNAMIC_CONTENT")
+    # Pause between scroll steps during the full-page scan (seconds). Higher =
+    # gentler + more time for lazy content; the owner is fine with slow crawls.
+    crawl_scroll_delay_seconds: float = Field(default=0.3, alias="CRAWL_SCROLL_DELAY_SECONDS")
+    # Extra settle time after scripts run before the HTML snapshot (seconds).
+    crawl_settle_seconds: float = Field(default=2.0, alias="CRAWL_SETTLE_SECONDS")
+    # Per-page browser timeout (seconds) — generous because full-page scans of
+    # image-heavy catalogs legitimately take a while.
+    crawl_page_timeout_seconds: float = Field(default=90.0, alias="CRAWL_PAGE_TIMEOUT_SECONDS")
+
     # --- URL seeding (Slice H2) ------------------------------------------------
     # Two-phase cost control: BEFORE spending expensive browser fetches, ask
     # crawl4ai's AsyncUrlSeeder for the site's full URL inventory (sitemap

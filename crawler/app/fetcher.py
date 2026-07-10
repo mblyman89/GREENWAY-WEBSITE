@@ -300,8 +300,101 @@ def _extract_image_urls(html: str, base_url: str) -> list[str]:
     return out[:_MAX_IMAGES_PER_PAGE]
 
 
+# --- C3: dynamic-content capture -------------------------------------------------
+# Best-effort in-page JavaScript that surfaces content a plain page-load misses:
+#   1. clicks visible "load more / show more / view all" buttons (a few rounds),
+#   2. scrolls to the bottom after each round so infinite-scroll lists append,
+#   3. returns to the top so screenshots/layout-sensitive extraction see page start.
+# This only interacts with PUBLIC pages the way a human visitor would (scrolling
+# and clicking a pagination button) — no form fills, no logins, no purchases.
+_LOAD_MORE_JS = """
+(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const LOAD_MORE = /(load|show|view)\\s*(more|all)|more\\s+(products|items|results)/i;
+  for (let round = 0; round < 4; round++) {
+    let clicked = false;
+    const candidates = document.querySelectorAll(
+      'button, a[role="button"], [class*="load-more" i], [class*="loadmore" i], [class*="show-more" i]'
+    );
+    for (const el of candidates) {
+      const label = ((el.innerText || '') + ' ' + (el.getAttribute('aria-label') || '')).trim();
+      if (LOAD_MORE.test(label) && el.offsetParent !== null) {
+        try { el.click(); clicked = true; } catch (e) {}
+      }
+    }
+    window.scrollTo(0, document.body.scrollHeight);
+    await sleep(800);
+    if (!clicked) break;
+  }
+  window.scrollTo(0, 0);
+})();
+"""
+
+
+def _crawl4ai_run_config(settings: Settings):
+    """Build the most capable ``CrawlerRunConfig`` the INSTALLED crawl4ai supports.
+
+    The repo pins ``crawl4ai>=0.4.0,<0.10.0`` — a wide range — so every advanced
+    kwarg is filtered against the actual ``CrawlerRunConfig.__init__`` signature
+    (same soft-degrade pattern as ``seeding.py``). Returns ``None`` when
+    ``CrawlerRunConfig`` doesn't exist (very old crawl4ai) or construction fails;
+    the caller then uses the legacy plain-``arun`` path.
+    """
+    try:
+        from crawl4ai import CrawlerRunConfig  # type: ignore
+    except Exception:
+        return None
+    import inspect
+
+    try:
+        accepted = set(inspect.signature(CrawlerRunConfig.__init__).parameters)
+    except (TypeError, ValueError):  # pragma: no cover - C-extension oddities
+        accepted = set()
+
+    desired: dict = {"word_count_threshold": 10}
+    if settings.crawl_dynamic_content:
+        desired.update(
+            {
+                # Scroll the whole page so lazy-loaded sections/images render.
+                "scan_full_page": True,
+                "scroll_delay": settings.crawl_scroll_delay_seconds,
+                # Wait for <img> elements to finish loading before capture.
+                "wait_for_images": True,
+                # Dismiss cookie walls / newsletter modals that hide content.
+                "remove_overlay_elements": True,
+                # Let JS-appended content settle before the HTML snapshot.
+                "delay_before_return_html": settings.crawl_settle_seconds,
+                "page_timeout": int(settings.crawl_page_timeout_seconds * 1000),
+                # Best-effort "load more" clicking + infinite-scroll nudging.
+                "js_code": _LOAD_MORE_JS,
+            }
+        )
+    # Fresh fetch every time — our own on-disk cache handles reuse politely.
+    if "cache_mode" in accepted:
+        try:
+            from crawl4ai import CacheMode  # type: ignore
+
+            desired["cache_mode"] = CacheMode.BYPASS
+        except Exception:
+            pass
+
+    filtered = {k: v for k, v in desired.items() if k in accepted}
+    try:
+        return CrawlerRunConfig(**filtered)
+    except Exception:  # pragma: no cover - defensive; config must never break a fetch
+        return None
+
+
 async def _fetch_with_crawl4ai(settings: Settings, url: str) -> FetchResult | None:
-    """Use crawl4ai (real browser + fit_markdown). Returns None if unavailable."""
+    """Use crawl4ai (real browser + fit_markdown). Returns None if unavailable.
+
+    C3 fetch ladder inside the browser:
+      1. advanced ``CrawlerRunConfig`` (full-page scan, wait-for-images, overlay
+         removal, load-more clicking) when the installed crawl4ai supports it,
+      2. legacy plain ``arun`` when the config can't be built or the advanced
+         run raises/returns nothing,
+    and the caller falls back to httpx when the browser path fails entirely.
+    """
     try:
         from crawl4ai import AsyncWebCrawler  # type: ignore
     except Exception:
@@ -316,13 +409,23 @@ async def _fetch_with_crawl4ai(settings: Settings, url: str) -> FetchResult | No
         if settings.proxy_url:
             crawler_kwargs["proxy"] = settings.proxy_url
         async with AsyncWebCrawler(**crawler_kwargs) as crawler:
-            result = await crawler.arun(
-                url=url,
-                user_agent=ua,
-                # fit_markdown prunes boilerplate to the meaningful content.
-                word_count_threshold=10,
-                bypass_cache=True,
-            )
+            result = None
+            run_config = _crawl4ai_run_config(settings)
+            if run_config is not None:
+                try:
+                    result = await crawler.arun(url=url, config=run_config, user_agent=ua)
+                except Exception:
+                    result = None  # advanced path unsupported → legacy arun below
+            if result is None or not (
+                getattr(result, "html", "") or getattr(result, "markdown", "")
+            ):
+                result = await crawler.arun(
+                    url=url,
+                    user_agent=ua,
+                    # fit_markdown prunes boilerplate to the meaningful content.
+                    word_count_threshold=10,
+                    bypass_cache=True,
+                )
         html = getattr(result, "html", "") or ""
         markdown = (
             getattr(result, "fit_markdown", None)
