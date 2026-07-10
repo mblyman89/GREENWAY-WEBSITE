@@ -41,6 +41,8 @@ import {
   compareInvoiceToPo,
   type InvoicePoComparison,
 } from "@/lib/payments/invoice-po-match-core";
+import { paymentReferenceLabel } from "@/lib/purchasing/po-paid-stamp-core";
+import { stampPoPaidIfSettled } from "@/lib/purchasing/po-paid-stamp-store";
 
 export type PayableOption = {
   manifestId: string;
@@ -293,6 +295,13 @@ export async function buildVendorAchAction(
       achBatchRef: batchRef,
       createdBy: session.userId,
     }).catch(() => null);
+
+    // W9: if this payment settles every invoice linked to a PO, stamp the PO
+    // paid so Purchasing can see it. Best-effort; no-op pre-migration 0103.
+    await stampPoPaidIfSettled(
+      payable.manifestId,
+      paymentReferenceLabel({ achBatchRef: batchRef, paymentMethod: "ach" }),
+    ).catch(() => null);
   }
 
   await recordAudit({
@@ -428,6 +437,13 @@ export async function recordManualPaymentAction(
       problems: ["Could not save the payment. Please try again or check the database connection."],
     };
   }
+
+  // W9: if this payment settles every invoice linked to a PO, stamp the PO
+  // paid so Purchasing can see it. Best-effort; no-op pre-migration 0103.
+  await stampPoPaidIfSettled(
+    payable.manifestId,
+    paymentReferenceLabel({ reference: reference || null, paymentMethod: method }),
+  ).catch(() => null);
 
   await recordAudit({
     actorId: session.userId,
