@@ -23,6 +23,8 @@ import { VendorLeadsTable } from "./vendor-leads-table";
 import { ProductLeadsTable } from "./product-leads-table";
 import { LeadsAssistantPanel } from "./LeadsAssistantPanel";
 import { isAiConfigured } from "@/lib/ai/provider";
+import { discoveryWhatDoIDoHere } from "@/lib/catalog/next-action-core";
+import { WhatDoIDoHere } from "@/components/admin/catalog/WhatDoIDoHere";
 
 export const dynamic = "force-dynamic";
 
@@ -167,6 +169,15 @@ export default async function DiscoveryPage({ searchParams }: { searchParams: Pr
             {cautionSources.map((s) => s.notes || s.name).join(" ")}
           </div>
         ) : null}
+
+        {/* W4: one plain-English next action for the state of the funnel. */}
+        <WhatDoIDoHere
+          action={discoveryWhatDoIDoHere({
+            openProductLeads: snap.productLeads.open,
+            shortlisted: snap.productLeads.shortlisted,
+            openVendorLeads: snap.vendorLeads.open,
+          })}
+        />
 
         {/* KPIs */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
