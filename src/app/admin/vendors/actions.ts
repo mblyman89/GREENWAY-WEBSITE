@@ -21,6 +21,8 @@ import { acceptWithComplianceGate } from "@/lib/ai/accept-gate";
 import { AiNotConfiguredError } from "@/lib/ai/provider";
 import { researchSocial, startHarvest, isCrawlerConfigured, CrawlerNotConfiguredError } from "@/lib/ai/crawler-client";
 import { importImageFromUrl, HarvestImageError } from "@/lib/media/harvest";
+import { validateMergeSelection } from "@/lib/vendors/merge-core";
+import { mergeVendors, type MergeVendorsSummary } from "@/lib/vendors/merge-service";
 
 const MAX_LOGO_BYTES = 5 * 1024 * 1024;
 const IMAGE_MIME = new Set(["image/png", "image/jpeg", "image/webp", "image/svg+xml", "image/gif"]);
@@ -958,4 +960,63 @@ export async function importHarvestImageAction(formData: FormData): Promise<void
     const msg = err instanceof HarvestImageError ? err.message : "Couldn't import that image.";
     redirect(`${back}?error=` + encodeURIComponent(msg));
   }
+}
+
+/**
+ * Task F — combine duplicate vendor cards into one.
+ *
+ * Validates the human-confirmed selection (mirrors the DB guards, friendlier
+ * messages), then calls the atomic `merge_vendors()` DB function (migration
+ * 0104): repoints every reference from the duplicates to the survivor,
+ * gap-fills only the survivor's EMPTY fields, preserves every license number
+ * as aliases + Internal notes, and ARCHIVES the duplicates — nothing is ever
+ * deleted. Fails with a clear "apply migration 0104 first" message when the
+ * function isn't installed yet (owner applies migrations manually).
+ */
+export async function mergeVendorsAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("vendors.manage");
+  const survivorId = String(formData.get("survivor_id") ?? "").trim();
+  const duplicateIds = formData
+    .getAll("duplicate_ids")
+    .map((v) => String(v).trim())
+    .filter(Boolean);
+  const back = "/admin/vendors/merge";
+
+  const problem = validateMergeSelection(survivorId, duplicateIds);
+  if (problem) redirect(`${back}?error=` + encodeURIComponent(problem));
+
+  const survivor = await getVendorById(survivorId);
+  if (!survivor) redirect(`${back}?error=` + encodeURIComponent("The card you chose to keep no longer exists."));
+
+  let summary: MergeVendorsSummary;
+  try {
+    summary = await mergeVendors(survivorId, duplicateIds);
+  } catch (err) {
+    unstable_rethrow(err);
+    const msg = err instanceof Error ? err.message : "Merge failed.";
+    redirect(`${back}?error=` + encodeURIComponent(msg));
+    return; // unreachable — keeps TS aware summary is assigned below
+  }
+
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "vendor.merged",
+    entityType: "vendor",
+    entityId: survivorId,
+    after: {
+      duplicate_ids: summary.duplicateIds,
+      tables: summary.tables,
+      total_rows_repointed: summary.totalRowsRepointed,
+    },
+  });
+
+  revalidatePath("/admin/vendors");
+  revalidatePath(`/admin/vendors/${survivorId}`);
+  revalidatePath(back);
+  revalidatePath("/vendors");
+
+  const cards = summary.duplicateIds.length + 1;
+  const note = `Combined ${cards} cards into “${survivor!.display_name}”. ${summary.totalRowsRepointed} linked record${summary.totalRowsRepointed === 1 ? "" : "s"} moved over; the duplicate card${summary.duplicateIds.length === 1 ? " was" : "s were"} archived (nothing deleted).`;
+  redirect(`${back}?saved=1&note=${encodeURIComponent(note)}`);
 }

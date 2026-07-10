@@ -138,12 +138,22 @@ export default async function VendorsPage({
           <p className="text-sm text-[var(--admin-text-faint)]">
             Import your vendor or brand list from a spreadsheet export.
           </p>
-          <Link
-            href="/admin/vendors/import"
-            className="inline-flex items-center gap-2 rounded-[var(--admin-radius)] bg-[var(--admin-orange)] px-4 py-2 text-sm font-semibold text-black shadow-[var(--admin-shadow-sm)] hover:brightness-110"
-          >
-            <span aria-hidden>⬆️</span> Import vendors &amp; brands
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Task F: combine producer-processor cards that exist 2–3× because
+                the same business holds multiple LCB licenses. */}
+            <Link
+              href="/admin/vendors/merge"
+              className="inline-flex items-center gap-2 rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-4 py-2 text-sm font-semibold text-white shadow-[var(--admin-shadow-sm)] hover:bg-[var(--admin-surface-hover)]"
+            >
+              <span aria-hidden>🔀</span> Combine duplicates
+            </Link>
+            <Link
+              href="/admin/vendors/import"
+              className="inline-flex items-center gap-2 rounded-[var(--admin-radius)] bg-[var(--admin-orange)] px-4 py-2 text-sm font-semibold text-black shadow-[var(--admin-shadow-sm)] hover:brightness-110"
+            >
+              <span aria-hidden>⬆️</span> Import vendors &amp; brands
+            </Link>
+          </div>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
