@@ -10,6 +10,7 @@ import { vendorCompleteness } from "@/lib/vendors/completeness";
 import { CompletenessMeter } from "@/components/admin/vendors/CompletenessMeter";
 import { computeVendorStats, vendorGapInsights } from "@/lib/insight/vendors";
 import { MissingInsight } from "@/components/admin/insight/MissingInsight";
+import { pickVendorListParams, vendorDetailHref } from "@/lib/vendors/list-state-core";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +36,9 @@ export default async function VendorsPage({
   const sp = await searchParams;
   const { q, status, scope, active, license, itype, icat } = sp;
   const page = Math.max(1, Number.parseInt(sp.page ?? "1", 10) || 1);
+  // Task E: the active filter/sort/page state, carried into each vendor card's
+  // detail link so the detail page can send the owner back to this exact view.
+  const listParams = pickVendorListParams(sp);
 
   if (!isSupabaseServiceConfigured) {
     return (
@@ -259,7 +263,7 @@ export default async function VendorsPage({
             return (
               <Link
                 key={v.id}
-                href={`/admin/vendors/${v.id}`}
+                href={vendorDetailHref(v.id, listParams)}
                 className="admin-card-interactive group flex flex-col gap-3 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4"
               >
                 <div className="flex items-center gap-3">
