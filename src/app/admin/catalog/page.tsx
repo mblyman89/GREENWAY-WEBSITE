@@ -10,6 +10,8 @@ import { buildWorkQueue } from "@/lib/catalog/work-queue-core";
 import { journeyStage, type JourneyStageKey } from "@/lib/catalog/journey-core";
 import { can } from "@/lib/auth/roles";
 import { formatMoneyMinor } from "@/lib/purchasing/po-store";
+import { getDockToShelfMetrics } from "@/lib/catalog/dock-to-shelf";
+import { formatHopHours } from "@/lib/catalog/dock-to-shelf-core";
 
 /** W1 — hub card titles derive from THE canonical journey (journey-core). */
 function stageTitle(key: Parameters<typeof journeyStage>[0]): string {
@@ -25,7 +27,7 @@ export default async function CatalogHubPage() {
   // the viewer can actually open the page behind it (the stage's verified
   // permission from journey-core). No doors staff can't open.
   const canSee = (key: JourneyStageKey) => can(session.profile.role, journeyStage(key).permission);
-  const hub = await getCatalogHub();
+  const [hub, dockToShelf] = await Promise.all([getCatalogHub(), getDockToShelfMetrics()]);
 
   if (!hub.configured) {
     return (
@@ -170,6 +172,59 @@ export default async function CatalogHubPage() {
             href="/admin/products"
           />
         </div>
+
+        {/* W12 — dock-to-shelf: how fast product becomes sellable (last 90
+            days, medians). Every number is a real timestamp pair; a hop with
+            no completed pairs shows an em dash, never a guess. */}
+        {dockToShelf ? (
+          <Card className="p-5">
+            <CardHeader
+              title="Dock to shelf"
+              subtitle="How fast product becomes sellable — median time per hop, last 90 days"
+            />
+            <div className="mt-3 grid gap-4 sm:grid-cols-3">
+              <div>
+                <div className="text-xs uppercase tracking-wide text-[var(--admin-text-faint)]">
+                  Received → accepted
+                </div>
+                <div className="mt-1 text-2xl font-semibold text-[var(--admin-text)]">
+                  {formatHopHours(dockToShelf.receiveToAcceptHours)}
+                </div>
+                <div className="text-xs text-[var(--admin-text-muted)]">
+                  {dockToShelf.receiveToAcceptCount > 0
+                    ? `median of ${dockToShelf.receiveToAcceptCount} deliveries`
+                    : "no completed deliveries yet"}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs uppercase tracking-wide text-[var(--admin-text-faint)]">
+                  Accepted → product approved
+                </div>
+                <div className="mt-1 text-2xl font-semibold text-[var(--admin-text)]">
+                  {formatHopHours(dockToShelf.acceptToApproveHours)}
+                </div>
+                <div className="text-xs text-[var(--admin-text-muted)]">
+                  {dockToShelf.acceptToApproveCount > 0
+                    ? `median of ${dockToShelf.acceptToApproveCount} onboarded products`
+                    : "no onboarded products yet"}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs uppercase tracking-wide text-[var(--admin-text-faint)]">
+                  Approved → live on menu
+                </div>
+                <div className="mt-1 text-2xl font-semibold text-[var(--admin-text)]">
+                  {formatHopHours(dockToShelf.approveToLiveHours)}
+                </div>
+                <div className="text-xs text-[var(--admin-text-muted)]">
+                  {dockToShelf.approveToLiveCount > 0
+                    ? `median of ${dockToShelf.approveToLiveCount} publishes`
+                    : "no publishes after an approval yet"}
+                </div>
+              </div>
+            </div>
+          </Card>
+        ) : null}
 
         {/* Lifecycle surfaces, in order. Each card owns exactly one job. */}
         <Section
