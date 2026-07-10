@@ -176,9 +176,38 @@ upgrade adds a new write path — richer data lands in the SAME
 - [x] **C4 (PR #359) — Completeness validation + coverage report.**
       `crawler/app/coverage.py` (pure) + `research_coverage` reference draft +
       coverage in API response + harvest target state; tests.
-- [x] **C5 (this PR) — Back-office surface.** `research_coverage` label/lane, coverage
+- [x] **C5 (PR #360) — Back-office surface.** `research_coverage` label/lane, coverage
       display on vendor/brand research results + harvest review, env
       reference rows, crawler README update.
+
+## Follow-up: the 524 timeout after the powerhouse upgrade
+
+Owner report (verbatim): *"I tried the new crawler, and I get this error in
+the back office. Crawler error: Crawler responded 524: <none>. please help me
+to fix it."*
+
+**Verified root cause (read the code + deployment docs, no guessing):**
+`524` is a **Cloudflare Tunnel** status ("A Timeout Occurred") — NOT emitted by
+the FastAPI worker or the Next.js client. The deployment is
+Vercel → Cloudflare Tunnel (`cloudflared`, per `docs/IT_DEPLOYMENT_GUIDE.md`
+§4) → the crawler VM. Cloudflare closes a request that gets no response
+headers within ~100 s. The `/research` endpoint (`crawler/app/main.py`) is
+**synchronous** — it `await research_target(...)` and only returns once the
+whole crawl finishes. Before this powerhouse work a crawl was 1–2 pages (a few
+seconds); C2 (full-site frontier) + C3 (full-page scan/scroll + polite
+per-domain delays) now make ONE `/research` call take **several minutes**, far
+past Cloudflare's ~100 s cutoff → 524. (Cloudflare's 524 timeout is only
+tunable on Enterprise `proxy_read_timeout`, so raising it is not a reliable
+fix; the free/standard tier is fixed at ~100 s.)
+
+- [ ] **C6 — Async single-target research (fixes the 524).** The vendor/brand
+      "Research with the crawler" button no longer holds an HTTP connection
+      open for the whole crawl. It submits a **one-target harvest job** (the
+      already-shipped `/harvest` path returns 202 in <1 s — never hits 524) and
+      redirects to the Harvest Console, where the existing crash-safe live
+      poller (`HarvestJobsLive`, short 20 s polls) shows progress and the same
+      drafts land in `ai_suggestions` for review. Zero worker changes; reuses
+      proven background-job machinery; drafts-only preserved.
 
 ## Non-goals / unchanged
 

@@ -19,7 +19,7 @@ import { generateVendorProfile } from "@/lib/ai/ai-vendor";
 import { persistSuggestion, reviewSuggestion, getSuggestion } from "@/lib/ai/suggestions";
 import { acceptWithComplianceGate } from "@/lib/ai/accept-gate";
 import { AiNotConfiguredError } from "@/lib/ai/provider";
-import { researchUrl, researchSocial, isCrawlerConfigured, coverageNote, CrawlerNotConfiguredError } from "@/lib/ai/crawler-client";
+import { researchSocial, startHarvest, isCrawlerConfigured, CrawlerNotConfiguredError } from "@/lib/ai/crawler-client";
 import { importImageFromUrl, HarvestImageError } from "@/lib/media/harvest";
 
 const MAX_LOGO_BYTES = 5 * 1024 * 1024;
@@ -636,7 +636,15 @@ function crawlFailureMessage(err: unknown): string {
   return `Crawler error: ${err instanceof Error ? err.message : "please try again"}`;
 }
 
-/** Crawl a URL for a VENDOR → pending drafts in the review queue. */
+/** Crawl a URL for a VENDOR → pending drafts in the review queue.
+ *
+ * ASYNC (fixes the Cloudflare 524): since the powerhouse upgrade a full-site
+ * crawl takes several minutes, far past Cloudflare Tunnel's ~100 s request
+ * timeout — a synchronous `/research` call was being killed with a 524 before
+ * it could finish. Instead we submit a ONE-TARGET harvest job (the `/harvest`
+ * path returns immediately) and send the owner to the Harvest Console, where
+ * the crash-safe live poller shows progress and the same drafts land in
+ * `ai_suggestions` for review. Drafts-only, unchanged. */
 export async function crawlVendorAction(formData: FormData): Promise<void> {
   const session = await requirePermission("vendors.manage");
   const id = String(formData.get("id") ?? "");
@@ -653,11 +661,9 @@ export async function crawlVendorAction(formData: FormData): Promise<void> {
   if (!vendor) redirect("/admin/vendors?error=" + encodeURIComponent("Vendor not found."));
 
   try {
-    const result = await researchUrl({
-      url,
-      entityType: "vendor",
-      entityId: id,
-      displayName: vendor!.display_name,
+    const job = await startHarvest({
+      targets: [{ url, entityType: "vendor", entityId: id, displayName: vendor!.display_name }],
+      label: `Research: ${vendor!.display_name || url}`,
     });
     await recordAudit({
       actorId: session.userId,
@@ -665,14 +671,12 @@ export async function crawlVendorAction(formData: FormData): Promise<void> {
       action: "vendor.crawl_drafted",
       entityType: "vendor",
       entityId: id,
-      after: { url, written: result.drafts_written, skipped: result.drafts_skipped, fromCache: result.from_cache },
+      after: { url, jobId: job.id, mode: "async-harvest" },
     });
-    if (!result.ok) {
-      redirect(`/admin/vendors/${id}?error=` + encodeURIComponent(`Couldn't research that page: ${result.error || "unknown error"}`));
-    }
-    // H12c: the crawl SUCCEEDED on this URL — gap-fill the vendor's empty
-    // website field with the site root (a hand-entered website is never
-    // overwritten; websitePatch returns null in that case).
+    // H12c: gap-fill the vendor's empty website field with the researched URL
+    // now (a hand-entered website is never overwritten; websitePatch returns
+    // null in that case). Done at submit time because the crawl finishes later
+    // in the background job — it doesn't depend on the crawl result.
     let websiteNote = "";
     const site = websitePatch(vendor!.website, url);
     if (site) {
@@ -694,12 +698,11 @@ export async function crawlVendorAction(formData: FormData): Promise<void> {
       }
     }
     const msg =
-      (result.drafts_written > 0
-        ? `Researched ${result.pages?.length ?? 1} page(s) on ${url} — ${result.drafts_written} draft(s) added for review.`
-        : `Researched ${result.pages?.length ?? 1} page(s) on ${url} — no new drafts (nothing verifiable found, or already pending).`) +
-      coverageNote(result) + websiteNote;
+      `Crawling ${url} in the background (a full-site crawl takes a few minutes). ` +
+      `Watch progress below; drafts will appear on the vendor page for review when it finishes.` +
+      websiteNote;
     revalidatePath(`/admin/vendors/${id}`);
-    redirect(`/admin/vendors/${id}?saved=1&note=${encodeURIComponent(msg)}#ai-drafts`);
+    redirect(`/admin/knowledge-base/harvest?msg=${encodeURIComponent(msg)}`);
   } catch (err) {
     unstable_rethrow(err); // let NEXT_REDIRECT (success path) propagate
     redirect(`/admin/vendors/${id}?error=` + encodeURIComponent(crawlFailureMessage(err)));
@@ -726,11 +729,12 @@ export async function crawlBrandAction(formData: FormData): Promise<void> {
   if (!brand) redirect(`/admin/vendors/${vendorId}?error=` + encodeURIComponent("Brand not found."));
 
   try {
-    const result = await researchUrl({
-      url,
-      entityType: "brand",
-      entityId: brandId,
-      displayName: brand!.display_name,
+    // ASYNC (fixes the Cloudflare 524): submit a one-target harvest job instead
+    // of a synchronous /research call that a multi-minute crawl would blow past
+    // the tunnel timeout on. Same drafts-only landing; poll the Harvest Console.
+    const job = await startHarvest({
+      targets: [{ url, entityType: "brand", entityId: brandId, displayName: brand!.display_name }],
+      label: `Research: ${brand!.display_name || url}`,
     });
     await recordAudit({
       actorId: session.userId,
@@ -738,13 +742,10 @@ export async function crawlBrandAction(formData: FormData): Promise<void> {
       action: "brand.crawl_drafted",
       entityType: "brand",
       entityId: brandId,
-      after: { url, written: result.drafts_written, skipped: result.drafts_skipped, fromCache: result.from_cache },
+      after: { url, jobId: job.id, mode: "async-harvest" },
     });
-    if (!result.ok) {
-      redirect(`/admin/vendors/${vendorId}?error=` + encodeURIComponent(`Couldn't research that page: ${result.error || "unknown error"}`));
-    }
-    // H12c: gap-fill the brand's empty website field with the crawled site
-    // root (never overwrites a hand-entered value).
+    // H12c: gap-fill the brand's empty website field with the researched URL now
+    // (never overwrites a hand-entered value; the crawl runs in the background).
     let websiteNote = "";
     const site = websitePatch(brand!.website, url);
     if (site) {
@@ -766,12 +767,12 @@ export async function crawlBrandAction(formData: FormData): Promise<void> {
       }
     }
     const msg =
-      (result.drafts_written > 0
-        ? `Researched ${result.pages?.length ?? 1} page(s) on ${url} — ${result.drafts_written} brand draft(s) added for review.`
-        : `Researched ${result.pages?.length ?? 1} page(s) on ${url} — no new drafts (nothing verifiable found, or already pending).`) +
-      coverageNote(result) + websiteNote;
+      `Crawling ${url} for ${brand!.display_name || "this brand"} in the background ` +
+      `(a full-site crawl takes a few minutes). Watch progress below; ` +
+      `drafts will appear on the vendor page for review when it finishes.` +
+      websiteNote;
     revalidatePath(`/admin/vendors/${vendorId}`);
-    redirect(`/admin/vendors/${vendorId}?saved=1&note=${encodeURIComponent(msg)}#brand-${brandId}`);
+    redirect(`/admin/knowledge-base/harvest?msg=${encodeURIComponent(msg)}`);
   } catch (err) {
     unstable_rethrow(err); // let NEXT_REDIRECT (success path) propagate
     redirect(`/admin/vendors/${vendorId}?error=` + encodeURIComponent(crawlFailureMessage(err)));

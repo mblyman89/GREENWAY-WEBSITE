@@ -382,6 +382,7 @@ Run these in order and confirm each:
 | Site button → 401 | Secret mismatch | Make `CRAWLER_SHARED_SECRET` identical in `.env` and Vercel; restart + redeploy |
 | Site button → "not configured" | Vercel missing `CRAWLER_BASE_URL`/secret | Set env vars, redeploy |
 | Site button → connection error | Tunnel down / wrong hostname | `systemctl status cloudflared`; verify DNS route; `curl` the hostname |
+| Site button → `Crawler responded 524` | Cloudflare Tunnel closes a request with no response headers after ~100s. A full-site crawl takes minutes. | **Already handled in-app:** the vendor/brand "Research" buttons submit a background harvest job (returns instantly) and poll — they never hold the request open. If you see 524, you're on an old build or calling the synchronous `/research` endpoint directly; update the site and use the buttons. (Cloudflare's 524 timeout is Enterprise-only to raise, so the app avoids long requests by design.) |
 | Drafts "not supported by source" / empty | JS-heavy page, browser missing (systemd) | Use Docker image, or re-run `playwright install --with-deps chromium` |
 | `social_configured:false` after setting tokens | Token not loaded / wrong var name | Confirm `META_GRAPH_TOKEN` + `META_IG_BUSINESS_ID` in `.env`; restart; re-check `/health` |
 | IG returns clean error | Target not a discoverable business/creator account | Expected; only public business/creator accounts are readable |
