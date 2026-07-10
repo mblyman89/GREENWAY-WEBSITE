@@ -169,7 +169,15 @@ export default async function PurchasingPage() {
                         )}
                       </td>
                       <td className="px-4 py-3 text-[var(--admin-text-muted)]">{p.vendor_name ?? "—"}</td>
-                      <td className="px-4 py-3"><Badge tone={statusTone(p.status)}>{p.status}</Badge></td>
+                      <td className="px-4 py-3">
+                        <Badge tone={statusTone(p.status)}>{p.status}</Badge>
+                        {/* W9: paid stamp (migration 0103) — absent pre-migration. */}
+                        {p.paid_at ? (
+                          <span className="ml-1 align-middle">
+                            <Badge tone="green">paid</Badge>
+                          </span>
+                        ) : null}
+                      </td>
                       <td className="px-4 py-3 text-center text-[var(--admin-text-muted)]">{p.line_count}</td>
                       <td className="px-4 py-3 text-right text-[var(--admin-text)]">{formatMoneyMinor(p.subtotal_minor_units)}</td>
                       <td className="px-4 py-3 text-[var(--admin-text-faint)]">{new Date(p.created_at).toLocaleDateString()}</td>

@@ -68,6 +68,13 @@ export type PurchaseOrder = {
   submitted_at: string | null;
   sent_at: string | null;
   received_at: string | null;
+  /**
+   * W9 (migration 0103): set when AP payments settle every manifest linked to
+   * this PO. OPTIONAL because rows read pre-migration simply lack the columns
+   * (select("*") — no probe needed for reads).
+   */
+  paid_at?: string | null;
+  payment_reference?: string | null;
   created_at: string;
   updated_at: string;
 };

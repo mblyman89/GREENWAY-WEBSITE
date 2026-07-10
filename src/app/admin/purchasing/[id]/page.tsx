@@ -104,6 +104,8 @@ export default async function PurchaseOrderDetailPage({
         <Card className="p-5">
           <div className="flex flex-wrap items-center gap-3">
             <Badge tone={statusTone(po.status)}>{po.status}</Badge>
+            {/* W9: paid stamp (migration 0103) — absent pre-migration. */}
+            {po.paid_at ? <Badge tone="green">paid</Badge> : null}
             {po.origin === "ai_suggested" ? <Badge tone="gold">AI drafted</Badge> : null}
 
             {canSend ? (
@@ -146,6 +148,12 @@ export default async function PurchaseOrderDetailPage({
           {po.note ? <p className="mt-2 text-sm text-stone-600">Note: {po.note}</p> : null}
           {po.expected_date ? (
             <p className="mt-1 text-xs text-stone-500">Expected delivery: {po.expected_date}</p>
+          ) : null}
+          {po.paid_at ? (
+            <p className="mt-1 text-xs text-emerald-700">
+              Paid {new Date(po.paid_at).toLocaleDateString()} · {po.payment_reference ?? "payment"}{" "}
+              — stamped automatically when Accounts Payable settled every linked invoice.
+            </p>
           ) : null}
         </Card>
 
