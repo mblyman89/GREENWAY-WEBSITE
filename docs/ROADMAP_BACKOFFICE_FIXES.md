@@ -190,3 +190,83 @@ identity now shows in the Samples recent-events ledger, the Employee Sample Hist
 The record action audits the assigned product. Extended the existing sample self-test suites (wired
 into CI via `tests/compliance/sample-core.test.ts`) with outgoing product-identity coverage.
 Verified `tsc` (clean), scoped ESLint (clean), full compliance (**779 passing**).
+
+---
+
+## Task H — CCRS monthly public-records extract: parse, ingest, and self-service pipeline
+
+**Verbatim request (owner):** "thank you. the two files finally uploaded to my git via release. the
+tag or name of the release is, APRIL & MAY 2026 CCRS MONTHLY REPORTS. please get after that data and
+help me get it into the back office, and then help me strategize the best way going forward to get
+the info to the back office with out needing to come in here to have you parse it for me. let me know
+what you find and what we can do with this information."
+
+**Status: PARSED + REPORTED (no app code changed yet — reporting before code per standing rule).**
+
+### What the files are
+GitHub release tag `CCRS_DATA` ("APRIL & MAY 2026 CCRS MONTHLY REPORTS") has two assets:
+`April.2026.Monthly.CCRS.Reports.zip` (~713 MB) and `May.2026.CCRS.Monthly.Reports.zip` (~990 MB).
+Each is the **entire WA statewide CCRS public-records extract** for that month — not just Greenway.
+May alone is ~101 million rows. Outer zip → `<Month> 2026 Monthly CCRS Reports/CCRS PRR (…)/` →
+many nested per-table zips (April 49, May 64); big tables are split into `_0.._N` chunks of ≤1M rows.
+
+### VERIFIED file format (differs from the self-reporting templates in CCRS_VERIFIED_SCHEMA.md)
+- Encoding **UTF-16-LE with BOM**, delimiter **TAB** for almost every table, **CRLF** line endings.
+  Exception: `Areas` is UTF-16 but **comma**-delimited; a couple of tables (e.g. `Harvest`) ship
+  with no BOM. A robust importer must sniff delimiter/BOM per file.
+- **No 3-line preamble** (unlike the self-report CSV templates). Row 1 is the header.
+- The extract is **normalised with integer surrogate keys** (`LicenseeId`, `ProductId`,
+  `InventoryId`, `SaleHeaderId`, `StrainId`, `AreaId`) — NOT the 6-digit `LicenseNumber`/external
+  identifiers used by the self-report templates. Only `Licensee` and `ManifestHeader` carry the
+  6-digit `LicenseNumber`.
+
+### Identity resolution (earlier "Green Dragon/Eastsound" note was WRONG — an artifact of misreading
+UTF-16 as UTF-8). Correctly parsed, the `Licensee` row for `LicenseNumber = 413541` is:
+`LicenseeId = 736`, Name **"LYMAN'S MARIJUANA L.L.C."**, DBA **"GREENWAY MARIJUANA"**,
+4851 GEIGER RD SE, **PORT ORCHARD, WA 98366**, KITSAP county, email MICHAEL@GREENWAYMARIJUANA.COM,
+license active, issued 2025-10-27, expires 2026-11-30. **No discrepancy — this is the owner's store.**
+The correct join key for all transactional tables is **LicenseeId = 736**.
+
+### Join map for the extract (how to find "Greenway" rows)
+- Direct `LicenseeId`: Inventory, Product, Strains, SaleHeader (seller=`LicenseeId`,
+  buyer=`SoldToLicenseeId`), Contacts, LabResult (`LicenseeId`/`LabLicenseeId`), Plant.
+- `InventoryPlantTransfer`: `FromLicenseeId` / `ToLicenseeId`.
+- **SalesDetail** has NO LicenseeId → join via `SaleHeaderId ∈ Greenway SaleHeaderIds`.
+- **InventoryAdjustment** → join via `InventoryId ∈ Greenway InventoryIds`.
+- **ManifestHeader** → match `OriginLicenseNumber`/`DestinationLicenseNumber == 413541`.
+- **TransportedItems** → join via `ExternalManifestIdentifier ∈ Greenway manifest ids`.
+
+### Extracted Greenway subsets (verified counts; tab/UTF-16 parsed correctly)
+| Table | April rows | May rows |
+|---|---:|---:|
+| SaleHeader (all) | 5,732 | 6,504 |
+| — retail sales (seller=736) | 4,796 | 5,438 |
+| — wholesale purchases (buyer=736) | 936 | 1,066 |
+| SalesDetail (line items) | 10,593 | 11,469 |
+| Product | 373 | 329 |
+| Inventory lots | 1,029 | 911 |
+| Strains | 70 | 66 |
+| InventoryPlantTransfer | 1,098 | 984 |
+| ManifestHeader | 68 | 71 |
+| TransportedItems | 1,110 | 1,284 |
+| InventoryAdjustment | 0 | 0 |
+| Plant / Harvest / LabResult | 0 | 0 (Greenway is a retailer, not a grower/lab) |
+
+### Business summary (money kept in cents internally; USD shown here)
+| Metric | April 2026 | May 2026 |
+|---|---:|---:|
+| Retail revenue | $149,721.94 | $159,107.43 |
+| Retail units sold | 11,034 | 12,071 |
+| Wholesale spend (purchases) | $10,199.35 | $11,450.60 |
+| Distinct products sold | 373 | 329 |
+
+NOTE — **category attribution is partial**: SalesDetail references ~3,857 distinct InventoryIds but
+the monthly extract only contains the Inventory lots *touched that month* (911), so only ~622 join
+to a Product for category breakdown. The monthly extract is a **delta**, not a full master; accurate
+product/category attribution needs a **cumulative** Inventory+Product master accumulated across
+months. This directly informs the pipeline design (persist a rolling master, upsert by surrogate id).
+
+### Next (pending owner review before code)
+1. Ingestion pipeline design (self-service upload → stream/filter by LicenseeId=736 → drafts).
+2. Wire Greenway sales/inventory/product/manifest data into the back office (drafts-only, 1 slice/PR).
+3. Retune CCRS benchmarks + Discovery leads to the real extract schema (LicenseeId-keyed, tab/UTF-16).
