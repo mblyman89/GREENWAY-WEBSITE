@@ -234,7 +234,7 @@ back to the reliable legacy fetch when the advanced run returned **empty** — a
 **thin-but-non-empty** shell slipped through as "success," so it never
 recovered.
 
-- [ ] **C7 — Fix the C3 age-gate regression.** Four parts, one slice:
+- [x] **C7 — Fix the C3 age-gate regression.** (PR #362) Four parts, one slice:
       1. **Overlay removal OFF by default** (`CRAWL_REMOVE_OVERLAYS`, opt-in) —
          the content is under the modal; deleting it is what broke things.
       2. **Thin-shell fallback** — a non-empty-but-contentless advanced result
