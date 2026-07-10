@@ -17,6 +17,8 @@ import {
   receiveLineAction,
   deletePurchaseOrderAction,
 } from "../actions";
+import { poWhatDoIDoHere } from "@/lib/catalog/next-action-core";
+import { WhatDoIDoHere } from "@/components/admin/catalog/WhatDoIDoHere";
 
 export const dynamic = "force-dynamic";
 
@@ -87,6 +89,9 @@ export default async function PurchaseOrderDetailPage({
             {errorMessage}
           </div>
         ) : null}
+
+        {/* W4: one plain-English next action for this PO's stage. */}
+        <WhatDoIDoHere action={poWhatDoIDoHere(po.status, Boolean(po.vendor_email))} />
 
         <div className="grid gap-4 sm:grid-cols-4">
           <StatCard label="Status" value={po.status} accent={po.status === "received" ? "green" : "gold"} />

@@ -8,6 +8,8 @@ import { Button, Input } from "@/components/admin/ui";
 import { CatalogStageStrip } from "@/components/admin/catalog/CatalogStageStrip";
 import { listCatalogDrafts, countCatalogDrafts } from "@/lib/inventory/catalog-drafts";
 import { approveDraftAction, dismissDraftAction, restoreDraftAction } from "./actions";
+import { draftsWhatDoIDoHere } from "@/lib/catalog/next-action-core";
+import { WhatDoIDoHere } from "@/components/admin/catalog/WhatDoIDoHere";
 
 export const dynamic = "force-dynamic";
 
@@ -97,6 +99,10 @@ export default async function CatalogDraftsPage({
           </Link>
         </div>
         <CatalogStageStrip current="onboarding" />
+
+        {/* W4: one plain-English next action for the tab you're on. */}
+        <WhatDoIDoHere action={draftsWhatDoIDoHere(view, counts)} />
+
         <div className="grid gap-4 sm:grid-cols-3">
           <StatCard label="Needs review" value={counts.draft} accent={counts.draft > 0 ? "gold" : "muted"} href="/admin/inventory/drafts?status=draft" />
           <StatCard label="Approved" value={counts.approved} accent="green" href="/admin/inventory/drafts?status=approved" />
