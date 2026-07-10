@@ -84,6 +84,10 @@ class JobState:
     status: str = "queued"  # queued | running | completed | cancelled | failed
     write: bool = True
     max_pages_per_site: int | None = None  # None = worker default (CRAWL_MAX_PAGES)
+    # C7: when true every fetch in this job bypasses the on-disk page cache, so
+    # a stale age-gate shell cached by the buggy C3 crawl can't mask the fix on
+    # a re-crawl. Default false keeps the polite 24h cache for routine harvests.
+    force_fresh: bool = False
     # Optional politeness gap BETWEEN sites (seconds) — used by the Tier-3
     # "trickle" mode so a whole-market pass is a slow background hum, not a burst.
     delay_between_targets: float = 0.0
@@ -187,6 +191,7 @@ def create_job(
     write: bool = True,
     max_pages_per_site: int | None = None,
     delay_between_targets: float = 0.0,
+    force_fresh: bool = False,
     label: str = "",
     settings: Settings | None = None,
 ) -> JobState:
@@ -228,6 +233,7 @@ def create_job(
         write=write,
         max_pages_per_site=max_pages_per_site,
         delay_between_targets=float(delay_between_targets),
+        force_fresh=bool(force_fresh),
         created_at=time.time(),
         targets=states,
     )
@@ -329,6 +335,7 @@ async def run_job(job_id: str, *, settings: Settings | None = None) -> JobState 
                     display_name=t.display_name,
                     settings=settings,
                     max_pages=job.max_pages_per_site,
+                    force_fresh=job.force_fresh,
                 )
                 t.pages = len(result.pages)
                 # C4: surface the crawl's completeness verdict on the target.

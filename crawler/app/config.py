@@ -89,6 +89,15 @@ class Settings(BaseSettings):
     # skipped (the repo pins a wide crawl4ai range). Set false for the fastest,
     # plain page-load capture.
     crawl_dynamic_content: bool = Field(default=True, alias="CRAWL_DYNAMIC_CONTENT")
+    # C7: overlay removal (crawl4ai `remove_overlay_elements`) is OFF by default.
+    # It was added in C3 to hide cookie/newsletter popups, but on age-gated
+    # dispensary themes ("Are you 21?") crawl4ai's remover strips the modal AND
+    # the real content wrapper behind it, leaving a thin shell with no nav links
+    # \u2014 the "1 page, 0 drafts" regression the owner hit on every vendor. The real
+    # content is UNDER the modal (an overlay, not a separate page), so we don't
+    # need to delete anything; we scroll/scan the page as-is (plus the C7 age-gate
+    # "click YES" nudge). Set true only if a specific site truly needs it.
+    crawl_remove_overlays: bool = Field(default=False, alias="CRAWL_REMOVE_OVERLAYS")
     # Pause between scroll steps during the full-page scan (seconds). Higher =
     # gentler + more time for lazy content; the owner is fine with slow crawls.
     crawl_scroll_delay_seconds: float = Field(default=0.3, alias="CRAWL_SCROLL_DELAY_SECONDS")

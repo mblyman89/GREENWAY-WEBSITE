@@ -202,7 +202,7 @@ def _settings(**env: object) -> Settings:
 
 @pytest.fixture()
 def fake_site(monkeypatch):
-    async def fake_fetch(url, *, prefer_browser=True, settings=None):
+    async def fake_fetch(url, *, prefer_browser=True, settings=None, force_fresh=False):
         html = SITE.get(url)
         if html is None:
             return FetchResult(url=url, ok=False, status=404, error="HTTP 404")
@@ -242,7 +242,7 @@ def test_pipeline_reports_budget_reached_with_leftover(fake_site):
 
 
 def test_pipeline_counts_failed_pages(fake_site, monkeypatch):
-    async def flaky_fetch(url, *, prefer_browser=True, settings=None):
+    async def flaky_fetch(url, *, prefer_browser=True, settings=None, force_fresh=False):
         if url.endswith("/products/gg4/"):
             return FetchResult(url=url, ok=False, status=503, error="HTTP 503")
         html = SITE.get(url)
