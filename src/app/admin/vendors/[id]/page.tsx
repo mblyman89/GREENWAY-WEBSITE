@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { Breadcrumbs } from "@/components/admin/ux";
+import { vendorListBackHref } from "@/lib/vendors/list-state-core";
 import { getVendorById, listBrandsForVendor, publicMediaUrl } from "@/lib/vendors/store";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { Brand } from "@/lib/vendors/types";
@@ -71,11 +73,14 @@ export default async function VendorEditPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; saved?: string; note?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; note?: string; from?: string }>;
 }) {
   await requirePermission("vendors.manage");
   const { id } = await params;
   const sp = await searchParams;
+  // Task E: the list page encodes its active filter/sort/page state into a
+  // `from` token so we can return the owner to the exact same filtered view.
+  const backHref = vendorListBackHref(sp.from);
   const crawlerOn = isCrawlerConfigured();
   // Social (DF-9) is enabled only when the worker reports a Meta Graph token.
   // Probe health once (short timeout); falls back to false if the worker is down.
@@ -108,8 +113,18 @@ export default async function VendorEditPage({
       <AdminPageHeader
         title={vendor.display_name}
         subtitle={`${vendor.brand_count} brands · ${vendor.product_count} products · ${vendor.status}`}
+        breadcrumbs={
+          <Breadcrumbs
+            items={[
+              // Both crumbs carry the active list filters so either one returns
+              // the owner to the exact same filtered/sorted/paged view.
+              { label: "Vendors & Brands", href: backHref },
+              { label: vendor.display_name },
+            ]}
+          />
+        }
         action={
-          <Link href="/admin/vendors" className="rounded-full border border-white/15 px-4 py-2 text-xs text-white/80 hover:border-[#7ed957] hover:text-white">
+          <Link href={backHref} className="rounded-full border border-white/15 px-4 py-2 text-xs text-white/80 hover:border-[#7ed957] hover:text-white">
             ← All vendors
           </Link>
         }

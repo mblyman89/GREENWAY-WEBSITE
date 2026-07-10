@@ -92,10 +92,25 @@ console to the history tab on the next poll. Resume and the Task-C jump links st
 history cards. No schema change. Verified with `tsc` (clean), scoped ESLint (clean), full
 compliance (747).
 
-### Task E — Preserve filters/sort on back navigation  `[ ]`
+### Task E — Preserve filters/sort on back navigation  `[x]`  (PR pending)
 On the Vendors & Brands page, fix the back buttons and the breadcrumb / in-page return button
 on the vendor detail page so that returning to the list restores the same filters and sorting
 that were active before.
+
+**Root cause (verified by reading code):** the list page (`src/app/admin/vendors/page.tsx`) is
+fully URL-driven (filters/sort/page in `searchParams`), but each vendor card linked to a bare
+`/admin/vendors/${v.id}` with **no** filter context. The detail page
+(`src/app/admin/vendors/[id]/page.tsx`) then hardcoded its only back link to `/admin/vendors`,
+so returning always dropped every filter/sort/page.
+
+**Fix:** new pure helper `src/lib/vendors/list-state-core.ts` (`pickVendorListParams`,
+`vendorListQueryString`, `vendorDetailHref`, `vendorListBackHref`). The list now builds each
+card link with `vendorDetailHref(v.id, listParams)`, encoding the active state into an opaque
+`from` token. The detail page reads `from`, rebuilds the exact list URL with
+`vendorListBackHref` (re-sanitised through the allow-list so a tampered token can't steer the
+link off-app), and uses it for **both** the "← All vendors" button and a new breadcrumb. Added
+`tests/compliance/vendor-list-state.test.ts` (13 tests). Verified `tsc` (clean), scoped ESLint
+(clean), full compliance (**760 passing**).
 
 ### Task F — Combine / merge duplicate vendors  `[ ]`
 Add a function/method to combine vendors (dedupe). Producer-processors may carry multiple LCB
