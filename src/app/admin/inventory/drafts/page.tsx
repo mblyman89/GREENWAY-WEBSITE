@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { SopSheetLink } from "@/components/admin/SopSheetLink";
 import { Breadcrumbs, HelpPanel, EmptyState } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
 import { Button, Input } from "@/components/admin/ui";
@@ -85,6 +86,7 @@ export default async function CatalogDraftsPage({
               This keeps the live menu clean: machine-suggested products always wait for a human to
               confirm them before customers ever see them.
             </p>
+            <SopSheetLink slug="onboard" />
           </HelpPanel>
         }
       />

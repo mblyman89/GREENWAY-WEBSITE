@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { SopSheetLink } from "@/components/admin/SopSheetLink";
 import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
 import { getAchCompanySettings } from "@/lib/payroll/payroll-store";
@@ -67,6 +68,7 @@ export default async function VendorPaymentsPage() {
               payments are allowed with a warning. Amounts are entered in dollars and
               stored/generated in cents. This is a draft for your review and manual bank upload.
             </p>
+            <SopSheetLink slug="pay" />
           </HelpPanel>
         }
       />

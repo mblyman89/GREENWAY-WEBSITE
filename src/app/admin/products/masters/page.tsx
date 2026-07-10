@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { SopSheetLink } from "@/components/admin/SopSheetLink";
 import { Breadcrumbs, HelpPanel, EmptyState } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
 import { Input, Button, Badge } from "@/components/admin/ui";
@@ -81,6 +82,7 @@ export default async function MastersPage({
               found instantly; the AI adds smarter matches (e.g. brand spelled two
               ways) when it&apos;s configured.
             </p>
+            <SopSheetLink slug="master" />
           </HelpPanel>
         }
         action={

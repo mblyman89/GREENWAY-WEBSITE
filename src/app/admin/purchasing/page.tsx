@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { SopSheetLink } from "@/components/admin/SopSheetLink";
 import { Breadcrumbs, HelpPanel, EmptyState } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
 import { Badge, Button, Section } from "@/components/admin/ui";
@@ -111,6 +112,7 @@ export default async function PurchasingPage() {
             and the bill is settled in{" "}
             <Link href="/admin/vendor-payments" className="text-[var(--admin-accent)] hover:underline">Accounts Payable</Link>.
           </p>
+          <SopSheetLink slug="order" />
         </HelpPanel>
 
         {/* KPIs — every value is computed from real PO data. */}

@@ -64,6 +64,25 @@ export default async function GettingStartedPage() {
           aiEnabled={isAiConfigured}
         />
 
+        {/* ── W13: printable SOP pack ─────────────────────────────────────────
+            One-page procedures for the whole product journey plus the
+            "truck day" master sheet for new hires. Wall-ready print pages. */}
+        <Link
+          href="/admin/getting-started/sop"
+          className="block rounded-xl border border-white/10 bg-white/[0.03] p-5 transition hover:border-[#7ed957]/50"
+        >
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#7ed957]">
+            Printable SOPs
+          </p>
+          <p className="mt-1 text-base font-semibold text-white">
+            One-page procedures for truck day and every stage of the product journey
+          </p>
+          <p className="mt-1 text-sm text-white/60">
+            Print them, put them on the wall, hand the &ldquo;truck day&rdquo; master sheet to every new
+            hire. Each sheet matches the on-screen help for its page.
+          </p>
+        </Link>
+
         {/* ── Explore your back office ──────────────────────────────────────
             Setup gets the store live; this tour introduces the full product so
             owners know everything they can do and where to find it. Data-driven
