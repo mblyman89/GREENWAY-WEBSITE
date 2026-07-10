@@ -42,7 +42,10 @@ log = logging.getLogger("greenway.crawler.harvest")
 
 # Hard caps — a job is a batch, not a botnet.
 MAX_TARGETS_PER_JOB = 500
-MAX_PAGES_PER_SITE = 50
+# C2: 50 → 120. The frontier crawl now walks whole sites and the owner wants
+# every page read ("I don't mind if the crawler takes several minutes to crawl
+# a vendor site"); per-domain politeness delays still pace every fetch.
+MAX_PAGES_PER_SITE = 120
 # How many finished job files to keep on disk (oldest pruned).
 MAX_JOB_FILES = 200
 

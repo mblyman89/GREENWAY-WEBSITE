@@ -19,8 +19,9 @@ from .compliance import check_compliance
 from .config import Settings, get_settings
 from .css_extract import extract_css
 from .discovery import discover_nav_links, discover_sitemap_urls
+from .frontier import CrawlFrontier, discover_pagination_links
 from .logos import detect_logo_candidates
-from .seeding import merge_candidates, seed_site_urls
+from .seeding import seed_site_urls
 from .fetcher import fetch_page
 from .llm_extract import extract_with_llm, supported_by_source
 from .page_intelligence import ImageContext, extract_image_contexts
@@ -211,30 +212,44 @@ async def research_target(
     css_values: dict[str, str] = {}
     _merge_css_values(css_values, css, is_product=is_product)
 
-    # ---- DEEP RESEARCH: read the site the way a human does -------------------
-    # Follow the site's own nav links (Our Story, Rosin, Edibles, ...) plus the
-    # sitemap and the H2 URL-seeder inventory, most-promising first, up to the
-    # page budget (CRAWL_MAX_PAGES or the harvest job's max_pages override).
-    # Every fetch stays inside robots.txt + per-domain rate limits. Products
-    # are a single-page lookup, so deep crawl applies to vendor/brand only.
+    # ---- DEEP RESEARCH: full-site FRONTIER crawl (Slice C2) -------------------
+    # The old crawl discovered extra pages only from the ENTRY page, so links
+    # on sub-pages were never followed (homepage → /products/ → 40 product
+    # pages stopped at /products/). Now EVERY fetched page feeds its same-site
+    # links (nav/anchors + pagination) back into a best-first frontier until
+    # the page budget is spent — "crawl around the whole site … scraping
+    # everything" per the owner. Every fetch still goes through the exact same
+    # fetch_page gate (robots.txt, SSRF guard, allow-list, per-domain delay).
+    # Products are a single-page lookup, so deep crawl applies to vendor/brand.
+    frontier = CrawlFrontier(base_url=url)
+    failed_pages: list[str] = []
     if not is_product and page_budget > 1:
-        nav = discover_nav_links(fetched.html, url, limit=20)
-        sitemap = discover_sitemap_urls(url, settings, limit=30)
+        # Seed the frontier from the entry page + the site's own machine maps.
+        frontier.add(discover_nav_links(fetched.html, url, limit=60))
+        frontier.add(discover_pagination_links(fetched.html, url))
+        frontier.add(discover_sitemap_urls(url, settings, limit=100))
         # Slice H2: cheap URL inventory (sitemap / Common Crawl — no page
         # fetches) scored by BM25 against the KB target fields. Best-effort;
-        # returns [] on old crawl4ai or any seeder error.
+        # returns [] on old crawl4ai or any seeder error. Seeder-vetted URLs
+        # keep their +1 nudge from the old merge.
         try:
             seeded = await seed_site_urls(url, settings=settings)
         except Exception:
             seeded = []
+        frontier.add(seeded, bonus=1)
+
         # NOTE: budget is derived from page_budget (the per-job override from
         # harvest jobs), not settings.crawl_max_pages — fixes an H1 latent bug
         # where the override gated the `if` above but not the loop budget.
         budget = max(0, page_budget - 1)
-        queue = merge_candidates(url, nav, sitemap, seeded, budget=budget)
-        for extra_url in queue:
+        while budget > 0:
+            extra_url = frontier.pop()
+            if extra_url is None:
+                break  # site exhausted — we saw everything reachable
+            budget -= 1
             sub = await fetch_page(extra_url, prefer_browser=True, settings=settings)
             if not sub.ok:
+                failed_pages.append(extra_url)
                 continue
             pages_read.append(extra_url)
             html_pages.append((extra_url, sub.html))
@@ -245,6 +260,10 @@ async def research_target(
             image_contexts += extract_image_contexts(sub.html, extra_url)
             if sub.markdown:
                 corpus_parts.append(sub.markdown)
+            # THE C2 FIX: this sub-page's own links join the crawl, so the
+            # whole reachable site is walked, not just the entry page's links.
+            frontier.add(discover_nav_links(sub.html, extra_url, limit=60))
+            frontier.add(discover_pagination_links(sub.html, extra_url))
 
     corpus = "\n\n".join(p for p in corpus_parts if p)
 
