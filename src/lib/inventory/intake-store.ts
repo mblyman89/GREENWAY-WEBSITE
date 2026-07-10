@@ -52,6 +52,7 @@ import {
   type ExistingManifestRow,
 } from "@/lib/inventory/manifest-dedupe-core";
 import { autoReceiveManifestPo } from "@/lib/inventory/po-receive-store";
+import { stageIntakeMenuVersionForManifest } from "@/lib/pos/intake-menu-staging";
 
 export async function listManifests(opts?: {
   status?: string;
@@ -850,6 +851,28 @@ export async function finalizeManifestDispositions(
       }
     } catch (err) {
       console.error("[intake-store] autoReceiveManifestPo failed:", err);
+    }
+    // Intake auto-carry (owner Option B, NOT auto-published): if this manifest's
+    // products have already been APPROVED (priced) as onboarding drafts, stage
+    // an intake-origin menu version (current live menu carried forward + the new
+    // approved products) so they reach the customer menu + front POS WITHOUT the
+    // one-time Cultivera "Menu Imports" upload. A human still reviews + Publishes.
+    // No-op when there are no approved drafts yet (the usual case at first
+    // finalize — the owner approves prices afterward, then re-finalizes or the
+    // approval flow triggers this). Best-effort: a staging hiccup must never
+    // break intake finalization.
+    try {
+      const carry = await stageIntakeMenuVersionForManifest(manifestId, actorId);
+      if (carry.staged) {
+        await logManifestEvent(
+          manifestId,
+          "menu_auto_carry",
+          `Staged a menu version for review: ${carry.added} new product(s) added on top of ${carry.carried} live item(s). Publish it to make them sellable on the website + POS.`,
+          actorId,
+        );
+      }
+    } catch (err) {
+      console.error("[intake-store] stageIntakeMenuVersionForManifest failed:", err);
     }
   }
 
