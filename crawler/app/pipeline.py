@@ -23,6 +23,7 @@ from .logos import detect_logo_candidates
 from .seeding import merge_candidates, seed_site_urls
 from .fetcher import fetch_page
 from .llm_extract import extract_with_llm, supported_by_source
+from .page_intelligence import ImageContext, extract_image_contexts
 from .schemas import ProductExtraction, ProductLine, ProductLineupExtraction, VendorBrandExtraction
 from .social_links import (
     SocialLink,
@@ -199,6 +200,10 @@ async def research_target(
     corpus_parts: list[str] = [fetched.markdown or ""]
     image_pairs: list[tuple[str, str]] = list(css.images)
     image_candidates: list[str] = list(css.image_urls) + list(fetched.image_urls)
+    # C1: image ↔ adjacent-text pairing — the description printed NEXT TO or
+    # BELOW a product image (card heading/body, figcaption, JSON-LD Product)
+    # is captured alongside the image so the reviewer knows what each image is.
+    image_contexts: list[ImageContext] = extract_image_contexts(fetched.html, url)
     # H9d: keep each page's (url, html) so we can detect the social-profile links
     # the vendor advertises (usually in the header/footer of any page).
     html_pages: list[tuple[str, str]] = [(url, fetched.html)]
@@ -237,6 +242,7 @@ async def research_target(
             _merge_css_values(css_values, sub_css, is_product=False)
             image_pairs += sub_css.images
             image_candidates += sub_css.image_urls + sub.image_urls
+            image_contexts += extract_image_contexts(sub.html, extra_url)
             if sub.markdown:
                 corpus_parts.append(sub.markdown)
 
@@ -365,22 +371,37 @@ async def research_target(
             ))
 
     # ---- Image candidates as ONE reviewable draft ----------------------------
-    # The reviewer sees each image URL with its alt text and can open/download
-    # the ones worth keeping. Reference data for the media workflow — nothing
-    # is fetched or attached automatically.
+    # The reviewer sees each image URL with the text the page printed NEXT TO
+    # it (C1: card heading/body, figcaption, JSON-LD Product — not just alt)
+    # and can open/download the ones worth keeping. Reference data for the
+    # media workflow — nothing is fetched or attached automatically.
     if not is_product:
-        # H9: alt-text images first (self-describing), then alt-less content
-        # images (product shots on catalog pages routinely ship without alt).
-        with_alt = [
-            (u, alt) for u, alt in image_pairs
-            if alt and len(alt) > 2 and not u.lower().endswith(".svg")
-        ]
-        seen_urls = {u for u, _ in with_alt}
-        without_alt = [
-            (u, "") for u, alt in image_pairs
-            if u not in seen_urls and not u.lower().endswith(".svg")
-        ]
-        interesting = with_alt + without_alt
+        # C1: context-rich pairs first (figcaption/JSON-LD/card text beat bare
+        # alt), then context-less content images (product shots on catalog
+        # pages routinely ship with no describing text at all).
+        context_by_url: dict[str, str] = {}
+        ctx_order: list[str] = []
+        for ctx in image_contexts:
+            if ctx.url.lower().endswith(".svg"):
+                continue
+            best = ctx.best_context()
+            prev = context_by_url.get(ctx.url)
+            if prev is None:
+                context_by_url[ctx.url] = best
+                ctx_order.append(ctx.url)
+            elif not prev and best:
+                context_by_url[ctx.url] = best
+        # Legacy (url, alt) pairs from css_extract still contribute anything
+        # the DOM walk didn't see (e.g. <source>-only picture entries).
+        for u, alt in image_pairs:
+            if u.lower().endswith(".svg"):
+                continue
+            if u not in context_by_url:
+                context_by_url[u] = alt if (alt and len(alt) > 2) else ""
+                ctx_order.append(u)
+        with_ctx = [(u, context_by_url[u]) for u in ctx_order if context_by_url[u]]
+        without_ctx = [(u, "") for u in ctx_order if not context_by_url[u]]
+        interesting = with_ctx + without_ctx
         if not interesting:
             interesting = [(u, "") for u in result.image_candidates[:MAX_IMAGE_LINES]]
         if interesting:
