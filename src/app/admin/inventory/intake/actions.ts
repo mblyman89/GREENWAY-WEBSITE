@@ -192,6 +192,25 @@ export async function setManifestLifecycleAction(manifestId: string, status: "in
   redirect(`/admin/inventory/intake/${manifestId}?lifecycle=${status}`);
 }
 
+/**
+ * W5 — human-confirmed manifest ↔ PO link (suggest-and-confirm; never auto).
+ * `po_id` empty/absent = unlink. No-op-safe pre-migration-0102 (store returns
+ * a plain error the page shows in its banner).
+ */
+export async function linkManifestPoAction(manifestId: string, formData: FormData) {
+  const session = await requirePermission("inventory.manage");
+  const poId = ((formData.get("po_id") as string | null) ?? "").trim() || null;
+  const { setManifestPoLink } = await import("@/lib/inventory/po-link-store");
+  const result = await setManifestPoLink(manifestId, poId, session.userId);
+  revalidatePath(`/admin/inventory/intake/${manifestId}`);
+  if (!result.ok) {
+    redirect(
+      `/admin/inventory/intake/${manifestId}?error=polink&capmsg=${encodeURIComponent(result.error)}`,
+    );
+  }
+  redirect(`/admin/inventory/intake/${manifestId}?polink=${poId ? "linked" : "unlinked"}`);
+}
+
 export async function archiveCoasAction(manifestId: string) {
   await requirePermission("inventory.manage");
   const { archiveCoasForManifest } = await import("@/lib/inventory/coa-archive");

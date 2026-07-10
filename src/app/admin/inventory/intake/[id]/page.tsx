@@ -24,6 +24,8 @@ import {
   CONCIERGE_HINTS,
 } from "@/lib/inventory/guided-accept-core";
 import { GuidedAcceptRibbon } from "@/components/admin/inventory/GuidedAcceptRibbon";
+import { getManifestPoLinkState } from "@/lib/inventory/po-link-store";
+import { ManifestPoLinkPanel } from "@/components/admin/inventory/ManifestPoLinkPanel";
 import {
   rejectManifestAction,
   archiveCoasAction,
@@ -33,6 +35,7 @@ import {
   finalizeManifestAction,
   promoteManifestToKbAction,
   notifyVendorSampleCapAction,
+  linkManifestPoAction,
 } from "../actions";
 
 /** Format an ISO timestamp into the value a datetime-local input expects. */
@@ -72,6 +75,7 @@ export default async function ManifestReviewPage({
     kb?: string;
     kbstrains?: string;
     kblicense?: string;
+    polink?: string;
   }>;
 }) {
   await requirePermission("inventory.manage");
@@ -92,6 +96,7 @@ export default async function ManifestReviewPage({
     kb,
     kbstrains,
     kblicense,
+    polink,
   } = await searchParams;
 
   const manifest = await getManifestById(id);
@@ -123,6 +128,10 @@ export default async function ManifestReviewPage({
 
   const lots = await listManifestLots(id);
   const events = await listManifestEvents(id);
+
+  // W5: manifest ↔ PO link state (suggest-and-confirm). {available:false}
+  // pre-migration-0102 — the panel simply doesn't render until it's applied.
+  const poLink = await getManifestPoLinkState(manifest);
 
   // H15f — the guided-accept ribbon's green "from the manifest" chips.
   // Identity fields always come from the parsed document; transport fields are
@@ -162,6 +171,7 @@ export default async function ManifestReviewPage({
   const coaLinks = Array.isArray(manifest.coa_links) ? manifest.coa_links : [];
 
   const rejectAction = rejectManifestAction.bind(null, id);
+  const poLinkAction = linkManifestPoAction.bind(null, id);
   const finalizeAction = finalizeManifestAction.bind(null, id);
   const notifyVendorAction = notifyVendorSampleCapAction.bind(null, id);
   const archiveAction = archiveCoasAction.bind(null, id);
@@ -304,7 +314,7 @@ export default async function ManifestReviewPage({
             The notice could not be delivered to the vendor. Please try again or contact them directly.
           </div>
         )}
-        {error && error !== "sample_cap" && !error.startsWith("notify_") && (
+        {error && error !== "sample_cap" && error !== "polink" && !error.startsWith("notify_") && (
           <div className="rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/10 px-4 py-2 text-sm text-[var(--admin-danger)]">
             Something went wrong with that action.
           </div>
@@ -328,9 +338,29 @@ export default async function ManifestReviewPage({
           </div>
         )}
 
+        {polink === "linked" && (
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]">
+            Linked to its purchase order — the paper trail from order to delivery is now connected. Logged on the timeline.
+          </div>
+        )}
+        {polink === "unlinked" && (
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-accent)]">
+            Unlinked from its purchase order. Logged on the timeline.
+          </div>
+        )}
+        {error === "polink" && (
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/10 px-4 py-2 text-sm text-[var(--admin-danger)]">
+            Couldn&apos;t update the purchase-order link{capmsg ? ` — ${capmsg}` : "."}
+          </div>
+        )}
+
         {/* H15f — guided accept: ① Arrived → ② Verify counts → ③ Accept,
             plain-English stage guidance + green "from the manifest" chips. */}
         <GuidedAcceptRibbon status={manifest.status} etaDate={manifest.eta_date} chips={manifestChips} />
+
+        {/* W5: which order is this delivery for? (suggest-and-confirm; hidden
+            entirely until migration 0102 is applied) */}
+        {poLink.available && <ManifestPoLinkPanel state={poLink} linkAction={poLinkAction} />}
 
         <div className="grid gap-4 sm:grid-cols-5">
           <StatCard label="Lines" value={lots.length} accent="muted" />
