@@ -270,3 +270,52 @@ months. This directly informs the pipeline design (persist a rolling master, ups
 1. Ingestion pipeline design (self-service upload → stream/filter by LicenseeId=736 → drafts).
 2. Wire Greenway sales/inventory/product/manifest data into the back office (drafts-only, 1 slice/PR).
 3. Retune CCRS benchmarks + Discovery leads to the real extract schema (LicenseeId-keyed, tab/UTF-16).
+
+---
+
+## Task H (revised) — statewide CCRS transformer feeding Leads + CCRS Benchmarks + Local Benchmarks
+
+**Owner clarified the vision (verbatim):** "…I want this data not for my own data, the back office
+has this already. This data will be used … to create state wide benchmarks on the CCRS benchmark
+page. It will also be used on the reports page in the local benchmarks page. It will also be used on
+the leads page so it can help my purchaser make better more informed decisions based on what is
+moving well in the state but also at our competitors stores. I want the ai to help us beat them by
+under cutting them or beating them in some other ways. Ideally, I will make the public records
+request once per month to get the previous months data. One big zip file with nested zips in it. I
+drag and drop or upload the full zip file, the back office via some sort of transformer, extracts
+what we need and then uses it in all the system I've described. I do not want to have to do a bunch
+of steps or validate anything. If we get the logic right the first time, all the future extracts
+will be reliable and source data … work on the transformer first, then update the leads page, the
+CCRS benchmarks page and the reports local benchmarks page … No code edits yet."
+
+**Purpose reframed:** the extract is the **statewide market/competitor** dataset (NOT Greenway's own
+numbers — POS is source of truth for those). It feeds three surfaces: **CCRS Benchmarks** (statewide),
+**Reports → Local Benchmarks** (competitor/area), **Leads** (purchaser decisions + AI undercut/
+out-position recommendations).
+
+**Zero-touch flow:** monthly, owner uploads the ONE big zip (nested zips); a **transformer** streams
+it, extracts what's needed, and auto-feeds all three surfaces. No wizard, no manual validation.
+
+**Reality vs current code:** the real monthly extract is UTF-16/TAB, no preamble, statewide (~101M
+rows/mo), split into nested per-table zips, and **normalised with integer surrogate keys**
+(`LicenseeId`, `ProductId`, `InventoryId`) — Sales are split into `SaleHeader` + `SalesDetail`. The
+existing `ccrs.ts` parser + `discovery_ccrs_sales` shape were built for the **self-report template**
+(one `Sale` file, `LicenseNumber`, comma/UTF-8, 3-line preamble) and will match none of these files.
+The transformer must do the header/detail + inventory→product join and the LicenseeId↔LicenseNumber
+resolution, and **store ROLLUPS, not statewide raw rows** (raw is far too large; discard after
+aggregation). Greenway self (LicenseeId 736) excluded from competitor sets.
+
+**Build order (one slice per PR, drafts-only, migrations MANUAL):**
+1. **Transformer** — 1a real-extract pure parser (UTF-16/tab + new table signatures + surrogate-key
+   joins; template path kept) with tests; 1b streaming zip ingest + aggregation writing only rollups
+   (new `discovery_competitor_stats` + `discovery_market_signals`, period auto-derived from SaleDate);
+   1c single drag-drop zip uploader (`uploading → ready`, latest ready dataset wins).
+2. **Leads page** — surface statewide fast-movers + competitor-beating signals; AI undercut/out-position.
+3. **CCRS Benchmarks page** — point at statewide rollups.
+4. **Reports → Local Benchmarks** — point at competitor stats sliced by `discovery_competitors` roster.
+
+Full strategy: `ccrs_data/CCRS_TRANSFORMER_STRATEGY.md` (working notes, not in repo).
+
+**Open confirmations before Phase 1:** (a) upload raw ~1 GB zip via browser vs point at GitHub
+release URL; (b) keep all monthly datasets (trend) vs latest only; (c) confirm `discovery_competitors`
+roster is current. **No app code changed yet.**
