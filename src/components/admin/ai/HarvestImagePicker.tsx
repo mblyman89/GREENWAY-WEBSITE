@@ -88,6 +88,10 @@ export function HarvestImagePicker({
                 <input type="hidden" name="entityType" value={entityType} />
                 <input type="hidden" name="entityId" value={entityId} />
                 <input type="hidden" name="imageUrl" value={item.url} />
+                {/* Carry the crawler's captured alt text / context so it lands on
+                    the Media Library draft (Task A). Empty is fine \u2014 the server
+                    action falls back to a sensible default. */}
+                <input type="hidden" name="caption" value={item.caption} />
                 <button
                   type="submit"
                   className="rounded-full border border-white/20 px-2.5 py-1 text-[10px] font-semibold text-white/80 transition hover:border-[#7ed957] hover:text-white"
@@ -102,6 +106,7 @@ export function HarvestImagePicker({
                   <input type="hidden" name="entityType" value={entityType} />
                   <input type="hidden" name="entityId" value={entityId} />
                   <input type="hidden" name="imageUrl" value={item.url} />
+                  <input type="hidden" name="caption" value={item.caption} />
                   <input type="hidden" name="assign" value="logo" />
                   <button
                     type="submit"
