@@ -153,6 +153,26 @@ export function buildWorkQueue(input: WorkQueueInputs): WorkQueueRow[] {
   return rows;
 }
 
+/**
+ * W3 — the dashboard's "Needs your attention" flags reuse THE work queue.
+ * Same verified counts, same priority order, same copy; shaped to match the
+ * cockpit's AttentionFlag ({severity, text, href}) so the dashboard renders
+ * intake work exactly like drawer/order/stock flags.
+ */
+export type IntakeAttentionFlag = {
+  severity: "critical" | "warning" | "info";
+  text: string;
+  href: string;
+};
+
+export function workQueueAttentionFlags(input: WorkQueueInputs): IntakeAttentionFlag[] {
+  return buildWorkQueue(input).map((row) => ({
+    severity: row.severity,
+    text: row.text,
+    href: row.actionHref,
+  }));
+}
+
 export function emptyWorkQueueInputs(): WorkQueueInputs {
   return {
     overdueInTransit: 0,
