@@ -66,9 +66,17 @@ force-deleted), removes storage + row, audits each deletion, and returns a plain
 summary (deleted / skipped-in-use / failed). No schema change. Verified with `tsc` (clean),
 scoped ESLint (clean), and the full compliance suite (747 passing).
 
-### Task C — Jump-to-vendor button in completed job box  `[ ]`
+### Task C — Jump-to-vendor button in completed job box  `[x]`  (PR pending)
 In the "completed" job box on the Harvest Console (`HarvestJobsLive.tsx`), add a button to
 jump back to the vendor that was just crawled, for quick return.
+
+**Implementation (verified by reading code):** the worker already carries `entity_type` +
+`entity_id` per target (`crawler/app/harvest.py` `TargetState`, relayed unchanged through
+`/api/admin/harvest` → `HarvestTargetState`). Added those fields to the component's local
+`TargetState` type and a "Jump to vendor(s)" row that renders a link
+(`/admin/vendors/<entity_id>`) for each **completed** vendor target. Lead targets (id prefixed
+`lead:`) and non-vendor targets are excluded since they have no vendor page. No schema change,
+no new endpoint. Verified with `tsc` (clean), scoped ESLint (clean), full compliance (747).
 
 ### Task D — Relocate past crawls to a tabbed history page  `[ ]`
 Move the crawl history off the main Harvest Console page into a new tab / sub-page so the
