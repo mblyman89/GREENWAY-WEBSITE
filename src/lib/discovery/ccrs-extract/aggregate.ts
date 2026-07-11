@@ -325,8 +325,17 @@ export type MarketSignal = {
 };
 
 export type AggregationResult = {
+  /**
+   * The delivery's REAL period: the full span of the DOMINANT SaleHeader
+   * month (first → last day). Monthly deliveries include headers UPDATED in
+   * the month whose original SaleDates reach years back, so min/max would
+   * mislabel the drop (verified: the May-2026 zip spans 54 distinct months).
+   */
   periodStart: string | null;
   periodEnd: string | null;
+  /** Honest observed SaleDate span across ALL headers (metadata, not the label). */
+  observedMinDate?: string | null;
+  observedMaxDate?: string | null;
   totals: {
     licenseeRows: number;
     productRows: number;
@@ -495,6 +504,14 @@ export class CcrsAggregator {
   private supplierBuyers = new Map<number, Set<number>>();
   private minDate: string | null = null;
   private maxDate: string | null = null;
+  /**
+   * Task I (I1): yyyy-mm histogram of SaleHeader dates. A monthly delivery
+   * contains every header UPDATED that month, whose original SaleDates span
+   * YEARS (verified on the real May-2026 zip: 54 distinct months, dominant
+   * month = 53.2% of headers, stale tail back to 2021). min/max therefore
+   * mislabels the drop; the DOMINANT month is the delivery's real period.
+   */
+  private monthCounts = new Map<string, number>();
   private totals = {
     licenseeRows: 0,
     productRows: 0,
@@ -583,10 +600,16 @@ export class CcrsAggregator {
 
   addSaleHeader(row: SaleHeaderRow): void {
     this.totals.saleHeaderRows += 1;
-    // Track period from headers (the dataset's real span).
+    // Track period from headers. min/max record the honest observed span;
+    // the yyyy-mm histogram finds the DOMINANT month (the drop's real period),
+    // because monthly deliveries carry updated headers with stale SaleDates.
     if (row.saleDate) {
       if (this.minDate == null || row.saleDate < this.minDate) this.minDate = row.saleDate;
       if (this.maxDate == null || row.saleDate > this.maxDate) this.maxDate = row.saleDate;
+      const month = row.saleDate.slice(0, 7); // ISO yyyy-mm (parse.ts normalizes)
+      if (month.length === 7) {
+        this.monthCounts.set(month, (this.monthCounts.get(month) ?? 0) + 1);
+      }
     }
     // Only headers that can produce classified lines are worth remembering.
     if (row.saleType === "other") return;
@@ -1001,9 +1024,34 @@ export class CcrsAggregator {
         };
       });
 
+    // Task I (I1): period = the DOMINANT SaleHeader month's full span. The
+    // histogram is never guessed — no dated headers means a null period. Ties
+    // break toward the NEWEST month (a delivery is named for its newest data).
+    let periodStart: string | null = null;
+    let periodEnd: string | null = null;
+    let bestMonth = "";
+    let bestCount = -1;
+    for (const [month, count] of this.monthCounts) {
+      if (count > bestCount || (count === bestCount && month > bestMonth)) {
+        bestMonth = month;
+        bestCount = count;
+      }
+    }
+    if (bestMonth) {
+      const year = Number(bestMonth.slice(0, 4));
+      const monthNum = Number(bestMonth.slice(5, 7));
+      if (Number.isFinite(year) && monthNum >= 1 && monthNum <= 12) {
+        const lastDay = new Date(Date.UTC(year, monthNum, 0)).getUTCDate();
+        periodStart = `${bestMonth}-01`;
+        periodEnd = `${bestMonth}-${String(lastDay).padStart(2, "0")}`;
+      }
+    }
+
     return {
-      periodStart: this.minDate,
-      periodEnd: this.maxDate,
+      periodStart,
+      periodEnd,
+      observedMinDate: this.minDate,
+      observedMaxDate: this.maxDate,
       totals: { ...this.totals },
       statewide,
       competitors,

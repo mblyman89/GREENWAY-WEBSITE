@@ -752,10 +752,22 @@ export async function saveMonthlyRollupsAction(input: {
     };
   }
 
+  // Task I (I1): the period is the DOMINANT SaleHeader month (aggregate.ts),
+  // so the label names the month the owner actually uploaded — not a stale
+  // SaleDate from an updated old header.
   const label =
     result.periodStart && result.periodEnd
       ? `CCRS monthly · ${result.periodStart.slice(0, 7)}`
       : `CCRS monthly · ${(input.fileName || "upload").slice(0, 80)}`;
+
+  // Task I (I1): re-uploading a month REPLACES the previous upload (owner:
+  // "the table should replace a duplicate with a newer uploaded version").
+  // Capture the prior same-label monthly datasets NOW; they are deleted only
+  // AFTER the new dataset persists and flips ready — a failed upload never
+  // destroys existing data.
+  const priorSameMonth = (await listDatasets()).filter(
+    (d) => d.ingest_kind === "monthly_zip" && d.label === label,
+  );
 
   const datasetId = await createDataset({
     label,
@@ -771,6 +783,11 @@ export async function saveMonthlyRollupsAction(input: {
   try {
     const written = await persistAggregationResult(datasetId, result);
     await markDatasetReady(datasetId);
+    // I1: the new upload is safely persisted + ready — now replace the older
+    // upload(s) of the same month (cascade removes their rollup rows too).
+    for (const prior of priorSameMonth) {
+      if (prior.id !== datasetId) await deleteDataset(prior.id);
+    }
     await recordAudit({
       actorId: session.userId,
       actorEmail: session.email,
@@ -782,6 +799,7 @@ export async function saveMonthlyRollupsAction(input: {
         period: `${result.periodStart} → ${result.periodEnd}`,
         totals: result.totals,
         written,
+        replacedDatasetIds: priorSameMonth.map((d) => d.id),
       },
     });
     revalidatePath(`${BASE}/ccrs`);

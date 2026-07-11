@@ -90,8 +90,12 @@ describe("sanitizeAggregationResult", () => {
     expect(out.ok).toBe(true);
     if (!out.ok) return;
     const r = out.result;
+    // I1: period = the dominant SaleHeader month's FULL span (all headers are
+    // May 2026 here), with the honest observed span carried alongside.
     expect(r.periodStart).toBe("2026-05-01");
-    expect(r.periodEnd).toBe("2026-05-10");
+    expect(r.periodEnd).toBe("2026-05-31");
+    expect(r.observedMinDate).toBe("2026-05-01");
+    expect(r.observedMaxDate).toBe("2026-05-10");
     expect(r.totals.saleDetailRows).toBe(2);
     expect(r.totals.retailLines).toBe(1);
     expect(r.totals.wholesaleLines).toBe(1);

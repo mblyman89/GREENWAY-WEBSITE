@@ -319,9 +319,54 @@ describe("CcrsAggregator", () => {
     expect(result.totals.attributedRetailLines).toBe(4);
   });
 
-  it("derives the period from sale-header dates (min/max)", () => {
+  it("derives the period from the DOMINANT sale-header month (full span) with the honest observed min/max alongside", () => {
+    // I1: every header here is May 2026 → the period is the whole month, and
+    // the observed span records what the headers actually contained.
     expect(result.periodStart).toBe("2026-05-01");
-    expect(result.periodEnd).toBe("2026-05-30");
+    expect(result.periodEnd).toBe("2026-05-31");
+    expect(result.observedMinDate).toBe("2026-05-01");
+    expect(result.observedMaxDate).toBe("2026-05-30");
+  });
+
+  it("I1: stale-dated updated headers do NOT shift the period off the dominant month", () => {
+    const agg = new CcrsAggregator({ selfLicenseNumber: SELF, trackedLicenseNumbers: [] });
+    // Real-world shape (verified on the May-2026 zip): a monthly delivery
+    // carries headers UPDATED that month whose original SaleDates reach years
+    // back. Dominant month = the delivery month; min/max would say 2022-06.
+    agg.addSaleHeader(header("1", "1", "retail", "2022-06-14"));
+    agg.addSaleHeader(header("2", "1", "retail", "2026-04-02"));
+    agg.addSaleHeader(header("3", "1", "retail", "2026-04-11"));
+    agg.addSaleHeader(header("4", "1", "retail", "2026-04-27"));
+    const r = agg.result();
+    expect(r.periodStart).toBe("2026-04-01");
+    expect(r.periodEnd).toBe("2026-04-30");
+    expect(r.observedMinDate).toBe("2022-06-14");
+    expect(r.observedMaxDate).toBe("2026-04-27");
+  });
+
+  it("I1: a tie between months breaks toward the NEWER month", () => {
+    const agg = new CcrsAggregator({ selfLicenseNumber: SELF, trackedLicenseNumbers: [] });
+    agg.addSaleHeader(header("1", "1", "retail", "2026-03-05"));
+    agg.addSaleHeader(header("2", "1", "retail", "2026-04-05"));
+    const r = agg.result();
+    expect(r.periodStart).toBe("2026-04-01");
+    expect(r.periodEnd).toBe("2026-04-30");
+  });
+
+  it("I1: February leap handling comes from the calendar, not a guess", () => {
+    const agg = new CcrsAggregator({ selfLicenseNumber: SELF, trackedLicenseNumbers: [] });
+    agg.addSaleHeader(header("1", "1", "retail", "2028-02-10"));
+    const r = agg.result();
+    expect(r.periodStart).toBe("2028-02-01");
+    expect(r.periodEnd).toBe("2028-02-29"); // 2028 is a leap year
+  });
+
+  it("I1: headers with 'other' sale types still count toward the period month", () => {
+    const agg = new CcrsAggregator({ selfLicenseNumber: SELF, trackedLicenseNumbers: [] });
+    agg.addSaleHeader(header("1", "1", "other", "2026-04-05"));
+    const r = agg.result();
+    expect(r.periodStart).toBe("2026-04-01");
+    expect(r.periodEnd).toBe("2026-04-30");
   });
 
   it("computes the retail 'overall' statewide benchmark with per-unit semantics", () => {

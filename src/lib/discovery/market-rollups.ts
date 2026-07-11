@@ -250,6 +250,10 @@ export function sanitizeAggregationResult(
     result: {
       periodStart: isoDateOrNull(r.periodStart),
       periodEnd: isoDateOrNull(r.periodEnd),
+      // Task I (I1): honest observed SaleDate span (optional — an older
+      // transformer payload has neither; that sanitizes to null, never guessed).
+      observedMinDate: isoDateOrNull(r.observedMinDate),
+      observedMaxDate: isoDateOrNull(r.observedMaxDate),
       totals: {
         licenseeRows: num(totalsIn.licenseeRows),
         productRows: num(totalsIn.productRows),
