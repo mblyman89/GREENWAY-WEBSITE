@@ -603,3 +603,56 @@ done in this slice (ONE slice per PR).
 6. **Web Worker transformer (UX):** move the zip crunch off the main thread so the browser stays
    responsive (no "page unresponsive" prompts), with a live progress readout; optionally
    File System Access API streaming to cut memory further.
+
+---
+
+## Task H — S9–S14: the six logged suggestions (owner-approved set)
+
+**Owner request (verbatim):** "I have applied both sql files. While I test the upload again,
+please create a comprehensive roadmap, task list and todo list that are handoff ready. I want you
+to tackle all six slices, one slice per pr, completing the entire set before reporting back to me.
+I will then let you know how the new upload went and we can hopefully move on to the next set of
+tasks to be done. For now, please proceed on these 6 slices. Follow the standing rules, never
+guess and do not cut corners. Thank you."
+
+### The set (one slice per PR, dependency order)
+
+| Slice | Suggestion | Scope | Migration |
+| --- | --- | --- | --- |
+| S9  | #1 supplier-switching detection | pure diff core + Reports section (current vs previous transformer dataset) | none |
+| S10 | #2 wholesale price benchmarking | aggregator statewide supplier stats + `discovery_supplier_stats` + Reports section | **0109 (MANUAL)** |
+| S11 | #3 auto-draft vendor outreach | server action drafting vendor leads from shared suppliers (dedupe upsert) + Leads button | none |
+| S12 | #4 assortment-gap analysis | pure gap core (statewide movers vs published menu) + Reports section | none |
+| S13 | #5 new-vendor early detection | pure first-appearance core over uploaded history + Reports section | none (reads 0109) |
+| S14 | #6 Web Worker transformer | DOM-free pipeline runner + worker + uploader with main-thread fallback | none |
+
+### S9 — Supplier switching, month over month (suggestion #1)
+
+**Core (`src/lib/discovery/supplier-switching-core.ts`, pure):**
+`buildSupplierSwitchReport(current, previous, roster)` diffs each competitor's persisted
+`top_suppliers` (0107) between two transformer datasets. Join key = supplier LICENSE NUMBER
+(stable public id; real-file check: 367/367 May supplier rows carry one), fallback `id:<licenseeId>`
+(surrogate ids shift between extracts — verified semantics). Outputs:
+- per competitor: `entered` / `exited` / `continued` (with spend delta) — sorted spend/|delta| desc;
+  competitors with a steady list produce NO row (no noise);
+- per supplier: tracked-buyer momentum (prev→curr buyer counts, gained/lost store names, spend);
+  restricted to competitors with data in BOTH months — a store missing data in one month can't
+  honestly contribute to buyer deltas;
+- `missingPrevData` / `missingCurrData`: competitors excluded because a month lacks supplier data
+  (pre-0107 rows or absent stats) — reported by name, never silently folded into the diff.
+HONESTY: the persisted lists are TOP-10-BY-SPEND, so "exited" strictly means "left the top list",
+never "stopped buying" — every UI subtitle says so. Absent-month spends stay null (unknown ≠ 0).
+Caps: 40 competitor reports / 20 momentum rows.
+
+**UI (Reports → Local Benchmarks):** new "Supplier switching — month over month" section rendered
+only when a previous READY transformer dataset exists (`listTransformerDatasets()` order, the
+entry after the active one). Momentum table (buyers prev→now, gained/lost, spend prev→now) +
+per-competitor entered/left blocks (top 3 continued for context). Missing-data stores are listed
+in an explicit footnote. Best-effort try/catch: on any load failure the section simply doesn't
+render.
+
+**Tests:** `tests/compliance/supplier-switching-core.test.ts` — 11 tests: entered/exited/continued
+with deltas + null unknowns, pre-0107 exclusion honesty, absent-competitor handling, steady-roster
+silence, cross-competitor momentum with named gains/losses, license-number join across changing
+surrogate ids, licenseeId fallback, junk-row drop, junk-number coercion, momentum cap + ordering,
+roster/dba naming fallbacks.
