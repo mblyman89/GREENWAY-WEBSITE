@@ -26,6 +26,7 @@ import { VendorLeadsTable } from "./vendor-leads-table";
 import { ProductLeadsTable } from "./product-leads-table";
 import { LeadsAssistantPanel } from "./LeadsAssistantPanel";
 import { MarketMoversSection } from "./MarketMoversSection";
+import { PoCockpitSection } from "./PoCockpitSection";
 import { isAiConfigured } from "@/lib/ai/provider";
 import { discoveryWhatDoIDoHere } from "@/lib/catalog/next-action-core";
 import { WhatDoIDoHere } from "@/components/admin/catalog/WhatDoIDoHere";
@@ -230,6 +231,12 @@ export default async function DiscoveryPage({ searchParams }: { searchParams: Pr
 
         {/* AI leads advisor — a grounded second opinion over the pipeline. */}
         <LeadsAssistantPanel aiEnabled={isAiConfigured} />
+
+        {/* Task I I5: the Port Orchard purchase cockpit — head-to-head board,
+            "they sell it, we don't" buy list with one-click Start PO, and the
+            price check vs their observed p25. Renders nothing until a monthly
+            zip has been processed. */}
+        <PoCockpitSection />
 
         {/* Task H S4: lead ideas from the latest monthly CCRS transformer drop.
             Renders nothing until a monthly zip has been processed. */}

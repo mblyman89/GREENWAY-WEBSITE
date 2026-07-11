@@ -18,6 +18,9 @@ import {
   importProductLeads,
   isDiscoveryEnabled,
 } from "@/lib/discovery/store";
+import { getProductLeadByDedupeKey } from "@/lib/discovery/store";
+import { productLeadDedupeKey, matchVendorLead } from "@/lib/discovery/reconcile";
+import { listVendors } from "@/lib/vendors/store";
 import { parseVendorLeadsCsv, parseProductLeadsCsv } from "@/lib/discovery/import";
 import { resolveLeadVendorThread } from "@/lib/discovery/lead-vendor-thread-core";
 import {
@@ -324,6 +327,87 @@ export async function promoteProductLeadAction(formData: FormData): Promise<void
     params.set("leadVendorId", thread.vendorId);
     params.set("leadVendorVia", thread.via);
   }
+
+  revalidatePath(BASE);
+  redirect(`/admin/purchasing/new?${params.toString()}`);
+}
+
+/**
+ * Task I (I5) — "Start PO" straight from a purchase-cockpit buy-list row (a
+ * competitor mover we don't carry). Creates a product lead first (dedupe-safe:
+ * a re-click reuses the existing lead instead of duplicating), marks it
+ * ordered, then redirects to the New PO builder with the SAME prefill contract
+ * promoteProductLeadAction uses — so the PO save closes the loop by stamping
+ * promoted_po_id back on the lead.
+ *
+ * NEVER GUESS:
+ *  - The observed p25 is a RETAIL price, not a wholesale cost — the unit cost
+ *    is deliberately NOT prefilled (the manager enters the real quote).
+ *  - The I4 manifest vendor is threaded as a vendor id ONLY when it matches a
+ *    real vendor record (license-confident, else name-possible — the same
+ *    conservative matchVendorLead used by Discovery reconciliation). Otherwise
+ *    the name rides along as text and the manager picks the vendor.
+ */
+export async function startPoFromCockpitRowAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("inventory.manage");
+  await ensureEnabled();
+  const productName = str(formData, "product_name");
+  if (!productName) redirect(BASE);
+  const brand = str(formData, "brand");
+  const category = str(formData, "category");
+  const demandSignal = str(formData, "demand_signal");
+  const vendorName = str(formData, "vendor_name");
+  const vendorLicense = str(formData, "vendor_license");
+
+  // Create the lead — or, when the dedupe key already exists (re-click,
+  // ignoreDuplicates upsert returns null), reuse the existing lead.
+  let leadId = await createProductLead({
+    productName: productName as string,
+    brand,
+    category,
+    demandSignal,
+    priority: "high",
+    note: "From the local purchase cockpit (Leads page) — competitor mover we don't carry.",
+    createdBy: session.userId,
+  });
+  if (!leadId) {
+    const key = productLeadDedupeKey({ product_name: productName, brand, pack_size: null });
+    const existing = key ? await getProductLeadByDedupeKey(key) : null;
+    leadId = existing?.id ?? null;
+  }
+  if (!leadId) {
+    redirect(`${BASE}?error=${encodeURIComponent("Could not create a product lead for that row.")}`);
+  }
+
+  await updateProductLead(leadId as string, { status: "ordered", updated_by: session.userId });
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "discovery.product_lead.promote",
+    entityType: "discovery_product_leads",
+    entityId: leadId as string,
+  });
+
+  // Vendor threading: match the I4 manifest vendor against REAL vendor records.
+  // License equality → confident; normalized-name equality → possible (the
+  // builder pre-selects, the manager confirms). No match → name only.
+  let vendorId: string | null = null;
+  if (vendorLicense || vendorName) {
+    const vendors = await listVendors();
+    const m = matchVendorLead(
+      { display_name: vendorName, legal_name: null, license_number: vendorLicense },
+      vendors,
+    );
+    vendorId = m.matchedVendorId;
+  }
+
+  const params = new URLSearchParams();
+  params.set("fromLead", leadId as string);
+  params.set("leadName", productName as string);
+  if (brand) params.set("leadBrand", brand);
+  if (category) params.set("leadCategory", category);
+  if (vendorName) params.set("leadVendorName", vendorName);
+  if (vendorId) params.set("leadVendorId", vendorId);
 
   revalidatePath(BASE);
   redirect(`/admin/purchasing/new?${params.toString()}`);
