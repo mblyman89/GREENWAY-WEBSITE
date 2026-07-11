@@ -1083,3 +1083,56 @@ brand-carried stays listed, carried excluded, category suggestion, sort + caps, 
 skips; undercuts: min-menu-price pairing, both-prices-required, above-first sort + cap; menu
 accounting; demand-signal copy). Suite: 1049 passing. No migration needed (reads 0106/0107/0110
 tables as-is).
+
+### I6 — shipped notes
+
+Owner's ask: "the purchase order detail page, where my purchase manager actually builds the
+p.o.'s. I need this to be a super easy super clean super helpful page for my manager to build the
+best p.o.'s possible that focus on port orchard and local competitor insights from ai."
+
+**Pure core `src/lib/purchasing/po-market-context-core.ts`** — `buildPoMarketContext(lines,
+signals, roster, {area})` crosses PO lines (or builder candidate rows — anything in `PoLineLike`
+shape) against the persisted monthly CCRS market signals (0106/0110) and the verified roster.
+Matching is CONSERVATIVE: exact product-name equality after `normalizeKey` first, brand-level
+fallback, otherwise `none` — never fuzzy. Provenance is honest: `competitor_mover` signals count
+ONLY when they come from a tracked store in the target area (out-of-area/untracked rows are
+DROPPED, never mislabeled); statewide/type movers count as statewide evidence. Per line: area
+stores (deduped/sorted tradenames), summed units/revenue across matches, MIN p25 across matches
+(the "price to beat" — a factual bound), median from the single top-revenue match (labeled
+proxy), and `retailCostMultiple` = p25 retail ÷ wholesale cost to 1 decimal ONLY when both are
+known and cost > 0 (plain arithmetic across different bases, never a margin claim). Order mix
+aggregates by the lines' OWN categories with spend shares. Junk numbers coerce to 0/null;
+unnamed lines are skipped; money in minor units end to end. `formatPoReviewDigest` renders the
+grounded fact block the AI reasons over, explicitly labeling `unit_cost=… (WHOLESALE)` vs
+`retail_price_to_beat_p25` and per-line `PORT ORCHARD_EVIDENCE`.
+
+**AI reviewer `src/lib/purchasing/po-review-ai.ts`** — leads-ai pattern (`generateStructured`,
+tier "heavy" → router-controlled model, temperature 0.3, flat schema DSL). Returns
+`PoReview {headline, line_reviews, mix_observations, pre_send_checks, model}`; line reviews come
+back as pipe-delimited strings parsed by the PURE `parseLineReviews` (verdicts
+solid/check_price/check_demand/reconsider; unknown verdict → check_demand; confidence clamped
+0..1, NaN → 0.5; malformed rows dropped). The SYSTEM prompt enforces the wholesale-vs-retail
+basis rule, Port Orchard-first weighting, and never-invent-figures. Advisory only — it never
+edits the order.
+
+**Action `src/app/admin/purchasing/actions.ts` `reviewPurchaseOrderAction`** — permission check,
+friendly unconfigured-key message, re-reads the PO's REAL lines via `getPurchaseOrder`,
+best-effort dataset/signals/roster load (no drop → the reviewer honestly sees match=none
+everywhere), builds context for `port_orchard`, generates the review, records a
+`purchase_order.ai_review` audit event (model, line count, evidence count).
+
+**UI** — `src/app/admin/purchasing/PoMarketContextCard.tsx` (server, shared): per-line table
+(match badge, Port Orchard evidence with store names, units/revenue, retail median, price to
+beat p25, retail÷cost) with evidence-first ordering, honest "—" everywhere data is missing, and
+the wholesale-vs-retail basis note; best-effort (any failure/no dataset hides the card). Mounted
+on the PO DETAIL page (all lines + order-mix chips, `showMix`) and on the BUILDER as a
+market-check strip (`onlyMatched`, cap 15 — only rows with real evidence show; the lead prefill
+row is included). `src/app/admin/purchasing/[id]/PoReviewPanel.tsx` (client, LeadsAssistantPanel
+pattern): "Review this PO" → headline, line-by-line verdict cards, Order mix / Before you send
+bullets, provenance footer; soft-disable copy when no AI key.
+
+**Tests:** +13 in `tests/compliance/po-market-context-core.test.ts` (exact/brand/none matching,
+normalizeKey-insensitive but never fuzzy, statewide-vs-area provenance, out-of-area drop,
+multi-source MIN-p25/top-revenue-median/store dedupe, retail÷cost gating, junk coercion +
+unnamed-line skip, mix shares, digest basis labels + unmatched rendering, parseLineReviews
+clamps/defaults/drops). Suite: 1062 passing. No migration needed (reads 0106/0110 as-is).

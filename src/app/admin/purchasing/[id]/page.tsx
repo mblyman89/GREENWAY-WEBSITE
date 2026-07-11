@@ -19,6 +19,9 @@ import {
 } from "../actions";
 import { poWhatDoIDoHere } from "@/lib/catalog/next-action-core";
 import { WhatDoIDoHere } from "@/components/admin/catalog/WhatDoIDoHere";
+import { isAiConfigured } from "@/lib/ai/provider";
+import { PoMarketContextCard } from "../PoMarketContextCard";
+import { PoReviewPanel } from "./PoReviewPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -217,6 +220,13 @@ export default async function PurchaseOrderDetailPage({
             </table>
           </div>
         </Card>
+
+        {/* Task I (I6): grounded local-market context for every line — best-effort,
+            hidden when no CCRS dataset is available. */}
+        <PoMarketContextCard lines={po.lines} showMix />
+
+        {/* Task I (I6): advisory AI review — drafts-only, never edits the order. */}
+        <PoReviewPanel poId={po.id} aiEnabled={isAiConfigured} />
       </div>
     </div>
   );

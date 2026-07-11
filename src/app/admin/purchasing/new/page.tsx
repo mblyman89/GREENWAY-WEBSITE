@@ -16,6 +16,8 @@ import {
   saveReorderSettingsAction,
 } from "../actions";
 import { BuilderTable, type SuggestionRow } from "./builder-table";
+import { PoMarketContextCard } from "../PoMarketContextCard";
+import type { PoLineLike } from "@/lib/purchasing/po-market-context-core";
 
 export const dynamic = "force-dynamic";
 
@@ -127,6 +129,16 @@ export default async function NewPurchaseOrderPage({
         daysOfSupplyLeft: 0,
       }
     : undefined;
+
+  // Task I (I6): candidate rows in PoLineLike shape for the market check —
+  // suggested qty as the order qty, real unit costs (wholesale, minor units).
+  const marketLines: PoLineLike[] = [...(prefill ? [prefill] : []), ...rows].map((r) => ({
+    product_name: r.productName,
+    brand: r.brand,
+    category: r.category,
+    order_qty: r.suggestedQty,
+    unit_cost_minor_units: r.unitCostMinor,
+  }));
 
   const planSummary = one(sp, "plan");
   const origin = one(sp, "origin") === "ai_suggested" ? "ai_suggested" : "manual";
@@ -265,6 +277,11 @@ export default async function NewPurchaseOrderPage({
             </Card>
           </div>
         </Section>
+
+        {/* Task I (I6): Port Orchard market check for the candidate rows in
+            view — only rows with REAL market evidence show (best-effort;
+            hidden when no CCRS dataset is available). */}
+        <PoMarketContextCard lines={marketLines} onlyMatched maxRows={15} />
 
         {/* Step 2 & 3 — Review, build, send */}
         <Section
