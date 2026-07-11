@@ -340,3 +340,29 @@ Greenway's actual Licensee row; **816 passing** total). Validation harness
 all 49 non-skipped files detected correctly (licensee 1,715 / product 1.6M / inventory 14.05M /
 sale_header 10.74M / sale_detail 10.82M / strains 334K / lab 255K rows) and Greenway's row parsed
 exactly. No app pages touched; no migration.
+
+### Task H — S2 (aggregation engine) — DONE
+**S2 of 6.** New pure module `src/lib/discovery/ccrs-extract/aggregate.ts`: single-pass
+`CcrsAggregator` folding the typed rows from parse.ts (fed in dependency order — Licensee →
+Strains → Product → Inventory → SaleHeader → SalesDetail) into the three rollups the surfaces need:
+**statewide benchmarks** (retail/wholesale unit-price + $/g percentiles, units, revenue by
+type/brand/strain/overall; brand+strain capped at top 500 per class by revenue), **competitor stats**
+(per tracked license from the `discovery_competitors` roster: retail revenue/units/price
+distribution, byType breakdown, top-25 products; **self 413541 structurally excluded**), and
+**market signals** (top-100 statewide movers + top-15 per competitor, each with median and p25
+unit-price bands — p25 is the undercut reference for the Leads AI).
+Key scale piece: **`U53Map`**, a typed-array open-addressing hash map for CCRS's integer surrogate
+keys. A first cut with JS `Map<string,…>` joins **OOM-killed a 3.3 GB Node heap** on the real file
+(14.05M inventory + 10.74M header entries); U53Map holds the same joins in flat Float64Arrays and
+the whole run peaks ≈ **0.8 GB heap** — safe for the in-browser transformer. Sale headers fold to
+ONE packed number (sale class bit + tracked-competitor slot). Prices use exact-cents
+`PriceHistogram`s (nearest-rank percentiles, $10k cap). The statewide product-mover map is bounded
+by documented heavy-hitters pruning (cap 150k names → keep top 30k; prune count surfaced in
+`totals.moverMapPrunes` — honesty over silence). Attribution is never guessed: lines whose
+InventoryId doesn't resolve (delta-month reality) land in "(unattributed)" and the retail join rate
+is reported in totals.
+CI: `tests/compliance/ccrs-extract-aggregate.test.ts` (30 tests — U53Map growth/rehash, histogram
+percentiles, per-unit revenue math `qty × unit − discount` clamped at 0, self-exclusion, caps,
+deterministic ordering; **846 passing** total). Validation harness
+`scripts/validate-ccrs-aggregate.mjs` ran the FULL S1+S2 pipeline over the real May 2026 zip
+(results recorded in the S2 PR). No app pages touched; no migration.
