@@ -53,6 +53,31 @@ function validResult(): unknown {
     discountMinor: 0,
     isDeleted: false,
   });
+  // S7: a wholesale purchase — the tracked competitor buys from licensee 901.
+  agg.addLicensee({
+    licenseeId: "901",
+    licenseNumber: "999999",
+    name: "SOMEWHERE ELSE LLC",
+    dba: null,
+    status: "Active",
+    city: "SPOKANE",
+    county: null,
+  });
+  agg.addSaleHeader({
+    saleHeaderId: "327733904",
+    sellerLicenseeId: "901",
+    buyerLicenseeId: "900",
+    saleType: "wholesale",
+    saleDate: "2026-05-01",
+  });
+  agg.addSaleDetail({
+    saleHeaderId: "327733904",
+    inventoryId: null,
+    quantity: 50,
+    unitPriceMinor: 220,
+    discountMinor: 0,
+    isDeleted: false,
+  });
   // Serialize/deserialize like the real client→server hop.
   return JSON.parse(JSON.stringify(agg.result()));
 }
@@ -63,10 +88,11 @@ describe("sanitizeAggregationResult", () => {
     expect(out.ok).toBe(true);
     if (!out.ok) return;
     const r = out.result;
-    expect(r.periodStart).toBe("2026-05-10");
+    expect(r.periodStart).toBe("2026-05-01");
     expect(r.periodEnd).toBe("2026-05-10");
-    expect(r.totals.saleDetailRows).toBe(1);
+    expect(r.totals.saleDetailRows).toBe(2);
     expect(r.totals.retailLines).toBe(1);
+    expect(r.totals.wholesaleLines).toBe(1);
     expect(r.totals.attributedRetailLines).toBe(1);
     // Statewide: overall + type + brand + strain (retail).
     const overall = r.statewide.find((b) => b.scope === "overall" && b.saleClass === "retail");
@@ -77,10 +103,78 @@ describe("sanitizeAggregationResult", () => {
     expect(r.competitors[0].licenseNumber).toBe("415229");
     expect(r.competitors[0].retail.unitPrice?.sampleSize).toBe(1);
     expect(r.competitors[0].retail.topProducts[0].productName).toBe("Phat Panda | Grape Ape 3.5g");
+    // S7: wholesale sourcing round-trips losslessly.
+    const ws = r.competitors[0].wholesale;
+    expect(ws.lineCount).toBe(1);
+    expect(ws.spendMinor).toBe(11_000);
+    expect(ws.topSuppliers).toHaveLength(1);
+    expect(ws.topSuppliers[0]).toEqual({
+      licenseeId: "901",
+      licenseNumber: "999999",
+      name: "SOMEWHERE ELSE LLC",
+      dba: null,
+      lineCount: 1,
+      spendMinor: 11_000,
+    });
     // Signals preserved with both bands.
     const mover = r.signals.find((s) => s.kind === "statewide_mover");
     expect(mover?.p25UnitPriceMinor).toBe(2500);
     expect(mover?.medianUnitPriceMinor).toBe(2500);
+  });
+
+  it("accepts pre-S7 payloads without a wholesale block (backward compatible)", () => {
+    const base = JSON.parse(JSON.stringify(validResult())) as Record<string, unknown>;
+    const comps = base.competitors as Array<Record<string, unknown>>;
+    for (const c of comps) delete c.wholesale; // older transformer build
+    const out = sanitizeAggregationResult(base);
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    const ws = out.result.competitors[0].wholesale;
+    expect(ws.lineCount).toBe(0);
+    expect(ws.spendMinor).toBe(0);
+    expect(ws.topSuppliers).toEqual([]);
+  });
+
+  it("rejects supplier rows without a licenseeId and oversized supplier lists", () => {
+    const base = JSON.parse(JSON.stringify(validResult())) as Record<string, unknown>;
+    const comps = base.competitors as Array<Record<string, unknown>>;
+    (comps[0].wholesale as Record<string, unknown>).topSuppliers = [
+      { licenseeId: "", name: "NO ID LLC", lineCount: 1, spendMinor: 100 },
+    ];
+    expect(sanitizeAggregationResult(base).ok).toBe(false);
+
+    const base2 = JSON.parse(JSON.stringify(validResult())) as Record<string, unknown>;
+    const comps2 = base2.competitors as Array<Record<string, unknown>>;
+    (comps2[0].wholesale as Record<string, unknown>).topSuppliers = Array.from(
+      { length: 21 },
+      (_, i) => ({ licenseeId: String(i + 1), lineCount: 1, spendMinor: 1 }),
+    );
+    const out2 = sanitizeAggregationResult(base2);
+    expect(out2.ok).toBe(false);
+    if (out2.ok) return;
+    expect(out2.error).toMatch(/supplier/i);
+  });
+
+  it("coerces junk supplier numbers to safe values (never trusted)", () => {
+    const base = JSON.parse(JSON.stringify(validResult())) as Record<string, unknown>;
+    const comps = base.competitors as Array<Record<string, unknown>>;
+    (comps[0].wholesale as Record<string, unknown>) = {
+      lineCount: "7",
+      spendMinor: Number.NaN,
+      topSuppliers: [
+        { licenseeId: "901", licenseNumber: 42, name: "", dba: null, lineCount: "3", spendMinor: 100.6 },
+      ],
+    };
+    const out = sanitizeAggregationResult(base);
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    const ws = out.result.competitors[0].wholesale;
+    expect(ws.lineCount).toBe(0); // string → 0, not parsed
+    expect(ws.spendMinor).toBe(0); // NaN → 0
+    expect(ws.topSuppliers[0].licenseNumber).toBeNull(); // number → null, not coerced
+    expect(ws.topSuppliers[0].name).toBeNull(); // empty string → null
+    expect(ws.topSuppliers[0].lineCount).toBe(0);
+    expect(ws.topSuppliers[0].spendMinor).toBe(101); // rounded integer cents
   });
 
   it("rejects non-object payloads", () => {

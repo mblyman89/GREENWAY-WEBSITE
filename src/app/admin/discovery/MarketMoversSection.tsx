@@ -7,6 +7,8 @@
  *
  *  - STATEWIDE TOP MOVERS — the state's best-selling retail products.
  *  - COMPETITOR TOP MOVERS — what the tracked local competitors sold most of.
+ *  - SHARED SUPPLIERS (S7) — vendors that sold wholesale to 2+ tracked
+ *    competitors this month: proven local demand, the priority outreach list.
  *
  * Each row shows the REAL market price bands from the transformer: the median
  * unit price and the p25 "price to beat" (selling at/below it undercuts ~75%
@@ -17,12 +19,15 @@ import { Card, CardHeader, Section, Badge } from "@/components/admin/ui";
 import { formatMinorCurrency } from "@/lib/leafly/format";
 import {
   getLatestTransformerDataset,
+  listCompetitorStats,
   listMarketSignals,
 } from "@/lib/discovery/market-rollups";
 import { listCompetitors } from "@/lib/discovery/competitors";
 import {
   buildMarketMoverLeads,
+  buildSupplierLeads,
   type MarketMoverLead,
+  type SupplierLead,
 } from "@/lib/discovery/market-leads-core";
 
 function money(minor: number | null): string {
@@ -77,6 +82,50 @@ function MoverTable({ leads, showStore }: { leads: MarketMoverLead[]; showStore:
   );
 }
 
+function SharedSupplierTable({ suppliers }: { suppliers: SupplierLead[] }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-left text-sm">
+        <thead>
+          <tr className="border-b border-[var(--admin-border)] text-[0.65rem] uppercase tracking-wide text-[var(--admin-text-faint)]">
+            <th className="py-2 pr-3 font-semibold">Supplier</th>
+            <th className="py-2 pr-3 text-right font-semibold">Stores supplied</th>
+            <th className="py-2 pr-3 font-semibold">Who they supply</th>
+            <th className="py-2 pr-3 text-right font-semibold">Lines</th>
+            <th className="py-2 text-right font-semibold">Observed spend</th>
+          </tr>
+        </thead>
+        <tbody>
+          {suppliers.map((s) => (
+            <tr key={s.licenseeId} className="border-b border-[var(--admin-border)]/50">
+              <td className="py-2 pr-3 max-w-[18rem]">
+                <div className="truncate font-medium text-[var(--admin-text)]" title={s.displayName}>
+                  {s.displayName}
+                </div>
+                {s.licenseNumber ? (
+                  <div className="text-xs text-[var(--admin-text-muted)]">lic {s.licenseNumber}</div>
+                ) : null}
+              </td>
+              <td className="py-2 pr-3 text-right tabular-nums font-semibold text-[var(--admin-accent)]">
+                {s.buyerCount}
+              </td>
+              <td className="py-2 pr-3 max-w-[20rem]">
+                <div className="truncate text-[var(--admin-text-muted)]" title={s.buyerNames.join(", ")}>
+                  {s.buyerNames.slice(0, 4).join(", ")}
+                </div>
+              </td>
+              <td className="py-2 pr-3 text-right tabular-nums text-[var(--admin-text-muted)]">
+                {units(s.totalLineCount)}
+              </td>
+              <td className="py-2 text-right tabular-nums text-[var(--admin-text)]">{money(s.totalSpendMinor)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export async function MarketMoversSection() {
   // Best-effort: any failure (tables not migrated yet, no service key) simply
   // hides the section — the rest of the Leads page never breaks on this.
@@ -90,18 +139,27 @@ export async function MarketMoversSection() {
 
   let statewide: MarketMoverLead[] = [];
   let competitor: MarketMoverLead[] = [];
+  let sharedSuppliers: SupplierLead[] = [];
   try {
-    const [signals, roster] = await Promise.all([
+    const [signals, stats, roster] = await Promise.all([
       listMarketSignals(dataset.id),
+      listCompetitorStats(dataset.id),
       listCompetitors(),
     ]);
     const movers = buildMarketMoverLeads(signals, roster);
     statewide = movers.statewide;
     competitor = movers.competitor;
+    // S7: only the multi-competitor suppliers make the Leads page card — the
+    // full per-store supplier breakdown lives on Reports → Local Benchmarks.
+    sharedSuppliers = buildSupplierLeads(stats, roster).filter(
+      (s) => s.suppliesMultipleCompetitors,
+    );
   } catch {
     return null;
   }
-  if (statewide.length === 0 && competitor.length === 0) return null;
+  if (statewide.length === 0 && competitor.length === 0 && sharedSuppliers.length === 0) {
+    return null;
+  }
 
   const period =
     dataset.period_start && dataset.period_end
@@ -139,6 +197,17 @@ export async function MarketMoversSection() {
             />
             <div className="mt-3">
               <MoverTable leads={competitor} showStore={true} />
+            </div>
+          </Card>
+        ) : null}
+        {sharedSuppliers.length > 0 ? (
+          <Card padding="md">
+            <CardHeader
+              title="Shared suppliers — priority vendor leads"
+              subtitle="Vendors that sold wholesale to two or more of your tracked competitors this month. Proven local demand — call these first."
+            />
+            <div className="mt-3">
+              <SharedSupplierTable suppliers={sharedSuppliers} />
             </div>
           </Card>
         ) : null}

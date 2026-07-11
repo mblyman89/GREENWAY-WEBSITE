@@ -9,12 +9,17 @@
 import { describe, it, expect } from "vitest";
 import {
   buildMarketMoverLeads,
+  buildSupplierLeads,
   formatMoverDigestLine,
   formatMarketMoversDigest,
+  formatSupplierDigestLine,
+  formatSupplierLeadsDigest,
   DEFAULT_STATEWIDE_MOVERS,
   DEFAULT_COMPETITOR_MOVERS,
+  DEFAULT_SUPPLIER_LEADS,
   type MarketSignalLike,
   type MarketMoverLead,
+  type CompetitorSupplierStatLike,
 } from "@/lib/discovery/market-leads-core";
 
 function sig(overrides: Partial<MarketSignalLike> = {}): MarketSignalLike {
@@ -197,5 +202,181 @@ describe("formatMarketMoversDigest", () => {
     expect(digest).toContain("COMPETITOR TOP MOVERS");
     expect(digest).toContain("25th-percentile");
     expect(digest).toContain('store="Clear Choice Tacoma"');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// S7 — buildSupplierLeads + supplier digest
+// ---------------------------------------------------------------------------
+
+function supplierStat(
+  overrides: Partial<CompetitorSupplierStatLike> = {},
+): CompetitorSupplierStatLike {
+  return {
+    license_number: "111111",
+    name: "CLEAR CHOICE LLC",
+    dba: "CLEAR CHOICE",
+    top_suppliers: [],
+    ...overrides,
+  };
+}
+
+function supplier(
+  licenseeId: string,
+  spendMinor: number,
+  lineCount = 1,
+  overrides: Partial<CompetitorSupplierStatLike["top_suppliers"][number]> = {},
+) {
+  return {
+    licenseeId,
+    licenseNumber: `7${licenseeId}`,
+    name: `SUPPLIER ${licenseeId} LLC`,
+    dba: null,
+    lineCount,
+    spendMinor,
+    ...overrides,
+  };
+}
+
+describe("buildSupplierLeads (S7)", () => {
+  it("ranks multi-competitor suppliers first and flags them as priority", () => {
+    const stats = [
+      supplierStat({
+        license_number: "111111",
+        top_suppliers: [supplier("901", 50_000), supplier("902", 90_000)],
+      }),
+      supplierStat({
+        license_number: "222222",
+        top_suppliers: [supplier("901", 30_000)],
+      }),
+    ];
+    const roster = [
+      { license_number: "111111", tradename: "Clear Choice Tacoma" },
+      { license_number: "222222", tradename: "Pot Zone" },
+    ];
+    const leads = buildSupplierLeads(stats, roster);
+    expect(leads).toHaveLength(2);
+    // 901 supplies BOTH competitors → first despite lower total spend.
+    expect(leads[0].licenseeId).toBe("901");
+    expect(leads[0].buyerCount).toBe(2);
+    expect(leads[0].suppliesMultipleCompetitors).toBe(true);
+    expect(leads[0].totalSpendMinor).toBe(80_000);
+    expect(leads[0].totalLineCount).toBe(2);
+    // Buyer names spend-desc: Clear Choice ($500) before Pot Zone ($300).
+    expect(leads[0].buyerNames).toEqual(["Clear Choice Tacoma", "Pot Zone"]);
+    expect(leads[1].licenseeId).toBe("902");
+    expect(leads[1].buyerCount).toBe(1);
+    expect(leads[1].suppliesMultipleCompetitors).toBe(false);
+  });
+
+  it("resolves display name dba → name → licensee id (never invents)", () => {
+    const stats = [
+      supplierStat({
+        top_suppliers: [
+          supplier("901", 100, 1, { dba: "B FARMS", name: "B LLC" }),
+          supplier("902", 90, 1, { dba: null, name: "C LLC" }),
+          supplier("903", 80, 1, { dba: null, name: null, licenseNumber: null }),
+        ],
+      }),
+    ];
+    const leads = buildSupplierLeads(stats, []);
+    expect(leads.map((l) => l.displayName)).toEqual(["B FARMS", "C LLC", "Licensee 903"]);
+    expect(leads[2].licenseNumber).toBeNull();
+  });
+
+  it("falls back to the stat row's dba/name for buyer names when off-roster", () => {
+    const stats = [
+      supplierStat({
+        license_number: "333333",
+        dba: null,
+        name: "MYSTERY STORE LLC",
+        top_suppliers: [supplier("901", 100)],
+      }),
+    ];
+    const leads = buildSupplierLeads(stats, []);
+    expect(leads[0].buyerNames).toEqual(["MYSTERY STORE LLC"]);
+  });
+
+  it("coerces junk numbers to zero and skips suppliers without a licensee id", () => {
+    const stats = [
+      supplierStat({
+        top_suppliers: [
+          supplier("901", Number.NaN as unknown as number, -5 as unknown as number),
+          { ...supplier("", 100), licenseeId: "" },
+        ],
+      }),
+    ];
+    const leads = buildSupplierLeads(stats, []);
+    expect(leads).toHaveLength(1);
+    expect(leads[0].totalSpendMinor).toBe(0);
+    expect(leads[0].totalLineCount).toBe(0);
+  });
+
+  it("caps output at the default and honors an explicit max", () => {
+    const stats = [
+      supplierStat({
+        top_suppliers: Array.from({ length: 10 }, (_, i) => supplier(String(900 + i), 1000 - i)),
+      }),
+      supplierStat({
+        license_number: "222222",
+        top_suppliers: Array.from({ length: 10 }, (_, i) => supplier(String(950 + i), 500 - i)),
+      }),
+    ];
+    expect(buildSupplierLeads(stats, [])).toHaveLength(DEFAULT_SUPPLIER_LEADS);
+    expect(buildSupplierLeads(stats, [], { max: 3 })).toHaveLength(3);
+    expect(buildSupplierLeads(stats, [], { max: 0 })).toHaveLength(0);
+  });
+
+  it("handles missing/empty top_suppliers arrays gracefully", () => {
+    const stats = [
+      supplierStat({ top_suppliers: [] }),
+      supplierStat({
+        license_number: "222222",
+        top_suppliers: undefined as unknown as CompetitorSupplierStatLike["top_suppliers"],
+      }),
+    ];
+    expect(buildSupplierLeads(stats, [])).toEqual([]);
+  });
+});
+
+describe("supplier digest (S7)", () => {
+  const stats = [
+    supplierStat({
+      license_number: "111111",
+      top_suppliers: [supplier("901", 50_000, 12)],
+    }),
+    supplierStat({
+      license_number: "222222",
+      top_suppliers: [supplier("901", 30_000, 5)],
+    }),
+  ];
+  const roster = [
+    { license_number: "111111", tradename: "Clear Choice Tacoma" },
+    { license_number: "222222", tradename: "Pot Zone" },
+  ];
+
+  it("marks multi-competitor suppliers as PRIORITY in the line format", () => {
+    const [lead] = buildSupplierLeads(stats, roster);
+    const line = formatSupplierDigestLine(lead);
+    expect(line).toContain('supplier="SUPPLIER 901 LLC"');
+    expect(line).toContain("supplies_competitors=2");
+    expect(line).toContain('buyers="Clear Choice Tacoma; Pot Zone"');
+    expect(line).toContain("observed_spend=$800.00");
+    expect(line).toContain("PRIORITY=multi-competitor-supplier");
+  });
+
+  it("omits the PRIORITY marker for single-competitor suppliers", () => {
+    const single = buildSupplierLeads([stats[0]], roster);
+    const line = formatSupplierDigestLine(single[0]);
+    expect(line).not.toContain("PRIORITY=");
+  });
+
+  it("returns null for an empty list, and frames the block honestly", () => {
+    expect(formatSupplierLeadsDigest([])).toBeNull();
+    const digest = formatSupplierLeadsDigest(buildSupplierLeads(stats, roster));
+    expect(digest).toBeTruthy();
+    expect(digest).toContain("COMPETITOR SUPPLIERS");
+    expect(digest).toContain("this drop only");
+    expect(digest).toContain("PRIORITY vendor leads");
   });
 });

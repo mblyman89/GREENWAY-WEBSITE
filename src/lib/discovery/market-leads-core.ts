@@ -1,10 +1,12 @@
 /**
  * src/lib/discovery/market-leads-core.ts
  *
- * PURE market-mover lead logic for the Leads page and the AI leads advisor
- * (Task H, S4). Turns the persisted CCRS monthly-transformer market signals
- * (migration 0106 `discovery_market_signals`) plus the competitor roster into
- * lead-shaped rows the UI can render and the AI can reason over.
+ * PURE market-mover + supplier lead logic for the Leads page and the AI leads
+ * advisor (Task H, S4 + S7). Turns the persisted CCRS monthly-transformer
+ * market signals (migration 0106 `discovery_market_signals`) and competitor
+ * supplier rollups (migration 0107 `discovery_competitor_stats.top_suppliers`)
+ * plus the competitor roster into lead-shaped rows the UI can render and the
+ * AI can reason over.
  *
  * Standing rules honored:
  *  - NEVER GUESS: every number here is passed through from the transformer's
@@ -208,4 +210,178 @@ export function formatMarketMoversDigest(movers: MarketMoverLeads): string | nul
 
   if (parts.length === 0) return null;
   return parts.join("\n\n");
+}
+
+// ---------------------------------------------------------------------------
+// S7 — competitor SUPPLIER leads. Wholesale SaleHeaders in the monthly CCRS
+// extract carry both sides of the transfer (seller → SoldToLicensee buyer),
+// so the transformer records who each tracked competitor bought from. Here we
+// invert that into vendor leads: suppliers ranked by total spend across the
+// tracked competitors, flagging vendors that supply SEVERAL competitors —
+// proven local demand and the owner's priority outreach list.
+// ---------------------------------------------------------------------------
+
+/** Structurally matches DiscoveryCompetitorStatRow's S7 columns. */
+export type CompetitorSupplierStatLike = {
+  license_number: string;
+  name: string | null;
+  dba: string | null;
+  top_suppliers: Array<{
+    licenseeId: string;
+    licenseNumber: string | null;
+    name: string | null;
+    dba: string | null;
+    lineCount: number;
+    spendMinor: number;
+  }>;
+};
+
+export type SupplierLead = {
+  /** CCRS surrogate LicenseeId (stable within one extract). */
+  licenseeId: string;
+  licenseNumber: string | null;
+  /** DBA, else legal name, else "Licensee <id>" — never invented. */
+  displayName: string;
+  /** Distinct tracked competitors this supplier sold to this month. */
+  buyerCount: number;
+  /** Roster tradenames (or license fallbacks) of those competitors, spend desc. */
+  buyerNames: string[];
+  /** Total observed spend across tracked competitors, minor units. */
+  totalSpendMinor: number;
+  totalLineCount: number;
+  /** True when the supplier sold to 2+ tracked competitors — priority lead. */
+  suppliesMultipleCompetitors: boolean;
+};
+
+/** Default cap for the UI card and AI digest. */
+export const DEFAULT_SUPPLIER_LEADS = 15;
+
+/**
+ * Rank the tracked competitors' wholesale suppliers into vendor leads.
+ * Deterministic: buyer count desc (multi-competitor first), then total spend
+ * desc, then display name asc. NEVER GUESS: identity fields come straight from
+ * the CCRS licensee table via the transformer; missing names fall back to the
+ * licensee id, never an invented tradename.
+ */
+export function buildSupplierLeads(
+  stats: CompetitorSupplierStatLike[],
+  roster: RosterNameLike[],
+  opts?: { max?: number },
+): SupplierLead[] {
+  const max = opts?.max ?? DEFAULT_SUPPLIER_LEADS;
+
+  const rosterNames = new Map<string, string>();
+  for (const r of roster) {
+    const lic = cleanStr(r.license_number);
+    const name = cleanStr(r.tradename);
+    if (lic && name) rosterNames.set(lic, name);
+  }
+
+  type Acc = {
+    licenseeId: string;
+    licenseNumber: string | null;
+    name: string | null;
+    dba: string | null;
+    totalSpendMinor: number;
+    totalLineCount: number;
+    /** buyer license → spend with this supplier (for spend-desc buyer names). */
+    buyers: Map<string, { name: string; spendMinor: number }>;
+  };
+  const bySupplier = new Map<string, Acc>();
+
+  for (const stat of stats) {
+    const buyerLicense = cleanStr(stat.license_number);
+    if (!buyerLicense) continue;
+    const buyerName =
+      rosterNames.get(buyerLicense) ??
+      cleanStr(stat.dba) ??
+      cleanStr(stat.name) ??
+      `License ${buyerLicense}`;
+    const suppliers = Array.isArray(stat.top_suppliers) ? stat.top_suppliers : [];
+    for (const s of suppliers) {
+      const licenseeId = cleanStr(s.licenseeId);
+      if (!licenseeId) continue;
+      const spend = Math.round(toFiniteNonNegative(s.spendMinor));
+      const lines = Math.round(toFiniteNonNegative(s.lineCount));
+      let acc = bySupplier.get(licenseeId);
+      if (!acc) {
+        acc = {
+          licenseeId,
+          licenseNumber: cleanStr(s.licenseNumber),
+          name: cleanStr(s.name),
+          dba: cleanStr(s.dba),
+          totalSpendMinor: 0,
+          totalLineCount: 0,
+          buyers: new Map(),
+        };
+        bySupplier.set(licenseeId, acc);
+      }
+      // Fill identity gaps from later rows (same extract → same identity).
+      if (!acc.licenseNumber) acc.licenseNumber = cleanStr(s.licenseNumber);
+      if (!acc.name) acc.name = cleanStr(s.name);
+      if (!acc.dba) acc.dba = cleanStr(s.dba);
+      acc.totalSpendMinor += spend;
+      acc.totalLineCount += lines;
+      const buyer = acc.buyers.get(buyerLicense) ?? { name: buyerName, spendMinor: 0 };
+      buyer.spendMinor += spend;
+      acc.buyers.set(buyerLicense, buyer);
+    }
+  }
+
+  const leads: SupplierLead[] = [...bySupplier.values()].map((acc) => {
+    const buyerNames = [...acc.buyers.values()]
+      .sort((a, b) => b.spendMinor - a.spendMinor || a.name.localeCompare(b.name))
+      .map((b) => b.name);
+    return {
+      licenseeId: acc.licenseeId,
+      licenseNumber: acc.licenseNumber,
+      displayName: acc.dba ?? acc.name ?? `Licensee ${acc.licenseeId}`,
+      buyerCount: acc.buyers.size,
+      buyerNames,
+      totalSpendMinor: acc.totalSpendMinor,
+      totalLineCount: acc.totalLineCount,
+      suppliesMultipleCompetitors: acc.buyers.size >= 2,
+    };
+  });
+
+  leads.sort(
+    (a, b) =>
+      b.buyerCount - a.buyerCount ||
+      b.totalSpendMinor - a.totalSpendMinor ||
+      a.displayName.localeCompare(b.displayName),
+  );
+
+  return leads.slice(0, Math.max(0, max));
+}
+
+/** One compact prompt line per supplier lead. Exported for direct testability. */
+export function formatSupplierDigestLine(lead: SupplierLead): string {
+  const bits = [
+    `supplier="${lead.displayName.slice(0, 80)}"`,
+    lead.licenseNumber ? `license=${lead.licenseNumber}` : null,
+    `supplies_competitors=${lead.buyerCount}`,
+    `buyers="${lead.buyerNames.slice(0, 6).join("; ").slice(0, 200)}"`,
+    `observed_spend=${digestMoney(lead.totalSpendMinor)}`,
+    `lines=${lead.totalLineCount}`,
+    lead.suppliesMultipleCompetitors ? "PRIORITY=multi-competitor-supplier" : null,
+  ].filter(Boolean);
+  return `- ${bits.join(", ")}`;
+}
+
+/**
+ * The competitor-suppliers digest block for the AI prompt, or null when there
+ * are no supplier leads. The multi-competitor priority framing is explicit —
+ * per the owner: vendors that supply several tracked competitors are proven
+ * local sellers and should be called out as priority vendor leads.
+ */
+export function formatSupplierLeadsDigest(leads: SupplierLead[]): string | null {
+  if (leads.length === 0) return null;
+  return (
+    `COMPETITOR SUPPLIERS (who tracked local competitors BOUGHT from this month, from the latest ` +
+    `monthly CCRS drop — real wholesale transfers, seller → buyer; "observed_spend" is what those ` +
+    `competitors spent with that supplier in this drop only. Suppliers marked ` +
+    `PRIORITY=multi-competitor-supplier sell to 2+ tracked competitors — proven local demand, treat ` +
+    `them as PRIORITY vendor leads):\n` +
+    leads.map(formatSupplierDigestLine).join("\n")
+  );
 }

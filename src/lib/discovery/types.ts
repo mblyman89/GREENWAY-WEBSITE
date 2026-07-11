@@ -194,7 +194,7 @@ export type DiscoveryDataset = {
   ingest_kind?: string | null; // 'csv' | 'monthly_zip'
 };
 
-/** Row of discovery_competitor_stats (migration 0106). Money in minor units. */
+/** Row of discovery_competitor_stats (migrations 0106 + 0107). Money in minor units. */
 export type DiscoveryCompetitorStatRow = {
   id: number;
   dataset_id: string;
@@ -220,6 +220,17 @@ export type DiscoveryCompetitorStatRow = {
     units: number;
     revenueMinor: number;
     medianUnitPriceMinor: number | null;
+  }>;
+  // S7 (migration 0107): wholesale sourcing — what this competitor BOUGHT.
+  wholesale_line_count: number;
+  wholesale_spend_minor: number;
+  top_suppliers: Array<{
+    licenseeId: string;
+    licenseNumber: string | null;
+    name: string | null;
+    dba: string | null;
+    lineCount: number;
+    spendMinor: number;
   }>;
   created_at: string;
 };
