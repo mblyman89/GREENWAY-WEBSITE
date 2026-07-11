@@ -30,13 +30,19 @@ import { ReportTable, type ReportColumn } from "@/components/admin/reports/Repor
 import { StatCard } from "@/components/admin/StatCard";
 import { areaLabel } from "@/lib/discovery/competitors";
 import type { DiscoveryCompetitor, DiscoveryDataset } from "@/lib/discovery/types";
-import { listCompetitorStats } from "@/lib/discovery/market-rollups";
+import { listCompetitorStats, listTransformerDatasets } from "@/lib/discovery/market-rollups";
 import {
   buildLocalBenchmarks,
   type LocalAreaStat,
   type LocalCompetitorStat,
 } from "@/lib/discovery/local-benchmarks-core";
 import { buildSupplierLeads, type SupplierLead } from "@/lib/discovery/market-leads-core";
+import {
+  buildSupplierSwitchReport,
+  type CompetitorSwitchReport,
+  type SupplierMomentum,
+  type SupplierSwitchReport,
+} from "@/lib/discovery/supplier-switching-core";
 
 function money(minor: number | null | undefined): string {
   if (minor == null) return "—";
@@ -236,6 +242,149 @@ function SharedSuppliersTable({ suppliers }: { suppliers: SupplierLead[] }) {
   );
 }
 
+/**
+ * S9: supplier switching — per-competitor entered/exited top-supplier lists
+ * and per-supplier tracked-buyer momentum, current month vs the previous
+ * READY transformer dataset. Honest framing everywhere: the persisted lists
+ * are TOP-10-by-spend, so "exited" means "no longer a top supplier", never
+ * "stopped buying".
+ */
+function SwitchCompetitorBlocks({ reports }: { reports: CompetitorSwitchReport[] }) {
+  return (
+    <div className="grid gap-4 lg:grid-cols-2">
+      {reports.map((r) => (
+        <div key={r.licenseNumber} className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <span className="text-sm font-bold text-white/90">{r.competitorName}</span>
+            <span className="text-xs text-white/40">
+              {r.entered.length} entered · {r.exited.length} left
+            </span>
+          </div>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-white/10 text-left text-[0.65rem] uppercase tracking-wide text-white/40">
+                <th className="py-1.5 pr-2">Change</th>
+                <th className="px-2 py-1.5">Supplier</th>
+                <th className="py-1.5 pl-2 text-right">Spend (prev → now)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {r.entered.map((c) => (
+                <tr key={`in-${c.supplierKey}`} className="border-b border-white/5">
+                  <td className="py-1.5 pr-2 font-semibold text-[#7ed957]">Entered</td>
+                  <td className="max-w-[14rem] truncate px-2 py-1.5 text-white/80" title={c.displayName}>
+                    {c.displayName}
+                    {c.licenseNumber ? <span className="ml-1 text-[10px] text-white/30">{c.licenseNumber}</span> : null}
+                  </td>
+                  <td className="py-1.5 pl-2 text-right text-white/70">— → {money(c.currSpendMinor)}</td>
+                </tr>
+              ))}
+              {r.exited.map((c) => (
+                <tr key={`out-${c.supplierKey}`} className="border-b border-white/5">
+                  <td className="py-1.5 pr-2 font-semibold text-amber-400/90">Left top list</td>
+                  <td className="max-w-[14rem] truncate px-2 py-1.5 text-white/80" title={c.displayName}>
+                    {c.displayName}
+                    {c.licenseNumber ? <span className="ml-1 text-[10px] text-white/30">{c.licenseNumber}</span> : null}
+                  </td>
+                  <td className="py-1.5 pl-2 text-right text-white/70">{money(c.prevSpendMinor)} → —</td>
+                </tr>
+              ))}
+              {r.continued.slice(0, 3).map((c) => (
+                <tr key={`ct-${c.supplierKey}`} className="border-b border-white/5">
+                  <td className="py-1.5 pr-2 text-white/40">Continued</td>
+                  <td className="max-w-[14rem] truncate px-2 py-1.5 text-white/60" title={c.displayName}>
+                    {c.displayName}
+                  </td>
+                  <td className="py-1.5 pl-2 text-right text-white/55">
+                    {money(c.prevSpendMinor)} → {money(c.currSpendMinor)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SupplierMomentumTable({ momentum }: { momentum: SupplierMomentum[] }) {
+  const columns: ReportColumn<SupplierMomentum & Record<string, unknown>>[] = [
+    {
+      key: "displayName",
+      header: "Supplier",
+      emphasis: true,
+      render: (r) => (
+        <span>
+          {r.displayName}
+          {r.licenseNumber ? <span className="ml-1 text-white/30">{r.licenseNumber}</span> : null}
+        </span>
+      ),
+    },
+    {
+      key: "buyerDelta",
+      header: "Tracked buyers",
+      align: "right",
+      emphasis: true,
+      render: (r) => (
+        <span className={r.buyerDelta > 0 ? "text-[#7ed957]" : "text-amber-400/90"}>
+          {r.prevBuyerCount} → {r.currBuyerCount} ({r.buyerDelta > 0 ? "+" : ""}
+          {r.buyerDelta})
+        </span>
+      ),
+    },
+    { key: "gainedBuyers", header: "Gained", render: (r) => (r.gainedBuyers.length ? r.gainedBuyers.slice(0, 4).join(", ") : "—") },
+    { key: "lostBuyers", header: "Lost", render: (r) => (r.lostBuyers.length ? r.lostBuyers.slice(0, 4).join(", ") : "—") },
+    {
+      key: "currSpendMinor",
+      header: "Spend (prev → now)",
+      align: "right",
+      render: (r) => `${money(r.prevSpendMinor)} → ${money(r.currSpendMinor)}`,
+    },
+  ];
+  return (
+    <ReportTable
+      columns={columns}
+      rows={momentum as Array<SupplierMomentum & Record<string, unknown>>}
+      emptyLabel="No supplier gained or lost a tracked buyer between these months."
+    />
+  );
+}
+
+function SupplierSwitchingSection({
+  report,
+  prevLabel,
+}: {
+  report: SupplierSwitchReport;
+  prevLabel: string;
+}) {
+  const hasAny = report.competitors.length > 0 || report.momentum.length > 0;
+  return (
+    <Section
+      title="Supplier switching — month over month"
+      subtitle={`Current drop vs "${prevLabel}". "Entered/left" means a vendor moved on or off a store's TOP-10-by-spend supplier list — a vendor below the top 10 still supplies the store. Losing a big account can make a vendor negotiable; a new account signals a product line winning nearby.`}
+    >
+      {hasAny ? (
+        <div className="space-y-5">
+          {report.momentum.length > 0 ? <SupplierMomentumTable momentum={report.momentum} /> : null}
+          {report.competitors.length > 0 ? <SwitchCompetitorBlocks reports={report.competitors} /> : null}
+        </div>
+      ) : (
+        <p className="text-sm text-white/40">
+          No top-supplier changes between these two months for stores with sourcing data in both.
+        </p>
+      )}
+      {report.missingPrevData.length > 0 ? (
+        <p className="mt-3 text-xs text-white/30">
+          No previous-month sourcing data for: {report.missingPrevData.slice(0, 8).join(", ")}
+          {report.missingPrevData.length > 8 ? "…" : ""} (datasets uploaded before the sourcing update
+          need a re-upload to backfill suppliers — those stores are excluded, never guessed).
+        </p>
+      ) : null}
+    </Section>
+  );
+}
+
 export async function TransformerLocalBenchmarks({
   dataset,
   roster,
@@ -249,6 +398,23 @@ export async function TransformerLocalBenchmarks({
   const sharedSuppliers = buildSupplierLeads(stats, roster).filter(
     (s) => s.suppliesMultipleCompetitors,
   );
+
+  // S9: previous READY transformer dataset (by period, falling back to list
+  // order) → supplier-switching report. Best-effort: one month = no section.
+  let switchReport: SupplierSwitchReport | null = null;
+  let prevLabel: string | null = null;
+  try {
+    const all = await listTransformerDatasets(); // newest period first
+    const idx = all.findIndex((d) => d.id === dataset.id);
+    const prev = idx >= 0 ? (all[idx + 1] ?? null) : null;
+    if (prev) {
+      const prevStats = await listCompetitorStats(prev.id);
+      switchReport = buildSupplierSwitchReport(stats, prevStats, roster);
+      prevLabel = prev.label;
+    }
+  } catch {
+    switchReport = null; // section simply doesn't render; nothing is guessed
+  }
 
   const portOrchard = competitors.filter((c) => c.area === "port_orchard");
   const poArea = areas.find((a) => a.area === "port_orchard") ?? null;
@@ -330,6 +496,11 @@ export async function TransformerLocalBenchmarks({
         >
           <SharedSuppliersTable suppliers={sharedSuppliers} />
         </Section>
+      ) : null}
+
+      {/* S9: supplier switching (needs two months of transformer data) */}
+      {switchReport && prevLabel ? (
+        <SupplierSwitchingSection report={switchReport} prevLabel={prevLabel} />
       ) : null}
 
       <p className="text-xs text-white/30">
