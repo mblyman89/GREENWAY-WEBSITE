@@ -8,7 +8,8 @@ import { getDiscoverySnapshot } from "@/lib/discovery/store";
 import { listDatasets } from "@/lib/discovery/ingest";
 import { listBenchmarks, listTopLicensees, getBenchmarkFor } from "@/lib/discovery/benchmarks";
 import { compareOwnVsBenchmarks, type CompareRow, type CompareFlag } from "@/lib/discovery/compare";
-import type { DiscoveryBenchmark, BenchmarkScope, BenchmarkMetric } from "@/lib/discovery/types";
+import type { DiscoveryBenchmark, BenchmarkScope, BenchmarkMetric, DiscoveryDataset } from "@/lib/discovery/types";
+import { TransformerBenchmarks } from "./TransformerBenchmarks";
 
 export const dynamic = "force-dynamic";
 
@@ -200,6 +201,56 @@ export default async function BenchmarksPage({ searchParams }: { searchParams: P
     );
   }
 
+  // Task H S5: datasets produced by the monthly zip transformer store their
+  // rollups under the class-scoped metrics across overall/type/brand/strain —
+  // the legacy category view below can't show them, so render the dedicated
+  // transformer view (with month-over-month history) instead.
+  if (active.ingest_kind === "monthly_zip") {
+    return (
+      <div>
+        <AdminPageHeader
+          title="Statewide Benchmarks"
+          subtitle="Statewide prices, $/gram, brand & strain premiums, velocity and month-over-month trends — from the monthly CCRS drop."
+          breadcrumbs={
+            <Breadcrumbs
+              items={[
+                { label: "Product Intake", href: "/admin/catalog" },
+                { label: "Product Discovery", href: "/admin/discovery" },
+                { label: "Benchmarks" },
+              ]}
+            />
+          }
+          action={
+            <Link href="/admin/discovery/ccrs">
+              <Button variant="neutral" size="sm">Manage datasets</Button>
+            </Link>
+          }
+          help={
+            <HelpPanel
+              id="discovery-benchmarks"
+              title="Reading these benchmarks"
+              steps={[
+                "Wholesale price = what stores PAY vendors (your buying benchmark). Retail price = shelf price shoppers pay.",
+                "Median is the typical price; p25/p75 show the normal low-to-high band. 'n' is how many transactions back the number.",
+                "$/gram normalizes across pack sizes so types are comparable.",
+                "Each monthly drop keeps its own rollups — the History table lines them up month over month.",
+              ]}
+            >
+              <p className="text-xs text-[var(--admin-text-muted)]">
+                Computed in your browser from the monthly WSLCB zip ({active.label}); only the rollups are stored.
+              </p>
+            </HelpPanel>
+          }
+        />
+        <div className="space-y-6 px-5 py-6 sm:px-8">
+          <BackLink />
+          <DatasetSelector datasets={datasets} activeId={active.id} />
+          <TransformerBenchmarks dataset={active} />
+        </div>
+      </div>
+    );
+  }
+
   const rows = await listBenchmarks(active.id);
   const topVendors = await listTopLicensees(active.id, 25);
   const compare = active.benchmarks_computed_at
@@ -263,24 +314,7 @@ export default async function BenchmarksPage({ searchParams }: { searchParams: P
         <BackLink />
 
         {/* Dataset selector */}
-        {datasets.length > 1 ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-semibold text-[var(--admin-text-muted)]">Dataset:</span>
-            {datasets.map((d) => (
-              <Link
-                key={d.id}
-                href={`/admin/discovery/benchmarks?dataset=${d.id}`}
-                className={`rounded-full border px-3 py-1 text-xs font-semibold ${
-                  d.id === active.id
-                    ? "border-[var(--admin-accent)] bg-[var(--admin-accent-soft)] text-[var(--admin-accent)]"
-                    : "border-[var(--admin-border)] bg-[var(--admin-surface-2)] text-[var(--admin-text-muted)] hover:text-[var(--admin-text)]"
-                }`}
-              >
-                {d.label}
-              </Link>
-            ))}
-          </div>
-        ) : null}
+        <DatasetSelector datasets={datasets} activeId={active.id} />
 
         {needsCompute ? (
           <div className="rounded-[var(--admin-radius)] border border-[var(--admin-orange)]/40 bg-[var(--admin-orange)]/10 px-4 py-3 text-sm text-[var(--admin-text)]">
@@ -488,6 +522,28 @@ export default async function BenchmarksPage({ searchParams }: { searchParams: P
           </Card>
         </Section>
       </div>
+    </div>
+  );
+}
+
+function DatasetSelector({ datasets, activeId }: { datasets: DiscoveryDataset[]; activeId: string }) {
+  if (datasets.length <= 1) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="text-xs font-semibold text-[var(--admin-text-muted)]">Dataset:</span>
+      {datasets.map((d) => (
+        <Link
+          key={d.id}
+          href={`/admin/discovery/benchmarks?dataset=${d.id}`}
+          className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+            d.id === activeId
+              ? "border-[var(--admin-accent)] bg-[var(--admin-accent-soft)] text-[var(--admin-accent)]"
+              : "border-[var(--admin-border)] bg-[var(--admin-surface-2)] text-[var(--admin-text-muted)] hover:text-[var(--admin-text)]"
+          }`}
+        >
+          {d.label}
+        </Link>
+      ))}
     </div>
   );
 }
