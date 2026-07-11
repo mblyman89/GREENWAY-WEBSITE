@@ -951,3 +951,13 @@ fix themselves when the owner re-uploads each month's zip.
 **Tests:** +4 (stale-header dominance mirroring the real May-zip shape, newest-month tie break,
 leap February, 'other'-type headers still dating the drop) and 3 updated period assertions.
 Suite: 981 passing.
+
+### I2 — shipped notes
+
+**`benchmarks.ts` `listBenchmarks`:** now paginates with the same `.range()` loop the file
+already uses in `loadSales`/`loadPotency` (+ a stable `id` tiebreaker within equal scope_keys).
+Root cause of the owner's "by type boxes empty / velocity & mix broken / brand table mixed up"
+reports: a drop writes ~6,000–8,200 benchmark rows but the un-ranged read stopped at PostgREST's
+1,000-row cap, and scope_key-ascending ordering meant only alphabetically-early keys (e.g.
+"(unattributed)", numeric-prefix junk "brands") survived. Pure read-layer fix — no migration,
+no re-upload needed; the pages heal on next render.

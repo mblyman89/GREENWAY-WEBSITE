@@ -320,11 +320,26 @@ export async function listBenchmarks(
 ): Promise<DiscoveryBenchmark[]> {
   if (!isSupabaseServiceConfigured) return [];
   const admin = createSupabaseAdminClient();
-  let q = admin.from("discovery_benchmarks").select("*").eq("dataset_id", datasetId);
-  if (opts?.scope) q = q.eq("scope", opts.scope);
-  if (opts?.metric) q = q.eq("metric", opts.metric);
-  const { data } = await q.order("scope_key", { ascending: true });
-  return (data as DiscoveryBenchmark[] | null) ?? [];
+  // Task I (I2): PAGINATE. A monthly transformer drop writes ~6,000–8,200
+  // benchmark rows, but an un-ranged PostgREST read caps at 1,000 — with the
+  // scope_key ordering that silently kept only alphabetically-early keys
+  // (why the by-type boxes, velocity & mix, and brand tables looked broken).
+  // Same .range() loop pattern as loadSales/loadPotency above.
+  const out: DiscoveryBenchmark[] = [];
+  const pageSize = 1000;
+  for (let from = 0; ; from += pageSize) {
+    let q = admin.from("discovery_benchmarks").select("*").eq("dataset_id", datasetId);
+    if (opts?.scope) q = q.eq("scope", opts.scope);
+    if (opts?.metric) q = q.eq("metric", opts.metric);
+    const { data } = await q
+      .order("scope_key", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, from + pageSize - 1);
+    const rows = (data as DiscoveryBenchmark[] | null) ?? [];
+    out.push(...rows);
+    if (rows.length < pageSize) break;
+  }
+  return out;
 }
 
 /** Convenience lookup of one benchmark row (e.g. for a chip). */
