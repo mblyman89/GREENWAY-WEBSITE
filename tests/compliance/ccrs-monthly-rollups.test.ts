@@ -9,6 +9,8 @@
  * validation gate is the part that must be airtight.)
  */
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 import { sanitizeAggregationResult } from "@/lib/discovery/market-rollups";
 import { CcrsAggregator } from "@/lib/discovery/ccrs-extract/aggregate";
@@ -289,5 +291,96 @@ describe("sanitizeAggregationResult", () => {
     expect(out.ok).toBe(true);
     if (!out.ok) return;
     expect(out.result.statewide[0].scopeKey.length).toBeLessThanOrEqual(300);
+  });
+
+  // S8 regression: real statewide revenue totals exceed int4 (the April 2026
+  // upload failed with "value 8932289184 is out of range for type integer").
+  // Sanitize must PASS these values through untouched — the DB columns are
+  // bigint as of migration 0108, so clamping them here would silently corrupt
+  // money. Values chosen straight from the real failure + the May extract.
+  it("passes >2^31 revenue totals through unclamped (real months overflow int4)", () => {
+    const base = validResult() as Record<string, unknown>;
+    const big = {
+      ...base,
+      statewide: [
+        {
+          scope: "overall",
+          scopeKey: "all",
+          saleClass: "retail",
+          unitPrice: null,
+          pricePerGram: null,
+          units: 10_208_708,
+          revenueMinor: 12_531_365_735, // May 2026 retail/overall/all (verified)
+        },
+        {
+          scope: "type",
+          scopeKey: "(unattributed)",
+          saleClass: "wholesale",
+          unitPrice: null,
+          pricePerGram: null,
+          units: 1,
+          revenueMinor: 8_932_289_184, // the exact value from April's failure
+        },
+      ],
+    };
+    const out = sanitizeAggregationResult(big);
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    expect(out.result.statewide[0].revenueMinor).toBe(12_531_365_735);
+    expect(out.result.statewide[1].revenueMinor).toBe(8_932_289_184);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// S8 schema guard: every *_minor column the transformer writes must be bigint.
+// The failed April upload proved a real month overflows int4 on the statewide
+// revenue metrics (avg_minor carries retail_revenue / wholesale_revenue
+// totals). Migration 0108 widens all three rollup tables; this test pins the
+// migration text so the columns can never regress to `integer`.
+// ---------------------------------------------------------------------------
+describe("migration 0108 — rollup money columns are bigint", () => {
+  const sql = readFileSync(
+    join(process.cwd(), "supabase", "migrations", "0108_discovery_minor_columns_bigint.sql"),
+    "utf8",
+  );
+
+  const required: Array<[table: string, column: string]> = [
+    ["discovery_benchmarks", "min_minor"],
+    ["discovery_benchmarks", "p25_minor"],
+    ["discovery_benchmarks", "median_minor"],
+    ["discovery_benchmarks", "p75_minor"],
+    ["discovery_benchmarks", "max_minor"],
+    ["discovery_benchmarks", "avg_minor"],
+    ["discovery_competitor_stats", "price_min_minor"],
+    ["discovery_competitor_stats", "price_p25_minor"],
+    ["discovery_competitor_stats", "price_median_minor"],
+    ["discovery_competitor_stats", "price_p75_minor"],
+    ["discovery_competitor_stats", "price_max_minor"],
+    ["discovery_competitor_stats", "price_avg_minor"],
+    ["discovery_market_signals", "median_unit_price_minor"],
+    ["discovery_market_signals", "p25_unit_price_minor"],
+  ];
+
+  it("widens every transformer-written *_minor column to bigint", () => {
+    for (const [table, column] of required) {
+      const tableBlock = sql
+        .split(new RegExp(`alter table public\\.${table}\\b`))
+        .slice(1)
+        .join("\n");
+      expect(tableBlock, `${table} block missing`).not.toBe("");
+      const re = new RegExp(`alter column ${column}\\s+type bigint`);
+      expect(re.test(tableBlock), `${table}.${column} must be widened to bigint`).toBe(true);
+    }
+  });
+
+  it("never narrows a column back to integer", () => {
+    // Strip `--` comments first: the header quotes the original Postgres
+    // error text ("out of range for type integer"), which is documentation,
+    // not DDL.
+    const ddl = sql
+      .split("\n")
+      .map((line) => line.replace(/--.*$/, ""))
+      .join("\n");
+    expect(/type\s+integer/i.test(ddl)).toBe(false);
   });
 });

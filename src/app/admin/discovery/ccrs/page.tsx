@@ -294,8 +294,9 @@ export default async function CcrsPage({ searchParams }: { searchParams: Promise
               <Link href="/admin/discovery/benchmarks" className="font-semibold text-[var(--admin-accent)] hover:underline">
                 CCRS Benchmarks
               </Link>
-              , the Leads page, and Reports → Local Benchmarks. Requires migration{" "}
-              <code>0106_discovery_market_rollups.sql</code>.
+              , the Leads page, and Reports → Local Benchmarks. Requires migrations{" "}
+              <code>0106</code>–<code>0108</code> (competitor suppliers + bigint money columns —
+              statewide revenue totals overflow 32-bit integers on a real month).
             </p>
           </Card>
         </Section>
