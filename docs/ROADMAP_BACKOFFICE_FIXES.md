@@ -836,3 +836,118 @@ retail revenue/units, wholesale sourcing qty×price−discount, S10 statewide su
 totals, period detection, Greenway never in competitor outputs), structuredClone-able progress
 with monotonic filesDone + dependency-ordered first table, skip rules, verbatim error, and
 callback-less operation. Suite: 977 passing.
+
+---
+
+## Task I — CCRS benchmark bug fixes, per-type intelligence, leads-page purchase cockpit, PO insights, and AI everywhere
+
+### Owner's request (verbatim)
+
+> this is working incredibly well so far. I have two things to report. the month over month history
+> section on the CCRS benchmarks page, has the April upload I did twice in the list. I feel like the
+> table should replace a duplicate with a newer uploaded version. it also shows the date as june of
+> 2022, which is wrong, the month I uploaded was April of 2026. the other thing that is not working
+> quite right, is the velocity and mix section with the retail volume by type, it does not breakdown
+> the info like it should. same with the top part of the page, none of the by type boxes are filled.
+> I am also hoping we can add some extra insight to this page. like being able to see which vendor/
+> brand the top strains/ products are from. I want to be able to, like the top strains section, to be
+> able to have a list of the top 10 products from every single type shown each in its own section
+> with the ability to see which vendor/ brand those products come from. the next thing I want to
+> focus on is the product leads page. we now have all this data, what would a professional expert
+> level purchase manager need to make their job as easy as possible. I want there to be more displays
+> and tables and insights related to our local competitors as well as port orchard specifically. port
+> orchard is who we really need to start beating. so I need my purchase manager to have an easier
+> time putting together purchase orders with this new gold mine of information. you are super
+> intelligence... please use this vast wealth of knowledge you have to transform our leads page.
+> after you have done that transformation, I need you to then focus on the purchase order detail
+> page, where my purchase manager actually builds the p.o.'s. I need this to be a super easy super
+> clean super helpful page for my manager to build the best p.o.'s possible that focus on port
+> orchard and local competitor insights from ai. I want ai to be included in all of the benchmarks
+> sections. it knows more about the data set than we do and can offer way more insight than simple
+> charts and tables. I want to be able to ask questions and have appropriate and fantastic responses
+> and insights. after we nail this, the entire pipeline from leads, ordering, receiving, enriching,
+> etc. we will have the greatest intake and enrichment system around. please put together a roadmap,
+> task list, todo list that are all handoff ready. please help me finish this off. please proceed,
+> follow the standing rules, never guess, no short cuts or cutting corners. best work possible, use
+> you best judgement when it comes to professional and expert level enhancements. I trust you to
+> make the right decision. please proceed. thank you.
+
+### Verified root causes (from the REAL May 2026 zip + code reading — never guessed)
+
+1. **Wrong month (2022-06) + duplicate April rows in history.** SaleHeader files in a monthly
+   delivery contain every header *updated* that month, with original `SaleDate`s spanning 54
+   distinct months (sampled 1.2M May headers: 2026-05 = 53.2% dominant; tail back to 2021).
+   `aggregate.ts` tracked `minDate`/`maxDate` over ALL headers, so `periodStart` landed on a stale
+   old sale (June 2022) and the dataset label inherited it. And `saveMonthlyRollupsAction` always
+   `createDataset`s — re-uploading the same month created a second row instead of replacing it.
+2. **Empty "by type" boxes / broken "retail volume by type" / mixed-up brand table.**
+   `listBenchmarks()` had NO pagination — PostgREST caps a read at 1000 rows while a drop writes
+   ~6,000–8,200 benchmark rows, and `order("scope_key")` means only alphabetically-early keys
+   (e.g. "(unattributed)", numeric-prefix "brands" like `1g`, `3.5g`) survived the cut.
+3. **Brand contamination.** `extractBrand`'s prefix-before-separator heuristic captures junk
+   tokens; verified over 300k real May product names: real brands dominate but `3.5g` (712),
+   `Flower` (642), `100mg`, `2pk` etc. leak in. Also verified: the `"… by <brand>"` naming
+   convention is common (e.g. "Gelato x Dosidos by Mt Baker Homegrown - 14g").
+4. **No vendor attribution on top products/strains.** `Product.LicenseeId` (the producer/processor
+   that created the product = the vendor) exists in the raw file and in `parse.ts`'s `ProductRow`,
+   but `addProduct` dropped it. Licensee identity for every licensee is already interned (S7).
+
+### Slices (one PR each; owner applies migrations manually)
+
+- **I1 — Dataset identity: dominant-month period + replace-on-reupload.**
+  `aggregate.ts` builds a yyyy-mm histogram of header SaleDates and reports the DOMINANT month as
+  the period (full month span), plus honest min/max kept as observed span metadata. Label becomes
+  `CCRS monthly · <dominant yyyy-mm>`. `saveMonthlyRollupsAction` finds prior `monthly_zip`
+  datasets with the same label and deletes them AFTER the new dataset persists + flips ready
+  (replace, never lose data on a failed upload — owner: "the table should replace a duplicate
+  with a newer uploaded version"). Existing bad rows fix themselves on re-upload.
+- **I2 — Paginate `listBenchmarks`** with the same `.range()` loop the file already uses
+  elsewhere; fixes all by-type StatCards, velocity & mix, $/g, and truncated brand/strain tables.
+- **I3 — `extractBrand` v2.** Blocklist of weight/size/count/generic tokens (verified junk set),
+  `"… by <brand>"` extraction, still conservative (null when unsure — never guess).
+- **I4 — Per-type top products with vendor + brand.** Aggregator keeps per-inventory-type top
+  product accumulators (retail, revenue-ranked, cap 10) carrying brand, strain, and the product's
+  creating licensee (vendor) resolved to name/license via the interned licensee table; statewide
+  movers gain the same vendor fields. New signal kind `type_mover` rides the existing
+  `discovery_market_signals` table; migration 0110 adds nullable `vendor_name` / `vendor_license`
+  columns. CCRS Benchmarks page renders "Top 10 products — <type>" sections for EVERY type in the
+  drop, each row showing brand · strain · vendor, and the top-strains/movers tables gain vendor.
+- **I5 — Leads page → purchase-manager cockpit (Port Orchard first).** New pure core
+  (`po-cockpit-core.ts`) shaping persisted rollups into buyer-ready boards: Port Orchard
+  head-to-head (Greenway vs each PO competitor: revenue, units, mix), "what Port Orchard sells
+  that we don't order" (PO competitor movers vs our PO/vendor history), undercut board (p25 price
+  targets on local movers), shared-supplier call list (exists, S7) — every row with a one-click
+  "Start PO" prefill into Purchasing.
+- **I6 — PO builder + detail: market context & AI review.** The builder and the PO detail page
+  surface grounded local-market context (median/p25 for matching movers, Port Orchard emphasis)
+  and an advisory AI review of the draft PO (line-by-line: price vs market band, mix warnings,
+  Port Orchard-focused suggestions). Drafts-only; AI never edits an order.
+- **I7 — AI everywhere in benchmarks + interactive Q&A.** "Ask the analyst" panel on the CCRS
+  Benchmarks page and the Local Benchmarks report: free-text question → server action builds a
+  grounded digest (persisted rollups ONLY: benchmarks, competitor stats, suppliers, signals,
+  history) → structured, cited answer via the leads-ai pattern (`generateStructured`, heavy tier,
+  never invents figures; unconfigured key = friendly notice).
+
+Standing rules apply to every slice: never guess (verify against real data/code), money in minor
+units, drafts-only AI, tests + roadmap update per slice, CI green, squash-merge, sync main.
+
+### I1 — shipped notes
+
+**Aggregator (`ccrs-extract/aggregate.ts`):** every dated SaleHeader also feeds a yyyy-mm
+histogram (`monthCounts`); `result()` reports the DOMINANT month's full calendar span as
+`periodStart`/`periodEnd` (ties break toward the newer month; leap years from the calendar),
+with the honest observed min/max kept as `observedMinDate`/`observedMaxDate`. No dated headers →
+null period (never guessed).
+
+**Sanitizer (`market-rollups.ts`):** carries the two new optional observed-span fields
+(older payloads sanitize to null — backward compatible).
+
+**Action (`actions.ts` `saveMonthlyRollupsAction`):** captures prior `monthly_zip` datasets with
+the same `CCRS monthly · yyyy-mm` label BEFORE creating the new one, and deletes them only AFTER
+the new dataset persists and flips ready — replace-on-reupload without ever risking data on a
+failed upload. Replaced ids are recorded in the audit event. Existing mislabeled/duplicate rows
+fix themselves when the owner re-uploads each month's zip.
+
+**Tests:** +4 (stale-header dominance mirroring the real May-zip shape, newest-month tie break,
+leap February, 'other'-type headers still dating the drop) and 3 updated period assertions.
+Suite: 981 passing.

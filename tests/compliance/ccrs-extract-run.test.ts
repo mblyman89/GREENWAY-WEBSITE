@@ -105,8 +105,12 @@ describe("runCcrsExtract (S14)", () => {
     expect(result.totals.saleDetailRows).toBe(2);
     expect(result.totals.retailLines).toBe(1);
     expect(result.totals.wholesaleLines).toBe(1);
-    expect(result.periodStart).toBe("2026-05-03");
-    expect(result.periodEnd).toBe("2026-05-10");
+    // I1: period = the dominant SaleHeader month's full span; the honest
+    // observed SaleDate span rides alongside.
+    expect(result.periodStart).toBe("2026-05-01");
+    expect(result.periodEnd).toBe("2026-05-31");
+    expect(result.observedMinDate).toBe("2026-05-03");
+    expect(result.observedMaxDate).toBe("2026-05-10");
 
     // Competitor stats: HPO's retail revenue = 2 × $30.00 = $60.00 (6000¢).
     expect(result.competitors).toHaveLength(1);
