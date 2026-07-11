@@ -739,3 +739,34 @@ skipped)". Errors (no dataset, discovery off, pre-0107 data) surface verbatim.
 **Tests:** +6 (note grounding incl. no-projection/no-contact guards, single-competitor and
 missing-period honesty, license-less supplier fallback, high/med priority mapping, draft cap
 bounds). Suite: 943 passing.
+
+### S12 — Assortment-gap analysis (suggestion #4)
+
+**What it does:** a new "Assortment gaps — statewide movers vs your menu" section on Reports →
+Local Benchmarks crosses the drop's statewide top movers (`discovery_market_signals`,
+kind='statewide_mover', migration 0106 — no new migration needed) against Greenway's PUBLISHED
+menu (`loadCandidateItems()`), answering: "which of the state's best sellers do we not carry?"
+
+**Pure core (`assortment-gap-core.ts`):**
+- `normalizeKey` — lowercase, trim, collapse whitespace, NOTHING else. No punctuation stripping,
+  no fuzzy matching: aggressive normalization manufactures false "carried" matches, so a
+  near-miss renders honestly as a gap instead of being silently mis-matched (NEVER GUESS).
+- `buildAssortmentGapReport(movers, menu)` — statewide movers only (competitor_mover rows
+  describe one store, not demand; kind-less legacy rows kept), nameless movers skipped, revenue
+  desc, per-mover status: **carried** (exact name match) / **brand_carried** (brand on menu, with
+  item count) / **not_carried** (neither). Rows capped at `MAX_GAP_ROWS = 50` for the UI but
+  counts cover ALL candidates. Money minor units; junk numerics coerced, never NaN.
+- HONESTY: CCRS product names come from producer/processor systems and rarely equal a retail
+  menu name verbatim, so BRAND match is the primary signal — the UI copy says so, and the footer
+  states that brand-less movers can only be name-matched.
+
+**UI (`TransformerLocalBenchmarks.tsx`):** best-effort load of signals + menu (try/catch — no
+signals → no section; no published menu → honest empty state telling the owner to publish one).
+Table: mover name+brand, type, statewide units/revenue, median unit price, status badge (green
+carried / gold brand-carried / neutral not-carried) + a counts footer disclosing the cap.
+
+**Tests (`assortment-gap-core.test.ts`):** +15 — conservative normalization (punctuation
+near-misses stay distinct), carried/brand_carried(+count)/not_carried, no fuzzy matching,
+brand-less movers name-match only, revenue ordering, kind filtering (competitor_mover excluded,
+kind-less kept), nameless skipped, cap-with-full-counts, MAX_GAP_ROWS default, empty menu, junk
+numeric coercion. Suite: 958 passing.
