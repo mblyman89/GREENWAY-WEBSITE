@@ -36,9 +36,17 @@ import type {
 } from "@/lib/discovery/types";
 import {
   listCompetitorStats,
+  listMarketSignals,
   listSupplierStats,
   listTransformerDatasets,
 } from "@/lib/discovery/market-rollups";
+import { loadCandidateItems } from "@/lib/products/masters-store";
+import {
+  buildAssortmentGapReport,
+  type AssortmentGapReport,
+  type AssortmentGapRow,
+  type AssortmentGapStatus,
+} from "@/lib/discovery/assortment-gap-core";
 import {
   buildLocalBenchmarks,
   type LocalAreaStat,
@@ -410,6 +418,94 @@ function StatewideSupplierTable({ suppliers }: { suppliers: DiscoverySupplierSta
   );
 }
 
+/**
+ * S12: assortment gaps — statewide top movers crossed against Greenway's own
+ * PUBLISHED menu. Matching is conservative (exact after lowercase/trim/
+ * whitespace-collapse only), so brand match is the primary signal; a CCRS
+ * product name rarely equals a retail menu name verbatim.
+ */
+function GapStatusBadge({ status, brandItemCount }: { status: AssortmentGapStatus; brandItemCount: number }) {
+  if (status === "carried") {
+    return (
+      <span className="rounded-full border border-[#7ed957]/40 bg-[#7ed957]/10 px-2 py-0.5 text-xs font-semibold text-[#7ed957]">
+        Carried
+      </span>
+    );
+  }
+  if (status === "brand_carried") {
+    return (
+      <span className="rounded-full border border-[#d4af37]/40 bg-[#d4af37]/10 px-2 py-0.5 text-xs font-semibold text-[#d4af37]">
+        Brand carried ({brandItemCount} item{brandItemCount === 1 ? "" : "s"})
+      </span>
+    );
+  }
+  return (
+    <span className="rounded-full border border-white/20 bg-white/[0.06] px-2 py-0.5 text-xs font-semibold text-white/80">
+      Not carried
+    </span>
+  );
+}
+
+function AssortmentGapTable({ rows }: { rows: AssortmentGapRow[] }) {
+  const columns: ReportColumn<AssortmentGapRow & Record<string, unknown>>[] = [
+    {
+      key: "productName",
+      header: "Statewide mover",
+      emphasis: true,
+      render: (r) => (
+        <span>
+          {r.productName}
+          {r.brand ? <span className="ml-1 text-white/30">{r.brand}</span> : null}
+        </span>
+      ),
+    },
+    { key: "inventoryType", header: "Type", render: (r) => r.inventoryType ?? "—" },
+    { key: "units", header: "Units (statewide)", align: "right", render: (r) => num(r.units) },
+    { key: "revenueMinor", header: "Revenue (statewide)", align: "right", emphasis: true, render: (r) => money(r.revenueMinor) },
+    { key: "medianUnitPriceMinor", header: "Median unit price", align: "right", render: (r) => money(r.medianUnitPriceMinor) },
+    {
+      key: "status",
+      header: "On our menu?",
+      render: (r) => <GapStatusBadge status={r.status} brandItemCount={r.brandItemCount} />,
+    },
+  ];
+  return (
+    <ReportTable
+      columns={columns}
+      rows={rows as Array<AssortmentGapRow & Record<string, unknown>>}
+      emptyLabel="No statewide movers in this drop."
+    />
+  );
+}
+
+function AssortmentGapSection({ report }: { report: AssortmentGapReport }) {
+  return (
+    <Section
+      title="Assortment gaps — statewide movers vs your menu"
+      subtitle={`The state's top-selling products this month, checked against your ${num(report.menuItemCount)} published menu items. Matching is deliberately conservative — exact name match only (case/whitespace-insensitive), no fuzzy matching — and CCRS product names rarely equal retail menu names verbatim, so "Brand carried" is the primary signal: you already stock the brand, just not (under) that exact name. "Not carried" means neither the exact name nor the brand appears on your menu — a real assortment gap to evaluate.`}
+    >
+      {report.menuItemCount === 0 ? (
+        <p className="text-sm text-white/40">
+          No published menu to compare against. Publish a menu version and this section will cross the
+          state&apos;s top movers against your live assortment — nothing is compared until real menu data
+          exists.
+        </p>
+      ) : (
+        <div className="space-y-3">
+          <AssortmentGapTable rows={report.rows} />
+          <p className="text-xs text-white/30">
+            {num(report.moverCount)} statewide movers considered: {num(report.carriedCount)} carried,{" "}
+            {num(report.brandCarriedCount)} brand-carried, {num(report.notCarriedCount)} not carried
+            {report.rows.length < report.moverCount ? ` (showing top ${num(report.rows.length)} by revenue)` : ""}.
+            Movers without a brand can only be name-matched, so some &ldquo;Not carried&rdquo; rows may be
+            products you stock under a different menu name — the table never guesses a match.
+          </p>
+        </div>
+      )}
+    </Section>
+  );
+}
+
 function SupplierSwitchingSection({
   report,
   prevLabel,
@@ -465,6 +561,25 @@ export async function TransformerLocalBenchmarks({
     supplierStats = await listSupplierStats(dataset.id);
   } catch {
     supplierStats = [];
+  }
+
+  // S12: assortment gaps — statewide movers vs the published menu. Best-effort
+  // on BOTH sides: a dataset without market signals or a store without a
+  // published menu simply yields no section / an honest empty state.
+  let gapReport: AssortmentGapReport | null = null;
+  try {
+    const [movers, menuItems] = await Promise.all([
+      listMarketSignals(dataset.id, "statewide_mover"),
+      loadCandidateItems(),
+    ]);
+    if (movers.length > 0) {
+      gapReport = buildAssortmentGapReport(
+        movers,
+        menuItems.map((i) => ({ name: i.name, brand: i.brand })),
+      );
+    }
+  } catch {
+    gapReport = null; // section simply doesn't render; nothing is guessed
   }
 
   // S9: previous READY transformer dataset (by period, falling back to list
@@ -575,6 +690,9 @@ export async function TransformerLocalBenchmarks({
           <StatewideSupplierTable suppliers={supplierStats.slice(0, 40)} />
         </Section>
       ) : null}
+
+      {/* S12: assortment gaps (statewide movers vs published menu) */}
+      {gapReport ? <AssortmentGapSection report={gapReport} /> : null}
 
       {/* S9: supplier switching (needs two months of transformer data) */}
       {switchReport && prevLabel ? (
