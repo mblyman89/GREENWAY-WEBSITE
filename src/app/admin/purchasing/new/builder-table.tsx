@@ -2,21 +2,48 @@
 
 import { useMemo, useState } from "react";
 import { Badge, Button, Input, Field, Select, Textarea } from "@/components/admin/ui";
+import {
+  classifyUrgency,
+  builderRowKey,
+  filterRowsByQuery,
+  sortRows,
+  presetRowKeys,
+  countVendorMismatches,
+  URGENCY_LABEL,
+  BUILDER_SORT_OPTIONS,
+  type BuilderSortKey,
+  type SelectionPreset,
+  type UrgencyLevel,
+} from "@/lib/purchasing/po-builder-core";
 
 /**
- * Editable purchase-order builder table (client island).
+ * The PO command center's work surface (client island, Task J rewrite).
  *
- * Receives the reorder suggestions from the server (already filtered + sorted by
- * urgency) and lets the manager select rows, edit order quantities and unit
- * costs, pick a vendor, then either SAVE the draft or SAVE & EMAIL it to the
- * vendor in one step.
+ * Receives the REAL reorder suggestions from the server and lets the manager
+ * search, re-sort, bulk-select by urgency, edit quantities and unit costs,
+ * pick a vendor, then SAVE the draft or SAVE & EMAIL it in one step.
  *
- * Cannabis-specific: rows carry a category so the summary can show a category
- * breakdown, and the selected vendor's email is auto-captured so the PO can be
- * emailed straight from the back office (Resend). Nothing is invented — every
- * quantity/cost is an editable DRAFT default the manager confirms before saving.
+ * Contract-critical (unchanged from the original builder):
+ *   - hidden `lines` field: JSON array of {posProductKey, productName, brand,
+ *     category, onHandQty, avgDailySales, reorderPoint, orderQty, unit,
+ *     unitCostMinor} — exactly what createPurchaseOrderAction parses.
+ *   - hidden `origin`, `from_lead`, `vendor_id/name/email`, `expected_date`,
+ *     `note` fields — same names, same semantics.
  *
- * THEME: fully on the dark admin tokens (no light `stone`/`white` surfaces).
+ * What changed:
+ *   - per-row edit state is keyed by a STABLE row key (pos product key or a
+ *     normalized name key — the store's own dedupe identity), never by array
+ *     index, so client-side sorting/filtering can't corrupt quantities.
+ *   - urgency badges (stockout / critical / below reorder) computed by the
+ *     PURE po-builder-core module from real velocity + the store's lead time.
+ *   - quick-select presets, live search, and sort — buyer muscle-memory tools.
+ *   - sticky order bar: running total, category mix, and the save buttons stay
+ *     in view while scrolling a long table.
+ *   - vendor sanity check: warns when selected lines' inventory vendor differs
+ *     from the PO's vendor (a PO goes to ONE licensed vendor).
+ *
+ * Drafts-only rule: every quantity/cost here is an editable DEFAULT the
+ * manager confirms — nothing is ordered until they save.
  */
 export type SuggestionRow = {
   posProductKey: string | null;
@@ -45,6 +72,13 @@ function titleCase(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+const URGENCY_TONE: Record<UrgencyLevel, "danger" | "orange" | "gold" | "neutral"> = {
+  stockout: "danger",
+  critical: "orange",
+  low: "gold",
+  healthy: "neutral",
+};
+
 export function BuilderTable({
   rows: rowsProp,
   vendors,
@@ -52,6 +86,7 @@ export function BuilderTable({
   planSummary,
   prefill,
   fromLeadId,
+  leadTimeDays,
   createAction,
   sendAction,
 }: {
@@ -61,43 +96,54 @@ export function BuilderTable({
   planSummary?: string;
   prefill?: SuggestionRow;
   fromLeadId?: string;
+  /** The store's real lead-time setting (drives urgency classification). */
+  leadTimeDays: number;
   createAction: (formData: FormData) => void | Promise<void>;
   sendAction: (formData: FormData) => void | Promise<void>;
 }) {
-  // When promoting a discovery lead, prepend its draft line so it's the first
-  // row and pre-selected. Memoized so the row list is stable across renders
-  // (it feeds the initial-selection useMemo below).
+  // When promoting a discovery lead, prepend its draft line so it's first and
+  // pre-selected. Memoized so the row list is stable across renders.
   const rows = useMemo(
     () => (prefill ? [prefill, ...rowsProp] : rowsProp),
     [prefill, rowsProp],
   );
 
-  // Pre-select rows that are below the reorder point (need attention). A
-  // prefilled lead row (index 0) is always pre-selected.
+  // Stable keys — the store dedupes on exactly this identity, so it's unique
+  // within one suggestion set. The prefill lead has no pos key; its name key
+  // is namespaced so it can never collide with a real suggestion.
+  const keyOf = useMemo(() => {
+    const prefillKey = prefill ? `lead:${builderRowKey(prefill)}` : null;
+    return (r: SuggestionRow) => (prefill && r === prefill ? (prefillKey as string) : builderRowKey(r));
+  }, [prefill]);
+
+  // Pre-select rows that need attention (below reorder with a suggested qty);
+  // a prefilled lead row is always pre-selected.
   const initialSelected = useMemo(() => {
     const set = new Set<string>();
-    rows.forEach((r, i) => {
-      if (r.belowReorderPoint && r.suggestedQty > 0) set.add(String(i));
+    rows.forEach((r) => {
+      if (r.belowReorderPoint && r.suggestedQty > 0) set.add(keyOf(r));
     });
+    if (prefill) set.add(keyOf(prefill));
     return set;
-  }, [rows]);
+  }, [rows, prefill, keyOf]);
 
   const [selected, setSelected] = useState<Set<string>>(initialSelected);
   const [qtys, setQtys] = useState<Record<string, number>>(() => {
     const o: Record<string, number> = {};
-    rows.forEach((r, i) => (o[String(i)] = Math.max(0, Math.round(r.suggestedQty))));
+    rows.forEach((r) => (o[keyOf(r)] = Math.max(0, Math.round(r.suggestedQty))));
     return o;
   });
   const [costs, setCosts] = useState<Record<string, number>>(() => {
     const o: Record<string, number> = {};
-    rows.forEach((r, i) => (o[String(i)] = r.unitCostMinor));
+    rows.forEach((r) => (o[keyOf(r)] = r.unitCostMinor));
     return o;
   });
+  const [query, setQuery] = useState("");
+  const [sortKey, setSortKey] = useState<BuilderSortKey>("urgency");
   const [vendorId, setVendorId] = useState<string>(() => {
-    // W11 — prefer the RECONCILED vendor id threaded from Discovery (license-
-    // or name-matched, page-verified against real vendors), then a vendor
-    // matched by the lead's display name, then any suggestion row's vendor id.
-    // The human still confirms the vendor before saving.
+    // Prefer the RECONCILED vendor id threaded from Discovery (verified against
+    // real vendors), then a vendor matched by the lead's display name, then any
+    // suggestion row's vendor id. The human still confirms before saving.
     if (prefill?.vendorId && vendors.some((v) => v.id === prefill.vendorId)) {
       return prefill.vendorId;
     }
@@ -111,8 +157,16 @@ export function BuilderTable({
     return first ?? "";
   });
 
-  function toggle(i: number) {
-    const key = String(i);
+  // Visible rows: search, then sort. The prefill lead (when present) is always
+  // pinned to the top so a promoted product can never be "lost" to a filter.
+  const visible = useMemo(() => {
+    const body = rows.filter((r) => !(prefill && r === prefill));
+    const searched = filterRowsByQuery(body, query);
+    const sorted = sortRows(searched, sortKey, leadTimeDays);
+    return prefill ? [prefill, ...sorted] : sorted;
+  }, [rows, prefill, query, sortKey, leadTimeDays]);
+
+  function toggle(key: string) {
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
@@ -121,37 +175,40 @@ export function BuilderTable({
     });
   }
 
-  function selectAll() {
-    setSelected(new Set(rows.map((_, i) => String(i))));
-  }
-  function selectNone() {
-    setSelected(new Set());
+  // Presets act on the VISIBLE (searched) rows so "Stockouts" respects an
+  // active search; the prefill lead stays selected through every preset
+  // except an explicit "None".
+  function applyPreset(preset: SelectionPreset) {
+    const body = visible.filter((r) => !(prefill && r === prefill));
+    const keys = new Set(
+      presetRowKeys(body, preset, leadTimeDays).map((k) => k), // core keys == keyOf for body rows
+    );
+    if (prefill && preset !== "none") keys.add(keyOf(prefill));
+    setSelected(keys);
   }
 
   const chosen = rows
-    .map((r, i) => ({ r, i }))
-    .filter(({ i }) => selected.has(String(i)) && (qtys[String(i)] ?? 0) > 0);
+    .map((r) => ({ r, key: keyOf(r) }))
+    .filter(({ key }) => selected.has(key) && (qtys[key] ?? 0) > 0);
 
-  const total = chosen.reduce((sum, { i }) => sum + (qtys[String(i)] ?? 0) * (costs[String(i)] ?? 0), 0);
-  const totalUnits = chosen.reduce((sum, { i }) => sum + (qtys[String(i)] ?? 0), 0);
+  const total = chosen.reduce((sum, { key }) => sum + (qtys[key] ?? 0) * (costs[key] ?? 0), 0);
+  const totalUnits = chosen.reduce((sum, { key }) => sum + (qtys[key] ?? 0), 0);
 
-  // Category breakdown of the chosen lines (cannabis-first summary). Cheap to
-  // recompute each render; kept as a plain derived value so the React Compiler
-  // can optimise it without manual-memoization warnings.
+  // Category breakdown of the chosen lines (cannabis-first summary).
   const byCategory = (() => {
     const map = new Map<string, { units: number; minor: number }>();
-    chosen.forEach(({ r, i }) => {
+    chosen.forEach(({ r, key }) => {
       const cat = (r.category || "uncategorized").toLowerCase();
       const cur = map.get(cat) ?? { units: 0, minor: 0 };
-      cur.units += qtys[String(i)] ?? 0;
-      cur.minor += (qtys[String(i)] ?? 0) * (costs[String(i)] ?? 0);
+      cur.units += qtys[key] ?? 0;
+      cur.minor += (qtys[key] ?? 0) * (costs[key] ?? 0);
       map.set(cat, cur);
     });
     return [...map.entries()].sort((a, b) => b[1].minor - a[1].minor);
   })();
 
   const linesJson = JSON.stringify(
-    chosen.map(({ r, i }) => ({
+    chosen.map(({ r, key }) => ({
       posProductKey: r.posProductKey,
       productName: r.productName,
       brand: r.brand,
@@ -159,15 +216,23 @@ export function BuilderTable({
       onHandQty: r.onHand,
       avgDailySales: r.avgDaily,
       reorderPoint: r.reorderPoint,
-      orderQty: qtys[String(i)] ?? 0,
+      orderQty: qtys[key] ?? 0,
       unit: r.unit,
-      unitCostMinor: costs[String(i)] ?? 0,
+      unitCostMinor: costs[key] ?? 0,
     })),
   );
 
   const selectedVendor = vendors.find((v) => v.id === vendorId);
   const vendorEmail = selectedVendor?.email ?? "";
   const canEmail = chosen.length > 0 && Boolean(vendorId) && Boolean(vendorEmail);
+
+  // Sanity check: lines whose INVENTORY vendor differs from the PO's vendor.
+  const mismatchCount = countVendorMismatches(
+    chosen.map(({ r }) => ({ vendorName: r.vendorName })),
+    selectedVendor?.name ?? null,
+  );
+
+  const hiddenBySearch = rows.length - visible.length;
 
   return (
     <form className="space-y-5">
@@ -184,18 +249,51 @@ export function BuilderTable({
         </div>
       ) : (
         <>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="text-xs text-[var(--admin-text-muted)]">
-              {rows.length} product{rows.length === 1 ? "" : "s"} to review · rows below the reorder point are pre-ticked
-            </div>
-            <div className="flex gap-2">
-              <Button type="button" variant="neutral" size="sm" onClick={selectAll}>
-                Select all
+          {/* Command bar: search, sort, quick-select presets */}
+          <div className="flex flex-wrap items-center gap-2">
+            <Input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search product, brand, vendor, category…"
+              aria-label="Search products"
+              className="w-full sm:w-64"
+            />
+            <Select
+              value={sortKey}
+              onChange={(e) => setSortKey(e.target.value as BuilderSortKey)}
+              aria-label="Sort rows"
+              className="w-full sm:w-auto"
+            >
+              {BUILDER_SORT_OPTIONS.map((o) => (
+                <option key={o.key} value={o.key}>
+                  Sort: {o.label}
+                </option>
+              ))}
+            </Select>
+            <div className="ml-auto flex flex-wrap gap-1.5">
+              <Button type="button" variant="neutral" size="sm" onClick={() => applyPreset("stockouts")}>
+                Stockouts
               </Button>
-              <Button type="button" variant="neutral" size="sm" onClick={selectNone}>
-                Clear
+              <Button type="button" variant="neutral" size="sm" onClick={() => applyPreset("critical")}>
+                Order today
+              </Button>
+              <Button type="button" variant="neutral" size="sm" onClick={() => applyPreset("needs_action")}>
+                Needs action
+              </Button>
+              <Button type="button" variant="neutral" size="sm" onClick={() => applyPreset("all")}>
+                All
+              </Button>
+              <Button type="button" variant="neutral" size="sm" onClick={() => applyPreset("none")}>
+                None
               </Button>
             </div>
+          </div>
+
+          <div className="text-xs text-[var(--admin-text-muted)]">
+            {visible.length} of {rows.length} product{rows.length === 1 ? "" : "s"} shown
+            {hiddenBySearch > 0 ? ` · ${hiddenBySearch} hidden by search` : ""} · rows below the
+            reorder point are pre-ticked · quick-select applies to the rows shown
           </div>
 
           <div className="overflow-x-auto rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)]">
@@ -204,6 +302,7 @@ export function BuilderTable({
                 <tr className="bg-[var(--admin-surface-2)] text-left text-xs uppercase tracking-wide text-[var(--admin-text-faint)]">
                   <th className="w-8 px-3 py-3"></th>
                   <th className="px-3 py-3">Product</th>
+                  <th className="px-3 py-3">Status</th>
                   <th className="px-3 py-3 text-right">On hand</th>
                   <th className="px-3 py-3 text-right">Avg/day</th>
                   <th className="px-3 py-3 text-right">Reorder pt</th>
@@ -214,9 +313,11 @@ export function BuilderTable({
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--admin-border)]">
-                {rows.map((r, i) => {
-                  const key = String(i);
+                {visible.map((r) => {
+                  const key = keyOf(r);
                   const isSel = selected.has(key);
+                  const isLead = Boolean(prefill && r === prefill);
+                  const urgency = classifyUrgency(r, leadTimeDays);
                   const lineTotal = (qtys[key] ?? 0) * (costs[key] ?? 0);
                   return (
                     <tr
@@ -231,7 +332,7 @@ export function BuilderTable({
                         <input
                           type="checkbox"
                           checked={isSel}
-                          onChange={() => toggle(i)}
+                          onChange={() => toggle(key)}
                           aria-label={`Select ${r.productName}`}
                           className="h-4 w-4 accent-[var(--admin-accent)]"
                         />
@@ -240,11 +341,17 @@ export function BuilderTable({
                         <div className="font-semibold text-[var(--admin-text)]">{r.productName}</div>
                         <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-[var(--admin-text-muted)]">
                           {[r.brand, r.vendorName].filter(Boolean).join(" · ") || "—"}
-                          {r.category ? (
-                            <Badge tone="neutral">{titleCase(r.category)}</Badge>
-                          ) : null}
-                          {r.belowReorderPoint ? <Badge tone="orange">below reorder</Badge> : null}
+                          {r.category ? <Badge tone="neutral">{titleCase(r.category)}</Badge> : null}
                         </div>
+                      </td>
+                      <td className="px-3 py-3">
+                        {isLead ? (
+                          <Badge tone="green">from lead</Badge>
+                        ) : urgency !== "healthy" ? (
+                          <Badge tone={URGENCY_TONE[urgency]}>{URGENCY_LABEL[urgency]}</Badge>
+                        ) : (
+                          <span className="text-xs text-[var(--admin-text-faint)]">—</span>
+                        )}
                       </td>
                       <td className="px-3 py-3 text-right text-[var(--admin-text)]">{r.onHand}</td>
                       <td className="px-3 py-3 text-right text-[var(--admin-text-muted)]">{r.avgDaily.toFixed(2)}</td>
@@ -310,6 +417,13 @@ export function BuilderTable({
               </p>
             )
           ) : null}
+          {mismatchCount > 0 ? (
+            <p className="mt-1.5 text-xs text-[var(--admin-orange)]">
+              Heads up: {mismatchCount} selected line{mismatchCount === 1 ? "" : "s"} last came from a
+              different vendor. A PO goes to one licensed vendor — split the order or confirm this
+              vendor also carries {mismatchCount === 1 ? "it" : "them"}.
+            </p>
+          ) : null}
         </Field>
         <Field label="Expected delivery (optional)">
           <Input type="date" name="expected_date" />
@@ -323,8 +437,8 @@ export function BuilderTable({
       <input type="hidden" name="origin" value={origin} />
       {fromLeadId ? <input type="hidden" name="from_lead" value={fromLeadId} /> : null}
 
-      {/* Order summary + category breakdown */}
-      <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] p-5">
+      {/* Sticky order bar: totals + category mix + actions stay in view */}
+      <div className="sticky bottom-0 z-10 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border-strong)] bg-[var(--admin-surface-2)] p-5 shadow-[var(--admin-shadow-lg)]">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="text-sm text-[var(--admin-text-muted)]">
             <span className="font-semibold text-[var(--admin-text)]">{chosen.length}</span> line
