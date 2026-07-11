@@ -397,3 +397,29 @@ Loaders for S4–S6: `getLatestTransformerDataset`, `listTransformerDatasets`, `
 CI: `tests/compliance/ccrs-monthly-rollups.test.ts` (9 tests — round-trip through the REAL
 aggregator output, rejection of malformed/oversized payloads, junk-coercion; **855 passing** total).
 **Owner reminder: apply migration 0106 manually before dropping the first zip.**
+
+### Task H — S4 (Leads page: market movers + AI undercut context) — DONE
+**S4 of 6.** The owner's Leads surface: "statewide top movers … all the top movers from my
+competitors … [AI] could help me beat them by undercutting them or beating them in some other ways."
+**Pure core (`src/lib/discovery/market-leads-core.ts`):** `buildMarketMoverLeads(signals, roster)`
+maps persisted `discovery_market_signals` rows into lead-shaped movers — statewide (cap 12) and
+competitor (cap 15, roster tradename resolved; unknown license → "lic <n>") — sorted revenue desc /
+units desc / name asc. NEVER GUESS: junk numbers → 0, bad/absent price bands → null (rendered "—",
+never a fabricated price). `undercutTargetMinor` = the transformer's REAL p25 unit price (selling
+at/below beats ~75% of observed sales). `formatMarketMoversDigest` renders the compact grounded
+prompt block for the AI.
+**Leads page (`MarketMoversSection.tsx`, server component on `/admin/discovery`):** reads the
+latest READY `monthly_zip` dataset via `getLatestTransformerDataset()` + `listMarketSignals()` +
+`listCompetitors()`; renders "Statewide top movers" and "Competitor top movers" tables (units,
+revenue, median price, **Price to beat (p25)**) with the dataset's observed period and an honest
+"only that month's reported activity" note. Best-effort: no dataset / tables not migrated → the
+section renders nothing and the rest of the Leads page is untouched.
+**AI advisor:** `LeadsAdvisorInput` gains optional `marketMovers`; `buildLeadsDigest` appends the
+movers digest; SYSTEM prompt instructs the model to treat movers as the strongest demand evidence,
+flag pipeline leads matching a mover, call out proven movers the pipeline is missing, and anchor any
+price recommendation to the provided `undercut_at_or_below` (p25) — never invent a price, say when
+the sample was too thin. `analyzeLeadsAction` loads the movers best-effort (non-fatal on any
+failure) and audits `withMarketMovers`.
+CI: `tests/compliance/market-leads-core.test.ts` (10 tests — mapping, roster fallback, unknown-kind
+/ no-product drops, junk-coercion to null (never fabricate), deterministic sort, caps, digest
+dollars + n/a; **865 passing** total).
