@@ -252,6 +252,25 @@ export async function getProductLead(id: string): Promise<DiscoveryProductLead |
   return (data as DiscoveryProductLead | null) ?? null;
 }
 
+/**
+ * Look a product lead up by its dedupe key (Task I, I5). Needed because
+ * createProductLead's upsert uses ignoreDuplicates — a re-click on a cockpit
+ * "Start PO" row returns null instead of the EXISTING lead's id, and the
+ * promotion flow must reuse that lead rather than fail or duplicate it.
+ */
+export async function getProductLeadByDedupeKey(
+  dedupeKey: string,
+): Promise<DiscoveryProductLead | null> {
+  if (!isSupabaseServiceConfigured || !dedupeKey) return null;
+  const admin = createSupabaseAdminClient();
+  const { data } = await admin
+    .from("discovery_product_leads")
+    .select("*")
+    .eq("dedupe_key", dedupeKey)
+    .maybeSingle();
+  return (data as DiscoveryProductLead | null) ?? null;
+}
+
 export async function createProductLead(input: {
   sourceId?: string | null;
   vendorLeadId?: string | null;

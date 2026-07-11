@@ -1025,3 +1025,61 @@ tombstoning, dominance + deterministic ties, bridge thresholds + dedupe, lot-bea
 vendor round-trip + pre-I4 compat; migration 0110 guard; parse detection/mappers with the real
 header rows; run.ts end-to-end with manifest zips). Suite: 1024 passing. Owner: apply 0110,
 then re-upload April + May zips to backfill vendor data and the per-type boards.
+
+### I5 — shipped notes
+
+**PLAN CORRECTION (verified before building — never guess):** the plan sketch said the buy list
+would cross Port Orchard movers against "our PO/vendor history". Verified reality: the monthly
+transformer **structurally excludes Greenway (`is_self`)** from all competitor rollups, so no
+Greenway CCRS numbers exist anywhere in the drop; and the PUBLISHED MENU (`loadCandidateItems()`,
+same source as the S12 assortment-gap report) is the honest, current statement of what we carry —
+PO history says what we once ordered, not what's on the shelf. The shipped cockpit therefore
+compares their CCRS reality against our published menu, and the head-to-head board is *their*
+month + *our coverage of their movers*, never an invented Greenway sales figure.
+
+**PURE core `src/lib/discovery/po-cockpit-core.ts`** (`buildPoCockpit(stats, roster, signals,
+menu, {area})`, default `port_orchard`; money in minor units; junk → 0/null):
+- **Head-to-head board** — one row per tracked area competitor (self excluded): revenue/units/
+  line count, p25/median/p75 bands, top-3 category mix with revenue shares, wholesale spend +
+  supplier count (null for pre-0107 rows), and our menu's coverage of that store's
+  `competitor_mover` list (carried / brand-only / gaps) using the CONSERVATIVE
+  `normalizeKey` exact-name + brand matching from `assortment-gap-core` (imported, not copied).
+- **Buy list ("they sell it, we don't")** — area movers deduped across stores on
+  `brand|name` key: units/revenue summed; stores listed by contribution; **price to beat =
+  MIN p25 across stores** (beats ~75% at EVERY store — a factual bound, not a pooled estimate);
+  median from the top-revenue store (labeled proxy); brand/strain/type/vendor carried only when
+  all contributing rows AGREE (two different values → null tombstone; null-vs-value is NOT a
+  conflict); exact-name-carried movers excluded; brand-only flagged. Cap 25 (`MAX_BUY_ROWS`).
+- **Undercut board** — exact-name matches where BOTH our min matching menu price and their MIN
+  p25 exist; `delta = ours − theirs`, sorted above-beat-first. Cap 15 (`MAX_UNDERCUT_ROWS`).
+- **`suggestLeadCategory`** — CCRS type → lead category ONLY for unambiguous WSLCB types
+  (verified May-2026 vocabulary): Usable Cannabis/Marijuana + Flower Lot → flower; Cannabis Mix
+  Packaged/Infused → preroll; Hydrocarbon/Ethanol/CO2/Non-Solvent → concentrate; Solid/Liquid
+  Edible → edible; Topical Ointment → topical. Ambiguous (Concentrate For Inhalation = carts OR
+  dabs, Cannabis Mix, Tincture, Capsule, …) → null: the manager picks on the builder.
+- **`buildBuyRowDemandSignal`** — grounded this-drop-only demand copy stored on the created lead.
+
+**Server action `startPoFromCockpitRowAction`** (discovery/actions.ts): creates a HIGH-priority
+product lead (dedupe-safe — a re-click reuses the existing lead via new
+`getProductLeadByDedupeKey` in store.ts, since the upsert's ignoreDuplicates returns null on a
+dupe), marks it ordered + audits, then redirects into `/admin/purchasing/new` with the EXISTING
+prefill contract (fromLead/leadName/leadBrand/leadCategory/leadVendorName/leadVendorId) — so the
+PO save stamps `promoted_po_id` back on the lead exactly like a normal promotion. The I4 manifest
+vendor is threaded as a vendor id ONLY when `matchVendorLead` (license-exact, else conservative
+name match) finds a real vendor record; otherwise name-only text. The observed p25 is a RETAIL
+price, so unit cost is deliberately NOT prefilled — the manager enters the real quote.
+
+**UI `src/app/admin/discovery/PoCockpitSection.tsx`** — server component in the
+MarketMoversSection best-effort pattern (any failure/no dataset/no area competitors → renders
+nothing), mounted on the Leads page ABOVE Market movers: "Port Orchard battle plan" Section with
+the three cards, CCRS-monthly period badge, menu-item count in the honesty copy, and per-row
+Start PO forms. "—" everywhere data was too thin or conflicting.
+
+**Tests:** +25 in `tests/compliance/po-cockpit-core.test.ts` (category map incl. refusals;
+board: area scoping + self exclusion + non-default area, mix shares, junk coercion, pre-0107
+sourcing nulls, coverage counting, signal-kind filtering; buy list: cross-store dedupe/min-p25/
+store ordering, agree-vs-conflict tombstones, null-not-a-conflict, pre-0110 vendor nulls,
+brand-carried stays listed, carried excluded, category suggestion, sort + caps, junk/unnamed
+skips; undercuts: min-menu-price pairing, both-prices-required, above-first sort + cap; menu
+accounting; demand-signal copy). Suite: 1049 passing. No migration needed (reads 0106/0107/0110
+tables as-is).
