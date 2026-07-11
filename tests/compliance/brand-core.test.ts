@@ -10,7 +10,7 @@
  */
 import { describe, it, expect } from "vitest";
 
-import { extractBrand, isJunkBrandCandidate } from "@/lib/discovery/brand-core";
+import { extractBrand, isJunkBrandCandidate, normalizeBrandKey } from "@/lib/discovery/brand-core";
 
 describe("extractBrand v2 — separator prefix (v1 behavior preserved)", () => {
   it("extracts the prefix before ' - ' / ' | ' / ': ' separators", () => {
@@ -110,5 +110,26 @@ describe("isJunkBrandCandidate", () => {
     expect(isJunkBrandCandidate("Phat Panda")).toBe(false);
     expect(isJunkBrandCandidate("NWCS Crystal Clear")).toBe(false);
     expect(isJunkBrandCandidate("Good Earth Cannabis")).toBe(false);
+  });
+});
+
+// Task I (I4): the cross-table brand join key behind the brand→vendor bridge.
+// Product names and TransportedItems descriptions style the same brand
+// differently ("Phat Panda" vs "PHAT-PANDA"); the key must unify them.
+describe("normalizeBrandKey (Task I I4)", () => {
+  it("lowercases and strips everything but letters and digits", () => {
+    expect(normalizeBrandKey("Phat Panda")).toBe("phatpanda");
+    expect(normalizeBrandKey("PHAT-PANDA")).toBe("phatpanda");
+    expect(normalizeBrandKey("phat panda ")).toBe("phatpanda");
+    expect(normalizeBrandKey("2727")).toBe("2727");
+    expect(normalizeBrandKey("Mr. O.G.")).toBe("mrog");
+  });
+
+  it("returns null when nothing joinable remains — never an empty-string key", () => {
+    expect(normalizeBrandKey(null)).toBeNull();
+    expect(normalizeBrandKey(undefined)).toBeNull();
+    expect(normalizeBrandKey("")).toBeNull();
+    expect(normalizeBrandKey("---")).toBeNull();
+    expect(normalizeBrandKey("  ")).toBeNull();
   });
 });

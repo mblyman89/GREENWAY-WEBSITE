@@ -44,6 +44,47 @@ export const INVENTORY_HEADER =
 export const STRAIN_HEADER =
   "StrainId\tLicenseeId\tName\tStrainType\tExternalIdentifier\tIsDeleted\tCreatedBy\tCreatedDate\tUpdatedBy\tUpdatedDate";
 
+/** Task I (I4): verified May-2026 ManifestHeader header (exact column order, read from the real zip). */
+export const MANIFEST_HEADER_HEADER =
+  "CCRSManifestHeaderId\tSubmittedBy\tSubmittedDate\tNumberRecords\tExternalManifestIdentifier\tHeaderOperation\tTransportationType\tOriginLicenseNumber\tOriginLicenseName\tOriginLicenseeAddress\tOriginLicenseePhone\tOriginLicenseeEmailAddress\tOriginAssociateID\tTransportationLicenseNumber\tTransportationAssociateID\tDepartureDateTime\tArrivalDateTime\tDestinationLicenseNumber\tDestinationLicenseName\tDestinationLicenseAddress\tDestinationLicenseePhone\tDestinationLicenseeEmailAddress\tDestinationAssociateId\tIsDeleted\tRecordCreatedBy\tRecordCreatedDate\tRecordUpdatedBy\tRecordUpdatedDate\tOrderCancelled\tManifestGeneratedDate\tErrorMessage\tTransportationLicenseAddress\tTransportationLicenseName\tTransportationLicenseEmailAddress\tTransportationLicensePhone\tIsManifestGenerated";
+
+/** Task I (I4): verified May-2026 TransportedItems header (exact column order, read from the real zip). */
+export const TRANSPORTED_ITEMS_HEADER =
+  "TransportedItemsID\tExternalManifestIdentifier\tInventoryExternalIdentifier\tPlantExternalIdentifier\tDescription\tProductType\tMedical\tInventoryType\tStrain\tQuantity\tUOM\tWeightPerUnit\tServingsPerUnit\tExternalIdentifier\tLabTestExternalIdentifier\tCreatedBy\tCreatedDate\tUpdatedBy\tUpdatedDate\tRecordCreatedBy\tRecordCreatedDate\tRecordUpdatedBy\tRecordUpdatedDate\tIsDeleted\tOperation\tErrorMessage";
+
+/** Task I (I4): a ManifestHeader row in the verified column order (blank cells elsewhere). */
+export function manifestHeaderRow(opts: {
+  externalManifestIdentifier: string;
+  originLicenseNumber: string;
+  originLicenseName: string;
+  isDeleted?: boolean;
+}): string {
+  const c: string[] = new Array(36).fill("");
+  c[0] = "291178"; // CCRSManifestHeaderId (surrogate — not used by the mapper)
+  c[4] = opts.externalManifestIdentifier;
+  c[7] = opts.originLicenseNumber;
+  c[8] = opts.originLicenseName;
+  c[23] = opts.isDeleted ? "True" : "False";
+  return c.join("\t");
+}
+
+/** Task I (I4): a TransportedItems row in the verified column order (blank cells elsewhere). */
+export function transportedItemRow(opts: {
+  transportedItemsId?: string;
+  externalManifestIdentifier: string;
+  inventoryExternalIdentifier: string;
+  description: string;
+  isDeleted?: boolean;
+}): string {
+  const c: string[] = new Array(26).fill("");
+  c[0] = opts.transportedItemsId ?? "4093549";
+  c[1] = opts.externalManifestIdentifier;
+  c[2] = opts.inventoryExternalIdentifier;
+  c[4] = opts.description;
+  c[23] = opts.isDeleted ? "True" : "False";
+  return c.join("\t");
+}
+
 /** Greenway's real Licensee row (verified byte-for-byte in Task H). */
 export const GREENWAY_ROW =
   "Active\t736\t6033535550010001\t413541    \tLYMAN'S MARIJUANA L.L.C.\tGREENWAY MARIJUANA\t2025-10-27\t2026-11-30\t\tFalse\t4851 GEIGER RD SE\t\tPORT ORCHARD\tWA\t98366    \tKITSAP\tMICHAEL@GREENWAYMARIJUANA.COM\t\tLoadLicenseeETL\t2021-12-06 09:09:34.420000000\tproc_UpdateExistingLicenses\t2025-10-28 04:52:12.467000000";

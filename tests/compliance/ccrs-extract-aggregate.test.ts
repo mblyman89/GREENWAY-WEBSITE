@@ -19,6 +19,9 @@ import {
   extractBrand,
   CcrsAggregator,
   TOP_SUPPLIERS_STATEWIDE,
+  TOP_TYPE_MOVERS_PER_TYPE,
+  BRAND_BRIDGE_MIN_MANIFESTS,
+  BRAND_BRIDGE_MIN_SHARE,
   type AggregationResult,
 } from "@/lib/discovery/ccrs-extract/aggregate";
 import type {
@@ -28,6 +31,8 @@ import type {
   ProductRow,
   InventoryRow,
   StrainRow,
+  ManifestHeaderRow,
+  TransportedItemRow,
 } from "@/lib/discovery/ccrs-extract/parse";
 
 // ---------------------------------------------------------------------------
@@ -212,8 +217,13 @@ function product(
   return { productId, licenseeId: null, inventoryType, name, unitWeightGrams };
 }
 
-function inventory(inventoryId: string, productId: string | null, strainId: string | null = null): InventoryRow {
-  return { inventoryId, licenseeId: null, productId, strainId };
+function inventory(
+  inventoryId: string,
+  productId: string | null,
+  strainId: string | null = null,
+  externalIdentifier: string | null = null,
+): InventoryRow {
+  return { inventoryId, licenseeId: null, productId, strainId, externalIdentifier };
 }
 
 function header(
@@ -917,5 +927,289 @@ describe("CcrsAggregator statewide supplier benchmarks (S10)", () => {
     expect(r.suppliers[0].licenseeId).toBe("123456789");
     expect(r.suppliers[0].name).toBe("BIG ID FARMS LLC");
     expect(r.suppliers[0].revenueMinor).toBe(660);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Task I (I4): manifest-based vendor attribution + per-type top-10 signals.
+// Verified design (real May-2026 delivery): retail Product.LicenseeId is the
+// RETAILER, so the vendor comes from manifests — lot-level joins first
+// (Inventory.ExternalIdentifier == TransportedItems.InventoryExternalIdentifier
+// → ManifestHeader origin), then a conservative brand→vendor bridge, then
+// null. NEVER GUESS: ambiguous lots are tombstoned, thin bridges resolve to
+// nothing.
+// ---------------------------------------------------------------------------
+
+function mh(
+  externalManifestIdentifier: string,
+  originLicenseNumber: string | null,
+  originLicenseName: string | null,
+  isDeleted: boolean | null = false,
+): ManifestHeaderRow {
+  return { externalManifestIdentifier, originLicenseNumber, originLicenseName, isDeleted };
+}
+
+function ti(
+  externalManifestIdentifier: string | null,
+  inventoryExternalIdentifier: string | null,
+  description: string | null = null,
+  isDeleted: boolean | null = false,
+): TransportedItemRow {
+  return { externalManifestIdentifier, inventoryExternalIdentifier, description, isDeleted };
+}
+
+/** A fresh aggregator with the standard identities (self + tracked competitor). */
+function vendorAgg(): CcrsAggregator {
+  const agg = new CcrsAggregator({ selfLicenseNumber: SELF, trackedLicenseNumbers: [COMP] });
+  agg.addLicensee(licensee("736", SELF, "LYMAN'S MARIJUANA L.L.C.", "GREENWAY MARIJUANA", "PORT ORCHARD"));
+  agg.addLicensee(licensee("900", COMP, "POT ZONE PO LLC", "POT ZONE", "PORT ORCHARD"));
+  return agg;
+}
+
+describe("CcrsAggregator — manifest vendor attribution (Task I I4)", () => {
+  it("resolves the lot-level vendor onto statewide, competitor AND type_mover signals (case-insensitive lot join)", () => {
+    const agg = vendorAgg();
+    // The vendor IS in the licensee table — display name must prefer its DBA.
+    agg.addLicensee(licensee("950", "610001", "EVERGREEN FARMS LLC", "Evergreen Farms"));
+    agg.addManifestHeader(mh("RM-1", "610001", "EVERGREEN FARMS LLC"));
+    // Lot id casing differs between tables in the real files — join must not care.
+    agg.addTransportedItem(ti("RM-1", "LOT-A", "Blue Dream 3.5g Flower"));
+    agg.addProduct(product("5001", "Usable Marijuana", "Blue Dream 3.5g Flower", 3.5));
+    agg.addInventory(inventory("9001", "5001", null, "lot-a"));
+    agg.addSaleHeader(header("100", "900", "retail", "2026-05-05"));
+    agg.addSaleDetail(detail("100", "9001", 2, 3000));
+    const r = agg.result();
+
+    const sw = r.signals.find((s) => s.kind === "statewide_mover");
+    expect(sw?.vendorLicense).toBe("610001");
+    expect(sw?.vendorName).toBe("Evergreen Farms"); // licensee DBA beats legal name
+
+    const cm = r.signals.find((s) => s.kind === "competitor_mover");
+    expect(cm?.licenseNumber).toBe(COMP);
+    expect(cm?.vendorLicense).toBe("610001");
+    expect(cm?.vendorName).toBe("Evergreen Farms");
+
+    const tm = r.signals.find((s) => s.kind === "type_mover");
+    expect(tm?.inventoryType).toBe("Usable Marijuana");
+    expect(tm?.productName).toBe("Blue Dream 3.5g Flower");
+    expect(tm?.licenseNumber).toBeNull(); // statewide, not per-competitor
+    expect(tm?.vendorLicense).toBe("610001");
+
+    expect(r.totals.manifestRows).toBe(1);
+    expect(r.totals.transportedItemRows).toBe(1);
+  });
+
+  it("falls back to the manifest origin name when the vendor has no licensee row", () => {
+    const agg = vendorAgg();
+    agg.addManifestHeader(mh("RM-1", "610001", "EVERGREEN FARMS LLC"));
+    agg.addTransportedItem(ti("RM-1", "LOT-A", "Blue Dream 3.5g Flower"));
+    agg.addProduct(product("5001", "Usable Marijuana", "Blue Dream 3.5g Flower", 3.5));
+    agg.addInventory(inventory("9001", "5001", null, "LOT-A"));
+    agg.addSaleHeader(header("100", "900", "retail", "2026-05-05"));
+    agg.addSaleDetail(detail("100", "9001", 1, 3000));
+    const sw = agg.result().signals.find((s) => s.kind === "statewide_mover");
+    expect(sw?.vendorLicense).toBe("610001");
+    expect(sw?.vendorName).toBe("EVERGREEN FARMS LLC");
+  });
+
+  it("skips deleted manifests and deleted transported items whole (a cancelled shipment proves nothing)", () => {
+    const agg = vendorAgg();
+    agg.addManifestHeader(mh("RM-DEL", "610001", "EVERGREEN FARMS LLC", true)); // deleted header
+    agg.addTransportedItem(ti("RM-DEL", "LOT-A", "Blue Dream 3.5g Flower"));
+    agg.addManifestHeader(mh("RM-2", "620002", "GROW OP LLC"));
+    agg.addTransportedItem(ti("RM-2", "LOT-B", "Blue Dream 3.5g Flower", true)); // deleted item
+    agg.addProduct(product("5001", "Usable Marijuana", "Blue Dream 3.5g Flower", 3.5));
+    agg.addInventory(inventory("9001", "5001", null, "LOT-A"));
+    agg.addInventory(inventory("9002", "5001", null, "LOT-B"));
+    agg.addSaleHeader(header("100", "900", "retail", "2026-05-05"));
+    agg.addSaleDetail(detail("100", "9001", 1, 3000));
+    agg.addSaleDetail(detail("100", "9002", 1, 3000));
+    const r = agg.result();
+    const sw = r.signals.find((s) => s.kind === "statewide_mover");
+    expect(sw?.vendorLicense).toBeNull(); // no live attribution — never guessed
+    expect(sw?.vendorName).toBeNull();
+    // Inputs are still counted honestly, deleted or not.
+    expect(r.totals.manifestRows).toBe(2);
+    expect(r.totals.transportedItemRows).toBe(2);
+  });
+
+  it("tombstones a lot claimed by two different origins — and never resurrects it", () => {
+    const agg = vendorAgg();
+    agg.addManifestHeader(mh("RM-1", "610001", "EVERGREEN FARMS LLC"));
+    agg.addManifestHeader(mh("RM-2", "620002", "GROW OP LLC"));
+    agg.addTransportedItem(ti("RM-1", "LOT-A", "Blue Dream 3.5g Flower"));
+    agg.addTransportedItem(ti("RM-2", "LOT-A", "Blue Dream 3.5g Flower")); // conflict → tombstone
+    agg.addTransportedItem(ti("RM-1", "LOT-A", "Blue Dream 3.5g Flower")); // re-sighting must NOT revive
+    agg.addProduct(product("5001", "Usable Marijuana", "Blue Dream 3.5g Flower", 3.5));
+    agg.addInventory(inventory("9001", "5001", null, "LOT-A"));
+    agg.addSaleHeader(header("100", "900", "retail", "2026-05-05"));
+    agg.addSaleDetail(detail("100", "9001", 1, 3000));
+    const sw = agg.result().signals.find((s) => s.kind === "statewide_mover");
+    expect(sw?.vendorLicense).toBeNull(); // ambiguous — never guessed
+  });
+
+  it("picks the DOMINANT lot vendor across a mover's sold lots (ties → smaller license)", () => {
+    const agg = vendorAgg();
+    agg.addManifestHeader(mh("RM-1", "620002", "GROW OP LLC"));
+    agg.addManifestHeader(mh("RM-2", "610001", "EVERGREEN FARMS LLC"));
+    agg.addTransportedItem(ti("RM-1", "LOT-A", "Blue Dream 3.5g Flower"));
+    agg.addTransportedItem(ti("RM-2", "LOT-B", "Blue Dream 3.5g Flower"));
+    agg.addProduct(product("5001", "Usable Marijuana", "Blue Dream 3.5g Flower", 3.5));
+    agg.addInventory(inventory("9001", "5001", null, "LOT-A"));
+    agg.addInventory(inventory("9002", "5001", null, "LOT-B"));
+    agg.addSaleHeader(header("100", "900", "retail", "2026-05-05"));
+    // Two sightings for 620002's lot, one for 610001's → 620002 dominates.
+    agg.addSaleDetail(detail("100", "9001", 1, 3000));
+    agg.addSaleDetail(detail("100", "9001", 1, 3000));
+    agg.addSaleDetail(detail("100", "9002", 1, 3000));
+    const sw = agg.result().signals.find((s) => s.kind === "statewide_mover");
+    expect(sw?.vendorLicense).toBe("620002");
+
+    // Tie case: one sighting each → the lexicographically smaller license wins
+    // (deterministic, no hidden ordering dependence).
+    const agg2 = vendorAgg();
+    agg2.addManifestHeader(mh("RM-1", "620002", "GROW OP LLC"));
+    agg2.addManifestHeader(mh("RM-2", "610001", "EVERGREEN FARMS LLC"));
+    agg2.addTransportedItem(ti("RM-1", "LOT-A", "Blue Dream 3.5g Flower"));
+    agg2.addTransportedItem(ti("RM-2", "LOT-B", "Blue Dream 3.5g Flower"));
+    agg2.addProduct(product("5001", "Usable Marijuana", "Blue Dream 3.5g Flower", 3.5));
+    agg2.addInventory(inventory("9001", "5001", null, "LOT-A"));
+    agg2.addInventory(inventory("9002", "5001", null, "LOT-B"));
+    agg2.addSaleHeader(header("100", "900", "retail", "2026-05-05"));
+    agg2.addSaleDetail(detail("100", "9001", 1, 3000));
+    agg2.addSaleDetail(detail("100", "9002", 1, 3000));
+    const sw2 = agg2.result().signals.find((s) => s.kind === "statewide_mover");
+    expect(sw2?.vendorLicense).toBe("610001");
+  });
+
+  it("brand bridge: resolves at ≥3 manifests and ≥80% share, one count per (brand, manifest)", () => {
+    expect(BRAND_BRIDGE_MIN_MANIFESTS).toBe(3);
+    expect(BRAND_BRIDGE_MIN_SHARE).toBe(0.8);
+
+    // 4 manifests from GROW OP + 1 from elsewhere → share 0.8 exactly → resolves.
+    const agg = vendorAgg();
+    for (let i = 1; i <= 4; i += 1) {
+      agg.addManifestHeader(mh(`RM-${i}`, "620002", "GROW OP LLC"));
+      agg.addTransportedItem(ti(`RM-${i}`, `LOT-${i}`, "Phat Panda | Golden Pineapple 1g"));
+    }
+    agg.addManifestHeader(mh("RM-5", "630003", "OTHER FARM LLC"));
+    agg.addTransportedItem(ti("RM-5", "LOT-5", "Phat Panda | Golden Pineapple 1g"));
+    // The SOLD lot never appears in this month's manifests → lot join misses,
+    // so only the brand ("Phat Panda") can attribute it.
+    agg.addProduct(product("5001", "Usable Marijuana", "Phat Panda | Grape Ape 3.5g", 3.5));
+    agg.addInventory(inventory("9001", "5001", null, "LOT-UNSEEN"));
+    agg.addSaleHeader(header("100", "900", "retail", "2026-05-05"));
+    agg.addSaleDetail(detail("100", "9001", 1, 3000));
+    const sw = agg.result().signals.find((s) => s.kind === "statewide_mover");
+    expect(sw?.brand).toBe("Phat Panda");
+    expect(sw?.vendorLicense).toBe("620002");
+    expect(sw?.vendorName).toBe("GROW OP LLC");
+
+    // Dedupe guard: 2 manifests, each shipping the brand TWICE → still only 2
+    // distinct manifests → below the 3-manifest floor → null.
+    const agg2 = vendorAgg();
+    for (let i = 1; i <= 2; i += 1) {
+      agg2.addManifestHeader(mh(`RM-${i}`, "620002", "GROW OP LLC"));
+      agg2.addTransportedItem(ti(`RM-${i}`, `LOT-${i}a`, "Phat Panda | Golden Pineapple 1g"));
+      agg2.addTransportedItem(ti(`RM-${i}`, `LOT-${i}b`, "Phat Panda | Grape Ape 3.5g"));
+    }
+    agg2.addProduct(product("5001", "Usable Marijuana", "Phat Panda | Grape Ape 3.5g", 3.5));
+    agg2.addInventory(inventory("9001", "5001", null, "LOT-UNSEEN"));
+    agg2.addSaleHeader(header("100", "900", "retail", "2026-05-05"));
+    agg2.addSaleDetail(detail("100", "9001", 1, 3000));
+    expect(agg2.result().signals.find((s) => s.kind === "statewide_mover")?.vendorLicense).toBeNull();
+
+    // Split origins: 2 of 3 manifests (67% share) → below 80% → null, never guessed.
+    const agg3 = vendorAgg();
+    agg3.addManifestHeader(mh("RM-1", "620002", "GROW OP LLC"));
+    agg3.addManifestHeader(mh("RM-2", "620002", "GROW OP LLC"));
+    agg3.addManifestHeader(mh("RM-3", "630003", "OTHER FARM LLC"));
+    for (let i = 1; i <= 3; i += 1) {
+      agg3.addTransportedItem(ti(`RM-${i}`, `LOT-${i}`, "Phat Panda | Golden Pineapple 1g"));
+    }
+    agg3.addProduct(product("5001", "Usable Marijuana", "Phat Panda | Grape Ape 3.5g", 3.5));
+    agg3.addInventory(inventory("9001", "5001", null, "LOT-UNSEEN"));
+    agg3.addSaleHeader(header("100", "900", "retail", "2026-05-05"));
+    agg3.addSaleDetail(detail("100", "9001", 1, 3000));
+    expect(agg3.result().signals.find((s) => s.kind === "statewide_mover")?.vendorLicense).toBeNull();
+  });
+
+  it("lot-level attribution BEATS the brand bridge (exact evidence over inference)", () => {
+    const agg = vendorAgg();
+    // Bridge points hard at GROW OP (4 manifests, 100% share)…
+    for (let i = 1; i <= 4; i += 1) {
+      agg.addManifestHeader(mh(`RM-${i}`, "620002", "GROW OP LLC"));
+      agg.addTransportedItem(ti(`RM-${i}`, `LOT-${i}`, "Phat Panda | Golden Pineapple 1g"));
+    }
+    // …but the SOLD lot itself was shipped by EVERGREEN.
+    agg.addManifestHeader(mh("RM-9", "610001", "EVERGREEN FARMS LLC"));
+    agg.addTransportedItem(ti("RM-9", "LOT-SOLD", "Phat Panda | Grape Ape 3.5g"));
+    agg.addProduct(product("5001", "Usable Marijuana", "Phat Panda | Grape Ape 3.5g", 3.5));
+    agg.addInventory(inventory("9001", "5001", null, "LOT-SOLD"));
+    agg.addSaleHeader(header("100", "900", "retail", "2026-05-05"));
+    agg.addSaleDetail(detail("100", "9001", 1, 3000));
+    const sw = agg.result().signals.find((s) => s.kind === "statewide_mover");
+    expect(sw?.vendorLicense).toBe("610001");
+  });
+
+  it("emits at most TOP_TYPE_MOVERS_PER_TYPE type_mover rows per inventory type, revenue-desc", () => {
+    expect(TOP_TYPE_MOVERS_PER_TYPE).toBe(10);
+    const agg = vendorAgg();
+    // 11 vapor products with distinct revenues + 1 concentrate.
+    for (let i = 1; i <= 11; i += 1) {
+      agg.addProduct(product(String(5000 + i), "Vapor Product", `Vape Cart ${String(i).padStart(2, "0")}`, 1));
+      agg.addInventory(inventory(String(9000 + i), String(5000 + i)));
+    }
+    agg.addProduct(product("5100", "Concentrate", "Dab Co - Live Resin 1g", 1));
+    agg.addInventory(inventory("9100", "5100"));
+    agg.addSaleHeader(header("100", "900", "retail", "2026-05-05"));
+    for (let i = 1; i <= 11; i += 1) {
+      agg.addSaleDetail(detail("100", String(9000 + i), 1, i * 100)); // Cart 11 = top, Cart 01 = bottom
+    }
+    agg.addSaleDetail(detail("100", "9100", 1, 4000));
+    const r = agg.result();
+
+    const vapor = r.signals.filter((s) => s.kind === "type_mover" && s.inventoryType === "Vapor Product");
+    expect(vapor).toHaveLength(10); // 11 products, top 10 kept
+    expect(vapor[0].productName).toBe("Vape Cart 11");
+    expect(vapor.map((s) => s.productName)).not.toContain("Vape Cart 01"); // lowest revenue cut
+    const revs = vapor.map((s) => s.revenueMinor);
+    expect(revs).toEqual([...revs].sort((a, b) => b - a));
+
+    const conc = r.signals.filter((s) => s.kind === "type_mover" && s.inventoryType === "Concentrate");
+    expect(conc).toHaveLength(1);
+    expect(conc[0].productName).toBe("Dab Co - Live Resin 1g");
+    // No manifests were fed → vendor honestly null on every type row.
+    for (const s of [...vapor, ...conc]) {
+      expect(s.vendorLicense).toBeNull();
+      expect(s.vendorName).toBeNull();
+    }
+  });
+
+  it("folds movers without a product inventory type into the '(unattributed)' type section", () => {
+    const agg = vendorAgg();
+    agg.addProduct(product("5001", null, "Mystery Widget 1ea", 1)); // real delta-month case
+    agg.addInventory(inventory("9001", "5001"));
+    agg.addSaleHeader(header("100", "900", "retail", "2026-05-05"));
+    agg.addSaleDetail(detail("100", "9001", 1, 1500));
+    const tm = agg.result().signals.filter((s) => s.kind === "type_mover");
+    expect(tm).toHaveLength(1);
+    expect(tm[0].inventoryType).toBe("(unattributed)");
+    expect(tm[0].productName).toBe("Mystery Widget 1ea");
+  });
+
+  it("ignores manifest headers without an origin license and items without a manifest id", () => {
+    const agg = vendorAgg();
+    agg.addManifestHeader(mh("RM-1", null, "NAMELESS")); // no license → unusable
+    agg.addTransportedItem(ti("RM-1", "LOT-A", "Blue Dream 3.5g Flower"));
+    agg.addTransportedItem(ti(null, "LOT-B", "Blue Dream 3.5g Flower")); // orphan item
+    agg.addProduct(product("5001", "Usable Marijuana", "Blue Dream 3.5g Flower", 3.5));
+    agg.addInventory(inventory("9001", "5001", null, "LOT-A"));
+    agg.addInventory(inventory("9002", "5001", null, "LOT-B"));
+    agg.addSaleHeader(header("100", "900", "retail", "2026-05-05"));
+    agg.addSaleDetail(detail("100", "9001", 1, 3000));
+    agg.addSaleDetail(detail("100", "9002", 1, 3000));
+    const sw = agg.result().signals.find((s) => s.kind === "statewide_mover");
+    expect(sw?.vendorLicense).toBeNull();
   });
 });

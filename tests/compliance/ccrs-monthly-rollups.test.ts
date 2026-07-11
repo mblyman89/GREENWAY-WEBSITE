@@ -39,7 +39,7 @@ function validResult(): unknown {
     name: "Phat Panda | Grape Ape 3.5g",
     unitWeightGrams: 3.5,
   });
-  agg.addInventory({ inventoryId: "9001", licenseeId: null, productId: "5001", strainId: "77" });
+  agg.addInventory({ inventoryId: "9001", licenseeId: null, productId: "5001", strainId: "77", externalIdentifier: null });
   agg.addSaleHeader({
     saleHeaderId: "327733901",
     sellerLicenseeId: "900",
@@ -236,6 +236,88 @@ describe("sanitizeAggregationResult", () => {
       signals: [{ kind: "made_up_mover", units: 1, revenueMinor: 1 }],
     };
     expect(sanitizeAggregationResult(bad).ok).toBe(false);
+  });
+
+  // Task I (I4): the per-type top-10 signal kind + manifest-derived vendor
+  // fields (migration 0110) must round-trip; pre-I4 payloads must still pass.
+  it("accepts type_mover signals and round-trips vendor fields losslessly (I4)", () => {
+    const base = validResult() as Record<string, unknown>;
+    const withType = {
+      ...base,
+      signals: [
+        {
+          kind: "type_mover",
+          licenseNumber: null,
+          inventoryType: "Usable Marijuana",
+          productName: "Phat Panda | Grape Ape 3.5g",
+          brand: "Phat Panda",
+          strainName: "Blue Dream",
+          units: 3,
+          revenueMinor: 7500,
+          medianUnitPriceMinor: 2500,
+          p25UnitPriceMinor: 2500,
+          vendorName: "GROW OP LLC",
+          vendorLicense: "620002",
+        },
+      ],
+    };
+    const out = sanitizeAggregationResult(withType);
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    expect(out.result.signals).toHaveLength(1);
+    const s = out.result.signals[0];
+    expect(s.kind).toBe("type_mover");
+    expect(s.inventoryType).toBe("Usable Marijuana");
+    expect(s.vendorName).toBe("GROW OP LLC");
+    expect(s.vendorLicense).toBe("620002");
+  });
+
+  it("sanitizes missing/junk vendor fields to null — pre-I4 payloads stay valid (I4)", () => {
+    // A pre-I4 transformer payload: signals carry NO vendor fields at all.
+    const base = validResult() as Record<string, unknown>;
+    const signals = base.signals as Array<Record<string, unknown>>;
+    expect(signals.length).toBeGreaterThan(0);
+    for (const s of signals) {
+      delete s.vendorName;
+      delete s.vendorLicense;
+    }
+    const out = sanitizeAggregationResult(base);
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    for (const s of out.result.signals) {
+      expect(s.vendorName).toBeNull();
+      expect(s.vendorLicense).toBeNull();
+    }
+
+    // Junk types must coerce to null, never pass through.
+    const base2 = validResult() as Record<string, unknown>;
+    const signals2 = base2.signals as Array<Record<string, unknown>>;
+    signals2[0].vendorName = 42;
+    signals2[0].vendorLicense = { evil: true };
+    const out2 = sanitizeAggregationResult(base2);
+    expect(out2.ok).toBe(true);
+    if (!out2.ok) return;
+    expect(out2.result.signals[0].vendorName).toBeNull();
+    expect(out2.result.signals[0].vendorLicense).toBeNull();
+  });
+
+  it("counts manifest input totals, defaulting to 0 for pre-I4 payloads (I4)", () => {
+    // The real-aggregator fixture fed no manifests → totals must be 0, not undefined.
+    const out = sanitizeAggregationResult(validResult());
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    expect(out.result.totals.manifestRows).toBe(0);
+    expect(out.result.totals.transportedItemRows).toBe(0);
+
+    // Payload with counts round-trips them.
+    const base = validResult() as Record<string, unknown>;
+    (base.totals as Record<string, unknown>).manifestRows = 123;
+    (base.totals as Record<string, unknown>).transportedItemRows = 456;
+    const out2 = sanitizeAggregationResult(base);
+    expect(out2.ok).toBe(true);
+    if (!out2.ok) return;
+    expect(out2.result.totals.manifestRows).toBe(123);
+    expect(out2.result.totals.transportedItemRows).toBe(456);
   });
 
   it("rejects oversized payloads (defensive caps)", () => {
@@ -542,5 +624,34 @@ describe("migration 0109 — discovery_supplier_stats schema", () => {
     expect(ddl).toMatch(/create policy discovery_supplier_stats_read/);
     expect(ddl).toMatch(/create policy discovery_supplier_stats_write/);
     expect(ddl).toMatch(/public\.is_staff\(\)/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Task I (I4): migration 0110 schema guard — the vendor columns behind the
+// per-type top-10 boards. Text columns (no money), additive + idempotent.
+// ---------------------------------------------------------------------------
+describe("migration 0110 — discovery_market_signals vendor columns", () => {
+  const sql = readFileSync(
+    join(process.cwd(), "supabase", "migrations", "0110_discovery_signal_vendor.sql"),
+    "utf8",
+  );
+  // Strip `--` comments line-wise so prose can't false-positive the DDL checks.
+  const ddl = sql
+    .split("\n")
+    .map((line) => line.replace(/--.*$/, ""))
+    .join("\n");
+
+  it("adds both vendor columns idempotently as plain text", () => {
+    expect(ddl).toMatch(/alter table public\.discovery_market_signals/);
+    expect(ddl).toMatch(/add column if not exists vendor_name\s+text/);
+    expect(ddl).toMatch(/add column if not exists vendor_license\s+text/);
+  });
+
+  it("stays additive: no drops, no type changes, no constraint on kind", () => {
+    expect(/drop\s/i.test(ddl)).toBe(false);
+    expect(/alter column/i.test(ddl)).toBe(false);
+    // kind is intentionally unconstrained text — 'type_mover' needs no DDL.
+    expect(/check\s*\(/i.test(ddl)).toBe(false);
   });
 });

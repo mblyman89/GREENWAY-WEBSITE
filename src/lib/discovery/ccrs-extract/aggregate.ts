@@ -44,7 +44,7 @@
  *     run inside the browser on the dragged-in zip.
  */
 
-import { extractBrand } from "../brand-core";
+import { extractBrand, normalizeBrandKey } from "../brand-core";
 import type {
   LicenseeRow,
   SaleHeaderRow,
@@ -52,6 +52,8 @@ import type {
   ProductRow,
   InventoryRow,
   StrainRow,
+  ManifestHeaderRow,
+  TransportedItemRow,
 } from "./parse";
 
 // ---------------------------------------------------------------------------
@@ -311,7 +313,7 @@ export type CompetitorStat = {
 };
 
 export type MarketSignal = {
-  kind: "statewide_mover" | "competitor_mover";
+  kind: "statewide_mover" | "competitor_mover" | "type_mover";
   /** For competitor_mover: which tracked license this signal came from. */
   licenseNumber: string | null;
   inventoryType: string | null;
@@ -323,6 +325,14 @@ export type MarketSignal = {
   medianUnitPriceMinor: number | null;
   /** p25 — the aggressive-but-real "undercut" reference point. */
   p25UnitPriceMinor: number | null;
+  /**
+   * Task I (I4): the SHIPPING VENDOR (producer/processor) behind the product,
+   * from manifest lot joins (dominant origin on the sold lots) with a
+   * conservative brand→vendor bridge fallback. Null when unresolvable —
+   * never guessed.
+   */
+  vendorName: string | null;
+  vendorLicense: string | null;
 };
 
 export type AggregationResult = {
@@ -350,6 +360,10 @@ export type AggregationResult = {
     attributedRetailLines: number;
     /** How many times the statewide-mover map hit its cap and was pruned. */
     moverMapPrunes: number;
+    /** Task I (I4): manifest rows read (vendor attribution inputs). Optional
+     * so older persisted payloads (pre-I4) still parse. */
+    manifestRows?: number;
+    transportedItemRows?: number;
   };
   statewide: StatewideBenchmark[];
   competitors: CompetitorStat[];
@@ -376,6 +390,17 @@ const TOP_PRODUCTS_PER_COMPETITOR = 25;
 export const TOP_SUPPLIERS_PER_COMPETITOR = 10;
 const TOP_SIGNALS_STATEWIDE = 100;
 const TOP_SIGNALS_PER_COMPETITOR = 15;
+/** Task I (I4): per-inventory-type product leaders persisted per month. */
+export const TOP_TYPE_MOVERS_PER_TYPE = 10;
+/**
+ * Task I (I4): brand→vendor bridge thresholds, verified on the real May-2026
+ * delivery (2,698 of 4,855 transported brands resolve at these bounds with
+ * near-unanimous origins). A brand maps to a vendor only when one origin
+ * license shipped ≥ 80% of that brand's manifests and ≥ 3 manifests exist —
+ * below that the vendor stays null, never guessed.
+ */
+export const BRAND_BRIDGE_MIN_MANIFESTS = 3;
+export const BRAND_BRIDGE_MIN_SHARE = 0.8;
 /** S10: statewide wholesale suppliers persisted per month (top by revenue). */
 export const TOP_SUPPLIERS_STATEWIDE = 100;
 /** Persisted brand/strain benchmark rows per sale class (top by revenue). */
@@ -404,6 +429,13 @@ type MoverAcc = {
   inventoryType: string | null;
   brand: string | null;
   strainName: string | null;
+  /**
+   * Task I (I4): manifest ORIGIN sightings for the lots this product sold
+   * from — vendorLicense → line count. Dominant origin wins at result() time;
+   * null/empty = no manifest join (vendor may still resolve via brand bridge).
+   * Lazily created so movers without joins cost nothing.
+   */
+  vendorCounts: Map<string, number> | null;
 };
 
 type BenchAcc = {
@@ -469,6 +501,13 @@ export class CcrsAggregator {
   private invMap = new U53Map(2);
   /** saleHeaderId → packed(class + sellerSlot + buyerSlot + supplierId). */
   private headerMap = new U53Map(1);
+  /**
+   * Task I (I4): inventoryId → manifest ORIGIN license number (the shipping
+   * vendor). Sparse — only lots whose ExternalIdentifier matched a live
+   * transported item get an entry (~2% of inventory rows in the real May-2026
+   * delivery), so this stays far smaller than invMap.
+   */
+  private invVendor = new U53Map(1);
 
   // Bounded reference lookups (numeric keys keep these compact).
   private productById = new Map<number, ProductInfo>();
@@ -482,8 +521,29 @@ export class CcrsAggregator {
    * (~1.7k rows), so this map stays tiny.
    */
   private licenseeInfoById = new Map<number, LicenseeIdentity>();
+  /**
+   * Task I (I4): licensee identity by LICENSE NUMBER — manifests carry the
+   * origin's license number (not its LicenseeId), so vendor naming resolves
+   * through this map first (DBA preferred), manifest origin name second.
+   */
+  private licenseeByLicenseNumber = new Map<string, LicenseeIdentity>();
   /** Interned inventory-type strings (small closed set in the real data). */
   private typeIntern = new Map<string, string>();
+
+  // Task I (I4): manifest-based vendor attribution (verified route — retail
+  // Product.LicenseeId is the RETAILER 99.7% of the time, so manifests are
+  // the only honest vendor source in the delivery).
+  /** Live manifest ext-id → origin (shipping vendor) license + name. */
+  private manifestOrigin = new Map<string, { license: string; name: string | null }>();
+  /** Vendor license → best display name (manifest origin name; licensee table wins later). */
+  private vendorNameByLicense = new Map<string, string | null>();
+  /** Lot ExternalIdentifier (lowercased) → origin license. Conflicts tombstoned (never guessed). */
+  private lotVendor = new Map<string, string>();
+  private lotVendorConflicts = new Set<string>();
+  /** Brand key → (origin license → distinct-manifest count) for the bridge fallback. */
+  private brandBridge = new Map<string, Map<string, number>>();
+  /** Dedupe: `${brandKey}\u0001${manifestExtId}` pairs already counted. */
+  private brandBridgeSeen = new Set<string>();
 
   // Accumulators.
   private statewide = new Map<string, BenchAcc>(); // `${class}\u0001${scope}\u0001${key}`
@@ -521,6 +581,9 @@ export class CcrsAggregator {
     wholesaleLines: 0,
     attributedRetailLines: 0,
     moverMapPrunes: 0,
+    // Task I (I4): manifest tables (vendor attribution inputs).
+    manifestRows: 0,
+    transportedItemRows: 0,
   };
 
   constructor(opts: { selfLicenseNumber: string; trackedLicenseNumbers: string[] }) {
@@ -553,6 +616,14 @@ export class CcrsAggregator {
       name: row.name,
       dba: row.dba,
     });
+    // Task I (I4): manifests reference vendors by license number.
+    if (row.licenseNumber) {
+      this.licenseeByLicenseNumber.set(row.licenseNumber.trim(), {
+        licenseNumber: row.licenseNumber,
+        name: row.name,
+        dba: row.dba,
+      });
+    }
     if (row.licenseNumber && this.trackedLicenses.has(row.licenseNumber)) {
       if (this.trackedByIdx.length >= SLOT_LIMIT) return; // packing bound (roster ≪ 255)
       this.trackedByIdx.push({
@@ -579,10 +650,82 @@ export class CcrsAggregator {
     });
   }
 
+  /**
+   * Task I (I4): manifest headers name the SHIPPING VENDOR (origin) for the
+   * lots they moved. Deleted manifests are skipped whole — a cancelled
+   * shipment proves nothing. Must be fed BEFORE transported items.
+   */
+  addManifestHeader(row: ManifestHeaderRow): void {
+    this.totals.manifestRows += 1;
+    if (row.isDeleted === true) return;
+    const license = row.originLicenseNumber?.trim() ?? "";
+    if (!license) return;
+    this.manifestOrigin.set(row.externalManifestIdentifier, {
+      license,
+      name: row.originLicenseName,
+    });
+    if (!this.vendorNameByLicense.has(license)) {
+      this.vendorNameByLicense.set(license, row.originLicenseName);
+    }
+  }
+
+  /**
+   * Task I (I4): a transported item ties a lot's ExternalIdentifier (and its
+   * product description's brand) to the manifest's origin vendor. Two joins
+   * are built here:
+   *  - lotVendor: exact lot-level attribution (conflicting origins for the
+   *    same lot id are tombstoned — never guessed);
+   *  - brandBridge: brand → origin manifest counts (fallback when a sold lot
+   *    never appears in this month's manifests).
+   */
+  addTransportedItem(row: TransportedItemRow): void {
+    this.totals.transportedItemRows += 1;
+    if (row.isDeleted === true) return;
+    const ext = row.externalManifestIdentifier;
+    if (!ext) return;
+    const origin = this.manifestOrigin.get(ext);
+    if (!origin) return; // deleted or unknown manifest — no attribution
+    const lot = row.inventoryExternalIdentifier?.trim().toLowerCase() ?? "";
+    if (lot && !this.lotVendorConflicts.has(lot)) {
+      const prev = this.lotVendor.get(lot);
+      if (prev === undefined) {
+        this.lotVendor.set(lot, origin.license);
+      } else if (prev !== origin.license) {
+        this.lotVendor.delete(lot); // ambiguous lot — tombstone, never guess
+        this.lotVendorConflicts.add(lot);
+      }
+    }
+    const brandKey = normalizeBrandKey(extractBrand(row.description));
+    if (brandKey) {
+      const seenKey = `${brandKey}\u0001${ext}`;
+      if (!this.brandBridgeSeen.has(seenKey)) {
+        this.brandBridgeSeen.add(seenKey);
+        let counts = this.brandBridge.get(brandKey);
+        if (!counts) {
+          counts = new Map();
+          this.brandBridge.set(brandKey, counts);
+        }
+        counts.set(origin.license, (counts.get(origin.license) ?? 0) + 1);
+      }
+    }
+  }
+
   addInventory(row: InventoryRow): void {
     this.totals.inventoryRows += 1;
     const idNum = Number(row.inventoryId);
     if (!Number.isFinite(idNum)) return;
+    // Task I (I4): lot-level vendor join — the retailer's inventory
+    // ExternalIdentifier equals TransportedItems.InventoryExternalIdentifier
+    // on the manifest that delivered it (verified on the real May-2026 zip).
+    if (row.externalIdentifier) {
+      const vendorLicense = this.lotVendor.get(row.externalIdentifier.trim().toLowerCase());
+      if (vendorLicense !== undefined) {
+        const licNum = Number(vendorLicense);
+        if (Number.isFinite(licNum) && Number.isInteger(licNum) && licNum > 0) {
+          this.invVendor.set(idNum, licNum);
+        }
+      }
+    }
     const productId = row.productId ? Number(row.productId) : 0;
     const strainId = row.strainId ? Number(row.strainId) : 0;
     if (!productId && !strainId) return;
@@ -718,12 +861,23 @@ export class CcrsAggregator {
           units: 0,
           revenueMinor: 0,
           price: new PriceHistogram(),
+          vendorCounts: null,
         };
         this.statewideMovers.set(product.name, mover);
       }
       mover.units += qty;
       mover.revenueMinor += lineMinor;
       mover.price.add(unitMinor);
+      // Task I (I4): lot-level vendor sighting — the manifest that delivered
+      // THIS lot named its shipping vendor. Dominant vendor wins at result().
+      if (Number.isFinite(invNum)) {
+        const vendorLicNum = this.invVendor.get(invNum);
+        if (vendorLicNum !== undefined && vendorLicNum > 0) {
+          const lic = String(vendorLicNum);
+          if (!mover.vendorCounts) mover.vendorCounts = new Map();
+          mover.vendorCounts.set(lic, (mover.vendorCounts.get(lic) ?? 0) + 1);
+        }
+      }
     }
 
     // -- statewide supplier benchmarks (S10: every wholesale line with a
@@ -781,12 +935,21 @@ export class CcrsAggregator {
               units: 0,
               revenueMinor: 0,
               price: new PriceHistogram(),
+              vendorCounts: null,
             };
             comp.byProduct.set(product.name, p);
           }
           p.units += qty;
           p.revenueMinor += lineMinor;
           p.price.add(unitMinor);
+          if (Number.isFinite(invNum)) {
+            const vendorLicNum = this.invVendor.get(invNum);
+            if (vendorLicNum !== undefined && vendorLicNum > 0) {
+              const lic = String(vendorLicNum);
+              if (!p.vendorCounts) p.vendorCounts = new Map();
+              p.vendorCounts.set(lic, (p.vendorCounts.get(lic) ?? 0) + 1);
+            }
+          }
         }
       }
     }
@@ -819,6 +982,48 @@ export class CcrsAggregator {
     if (hit !== undefined) return hit;
     this.typeIntern.set(s, s);
     return s;
+  }
+
+  /**
+   * Task I (I4): resolve a mover's SHIPPING VENDOR — dominant manifest origin
+   * on its sold lots first (exact), brand→vendor bridge second (conservative
+   * thresholds verified on the real May-2026 delivery), null otherwise.
+   * Display name: licensee-table DBA → licensee name → manifest origin name.
+   */
+  private resolveVendor(m: MoverAcc): { vendorName: string | null; vendorLicense: string | null } {
+    let license: string | null = null;
+    if (m.vendorCounts && m.vendorCounts.size > 0) {
+      let bestCount = -1;
+      for (const [lic, count] of m.vendorCounts) {
+        if (count > bestCount || (count === bestCount && (license === null || lic < license))) {
+          license = lic;
+          bestCount = count;
+        }
+      }
+    }
+    if (!license) {
+      const brandKey = normalizeBrandKey(m.brand);
+      const counts = brandKey ? this.brandBridge.get(brandKey) : undefined;
+      if (counts) {
+        let total = 0;
+        let top: string | null = null;
+        let topCount = -1;
+        for (const [lic, count] of counts) {
+          total += count;
+          if (count > topCount || (count === topCount && (top === null || lic < top))) {
+            top = lic;
+            topCount = count;
+          }
+        }
+        if (top && total >= BRAND_BRIDGE_MIN_MANIFESTS && topCount / total >= BRAND_BRIDGE_MIN_SHARE) {
+          license = top;
+        }
+      }
+    }
+    if (!license) return { vendorName: null, vendorLicense: null };
+    const id = this.licenseeByLicenseNumber.get(license);
+    const name = id?.dba ?? id?.name ?? this.vendorNameByLicense.get(license) ?? null;
+    return { vendorName: name, vendorLicense: license };
   }
 
   private pruneMovers(): void {
@@ -954,13 +1159,16 @@ export class CcrsAggregator {
       );
 
     const signals: MarketSignal[] = [];
-    const movers = [...this.statewideMovers.entries()]
-      .sort((a, b) => b[1].revenueMinor - a[1].revenueMinor)
-      .slice(0, TOP_SIGNALS_STATEWIDE);
-    for (const [productName, m] of movers) {
-      signals.push({
-        kind: "statewide_mover",
-        licenseNumber: null,
+    const moverSignal = (
+      kind: MarketSignal["kind"],
+      licenseNumber: string | null,
+      productName: string,
+      m: MoverAcc,
+    ): MarketSignal => {
+      const vendor = this.resolveVendor(m);
+      return {
+        kind,
+        licenseNumber,
         inventoryType: m.inventoryType,
         productName,
         brand: m.brand,
@@ -969,25 +1177,41 @@ export class CcrsAggregator {
         revenueMinor: m.revenueMinor,
         medianUnitPriceMinor: m.price.percentile(0.5),
         p25UnitPriceMinor: m.price.percentile(0.25),
-      });
+        vendorName: vendor.vendorName,
+        vendorLicense: vendor.vendorLicense,
+      };
+    };
+
+    const movers = [...this.statewideMovers.entries()]
+      .sort((a, b) => b[1].revenueMinor - a[1].revenueMinor)
+      .slice(0, TOP_SIGNALS_STATEWIDE);
+    for (const [productName, m] of movers) {
+      signals.push(moverSignal("statewide_mover", null, productName, m));
+    }
+    // Task I (I4): per-inventory-type product leaders ("top 10 products from
+    // every single type"). Grouped over the FULL mover map (not just the
+    // statewide top-100) so small-revenue types still get their leaders.
+    {
+      const byType = new Map<string, Array<[string, MoverAcc]>>();
+      for (const [productName, m] of this.statewideMovers.entries()) {
+        const t = m.inventoryType ?? UNATTRIBUTED;
+        const list = byType.get(t);
+        if (list) list.push([productName, m]);
+        else byType.set(t, [[productName, m]]);
+      }
+      for (const list of byType.values()) {
+        list.sort((a, b) => b[1].revenueMinor - a[1].revenueMinor || a[0].localeCompare(b[0]));
+        for (const [productName, m] of list.slice(0, TOP_TYPE_MOVERS_PER_TYPE)) {
+          signals.push(moverSignal("type_mover", null, productName, m));
+        }
+      }
     }
     for (const c of this.competitors.values()) {
       const top = [...c.byProduct.values()]
         .sort((a, b) => b.revenueMinor - a.revenueMinor)
         .slice(0, TOP_SIGNALS_PER_COMPETITOR);
       for (const p of top) {
-        signals.push({
-          kind: "competitor_mover",
-          licenseNumber: c.licenseNumber,
-          inventoryType: p.inventoryType,
-          productName: p.productName,
-          brand: p.brand,
-          strainName: p.strainName,
-          units: round2(p.units),
-          revenueMinor: p.revenueMinor,
-          medianUnitPriceMinor: p.price.percentile(0.5),
-          p25UnitPriceMinor: p.price.percentile(0.25),
-        });
+        signals.push(moverSignal("competitor_mover", c.licenseNumber, p.productName, p));
       }
     }
 

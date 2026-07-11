@@ -49,7 +49,12 @@ const BATCH = 500;
 /** Caps that a legitimate transformer payload can never exceed. */
 const MAX_STATEWIDE = 5_000;
 const MAX_COMPETITORS = 200;
-const MAX_SIGNALS = 2_000;
+/**
+ * Signals = 100 statewide movers + 10 per inventory type (Task I I4
+ * "type_mover"; the real data has ~25 types) + 15 per tracked competitor.
+ * 4,000 gives honest headroom without letting a hostile payload balloon.
+ */
+const MAX_SIGNALS = 4_000;
 /** S10: the aggregator emits ≤ TOP_SUPPLIERS_STATEWIDE (100); allow slack. */
 const MAX_SUPPLIERS = 200;
 const MAX_KEY_LEN = 300;
@@ -228,7 +233,7 @@ export function sanitizeAggregationResult(
   for (const s0 of signalsIn) {
     const s = (s0 ?? {}) as Record<string, unknown>;
     const kind = s.kind;
-    if (kind !== "statewide_mover" && kind !== "competitor_mover") {
+    if (kind !== "statewide_mover" && kind !== "competitor_mover" && kind !== "type_mover") {
       return { ok: false, error: "Malformed signal row." };
     }
     signals.push({
@@ -242,6 +247,10 @@ export function sanitizeAggregationResult(
       revenueMinor: Math.round(num(s.revenueMinor)),
       medianUnitPriceMinor: intOrNull(s.medianUnitPriceMinor),
       p25UnitPriceMinor: intOrNull(s.p25UnitPriceMinor),
+      // Task I (I4): manifest-derived shipping vendor. Optional — a pre-I4
+      // payload has neither field; that sanitizes to null, never guessed.
+      vendorName: strOrNull(s.vendorName),
+      vendorLicense: strOrNull(s.vendorLicense, 32),
     });
   }
 
@@ -265,6 +274,9 @@ export function sanitizeAggregationResult(
         wholesaleLines: num(totalsIn.wholesaleLines),
         attributedRetailLines: num(totalsIn.attributedRetailLines),
         moverMapPrunes: num(totalsIn.moverMapPrunes),
+        // Task I (I4): manifest inputs (optional — pre-I4 payloads have none).
+        manifestRows: num(totalsIn.manifestRows),
+        transportedItemRows: num(totalsIn.transportedItemRows),
       },
       statewide,
       competitors,
@@ -451,6 +463,9 @@ export async function persistAggregationResult(
     revenue_minor: Math.round(s.revenueMinor),
     median_unit_price_minor: s.medianUnitPriceMinor,
     p25_unit_price_minor: s.p25UnitPriceMinor,
+    // Task I (I4, migration 0110): manifest-derived shipping vendor.
+    vendor_name: s.vendorName,
+    vendor_license: s.vendorLicense,
   }));
   await insertInBatches("discovery_market_signals", signalRows);
 

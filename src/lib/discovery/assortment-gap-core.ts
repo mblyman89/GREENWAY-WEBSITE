@@ -27,7 +27,9 @@
 // ---------------------------------------------------------------------------
 
 export type GapSignalLike = {
-  kind?: "statewide_mover" | "competitor_mover";
+  // Task I (I4): "type_mover" rows may be present in mixed signal lists;
+  // the runtime filter below only accepts null/statewide_mover rows.
+  kind?: "statewide_mover" | "competitor_mover" | "type_mover";
   product_name: string | null;
   inventory_type: string | null;
   brand: string | null;

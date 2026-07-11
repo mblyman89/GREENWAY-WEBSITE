@@ -976,3 +976,52 @@ itself a strain-by-brand run or junk; a junk by-brand still returns null (never 
 
 **Tests:** new `brand-core.test.ts` (+14) with fixtures mirroring real May-2026 names. Suite:
 995 passing. Owner: re-upload monthly zips to rebuild brand benchmarks with the clean extractor.
+
+### I4 — shipped notes
+
+**PLAN CORRECTION (never guess, verified against the real May-2026 delivery):** the original I4
+bullet assumed retail `Product.LicenseeId` names the creating vendor. Measured reality: over 26k
+joined retail lines it equals the RETAILER 99.7% of the time — useless as a vendor signal. The
+wholesale-sales brand bridge was also measured (1.1–2.1% of retail revenue) — insufficient. The
+shipped vendor route is MANIFESTS:
+
+- **Lot-level join (exact):** `ManifestHeader` (live rows only; deleted manifests skipped whole)
+  gives `ExternalManifestIdentifier → OriginLicenseNumber/Name`; `TransportedItems` (live rows)
+  ties that manifest to `InventoryExternalIdentifier`; the retailer's
+  `Inventory.ExternalIdentifier` equals it (case-insensitive). Measured: 306,998 lots resolve;
+  1,858 lots claimed by two different origins are TOMBSTONED (never guessed); 24.6% of retail
+  inventory rows hit.
+- **Brand→vendor bridge (conservative fallback):** `normalizeBrandKey(extractBrand(transported
+  description))` → dominant origin license, accepted only at ≥80% share across ≥3 distinct
+  manifests (one count per brand+manifest). 2,698 brands resolve.
+- **Measured coverage on the real May zip:** 53% of the top-10-per-type products get a vendor
+  (85 lot-level + 8 bridge of 175); the rest stay honestly null.
+
+**Transformer:** `parse.ts` un-skips `manifestheader`/`transporteditems`, adds verified header
+signatures + `mapManifestHeader`/`mapTransportedItem`, and carries `Inventory.ExternalIdentifier`
+(the lot id). `run.ts` crunches manifests BEFORE inventory (lot map must exist when inventory
+joins). `aggregate.ts` builds `lotVendor` (+conflict tombstones), the brand bridge, and
+`invVendor` (inventoryId→vendor license); every retail mover sighting records the lot's vendor;
+`resolveVendor` = dominant lot vendor (ties → smaller license) → bridge at thresholds → null.
+Vendor display name: licensee-table DBA → name → manifest origin name. NEW signal kind
+`type_mover`: top `TOP_TYPE_MOVERS_PER_TYPE` (10) products per inventory type, grouped over the
+FULL mover map (small types keep their leaders), revenue-desc; statewide + competitor movers gain
+the same `vendorName`/`vendorLicense` fields.
+
+**Persistence:** migration `0110_discovery_signal_vendor.sql` (owner applies MANUALLY) adds
+nullable `vendor_name`/`vendor_license` to `discovery_market_signals`; `kind` is plain text so
+`type_mover` needs no DDL. Sanitizer accepts the new kind, passes vendor fields through
+(pre-I4 payloads sanitize to null), counts `manifestRows`/`transportedItemRows`, and raises
+MAX_SIGNALS 2000→4000 (~25 types × 10 + existing 100 + 15/competitor headroom).
+
+**UI:** CCRS Benchmarks gains "Top products by type" — one section per inventory type (biggest
+type first), each a top-10 table with Product / Brand / Strain / **Vendor** (license in the
+title tooltip) / Units / Revenue / Median / Low(p25), via pure `type-movers-core.ts`
+(`groupTypeMovers`). Empty state tells the owner to re-upload after applying 0110.
+
+**Tests:** +29 (aggregator manifest path: lot join incl. case-insensitivity, deleted-skip,
+tombstoning, dominance + deterministic ties, bridge thresholds + dedupe, lot-beats-bridge,
+≤10/type emission, unattributed fold; `type-movers-core` grouping; sanitizer type_mover +
+vendor round-trip + pre-I4 compat; migration 0110 guard; parse detection/mappers with the real
+header rows; run.ts end-to-end with manifest zips). Suite: 1024 passing. Owner: apply 0110,
+then re-upload April + May zips to backfill vendor data and the per-type boards.
