@@ -770,3 +770,37 @@ near-misses stay distinct), carried/brand_carried(+count)/not_carried, no fuzzy 
 brand-less movers name-match only, revenue ordering, kind filtering (competitor_mover excluded,
 kind-less kept), nameless skipped, cap-with-full-counts, MAX_GAP_ROWS default, empty menu, junk
 numeric coercion. Suite: 958 passing.
+
+### S13 — New-vendor early detection (suggestion #5)
+
+**What it does:** a "New suppliers this month — first appearance in your uploads" section on
+Reports → Local Benchmarks flags suppliers present in this drop's statewide supplier benchmarks
+(`discovery_supplier_stats`, migration 0109 — no new migration) that are absent from EVERY prior
+uploaded month with supplier data — candidate new producers/processors to call before competitors
+lock in shelf space.
+
+**Pure core (`supplier-history-core.ts`):**
+- `supplierHistoryKey` — LICENSE NUMBER (stable WSLCB identity), fallback `id:<licensee_id>`;
+  the same S9 cross-month join rule.
+- `buildSupplierHistoryReport(latest, prior)` — first-appearance = present now, absent from all
+  prior months WITH supplier rows. Pre-0109 prior months (zero rows) are EXCLUDED from the
+  comparison (missing data ≠ absence) and returned in `priorWithoutSupplierData` for the UI's
+  re-upload prompt. `detectable=false` when NO prior month has supplier data — nothing is called
+  new when nothing can be compared. Revenue desc, `MAX_NEW_SUPPLIER_ROWS = 25` cap with pre-cap
+  counts; dba→name→Licensee-id display fallbacks; junk numerics coerced. Money minor units.
+
+**HONEST framing (in the UI copy, verbatim intent):** "first appearance in your uploads" is NOT
+"new to the market" — months the owner hasn't uploaded and suppliers below a prior month's
+top-100 rollup cap are invisible to the comparison. Rows are call-first candidates to verify,
+never certainties.
+
+**UI (`TransformerLocalBenchmarks.tsx`):** reuses the S9 dataset-list fetch; loads each older
+dataset's supplier stats; section renders only when this drop has supplier stats, older months
+exist, and detection is possible. Table: supplier + license, wholesale revenue, lines, statewide
+buyers, tracked-competitor count (green when >0), plus cap disclosure and the pre-0109 re-upload
+note listing excluded months.
+
+**Tests (`supplier-history-core.test.ts`):** +13 — key stability across licensee-id changes,
+license-less fallback join, first-appearance vs any-prior-month presence, no-prior-data and
+first-upload honesty (detectable=false), data-less month exclusion, revenue ordering,
+cap-with-full-counts, MAX default, display fallbacks + junk coercion. Suite: 971 passing.
