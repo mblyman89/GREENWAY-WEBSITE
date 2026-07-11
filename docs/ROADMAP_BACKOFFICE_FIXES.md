@@ -423,3 +423,25 @@ failure) and audits `withMarketMovers`.
 CI: `tests/compliance/market-leads-core.test.ts` (10 tests — mapping, roster fallback, unknown-kind
 / no-product drops, junk-coercion to null (never fabricate), deterministic sort, caps, digest
 dollars + n/a; **865 passing** total).
+
+### Task H — S5 (CCRS Benchmarks page: transformer statewide rollups + history) — DONE
+**S5 of 6.** The owner's Benchmarks surface for the monthly drop, with history rollups kept as
+confirmed ("yes let's keep history rollups please").
+**Pure core (`src/lib/discovery/benchmarks-history-core.ts`):** `buildTransformerHistory(datasets,
+benchmarks)` lines up each transformer dataset's OVERALL (scope=overall, scope_key=all) rows into
+one month-over-month history row — median retail / $/g / wholesale, retail units, retail revenue
+(rides in `avg_minor` per `benchmarkRows`), plus `attributedShare` = attributed_retail_lines /
+retail_lines (the delta-file honesty metric). NEVER GUESS: missing metric → null (UI "—"), never
+interpolated; negatives rejected; newest period first, null periods last.
+**Page (`/admin/discovery/benchmarks`):** when the active dataset has `ingest_kind='monthly_zip'`
+the page renders the new `TransformerBenchmarks` server component instead of the legacy
+category-scope view (whose scopes/metrics don't exist in transformer data): headline KPI cards
+(median retail/wholesale/$g, units+revenue), an honest "detail coverage" note explaining the
+monthly delta attribution, retail+wholesale price tables by inventory type, $/g by type, brand &
+strain pricing (top rows by sample size), velocity & mix (units+revenue by type/brand), and the
+**Month over month History table** across every ready transformer dataset. Dataset selector chips
+extracted into a shared `DatasetSelector` used by both views; legacy CSV datasets render exactly
+as before.
+CI: `tests/compliance/benchmarks-history-core.test.ts` (6 tests — metric mapping incl.
+revenue-in-avg_minor, non-overall/foreign-dataset exclusion, honest nulls, divide-by-zero guard,
+ordering, rounding + negative rejection; **871 passing** total).
