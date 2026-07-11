@@ -6,7 +6,8 @@
  * (migration 0106 `discovery_competitor_stats`) plus the verified WSLCB roster
  * (`discovery_competitors`) into the report page's local views:
  *
- *  - one row per tracked competitor (price bands, volume, top products), and
+ *  - one row per tracked competitor (price bands, volume, top products, and
+ *    S7 wholesale sourcing: spend + top suppliers), and
  *  - one honest area rollup per area (median of each store's median — the
  *    same labeled proxy the legacy view uses; a true pooled median would need
  *    raw rows the transformer deliberately does not upload).
@@ -47,6 +48,19 @@ export type CompetitorStatLike = {
     revenueMinor: number;
     medianUnitPriceMinor: number | null;
   }>;
+  // S7 (migration 0107): wholesale sourcing. Optional so rows persisted
+  // BEFORE the 0107 migration/transformer rerun keep working (they render as
+  // "no sourcing data", never a guess).
+  wholesale_line_count?: number;
+  wholesale_spend_minor?: number;
+  top_suppliers?: Array<{
+    licenseeId: string;
+    licenseNumber: string | null;
+    name: string | null;
+    dba: string | null;
+    lineCount: number;
+    spendMinor: number;
+  }>;
 };
 
 export type RosterEntryLike = {
@@ -82,6 +96,18 @@ export type LocalCompetitorStat = {
     units: number;
     revenueMinor: number;
     medianUnitPriceMinor: number | null;
+  }>;
+  /** S7: wholesale purchase lines observed this month (0 pre-0107 rows). */
+  wholesaleLineCount: number;
+  /** S7: what this competitor spent wholesale this month, minor units. */
+  wholesaleSpendMinor: number;
+  /** S7: top suppliers by spend (≤10). Display name falls back dba→name→id. */
+  topSuppliers: Array<{
+    licenseeId: string;
+    licenseNumber: string | null;
+    displayName: string;
+    lineCount: number;
+    spendMinor: number;
   }>;
 };
 
@@ -178,6 +204,17 @@ export function buildLocalBenchmarks(
       priceAvgMinor: minorOrNull(s.price_avg_minor),
       byType: Array.isArray(s.by_type) ? s.by_type : [],
       topProducts: Array.isArray(s.top_products) ? s.top_products : [],
+      wholesaleLineCount: toCount(s.wholesale_line_count),
+      wholesaleSpendMinor: Math.round(toCount(s.wholesale_spend_minor)),
+      topSuppliers: (Array.isArray(s.top_suppliers) ? s.top_suppliers : [])
+        .filter((sup) => typeof sup?.licenseeId === "string" && sup.licenseeId.length > 0)
+        .map((sup) => ({
+          licenseeId: sup.licenseeId,
+          licenseNumber: sup.licenseNumber ?? null,
+          displayName: sup.dba ?? sup.name ?? `Licensee ${sup.licenseeId}`,
+          lineCount: toCount(sup.lineCount),
+          spendMinor: Math.round(toCount(sup.spendMinor)),
+        })),
     });
   }
 

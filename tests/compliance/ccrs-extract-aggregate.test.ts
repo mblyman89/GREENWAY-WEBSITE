@@ -220,8 +220,9 @@ function header(
   sellerLicenseeId: string | null,
   saleType: SaleHeaderRow["saleType"],
   saleDate: string | null,
+  buyerLicenseeId: string | null = null,
 ): SaleHeaderRow {
-  return { saleHeaderId, sellerLicenseeId, buyerLicenseeId: null, saleType, saleDate };
+  return { saleHeaderId, sellerLicenseeId, buyerLicenseeId, saleType, saleDate };
 }
 
 function detail(
@@ -270,7 +271,9 @@ function runFixture(): AggregationResult {
   agg.addSaleHeader(header(H_SELF, "736", "retail", "2026-05-02"));
   agg.addSaleHeader(header(H_COMP, "900", "retail", "2026-05-10"));
   agg.addSaleHeader(header(H_ELSE, "901", "medical", "2026-05-30"));
-  agg.addSaleHeader(header(H_WS, "901", "wholesale", "2026-05-01"));
+  // Wholesale: seller 901 (Somewhere Else) → buyer 900 (the tracked competitor).
+  // S7: this is the sourcing edge — the competitor BOUGHT from 901 this month.
+  agg.addSaleHeader(header(H_WS, "901", "wholesale", "2026-05-01", "900"));
   agg.addSaleHeader(header(H_OTHER, "901", "other", "2026-05-15"));
 
   // Details.
@@ -429,6 +432,21 @@ describe("CcrsAggregator", () => {
     expect(c.retail.topProducts[0].medianUnitPriceMinor).toBe(2500);
   });
 
+  it("attributes wholesale purchases to the buying competitor's suppliers (S7)", () => {
+    const c = result.competitors[0];
+    // The H_WS line: 50 × $2.20 = $110.00 bought by COMP from licensee 901.
+    expect(c.wholesale.lineCount).toBe(1);
+    expect(c.wholesale.spendMinor).toBe(11_000);
+    expect(c.wholesale.topSuppliers).toHaveLength(1);
+    const sup = c.wholesale.topSuppliers[0];
+    expect(sup.licenseeId).toBe("901");
+    expect(sup.licenseNumber).toBe("999999");
+    expect(sup.name).toBe("SOMEWHERE ELSE LLC");
+    expect(sup.dba).toBeNull(); // real null in the fixture — never guessed
+    expect(sup.lineCount).toBe(1);
+    expect(sup.spendMinor).toBe(11_000);
+  });
+
   it("emits statewide_mover signals for NAMED products only, with p25/median bands", () => {
     const movers = result.signals.filter((s) => s.kind === "statewide_mover");
     // p1, p2, p3 sold at retail; the unattributed i9 line has no product name.
@@ -522,5 +540,147 @@ describe("CcrsAggregator", () => {
     }
     const r = agg.result();
     expect(r.signals.filter((s) => s.kind === "statewide_mover")).toHaveLength(100);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// S7 — competitor wholesale sourcing (buyer-side attribution)
+// ---------------------------------------------------------------------------
+
+describe("CcrsAggregator wholesale sourcing (S7)", () => {
+  it("creates a competitor entry for wholesale-only activity (no retail lines)", () => {
+    const agg = new CcrsAggregator({ selfLicenseNumber: SELF, trackedLicenseNumbers: [COMP] });
+    agg.addLicensee(licensee("900", COMP, "POT ZONE PO LLC", "POT ZONE", "PORT ORCHARD"));
+    agg.addLicensee(licensee("901", "999999", "SOMEWHERE ELSE LLC"));
+    // Only a wholesale purchase — the competitor sold nothing at retail.
+    agg.addSaleHeader(header("100", "901", "wholesale", "2026-05-03", "900"));
+    agg.addSaleDetail(detail("100", null, 10, 500)); // 10 × $5.00 = $50.00
+    const r = agg.result();
+    expect(r.competitors).toHaveLength(1);
+    const c = r.competitors[0];
+    expect(c.licenseNumber).toBe(COMP);
+    expect(c.retail.lineCount).toBe(0);
+    expect(c.retail.revenueMinor).toBe(0);
+    expect(c.wholesale.lineCount).toBe(1);
+    expect(c.wholesale.spendMinor).toBe(5000);
+    expect(c.wholesale.topSuppliers[0].licenseeId).toBe("901");
+    expect(c.wholesale.topSuppliers[0].name).toBe("SOMEWHERE ELSE LLC");
+  });
+
+  it("NEVER attributes wholesale purchases to self (self excluded as buyer)", () => {
+    const agg = new CcrsAggregator({
+      selfLicenseNumber: SELF,
+      trackedLicenseNumbers: [SELF, COMP], // self in list on purpose
+    });
+    agg.addLicensee(licensee("736", SELF, "LYMAN'S MARIJUANA L.L.C.", "GREENWAY MARIJUANA"));
+    agg.addLicensee(licensee("900", COMP, "POT ZONE PO LLC"));
+    agg.addLicensee(licensee("901", "999999", "SOMEWHERE ELSE LLC"));
+    // Greenway itself buys wholesale — must NOT create a competitor entry.
+    agg.addSaleHeader(header("100", "901", "wholesale", "2026-05-03", "736"));
+    agg.addSaleDetail(detail("100", null, 10, 500));
+    const r = agg.result();
+    expect(r.competitors).toHaveLength(0);
+    // The line still counts in the honest statewide wholesale totals.
+    expect(r.totals.wholesaleLines).toBe(1);
+  });
+
+  it("ignores wholesale headers whose buyer is not tracked", () => {
+    const agg = new CcrsAggregator({ selfLicenseNumber: SELF, trackedLicenseNumbers: [COMP] });
+    agg.addLicensee(licensee("900", COMP, "POT ZONE PO LLC"));
+    agg.addLicensee(licensee("901", "999999", "SOMEWHERE ELSE LLC"));
+    agg.addLicensee(licensee("902", "888888", "ANOTHER STORE LLC"));
+    // 901 sells to 902 — neither buyer nor seller is on the roster.
+    agg.addSaleHeader(header("100", "901", "wholesale", "2026-05-03", "902"));
+    agg.addSaleDetail(detail("100", null, 10, 500));
+    const r = agg.result();
+    expect(r.competitors).toHaveLength(0);
+    expect(r.totals.wholesaleLines).toBe(1);
+  });
+
+  it("accumulates spend per supplier across headers and lines (qty × price − discount)", () => {
+    const agg = new CcrsAggregator({ selfLicenseNumber: SELF, trackedLicenseNumbers: [COMP] });
+    agg.addLicensee(licensee("900", COMP, "POT ZONE PO LLC"));
+    agg.addLicensee(licensee("901", "999999", "SUPPLIER A LLC"));
+    agg.addLicensee(licensee("902", "888888", "SUPPLIER B LLC", "B FARMS"));
+    agg.addSaleHeader(header("100", "901", "wholesale", "2026-05-03", "900"));
+    agg.addSaleHeader(header("101", "901", "wholesale", "2026-05-10", "900"));
+    agg.addSaleHeader(header("102", "902", "wholesale", "2026-05-12", "900"));
+    agg.addSaleDetail(detail("100", null, 10, 500)); // A: $50.00
+    agg.addSaleDetail(detail("100", null, 4, 250, 100)); // A: $10.00 − $1.00 = $9.00
+    agg.addSaleDetail(detail("101", null, 2, 1000)); // A: $20.00
+    agg.addSaleDetail(detail("102", null, 1, 300, 9999)); // B: clamps to $0.00
+    const r = agg.result();
+    const c = r.competitors[0];
+    expect(c.wholesale.lineCount).toBe(4);
+    expect(c.wholesale.spendMinor).toBe(7900); // 5000 + 900 + 2000 + 0
+    // Suppliers sorted by spend desc; B kept even at $0 spend (real lines).
+    expect(c.wholesale.topSuppliers.map((s) => s.licenseeId)).toEqual(["901", "902"]);
+    const a = c.wholesale.topSuppliers[0];
+    expect(a.spendMinor).toBe(7900); // all of it — B's line clamped to $0
+    expect(a.lineCount).toBe(3);
+    const b = c.wholesale.topSuppliers[1];
+    expect(b.spendMinor).toBe(0);
+    expect(b.lineCount).toBe(1);
+    expect(b.dba).toBe("B FARMS");
+  });
+
+  it("caps topSuppliers at 10, keeping the highest-spend suppliers", () => {
+    const agg = new CcrsAggregator({ selfLicenseNumber: SELF, trackedLicenseNumbers: [COMP] });
+    agg.addLicensee(licensee("900", COMP, "POT ZONE PO LLC"));
+    for (let i = 0; i < 14; i += 1) {
+      agg.addLicensee(licensee(`${1000 + i}`, `${700000 + i}`, `SUPPLIER ${String(i).padStart(2, "0")} LLC`));
+      agg.addSaleHeader(header(`${200 + i}`, `${1000 + i}`, "wholesale", "2026-05-05", "900"));
+      // Distinct spend per supplier so ordering is deterministic (i=13 highest).
+      agg.addSaleDetail(detail(`${200 + i}`, null, 1, 1000 + i * 100));
+    }
+    const r = agg.result();
+    const c = r.competitors[0];
+    expect(c.wholesale.lineCount).toBe(14);
+    expect(c.wholesale.topSuppliers).toHaveLength(10);
+    expect(c.wholesale.topSuppliers[0].name).toBe("SUPPLIER 13 LLC");
+    expect(c.wholesale.topSuppliers[0].spendMinor).toBe(2300);
+    // The 4 lowest-spend suppliers (i=0..3) fell off; the total keeps them.
+    expect(c.wholesale.topSuppliers.some((s) => s.name === "SUPPLIER 00 LLC")).toBe(false);
+    expect(c.wholesale.spendMinor).toBe(14 * 1000 + 100 * ((13 * 14) / 2));
+  });
+
+  it("keeps supplier identity honest when the licensee row is missing (nulls, never guessed)", () => {
+    const agg = new CcrsAggregator({ selfLicenseNumber: SELF, trackedLicenseNumbers: [COMP] });
+    agg.addLicensee(licensee("900", COMP, "POT ZONE PO LLC"));
+    // Seller 903 has NO licensee row in this drop.
+    agg.addSaleHeader(header("100", "903", "wholesale", "2026-05-03", "900"));
+    agg.addSaleDetail(detail("100", null, 1, 700));
+    const r = agg.result();
+    const sup = r.competitors[0].wholesale.topSuppliers[0];
+    expect(sup.licenseeId).toBe("903");
+    expect(sup.licenseNumber).toBeNull();
+    expect(sup.name).toBeNull();
+    expect(sup.dba).toBeNull();
+    expect(sup.spendMinor).toBe(700);
+  });
+
+  it("does not credit retail buyers: sourcing only flows through wholesale headers", () => {
+    const agg = new CcrsAggregator({ selfLicenseNumber: SELF, trackedLicenseNumbers: [COMP] });
+    agg.addLicensee(licensee("900", COMP, "POT ZONE PO LLC"));
+    agg.addLicensee(licensee("901", "999999", "SOMEWHERE ELSE LLC"));
+    // A retail header that (oddly) carries the competitor as buyer — ignored.
+    agg.addSaleHeader(header("100", "901", "retail", "2026-05-03", "900"));
+    agg.addSaleDetail(detail("100", null, 1, 700));
+    const r = agg.result();
+    expect(r.competitors).toHaveLength(0);
+    expect(r.totals.retailLines).toBe(1);
+  });
+
+  it("round-trips a 9-digit supplier licensee id through the packed header (real magnitudes)", () => {
+    const agg = new CcrsAggregator({ selfLicenseNumber: SELF, trackedLicenseNumbers: [COMP] });
+    agg.addLicensee(licensee("900", COMP, "POT ZONE PO LLC"));
+    agg.addLicensee(licensee("123456789", "777777", "BIG ID FARMS LLC"));
+    agg.addSaleHeader(header("327733904", "123456789", "wholesale", "2026-05-03", "900"));
+    agg.addSaleDetail(detail("327733904", null, 3, 220));
+    const r = agg.result();
+    const sup = r.competitors[0].wholesale.topSuppliers[0];
+    expect(sup.licenseeId).toBe("123456789");
+    expect(sup.name).toBe("BIG ID FARMS LLC");
+    expect(sup.spendMinor).toBe(660);
   });
 });

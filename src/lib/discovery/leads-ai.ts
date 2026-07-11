@@ -31,7 +31,12 @@ import { aiHeavyModelId, aiMode } from "@/lib/ai/router";
 import { defineSchema } from "@/lib/ai/schema";
 import type { DiscoveryVendorLead, DiscoveryProductLead } from "@/lib/discovery/types";
 import type { CompetitorProfile, AreaBenchmark } from "@/lib/discovery/types";
-import { formatMarketMoversDigest, type MarketMoverLeads } from "@/lib/discovery/market-leads-core";
+import {
+  formatMarketMoversDigest,
+  formatSupplierLeadsDigest,
+  type MarketMoverLeads,
+  type SupplierLead,
+} from "@/lib/discovery/market-leads-core";
 
 export { isAiConfigured };
 
@@ -142,6 +147,12 @@ export type LeadsAdvisorInput = {
    * REAL p25 undercut bands so it can recommend concrete prices to beat.
    */
   marketMovers?: MarketMoverLeads;
+  /**
+   * Optional: who the tracked competitors BUY from, from the latest monthly
+   * CCRS transformer drop (Task H S7, buildSupplierLeads). Suppliers serving
+   * multiple tracked competitors are flagged as PRIORITY vendor leads.
+   */
+  supplierLeads?: SupplierLead[];
 };
 
 function money(minor: number | null | undefined): string {
@@ -156,7 +167,7 @@ function marginPct(costMinor: number | null | undefined, retailMinor: number | n
 
 /** Build the grounded fact block. Returns null when there is nothing to analyze. */
 export function buildLeadsDigest(input: LeadsAdvisorInput): string | null {
-  const { vendorLeads, productLeads, competitors, areas, marketMovers } = input;
+  const { vendorLeads, productLeads, competitors, areas, marketMovers, supplierLeads } = input;
   if (vendorLeads.length === 0 && productLeads.length === 0) return null;
 
   const parts: string[] = [];
@@ -243,6 +254,13 @@ export function buildLeadsDigest(input: LeadsAdvisorInput): string | null {
     if (moversDigest) parts.push(moversDigest);
   }
 
+  // Optional grounded competitor-supplier leads from the same transformer drop
+  // (S7: who the tracked competitors buy from; multi-competitor = priority).
+  if (supplierLeads && supplierLeads.length > 0) {
+    const suppliersDigest = formatSupplierLeadsDigest(supplierLeads);
+    if (suppliersDigest) parts.push(suppliersDigest);
+  }
+
   return parts.join("\n\n");
 }
 
@@ -293,6 +311,7 @@ const SYSTEM = [
   "Reason ONLY from the fields you are given. NEVER invent prices, licenses, demand figures, or facts. When a lead is missing key data (no cost, no COA/license, no demand evidence), say so plainly and treat it as lower confidence.",
   "Use the market benchmarks as context (e.g., a product's estimated retail vs. the area median; whether a vendor already supplies competitors) but do not extrapolate beyond the numbers provided.",
   "When STATEWIDE TOP MOVERS or COMPETITOR TOP MOVERS are provided, treat them as the strongest demand evidence available: flag pipeline leads that match a mover, call out proven movers the pipeline is missing, and when recommending a price to win on a mover use its provided 'undercut_at_or_below' (the real 25th-percentile market price) — never invent a different price, and if it is 'n/a' say the price sample was too thin to set a target.",
+  "When COMPETITOR SUPPLIERS are provided, treat any supplier marked PRIORITY=multi-competitor-supplier as a PRIORITY vendor lead: they demonstrably sell to several tracked local competitors, so recommend the buyer contact them first (mention which competitors they supply and the observed spend). Flag when a pipeline vendor lead matches a listed supplier (strong validation) and when a heavy multi-competitor supplier is missing from the pipeline entirely. Spend figures cover only the provided monthly drop — never extrapolate them to a longer period.",
   "Be concrete and buyer-focused. Do not make medical or health claims. This is advisory only — you never place orders or change data.",
 ].join("\n");
 

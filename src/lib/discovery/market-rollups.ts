@@ -2,7 +2,7 @@
  * src/lib/discovery/market-rollups.ts
  *
  * Server-side persistence + loaders for the monthly CCRS statewide-extract
- * TRANSFORMER rollups (Task H, migration 0106). The transformer runs in the
+ * TRANSFORMER rollups (Task H, migrations 0106 + 0107). The transformer runs in the
  * browser (see ccrs-extract/) on the dragged-in monthly zip and posts ONLY the
  * compact AggregationResult (~1 MB JSON for a real month) — never raw rows.
  *
@@ -136,6 +136,28 @@ export function sanitizeAggregationResult(
     if (byTypeIn.length > 100 || topProductsIn.length > 100) {
       return { ok: false, error: "Competitor breakdown too large." };
     }
+    // S7 wholesale sourcing block. BACKWARD COMPATIBLE: a payload from an
+    // older transformer build has no `wholesale` key — that sanitizes to
+    // zeros/empty (honest "no sourcing data"), never a rejection.
+    const wholesale = (c.wholesale ?? {}) as Record<string, unknown>;
+    const topSuppliersIn = Array.isArray(wholesale.topSuppliers) ? wholesale.topSuppliers : [];
+    if (topSuppliersIn.length > 20) {
+      return { ok: false, error: "Competitor supplier list too large." };
+    }
+    const topSuppliers: AggregationResult["competitors"][number]["wholesale"]["topSuppliers"] = [];
+    for (const s0 of topSuppliersIn) {
+      const s = (s0 ?? {}) as Record<string, unknown>;
+      const supplierLicenseeId = strOrNull(s.licenseeId, 32);
+      if (!supplierLicenseeId) return { ok: false, error: "Malformed supplier row." };
+      topSuppliers.push({
+        licenseeId: supplierLicenseeId,
+        licenseNumber: strOrNull(s.licenseNumber, 32),
+        name: strOrNull(s.name),
+        dba: strOrNull(s.dba),
+        lineCount: intOrNull(s.lineCount) ?? 0,
+        spendMinor: Math.round(num(s.spendMinor)),
+      });
+    }
     competitors.push({
       licenseNumber,
       licenseeId,
@@ -165,6 +187,11 @@ export function sanitizeAggregationResult(
             medianUnitPriceMinor: intOrNull(p.medianUnitPriceMinor),
           };
         }),
+      },
+      wholesale: {
+        lineCount: intOrNull(wholesale.lineCount) ?? 0,
+        spendMinor: Math.round(num(wholesale.spendMinor)),
+        topSuppliers,
       },
     });
   }
@@ -363,6 +390,10 @@ export async function persistAggregationResult(
     price_avg_minor: c.retail.unitPrice?.avgMinor ?? null,
     by_type: c.retail.byType,
     top_products: c.retail.topProducts,
+    // S7 (migration 0107): wholesale sourcing.
+    wholesale_line_count: c.wholesale.lineCount,
+    wholesale_spend_minor: Math.round(c.wholesale.spendMinor),
+    top_suppliers: c.wholesale.topSuppliers,
   }));
   await insertInBatches("discovery_competitor_stats", compRows);
 

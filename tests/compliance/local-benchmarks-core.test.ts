@@ -163,4 +163,63 @@ describe("buildLocalBenchmarks", () => {
     expect(po.retailMedianMinor).toBe(3000);
     expect(po.retailUnits).toBe(150);
   });
+
+  // --- S7: wholesale sourcing passthrough -----------------------------------
+
+  it("passes wholesale sourcing through with dba→name→id display fallbacks (S7)", () => {
+    const { competitors } = buildLocalBenchmarks(
+      [
+        stat({
+          license_number: "111111",
+          wholesale_line_count: 42,
+          wholesale_spend_minor: 123_456,
+          top_suppliers: [
+            { licenseeId: "901", licenseNumber: "777777", name: "A LLC", dba: "A FARMS", lineCount: 30, spendMinor: 100_000 },
+            { licenseeId: "902", licenseNumber: null, name: "B LLC", dba: null, lineCount: 10, spendMinor: 20_000 },
+            { licenseeId: "903", licenseNumber: null, name: null, dba: null, lineCount: 2, spendMinor: 3_456 },
+          ],
+        }),
+      ],
+      ROSTER,
+    );
+    const c = competitors[0];
+    expect(c.wholesaleLineCount).toBe(42);
+    expect(c.wholesaleSpendMinor).toBe(123_456);
+    expect(c.topSuppliers.map((s) => s.displayName)).toEqual(["A FARMS", "B LLC", "Licensee 903"]);
+    expect(c.topSuppliers[0].licenseNumber).toBe("777777");
+    expect(c.topSuppliers[0].spendMinor).toBe(100_000);
+  });
+
+  it("defaults to zero/empty sourcing for pre-0107 rows (S7, never guessed)", () => {
+    // A row persisted before migration 0107 has none of the S7 fields.
+    const { competitors } = buildLocalBenchmarks([stat({ license_number: "111111" })], ROSTER);
+    const c = competitors[0];
+    expect(c.wholesaleLineCount).toBe(0);
+    expect(c.wholesaleSpendMinor).toBe(0);
+    expect(c.topSuppliers).toEqual([]);
+  });
+
+  it("coerces junk sourcing numbers and drops suppliers without an id (S7)", () => {
+    const { competitors } = buildLocalBenchmarks(
+      [
+        stat({
+          license_number: "111111",
+          wholesale_line_count: Number.NaN,
+          wholesale_spend_minor: -5,
+          top_suppliers: [
+            { licenseeId: "", licenseNumber: null, name: "NO ID LLC", dba: null, lineCount: 1, spendMinor: 100 },
+            { licenseeId: "901", licenseNumber: null, name: "OK LLC", dba: null, lineCount: Number.NaN, spendMinor: -10 },
+          ],
+        }),
+      ],
+      ROSTER,
+    );
+    const c = competitors[0];
+    expect(c.wholesaleLineCount).toBe(0);
+    expect(c.wholesaleSpendMinor).toBe(0);
+    expect(c.topSuppliers).toHaveLength(1);
+    expect(c.topSuppliers[0].displayName).toBe("OK LLC");
+    expect(c.topSuppliers[0].lineCount).toBe(0);
+    expect(c.topSuppliers[0].spendMinor).toBe(0);
+  });
 });

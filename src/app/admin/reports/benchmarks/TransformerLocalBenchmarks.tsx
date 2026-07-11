@@ -12,12 +12,18 @@
  *  - Per-competitor table: price bands (p25/median/p75/avg), volume, revenue.
  *  - Per-competitor top products (what each store actually moves, with the
  *    median price they sell it at).
+ *  - S7: who competitors BUY from — per-competitor top wholesale suppliers
+ *    (migration 0107) and the shared suppliers serving several tracked stores.
+ *    Wholesale SaleHeaders carry both sides of the transfer (seller LicenseeId
+ *    → buyer SoldToLicenseeId), so supplier attribution is exact for every
+ *    wholesale line in the drop. (This corrects the earlier S6 footnote that
+ *    called sourcing "not derivable from a monthly delta" — the identities ARE
+ *    in the file; only PRODUCT-level joins are delta-limited.)
  *
  * NEVER GUESS: missing price bands render "—"; the transformer's stats are
  * competitor-only by construction (the aggregator structurally excludes the
- * owner's license — the POS owns Greenway's own numbers). The monthly file is
- * a delta, so sourcing (who competitors buy from) is not derivable from it —
- * that remains a legacy full-extract feature and we say so instead of faking it.
+ * owner's license — the POS owns Greenway's own numbers). Suppliers a header
+ * couldn't name stay uncounted rather than invented.
  */
 import { formatMinorCurrency } from "@/lib/leafly/format";
 import { ReportTable, type ReportColumn } from "@/components/admin/reports/ReportTable";
@@ -30,6 +36,7 @@ import {
   type LocalAreaStat,
   type LocalCompetitorStat,
 } from "@/lib/discovery/local-benchmarks-core";
+import { buildSupplierLeads, type SupplierLead } from "@/lib/discovery/market-leads-core";
 
 function money(minor: number | null | undefined): string {
   if (minor == null) return "—";
@@ -153,6 +160,82 @@ function TopProductsBlocks({ competitors }: { competitors: LocalCompetitorStat[]
   );
 }
 
+function SupplierBlocks({ competitors }: { competitors: LocalCompetitorStat[] }) {
+  const withSuppliers = competitors.filter((c) => c.topSuppliers.length > 0);
+  if (withSuppliers.length === 0) {
+    return (
+      <p className="text-sm text-white/40">
+        No wholesale purchases attributed to these stores in this drop. (Datasets uploaded before the
+        sourcing update need a re-upload of the monthly zip to backfill suppliers.)
+      </p>
+    );
+  }
+  return (
+    <div className="grid gap-4 lg:grid-cols-2">
+      {withSuppliers.map((c) => (
+        <div key={c.licenseNumber} className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <span className="text-sm font-bold text-white/90">{c.tradename}</span>
+            <span className="text-xs text-white/40">
+              {money(c.wholesaleSpendMinor)} wholesale · {num(c.wholesaleLineCount)} lines
+            </span>
+          </div>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-white/10 text-left text-[0.65rem] uppercase tracking-wide text-white/40">
+                <th className="py-1.5 pr-2">Supplier</th>
+                <th className="px-2 py-1.5 text-right">Lines</th>
+                <th className="py-1.5 pl-2 text-right">Spend</th>
+              </tr>
+            </thead>
+            <tbody>
+              {c.topSuppliers.map((s) => (
+                <tr key={s.licenseeId} className="border-b border-white/5">
+                  <td className="max-w-[16rem] truncate py-1.5 pr-2 text-white/80" title={s.displayName}>
+                    {s.displayName}
+                    {s.licenseNumber ? (
+                      <span className="ml-1 text-[10px] text-white/30">{s.licenseNumber}</span>
+                    ) : null}
+                  </td>
+                  <td className="px-2 py-1.5 text-right text-white/55">{num(s.lineCount)}</td>
+                  <td className="py-1.5 pl-2 text-right font-semibold text-[#7ed957]">{money(s.spendMinor)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SharedSuppliersTable({ suppliers }: { suppliers: SupplierLead[] }) {
+  const columns: ReportColumn<SupplierLead & Record<string, unknown>>[] = [
+    {
+      key: "displayName",
+      header: "Supplier",
+      emphasis: true,
+      render: (r) => (
+        <span>
+          {r.displayName}
+          {r.licenseNumber ? <span className="ml-1 text-white/30">{r.licenseNumber}</span> : null}
+        </span>
+      ),
+    },
+    { key: "buyerCount", header: "Stores supplied", align: "right", emphasis: true, render: (r) => r.buyerCount.toLocaleString() },
+    { key: "buyerNames", header: "Who they supply", render: (r) => r.buyerNames.slice(0, 5).join(", ") },
+    { key: "totalLineCount", header: "Lines", align: "right", render: (r) => num(r.totalLineCount) },
+    { key: "totalSpendMinor", header: "Observed spend", align: "right", render: (r) => money(r.totalSpendMinor) },
+  ];
+  return (
+    <ReportTable
+      columns={columns}
+      rows={suppliers as Array<SupplierLead & Record<string, unknown>>}
+      emptyLabel="No suppliers serving multiple tracked stores in this drop."
+    />
+  );
+}
+
 export async function TransformerLocalBenchmarks({
   dataset,
   roster,
@@ -162,6 +245,10 @@ export async function TransformerLocalBenchmarks({
 }) {
   const stats = await listCompetitorStats(dataset.id);
   const { competitors, areas } = buildLocalBenchmarks(stats, roster);
+  // S7: shared suppliers — vendors serving 2+ tracked competitors this month.
+  const sharedSuppliers = buildSupplierLeads(stats, roster).filter(
+    (s) => s.suppliesMultipleCompetitors,
+  );
 
   const portOrchard = competitors.filter((c) => c.area === "port_orchard");
   const poArea = areas.find((a) => a.area === "port_orchard") ?? null;
@@ -228,13 +315,31 @@ export async function TransformerLocalBenchmarks({
         <TopProductsBlocks competitors={competitors} />
       </Section>
 
+      {/* S7: who competitors buy from */}
+      <Section
+        title="Who competitors buy from"
+        subtitle="Each store's top wholesale suppliers by spend this month — real seller-to-buyer transfers from the CCRS drop, never inferred."
+      >
+        <SupplierBlocks competitors={competitors} />
+      </Section>
+
+      {sharedSuppliers.length > 0 ? (
+        <Section
+          title="Shared suppliers — priority vendor leads"
+          subtitle="Vendors selling to two or more of your tracked competitors this month. Proven local demand: these are the first calls to make. The AI leads advisor flags them automatically."
+        >
+          <SharedSuppliersTable suppliers={sharedSuppliers} />
+        </Section>
+      ) : null}
+
       <p className="text-xs text-white/30">
         Derived from the monthly CCRS drop &ldquo;{dataset.label}&rdquo; — computed in your browser at
         upload; only rollups are stored. Product-level detail covers lines whose joins resolved inside
         the same monthly file (a monthly drop is a delta); totals count every line, and nothing is
-        guessed to fill gaps. Vendor-sourcing analysis requires a full extract (legacy CSV upload) —
-        it is not derivable from a monthly delta, so it isn&apos;t shown here. Public Records data is
-        for internal buying/pricing decisions only (RCW 42.56.070(8)).
+        guessed to fill gaps. Supplier attribution comes straight from each wholesale transfer&apos;s
+        seller and buyer licensees, which the monthly file carries in full — but it reflects only this
+        month&apos;s reported wholesale activity, not a competitor&apos;s all-time vendor list. Public
+        Records data is for internal buying/pricing decisions only (RCW 42.56.070(8)).
       </p>
     </div>
   );

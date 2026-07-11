@@ -468,3 +468,67 @@ exactly as before.
 CI: `tests/compliance/local-benchmarks-core.test.ts` (7 tests — roster join + fallbacks, self
 exclusion, junk coercion, ordering, median-of-medians area proxy, null-median volume handling;
 **878 passing** total).
+
+### Task H — S7 (competitor wholesale sourcing: top suppliers + AI priority vendor leads) — DONE
+**Owner request (verbatim):** "Let's build S7. 10 top suppliers per competitor sounds great. And
+yes, the ai advisor should call out vendors that supply multiple competitors as priority leads.
+Please proceed, follow the standing rules never guess and no cutting corners. Be handoff ready.
+Complete the full task from start to finish then report back to me when it's done. Thank you! Also
+at the end, with your final report, will you tell me if there is anything else you would add from a
+professional expert standpoint? You are smarter than I, what would you do with this information?
+Please proceed."
+**Honesty correction (S6 → S7):** S6's footnote claimed vendor sourcing "is not derivable from a
+monthly delta." That was WRONG about the data and only true about the code at the time: wholesale
+SaleHeaders in the monthly extract carry BOTH sides of every transfer (seller `LicenseeId` → buyer
+`SoldToLicenseeId`), and the licensee table ships whole every month, so supplier identity resolves
+exactly. Only PRODUCT-level joins are delta-limited. S6's aggregator simply never looked at the
+buyer column. S7 fixes the code and replaces the footnote with the honest caveat: sourcing reflects
+this month's reported wholesale activity only, not a competitor's all-time vendor list.
+**Aggregator (`ccrs-extract/aggregate.ts`):** headerMap still folds each sale header to ONE
+Float64 — now packed as `class(1 bit) + sellerSlot(8 bits) + buyerSlot(8 bits) + supplier
+licenseeId(36 bits)`; max packed value is exactly 2^53−1 (verified round-trip at all extremes), so
+memory is unchanged. `addLicensee` additionally keeps a compact identity map for EVERY licensee
+(~1.7k rows/month) so suppliers get real names; roster slots capped at 255 (packing bound, roster
+is 39). `addSaleDetail` credits wholesale lines whose BUYER is tracked to that competitor's
+supplier accumulator (lineCount + spendMinor = qty × unit − discount, clamped ≥ 0); competitor
+entries are now created for wholesale-only activity too (shared `competitorAcc` helper). SELF is
+structurally excluded as buyer (never in the tracked set). `CompetitorStat` gains
+`wholesale { lineCount, spendMinor, topSuppliers(≤10 by spend, TOP_SUPPLIERS_PER_COMPETITOR) }`;
+supplier identity missing from the drop → honest nulls, never guessed.
+**Migration `0107_discovery_competitor_suppliers.sql` (idempotent — OWNER APPLIES MANUALLY):**
+`discovery_competitor_stats` + `wholesale_line_count int default 0`, `wholesale_spend_minor bigint
+default 0`, `top_suppliers jsonb default '[]'`. Pre-S7 rows default to zero/empty (honest "no
+sourcing captured"); re-uploading the monthly zip backfills. RLS unchanged (row-level, 0106).
+**Server boundary (`market-rollups.ts`):** `sanitizeAggregationResult` validates the wholesale
+block — BACKWARD COMPATIBLE (payload without `wholesale` → zeros/empty, not rejected), supplier
+rows require `licenseeId`, list capped at 20, junk numbers coerced; `persistAggregationResult`
+writes the three new columns. `DiscoveryCompetitorStatRow` extended in types.ts.
+**Pure lead logic (`market-leads-core.ts`):** `buildSupplierLeads(stats, roster)` inverts
+per-competitor suppliers into vendor leads — dedup by supplier licenseeId across competitors,
+buyerCount + buyer tradenames (spend desc), total spend/lines, `suppliesMultipleCompetitors`
+(≥2 buyers) = PRIORITY; sort buyerCount desc → spend desc → name asc, cap 15; display name
+dba → name → "Licensee <id>", never invented. `formatSupplierLeadsDigest` renders the grounded AI
+block with explicit `PRIORITY=multi-competitor-supplier` markers and a "this drop only" framing.
+**Reports → Local Benchmarks (`TransformerLocalBenchmarks.tsx`):** new "Who competitors buy from"
+section (per-competitor top-supplier tables with spend + lines) and "Shared suppliers — priority
+vendor leads" table (vendors serving 2+ tracked stores); footnote rewritten to the corrected,
+honest caveat. `local-benchmarks-core.ts` passes the sourcing fields through (pre-0107 rows →
+zero/empty, junk coerced, id-less suppliers dropped).
+**Leads page (`MarketMoversSection.tsx`):** new "Shared suppliers — priority vendor leads" card
+(multi-competitor suppliers only; full breakdown lives on Reports). Best-effort as before.
+**AI advisor (`leads-ai.ts` + `actions.ts`):** `LeadsAdvisorInput` gains optional `supplierLeads`;
+digest appends the supplier block; SYSTEM prompt instructs: treat PRIORITY multi-competitor
+suppliers as priority vendor leads (contact first, cite which competitors they supply + observed
+spend), flag pipeline vendor leads matching a listed supplier, call out heavy shared suppliers
+missing from the pipeline, and never extrapolate one month's spend. `analyzeLeadsAction` loads
+supplier leads best-effort alongside movers and audits `withSupplierLeads`.
+**Validation:** full run against the REAL May 2026 zip (14.05M inventory / 10.74M headers / 10.82M
+details) via `scripts/validate-ccrs-aggregate.mjs` (now prints per-competitor suppliers + shared
+suppliers) — memory bounded, self never appears as buyer, supplier names resolve via the monthly
+licensee table.
+CI: 24 new tests — aggregator S7 block (buyer attribution incl. wholesale-only competitors, self
+exclusion as buyer, untracked-buyer/retail-buyer ignore, spend math + clamp, top-10 cap, honest
+null identity, 9-digit id round-trip) + sanitize round-trip/backward-compat/caps/junk + supplier
+leads build/digest + local-benchmarks passthrough (**902 passing** total).
+**OWNER REMINDER: apply migration `0107_discovery_competitor_suppliers.sql` manually, then
+re-upload the May monthly zip so supplier data backfills.**

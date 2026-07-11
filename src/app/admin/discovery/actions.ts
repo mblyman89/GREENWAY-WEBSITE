@@ -33,9 +33,15 @@ import {
   sanitizeAggregationResult,
   persistAggregationResult,
   getLatestTransformerDataset,
+  listCompetitorStats,
   listMarketSignals,
 } from "@/lib/discovery/market-rollups";
-import { buildMarketMoverLeads, type MarketMoverLeads } from "@/lib/discovery/market-leads-core";
+import {
+  buildMarketMoverLeads,
+  buildSupplierLeads,
+  type MarketMoverLeads,
+  type SupplierLead,
+} from "@/lib/discovery/market-leads-core";
 import { enrichKbFromCcrsDataset } from "@/lib/kb/enrich-from-discovery";
 import { listVendorLeads, listProductLeads } from "@/lib/discovery/store";
 import { listDatasets } from "@/lib/discovery/ingest";
@@ -781,23 +787,29 @@ export async function analyzeLeadsAction(): Promise<LeadsAdviceResult> {
     // Optional statewide + competitor top movers from the latest monthly
     // transformer drop (Task H S4). Best-effort: no dataset → no movers block.
     let marketMovers: MarketMoverLeads | undefined;
+    let supplierLeads: SupplierLead[] | undefined;
     try {
       const transformerDataset = await getLatestTransformerDataset();
       if (transformerDataset) {
-        const [signals, roster] = await Promise.all([
+        const [signals, stats, roster] = await Promise.all([
           listMarketSignals(transformerDataset.id),
+          listCompetitorStats(transformerDataset.id),
           listCompetitors(),
         ]);
         if (signals.length > 0) {
           marketMovers = buildMarketMoverLeads(signals, roster);
         }
+        // S7: who the tracked competitors buy from (multi-competitor suppliers
+        // are flagged as priority vendor leads in the AI digest).
+        const suppliers = buildSupplierLeads(stats, roster);
+        if (suppliers.length > 0) supplierLeads = suppliers;
       }
     } catch {
-      // Non-fatal — proceed without the movers block.
+      // Non-fatal — proceed without the movers/supplier blocks.
     }
 
     const advice = await generateLeadsAdvice(
-      { vendorLeads, productLeads, competitors, areas, marketMovers },
+      { vendorLeads, productLeads, competitors, areas, marketMovers, supplierLeads },
       { actorId: session.userId, actorEmail: session.email },
     );
 
@@ -814,6 +826,7 @@ export async function analyzeLeadsAction(): Promise<LeadsAdviceResult> {
         withMarketMovers: Boolean(
           marketMovers && (marketMovers.statewide.length > 0 || marketMovers.competitor.length > 0),
         ),
+        withSupplierLeads: Boolean(supplierLeads && supplierLeads.length > 0),
       },
     });
 

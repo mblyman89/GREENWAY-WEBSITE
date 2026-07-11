@@ -162,12 +162,46 @@ console.log("\ncompetitors (revenue desc):");
 for (const c of result.competitors) {
   console.log(
     `  ${c.licenseNumber} ${c.dba ?? c.name}: $${(c.retail.revenueMinor / 100).toFixed(2)} rev, ` +
-      `${c.retail.lineCount} lines, median $${((c.retail.unitPrice?.medianMinor ?? 0) / 100).toFixed(2)}`,
+      `${c.retail.lineCount} lines, median $${((c.retail.unitPrice?.medianMinor ?? 0) / 100).toFixed(2)}, ` +
+      `wholesale $${(c.wholesale.spendMinor / 100).toFixed(2)} / ${c.wholesale.lineCount} lines / ` +
+      `${c.wholesale.topSuppliers.length} suppliers`,
   );
 }
 if (result.competitors.some((c) => c.licenseNumber === SELF)) {
   console.error("FAIL: self license leaked into competitor stats");
   process.exit(1);
+}
+
+// S7: per-competitor top suppliers (who they buy from).
+console.log("\ntop suppliers per competitor (S7, spend desc):");
+for (const c of result.competitors) {
+  if (c.wholesale.topSuppliers.length === 0) continue;
+  console.log(`  ${c.licenseNumber} ${c.dba ?? c.name}:`);
+  for (const s of c.wholesale.topSuppliers) {
+    console.log(
+      `    ${s.licenseNumber ?? "?"} ${s.dba ?? s.name ?? `(licenseeId ${s.licenseeId})`}: ` +
+        `$${(s.spendMinor / 100).toFixed(2)} / ${s.lineCount} lines`,
+    );
+  }
+}
+// Shared suppliers (2+ tracked buyers) — the priority-vendor-lead signal.
+{
+  const buyersBySupplier = new Map();
+  for (const c of result.competitors) {
+    for (const s of c.wholesale.topSuppliers) {
+      const arr = buyersBySupplier.get(s.licenseeId) ?? [];
+      arr.push({ buyer: c.dba ?? c.name ?? c.licenseNumber, supplier: s });
+      buyersBySupplier.set(s.licenseeId, arr);
+    }
+  }
+  const shared = [...buyersBySupplier.values()].filter((a) => a.length >= 2);
+  console.log(`\nshared suppliers (2+ tracked buyers): ${shared.length}`);
+  for (const group of shared.sort((a, b) => b.length - a.length).slice(0, 15)) {
+    const s = group[0].supplier;
+    console.log(
+      `  ${s.dba ?? s.name ?? s.licenseeId}: supplies ${group.length} → ${group.map((g) => g.buyer).join(", ")}`,
+    );
+  }
 }
 
 console.log("\ntop 10 statewide movers:");
