@@ -30,7 +30,8 @@ import {
   listCompetitors,
   areaLabel,
 } from "@/lib/discovery/competitors";
-import type { CompetitorProfile, AreaBenchmark } from "@/lib/discovery/types";
+import type { CompetitorProfile, AreaBenchmark, DiscoveryDataset } from "@/lib/discovery/types";
+import { TransformerLocalBenchmarks } from "./TransformerLocalBenchmarks";
 
 export const dynamic = "force-dynamic";
 
@@ -111,6 +112,25 @@ export default async function BenchmarksReportPage({ searchParams }: { searchPar
     );
   }
 
+  // Task H S6: monthly transformer drops persist their competitor rollups in
+  // discovery_competitor_stats (0106) — render the dedicated view. The legacy
+  // path below reads discovery_ccrs_sales, which is empty for these datasets.
+  if (active.ingest_kind === "monthly_zip") {
+    return (
+      <div className="space-y-5">
+        <Intro rosterCount={roster.length} datasetLabel={active.label} />
+        <DatasetSwitcher datasets={datasets} activeId={active.id} />
+        <TransformerLocalBenchmarks dataset={active} roster={roster} />
+        <Section
+          title="Verified competitor roster"
+          subtitle="Source: WSLCB Cannabis License Applicants (public licensing data). This is the key used to slice CCRS by store."
+        >
+          <RosterCard rosterByArea={rosterByArea} />
+        </Section>
+      </div>
+    );
+  }
+
   const profiles = await computeCompetitorProfiles(active.id);
   const areas = rollUpAreas(profiles);
   const self = profiles.find((p) => p.is_self) ?? null;
@@ -124,24 +144,7 @@ export default async function BenchmarksReportPage({ searchParams }: { searchPar
       <Intro rosterCount={roster.length} datasetLabel={active.label} />
 
       {/* Dataset switcher */}
-      {datasets.length > 1 ? (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-bold uppercase tracking-wide text-white/40">Dataset:</span>
-          {datasets.map((d) => (
-            <Link
-              key={d.id}
-              href={`/admin/reports/benchmarks?dataset=${d.id}`}
-              className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${
-                d.id === active.id
-                  ? "bg-[#7ed957]/15 text-[#7ed957] ring-1 ring-[#7ed957]/40"
-                  : "text-white/55 hover:bg-white/5 hover:text-white"
-              }`}
-            >
-              {d.label}
-            </Link>
-          ))}
-        </div>
-      ) : null}
+      <DatasetSwitcher datasets={datasets} activeId={active.id} />
 
       {withData.length === 0 ? (
         <NotReady
@@ -222,6 +225,28 @@ export default async function BenchmarksReportPage({ searchParams }: { searchPar
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
+function DatasetSwitcher({ datasets, activeId }: { datasets: DiscoveryDataset[]; activeId: string }) {
+  if (datasets.length <= 1) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="text-xs font-bold uppercase tracking-wide text-white/40">Dataset:</span>
+      {datasets.map((d) => (
+        <Link
+          key={d.id}
+          href={`/admin/reports/benchmarks?dataset=${d.id}`}
+          className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${
+            d.id === activeId
+              ? "bg-[#7ed957]/15 text-[#7ed957] ring-1 ring-[#7ed957]/40"
+              : "text-white/55 hover:bg-white/5 hover:text-white"
+          }`}
+        >
+          {d.label}
+        </Link>
+      ))}
+    </div>
+  );
+}
+
 function Intro({ rosterCount, datasetLabel }: { rosterCount: number; datasetLabel?: string }) {
   return (
     <section className="rounded-2xl border border-[#7ed957]/20 bg-[#7ed957]/[0.04] p-5">

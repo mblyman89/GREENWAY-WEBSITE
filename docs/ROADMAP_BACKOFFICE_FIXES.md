@@ -445,3 +445,26 @@ as before.
 CI: `tests/compliance/benchmarks-history-core.test.ts` (6 tests — metric mapping incl.
 revenue-in-avg_minor, non-overall/foreign-dataset exclusion, honest nulls, divide-by-zero guard,
 ordering, rounding + negative rejection; **871 passing** total).
+
+### Task H — S6 (Reports → Local Benchmarks: competitor/area stats from the monthly drop) — DONE
+**S6 of 6 — final slice.** The owner's local-intelligence surface for the monthly drop.
+**Pure core (`src/lib/discovery/local-benchmarks-core.ts`):** `buildLocalBenchmarks(stats, roster)`
+joins `discovery_competitor_stats` (0106) to the verified WSLCB roster: per-competitor rows
+(tradename from roster, honest fallbacks dba → CCRS name → "License <n>"; unknown license → area
+"other", never guessed), price bands p25/median/p75/avg (junk → null, NEVER a fabricated price),
+volume/revenue/lines, by_type + top_products passthrough; self excluded belt-and-braces (aggregator
+already excludes it structurally). Area rollup = median of each store's median (the same labeled
+proxy the legacy view uses — a pooled median would need raw rows the transformer deliberately never
+uploads) + summed volume; deterministic ordering (revenue desc; AREA_ORDER incl. "other").
+**Page (`/admin/reports/benchmarks`):** when the active dataset has `ingest_kind='monthly_zip'`,
+renders `TransformerLocalBenchmarks` — headline KPIs (Port Orchard market median, competitors seen,
+competitor revenue, top competitor), Area benchmarks table, Port Orchard head-to-head, all tracked
+competitors, and per-competitor "what they sell most" top-product tables with the median price they
+sell at. HONESTY: notes that Greenway's own numbers live in the POS (transformer excludes the
+license), that product detail covers same-month joins only, and that vendor-sourcing analysis is
+NOT derivable from a monthly delta (stays a legacy full-extract feature — said plainly instead of
+faked). Dataset switcher extracted into shared `DatasetSwitcher`; legacy CSV datasets render
+exactly as before.
+CI: `tests/compliance/local-benchmarks-core.test.ts` (7 tests — roster join + fallbacks, self
+exclusion, junk coercion, ordering, median-of-medians area proxy, null-median volume handling;
+**878 passing** total).
