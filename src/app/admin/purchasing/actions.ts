@@ -19,6 +19,17 @@ import { sendPurchaseOrderEmail } from "@/lib/purchasing/po-notify";
 import { interpretPlanRequest } from "@/lib/purchasing/ai-assist";
 import { listVendors } from "@/lib/vendors/store";
 import { markProductLeadPromoted } from "@/lib/discovery/store";
+import {
+  getLatestTransformerDataset,
+  listMarketSignals,
+} from "@/lib/discovery/market-rollups";
+import { listCompetitors, areaLabel } from "@/lib/discovery/competitors";
+import { buildPoMarketContext } from "@/lib/purchasing/po-market-context-core";
+import {
+  generatePoReview,
+  isAiConfigured as isPoReviewAiConfigured,
+  type PoReview,
+} from "@/lib/purchasing/po-review-ai";
 
 const BASE = "/admin/purchasing";
 
@@ -411,4 +422,86 @@ export async function saveReorderSettingsAction(formData: FormData): Promise<voi
   });
   revalidatePath(`${BASE}/new`);
   redirect(`${BASE}/new?settings=1`);
+}
+
+// ---------------------------------------------------------------------------
+// Task I (I6): advisory AI review of a draft PO — Port Orchard-first market
+// context from the latest monthly CCRS drop. Drafts-only: the review changes
+// NOTHING; the manager reads it and edits/sends the PO themselves.
+// ---------------------------------------------------------------------------
+
+export type PoReviewResult =
+  | { ok: true; review: PoReview }
+  | { ok: false; error: string };
+
+export async function reviewPurchaseOrderAction(formData: FormData): Promise<PoReviewResult> {
+  const session = await requirePermission("inventory.manage");
+
+  if (!isPoReviewAiConfigured) {
+    return {
+      ok: false,
+      error:
+        "AI isn't set up yet. Add an AI_API_KEY (or OPENAI_API_KEY) in your environment to enable the PO reviewer. The purchase order works without it.",
+    };
+  }
+
+  const poId = str(formData, "po_id");
+  if (!poId) return { ok: false, error: "Missing purchase order id." };
+  const po = await getPurchaseOrder(poId);
+  if (!po) return { ok: false, error: "Purchase order not found." };
+  if (po.lines.length === 0) {
+    return { ok: false, error: "This purchase order has no lines to review yet." };
+  }
+
+  try {
+    // Grounded market context — best-effort: no monthly drop simply means the
+    // reviewer sees every line as match=none and says so honestly.
+    let signals: Awaited<ReturnType<typeof listMarketSignals>> = [];
+    let roster: Awaited<ReturnType<typeof listCompetitors>> = [];
+    try {
+      const dataset = await getLatestTransformerDataset();
+      if (dataset) {
+        [signals, roster] = await Promise.all([
+          listMarketSignals(dataset.id),
+          listCompetitors(),
+        ]);
+      }
+    } catch {
+      // Non-fatal — review proceeds without market evidence.
+    }
+
+    const context = buildPoMarketContext(po.lines, signals, roster, { area: "port_orchard" });
+    const review = await generatePoReview(
+      {
+        poNumber: po.po_number,
+        vendorName: po.vendor_name,
+        subtotalMinor: po.subtotal_minor_units,
+        status: po.status,
+      },
+      context,
+      areaLabel("port_orchard"),
+      { actorId: session.userId, actorEmail: session.email },
+    );
+
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "purchase_order.ai_review",
+      entityType: "purchase_orders",
+      entityId: poId,
+      after: {
+        model: review.model,
+        lines: po.lines.length,
+        withMarketEvidence: context.matchedCount,
+      },
+    });
+
+    return { ok: true, review };
+  } catch (err) {
+    const message =
+      err instanceof Error && err.message
+        ? err.message
+        : "The AI review failed. Try again in a moment.";
+    return { ok: false, error: message };
+  }
 }
