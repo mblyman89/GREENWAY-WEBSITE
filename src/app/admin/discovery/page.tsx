@@ -25,6 +25,7 @@ import {
 import { VendorLeadsTable } from "./vendor-leads-table";
 import { ProductLeadsTable } from "./product-leads-table";
 import { LeadsAssistantPanel } from "./LeadsAssistantPanel";
+import { MarketMoversSection } from "./MarketMoversSection";
 import { isAiConfigured } from "@/lib/ai/provider";
 import { discoveryWhatDoIDoHere } from "@/lib/catalog/next-action-core";
 import { WhatDoIDoHere } from "@/components/admin/catalog/WhatDoIDoHere";
@@ -229,6 +230,10 @@ export default async function DiscoveryPage({ searchParams }: { searchParams: Pr
 
         {/* AI leads advisor — a grounded second opinion over the pipeline. */}
         <LeadsAssistantPanel aiEnabled={isAiConfigured} />
+
+        {/* Task H S4: lead ideas from the latest monthly CCRS transformer drop.
+            Renders nothing until a monthly zip has been processed. */}
+        <MarketMoversSection />
 
         {/* Vendor leads */}
         <Section

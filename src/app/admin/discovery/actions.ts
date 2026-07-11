@@ -32,11 +32,14 @@ import { computeBenchmarks, generateVendorLeadsFromCcrs } from "@/lib/discovery/
 import {
   sanitizeAggregationResult,
   persistAggregationResult,
+  getLatestTransformerDataset,
+  listMarketSignals,
 } from "@/lib/discovery/market-rollups";
+import { buildMarketMoverLeads, type MarketMoverLeads } from "@/lib/discovery/market-leads-core";
 import { enrichKbFromCcrsDataset } from "@/lib/kb/enrich-from-discovery";
 import { listVendorLeads, listProductLeads } from "@/lib/discovery/store";
 import { listDatasets } from "@/lib/discovery/ingest";
-import { computeCompetitorProfiles, rollUpAreas } from "@/lib/discovery/competitors";
+import { computeCompetitorProfiles, rollUpAreas, listCompetitors } from "@/lib/discovery/competitors";
 import { bumpLeadHarvestDepth, isPursuingStatus, unlockLeadDrafts } from "@/lib/kb/lead-promotion";
 import {
   generateLeadsAdvice,
@@ -775,8 +778,26 @@ export async function analyzeLeadsAction(): Promise<LeadsAdviceResult> {
       // Non-fatal — proceed with leads-only analysis.
     }
 
+    // Optional statewide + competitor top movers from the latest monthly
+    // transformer drop (Task H S4). Best-effort: no dataset → no movers block.
+    let marketMovers: MarketMoverLeads | undefined;
+    try {
+      const transformerDataset = await getLatestTransformerDataset();
+      if (transformerDataset) {
+        const [signals, roster] = await Promise.all([
+          listMarketSignals(transformerDataset.id),
+          listCompetitors(),
+        ]);
+        if (signals.length > 0) {
+          marketMovers = buildMarketMoverLeads(signals, roster);
+        }
+      }
+    } catch {
+      // Non-fatal — proceed without the movers block.
+    }
+
     const advice = await generateLeadsAdvice(
-      { vendorLeads, productLeads, competitors, areas },
+      { vendorLeads, productLeads, competitors, areas, marketMovers },
       { actorId: session.userId, actorEmail: session.email },
     );
 
@@ -790,6 +811,9 @@ export async function analyzeLeadsAction(): Promise<LeadsAdviceResult> {
         vendorLeads: vendorLeads.length,
         productLeads: productLeads.length,
         withMarketContext: Boolean(competitors && competitors.length > 0),
+        withMarketMovers: Boolean(
+          marketMovers && (marketMovers.statewide.length > 0 || marketMovers.competitor.length > 0),
+        ),
       },
     });
 
