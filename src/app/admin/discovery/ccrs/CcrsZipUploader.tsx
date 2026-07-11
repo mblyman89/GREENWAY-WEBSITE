@@ -13,29 +13,25 @@
  * dependency order (Licensee → Strains → Product → Inventory → SaleHeader →
  * SalesDetail) → aggregate → POST rollups → dataset flips uploading → ready.
  * Errors are surfaced verbatim, never force-fit (NEVER GUESS).
+ *
+ * S14: the crunch itself lives in the DOM-free runner
+ * (`ccrs-extract/run.ts`) and executes inside a WEB WORKER
+ * (`transformer.worker.ts`) so the tab never freezes and the browser never
+ * shows the "page unresponsive" prompt mid-crunch. If worker construction
+ * fails (ancient browser, blocked workers), the SAME runner executes on the
+ * main thread — identical results, just the old responsiveness.
  */
 import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  readZipEntries,
-  readZipEntryBytes,
-  openZipEntryStream,
-  bytesAsBlob,
-  type ZipEntry,
-} from "@/lib/discovery/ccrs-extract/zip";
-import {
-  decodeStream,
-  streamTable,
-  tableNameFromZipEntry,
-  SKIPPED_TABLES,
-  mapLicensee,
-  mapProduct,
-  mapInventory,
-  mapStrain,
-  mapSaleHeader,
-  mapSaleDetail,
-} from "@/lib/discovery/ccrs-extract/parse";
-import { CcrsAggregator } from "@/lib/discovery/ccrs-extract/aggregate";
+  runCcrsExtract,
+  type ExtractProgress,
+  type ExtractRunOutcome,
+} from "@/lib/discovery/ccrs-extract/run";
+import type {
+  TransformerWorkerRequest,
+  TransformerWorkerResponse,
+} from "@/lib/discovery/ccrs-extract/transformer.worker";
 import { saveMonthlyRollupsAction } from "../actions";
 
 type Phase = "idle" | "reading" | "aggregating" | "saving" | "done" | "error";
@@ -51,15 +47,49 @@ type Progress = {
 
 const IDLE: Progress = { phase: "idle", fileLabel: "", filesDone: 0, filesTotal: 0, rows: 0, message: null };
 
-/** Dependency order for the table passes (reference tables before sales). */
-const TABLE_ORDER = ["licensee", "strains", "product", "inventory", "saleheader", "salesdetail"];
-
-function orderRank(name: string): number {
-  const t = tableNameFromZipEntry(name);
-  for (let i = 0; i < TABLE_ORDER.length; i += 1) {
-    if (t === TABLE_ORDER[i] || t.startsWith(TABLE_ORDER[i])) return i;
+/**
+ * S14: run the crunch in a Web Worker; fall back to the main thread when the
+ * worker can't even be constructed. Worker errors are relayed verbatim and
+ * REJECT (they are real crunch failures, e.g. "not the delivery zip" — the
+ * main thread would have thrown the identical message; retrying there would
+ * just freeze the tab for minutes before failing the same way).
+ */
+function runInWorker(
+  file: File,
+  selfLicenseNumber: string,
+  trackedLicenseNumbers: string[],
+  onProgress: (p: ExtractProgress) => void,
+): Promise<ExtractRunOutcome> | null {
+  let worker: Worker;
+  try {
+    // Relative URL (not the @/ alias): the documented pattern the bundler
+    // statically analyzes to emit the worker chunk.
+    worker = new Worker(
+      new URL("../../../../lib/discovery/ccrs-extract/transformer.worker.ts", import.meta.url),
+    );
+  } catch {
+    return null; // construction failed → caller uses the main-thread fallback
   }
-  return TABLE_ORDER.length;
+  return new Promise<ExtractRunOutcome>((resolve, reject) => {
+    worker.onmessage = (ev: MessageEvent<TransformerWorkerResponse>) => {
+      const msg = ev.data;
+      if (msg.type === "progress") {
+        onProgress(msg.progress);
+      } else if (msg.type === "done") {
+        worker.terminate();
+        resolve({ result: msg.result, rows: msg.rows, filesTotal: msg.filesTotal });
+      } else if (msg.type === "error") {
+        worker.terminate();
+        reject(new Error(msg.message));
+      }
+    };
+    worker.onerror = (ev: ErrorEvent) => {
+      worker.terminate();
+      reject(new Error(ev.message || "The background transformer crashed."));
+    };
+    const req: TransformerWorkerRequest = { type: "run", file, selfLicenseNumber, trackedLicenseNumbers };
+    worker.postMessage(req);
+  });
 }
 
 export function CcrsZipUploader({
@@ -82,82 +112,24 @@ export function CcrsZipUploader({
       try {
         setProgress({ ...IDLE, phase: "reading", fileLabel: file.name, message: "Reading zip directory…" });
 
-        // The browser File natively satisfies the transformer's BlobLike.
-        const entries = await readZipEntries(file);
-        const innerZips = entries
-          .filter((e) => e.name.toLowerCase().endsWith(".zip"))
-          .filter((e) => {
-            const t = tableNameFromZipEntry(e.name);
-            return !SKIPPED_TABLES.has(t) && !t.startsWith("labresult");
-          })
-          .sort((a, b) => orderRank(a.name) - orderRank(b.name) || a.name.localeCompare(b.name));
-        if (innerZips.length === 0) {
-          throw new Error(
-            "No CCRS table zips found inside this file. Drop the FULL monthly delivery zip (it contains Licensee/Product/Inventory/SaleHeader/SalesDetail zips).",
-          );
-        }
-
-        const agg = new CcrsAggregator({ selfLicenseNumber, trackedLicenseNumbers });
-        // Pre-size the big joins from chunk counts (≤1M rows per chunked file).
-        const count = (t: string) =>
-          innerZips.filter((e) => tableNameFromZipEntry(e.name) === t).length;
-        agg.reserve({
-          inventoryRows: count("inventory") * 1_000_000,
-          saleHeaderRows: count("saleheader") * 1_000_000,
-        });
-
-        let rows = 0;
-        let done = 0;
-        for (const entry of innerZips) {
+        // S14: identical crunch (ccrs-extract/run.ts), preferably off-thread.
+        const onExtractProgress = (p: ExtractProgress) => {
           setProgress({
-            phase: "aggregating",
+            phase: p.phase,
             fileLabel: file.name,
-            filesDone: done,
-            filesTotal: innerZips.length,
-            rows,
-            message: `Processing ${shortName(entry)}…`,
+            filesDone: p.filesDone,
+            filesTotal: p.filesTotal,
+            rows: p.rows,
+            message: p.currentFile ? `Processing ${p.currentFile}…` : null,
           });
-          const innerBytes = await readZipEntryBytes(file, entry);
-          const innerBlob = bytesAsBlob(innerBytes);
-          const innerEntries = await readZipEntries(innerBlob);
-          for (const csvEntry of innerEntries) {
-            if (!csvEntry.name.toLowerCase().endsWith(".csv")) continue;
-            const stream = await openZipEntryStream(innerBlob, csvEntry);
-            const res = await streamTable(decodeStream(stream), (kind, cells, idx) => {
-              if (kind === "licensee") {
-                const r = mapLicensee(cells, idx);
-                if (r) agg.addLicensee(r);
-              } else if (kind === "strain") {
-                const r = mapStrain(cells, idx);
-                if (r) agg.addStrain(r);
-              } else if (kind === "product") {
-                const r = mapProduct(cells, idx);
-                if (r) agg.addProduct(r);
-              } else if (kind === "inventory") {
-                const r = mapInventory(cells, idx);
-                if (r) agg.addInventory(r);
-              } else if (kind === "sale_header") {
-                const r = mapSaleHeader(cells, idx);
-                if (r) agg.addSaleHeader(r);
-              } else if (kind === "sale_detail") {
-                const r = mapSaleDetail(cells, idx);
-                if (r) agg.addSaleDetail(r);
-              }
-            });
-            rows += res.rowCount;
-          }
-          done += 1;
-          setProgress({
-            phase: "aggregating",
-            fileLabel: file.name,
-            filesDone: done,
-            filesTotal: innerZips.length,
-            rows,
-            message: null,
-          });
-        }
+        };
+        const workerRun = runInWorker(file, selfLicenseNumber, trackedLicenseNumbers, onExtractProgress);
+        const outcome = await (workerRun ??
+          // Worker couldn't be constructed → same runner on the main thread
+          // (the pre-S14 behavior: correct results, tab busy while crunching).
+          runCcrsExtract(file, { selfLicenseNumber, trackedLicenseNumbers, onProgress: onExtractProgress }));
 
-        const result = agg.result();
+        const { result, rows, filesTotal } = outcome;
         setProgress((p) => ({ ...p, phase: "saving", message: "Saving rollups…" }));
         const saved = await saveMonthlyRollupsAction({
           fileName: file.name,
@@ -168,8 +140,8 @@ export function CcrsZipUploader({
         setProgress({
           phase: "done",
           fileLabel: file.name,
-          filesDone: done,
-          filesTotal: innerZips.length,
+          filesDone: filesTotal,
+          filesTotal,
           rows,
           message: `Saved ${saved.benchmarks?.toLocaleString()} benchmark rows, ${saved.competitors} competitor profiles and ${saved.signals} market signals for ${result.periodStart ?? "?"} → ${result.periodEnd ?? "?"}.`,
         });
@@ -293,7 +265,3 @@ export function CcrsZipUploader({
   );
 }
 
-function shortName(entry: ZipEntry): string {
-  const parts = entry.name.split("/");
-  return parts[parts.length - 1] || entry.name;
-}

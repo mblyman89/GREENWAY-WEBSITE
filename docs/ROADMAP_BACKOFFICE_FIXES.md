@@ -804,3 +804,35 @@ note listing excluded months.
 license-less fallback join, first-appearance vs any-prior-month presence, no-prior-data and
 first-upload honesty (detectable=false), data-less month exclusion, revenue ordering,
 cap-with-full-counts, MAX default, display fallbacks + junk coercion. Suite: 971 passing.
+
+### S14 — Web Worker transformer (suggestion #6)
+
+**What it does:** the ~1 GB monthly-extract crunch now runs inside a WEB WORKER, so the tab stays
+responsive and the browser never shows the "page unresponsive" prompt mid-crunch. No behavior
+change to the math — the pipeline is byte-for-byte the same code, just relocated.
+
+**Runner (`ccrs-extract/run.ts`):** the zip → parse → aggregate pipeline extracted VERBATIM from
+CcrsZipUploader into a pure, DOM-free `runCcrsExtract(file, opts)` — same table filters
+(SKIPPED_TABLES + labresult), same dependency ordering (Licensee → Strains → Product → Inventory
+→ SaleHeader → SalesDetail), same reserve hints (chunk count × 1M), same row mappers, same
+verbatim not-a-delivery-zip error. Progress = structured-clonable snapshots via callback (safe to
+postMessage unchanged). Loadable in a worker AND under Node for tests.
+
+**Worker (`transformer.worker.ts`):** thin shell — receives {file, self, tracked}, relays
+progress, posts done/error. Errors cross the boundary VERBATIM (NEVER GUESS). Typed protocol
+exported for the uploader.
+
+**Uploader (`CcrsZipUploader.tsx`):** constructs the worker via the bundler-analyzable
+`new Worker(new URL("…/transformer.worker.ts", import.meta.url))`; if construction throws
+(ancient browser, blocked workers) it falls back to running the SAME runner on the main thread —
+identical results, pre-S14 responsiveness, no regression path. Worker crunch errors reject
+verbatim (they are real failures the main thread would reproduce identically after minutes of
+frozen tab — retrying there would help nobody).
+
+**Tests (`ccrs-extract-run.test.ts`, +6; shared fixture `fixtures/ccrs-zip-fixture.ts`):**
+end-to-end over byte-exact synthetic nested deliveries (outer zip → inner table zips → UTF-16-LE
+tab csv, verified May-2026 headers + Greenway's real licensee row): full-crunch math (competitor
+retail revenue/units, wholesale sourcing qty×price−discount, S10 statewide supplier stats,
+totals, period detection, Greenway never in competitor outputs), structuredClone-able progress
+with monotonic filesDone + dependency-ordered first table, skip rules, verbatim error, and
+callback-less operation. Suite: 977 passing.
