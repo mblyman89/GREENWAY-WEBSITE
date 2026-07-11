@@ -104,6 +104,8 @@ export type ExtractTableKind =
   | "sale_detail"
   | "strain"
   | "lab_result"
+  | "manifest_header"
+  | "transported_item"
   | "unknown";
 
 /** Tables the transformer deliberately skips (grower/lab-side, irrelevant to retail benchmarks). */
@@ -114,10 +116,8 @@ export const SKIPPED_TABLES = new Set([
   "integrator",
   "inventoryadjustment",
   "inventoryplanttransfer",
-  "manifestheader",
   "plant",
   "plantdestructions",
-  "transporteditems",
 ]);
 
 export function normalizeHeaderCell(raw: string): string {
@@ -157,6 +157,17 @@ const SIGNATURES: Array<{ kind: ExtractTableKind; must: string[] }> = [
   {
     kind: "lab_result",
     must: ["labresultid", "lablicenseeid", "licenseeid", "testname", "testvalue", "inventoryid"],
+  },
+  // Task I (I4): manifests carry the SHIPPING VENDOR for retailer inventory.
+  // Signatures verified against the real May-2026 ManifestHeader_0 /
+  // TransportedItems_0 headers (never guessed).
+  {
+    kind: "manifest_header",
+    must: ["externalmanifestidentifier", "originlicensenumber", "originlicensename", "isdeleted"],
+  },
+  {
+    kind: "transported_item",
+    must: ["transporteditemsid", "externalmanifestidentifier", "inventoryexternalidentifier", "description"],
   },
 ];
 
@@ -289,6 +300,28 @@ export type InventoryRow = {
   licenseeId: string | null;
   productId: string | null;
   strainId: string | null;
+  /**
+   * Task I (I4): the lot's ExternalIdentifier — joins
+   * TransportedItems.InventoryExternalIdentifier so a retail lot can carry its
+   * SHIPPING VENDOR (manifest origin). Verified on the real May-2026 delivery.
+   */
+  externalIdentifier: string | null;
+};
+
+/** Task I (I4): manifest header — who SHIPPED product (the vendor side). */
+export type ManifestHeaderRow = {
+  externalManifestIdentifier: string;
+  originLicenseNumber: string | null;
+  originLicenseName: string | null;
+  isDeleted: boolean | null;
+};
+
+/** Task I (I4): one shipped item on a manifest. */
+export type TransportedItemRow = {
+  externalManifestIdentifier: string | null;
+  inventoryExternalIdentifier: string | null;
+  description: string | null;
+  isDeleted: boolean | null;
 };
 
 export type StrainRow = {
@@ -367,6 +400,27 @@ export function mapInventory(row: string[], idx: Map<string, number>): Inventory
     licenseeId: cell(row, idx, "licenseeid"),
     productId: cell(row, idx, "productid"),
     strainId: cell(row, idx, "strainid"),
+    externalIdentifier: cell(row, idx, "externalidentifier"),
+  };
+}
+
+export function mapManifestHeader(row: string[], idx: Map<string, number>): ManifestHeaderRow | null {
+  const externalManifestIdentifier = cell(row, idx, "externalmanifestidentifier");
+  if (!externalManifestIdentifier) return null;
+  return {
+    externalManifestIdentifier,
+    originLicenseNumber: cell(row, idx, "originlicensenumber"),
+    originLicenseName: cell(row, idx, "originlicensename"),
+    isDeleted: toBool(cell(row, idx, "isdeleted")),
+  };
+}
+
+export function mapTransportedItem(row: string[], idx: Map<string, number>): TransportedItemRow {
+  return {
+    externalManifestIdentifier: cell(row, idx, "externalmanifestidentifier"),
+    inventoryExternalIdentifier: cell(row, idx, "inventoryexternalidentifier"),
+    description: cell(row, idx, "description"),
+    isDeleted: toBool(cell(row, idx, "isdeleted")),
   };
 }
 

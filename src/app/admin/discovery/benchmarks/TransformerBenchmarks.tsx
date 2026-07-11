@@ -17,12 +17,18 @@
 import { StatCard } from "@/components/admin/StatCard";
 import { Card, CardHeader, Section, Badge } from "@/components/admin/ui";
 import { listBenchmarks } from "@/lib/discovery/benchmarks";
-import { listTransformerDatasets } from "@/lib/discovery/market-rollups";
+import { listTransformerDatasets, listMarketSignals } from "@/lib/discovery/market-rollups";
 import {
   buildTransformerHistory,
   type TransformerHistoryRow,
 } from "@/lib/discovery/benchmarks-history-core";
-import type { DiscoveryBenchmark, DiscoveryDataset, BenchmarkMetric } from "@/lib/discovery/types";
+import { groupTypeMovers, type TypeMoverGroup } from "@/lib/discovery/type-movers-core";
+import type {
+  DiscoveryBenchmark,
+  DiscoveryDataset,
+  BenchmarkMetric,
+  DiscoveryMarketSignalRow,
+} from "@/lib/discovery/types";
 
 function money(minor: number | null | undefined): string {
   if (minor == null) return "—";
@@ -182,6 +188,63 @@ function HistoryTable({ rows }: { rows: TransformerHistoryRow[] }) {
   );
 }
 
+/**
+ * Task I (I4): top products for ONE inventory type, with brand · strain ·
+ * vendor. Vendor comes from manifest lot joins (dominant origin) with a
+ * conservative brand-bridge fallback; "—" = unresolvable, never guessed.
+ */
+function TypeProductsTable({ inventoryType, rows }: { inventoryType: string; rows: DiscoveryMarketSignalRow[] }) {
+  return (
+    <Card padding="md">
+      <CardHeader
+        title={`Top ${rows.length} products — ${inventoryType}`}
+        subtitle="Statewide retail sell-through this month, ranked by revenue"
+      />
+      <div className="mt-3 overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-[var(--admin-border)] text-left text-xs uppercase tracking-wide text-[var(--admin-text-muted)]">
+              <th className="py-2 pr-3">Product</th>
+              <th className="px-3 py-2">Brand</th>
+              <th className="px-3 py-2">Strain</th>
+              <th className="px-3 py-2">Vendor</th>
+              <th className="px-3 py-2 text-right">Units</th>
+              <th className="px-3 py-2 text-right">Revenue</th>
+              <th className="px-3 py-2 text-right">Median</th>
+              <th className="py-2 pl-3 text-right">Low (p25)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((s) => (
+              <tr key={s.id} className="border-b border-[var(--admin-border)]/50">
+                <td className="max-w-[16rem] truncate py-2 pr-3 font-medium text-[var(--admin-text)]" title={s.product_name ?? undefined}>
+                  {s.product_name ?? "—"}
+                </td>
+                <td className="max-w-[9rem] truncate px-3 py-2 text-[var(--admin-text-muted)]" title={s.brand ?? undefined}>
+                  {s.brand ?? "—"}
+                </td>
+                <td className="max-w-[9rem] truncate px-3 py-2 text-[var(--admin-text-muted)]" title={s.strain_name ?? undefined}>
+                  {s.strain_name ?? "—"}
+                </td>
+                <td
+                  className="max-w-[11rem] truncate px-3 py-2 text-[var(--admin-text)]"
+                  title={s.vendor_name ? `${s.vendor_name}${s.vendor_license ? ` (lic ${s.vendor_license})` : ""}` : undefined}
+                >
+                  {s.vendor_name ?? "—"}
+                </td>
+                <td className="px-3 py-2 text-right text-[var(--admin-text-muted)]">{num(s.units)}</td>
+                <td className="px-3 py-2 text-right font-semibold text-[var(--admin-text)]">{money(s.revenue_minor)}</td>
+                <td className="px-3 py-2 text-right text-[var(--admin-text-muted)]">{money(s.median_unit_price_minor)}</td>
+                <td className="py-2 pl-3 text-right text-[var(--admin-text-muted)]">{money(s.p25_unit_price_minor)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  );
+}
+
 export async function TransformerBenchmarks({ dataset }: { dataset: DiscoveryDataset }) {
   const rows = await listBenchmarks(dataset.id);
 
@@ -209,6 +272,16 @@ export async function TransformerBenchmarks({ dataset }: { dataset: DiscoveryDat
     history = buildTransformerHistory(datasets, overallRows);
   } catch {
     history = [];
+  }
+
+  // Task I (I4): per-inventory-type product leaderboards with vendor + brand.
+  // Best-effort: a pre-I4 upload has no type_mover signals — the section
+  // simply doesn't render until the owner re-uploads the month's zip.
+  let typeGroups: TypeMoverGroup[] = [];
+  try {
+    typeGroups = groupTypeMovers(await listMarketSignals(dataset.id, "type_mover"));
+  } catch {
+    typeGroups = [];
   }
 
   return (
@@ -277,6 +350,29 @@ export async function TransformerBenchmarks({ dataset }: { dataset: DiscoveryDat
           />
         </div>
       </Section>
+
+      {/* Task I (I4): top products per inventory type, with vendor + brand */}
+      {typeGroups.length > 0 ? (
+        <Section
+          title="Top products by type"
+          description="The state's best-selling products in every inventory type — with the brand and the vendor (producer/processor) behind each one. Vendor comes from the month's transport manifests (lot-level origin joins, with a conservative brand fallback); “—” means the vendor couldn't be verified from this delivery — never guessed."
+        >
+          <div className="grid gap-4">
+            {typeGroups.map((g) => (
+              <TypeProductsTable key={g.inventoryType} inventoryType={g.inventoryType} rows={g.rows} />
+            ))}
+          </div>
+        </Section>
+      ) : (
+        <Section title="Top products by type" description="Per-type product leaderboards with vendor + brand.">
+          <Card padding="md">
+            <p className="text-sm text-[var(--admin-text-muted)]">
+              This drop has no per-type product signals yet &mdash; they&apos;re computed during upload. Re-upload
+              this month&apos;s zip (after applying migration 0110) to populate this section.
+            </p>
+          </Card>
+        </Section>
+      )}
 
       {/* History */}
       {history.length > 0 ? (

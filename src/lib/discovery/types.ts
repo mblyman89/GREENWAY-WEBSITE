@@ -235,11 +235,12 @@ export type DiscoveryCompetitorStatRow = {
   created_at: string;
 };
 
-/** Row of discovery_market_signals (migration 0106). Money in minor units. */
+/** Row of discovery_market_signals (migrations 0106 + 0110). Money in minor units. */
 export type DiscoveryMarketSignalRow = {
   id: number;
   dataset_id: string;
-  kind: "statewide_mover" | "competitor_mover";
+  /** "type_mover" (Task I I4): per-inventory-type top product, statewide. */
+  kind: "statewide_mover" | "competitor_mover" | "type_mover";
   license_number: string | null;
   inventory_type: string | null;
   product_name: string | null;
@@ -249,6 +250,14 @@ export type DiscoveryMarketSignalRow = {
   revenue_minor: number;
   median_unit_price_minor: number | null;
   p25_unit_price_minor: number | null;
+  /**
+   * Task I (I4, migration 0110): the SHIPPING VENDOR (producer/processor)
+   * behind the product, resolved from manifest lot joins with a conservative
+   * brand-bridge fallback. Null when unresolvable OR when the row predates
+   * migration 0110 / a pre-I4 upload — never guessed.
+   */
+  vendor_name: string | null;
+  vendor_license: string | null;
   created_at: string;
 };
 

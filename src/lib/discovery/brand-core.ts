@@ -146,6 +146,18 @@ const BY_RE = /\sby\s+([^|:\u2013-]{2,40}?)\s*(?:[|:\u2013-]\s|$)/i;
  *     junk.
  *  3. Otherwise null — never guessed.
  */
+/**
+ * Task I (I4): canonical brand key for cross-table joins (manifest
+ * descriptions vs product names write the same brand differently —
+ * "Phat Panda" / "PHATPANDA" / "phat-panda"). Lowercase, alphanumerics only.
+ * Returns null for null/empty input — a missing brand never joins anything.
+ */
+export function normalizeBrandKey(brand: string | null | undefined): string | null {
+  if (!brand) return null;
+  const key = brand.toLowerCase().replace(/[^a-z0-9]+/g, "");
+  return key.length > 0 ? key : null;
+}
+
 export function extractBrand(name: string | null | undefined): string | null {
   if (!name) return null;
 

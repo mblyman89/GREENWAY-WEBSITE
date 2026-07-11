@@ -24,7 +24,9 @@
 // ---------------------------------------------------------------------------
 
 export type MarketSignalLike = {
-  kind: "statewide_mover" | "competitor_mover";
+  // Task I (I4): "type_mover" rows may be present in mixed signal lists;
+  // the runtime filter below only builds leads from statewide/competitor movers.
+  kind: "statewide_mover" | "competitor_mover" | "type_mover";
   license_number: string | null;
   inventory_type: string | null;
   product_name: string | null;

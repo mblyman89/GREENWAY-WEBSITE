@@ -29,8 +29,12 @@ import {
   PRODUCT_HEADER,
   INVENTORY_HEADER,
   STRAIN_HEADER,
+  MANIFEST_HEADER_HEADER,
+  TRANSPORTED_ITEMS_HEADER,
   GREENWAY_ROW,
   licenseeRow,
+  manifestHeaderRow,
+  transportedItemRow,
 } from "./fixtures/ccrs-zip-fixture";
 
 // ---------------------------------------------------------------------------
@@ -156,8 +160,20 @@ describe("runCcrsExtract (S14)", () => {
   });
 
   it("processes tables in dependency order regardless of zip entry order", () => {
-    // The TABLE_ORDER constant is the contract the sort uses.
-    expect(TABLE_ORDER).toEqual(["licensee", "strains", "product", "inventory", "saleheader", "salesdetail"]);
+    // The TABLE_ORDER constant is the contract the sort uses. Task I (I4):
+    // manifests precede inventory (the lot→vendor map must exist when
+    // inventory rows join their ExternalIdentifier), and manifest headers
+    // precede transported items (origin lookup).
+    expect(TABLE_ORDER).toEqual([
+      "licensee",
+      "strains",
+      "manifestheader",
+      "transporteditems",
+      "product",
+      "inventory",
+      "saleheader",
+      "salesdetail",
+    ]);
   });
 
   it("skips non-table zips (SKIPPED_TABLES + labresult) without failing", async () => {
@@ -183,5 +199,89 @@ describe("runCcrsExtract (S14)", () => {
   it("runs without a progress callback (worker shell may omit it)", async () => {
     const { result } = await runCcrsExtract(bytesAsBlob(buildDelivery()), OPTS);
     expect(result.competitors).toHaveLength(1);
+  });
+
+  // Task I (I4): a delivery WITH manifest tables — the lot-level vendor join
+  // must flow end to end (nested zips → parse → aggregate → signals), and the
+  // per-type top-10 signals must come out with the vendor attached.
+  it("crunches manifest tables end to end: lot join attributes the shipping vendor (I4)", async () => {
+    const manifestHeader = tableZip("ManifestHeader_0.csv", [
+      MANIFEST_HEADER_HEADER,
+      manifestHeaderRow({
+        externalManifestIdentifier: "RM-100",
+        originLicenseNumber: "610001",
+        originLicenseName: "EVERGREEN FARMS LLC",
+      }),
+      // Deleted manifest — must contribute nothing.
+      manifestHeaderRow({
+        externalManifestIdentifier: "RM-DEAD",
+        originLicenseNumber: "999999",
+        originLicenseName: "GHOST FARM LLC",
+        isDeleted: true,
+      }),
+    ]);
+    const transportedItems = tableZip("TransportedItems_0.csv", [
+      TRANSPORTED_ITEMS_HEADER,
+      transportedItemRow({
+        externalManifestIdentifier: "RM-100",
+        inventoryExternalIdentifier: "LOT-BD-1",
+        description: "Evergreen | Blue Dream 3.5g",
+      }),
+    ]);
+    // Inventory row carrying the lot id in ExternalIdentifier (column 11).
+    const inventoryWithLot = tableZip("Inventory_0.csv", [
+      INVENTORY_HEADER,
+      "901\t8001\t77\t\t5001\tINV-1\t100\t50\t\tFalse\tLOT-BD-1\tFalse\t\t\t\t",
+    ]);
+    const licensee = tableZip("Licensee_0.csv", [
+      LICENSEE_HEADER,
+      GREENWAY_ROW,
+      licenseeRow({ licenseeId: "901", licenseNumber: "420001", name: "HIGH POINT OP LLC", dba: "HPO CANNABIS" }),
+      licenseeRow({ licenseeId: "950", licenseNumber: "610001", name: "EVERGREEN FARMS LLC", dba: "Evergreen Farms" }),
+    ]);
+    const strains = tableZip("Strains_0.csv", [STRAIN_HEADER, "77\t950\tBlue Dream\tHybrid\t\tFalse\t\t\t\t"]);
+    const product = tableZip("Product_0.csv", [
+      PRODUCT_HEADER,
+      "5001\t950\tUsable Marijuana\tEvergreen | Blue Dream 3.5g\t\t3.5\t\tFalse\t\t\t\t",
+    ]);
+    const saleHeader = tableZip("SaleHeader_0.csv", [
+      SALE_HEADER_HEADER,
+      "3001\t901\t\tRecreationalRetail\t2026-05-03 00:00:00\t\tFalse\t\t\t\t",
+    ]);
+    const saleDetail = tableZip("SalesDetail_0.csv", [
+      SALE_DETAIL_HEADER,
+      "9001\t3001\t8001\t\t2.00\t30.00\t.00\t.00\t.00\t\tFalse\t\t\t\t",
+    ]);
+
+    const zip = buildZip([
+      // Shuffled on purpose — the runner must order manifests BEFORE inventory.
+      { name: `${PREFIX}SalesDetail_0.zip`, data: saleDetail, method: 8 },
+      { name: `${PREFIX}Inventory_0.zip`, data: inventoryWithLot, method: 8 },
+      { name: `${PREFIX}TransportedItems_0.zip`, data: transportedItems, method: 8 },
+      { name: `${PREFIX}Licensee_0.zip`, data: licensee, method: 8 },
+      { name: `${PREFIX}SaleHeader_0.zip`, data: saleHeader, method: 8 },
+      { name: `${PREFIX}ManifestHeader_0.zip`, data: manifestHeader, method: 8 },
+      { name: `${PREFIX}Strains_0.zip`, data: strains, method: 8 },
+      { name: `${PREFIX}Product_0.zip`, data: product, method: 8 },
+    ]);
+
+    const { result, filesTotal } = await runCcrsExtract(bytesAsBlob(zip), OPTS);
+    expect(filesTotal).toBe(8); // manifests are crunched, not skipped
+    expect(result.totals.manifestRows).toBe(2);
+    expect(result.totals.transportedItemRows).toBe(1);
+
+    // The statewide mover carries the manifest-resolved shipping vendor,
+    // displayed by its licensee-table DBA.
+    const sw = result.signals.find((s) => s.kind === "statewide_mover");
+    expect(sw?.productName).toBe("Evergreen | Blue Dream 3.5g");
+    expect(sw?.vendorLicense).toBe("610001");
+    expect(sw?.vendorName).toBe("Evergreen Farms");
+
+    // The owner's per-type board: a type_mover row for the type, with vendor.
+    const tm = result.signals.find((s) => s.kind === "type_mover");
+    expect(tm?.inventoryType).toBe("Usable Marijuana");
+    expect(tm?.productName).toBe("Evergreen | Blue Dream 3.5g");
+    expect(tm?.vendorLicense).toBe("610001");
+    expect(tm?.vendorName).toBe("Evergreen Farms");
   });
 });

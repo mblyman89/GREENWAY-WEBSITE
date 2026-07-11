@@ -29,6 +29,8 @@ import {
   mapStrain,
   mapSaleHeader,
   mapSaleDetail,
+  mapManifestHeader,
+  mapTransportedItem,
 } from "./parse";
 import { CcrsAggregator, type AggregationResult } from "./aggregate";
 
@@ -56,8 +58,22 @@ export type ExtractRunOutcome = {
   filesTotal: number;
 };
 
-/** Dependency order for the table passes (reference tables before sales). */
-export const TABLE_ORDER = ["licensee", "strains", "product", "inventory", "saleheader", "salesdetail"];
+/**
+ * Dependency order for the table passes (reference tables before sales).
+ * Task I (I4): manifests come before inventory — the lot→vendor map must
+ * exist when inventory rows join their ExternalIdentifier, and manifest
+ * headers before transported items (origin lookup).
+ */
+export const TABLE_ORDER = [
+  "licensee",
+  "strains",
+  "manifestheader",
+  "transporteditems",
+  "product",
+  "inventory",
+  "saleheader",
+  "salesdetail",
+];
 
 function orderRank(name: string): number {
   const t = tableNameFromZipEntry(name);
@@ -141,6 +157,11 @@ export async function runCcrsExtract(file: BlobLike, opts: ExtractRunOptions): P
         } else if (kind === "sale_detail") {
           const r = mapSaleDetail(cells, idx);
           if (r) agg.addSaleDetail(r);
+        } else if (kind === "manifest_header") {
+          const r = mapManifestHeader(cells, idx);
+          if (r) agg.addManifestHeader(r);
+        } else if (kind === "transported_item") {
+          agg.addTransportedItem(mapTransportedItem(cells, idx));
         }
       });
       rows += res.rowCount;

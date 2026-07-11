@@ -35,6 +35,8 @@ import {
   mapInventory,
   mapStrain,
   mapLabResult,
+  mapManifestHeader,
+  mapTransportedItem,
   streamTable,
   decodeStream,
   SKIPPED_TABLES,
@@ -91,6 +93,14 @@ const STRAIN_HEADER =
 
 const LAB_HEADER =
   "LabResultId\tLabLicenseeId\tLicenseeId\tLabTestStatus\tInventoryId\tTestName\tTestDate\tTestValue\tExternalIdentifier\tIsDeleted\tCreatedBy\tCreatedDate\tUpdatedBy\tUpdatedDate";
+
+/** Task I (I4): verified May-2026 ManifestHeader header (exact column order, read from the real zip). */
+const MANIFEST_HEADER_HEADER =
+  "CCRSManifestHeaderId\tSubmittedBy\tSubmittedDate\tNumberRecords\tExternalManifestIdentifier\tHeaderOperation\tTransportationType\tOriginLicenseNumber\tOriginLicenseName\tOriginLicenseeAddress\tOriginLicenseePhone\tOriginLicenseeEmailAddress\tOriginAssociateID\tTransportationLicenseNumber\tTransportationAssociateID\tDepartureDateTime\tArrivalDateTime\tDestinationLicenseNumber\tDestinationLicenseName\tDestinationLicenseAddress\tDestinationLicenseePhone\tDestinationLicenseeEmailAddress\tDestinationAssociateId\tIsDeleted\tRecordCreatedBy\tRecordCreatedDate\tRecordUpdatedBy\tRecordUpdatedDate\tOrderCancelled\tManifestGeneratedDate\tErrorMessage\tTransportationLicenseAddress\tTransportationLicenseName\tTransportationLicenseEmailAddress\tTransportationLicensePhone\tIsManifestGenerated";
+
+/** Task I (I4): verified May-2026 TransportedItems header (exact column order, read from the real zip). */
+const TRANSPORTED_ITEMS_HEADER =
+  "TransportedItemsID\tExternalManifestIdentifier\tInventoryExternalIdentifier\tPlantExternalIdentifier\tDescription\tProductType\tMedical\tInventoryType\tStrain\tQuantity\tUOM\tWeightPerUnit\tServingsPerUnit\tExternalIdentifier\tLabTestExternalIdentifier\tCreatedBy\tCreatedDate\tUpdatedBy\tUpdatedDate\tRecordCreatedBy\tRecordCreatedDate\tRecordUpdatedBy\tRecordUpdatedDate\tIsDeleted\tOperation\tErrorMessage";
 
 // ---------------------------------------------------------------------------
 // decodeCcrsBytes
@@ -166,6 +176,9 @@ describe("detectExtractTable", () => {
     [INVENTORY_HEADER, "inventory"],
     [STRAIN_HEADER, "strain"],
     [LAB_HEADER, "lab_result"],
+    // Task I (I4): manifest tables are now detected (vendor attribution).
+    [MANIFEST_HEADER_HEADER, "manifest_header"],
+    [TRANSPORTED_ITEMS_HEADER, "transported_item"],
   ];
   for (const [header, kind] of cases) {
     it(`detects ${kind}`, () => {
@@ -201,15 +214,16 @@ describe("tableNameFromZipEntry", () => {
       "integrator",
       "inventoryadjustment",
       "inventoryplanttransfer",
-      "manifestheader",
       "plant",
       "plantdestructions",
-      "transporteditems",
     ]) {
       expect(SKIPPED_TABLES.has(t)).toBe(true);
     }
     expect(SKIPPED_TABLES.has("saleheader")).toBe(false);
     expect(SKIPPED_TABLES.has("salesdetail")).toBe(false);
+    // Task I (I4): manifests are now CRUNCHED (vendor attribution), not skipped.
+    expect(SKIPPED_TABLES.has("manifestheader")).toBe(false);
+    expect(SKIPPED_TABLES.has("transporteditems")).toBe(false);
   });
 });
 
@@ -334,7 +348,21 @@ describe("row mappers", () => {
       "42\t50066319\t77\t\t9001\tlot-1\t100\t40\t500.00\tFalse\t\tFalse\t\t\t\t".split("\t"),
       iIdx,
     );
-    expect(inv).toEqual({ inventoryId: "50066319", licenseeId: "42", productId: "9001", strainId: "77" });
+    expect(inv).toEqual({
+      inventoryId: "50066319",
+      licenseeId: "42",
+      productId: "9001",
+      strainId: "77",
+      externalIdentifier: null, // blank cell — never fabricated (Task I I4)
+    });
+
+    // Task I (I4): the lot id (ExternalIdentifier) is now carried through —
+    // it is the join key to TransportedItems.InventoryExternalIdentifier.
+    const invWithLot = mapInventory(
+      "42\t50066319\t77\t\t9001\tlot-1\t100\t40\t500.00\tFalse\tLOT.752489.9ba888\tFalse\t\t\t\t".split("\t"),
+      iIdx,
+    );
+    expect(invWithLot?.externalIdentifier).toBe("LOT.752489.9ba888");
 
     const sIdx = headerIndexMap(STRAIN_HEADER.split("\t"));
     expect(mapStrain("77\t42\tLemon Cherry Runtz\tHybrid\t\tFalse\t\t\t\t".split("\t"), sIdx)).toEqual({
@@ -349,6 +377,41 @@ describe("row mappers", () => {
         lIdx,
       ),
     ).toEqual({ inventoryId: "50066319", testName: "Potency - THC", testValue: 23.4 });
+  });
+
+  it("mapManifestHeader parses the real row shape and requires the manifest id (Task I I4)", () => {
+    const idx = headerIndexMap(MANIFEST_HEADER_HEADER.split("\t"));
+    // Column values mirror the verified May-2026 sample row (trimmed strings).
+    const cells = MANIFEST_HEADER_HEADER.split("\t").map(() => "");
+    cells[4] = "RM-1692125503"; // ExternalManifestIdentifier
+    cells[7] = "417949"; // OriginLicenseNumber
+    cells[8] = "SOUTH SEATTLE RETAIL HOLDING"; // OriginLicenseName
+    cells[23] = "False"; // IsDeleted
+    expect(mapManifestHeader(cells, idx)).toEqual({
+      externalManifestIdentifier: "RM-1692125503",
+      originLicenseNumber: "417949",
+      originLicenseName: "SOUTH SEATTLE RETAIL HOLDING",
+      isDeleted: false,
+    });
+    // No manifest id → no row (there is nothing to join on — never guess).
+    const blank = MANIFEST_HEADER_HEADER.split("\t").map(() => "");
+    expect(mapManifestHeader(blank, idx)).toBeNull();
+  });
+
+  it("mapTransportedItem parses the real row shape (Task I I4)", () => {
+    const idx = headerIndexMap(TRANSPORTED_ITEMS_HEADER.split("\t"));
+    const cells = TRANSPORTED_ITEMS_HEADER.split("\t").map(() => "");
+    cells[0] = "19923862"; // TransportedItemsID
+    cells[1] = "RM-1769188030"; // ExternalManifestIdentifier
+    cells[2] = "LOT.752489.9ba888"; // InventoryExternalIdentifier
+    cells[4] = "PLAIDJACKET - Miracle Alien"; // Description
+    cells[23] = "True"; // IsDeleted
+    expect(mapTransportedItem(cells, idx)).toEqual({
+      externalManifestIdentifier: "RM-1769188030",
+      inventoryExternalIdentifier: "LOT.752489.9ba888",
+      description: "PLAIDJACKET - Miracle Alien",
+      isDeleted: true,
+    });
   });
 });
 
