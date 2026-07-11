@@ -32,6 +32,8 @@ import {
 } from "@/lib/discovery/competitors";
 import type { CompetitorProfile, AreaBenchmark, DiscoveryDataset } from "@/lib/discovery/types";
 import { TransformerLocalBenchmarks } from "./TransformerLocalBenchmarks";
+import { AskAnalystPanel } from "@/app/admin/discovery/AskAnalystPanel";
+import { isAiConfigured } from "@/lib/ai/provider";
 
 export const dynamic = "force-dynamic";
 
@@ -120,6 +122,8 @@ export default async function BenchmarksReportPage({ searchParams }: { searchPar
       <div className="space-y-5">
         <Intro rosterCount={roster.length} datasetLabel={active.label} />
         <DatasetSwitcher datasets={datasets} activeId={active.id} />
+        {/* Task I (I7): free-text Q&A over this drop's local competitor rollups. */}
+        <AskAnalystPanel datasetId={active.id} aiEnabled={isAiConfigured} surface="local" />
         <TransformerLocalBenchmarks dataset={active} roster={roster} />
         <Section
           title="Verified competitor roster"

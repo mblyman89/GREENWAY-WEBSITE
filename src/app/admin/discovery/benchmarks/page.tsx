@@ -10,6 +10,8 @@ import { listBenchmarks, listTopLicensees, getBenchmarkFor } from "@/lib/discove
 import { compareOwnVsBenchmarks, type CompareRow, type CompareFlag } from "@/lib/discovery/compare";
 import type { DiscoveryBenchmark, BenchmarkScope, BenchmarkMetric, DiscoveryDataset } from "@/lib/discovery/types";
 import { TransformerBenchmarks } from "./TransformerBenchmarks";
+import { AskAnalystPanel } from "../AskAnalystPanel";
+import { isAiConfigured } from "@/lib/ai/provider";
 
 export const dynamic = "force-dynamic";
 
@@ -245,6 +247,8 @@ export default async function BenchmarksPage({ searchParams }: { searchParams: P
         <div className="space-y-6 px-5 py-6 sm:px-8">
           <BackLink />
           <DatasetSelector datasets={datasets} activeId={active.id} />
+          {/* Task I (I7): free-text Q&A over this drop's persisted rollups. */}
+          <AskAnalystPanel datasetId={active.id} aiEnabled={isAiConfigured} surface="statewide" />
           <TransformerBenchmarks dataset={active} />
         </div>
       </div>
@@ -315,6 +319,11 @@ export default async function BenchmarksPage({ searchParams }: { searchParams: P
 
         {/* Dataset selector */}
         <DatasetSelector datasets={datasets} activeId={active.id} />
+
+        {/* Task I (I7): free-text Q&A over this dataset's persisted rollups. */}
+        {active.benchmarks_computed_at ? (
+          <AskAnalystPanel datasetId={active.id} aiEnabled={isAiConfigured} surface="statewide" />
+        ) : null}
 
         {needsCompute ? (
           <div className="rounded-[var(--admin-radius)] border border-[var(--admin-orange)]/40 bg-[var(--admin-orange)]/10 px-4 py-3 text-sm text-[var(--admin-text)]">

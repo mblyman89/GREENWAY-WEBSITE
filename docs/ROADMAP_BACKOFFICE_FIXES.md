@@ -1136,3 +1136,55 @@ normalizeKey-insensitive but never fuzzy, statewide-vs-area provenance, out-of-a
 multi-source MIN-p25/top-revenue-median/store dedupe, retail÷cost gating, junk coercion +
 unnamed-line skip, mix shares, digest basis labels + unmatched rendering, parseLineReviews
 clamps/defaults/drops). Suite: 1062 passing. No migration needed (reads 0106/0110 as-is).
+
+### I7 — shipped notes
+
+Owner's ask: "I want ai to be included in all of the benchmarks sections … I want to be able to
+ask questions and have appropriate and fantastic responses and insights."
+
+**Pure core `src/lib/discovery/benchmarks-ai-core.ts`** — two grounded fact blocks built ONLY
+from the persisted rollups the pages already render (never raw CCRS re-reads, never invented):
+`buildStatewideAnalystDigest` (dataset provenance + one-month scope notice + attribution share,
+overall retail/wholesale/$g bands, per-type/brand/strain price tables biggest-samples-first with
+null-median rows dropped, month-over-month history, per-type top movers with the honest
+`vendor=unresolved` fallback) and `buildLocalAnalystDigest` (self-exclusion + Port Orchard-first
+notice, area rollups with the labeled median-of-medians proxy, per-competitor rows — bands, top
+products, top suppliers, wholesale spend with an honest "none recorded (pre-0107…)" state —
+shared multi-competitor suppliers, statewide supplier benchmarks labeled WHOLESALE). Both return
+NULL when nothing is persisted; missing figures print "n/a"; retail-vs-wholesale bases labeled
+on every money line; caps keep the prompt bounded (15 competitors, 12 types, 15 brands, 12
+history months…). `sanitizeAnalystQuestion` trims/collapses/caps at 500 chars and refuses
+empty/non-string input. Shared `AnalystAnswer`/`AnalystAnswerResult` types live here (pure) so
+the client panel never imports server-only code.
+
+**AI module `src/lib/discovery/benchmarks-ai.ts`** — leads-ai pattern (`generateStructured`,
+heavy tier → router-controlled, temperature 0.2, flat schema `benchmark_analyst_answer`):
+headline (must say plainly when the data can't answer), 2-8 answer_points quoting the digest's
+actual numbers, key_facts grounding trail (citations of DATA lines only), caveats (one-month
+scope, thin n, n/a fields, basis), and follow_ups the SAME dataset can answer. The SYSTEM prompt
+hard-rules: digest-only figures, basis separation, no month-to-year extrapolation, Greenway
+never in the data, Port Orchard weighted first, thin samples flagged.
+
+**Actions `src/app/admin/discovery/analyst-actions.ts`** — `askStatewideAnalystAction`
+(inventory.manage; benchmarks + best-effort history/type-movers exactly like the page) and
+`askLocalAnalystAction` (reports.view — matching the report page's permission; competitor stats
++ roster → buildLocalBenchmarks, shared suppliers, best-effort 0109 supplier stats). Both:
+friendly unconfigured-key message, sanitized question, dataset validated by id, no-digest → an
+honest "nothing persisted to analyze" message, `discovery.benchmarks_analyst` audit (surface,
+model, question).
+
+**UI `src/app/admin/discovery/AskAnalystPanel.tsx`** — shared client panel (LeadsAssistantPanel
+styling): free-text input + one-click example chips per surface, headline + Answer bullets +
+"Grounded in" / "Caveats" columns + clickable "Ask next" follow-ups + provenance footer (model,
+one-month scope, basis note, self-exclusion); soft-disable copy when no AI key. Mounted on the
+CCRS Benchmarks page (both the transformer view and the legacy computed view — hidden until
+benchmarks are computed) and on the Local Benchmarks report (transformer view, above the
+tables).
+
+**Tests:** +16 in `tests/compliance/benchmarks-ai-core.test.ts` (sanitizer trim/refusal/cap;
+statewide: null-on-empty, scope+attribution labels, dollar bands with n, scope grouping with
+sample-desc ordering + null-median drops, history with n/a, movers with vendor=unresolved;
+local: null-on-empty, self-exclusion/PO-weighting labels, area proxy label, competitor rows,
+honest missing-wholesale state, shared suppliers + supplier stats ordering/fallback-name/basis,
+competitor cap messaging). Suite: 1078 passing. No migration needed (reads persisted rollups
+as-is).
