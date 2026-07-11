@@ -656,3 +656,55 @@ with deltas + null unknowns, pre-0107 exclusion honesty, absent-competitor handl
 silence, cross-competitor momentum with named gains/losses, license-number join across changing
 surrogate ids, licenseeId fallback, junk-row drop, junk-number coercion, momentum cap + ordering,
 roster/dba naming fallbacks.
+
+### S10 — Statewide wholesale price benchmarking (suggestion #2)
+
+**What it answers:** "am I paying a fair wholesale price, and who else could supply me?" — one
+statewide table per monthly drop of every wholesale SELLER with observed volume, revenue,
+unit-price distribution, and buyer reach. Negotiation leverage grounded in the extract itself.
+
+**Aggregator (`src/lib/discovery/ccrs-extract/aggregate.ts`):**
+- Packing widened (S10): the seller LicenseeId is now packed into the Float64 header value for
+  EVERY wholesale header (S7 packed it only when the BUYER was a tracked competitor). Bound
+  unchanged and still exact: the id occupies the same bits either way, max packed = 2^53 − 1
+  exactly. Ids ≥ 2^36 are not packed — absent from the supplier table (never guessed), still
+  counted in `wholesaleLines` (verified: max LicenseeId in the May 2026 Licensee table is 3,517 —
+  nowhere near the 2^36 bound).
+- New `StatewideSupplierStat` (top `TOP_SUPPLIERS_STATEWIDE = 100` by revenue desc → lineCount
+  desc → id asc): lines/revenue/prices from wholesale SalesDetail lines (qty × unit − discount,
+  clamped ≥ 0, exact-cents PriceHistogram percentiles); buyer reach = DISTINCT buyer licensees on
+  wholesale SaleHeaders (a header with no surviving lines still proves the relationship);
+  `trackedBuyers` = how many buyers are roster competitors (self never counts — dropped from the
+  tracked set by the constructor). Identity from the monthly licensee table; missing rows leave
+  nulls. Suppliers with headers but zero surviving detail lines are NOT emitted (no observed volume).
+- Self appears honestly as a statewide supplier if the self license sells wholesale — the
+  statewide table describes the market, it hides nothing.
+
+**Migration `0109_discovery_supplier_stats.sql` (OWNER APPLIES MANUALLY):**
+`discovery_supplier_stats` — one row per (dataset, supplier licensee), `unique (dataset_id,
+licensee_id)`, cascade on dataset delete, ALL money/count columns BIGINT (the S8 lesson: real
+statewide months overflow int4), integer only for the bounded buyer counts, staff-only RLS
+matching 0106. Pinned by a schema-guard test (comments stripped line-wise before DDL checks —
+the S8 regex lesson).
+> **OWNER REMINDER:** apply `0109_discovery_supplier_stats.sql` manually, then RE-UPLOAD the
+> monthly zips — supplier benchmarks only exist for drops transformed after this slice merges.
+
+**Persistence (`src/lib/discovery/market-rollups.ts`):** sanitize gains a `suppliers` block —
+BACKWARD COMPATIBLE (older payload without the array → `[]`, never a rejection), rejects rows
+without a licenseeId and lists over `MAX_SUPPLIERS = 200`, coerces junk numbers, passes >2^31
+revenue unclamped. Persist deletes-then-inserts `discovery_supplier_stats` per dataset (same
+idempotent pattern as every other rollup table). New reader `listSupplierStats(datasetId)`
+ordered by revenue desc.
+
+**UI (Reports → Local Benchmarks):** new "Statewide supplier benchmarks" section (top 40 shown)
+before the S9 switching section — supplier name + license, revenue, lines, p25/median/p75
+wholesale unit-price band, distinct buyers, tracked buyers (highlighted when > 0). Best-effort
+load in try/catch; section renders only when rows exist (pre-0109 datasets simply show nothing).
+
+**Tests:** 12 aggregator tests (fixture supplier emission with price summary + buyer reach,
+untracked-buyer inclusion vs the S7 view, qty×price−discount accumulation with clamping, header
+buyer reach incl. line-less headers, zero-line suppliers not emitted, self-as-buyer counted but
+never tracked, self-as-seller emitted honestly, null identity, top-100 cap, deterministic tie
+ordering, ≥2^36 id skip, widened-packing round trip) + 6 sanitize tests (round trip, pre-S10
+backward compat, missing-id rejection, oversize rejection, junk coercion, >2^31 pass-through) +
+3 schema-guard tests over 0109. Suite: 937 passing.

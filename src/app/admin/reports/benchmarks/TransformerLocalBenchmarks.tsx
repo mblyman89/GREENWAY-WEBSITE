@@ -29,8 +29,16 @@ import { formatMinorCurrency } from "@/lib/leafly/format";
 import { ReportTable, type ReportColumn } from "@/components/admin/reports/ReportTable";
 import { StatCard } from "@/components/admin/StatCard";
 import { areaLabel } from "@/lib/discovery/competitors";
-import type { DiscoveryCompetitor, DiscoveryDataset } from "@/lib/discovery/types";
-import { listCompetitorStats, listTransformerDatasets } from "@/lib/discovery/market-rollups";
+import type {
+  DiscoveryCompetitor,
+  DiscoveryDataset,
+  DiscoverySupplierStatRow,
+} from "@/lib/discovery/types";
+import {
+  listCompetitorStats,
+  listSupplierStats,
+  listTransformerDatasets,
+} from "@/lib/discovery/market-rollups";
 import {
   buildLocalBenchmarks,
   type LocalAreaStat,
@@ -351,6 +359,57 @@ function SupplierMomentumTable({ momentum }: { momentum: SupplierMomentum[] }) {
   );
 }
 
+/**
+ * S10: statewide wholesale supplier benchmarks — negotiation leverage. Every
+ * number is the supplier's observed statewide wholesale activity in THIS
+ * month's drop: line volume, revenue, per-line price band, and buyer reach.
+ */
+function StatewideSupplierTable({ suppliers }: { suppliers: DiscoverySupplierStatRow[] }) {
+  const columns: ReportColumn<DiscoverySupplierStatRow & Record<string, unknown>>[] = [
+    {
+      key: "name",
+      header: "Supplier",
+      emphasis: true,
+      render: (r) => (
+        <span>
+          {r.dba?.trim() || r.name?.trim() || `Licensee ${r.licensee_id}`}
+          {r.license_number ? <span className="ml-1 text-white/30">{r.license_number}</span> : null}
+        </span>
+      ),
+    },
+    { key: "revenue_minor", header: "Wholesale revenue", align: "right", emphasis: true, render: (r) => money(r.revenue_minor) },
+    { key: "line_count", header: "Lines", align: "right", render: (r) => num(r.line_count) },
+    {
+      key: "price_median_minor",
+      header: "Line price (p25 / median / p75)",
+      align: "right",
+      render: (r) =>
+        r.price_sample_size > 0
+          ? `${money(r.price_p25_minor)} / ${money(r.price_median_minor)} / ${money(r.price_p75_minor)}`
+          : "—",
+    },
+    { key: "distinct_buyers", header: "Buyers (statewide)", align: "right", render: (r) => num(r.distinct_buyers) },
+    {
+      key: "tracked_buyers",
+      header: "Your competitors",
+      align: "right",
+      render: (r) =>
+        r.tracked_buyers > 0 ? (
+          <span className="font-semibold text-[#7ed957]">{num(r.tracked_buyers)}</span>
+        ) : (
+          "—"
+        ),
+    },
+  ];
+  return (
+    <ReportTable
+      columns={columns}
+      rows={suppliers as Array<DiscoverySupplierStatRow & Record<string, unknown>>}
+      emptyLabel="No statewide supplier benchmarks in this drop."
+    />
+  );
+}
+
 function SupplierSwitchingSection({
   report,
   prevLabel,
@@ -398,6 +457,15 @@ export async function TransformerLocalBenchmarks({
   const sharedSuppliers = buildSupplierLeads(stats, roster).filter(
     (s) => s.suppliesMultipleCompetitors,
   );
+
+  // S10: statewide supplier benchmarks (migration 0109). Best-effort — a
+  // pre-0109 database or a pre-S10 dataset simply has no rows.
+  let supplierStats: DiscoverySupplierStatRow[] = [];
+  try {
+    supplierStats = await listSupplierStats(dataset.id);
+  } catch {
+    supplierStats = [];
+  }
 
   // S9: previous READY transformer dataset (by period, falling back to list
   // order) → supplier-switching report. Best-effort: one month = no section.
@@ -495,6 +563,16 @@ export async function TransformerLocalBenchmarks({
           subtitle="Vendors selling to two or more of your tracked competitors this month. Proven local demand: these are the first calls to make. The AI leads advisor flags them automatically."
         >
           <SharedSuppliersTable suppliers={sharedSuppliers} />
+        </Section>
+      ) : null}
+
+      {/* S10: statewide supplier benchmarks (needs migration 0109 + re-upload) */}
+      {supplierStats.length > 0 ? (
+        <Section
+          title="Statewide supplier benchmarks"
+          subtitle="The state's biggest wholesale suppliers this month: observed revenue, per-line price bands, and buyer reach. Use before vendor negotiations — a supplier's median line price across all their accounts is your reference point, and 'Your competitors' shows how many tracked stores they already serve."
+        >
+          <StatewideSupplierTable suppliers={supplierStats.slice(0, 40)} />
         </Section>
       ) : null}
 

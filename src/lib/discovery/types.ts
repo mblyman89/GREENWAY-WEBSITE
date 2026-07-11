@@ -252,6 +252,28 @@ export type DiscoveryMarketSignalRow = {
   created_at: string;
 };
 
+/** Row of discovery_supplier_stats (migration 0109, S10). Money in minor units. */
+export type DiscoverySupplierStatRow = {
+  id: number;
+  dataset_id: string;
+  licensee_id: string;
+  license_number: string | null;
+  name: string | null;
+  dba: string | null;
+  line_count: number;
+  revenue_minor: number;
+  price_sample_size: number;
+  price_min_minor: number | null;
+  price_p25_minor: number | null;
+  price_median_minor: number | null;
+  price_p75_minor: number | null;
+  price_max_minor: number | null;
+  price_avg_minor: number | null;
+  distinct_buyers: number;
+  tracked_buyers: number;
+  created_at: string;
+};
+
 /** Which CCRS collection file a given upload is. */
 export type CcrsFileKind =
   | "sale"

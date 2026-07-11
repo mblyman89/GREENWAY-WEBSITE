@@ -37,6 +37,7 @@ import type {
   DiscoveryCompetitorStatRow,
   DiscoveryDataset,
   DiscoveryMarketSignalRow,
+  DiscoverySupplierStatRow,
 } from "./types";
 
 const BATCH = 500;
@@ -49,6 +50,8 @@ const BATCH = 500;
 const MAX_STATEWIDE = 5_000;
 const MAX_COMPETITORS = 200;
 const MAX_SIGNALS = 2_000;
+/** S10: the aggregator emits ≤ TOP_SUPPLIERS_STATEWIDE (100); allow slack. */
+const MAX_SUPPLIERS = 200;
 const MAX_KEY_LEN = 300;
 
 function num(v: unknown): number {
@@ -196,6 +199,31 @@ export function sanitizeAggregationResult(
     });
   }
 
+  // S10: statewide supplier benchmarks. BACKWARD COMPATIBLE: an older
+  // transformer payload has no `suppliers` array — that sanitizes to []
+  // (honest "no supplier benchmarks"), never a rejection.
+  const suppliersIn = Array.isArray(r.suppliers) ? r.suppliers : [];
+  if (suppliersIn.length > MAX_SUPPLIERS) {
+    return { ok: false, error: "Too many statewide supplier rows." };
+  }
+  const suppliers: AggregationResult["suppliers"] = [];
+  for (const s0 of suppliersIn) {
+    const s = (s0 ?? {}) as Record<string, unknown>;
+    const licenseeId = strOrNull(s.licenseeId, 32);
+    if (!licenseeId) return { ok: false, error: "Malformed statewide supplier row." };
+    suppliers.push({
+      licenseeId,
+      licenseNumber: strOrNull(s.licenseNumber, 32),
+      name: strOrNull(s.name),
+      dba: strOrNull(s.dba),
+      lineCount: intOrNull(s.lineCount) ?? 0,
+      revenueMinor: Math.round(num(s.revenueMinor)),
+      unitPrice: sanitizeSummary(s.unitPrice),
+      distinctBuyers: intOrNull(s.distinctBuyers) ?? 0,
+      trackedBuyers: intOrNull(s.trackedBuyers) ?? 0,
+    });
+  }
+
   const signals: AggregationResult["signals"] = [];
   for (const s0 of signalsIn) {
     const s = (s0 ?? {}) as Record<string, unknown>;
@@ -237,6 +265,7 @@ export function sanitizeAggregationResult(
       statewide,
       competitors,
       signals,
+      suppliers,
     },
   };
 }
@@ -364,6 +393,15 @@ export async function persistAggregationResult(
       .eq("dataset_id", datasetId);
     if (error) throw new Error(`discovery_market_signals clear failed: ${error.message}`);
   }
+  {
+    // S10 (migration 0109). Clear is unconditional so re-uploads stay
+    // idempotent even when the new payload has no supplier block.
+    const { error } = await admin
+      .from("discovery_supplier_stats")
+      .delete()
+      .eq("dataset_id", datasetId);
+    if (error) throw new Error(`discovery_supplier_stats clear failed: ${error.message}`);
+  }
 
   const benchRows: Record<string, unknown>[] = [];
   for (const b of result.statewide) {
@@ -411,6 +449,27 @@ export async function persistAggregationResult(
     p25_unit_price_minor: s.p25UnitPriceMinor,
   }));
   await insertInBatches("discovery_market_signals", signalRows);
+
+  // S10 (migration 0109): statewide supplier benchmarks.
+  const supplierRows = result.suppliers.map((s) => ({
+    dataset_id: datasetId,
+    licensee_id: s.licenseeId,
+    license_number: s.licenseNumber,
+    name: s.name,
+    dba: s.dba,
+    line_count: s.lineCount,
+    revenue_minor: Math.round(s.revenueMinor),
+    price_sample_size: s.unitPrice?.sampleSize ?? 0,
+    price_min_minor: s.unitPrice?.minMinor ?? null,
+    price_p25_minor: s.unitPrice?.p25Minor ?? null,
+    price_median_minor: s.unitPrice?.medianMinor ?? null,
+    price_p75_minor: s.unitPrice?.p75Minor ?? null,
+    price_max_minor: s.unitPrice?.maxMinor ?? null,
+    price_avg_minor: s.unitPrice?.avgMinor ?? null,
+    distinct_buyers: s.distinctBuyers,
+    tracked_buyers: s.trackedBuyers,
+  }));
+  await insertInBatches("discovery_supplier_stats", supplierRows);
 
   // Dataset bookkeeping: derived period, honest line totals, row counts, and
   // benchmarks_computed_at (the transformer computes benchmarks inline).
@@ -478,6 +537,18 @@ export async function listCompetitorStats(datasetId: string): Promise<DiscoveryC
     .eq("dataset_id", datasetId)
     .order("retail_revenue_minor", { ascending: false });
   return (data as DiscoveryCompetitorStatRow[] | null) ?? [];
+}
+
+/** S10: statewide supplier benchmarks for a dataset (revenue desc). */
+export async function listSupplierStats(datasetId: string): Promise<DiscoverySupplierStatRow[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  const admin = createSupabaseAdminClient();
+  const { data } = await admin
+    .from("discovery_supplier_stats")
+    .select("*")
+    .eq("dataset_id", datasetId)
+    .order("revenue_minor", { ascending: false });
+  return (data as DiscoverySupplierStatRow[] | null) ?? [];
 }
 
 export async function listMarketSignals(
