@@ -708,3 +708,34 @@ never tracked, self-as-seller emitted honestly, null identity, top-100 cap, dete
 ordering, ≥2^36 id skip, widened-packing round trip) + 6 sanitize tests (round trip, pre-S10
 backward compat, missing-id rejection, oversize rejection, junk coercion, >2^31 pass-through) +
 3 schema-guard tests over 0109. Suite: 937 passing.
+
+### S11 — Auto-draft vendor outreach from shared suppliers (suggestion #3)
+
+**What it does:** one click on the Leads page's "Shared suppliers — priority vendor leads" card
+drafts a vendor lead for every multi-competitor supplier in the latest drop — the pre-qualified
+call list. DRAFTS ONLY: nothing is contacted, ordered, or merged.
+
+**Pure core (`market-leads-core.ts`):**
+- `buildSupplierOutreachNote(lead, drop)` — grounded talking points only: supplier identity +
+  WSLCB license (with "verify current status" caveat), which tracked competitors they supplied
+  (names, spend desc), observed spend + line count framed EXPLICITLY as "this drop only", and a
+  closing line that the figures are one month's reported transfers, not a run rate. NEVER GUESS:
+  no projections, no invented contacts.
+- `supplierLeadToVendorLeadInput(lead, drop)` — display name passed through verbatim (S7
+  dba→name→licensee fallbacks already applied), license number carried (drives dedupe + vendor
+  matching), priority **high ONLY for multi-competitor suppliers** (the owner's S7 rule), else
+  the default med. `MAX_SUPPLIER_LEAD_DRAFTS = 100` (May real data: 61 shared suppliers fit).
+
+**Server action (`draftSupplierOutreachAction`, actions.ts):** permission `inventory.manage` +
+kill-switch guard; loads the latest transformer dataset's competitor stats + roster, selects the
+SAME multi-competitor suppliers the card shows, and upserts each via `createVendorLead` —
+dedupe_key upsert means RE-CLICKING NEVER DUPLICATES (already-piped suppliers return null and are
+reported as skipped). Audited (`discovery.supplier_outreach_drafted` with inserted/processed).
+
+**UI (`DraftSupplierOutreachButton.tsx`, client):** button under the shared-suppliers table with
+inline honest feedback — "N new draft vendor leads created (M already in your pipeline —
+skipped)". Errors (no dataset, discovery off, pre-0107 data) surface verbatim.
+
+**Tests:** +6 (note grounding incl. no-projection/no-contact guards, single-competitor and
+missing-period honesty, license-less supplier fallback, high/med priority mapping, draft cap
+bounds). Suite: 943 passing.

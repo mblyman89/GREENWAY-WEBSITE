@@ -14,6 +14,9 @@ import {
   formatMarketMoversDigest,
   formatSupplierDigestLine,
   formatSupplierLeadsDigest,
+  buildSupplierOutreachNote,
+  supplierLeadToVendorLeadInput,
+  MAX_SUPPLIER_LEAD_DRAFTS,
   DEFAULT_STATEWIDE_MOVERS,
   DEFAULT_COMPETITOR_MOVERS,
   DEFAULT_SUPPLIER_LEADS,
@@ -378,5 +381,110 @@ describe("supplier digest (S7)", () => {
     expect(digest).toContain("COMPETITOR SUPPLIERS");
     expect(digest).toContain("this drop only");
     expect(digest).toContain("PRIORITY vendor leads");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// S11: auto-draft vendor outreach — note builder + lead-input mapping
+// ---------------------------------------------------------------------------
+
+describe("buildSupplierOutreachNote (S11)", () => {
+  const stats = [
+    supplierStat({
+      license_number: "111111",
+      top_suppliers: [supplier("901", 50_000, 3)],
+    }),
+    supplierStat({
+      license_number: "222222",
+      name: "POT ZONE LLC",
+      dba: "POT ZONE",
+      top_suppliers: [supplier("901", 30_000, 2)],
+    }),
+  ];
+  const roster = [
+    { license_number: "111111", tradename: "Clear Choice Tacoma" },
+    { license_number: "222222", tradename: "Pot Zone" },
+  ];
+  const drop = {
+    periodStart: "2026-05-01",
+    periodEnd: "2026-05-31",
+    datasetLabel: "May 2026 monthly",
+  };
+
+  it("grounds the note in observed figures and frames them as this-drop-only", () => {
+    const [lead] = buildSupplierLeads(stats, roster);
+    const note = buildSupplierOutreachNote(lead, drop);
+    expect(note).toContain('CCRS monthly drop "May 2026 monthly"');
+    expect(note).toContain("2026-05-01 → 2026-05-31");
+    expect(note).toContain("PRIORITY: supplies 2 tracked local competitors");
+    expect(note).toContain("Clear Choice Tacoma, Pot Zone");
+    expect(note).toContain("$800.00 across 5 wholesale lines");
+    expect(note).toContain("ONE month's reported wholesale transfers only");
+    expect(note).toContain("license 7901"); // WSLCB license carried
+    // NEVER GUESS: no projections or invented contact details.
+    expect(note).not.toMatch(/per (month|year)|annual|run rate:/i);
+    expect(note).not.toMatch(/@|phone/i);
+  });
+
+  it("handles single-competitor suppliers and missing period/label honestly", () => {
+    const [lead] = buildSupplierLeads([stats[0]], roster);
+    const note = buildSupplierOutreachNote(lead, {
+      periodStart: null,
+      periodEnd: null,
+      datasetLabel: null,
+    });
+    expect(note).toContain("the latest CCRS monthly drop");
+    expect(note).toContain("Supplies 1 tracked local competitor this month.");
+    expect(note).not.toContain("PRIORITY:");
+    expect(note).toContain("$500.00 across 3 wholesale lines");
+    expect(note).not.toContain("null"); // no leaked null renderings
+  });
+
+  it("omits the license talking point when the supplier has no license number", () => {
+    const noLicense = [
+      supplierStat({
+        top_suppliers: [supplier("903", 100, 1, { licenseNumber: null, name: null, dba: null })],
+      }),
+    ];
+    const [lead] = buildSupplierLeads(noLicense, roster);
+    const note = buildSupplierOutreachNote(lead, drop);
+    expect(note).not.toContain("WSLCB license");
+    expect(note).toContain("Licensee 903"); // fallback display name, never invented
+  });
+});
+
+describe("supplierLeadToVendorLeadInput (S11)", () => {
+  const roster = [
+    { license_number: "111111", tradename: "Clear Choice Tacoma" },
+    { license_number: "222222", tradename: "Pot Zone" },
+  ];
+  const drop = { periodStart: "2026-05-01", periodEnd: "2026-05-31", datasetLabel: "May" };
+
+  it("maps multi-competitor suppliers to HIGH priority with license + note", () => {
+    const stats = [
+      supplierStat({ license_number: "111111", top_suppliers: [supplier("901", 50_000)] }),
+      supplierStat({ license_number: "222222", top_suppliers: [supplier("901", 30_000)] }),
+    ];
+    const [lead] = buildSupplierLeads(stats, roster);
+    const input = supplierLeadToVendorLeadInput(lead, drop);
+    expect(input.displayName).toBe("SUPPLIER 901 LLC");
+    expect(input.licenseNumber).toBe("7901");
+    expect(input.priority).toBe("high"); // owner's rule: multi-competitor = priority
+    expect(input.note).toContain("PRIORITY: supplies 2 tracked local competitors");
+  });
+
+  it("maps single-competitor suppliers to the default MED priority", () => {
+    const stats = [
+      supplierStat({ license_number: "111111", top_suppliers: [supplier("902", 10_000)] }),
+    ];
+    const [lead] = buildSupplierLeads(stats, roster);
+    const input = supplierLeadToVendorLeadInput(lead, drop);
+    expect(input.priority).toBe("med");
+    expect(input.note).not.toContain("PRIORITY:");
+  });
+
+  it("exports a bounded draft cap (May real data: 61 shared suppliers fit)", () => {
+    expect(MAX_SUPPLIER_LEAD_DRAFTS).toBeGreaterThanOrEqual(61);
+    expect(MAX_SUPPLIER_LEAD_DRAFTS).toBeLessThanOrEqual(500);
   });
 });

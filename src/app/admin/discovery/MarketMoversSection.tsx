@@ -29,6 +29,7 @@ import {
   type MarketMoverLead,
   type SupplierLead,
 } from "@/lib/discovery/market-leads-core";
+import { DraftSupplierOutreachButton } from "./DraftSupplierOutreachButton";
 
 function money(minor: number | null): string {
   return minor == null ? "—" : formatMinorCurrency(minor);
@@ -208,6 +209,11 @@ export async function MarketMoversSection() {
             />
             <div className="mt-3">
               <SharedSupplierTable suppliers={sharedSuppliers} />
+            </div>
+            {/* S11: one-click outreach drafting. Dedupe-safe (re-clicking never
+                duplicates a lead); notes carry grounded this-drop-only figures. */}
+            <div className="mt-4">
+              <DraftSupplierOutreachButton />
             </div>
           </Card>
         ) : null}

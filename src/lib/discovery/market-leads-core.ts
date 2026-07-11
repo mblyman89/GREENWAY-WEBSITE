@@ -385,3 +385,79 @@ export function formatSupplierLeadsDigest(leads: SupplierLead[]): string | null 
     leads.map(formatSupplierDigestLine).join("\n")
   );
 }
+
+// ---------------------------------------------------------------------------
+// S11: auto-draft vendor outreach — turn a SupplierLead into a draft vendor
+// lead's outreach note. PURE: the note contains ONLY figures observed in the
+// drop (never projections), framed explicitly as "this drop only".
+// ---------------------------------------------------------------------------
+
+/** Bound on suppliers auto-drafted in one click (May real data: 61 shared). */
+export const MAX_SUPPLIER_LEAD_DRAFTS = 100;
+
+/** Format an ISO period as a compact label, e.g. "2026-05-01 → 2026-05-31". */
+function periodLabel(periodStart: string | null, periodEnd: string | null): string | null {
+  if (periodStart && periodEnd) return `${periodStart} → ${periodEnd}`;
+  return periodStart ?? periodEnd ?? null;
+}
+
+/**
+ * Build the outreach note stored on an auto-drafted vendor lead. Grounded
+ * talking points only:
+ *  - which tracked competitors this supplier sold to (names, spend desc),
+ *  - observed spend + line volume IN THIS DROP ONLY (stated explicitly),
+ *  - the multi-competitor priority callout when it applies.
+ * NEVER GUESS: no projected volumes, no invented contacts, no price promises.
+ */
+export function buildSupplierOutreachNote(
+  lead: SupplierLead,
+  drop: { periodStart: string | null; periodEnd: string | null; datasetLabel?: string | null },
+): string {
+  const period = periodLabel(drop.periodStart, drop.periodEnd);
+  const source = drop.datasetLabel
+    ? `CCRS monthly drop "${drop.datasetLabel}"`
+    : "the latest CCRS monthly drop";
+  const buyers = lead.buyerNames.slice(0, 6).join(", ");
+  const lines: string[] = [
+    `[Auto-drafted vendor outreach — ${source}${period ? `, sales observed ${period}` : ""}]`,
+    "",
+    `Supplier: ${lead.displayName}${lead.licenseNumber ? ` (WSLCB license ${lead.licenseNumber})` : ""}.`,
+    lead.suppliesMultipleCompetitors
+      ? `PRIORITY: supplies ${lead.buyerCount} tracked local competitors — proven local demand.`
+      : `Supplies 1 tracked local competitor this month.`,
+    `Who they supplied: ${buyers || "(names unavailable)"}.`,
+    `Observed in this drop only: ${digestMoney(lead.totalSpendMinor)} across ${lead.totalLineCount} wholesale line${lead.totalLineCount === 1 ? "" : "s"}.`,
+    "",
+    "Talking points:",
+    `- They already deliver to ${lead.buyerCount === 1 ? "a store" : "stores"} in our market — logistics are proven.`,
+    `- Competitors stock their product; carrying it closes an assortment gap.`,
+    lead.licenseNumber ? `- WSLCB license ${lead.licenseNumber} (verify current status before ordering).` : null,
+    "",
+    "Figures cover ONE month's reported wholesale transfers only — not a run rate.",
+  ].filter((l): l is string => l !== null);
+  return lines.join("\n");
+}
+
+/**
+ * Shape a SupplierLead into the createVendorLead input for auto-drafting
+ * (S11). Pure so the mapping is testable: display name passed through
+ * verbatim (buildSupplierLeads already applied dba→name→licensee fallbacks),
+ * license number carried for dedupe + vendor matching, priority "high" ONLY
+ * for multi-competitor suppliers (the owner's rule), else default "med".
+ */
+export function supplierLeadToVendorLeadInput(
+  lead: SupplierLead,
+  drop: { periodStart: string | null; periodEnd: string | null; datasetLabel?: string | null },
+): {
+  displayName: string;
+  licenseNumber: string | null;
+  priority: "high" | "med";
+  note: string;
+} {
+  return {
+    displayName: lead.displayName,
+    licenseNumber: lead.licenseNumber,
+    priority: lead.suppliesMultipleCompetitors ? "high" : "med",
+    note: buildSupplierOutreachNote(lead, drop),
+  };
+}

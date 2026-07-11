@@ -39,6 +39,8 @@ import {
 import {
   buildMarketMoverLeads,
   buildSupplierLeads,
+  supplierLeadToVendorLeadInput,
+  MAX_SUPPLIER_LEAD_DRAFTS,
   type MarketMoverLeads,
   type SupplierLead,
 } from "@/lib/discovery/market-leads-core";
@@ -564,6 +566,71 @@ export async function generateCcrsVendorLeadsAction(formData: FormData): Promise
   revalidatePath(CCRS);
   revalidatePath(BASE);
   redirect(`${CCRS}?leads_inserted=${inserted}&leads_processed=${processed}&dataset=${datasetId}`);
+}
+
+/**
+ * S11 (Task H) — auto-draft vendor outreach from the shared-suppliers card.
+ * Turns the latest transformer drop's multi-competitor suppliers into DRAFT
+ * vendor leads via createVendorLead (dedupe_key upsert — re-clicking never
+ * duplicates). Priority "high" only for multi-competitor suppliers (the
+ * owner's rule); the note carries grounded talking points framed explicitly
+ * as "this drop only". DRAFTS ONLY: nothing is contacted or ordered.
+ */
+export async function draftSupplierOutreachAction(): Promise<{
+  ok: boolean;
+  inserted?: number;
+  processed?: number;
+  error?: string;
+}> {
+  const session = await requirePermission("inventory.manage");
+  if (!(await isDiscoveryEnabled())) {
+    return { ok: false, error: "Product Discovery is turned off." };
+  }
+
+  try {
+    const dataset = await getLatestTransformerDataset();
+    if (!dataset) {
+      return { ok: false, error: "No monthly transformer dataset found. Upload a monthly zip first." };
+    }
+    const [stats, roster] = await Promise.all([listCompetitorStats(dataset.id), listCompetitors()]);
+    // Same selection as the Leads card: multi-competitor suppliers only —
+    // pre-qualified vendors with proven coverage of the competitive set.
+    const leads = buildSupplierLeads(stats, roster, { max: MAX_SUPPLIER_LEAD_DRAFTS }).filter(
+      (s) => s.suppliesMultipleCompetitors,
+    );
+    if (leads.length === 0) {
+      return {
+        ok: false,
+        error:
+          "No multi-competitor suppliers in the latest drop. If competitor supplier data is missing, apply migration 0107/0109 and re-upload the monthly zip.",
+      };
+    }
+
+    const drop = {
+      periodStart: dataset.period_start,
+      periodEnd: dataset.period_end,
+      datasetLabel: dataset.label,
+    };
+    let inserted = 0;
+    for (const lead of leads) {
+      const input = supplierLeadToVendorLeadInput(lead, drop);
+      const id = await createVendorLead({ ...input, createdBy: session.userId });
+      if (id) inserted += 1;
+    }
+
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "discovery.supplier_outreach_drafted",
+      entityType: "discovery_vendor_leads",
+      entityId: dataset.id,
+      after: { inserted, processed: leads.length, datasetLabel: dataset.label },
+    });
+    revalidatePath(BASE);
+    return { ok: true, inserted, processed: leads.length };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Drafting failed." };
+  }
 }
 
 /**
