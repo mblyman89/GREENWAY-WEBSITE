@@ -48,6 +48,11 @@ import {
   type AssortmentGapStatus,
 } from "@/lib/discovery/assortment-gap-core";
 import {
+  buildSupplierHistoryReport,
+  type NewSupplierRow,
+  type SupplierHistoryReport,
+} from "@/lib/discovery/supplier-history-core";
+import {
   buildLocalBenchmarks,
   type LocalAreaStat,
   type LocalCompetitorStat,
@@ -506,6 +511,76 @@ function AssortmentGapSection({ report }: { report: AssortmentGapReport }) {
   );
 }
 
+/**
+ * S13: new-vendor early detection — suppliers whose first appearance in the
+ * UPLOADED history is this drop. Honest framing baked into the copy: "first
+ * appearance in your uploads" is NOT "new to the market" (unuploaded months
+ * and the top-100 rollup cap both hide history).
+ */
+function NewSupplierTable({ rows }: { rows: NewSupplierRow[] }) {
+  const columns: ReportColumn<NewSupplierRow & Record<string, unknown>>[] = [
+    {
+      key: "displayName",
+      header: "Supplier",
+      emphasis: true,
+      render: (r) => (
+        <span>
+          {r.displayName}
+          {r.licenseNumber ? <span className="ml-1 text-white/30">{r.licenseNumber}</span> : null}
+        </span>
+      ),
+    },
+    { key: "revenueMinor", header: "Wholesale revenue", align: "right", emphasis: true, render: (r) => money(r.revenueMinor) },
+    { key: "lineCount", header: "Lines", align: "right", render: (r) => num(r.lineCount) },
+    { key: "distinctBuyers", header: "Buyers (statewide)", align: "right", render: (r) => num(r.distinctBuyers) },
+    {
+      key: "trackedBuyers",
+      header: "Your competitors",
+      align: "right",
+      render: (r) =>
+        r.trackedBuyers > 0 ? (
+          <span className="font-semibold text-[#7ed957]">{num(r.trackedBuyers)}</span>
+        ) : (
+          "—"
+        ),
+    },
+  ];
+  return (
+    <ReportTable
+      columns={columns}
+      rows={rows as Array<NewSupplierRow & Record<string, unknown>>}
+      emptyLabel="No first-appearance suppliers this month."
+    />
+  );
+}
+
+function NewSuppliersSection({ report }: { report: SupplierHistoryReport }) {
+  return (
+    <Section
+      title="New suppliers this month — first appearance in your uploads"
+      subtitle={`Suppliers in this drop's statewide benchmarks that don't appear in any prior uploaded month with supplier data (${report.priorWithSupplierData.length} month${report.priorWithSupplierData.length === 1 ? "" : "s"} compared). HONEST LIMITS: "first appearance in your uploads" is not "new to the market" — months you haven't uploaded and suppliers below a prior month's top-100 rollup cap are invisible to this comparison. Treat these as call-first candidates to verify, not certainties.`}
+    >
+      <div className="space-y-3">
+        <NewSupplierTable rows={report.newSuppliers} />
+        {report.newSupplierCount > report.newSuppliers.length ? (
+          <p className="text-xs text-white/30">
+            Showing top {num(report.newSuppliers.length)} of {num(report.newSupplierCount)}{" "}
+            first-appearance suppliers by revenue.
+          </p>
+        ) : null}
+        {report.priorWithoutSupplierData.length > 0 ? (
+          <p className="text-xs text-white/30">
+            Not compared (no supplier data — uploaded before the statewide supplier update):{" "}
+            {report.priorWithoutSupplierData.slice(0, 8).join(", ")}
+            {report.priorWithoutSupplierData.length > 8 ? "…" : ""}. Re-upload those monthly zips to
+            backfill and tighten this detection.
+          </p>
+        ) : null}
+      </div>
+    </Section>
+  );
+}
+
 function SupplierSwitchingSection({
   report,
   prevLabel,
@@ -584,8 +659,13 @@ export async function TransformerLocalBenchmarks({
 
   // S9: previous READY transformer dataset (by period, falling back to list
   // order) → supplier-switching report. Best-effort: one month = no section.
+  // S13: the SAME dataset list feeds new-vendor detection — this dataset's
+  // supplier stats vs every OLDER uploaded month's. Prior months without
+  // supplier rows (pre-0109 uploads) are excluded from the comparison inside
+  // the pure core (missing data ≠ absence) and surfaced as a re-upload prompt.
   let switchReport: SupplierSwitchReport | null = null;
   let prevLabel: string | null = null;
+  let historyReport: SupplierHistoryReport | null = null;
   try {
     const all = await listTransformerDatasets(); // newest period first
     const idx = all.findIndex((d) => d.id === dataset.id);
@@ -595,8 +675,22 @@ export async function TransformerLocalBenchmarks({
       switchReport = buildSupplierSwitchReport(stats, prevStats, roster);
       prevLabel = prev.label;
     }
+    // S13: only meaningful when THIS drop has supplier stats and older months
+    // exist. detectable=false (no prior supplier data anywhere) → no section.
+    const older = idx >= 0 ? all.slice(idx + 1) : [];
+    if (supplierStats.length > 0 && older.length > 0) {
+      const priorDatasets = await Promise.all(
+        older.map(async (d) => ({
+          label: d.label,
+          suppliers: await listSupplierStats(d.id),
+        })),
+      );
+      const report = buildSupplierHistoryReport(supplierStats, priorDatasets);
+      historyReport = report.detectable ? report : null;
+    }
   } catch {
-    switchReport = null; // section simply doesn't render; nothing is guessed
+    switchReport = null; // sections simply don't render; nothing is guessed
+    historyReport = null;
   }
 
   const portOrchard = competitors.filter((c) => c.area === "port_orchard");
@@ -690,6 +784,9 @@ export async function TransformerLocalBenchmarks({
           <StatewideSupplierTable suppliers={supplierStats.slice(0, 40)} />
         </Section>
       ) : null}
+
+      {/* S13: new suppliers this month (needs 0109 data in 2+ months) */}
+      {historyReport ? <NewSuppliersSection report={historyReport} /> : null}
 
       {/* S12: assortment gaps (statewide movers vs published menu) */}
       {gapReport ? <AssortmentGapSection report={gapReport} /> : null}
