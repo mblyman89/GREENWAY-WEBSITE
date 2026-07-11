@@ -5,7 +5,9 @@ import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { Button, Card, CardHeader, Section, Field, Input } from "@/components/admin/ui";
 import { getDiscoverySnapshot } from "@/lib/discovery/store";
 import { listDatasets } from "@/lib/discovery/ingest";
+import { listCompetitors, getSelfCompetitor } from "@/lib/discovery/competitors";
 import type { DiscoveryDataset } from "@/lib/discovery/types";
+import { CcrsZipUploader } from "./CcrsZipUploader";
 import {
   uploadCcrsDatasetAction,
   computeBenchmarksAction,
@@ -98,6 +100,11 @@ export default async function CcrsPage({ searchParams }: { searchParams: Promise
   }
 
   const datasets = await listDatasets();
+  // Roster for the monthly-zip transformer: tracked competitor licenses + self
+  // (self is passed separately so the aggregator can exclude it structurally).
+  const [roster, selfComp] = await Promise.all([listCompetitors(), getSelfCompetitor()]);
+  const trackedLicenseNumbers = roster.map((c) => c.license_number);
+  const selfLicenseNumber = selfComp?.license_number ?? "413541";
 
   const uploaded = one(sp, "uploaded");
   const rows = one(sp, "rows");
@@ -271,10 +278,32 @@ export default async function CcrsPage({ searchParams }: { searchParams: Promise
           </div>
         </Section>
 
-        {/* UPLOAD CENTER */}
+        {/* MONTHLY ZIP TRANSFORMER (Task H) — the zero-touch path */}
         <Section
-          title="Step 2 — Upload the CCRS files"
-          description="Attach one or more CSV files. Each file is auto-detected by its columns; you don't have to label them."
+          title="Step 2 — Drop the monthly zip"
+          description="Drag the ONE big zip from the WSLCB delivery straight in. Everything else — unzipping, parsing, statewide benchmarks, competitor stats, market signals — happens automatically."
+        >
+          <Card padding="md">
+            <CcrsZipUploader
+              selfLicenseNumber={selfLicenseNumber}
+              trackedLicenseNumbers={trackedLicenseNumbers}
+            />
+            <p className="mt-3 text-xs text-[var(--admin-text-muted)]">
+              The raw file is crunched locally in your browser and never uploads — only the compact
+              market rollups are saved. Feeds the{" "}
+              <Link href="/admin/discovery/benchmarks" className="font-semibold text-[var(--admin-accent)] hover:underline">
+                CCRS Benchmarks
+              </Link>
+              , the Leads page, and Reports → Local Benchmarks. Requires migration{" "}
+              <code>0106_discovery_market_rollups.sql</code>.
+            </p>
+          </Card>
+        </Section>
+
+        {/* LEGACY UPLOAD CENTER (per-file CSV path, kept for targeted uploads) */}
+        <Section
+          title="Advanced — upload individual CSV files"
+          description="The older per-file path. Attach one or more CSV files; each is auto-detected by its columns. Use the zip drop above for the monthly extract."
         >
           <Card padding="md">
             <form action={uploadCcrsDatasetAction} className="space-y-4" encType="multipart/form-data">

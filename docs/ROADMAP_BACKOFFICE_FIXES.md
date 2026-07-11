@@ -366,3 +366,34 @@ percentiles, per-unit revenue math `qty × unit − discount` clamped at 0, self
 deterministic ordering; **846 passing** total). Validation harness
 `scripts/validate-ccrs-aggregate.mjs` ran the FULL S1+S2 pipeline over the real May 2026 zip
 (results recorded in the S2 PR). No app pages touched; no migration.
+
+### Task H — S3 (migration 0106 + server persist + drag-drop zip uploader) — DONE
+**S3 of 6.** The zero-touch monthly flow the owner asked for: drag the ONE big WSLCB zip onto the
+CCRS page and everything else is automatic.
+**Migration `0106_discovery_market_rollups.sql` (APPLY MANUALLY):** new `discovery_competitor_stats`
+(per tracked license per dataset: retail units/revenue/lines, unit-price distribution columns,
+`by_type` + `top_products` jsonb; unique dataset+license) and `discovery_market_signals`
+(statewide_mover/competitor_mover rows with median + p25 undercut bands); new `discovery_datasets`
+columns `retail_lines`, `wholesale_lines`, `attributed_retail_lines`, `ingest_kind`
+('csv' legacy | 'monthly_zip' transformer). Idempotent; RLS is_staff read/write like 0079/0080.
+**Client (`CcrsZipUploader.tsx`, "use client"):** drag-drop/click card on `/admin/discovery/ccrs`
+(new "Step 2 — Drop the monthly zip"; legacy per-file CSV upload demoted to "Advanced"). Runs the
+S1 zip reader + parser and S2 aggregator IN THE BROWSER over the local File (raw ~1 GB never
+uploads; Vercel limits forbid it anyway), processing inner zips in dependency order with a real
+progress bar (files done / rows scanned), then POSTs only the ~1 MB rollup JSON. Roster comes from
+`discovery_competitors` (self license passed separately for structural exclusion).
+**Server (`market-rollups.ts` + `saveMonthlyRollupsAction`):** `sanitizeAggregationResult` —
+structural validation of the posted payload BEFORE any write (rejects whole on malformed rows,
+caps 5k/200/2k rows, truncates over-long keys, coerces junk numbers to safe zeros — NEVER GUESS);
+`persistAggregationResult` — replace-then-insert per dataset (re-drop = recompute, history kept
+across datasets): statewide → existing `discovery_benchmarks` under NEW class-scoped metrics
+(`retail_unit_price`/`wholesale_unit_price`/`retail_price_per_gram`/`wholesale_price_per_gram`/
+`retail_units`/`wholesale_units`/`retail_revenue`/`wholesale_revenue` — added to `BenchmarkMetric`),
+competitor stats + signals → the 0106 tables, dataset stamped with derived period + honest line
+totals + `benchmarks_computed_at`. Dataset lifecycle `uploading → ready | error` (verbatim errors).
+Loaders for S4–S6: `getLatestTransformerDataset`, `listTransformerDatasets`, `listCompetitorStats`,
+`listMarketSignals`. Guard: legacy "Compute benchmarks" refuses monthly_zip datasets (it reads
+`discovery_ccrs_sales`, empty for them, and would wipe the rollups).
+CI: `tests/compliance/ccrs-monthly-rollups.test.ts` (9 tests — round-trip through the REAL
+aggregator output, rejection of malformed/oversized payloads, junk-coercion; **855 passing** total).
+**Owner reminder: apply migration 0106 manually before dropping the first zip.**

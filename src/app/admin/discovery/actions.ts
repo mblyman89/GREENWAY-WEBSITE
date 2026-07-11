@@ -22,12 +22,17 @@ import { parseVendorLeadsCsv, parseProductLeadsCsv } from "@/lib/discovery/impor
 import { resolveLeadVendorThread } from "@/lib/discovery/lead-vendor-thread-core";
 import {
   createDataset,
+  getDataset,
   ingestCcrsText,
   markDatasetReady,
   markDatasetError,
   deleteDataset,
 } from "@/lib/discovery/ingest";
 import { computeBenchmarks, generateVendorLeadsFromCcrs } from "@/lib/discovery/benchmarks";
+import {
+  sanitizeAggregationResult,
+  persistAggregationResult,
+} from "@/lib/discovery/market-rollups";
 import { enrichKbFromCcrsDataset } from "@/lib/kb/enrich-from-discovery";
 import { listVendorLeads, listProductLeads } from "@/lib/discovery/store";
 import { listDatasets } from "@/lib/discovery/ingest";
@@ -495,6 +500,18 @@ export async function computeBenchmarksAction(formData: FormData): Promise<void>
   const datasetId = str(formData, "dataset_id");
   if (!datasetId) redirect(`${CCRS}?error=${encodeURIComponent("Missing dataset id.")}`);
 
+  // Monthly-zip datasets carry transformer-computed benchmarks; the legacy
+  // recompute reads discovery_ccrs_sales (empty for them) and would WIPE the
+  // rollups. Refuse instead of destroying data.
+  const ds = await getDataset(datasetId as string);
+  if (ds?.ingest_kind === "monthly_zip") {
+    redirect(
+      `${CCRS}?error=${encodeURIComponent(
+        "This dataset came from the monthly zip transformer — its benchmarks are already computed. Re-drop the zip to recompute.",
+      )}`,
+    );
+  }
+
   let rows = 0;
   try {
     const res = await computeBenchmarks(datasetId as string);
@@ -616,6 +633,99 @@ export async function deleteCcrsDatasetAction(formData: FormData): Promise<void>
 export type LeadsAdviceResult =
   | { ok: true; advice: LeadsAdvice }
   | { ok: false; error: string };
+
+// ---------------------------------------------------------------------------
+// Task H (S3): monthly-zip transformer rollup persistence
+// ---------------------------------------------------------------------------
+
+export type SaveMonthlyRollupsResult = {
+  ok: boolean;
+  error?: string;
+  datasetId?: string;
+  benchmarks?: number;
+  competitors?: number;
+  signals?: number;
+};
+
+/**
+ * Called by the in-browser transformer (CcrsZipUploader) after it crunches the
+ * dragged-in monthly zip locally. Receives ONLY the compact AggregationResult
+ * (~1 MB JSON), never raw rows. Validates the payload structurally before a
+ * single row is written (NEVER GUESS), creates the dataset, persists the
+ * rollups, and flips the dataset uploading → ready (or error, verbatim).
+ */
+export async function saveMonthlyRollupsAction(input: {
+  fileName: string;
+  result: unknown;
+}): Promise<SaveMonthlyRollupsResult> {
+  const session = await requirePermission("inventory.manage");
+  if (!(await isDiscoveryEnabled())) {
+    return { ok: false, error: "Product Discovery is turned off." };
+  }
+
+  const sanitized = sanitizeAggregationResult(input.result);
+  if (!sanitized.ok) {
+    return { ok: false, error: `The rollup payload didn't validate: ${sanitized.error}` };
+  }
+  const result = sanitized.result;
+  if (result.totals.saleDetailRows <= 0 || result.statewide.length === 0) {
+    return {
+      ok: false,
+      error:
+        "The zip produced no sales rollups. It should be the full monthly CCRS delivery (with SaleHeader and SalesDetail zips inside).",
+    };
+  }
+
+  const label =
+    result.periodStart && result.periodEnd
+      ? `CCRS monthly · ${result.periodStart.slice(0, 7)}`
+      : `CCRS monthly · ${(input.fileName || "upload").slice(0, 80)}`;
+
+  const datasetId = await createDataset({
+    label,
+    periodStart: result.periodStart,
+    periodEnd: result.periodEnd,
+    sourceNote: `Monthly zip: ${(input.fileName || "").slice(0, 200)}`,
+    uploadedBy: session.userId,
+  });
+  if (!datasetId) {
+    return { ok: false, error: "Could not create the dataset (database not configured)." };
+  }
+
+  try {
+    const written = await persistAggregationResult(datasetId, result);
+    await markDatasetReady(datasetId);
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "discovery.ccrs.monthly_zip",
+      entityType: "discovery_datasets",
+      entityId: datasetId,
+      after: {
+        fileName: input.fileName,
+        period: `${result.periodStart} → ${result.periodEnd}`,
+        totals: result.totals,
+        written,
+      },
+    });
+    revalidatePath(`${BASE}/ccrs`);
+    revalidatePath(`${BASE}/benchmarks`);
+    revalidatePath(BASE);
+    return { ok: true, datasetId, ...written };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Saving the rollups failed.";
+    await markDatasetError(datasetId, message);
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "discovery.ccrs.monthly_zip.error",
+      entityType: "discovery_datasets",
+      entityId: datasetId,
+      after: { fileName: input.fileName, message },
+    }).catch(() => {});
+    return { ok: false, error: message, datasetId };
+  }
+}
 
 /**
  * Run the AI leads advisor over the current discovery pipeline. It re-reads the

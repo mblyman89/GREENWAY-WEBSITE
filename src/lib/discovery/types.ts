@@ -186,6 +186,59 @@ export type DiscoveryDataset = {
   uploaded_by: string | null;
   created_at: string;
   updated_at: string;
+  // Task H (migration 0106) — monthly-zip transformer bookkeeping. Nullable so
+  // datasets created before 0106 (or before the transformer) read cleanly.
+  retail_lines?: number | null;
+  wholesale_lines?: number | null;
+  attributed_retail_lines?: number | null;
+  ingest_kind?: string | null; // 'csv' | 'monthly_zip'
+};
+
+/** Row of discovery_competitor_stats (migration 0106). Money in minor units. */
+export type DiscoveryCompetitorStatRow = {
+  id: number;
+  dataset_id: string;
+  license_number: string;
+  licensee_id: string | null;
+  name: string | null;
+  dba: string | null;
+  city: string | null;
+  retail_units: number;
+  retail_revenue_minor: number;
+  retail_line_count: number;
+  price_sample_size: number;
+  price_min_minor: number | null;
+  price_p25_minor: number | null;
+  price_median_minor: number | null;
+  price_p75_minor: number | null;
+  price_max_minor: number | null;
+  price_avg_minor: number | null;
+  by_type: Array<{ inventoryType: string; units: number; revenueMinor: number }>;
+  top_products: Array<{
+    productName: string;
+    inventoryType: string | null;
+    units: number;
+    revenueMinor: number;
+    medianUnitPriceMinor: number | null;
+  }>;
+  created_at: string;
+};
+
+/** Row of discovery_market_signals (migration 0106). Money in minor units. */
+export type DiscoveryMarketSignalRow = {
+  id: number;
+  dataset_id: string;
+  kind: "statewide_mover" | "competitor_mover";
+  license_number: string | null;
+  inventory_type: string | null;
+  product_name: string | null;
+  brand: string | null;
+  strain_name: string | null;
+  units: number;
+  revenue_minor: number;
+  median_unit_price_minor: number | null;
+  p25_unit_price_minor: number | null;
+  created_at: string;
 };
 
 /** Which CCRS collection file a given upload is. */
@@ -224,7 +277,15 @@ export type BenchmarkMetric =
   | "units"
   | "revenue"
   | "thc_pct"
-  | "cbd_pct";
+  | "cbd_pct"
+  // Task H monthly-extract transformer metrics (class-scoped so retail and
+  // wholesale rollups never collide on the same scope/scope_key):
+  | "retail_price_per_gram"
+  | "wholesale_price_per_gram"
+  | "retail_units"
+  | "wholesale_units"
+  | "retail_revenue"
+  | "wholesale_revenue";
 
 export type DiscoveryBenchmark = {
   id: number;
