@@ -961,3 +961,18 @@ reports: a drop writes ~6,000–8,200 benchmark rows but the un-ranged read stop
 1,000-row cap, and scope_key-ascending ordering meant only alphabetically-early keys (e.g.
 "(unattributed)", numeric-prefix junk "brands") survived. Pure read-layer fix — no migration,
 no re-upload needed; the pages heal on next render.
+
+### I3 — shipped notes
+
+**New shared pure module `brand-core.ts`** (single source for the transformer AND the legacy CSV
+path — the two v1 copies could drift): prefix-before-separator extraction kept, plus (a) a
+junk-candidate blocklist — a candidate is rejected only when EVERY token is a weight/size
+(`3.5g`, `100mg`, spaced variants like `10 ct`), count/pack (`2pk`, `x2`) or generic category
+word (`Flower`, `Preroll`, `Live Resin`…); all-numeric real brands like `2727` (1,311 real hits)
+and lines that merely contain a generic word ("Regulator Sugar Wax (2.0)") pass — and (b) the
+verified `"… by <brand>"` convention: the brand after the last " by " wins when the prefix is
+itself a strain-by-brand run or junk; a junk by-brand still returns null (never guess).
+`aggregate.ts` and `ccrs.ts` now import + re-export it (call sites unchanged).
+
+**Tests:** new `brand-core.test.ts` (+14) with fixtures mirroring real May-2026 names. Suite:
+995 passing. Owner: re-upload monthly zips to rebuild brand benchmarks with the clean extractor.

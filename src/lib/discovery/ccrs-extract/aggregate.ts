@@ -44,6 +44,7 @@
  *     run inside the browser on the dragged-in zip.
  */
 
+import { extractBrand } from "../brand-core";
 import type {
   LicenseeRow,
   SaleHeaderRow,
@@ -358,15 +359,12 @@ export type AggregationResult = {
 };
 
 // ---------------------------------------------------------------------------
-// Brand extraction (same conservative heuristic as ccrs.ts — separator only)
+// Brand extraction — shared v2 heuristic (Task I, I3): junk-token blocklist +
+// "… by <brand>" support, verified against 300k real May-2026 product names.
+// Re-exported so existing imports (tests, downstream consumers) keep working.
 // ---------------------------------------------------------------------------
 
-export function extractBrand(name: string | null): string | null {
-  if (!name) return null;
-  const m = name.match(/^\s*([^|:–-]{2,40}?)\s*[|:–-]\s+/);
-  if (m && m[1].trim().length >= 2) return m[1].trim();
-  return null;
-}
+export { extractBrand } from "../brand-core";
 
 // ---------------------------------------------------------------------------
 // The aggregator

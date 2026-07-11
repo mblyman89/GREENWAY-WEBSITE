@@ -135,16 +135,13 @@ export function normalizeSaleType(raw: string | null | undefined): CcrsSaleType 
 }
 
 /**
- * Extract a likely brand from a CCRS Product.Name. WA product names commonly
- * encode brand as a prefix before a separator (" - ", " | ", ":"). Conservative:
- * only returns a brand when a clear separator exists; else null (never guess).
+ * Extract a likely brand from a CCRS Product.Name — shared v2 heuristic
+ * (Task I, I3): prefix-before-separator with a junk-token blocklist, plus the
+ * verified "… by <brand>" convention. Conservative: null when unsure (never
+ * guess). Re-exported from brand-core so the transformer path can't drift.
  */
-export function extractBrand(name: string | null | undefined): string | null {
-  if (!name) return null;
-  const m = name.match(/^\s*([^|:–-]{2,40}?)\s*[|:–-]\s+/);
-  if (m && m[1].trim().length >= 2) return m[1].trim();
-  return null;
-}
+import { extractBrand } from "./brand-core";
+export { extractBrand };
 
 /** Derived price per gram in minor units, or null when weight unknown/zero. */
 export function pricePerGramMinor(
