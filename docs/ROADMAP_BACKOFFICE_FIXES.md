@@ -1188,3 +1188,92 @@ local: null-on-empty, self-exclusion/PO-weighting labels, area proxy label, comp
 honest missing-wholesale state, shared suppliers + supplier stats ordering/fallback-name/basis,
 competitor cap messaging). Suite: 1078 passing. No migration needed (reads persisted rollups
 as-is).
+
+---
+
+## Task J — Purchase Order Command Center (`/admin/purchasing/new` major upgrade)
+
+## Owner's request (verbatim)
+
+> "I now need you to focus your attention on the new purchase order page, or the purchase
+> builder, the page that I see when I click the 'new purchase order' button on the purchasing
+> page. that page was not touched I can see, did you build a po builder somewhere else? I will
+> upload a screenshot for you to see the page currently and then I want you to give it a major
+> major upgrade and enhancement so it is a true purchase order command center. unless you built
+> the po command center somewhere else? if so, please move it to the new po page. if not, deep
+> research professional and expert level purchase order building. I want this to be clean easy
+> and powerful. please use your vast knowledge and wisdom to build me something truly excellent
+> and awesome. please proceed, follow the standing rules, no guessing no cutting corners no
+> short cuts. be handoff ready. thank you."
+
+Context answered honestly: the I5 "battle plan" cockpit was built on **Discovery → Leads**
+(`PoCockpitSection`), and the I6 market-check card WAS already mounted on the builder — but it
+hides itself when no CCRS dataset/matches exist, and the owner's screenshot showed the page in
+its **empty state** (no active inventory lots ⇒ zero reorder suggestions ⇒ one barren line of
+text). Task J = bring the cockpit ONTO the builder, add a real command-center layer, and make
+the empty state honest and helpful.
+
+### J — shipped notes (PR #TBD)
+
+**Research** — grounded in the existing `docs/RESEARCH_CANNABIS_PURCHASING.md` (Cova reorder
+math, Northstar category benchmarks, NetSuite procurement KPIs) plus fresh reads: Happy Cabbage
+dispensary demand-planning (stockouts on top movers at the front of a purchase cycle are the #1
+revenue leak; overstock of non-movers is the #1 cash trap ⇒ urgency triage must be
+velocity-gated) and Ivalua procurement-dashboard practice (a FEW actionable KPIs beat vanity
+counts; role-relevant rollups; drill-downs over static numbers).
+
+**Pure core `src/lib/purchasing/po-builder-core.ts`** (no server-only, no DB — shared by the
+server page, the client island, and vitest):
+- `classifyUrgency(row, leadTimeDays)` → `stockout` (selling, zero on hand) / `critical`
+  (below reorder AND days-of-supply ≤ the store's real lead time — runs out before a typical
+  delivery) / `low` (below reorder, more runway) / `healthy`. **Velocity-gated:** zero recent
+  sales ⇒ never urgent (reordering a non-mover is how dead stock happens).
+- `builderRowKey(row)` — STABLE row identity (pos_product_key, else `name:<normalized>` —
+  exactly the store's own lot-dedupe key). Fixes a latent hazard: the old table keyed edit
+  state by array index, which client-side sorting would have corrupted.
+- `buildBuilderKpis` (stockout/critical/low counts, needs-action, suggested units + spend in
+  minor units, distinct vendors/categories), `groupRowsByVendor` / `groupRowsByCategory`
+  (needs-action + spend per group, worst-first), `filterRowsByQuery` (name/brand/vendor/
+  category substring), `sortRows` (urgency default reproducing the server order, plus
+  daysLeft/value/product/vendor/category/onHand; stable, non-mutating, Infinity-safe),
+  `presetRowKeys` (needs_action / stockouts / critical / all / none — qty>0 only for urgency
+  presets), `countVendorMismatches` (PO-vendor vs line inventory-vendor sanity check),
+  `buildEmptyStateGuidance` (filtered-to-nothing vs truly-no-lots vs lead-only, with
+  grounded hints on how suggestions are actually computed).
+
+**Page `src/app/admin/purchasing/new/page.tsx`** — retitled "Purchase order command center":
+- **Command strip** (only when rows exist): Stockouts / Order today (≤ lead time, labeled with
+  the store's real setting) / Below reorder / Suggested buy ($ + units) / In view (rows,
+  vendors, categories) — colored borders on the urgent tiles, all computed by the pure core.
+- **Vendor hot list** — top vendors with needs-action items and their suggested spend ("who do
+  I owe a call today?").
+- **Honest empty state** (EmptyState component + guidance hints) replacing the barren one-liner:
+  explains WHY it's empty (filters vs no active lots), primary action (Reset filters / Go to
+  Inventory), secondary (Open Discovery leads), and how suggestions are computed. Lead-prefill
+  arriving onto an empty inventory keeps the builder mounted with an explanatory note.
+- **Port Orchard battle plan ON the builder** — mounts the same `PoCockpitSection` (I5) used on
+  Discovery → Leads: head-to-head board, "they sell it, we don't" buy list with one-click Start
+  PO, price check vs their p25. Best-effort as before (hidden with no dataset) and additionally
+  gated on `isDiscoveryEnabled()` because its Start-PO action requires the Discovery flag.
+- I6 market-check card, AI plan box, manual filters, reference/settings section unchanged.
+
+**Client `src/app/admin/purchasing/new/builder-table.tsx`** — command-center work surface:
+- Live search (product/brand/vendor/category), sort dropdown (urgency default), quick-select
+  chips (Stockouts / Order today / Needs action / All / None) acting on the VISIBLE rows;
+  the prefilled lead row is pinned on top and survives search/presets (except explicit None).
+- Urgency Badge per row (stockout=danger, critical=orange, below reorder=gold, lead=green).
+- All edit state (selection, qty, cost) keyed by the STABLE row key.
+- Sticky bottom order bar (totals, category mix chips, Save as draft / Save & send) so the
+  actions stay visible on long tables.
+- Vendor mismatch warning when selected lines' inventory vendor differs from the PO's vendor.
+- **Contracts preserved exactly:** hidden `lines` JSON field (same NewPoLine field names),
+  `origin`, `from_lead`, `vendor_id/name/email`, `expected_date`, `note`;
+  createPurchaseOrderAction / createAndSendPurchaseOrderAction untouched; lead-prefill URL
+  contract untouched.
+
+**Tests:** +27 in `tests/compliance/po-builder-core.test.ts` (urgency incl. the
+zero-velocity-never-urgent rule and defensive lead-time handling; stable keys; KPI sums and
+dedupe; vendor/category grouping with (unknown) bucket; search; every sort key incl.
+stability + non-mutation + Infinity; all five presets; vendor mismatch counting incl.
+case/whitespace and null vendors; all three empty-state variants). Suite: **1105 passing**
+(was 1078). tsc + eslint clean. No migration needed — reads existing tables only.

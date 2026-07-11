@@ -1,14 +1,22 @@
 import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
-import { Button, Card, CardHeader, Section, Field, Input } from "@/components/admin/ui";
+import { Breadcrumbs, HelpPanel, EmptyState } from "@/components/admin/ux";
+import { Button, Card, CardHeader, Section, Field, Input, Badge } from "@/components/admin/ui";
 import { listVendors } from "@/lib/vendors/store";
 import {
   buildReorderSuggestions,
   getReorderSettings,
+  formatMoneyMinor,
   type PoFilter,
 } from "@/lib/purchasing/po-store";
+import {
+  buildBuilderKpis,
+  groupRowsByVendor,
+  buildEmptyStateGuidance,
+  type BuilderKpis,
+  type BuilderGroupRow,
+} from "@/lib/purchasing/po-builder-core";
 import {
   createPurchaseOrderAction,
   createAndSendPurchaseOrderAction,
@@ -18,6 +26,8 @@ import {
 import { BuilderTable, type SuggestionRow } from "./builder-table";
 import { PoMarketContextCard } from "../PoMarketContextCard";
 import type { PoLineLike } from "@/lib/purchasing/po-market-context-core";
+import { PoCockpitSection } from "@/app/admin/discovery/PoCockpitSection";
+import { isDiscoveryEnabled } from "@/lib/discovery/store";
 
 export const dynamic = "force-dynamic";
 
@@ -52,6 +62,100 @@ const CATEGORY_GUIDE: { label: string; note: string }[] = [
   { label: "Topicals", note: "Slowest (3–6) · order conservatively" },
 ];
 
+// ---------------------------------------------------------------------------
+// Command strip — a FEW real, actionable numbers (procurement-dashboard
+// practice: fewer, smarter metrics; see docs/RESEARCH_CANNABIS_PURCHASING.md).
+// Every figure is computed by the PURE po-builder-core module from the actual
+// reorder suggestions in view — nothing estimated.
+// ---------------------------------------------------------------------------
+function CommandStrip({ kpis, leadTimeDays }: { kpis: BuilderKpis; leadTimeDays: number }) {
+  const stats: { label: string; value: string; sub: string; tone?: "danger" | "orange" | "gold" }[] = [
+    {
+      label: "Stockouts",
+      value: String(kpis.stockoutCount),
+      sub: "selling, zero on hand",
+      tone: kpis.stockoutCount > 0 ? "danger" : undefined,
+    },
+    {
+      label: "Order today",
+      value: String(kpis.criticalCount),
+      sub: `run out within lead time (${leadTimeDays}d)`,
+      tone: kpis.criticalCount > 0 ? "orange" : undefined,
+    },
+    {
+      label: "Below reorder",
+      value: String(kpis.lowCount),
+      sub: "order soon",
+      tone: kpis.lowCount > 0 ? "gold" : undefined,
+    },
+    {
+      label: "Suggested buy",
+      value: formatMoneyMinor(kpis.suggestedSpendMinor),
+      sub: `${kpis.suggestedUnits.toLocaleString("en-US")} units suggested`,
+    },
+    {
+      label: "In view",
+      value: String(kpis.totalRows),
+      sub: `${kpis.vendorCount} vendor${kpis.vendorCount === 1 ? "" : "s"} · ${kpis.categoryCount} categor${kpis.categoryCount === 1 ? "y" : "ies"}`,
+    },
+  ];
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      {stats.map((s) => (
+        <div
+          key={s.label}
+          className={`rounded-[var(--admin-radius-lg)] border bg-[var(--admin-surface)] px-4 py-3 ${
+            s.tone === "danger"
+              ? "border-[var(--admin-danger)]/40"
+              : s.tone === "orange"
+                ? "border-[var(--admin-orange)]/40"
+                : s.tone === "gold"
+                  ? "border-[var(--admin-gold)]/40"
+                  : "border-[var(--admin-border)]"
+          }`}
+        >
+          <div className="text-[0.65rem] font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
+            {s.label}
+          </div>
+          <div
+            className={`mt-1 text-2xl font-bold tabular-nums ${
+              s.tone === "danger"
+                ? "text-[var(--admin-danger)]"
+                : s.tone === "orange"
+                  ? "text-[var(--admin-orange)]"
+                  : s.tone === "gold"
+                    ? "text-[var(--admin-gold)]"
+                    : "text-[var(--admin-text)]"
+            }`}
+          >
+            {s.value}
+          </div>
+          <div className="mt-0.5 text-xs text-[var(--admin-text-muted)]">{s.sub}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Vendor hot list — who needs a call today, computed from the rows in view. */
+function VendorHotList({ groups }: { groups: BuilderGroupRow[] }) {
+  const hot = groups.filter((g) => g.needsActionCount > 0).slice(0, 6);
+  if (hot.length === 0) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 text-xs text-[var(--admin-text-muted)]">
+      <span className="font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
+        Vendors needing action:
+      </span>
+      {hot.map((g) => (
+        <Badge key={g.label} tone={g.label === "(unknown)" ? "neutral" : "orange"}>
+          {g.label}: {g.needsActionCount} item{g.needsActionCount === 1 ? "" : "s"} ·{" "}
+          {formatMoneyMinor(g.suggestedSpendMinor)}
+        </Badge>
+      ))}
+    </div>
+  );
+}
+
 export default async function NewPurchaseOrderPage({
   searchParams,
 }: {
@@ -60,7 +164,13 @@ export default async function NewPurchaseOrderPage({
   await requirePermission("inventory.manage");
   const sp = await searchParams;
 
-  const [vendors, settings] = await Promise.all([listVendors(), getReorderSettings()]);
+  const [vendors, settings, discoveryEnabled] = await Promise.all([
+    listVendors(),
+    getReorderSettings(),
+    // Best-effort: the cockpit's "Start PO" action requires Discovery to be
+    // on, so the section only mounts when the feature flag says so.
+    isDiscoveryEnabled().catch(() => false),
+  ]);
 
   // Resolve AI/manual vendor-name filters → vendor ids.
   const nameToId = new Map<string, string>();
@@ -96,8 +206,6 @@ export default async function NewPurchaseOrderPage({
     belowReorderPoint: s.result.belowReorderPoint,
     daysOfSupplyLeft: s.result.daysOfSupplyLeft,
   }));
-
-  const needCount = rows.filter((r) => r.belowReorderPoint).length;
 
   // Discovery hand-off: when arriving from a promoted product lead, build a
   // prefilled DRAFT line the builder prepends and pre-selects. Nothing is
@@ -160,11 +268,17 @@ export default async function NewPurchaseOrderPage({
       csv(sp, "excBrand").length >
     0;
 
+  // Task J — command-center rollups, computed by the PURE core from the real
+  // suggestion rows and the store's own lead-time setting.
+  const leadTimeDays = settings.default_lead_time_days;
+  const kpis = buildBuilderKpis(rows, leadTimeDays);
+  const vendorGroups = groupRowsByVendor(rows, leadTimeDays);
+
   return (
     <div>
       <AdminPageHeader
-        title="New purchase order"
-        subtitle="Build a cannabis reorder from on-hand stock and recent sales velocity — then email it to the vendor"
+        title="Purchase order command center"
+        subtitle="What needs ordering, from whom, at what price — grounded in your on-hand stock, real sales velocity, and the Port Orchard market"
         breadcrumbs={
           <Breadcrumbs
             items={[{ label: "Purchasing", href: "/admin/purchasing" }, { label: "New" }]}
@@ -204,11 +318,13 @@ export default async function NewPurchaseOrderPage({
 
         <HelpPanel
           id="po-new-help"
-          title="How to build this order"
+          title="How this command center works"
           steps={[
+            "The strip below triages your inventory: STOCKOUTS are selling with nothing on the shelf, ORDER TODAY runs out before a typical delivery arrives, BELOW REORDER needs ordering soon. All computed from your real on-hand stock and sales velocity.",
             "Step 1 — Narrow the list (optional): use the AI box or manual filters to focus on a vendor, category, or brand.",
-            "Step 2 — Review & build: rows below the reorder point are pre-ticked with a suggested quantity. Reorder point = avg daily sales × lead time + safety stock. Adjust quantities and unit costs — every number is a draft you confirm.",
+            "Step 2 — Review & build: search, sort, and quick-select. Rows below the reorder point are pre-ticked with a suggested quantity — every number is a draft you confirm. Reorder point = avg daily sales × lead time + safety stock.",
             "Step 3 — Send: pick the vendor and either Save as draft or Save & send to email the PO straight from here.",
+            "The Port Orchard sections use the latest monthly CCRS drop: the market check prices your candidate lines against observed local retail, and the battle plan shows what competitors sell that you don't — one click starts a prefilled line.",
           ]}
         >
           <p className="text-xs text-[var(--admin-text-muted)]">
@@ -216,6 +332,14 @@ export default async function NewPurchaseOrderPage({
             often; edibles and topicals turn slowly, so order conservatively and watch batch dates.
           </p>
         </HelpPanel>
+
+        {/* Command strip — only when there are rows to triage. */}
+        {rows.length > 0 ? (
+          <div className="space-y-3">
+            <CommandStrip kpis={kpis} leadTimeDays={leadTimeDays} />
+            <VendorHotList groups={vendorGroups} />
+          </div>
+        ) : null}
 
         {/* Step 1 — Narrow the list */}
         <Section
@@ -289,24 +413,74 @@ export default async function NewPurchaseOrderPage({
           description={
             rows.length === 0
               ? "No products to evaluate yet."
-              : `${rows.length} product${rows.length === 1 ? "" : "s"} in view · ${needCount} below reorder point${
+              : `${rows.length} product${rows.length === 1 ? "" : "s"} in view · ${kpis.needsActionCount} need${kpis.needsActionCount === 1 ? "s" : ""} action${
                   hasActiveFilters ? " (filtered)" : ""
                 }`
           }
         >
-          <Card padding="md">
-            <BuilderTable
-              rows={rows}
-              vendors={vendorOptions}
-              origin={origin}
-              planSummary={planSummary}
-              prefill={prefill}
-              fromLeadId={fromLead}
-              createAction={createPurchaseOrderAction}
-              sendAction={createAndSendPurchaseOrderAction}
-            />
-          </Card>
+          {rows.length === 0 && !prefill ? (
+            (() => {
+              const guidance = buildEmptyStateGuidance({ hasActiveFilters, hasPrefill: false });
+              return (
+                <div className="space-y-3">
+                  <EmptyState
+                    icon="📦"
+                    title={guidance.title}
+                    description={guidance.description}
+                    action={
+                      hasActiveFilters ? (
+                        <Link href="/admin/purchasing/new">
+                          <Button variant="primary" size="sm">Reset filters</Button>
+                        </Link>
+                      ) : (
+                        <Link href="/admin/inventory">
+                          <Button variant="primary" size="sm">Go to Inventory</Button>
+                        </Link>
+                      )
+                    }
+                    secondary={
+                      <Link href="/admin/discovery">
+                        <Button variant="neutral" size="sm">Open Discovery leads</Button>
+                      </Link>
+                    }
+                  />
+                  <ul className="space-y-1 text-xs text-[var(--admin-text-muted)]">
+                    {guidance.hints.map((h) => (
+                      <li key={h}>· {h}</li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })()
+          ) : (
+            <Card padding="md">
+              {rows.length === 0 && prefill ? (
+                <p className="mb-4 text-xs text-[var(--admin-text-muted)]">
+                  {buildEmptyStateGuidance({ hasActiveFilters, hasPrefill: true }).description}
+                </p>
+              ) : null}
+              <BuilderTable
+                rows={rows}
+                vendors={vendorOptions}
+                origin={origin}
+                planSummary={planSummary}
+                prefill={prefill}
+                fromLeadId={fromLead}
+                leadTimeDays={leadTimeDays}
+                createAction={createPurchaseOrderAction}
+                sendAction={createAndSendPurchaseOrderAction}
+              />
+            </Card>
+          )}
         </Section>
+
+        {/* Task J: the Port Orchard battle plan, ON the builder — the same
+            best-effort cockpit as Discovery → Leads (head-to-head board, the
+            "they sell it, we don't" buy list with one-click Start PO, and the
+            price check). Renders nothing until a monthly CCRS zip has been
+            processed, so the page stays clean until the data exists. Gated on
+            the Discovery flag because its "Start PO" action requires it. */}
+        {discoveryEnabled ? <PoCockpitSection /> : null}
 
         {/* Reference: category guidance + planning settings (secondary) */}
         <details className="group rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)]">
