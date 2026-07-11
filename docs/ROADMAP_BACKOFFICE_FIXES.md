@@ -532,3 +532,74 @@ null identity, 9-digit id round-trip) + sanitize round-trip/backward-compat/caps
 leads build/digest + local-benchmarks passthrough (**902 passing** total).
 **OWNER REMINDER: apply migration `0107_discovery_competitor_suppliers.sql` manually, then
 re-upload the May monthly zip so supplier data backfills.**
+
+---
+
+## Task H — S8: monthly-zip upload failure — int4 overflow on statewide revenue (fix)
+
+**Owner request (verbatim):** "Please log all of your suggestions, I want to add those after we
+are done fixing the upload. The message says "something went wrong" "discovery benchmarks insert
+failed: value 8932289184 is out of range for type integer" "nothing was saved. Fix the file, it
+should be the monthly delivery zip". I drag and dropped the April zip I gave to you via the git
+release. So it was the right file uploaded. It took a really really long time to get to the fail.
+It looked like it was working, the progress bar moved through the 29 folders. The browser
+constantly kept saying it was frozen and if I wanted to wait or exit. I have uploaded a screenshot
+as well. Please help me figure this out. Follow the standing rules and never guess."
+
+**Root cause (verified against real data — no guessing):** `discovery_benchmarks` (migration 0079)
+declares its money columns (`min_minor` … `avg_minor`) as `integer` (int4, max 2,147,483,647).
+The transformer stores STATEWIDE REVENUE TOTALS in `avg_minor` for the `retail_revenue` /
+`wholesale_revenue` metrics — money in minor units per standing rules. A real month of Washington
+statewide retail is ~$90M+ ≈ 9–12.5 BILLION cents, far past int4. Re-checked the saved May 2026
+rollup JSON (from the S7 real-file validation): 4 rows exceed int4 —
+retail/overall/all = 12,531,365,735; retail/type/(unattributed) = 8,572,258,333;
+wholesale/overall/all = 8,716,406,494; wholesale/type/(unattributed) = 6,676,246,603. April's
+failing value 8,932,289,184 is the same class of row. The failure happened at the very END of the
+~1.5h browser crunch because the overflow only occurs at the DB insert; the error surfaced via
+`insertInBatches` → "discovery_benchmarks insert failed: …". Nothing durable was saved: the save
+action marks the dataset `status='error'` on failure, and only `status='ready'` datasets are ever
+read; deleting the errored dataset (CCRS page) cascades away any partial benchmark batches.
+
+**Fix:** migration `0108_discovery_minor_columns_bigint.sql` (idempotent, MANUAL apply) widens
+every transformer-written `*_minor` column to `bigint` across all three rollup tables
+(`discovery_benchmarks` 6 cols, `discovery_competitor_stats` 6 price cols,
+`discovery_market_signals` 2 price-band cols). Unit-price percentiles didn't overflow in the real
+files checked, but one anomalous CCRS price row would crash the whole save identically — bigint
+everywhere removes the failure mode outright (no cutting corners). No TS code change needed:
+values are exact in JS numbers (≪ 2^53) and PostgREST JSON. The CCRS upload page footnote now
+references migrations 0106–0108.
+
+**Tests:** +3 (905 passing) — sanitize passes >2^31 revenue totals through UNCLAMPED (using the
+exact April failure value 8,932,289,184 and the real May maximum 12,531,365,735), and a schema
+guard pinning migration 0108's DDL (all 14 columns widened; no `type integer` regression in DDL).
+
+**Note on the browser "page unresponsive" prompts:** expected with the current design — the
+transformer crunches ~10.8M rows on the main thread, so Chrome periodically offers wait/exit.
+Choosing "Wait" is safe. Moving the crunch to a Web Worker is logged below as suggestion #6, not
+done in this slice (ONE slice per PR).
+
+**OWNER REMINDERS:**
+1. Apply `0107_discovery_competitor_suppliers.sql` (if not yet applied) and
+   `0108_discovery_minor_columns_bigint.sql` manually.
+2. Delete the errored April dataset row on the CCRS page (optional but tidy).
+3. Re-upload the April zip (and the May zip for supplier backfill) — the insert will now succeed.
+
+### Logged suggestions (owner: "log all of your suggestions, I want to add those after we are done fixing the upload")
+
+1. **Supplier-switching detection (highest value):** with 2+ monthly datasets, diff each
+   competitor's supplier list month-over-month. A store dropping a vendor = that vendor is hungry
+   and negotiable; a store adding one = a product line winning nearby.
+2. **Wholesale price benchmarking:** compute per-supplier average spend-per-line across all
+   buyers statewide; walk into vendor negotiations knowing what that vendor's other accounts look
+   like ("you supply 23 stores in my dataset" is leverage).
+3. **Auto-draft vendor outreach:** the shared suppliers (61 in May) are pre-qualified — they
+   already service the competitive set, so logistics/coverage is proven. Generate a ranked call
+   list with talking points (which nearby stores they supply, observed volume).
+4. **Assortment-gap analysis:** cross-reference top statewide movers (S5/S6 product data) against
+   what shared suppliers carry — find products competitors sell that Greenway doesn't, from
+   vendors already delivering to the area.
+5. **New-vendor early detection:** flag suppliers appearing in the data for the first time each
+   month — early accounts with rising producers get the best pricing.
+6. **Web Worker transformer (UX):** move the zip crunch off the main thread so the browser stays
+   responsive (no "page unresponsive" prompts), with a live progress readout; optionally
+   File System Access API streaming to cut memory further.
