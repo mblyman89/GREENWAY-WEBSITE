@@ -258,6 +258,34 @@ export type CompetitorSupplierStat = {
   spendMinor: number;
 };
 
+/**
+ * S10 (suggestion #2): one STATEWIDE wholesale supplier — every licensee that
+ * SOLD wholesale this month, with observed transfer volume, revenue, unit-price
+ * distribution, and buyer reach. Sources:
+ *  - lines/revenue/prices: wholesale SaleDetail lines whose header carried a
+ *    packable seller LicenseeId (ids ≥ 2^36 are not packed — counted in
+ *    wholesaleLines but absent here, never guessed);
+ *  - buyer reach: DISTINCT buyer licensees on wholesale sale HEADERS (a header
+ *    with no surviving detail lines still proves the relationship);
+ *  - identity: the monthly licensee table (whole every month); missing rows
+ *    leave identity fields null.
+ */
+export type StatewideSupplierStat = {
+  licenseeId: string;
+  licenseNumber: string | null;
+  name: string | null;
+  dba: string | null;
+  lineCount: number;
+  /** Observed wholesale revenue for this supplier (qty × unit − discount), cents. */
+  revenueMinor: number;
+  /** Per-line wholesale unit-price distribution (minor units). */
+  unitPrice: PriceSummary | null;
+  /** Distinct buyer licensees on this supplier's wholesale headers. */
+  distinctBuyers: number;
+  /** How many of those buyers are tracked roster competitors. */
+  trackedBuyers: number;
+};
+
 export type CompetitorStat = {
   licenseNumber: string;
   licenseeId: string;
@@ -316,6 +344,8 @@ export type AggregationResult = {
   statewide: StatewideBenchmark[];
   competitors: CompetitorStat[];
   signals: MarketSignal[];
+  /** S10: statewide wholesale supplier benchmarks (top by revenue). */
+  suppliers: StatewideSupplierStat[];
 };
 
 // ---------------------------------------------------------------------------
@@ -339,6 +369,8 @@ const TOP_PRODUCTS_PER_COMPETITOR = 25;
 export const TOP_SUPPLIERS_PER_COMPETITOR = 10;
 const TOP_SIGNALS_STATEWIDE = 100;
 const TOP_SIGNALS_PER_COMPETITOR = 15;
+/** S10: statewide wholesale suppliers persisted per month (top by revenue). */
+export const TOP_SUPPLIERS_STATEWIDE = 100;
 /** Persisted brand/strain benchmark rows per sale class (top by revenue). */
 const TOP_BENCH_PER_SCOPE = 500;
 /**
@@ -450,6 +482,17 @@ export class CcrsAggregator {
   private statewide = new Map<string, BenchAcc>(); // `${class}\u0001${scope}\u0001${key}`
   private competitors = new Map<string, CompetitorAcc>(); // licenseNumber
   private statewideMovers = new Map<string, MoverAcc>(); // product name
+  /**
+   * S10: statewide wholesale supplier accumulators. Bounded by the licensee
+   * table (~1.7k/month): line stats keyed by seller LicenseeId; buyer reach
+   * keyed the same, deduped via Sets of buyer LicenseeIds (≤ distinct
+   * seller→buyer pairs, far below header count).
+   */
+  private supplierStats = new Map<
+    number,
+    { lineCount: number; revenueMinor: number; price: PriceHistogram }
+  >();
+  private supplierBuyers = new Map<number, Set<number>>();
   private minDate: string | null = null;
   private maxDate: string | null = null;
   private totals = {
@@ -559,19 +602,34 @@ export class CcrsAggregator {
     // so sale details can attribute the spend to that competitor's suppliers.
     let buyerSlot = 0;
     let supplierId = 0;
-    if (classCode === CLASS_WHOLESALE && row.buyerLicenseeId) {
-      const buyerNum = Number(row.buyerLicenseeId);
-      if (Number.isFinite(buyerNum)) {
-        buyerSlot = this.trackedSlotByLicenseeId.get(buyerNum) ?? 0;
-      }
+    if (classCode === CLASS_WHOLESALE) {
+      // S10: pack the seller licensee id for EVERY wholesale header (not just
+      // tracked-buyer ones) so sale details can also feed the STATEWIDE
+      // supplier benchmarks. Packing bound is unchanged: the id occupies the
+      // same bits whether or not a buyer slot is set (max = 2^53 − 1 exactly).
       if (
-        buyerSlot > 0 &&
         Number.isFinite(sellerNum) &&
         Number.isInteger(sellerNum) &&
         sellerNum > 0 &&
         sellerNum < MAX_PACKED_SUPPLIER_ID
       ) {
         supplierId = sellerNum;
+      }
+      if (row.buyerLicenseeId) {
+        const buyerNum = Number(row.buyerLicenseeId);
+        if (Number.isFinite(buyerNum)) {
+          buyerSlot = this.trackedSlotByLicenseeId.get(buyerNum) ?? 0;
+          // S10: buyer reach from HEADERS (a header with no surviving detail
+          // lines still proves the seller→buyer relationship).
+          if (supplierId > 0 && Number.isInteger(buyerNum) && buyerNum > 0) {
+            let set = this.supplierBuyers.get(supplierId);
+            if (!set) {
+              set = new Set();
+              this.supplierBuyers.set(supplierId, set);
+            }
+            set.add(buyerNum);
+          }
+        }
       }
     }
     this.headerMap.set(
@@ -645,6 +703,19 @@ export class CcrsAggregator {
       mover.units += qty;
       mover.revenueMinor += lineMinor;
       mover.price.add(unitMinor);
+    }
+
+    // -- statewide supplier benchmarks (S10: every wholesale line with a
+    //    packable seller id feeds the seller's supplier stats) --
+    if (saleClass === "wholesale" && supplierLicenseeId > 0) {
+      let sup = this.supplierStats.get(supplierLicenseeId);
+      if (!sup) {
+        sup = { lineCount: 0, revenueMinor: 0, price: new PriceHistogram() };
+        this.supplierStats.set(supplierLicenseeId, sup);
+      }
+      sup.lineCount += 1;
+      sup.revenueMinor += lineMinor;
+      sup.price.add(unitMinor);
     }
 
     // -- competitor sourcing (S7: wholesale lines BOUGHT by a tracked license) --
@@ -899,6 +970,37 @@ export class CcrsAggregator {
       }
     }
 
+    // S10: statewide wholesale supplier benchmarks — top by observed revenue.
+    const suppliers: StatewideSupplierStat[] = [...this.supplierStats.entries()]
+      .sort(
+        (a, b) =>
+          b[1].revenueMinor - a[1].revenueMinor ||
+          b[1].lineCount - a[1].lineCount ||
+          a[0] - b[0],
+      )
+      .slice(0, TOP_SUPPLIERS_STATEWIDE)
+      .map(([supplierId, s]) => {
+        const id = this.licenseeInfoById.get(supplierId);
+        const buyers = this.supplierBuyers.get(supplierId);
+        let trackedBuyers = 0;
+        if (buyers) {
+          for (const b of buyers) {
+            if (this.trackedSlotByLicenseeId.has(b)) trackedBuyers += 1;
+          }
+        }
+        return {
+          licenseeId: String(supplierId),
+          licenseNumber: id?.licenseNumber ?? null,
+          name: id?.name ?? null,
+          dba: id?.dba ?? null,
+          lineCount: s.lineCount,
+          revenueMinor: s.revenueMinor,
+          unitPrice: s.price.summary(),
+          distinctBuyers: buyers?.size ?? 0,
+          trackedBuyers,
+        };
+      });
+
     return {
       periodStart: this.minDate,
       periodEnd: this.maxDate,
@@ -906,6 +1008,7 @@ export class CcrsAggregator {
       statewide,
       competitors,
       signals,
+      suppliers,
     };
   }
 }

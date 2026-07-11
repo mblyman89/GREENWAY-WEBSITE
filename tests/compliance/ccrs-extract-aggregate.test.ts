@@ -18,6 +18,7 @@ import {
   U53Map,
   extractBrand,
   CcrsAggregator,
+  TOP_SUPPLIERS_STATEWIDE,
   type AggregationResult,
 } from "@/lib/discovery/ccrs-extract/aggregate";
 import type {
@@ -682,5 +683,194 @@ describe("CcrsAggregator wholesale sourcing (S7)", () => {
     expect(sup.licenseeId).toBe("123456789");
     expect(sup.name).toBe("BIG ID FARMS LLC");
     expect(sup.spendMinor).toBe(660);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// S10: statewide wholesale supplier benchmarks
+// ---------------------------------------------------------------------------
+
+describe("CcrsAggregator statewide supplier benchmarks (S10)", () => {
+  it("emits the fixture's wholesale seller with revenue, price summary, and buyer reach", () => {
+    const r = runFixture();
+    // Only H_WS is wholesale: seller 901 -> buyer 900, 50 x $2.20 = $110.00.
+    expect(r.suppliers).toHaveLength(1);
+    const s = r.suppliers[0];
+    expect(s.licenseeId).toBe("901");
+    expect(s.licenseNumber).toBe("999999");
+    expect(s.name).toBe("SOMEWHERE ELSE LLC");
+    expect(s.dba).toBeNull();
+    expect(s.lineCount).toBe(1);
+    expect(s.revenueMinor).toBe(11000);
+    expect(s.unitPrice?.sampleSize).toBe(1);
+    expect(s.unitPrice?.medianMinor).toBe(220);
+    expect(s.distinctBuyers).toBe(1);
+    expect(s.trackedBuyers).toBe(1); // buyer 900 is the tracked competitor
+  });
+
+  it("includes suppliers whose buyers are NOT tracked (statewide view, unlike S7)", () => {
+    const agg = new CcrsAggregator({ selfLicenseNumber: SELF, trackedLicenseNumbers: [COMP] });
+    agg.addLicensee(licensee("900", COMP, "POT ZONE PO LLC"));
+    agg.addLicensee(licensee("901", "999999", "SOMEWHERE ELSE LLC"));
+    agg.addLicensee(licensee("902", "888888", "ANOTHER STORE LLC"));
+    // 901 sells to 902 — neither party is on the roster.
+    agg.addSaleHeader(header("100", "901", "wholesale", "2026-05-03", "902"));
+    agg.addSaleDetail(detail("100", null, 10, 500));
+    const r = agg.result();
+    expect(r.competitors).toHaveLength(0); // S7 view stays empty
+    expect(r.suppliers).toHaveLength(1); // S10 view sees the transfer
+    const s = r.suppliers[0];
+    expect(s.licenseeId).toBe("901");
+    expect(s.revenueMinor).toBe(5000);
+    expect(s.distinctBuyers).toBe(1);
+    expect(s.trackedBuyers).toBe(0);
+  });
+
+  it("accumulates lines across headers with qty x price - discount, clamped at zero", () => {
+    const agg = new CcrsAggregator({ selfLicenseNumber: SELF, trackedLicenseNumbers: [COMP] });
+    agg.addLicensee(licensee("901", "999999", "SUPPLIER A LLC"));
+    agg.addSaleHeader(header("100", "901", "wholesale", "2026-05-03", "800"));
+    agg.addSaleHeader(header("101", "901", "wholesale", "2026-05-10", "801"));
+    agg.addSaleDetail(detail("100", null, 10, 500)); // $50.00
+    agg.addSaleDetail(detail("100", null, 4, 250, 100)); // $10.00 - $1.00 = $9.00
+    agg.addSaleDetail(detail("101", null, 1, 300, 9999)); // clamps to $0.00
+    const r = agg.result();
+    expect(r.suppliers).toHaveLength(1);
+    const s = r.suppliers[0];
+    expect(s.lineCount).toBe(3);
+    expect(s.revenueMinor).toBe(5900);
+    expect(s.unitPrice?.sampleSize).toBe(3);
+    expect(s.distinctBuyers).toBe(2); // buyers 800 and 801
+  });
+
+  it("counts buyer reach from HEADERS, including headers with no surviving lines", () => {
+    const agg = new CcrsAggregator({ selfLicenseNumber: SELF, trackedLicenseNumbers: [COMP] });
+    agg.addLicensee(licensee("901", "999999", "SUPPLIER A LLC"));
+    agg.addSaleHeader(header("100", "901", "wholesale", "2026-05-03", "800"));
+    agg.addSaleHeader(header("101", "901", "wholesale", "2026-05-04", "801")); // no lines
+    agg.addSaleDetail(detail("100", null, 1, 500));
+    const r = agg.result();
+    const s = r.suppliers[0];
+    expect(s.lineCount).toBe(1);
+    // The line-less header still proves the 901 -> 801 relationship.
+    expect(s.distinctBuyers).toBe(2);
+  });
+
+  it("does NOT emit a supplier that has headers but zero surviving detail lines", () => {
+    const agg = new CcrsAggregator({ selfLicenseNumber: SELF, trackedLicenseNumbers: [COMP] });
+    agg.addLicensee(licensee("901", "999999", "SUPPLIER A LLC"));
+    agg.addSaleHeader(header("100", "901", "wholesale", "2026-05-03", "800"));
+    // No detail lines at all — no observed volume, so no benchmark row.
+    const r = agg.result();
+    expect(r.suppliers).toHaveLength(0);
+  });
+
+  it("counts self as a buyer in distinctBuyers but NOT in trackedBuyers (self is not a competitor)", () => {
+    const agg = new CcrsAggregator({
+      selfLicenseNumber: SELF,
+      trackedLicenseNumbers: [SELF, COMP], // self in list on purpose — constructor drops it
+    });
+    agg.addLicensee(licensee("736", SELF, "LYMAN'S MARIJUANA L.L.C.", "GREENWAY MARIJUANA"));
+    agg.addLicensee(licensee("900", COMP, "POT ZONE PO LLC"));
+    agg.addLicensee(licensee("901", "999999", "SUPPLIER A LLC"));
+    agg.addSaleHeader(header("100", "901", "wholesale", "2026-05-03", "736")); // sells to SELF
+    agg.addSaleHeader(header("101", "901", "wholesale", "2026-05-04", "900")); // sells to competitor
+    agg.addSaleDetail(detail("100", null, 10, 500));
+    agg.addSaleDetail(detail("101", null, 5, 400));
+    const r = agg.result();
+    const s = r.suppliers[0];
+    expect(s.distinctBuyers).toBe(2);
+    expect(s.trackedBuyers).toBe(1); // only 900; self never counts as tracked
+  });
+
+  it("emits self honestly as a statewide supplier when self SELLS wholesale", () => {
+    // The statewide table describes the market, never hides facts: if the
+    // self license shows up as a wholesale SELLER, that is reported as-is.
+    const agg = new CcrsAggregator({ selfLicenseNumber: SELF, trackedLicenseNumbers: [COMP] });
+    agg.addLicensee(licensee("736", SELF, "LYMAN'S MARIJUANA L.L.C.", "GREENWAY MARIJUANA"));
+    agg.addLicensee(licensee("902", "888888", "ANOTHER STORE LLC"));
+    agg.addSaleHeader(header("100", "736", "wholesale", "2026-05-03", "902"));
+    agg.addSaleDetail(detail("100", null, 2, 750));
+    const r = agg.result();
+    expect(r.suppliers).toHaveLength(1);
+    expect(r.suppliers[0].licenseNumber).toBe(SELF);
+    expect(r.suppliers[0].revenueMinor).toBe(1500);
+  });
+
+  it("keeps identity null (never guessed) when the seller's licensee row is missing", () => {
+    const agg = new CcrsAggregator({ selfLicenseNumber: SELF, trackedLicenseNumbers: [COMP] });
+    // Seller 903 has NO licensee row in this drop.
+    agg.addSaleHeader(header("100", "903", "wholesale", "2026-05-03", "800"));
+    agg.addSaleDetail(detail("100", null, 1, 700));
+    const r = agg.result();
+    const s = r.suppliers[0];
+    expect(s.licenseeId).toBe("903");
+    expect(s.licenseNumber).toBeNull();
+    expect(s.name).toBeNull();
+    expect(s.dba).toBeNull();
+    expect(s.revenueMinor).toBe(700);
+  });
+
+  it("caps the table at TOP_SUPPLIERS_STATEWIDE by revenue desc, dropping the smallest", () => {
+    const agg = new CcrsAggregator({ selfLicenseNumber: SELF, trackedLicenseNumbers: [COMP] });
+    const N = TOP_SUPPLIERS_STATEWIDE + 5;
+    for (let i = 0; i < N; i += 1) {
+      const id = `${2000 + i}`;
+      agg.addLicensee(licensee(id, `${600000 + i}`, `SUPPLIER ${String(i).padStart(3, "0")} LLC`));
+      agg.addSaleHeader(header(`${5000 + i}`, id, "wholesale", "2026-05-05", "800"));
+      // Distinct revenue per supplier so ordering is deterministic (i = N-1 highest).
+      agg.addSaleDetail(detail(`${5000 + i}`, null, 1, 1000 + i * 10));
+    }
+    const r = agg.result();
+    expect(r.suppliers).toHaveLength(TOP_SUPPLIERS_STATEWIDE);
+    expect(r.suppliers[0].name).toBe(`SUPPLIER ${String(N - 1).padStart(3, "0")} LLC`);
+    expect(r.suppliers[0].revenueMinor).toBe(1000 + (N - 1) * 10);
+    // The 5 lowest-revenue suppliers (i = 0..4) fell off the table.
+    expect(r.suppliers.some((s) => s.name === "SUPPLIER 000 LLC")).toBe(false);
+    expect(r.suppliers.some((s) => s.name === "SUPPLIER 004 LLC")).toBe(false);
+    expect(r.suppliers.some((s) => s.name === "SUPPLIER 005 LLC")).toBe(true);
+    // The honest total still counts every line.
+    expect(r.totals.wholesaleLines).toBe(N);
+  });
+
+  it("breaks revenue ties by lineCount desc, then licensee id asc (deterministic)", () => {
+    const agg = new CcrsAggregator({ selfLicenseNumber: SELF, trackedLicenseNumbers: [COMP] });
+    agg.addLicensee(licensee("910", "111111", "TIE MORE LINES LLC"));
+    agg.addLicensee(licensee("905", "222222", "TIE LOW ID LLC"));
+    agg.addLicensee(licensee("907", "333333", "TIE HIGH ID LLC"));
+    // 910: revenue 1000 across 2 lines. 905 & 907: revenue 1000 across 1 line.
+    agg.addSaleHeader(header("100", "910", "wholesale", "2026-05-03", "800"));
+    agg.addSaleDetail(detail("100", null, 1, 600));
+    agg.addSaleDetail(detail("100", null, 1, 400));
+    agg.addSaleHeader(header("101", "905", "wholesale", "2026-05-03", "800"));
+    agg.addSaleDetail(detail("101", null, 1, 1000));
+    agg.addSaleHeader(header("102", "907", "wholesale", "2026-05-03", "800"));
+    agg.addSaleDetail(detail("102", null, 1, 1000));
+    const r = agg.result();
+    expect(r.suppliers.map((s) => s.licenseeId)).toEqual(["910", "905", "907"]);
+  });
+
+  it("skips sellers with ids >= 2^36 (unpackable) while still counting the wholesale line", () => {
+    const agg = new CcrsAggregator({ selfLicenseNumber: SELF, trackedLicenseNumbers: [COMP] });
+    const hugeId = String(2 ** 36); // exactly at the exclusive bound
+    agg.addLicensee(licensee(hugeId, "444444", "HUGE ID FARMS LLC"));
+    agg.addSaleHeader(header("100", hugeId, "wholesale", "2026-05-03", "800"));
+    agg.addSaleDetail(detail("100", null, 1, 500));
+    const r = agg.result();
+    expect(r.suppliers).toHaveLength(0); // absent, never guessed
+    expect(r.totals.wholesaleLines).toBe(1); // still honestly counted
+  });
+
+  it("round-trips a 9-digit seller id even when the buyer is untracked (widened S10 packing)", () => {
+    const agg = new CcrsAggregator({ selfLicenseNumber: SELF, trackedLicenseNumbers: [COMP] });
+    agg.addLicensee(licensee("123456789", "777777", "BIG ID FARMS LLC"));
+    // Buyer 902 is NOT on the roster — before S10 this header packed no supplier.
+    agg.addSaleHeader(header("327733904", "123456789", "wholesale", "2026-05-03", "902"));
+    agg.addSaleDetail(detail("327733904", null, 3, 220));
+    const r = agg.result();
+    expect(r.suppliers).toHaveLength(1);
+    expect(r.suppliers[0].licenseeId).toBe("123456789");
+    expect(r.suppliers[0].name).toBe("BIG ID FARMS LLC");
+    expect(r.suppliers[0].revenueMinor).toBe(660);
   });
 });
