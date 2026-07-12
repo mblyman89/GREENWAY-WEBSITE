@@ -1575,3 +1575,63 @@ hint, required category select, register/re-verify/remove with audits
 **Tests:** +3 pure self-test registrations (`__runMedTaxTests`,
 `__runMedicalAuthorizationTests`, `__runMedicalSaleTests`). Suite: **1139 passing** (was
 1136). tsc + eslint clean. **Owner action: apply migration 0113 (after 0110–0112).**
+
+---
+
+## Shipped — Task P: medical guided intake polish (PR #400)
+
+**Problem set (owner-reported):** blank page when printing a recognition card; a
+redundant "Authorization Intake" page duplicating the Patient Records flow; no
+step-by-step guidance for the DOH registration process; open questions about
+where the UPID comes from, DOH login, and expiration dates.
+
+**Print fix:** `/admin/medical/card/[id]` rendered its own `<html>/<body>`
+INSIDE the root layout's document — nested documents crash the React render
+(the blank page). Rewritten as a normal admin page with scoped `@media print`
+CSS (`@page 3.5in × 2.25in` credit-card layout) + client `CardPrintButton`
+(`window.print()`), same pattern as the order ticket. Toolbar adds "Mark
+printed & laminated."
+
+**Consolidation:** `/admin/medical/intake`, `AuthorizationIntakeForm`, and
+`CustomerPicker` DELETED; the duplicate `issueCardAction` +
+`intakeAuthorizationAction` paths replaced by ONE hardened `guidedIntakeAction`.
+The Medical nav group is now a direct-link button to `/admin/medical`
+(DIRECT_LINK_GROUPS, like Reports/CCRS). MedicalPanel on the customer page
+links into the wizard preselected.
+
+**Research (scraped verbatim — RCW 69.51A.230/.220, DOH MCR + FAQs):** the card
+number/UPID is "a randomly generated and unique identifying number" GENERATED
+BY THE MCR — staff copy it, never invent it. MCR login is via SecureAccess
+Washington (SAW), Chrome recommended, store selected by LCB license 413541; no
+public API. Card expiration = authorization form expiration, statutory max
+1 year (adult) / 6 months (minor) from the date the practitioner ISSUED the
+authorization. $1 minimum fee at registration (230(10)). Photo: portrait JPEG
+≥400×600 uploaded into the MCR; compassionate renewals photo-exempt (230(4)(b)).
+Only DOH-Certified Consultants register patients; any budtender may verify by
+card number and sell to existing cardholders. 30-day post-expiry grace keeps
+the same card number on renewal.
+
+**New pure core `src/lib/medical/medical-intake-core.ts`** (self-tested):
+`addMonthsClamped` (leap-safe), `ageOn`, `classifyPatientAge` (minor /
+adult_18_20 / adult_21_plus), `maxExpirationFor`, `checkIntakeDates` (blocks
+expiration > statutory max, expiration ≤ effective, expired-at-issue,
+future-dated auth, effective-before-auth), `checkCardNumber` (shape check only —
+MCR format unpublished).
+
+**GuidedIntakeWizard** (server component on `/admin/medical`): Step 1 patient
+search with age-class badges + existing-valid-card renewal/replacement warning;
+Step 2 DOH 608-048 four-point checklist + Canon PIXMA TS3522 scan upload;
+Step 3 numbered MCR walkthrough with required confirmations (certified
+consultant, photo uploaded [waived on compassionate renewal], $1 fee collected,
+minor parent/guardian DP per RCW 69.51A.220); Step 4 MCR-generated card number +
+dates with auto-hinted statutory maximum. Success banner links straight to the
+print page. Recent-cards queue with MCR / scan / printed badges.
+
+**Migration 0114 (owner applies manually AFTER 0113):** adds
+`authorization_issued_on`, `card_fee_collected`, `photo_uploaded_to_mcr`,
+`compassionate_renewal` to `patient_authorizations`. `createAuthorization`
+degrades gracefully pre-migration (42703 → retry without new columns).
+
+**Tests:** +1 pure self-test registration (`__runMedicalIntakeTests`). Suite:
+**1140 passing** (was 1139). tsc + eslint clean. **Owner action: apply
+migration 0114 (after 0113).**
