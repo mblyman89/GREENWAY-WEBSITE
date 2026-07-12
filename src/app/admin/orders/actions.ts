@@ -523,3 +523,62 @@ export async function removeLoyaltyAction(formData: FormData): Promise<void> {
   revalidatePath(`/admin/orders/${orderId}`);
   redirect(`/admin/orders/${orderId}?ok=${encodeURIComponent(res.message)}`);
 }
+
+/**
+ * STAFF-CONFIRMED customer↔order link (Task T / PR 4). Candidates are ranked
+ * by exact normalized phone/email match, but linking is always a human click —
+ * never automatic. Once linked, order completion accrues loyalty points for
+ * the customer (existing hook in orders-store.setOrderStatus).
+ */
+export async function linkOrderCustomerAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("orders.manage");
+  const orderId = String(formData.get("id") ?? "");
+  const customerId = String(formData.get("customerId") ?? "");
+  if (!orderId || !customerId) return;
+
+  const { linkCustomerToOrder } = await import("@/lib/orders/customer-link-store");
+  const res = await linkCustomerToOrder(orderId, customerId, {
+    actorId: session.profile.id,
+    actorLabel: actorLabel(session.email, session.profile.full_name),
+  });
+  if (!res.ok) {
+    redirect(`/admin/orders/${orderId}?blocked=${encodeURIComponent(res.error.slice(0, 500))}`);
+  }
+
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: "order.customer_linked",
+    entityType: "order",
+    entityId: orderId,
+    after: { customer_id: customerId },
+  });
+  revalidatePath(`/admin/orders/${orderId}`);
+  redirect(`/admin/orders/${orderId}?ok=${encodeURIComponent("Customer linked — points will accrue on completion.")}`);
+}
+
+/** Remove a customer link (wrong match). */
+export async function unlinkOrderCustomerAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("orders.manage");
+  const orderId = String(formData.get("id") ?? "");
+  if (!orderId) return;
+
+  const { unlinkCustomerFromOrder } = await import("@/lib/orders/customer-link-store");
+  const res = await unlinkCustomerFromOrder(orderId, {
+    actorId: session.profile.id,
+    actorLabel: actorLabel(session.email, session.profile.full_name),
+  });
+  if (!res.ok) {
+    redirect(`/admin/orders/${orderId}?blocked=${encodeURIComponent(res.error.slice(0, 500))}`);
+  }
+
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: "order.customer_unlinked",
+    entityType: "order",
+    entityId: orderId,
+  });
+  revalidatePath(`/admin/orders/${orderId}`);
+  redirect(`/admin/orders/${orderId}?ok=${encodeURIComponent("Customer link removed.")}`);
+}

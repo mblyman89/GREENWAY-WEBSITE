@@ -52,7 +52,7 @@ function PolicyLinks({ compact = false }: { compact?: boolean }) {
 }
 
 /**
- * Store hours graphic ("OPEN / 8am-11:45pm"). Shared by mobile + desktop.
+ * Store hours graphic ("OPEN / 8am-11pm"). Shared by mobile + desktop.
  * The artwork is now transparent (no background box), so it blends with the
  * black footer and is free to scale up and fill its column. We let it grow to
  * the full width of its container rather than capping it with a small box, so
@@ -71,7 +71,7 @@ async function HoursImage({ align = "center" }: { align?: "center" | "end" }) {
     <div className={`flex w-full ${align === "end" ? "justify-end" : "justify-center"}`}>
       <Image
         src={src}
-        alt="Greenway Marijuana store hours: open daily 8am to 11:45pm"
+        alt="Greenway Marijuana store hours: open daily 8am to 11pm"
         width={580}
         height={360}
         className="h-auto w-full max-w-[20rem] object-contain lg:max-w-none"
