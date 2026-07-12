@@ -44,6 +44,8 @@ function publicPathForBlock(page: string, blockKey: string): string | null {
       return "/menu";
     case "loyalty":
       return "/loyalty";
+    case "medical":
+      return "/medical";
     case "vendors":
       return "/vendor-delivery";
     case "specials":

@@ -183,6 +183,36 @@ export const CONTENT_BLOCK_SEEDS: ContentBlockSeed[] = [
     field_type: "plain",
     defaultValue: "Get updates on our promotions tailored to you.",
   },
+  // ---- Medical -------------------------------------------------------------
+  {
+    block_key: "medical.hero.title",
+    page: "medical",
+    section: "hero",
+    label: "Medical hero — title",
+    field_type: "plain",
+    seo_impact: true,
+    defaultValue: "Medical Cannabis at Greenway",
+  },
+  {
+    block_key: "medical.hero.subtitle",
+    page: "medical",
+    section: "hero",
+    label: "Medical hero — subtitle",
+    field_type: "plain",
+    defaultValue:
+      "Greenway Marijuana is a medically endorsed retailer with certified medical cannabis consultants on staff.",
+  },
+  {
+    block_key: "medical.intro.body",
+    page: "medical",
+    section: "intro",
+    label: "Medical — intro paragraph",
+    help_text:
+      "The paragraph under the hero explaining the medical program at a glance. Keep claims factual — no therapeutic or curative claims.",
+    field_type: "plain",
+    defaultValue:
+      "Washington patients with a valid authorization can join the state's voluntary Medical Cannabis Authorization Database at our store, receive a recognition card, and unlock tax savings and higher purchase limits on qualifying products. Here's how it works and what to bring.",
+  },
   // ---- Vendors -------------------------------------------------------------
   {
     block_key: "vendors.outreach.heading",
