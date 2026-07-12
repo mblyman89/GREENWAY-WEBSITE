@@ -6,131 +6,92 @@ import { requirePermission } from "@/lib/auth/session";
 import { isOwnerRole } from "@/lib/auth/roles";
 import { recordAudit } from "@/lib/auth/audit";
 import {
-  parseRecordDraft,
-  parseSampleJson,
-  recordSampleEvent,
+  assignSampleToEmployee,
+  listAvailableSampleLots,
   updateSampleSettings,
   getSampleSettings,
-  createSampleImport,
-  type RecordDraft,
 } from "@/lib/compliance/trade-samples";
+import {
+  buildAvailableSampleRows,
+  parseAssignmentDraft,
+  type AssignmentDraft,
+} from "@/lib/compliance/employee-sample-core";
 import { getEmployee } from "@/lib/staffing/store";
 
 const BASE = "/admin/compliance/samples";
 
-export type SampleActionResult =
-  | { ok: true; message?: string }
+export type AssignSampleResult =
+  | { ok: true; message: string; adjustmentWarning: string | null }
   | { ok: false; error?: string; errors?: string[]; blocked?: boolean };
 
 /**
- * Record a TRADE sample event (incoming from processor, or outgoing to a paid
- * employee). Validates per-unit size caps + fields via the pure core, then
- * HARD-ENFORCES the applicable quarterly cap in the store (incoming: 120/
- * processor; outgoing: 30/employee). IQC is producer/processor-only [096(3)]
- * and is not available to a retailer, so it has been fully retired. Every event
- * is audited. Customer samples are impossible by design (no customer direction)
- * per WAC 314-55-096(2).
+ * Task K — assign a sample lot (picked from the available-samples TABLE) to a
+ * CURRENT paid employee, then mark it out of the system the CCRS-required way.
+ *
+ * Compliance chain (WAC 314-55-096):
+ *   • only current PAID employees may receive a trade sample [096(1)(j)(i)]
+ *   • per-unit size caps validated from the lot [096(1)(e)]
+ *   • 30 units/employee/quarter HARD-ENFORCED server-side [096(1)(j)(vi)]
+ *   • the outgoing ledger row records amount + product type + employee name
+ *     [096(1)(j)(iv)-(v)]
+ *   • a negative `employee_sample` inventory adjustment decrements the lot and
+ *     exports to CCRS InventoryAdjustment.csv as reason "Other" with a detail
+ *     naming the employee — the LCB-confirmed reporting shape.
+ * Every assignment is audited. Customer samples are impossible by design.
  */
-export async function recordSampleAction(draft: RecordDraft): Promise<SampleActionResult> {
+export async function assignSampleAction(draft: AssignmentDraft): Promise<AssignSampleResult> {
   const session = await requirePermission("settings.manage");
   const settings = await getSampleSettings();
 
-  const parsed = parseRecordDraft(draft, settings);
+  // Re-resolve the selected lot SERVER-SIDE (never trust the client row):
+  // it must still be an active sample lot with units on hand.
+  const lots = await listAvailableSampleLots();
+  const { rows } = buildAvailableSampleRows(lots);
+  const row = rows.find((r) => r.lotId === draft.lotId) ?? null;
+  if (!row) {
+    return { ok: false, error: "That sample is no longer available (already assigned or removed). Refresh the page." };
+  }
+
+  const parsed = parseAssignmentDraft(draft, row, settings);
   if (!parsed.ok) return { ok: false, errors: parsed.errors };
 
-  // Resolve employee name for outgoing (for the ledger + audit).
-  let employeeName: string | null = null;
-  if (parsed.value.direction === "outgoing" && parsed.value.employeeId) {
-    const emp = await getEmployee(parsed.value.employeeId);
-    if (!emp) return { ok: false, error: "Employee not found." };
-    if (!emp.active) return { ok: false, error: "Samples may only go to CURRENT paid employees (WAC 314-55-096(1)(i))." };
-    employeeName = emp.full_name;
+  // Samples may only go to CURRENT paid employees [096(1)(j)(i)].
+  const emp = await getEmployee(parsed.value.employeeId);
+  if (!emp) return { ok: false, error: "Employee not found." };
+  if (!emp.active) {
+    return { ok: false, error: "Samples may only go to CURRENT paid employees (WAC 314-55-096(1)(j)(i))." };
   }
 
-  const res = await recordSampleEvent(parsed.value, { employeeName, createdBy: session.userId });
-  if (!res.ok) {
-    return { ok: false, error: res.error, blocked: res.blocked };
-  }
+  const res = await assignSampleToEmployee(parsed.value, {
+    employeeName: emp.full_name,
+    createdBy: session.userId,
+  });
+  if (!res.ok) return { ok: false, error: res.error, blocked: res.blocked };
 
   await recordAudit({
     actorId: session.userId,
     actorEmail: session.email,
-    action: "trade_sample.recorded",
+    action: "trade_sample.assigned",
     entityType: "trade_sample_event",
-    entityId: res.id,
+    entityId: res.eventId,
     after: {
-      category: parsed.value.category,
-      direction: parsed.value.direction,
+      lot_id: parsed.value.lotId,
+      employee_id: parsed.value.employeeId,
+      employee_name: emp.full_name,
       product_type: parsed.value.productType,
       unit_count: parsed.value.unitCount,
       quarter_key: parsed.value.quarterKey,
-      processor_name: parsed.value.processorName,
-      employee_id: parsed.value.employeeId,
       from_sample_jar: parsed.value.fromSampleJar,
       source_product_name: parsed.value.sourceProductName,
       source_lot_ref: parsed.value.sourceLotRef,
-      import_id: parsed.value.importId,
+      adjustment_ok: res.adjustmentWarning === null,
     },
   });
 
   revalidatePath(BASE);
-  return { ok: true, message: res.message };
-}
-
-export type SampleImportResult =
-  | { ok: true; message: string; lotCount: number; totalUnits: number }
-  | { ok: false; errors: string[] };
-
-/**
- * Upload a sample JSON batch ("samples come to us like regular products, with
- * its own json to upload"). We parse the permissive shape, persist the batch,
- * and return a summary. The owner then records + assigns the parsed lots from
- * the ledger form. Nothing is auto-recorded (drafts-only rule).
- */
-export async function uploadSampleJsonAction(input: {
-  fileName?: string | null;
-  content: string;
-  notes?: string | null;
-}): Promise<SampleImportResult> {
-  const session = await requirePermission("settings.manage");
-
-  const parsed = parseSampleJson(input.content);
-  if (!parsed.ok) return { ok: false, errors: parsed.errors };
-
-  let raw: unknown;
-  try {
-    raw = JSON.parse(input.content);
-  } catch {
-    return { ok: false, errors: ["The file is not valid JSON."] };
-  }
-
-  const res = await createSampleImport({
-    fileName: input.fileName?.trim() || null,
-    raw,
-    lots: parsed.lots,
-    totalUnits: parsed.totalUnits,
-    notes: input.notes?.trim() || null,
-    uploadedBy: session.userId,
-  });
-  if (!res.ok) return { ok: false, errors: [res.error] };
-
-  await recordAudit({
-    actorId: session.userId,
-    actorEmail: session.email,
-    action: "trade_sample.json_imported",
-    entityType: "sample_json_import",
-    entityId: res.id,
-    after: { lot_count: parsed.lots.length, unit_count: parsed.totalUnits, file_name: input.fileName ?? null },
-  });
-
-  revalidatePath(BASE);
-  const warn = parsed.warnings.length ? ` (${parsed.warnings.length} row(s) skipped)` : "";
-  return {
-    ok: true,
-    message: `Imported ${parsed.lots.length} lot(s) / ${parsed.totalUnits} unit(s)${warn}.`,
-    lotCount: parsed.lots.length,
-    totalUnits: parsed.totalUnits,
-  };
+  revalidatePath(`${BASE}/history`);
+  revalidatePath("/admin/inventory");
+  return { ok: true, message: res.message, adjustmentWarning: res.adjustmentWarning };
 }
 
 /** Owner-only: tune the trade sample settings (caps + enforcement). */

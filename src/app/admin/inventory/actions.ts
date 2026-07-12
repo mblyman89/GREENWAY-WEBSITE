@@ -10,6 +10,9 @@ const VALID_REASONS = new Set([
   "shrink",
   "damage",
   "sample",
+  // Task K: trade sample provided to a paid employee (WAC 314-55-096) \u2014 exports
+  // to CCRS as AdjustmentReason "Other" with a detail naming the employee.
+  "employee_sample",
   "destruction",
   "count",
   "recall",

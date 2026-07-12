@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { isOwnerRole } from "@/lib/auth/roles";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
@@ -7,11 +8,9 @@ import { Button, Card, Field, Input, Textarea, Badge } from "@/components/admin/
 import { listEmployees } from "@/lib/staffing/store";
 import {
   getSampleSettings,
-  getSampleCapacity,
   quarterUsage,
   listSampleEvents,
-  listSampleImports,
-  listSampleProductOptions,
+  listAvailableSampleLots,
   quarterKeyFromYmd,
   quarterLabel,
   capTone,
@@ -19,14 +18,29 @@ import {
   WAC_CITATION,
   type SampleProductType,
 } from "@/lib/compliance/trade-samples";
+import { buildAvailableSampleRows } from "@/lib/compliance/employee-sample-core";
 import { pacificToday } from "@/lib/reports/timezone";
-import { SampleRecorder, type EmployeeOption } from "@/components/admin/compliance/SampleRecorder";
-import { SampleCapacityGauge } from "@/components/admin/compliance/SampleCapacityGauge";
-import { SampleImportUploader } from "@/components/admin/compliance/SampleImportUploader";
+import { SampleAssigner, type EmployeeAllowanceOption } from "@/components/admin/compliance/SampleAssigner";
 import { updateSampleSettingsAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * Employee Samples — Task K rebuild (WAC 314-55-096, WSR 25-08-032).
+ *
+ * Exactly what a WA retailer needs to stay compliant, and nothing else:
+ *   • INCOMING (processor → retailer, ≤120 units/qtr/processor) is handled at
+ *     RECEIVING: manifest sample lines are hard-capped at finalize and
+ *     auto-recorded to the ledger. This page shows that intake usage READ-ONLY —
+ *     there is nothing to type here.
+ *   • OUTGOING (retailer → current paid employee, ≤30 units/qtr/employee) is
+ *     THIS page's job: pick an accepted sample from the table, assign it, and
+ *     the system logs amount + product type + employee name [096(1)(j)(iv)-(v)],
+ *     hard-blocks over-cap, and marks the units out of inventory via an
+ *     `employee_sample` adjustment that exports to CCRS as reason "Other" with
+ *     a detail naming the employee (the LCB-confirmed reporting shape).
+ *   • The JSON upload is gone — samples flow in via email-intake receiving.
+ */
 function toneBadge(used: number, cap: number) {
   const t = capTone(used, cap);
   const map = { green: "green", amber: "orange", red: "danger" } as const;
@@ -57,17 +71,27 @@ export default async function SamplesPage({
   const quarter = quarterKeyFromYmd(today);
   const settings = await getSampleSettings();
 
-  const [employees, usage, recent, imports, capacity, productOptions] = await Promise.all([
+  const [employees, usage, recent, lots] = await Promise.all([
     listEmployees(),
     quarterUsage(quarter, settings),
     listSampleEvents({ quarterKey: quarter, limit: 50 }),
-    listSampleImports(10),
-    getSampleCapacity(quarter, settings),
-    listSampleProductOptions(25),
+    listAvailableSampleLots(),
   ]);
 
-  const empOptions: EmployeeOption[] = employees.map((e) => ({ id: e.id, name: e.full_name }));
-  const totalIncoming = usage.incomingByProcessor.reduce((s, r) => s + r.used, 0);
+  const { rows: availableRows } = buildAvailableSampleRows(lots);
+  const availableUnits = availableRows.reduce((s, r) => s + r.onHandQty, 0);
+
+  // Active employees with their quarter usage (drives the remaining-allowance
+  // display in the assigner; the server re-checks and hard-blocks regardless).
+  const usedByEmployee = new Map(
+    usage.outgoingByEmployee.filter((r) => r.employeeId).map((r) => [r.employeeId as string, r.used]),
+  );
+  const empOptions: EmployeeAllowanceOption[] = employees.map((e) => ({
+    id: e.id,
+    name: e.full_name,
+    used: usedByEmployee.get(e.id) ?? 0,
+  }));
+
   const totalOutgoing = usage.outgoingByEmployee.reduce((s, r) => s + r.used, 0);
   const anyOver =
     usage.incomingByProcessor.some((r) => r.used > r.cap) ||
@@ -76,29 +100,32 @@ export default async function SamplesPage({
   return (
     <div>
       <AdminPageHeader
-        title="Trade samples"
-        subtitle={`WSLCB sample limits enforced as hard blocks — ${WAC_CITATION}`}
+        title="Employee samples"
+        subtitle={`Assign trade samples to paid employees — limits enforced automatically (${WAC_CITATION})`}
         breadcrumbs={
           <Breadcrumbs
             items={[
               { label: "Compliance", href: "/admin/compliance/sales-limits" },
-              { label: "Samples" },
+              { label: "Employee samples" },
             ]}
           />
         }
         help={
           <HelpPanel
             id="trade-samples"
-            title="How sample limits work"
+            title="How employee samples work"
             steps={[
-              "TRADE: record every sample coming IN from a processor and every sample going OUT to an employee.",
-              "TRADE incoming is capped at 120 units per processor per calendar quarter; outgoing at 30 units per employee (sample-jar leftovers count).",
-              "IQC (internal quality control) is producer/processor-only (§096(3)) and is NOT available to a retailer — this store only handles trade samples.",
-              "Per-unit sizes: TRADE 3.5 g useable / 1 g concentrate / 100 mg infused (≤10 mg THC).",
-              "Free samples to CUSTOMERS are prohibited — there is no way to record one here.",
+              "Samples ARRIVE through Receiving: accept a vendor manifest with sample lines and they appear in the table below. Intake is capped at 120 units per processor per quarter and blocked automatically at receiving — nothing to record here.",
+              "To GIVE a sample: select it in the table, pick the employee, and assign. The system logs the amount, product type, and employee name, and marks the units out of inventory the CCRS-required way (an inventory adjustment naming the employee).",
+              "Each employee may receive at most 30 units per calendar quarter — over-cap assignments are hard-blocked. Sample-jar leftovers count toward the 30.",
+              "Per-unit sizes are enforced from the lot: 3.5 g useable / 1 g concentrate / 100 mg infused (≤10 mg THC per serving).",
+              "Samples go only to CURRENT PAID employees — never to customers, and never as compensation or a reward. There is no way to record a customer sample by design.",
             ]}
           >
-            <p>Over-cap events are blocked automatically. All events are logged to the audit trail. Source: {WAC_CITATION}.</p>
+            <p>
+              Every assignment is written to the sample ledger and the audit trail, and the inventory adjustment
+              exports to CCRS InventoryAdjustment.csv. Source: {WAC_CITATION}.
+            </p>
           </HelpPanel>
         }
       />
@@ -113,9 +140,13 @@ export default async function SamplesPage({
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard label="Quarter" value={quarterLabel(quarter)} accent="gold" />
-          <StatCard label="Trade in" value={totalIncoming} accent="muted" />
-          <StatCard label="Trade out" value={totalOutgoing} accent="muted" />
-          <StatCard label="Enforcement" value={settings.enforce ? (settings.hardBlock ? "Hard block" : "Warn only") : "Off"} accent={settings.enforce && settings.hardBlock ? "green" : "muted"} />
+          <StatCard label="Samples on hand" value={availableUnits} accent="green" />
+          <StatCard label="Given to employees" value={totalOutgoing} accent="muted" />
+          <StatCard
+            label="Enforcement"
+            value={settings.enforce ? (settings.hardBlock ? "Hard block" : "Warn only") : "Off"}
+            accent={settings.enforce && settings.hardBlock ? "green" : "muted"}
+          />
         </div>
 
         {anyOver && (
@@ -124,76 +155,31 @@ export default async function SamplesPage({
           </div>
         )}
 
-        {/* Distribution-capacity gauge — "can we take in more?" */}
-        <SampleCapacityGauge capacity={capacity} citation={WAC_CITATION} />
+        {/* THE page: table of available samples + minimal compliant assignment form */}
+        <SampleAssigner
+          rows={availableRows}
+          employees={empOptions}
+          tradeCap={settings.outgoingUnitsPerEmployee}
+          today={today}
+        />
 
-        {/* No-customer notice */}
-        <div className="rounded-lg border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-4 py-3 text-xs text-white/60">
-          <strong className="text-white/80">Customers:</strong> Washington retailers may not provide free samples to customers ({WAC_CITATION}, §096(2)). This module has no customer path by design.
-          <br />
-          <strong className="text-white/80">Purchasing manager:</strong> there is no unlimited sample category and no job-title exemption. IQC (internal quality control) is producer/processor-only (§096(3)) and is not available to a retailer, so his product-evaluation samples must be handled as ordinary trade-outgoing units within the 30/employee/quarter cap below.
-        </div>
-
-        <SampleRecorder employees={empOptions} products={productOptions} today={today} />
-
-        <SampleImportUploader capacity={capacity} />
-
-        {/* Recent imports */}
-        {imports.length > 0 && (
-          <div>
-            <h3 className="mb-3 text-sm font-semibold text-white">Recent JSON imports</h3>
-            <div className="overflow-x-auto rounded-lg border border-[var(--admin-border)]">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-[var(--admin-surface-2)] text-xs uppercase tracking-wide text-white/50">
-                  <tr>
-                    <th className="px-4 py-2">File</th>
-                    <th className="px-4 py-2">Lots</th>
-                    <th className="px-4 py-2">Units</th>
-                    <th className="px-4 py-2">Notes</th>
-                    <th className="px-4 py-2">When</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {imports.map((im) => (
-                    <tr key={im.id} className="border-t border-[var(--admin-border)]">
-                      <td className="px-4 py-2 text-white/80">{im.file_name ?? "(pasted)"}</td>
-                      <td className="px-4 py-2 text-white/60">{im.lot_count}</td>
-                      <td className="px-4 py-2 text-white/60">{im.unit_count}</td>
-                      <td className="px-4 py-2 text-white/40">{im.notes ?? "—"}</td>
-                      <td className="px-4 py-2 text-white/40">{new Date(im.created_at).toLocaleDateString("en-US")}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+        {/* Per-employee usage vs the 30-cap (the "not more than they're allowed" check) */}
+        <div>
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-white">
+              Given out this quarter — cap {settings.outgoingUnitsPerEmployee}/employee
+            </h3>
+            <Link
+              href="/admin/compliance/samples/history"
+              className="text-xs font-semibold text-[#7ed957] hover:underline"
+            >
+              Full sample history →
+            </Link>
           </div>
-        )}
-
-        {/* Insight: incoming per processor */}
-        <div>
-          <h3 className="mb-3 text-sm font-semibold text-white">Trade incoming this quarter — cap {settings.incomingUnitsPerQuarter}/processor</h3>
-          {usage.incomingByProcessor.length === 0 ? (
-            <p className="rounded-lg border border-[var(--admin-border)] bg-[var(--admin-surface)] px-4 py-6 text-center text-sm text-white/40">No incoming samples recorded this quarter.</p>
-          ) : (
-            <div className="space-y-3">
-              {usage.incomingByProcessor.map((r) => (
-                <div key={r.name} className="rounded-lg border border-[var(--admin-border)] bg-[var(--admin-surface)] px-4 py-3">
-                  <div className="mb-2 flex items-center justify-between text-sm">
-                    <span className="font-semibold text-white">{r.name}</span>
-                    {toneBadge(r.used, r.cap)}
-                  </div>
-                  {bar(r.used, r.cap)}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Insight: TRADE outgoing per employee */}
-        <div>
-          <h3 className="mb-3 text-sm font-semibold text-white">Trade outgoing this quarter — cap {settings.outgoingUnitsPerEmployee}/employee</h3>
           {usage.outgoingByEmployee.length === 0 ? (
-            <p className="rounded-lg border border-[var(--admin-border)] bg-[var(--admin-surface)] px-4 py-6 text-center text-sm text-white/40">No outgoing samples recorded this quarter.</p>
+            <p className="rounded-lg border border-[var(--admin-border)] bg-[var(--admin-surface)] px-4 py-6 text-center text-sm text-white/40">
+              No samples given to employees yet this quarter.
+            </p>
           ) : (
             <div className="space-y-3">
               {usage.outgoingByEmployee.map((r) => (
@@ -209,7 +195,39 @@ export default async function SamplesPage({
           )}
         </div>
 
-        {/* Recent ledger */}
+        {/* READ-ONLY intake usage (the "not more than we're allowed to take in" check).
+            Recording happens automatically at Receiving; the 120/qtr cap is hard-blocked there. */}
+        <div>
+          <h3 className="mb-1 text-sm font-semibold text-white">
+            Received this quarter — cap {settings.incomingUnitsPerQuarter}/processor
+          </h3>
+          <p className="mb-3 text-xs text-white/40">
+            Tracked automatically when you accept a manifest with sample lines in{" "}
+            <Link href="/admin/inventory/intake" className="text-[#7ed957] hover:underline">
+              Receiving
+            </Link>{" "}
+            — deliveries that would exceed a processor&apos;s quarterly cap are blocked there. Nothing to record here.
+          </p>
+          {usage.incomingByProcessor.length === 0 ? (
+            <p className="rounded-lg border border-[var(--admin-border)] bg-[var(--admin-surface)] px-4 py-6 text-center text-sm text-white/40">
+              No samples received this quarter.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {usage.incomingByProcessor.map((r) => (
+                <div key={r.name} className="rounded-lg border border-[var(--admin-border)] bg-[var(--admin-surface)] px-4 py-3">
+                  <div className="mb-2 flex items-center justify-between text-sm">
+                    <span className="font-semibold text-white">{r.name}</span>
+                    {toneBadge(r.used, r.cap)}
+                  </div>
+                  {bar(r.used, r.cap)}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Recent ledger (this quarter) */}
         <div>
           <h3 className="mb-3 text-sm font-semibold text-white">Recent events this quarter</h3>
           {recent.length === 0 ? (
@@ -231,7 +249,9 @@ export default async function SamplesPage({
                   {recent.map((e) => (
                     <tr key={e.id} className="border-t border-[var(--admin-border)]">
                       <td className="px-4 py-2">
-                        <Badge tone={e.direction === "incoming" ? "outline" : "gold"}>{e.direction}</Badge>
+                        <Badge tone={e.direction === "incoming" ? "outline" : "gold"}>
+                          {e.direction === "incoming" ? "received" : "given out"}
+                        </Badge>
                       </td>
                       <td className="px-4 py-2 text-white/80">{PRODUCT_TYPE_LABELS[e.product_type as SampleProductType]}</td>
                       <td className="px-4 py-2 text-white/60">

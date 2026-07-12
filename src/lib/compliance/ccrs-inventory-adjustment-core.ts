@@ -65,6 +65,11 @@ export function mapAdjustmentReason(internal: string): CcrsAdjustmentReason {
       return "Lost";
     case "sample":
       return "ReturnedLabSample";
+    // Task K: an EMPLOYEE trade sample (WAC 314-55-096) is reported to CCRS as
+    // an InventoryAdjustment with reason "Other" and a detail naming the
+    // employee (LCB-confirmed shape). It is NOT a returned lab sample.
+    case "employee_sample":
+      return "Other";
     case "recall":
       return "Destruction";
     case "theft":
@@ -232,6 +237,7 @@ export function __runCcrsAdjustmentTests(): void {
   eq(mapAdjustmentReason("shrink"), "Lost", "shrink→Lost");
   eq(mapAdjustmentReason("damage"), "Lost", "damage→Lost");
   eq(mapAdjustmentReason("sample"), "ReturnedLabSample", "sample→ReturnedLabSample");
+  eq(mapAdjustmentReason("employee_sample"), "Other", "employee_sample→Other (LCB-confirmed shape)");
   eq(mapAdjustmentReason("recall"), "Destruction", "recall→Destruction");
   eq(mapAdjustmentReason("theft"), "Theft", "theft→Theft");
   eq(mapAdjustmentReason("seizure"), "Seizure", "seizure→Seizure");
@@ -241,6 +247,7 @@ export function __runCcrsAdjustmentTests(): void {
   ok(!isReportableAdjustment("count", 0), "zero-delta not reportable");
   ok(isReportableAdjustment("count", -3), "count -3 reportable");
   ok(isReportableAdjustment("shrink", -1), "shrink reportable");
+  ok(isReportableAdjustment("employee_sample", -2), "employee_sample reportable");
 
   eq(adjustmentQuantity(-3), "3", "abs of -3");
   eq(adjustmentQuantity(2.5), "2.5", "decimal kept");

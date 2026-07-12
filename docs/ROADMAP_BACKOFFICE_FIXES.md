@@ -1277,3 +1277,67 @@ dedupe; vendor/category grouping with (unknown) bucket; search; every sort key i
 stability + non-mutation + Infinity; all five presets; vendor mismatch counting incl.
 case/whitespace and null vendors; all three empty-state variants). Suite: **1105 passing**
 (was 1078). tsc + eslint clean. No migration needed — reads existing tables only.
+
+## Task K — Employee Samples page rebuild (compliance-first, table-based assignment)
+
+**Owner request (verbatim, condensed):** "the page is a disaster… research exactly what a
+retailer specifically needs to have on this page to keep us compliant, and that's it. I don't
+want the json upload to happen here anymore, those will filter into receiving via the email
+intake… a simple form that only has what is required… Limits respected… There should be a
+table with the available samples to select. I don't want a drop down… Assign the selected
+sample to the employee, if the system says they are allowed to have it, mark/record it out of
+the system in whatever way is the CCRS required way. Then… confirm the samples history page is
+properly connected."
+
+**Research (verified, not guessed):**
+- WAC 314-55-096 (WSR 25-08-032, eff. 4/26/25): a retailer's only sample lane is TRADE.
+  Incoming ≤120 units/qtr/processor [096(1)(f)(ii)]; outgoing ≤30 units/qtr/CURRENT PAID
+  employee [096(1)(j)(vi)] (jar leftovers count [096(4)(d)(i)]); per-unit sizes 3.5 g useable /
+  1 g concentrate / 100 mg infused, ≤10 mg THC/serving [096(1)(e)]; the retailer must track
+  incoming AND outgoing sample inventory by product type and record amount + product type +
+  employee name [096(1)(j)(iv)-(v)]; no customer samples [096(2)]; IQC is producer/processor
+  only [096(3)].
+- CCRS reporting mechanism (LCB-confirmed via GrowFlow help, May 2025): an employee sample is
+  reported to CCRS as an **InventoryAdjustment with reason "Other" and a detail naming the
+  employee**, plus the retailer's own log of samples and recipients.
+
+**What shipped:**
+- **New pure core `src/lib/compliance/employee-sample-core.ts`** — maps accepted sample lots
+  (`inventory_lots` is_sample/active/on-hand>0) into selectable table rows (product type via the
+  H16b-9 resolver; per-unit size derived from the lot's unit_weight g/mg/oz); validates the
+  minimal assignment draft (employee, units ≤ on-hand, date, size caps, manual size only when
+  the lot has no weight on file); builds the employee-named CCRS adjustment note; embedded
+  self-tests.
+- **`assignSampleToEmployee` (trade-samples.ts)** — one call does the compliant sequence:
+  records the OUTGOING `trade_sample_events` row (30/qtr cap HARD-blocked; now linked via
+  `lot_id` + source product/lot identity) then posts a negative `inventory_adjustments` row with
+  new internal reason **`employee_sample`** (decrements the lot's on-hand). If the adjustment
+  fails after the ledger row landed, the receipt stands and the owner gets an explicit warning
+  to post it manually — never silently lost.
+- **CCRS exporter** (`ccrs-inventory-adjustment-core.ts`): `employee_sample` → AdjustmentReason
+  **"Other"** with the employee-named detail (the LCB-confirmed shape). The pre-existing lab/QA
+  `sample` → ReturnedLabSample mapping is unchanged. `employee_sample` added to the lot-page
+  adjustment reasons and the inventory action whitelist. NOTE: `inventory_adjustments.reason` is
+  free text (0023) — **no migration needed**.
+- **Page rebuilt (`/admin/compliance/samples`)** — retitled "Employee samples". REMOVED: JSON
+  upload (SampleImportUploader), recent-imports table, the manual incoming/outgoing recorder
+  with its product DROPDOWN (SampleRecorder), the capacity gauge, and the JSON-import plumbing
+  (`sample_json_imports` readers/writers) — samples now arrive exclusively through email-intake
+  receiving (cap preflight + auto incoming ledger already shipped in H16b). ADDED:
+  `SampleAssigner` — a TABLE of available samples (radio row select, search over name/strain/
+  lot/vendor) + the minimal form (employee with live remaining-allowance, units, date, from-jar
+  flag, optional note; manual size field only when the lot carries no unit weight). The
+  "inbound section" question resolved: intake usage vs the 120 cap is now a READ-ONLY panel
+  pointing at Receiving (that cap IS retailer-relevant but is enforced at receiving, not here).
+- **Server action `assignSampleAction`** re-resolves the lot server-side (never trusts the
+  client row), requires a CURRENT paid employee, audits as `trade_sample.assigned`, and
+  revalidates samples + history + inventory.
+- **History page connection confirmed + tightened:** `listEmployeeSampleHistory` already
+  surfaces outgoing rows with source product/lot; assignments now also carry `lot_id`.
+  Breadcrumb/copy updated ("assignments happen on the Employee Samples page"). Nav label →
+  "Employee Samples"; concierge KB facts updated to describe the real flow.
+
+**Tests:** new `tests/compliance/employee-sample-core.test.ts` (+7: self-test suite, lawful-row
+building, on-hand block, product-identity carry, employee_sample→Other + note ≤250 chars,
+lab-sample mapping unchanged, allowance floors). Suite: **1112 passing** (was 1105). tsc +
+eslint clean. No migration needed.
