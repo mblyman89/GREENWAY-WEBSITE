@@ -1521,3 +1521,57 @@ as before; merch invoices skip PO stamping (no PO link exists).
 math, date validation, draft validation, typo-catcher, payment guardrails, key round-trip).
 Suite: **1136 passing** (was 1128). tsc + eslint clean. **Owner action: apply migration 0112
 (after 0110 + 0111).**
+
+---
+
+## Task O — Medical cannabis selling pipeline (PR #399, merged)
+
+**Research first:** `docs/MEDICAL_CANNABIS_COMPLIANCE.md` — an AI-optimized, verbatim-sourced
+reference covering RCW 82.08.9998 (sales-tax exemption), WAC 314-55-090 (excise exemption +
+5-yr records + 2029-06-30 sunset), chapter 246-70 WAC (DOH product categories), the DOH MCR
+card workflow, CCRS medical flags, and the full sell-to-patient procedure. This is now the
+authoritative doc; the older `docs/medical-doh-requirements.md` carried a WRONG sales-tax rule
+("ANY cannabis" exempt for cardholders) which has been corrected with a pointer.
+
+**Statute-correct tax fix (`src/lib/medical/tax.ts`):** RCW 82.08.9998 conditions the 9.3%
+sales-tax exemption on the product being **chapter 246-70 WAC compliant**. Carded patient +
+non-compliant product = BOTH taxes due in full. High-CBD compliant product = sales-tax exempt
+for ANYONE at an endorsed store ((1)(c), new `highCbd` flag). Excise rule unchanged
+(endorsed + carded-in-MCR + compliant + exemption active).
+
+**Migration 0113 (owner applies manually):** `medical_product_registry` (unique
+`pos_product_key` = stable menu source_item_id, `doh_category` CHECK in
+general_use/high_thc/high_cbd, verified_by/at, staff RLS) + `orders.medical_authorization_id`
+FK. Every store read degrades gracefully pre-migration (`isMissingSchemaError`).
+
+**Pure core `src/lib/medical/medical-sale-core.ts`** (self-tested, registered in
+pure-selftests): `decideLineExemption` implements the corrected statute;
+`buildOrderExemptionPlan` maps stored order lines + registry + card validity to per-line
+sales/excise exemptions, claimed totals, and high-THC violations; `buildExemptSaleDrafts`
+refuses incomplete WAC 090(2) rows; `suggestDohCategory` is a conservative drafts-only
+heuristic (staff must confirm from the package). CLAIM POLICY: exemptions are only claimed on
+orders with a valid attached card — uncarded High-CBD is deliberately not claimed
+(over-remit rather than under-document).
+
+**Completion gate hardening (`src/app/admin/orders/actions.ts`):** after the money gate —
+(1) an attached card is RE-validated at completion date (fix-or-detach message if invalid);
+(2) **high-THC products sell ONLY to valid cardholders — hard block, NO override** (WAC
+246-70); (3) sales-limit gate switches to MEDICAL limits when carded-valid; (4) WAC
+314-55-090(2) exempt-sale rows are written idempotently (delete-then-insert, each row
+verified) or completion is BLOCKED. Ledger hygiene: rows are cleared when a completion is
+refused after the gate and when an order leaves completed status (the excise return sums the
+ledger by sale date, so stale rows would overstate Box 2) — audited as
+`medical.exempt_sales_cleared`.
+
+**UI:** `MedicalSaleSection` on the order detail sidebar — carded/invalid/recreational badge,
+customer search + one-click card attach (validity-checked), card facts + expiring-soon
+warning, per-line exemption plan preview with claimed totals, high-THC hard-stop warning,
+detach. `DohProductRegistry` on /admin/medical — search the live menu, category suggestion
+hint, required category select, register/re-verify/remove with audits
+(`medical.doh_product.verified` / `.removed`). New actions: `attachMedicalCardAction` /
+`detachMedicalCardAction` (orders.manage) and `upsertDohProductAction` /
+`removeDohProductAction` (medical.manage).
+
+**Tests:** +3 pure self-test registrations (`__runMedTaxTests`,
+`__runMedicalAuthorizationTests`, `__runMedicalSaleTests`). Suite: **1139 passing** (was
+1136). tsc + eslint clean. **Owner action: apply migration 0113 (after 0110–0112).**
