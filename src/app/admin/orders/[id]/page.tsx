@@ -5,6 +5,7 @@ import { can } from "@/lib/auth/roles";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { OrderStatusFlow } from "@/components/admin/orders/OrderStatusFlow";
+import { CustomerLinkSection } from "@/components/admin/orders/CustomerLinkSection";
 import { MedicalSaleSection } from "@/components/admin/orders/MedicalSaleSection";
 import { LoyaltySaleSection } from "@/components/admin/orders/LoyaltySaleSection";
 import { formatMinorCurrency } from "@/lib/leafly/format";
@@ -270,7 +271,11 @@ export default async function OrderDetailPage({
                             ? "Order placed"
                             : ev.event_type === "note"
                               ? "Note added"
-                              : ev.event_type}
+                              : ev.event_type === "customer_linked"
+                                ? "Customer linked"
+                                : ev.event_type === "customer_unlinked"
+                                  ? "Customer link removed"
+                                  : ev.event_type}
                       </p>
                       {ev.note ? <p className="text-xs text-white/50">{ev.note}</p> : null}
                       <p className="text-[0.66rem] uppercase tracking-[0.1em] text-white/30">
@@ -303,6 +308,9 @@ export default async function OrderDetailPage({
               </p>
             ) : null}
           </div>
+
+          {/* Task T / PR 4 — staff-confirmed customer link (loyalty accrual) */}
+          <CustomerLinkSection order={order} />
 
           {/* Task S-a — loyalty at the register (code entry / member pricing) */}
           <LoyaltySaleSection order={order} searchQuery={loyaltyQuery} />

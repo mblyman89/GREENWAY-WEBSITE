@@ -22,33 +22,46 @@ export function OrderConfirmation() {
   const [fetchedOrder, setFetchedOrder] = useState<CompletedOrder | null>(null);
   const [statusLabel, setStatusLabel] = useState<string | null>(null);
 
+  // LIVE STATUS (Task T / PR 4): whenever we have a token, fetch the order's
+  // current status — even right after checkout when the receipt itself comes
+  // from sessionStorage — and refresh it every 30s while the tab is open, so
+  // "Ready for pickup" shows up without a manual reload. Best-effort: any
+  // failure just leaves the last known label.
   useEffect(() => {
-    if (!hydrated || localOrder || !tokenFromUrl) return;
+    if (!hydrated || !tokenFromUrl) return;
     let cancelled = false;
-    (async () => {
+    const needOrder = !localOrder;
+
+    async function load() {
       try {
-        const res = await fetch(`/api/orders/${encodeURIComponent(tokenFromUrl)}`);
+        const res = await fetch(`/api/orders/${encodeURIComponent(tokenFromUrl!)}`);
         if (!res.ok) return;
         const data = await res.json();
         if (cancelled) return;
         setStatusLabel(data.statusLabel ?? null);
-        setFetchedOrder({
-          orderNumber: data.orderNumber,
-          publicToken: tokenFromUrl,
-          placedAt: data.placedAt,
-          customerFirstName: data.customerFirstName ?? "",
-          lines: data.lines ?? [],
-          subtotalMinorUnits: data.subtotalMinorUnits ?? 0,
-          estimatedTaxMinorUnits: data.estimatedTaxMinorUnits ?? 0,
-          savingsMinorUnits: data.savingsMinorUnits ?? 0,
-          totalMinorUnits: data.totalMinorUnits ?? 0,
-        });
+        if (needOrder) {
+          setFetchedOrder({
+            orderNumber: data.orderNumber,
+            publicToken: tokenFromUrl!,
+            placedAt: data.placedAt,
+            customerFirstName: data.customerFirstName ?? "",
+            lines: data.lines ?? [],
+            subtotalMinorUnits: data.subtotalMinorUnits ?? 0,
+            estimatedTaxMinorUnits: data.estimatedTaxMinorUnits ?? 0,
+            savingsMinorUnits: data.savingsMinorUnits ?? 0,
+            totalMinorUnits: data.totalMinorUnits ?? 0,
+          });
+        }
       } catch {
         /* offline / not found — fall back to the URL order number */
       }
-    })();
+    }
+
+    void load();
+    const timer = window.setInterval(() => void load(), 30_000);
     return () => {
       cancelled = true;
+      window.clearInterval(timer);
     };
   }, [hydrated, localOrder, tokenFromUrl]);
 

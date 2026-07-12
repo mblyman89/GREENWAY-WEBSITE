@@ -361,7 +361,7 @@ export const CONTENT_BLOCK_SEEDS: ContentBlockSeed[] = [
     label: "Business — hours display",
     help_text: "Plain-text hours shown in the footer / contact areas.",
     field_type: "plain",
-    defaultValue: "Open Daily 8:00 AM – 11:45 PM",
+    defaultValue: "Open Daily 8:00 AM – 11:00 PM",
   },
 
   // ---- Legal & info pages --------------------------------------------------
