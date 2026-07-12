@@ -1453,3 +1453,71 @@ drafts. Server actions `adjustNonCannabisAction` + `updateNonCannabisOpsAction` 
 **Tests:** new `tests/compliance/merch-intel-core.test.ts` (+8: self-tests, constants, GS1
 check digits, dual identifier, reorder ordering, ABC, adjustment validation, shrink). Suite:
 **1128 passing** (was 1120). tsc + eslint clean. **Owner action: apply migration 0111.**
+
+## Task N — Non-cannabis paper-invoice intake (vendor visit → payable source document)
+
+## Owner's request (verbatim)
+
+> I forgot to mention that we won't be accepting non cannabis products through the email
+> intake process. It will be a manual process. The glass vendor will come in with a stock of
+> inventory, we pick out what we want, then they write us up a paper invoice. So id like a way
+> to intake non cannabis products through the other inventory page. It should be a simple
+> invoice builder type of form, where we manually input the details and submit the form. That
+> way we can use it as a source document for the ach payments page for vendors. Please add
+> this to the other inventory page. Follow the standing rules, never guess, no short cuts no
+> cutting corners.
+
+## What shipped
+
+**The design decision (verified, not guessed):** in this back office a payable "invoice" was
+ALWAYS an accepted inbound manifest — `vendor_manifest_payments.manifest_id` was `NOT NULL`
+FK to `inbound_manifests`, so a merch paper invoice could not reuse the ledger as-is. Rather
+than fork a second payments system, migration 0112 turns `vendor_manifest_payments` into the
+**unified AP ledger**: `manifest_id` drops NOT NULL, a new `noncannabis_invoice_id` FK is
+added, and a CHECK enforces **exactly one source document per payment row** (all existing rows
+have manifest_id set, so the constraint holds). The Sage 50 vendor-payment export and ACH batch
+refs see merch payments with zero changes (`manifest_number` carries the invoice number).
+
+**Migration (`supabase/migrations/0112_noncannabis_vendor_invoices.sql`):**
+`noncannabis_invoices` (invoice_number, vendor_id SET NULL + vendor_name snapshot,
+invoice_date, total_minor_units CENTS, status open/paid, note; unique per
+lower(vendor_name)+lower(invoice_number) to catch double entry) +
+`noncannabis_invoice_lines` (product_id SET NULL, description snapshot, qty>0,
+unit_cost_minor_units≥0; CASCADE on invoice delete) + the unified-ledger change above.
+RLS staff-read/admin-write, guarded updated_at trigger. **Owner action: apply 0112.**
+
+**Pure core (NEW `src/lib/noncannabis/invoice-core.ts`, self-tested):**
+`validateNonCannabisInvoice` (vendor/number/real-date required, ≥1 line, integer qty>0,
+integer cents≥0, existing lines need a product, optional STATED paper total must equal the
+computed line total — the typo catcher), `invoiceTotalMinorUnits` (integer cents),
+`checkNonCannabisInvoicePayment` (IDENTICAL policy to `checkManifestPayment`: overpay
+BLOCKED, partial WARNING, fully-paid BLOCKED, exact OK), `encodePayableKey`/`decodePayableKey`
+("manifest:<id>" / "ncinv:<id>"; bare ids decode as manifests for back-compat).
+
+**Store (NEW `src/lib/noncannabis/invoice-store.ts`):** `createNonCannabisInvoice` — header +
+lines, then per line: "new" stages a catalog DRAFT (smart SKU, cost/qty/retail from the line),
+"existing" posts a +received adjustment through the Task-M ledger; any mid-way failure deletes
+the header (cascade) so a broken half-invoice never becomes a payable. Vendor link only on an
+EXACT case-insensitive display-name match (never fuzzy-guess on a payment document).
+`listNonCannabisInvoicePayables` (paid from the unified ledger; [] pre-0112 → graceful),
+`recordNonCannabisInvoicePayment` (unified-ledger insert + stamps the invoice 'paid' when
+settled).
+
+**Non-cannabis page:** NEW `InvoiceBuilderForm` client island — header (vendor, invoice #,
+date, optional paper total with live mismatch flag) + multi-row lines (New item: description/
+type/qty/unit cost/retail; Restock existing: product picker), running total, problems returned
+in-place (typed rows preserved). Plus a "Recent vendor invoices" table (total/paid/owe badge)
+linking to Accounts Payable. Action `submitNonCannabisInvoiceAction` audits
+(`noncannabis_invoice.create`) and revalidates both pages.
+
+**Accounts Payable page:** `loadPayableOptionsAction` now returns manifests PLUS open merch
+invoices behind one opaque `key`; both `VendorAchForm` and `ManualPaymentForm` pickers show
+"Manifest #… / Merch #…" tags. `buildVendorAchAction` and `recordManualPaymentAction` resolve
+the key via `resolvePayable` and run the source-appropriate guardrail (`checkPayablePayment`) —
+the manifest path (incl. PO-paid stamping and status checks) is byte-for-byte the same policy
+as before; merch invoices skip PO stamping (no PO link exists).
+
+**Tests:** new `tests/compliance/noncannabis-invoice-core.test.ts` (+8: self-tests, cents
+math, date validation, draft validation, typo-catcher, payment guardrails, key round-trip).
+Suite: **1136 passing** (was 1128). tsc + eslint clean. **Owner action: apply migration 0112
+(after 0110 + 0111).**

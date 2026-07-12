@@ -66,9 +66,11 @@ export function ManualPaymentForm() {
     }
   }, [state?.ok, state?.message, state?.warning]);
 
+  // Task N: options are keyed by the opaque payable key ("manifest:<id>" /
+  // "ncinv:<id>") so a payment can close a manifest OR a merch paper invoice.
   const byId = useMemo(() => {
     const m = new Map<string, PayableOption>();
-    (payables ?? []).forEach((p) => m.set(p.manifestId, p));
+    (payables ?? []).forEach((p) => m.set(p.key, p));
     return m;
   }, [payables]);
 
@@ -100,24 +102,24 @@ export function ManualPaymentForm() {
     <form action={formAction} className="space-y-4">
       {noPayables && (
         <div className="rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] px-4 py-3 text-sm text-[var(--admin-gold)]">
-          No accepted manifests with an outstanding balance. Recording a payment requires an
-          accepted manifest (the invoice) that still owes money.
+          Nothing owing: no accepted manifests or merch invoices with an outstanding balance.
+          Recording a payment requires a source document (invoice) that still owes money.
         </div>
       )}
 
       <div className="grid gap-3 sm:grid-cols-12">
         {/* Manifest (invoice) picker */}
         <div className="sm:col-span-5">
-          <Field label="Invoice (accepted manifest)" required>
+          <Field label="Invoice (manifest or merch invoice)" required>
             <Select
               name="manifestId"
               value={manifestId}
               onChange={(e) => onSelectManifest(e.target.value)}
             >
-              <option value="">Select an accepted manifest…</option>
+              <option value="">Select an invoice…</option>
               {(payables ?? []).map((opt) => (
-                <option key={opt.manifestId} value={opt.manifestId}>
-                  #{opt.manifestNumber} · {opt.vendorName} · owe{" "}
+                <option key={opt.key} value={opt.key}>
+                  {opt.source === "noncannabis_invoice" ? "Merch" : "Manifest"} #{opt.manifestNumber} · {opt.vendorName} · owe{" "}
                   {centsToUsd(opt.remainingMinorUnits)}
                 </option>
               ))}
@@ -186,7 +188,9 @@ export function ManualPaymentForm() {
               {centsToUsd(selected.remainingMinorUnits)}
             </strong>
           </span>
-          <span>{selected.lotCount} lot(s)</span>
+          <span>
+            {selected.lotCount} {selected.source === "noncannabis_invoice" ? "line(s)" : "lot(s)"}
+          </span>
         </div>
       )}
 

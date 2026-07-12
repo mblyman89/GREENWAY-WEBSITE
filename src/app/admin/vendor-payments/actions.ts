@@ -32,7 +32,6 @@ import {
   listVendorPayables,
   getVendorPayable,
   recordManifestPayment,
-  type VendorPayableRow,
   type PaymentMethod,
 } from "@/lib/payments/vendor-payables-store";
 import { isValidRouting } from "@/lib/payments/nacha-core";
@@ -43,8 +42,26 @@ import {
 } from "@/lib/payments/invoice-po-match-core";
 import { paymentReferenceLabel } from "@/lib/purchasing/po-paid-stamp-core";
 import { stampPoPaidIfSettled } from "@/lib/purchasing/po-paid-stamp-store";
+import {
+  checkNonCannabisInvoicePayment,
+  decodePayableKey,
+  encodePayableKey,
+  type PayableSource,
+} from "@/lib/noncannabis/invoice-core";
+import {
+  getNonCannabisInvoicePayable,
+  listNonCannabisInvoicePayables,
+  recordNonCannabisInvoicePayment,
+} from "@/lib/noncannabis/invoice-store";
 
 export type PayableOption = {
+  /**
+   * Task N: opaque payable key posted by the forms — "manifest:<id>" for
+   * cannabis manifests, "ncinv:<id>" for non-cannabis paper invoices. Bare
+   * ids decode as manifests for back-compat.
+   */
+  key: string;
+  source: PayableSource;
   manifestId: string;
   manifestNumber: string;
   vendorId: string | null;
@@ -71,7 +88,11 @@ export type VendorPayFormResult = {
   entryCount?: number;
 };
 
-/** Load payables for the form (accepted manifests still owing money). */
+/**
+ * Load payables for the form: accepted manifests still owing money PLUS
+ * non-cannabis paper invoices still owing money (Task N — the paper invoice
+ * keyed in on the non-cannabis inventory page is a payable source document).
+ */
 export async function loadPayableOptionsAction(): Promise<PayableOption[]> {
   await requirePermission("payables.manage");
   const rows = await listVendorPayables({ includePaid: false, limit: 300 });
@@ -79,7 +100,9 @@ export async function loadPayableOptionsAction(): Promise<PayableOption[]> {
   // W5 link exists) so the human sees "invoice vs ordered" before paying.
   // Best-effort — an empty map (pre-0102 or any failure) just means no chips.
   const poFacts = await getLinkedPoFactsForManifests(rows.map((r) => r.manifestId));
-  return rows.map((r) => ({
+  const manifestOptions: PayableOption[] = rows.map((r) => ({
+    key: encodePayableKey("manifest", r.manifestId),
+    source: "manifest" as const,
     manifestId: r.manifestId,
     manifestNumber: r.manifestNumber,
     vendorId: r.vendorId,
@@ -91,11 +114,108 @@ export async function loadPayableOptionsAction(): Promise<PayableOption[]> {
     lotCount: r.lotCount,
     poComparison: compareInvoiceToPo(r.owedMinorUnits, poFacts.get(r.manifestId) ?? null),
   }));
+
+  // Non-cannabis paper invoices (merch). [] pre-migration-0112 — no forks.
+  const ncRows = await listNonCannabisInvoicePayables({ includePaid: false, limit: 300 });
+  const ncOptions: PayableOption[] = ncRows.map((r) => ({
+    key: encodePayableKey("noncannabis_invoice", r.invoiceId),
+    source: "noncannabis_invoice" as const,
+    manifestId: r.invoiceId,
+    manifestNumber: r.invoiceNumber,
+    vendorId: r.vendorId,
+    vendorName: r.vendorName,
+    owedMinorUnits: r.totalMinorUnits,
+    paidMinorUnits: r.paidMinorUnits,
+    remainingMinorUnits: Math.max(0, r.totalMinorUnits - r.paidMinorUnits),
+    acceptedAt: r.invoiceDate,
+    lotCount: r.lineCount,
+    poComparison: { hasPo: false },
+  }));
+
+  return [...manifestOptions, ...ncOptions];
+}
+
+/**
+ * A resolved payable, source-agnostic (Task N). Wraps either an accepted
+ * manifest or a non-cannabis paper invoice behind one shape so the guardrail /
+ * NACHA / recording code has a single path. Money is CENTS.
+ */
+type ResolvedPayable = {
+  source: PayableSource;
+  id: string;
+  /** Manifest number or paper-invoice number (the human label). */
+  number: string;
+  vendorId: string | null;
+  vendorName: string;
+  owedMinorUnits: number;
+  paidMinorUnits: number;
+};
+
+/**
+ * Resolve a posted payable key to fresh owed/paid figures. Bare ids decode as
+ * manifests (back-compat with pre-Task-N forms). Null when not found.
+ */
+async function resolvePayable(key: string): Promise<ResolvedPayable | null> {
+  const { source, id } = decodePayableKey(key);
+  if (source === "noncannabis_invoice") {
+    const p = await getNonCannabisInvoicePayable(id);
+    if (!p) return null;
+    return {
+      source,
+      id: p.invoiceId,
+      number: p.invoiceNumber,
+      vendorId: p.vendorId,
+      vendorName: p.vendorName,
+      owedMinorUnits: p.totalMinorUnits,
+      paidMinorUnits: p.paidMinorUnits,
+    };
+  }
+  const p = await getVendorPayable(id);
+  if (!p) return null;
+  return {
+    source: "manifest",
+    id: p.manifestId,
+    number: p.manifestNumber,
+    vendorId: p.vendorId,
+    vendorName: p.vendorName,
+    owedMinorUnits: p.owedMinorUnits,
+    paidMinorUnits: p.paidMinorUnits,
+  };
+}
+
+/**
+ * Run the source-appropriate payment guardrail (identical policy on both
+ * paths: non-payable/fully-paid BLOCKED, overpay BLOCKED, partial WARNING).
+ * For manifests this re-fetches the full ManifestPayable so the status check
+ * (accepted / partially_accepted) still runs exactly as before.
+ */
+async function checkPayablePayment(
+  payable: ResolvedPayable,
+  amountCents: number,
+): Promise<{ severity: "ok" | "warning" | "blocked"; message: string }> {
+  if (payable.source === "noncannabis_invoice") {
+    return checkNonCannabisInvoicePayment(
+      {
+        invoiceId: payable.id,
+        invoiceNumber: payable.number,
+        vendorId: payable.vendorId,
+        vendorName: payable.vendorName,
+        status: "open",
+        totalMinorUnits: payable.owedMinorUnits,
+        paidMinorUnits: payable.paidMinorUnits,
+      },
+      amountCents,
+    );
+  }
+  const full = await getVendorPayable(payable.id);
+  if (!full) return { severity: "blocked", message: "That manifest could not be found or is no longer payable." };
+  return checkManifestPayment(full, amountCents);
 }
 
 /** One parsed row from the form (before guardrail checks). */
 type ParsedRow = {
   index: number; // 1-based
+  /** The posted payable key ("manifest:<id>" / "ncinv:<id>" / bare id). */
   manifestId: string;
   routing: string;
   accountNumber: string;
@@ -169,43 +289,45 @@ export async function buildVendorAchAction(
   }
 
   // Resolve every referenced payable (fresh owed/paid at submit time).
+  // Task N: a row may reference an accepted manifest OR a non-cannabis paper
+  // invoice — resolvePayable + checkPayablePayment keep one code path.
   const problems: VendorPayFormResult["problems"] = [];
   const warnings: NonNullable<VendorPayFormResult["warnings"]> = [];
-  const payableById = new Map<string, VendorPayableRow>();
+  const payableByKey = new Map<string, ResolvedPayable>();
 
-  // Guardrail: a manifest can only appear once per batch (avoid double-spend
+  // Guardrail: a payable can only appear once per batch (avoid double-spend
   // math across rows of the same submit).
-  const seenManifests = new Set<string>();
+  const seenPayables = new Set<string>();
 
   for (const row of rows) {
     if (!row.manifestId) {
       problems.push({
         index: row.index,
         vendorName: null,
-        message: "Select an accepted manifest (invoice) to pay against.",
+        message: "Select an invoice (accepted manifest or merch invoice) to pay against.",
       });
       continue;
     }
-    if (seenManifests.has(row.manifestId)) {
+    if (seenPayables.has(row.manifestId)) {
       problems.push({
         index: row.index,
         vendorName: null,
-        message: "This manifest is already selected on another row. Pay each manifest once per batch.",
+        message: "This invoice is already selected on another row. Pay each invoice once per batch.",
       });
       continue;
     }
-    seenManifests.add(row.manifestId);
+    seenPayables.add(row.manifestId);
 
-    let payable = payableById.get(row.manifestId) ?? null;
+    let payable = payableByKey.get(row.manifestId) ?? null;
     if (!payable) {
-      payable = await getVendorPayable(row.manifestId);
-      if (payable) payableById.set(row.manifestId, payable);
+      payable = await resolvePayable(row.manifestId);
+      if (payable) payableByKey.set(row.manifestId, payable);
     }
     if (!payable) {
       problems.push({
         index: row.index,
         vendorName: null,
-        message: "That manifest could not be found or is no longer payable.",
+        message: "That invoice could not be found or is no longer payable.",
       });
       continue;
     }
@@ -224,8 +346,8 @@ export async function buildVendorAchAction(
       problems.push({ index: row.index, vendorName: payable.vendorName, message: "Account number exceeds 17 characters." });
     }
 
-    // THE GUARDRAIL: accepted + over/under check.
-    const check = checkManifestPayment(payable, row.amountCents);
+    // THE GUARDRAIL: payable status + over/under check (source-appropriate).
+    const check = await checkPayablePayment(payable, row.amountCents);
     if (check.severity === "blocked") {
       problems.push({ index: row.index, vendorName: payable.vendorName, message: check.message });
     } else if (check.severity === "warning") {
@@ -239,9 +361,9 @@ export async function buildVendorAchAction(
 
   // Build the VendorPayment[] for the NACHA file (uses the payable's vendor name).
   const payments: VendorPayment[] = rows.map((row) => {
-    const payable = payableById.get(row.manifestId)!;
+    const payable = payableByKey.get(row.manifestId)!;
     return {
-      vendorId: payable.vendorId || `manifest-${payable.manifestId}`,
+      vendorId: payable.vendorId || `${payable.source === "noncannabis_invoice" ? "ncinv" : "manifest"}-${payable.id}`,
       vendorName: payable.vendorName,
       routing: row.routing,
       accountNumber: row.accountNumber,
@@ -279,16 +401,32 @@ export async function buildVendorAchAction(
   const stamp = new Date().toISOString().slice(0, 10);
   const batchRef = `vendor-ach-${stamp}-${Date.now().toString(36)}`;
 
-  // Record each payment against its manifest (persist the applied amount so
-  // future over/under math is correct). Best-effort — never blocks the draft.
+  // Record each payment against its source document (persist the applied
+  // amount so future over/under math is correct). Best-effort — never blocks
+  // the draft. Manifests keep their exact pre-Task-N path; paper invoices go
+  // to the unified ledger via recordNonCannabisInvoicePayment.
   for (const row of rows) {
-    const payable = payableById.get(row.manifestId)!;
+    const payable = payableByKey.get(row.manifestId)!;
     const remaining = Math.max(0, payable.owedMinorUnits - payable.paidMinorUnits);
+    if (payable.source === "noncannabis_invoice") {
+      await recordNonCannabisInvoicePayment({
+        invoiceId: payable.id,
+        vendorId: payable.vendorId,
+        vendorName: payable.vendorName,
+        invoiceNumber: payable.number,
+        amountMinorUnits: row.amountCents,
+        owedMinorUnits: payable.owedMinorUnits,
+        isPartial: row.amountCents < remaining,
+        achBatchRef: batchRef,
+        createdBy: session.userId,
+      }).catch(() => null);
+      continue;
+    }
     await recordManifestPayment({
-      manifestId: payable.manifestId,
+      manifestId: payable.id,
       vendorId: payable.vendorId,
       vendorName: payable.vendorName,
-      manifestNumber: payable.manifestNumber,
+      manifestNumber: payable.number,
       amountMinorUnits: row.amountCents,
       owedMinorUnits: payable.owedMinorUnits,
       isPartial: row.amountCents < remaining,
@@ -299,7 +437,7 @@ export async function buildVendorAchAction(
     // W9: if this payment settles every invoice linked to a PO, stamp the PO
     // paid so Purchasing can see it. Best-effort; no-op pre-migration 0103.
     await stampPoPaidIfSettled(
-      payable.manifestId,
+      payable.id,
       paymentReferenceLabel({ achBatchRef: batchRef, paymentMethod: "ach" }),
     ).catch(() => null);
   }
@@ -371,7 +509,7 @@ export async function recordManualPaymentAction(
   const problems: string[] = [];
 
   if (!manifestId) {
-    problems.push("Select an accepted manifest (invoice) to record a payment against.");
+    problems.push("Select an invoice (accepted manifest or merch invoice) to record a payment against.");
   }
 
   const method = methodRaw as PaymentMethod;
@@ -399,37 +537,57 @@ export async function recordManualPaymentAction(
     return { ok: false, problems };
   }
 
-  // Resolve the payable fresh (owed/paid at submit time).
-  const payable = await getVendorPayable(manifestId);
+  // Resolve the payable fresh (owed/paid at submit time). Task N: this may be
+  // an accepted manifest OR a non-cannabis paper invoice (opaque key).
+  const payable = await resolvePayable(manifestId);
   if (!payable) {
     return {
       ok: false,
-      problems: ["That manifest could not be found or is no longer payable."],
+      problems: ["That invoice could not be found or is no longer payable."],
     };
   }
 
-  // THE GUARDRAIL — identical logic to the ACH path.
-  const check = checkManifestPayment(payable, amountCents);
+  // THE GUARDRAIL — identical policy on both source-document paths.
+  const check = await checkPayablePayment(payable, amountCents);
   if (check.severity === "blocked") {
-    return { ok: false, problems: [check.message], remainingMinorUnits: check.remainingMinorUnits };
+    return {
+      ok: false,
+      problems: [check.message],
+      remainingMinorUnits: Math.max(0, payable.owedMinorUnits - payable.paidMinorUnits),
+    };
   }
 
   const remaining = Math.max(0, payable.owedMinorUnits - payable.paidMinorUnits);
   const isPartial = amountCents < remaining;
 
-  const recorded = await recordManifestPayment({
-    manifestId: payable.manifestId,
-    vendorId: payable.vendorId,
-    vendorName: payable.vendorName,
-    manifestNumber: payable.manifestNumber,
-    amountMinorUnits: amountCents,
-    owedMinorUnits: payable.owedMinorUnits,
-    isPartial,
-    paymentMethod: method,
-    reference: reference || null,
-    note: note || null,
-    createdBy: session.userId,
-  });
+  const recorded =
+    payable.source === "noncannabis_invoice"
+      ? await recordNonCannabisInvoicePayment({
+          invoiceId: payable.id,
+          vendorId: payable.vendorId,
+          vendorName: payable.vendorName,
+          invoiceNumber: payable.number,
+          amountMinorUnits: amountCents,
+          owedMinorUnits: payable.owedMinorUnits,
+          isPartial,
+          paymentMethod: method,
+          reference: reference || null,
+          note: note || null,
+          createdBy: session.userId,
+        })
+      : await recordManifestPayment({
+          manifestId: payable.id,
+          vendorId: payable.vendorId,
+          vendorName: payable.vendorName,
+          manifestNumber: payable.number,
+          amountMinorUnits: amountCents,
+          owedMinorUnits: payable.owedMinorUnits,
+          isPartial,
+          paymentMethod: method,
+          reference: reference || null,
+          note: note || null,
+          createdBy: session.userId,
+        });
 
   if (!recorded) {
     return {
@@ -440,10 +598,13 @@ export async function recordManualPaymentAction(
 
   // W9: if this payment settles every invoice linked to a PO, stamp the PO
   // paid so Purchasing can see it. Best-effort; no-op pre-migration 0103.
-  await stampPoPaidIfSettled(
-    payable.manifestId,
-    paymentReferenceLabel({ reference: reference || null, paymentMethod: method }),
-  ).catch(() => null);
+  // (Paper invoices have no PO link — manifests only.)
+  if (payable.source === "manifest") {
+    await stampPoPaidIfSettled(
+      payable.id,
+      paymentReferenceLabel({ reference: reference || null, paymentMethod: method }),
+    ).catch(() => null);
+  }
 
   await recordAudit({
     actorId: session.userId,
@@ -452,8 +613,10 @@ export async function recordManualPaymentAction(
     entityType: "vendor_manifest_payments",
     entityId: recorded.id,
     after: {
-      manifestId: payable.manifestId,
-      manifestNumber: payable.manifestNumber,
+      source: payable.source,
+      manifestId: payable.source === "manifest" ? payable.id : null,
+      noncannabisInvoiceId: payable.source === "noncannabis_invoice" ? payable.id : null,
+      manifestNumber: payable.number,
       vendorName: payable.vendorName,
       amountCents,
       owedCents: payable.owedMinorUnits,
@@ -464,16 +627,18 @@ export async function recordManualPaymentAction(
   }).catch(() => {});
 
   revalidatePath("/admin/vendor-payments");
+  revalidatePath("/admin/inventory/noncannabis");
 
   const remainingAfter = Math.max(0, remaining - amountCents);
   const methodLabel = method.charAt(0).toUpperCase() + method.slice(1);
   const usd = (c: number) => (c / 100).toLocaleString("en-US", { style: "currency", currency: "USD" });
+  const docLabel = payable.source === "noncannabis_invoice" ? "merch invoice" : "manifest";
 
   if (isPartial) {
     return {
       ok: true,
       problems: [],
-      warning: `Partial ${methodLabel.toLowerCase()} payment of ${usd(amountCents)} recorded for manifest #${payable.manifestNumber}. Balance of ${usd(remainingAfter)} remains outstanding.`,
+      warning: `Partial ${methodLabel.toLowerCase()} payment of ${usd(amountCents)} recorded for ${docLabel} #${payable.number}. Balance of ${usd(remainingAfter)} remains outstanding.`,
       remainingMinorUnits: remainingAfter,
     };
   }
@@ -481,7 +646,7 @@ export async function recordManualPaymentAction(
   return {
     ok: true,
     problems: [],
-    message: `${methodLabel} payment of ${usd(amountCents)} recorded for manifest #${payable.manifestNumber}. This manifest is now paid in full and cleared from payables.`,
+    message: `${methodLabel} payment of ${usd(amountCents)} recorded for ${docLabel} #${payable.number}. This ${docLabel} is now paid in full and cleared from payables.`,
     remainingMinorUnits: remainingAfter,
   };
 }

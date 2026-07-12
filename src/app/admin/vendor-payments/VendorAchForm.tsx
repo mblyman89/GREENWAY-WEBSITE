@@ -60,9 +60,11 @@ export function VendorAchForm({
     };
   }, []);
 
+  // Task N: options are keyed by the opaque payable key ("manifest:<id>" /
+  // "ncinv:<id>") so a row can pay a manifest OR a merch paper invoice.
   const byId = useMemo(() => {
     const m = new Map<string, PayableOption>();
-    (payables ?? []).forEach((p) => m.set(p.manifestId, p));
+    (payables ?? []).forEach((p) => m.set(p.key, p));
     return m;
   }, [payables]);
 
@@ -121,8 +123,8 @@ export function VendorAchForm({
 
       {noPayables && (
         <div className="rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] px-4 py-3 text-sm text-[var(--admin-gold)]">
-          No accepted manifests with an outstanding balance. A vendor payment must be married to an
-          accepted manifest (the invoice); accept an inbound manifest first.
+          Nothing to pay: no accepted manifests or merch invoices with an outstanding balance.
+          Accept an inbound manifest, or enter a vendor invoice on the non-cannabis inventory page.
         </div>
       )}
 
@@ -140,19 +142,20 @@ export function VendorAchForm({
               <div className="grid gap-3 sm:grid-cols-12">
                 {/* Manifest (invoice) picker */}
                 <div className="sm:col-span-5">
-                  <Field label={`Invoice ${i + 1} (accepted manifest)`} required>
+                  <Field label={`Invoice ${i + 1} (manifest or merch invoice)`} required>
                     <Select
                       name="manifestId"
                       value={row.manifestId}
                       onChange={(e) => setManifest(row.id, e.target.value)}
                     >
-                      <option value="">Select an accepted manifest…</option>
+                      <option value="">Select an invoice…</option>
                       {(payables ?? []).map((opt) => {
                         const remaining = opt.remainingMinorUnits;
-                        const disabled = chosen.has(opt.manifestId) && opt.manifestId !== row.manifestId;
+                        const disabled = chosen.has(opt.key) && opt.key !== row.manifestId;
+                        const tag = opt.source === "noncannabis_invoice" ? "Merch" : "Manifest";
                         return (
-                          <option key={opt.manifestId} value={opt.manifestId} disabled={disabled}>
-                            #{opt.manifestNumber} · {opt.vendorName} · owe {centsToUsd(remaining)}
+                          <option key={opt.key} value={opt.key} disabled={disabled}>
+                            {tag} #{opt.manifestNumber} · {opt.vendorName} · owe {centsToUsd(remaining)}
                           </option>
                         );
                       })}
@@ -202,7 +205,9 @@ export function VendorAchForm({
                   <span>
                     Remaining: <strong className="text-[var(--admin-accent)]">{centsToUsd(p.remainingMinorUnits)}</strong>
                   </span>
-                  <span>{p.lotCount} lot(s)</span>
+                  <span>
+                    {p.lotCount} {p.source === "noncannabis_invoice" ? "line(s)" : "lot(s)"}
+                  </span>
                 </div>
               )}
 
