@@ -7,6 +7,7 @@ import {
   type SectionBannerData,
 } from "@/components/home/SectionBanner";
 import type { GreenwayMenuItem } from "@/lib/leafly/types";
+import type { WeeklyDealSummary } from "@/lib/promotions/published-rules-core";
 
 type DealTone = {
   /** Glowing card border color (matches ProductCardVisual tones). */
@@ -272,29 +273,53 @@ type SpecialsHeroContent = {
 
 export function SpecialsContent({
   thursdayBrands,
+  weeklyDeals,
   content,
   menuItems = [],
 }: {
   thursdayBrands?: string[];
+  /**
+   * PROMOTIONS HARMONY (Task T / PR 1): the week's deals from the back
+   * office's PUBLISHED promotions. Days staff edited in /admin/promotions
+   * override the static card copy (title / offer / description / link);
+   * seed days keep the committed presentation so the live look is unchanged.
+   */
+  weeklyDeals?: WeeklyDealSummary[];
   content?: SpecialsHeroContent;
   /** Live menu items (from the published DB version) for the daily-deals grid. */
   menuItems?: GreenwayMenuItem[];
 } = {}) {
+  const summaryByDay = new Map(
+    (weeklyDeals ?? [])
+      .filter((d) => d.fromDatabase)
+      .map((d) => [d.weekday.charAt(0).toUpperCase() + d.weekday.slice(1), d] as const),
+  );
   // When DB-published Thursday brands are supplied, override the static Thursday
   // card's menu link so the storefront reflects the back-office promotion.
-  const deals: DailyDeal[] =
-    thursdayBrands && thursdayBrands.length > 0
-      ? dailyDeals.map((deal) =>
-          deal.day === "Thursday"
-            ? {
-                ...deal,
-                href: `/menu?brands=${thursdayBrands
-                  .map((b) => encodeURIComponent(b))
-                  .join(",")}`,
-              }
-            : deal,
-        )
-      : dailyDeals;
+  const deals: DailyDeal[] = dailyDeals.map((deal) => {
+    const summary = summaryByDay.get(deal.day);
+    if (summary) {
+      // Staff-published day: the card reflects the DB promotion's actual copy.
+      return {
+        ...deal,
+        title: summary.title,
+        titleLines: undefined,
+        offer: summary.offerLabel || deal.offer,
+        desktopOffer: summary.offerLabel
+          ? summary.offerLabel.replace(/\s*off$/i, "")
+          : deal.desktopOffer,
+        details: summary.description ? [summary.description] : deal.details,
+        href: summary.menuHref,
+      };
+    }
+    if (deal.day === "Thursday" && thursdayBrands && thursdayBrands.length > 0) {
+      return {
+        ...deal,
+        href: `/menu?brands=${thursdayBrands.map((b) => encodeURIComponent(b)).join(",")}`,
+      };
+    }
+    return deal;
+  });
 
   return (
     <section className="relative overflow-hidden bg-black text-white">

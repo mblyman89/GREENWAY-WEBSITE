@@ -4,6 +4,8 @@ import { Header } from "@/components/site/Header";
 import { Breadcrumbs } from "@/components/site/Breadcrumbs";
 import { pageMetadata } from "@/lib/seo/seo";
 import { getThursdayBrands } from "@/lib/promotions/storefront-bridge";
+import { loadPublishedRuleSnapshots } from "@/lib/promotions/discount-engine";
+import { weeklyDealSummaries } from "@/lib/promotions/published-rules-core";
 import { getContentValues, isPreviewActive } from "@/lib/cms/render-content";
 import { getPageBanners } from "@/lib/cms/page-sections-store";
 import { loadLiveMenuItems } from "@/lib/pos/live-menu";
@@ -20,9 +22,11 @@ export const metadata = pageMetadata({
 });
 
 export default async function SpecialsPage() {
-  // DB-published Thursday brands (back-office promotions) with static fallback.
-  const [thursdayBrands, copy, preview, banners, menuItems] = await Promise.all([
+  // DB-published promotions (back-office) with static seed fallback: the
+  // Thursday brand list AND the full weekly deals grid copy (Task T / PR 1).
+  const [thursdayBrands, ruleSnapshots, copy, preview, banners, menuItems] = await Promise.all([
     getThursdayBrands(),
+    loadPublishedRuleSnapshots(),
     getContentValues([
       "specials.hero.eyebrow",
       "specials.hero.title",
@@ -43,6 +47,7 @@ export default async function SpecialsPage() {
       <Breadcrumbs items={[{ label: "Specials" }]} />
       <SpecialsContent
         thursdayBrands={thursdayBrands}
+        weeklyDeals={weeklyDealSummaries(ruleSnapshots)}
         menuItems={menuItems}
         content={{
           eyebrow: hero?.eyebrow || copy["specials.hero.eyebrow"],

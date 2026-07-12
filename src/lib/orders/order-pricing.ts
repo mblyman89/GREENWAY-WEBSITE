@@ -9,8 +9,12 @@
  *  1. Every line is resolved against the CURRENT PUBLISHED menu snapshot
  *     (src/lib/pos/live-menu.ts) by variantId + productId — category, variant
  *     label and the TRUE regular price come from the DB, never the client.
- *  2. Discounts are recomputed server-side with the SAME pure cart engine the
- *     client uses (computeCartDiscounts + the store's Pacific weekday).
+ *  2. Discounts are recomputed server-side with the SAME data-driven rules
+ *     engine the REGISTER uses (loadActiveRules + computePromotions over the
+ *     back office's PUBLISHED promotions — Task T / PR 1, Promotions Harmony).
+ *     The committed daily-deal seeds remain the zero-blank fallback, so
+ *     behaviour is identical to the legacy static weekday engine until staff
+ *     publish an override.
  *  3. The global cannabis price floor (RCW 69.50.357) is applied to every
  *     discounted unit price — no cannabis line can ever be $0.
  *  4. Totals are recomputed with the shared pure money math
@@ -20,15 +24,13 @@
  */
 import "server-only";
 import type { GreenwayMenuItem } from "@/lib/leafly/types";
-import type { GreenwayCategory } from "@/lib/leafly/types";
 import { loadLiveMenuAll } from "@/lib/pos/live-menu";
-import { getStoreWeekday } from "@/lib/specials/daily-deals";
+import { loadActiveRules, loadProductCosts } from "@/lib/promotions/discount-engine";
 import {
-  computeCartDiscounts,
-  costFloorForLine,
-  type DiscountCartLine,
-} from "@/lib/specials/cart-discount";
-import { loadProductCosts } from "@/lib/promotions/discount-engine";
+  computePromotions,
+  lineCostFloor,
+  type EngineCartLine,
+} from "@/lib/promotions/discount-engine-core";
 import type { LimitCartLine } from "@/lib/compliance/sales-limits-core";
 import {
   assertCannabisLineSellable,
@@ -149,25 +151,35 @@ export async function repriceOrderLines(rawLines: NewOrderLineInput[]): Promise<
     };
   }
 
-  // Recompute discounts server-side with the SAME pure engine + Pacific weekday.
+  // Recompute discounts server-side with the SAME data-driven rules engine the
+  // REGISTER uses: the back office's PUBLISHED promotions active right now
+  // (Pacific weekday / date window), evaluated by the pure POS engine. This is
+  // what makes the back office the single source of truth for every price the
+  // website charges (Task T / PR 1 — Promotions Harmony, gap G-1).
   // CCRS COST FLOOR (Task R): attach the weighted-average acquisition cost per
   // product so no discount can price a unit below cost ("may not discount the
   // sale price below the cost of acquisition" — CCRS Upload User Guide; see
   // docs/PROMOTIONS_COMPLIANCE.md).
-  const weekday = getStoreWeekday();
-  const productCosts = await loadProductCosts();
-  const discountInput: DiscountCartLine[] = work.map((w) => ({
-    lineId: w.lineId,
-    regularPriceMinorUnits: w.resolved.variant.priceMinorUnits,
-    quantity: Math.round(w.raw.quantity),
-    category: w.resolved.item.category as GreenwayCategory,
-    filterCategories: w.resolved.item.filterCategories,
-    variantLabel: w.resolved.variant.label,
-    brand: w.resolved.item.brand,
-    costMinorUnits: productCosts.get(w.resolved.item.id) ?? null,
-  }));
+  const [activeRules, productCosts] = await Promise.all([
+    loadActiveRules(),
+    loadProductCosts(),
+  ]);
+  const discountInput: EngineCartLine[] = work.map((w) => {
+    const item = w.resolved.item;
+    const cats = item.filterCategories?.length ? item.filterCategories : [item.category];
+    return {
+      lineId: w.lineId,
+      regularPriceMinorUnits: w.resolved.variant.priceMinorUnits,
+      quantity: Math.round(w.raw.quantity),
+      categories: cats.map((c) => String(c).toLowerCase()),
+      brand: item.brand || null,
+      productKey: item.id,
+      variantLabel: w.resolved.variant.label,
+      costMinorUnits: productCosts.get(item.id) ?? null,
+    };
+  });
   const discountInputByLine = new Map(discountInput.map((l) => [l.lineId, l]));
-  const discount = computeCartDiscounts(discountInput, weekday);
+  const discount = computePromotions(discountInput, activeRules);
   const discountByLine = new Map(discount.lines.map((l) => [l.lineId, l]));
 
   const priced: PricedOrderLine[] = [];
@@ -179,7 +191,7 @@ export async function repriceOrderLines(rawLines: NewOrderLineInput[]): Promise<
     // Plus the CCRS acquisition-cost floor as a last-resort clamp.
     const statutory = clampCannabisUnitPrice(w.resolved.item.category, rawUnit, regular);
     const inputLine = discountInputByLine.get(w.lineId);
-    const costFloor = inputLine ? costFloorForLine(inputLine) : 0;
+    const costFloor = inputLine ? lineCostFloor(inputLine) : 0;
     const unit = regular > 0 ? Math.max(statutory, Math.min(costFloor, regular)) : statutory;
     const sellable = assertCannabisLineSellable({
       category: w.resolved.item.category,

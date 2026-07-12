@@ -5,11 +5,15 @@ import { useMemo } from "react";
 import { ProductCard } from "@/components/menu/ProductCard";
 import type { GreenwayMenuItem } from "@/lib/leafly/types";
 import { useShuffleOrder } from "@/lib/home/useShuffleOrder";
+import { DAILY_DEAL_FALLBACK } from "@/lib/specials/daily-deal-presentation";
 import {
-  DAILY_DEAL_FALLBACK,
-  getDailyDealPresentation,
-  selectDailyDealItems,
-} from "@/lib/specials/daily-deal-presentation";
+  dealPresentationFor,
+  selectOnDealItems,
+} from "@/lib/promotions/published-rules-core";
+import {
+  useActiveDealRules,
+  usePublishedRules,
+} from "@/components/promotions/PublishedRulesProvider";
 import { useStoreWeekday } from "@/lib/specials/useStoreWeekday";
 
 const LIMIT = 16;
@@ -23,15 +27,20 @@ const LIMIT = 16;
  */
 export function HomeDailyDeals({ items }: { items: GreenwayMenuItem[] }) {
   const weekday = useStoreWeekday();
+  // PROMOTIONS HARMONY (Task T / PR 1): the section title, offer line, shop
+  // link AND the on-deal product pool all derive from the back office's
+  // PUBLISHED promotion rules (seed fallback keeps legacy behaviour).
+  const allRules = usePublishedRules();
+  const activeRules = useActiveDealRules();
 
   // Stable, on-deal candidate pool for the active day (deterministic order).
   const candidates = useMemo(
-    () => (weekday ? selectDailyDealItems(items, weekday, { limit: 64 }) : []),
-    [items, weekday],
+    () => (activeRules ? selectOnDealItems(items, activeRules, { limit: 64 }) : []),
+    [items, activeRules],
   );
 
   // Fallback pool for days with NO per-item discount (e.g. Ice Cream Sunday is a
-  // basket-level deal, so getActiveMenuDiscount returns undefined for every item
+  // basket-level deal, so menuDiscountForItem returns undefined for every item
   // and `candidates` is empty). Without this the section would render permanent
   // grey skeletons every Sunday. We still want to showcase real products, so we
   // fall back to a representative cross-section of the menu.
@@ -58,7 +67,7 @@ export function HomeDailyDeals({ items }: { items: GreenwayMenuItem[] }) {
   // show (either the day's deals or the menu fallback) — never permanent grey.
   const isResolvingWeekday = weekday === undefined;
 
-  const presentation = weekday ? getDailyDealPresentation(weekday) : null;
+  const presentation = weekday ? dealPresentationFor(allRules, weekday) : null;
   const title = presentation?.title ?? DAILY_DEAL_FALLBACK.title;
   const subtitle = presentation?.subtitle ?? DAILY_DEAL_FALLBACK.subtitle;
   const menuHref = presentation?.menuHref ?? DAILY_DEAL_FALLBACK.menuHref;

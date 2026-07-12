@@ -6,8 +6,12 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { greenwayBusiness } from "@/content/business";
 import { formatMinorCurrency } from "@/lib/leafly/format";
 import type { GreenwayCategory } from "@/lib/leafly/types";
-import { computeCartDiscounts } from "@/lib/specials/cart-discount";
-import { useStoreWeekday } from "@/lib/specials/useStoreWeekday";
+import {
+  computePromotions,
+  type EngineCartLine,
+} from "@/lib/promotions/discount-engine-core";
+import { snapshotToEngineRule } from "@/lib/promotions/published-rules-core";
+import { useActiveDealRules } from "@/components/promotions/PublishedRulesProvider";
 
 // ---------------------------------------------------------------------------
 // Cart + runtime inventory store
@@ -163,30 +167,35 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     }
   }, [soldLedger, hydrated]);
 
-  const weekday = useStoreWeekday();
+  // PROMOTIONS HARMONY (Task T / PR 1): the active deal rules come from the
+  // back office's PUBLISHED promotions (seed fallback when the DB is empty) —
+  // the SAME rules + pure engine the register and the server reprice use.
+  const activeRules = useActiveDealRules();
   const itemCount = items.reduce((total, item) => total + item.quantity, 0);
 
   // SMART CART: the authoritative discount is computed at the cart level from
   // the active day's deal rules (weight/qty/spend tiers, storewide best-item,
   // etc.). This is what makes a single 3.5g flower bag earn NOTHING on Friday
   // while 2×3.5g (a quarter ounce) earns 15%, 8×3.5g (an ounce) earns 30%.
-  const discount = useMemo(
-    () =>
-      computeCartDiscounts(
-        items.map((item) => ({
-          lineId: item.lineId,
-          regularPriceMinorUnits: item.regularPriceMinorUnits,
-          quantity: item.quantity,
-          category: item.category as GreenwayCategory,
-          filterCategories: item.filterCategories,
-          variantLabel: item.variantLabel,
-          brand: item.brand,
-        })),
-        // Until the client resolves the store weekday, fall back to no discount.
-        weekday ?? ("__none__" as never),
-      ),
-    [items, weekday],
-  );
+  const discount = useMemo(() => {
+    const lines: EngineCartLine[] = items.map((item) => {
+      const cats = item.filterCategories?.length
+        ? item.filterCategories
+        : [item.category as GreenwayCategory];
+      return {
+        lineId: item.lineId,
+        regularPriceMinorUnits: item.regularPriceMinorUnits,
+        quantity: item.quantity,
+        categories: cats.map((c) => String(c).toLowerCase()),
+        brand: item.brand || null,
+        productKey: item.productId,
+        variantLabel: item.variantLabel,
+        costMinorUnits: null,
+      };
+    });
+    // Until the client resolves the store weekday, price at regular (no rules).
+    return computePromotions(lines, (activeRules ?? []).map(snapshotToEngineRule));
+  }, [items, activeRules]);
 
   const effectivePriceByLine = useMemo(() => {
     const map = new Map<string, number>();
