@@ -69,6 +69,11 @@ export const primaryNavigationItems: NavigationItem[] = [
     helper: "Join the future Greenway loyalty list and submit signup details for staff review.",
   },
   {
+    label: "Medical",
+    href: "/medical",
+    helper: "Learn about Greenway's medical endorsement, DOH recognition cards, tax savings, and elevated limits.",
+  },
+  {
     label: "Blog",
     href: "/blog",
     helper: "Preview the future Greenway education hub.",

@@ -28,6 +28,22 @@ function priceParts(variant: GreenwayMenuVariant, itemPriceMinorUnits: number, s
   };
 }
 
+/**
+ * Compact DOH-compliant ("medical") indicator (Task T / PR 3). Variants carry
+ * `medical: boolean` straight from the POS import (Is Medical), so this chip
+ * reflects the same flag the register's exemption math keys off.
+ */
+function MedChip() {
+  return (
+    <span
+      className="rounded-[0.3rem] border border-[var(--greenway)]/60 bg-[var(--greenway)]/15 px-1 py-0.5 text-[0.5rem] font-black uppercase tracking-[0.12em] text-[var(--greenway)] md:text-[0.6rem]"
+      title="DOH-compliant medical product — tax savings may apply for carded patients"
+    >
+      Med
+    </span>
+  );
+}
+
 function PriceLine({ variant, itemPriceMinorUnits, salePriceMinorUnits }: PriceLineProps) {
   const { regularPrice, displayPrice, hasSalePrice, unitLabel } = priceParts(variant, itemPriceMinorUnits, salePriceMinorUnits);
 
@@ -37,6 +53,7 @@ function PriceLine({ variant, itemPriceMinorUnits, salePriceMinorUnits }: PriceL
       <span className="flex min-h-[3.35rem] w-full items-center justify-center gap-1 px-2.5 text-center leading-none md:px-3">
         <span className="text-[1.18rem] font-black text-[var(--orange)] md:text-[1.72rem]">{formatMinorCurrency(displayPrice)}</span>
         {unitLabel ? <span className="text-[0.78rem] font-black text-white/95 md:text-base">{unitLabel}</span> : null}
+        {variant.medical ? <MedChip /> : null}
       </span>
     );
   }
@@ -58,6 +75,7 @@ function PriceLine({ variant, itemPriceMinorUnits, salePriceMinorUnits }: PriceL
         <span className="text-[0.98rem] font-black text-[var(--orange)] md:text-[1.5rem]">{formatMinorCurrency(displayPrice)}</span>
         {unitLabel ? <span className="text-[0.66rem] font-black text-white/95 md:text-[0.92rem]">{unitLabel}</span> : null}
       </span>
+      {variant.medical ? <MedChip /> : null}
     </span>
   );
 }

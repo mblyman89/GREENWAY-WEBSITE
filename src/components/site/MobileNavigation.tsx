@@ -41,6 +41,7 @@ const primaryMenuItems: SiteMenuItem[] = [
   { label: "Specials", href: "/specials" },
   { label: "Location", href: "/locations" },
   { label: "Loyalty", href: "/loyalty" },
+  { label: "Medical", href: "/medical" },
   { label: "Blog", href: "/blog" },
   { label: "FAQs", href: "/faq" },
   { label: "Price Match", href: "/price-match" },

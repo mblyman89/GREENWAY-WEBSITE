@@ -75,6 +75,11 @@ export function ProductDetailPurchasePanel({ item }: ProductDetailPurchasePanelP
                 }`}
               >
                 {variant.label} — {formatMinorCurrency(variant.priceMinorUnits)}
+                {variant.medical ? (
+                  <span className="ml-1.5 rounded-[0.3rem] border border-current px-1 py-0.5 text-[0.55rem] font-black uppercase tracking-[0.12em]">
+                    Med
+                  </span>
+                ) : null}
               </button>
             );
           })}

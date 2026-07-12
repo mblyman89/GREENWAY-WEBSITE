@@ -12,6 +12,7 @@ const staticRoutes = [
   "/locations",
   "/about",
   "/loyalty",
+  "/medical",
   "/price-match",
   "/vendor-delivery",
   "/blog",

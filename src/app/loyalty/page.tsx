@@ -2,9 +2,12 @@ import { Breadcrumbs } from "@/components/site/Breadcrumbs";
 import { Footer } from "@/components/site/Footer";
 import { Header } from "@/components/site/Header";
 import { LoyaltySignupForm } from "@/components/loyalty/LoyaltySignupForm";
+import { LoyaltyProgramTerms } from "@/components/loyalty/LoyaltyProgramTerms";
 import { pageMetadata } from "@/lib/seo/seo";
 import { getContentValues, isPreviewActive } from "@/lib/cms/render-content";
 import { getPageBanners } from "@/lib/cms/page-sections-store";
+import { getConfig, listTiers } from "@/lib/loyalty/loyalty-store";
+import { loyaltyTermsSummary, tierDisplayRows } from "@/lib/loyalty/program-terms-core";
 
 export const metadata = pageMetadata({
   title: "Loyalty Rewards & Sign-Up — Greenway Points",
@@ -15,7 +18,7 @@ export const metadata = pageMetadata({
 });
 
 export default async function LoyaltyPage() {
-  const [copy, preview, banners] = await Promise.all([
+  const [copy, preview, banners, loyaltyConfig, loyaltyTiers] = await Promise.all([
     getContentValues([
       "loyalty.hero.title",
       "loyalty.hero.subtitle",
@@ -24,6 +27,10 @@ export default async function LoyaltyPage() {
     ]),
     isPreviewActive(),
     getPageBanners("loyalty", ["loyalty.hero"]),
+    // Live program terms — the SAME config/tiers the register pays with, so the
+    // public page can never advertise different numbers (Task T / PR 3).
+    getConfig(),
+    listTiers(),
   ]);
 
   // The Loyalty hero is image-led (distinct from a SectionBanner), so the
@@ -43,6 +50,10 @@ export default async function LoyaltyPage() {
           heroImageMobile: copy["loyalty.hero.image_mobile"],
           editable: preview,
         }}
+      />
+      <LoyaltyProgramTerms
+        terms={loyaltyTermsSummary(loyaltyConfig)}
+        tiers={tierDisplayRows(loyaltyTiers)}
       />
       <Footer />
     </main>
