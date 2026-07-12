@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { useMockCart } from "@/components/cart/CartProvider";
+import { CartEstimator } from "@/components/cart/CartEstimator";
 import { formatMinorCurrency } from "@/lib/leafly/format";
 import { generateOrderNumber, persistCompletedOrder } from "@/lib/checkout/order";
 
@@ -306,6 +307,16 @@ export function CheckoutFlow() {
               <dd className="text-2xl font-black text-[var(--orange)]">{formatMinorCurrency(totalMinorUnits)}</dd>
             </div>
           </dl>
+        </div>
+
+        {/* Task T / PR 2: register-final loyalty + medical + tier-nudge estimator */}
+        <div className="mt-5">
+          <CartEstimator
+            items={items}
+            subtotalMinorUnits={subtotalMinorUnits}
+            totalMinorUnits={totalMinorUnits}
+            variant="checkout"
+          />
         </div>
 
         {serverError ? (
