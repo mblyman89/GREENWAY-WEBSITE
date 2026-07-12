@@ -28,6 +28,8 @@ import { __runLoyaltySaleTests } from "@/lib/loyalty/loyalty-sale-core";
 import { __runScheduleCoreTests } from "@/lib/staffing/schedule-core";
 import { __runEmployeeLifecycleTests } from "@/lib/staffing/employee-lifecycle-core";
 import { __runUserGuardTests } from "@/lib/auth/user-guards-core";
+import { __runCampaignRulesTests } from "@/lib/marketing/campaign-rules-core";
+import { __runCompetitivePlaybookTests } from "@/lib/marketing/competitive-playbook-core";
 
 describe("embedded pure self-test suites", () => {
   it("order-pricing-core (S-2/S-3 money math + floor)", () => {
@@ -99,6 +101,14 @@ describe("embedded pure self-test suites", () => {
   });
   it("user-guards-core (Task S-c: self-rule, rank rule, privilege ceiling, last-owner rule)", () => {
     const n = __runUserGuardTests();
+    expect(n).toBeGreaterThan(0);
+  });
+  it("campaign-rules-core (Task S-d: WAC 314-55-155 per-channel rules, warnings map)", () => {
+    const n = __runCampaignRulesTests();
+    expect(n).toBeGreaterThan(0);
+  });
+  it("competitive-playbook-core (Task S-d: legal plays, in-app tool links, guardrails)", () => {
+    const n = __runCompetitivePlaybookTests();
     expect(n).toBeGreaterThan(0);
   });
 });

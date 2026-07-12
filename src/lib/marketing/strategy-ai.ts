@@ -30,6 +30,11 @@ import {
   type MarketingChannel,
   type MarketingStrategy,
 } from "@/lib/marketing/strategy-types";
+import {
+  channelRule,
+  campaignChecklist,
+  type CampaignChannel,
+} from "@/lib/marketing/campaign-rules-core";
 
 export { isAiConfigured };
 
@@ -115,9 +120,30 @@ export async function suggestStrategy(
   const channelLabel =
     MARKETING_CHANNELS.find((c) => c.value === (input.channel ?? "general"))?.label ?? "General";
 
+  // Task S-d: ground the strategist in the VERIFIED per-channel rulebook
+  // (campaign-rules-core, from the current WAC 314-55-155 text) so the plan's
+  // complianceNotes reflect the actual requirements of the chosen channel
+  // instead of generic reminders.
+  const CHANNEL_MAP: Partial<Record<MarketingChannel, CampaignChannel>> = {
+    newsletter: "newsletter",
+    website: "website",
+    "in-store": "in_store",
+    social: "social",
+  };
+  const mapped = CHANNEL_MAP[input.channel ?? "general"];
+  const channelRulesBlock = mapped
+    ? [
+        "",
+        `Verified WAC 314-55-155 rules for this channel (${channelRule(mapped).label}) — the plan MUST satisfy every item:`,
+        ...campaignChecklist(mapped).map((item) => `- ${item}`),
+        ...channelRule(mapped).prohibitions.map((item) => `- PROHIBITED: ${item}`),
+      ]
+    : [];
+
   const user = [
     `Marketing goal: ${goal}`,
     `Primary channel focus: ${channelLabel}`,
+    ...channelRulesBlock,
     "",
     "Brand context (use this, do not invent):",
     brandContext,
