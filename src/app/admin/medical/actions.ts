@@ -11,6 +11,8 @@ import {
   attachFormScan,
   markCardPrinted,
 } from "@/lib/medical/store";
+import { upsertMedicalRegistryEntry, removeMedicalRegistryEntry } from "@/lib/medical/sale-store";
+import { isDohCategory } from "@/lib/medical/medical-sale-core";
 
 function bool(form: FormData, key: string): boolean {
   return String(form.get(key) ?? "") === "on" || String(form.get(key) ?? "") === "true";
@@ -188,4 +190,63 @@ export async function validateMcrAction(form: FormData): Promise<void> {
     entityId: id,
   });
   if (customerId) revalidatePath(`/admin/customers/${customerId}`);
+}
+
+// ---------------------------------------------------------------------------
+// Task O — DOH product registry (durable 246-70 categories per POS product)
+// ---------------------------------------------------------------------------
+/**
+ * Register (or re-verify) a product's DOH 246-70 category. The category MUST
+ * be read from the DOH logo on the PHYSICAL PACKAGE — any name-based hint in
+ * the UI is a suggestion only. Upsert keyed by the stable POS product key.
+ */
+export async function upsertDohProductAction(form: FormData): Promise<void> {
+  const session = await requirePermission("medical.manage");
+  const key = str(form, "pos_product_key");
+  const categoryRaw = str(form, "doh_category");
+  if (!key || !isDohCategory(categoryRaw)) {
+    redirect(`/admin/medical?reg_error=${encodeURIComponent("Pick a product and a DOH category.")}`);
+  }
+
+  const res = await upsertMedicalRegistryEntry(
+    {
+      posProductKey: key,
+      productName: str(form, "product_name") || null,
+      dohCategory: categoryRaw,
+      notes: str(form, "notes") || null,
+    },
+    session.userId,
+  );
+
+  if (res.ok) {
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "medical.doh_product.verified",
+      entityType: "medical_product_registry",
+      entityId: res.id,
+      after: { pos_product_key: key, doh_category: categoryRaw },
+    });
+    revalidatePath("/admin/medical");
+  } else {
+    redirect(`/admin/medical?reg_error=${encodeURIComponent(res.error)}`);
+  }
+}
+
+/** Remove a registry entry (e.g. mis-verified). Future sales lose the exemption. */
+export async function removeDohProductAction(form: FormData): Promise<void> {
+  const session = await requirePermission("medical.manage");
+  const id = str(form, "registry_id");
+  if (!id) return;
+  const res = await removeMedicalRegistryEntry(id);
+  if (res.ok) {
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "medical.doh_product.removed",
+      entityType: "medical_product_registry",
+      entityId: id,
+    });
+  }
+  revalidatePath("/admin/medical");
 }

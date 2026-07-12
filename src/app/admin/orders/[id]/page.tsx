@@ -5,6 +5,7 @@ import { can } from "@/lib/auth/roles";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { OrderStatusFlow } from "@/components/admin/orders/OrderStatusFlow";
+import { MedicalSaleSection } from "@/components/admin/orders/MedicalSaleSection";
 import { formatMinorCurrency } from "@/lib/leafly/format";
 import { getOrder } from "@/lib/orders/orders-store";
 import {
@@ -33,12 +34,13 @@ export default async function OrderDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ blocked?: string }>;
+  searchParams?: Promise<{ blocked?: string; medq?: string }>;
 }) {
   const session = await requirePermission("orders.view");
   const { id } = await params;
   const sp = searchParams ? await searchParams : {};
   const blockedMessage = typeof sp.blocked === "string" ? sp.blocked : null;
+  const medicalQuery = typeof sp.medq === "string" ? sp.medq : "";
 
   if (!isSupabaseServiceConfigured) notFound();
   const order = await getOrder(id);
@@ -293,6 +295,9 @@ export default async function OrderDetailPage({
               </p>
             ) : null}
           </div>
+
+          {/* Task O — medical sale (attach card, per-line DOH exemption plan) */}
+          <MedicalSaleSection order={order} searchQuery={medicalQuery} />
 
           <div className="rounded-2xl border border-white/10 bg-[#0d0d0d] p-5">
             <h2 className="text-sm font-black uppercase tracking-[0.14em] text-white/70">

@@ -24,6 +24,25 @@ import { verifyStoredOrderForCompletion } from "@/lib/orders/order-pricing";
 import { enforceSalesLimitForSale } from "@/lib/compliance/sales-limits";
 import { evaluateSalesHours } from "@/lib/compliance/sales-hours-core";
 import { getSalesHoursWindow } from "@/lib/compliance/sales-hours-store";
+import { authorizationValidityAt } from "@/lib/medical/medical-authorization-core";
+import {
+  toRecognitionCard,
+  getMedTaxSettings,
+  getEndorsementConfig,
+  customerMedicalStatus,
+} from "@/lib/medical/store";
+import { attachCardToOrder, detachCardFromOrder } from "@/lib/medical/sale-store";
+import {
+  getOrderMedicalContext,
+  getMedicalRegistryForKeys,
+  recordExemptSalesForOrder,
+  clearExemptSalesForOrder,
+} from "@/lib/medical/sale-store";
+import {
+  buildOrderExemptionPlan,
+  buildExemptSaleDrafts,
+  type PlanLine,
+} from "@/lib/medical/medical-sale-core";
 import type { OrderStatus } from "@/lib/orders/types";
 
 const VALID_STATUSES: OrderStatus[] = [
@@ -72,19 +91,89 @@ async function runCompletionGate(opts: {
   }
 
   // ── S-1b: sales-limit HARD gate ────────────────────────────────────────
-  // Online guests are recreational; medical status is verified in store and
-  // handled by the in-store POS path when it lands.
-  const { verdict } = await enforceSalesLimitForSale(check.limitLines, "recreational", {
-    orderId: opts.orderId,
-    actorId: opts.actorId,
-    override: opts.overridePermitted
-      ? { permitted: true, reason: opts.overrideReason }
-      : null,
+  // Task O — medical context first (attached recognition card). If staff
+  // attached a card to this order, RE-validate it on the completion date
+  // (tax.cardValidity via authorizationValidityAt — the single source of
+  // truth). An attached-but-invalid card BLOCKS completion: staff must fix the
+  // card or detach it so the sale knowingly completes as recreational.
+  const medCtx = await getOrderMedicalContext(opts.orderId);
+  let cardedValid = false;
+  if (medCtx) {
+    const validity = authorizationValidityAt(toRecognitionCard(medCtx.authorization), new Date());
+    if (!validity.valid) {
+      return `The attached recognition card for ${medCtx.customerName} is NOT valid: ${validity.reason ?? "unknown reason"}. Fix the card on the patient's profile or detach it before completing (an invalid card grants no exemption, and completing anyway would misreport the sale).`;
+    }
+    cardedValid = true;
+  }
+
+  // Task O — DOH 246-70 exemption plan + high-THC statutory gate. Built from
+  // the STORED lines (category snapshot) and the durable product registry.
+  // The plan is the SAME pure math the order-detail preview shows — no drift
+  // between what staff saw and what the gate enforces.
+  const [medSettings, endorsement] = await Promise.all([getMedTaxSettings(), getEndorsementConfig()]);
+  const registry = await getMedicalRegistryForKeys(order.lines.map((l) => l.product_id));
+  const planLines: PlanLine[] = order.lines.map((l) => ({
+    productId: l.product_id,
+    productName: l.product_name,
+    category: l.category ?? null,
+    quantity: l.quantity,
+    unitPriceMinorUnits: l.price_minor_units,
+  }));
+  const plan = buildOrderExemptionPlan(planLines, {
+    registry,
+    cardedValid,
+    endorsed: medSettings.medicallyEndorsed,
+    saleDate: new Date().toISOString().slice(0, 10),
+    exciseExemptionUntil: endorsement?.exciseExemptionUntil ?? "2029-06-30",
   });
+
+  // HIGH-THC HARD GATE (chapter 246-70 WAC): these products sell ONLY to a
+  // buyer with a valid recognition card. Statutory — NO override exists.
+  if (plan.highThcViolations.length > 0) {
+    const names = plan.highThcViolations.map((n) => `"${n}"`).join(", ");
+    return `Sale blocked: ${names} ${plan.highThcViolations.length === 1 ? "is a DOH High-THC product" : "are DOH High-THC products"} (chapter 246-70 WAC) and may ONLY be sold to a patient with a valid recognition card. Attach the patient's card, or remove the item. There is no override for this rule.`;
+  }
+
+  // S-1b sales-limit HARD gate: a VALID attached recognition card evaluates
+  // against the 3× medical limits (WAC 314-55-095(2)(d)); otherwise recreational.
+  const { verdict } = await enforceSalesLimitForSale(
+    check.limitLines,
+    cardedValid ? "medical" : "recreational",
+    {
+      orderId: opts.orderId,
+      actorId: opts.actorId,
+      override: opts.overridePermitted
+        ? { permitted: true, reason: opts.overrideReason }
+        : null,
+    },
+  );
 
   if (!verdict.allowed) {
     const reasons = verdict.reasons.length ? verdict.reasons.join(" ") : "Cart exceeds a statutory limit.";
     return `Sale blocked by WAC 314-55-095 limits: ${reasons} Reduce quantities, or a manager can apply a logged override with a reason.`;
+  }
+
+  // Task O — WAC 314-55-090(2) exempt-sale ledger (write-or-block). Every
+  // claimed exemption MUST have its 5-year record row; otherwise the excise
+  // "shall be presumed to have been incorrectly exempted" and the store remits
+  // it plus penalties (WAC 314-55-090(3)). Failure to write = refuse to complete.
+  if (medCtx && cardedValid && plan.claimedLineCount > 0) {
+    const draftsResult = buildExemptSaleDrafts(plan, {
+      uniquePatientIdentifier: medCtx.authorization.unique_patient_identifier,
+      effectiveOn: medCtx.authorization.effective_on ?? medCtx.authorization.issued_on,
+      expiresOn: medCtx.authorization.expires_on,
+    });
+    if (!draftsResult.ok) {
+      return `Medical exempt-sale records could not be prepared: ${draftsResult.error}`;
+    }
+    const written = await recordExemptSalesForOrder(opts.orderId, draftsResult.drafts, {
+      customerId: medCtx.authorization.customer_id,
+      authorizationId: medCtx.authorization.id,
+      actorId: opts.actorId,
+    });
+    if (!written.ok) {
+      return `Sale blocked — the WAC 314-55-090(2) exempt-sale records could not be written (${written.error}). Without these records the exemption is presumed invalid and the store owes the tax, so completion is refused.`;
+    }
   }
   return null;
 }
@@ -153,6 +242,10 @@ export async function setOrderStatusAction(formData: FormData): Promise<void> {
   });
 
   if (!result.ok) {
+    // Task O — if the completion gate already wrote WAC 090(2) rows but the
+    // lifecycle matrix then refused the completion, remove them: the ledger
+    // may only describe sales that actually completed.
+    if (toStatus === "completed") await clearExemptSalesForOrder(id);
     if (result.refusal) {
       await recordAudit({
         actorId: session.profile.id,
@@ -183,6 +276,25 @@ export async function setOrderStatusAction(formData: FormData): Promise<void> {
     },
   });
 
+  // Task O — ledger hygiene: when an order LEAVES completed (logged S-15
+  // reversal), its WAC 314-55-090(2) exempt-sale rows no longer describe a
+  // standing sale, and the excise return sums the ledger by sale_date — stale
+  // rows would overstate the Box 2 deduction. Clear them (no-op for orders
+  // that never completed); they are re-derived if the order completes again.
+  if (toStatus !== "completed") {
+    const cleared = await clearExemptSalesForOrder(id);
+    if (cleared > 0) {
+      await recordAudit({
+        actorId: session.profile.id,
+        actorEmail: session.email,
+        action: "medical.exempt_sales_cleared",
+        entityType: "order",
+        entityId: id,
+        after: { cleared, reason: `Order left completed status (→ ${toStatus}).` },
+      });
+    }
+  }
+
   revalidatePath("/admin/orders");
   revalidatePath(`/admin/orders/${id}`);
 }
@@ -211,4 +323,76 @@ export async function updateOrderNoteAction(formData: FormData): Promise<void> {
   }
 
   revalidatePath(`/admin/orders/${id}`);
+}
+
+// ---------------------------------------------------------------------------
+// Task O — attach / detach a recognition card (medical sale)
+// ---------------------------------------------------------------------------
+/**
+ * Attach a patient's ACTIVE recognition card to an open order. The card must
+ * be valid RIGHT NOW to attach (fail fast at the counter); it is re-validated
+ * again at completion. Requires orders.manage; audited.
+ */
+export async function attachMedicalCardAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("orders.manage");
+  const orderId = String(formData.get("id") ?? "");
+  const customerId = String(formData.get("customerId") ?? "");
+  if (!orderId || !customerId) return;
+
+  const order = await getOrder(orderId);
+  if (!order) return;
+  if (order.status === "completed" || order.status === "cancelled" || order.status === "no_show") {
+    redirect(`/admin/orders/${orderId}?blocked=${encodeURIComponent("This order is closed — reopen it (logged reversal) before changing its medical status.")}`);
+  }
+
+  const status = await customerMedicalStatus(customerId, new Date());
+  if (!status.carded || !status.card) {
+    redirect(
+      `/admin/orders/${orderId}?blocked=${encodeURIComponent(`Cannot attach: ${status.reason ?? "the customer has no valid recognition card"}. Verify the card in the MCR and fix it on the patient's profile first.`)}`,
+    );
+  }
+
+  const res = await attachCardToOrder(orderId, { id: status.card.id, customer_id: customerId });
+  if (!res.ok) {
+    redirect(`/admin/orders/${orderId}?blocked=${encodeURIComponent(res.error ?? "Could not attach the card.")}`);
+  }
+
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: "order.medical_card_attached",
+    entityType: "order",
+    entityId: orderId,
+    after: {
+      authorization_id: status.card.id,
+      customer_id: customerId,
+      upid: status.card.unique_patient_identifier,
+    },
+  });
+  revalidatePath(`/admin/orders/${orderId}`);
+}
+
+/** Detach the recognition card from an open order (sale proceeds as recreational). */
+export async function detachMedicalCardAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("orders.manage");
+  const orderId = String(formData.get("id") ?? "");
+  if (!orderId) return;
+
+  const order = await getOrder(orderId);
+  if (!order) return;
+  if (order.status === "completed" || order.status === "cancelled" || order.status === "no_show") {
+    redirect(`/admin/orders/${orderId}?blocked=${encodeURIComponent("This order is closed — reopen it (logged reversal) before changing its medical status.")}`);
+  }
+
+  const res = await detachCardFromOrder(orderId);
+  if (res.ok) {
+    await recordAudit({
+      actorId: session.profile.id,
+      actorEmail: session.email,
+      action: "order.medical_card_detached",
+      entityType: "order",
+      entityId: orderId,
+    });
+  }
+  revalidatePath(`/admin/orders/${orderId}`);
 }

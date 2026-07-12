@@ -33,11 +33,13 @@ Per **WAC 314-55-090(2)** and **RCW 69.51A.230**, a recognition card has:
 
 | Exemption | Rate | Applies when |
 |---|---|---|
-| **Sales tax** | 9.3% | A registered patient/DP (in MCR) buys **ANY** cannabis at a medically-endorsed store. (Also: High-CBD WAC 246-70-040 products are sales-tax-free for anyone.) |
+| **Sales tax** | 9.3% | Per RCW 82.08.9998, ONLY for **chapter 246-70 WAC COMPLIANT products** sold by a medically-endorsed store: (1)(a) compliant product to a carded patient/DP; (1)(b) ≤0.3% THC product to a carded patient/DP; (1)(c) **High-CBD compliant** product to ANYONE. There is NO sales-tax exemption for non-compliant products, even to cardholders. |
 | **Excise tax** | 37% | ALL THREE: (a) medically-endorsed retailer; (b) buyer is patient/DP with a **valid recognition card in the MCR**; (c) product is **DOH-compliant** per WAC 246-70-040 (tested to 246-70 standards, bears DOH logo). |
 
-So a carded patient buying a non-DOH-compliant product: **sales tax exempt, excise still applies.**
+So a carded patient buying a non-DOH-compliant product: **BOTH taxes are due in full** (no exemption of any kind — RCW 82.08.9998 requires a compliant product).
 A carded patient buying a DOH-compliant product: **both exempt** → `RecreationalMedical`, $0 both taxes (matches existing CCRS handling).
+
+> **CORRECTION (Task O):** an earlier revision of this file incorrectly stated the sales-tax exemption applied to "ANY cannabis" bought by a cardholder. That was wrong. RCW 82.08.9998 conditions the exemption on the product being chapter 246-70 WAC compliant. The authoritative, verbatim-sourced reference is now `docs/MEDICAL_CANNABIS_COMPLIANCE.md` §5 — prefer that document.
 
 (Sources: HB 1453 FAQ DOH 608-050; WAC 314-55-090.)
 

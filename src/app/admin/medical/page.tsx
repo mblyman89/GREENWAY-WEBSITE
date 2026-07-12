@@ -6,6 +6,7 @@ import { Breadcrumbs, HelpPanel, EmptyState } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
 import { Badge } from "@/components/admin/ui";
 import { getEndorsementConfig, medicalSummary, listExemptSales } from "@/lib/medical/store";
+import { DohProductRegistry } from "@/components/admin/medical/DohProductRegistry";
 
 export const dynamic = "force-dynamic";
 
@@ -13,8 +14,15 @@ function money(minor: number): string {
   return `$${(minor / 100).toFixed(2)}`;
 }
 
-export default async function MedicalOverviewPage() {
+export default async function MedicalOverviewPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ prodq?: string; reg_error?: string }>;
+}) {
   await requirePermission("medical.manage");
+  const sp = searchParams ? await searchParams : {};
+  const productQuery = typeof sp.prodq === "string" ? sp.prodq : "";
+  const registryError = typeof sp.reg_error === "string" ? sp.reg_error : null;
 
   if (!isSupabaseServiceConfigured) {
     return (
@@ -53,8 +61,9 @@ export default async function MedicalOverviewPage() {
             steps={[
               "Verify the authorization form (complete/signed, tamper-resistant, identity, embossed seal).",
               "Issue a recognition card from the customer's profile; validate it in the MCR.",
-              "Carded patients (in MCR) are sales-tax exempt on any cannabis at this endorsed store.",
-              "DOH-compliant products (WAC 246-70-040) are ALSO 37% excise-exempt for carded patients.",
+              "Register DOH-compliant products (chapter 246-70 WAC) below — only registered products qualify for exemptions.",
+              "Attach the patient's card on the order; both exemptions (9.3% sales + 37% excise) apply ONLY to DOH-compliant products (RCW 82.08.9998; WAC 314-55-090). High-CBD products are sales-tax-free for anyone.",
+              "High-THC products sell ONLY to valid cardholders — the completion gate blocks this with no override.",
             ]}
           >
             <p>
@@ -92,6 +101,9 @@ export default async function MedicalOverviewPage() {
           accent="muted"
         />
       </div>
+
+      {/* Task O — DOH product registry (chapter 246-70 WAC) */}
+      <DohProductRegistry productQuery={productQuery} errorMessage={registryError} />
 
       {/* Excise-exempt sale records (WAC 314-55-090(2)) */}
       <section className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
