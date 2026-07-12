@@ -12,6 +12,7 @@ import {
 } from "@/lib/promotions/discount-engine-core";
 import { snapshotToEngineRule } from "@/lib/promotions/published-rules-core";
 import { useActiveDealRules } from "@/components/promotions/PublishedRulesProvider";
+import { CartEstimator } from "@/components/cart/CartEstimator";
 
 // ---------------------------------------------------------------------------
 // Cart + runtime inventory store
@@ -577,6 +578,14 @@ function CartDrawer({ isOpen, onClose }: { isOpen: boolean; onClose: () => void 
                   <span className="text-2xl font-black text-[var(--orange)]">{formatMinorCurrency(totalMinorUnits)}</span>
                 </div>
               </div>
+
+              {/* Task T / PR 2: register-final loyalty + medical + tier-nudge estimator */}
+              <CartEstimator
+                items={items}
+                subtotalMinorUnits={subtotalMinorUnits}
+                totalMinorUnits={totalMinorUnits}
+                variant="drawer"
+              />
 
               <div className="grid gap-3">
                 <Link href="/checkout" onClick={onClose} className="w-full rounded-full bg-[var(--orange)] px-6 py-3.5 text-center text-sm font-black uppercase tracking-[0.14em] text-black transition hover:bg-white">
