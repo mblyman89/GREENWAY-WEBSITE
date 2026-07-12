@@ -47,6 +47,14 @@ const ROLE_TONE: Record<ShiftLite["shift_role"], "green" | "gold" | "orange" | "
   other: "neutral",
 };
 
+/** Bar colors for the timeline view (Task S-b), matching the role tones. */
+const ROLE_BAR: Record<ShiftLite["shift_role"], string> = {
+  manager: "bg-[var(--admin-gold)]/70 border-[var(--admin-gold)]",
+  lead: "bg-[var(--admin-orange)]/70 border-[var(--admin-orange)]",
+  sales: "bg-[var(--admin-accent)]/70 border-[var(--admin-accent)]",
+  other: "bg-white/30 border-white/50",
+};
+
 export function ScheduleBuilder({
   mondayYmd,
   employees,
@@ -107,6 +115,11 @@ export function ScheduleBuilder({
 
   return (
     <div className="space-y-4">
+      {/* Coverage timeline — Task S-b: at-a-glance BAR CHART of the week.
+          Each day is a track; every shift is a colored bar positioned on a
+          shared time axis, so gaps and overlaps jump out immediately. */}
+      <CoverageTimeline days={days} shifts={shifts} employees={employees} />
+
       {/* Week nav + copy controls */}
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-3 p-4">
@@ -383,5 +396,168 @@ function ShiftForm({
         </Button>
       </div>
     </form>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Coverage timeline (Task S-b) — the "super easy to view" bar chart. One
+// horizontal track per day; each scheduled shift renders as a colored bar on
+// a shared hour axis, labeled with the employee's first name. Gaps in
+// coverage and stacked-up overlaps are visible at a glance.
+// ---------------------------------------------------------------------------
+function CoverageTimeline({
+  days,
+  shifts,
+  employees,
+}: {
+  days: string[];
+  shifts: ShiftLite[];
+  employees: EmployeeLite[];
+}) {
+  const [open, setOpen] = useState(true);
+  const nameOf = useMemo(
+    () => new Map(employees.map((e) => [e.id, e.full_name.split(" ")[0]])),
+    [employees],
+  );
+
+  const timed = useMemo(() => shifts.filter((s) => s.start_hm && s.end_hm), [shifts]);
+
+  // Shared hour axis: from the earliest start to the latest end (min 8–22).
+  const [axisStart, axisEnd] = useMemo(() => {
+    let lo = 8 * 60;
+    let hi = 22 * 60;
+    for (const s of timed) {
+      const st = (s.start_hm as { h: number; m: number }).h * 60 + (s.start_hm as { h: number; m: number }).m;
+      let en = (s.end_hm as { h: number; m: number }).h * 60 + (s.end_hm as { h: number; m: number }).m;
+      if (en <= st) en = 24 * 60; // overnight shift: draw to midnight
+      if (st < lo) lo = st;
+      if (en > hi) hi = en;
+    }
+    return [Math.floor(lo / 60) * 60, Math.min(24 * 60, Math.ceil(hi / 60) * 60)];
+  }, [timed]);
+  const span = Math.max(1, axisEnd - axisStart);
+
+  const hourTicks = useMemo(() => {
+    const ticks: number[] = [];
+    const step = span > 12 * 60 ? 120 : 60; // 2h ticks on long axes
+    for (let m = axisStart; m <= axisEnd; m += step) ticks.push(m);
+    return ticks;
+  }, [axisStart, axisEnd, span]);
+
+  const byDay = useMemo(() => {
+    const map = new Map<string, ShiftLite[]>();
+    for (const s of timed) {
+      const arr = map.get(s.business_day) ?? [];
+      arr.push(s);
+      map.set(s.business_day, arr);
+    }
+    for (const arr of map.values()) {
+      arr.sort((a, b) => {
+        const sa = (a.start_hm as { h: number; m: number }).h * 60 + (a.start_hm as { h: number; m: number }).m;
+        const sb = (b.start_hm as { h: number; m: number }).h * 60 + (b.start_hm as { h: number; m: number }).m;
+        return sa - sb;
+      });
+    }
+    return map;
+  }, [timed]);
+
+  const hourLabel = (m: number) => {
+    const h = Math.floor(m / 60) % 24;
+    if (h === 0) return "12a";
+    if (h === 12) return "12p";
+    return h < 12 ? `${h}a` : `${h - 12}p`;
+  };
+
+  return (
+    <Card>
+      <div className="p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-white">Week at a glance</h3>
+            <p className="text-xs text-white/45">
+              Every shift as a bar on the day&apos;s timeline — spot gaps and stack-ups instantly.
+              Colors match roles: <span className="text-[var(--admin-accent)]">sales</span>,{" "}
+              <span className="text-[var(--admin-gold)]">manager</span>,{" "}
+              <span className="text-[var(--admin-orange)]">lead</span>.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            className="rounded-lg border border-[var(--admin-border)] px-3 py-1.5 text-xs text-white/70 hover:bg-white/5"
+          >
+            {open ? "Hide" : "Show"}
+          </button>
+        </div>
+
+        {open && (
+          <div className="mt-4 space-y-1.5">
+            {/* Hour axis */}
+            <div className="ml-24 relative h-4">
+              {hourTicks.map((m) => (
+                <span
+                  key={m}
+                  className="absolute -translate-x-1/2 text-[10px] text-white/35"
+                  style={{ left: `${((m - axisStart) / span) * 100}%` }}
+                >
+                  {hourLabel(m)}
+                </span>
+              ))}
+            </div>
+            {days.map((d) => {
+              const dayShifts = byDay.get(d) ?? [];
+              return (
+                <div key={d} className="flex items-stretch gap-2">
+                  <div className="shrink-0 py-1 text-[11px] text-white/50" style={{ width: "5.5rem" }}>
+                    {shortDayLabel(d)}
+                  </div>
+                  <div className="relative min-h-[1.9rem] flex-1 rounded-md border border-white/5 bg-black/20">
+                    {/* Hour gridlines */}
+                    {hourTicks.map((m) => (
+                      <span
+                        key={m}
+                        className="absolute inset-y-0 w-px bg-white/5"
+                        style={{ left: `${((m - axisStart) / span) * 100}%` }}
+                      />
+                    ))}
+                    {dayShifts.length === 0 && (
+                      <span className="absolute inset-0 flex items-center justify-center text-[10px] uppercase tracking-wide text-white/20">
+                        no coverage
+                      </span>
+                    )}
+                    <div className="relative flex flex-col gap-0.5 py-0.5">
+                      {dayShifts.map((s) => {
+                        const st =
+                          (s.start_hm as { h: number; m: number }).h * 60 +
+                          (s.start_hm as { h: number; m: number }).m;
+                        let en =
+                          (s.end_hm as { h: number; m: number }).h * 60 +
+                          (s.end_hm as { h: number; m: number }).m;
+                        if (en <= st) en = 24 * 60;
+                        const left = ((Math.max(st, axisStart) - axisStart) / span) * 100;
+                        const width = Math.max(2, ((Math.min(en, axisEnd) - Math.max(st, axisStart)) / span) * 100);
+                        return (
+                          <div key={s.id} className="relative h-5">
+                            <div
+                              className={`absolute inset-y-0 flex items-center overflow-hidden rounded border px-1.5 text-[10px] font-semibold text-black ${ROLE_BAR[s.shift_role]}`}
+                              style={{ left: `${left}%`, width: `${width}%` }}
+                              title={`${nameOf.get(s.employee_id) ?? "?"} · ${s.shift_role} · ${
+                                s.start_hm && s.end_hm ? `${formatHm(s.start_hm)}–${formatHm(s.end_hm)}` : ""
+                              }`}
+                            >
+                              <span className="truncate">{nameOf.get(s.employee_id) ?? "?"}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </Card>
   );
 }

@@ -139,15 +139,15 @@ export const WORKSPACES: Workspace[] = [
     group: "Employee",
     title: "Employees",
     summary:
-      "The in-store team side: time clock and scheduling, payroll (ACH), trade samples, and live register activity.",
+      "The employee command center: hiring & onboarding checklists, documents, training, handbook, schedules, time clock, payroll (ACH), and offboarding.",
     does: [
-      "Clock in/out and build schedules",
-      "Run manual-entry payroll to a NACHA ACH file",
-      "Oversee registers and track trade samples",
+      "Run onboarding (offer → background check → I-9/W-4 → handbook → badge)",
+      "Clock in/out, build schedules, and track paid sick leave",
+      "Handle terminations with a guided offboarding checklist",
     ],
     icon: "🕐",
     href: "/admin/staffing",
-    permission: "loyalty.view",
+    permission: "timeclock.use",
   },
   {
     group: "Medical",

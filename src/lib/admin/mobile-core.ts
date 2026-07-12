@@ -168,7 +168,7 @@ export const MOBILE_SHORTCUTS: MobileShortcut[] = [
   { label: "Menu Imports", href: "/admin/menu-imports", icon: "⬆", permission: "menu.import", hint: "Publish / check the live menu" },
   { label: "Marketing & Advertising", href: "/admin/marketing", icon: "📣", permission: "content.edit", hint: "Draft a compliant idea" },
   { label: "Customers", href: "/admin/customers", icon: "👤", permission: "customers.manage", hint: "Look up a customer" },
-  { label: "Time Clock", href: "/admin/staffing", icon: "⏱", permission: "loyalty.view", hint: "Who's clocked in" },
+  { label: "Time Clock", href: "/admin/staffing", icon: "⏱", permission: "timeclock.use", hint: "Who's clocked in" },
 ];
 
 /** Filter the curated shortcuts to what this role can actually open. */

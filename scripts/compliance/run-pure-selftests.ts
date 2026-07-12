@@ -18,6 +18,8 @@ import { __runAtRestCryptoTests } from "../../src/lib/security/at-rest-crypto";
 import { __runEngineTests } from "../../src/lib/loyalty/engine";
 import { __runLoyaltyConfigTests } from "../../src/lib/loyalty/loyalty-config-core";
 import { __runLoyaltySaleTests } from "../../src/lib/loyalty/loyalty-sale-core";
+import { __runScheduleCoreTests } from "../../src/lib/staffing/schedule-core";
+import { __runEmployeeLifecycleTests } from "../../src/lib/staffing/employee-lifecycle-core";
 
 async function main() {
   __runOrderPricingTests();
