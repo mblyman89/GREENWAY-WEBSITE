@@ -7,11 +7,17 @@
  *  - loadActiveRules(): map currently-PUBLISHED promotions that are active right
  *    now (weekday match OR date window) into EngineRule[] the core understands,
  *    parsing each promotion's `config` jsonb into the typed EngineConfig.
- *  - menuLinesForKeys(): turn a set of POS product keys + quantities (a sample
+ *  - loadProductCosts(): the weighted-average acquisition cost per POS product
+ *    key from inventory_lots (same method as the COGS report) — feeds the CCRS
+ *    cost floor ("may not discount the sale price below the cost of
+ *    acquisition", see docs/PROMOTIONS_COMPLIANCE.md).
+ *  - menuLinesForBasket(): turn a set of POS product keys + quantities (a sample
  *    basket the manager builds in the simulator) into EngineCartLine[] using the
- *    published menu version (price, category, brand, variant).
+ *    published menu version (price, category, brand, variant) WITH costs.
  *
  * Pure math stays in discount-engine-core.ts (the single source of truth).
+ * NO STACKING: the engine is strictly best-deal-wins (owner hard block);
+ * legacy `config.stackable` values are ignored.
  */
 import "server-only";
 
@@ -67,7 +73,18 @@ export function parseEngineConfig(config: Record<string, unknown> | null | undef
     const t = c.basketTopItem as Record<string, unknown>;
     out.basketTopItem = { topPercent: Number(t.topPercent) || 0, restPercent: Number(t.restPercent) || 0 };
   }
-  out.stackable = Boolean(c.stackable);
+  if (c.eitherOr && typeof c.eitherOr === "object") {
+    const e = c.eitherOr as Record<string, unknown>;
+    const bundle = (e.bundle && typeof e.bundle === "object" ? e.bundle : {}) as Record<string, unknown>;
+    const flatPercent = Number(e.flatPercent) || 0;
+    const n = Number(bundle.n) || 0;
+    const m = Number(bundle.m);
+    if (flatPercent > 0 && n >= 2 && Number.isFinite(m) && m >= 0 && m < n) {
+      out.eitherOr = { flatPercent, bundle: { n, m } };
+    }
+  }
+  // NOTE: legacy `stackable` configs are intentionally IGNORED — discount
+  // stacking is hard-blocked (owner directive; see docs/PROMOTIONS_COMPLIANCE.md).
   return out;
 }
 
@@ -84,7 +101,6 @@ export function promotionToRule(p: PublishedPromotion, config: EngineConfig = {}
     discountPercent: p.discountPercent,
     discountFixed: p.discountFixed,
     priority: p.priority,
-    stackable: config.stackable ?? false,
     storewide: p.storewide,
     targetCategories: p.targetCategories,
     targetBrands: p.targetBrands,
@@ -119,8 +135,20 @@ export function isActiveNow(p: PublishedPromotion, when: Date): boolean {
 export async function loadActiveRules(when = new Date()): Promise<EngineRule[]> {
   const published = await getPublishedPromotions();
   const active = published.filter((p) => isActiveNow(p, when));
+  return attachConfigs(active);
+}
 
-  // Re-attach raw config from the DB for active rows (seed fallbacks have none).
+/**
+ * Every PUBLISHED promotion as an EngineRule (regardless of weekday/window) —
+ * powers the standing below-cost audit in the promotions command center.
+ */
+export async function loadPublishedRules(): Promise<EngineRule[]> {
+  const published = await getPublishedPromotions();
+  return attachConfigs(published);
+}
+
+/** Re-attach raw config jsonb from the DB (seed fallbacks carry seed config). */
+async function attachConfigs(active: PublishedPromotion[]): Promise<EngineRule[]> {
   const { isSupabaseServiceConfigured } = await import("@/lib/supabase/env");
   const configById = new Map<string, Record<string, unknown>>();
   if (isSupabaseServiceConfigured && active.some((p) => !p.id.startsWith("seed-"))) {
@@ -139,18 +167,75 @@ export async function loadActiveRules(when = new Date()): Promise<EngineRule[]> 
     const rule = promotionToRule(p);
     const raw = configById.get(p.id);
     if (raw) rule.config = { ...parseEngineConfig(raw) };
-    rule.stackable = rule.config.stackable ?? false;
+    // Seed fallbacks: the set-in-stone daily deals carry their config in the
+    // seed itself (e.g. Tuesday's either/or) — attach it when the DB had none.
+    if (!raw && p.id.startsWith("seed-")) {
+      rule.config = seedConfigFor(p.promoKey);
+    }
     return rule;
   });
 }
 
+/** Engine config for the committed daily-deal seeds (DB-empty fallback). */
+export function seedConfigFor(promoKey: string | null): EngineConfig {
+  switch (promoKey) {
+    case "daily.tuesday":
+      // Doobie Tuesday: 20% off OR 4-for-3 mix & match, store-advantaged.
+      return { eitherOr: { flatPercent: 20, bundle: { n: 4, m: 3 } } };
+    case "daily.saturday":
+      return { basketTopItem: { topPercent: 30, restPercent: 15 } };
+    case "daily.sunday":
+      return { basketNforM: { n: 3, m: 2 } };
+    default:
+      return {};
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Acquisition costs (the CCRS cost floor's data source)
+// ---------------------------------------------------------------------------
+
+/**
+ * Weighted-average acquisition cost (minor units, pre-tax) per POS product key
+ * from inventory_lots — the same method the COGS report uses. Keys without any
+ * costed lot are absent from the map (floor falls back to the statutory floor
+ * and the below-cost audit lists them as "cost unknown").
+ */
+export async function loadProductCosts(): Promise<Map<string, number>> {
+  const costs = new Map<string, number>();
+  const { isSupabaseServiceConfigured } = await import("@/lib/supabase/env");
+  if (!isSupabaseServiceConfigured) return costs;
+  const { createSupabaseAdminClient } = await import("@/lib/supabase/admin");
+  const admin = createSupabaseAdminClient();
+  const { data } = await admin
+    .from("inventory_lots")
+    .select("pos_product_key, received_qty, unit_cost_minor_units")
+    .not("pos_product_key", "is", null)
+    .not("unit_cost_minor_units", "is", null)
+    .limit(10000);
+  const num = new Map<string, number>();
+  const den = new Map<string, number>();
+  for (const row of (data ?? []) as { pos_product_key: string | null; received_qty: number | null; unit_cost_minor_units: number | null }[]) {
+    const key = row.pos_product_key;
+    if (!key || row.unit_cost_minor_units == null) continue;
+    const qty = Math.max(1, Math.round(row.received_qty ?? 1));
+    num.set(key, (num.get(key) ?? 0) + row.unit_cost_minor_units * qty);
+    den.set(key, (den.get(key) ?? 0) + qty);
+  }
+  for (const [key, total] of num.entries()) {
+    const d = den.get(key) ?? 0;
+    if (d > 0) costs.set(key, Math.round(total / d));
+  }
+  return costs;
+}
+
 export type SimBasketItem = { productKey: string; quantity: number };
 
-/** Resolve a sample basket of product keys into EngineCartLines from the published menu. */
+/** Resolve a sample basket of product keys into EngineCartLines from the published menu (with costs). */
 export async function menuLinesForBasket(items: SimBasketItem[]): Promise<EngineCartLine[]> {
   const version = await getPublishedVersion();
   if (!version) return [];
-  const menu = await getVersionItems(version.id);
+  const [menu, costs] = await Promise.all([getVersionItems(version.id), loadProductCosts()]);
   const byKey = new Map(menu.map((i) => [i.source_item_id, i]));
   const lines: EngineCartLine[] = [];
   for (const it of items) {
@@ -164,6 +249,7 @@ export async function menuLinesForBasket(items: SimBasketItem[]): Promise<Engine
       brand: m.brand_name ?? null,
       productKey: m.source_item_id,
       variantLabel: null,
+      costMinorUnits: costs.get(it.productKey) ?? null,
     });
   }
   return lines;

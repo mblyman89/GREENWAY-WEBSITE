@@ -31,7 +31,7 @@ const PRESENTATION: Record<StoreWeekday, Omit<DailyDealPresentation, "weekday">>
   },
   tuesday: {
     title: "Doobie Tuesday",
-    subtitle: "20% off prerolls & blunts · 25% off 4+",
+    subtitle: "20% off prerolls & blunts · or 4 for the price of 3",
     menuHref: "/menu?categories=preroll,blunt,preroll-pack,infused-preroll,infused-blunt,infused-preroll-pack",
   },
   wednesday: {

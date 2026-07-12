@@ -17,6 +17,8 @@ import {
 } from "../actions";
 import type { PostStatus } from "@/lib/promotions/types";
 import { isAiConfigured } from "@/lib/promotions/ai-copy";
+import { guardPromotionPublish } from "@/lib/promotions/promo-guard";
+import { formatMoneyMinor } from "@/lib/promotions/discount-engine-core";
 
 export const dynamic = "force-dynamic";
 
@@ -41,10 +43,14 @@ export default async function EditPromotionPage({
   const promotion = await getPromotion(id);
   if (!promotion) notFound();
 
-  const [brands, affected] = await Promise.all([
+  const [brands, affected, guard] = await Promise.all([
     listMenuBrands(),
     previewAffectedProductsWithImages(promotion),
+    guardPromotionPublish(promotion),
   ]);
+  const guardBelowCost = guard.findings.filter((f) => f.reason === "below_cost");
+  const guardCostUnknown = guard.findings.filter((f) => f.reason === "cost_unknown");
+  const guardRegularBelow = guard.findings.filter((f) => f.reason === "regular_below_cost");
 
   // Pick a representative product (or a sensible default) for the live badge preview.
   const sample = affected[0] ?? null;
@@ -107,8 +113,75 @@ export default async function EditPromotionPage({
                 ))}
               </div>
               <p className="mt-3 text-xs text-white/40">
-                Publishing takes an audit snapshot of the rules + affected products.
+                Publishing takes an audit snapshot of the rules + affected products, and is
+                HARD-BLOCKED if any product&apos;s worst case would fall below its acquisition cost
+                (CCRS).
               </p>
+            </div>
+
+            {/* CCRS cost-floor pre-publish check */}
+            <div
+              className={`rounded-xl border p-4 ${
+                guard.blocked
+                  ? "border-[#ff6b6b]/40 bg-[#ff6b6b]/10"
+                  : "border-[#7ed957]/25 bg-[#7ed957]/[0.05]"
+              }`}
+            >
+              <h3
+                className={`text-sm font-semibold uppercase tracking-wide ${
+                  guard.blocked ? "text-[#ff6b6b]" : "text-[#7ed957]"
+                }`}
+              >
+                🛡 CCRS cost-floor check
+              </h3>
+              {guard.blocked ? (
+                <>
+                  <p className="mt-1 text-xs text-[#ffb0b0]">
+                    Publish will be BLOCKED: {guardBelowCost.length} product
+                    {guardBelowCost.length === 1 ? "" : "s"} would be discounted below the cost of
+                    acquisition in the worst case. Soften the discount, raise the price, or exclude
+                    the product.
+                  </p>
+                  <ul className="mt-2 max-h-40 space-y-1 overflow-y-auto">
+                    {guardBelowCost.slice(0, 10).map((f) => (
+                      <li key={f.key} className="text-xs text-[#ffb0b0]/90">
+                        <span className="text-white/80">{f.name}</span> — worst case{" "}
+                        {formatMoneyMinor(f.worstCasePriceMinorUnits)} &lt; floor{" "}
+                        {formatMoneyMinor(f.floorMinorUnits)}
+                      </li>
+                    ))}
+                    {guardBelowCost.length > 10 && (
+                      <li className="text-xs text-[#ffb0b0]/60">
+                        …and {guardBelowCost.length - 10} more.
+                      </li>
+                    )}
+                  </ul>
+                </>
+              ) : (
+                <p className="mt-1 text-xs text-white/60">
+                  Worst case checked against {guard.affectedCount} affected product
+                  {guard.affectedCount === 1 ? "" : "s"}: no price can fall below its acquisition
+                  cost. The register also clamps every ticket at the floor (defense in depth).
+                </p>
+              )}
+              {(guardCostUnknown.length > 0 || guardRegularBelow.length > 0) && (
+                <p className="mt-2 text-xs text-[#ffd700]/90">
+                  {guardCostUnknown.length > 0 && (
+                    <>
+                      {guardCostUnknown.length} product
+                      {guardCostUnknown.length === 1 ? "" : "s"} have no cost on file (statutory
+                      floor only until a costed lot exists).{" "}
+                    </>
+                  )}
+                  {guardRegularBelow.length > 0 && (
+                    <>
+                      {guardRegularBelow.length} product
+                      {guardRegularBelow.length === 1 ? " is" : "s are"} already priced at/below the
+                      cost floor at regular price — no discount can apply there.
+                    </>
+                  )}
+                </p>
+              )}
             </div>
 
             <SaleBadgePreview

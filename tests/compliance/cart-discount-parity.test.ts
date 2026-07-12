@@ -73,14 +73,14 @@ describe("weekday mechanics", () => {
     expect(merch.unitPriceMinorUnits).toBe(2000); // never discounted
   });
 
-  it("Doobie Tuesday: quantity tiers across ALL preroll lines (1=0%, 2-3=15%, 4+=25%)", () => {
+  it("Doobie Tuesday: 20% off OR 4-for-3 — the SMALLER savings wins (store-advantaged)", () => {
+    // qty 1: only the flat 20% option can qualify.
     const one = computeCartDiscounts([line({ lineId: "p", category: "preroll", regularPriceMinorUnits: 1000 })], "tuesday");
-    expect(one.lines[0].appliedPercent).toBe(0);
-    const two = computeCartDiscounts(
-      [line({ lineId: "p", category: "preroll", regularPriceMinorUnits: 1000, quantity: 2 })],
-      "tuesday",
-    );
-    expect(two.lines[0].appliedPercent).toBe(15);
+    expect(one.lines[0].appliedPercent).toBe(20);
+    expect(one.lines[0].unitPriceMinorUnits).toBe(800);
+
+    // 4 similar-priced units: flat 20% saves LESS than 4-for-3 → flat wins.
+    // Flat: 20% of $44.00 = $8.80. Bundle: cheapest unit $10 → 22% spread ≈ $9.68.
     const four = computeCartDiscounts(
       [
         line({ lineId: "p1", category: "preroll", regularPriceMinorUnits: 1000, quantity: 2 }),
@@ -88,7 +88,32 @@ describe("weekday mechanics", () => {
       ],
       "tuesday",
     );
-    expect(four.lines.every((l) => l.appliedPercent === 25)).toBe(true);
+    expect(four.lines.every((l) => l.appliedPercent === 20)).toBe(true);
+    expect(four.totalSavingsMinorUnits).toBe(880);
+
+    // Skewed basket (3×$20 + 1×$2): bundle target = cheapest unit $2 → 3% spread
+    // (floor) saves far less than flat 20% → the 4-for-3 spread wins.
+    const skew = computeCartDiscounts(
+      [
+        line({ lineId: "big", category: "preroll", regularPriceMinorUnits: 2000, quantity: 3 }),
+        line({ lineId: "small", category: "blunt", regularPriceMinorUnits: 200, quantity: 1 }),
+      ],
+      "tuesday",
+    );
+    expect(skew.lines.every((l) => l.appliedPercent === 3)).toBe(true);
+    expect(skew.lines[0].appliedLabel).toContain("4 for 3");
+    // Store-advantaged: spread savings (≤ $2.00 target) instead of $12.40 flat.
+    expect(skew.totalSavingsMinorUnits).toBeLessThan(200);
+  });
+
+  it("Doobie Tuesday: the CCRS cost floor clamps the 20% option", () => {
+    // $10.00 preroll costing $6.00 pre-tax → floor = ceil(600 × 1.463) = 878.
+    // 20% off would be 800 — below the floor — so the unit clamps to 878.
+    const r = computeCartDiscounts(
+      [line({ lineId: "p", category: "preroll", regularPriceMinorUnits: 1000, costMinorUnits: 600 })],
+      "tuesday",
+    );
+    expect(r.lines[0].unitPriceMinorUnits).toBe(878);
   });
 
   it("Wax Wednesday: spend tiers ($50=15%, $100=20%, $150=30%)", () => {

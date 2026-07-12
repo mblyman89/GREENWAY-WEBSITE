@@ -26,7 +26,12 @@ import {
   tuesdayDoobieCategories,
   waxWednesdayCategories,
 } from "@/lib/specials/daily-deals";
-import { clampCannabisUnitPrice } from "@/lib/orders/order-pricing-core";
+import {
+  clampCannabisUnitPrice,
+  isNonCannabisCategory,
+  TAX_INCLUSIVE_DIVISOR,
+  NON_CANNABIS_TAX_INCLUSIVE_DIVISOR,
+} from "@/lib/orders/order-pricing-core";
 
 export type DiscountCartLine = {
   lineId: string;
@@ -39,6 +44,15 @@ export type DiscountCartLine = {
   /** Variant label, e.g. "3.5g", "7g", "1oz" — used for weight-tiered deals. */
   variantLabel?: string;
   brand?: string;
+  /**
+   * Acquisition cost per unit, PRE-TAX vendor cost in minor units, when known
+   * (server reprice attaches the weighted-average lot cost). Drives the CCRS
+   * cost floor: "may not discount the sale price below the cost of acquisition"
+   * (CCRS Upload User Guide — see docs/PROMOTIONS_COMPLIANCE.md). The client
+   * cart preview does not know costs; the below-cost audit in /admin/promotions
+   * keeps published deals clear of the floor so the clamp never binds live.
+   */
+  costMinorUnits?: number | null;
 };
 
 export type DiscountedLineResult = {
@@ -102,11 +116,32 @@ function ounceFridayPercentForGrams(totalGrams: number): number {
   return 0;
 }
 
-/** Doobie Tuesday qty tier -> percent. 1 item = 0%, 2-3 = 15%, 4+ = 25%. */
-function doobieTuesdayPercentForQty(totalQty: number): number {
-  if (totalQty >= 4) return 25;
-  if (totalQty >= 2) return 15;
-  return 0;
+// ---------------------------------------------------------------------------
+// CCRS COST FLOOR (Task R) — "may not discount the sale price below the cost
+// of acquisition" (CCRS Upload User Guide, Sale.csv Discount field).
+// Costs are PRE-TAX vendor costs; card prices are tax-INCLUSIVE, so the floor
+// on the charged unit price is ceil(cost × divisor) — rounded UP so revenue
+// can never round below cost (store-advantaged).
+// ---------------------------------------------------------------------------
+
+/** Tax-inclusive floor implied by a pre-tax acquisition cost. 0 when unknown. */
+export function costFloorForLine(line: DiscountCartLine): number {
+  const cost = line.costMinorUnits;
+  if (cost == null || !Number.isFinite(cost) || cost <= 0) return 0;
+  const divisor = isNonCannabisCategory(line.category)
+    ? NON_CANNABIS_TAX_INCLUSIVE_DIVISOR
+    : TAX_INCLUSIVE_DIVISOR;
+  // Never raise a price ABOVE regular — a regular price at/below cost is a
+  // pricing problem the below-cost audit surfaces; the engine only refuses to
+  // discount further.
+  return Math.min(Math.ceil(cost * divisor), Math.max(0, line.regularPriceMinorUnits));
+}
+
+/** Clamp a discounted unit price to the statutory floor AND the cost floor. */
+function clampLineUnit(line: DiscountCartLine, unitPrice: number): number {
+  const statutory = clampCannabisUnitPrice(line.category, unitPrice, line.regularPriceMinorUnits);
+  if (!isNonCannabisCategory(line.category) && line.regularPriceMinorUnits <= 0) return statutory;
+  return Math.max(statutory, costFloorForLine(line));
 }
 
 /** Wax Wednesday spend tier (eligible regular spend, minor units) -> percent. */
@@ -136,9 +171,10 @@ function applyPercentLine(line: DiscountCartLine, percent: number, label: string
   if (percent <= 0) return noDiscountLine(line);
   // GLOBAL CANNABIS PRICE FLOOR (RCW 69.50.357): a cannabis unit can never be
   // discounted to $0. Percent is also capped below 100 for cannabis lines.
+  // CCRS COST FLOOR: never below the acquisition cost when the cost is known.
   const cappedPercent = Math.min(percent, 99);
   const raw = round(line.regularPriceMinorUnits * (1 - cappedPercent / 100));
-  const discounted = clampCannabisUnitPrice(line.category, raw, line.regularPriceMinorUnits);
+  const discounted = clampLineUnit(line, raw);
   return {
     lineId: line.lineId,
     unitPriceMinorUnits: discounted,
@@ -178,11 +214,70 @@ export function computeCartDiscounts(
       break;
     }
     case "tuesday": {
-      // Doobie Tuesday: quantity-tiered across all eligible preroll lines.
+      // Doobie Tuesday (Task R, owner-specified): 20% off prerolls & blunts OR
+      // buy 4 for the price of 3 mix & match — WHICHEVER SAVES THE CUSTOMER
+      // LESS when both qualify (store-advantaged; deterministic and identical
+      // for every customer, so it stays "available to all who meet the
+      // discount conditions" per the CCRS guide).
+      //
+      // The 4-for-3 option is COMPLIANT like Sunday: the cheapest unit per
+      // full group of 4 sets the savings target, converted to an equivalent
+      // whole-number percent (floor) SPREAD across all eligible lines so no
+      // unit is ever free or below cost.
       const eligible = cartLines.filter((l) => !isMerchOrAccessory(l) && matchesCategories(l, tuesdayDoobieCategories));
-      const totalQty = eligible.reduce((sum, l) => sum + l.quantity, 0);
-      const percent = doobieTuesdayPercentForQty(totalQty);
-      for (const line of eligible) resultMap.set(line.lineId, applyPercentLine(line, percent, "Doobie Tuesday"));
+      if (eligible.length === 0) break;
+
+      // Option A — flat 20% (applies from qty 1).
+      const flatPercent = 20;
+      let flatSavings = 0;
+      for (const line of eligible) {
+        const d = applyPercentLine(line, flatPercent, "Doobie Tuesday");
+        flatSavings += d.unitSavingsMinorUnits * line.quantity;
+      }
+
+      // Option B — 4-for-3 mix & match spread (needs 4+ eligible units).
+      const units: number[] = [];
+      let eligibleTotal = 0;
+      for (const line of eligible) {
+        eligibleTotal += line.regularPriceMinorUnits * line.quantity;
+        for (let i = 0; i < line.quantity; i += 1) units.push(line.regularPriceMinorUnits);
+      }
+      units.sort((a, b) => a - b);
+      const groups = Math.floor(units.length / 4);
+      let bundleTarget = 0;
+      for (let i = 0; i < groups; i += 1) bundleTarget += units[i];
+      const bundlePercent =
+        groups > 0 && eligibleTotal > 0
+          ? Math.min(99, Math.floor((bundleTarget / eligibleTotal) * 100))
+          : 0;
+      let bundleSavings = 0;
+      if (bundlePercent > 0) {
+        for (const line of eligible) {
+          const d = applyPercentLine(line, bundlePercent, "Doobie Tuesday");
+          bundleSavings += d.unitSavingsMinorUnits * line.quantity;
+        }
+      }
+
+      // Store-advantaged pick: the SMALLER positive savings wins; a
+      // zero-savings option never beats a positive one.
+      let percent = 0;
+      let bundleChosen = false;
+      if (flatSavings > 0 && (bundleSavings <= 0 || flatSavings <= bundleSavings)) {
+        percent = flatPercent;
+      } else if (bundleSavings > 0) {
+        percent = bundlePercent;
+        bundleChosen = true;
+      }
+      if (percent <= 0) break;
+      for (const line of eligible) {
+        const d = applyPercentLine(line, percent, "Doobie Tuesday");
+        resultMap.set(
+          line.lineId,
+          bundleChosen
+            ? { ...d, appliedLabel: `Doobie Tuesday · 4 for 3 (${percent}% spread)` }
+            : d,
+        );
+      }
       break;
     }
     case "wednesday": {
@@ -234,11 +329,7 @@ export function computeCartDiscounts(
             const oneAt30 = round(line.regularPriceMinorUnits * 0.7);
             const restAt15 = round(line.regularPriceMinorUnits * 0.85);
             const blendedTotal = oneAt30 + restAt15 * (line.quantity - 1);
-            const blendedUnit = clampCannabisUnitPrice(
-              line.category,
-              round(blendedTotal / line.quantity),
-              line.regularPriceMinorUnits,
-            );
+            const blendedUnit = clampLineUnit(line, round(blendedTotal / line.quantity));
             resultMap.set(line.lineId, {
               lineId: line.lineId,
               unitPriceMinorUnits: blendedUnit,
@@ -279,7 +370,7 @@ export function computeCartDiscounts(
       if (percent <= 0) break;
       for (const line of eligible) {
         const raw = round(line.regularPriceMinorUnits * (1 - percent / 100));
-        const discounted = clampCannabisUnitPrice(line.category, raw, line.regularPriceMinorUnits);
+        const discounted = clampLineUnit(line, raw);
         resultMap.set(line.lineId, {
           lineId: line.lineId,
           unitPriceMinorUnits: discounted,

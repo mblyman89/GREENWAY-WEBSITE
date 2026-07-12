@@ -26,6 +26,8 @@ export type MenuPick = {
   categories: string[];
   priceMinorUnits: number;
   variantLabel?: string | null;
+  /** Weighted-average acquisition cost (pre-tax, minor units); null = unknown. */
+  costMinorUnits?: number | null;
 };
 
 type BasketEntry = { pick: MenuPick; quantity: number };
@@ -81,6 +83,7 @@ export function SimulatorClient({
     brand: b.pick.brand || null,
     productKey: b.pick.key,
     variantLabel: b.pick.variantLabel ?? null,
+    costMinorUnits: b.pick.costMinorUnits ?? null,
   }));
 
   const result = useMemo(() => computePromotions(cartLines, rules), [cartLines, rules]);
@@ -173,7 +176,12 @@ export function SimulatorClient({
                         </td>
                         <td className="px-2 py-2">
                           {res?.appliedLabel ? (
-                            <Badge tone="green">{res.appliedLabel}</Badge>
+                            <span className="inline-flex flex-wrap items-center gap-1">
+                              <Badge tone="green">{res.appliedLabel}</Badge>
+                              {res.atCostFloor ? (
+                                <Badge tone="gold">🛡 cost floor</Badge>
+                              ) : null}
+                            </span>
                           ) : (
                             <span className="text-xs text-stone-400">—</span>
                           )}

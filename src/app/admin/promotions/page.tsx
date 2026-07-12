@@ -1,3 +1,19 @@
+/**
+ * /admin/promotions — the PROMOTIONS COMMAND CENTER (Task R).
+ *
+ * One screen to run the whole promotions program like a big-player back
+ * office:
+ *  - Stats + weekly schedule strip (which weekday is covered by which deal).
+ *  - Standing CCRS BELOW-COST AUDIT: every published promotion is worst-case
+ *    checked against the current menu + weighted-average acquisition costs
+ *    (a discount may never take the price below the cost of acquisition —
+ *    CCRS Upload User Guide; RCW 69.50.357). True hits also HARD-BLOCK at
+ *    publish time and clamp at the register (defense in depth).
+ *  - Conflict panel (products under more than one published promo).
+ *  - AI advisor (drafts-only, aggregates only).
+ *  - The promotions table with URL-driven filtering (status / type / weekday /
+ *    search) and sorting — server-rendered, no client JS required.
+ */
 import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
@@ -5,38 +21,130 @@ import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel, StatusPill } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
 import { listPromotions, detectConflicts } from "@/lib/promotions/promotions-store";
+import { auditPublishedPromotions } from "@/lib/promotions/promo-guard";
+import { formatMoneyMinor } from "@/lib/promotions/discount-engine-core";
+import { isAiConfigured } from "@/lib/ai/provider";
 import { WEEKDAY_LABELS, DISCOUNT_TYPE_LABELS } from "@/lib/promotions/types";
-import type { Weekday } from "@/lib/promotions/types";
+import type { PromotionRow, Weekday, DiscountType } from "@/lib/promotions/types";
 import { storeWeekday } from "@/lib/reports/timezone";
 import { WeeklyScheduleStrip } from "@/components/admin/promotions/WeeklyScheduleStrip";
+import { PromotionsAdvisorPanel } from "@/components/admin/promotions/PromotionsAdvisorPanel";
 
 export const dynamic = "force-dynamic";
 
-export default async function PromotionsAdminPage() {
+type Params = {
+  status?: string;
+  type?: string;
+  weekday?: string;
+  q?: string;
+  sort?: string;
+  deleted?: string;
+};
+
+const SORTS = ["schedule", "title", "status", "type", "newest"] as const;
+type SortKey = (typeof SORTS)[number];
+
+function sortPromos(promos: PromotionRow[], sort: SortKey): PromotionRow[] {
+  const arr = [...promos];
+  switch (sort) {
+    case "title":
+      return arr.sort((a, b) => a.title.localeCompare(b.title));
+    case "status": {
+      const rank: Record<string, number> = { published: 0, scheduled: 1, draft: 2, archived: 3 };
+      return arr.sort(
+        (a, b) => (rank[a.status] ?? 9) - (rank[b.status] ?? 9) || a.title.localeCompare(b.title),
+      );
+    }
+    case "type":
+      return arr.sort(
+        (a, b) => a.discount_type.localeCompare(b.discount_type) || a.title.localeCompare(b.title),
+      );
+    case "newest":
+      return arr.sort((a, b) => b.created_at.localeCompare(a.created_at));
+    case "schedule":
+    default:
+      // Weekday deals first (Sun→Sat), then dated/one-offs, then priority.
+      return arr.sort((a, b) => {
+        const wa = a.weekday ?? 99;
+        const wb = b.weekday ?? 99;
+        return wa - wb || b.priority - a.priority || a.title.localeCompare(b.title);
+      });
+  }
+}
+
+/** Build a query string preserving the other active filters. */
+function href(sp: Params, patch: Partial<Params>): string {
+  const merged = { ...sp, ...patch };
+  const parts: string[] = [];
+  for (const [k, v] of Object.entries(merged)) {
+    if (k === "deleted") continue;
+    if (v) parts.push(`${k}=${encodeURIComponent(v)}`);
+  }
+  return `/admin/promotions${parts.length ? `?${parts.join("&")}` : ""}`;
+}
+
+function chip(active: boolean): string {
+  return active
+    ? "rounded-full bg-[#7ed957] px-3 py-1 text-xs font-semibold text-black"
+    : "rounded-full border border-[var(--admin-border)] px-3 py-1 text-xs text-[var(--admin-text-muted)] transition hover:bg-[var(--admin-surface-hover)]";
+}
+
+export default async function PromotionsAdminPage({
+  searchParams,
+}: {
+  searchParams: Promise<Params>;
+}) {
   await requirePermission("promotions.manage");
+  const sp = await searchParams;
 
   if (!isSupabaseServiceConfigured) {
     return (
       <div>
         <AdminPageHeader
-          title="Promotions & Specials"
-          subtitle="Daily deals, the Thursday brand selector, and clearance — all with a preview-before-publish gate."
+          title="Promotions command center"
+          subtitle="Daily deals, the promotion builder, and the CCRS cost-floor audit."
         />
         <div className="px-5 py-6 sm:px-8">
           <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] p-5 text-sm text-[var(--admin-gold)]">
             The database isn’t fully set up yet. Once your administrator finishes the one-time
             setup, you’ll be able to manage promotions here. Until then the storefront uses the
-            built-in daily-deal defaults.
+            built-in daily-deal defaults (which already enforce the cost floor at the register).
           </div>
         </div>
       </div>
     );
   }
 
-  const [promos, conflicts] = await Promise.all([listPromotions(), detectConflicts()]);
+  const [promos, conflicts, audit] = await Promise.all([
+    listPromotions(),
+    detectConflicts(),
+    auditPublishedPromotions(),
+  ]);
   const published = promos.filter((p) => p.status === "published").length;
   const drafts = promos.filter((p) => p.status === "draft").length;
   const scheduled = promos.filter((p) => p.status === "scheduled").length;
+
+  // ── URL-driven filters ────────────────────────────────────────────────────
+  const status = sp.status ?? "";
+  const type = sp.type ?? "";
+  const weekday = sp.weekday ?? "";
+  const q = (sp.q ?? "").trim().toLowerCase();
+  const sort: SortKey = SORTS.includes(sp.sort as SortKey) ? (sp.sort as SortKey) : "schedule";
+
+  let filtered = promos;
+  if (status) filtered = filtered.filter((p) => p.status === status);
+  if (type) filtered = filtered.filter((p) => p.discount_type === type);
+  if (weekday === "dated") filtered = filtered.filter((p) => p.weekday === null);
+  else if (weekday !== "") filtered = filtered.filter((p) => String(p.weekday) === weekday);
+  if (q) {
+    filtered = filtered.filter(
+      (p) =>
+        p.title.toLowerCase().includes(q) ||
+        (p.promo_key ?? "").toLowerCase().includes(q) ||
+        (p.description ?? "").toLowerCase().includes(q),
+    );
+  }
+  filtered = sortPromos(filtered, sort);
 
   const scheduleItems = promos
     .filter((p) => p.status !== "archived")
@@ -44,26 +152,33 @@ export default async function PromotionsAdminPage() {
   // S-12: "today" on the schedule strip is the STORE's (Pacific) weekday.
   const todayWeekday = storeWeekday() as Weekday;
 
+  const auditWithIssues = audit.entries.filter(
+    (e) => e.belowCost.length > 0 || e.regularBelowCost.length > 0,
+  );
+  const costUnknownTotal = audit.totals.costUnknown;
+
   return (
     <div>
       <AdminPageHeader
-        title="Promotions & Specials"
-        subtitle="Daily deals, the Thursday brand selector, and clearance — all with a preview-before-publish gate."
+        title="Promotions command center"
+        subtitle="Build deals like a pro — with the CCRS cost floor, no stacking, and a publish gate baked in."
         breadcrumbs={<Breadcrumbs items={[{ label: "Promotions" }]} />}
         help={
           <HelpPanel
             id="promotions"
             title="How promotions work"
             steps={[
-              "Create a promotion and pick the products or brands.",
-              "Set the discount and the start/end dates.",
-              "Preview how the sale badge looks on the site.",
-              "Publish — it goes live automatically on the dates you set.",
+              "Create a promotion, choose the mechanics (percent, BOGO, tiers, basket, either/or), and pick the products/brands.",
+              "Preview affected products and test in the simulator — the exact engine the register uses.",
+              "Publish. Publishing HARD-BLOCKS if any product's worst case would fall below its acquisition cost (CCRS).",
+              "Deals never stack — every item gets only the single best deal, and the register clamps at the cost floor.",
             ]}
           >
             <p>
-              If two promotions overlap on the same products, you&apos;ll get a
-              friendly warning before publishing so there are no surprises.
+              The daily deals are set in stone: Tuesday is 20% off prerolls &amp; blunts OR 4-for-3
+              (whichever saves less), Sunday is 3-for-2 storewide with savings spread
+              store-advantaged. The below-cost audit re-checks every published deal against your
+              live menu and costs.
             </p>
           </HelpPanel>
         }
@@ -85,29 +200,115 @@ export default async function PromotionsAdminPage() {
         }
       />
 
-      <div className="px-5 py-6 sm:px-8">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="space-y-6 px-5 py-6 sm:px-8">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
           <StatCard label="Total promotions" value={promos.length} accent="muted" />
           <StatCard label="Published (live)" value={published} accent="green" />
           <StatCard label="Drafts" value={drafts} accent="muted" />
           <StatCard label="Scheduled" value={scheduled} accent="gold" />
+          <StatCard
+            label="Below-cost hits"
+            value={audit.totals.belowCost}
+            accent={audit.totals.belowCost > 0 ? "orange" : "green"}
+          />
+          <StatCard
+            label="Costed products"
+            value={`${audit.costedProductCount}/${audit.productCount}`}
+            accent={audit.costedProductCount < audit.productCount ? "gold" : "green"}
+          />
         </div>
 
         {scheduleItems.length > 0 && (
-          <div className="mt-6">
-            <WeeklyScheduleStrip items={scheduleItems} todayWeekday={todayWeekday} />
+          <WeeklyScheduleStrip items={scheduleItems} todayWeekday={todayWeekday} />
+        )}
+
+        {/* ── CCRS below-cost audit ─────────────────────────────────────── */}
+        {auditWithIssues.length > 0 ? (
+          <div className="rounded-xl border border-[#ff6b6b]/40 bg-[#ff6b6b]/10 p-4 text-sm">
+            <p className="font-semibold text-[#ff6b6b]">
+              🛡 CCRS cost-floor audit — {audit.totals.belowCost + audit.totals.regularBelowCost}{" "}
+              product issue{audit.totals.belowCost + audit.totals.regularBelowCost === 1 ? "" : "s"}{" "}
+              across published deals
+            </p>
+            <p className="mt-1 text-[#ffb0b0]/90">
+              A discount may never take the sale price below the cost of acquisition (CCRS Upload
+              User Guide; RCW 69.50.357). The register already clamps these — fix the price, soften
+              the deal, or exclude the product so the advertised deal matches the charged deal.
+            </p>
+            <div className="mt-3 space-y-3">
+              {auditWithIssues.map((e) => (
+                <div key={e.promotionId} className="rounded-lg border border-white/10 bg-black/30 p-3">
+                  <p className="text-xs font-semibold text-white/85">
+                    {e.title}
+                    {e.weekday != null ? ` · every ${WEEKDAY_LABELS[e.weekday as Weekday]}` : ""}
+                    <span className="ml-2 font-normal text-white/45">
+                      {e.affectedCount} product{e.affectedCount === 1 ? "" : "s"} in scope
+                    </span>
+                  </p>
+                  <ul className="mt-1.5 space-y-1">
+                    {e.belowCost.slice(0, 5).map((f) => (
+                      <li key={`bc-${f.key}`} className="text-xs text-[#ffb0b0]">
+                        <span className="font-medium text-white/80">{f.name}</span> — worst case{" "}
+                        {formatMoneyMinor(f.worstCasePriceMinorUnits)} is below the{" "}
+                        {formatMoneyMinor(f.floorMinorUnits)} cost floor (reg{" "}
+                        {formatMoneyMinor(f.priceMinorUnits)}); register clamps to the floor.
+                      </li>
+                    ))}
+                    {e.belowCost.length > 5 && (
+                      <li className="text-xs text-[#ffb0b0]/70">
+                        …and {e.belowCost.length - 5} more below-cost hits.
+                      </li>
+                    )}
+                    {e.regularBelowCost.slice(0, 3).map((f) => (
+                      <li key={`rb-${f.key}`} className="text-xs text-[#ffd700]/90">
+                        <span className="font-medium text-white/80">{f.name}</span> — regular price{" "}
+                        {formatMoneyMinor(f.priceMinorUnits)} already sits at/below its{" "}
+                        {formatMoneyMinor(f.floorMinorUnits)} cost floor. No discount can apply;
+                        review the price or the cost data.
+                      </li>
+                    ))}
+                    {e.regularBelowCost.length > 3 && (
+                      <li className="text-xs text-[#ffd700]/60">
+                        …and {e.regularBelowCost.length - 3} more priced at/below cost.
+                      </li>
+                    )}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-xl border border-[#7ed957]/25 bg-[#7ed957]/[0.06] p-4 text-sm">
+            <p className="font-semibold text-[#7ed957]">
+              🛡 CCRS cost-floor audit — all published deals clear
+            </p>
+            <p className="mt-1 text-white/60">
+              Every published promotion was worst-case checked against your live menu and
+              weighted-average acquisition costs: no product can be discounted below its cost of
+              acquisition.
+              {costUnknownTotal > 0 && (
+                <>
+                  {" "}
+                  <span className="text-[#ffd700]">
+                    {costUnknownTotal} product{costUnknownTotal === 1 ? "" : "s"} in scope have no
+                    cost on file yet
+                  </span>{" "}
+                  — they fall back to the statutory never-free floor until a costed lot exists.
+                </>
+              )}
+            </p>
           </div>
         )}
 
         {conflicts.length > 0 && (
-          <div className="mt-6 rounded-xl border border-[#ff7f00]/40 bg-[#ff7f00]/10 p-4 text-sm text-[#ffb066]">
+          <div className="rounded-xl border border-[#ff7f00]/40 bg-[#ff7f00]/10 p-4 text-sm text-[#ffb066]">
             <p className="font-semibold text-[#ff7f00]">
-              ⚠ {conflicts.length} product{conflicts.length === 1 ? "" : "s"} fall under more than one
-              published promotion
+              ⚠ {conflicts.length} product{conflicts.length === 1 ? "" : "s"} fall under more than
+              one published promotion
             </p>
             <p className="mt-1 text-[#ffb066]/80">
-              Overlapping deals can show conflicting badges. Review the affected products and tighten
-              targeting or add exclusions.
+              No double-dipping ever happens — the register applies only the single best deal — but
+              overlapping promos can show conflicting badges. Tighten targeting or add exclusions.
             </p>
             <ul className="mt-2 space-y-1">
               {conflicts.slice(0, 8).map((c) => (
@@ -123,7 +324,91 @@ export default async function PromotionsAdminPage() {
           </div>
         )}
 
-        <div className="mt-6 overflow-hidden rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)]">
+        <PromotionsAdvisorPanel aiEnabled={isAiConfigured} />
+
+        {/* ── Filters + search ──────────────────────────────────────────── */}
+        <div className="space-y-3 rounded-xl border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
+              Status
+            </span>
+            <Link href={href(sp, { status: "" })} className={chip(!status)}>
+              All
+            </Link>
+            {(["published", "scheduled", "draft", "archived"] as const).map((s) => (
+              <Link key={s} href={href(sp, { status: s })} className={chip(status === s)}>
+                {s}
+              </Link>
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
+              Type
+            </span>
+            <Link href={href(sp, { type: "" })} className={chip(!type)}>
+              All
+            </Link>
+            {(Object.keys(DISCOUNT_TYPE_LABELS) as DiscountType[]).map((t) => (
+              <Link key={t} href={href(sp, { type: t })} className={chip(type === t)}>
+                {DISCOUNT_TYPE_LABELS[t]}
+              </Link>
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
+              Day
+            </span>
+            <Link href={href(sp, { weekday: "" })} className={chip(weekday === "")}>
+              All
+            </Link>
+            {([0, 1, 2, 3, 4, 5, 6] as Weekday[]).map((d) => (
+              <Link
+                key={d}
+                href={href(sp, { weekday: String(d) })}
+                className={chip(weekday === String(d))}
+              >
+                {WEEKDAY_LABELS[d].slice(0, 3)}
+              </Link>
+            ))}
+            <Link href={href(sp, { weekday: "dated" })} className={chip(weekday === "dated")}>
+              Dated / one-off
+            </Link>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <form action="/admin/promotions" method="get" className="flex items-center gap-2">
+              {status && <input type="hidden" name="status" value={status} />}
+              {type && <input type="hidden" name="type" value={type} />}
+              {weekday && <input type="hidden" name="weekday" value={weekday} />}
+              {sort !== "schedule" && <input type="hidden" name="sort" value={sort} />}
+              <input
+                type="search"
+                name="q"
+                defaultValue={sp.q ?? ""}
+                placeholder="Search title, key, description…"
+                className="w-64 rounded-lg border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-3 py-1.5 text-sm text-[var(--admin-text)] outline-none focus:border-[#7ed957]"
+              />
+              <button
+                type="submit"
+                className="rounded-lg border border-[var(--admin-border)] px-3 py-1.5 text-sm text-[var(--admin-text-muted)] transition hover:bg-[var(--admin-surface-hover)]"
+              >
+                Search
+              </button>
+            </form>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
+                Sort
+              </span>
+              {SORTS.map((s) => (
+                <Link key={s} href={href(sp, { sort: s })} className={chip(sort === s)}>
+                  {s}
+                </Link>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* ── Table ─────────────────────────────────────────────────────── */}
+        <div className="overflow-hidden rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)]">
           <table className="w-full text-left text-sm">
             <thead className="sticky top-0 z-10 bg-[var(--admin-surface-2)] text-xs uppercase tracking-wide text-[var(--admin-text-faint)] backdrop-blur">
               <tr>
@@ -134,16 +419,20 @@ export default async function PromotionsAdminPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--admin-border)]">
-              {promos.length === 0 && (
+              {filtered.length === 0 && (
                 <tr>
                   <td colSpan={4} className="px-4 py-8 text-center text-[var(--admin-text-faint)]">
-                    No promotions yet. The storefront is currently showing the built-in daily-deal
-                    defaults. Create one to override them.
+                    {promos.length === 0
+                      ? "No promotions yet. The storefront is currently showing the built-in daily-deal defaults. Create one to override them."
+                      : "No promotions match the current filters."}
                   </td>
                 </tr>
               )}
-              {promos.map((p) => (
-                <tr key={p.id} className="odd:bg-[var(--admin-surface)] transition hover:bg-[var(--admin-surface-hover)]">
+              {filtered.map((p) => (
+                <tr
+                  key={p.id}
+                  className="odd:bg-[var(--admin-surface)] transition hover:bg-[var(--admin-surface-hover)]"
+                >
                   <td className="px-4 py-3">
                     <Link
                       href={`/admin/promotions/${p.id}`}
@@ -152,7 +441,9 @@ export default async function PromotionsAdminPage() {
                       {p.title}
                     </Link>
                     {p.promo_key && (
-                      <span className="ml-2 text-xs text-[var(--admin-text-faint)]">{p.promo_key}</span>
+                      <span className="ml-2 text-xs text-[var(--admin-text-faint)]">
+                        {p.promo_key}
+                      </span>
                     )}
                   </td>
                   <td className="px-4 py-3 text-[var(--admin-text-muted)]">
@@ -174,6 +465,10 @@ export default async function PromotionsAdminPage() {
             </tbody>
           </table>
         </div>
+        <p className="text-xs text-[var(--admin-text-faint)]">
+          Showing {filtered.length} of {promos.length} promotion{promos.length === 1 ? "" : "s"}.
+          Deals never stack; the register clamps every price at the product&apos;s CCRS cost floor.
+        </p>
       </div>
     </div>
   );

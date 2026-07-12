@@ -109,9 +109,9 @@ const dailyDeals: DailyDeal[] = [
   {
     day: "Tuesday",
     title: "Doobie Tuesday",
-    offer: "20-25% off",
-    desktopOffer: "20 - 25%",
-    details: ["All prerolls and blunts, including infused and multi-packs, are 20% off for 1–3 items.", "Buy 4 or more eligible items for 25% off in store."],
+    offer: "20% off",
+    desktopOffer: "20%",
+    details: ["All prerolls and blunts, including infused and multi-packs, are 20% off.", "Or buy 4 for the price of 3 — mix and match, finalized in store."],
     href: "/menu?categories=preroll,blunt,preroll-pack,infused-preroll,infused-blunt,infused-preroll-pack",
     categoryLabel: "pre-rolls",
     tone: tones.green,

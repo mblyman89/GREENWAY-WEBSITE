@@ -7,9 +7,17 @@
  *
  * Includes:
  *  - Core fields (title, description, discount type/percent/fixed, recurrence).
+ *  - MECHANICS editor (structured promotions.config): qty/weight/spend tiers,
+ *    BOGO, basket N-for-M / top-item, and the Doobie-Tuesday-style either/or.
+ *    Only the section matching the chosen discount type is persisted, so stale
+ *    mechanics never leak between types.
  *  - The Thursday BRAND SELECTOR (checkbox grid of live menu brands).
  *  - Category targeting (Greenway categories) + storewide + clearance toggle.
  *  - Exclusions (categories/brands).
+ *
+ * Compliance guardrails baked into the UI: percent inputs cap at 99 (cannabis
+ * is never free — RCW 69.50.357), stacking does not exist (best-deal-wins
+ * only), and publish runs the CCRS below-cost HARD BLOCK server-side.
  */
 import {
   DISCOUNT_TYPE_LABELS,
@@ -32,6 +40,31 @@ type Props = {
 
 const DISCOUNT_TYPES = Object.keys(DISCOUNT_TYPE_LABELS) as (keyof typeof DISCOUNT_TYPE_LABELS)[];
 
+/** Defensive read of a stored tier list from promotions.config jsonb. */
+function readTiers(config: Record<string, unknown> | undefined, key: string): { at: number; percent: number }[] {
+  const raw = config?.[key];
+  if (!Array.isArray(raw)) return [];
+  const out: { at: number; percent: number }[] = [];
+  for (const t of raw) {
+    if (t && typeof t === "object") {
+      const at = Number((t as Record<string, unknown>).at);
+      const percent = Number((t as Record<string, unknown>).percent);
+      if (Number.isFinite(at) && Number.isFinite(percent)) out.push({ at, percent });
+    }
+  }
+  return out;
+}
+
+function readObj(config: Record<string, unknown> | undefined, key: string): Record<string, unknown> {
+  const raw = config?.[key];
+  return raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+}
+
+function readNum(obj: Record<string, unknown>, key: string): number | "" {
+  const n = Number(obj[key]);
+  return Number.isFinite(n) && n > 0 ? n : "";
+}
+
 export function PromotionForm({ action, promotion, brands, submitLabel, aiEnabled = false }: Props) {
   const selectedBrands = new Set(
     promotion?.targets.filter((t) => t.scope === "brand").map((t) => t.value ?? "") ?? [],
@@ -43,6 +76,34 @@ export function PromotionForm({ action, promotion, brands, submitLabel, aiEnable
     promotion?.exclusions.filter((e) => e.scope === "category").map((e) => e.value ?? "") ?? [],
   );
   const storewide = promotion?.targets.some((t) => t.scope === "all") ?? false;
+
+  // Stored mechanics (promotions.config jsonb) → editor defaults.
+  const cfg = (promotion?.config ?? {}) as Record<string, unknown>;
+  const qtyTiers = readTiers(cfg, "qtyTiers");
+  const weightTiers = readTiers(cfg, "weightTiers");
+  const spendTiers = readTiers(cfg, "spendTiers").map((t) => ({ at: t.at / 100, percent: t.percent }));
+  const bogo = readObj(cfg, "bogo");
+  const basketNforM = readObj(cfg, "basketNforM");
+  const basketTopItem = readObj(cfg, "basketTopItem");
+  const eitherOr = readObj(cfg, "eitherOr");
+  const eitherOrBundle = readObj(eitherOr, "bundle");
+  const basketMode = Object.keys(basketTopItem).length > 0 ? "top_item" : "n_for_m";
+
+  const inputCls =
+    "w-full rounded-lg border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#7ed957]";
+  const tierRow = (prefix: string, atLabel: string, tiers: { at: number; percent: number }[]) =>
+    [0, 1, 2].map((i) => (
+      <div key={`${prefix}-${i}`} className="grid grid-cols-2 gap-2">
+        <label className="block">
+          <span className="mb-1 block text-xs text-white/50">{atLabel} {i + 1}</span>
+          <input name={`${prefix}_at`} type="number" min={0} step="any" defaultValue={tiers[i]?.at ?? ""} className={inputCls} />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-xs text-white/50">% off</span>
+          <input name={`${prefix}_percent`} type="number" min={0} max={99} step="1" defaultValue={tiers[i]?.percent ?? ""} className={inputCls} />
+        </label>
+      </div>
+    ));
 
   return (
     <form action={action} className="space-y-8">
@@ -164,6 +225,138 @@ export function PromotionForm({ action, promotion, brands, submitLabel, aiEnable
               </span>
             </span>
           </label>
+        </div>
+      </section>
+
+      {/* Mechanics (structured config) */}
+      <section className="space-y-5 rounded-xl border border-white/10 bg-[#0a0a0a] p-5">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-white/40">
+          Mechanics (advanced — only the section matching your discount type is used)
+        </h2>
+        <p className="text-xs text-white/40">
+          Fill in ONLY the block for the discount type selected above; everything else is ignored
+          and cleared on save. Percent caps at 99 — cannabis is never free (RCW 69.50.357). Deals
+          never stack: every item gets the single best deal, and the register clamps any price at
+          the product&apos;s cost floor (CCRS: never below the cost of acquisition).
+        </p>
+
+        <div className="grid gap-6 lg:grid-cols-2">
+          {/* Multi-item qty tiers + either/or */}
+          <div className="space-y-3 rounded-lg border border-white/10 bg-black/40 p-4">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-white/50">
+              Multi-item tier (qty)
+            </h3>
+            <p className="text-xs text-white/40">e.g. buy 2 → 15% off, buy 4 → 25% off.</p>
+            {tierRow("cfg_qty_tier", "Buy at least", qtyTiers)}
+            <div className="mt-2 border-t border-white/10 pt-3">
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-white/50">
+                Either/or bundle (Doobie Tuesday style)
+              </h4>
+              <p className="mb-2 text-xs text-white/40">
+                Flat % OR buy-N-for-M — the register applies whichever saves the customer LESS
+                (store-advantaged, uniform for everyone). Leave blank if unused.
+              </p>
+              <div className="grid grid-cols-3 gap-2">
+                <label className="block">
+                  <span className="mb-1 block text-xs text-white/50">Flat %</span>
+                  <input name="cfg_eo_flat" type="number" min={0} max={99} step="1" defaultValue={readNum(eitherOr, "flatPercent")} className={inputCls} />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-xs text-white/50">Buy N</span>
+                  <input name="cfg_eo_n" type="number" min={0} max={24} step="1" defaultValue={readNum(eitherOrBundle, "n")} className={inputCls} />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-xs text-white/50">Pay for M</span>
+                  <input name="cfg_eo_m" type="number" min={0} max={24} step="1" defaultValue={readNum(eitherOrBundle, "m")} className={inputCls} />
+                </label>
+              </div>
+            </div>
+          </div>
+
+          {/* Weight tiers */}
+          <div className="space-y-3 rounded-lg border border-white/10 bg-black/40 p-4">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-white/50">
+              Weight tier (grams)
+            </h3>
+            <p className="text-xs text-white/40">
+              e.g. 7g (quarter) → 15%, 14g (half) → 20%, 28g (oz) → 30%.
+            </p>
+            {tierRow("cfg_weight_tier", "Grams ≥", weightTiers)}
+          </div>
+
+          {/* Spend tiers */}
+          <div className="space-y-3 rounded-lg border border-white/10 bg-black/40 p-4">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-white/50">
+              Spend threshold (dollars)
+            </h3>
+            <p className="text-xs text-white/40">e.g. spend $50 → 15%, $100 → 20% (enter dollars).</p>
+            {tierRow("cfg_spend_tier", "Spend $ ≥", spendTiers)}
+          </div>
+
+          {/* BOGO */}
+          <div className="space-y-3 rounded-lg border border-white/10 bg-black/40 p-4">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-white/50">BOGO</h3>
+            <p className="text-xs text-white/40">
+              Buy X, get Y at Z% off — the CHEAPEST eligible units are the discounted ones
+              (store-advantaged). Max 99%.
+            </p>
+            <div className="grid grid-cols-3 gap-2">
+              <label className="block">
+                <span className="mb-1 block text-xs text-white/50">Buy qty</span>
+                <input name="cfg_bogo_buy" type="number" min={0} max={12} step="1" defaultValue={readNum(bogo, "buyQty")} className={inputCls} />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xs text-white/50">Get qty</span>
+                <input name="cfg_bogo_get" type="number" min={0} max={12} step="1" defaultValue={readNum(bogo, "getQty")} className={inputCls} />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xs text-white/50">Get % off</span>
+                <input name="cfg_bogo_percent" type="number" min={0} max={99} step="1" defaultValue={readNum(bogo, "getPercent")} className={inputCls} />
+              </label>
+            </div>
+          </div>
+
+          {/* Basket */}
+          <div className="space-y-3 rounded-lg border border-white/10 bg-black/40 p-4 lg:col-span-2">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-white/50">
+              Basket deal
+            </h3>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-xs text-white/60">
+                  <input type="radio" name="cfg_basket_mode" value="n_for_m" defaultChecked={basketMode === "n_for_m"} className="h-3.5 w-3.5 accent-[#7ed957]" />
+                  Buy N for the price of M (mix &amp; match — cheapest units set the savings, spread
+                  across the basket like Ice Cream Sunday)
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="block">
+                    <span className="mb-1 block text-xs text-white/50">Buy N</span>
+                    <input name="cfg_basket_n" type="number" min={0} max={24} step="1" defaultValue={readNum(basketNforM, "n")} className={inputCls} />
+                  </label>
+                  <label className="block">
+                    <span className="mb-1 block text-xs text-white/50">Pay for M</span>
+                    <input name="cfg_basket_m" type="number" min={0} max={24} step="1" defaultValue={readNum(basketNforM, "m")} className={inputCls} />
+                  </label>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-xs text-white/60">
+                  <input type="radio" name="cfg_basket_mode" value="top_item" defaultChecked={basketMode === "top_item"} className="h-3.5 w-3.5 accent-[#7ed957]" />
+                  Top item % + rest % (Super Saturday style)
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="block">
+                    <span className="mb-1 block text-xs text-white/50">Top item %</span>
+                    <input name="cfg_top_percent" type="number" min={0} max={99} step="1" defaultValue={readNum(basketTopItem, "topPercent")} className={inputCls} />
+                  </label>
+                  <label className="block">
+                    <span className="mb-1 block text-xs text-white/50">Rest %</span>
+                    <input name="cfg_rest_percent" type="number" min={0} max={99} step="1" defaultValue={readNum(basketTopItem, "restPercent")} className={inputCls} />
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 

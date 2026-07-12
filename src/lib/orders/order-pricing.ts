@@ -23,7 +23,12 @@ import type { GreenwayMenuItem } from "@/lib/leafly/types";
 import type { GreenwayCategory } from "@/lib/leafly/types";
 import { loadLiveMenuAll } from "@/lib/pos/live-menu";
 import { getStoreWeekday } from "@/lib/specials/daily-deals";
-import { computeCartDiscounts, type DiscountCartLine } from "@/lib/specials/cart-discount";
+import {
+  computeCartDiscounts,
+  costFloorForLine,
+  type DiscountCartLine,
+} from "@/lib/specials/cart-discount";
+import { loadProductCosts } from "@/lib/promotions/discount-engine";
 import type { LimitCartLine } from "@/lib/compliance/sales-limits-core";
 import {
   assertCannabisLineSellable,
@@ -145,7 +150,12 @@ export async function repriceOrderLines(rawLines: NewOrderLineInput[]): Promise<
   }
 
   // Recompute discounts server-side with the SAME pure engine + Pacific weekday.
+  // CCRS COST FLOOR (Task R): attach the weighted-average acquisition cost per
+  // product so no discount can price a unit below cost ("may not discount the
+  // sale price below the cost of acquisition" — CCRS Upload User Guide; see
+  // docs/PROMOTIONS_COMPLIANCE.md).
   const weekday = getStoreWeekday();
+  const productCosts = await loadProductCosts();
   const discountInput: DiscountCartLine[] = work.map((w) => ({
     lineId: w.lineId,
     regularPriceMinorUnits: w.resolved.variant.priceMinorUnits,
@@ -154,7 +164,9 @@ export async function repriceOrderLines(rawLines: NewOrderLineInput[]): Promise<
     filterCategories: w.resolved.item.filterCategories,
     variantLabel: w.resolved.variant.label,
     brand: w.resolved.item.brand,
+    costMinorUnits: productCosts.get(w.resolved.item.id) ?? null,
   }));
+  const discountInputByLine = new Map(discountInput.map((l) => [l.lineId, l]));
   const discount = computeCartDiscounts(discountInput, weekday);
   const discountByLine = new Map(discount.lines.map((l) => [l.lineId, l]));
 
@@ -164,7 +176,11 @@ export async function repriceOrderLines(rawLines: NewOrderLineInput[]): Promise<
     const regular = w.resolved.variant.priceMinorUnits;
     const rawUnit = d ? d.unitPriceMinorUnits : regular;
     // GLOBAL CANNABIS PRICE FLOOR (S-3): no cannabis unit below the floor.
-    const unit = clampCannabisUnitPrice(w.resolved.item.category, rawUnit, regular);
+    // Plus the CCRS acquisition-cost floor as a last-resort clamp.
+    const statutory = clampCannabisUnitPrice(w.resolved.item.category, rawUnit, regular);
+    const inputLine = discountInputByLine.get(w.lineId);
+    const costFloor = inputLine ? costFloorForLine(inputLine) : 0;
+    const unit = regular > 0 ? Math.max(statutory, Math.min(costFloor, regular)) : statutory;
     const sellable = assertCannabisLineSellable({
       category: w.resolved.item.category,
       unitPriceMinorUnits: unit,
