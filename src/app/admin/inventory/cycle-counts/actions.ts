@@ -19,6 +19,46 @@ import {
   type ImportPreview,
   type ParsedSheetRow,
 } from "@/lib/inventory/cycle-count-sheet-core";
+import { classifyAbc, summarizeOverdueCounts } from "@/lib/inventory/inventory-intel-core";
+import { loadIntelLots } from "@/lib/inventory/inventory-intel";
+
+/**
+ * Task L: start a FOCUSED count session scoped to the lots that are overdue
+ * under the ABC cadence (A 30d / B 90d / C 180d — see inventory-intel-core).
+ * Uses the same createCycleCount path, just with an explicit lot list.
+ */
+export async function createOverdueCycleCountAction() {
+  const session = await requirePermission("inventory.manage");
+  const lots = await loadIntelLots();
+  const active = lots.filter((l) => l.status === "active");
+  const abc = classifyAbc(active);
+  const overdue = summarizeOverdueCounts(active, abc, new Date().toISOString().slice(0, 10));
+  if (overdue.total === 0) {
+    redirect("/admin/inventory/cycle-counts?error=" + encodeURIComponent("No lots are overdue for a count — everything is inside its cadence."));
+  }
+  const label = `Overdue-cadence count ${new Date().toISOString().slice(0, 10)}`;
+  const result = await createCycleCount(
+    {
+      label,
+      scopeNote: `ABC cadence: ${overdue.byClass.A} A · ${overdue.byClass.B} B · ${overdue.byClass.C} C lots past their count window`,
+      lotIds: overdue.lotIds,
+    },
+    session.userId,
+  );
+  if (!result.ok) {
+    redirect(`/admin/inventory/cycle-counts?error=${encodeURIComponent(result.error)}`);
+  }
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: "cycle_count.create",
+    entityType: "cycle_counts",
+    entityId: result.id,
+    after: { label, focused: true, lots: overdue.total },
+  });
+  revalidatePath("/admin/inventory/cycle-counts");
+  redirect(`/admin/inventory/cycle-counts/${result.id}`);
+}
 
 export async function createCycleCountAction(formData: FormData) {
   const session = await requirePermission("inventory.manage");

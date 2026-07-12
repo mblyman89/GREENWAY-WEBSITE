@@ -5,7 +5,9 @@ import { Breadcrumbs, HelpPanel, EmptyState } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
 import { Input, Button, Field, Badge } from "@/components/admin/ui";
 import { listCycleCounts, cycleCountSummary } from "@/lib/inventory/cycle-counts";
-import { createCycleCountAction } from "./actions";
+import { loadIntelLots } from "@/lib/inventory/inventory-intel";
+import { classifyAbc, summarizeOverdueCounts, COUNT_CADENCE_DAYS } from "@/lib/inventory/inventory-intel-core";
+import { createCycleCountAction, createOverdueCycleCountAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +24,15 @@ export default async function CycleCountsPage({
 }) {
   await requirePermission("inventory.manage");
   const sp = await searchParams;
-  const [sessions, summary] = await Promise.all([listCycleCounts(50), cycleCountSummary()]);
+  const [sessions, summary, intelLots] = await Promise.all([
+    listCycleCounts(50),
+    cycleCountSummary(),
+    loadIntelLots(),
+  ]);
+  // Task L: ABC cadence — how many active lots are past their count window.
+  const activeLots = intelLots.filter((l) => l.status === "active");
+  const abc = classifyAbc(activeLots);
+  const overdue = summarizeOverdueCounts(activeLots, abc, new Date().toISOString().slice(0, 10));
 
   return (
     <div className="space-y-5">
@@ -48,7 +58,7 @@ export default async function CycleCountsPage({
         </div>
       ) : null}
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="Open sessions" value={summary.open.toLocaleString()} accent="gold" />
         <StatCard label="Applied (30d)" value={summary.appliedLast30.toLocaleString()} accent="green" />
         <StatCard
@@ -56,7 +66,28 @@ export default async function CycleCountsPage({
           value={summary.totalAdjustmentsLast30.toLocaleString()}
           accent="muted"
         />
+        <StatCard
+          label="Lots overdue for count"
+          value={overdue.total.toLocaleString()}
+          hint={`ABC cadence: A ${COUNT_CADENCE_DAYS.A}d · B ${COUNT_CADENCE_DAYS.B}d · C ${COUNT_CADENCE_DAYS.C}d`}
+          accent={overdue.total > 0 ? "orange" : "green"}
+        />
       </div>
+
+      {overdue.total > 0 ? (
+        <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--admin-orange)]/30 bg-[var(--admin-orange-soft)] px-4 py-3">
+          <p className="text-sm text-[var(--admin-orange)]">
+            <span className="font-bold">{overdue.total}</span> active lot{overdue.total === 1 ? " is" : "s are"} past
+            the count cadence ({overdue.byClass.A} A · {overdue.byClass.B} B · {overdue.byClass.C} C).
+            High-value A lots should be verified every {COUNT_CADENCE_DAYS.A} days.
+          </p>
+          <form action={createOverdueCycleCountAction}>
+            <Button type="submit" variant="confirm" size="sm">
+              Count overdue lots only
+            </Button>
+          </form>
+        </section>
+      ) : null}
 
       <HelpPanel
         id="cycle-counts-help"

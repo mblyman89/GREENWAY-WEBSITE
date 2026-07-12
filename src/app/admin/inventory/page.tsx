@@ -10,6 +10,8 @@ import { MissingInsight } from "@/components/admin/insight/MissingInsight";
 import { CatalogStageStrip } from "@/components/admin/catalog/CatalogStageStrip";
 import { listLots, computeInventoryStats, EXPIRING_SOON_DAYS } from "@/lib/inventory/store";
 import { inventoryGapInsights } from "@/lib/insight/inventory";
+import { getInventoryCommandCenter } from "@/lib/inventory/inventory-intel";
+import { InventoryIntelPanel } from "@/components/admin/inventory/InventoryIntelPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -70,9 +72,10 @@ export default async function InventoryPage({
     );
   }
 
-  const [lots, stats] = await Promise.all([
+  const [lots, stats, intel] = await Promise.all([
     listLots({ q, status: activeStatus }),
     computeInventoryStats(),
+    getInventoryCommandCenter(),
   ]);
   const gaps = inventoryGapInsights(stats);
 
@@ -155,6 +158,10 @@ export default async function InventoryPage({
           noun="lot"
           gaps={gaps}
         />
+
+        {/* Task L — professional inventory intelligence (ABC, FEFO, aging,
+            months-of-supply vs the WAC 4-month ceiling, shrink telemetry). */}
+        <InventoryIntelPanel center={intel.center} sellFirst={intel.sellFirst} />
 
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-2">

@@ -1341,3 +1341,61 @@ properly connected."
 building, on-hand block, product-identity carry, employee_sample→Other + note ≤250 chars,
 lab-sample mapping unchanged, allowance floors). Suite: **1112 passing** (was 1105). tsc +
 eslint clean. No migration needed.
+
+## Task L — Inventory management powerhouse (CCRS + DOH compliant)
+
+**Shipped:** 2026-07-12 (branch `task-l-inventory-powerhouse`).
+
+**Owner's request (verbatim):** "I want you to now go back to the CCRS and doh rules and
+regulations. I want you to learn and document everything there is to know about retail cannabis
+inventory management. I want to make sure we have an inventory management system that is CCRS
+and doh compliant. I also want you to enhance and upgrade the inventory management system so it
+is a truly powerful system that is easy to use, clean and simple, feature rich, efficient and
+makes use of every professional and expert level tactic and strategy for managing large
+inventory. This needs to be highly specific to the Washington state retail cannabis industry.
+But it also should follow industry standards and best practices for managing inventory like a
+pro. ... This also includes the cycle counts page as this is how we efficiently audit inventory
+counts."
+
+**Research + compliance doc (NEW `docs/INVENTORY_COMPLIANCE_WA.md`):** 12-section reference
+built from live scrapes of app.leg.wa.gov + the full WAC/RCW/DOH corpus + the CCRS 2026 upload
+guide. Covers: seed-to-sale traceability (WAC 314-55-083, Category II exposure), 5-year on-
+premises recordkeeping + audit-trail requirements for POS systems (WAC 314-55-087), **the
+deemed-sales rule (WAC 314-55-089(4)(c): undocumented inventory reductions are deemed SALES and
+assessed excise tax)** — the compliance backbone of cycle counts, CCRS InventoryAdjustment.csv
+mechanics (valid reasons Destruction|Reconciliation|Lost|Seizure|Theft|Other; AdjustmentDetail
+REQUIRED for Other/Theft; no negative quantities; weekly cadence), retailer operating rules
+(WAC 314-55-079: **max FOUR months of average inventory on premises**, no below-cost sales,
+returns only in original packaging), waste/destruction (WAC 314-55-097 + the 72h quarantine
+already in disposition.ts), transport records (085), QA sale gate (102(2)(c)), DOH 246-70
+(endorsed retailer must ALWAYS keep compliant medical product in stock or on order), plus the
+professional layer: ABC classification, FEFO, aging buckets, shrink telemetry, months-of-
+supply, blind-count variance review.
+
+**Pure core (NEW `src/lib/inventory/inventory-intel-core.ts`, ~560 lines, embedded
+self-tests):** `classifyAbc` (80/95 cumulative-value breakpoints, dominant lot forced A),
+`fefoRank`, `summarizeAging` (0-30/31-60/61-90/90+), `monthsOfSupply` vs
+`MAX_MONTHS_ON_HAND=4` (WAC ceiling), `summarizeShrink` (negative deltas valued at cost,
+grouped shrink/destruction/samples/correction/other), count cadence A=30d/B=90d/C=180d with
+`summarizeOverdueCounts` (anchor = last counted ?? received), `reviewVariances` (accuracy %,
+over/short units, net/abs $ at cost, recount flags at ≥20% of system OR ≥$50 at cost),
+`buildCommandCenter` composition + DOH medical-in-stock count.
+
+**Server loaders (NEW `src/lib/inventory/inventory-intel.ts`):** `loadIntelLots` (joins most-
+recent counted timestamp from cycle_count_lines), `loadIntelAdjustments(30d)`,
+`getInventoryCommandCenter` (+FEFO sell-first list), `getCycleCountVarianceReview`.
+
+**UI:**
+- **Inventory index** — NEW `InventoryIntelPanel` (server component) after MissingInsight:
+  months-of-supply vs the 4-month WAC ceiling, ABC mix + overdue-count cadence card,
+  documented-reductions-30d shrink telemetry (with the 089(4)(c) hint), aging table (90+
+  highlighted, DOH medical-in-stock warning when zero), FEFO sell-first list (expired bolded).
+- **Cycle counts index** — 4th KPI "Lots overdue for count" + orange callout with a one-click
+  "Count overdue lots only" button → NEW server action `createOverdueCycleCountAction`
+  (classifies ABC, finds cadence-overdue lots, opens a scoped blind session).
+- **Count detail** — NEW "Variance review — check before you apply" section while the session
+  is open and lines are counted: accuracy %, over/short units, net $ impact at cost, flagged
+  lines (top 8 by |$|) needing recount — so bad counts get caught BEFORE variances post.
+
+**Tests:** new `tests/compliance/inventory-intel-core.test.ts` (+8). Suite: **1120 passing**
+(was 1112). tsc + eslint clean. No migration needed (read-only over existing tables).

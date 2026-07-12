@@ -14,6 +14,7 @@ import {
 } from "@/lib/inventory/cycle-counts";
 import { CycleCountScanner } from "@/components/admin/inventory/CycleCountScanner";
 import { CycleCountSheetTools } from "@/components/admin/inventory/CycleCountSheetTools";
+import { getCycleCountVarianceReview } from "@/lib/inventory/inventory-intel";
 import {
   filterLines as filterSheetLines,
   sortLines as sortSheetLines,
@@ -75,6 +76,9 @@ export default async function CycleCountDetailPage({
   const scanLines = session.status === "open" ? await getCycleCountScanLines(id) : [];
 
   const isOpen = session.status === "open";
+  // Task L: manager-level variance review (accuracy %, dollar impact at cost,
+  // recount flags) shown before applying an open session.
+  const review = isOpen ? await getCycleCountVarianceReview(id) : null;
 
   // Enriched lines drive the filter/sort tools + the export sheet.
   const sheetLines = await getCycleCountSheetLines(id);
@@ -126,7 +130,6 @@ export default async function CycleCountDetailPage({
   };
 
   const counted = lines.filter((l) => l.counted_qty != null).length;
-  const variances = lines.filter((l) => (l.variance_qty ?? 0) !== 0).length;
   // Blind: only reveal system_qty + variance once a session is applied OR the
   // line has been counted (so the employee doesn't see the target up front).
   const reveal = !isOpen;
@@ -202,6 +205,81 @@ export default async function CycleCountDetailPage({
       ) : null}
 
       {isOpen ? <CycleCountScanner countId={id} lines={scanLines} /> : null}
+
+      {/* Task L: variance review BEFORE apply — accuracy, dollar impact at
+          cost, and recount flags (≥20% of system or ≥$50 at cost). Posting a
+          documented Reconciliation adjustment is what keeps a reduction from
+          being an "inadequately documented" one (WAC 314-55-089(4)(c)). */}
+      {isOpen && review && review.countedLines > 0 ? (
+        <section className="rounded-2xl border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
+          <h2 className="mb-3 text-sm font-black uppercase tracking-[0.14em] text-[var(--admin-text)]">
+            Variance review — check before you apply
+          </h2>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div>
+              <div className={`text-xl font-black ${review.accuracyPct >= 95 ? "text-[var(--admin-accent)]" : "text-[var(--admin-orange)]"}`}>
+                {review.accuracyPct}%
+              </div>
+              <div className="text-[10px] uppercase tracking-wide text-[var(--admin-text-faint)]">
+                count accuracy ({review.matchedLines}/{review.countedLines} match)
+              </div>
+            </div>
+            <div>
+              <div className="text-xl font-black text-[var(--admin-text)]">
+                +{review.overUnits} / −{review.shortUnits}
+              </div>
+              <div className="text-[10px] uppercase tracking-wide text-[var(--admin-text-faint)]">
+                over / short (units)
+              </div>
+            </div>
+            <div>
+              <div className={`text-xl font-black ${review.netValueMinor < 0 ? "text-[var(--admin-danger)]" : "text-[var(--admin-text)]"}`}>
+                {review.netValueMinor < 0 ? "−" : ""}${(Math.abs(review.netValueMinor) / 100).toFixed(2)}
+              </div>
+              <div className="text-[10px] uppercase tracking-wide text-[var(--admin-text-faint)]">
+                net impact at cost
+              </div>
+            </div>
+            <div>
+              <div className={`text-xl font-black ${review.flagged.length > 0 ? "text-[var(--admin-orange)]" : "text-[var(--admin-accent)]"}`}>
+                {review.flagged.length}
+              </div>
+              <div className="text-[10px] uppercase tracking-wide text-[var(--admin-text-faint)]">
+                lines flagged for recount
+              </div>
+            </div>
+          </div>
+          {review.flagged.length > 0 ? (
+            <div className="mt-4 rounded-xl border border-[var(--admin-orange)]/30 bg-[var(--admin-orange-soft)] p-3">
+              <p className="mb-2 text-xs font-semibold text-[var(--admin-orange)]">
+                Recount these before applying (variance ≥ 20% of system or ≥ $50 at cost):
+              </p>
+              <ul className="space-y-1 text-sm">
+                {review.flagged.slice(0, 8).map((f) => (
+                  <li key={f.lineId} className="flex items-center justify-between gap-3">
+                    <span className="min-w-0 truncate text-[var(--admin-text)]">{f.productName ?? "(unnamed)"}</span>
+                    <span className="shrink-0 font-mono text-xs text-[var(--admin-orange)]">
+                      {f.varianceQty > 0 ? "+" : ""}
+                      {f.varianceQty} · {f.varianceValueMinor < 0 ? "−" : ""}$
+                      {(Math.abs(f.varianceValueMinor) / 100).toFixed(2)}
+                    </span>
+                  </li>
+                ))}
+                {review.flagged.length > 8 ? (
+                  <li className="text-xs text-[var(--admin-text-faint)]">
+                    …and {review.flagged.length - 8} more
+                  </li>
+                ) : null}
+              </ul>
+            </div>
+          ) : (
+            <p className="mt-3 text-xs text-[var(--admin-text-faint)]">
+              No recount flags — counted lines are within tolerance. Applying posts each non-zero
+              variance as a documented Reconciliation adjustment.
+            </p>
+          )}
+        </section>
+      ) : null}
 
       {isOpen ? (
         <CycleCountSheetTools
