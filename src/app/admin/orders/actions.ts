@@ -21,6 +21,13 @@ import { can } from "@/lib/auth/roles";
 import { recordAudit } from "@/lib/auth/audit";
 import { setOrderStatus, updateStaffNote, getOrder } from "@/lib/orders/orders-store";
 import { verifyStoredOrderForCompletion } from "@/lib/orders/order-pricing";
+import { checkLoyaltyCodeForCompletion } from "@/lib/loyalty/loyalty-sale-core";
+import {
+  applyCodeToOrder,
+  applyTierToOrder,
+  removeLoyaltyFromOrder,
+  getOrderLoyaltyContext,
+} from "@/lib/loyalty/loyalty-sale-store";
 import { enforceSalesLimitForSale } from "@/lib/compliance/sales-limits";
 import { evaluateSalesHours } from "@/lib/compliance/sales-hours-core";
 import { getSalesHoursWindow } from "@/lib/compliance/sales-hours-store";
@@ -88,6 +95,24 @@ async function runCompletionGate(opts: {
   const check = await verifyStoredOrderForCompletion(order);
   if (!check.ok) {
     return `Money check failed — fix the order first. ${check.problems.join(" ")}`;
+  }
+
+  // ── Task S-a: loyalty-code consistency gate ────────────────────────────────
+  // An order carrying a loyalty CODE may only complete while the redemption
+  // row is consumed by THIS order (catches released/re-used codes after a
+  // reopen). Pure check; loyalty value already lives in the line prices so
+  // the money gate above covers the totals.
+  const loyaltyCtx = await getOrderLoyaltyContext(opts.orderId);
+  const loyaltyCheck = checkLoyaltyCodeForCompletion(
+    {
+      id: opts.orderId,
+      loyaltyKind: loyaltyCtx.kind,
+      loyaltyRedemptionId: loyaltyCtx.redemption?.id ?? null,
+    },
+    loyaltyCtx.redemption,
+  );
+  if (!loyaltyCheck.ok) {
+    return loyaltyCheck.reason;
   }
 
   // ── S-1b: sales-limit HARD gate ────────────────────────────────────────
@@ -395,4 +420,106 @@ export async function detachMedicalCardAction(formData: FormData): Promise<void>
     });
   }
   revalidatePath(`/admin/orders/${orderId}`);
+}
+
+// ---------------------------------------------------------------------------
+// Task S-a — loyalty at the register (docs/LOYALTY_COMPLIANCE.md)
+// ---------------------------------------------------------------------------
+
+/**
+ * Apply a customer's redemption code (GW-XXXX-XXXX) to an open order. The
+ * code is claimed atomically; its value is spread across the lines above the
+ * statutory + acquisition-cost floors; only ONE loyalty application per order.
+ */
+export async function applyLoyaltyCodeAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("orders.manage");
+  const orderId = String(formData.get("id") ?? "");
+  const code = String(formData.get("code") ?? "").trim();
+  if (!orderId) return;
+  if (!code) {
+    redirect(`/admin/orders/${orderId}?blocked=${encodeURIComponent("Enter the customer's loyalty code (GW-XXXX-XXXX).")}`);
+  }
+
+  const res = await applyCodeToOrder({
+    orderId,
+    code,
+    actorId: session.profile.id,
+    actorLabel: actorLabel(session.email, session.profile.full_name),
+  });
+  if (!res.ok) {
+    redirect(`/admin/orders/${orderId}?blocked=${encodeURIComponent(res.error.slice(0, 500))}`);
+  }
+
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: "order.loyalty_code_applied",
+    entityType: "order",
+    entityId: orderId,
+    after: { code: code.toUpperCase(), result: res.message },
+  });
+  revalidatePath(`/admin/orders/${orderId}`);
+  redirect(`/admin/orders/${orderId}?ok=${encodeURIComponent(res.message)}`);
+}
+
+/**
+ * Apply the linked member's TIER pricing to an open order — per-line
+ * best-deal-wins vs the promo price, never stacked.
+ */
+export async function applyLoyaltyTierAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("orders.manage");
+  const orderId = String(formData.get("id") ?? "");
+  const customerId = String(formData.get("customerId") ?? "");
+  if (!orderId || !customerId) return;
+
+  const res = await applyTierToOrder({
+    orderId,
+    customerId,
+    actorId: session.profile.id,
+    actorLabel: actorLabel(session.email, session.profile.full_name),
+  });
+  if (!res.ok) {
+    redirect(`/admin/orders/${orderId}?blocked=${encodeURIComponent(res.error.slice(0, 500))}`);
+  }
+
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: "order.loyalty_tier_applied",
+    entityType: "order",
+    entityId: orderId,
+    after: { customer_id: customerId, result: res.message },
+  });
+  revalidatePath(`/admin/orders/${orderId}`);
+  redirect(`/admin/orders/${orderId}?ok=${encodeURIComponent(res.message)}`);
+}
+
+/**
+ * Remove the loyalty application from an open order: line prices restored
+ * from the per-line snapshot; a code is released back to the customer.
+ */
+export async function removeLoyaltyAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("orders.manage");
+  const orderId = String(formData.get("id") ?? "");
+  if (!orderId) return;
+
+  const res = await removeLoyaltyFromOrder({
+    orderId,
+    actorId: session.profile.id,
+    actorLabel: actorLabel(session.email, session.profile.full_name),
+  });
+  if (!res.ok) {
+    redirect(`/admin/orders/${orderId}?blocked=${encodeURIComponent(res.error.slice(0, 500))}`);
+  }
+
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action: "order.loyalty_removed",
+    entityType: "order",
+    entityId: orderId,
+    after: { result: res.message },
+  });
+  revalidatePath(`/admin/orders/${orderId}`);
+  redirect(`/admin/orders/${orderId}?ok=${encodeURIComponent(res.message)}`);
 }

@@ -323,9 +323,23 @@ export async function setOrderStatus(
     actor_label: opts.actorLabel ?? null,
   });
 
+  // Loyalty code release (Task S-a): when an order closes WITHOUT completing,
+  // any redemption code consumed by it is returned to the customer — the sale
+  // never happened, so their stored value must survive. Best-effort; never
+  // blocks the transition.
+  if ((toStatus === "cancelled" || toStatus === "no_show") && fromStatus !== toStatus) {
+    try {
+      const { releaseLoyaltyCodeForOrder } = await import("@/lib/loyalty/loyalty-sale-store");
+      await releaseLoyaltyCodeForOrder(id);
+    } catch {
+      // Release must never block the cancellation.
+    }
+  }
+
   // Loyalty accrual: when an order is completed, earn points on the PRETAX
   // subtotal for the linked customer (idempotent per order; no-op if there is
-  // no customer or no points to earn).
+  // no customer or no points to earn). The subtotal is post-discount, so
+  // points reflect what the customer actually paid.
   if (toStatus === "completed" && fromStatus !== "completed") {
     const customerId = (updated as unknown as { customer_id?: string | null }).customer_id ?? null;
     if (customerId) {
