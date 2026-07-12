@@ -5,10 +5,16 @@
  * HB 1453 (DOH 608-050), and RCW 69.51A.230. See docs/medical-doh-requirements.md.
  *
  * KEY RULE (do not conflate the two exemptions):
- *   - SALES tax (9.3%) is exempt for a registered patient/DP (in the MCR) on
- *     ANY cannabis purchased at a medically-endorsed store.
- *   - EXCISE tax (37%) is exempt ONLY when the product is also DOH-compliant
- *     (WAC 246-70-040) AND the buyer is in the MCR AND the store is endorsed.
+ *   - SALES tax (9.3%) — RCW 82.08.9998: exempt ONLY on 246-70 COMPLIANT
+ *     products sold by an endorsed store to a carded patient/DP ((1)(a)), and
+ *     on High-CBD compliant products sold to ANYONE ((1)(c)). A card alone
+ *     does NOT exempt sales tax on non-compliant product.
+ *     (CORRECTED 2026-07-12 — the earlier "carded ⇒ sales exempt on ANY
+ *     cannabis" rule under-collected sales tax; see
+ *     docs/MEDICAL_CANNABIS_COMPLIANCE.md §5a.)
+ *   - EXCISE tax (37%) is exempt ONLY when the product is DOH-compliant
+ *     (chapter 246-70 WAC) AND the buyer is in the MCR AND the store is
+ *     endorsed (WAC 314-55-090(1)).
  *
  * All money in MINOR UNITS (cents); rates in basis points (3700 = 37%).
  */
@@ -48,6 +54,11 @@ export type MedLineInput = {
   isCannabis: boolean; // subject to excise when not exempt
   /** Product is DOH-compliant per WAC 246-70-040 (lab-tested, DOH logo). */
   dohCompliant: boolean;
+  /**
+   * Product is a High-CBD compliant product (WAC 246-70-040 high-CBD class).
+   * RCW 82.08.9998(1)(c): sales-tax exempt for ANYONE at an endorsed store.
+   */
+  highCbd?: boolean;
 };
 
 export type MedLineTax = {
@@ -73,9 +84,14 @@ export function computeMedLineTax(
   const endorsed = s.medicallyEndorsed;
   const carded = endorsed && med.cardValidInDatabase;
 
-  // Sales tax: exempt for any cannabis bought by a carded patient at an
-  // endorsed store. (High-CBD-for-anyone is out of scope here.)
-  const salesExempt = carded;
+  // Sales tax (RCW 82.08.9998): exempt only on 246-70 COMPLIANT cannabis
+  // product — for a carded patient at an endorsed store ((1)(a)), or High-CBD
+  // compliant product for ANYONE ((1)(c)). A card alone exempts nothing on a
+  // non-compliant product.
+  const salesExempt =
+    line.isCannabis &&
+    line.dohCompliant &&
+    (carded || (endorsed && line.highCbd === true));
   const salesTaxMinor = salesExempt ? 0 : applyBps(base, combinedSalesBps(s));
 
   // Excise: only cannabis is ever subject. Exempt only when carded AND the
@@ -231,23 +247,34 @@ export function __runMedTaxTests(): void {
   ok(both.salesExempt && both.exciseExempt, "both exempt flags");
   ok(both.exciseExemptedMinor === 3700, "excise exempted recorded");
 
-  // Carded + NON-DOH-compliant: sales exempt, excise STILL applies
+  // Carded + NON-DOH-compliant: NO exemption at all (RCW 82.08.9998 limits the
+  // sales exemption to compliant product; the excise needs compliance too).
   const partial = computeMedLineTax(
     { taxableBaseMinor: 10000, isCannabis: true, dohCompliant: false },
     { cardValidInDatabase: true },
     s,
   );
-  ok(partial.salesExempt && !partial.exciseExempt, "carded non-compliant: sales exempt only");
-  ok(partial.salesTaxMinor === 0 && partial.exciseTaxMinor === 3700, "excise still 37%");
+  ok(!partial.salesExempt && !partial.exciseExempt, "carded non-compliant: NO exemptions");
+  ok(partial.salesTaxMinor === 930 && partial.exciseTaxMinor === 3700, "full 9.3% + 37% due");
 
-  // Non-cannabis accessory for carded patient: sales exempt, no excise ever
+  // High-CBD compliant product for an UNCARDED buyer: sales-tax-free for
+  // anyone (RCW 82.08.9998(1)(c)); excise still due without a card.
+  const cbd = computeMedLineTax(
+    { taxableBaseMinor: 10000, isCannabis: true, dohCompliant: true, highCbd: true },
+    { cardValidInDatabase: false },
+    s,
+  );
+  ok(cbd.salesExempt && !cbd.exciseExempt, "high-CBD uncarded: sales exempt only");
+  ok(cbd.salesTaxMinor === 0 && cbd.exciseTaxMinor === 3700, "high-CBD uncarded: excise still 37%");
+
+  // Non-cannabis accessory for carded patient: normal sales tax, no excise ever
   const acc = computeMedLineTax(
     { taxableBaseMinor: 10000, isCannabis: false, dohCompliant: false },
     { cardValidInDatabase: true },
     s,
   );
-  ok(acc.salesTaxMinor === 0 && acc.exciseTaxMinor === 0, "accessory carded: no tax");
-  ok(!acc.exciseExempt, "accessory never excise-exempt (no excise applies)");
+  ok(acc.salesTaxMinor === 930 && acc.exciseTaxMinor === 0, "accessory carded: sales tax due, no excise");
+  ok(!acc.salesExempt && !acc.exciseExempt, "accessory never exempt");
 
   // Endorsement off → no exemptions even if carded
   const noEndorse = computeMedLineTax(
@@ -268,7 +295,7 @@ export function __runMedTaxTests(): void {
   );
   ok(cart.exciseExemptLineCount === 1, "one excise-exempt line");
   ok(cart.exciseTaxMinor === applyBps(5000, 3700), "excise only on non-compliant line");
-  ok(cart.salesTaxMinor === 0, "all sales exempt for carded");
+  ok(cart.salesTaxMinor === applyBps(5000, 930), "sales tax due on the non-compliant line only");
 
   // Card validity
   const validCard: RecognitionCard = {

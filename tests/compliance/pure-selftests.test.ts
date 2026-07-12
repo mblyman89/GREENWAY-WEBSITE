@@ -13,6 +13,9 @@ import { __runSalesLimitTests } from "@/lib/compliance/sales-limits-core";
 import { __runSalesLimitGateTests } from "@/lib/compliance/sales-limit-gate-core";
 import { __runChunkedInTests } from "@/lib/supabase/chunked-in";
 import { __runExemptSaleRecordTests } from "@/lib/medical/exempt-sale-record-core";
+import { __runMedTaxTests } from "@/lib/medical/tax";
+import { __runMedicalAuthorizationTests } from "@/lib/medical/medical-authorization-core";
+import { __runMedicalSaleTests } from "@/lib/medical/medical-sale-core";
 import { __runSalesHoursCoreTests } from "@/lib/compliance/sales-hours-core";
 import { __runReceiptCoreTests } from "@/lib/printing/receipt-core";
 import { __runPinHashTests } from "@/lib/security/pin-hash";
@@ -38,6 +41,17 @@ describe("embedded pure self-test suites", () => {
     const r = __runExemptSaleRecordTests();
     expect(r.failed).toBe(0);
     expect(r.passed).toBeGreaterThan(0);
+  });
+  it("medical/tax (RCW 82.08.9998 + WAC 314-55-090 exemptions, card validity)", () => {
+    expect(() => __runMedTaxTests()).not.toThrow();
+  });
+  it("medical-authorization-core (DOH 608-048 issuance + validity-at-date)", () => {
+    const r = __runMedicalAuthorizationTests();
+    expect(r.failed).toBe(0);
+    expect(r.passed).toBeGreaterThan(0);
+  });
+  it("medical-sale-core (Task O: DOH categories, exemption plan, high-THC gate)", () => {
+    expect(() => __runMedicalSaleTests()).not.toThrow();
   });
   it("sales-hours-core (WAC 314-55-147 window)", () => {
     expect(() => __runSalesHoursCoreTests()).not.toThrow();
