@@ -50,6 +50,7 @@ export type CcrsAdjustmentReason = (typeof CCRS_ADJUSTMENT_REASONS)[number];
  *   damage        → Lost
  *   sample        → ReturnedLabSample (lab/QA sample pulled from sellable stock)
  *   recall        → Destruction       (recalled product is destroyed)
+ *   return        → Other             (customer return add-back; detail REQUIRED)
  *   theft         → Theft
  *   seizure       → Seizure
  *   other / *     → Other
@@ -72,6 +73,13 @@ export function mapAdjustmentReason(internal: string): CcrsAdjustmentReason {
       return "Other";
     case "recall":
       return "Destruction";
+    // Task Q: a CUSTOMER return (WAC 314-55-079(12)) adds quantity BACK to the
+    // inventory identifier. Per the LCB CCRS FAQ the sale identifier is deleted
+    // and the inventory identifier is "reported on an Inventory Adjustment as a
+    // return, with details" — 'Return' is not a valid AdjustmentReason, so the
+    // correct encoding is Other + a mandatory detail stating the ADD direction.
+    case "return":
+      return "Other";
     case "theft":
       return "Theft";
     case "seizure":
@@ -239,6 +247,8 @@ export function __runCcrsAdjustmentTests(): void {
   eq(mapAdjustmentReason("sample"), "ReturnedLabSample", "sample→ReturnedLabSample");
   eq(mapAdjustmentReason("employee_sample"), "Other", "employee_sample→Other (LCB-confirmed shape)");
   eq(mapAdjustmentReason("recall"), "Destruction", "recall→Destruction");
+  eq(mapAdjustmentReason("return"), "Other", "return→Other (customer return add-back, CCRS FAQ)");
+  ok(isReportableAdjustment("return", 2), "positive return add-back reportable");
   eq(mapAdjustmentReason("theft"), "Theft", "theft→Theft");
   eq(mapAdjustmentReason("seizure"), "Seizure", "seizure→Seizure");
   eq(mapAdjustmentReason("whatever"), "Other", "unknown→Other");
