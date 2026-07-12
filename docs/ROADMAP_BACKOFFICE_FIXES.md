@@ -1689,7 +1689,7 @@ destruction waste-record + recall columns, vendor manifest columns,
 self-test suites + targeted assertions). Suite: **1162 passing** (was 1140).
 tsc + eslint clean. **Owner action: apply migration 0115.**
 
-## Shipped — Task R: Discounts & Promotions command center (PR #TBD)
+## Shipped — Task R: Discounts & Promotions command center (PR #402)
 
 **What shipped:** the promotions program rebuilt as a professional command
 center with the CCRS cost floor enforced everywhere, the owner's set-in-stone
