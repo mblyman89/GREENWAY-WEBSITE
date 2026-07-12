@@ -1635,3 +1635,56 @@ degrades gracefully pre-migration (42703 → retry without new columns).
 **Tests:** +1 pure self-test registration (`__runMedicalIntakeTests`). Suite:
 **1140 passing** (was 1139). tsc + eslint clean. **Owner action: apply
 migration 0114 (after 0113).**
+
+---
+
+## Shipped — Task Q: Returns & Destruction command center (PR #401)
+
+**Research (all verified, never guessed):** CCRS Upload User Guide (June 2025
+PDF — Operation Insert/Update/Delete semantics, identifiers required on
+corrections, no negatives, AdjustmentDetail required for Other/Theft,
+"Returned to seller → Other"), LCB CCRS FAQ (customer return = delete the
+sale identifier + report an Inventory Adjustment as a return), current
+WAC 314-55-079(12) (returns require ORIGINAL packaging + fully legible
+lot/batch/inventory ID), -085 (CCRS-generated manifests only, 48–72h lead,
+Mon/Wed/Fri confirmations), -097 as amended (render unusable BEFORE leaving
+premises, grind + mix ≥50% non-cannabis; **the old 72-hour notices were
+REMOVED by WSR 22-14-111** — the hold is now store policy), -225 (recall
+destruction PROHIBITED before LCB coordination), -087 (3-year records).
+Full AI-reference report: **`docs/RETURNS_DESTRUCTION_COMPLIANCE.md`**.
+
+**Customer returns (new, end-to-end):** guided wizard — search COMPLETED
+sales, pick the exact line (double-return protected), attest the
+WAC 314-55-079(12) conditions, restock or destroy. Server posts a positive
+`return` adjustment (CCRS `Other`), snapshots the original CCRS Sale row
+(identifiers, sale type/date, unit price/discount/sales tax/excise in minor
+units), queues the **Sale Delete** (full line) or **Update** (partial —
+remaining qty, pro-rata money) correction, and can open a destruction event
+WITHOUT quarantining the whole lot. New export route builds the 18-column
+Sale correction CSV (original identifiers, UpdatedBy/UpdatedDate clamped ≥
+CreatedDate, Pacific-day-safe dates, no negatives) and marks rows exported.
+
+**Vendor returns:** manifest workflow none → requested → submitted →
+confirmed → picked_up (forward-only state machine), manifest # / processor
+license / pickup fields, on-page WAC 314-55-085 checklist.
+
+**Destruction:** completion form enforcing current -097 — rendering-method
+select (grind+mix compostable / non-compostable / LCB-approved other), mix
+material + ≥50% attestation, final destination / disposal facility, witness —
+plus the -225 recall guard (LCB coordination + officer required, enforced in
+the pure validator). Hold is a configurable store policy (0–336h, default
+72h) with the legal history explained in-app.
+
+**New pure cores (self-tested):** `disposition-core.ts` (return validation →
+Delete/Update, rendering rules, recall guard, manifest machine, hold policy)
+and `ccrs-sale-correction-core.ts` (Sale correction rows + file assembly).
+`mapAdjustmentReason("return") → "Other"`. Drafts-only AI advisor
+(aggregate counts only). Graceful pre-0115 degradation throughout.
+
+**Migration 0115 (owner applies manually):** `customer_returns`,
+destruction waste-record + recall columns, vendor manifest columns,
+`disposition_settings` singleton.
+
+**Tests:** `tests/compliance/disposition-core.test.ts` (22 tests wiring both
+self-test suites + targeted assertions). Suite: **1162 passing** (was 1140).
+tsc + eslint clean. **Owner action: apply migration 0115.**
