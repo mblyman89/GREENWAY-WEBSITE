@@ -149,3 +149,35 @@
   `createAuthorization` detects the missing columns (error 42703) and
   gracefully retries the insert without them, so only the four new audit
   fields go unrecorded.**
+
+---
+
+## Task Q — returns & destruction command center
+
+- [ ] **`supabase/migrations/0115_disposition_command_center.sql`** — Task Q:
+  1. **`public.customer_returns`** (new table) — one row per accepted
+     customer return: the original order/line, the CCRS Sale-row snapshot
+     (Sale/SaleDetail external identifiers, inventory external identifier,
+     sale type/date, unit price / discount / sales tax / excise in MINOR
+     UNITS), the WAC 314-55-079(12) attestations (original packaging +
+     legible lot ID), disposition (restock|destroy), the refund, and the
+     queued CCRS Sale correction (`correction_operation` Delete|Update,
+     `correction_status` pending|exported). RLS: staff all.
+  2. **`public.destruction_events`** — adds the WAC 314-55-097 waste-record
+     columns: `rendering_method`, `mix_material`, `final_destination`,
+     `disposal_facility`, plus the WAC 314-55-225 recall-coordination fields
+     `lcb_coordinated`, `lcb_officer`, `lcb_contact_date`.
+  3. **`public.vendor_returns`** — adds the WAC 314-55-085 manifest workflow
+     columns: `manifest_number`, `manifest_status`
+     (none|requested|submitted|confirmed|picked_up), `pickup_at`,
+     `processor_license`.
+  4. **`public.disposition_settings`** (new singleton) — `hold_hours`
+     (default 72, 0–336): the pre-destruction hold is now a configurable
+     STORE POLICY (the old 72-hour LCB notice was removed from
+     WAC 314-55-097 by WSR 22-14-111). RLS: staff read, admin write.
+
+  Idempotent; no data backfill. **Until this is run, the page still works —
+  the store detects the missing schema and degrades gracefully: destruction
+  scheduling/completion and vendor returns use the legacy columns, the hold
+  defaults to 72h, and customer returns tell you to apply 0115 first (any
+  posted adjustment is called out for manual reversal).**
