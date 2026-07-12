@@ -1399,3 +1399,57 @@ recent counted timestamp from cycle_count_lines), `loadIntelAdjustments(30d)`,
 
 **Tests:** new `tests/compliance/inventory-intel-core.test.ts` (+8). Suite: **1120 passing**
 (was 1112). tsc + eslint clean. No migration needed (read-only over existing tables).
+
+## Task M — Non-cannabis inventory masterclass (dual-identifier merch management)
+
+**Shipped:** 2026-07-12 (branch `task-m-noncannabis-masterclass`).
+
+**Owner's request (verbatim):** "Will you now give the other inventory page, the non cannabis
+inventory. We sell cannabis paraphernalia, glass products, lighters grinders papers etc. almost
+none of it has barcodes. So I need a master class strategy for managing inventory like this.
+Some things like lighters and papers will have barcodes. But pipes and bongs and such won't. I
+want the professional expert standard way of managing this type of inventory. We have built
+into the admin equipment page the printer I plan on using for barcoding my non cannabis
+inventory. ... The inventory adjustments should live on that page, it doesn't have the same
+requirements as cannabis. So there are no special hoops to jump through."
+
+**Playbook doc (NEW `docs/NONCANNABIS_INVENTORY_PLAYBOOK.md`):** the professional standard for
+mixed barcoded/non-barcoded merch — the **dual-identifier strategy**: items WITH a manufacturer
+UPC/EAN scan the package (GS1 mod-10 check digit validated on entry, unique per product); items
+WITHOUT one (most glass) get the in-house Code128 smart-SKU label printed on the equipment-page
+label printer (Rollo, PRN-LABEL-01). Every sellable item ends up scannable. Plus reorder
+points, shrink telemetry, ABC by retail value, and the daily workflow.
+
+**Migration 0111 (`noncannabis_inventory_ops.sql`, owner applies manually):**
+`noncannabis_products` + `barcode` (unique partial index), `reorder_point`, `reorder_qty`,
+`location`; NEW append-only `noncannabis_adjustments` (product_id, signed qty_delta, reason,
+note, actor_id). Store layer degrades gracefully pre-migration (intake retries without 0111
+columns).
+
+**Pure core (NEW `src/lib/noncannabis/merch-intel-core.ts`, self-tested):**
+`validateRetailBarcode` (UPC-A/EAN-13/EAN-8 GS1 check digit — canonical test vectors),
+`scanIdentity` (barcode wins, SKU label fallback), `reorderStatusOf` (out/below/near≤125%/ok/
+untracked) + `buildReorderList` (urgency-ordered, suggested qty = explicit or 2×min default),
+`valuateMerch` (retail/cost/margin + needs-label count), `classifyMerchAbc` (80/95 by retail
+value), `MERCH_ADJUSTMENT_REASONS` (received/return/count/damaged/theft/promo/sold_correction/
+other) + `validateMerchAdjustment` (note REQUIRED for theft/other, non-zero integer, never
+below zero), `summarizeMerchShrink` (negative deltas at cost, by reason).
+
+**Store (`src/lib/noncannabis/store.ts`):** `createNonCannabisAdjustment` (fresh server-side
+re-read → ledger insert → qty update), `listNonCannabisAdjustments(30d)`,
+`updateNonCannabisOps` (barcode/reorder/location), intake carries the new fields.
+
+**Page rebuilt (`/admin/inventory/noncannabis`):** 6-KPI band (active, units, retail value,
+margin on hand, reorder now, need SKU labels) → "Reorder now" panel (out → below → near, with
+suggested order qty) → "Documented reductions 30d" shrink panel (by reason, at cost) → NEW
+`MerchCatalog` client workbench: instant search (name/SKU/barcode/shelf — scanning a code jumps
+to the item) + type filter, scan-identity column (UPC/EAN badge vs SKU-label badge with print
+link), ABC badge, on-hand with reorder flag, expandable row panel where **adjustments live**
+(reason picker auto-sets direction, note enforcement, post) + item settings (barcode with live
+check-digit validation, reorder point/qty, shelf) + label print/archive → append-only recent-
+adjustments ledger → intake (now with barcode scan field validated live + reorder/shelf) →
+drafts. Server actions `adjustNonCannabisAction` + `updateNonCannabisOpsAction` both audit.
+
+**Tests:** new `tests/compliance/merch-intel-core.test.ts` (+8: self-tests, constants, GS1
+check digits, dual identifier, reorder ordering, ABC, adjustment validation, shrink). Suite:
+**1128 passing** (was 1120). tsc + eslint clean. **Owner action: apply migration 0111.**
