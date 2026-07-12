@@ -276,7 +276,7 @@ export function SampleHistoryClient({
               description={
                 filtersActive
                   ? "Try clearing or loosening the filters above."
-                  : "Once you record trade-outgoing samples for an employee, they will appear here."
+                  : "Once you assign samples to employees from the Employee Samples page, they will appear here."
               }
             />
           </div>

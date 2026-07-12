@@ -52,7 +52,7 @@ export default async function SampleHistoryPage() {
           <Breadcrumbs
             items={[
               { label: "Compliance", href: "/admin/compliance/sales-limits" },
-              { label: "Samples", href: "/admin/compliance/samples" },
+              { label: "Employee samples", href: "/admin/compliance/samples" },
               { label: "Sample history" },
             ]}
           />
@@ -69,7 +69,7 @@ export default async function SampleHistoryPage() {
             ]}
           >
             <p>
-              This is a read-only report — recording and editing happen on the Samples page. Source:{" "}
+              This is a read-only report — assignments happen on the Employee Samples page. Source:{" "}
               {WAC_CITATION}.
             </p>
           </HelpPanel>

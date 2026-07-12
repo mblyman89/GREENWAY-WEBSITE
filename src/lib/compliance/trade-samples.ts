@@ -13,20 +13,23 @@
  * IQC is producer/processor-only [096(3)] and was RETIRED (owner "kill it").
  */
 import "server-only";
-import { createHash } from "node:crypto";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import {
   evaluateCap,
-  parseSampleJson,
   SAMPLE_DEFAULTS,
   type SampleSettings,
   type SampleDirection,
   type SampleProductType,
   type SampleCategory,
   type ParsedRecord,
-  type SampleJsonLot,
 } from "@/lib/compliance/trade-samples-core";
+import {
+  buildEmployeeSampleAdjustmentNote,
+  type ParsedAssignment,
+  type RawSampleLot,
+} from "@/lib/compliance/employee-sample-core";
+import { createAdjustment } from "@/lib/inventory/store";
 import {
   computeSampleCapacity,
   daysLeftInQuarter,
@@ -211,7 +214,7 @@ export type RecordResult =
  */
 export async function recordSampleEvent(
   rec: ParsedRecord,
-  meta: { employeeName?: string | null; createdBy: string | null; importId?: string | null },
+  meta: { employeeName?: string | null; createdBy: string | null; importId?: string | null; lotId?: string | null },
 ): Promise<RecordResult> {
   if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not configured." };
   const settings = await getSampleSettings();
@@ -247,6 +250,9 @@ export async function recordSampleEvent(
     // assigned lot came from. Prefer the parsed value; fall back to any caller
     // override for backwards compatibility.
     import_id: rec.importId ?? meta.importId ?? null,
+    // Task K: assignments made from the available-samples table link straight
+    // to the source inventory lot (0054's lot_id FK) for a lossless audit chain.
+    lot_id: meta.lotId ?? null,
     created_by: meta.createdBy,
   };
 
@@ -267,6 +273,85 @@ export async function recordSampleEvent(
   return { ok: true, id: (data as { id: string }).id, message };
 }
 
+export type AssignResult =
+  | { ok: true; eventId: string; message: string; adjustmentWarning: string | null }
+  | { ok: false; error: string; blocked?: boolean };
+
+/**
+ * Task K — assign a selected sample lot to an employee and mark it OUT of the
+ * system the CCRS-required way. One call does the full compliant sequence:
+ *
+ *   1. HARD-ENFORCE the 30 units/employee/quarter cap (via recordSampleEvent,
+ *      which tallies the quarter and blocks over-cap) and write the OUTGOING
+ *      `trade_sample_events` row — the retailer's own log of the amount,
+ *      product type, and employee name required by WAC 314-55-096(1)(j)(iv)-(v).
+ *   2. Post a NEGATIVE `inventory_adjustments` row (reason `employee_sample`,
+ *      detail naming the employee) against the source lot and decrement its
+ *      on-hand quantity. The CCRS exporter maps `employee_sample` → "Other"
+ *      with that employee-named detail — the LCB-confirmed way to report an
+ *      employee sample to CCRS via InventoryAdjustment.csv.
+ *
+ * If step 2 fails after step 1 succeeded, the ledger row stands (it is the
+ * compliance log) and we surface a warning so the owner can post the
+ * adjustment manually from the lot page — we never silently lose the receipt.
+ */
+export async function assignSampleToEmployee(
+  assignment: ParsedAssignment,
+  meta: { employeeName: string; createdBy: string | null },
+): Promise<AssignResult> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not configured." };
+
+  const rec: ParsedRecord = {
+    direction: "outgoing",
+    category: "trade",
+    productType: assignment.productType,
+    unitCount: assignment.unitCount,
+    unitSizeGrams: assignment.unitSizeGrams,
+    unitSizeMg: assignment.unitSizeMg,
+    thcMgPerServing: assignment.thcMgPerServing,
+    quarterKey: assignment.quarterKey,
+    processorName: null,
+    employeeId: assignment.employeeId,
+    fromSampleJar: assignment.fromSampleJar,
+    note: assignment.note,
+    sourceProductName: assignment.sourceProductName,
+    sourceLotRef: assignment.sourceLotRef,
+    importId: null,
+  };
+
+  const recorded = await recordSampleEvent(rec, {
+    employeeName: meta.employeeName,
+    createdBy: meta.createdBy,
+    lotId: assignment.lotId,
+  });
+  if (!recorded.ok) return { ok: false, error: recorded.error, blocked: recorded.blocked };
+
+  const adjustmentNote = buildEmployeeSampleAdjustmentNote({
+    employeeName: meta.employeeName,
+    productName: assignment.sourceProductName,
+    lotCode: assignment.sourceLotRef,
+    unitCount: assignment.unitCount,
+  });
+  const adjusted = await createAdjustment(
+    {
+      lotId: assignment.lotId,
+      qtyDelta: -assignment.unitCount,
+      reason: "employee_sample",
+      note: adjustmentNote,
+    },
+    meta.createdBy,
+  );
+
+  return {
+    ok: true,
+    eventId: recorded.id,
+    message: recorded.message,
+    adjustmentWarning: adjusted.ok
+      ? null
+      : `The sample was logged, but the inventory adjustment failed (${adjusted.error}). Post a manual "Employee sample" adjustment of −${assignment.unitCount} on the lot so CCRS stays accurate.`,
+  };
+}
+
 /** True when a PostgREST/Postgres error is an "unknown column" error for any of
  * the given column names — used to gracefully degrade before migration 0105. */
 function isMissingColumnError(error: { message?: string; code?: string } | null, cols: string[]): boolean {
@@ -281,119 +366,56 @@ function isMissingColumnError(error: { message?: string; code?: string } | null,
 }
 
 // ---------------------------------------------------------------------------
-// Sample JSON imports ("samples come to us like regular products, with its own
-// json to upload"). We persist the uploaded batch, then the owner records +
-// assigns the parsed lots out to employees.
+// Available sample inventory (Task K) — the ASSIGNABLE samples table.
+//
+// Samples no longer arrive via a JSON upload on this page: they flow in through
+// email-intake receiving (manifest lines with is_sample = true), are hard-capped
+// at finalize (120/qtr/processor, sample-intake-cap-core), and are auto-recorded
+// to the ledger as INCOMING events (seedIncomingSampleEvents). What the
+// Employee Samples page needs is the list of ACCEPTED sample lots that still
+// have units on hand — the owner picks one from a table and assigns it to an
+// employee.
 // ---------------------------------------------------------------------------
 
-export type SampleImport = {
-  id: string;
-  file_name: string | null;
-  raw: unknown;
-  content_sha256: string | null;
-  lot_count: number;
-  unit_count: number;
-  notes: string | null;
-  created_at: string;
-};
-
-export async function listSampleImports(limit = 50): Promise<SampleImport[]> {
+/**
+ * List accepted, active sample lots that still have units on hand. Raw rows —
+ * classification into product types + per-unit sizes happens in the pure
+ * employee-sample-core layer so it stays testable.
+ */
+export async function listAvailableSampleLots(limit = 200): Promise<RawSampleLot[]> {
   if (!isSupabaseServiceConfigured) return [];
   const admin = createSupabaseAdminClient();
   const { data } = await admin
-    .from("sample_json_imports")
-    .select("id, file_name, raw, content_sha256, lot_count, unit_count, notes, created_at")
+    .from("inventory_lots")
+    .select(
+      "id, product_name, strain_name, lot_code, inventory_type, on_hand_qty, unit, unit_weight, unit_weight_uom, created_at, inbound_manifests(vendor_label)",
+    )
+    .eq("is_sample", true)
+    .eq("status", "active")
+    .gt("on_hand_qty", 0)
     .order("created_at", { ascending: false })
     .limit(limit);
-  return (data as SampleImport[] | null) ?? [];
-}
-
-export async function createSampleImport(args: {
-  fileName: string | null;
-  raw: unknown;
-  lots: SampleJsonLot[];
-  totalUnits: number;
-  notes?: string | null;
-  uploadedBy: string | null;
-}): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
-  if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not configured." };
-  const admin = createSupabaseAdminClient();
-  const hash = createHash("sha256").update(JSON.stringify(args.raw)).digest("hex");
-  const { data, error } = await admin
-    .from("sample_json_imports")
-    .insert({
-      file_name: args.fileName,
-      raw: args.raw as never,
-      content_sha256: hash,
-      lot_count: args.lots.length,
-      unit_count: args.totalUnits,
-      notes: args.notes ?? null,
-      uploaded_by: args.uploadedBy,
-    })
-    .select("id")
-    .single();
-  if (error || !data) return { ok: false, error: error?.message ?? "Failed to save import." };
-  return { ok: true, id: (data as { id: string }).id };
-}
-
-/**
- * Pickable sample product options for the OUTGOING recorder. We parse each
- * stored import's raw JSON back into normalized lots (they already carry a
- * product name + traceability lot ref) so the owner can ASSIGN a specific
- * sample product to an employee — satisfying the CCRS record requirement.
- * Most-recent import first. Only lots that actually have a product name are
- * offered (a nameless lot can't satisfy the CCRS "which product" record).
- */
-export type SampleProductOption = {
-  key: string; // stable option key (importId::index)
-  importId: string;
-  productName: string;
-  lotRef: string | null;
-  productType: SampleProductType;
-  unitSizeGrams: number | null;
-  unitSizeMg: number | null;
-  thcMgPerServing: number | null;
-  processorName: string | null;
-  fileName: string | null;
-  importedAt: string;
-};
-
-export async function listSampleProductOptions(limit = 25): Promise<SampleProductOption[]> {
-  if (!isSupabaseServiceConfigured) return [];
-  const imports = await listSampleImports(limit);
-  const options: SampleProductOption[] = [];
-  for (const im of imports) {
-    const parsed = parseSampleJson(im.raw);
-    if (!parsed.ok) continue;
-    parsed.lots.forEach((lot, i) => {
-      if (!lot.productName) return; // CCRS needs a named product
-      options.push({
-        key: `${im.id}::${i}`,
-        importId: im.id,
-        productName: lot.productName,
-        lotRef: lot.lotRef,
-        productType: lot.productType,
-        unitSizeGrams: lot.unitSizeGrams,
-        unitSizeMg: lot.unitSizeMg,
-        thcMgPerServing: lot.thcMgPerServing,
-        processorName: lot.processorName,
-        fileName: im.file_name,
-        importedAt: im.created_at,
-      });
-    });
-  }
-  return options;
-}
-
-export async function getSampleImport(id: string): Promise<SampleImport | null> {
-  if (!isSupabaseServiceConfigured) return null;
-  const admin = createSupabaseAdminClient();
-  const { data } = await admin
-    .from("sample_json_imports")
-    .select("id, file_name, raw, content_sha256, lot_count, unit_count, notes, created_at")
-    .eq("id", id)
-    .maybeSingle();
-  return (data as SampleImport | null) ?? null;
+  type Row = Record<string, unknown> & {
+    inbound_manifests?: { vendor_label: string | null } | { vendor_label: string | null }[] | null;
+  };
+  const rows = (data as Row[] | null) ?? [];
+  return rows.map((r) => {
+    const rel = r.inbound_manifests;
+    const manifest = Array.isArray(rel) ? (rel[0] ?? null) : (rel ?? null);
+    return {
+      id: r.id as string,
+      product_name: (r.product_name as string | null) ?? null,
+      strain_name: (r.strain_name as string | null) ?? null,
+      lot_code: (r.lot_code as string | null) ?? null,
+      inventory_type: (r.inventory_type as string | null) ?? null,
+      on_hand_qty: (r.on_hand_qty as number | null) ?? null,
+      unit: (r.unit as string | null) ?? null,
+      unit_weight: (r.unit_weight as number | null) ?? null,
+      unit_weight_uom: (r.unit_weight_uom as string | null) ?? null,
+      created_at: (r.created_at as string | null) ?? null,
+      vendor_label: manifest?.vendor_label ?? null,
+    };
+  });
 }
 
 // ---------------------------------------------------------------------------

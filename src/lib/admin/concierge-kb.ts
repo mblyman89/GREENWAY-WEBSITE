@@ -265,12 +265,12 @@ export const CONCIERGE_KB: ConciergeTopic[] = [
   {
     id: "samples",
     area: "back-office",
-    title: "Trade samples",
+    title: "Employee samples",
     tab: "Employee",
     href: "/admin/compliance/samples",
     facts: [
-      "Employee → Samples tracks trade samples against WA limits so you stay within the rules.",
-      "The page shows how trade-sample limits work and keeps a record for compliance.",
+      "Employee → Samples is where you assign trade samples to paid employees: pick the sample from the table, choose the employee, and the system records it and marks it out of inventory the CCRS-required way.",
+      "Limits are enforced automatically: 30 units per employee per quarter (hard-blocked); the 120 units per processor per quarter intake cap is enforced at Receiving, where samples arrive.",
     ],
   },
   {
