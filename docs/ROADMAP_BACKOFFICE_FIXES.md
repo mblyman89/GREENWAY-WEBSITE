@@ -1739,3 +1739,90 @@ cost-floor clamp case), `__runPromoGuardTests` + expanded
 `__runDiscountEngineTests` wired into `tests/compliance/pure-selftests.test.ts`
 and the local runner script. Suite: **1164 passing** (was 1162). tsc + eslint
 clean. No owner actions (costs flow from existing `inventory_lots`).
+
+## Shipped — Task S: Loyalty POS-side, Employee command center, Users guard rails, Marketing makeover (PRs #404, #405, #406, #407)
+
+Owner's request (summary of the four sub-areas): (a) harden loyalty on the POS
+sale side; (b) transform the Employees tab into a command center covering
+everything a major corporation does — onboarding (background checks, W-4, I-9,
+handbook read-and-sign), document tracking, time cards, a visual schedule
+builder, termination, grounded in re-verified CCRS/RCW/DOH rules; (c) harden
+the Users page against malicious behavior with guard rails that still make it
+easy to let someone go; (d) give Marketing a professional makeover with a
+playbook to beat nearby competitors.
+
+### S-a — Loyalty at the register (PR #404, merged; migration 0116)
+POS sale-side earn/redeem with **no stacking**: a sale takes the promotion OR
+the loyalty redemption, whichever saves the customer more (best-deal-wins,
+computed in pure `loyalty-sale-core.ts`); redemptions respect the acquisition-
+cost floor like every other discount. Ledger entries recorded server-side at
+sale completion; loyalty metrics + drafts-only AI customer-behavior advisor
+(aggregates only) on the back-office loyalty page. **Owner action: apply
+`0116_loyalty_at_sale.sql`.**
+
+### S-b — Employee command center (PR #405, merged; migration 0117)
+Ground truth documented in **`docs/EMPLOYEE_COMPLIANCE.md`** (verified by
+scraping the current sources): RCW 69.50.357 (21+ employees, rules + under-21
+ID training), WAC 314-55-083 (photo ID badges), WAC 314-55-087 (**5-year**
+employee records — employees are never deleted), RCW 49.94.010 Fair Chance
+(background check only AFTER a conditional offer), I-9 §1 day 1 / §2 within 3
+business days, W-4 before first payroll, DSHS new-hire report within 20 days,
+WA paid sick leave RCW 49.46.210 (1 hr per 40 worked, usable day 90, 40-hr
+carryover), final pay RCW 49.48.010, DOH WAC 246-72 medical consultant cert.
+
+What shipped: employment lifecycle (candidate → onboarding → active →
+terminated, rehire supported) with a **15-task, 4-phase onboarding checklist**
+whose ordering enforces Fair Chance in code (`background_check` requires
+`conditional_offer`) and whose **activation gate** blocks going active until
+the critical items are done (age-21 ID check, I-9 both sections, W-4, handbook
+signed, both trainings, badge issued). Employee file page answers "do we have
+their W-4 and I-9 on file? did they sign the handbook?" via a document tracker
+(missing / on file / signed, expiry tracking for the DOH consultant cert), plus
+a training log (5-yr records), deadline cards computed from the hire date
+(business-day I-9 §2 math), WA sick-leave accrual from real time punches, and a
+guided termination that clears the clock PIN, keeps the file 5 years, and opens
+an offboarding checklist. Printable **employee handbook v1.0** with citations
+and signature block at `/admin/staffing/handbook`. Schedule builder gained a
+week-at-a-glance coverage bar chart. Time-clock surfaces moved from the
+`loyalty.view` proxy to an honest **`timeclock.use`** permission (same roles —
+no behavior change, pinned by a permission test). Drafts-only HR advisor sees
+only roster aggregates — never SSNs/DOBs/banking. **Owner action: apply
+`0117_employee_command_center.sql` (after 0116).**
+
+### S-c — Users guard rails (PR #406, merged; no migration)
+Pure `user-guards-core.ts` (self-tested) enforced server-side: (1) no self
+role-change / self-deactivation; (2) you can't touch anyone ranked above you;
+(3) **privilege ceiling** — you can't grant a role above your own (closes the
+admin→owner escalation hole; applies to invites); (4) the last active owner
+can never be demoted or deactivated. Silent failures eliminated — every
+outcome lands as a visible banner, and **blocked attempts are audited**
+(`user.*.blocked`) and shown in a new on-page access-change log. Deactivation
+now also bans sign-in at the Supabase auth layer (`ban_duration` verified
+against @supabase/auth-js; reactivate lifts it) on top of the per-request
+profile check and `is_staff()` RLS. "Letting someone go? Do both halves" box
+ties deactivation to the S-b offboarding checklist. Also fixed a latent CI bug:
+`run-pure-selftests.ts` imported two runners it never invoked.
+
+### S-d — Marketing command center (PR #407, merged; no migration)
+`campaign-rules-core.ts` (pure, self-tested) encodes the **current** WAC
+314-55-155 (WSR 26-12-082, eff. 7/4/26, scraped from app.leg.wa.gov) + RCW
+69.50.369 per channel: universal content bans, 21+ statement, four mandated
+warnings at 10% type size (with the outdoor exemption), the four-sign/1,600-
+sq-in on-premises regime + 512-sq-in informational exemption, billboard/trade-
+name limits, the <$1 incidental-item giveaway regime, and the coupon
+acquisition-cost floor — rendered as an 8-channel campaign planner with
+pre-flight checklists, never-do lists, and copy-ready warning text.
+`competitive-playbook-core.ts` (pure, self-tested) is the "win your market"
+playbook: 9 legal plays across intel (CCRS benchmarks, weekly menu recon),
+price perception (known-value-item pricing with the cost floor pinned, vendor
+exclusives), retention (loyalty + newsletter moats), experience (training,
+accurate menu, rush staffing), and local search (Google Business Profile,
+educational content) — every play links to the in-app tool that executes it.
+The drafts-only AI strategist now embeds the verified channel checklist in its
+prompt and remains compliance-scanned before display.
+
+**Tests across Task S:** suite grew 1164 → **1176 passing** (loyalty-sale,
+schedule-core, employee-lifecycle, timeclock permission, user-guards,
+campaign-rules, competitive-playbook — all wired into both the vitest harness
+and the CI selftest script). tsc + eslint clean on every PR. Owner actions:
+apply migrations **0116** and **0117**.
