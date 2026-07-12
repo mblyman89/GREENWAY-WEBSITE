@@ -15,6 +15,7 @@ import { __runChunkedInTests } from "@/lib/supabase/chunked-in";
 import { __runExemptSaleRecordTests } from "@/lib/medical/exempt-sale-record-core";
 import { __runMedTaxTests } from "@/lib/medical/tax";
 import { __runMedicalAuthorizationTests } from "@/lib/medical/medical-authorization-core";
+import { __runMedicalIntakeTests } from "@/lib/medical/medical-intake-core";
 import { __runMedicalSaleTests } from "@/lib/medical/medical-sale-core";
 import { __runSalesHoursCoreTests } from "@/lib/compliance/sales-hours-core";
 import { __runReceiptCoreTests } from "@/lib/printing/receipt-core";
@@ -52,6 +53,11 @@ describe("embedded pure self-test suites", () => {
   });
   it("medical-sale-core (Task O: DOH categories, exemption plan, high-THC gate)", () => {
     expect(() => __runMedicalSaleTests()).not.toThrow();
+  });
+  it("medical-intake-core (Task P: RCW 69.51A.230(4) date rules, age classes, card number)", () => {
+    const r = __runMedicalIntakeTests();
+    expect(r.failed).toBe(0);
+    expect(r.passed).toBeGreaterThan(0);
   });
   it("sales-hours-core (WAC 314-55-147 window)", () => {
     expect(() => __runSalesHoursCoreTests()).not.toThrow();

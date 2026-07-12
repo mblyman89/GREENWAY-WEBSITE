@@ -68,8 +68,8 @@
   `form_scan_filename`, `form_scan_bytes` (int), `form_scan_uploaded_at`
   (timestamptz), `form_scan_uploaded_by` (FK `staff_profiles`), and `card_printed_at`
   (timestamptz); plus index `patient_auth_scan_uploaded_idx`. No data backfill.
-  **Until this is run, `/admin/medical/intake` scan uploads and the "mark printed"
-  action will error (missing bucket/columns).**
+  **Until this is run, guided-intake scan uploads on `/admin/medical` and the
+  "mark printed" action will error (missing bucket/columns).**
 
 - [ ] **`supabase/migrations/0061_seed_owner_hardware.sql`** — Slice 86: seeds the
   owner's integrated hardware into the EXISTING equipment registry
@@ -132,3 +132,20 @@
   export-first attestation checkbox + the escalated phrase
   `RESET OPERATIONAL DATA (WAC 314-55-087)`; until this migration is applied
   the app falls back to the legacy zero-arg call, so nothing breaks.**
+
+---
+
+## Task P — medical guided intake polish
+
+- [ ] **`supabase/migrations/0114_medical_intake_polish.sql`** — Task P (run
+  AFTER `0113_medical_pipeline.sql`): adds to `public.patient_authorizations`:
+  `authorization_issued_on` (date — the day the health care professional
+  issued the authorization, the anchor for the RCW 69.51A.230(4) statutory
+  expiration maximum), `card_fee_collected` (boolean, default false — the
+  minimum $1 registration fee, RCW 69.51A.230(10)), `photo_uploaded_to_mcr`
+  (boolean, default false), and `compassionate_renewal` (boolean, default
+  false — photo-exempt renewals per RCW 69.51A.230(4)(b)). Idempotent; no
+  data backfill. **Until this is run, the guided intake wizard still works —
+  `createAuthorization` detects the missing columns (error 42703) and
+  gracefully retries the insert without them, so only the four new audit
+  fields go unrecorded.**

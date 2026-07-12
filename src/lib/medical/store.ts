@@ -181,6 +181,13 @@ export type AuthorizationInput = {
   inDohDatabase: boolean;
   checklist: FormChecklist;
   notes?: string | null;
+  // Task P (migration 0114) — statutory-date + fee/photo audit fields. All
+  // optional so pre-0114 callers keep working; the insert degrades gracefully
+  // when the columns don't exist yet.
+  authorizationIssuedOn?: string | null;
+  cardFeeCollected?: boolean;
+  photoUploadedToMcr?: boolean;
+  compassionateRenewal?: boolean;
 };
 
 /**
@@ -207,30 +214,48 @@ export async function createAuthorization(
     return { ok: false, error: issuance.errors.join(" ") };
   }
   const admin = createSupabaseAdminClient();
-  const { data, error } = await admin
+  const baseRow = {
+    customer_id: input.customerId,
+    authorization_id: input.authorizationId ?? null,
+    unique_patient_identifier: input.uniquePatientIdentifier ?? null,
+    holder_type: input.holderType,
+    effective_on: input.effectiveOn ?? null,
+    issued_on: input.effectiveOn ?? null,
+    expires_on: input.expiresOn ?? null,
+    in_doh_database: input.inDohDatabase,
+    status: "active",
+    form_complete_signed: input.checklist.formCompleteSigned,
+    tamper_resistant_verified: input.checklist.tamperResistantVerified,
+    identity_verified: input.checklist.identityVerified,
+    embossed_seal_verified: input.checklist.embossedSealVerified,
+    mcr_validated_at: input.inDohDatabase ? new Date().toISOString() : null,
+    mcr_validated_by: input.inDohDatabase ? actorId : null,
+    notes: input.notes ?? null,
+    created_by: actorId,
+    updated_by: actorId,
+  };
+  // Task P (migration 0114) — statutory-date + fee/photo audit columns. Try
+  // the full row first; when 0114 hasn't been applied yet (42703 undefined
+  // column), retry without the new columns so intake keeps working.
+  const fullRow = {
+    ...baseRow,
+    authorization_issued_on: input.authorizationIssuedOn ?? null,
+    card_fee_collected: input.cardFeeCollected ?? false,
+    photo_uploaded_to_mcr: input.photoUploadedToMcr ?? false,
+    compassionate_renewal: input.compassionateRenewal ?? false,
+  };
+  let { data, error } = await admin
     .from("patient_authorizations")
-    .insert({
-      customer_id: input.customerId,
-      authorization_id: input.authorizationId ?? null,
-      unique_patient_identifier: input.uniquePatientIdentifier ?? null,
-      holder_type: input.holderType,
-      effective_on: input.effectiveOn ?? null,
-      issued_on: input.effectiveOn ?? null,
-      expires_on: input.expiresOn ?? null,
-      in_doh_database: input.inDohDatabase,
-      status: "active",
-      form_complete_signed: input.checklist.formCompleteSigned,
-      tamper_resistant_verified: input.checklist.tamperResistantVerified,
-      identity_verified: input.checklist.identityVerified,
-      embossed_seal_verified: input.checklist.embossedSealVerified,
-      mcr_validated_at: input.inDohDatabase ? new Date().toISOString() : null,
-      mcr_validated_by: input.inDohDatabase ? actorId : null,
-      notes: input.notes ?? null,
-      created_by: actorId,
-      updated_by: actorId,
-    })
+    .insert(fullRow)
     .select("id")
     .single();
+  if (error && (error.code === "42703" || /column .* does not exist/i.test(error.message ?? ""))) {
+    ({ data, error } = await admin
+      .from("patient_authorizations")
+      .insert(baseRow)
+      .select("id")
+      .single());
+  }
   if (error || !data) return { ok: false, error: error?.message ?? "Could not create card" };
 
   // Mark the customer as a medical patient.

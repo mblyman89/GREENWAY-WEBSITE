@@ -405,8 +405,8 @@ export const INTEGRATED_DEVICES: readonly IntegratedDevice[] = [
     manufacturer: "Canon",
     model: "PIXMA TS3522",
     summary: "Scan medical authorization forms to PDF, then upload during intake.",
-    href: "/admin/medical/intake",
-    hrefLabel: "Authorization Intake",
+    href: "/admin/medical",
+    hrefLabel: "Medical Cannabis \u2014 guided intake",
   },
   {
     assetTag: "LAMINATOR-01",
@@ -417,8 +417,8 @@ export const INTEGRATED_DEVICES: readonly IntegratedDevice[] = [
     manufacturer: "Scotch",
     model: "Thermal Laminator",
     summary: "Laminates printed medical recognition cards so they last at the register.",
-    href: "/admin/medical/intake",
-    hrefLabel: "Used during Authorization Intake",
+    href: "/admin/medical",
+    hrefLabel: "Used during guided intake",
   },
 ] as const;
 

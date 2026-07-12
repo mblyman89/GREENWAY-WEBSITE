@@ -87,9 +87,10 @@ export const adminNav: AdminNavItem[] = [
   { label: "Sample History", href: "/admin/compliance/samples/history", permission: "settings.manage", icon: "\ud83d\udccb", group: "Employee" }, // 📋 sample receipts log
   { label: "Register Activity", href: "/admin/registers", permission: "orders.manage", icon: "\ud83d\udcb5", group: "Employee" }, // 💵 cash drawer
 
-  // Medical: patient/DOH tools
-  { label: "Patient Records", href: "/admin/medical", permission: "medical.manage", icon: "\ud83c\udfe5", group: "Medical" }, // 🏥 medical
-  { label: "Authorization Intake", href: "/admin/medical/intake", permission: "medical.manage", icon: "\ud83e\ude7a", group: "Medical" }, // 🩺 clinical intake
+  // Medical: ONE page — /admin/medical carries the guided patient intake,
+  // recognition cards, DOH product registry, and the exempt-sale ledger.
+  // Rendered as a direct-link tab (no dropdown) — see DIRECT_LINK_GROUPS.
+  { label: "Medical Cannabis", href: "/admin/medical", permission: "medical.manage", icon: "\ud83c\udfe5", group: "Medical" }, // 🏥 medical
 
   // CCRS: standalone top-header button → Compliance Health (direct link, no dropdown).
   { label: "Compliance Health", href: "/admin/compliance/health", permission: "reports.view", icon: "\ud83d\udee1\ufe0f", group: "CCRS" }, // 🛡️ compliance shield

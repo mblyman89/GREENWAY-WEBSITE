@@ -13,15 +13,15 @@
 | Owner hardware seed | `supabase/migrations/0061_seed_owner_hardware.sql` | seeds the SAME 4 devices into the table as draft rows → duplicates the hardcoded card. |
 | Receipt printer | `src/app/admin/settings/receipt-printer/*` + `src/lib/printing/*` | full CloudPRNT subsystem: settings, job queue, live online status, AI diagnostics. Lives in **Admin** nav group. |
 | Label printing | `src/app/admin/inventory/noncannabis/[id]/label` + `.../lots/[id]/label` | Rollo, browser print dialog. |
-| Scanner + laminator | referenced from `src/app/admin/medical/intake` | scan-to-file then upload; laminate cards. |
+| Scanner + laminator | referenced from the guided intake on `src/app/admin/medical` | scan-to-file then upload; laminate cards. |
 | Registers & drawers | `src/app/admin/registers` | cash drawers; assets map to a `register_id`. |
 | Nav | `src/components/admin/admin-nav-data.ts` | "Equipment" under Inventory; "Receipt Printer" under Admin (split). |
 
 **Integrated-device ground truth (4), from migration 0061:**
 - Star Micronics TSP143IV — receipt printer (CloudPRNT) → `/admin/settings/receipt-printer`
 - Rollo Wireless X1040 — 4×6 label printer → prints from intake/label pages
-- Canon PIXMA TS3522 — medical scanner → `/admin/medical/intake`
-- Scotch Thermal Laminator — recognition-card laminator → `/admin/medical/intake`
+- Canon PIXMA TS3522 — medical scanner → `/admin/medical` (guided intake)
+- Scotch Thermal Laminator — recognition-card laminator → `/admin/medical` (guided intake)
 
 ## The declutter decision
 

@@ -1,9 +1,21 @@
-# Medical authorization intake — how it works (Slice 85)
+# Medical authorization intake — how it works (Slice 85, superseded by Task P)
 
-This documents the streamlined workflow at **Admin → Operations → Authorization
-Intake** (`/admin/medical/intake`) that a Certified Medical Cannabis Consultant
-uses to take in a new medical authorization efficiently, using the equipment the
-owner purchased:
+> **Task P update (2026-07):** the standalone `/admin/medical/intake` page was
+> RETIRED. The intake flow now lives inline on **`/admin/medical`** ("Medical
+> Cannabis") as a **guided intake wizard** (`GuidedIntakeWizard`) with hard
+> guard rails: statutory expiration maximums (RCW 69.51A.230(4) — 1 year adult
+> / 6 months minor from the AUTHORIZATION issue date), MCR-generated card
+> number (staff copy it, never invent it), $1 fee collection
+> (RCW 69.51A.230(10)), photo-uploaded-to-MCR confirmation (waived for
+> compassionate renewals), minor parent/guardian designated-provider check
+> (RCW 69.51A.220), and a certified-consultant-only confirmation. The server
+> action is `guidedIntakeAction` in `src/app/admin/medical/actions.ts`; date
+> math lives in the pure core `src/lib/medical/medical-intake-core.ts`.
+> The equipment, scanning, and lamination details below still apply.
+
+This documents the streamlined intake workflow (now on `/admin/medical`) that a
+Certified Medical Cannabis Consultant uses to take in a new medical
+authorization efficiently, using the equipment the owner purchased:
 
 - **Canon PIXMA TS3522** flatbed scanner (600×1200 dpi optical, AirPrint/Mopria,
   Wi-Fi 2.4 GHz + USB) — used to **scan** the paper authorization form.
