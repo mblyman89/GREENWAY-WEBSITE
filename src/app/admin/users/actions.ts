@@ -1,37 +1,86 @@
 "use server";
 
+import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requirePermission } from "@/lib/auth/session";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { recordAudit } from "@/lib/auth/audit";
-import { ALL_ROLES } from "@/lib/auth/roles";
+import {
+  guardRoleChange,
+  guardActiveChange,
+  guardGrantRole,
+  isKnownRole,
+  BAN_PERMANENT,
+  BAN_LIFT,
+} from "@/lib/auth/user-guards-core";
 import type { StaffRole } from "@/lib/supabase/types";
 
-export async function updateUserRole(formData: FormData) {
+const BASE = "/admin/users";
+
+function bounce(kind: "error" | "ok", message: string): never {
+  revalidatePath(BASE);
+  redirect(`${BASE}?${kind}=${encodeURIComponent(message)}`);
+}
+
+async function countActiveOwners(): Promise<number> {
+  const admin = createSupabaseAdminClient();
+  const { count } = await admin
+    .from("staff_profiles")
+    .select("id", { count: "exact", head: true })
+    .eq("role", "owner")
+    .eq("active", true);
+  return count ?? 0;
+}
+
+/**
+ * Task S-c: every guard here is enforced server-side via the pure core in
+ * user-guards-core.ts (self-rule, rank rule, privilege ceiling, last-owner
+ * rule) and every outcome — including refusals — is surfaced in the UI and
+ * written to the audit log. Silent returns are gone.
+ */
+export async function updateUserRole(formData: FormData): Promise<void> {
   const session = await requirePermission("users.manage");
 
   const userId = String(formData.get("userId") ?? "");
-  const role = String(formData.get("role") ?? "") as StaffRole;
-  if (!userId || !ALL_ROLES.includes(role)) return;
+  const role = String(formData.get("role") ?? "");
+  if (!userId) bounce("error", "Missing user id.");
+  if (!isKnownRole(role)) bounce("error", "Unknown role.");
+  const newRole = role as StaffRole;
 
-  // Prevent the last owner from accidentally demoting themselves into lockout.
   const admin = createSupabaseAdminClient();
-  const { data: before } = await admin
+  const { data: target } = await admin
     .from("staff_profiles")
     .select("role, email, active")
     .eq("id", userId)
     .maybeSingle();
+  if (!target) bounce("error", "That user no longer exists.");
 
-  if (before?.role === "owner" && role !== "owner") {
-    const { count } = await admin
-      .from("staff_profiles")
-      .select("id", { count: "exact", head: true })
-      .eq("role", "owner")
-      .eq("active", true);
-    if ((count ?? 0) <= 1) return; // refuse to remove the last owner
+  const guard = guardRoleChange({
+    actorId: session.userId,
+    actorRole: session.profile.role,
+    targetId: userId,
+    targetRole: target.role as StaffRole,
+    targetActive: Boolean(target.active),
+    newRole,
+    activeOwnerCount: await countActiveOwners(),
+  });
+  if (!guard.ok) {
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "user.role.update.blocked",
+      entityType: "staff_profile",
+      entityId: userId,
+      before: { role: target.role },
+      after: { attempted_role: newRole, reason: guard.reason },
+    });
+    bounce("error", guard.reason);
   }
 
-  await admin.from("staff_profiles").update({ role }).eq("id", userId);
+  if (target.role === newRole) bounce("ok", "No change — they already have that role.");
+
+  const { error } = await admin.from("staff_profiles").update({ role: newRole }).eq("id", userId);
+  if (error) bounce("error", error.message);
 
   await recordAudit({
     actorId: session.userId,
@@ -39,63 +88,118 @@ export async function updateUserRole(formData: FormData) {
     action: "user.role.update",
     entityType: "staff_profile",
     entityId: userId,
-    before: { role: before?.role },
-    after: { role },
+    before: { role: target.role },
+    after: { role: newRole },
   });
 
-  revalidatePath("/admin/users");
+  bounce("ok", `${target.email ?? "User"} is now ${newRole}.`);
 }
 
-export async function setUserActive(formData: FormData) {
+export async function setUserActive(formData: FormData): Promise<void> {
   const session = await requirePermission("users.manage");
 
   const userId = String(formData.get("userId") ?? "");
-  const active = String(formData.get("active") ?? "") === "true";
-  if (!userId) return;
+  const nextActive = String(formData.get("active") ?? "") === "true";
+  if (!userId) bounce("error", "Missing user id.");
 
   const admin = createSupabaseAdminClient();
-  const { data: before } = await admin
+  const { data: target } = await admin
     .from("staff_profiles")
-    .select("role, active")
+    .select("role, email, active")
     .eq("id", userId)
     .maybeSingle();
+  if (!target) bounce("error", "That user no longer exists.");
 
-  // Don't deactivate the last active owner.
-  if (before?.role === "owner" && !active) {
-    const { count } = await admin
-      .from("staff_profiles")
-      .select("id", { count: "exact", head: true })
-      .eq("role", "owner")
-      .eq("active", true);
-    if ((count ?? 0) <= 1) return;
+  const guard = guardActiveChange({
+    actorId: session.userId,
+    actorRole: session.profile.role,
+    targetId: userId,
+    targetRole: target.role as StaffRole,
+    targetActive: Boolean(target.active),
+    nextActive,
+    activeOwnerCount: await countActiveOwners(),
+  });
+  if (!guard.ok) {
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: nextActive ? "user.activate.blocked" : "user.deactivate.blocked",
+      entityType: "staff_profile",
+      entityId: userId,
+      after: { attempted_active: nextActive, reason: guard.reason },
+    });
+    bounce("error", guard.reason);
   }
 
-  await admin.from("staff_profiles").update({ active }).eq("id", userId);
+  const { error } = await admin
+    .from("staff_profiles")
+    .update({ active: nextActive })
+    .eq("id", userId);
+  if (error) bounce("error", error.message);
+
+  // Auth-layer enforcement, verified against @supabase/auth-js:
+  //  - deactivate → permanent ban (blocks new sign-ins AND token refresh);
+  //  - reactivate → lift the ban.
+  // The admin panel itself locks them out on the very next request either way,
+  // because getStaffSession() re-reads profile.active every time and RLS's
+  // is_staff() requires active=true — the ban is defense-in-depth so even the
+  // raw Supabase APIs go dark for them.
+  let banApplied = true;
+  const { error: banError } = await admin.auth.admin.updateUserById(userId, {
+    ban_duration: nextActive ? BAN_LIFT : BAN_PERMANENT,
+  });
+  if (banError) banApplied = false;
 
   await recordAudit({
     actorId: session.userId,
     actorEmail: session.email,
-    action: active ? "user.activate" : "user.deactivate",
+    action: nextActive ? "user.activate" : "user.deactivate",
     entityType: "staff_profile",
     entityId: userId,
-    before: { active: before?.active },
-    after: { active },
+    before: { active: target.active },
+    after: { active: nextActive, auth_ban: nextActive ? "lifted" : "applied", ban_ok: banApplied },
   });
 
-  revalidatePath("/admin/users");
+  if (nextActive) {
+    bounce(
+      "ok",
+      banApplied
+        ? `${target.email ?? "User"} reactivated — they can sign in again.`
+        : `${target.email ?? "User"} reactivated, but lifting the sign-in ban failed — check Supabase Auth.`,
+    );
+  }
+  bounce(
+    "ok",
+    banApplied
+      ? `${target.email ?? "User"} deactivated — access is cut off and sign-in is banned. If you're letting them go, run the offboarding checklist on their employee file too.`
+      : `${target.email ?? "User"} deactivated — the back office is locked for them, but the auth ban failed; check Supabase Auth.`,
+  );
 }
 
-export async function inviteUser(formData: FormData) {
+export async function inviteUser(formData: FormData): Promise<void> {
   const session = await requirePermission("users.manage");
 
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
-  const role = String(formData.get("role") ?? "readonly") as StaffRole;
-  if (!email || !ALL_ROLES.includes(role)) return;
+  const role = String(formData.get("role") ?? "readonly");
+  if (!email || !email.includes("@")) bounce("error", "Enter a valid email address.");
+  if (!isKnownRole(role)) bounce("error", "Unknown role.");
+  const newRole = role as StaffRole;
+
+  // Privilege ceiling applies to invites too: an admin cannot mint an owner.
+  const grant = guardGrantRole(session.profile.role, newRole);
+  if (!grant.ok) {
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "user.invite.blocked",
+      entityType: "staff_profile",
+      entityId: email,
+      after: { attempted_role: newRole, reason: grant.reason },
+    });
+    bounce("error", grant.reason);
+  }
 
   const admin = createSupabaseAdminClient();
-
-  // Invite via email; the trigger creates the staff_profile on signup, then we
-  // set the requested role.
   const { data, error } = await admin.auth.admin.inviteUserByEmail(email);
   if (error || !data?.user) {
     await recordAudit({
@@ -106,15 +210,13 @@ export async function inviteUser(formData: FormData) {
       entityId: email,
       after: { error: error?.message },
     });
-    return;
+    bounce("error", error?.message ?? "Invite failed — check the email and try again.");
   }
 
-  await admin
+  const { error: upsertError } = await admin
     .from("staff_profiles")
-    .upsert(
-      { id: data.user.id, email, role, active: true },
-      { onConflict: "id" },
-    );
+    .upsert({ id: data.user.id, email, role: newRole, active: true }, { onConflict: "id" });
+  if (upsertError) bounce("error", upsertError.message);
 
   await recordAudit({
     actorId: session.userId,
@@ -122,8 +224,8 @@ export async function inviteUser(formData: FormData) {
     action: "user.invite",
     entityType: "staff_profile",
     entityId: data.user.id,
-    after: { email, role },
+    after: { email, role: newRole },
   });
 
-  revalidatePath("/admin/users");
+  bounce("ok", `Invite sent to ${email} as ${newRole}. They'll get an email to set a password.`);
 }
