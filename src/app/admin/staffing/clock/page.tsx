@@ -30,7 +30,7 @@ export default async function PhoneClockPage({
   searchParams: Promise<{ error?: string; clocked?: string; who?: string }>;
 }) {
   // Any active staff session may reach this page; the PIN identifies the person.
-  await requirePermission("loyalty.view");
+  await requirePermission("timeclock.use");
   const sp = await searchParams;
 
   if (!isSupabaseServiceConfigured) {

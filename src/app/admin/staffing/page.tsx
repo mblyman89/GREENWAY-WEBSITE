@@ -28,7 +28,7 @@ export default async function StaffingPage({
 }: {
   searchParams: Promise<{ error?: string; clocked?: string; who?: string; saved?: string }>;
 }) {
-  const session = await requirePermission("loyalty.view");
+  const session = await requirePermission("timeclock.use");
   const canManage = can(session.profile.role, "staffing.manage");
   const sp = await searchParams;
 

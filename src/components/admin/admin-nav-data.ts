@@ -80,8 +80,12 @@ export const adminNav: AdminNavItem[] = [
   { label: "Email Newsletter", href: "/admin/newsletter", permission: "blog.manage", icon: "\u2709\ufe0f", group: "MKTG & ADV" }, // ✉️ email
   { label: "Image Generator", href: "/admin/marketing/midjourney", permission: "content.edit", icon: "\ud83c\udfa8", group: "MKTG & ADV" }, // 🎨 creative
 
-  // Employee: time & pay + trade samples
-  { label: "Time Clock", href: "/admin/staffing", permission: "loyalty.view", icon: "\ud83d\udd50", group: "Employee" }, // 🕐 clock
+  // Employee: the command center (roster/onboarding/offboarding + handbook),
+  // then schedule + time & pay + trade samples. Task S-b restructure.
+  { label: "Employees", href: "/admin/staffing/employees", permission: "staffing.manage", icon: "\ud83e\uddd1\u200d\ud83e\udd1d\u200d\ud83e\uddd1", group: "Employee" }, // 🧑‍🤝‍🧑 command center
+  { label: "Schedule", href: "/admin/staffing/schedule", permission: "staffing.manage", icon: "\ud83d\udcc6", group: "Employee" }, // 📆 week builder
+  { label: "Handbook & Policies", href: "/admin/staffing/handbook", permission: "staffing.manage", icon: "\ud83d\udcd6", group: "Employee" }, // 📖 handbook
+  { label: "Time Clock", href: "/admin/staffing", permission: "timeclock.use", icon: "\ud83d\udd50", group: "Employee" }, // 🕐 clock
   { label: "Payroll", href: "/admin/payroll", permission: "settings.manage", icon: "\ud83d\udcb0", group: "Employee" }, // 💰 pay
   { label: "Employee Samples", href: "/admin/compliance/samples", permission: "settings.manage", icon: "\ud83e\uddea", group: "Employee" }, // 🧪 trade samples
   { label: "Sample History", href: "/admin/compliance/samples/history", permission: "settings.manage", icon: "\ud83d\udccb", group: "Employee" }, // 📋 sample receipts log

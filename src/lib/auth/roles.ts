@@ -60,6 +60,7 @@ export type Permission =
   | "users.manage"
   | "settings.manage"
   | "staffing.manage"
+  | "timeclock.use"
   | "medical.manage"
   | "sales_limit.override";
 
@@ -91,6 +92,10 @@ const MATRIX: Record<Permission, StaffRole[]> = {
   "users.manage": ["owner", "admin"],
   "settings.manage": ["owner", "admin"],
   "staffing.manage": ["owner", "admin", "manager"],
+  // Task S-b: the time clock previously piggybacked on "loyalty.view" as a
+  // proxy for "any active floor staff". A scoped permission keeps the matrix
+  // honest (same roles — no behavior change, clearer intent).
+  "timeclock.use": ["owner", "admin", "manager", "staff"],
   "medical.manage": ["owner", "admin", "manager"],
   // Authorizing an OVER-LIMIT sale is a manager+ decision (Slice 109). Regular
   // staff/clerks cannot override the statutory transaction limit.
@@ -124,6 +129,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   "users.manage": "Manage staff & roles",
   "settings.manage": "Change settings",
   "staffing.manage": "Manage employees, shifts & time clock",
+  "timeclock.use": "Clock in & out (time clock)",
   "medical.manage": "Issue & manage medical recognition cards (consultant)",
   "sales_limit.override": "Authorize an over-limit sale (logged override)",
 };
@@ -149,6 +155,7 @@ export const ALL_PERMISSIONS: Permission[] = [
   "media.manage",
   "reports.view",
   "staffing.manage",
+  "timeclock.use",
   "sales_limit.override",
   "users.manage",
   "settings.manage",

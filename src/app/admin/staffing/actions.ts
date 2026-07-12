@@ -34,7 +34,7 @@ function str(formData: FormData, key: string): string {
 
 /** Clock in/out for a known employee (button on the clock page). */
 export async function clockToggleAction(formData: FormData): Promise<void> {
-  const session = await requirePermission("loyalty.view"); // any active staff member
+  const session = await requirePermission("timeclock.use"); // any active staff member
   const employeeId = str(formData, "employee_id");
   if (!employeeId) redirect(`${BASE}?error=` + encodeURIComponent("Missing employee."));
   const result = await toggleClock(employeeId, "web");
@@ -52,7 +52,7 @@ export async function clockToggleAction(formData: FormData): Promise<void> {
 
 /** Clock in/out via PIN at a shared station. */
 export async function clockByPinAction(formData: FormData): Promise<void> {
-  await requirePermission("loyalty.view");
+  await requirePermission("timeclock.use");
   // S-10: brute-force throttle on the shared PIN pad.
   const locked = pinThrottleBlocked();
   if (locked) redirect(`${BASE}?error=` + encodeURIComponent(locked));
@@ -84,7 +84,7 @@ export async function clockByPinAction(formData: FormData): Promise<void> {
  * session is allowed (the PIN identifies the employee).
  */
 export async function clockByPinPhoneAction(formData: FormData): Promise<void> {
-  await requirePermission("loyalty.view");
+  await requirePermission("timeclock.use");
   const pin = str(formData, "pin");
   const CLOCK = `${BASE}/clock`;
   // S-10: brute-force throttle on the PIN entry (shared with the station pad).
@@ -153,30 +153,39 @@ export async function updateEmployeeAction(formData: FormData): Promise<void> {
   const session = await requirePermission("staffing.manage");
   const id = str(formData, "id");
   if (!id) redirect(`${BASE}/employees?error=` + encodeURIComponent("Missing id."));
+  // Task S-b: the roster edit form now lives on the employee FILE page, so
+  // return there when asked (values restricted to our own employee routes).
+  const back =
+    formData.get("return_to") === "file" ? `${BASE}/employees/${id}` : `${BASE}/employees`;
   // S-10: hashes are never shown, so the PIN field is now write-only —
   // blank = keep the current PIN; the "remove PIN" checkbox clears it.
   const pin = str(formData, "clock_pin");
   const clearPin = formData.get("clear_pin") === "on";
-  if (pin && !isValidPin(pin)) redirect(`${BASE}/employees?error=` + encodeURIComponent("PIN must be 4–6 digits."));
+  if (pin && !isValidPin(pin)) redirect(`${back}?error=` + encodeURIComponent("PIN must be 4–6 digits."));
   if (pin) {
     const holder = await getEmployeeByPin(pin);
     if (holder && holder.id !== id) {
-      redirect(`${BASE}/employees?error=` + encodeURIComponent("That PIN is already in use."));
+      redirect(`${back}?error=` + encodeURIComponent("That PIN is already in use."));
     }
   }
   const update: Record<string, unknown> = {
     full_name: str(formData, "full_name"),
     job_role: str(formData, "job_role") || "sales",
-    active: formData.get("active") === "on" || formData.get("active") === "true",
     notes: str(formData, "notes") || null,
   };
+  // Task S-b: `active` is driven by the lifecycle (activate/terminate) on the
+  // employee file page. Only legacy forms that still render the checkbox may
+  // set it — the file-page basics form omits it entirely.
+  if (formData.has("active")) {
+    update.active = formData.get("active") === "on" || formData.get("active") === "true";
+  }
   if (clearPin) update.clock_pin = null;
   else if (pin) update.clock_pin = hashPin(pin);
   const admin = createSupabaseAdminClient();
   const { error } = await admin.from("employees").update(update).eq("id", id);
   if (error) {
     const msg = error.code === "23505" ? "That PIN is already in use." : error.message;
-    redirect(`${BASE}/employees?error=` + encodeURIComponent(msg));
+    redirect(`${back}?error=` + encodeURIComponent(msg));
   }
   await recordAudit({
     actorId: session.userId,
@@ -186,7 +195,8 @@ export async function updateEmployeeAction(formData: FormData): Promise<void> {
     entityId: id,
   });
   revalidatePath(`${BASE}/employees`);
-  redirect(`${BASE}/employees?saved=1`);
+  revalidatePath(`${BASE}/employees/${id}`);
+  redirect(formData.get("return_to") === "file" ? `${back}?ok=` + encodeURIComponent("Saved.") : `${back}?saved=1`);
 }
 
 // ---------------------------------------------------------------------------

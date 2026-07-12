@@ -25,6 +25,8 @@ import { __runAtRestCryptoTests } from "@/lib/security/at-rest-crypto";
 import { __runEngineTests } from "@/lib/loyalty/engine";
 import { __runLoyaltyConfigTests } from "@/lib/loyalty/loyalty-config-core";
 import { __runLoyaltySaleTests } from "@/lib/loyalty/loyalty-sale-core";
+import { __runScheduleCoreTests } from "@/lib/staffing/schedule-core";
+import { __runEmployeeLifecycleTests } from "@/lib/staffing/employee-lifecycle-core";
 
 describe("embedded pure self-test suites", () => {
   it("order-pricing-core (S-2/S-3 money math + floor)", () => {
@@ -86,5 +88,12 @@ describe("embedded pure self-test suites", () => {
   });
   it("loyalty-sale-core (Task S-a: best-deal-wins, code spread, floors)", () => {
     expect(() => __runLoyaltySaleTests()).not.toThrow();
+  });
+  it("schedule-core (week math, Pacific)", () => {
+    expect(() => __runScheduleCoreTests()).not.toThrow();
+  });
+  it("employee-lifecycle-core (Task S-b: RCW 49.94 order, activation gate, deadlines, sick leave)", () => {
+    const n = __runEmployeeLifecycleTests();
+    expect(n).toBeGreaterThan(0);
   });
 });
