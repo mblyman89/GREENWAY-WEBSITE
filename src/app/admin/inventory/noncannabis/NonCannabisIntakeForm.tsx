@@ -18,6 +18,7 @@ import {
   type NonCannabisType,
   type Gender,
 } from "@/lib/naming/noncannabis-core";
+import { validateRetailBarcode } from "@/lib/noncannabis/merch-intel-core";
 
 export function NonCannabisIntakeForm() {
   const [brand, setBrand] = useState("");
@@ -26,6 +27,13 @@ export function NonCannabisIntakeForm() {
   const [gender, setGender] = useState<Gender>("");
   const [color, setColor] = useState("");
   const [nameOverride, setNameOverride] = useState("");
+  const [barcode, setBarcode] = useState("");
+
+  const barcodeCheck = useMemo(() => {
+    const trimmed = barcode.trim();
+    if (!trimmed) return null;
+    return validateRetailBarcode(trimmed);
+  }, [barcode]);
 
   const preview = useMemo(() => {
     const built = buildNonCannabisName({ brand, type, size, gender, color });
@@ -109,6 +117,39 @@ export function NonCannabisIntakeForm() {
         </Field>
       </div>
 
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Field
+          label="Manufacturer barcode (optional)"
+          htmlFor="barcode"
+          help="Has one? Scan it here — it becomes the register code. No barcode? Leave blank and print the SKU label."
+        >
+          <Input
+            id="barcode"
+            name="barcode"
+            inputMode="numeric"
+            value={barcode}
+            onChange={(e) => setBarcode(e.target.value)}
+            placeholder="Scan the UPC/EAN on the package"
+          />
+        </Field>
+        <Field label="Reorder point" htmlFor="reorder_point" help="Alert when on-hand hits this. 0 = untracked">
+          <Input id="reorder_point" name="reorder_point" inputMode="numeric" placeholder="0" />
+        </Field>
+        <Field label="Order qty" htmlFor="reorder_qty" help="How many to order when low">
+          <Input id="reorder_qty" name="reorder_qty" inputMode="numeric" placeholder="0" />
+        </Field>
+        <Field label="Shelf / bin" htmlFor="location" help="Where it lives in the store">
+          <Input id="location" name="location" placeholder="e.g. Glass wall A2" />
+        </Field>
+      </div>
+      {barcodeCheck && !barcodeCheck.ok ? (
+        <p className="text-xs text-[var(--admin-danger)]">{barcodeCheck.error}</p>
+      ) : barcodeCheck?.ok ? (
+        <p className="text-xs text-[var(--admin-green)]">
+          Valid {barcodeCheck.kind.replace("_", "-").toUpperCase()} ✓ — this code will be scanned at the register.
+        </p>
+      ) : null}
+
       <Field
         label="Name override (optional)"
         htmlFor="name_override"
@@ -150,7 +191,7 @@ export function NonCannabisIntakeForm() {
         ) : null}
       </div>
 
-      <Button type="submit" variant="primary" disabled={!preview.ok}>
+      <Button type="submit" variant="primary" disabled={!preview.ok || (!!barcodeCheck && !barcodeCheck.ok)}>
         Stage draft
       </Button>
     </form>

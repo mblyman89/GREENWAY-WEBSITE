@@ -35,8 +35,27 @@ export type NonCannabisProduct = {
   status: "draft" | "active" | "archived";
   notes: string | null;
   kb_category_slug: string | null;
+  /** Manufacturer UPC/EAN when the item ships with one (0111). */
+  barcode: string | null;
+  /** Reorder minimum — 0 = untracked (0111). */
+  reorder_point: number;
+  /** Suggested order quantity when at/below the minimum (0111). */
+  reorder_qty: number;
+  /** Shelf/bin location, free text (0111). */
+  location: string | null;
   created_at: string;
   updated_at: string;
+};
+
+/** One append-only quantity-change ledger row (0111). */
+export type NonCannabisAdjustment = {
+  id: string;
+  product_id: string;
+  qty_delta: number;
+  reason: string;
+  note: string | null;
+  actor_id: string | null;
+  created_at: string;
 };
 
 export type NonCannabisDraftInput = {
@@ -50,6 +69,11 @@ export type NonCannabisDraftInput = {
   qty_on_hand?: number;
   notes?: string | null;
   kb_category_slug?: string | null;
+  /** Manufacturer UPC/EAN (validated by the caller; null = print SKU label). */
+  barcode?: string | null;
+  reorder_point?: number;
+  reorder_qty?: number;
+  location?: string | null;
   /** Optional manual name override; when absent we build from parts. */
   nameOverride?: string | null;
 };
@@ -140,30 +164,143 @@ export async function createNonCannabisProduct(
   if (!nameOk) return { ok: false, error: `Name invalid: ${nameIssues.join(" ")}` };
 
   const gender = input.gender === "male" || input.gender === "female" ? input.gender : null;
-  const { data, error } = await admin
+  const baseRow = {
+    sku,
+    name,
+    brand: (input.brand ?? "").trim() || null,
+    type: input.type,
+    size: (input.size ?? "").trim() || null,
+    gender,
+    color: (input.color ?? "").trim() || null,
+    price_minor_units: Math.max(0, Math.round(input.price_minor_units ?? 0)),
+    cost_minor_units: Math.max(0, Math.round(input.cost_minor_units ?? 0)),
+    qty_on_hand: Math.max(0, Math.round(input.qty_on_hand ?? 0)),
+    status,
+    notes: (input.notes ?? "").trim() || null,
+    kb_category_slug: (input.kb_category_slug ?? "").trim() || null,
+    created_by: actorId,
+    updated_by: actorId,
+  };
+  // 0111 columns — included first; if the migration hasn't been applied yet we
+  // retry with the base row so intake never breaks pre-migration.
+  const opsRow = {
+    ...baseRow,
+    barcode: (input.barcode ?? "").trim() || null,
+    reorder_point: Math.max(0, Math.round(input.reorder_point ?? 0)),
+    reorder_qty: Math.max(0, Math.round(input.reorder_qty ?? 0)),
+    location: (input.location ?? "").trim() || null,
+  };
+
+  let { data, error } = await admin
     .from("noncannabis_products")
-    .insert({
-      sku,
-      name,
-      brand: (input.brand ?? "").trim() || null,
-      type: input.type,
-      size: (input.size ?? "").trim() || null,
-      gender,
-      color: (input.color ?? "").trim() || null,
-      price_minor_units: Math.max(0, Math.round(input.price_minor_units ?? 0)),
-      cost_minor_units: Math.max(0, Math.round(input.cost_minor_units ?? 0)),
-      qty_on_hand: Math.max(0, Math.round(input.qty_on_hand ?? 0)),
-      status,
-      notes: (input.notes ?? "").trim() || null,
-      kb_category_slug: (input.kb_category_slug ?? "").trim() || null,
-      created_by: actorId,
-      updated_by: actorId,
-    })
+    .insert(opsRow)
     .select("id")
     .single();
+  if (error && /column|schema/i.test(error.message)) {
+    ({ data, error } = await admin
+      .from("noncannabis_products")
+      .insert(baseRow)
+      .select("id")
+      .single());
+  }
 
   if (error) return { ok: false, error: error.message };
   return { ok: true, id: (data as { id: string }).id, sku, name };
+}
+
+/* ------------------------------------------------------------------ *
+ *  Adjustment ledger (0111) — append-only quantity changes
+ * ------------------------------------------------------------------ */
+
+/**
+ * Post a quantity adjustment: inserts an append-only ledger row AND updates
+ * qty_on_hand. The caller validates reason/delta/note with
+ * validateMerchAdjustment BEFORE calling (single source of truth in the pure
+ * core). Re-reads the product server-side so stale forms can't oversubtract.
+ */
+export async function createNonCannabisAdjustment(
+  input: { productId: string; qtyDelta: number; reason: string; note?: string | null },
+  actorId: string | null,
+): Promise<{ ok: true; newQty: number } | { ok: false; error: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "supabase-not-configured" };
+  const admin = createSupabaseAdminClient();
+
+  const { data: product } = await admin
+    .from("noncannabis_products")
+    .select("id, qty_on_hand")
+    .eq("id", input.productId)
+    .maybeSingle();
+  if (!product) return { ok: false, error: "Product not found." };
+
+  const current = (product as { qty_on_hand: number }).qty_on_hand ?? 0;
+  const next = current + input.qtyDelta;
+  if (next < 0) {
+    return { ok: false, error: `That would take on-hand below zero (${current} on hand).` };
+  }
+
+  const { error: insErr } = await admin.from("noncannabis_adjustments").insert({
+    product_id: input.productId,
+    qty_delta: input.qtyDelta,
+    reason: input.reason,
+    note: (input.note ?? "").trim() || null,
+    actor_id: actorId,
+  });
+  if (insErr) return { ok: false, error: insErr.message };
+
+  const { error: updErr } = await admin
+    .from("noncannabis_products")
+    .update({ qty_on_hand: next, updated_by: actorId })
+    .eq("id", input.productId);
+  if (updErr) return { ok: false, error: updErr.message };
+
+  return { ok: true, newQty: next };
+}
+
+/** Recent adjustments (default 30 days), newest first. */
+export async function listNonCannabisAdjustments(opts?: {
+  days?: number;
+  productId?: string;
+  limit?: number;
+}): Promise<NonCannabisAdjustment[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  const admin = createSupabaseAdminClient();
+  const days = Math.max(1, Math.floor(opts?.days ?? 30));
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  let query = admin
+    .from("noncannabis_adjustments")
+    .select("*")
+    .gte("created_at", since)
+    .order("created_at", { ascending: false })
+    .limit(Math.max(1, Math.floor(opts?.limit ?? 200)));
+  if (opts?.productId) query = query.eq("product_id", opts.productId);
+  const { data } = await query;
+  return (data as NonCannabisAdjustment[] | null) ?? [];
+}
+
+/**
+ * Set the manufacturer barcode / reorder settings / location on a product
+ * (0111 columns). Pass null to clear the barcode. The caller validates the
+ * barcode check digit BEFORE calling.
+ */
+export async function updateNonCannabisOps(
+  id: string,
+  fields: {
+    barcode?: string | null;
+    reorder_point?: number;
+    reorder_qty?: number;
+    location?: string | null;
+  },
+  actorId: string | null,
+): Promise<{ ok: boolean; error?: string }> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "supabase-not-configured" };
+  const admin = createSupabaseAdminClient();
+  const patch: Record<string, unknown> = { updated_by: actorId };
+  if ("barcode" in fields) patch.barcode = (fields.barcode ?? "").trim() || null;
+  if (fields.reorder_point != null) patch.reorder_point = Math.max(0, Math.round(fields.reorder_point));
+  if (fields.reorder_qty != null) patch.reorder_qty = Math.max(0, Math.round(fields.reorder_qty));
+  if ("location" in fields) patch.location = (fields.location ?? "").trim() || null;
+  const { error } = await admin.from("noncannabis_products").update(patch).eq("id", id);
+  return error ? { ok: false, error: error.message } : { ok: true };
 }
 
 /** Confirm a draft -> active (staff action). */

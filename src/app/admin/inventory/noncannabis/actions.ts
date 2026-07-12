@@ -3,13 +3,21 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
+import { recordAudit } from "@/lib/auth/audit";
 import {
   createNonCannabisProduct,
   activateNonCannabisProduct,
   archiveNonCannabisProduct,
+  createNonCannabisAdjustment,
+  getNonCannabisProduct,
   previewSkuAndName,
+  updateNonCannabisOps,
   type NonCannabisDraftInput,
 } from "@/lib/noncannabis/store";
+import {
+  validateMerchAdjustment,
+  validateRetailBarcode,
+} from "@/lib/noncannabis/merch-intel-core";
 
 /** Parse a dollar string ("25", "25.00", "$25") into integer minor units. */
 function dollarsToMinor(raw: FormDataEntryValue | null): number {
@@ -37,6 +45,10 @@ function draftFromForm(formData: FormData): NonCannabisDraftInput {
     qty_on_hand: intVal(formData.get("qty")),
     notes: String(formData.get("notes") ?? "").trim() || null,
     kb_category_slug: String(formData.get("kb_category_slug") ?? "").trim() || null,
+    barcode: String(formData.get("barcode") ?? "").trim() || null,
+    reorder_point: intVal(formData.get("reorder_point")),
+    reorder_qty: intVal(formData.get("reorder_qty")),
+    location: String(formData.get("location") ?? "").trim() || null,
     nameOverride: String(formData.get("name_override") ?? "").trim() || null,
   };
 }
@@ -46,6 +58,15 @@ export async function createNonCannabisDraftAction(formData: FormData) {
   const session = await requirePermission("inventory.manage");
   const input = draftFromForm(formData);
   if (!input.type) redirect("/admin/inventory/noncannabis?error=type");
+  // Dual-identifier rule: a manufacturer barcode is optional, but when given
+  // it MUST pass the GS1 check digit so typos never enter the catalog.
+  if ((input.barcode ?? "").trim()) {
+    const check = validateRetailBarcode(input.barcode);
+    if (!check.ok) {
+      redirect(`/admin/inventory/noncannabis?error=${encodeURIComponent(check.error)}`);
+    }
+    input.barcode = check.normalized;
+  }
   const res = await createNonCannabisProduct(input, session.userId, "draft");
   revalidatePath("/admin/inventory/noncannabis");
   if (!res.ok) {
@@ -68,6 +89,113 @@ export async function archiveNonCannabisAction(formData: FormData) {
   if (id) await archiveNonCannabisProduct(id, session.userId);
   revalidatePath("/admin/inventory/noncannabis");
   redirect("/admin/inventory/noncannabis?archived=1");
+}
+
+/**
+ * Post a quantity adjustment (Task M). Adjustments live ON this page — plain
+ * retail rules, no CCRS hoops: pick a reason, sign the note when it's theft/
+ * other, never go below zero. Every change lands in the append-only ledger.
+ */
+export async function adjustNonCannabisAction(formData: FormData) {
+  const session = await requirePermission("inventory.manage");
+  const productId = String(formData.get("product_id") ?? "");
+  const reason = String(formData.get("reason") ?? "");
+  const note = String(formData.get("note") ?? "").trim() || null;
+  const direction = String(formData.get("direction") ?? "remove");
+  const units = intVal(formData.get("units"));
+  if (!productId) redirect("/admin/inventory/noncannabis?error=missing-product");
+
+  const product = await getNonCannabisProduct(productId);
+  if (!product) redirect("/admin/inventory/noncannabis?error=product-not-found");
+
+  const qtyDelta = direction === "add" ? units : -units;
+  const check = validateMerchAdjustment({
+    reason,
+    qtyDelta,
+    note,
+    currentQty: product.qty_on_hand,
+  });
+  if (!check.ok) {
+    redirect(`/admin/inventory/noncannabis?error=${encodeURIComponent(check.error)}`);
+  }
+
+  const res = await createNonCannabisAdjustment(
+    { productId, qtyDelta, reason, note },
+    session.userId,
+  );
+  if (!res.ok) {
+    redirect(`/admin/inventory/noncannabis?error=${encodeURIComponent(res.error)}`);
+  }
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "noncannabis.adjust",
+    entityType: "noncannabis_products",
+    entityId: productId,
+    before: { qty_on_hand: product.qty_on_hand },
+    after: { qty_on_hand: res.newQty, qty_delta: qtyDelta, reason, note },
+  });
+  revalidatePath("/admin/inventory/noncannabis");
+  redirect(`/admin/inventory/noncannabis?adjusted=${encodeURIComponent(product.sku)}`);
+}
+
+/**
+ * Save barcode / reorder point / reorder qty / location for a product.
+ * The barcode must pass the GS1 check digit (or be blank to clear it and
+ * fall back to the in-house SKU label).
+ */
+export async function updateNonCannabisOpsAction(formData: FormData) {
+  const session = await requirePermission("inventory.manage");
+  const productId = String(formData.get("product_id") ?? "");
+  if (!productId) redirect("/admin/inventory/noncannabis?error=missing-product");
+
+  const product = await getNonCannabisProduct(productId);
+  if (!product) redirect("/admin/inventory/noncannabis?error=product-not-found");
+
+  const rawBarcode = String(formData.get("barcode") ?? "").trim();
+  let barcode: string | null = null;
+  if (rawBarcode) {
+    const check = validateRetailBarcode(rawBarcode);
+    if (!check.ok) {
+      redirect(`/admin/inventory/noncannabis?error=${encodeURIComponent(check.error)}`);
+    }
+    barcode = check.normalized;
+  }
+
+  const res = await updateNonCannabisOps(
+    productId,
+    {
+      barcode,
+      reorder_point: intVal(formData.get("reorder_point")),
+      reorder_qty: intVal(formData.get("reorder_qty")),
+      location: String(formData.get("location") ?? "").trim() || null,
+    },
+    session.userId,
+  );
+  if (!res.ok) {
+    redirect(`/admin/inventory/noncannabis?error=${encodeURIComponent(res.error ?? "save-failed")}`);
+  }
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "noncannabis.ops_update",
+    entityType: "noncannabis_products",
+    entityId: productId,
+    before: {
+      barcode: product.barcode,
+      reorder_point: product.reorder_point,
+      reorder_qty: product.reorder_qty,
+      location: product.location,
+    },
+    after: {
+      barcode,
+      reorder_point: intVal(formData.get("reorder_point")),
+      reorder_qty: intVal(formData.get("reorder_qty")),
+      location: String(formData.get("location") ?? "").trim() || null,
+    },
+  });
+  revalidatePath("/admin/inventory/noncannabis");
+  redirect(`/admin/inventory/noncannabis?ops=${encodeURIComponent(product.sku)}`);
 }
 
 /** Preview the SKU + convention name for the current form (no write). */
