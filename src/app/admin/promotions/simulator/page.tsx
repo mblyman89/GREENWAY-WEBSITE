@@ -4,7 +4,7 @@ import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { Badge, Button, Card } from "@/components/admin/ui";
 import { getPublishedVersion, getVersionItems } from "@/lib/pos/menu-version";
-import { loadActiveRules } from "@/lib/promotions/discount-engine";
+import { loadActiveRules, loadProductCosts } from "@/lib/promotions/discount-engine";
 import { SimulatorClient, type MenuPick } from "./simulator-client";
 
 export const dynamic = "force-dynamic";
@@ -17,7 +17,7 @@ export default async function PromotionSimulatorPage() {
   const version = await getPublishedVersion();
   let menu: MenuPick[] = [];
   if (version) {
-    const items = await getVersionItems(version.id);
+    const [items, costs] = await Promise.all([getVersionItems(version.id), loadProductCosts()]);
     menu = items
       .filter((i) => !i.hidden)
       .map((i) => ({
@@ -28,6 +28,7 @@ export default async function PromotionSimulatorPage() {
         categories: (i.filter_categories?.length ? i.filter_categories : [i.category]).map((c) => String(c).toLowerCase()),
         priceMinorUnits: i.price_minor_units,
         variantLabel: i.variants?.[0]?.label ?? null,
+        costMinorUnits: costs.get(i.source_item_id) ?? null,
       }));
   }
 
@@ -55,8 +56,9 @@ export default async function PromotionSimulatorPage() {
           steps={[
             "Build a sample basket from your published menu on the left.",
             "The right side shows the authoritative per-item discount the POS engine applies using the promotions that are active right now — the same engine the cart uses.",
-            "Use it to validate a new promotion (percent, fixed, BOGO, quantity/weight/spend tiers, or basket deals) before relying on it at the register.",
-            "By default each item keeps the single best deal (best-deal-wins). Promotions marked stackable combine.",
+            "Use it to validate a new promotion (percent, fixed, BOGO, quantity/weight/spend tiers, basket deals, or either/or bundles) before relying on it at the register.",
+            "Each item keeps the single best deal (best-deal-wins). Promotions NEVER stack.",
+            "A shield marker on a line means the CCRS cost floor limited the discount — the price can never fall below the product's cost of acquisition.",
           ]}
         />
 
@@ -67,9 +69,8 @@ export default async function PromotionSimulatorPage() {
               <span className="text-sm text-stone-500">None active. Publish a promotion to see it here.</span>
             ) : (
               rules.map((r) => (
-                <Badge key={r.id} tone={r.stackable ? "gold" : "green"}>
+                <Badge key={r.id} tone="green">
                   {r.title}
-                  {r.stackable ? " · stacks" : ""}
                 </Badge>
               ))
             )}

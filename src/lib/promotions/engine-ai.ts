@@ -56,7 +56,11 @@ export type EngineConfigDraft = {
   // Basket top-item.
   basketTopPercent: number;
   basketRestPercent: number;
-  stackable: boolean;
+  // Either/or: flat percent OR bundle N-for-M, whichever saves the customer
+  // LESS (store-advantaged, e.g. Doobie Tuesday).
+  eitherOrFlatPercent: number;
+  eitherOrN: number;
+  eitherOrM: number;
   summary: string;
 };
 
@@ -91,7 +95,9 @@ const draftSchema = defineSchema<EngineConfigDraft>("promo_engine_config", {
   basketM: num("Basket 'buy N for M': M. 0 if not applicable.", 24),
   basketTopPercent: pct("Basket top-item: percent off the single most expensive item. 0 if n/a."),
   basketRestPercent: pct("Basket top-item: percent off the remaining items. 0 if n/a."),
-  stackable: { kind: "boolean", description: "Whether this promotion may stack on top of other promotions." },
+  eitherOrFlatPercent: pct("Either/or: the flat percent option (e.g. 20 for '20% off OR 4 for 3'). 0 if n/a."),
+  eitherOrN: num("Either/or bundle: buy N. 0 if n/a.", 24),
+  eitherOrM: num("Either/or bundle: pay for M (M < N). 0 if n/a.", 24),
   summary: { kind: "string", description: "One-sentence plain-English restatement for the manager to confirm.", maxLength: 240 },
 });
 
@@ -108,16 +114,26 @@ export function draftToEngineConfig(d: EngineConfigDraft): EngineConfig {
     qtyTiers: tiers([[d.qty1At, d.qty1Pct], [d.qty2At, d.qty2Pct], [d.qty3At, d.qty3Pct]]),
     weightTiers: tiers([[d.wt1At, d.wt1Pct], [d.wt2At, d.wt2Pct], [d.wt3At, d.wt3Pct]]),
     spendTiers: tiers([[d.spend1At, d.spend1Pct], [d.spend2At, d.spend2Pct], [d.spend3At, d.spend3Pct]]),
-    stackable: Boolean(d.stackable),
   };
   if (d.bogoBuyQty > 0 && d.bogoGetQty > 0) {
-    cfg.bogo = { buyQty: d.bogoBuyQty, getQty: d.bogoGetQty, getPercent: d.bogoGetPercent || 100 };
+    // Cannabis is never free (RCW 69.50.357) — cap the AI's "get" percent at 99.
+    cfg.bogo = {
+      buyQty: d.bogoBuyQty,
+      getQty: d.bogoGetQty,
+      getPercent: Math.min(99, d.bogoGetPercent || 99),
+    };
   }
   if (d.basketN > 0 && d.basketM > 0) {
     cfg.basketNforM = { n: d.basketN, m: d.basketM };
   }
   if (d.basketTopPercent > 0) {
     cfg.basketTopItem = { topPercent: d.basketTopPercent, restPercent: d.basketRestPercent };
+  }
+  if (d.eitherOrFlatPercent > 0 && d.eitherOrN >= 2 && d.eitherOrM >= 0 && d.eitherOrM < d.eitherOrN) {
+    cfg.eitherOr = {
+      flatPercent: Math.min(99, d.eitherOrFlatPercent),
+      bundle: { n: d.eitherOrN, m: d.eitherOrM },
+    };
   }
   return cfg;
 }
@@ -136,6 +152,8 @@ export async function draftEngineConfig(params: {
     "Translate the manager's description into the structured numeric tiers/fields. " +
     "Use ONLY the fields relevant to the chosen discount type and set the rest to 0. " +
     "Quantity tiers use item counts; weight tiers use GRAMS (1oz = 28g); spend tiers use CENTS ($50 = 5000). " +
+    "Cannabis can never be free (WA RCW 69.50.357) — percent-off values must be 99 or less. " +
+    "Promotions never stack: each item always receives only the single best deal. " +
     "Never invent products or brands. Output a DRAFT for the manager to confirm.";
 
   const user = [
@@ -146,9 +164,10 @@ export async function draftEngineConfig(params: {
     "- 'buy 2 save 15%, 4+ save 25%' -> qty1At 2 qty1Pct 15, qty2At 4 qty2Pct 25",
     "- 'quarter 15%, half 20%, ounce 30%' -> wt1At 7 wt1Pct 15, wt2At 14 wt2Pct 20, wt3At 28 wt3Pct 30",
     "- 'spend $50 15%, $100 20%, $150 30%' -> spend1At 5000 spend1Pct 15, spend2At 10000 spend2Pct 20, spend3At 15000 spend3Pct 30",
-    "- 'buy one get one free' -> bogoBuyQty 1 bogoGetQty 1 bogoGetPercent 100",
+    "- 'buy one get one' -> bogoBuyQty 1 bogoGetQty 1 bogoGetPercent 99 (cannabis is never free)",
     "- 'buy 3 for the price of 2' -> basketN 3 basketM 2",
     "- '30% off top item, 15% off the rest' -> basketTopPercent 30 basketRestPercent 15",
+    "- '20% off OR 4 for the price of 3, whichever applies' -> eitherOrFlatPercent 20 eitherOrN 4 eitherOrM 3",
   ].join("\n");
 
   const draft = await generateStructured<EngineConfigDraft>({

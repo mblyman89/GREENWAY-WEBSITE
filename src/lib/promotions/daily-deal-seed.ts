@@ -54,13 +54,12 @@ export const DAILY_DEAL_SEEDS: DailyDealSeed[] = [
     promoKey: "daily.tuesday",
     title: "Doobie Tuesday",
     description:
-      "Quantity-tiered savings on prerolls, blunts, and packs — buy 2+ to save, 4+ get 25%.",
+      "20% off prerolls, blunts, and packs — or buy 4 for the price of 3, mix and match (whichever applies, finalized in store).",
     weekday: 2,
     discountType: "multi_item_tier",
-    discountPercent: 25,
-    multiItemPercent: 25,
+    discountPercent: 20,
     perItemSale: false,
-    bonusNote: "buy 2+ to save",
+    bonusNote: "20% off · or 4 for 3",
     priority: 10,
     targetCategories: [
       "preroll",

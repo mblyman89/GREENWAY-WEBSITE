@@ -56,7 +56,7 @@ const previewSpecialCollections: Record<string, PreviewSpecialCollection> = {
   },
   "doobie-tuesday": {
     label: "Doobie Tuesday",
-    helper: "All prerolls, blunts, infused prerolls, and multi-packs are 20% off for 1–3 items. Buy 4 or more for 25% off in store.",
+    helper: "All prerolls, blunts, infused prerolls, and multi-packs are 20% off — or buy 4 for the price of 3, mix and match, finalized in store.",
     categories: ["preroll", "preroll-pack", "infused-preroll", "infused-preroll-pack"],
     maxPrice: 100,
     sortBy: "category",

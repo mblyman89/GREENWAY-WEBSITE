@@ -29,7 +29,29 @@ export type PosCartLine = {
   brand?: string | null;
   /** POS product key (matches PublishedPromotion.targetProductKeys). */
   productKey?: string | null;
+  /**
+   * Acquisition cost per unit (PRE-tax, minor units) when known. Because this
+   * engine's prices are also pre-tax, the CCRS cost floor here is simply the
+   * cost itself: "may not discount the sale price below the cost of
+   * acquisition" (CCRS Upload User Guide — see docs/PROMOTIONS_COMPLIANCE.md).
+   */
+  costMinorUnits?: number | null;
 };
+
+/**
+ * Clamp a pre-tax discounted unit price to the line's floors: never free
+ * (RCW 69.50.357 — at least 1 cent) and never below the acquisition cost
+ * when known. The floor is capped at the regular price so a cost anomaly
+ * can never RAISE a price.
+ */
+function clampPosUnit(line: PosCartLine, unitMinor: number): number {
+  const statutory = line.regularUnitMinor > 0 ? 1 : 0;
+  const cost =
+    line.costMinorUnits != null && line.costMinorUnits > 0
+      ? Math.min(line.costMinorUnits, line.regularUnitMinor)
+      : 0;
+  return Math.max(unitMinor, statutory, cost);
+}
 
 export type PosDiscountedLine = {
   lineId: string;
@@ -115,13 +137,13 @@ function promoUnitPrice(
     case "percent": {
       const pct = p.discountPercent;
       if (pct <= 0) return null;
-      const unit = Math.round(line.regularUnitMinor * (1 - pct / 100));
+      const unit = clampPosUnit(line, Math.round(line.regularUnitMinor * (1 - pct / 100)));
       return { unitMinor: unit, percent: pct, label: `${p.title} · ${pct}% off` };
     }
     case "fixed": {
       const off = p.discountFixed;
       if (off <= 0) return null;
-      const unit = Math.max(0, line.regularUnitMinor - off);
+      const unit = clampPosUnit(line, Math.max(0, line.regularUnitMinor - off));
       const pct = line.regularUnitMinor > 0 ? Math.round((1 - unit / line.regularUnitMinor) * 100) : 0;
       return { unitMinor: unit, percent: pct, label: `${p.title} · $${(off / 100).toFixed(2)} off` };
     }

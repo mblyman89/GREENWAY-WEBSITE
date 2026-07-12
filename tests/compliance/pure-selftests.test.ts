@@ -9,6 +9,7 @@
 import { describe, it, expect } from "vitest";
 import { __runOrderPricingTests } from "@/lib/orders/order-pricing-core";
 import { __runDiscountEngineTests } from "@/lib/promotions/discount-engine-core";
+import { __runPromoGuardTests } from "@/lib/promotions/promo-guard-core";
 import { __runSalesLimitTests } from "@/lib/compliance/sales-limits-core";
 import { __runSalesLimitGateTests } from "@/lib/compliance/sales-limit-gate-core";
 import { __runChunkedInTests } from "@/lib/supabase/chunked-in";
@@ -28,6 +29,9 @@ describe("embedded pure self-test suites", () => {
   });
   it("discount-engine-core (promotions engine)", () => {
     expect(() => __runDiscountEngineTests()).not.toThrow();
+  });
+  it("promo-guard-core (Task R: CCRS below-cost publish guard)", () => {
+    expect(() => __runPromoGuardTests()).not.toThrow();
   });
   it("sales-limits-core (WAC 314-55-095 buckets)", () => {
     expect(() => __runSalesLimitTests()).not.toThrow();

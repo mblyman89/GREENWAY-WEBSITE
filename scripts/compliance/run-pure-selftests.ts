@@ -6,6 +6,7 @@
  */
 import { __runOrderPricingTests } from "../../src/lib/orders/order-pricing-core";
 import { __runDiscountEngineTests } from "../../src/lib/promotions/discount-engine-core";
+import { __runPromoGuardTests } from "../../src/lib/promotions/promo-guard-core";
 import { __runSalesLimitTests } from "../../src/lib/compliance/sales-limits-core";
 import { __runSalesLimitGateTests } from "../../src/lib/compliance/sales-limit-gate-core";
 import { __runChunkedInTests } from "../../src/lib/supabase/chunked-in";
@@ -18,6 +19,7 @@ import { __runAtRestCryptoTests } from "../../src/lib/security/at-rest-crypto";
 async function main() {
   __runOrderPricingTests();
   __runDiscountEngineTests();
+  __runPromoGuardTests();
   __runSalesLimitTests();
   __runSalesLimitGateTests();
   await __runChunkedInTests();

@@ -187,14 +187,14 @@ export function getActiveMenuDiscount(
     }
     case "tuesday": {
       if (!isTuesdayDoobieItem(item)) return undefined;
-      // Quantity-tiered (2+ = 15%, 4+ = 25%): a single preroll earns nothing, so
-      // the card shows ONLY an informational note — the real discount is applied
-      // in the cart once the qty threshold is reached.
+      // Task R: 20% off OR buy 4 for the price of 3, mix & match — the exact
+      // charge depends on the whole basket (the 4-for-3 option spreads the
+      // savings), so the card shows the 20% headline + a note and the cart
+      // remains the source of truth.
       return buildDiscount(item, {
         label: "Doobie Tuesday",
-        discountPercent: 25,
-        multiItemDiscountPercent: 25,
-        bonusNote: "buy 2+ to save",
+        discountPercent: 20,
+        bonusNote: "or 4 for the price of 3",
         perItemSalePrice: false,
       });
     }

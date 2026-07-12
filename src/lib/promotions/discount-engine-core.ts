@@ -3,38 +3,55 @@
  *
  * POS-GRADE GENERIC DISCOUNT ENGINE (pure — no React, no DB, no server-only).
  *
- * Slice 39 generalises the hard-coded weekday cart engine in
+ * Slice 39 generalised the hard-coded weekday cart engine in
  * src/lib/specials/cart-discount.ts into a single, data-driven engine that can
  * evaluate ANY promotion (its discount_type + a structured `config`) against a
  * cart and produce the AUTHORITATIVE per-line discount — exactly the way a real
  * point-of-sale register applies deals.
  *
+ * Task R hardened it to the CCRS Upload User Guide's discount rules (see
+ * docs/PROMOTIONS_COMPLIANCE.md — every rule below was verified, not guessed):
+ *
+ *  1. COST FLOOR (hard rule): "may not discount the sale price below the cost
+ *     of acquisition" (CCRS guide, Sale.csv Discount field; RCW 69.50.357).
+ *     Lines may carry `costMinorUnits` (pre-tax acquisition cost). Every
+ *     mechanic clamps the discounted unit price to
+ *     ceil(cost × tax-inclusive divisor) — cannabis 1.463, non-cannabis 1.093 —
+ *     rounded UP so revenue can never round below cost. Blended/spread
+ *     mechanics clamp AFTER blending. When cost is unknown, the statutory
+ *     positive floor still applies (cannabis is never free; 99% percent cap).
+ *  2. NO STACKING (owner hard block): each cart line receives EXACTLY ONE
+ *     promotion — the highest savings; priority breaks ties. The former
+ *     opt-in `stackable` flag was removed and legacy configs are ignored.
+ *  3. STORE-ADVANTAGED conventions: percent spreads round DOWN to whole
+ *     percents, group counts round DOWN, cost floors round UP, and the
+ *     either/or mechanic picks the option with the SMALLER total savings when
+ *     both qualify (deterministic and identical for every customer, so it
+ *     remains "available to all who meet the discount conditions").
+ *  4. Bundle deals (basket N-for-M and either/or bundles) SPREAD the savings:
+ *     the cheapest (N−M) units per full group set the savings target, which is
+ *     converted to an equivalent whole-number percent of the eligible basket
+ *     and applied across ALL eligible lines — matching the live checkout
+ *     engine's Ice Cream Sunday behaviour, so no unit is ever free.
+ *
  * Design goals (grounded in the existing data + behaviour):
  *  - The seven discount_types from migration 0006 are all handled here:
  *      percent, fixed, bogo, threshold_spend, multi_item_tier, weight_tier, basket.
  *  - Tier breakpoints live in `config` (see EngineConfig) so staff can edit them
- *    without code. DEFAULTS exactly match the current hard-coded cart engine
- *    (Ounce Friday 7/14/28g → 15/20/30; Doobie Tuesday 2+→15 / 4+→25; Wax
- *    Wednesday $50/$100/$150 → 15/20/30; Super Saturday 30% top item + 15%;
- *    Ice Cream Sunday 3-for-2) so migrated promos behave identically.
- *  - EXCLUSIVITY: like a POS, by default each cart line keeps the SINGLE best
- *    deal (highest savings) among all matching promotions ("best-deal-wins").
- *    A promotion may opt into stacking via config.stackable=true.
+ *    without code.
+ *  - EXCLUSIVITY: each cart line keeps the SINGLE best deal (best-deal-wins).
  *  - Targets minus exclusions decide which lines a promotion can touch; merch /
  *    accessories never receive cannabis deals unless explicitly targeted.
  *
- * This module is unit-tested via __runDiscountEngineTests() and is the planned
- * single source of truth the storefront/cart, checkout, and the admin
- * simulator all consume.
- *
- * COMPLIANCE (GAP H-3, RCW 69.50.357 / WAC 314-55-155): cannabis product may
- * never be given away. Every mechanic in this engine clamps discounted
- * cannabis unit prices to a positive floor: percent discounts cap at 99% for
- * cannabis targets, BOGO "get 100% off" resolves to 99% for cannabis, and
- * basket N-for-M distributes savings without letting any unit reach $0. True
- * freebies remain possible ONLY for merch/accessories/paraphernalia.
+ * This module is unit-tested via __runDiscountEngineTests() and is the single
+ * source of truth the admin simulator consumes (checkout uses the parallel
+ * weekday engine in src/lib/specials/cart-discount.ts with the same floors).
  */
-import { clampCannabisUnitPrice } from "@/lib/orders/order-pricing-core";
+import {
+  clampCannabisUnitPrice,
+  TAX_INCLUSIVE_DIVISOR,
+  NON_CANNABIS_TAX_INCLUSIVE_DIVISOR,
+} from "@/lib/orders/order-pricing-core";
 
 export type DiscountType =
   | "percent"
@@ -58,6 +75,12 @@ export type EngineCartLine = {
   productKey?: string | null;
   /** Variant label, e.g. "3.5g", "1oz" — used by weight tiers. */
   variantLabel?: string | null;
+  /**
+   * Acquisition cost per unit, PRE-TAX vendor cost in minor units, when known
+   * (weighted-average lot cost). Drives the CCRS cost floor. Null/undefined =
+   * unknown → statutory floor only.
+   */
+  costMinorUnits?: number | null;
 };
 
 /** Normalised rule the engine consumes (derived from a PublishedPromotion). */
@@ -70,8 +93,6 @@ export type EngineRule = {
   /** Fixed amount off per unit, minor units (discount_type='fixed'). */
   discountFixed: number;
   priority: number;
-  /** When true, this promotion may stack on top of others (default false). */
-  stackable: boolean;
   storewide: boolean;
   targetCategories: string[];
   targetBrands: string[];
@@ -95,12 +116,16 @@ export type EngineConfig = {
   spendTiers?: Tier[];
   /** BOGO: buy `buyQty`, get `getQty` at `getPercent`% off (cheapest discounted). */
   bogo?: { buyQty: number; getQty: number; getPercent: number };
-  /** Basket: "buy N for the price of M" (basket: cheapest become free/discounted). */
+  /** Basket: "buy N for the price of M" (savings spread as an equivalent percent). */
   basketNforM?: { n: number; m: number };
   /** Basket: top item at `topPercent`, the rest at `restPercent` (Super Saturday). */
   basketTopItem?: { topPercent: number; restPercent: number };
-  /** Whether the promotion stacks with others. */
-  stackable?: boolean;
+  /**
+   * Either/or (Doobie Tuesday): a flat percent OR a bundle "buy N for M",
+   * whichever yields the SMALLER total savings when both qualify
+   * (store-advantaged; deterministic and uniform for every customer).
+   */
+  eitherOr?: { flatPercent: number; bundle: { n: number; m: number } };
 };
 
 export type EngineLineResult = {
@@ -112,6 +137,14 @@ export type EngineLineResult = {
   appliedRuleId?: string;
   appliedLabel?: string;
   appliedPercent: number;
+  /** Tax-inclusive cost floor for this line (0 = unknown cost). */
+  costFloorMinorUnits: number;
+  /**
+   * True when a promotion applied AND the final unit price sits AT the cost
+   * floor — the CCRS clamp (may not discount below the cost of acquisition)
+   * limited the advertised deal on this line.
+   */
+  atCostFloor: boolean;
 };
 
 export type EngineResult = {
@@ -130,8 +163,8 @@ function round(n: number): number {
 }
 
 // ---------------------------------------------------------------------------
-// Default tier breakpoints — EXACTLY mirror src/lib/specials/cart-discount.ts
-// so existing seeded promotions behave identically when config is empty.
+// Default tier breakpoints — mirror src/lib/specials/cart-discount.ts so
+// seeded promotions behave identically when config is empty.
 // ---------------------------------------------------------------------------
 export const DEFAULT_QTY_TIERS: Tier[] = [
   { at: 2, percent: 15 },
@@ -172,15 +205,45 @@ function isMerch(line: EngineCartLine): boolean {
   return line.categories.some((c) => MERCH_TOKENS.includes(c.toLowerCase()));
 }
 
+// ---------------------------------------------------------------------------
+// COST FLOOR (CCRS: never discount below the cost of acquisition)
+// ---------------------------------------------------------------------------
+
 /**
- * Clamp a discounted unit price to the cannabis price floor (RCW 69.50.357).
- * Engine lines carry multiple category tokens, so the shared single-category
- * clamp is applied with a representative token: merch lines stay clampable to
- * $0, everything else is cannabis and keeps a positive price.
+ * The tax-INCLUSIVE unit-price floor implied by a pre-tax acquisition cost.
+ * ceil() so the pre-tax revenue backed out of the charged price can never
+ * round below cost (store-advantaged direction). 0 when cost is unknown.
+ */
+export function costFloorMinorUnits(
+  costMinorUnits: number | null | undefined,
+  merch: boolean,
+): number {
+  if (costMinorUnits == null || !Number.isFinite(costMinorUnits) || costMinorUnits <= 0) return 0;
+  const divisor = merch ? NON_CANNABIS_TAX_INCLUSIVE_DIVISOR : TAX_INCLUSIVE_DIVISOR;
+  return Math.ceil(costMinorUnits * divisor);
+}
+
+/** Convenience: the effective floor for an engine line (never above regular). */
+export function lineCostFloor(line: EngineCartLine): number {
+  const floor = costFloorMinorUnits(line.costMinorUnits, isMerch(line));
+  // If a product's REGULAR price is already at/below cost, that is a pricing
+  // problem the below-cost audit surfaces — the engine never RAISES a price
+  // above regular, it just refuses to discount.
+  return Math.min(floor, Math.max(0, line.regularPriceMinorUnits));
+}
+
+/**
+ * Clamp a discounted unit price to BOTH floors:
+ *  - statutory positive floor for cannabis (RCW 69.50.357 — never free), and
+ *  - the acquisition-cost floor when the line's cost is known (CCRS guide).
  */
 function clampEngineUnit(line: EngineCartLine, unitPrice: number): number {
-  const category = isMerch(line) ? "merch" : "flower";
-  return clampCannabisUnitPrice(category, unitPrice, line.regularPriceMinorUnits);
+  const merch = isMerch(line);
+  const category = merch ? "merch" : "flower";
+  const statutory = clampCannabisUnitPrice(category, unitPrice, line.regularPriceMinorUnits);
+  // Cannabis with regular <= 0 is unsellable data; leave it for the sellable gate.
+  if (!merch && line.regularPriceMinorUnits <= 0) return statutory;
+  return Math.max(statutory, lineCostFloor(line));
 }
 
 function hasCi(list: string[], value: string | null | undefined): boolean {
@@ -223,6 +286,54 @@ function flatPercentDiscount(line: EngineCartLine, percent: number, label: strin
 }
 
 /**
+ * Bundle "buy N for the price of M" — the cheapest (N−M) units per full group
+ * set the savings target; the target is converted to an equivalent whole-number
+ * percent of the eligible basket (Math.floor — store-advantaged) and SPREAD
+ * across all eligible lines. Matches checkout's Ice Cream Sunday behaviour:
+ * every unit keeps a positive, above-cost price.
+ */
+function bundleSpreadDiscounts(
+  eligible: EngineCartLine[],
+  n: number,
+  m: number,
+  label: string,
+): Map<string, LineDiscount> {
+  const out = new Map<string, LineDiscount>();
+  const freePerGroup = Math.max(0, Math.floor(n) - Math.floor(m));
+  if (n < 2 || freePerGroup <= 0) return out;
+  const units: number[] = [];
+  let eligibleTotal = 0;
+  for (const l of eligible) {
+    eligibleTotal += l.regularPriceMinorUnits * l.quantity;
+    for (let i = 0; i < l.quantity; i += 1) units.push(l.regularPriceMinorUnits);
+  }
+  units.sort((a, b) => a - b);
+  const groups = Math.floor(units.length / Math.floor(n));
+  if (groups <= 0 || eligibleTotal <= 0) return out;
+  let targetSavings = 0;
+  for (let i = 0; i < groups * freePerGroup; i += 1) targetSavings += units[i];
+  // Equivalent basket-wide percent, floored (store-advantaged), capped at 99.
+  const percent = Math.min(99, Math.floor((targetSavings / eligibleTotal) * 100));
+  if (percent <= 0) return out;
+  for (const l of eligible) {
+    const d = flatPercentDiscount(l, percent, label);
+    out.set(l.lineId, { ...d, label: `${label} · ${Math.floor(n)} for ${Math.floor(m)} (${percent}% spread)` });
+  }
+  return out;
+}
+
+/** Total savings across a discount map (for either/or comparison). */
+function totalSavings(discounts: Map<string, LineDiscount>, lines: EngineCartLine[]): number {
+  let sum = 0;
+  for (const l of lines) {
+    const d = discounts.get(l.lineId);
+    if (!d) continue;
+    sum += Math.max(0, l.regularPriceMinorUnits - d.unitPrice) * l.quantity;
+  }
+  return sum;
+}
+
+/**
  * Compute one promotion's discounts across the cart. Returns line-level results
  * keyed by lineId (only matched lines that actually receive a discount).
  */
@@ -233,6 +344,28 @@ export function applyOnePromotion(
   const out = new Map<string, LineDiscount>();
   const eligible = lines.filter((l) => ruleMatchesLine(rule, l));
   if (eligible.length === 0) return out;
+
+  // Either/or overrides the base mechanic: flat % OR bundle N-for-M, whichever
+  // yields the SMALLER total savings when both qualify (store-advantaged).
+  if (rule.config.eitherOr) {
+    const { flatPercent, bundle } = rule.config.eitherOr;
+    const optionA = new Map<string, LineDiscount>();
+    if (flatPercent > 0) {
+      for (const l of eligible) optionA.set(l.lineId, flatPercentDiscount(l, flatPercent, rule.title));
+    }
+    const optionB = bundleSpreadDiscounts(eligible, bundle.n, bundle.m, rule.title);
+    const savingsA = totalSavings(optionA, eligible);
+    const savingsB = totalSavings(optionB, eligible);
+    if (savingsA <= 0 && savingsB <= 0) return out;
+    // Pick the option with the SMALLER positive savings; a zero-savings option
+    // never beats a positive one (the deal must actually apply).
+    let chosen: Map<string, LineDiscount>;
+    if (savingsA <= 0) chosen = optionB;
+    else if (savingsB <= 0) chosen = optionA;
+    else chosen = savingsA <= savingsB ? optionA : optionB;
+    for (const [k, v] of chosen.entries()) out.set(k, v);
+    return out;
+  }
 
   switch (rule.discountType) {
     case "percent": {
@@ -331,22 +464,12 @@ export function applyOnePromotion(
           }
         }
       } else {
-        // "buy N for the price of M" — cheapest (N-M) per group become free.
+        // "buy N for the price of M" — SPREAD as an equivalent percent across
+        // the eligible basket (the cheapest units set the savings; every unit
+        // keeps a positive, above-cost price). Matches checkout Sunday math.
         const cfg = rule.config.basketNforM ?? { n: 3, m: 2 };
-        const freePerGroup = Math.max(0, cfg.n - cfg.m);
-        const units: { lineId: string; price: number }[] = [];
-        for (const l of eligible) {
-          for (let i = 0; i < l.quantity; i += 1) units.push({ lineId: l.lineId, price: l.regularPriceMinorUnits });
-        }
-        units.sort((a, b) => a.price - b.price);
-        const groups = Math.floor(units.length / cfg.n);
-        const freeCount = groups * freePerGroup;
-        const savingsByLine = new Map<string, number>();
-        for (let i = 0; i < freeCount; i += 1) {
-          const u = units[i];
-          savingsByLine.set(u.lineId, (savingsByLine.get(u.lineId) ?? 0) + u.price);
-        }
-        blendSavings(eligible, savingsByLine, out, `${rule.title} · ${cfg.n} for ${cfg.m}`);
+        const spread = bundleSpreadDiscounts(eligible, cfg.n, cfg.m, rule.title);
+        for (const [k, v] of spread.entries()) out.set(k, v);
       }
       break;
     }
@@ -358,8 +481,9 @@ export function applyOnePromotion(
 
 /**
  * Distribute a per-line total-savings map into blended per-unit discounts.
- * COMPLIANCE: the blended unit price is clamped to the cannabis price floor so
- * no basket/BOGO mechanic can zero out a cannabis unit (RCW 69.50.357).
+ * COMPLIANCE: the blended unit price is clamped to the cannabis price floor AND
+ * the acquisition-cost floor, so no basket/BOGO mechanic can zero out a
+ * cannabis unit or take it below cost.
  */
 function blendSavings(
   eligible: EngineCartLine[],
@@ -381,7 +505,9 @@ function blendSavings(
 }
 
 // ---------------------------------------------------------------------------
-// Cart-level resolution across MANY promotions (POS exclusivity / stacking).
+// Cart-level resolution across MANY promotions.
+// NO STACKING (owner hard block): each line keeps exactly ONE promotion — the
+// highest savings; priority breaks ties. Legacy `stackable` configs are ignored.
 // ---------------------------------------------------------------------------
 export function computePromotions(
   lines: EngineCartLine[],
@@ -397,6 +523,8 @@ export function computePromotions(
       quantity: l.quantity,
       unitSavingsMinorUnits: 0,
       appliedPercent: 0,
+      costFloorMinorUnits: lineCostFloor(l),
+      atCostFloor: false,
     });
   }
 
@@ -412,21 +540,9 @@ export function computePromotions(
       const current = best.get(lineId)!;
       const newSavingsPerUnit = line.regularPriceMinorUnits - d.unitPrice;
 
-      if (rule.stackable && current.unitSavingsMinorUnits > 0) {
-        // Stack: apply this percentage on top of the already-discounted price.
-        // Clamped so stacked promos can never push a cannabis unit to $0.
-        const stackedUnit = clampEngineUnit(line, round(current.unitPriceMinorUnits * (1 - d.percent / 100)));
-        const totalSavingsUnit = line.regularPriceMinorUnits - stackedUnit;
-        best.set(lineId, {
-          ...current,
-          unitPriceMinorUnits: stackedUnit,
-          unitSavingsMinorUnits: totalSavingsUnit,
-          appliedRuleId: rule.id,
-          appliedLabel: `${current.appliedLabel ?? ""} + ${d.label}`.trim(),
-          appliedPercent: d.percent,
-        });
-      } else if (newSavingsPerUnit > current.unitSavingsMinorUnits) {
-        // Best-deal-wins (exclusive).
+      // Best-deal-wins (strictly exclusive — no stacking, ever).
+      if (newSavingsPerUnit > current.unitSavingsMinorUnits) {
+        const floor = current.costFloorMinorUnits;
         best.set(lineId, {
           ...current,
           unitPriceMinorUnits: d.unitPrice,
@@ -434,6 +550,7 @@ export function computePromotions(
           appliedRuleId: rule.id,
           appliedLabel: d.label,
           appliedPercent: d.percent,
+          atCostFloor: floor > 0 && d.unitPrice <= floor,
         });
       }
     }
@@ -494,7 +611,6 @@ export function __runDiscountEngineTests(): void {
     discountPercent: 0,
     discountFixed: 0,
     priority: 10,
-    stackable: false,
     storewide: false,
     targetCategories: [],
     targetBrands: [],
@@ -519,6 +635,13 @@ export function __runDiscountEngineTests(): void {
   expect("tier weight 28", tierPercent(28, DEFAULT_WEIGHT_TIERS) === 30);
   expect("tier spend 150", tierPercent(15000, DEFAULT_SPEND_TIERS) === 30);
 
+  // costFloorMinorUnits: ceil(cost × divisor), cannabis 1.463 / merch 1.093.
+  expect("cost floor cannabis", costFloorMinorUnits(1000, false) === 1463);
+  expect("cost floor cannabis ceil", costFloorMinorUnits(999, false) === Math.ceil(999 * 1.463));
+  expect("cost floor merch", costFloorMinorUnits(1000, true) === 1093);
+  expect("cost floor unknown", costFloorMinorUnits(null, false) === 0);
+  expect("cost floor zero", costFloorMinorUnits(0, false) === 0);
+
   // percent (Munchie Monday: 25% off edibles)
   {
     const rule = baseRule({ discountType: "percent", discountPercent: 25, targetCategories: ["edible-solid"] });
@@ -534,6 +657,35 @@ export function __runDiscountEngineTests(): void {
     expect("percent total savings", r.totalSavingsMinorUnits === 250);
   }
 
+  // COST FLOOR: 50% off a $20.00 flower unit that cost $8.00 pre-tax clamps to
+  // ceil(800 × 1.463) = 1171 — the sale never dips below acquisition cost.
+  {
+    const rule = baseRule({ discountType: "percent", discountPercent: 50, targetCategories: ["flower"] });
+    const lines: EngineCartLine[] = [
+      { lineId: "a", regularPriceMinorUnits: 2000, quantity: 1, categories: ["flower"], costMinorUnits: 800 },
+    ];
+    const r = computePromotions(lines, [rule]);
+    expect("cost floor clamps percent", r.lines[0].unitPriceMinorUnits === 1171);
+  }
+  // COST FLOOR on fixed discounts too.
+  {
+    const rule = baseRule({ discountType: "fixed", discountFixed: 1500, targetCategories: ["flower"] });
+    const lines: EngineCartLine[] = [
+      { lineId: "a", regularPriceMinorUnits: 2000, quantity: 1, categories: ["flower"], costMinorUnits: 800 },
+    ];
+    const r = computePromotions(lines, [rule]);
+    expect("cost floor clamps fixed", r.lines[0].unitPriceMinorUnits === 1171);
+  }
+  // COST FLOOR never RAISES a price above regular (regular below cost = audit's job).
+  {
+    const rule = baseRule({ discountType: "percent", discountPercent: 10, targetCategories: ["flower"] });
+    const lines: EngineCartLine[] = [
+      { lineId: "a", regularPriceMinorUnits: 1000, quantity: 1, categories: ["flower"], costMinorUnits: 2000 },
+    ];
+    const r = computePromotions(lines, [rule]);
+    expect("floor capped at regular", r.lines[0].unitPriceMinorUnits === 1000);
+  }
+
   // fixed
   {
     const rule = baseRule({ discountType: "fixed", discountFixed: 300, targetCategories: ["vape"] });
@@ -543,7 +695,7 @@ export function __runDiscountEngineTests(): void {
     expect("fixed total", r.totalSavingsMinorUnits === 600);
   }
 
-  // multi_item_tier (Doobie Tuesday): 4 prerolls → 25%
+  // multi_item_tier (default tiers): 4 prerolls → 25%
   {
     const rule = baseRule({ discountType: "multi_item_tier", targetCategories: ["preroll"] });
     const lines: EngineCartLine[] = [
@@ -558,6 +710,41 @@ export function __runDiscountEngineTests(): void {
     const lines: EngineCartLine[] = [{ lineId: "a", regularPriceMinorUnits: 500, quantity: 1, categories: ["preroll"] }];
     const r = computePromotions(lines, [rule]);
     expect("qtytier 1 => none", r.lines[0].unitPriceMinorUnits === 500);
+  }
+
+  // EITHER/OR (Doobie Tuesday): 20% flat OR 4-for-3, the SMALLER savings wins.
+  {
+    const rule = baseRule({
+      discountType: "multi_item_tier",
+      targetCategories: ["preroll"],
+      config: { eitherOr: { flatPercent: 20, bundle: { n: 4, m: 3 } } },
+    });
+    // qty 1: only the flat 20% qualifies.
+    const one = computePromotions(
+      [{ lineId: "a", regularPriceMinorUnits: 1000, quantity: 1, categories: ["preroll"] }],
+      [rule],
+    );
+    expect("eitherOr qty1 flat 20%", one.lines[0].unitPriceMinorUnits === 800);
+    // 4 equal $10 prerolls: flat 20% saves $8; 4-for-3 saves $10 → flat (store wins).
+    const four = computePromotions(
+      [{ lineId: "a", regularPriceMinorUnits: 1000, quantity: 4, categories: ["preroll"] }],
+      [rule],
+    );
+    expect("eitherOr equal prices picks flat", four.totalSavingsMinorUnits === 800);
+    // 3 × $20 + 1 × $2: flat saves $12.40; bundle saves $2 (cheapest) → bundle.
+    const mixed = computePromotions(
+      [
+        { lineId: "a", regularPriceMinorUnits: 2000, quantity: 3, categories: ["preroll"] },
+        { lineId: "b", regularPriceMinorUnits: 200, quantity: 1, categories: ["preroll"] },
+      ],
+      [rule],
+    );
+    // Bundle: target $2 of $62 → floor(3.22%) = 3% spread: a→1940 (×3), b→194.
+    expect("eitherOr cheap-unit picks bundle", mixed.totalSavingsMinorUnits < 1240);
+    expect(
+      "eitherOr bundle spreads across all lines",
+      mixed.lines.every((l) => l.unitSavingsMinorUnits > 0),
+    );
   }
 
   // weight_tier (Ounce Friday): 8 × 3.5g = 28g → 30%
@@ -604,6 +791,16 @@ export function __runDiscountEngineTests(): void {
     expect("bogo other full", r.lines.find((l) => l.lineId === "b")!.unitPriceMinorUnits === 2000);
     expect("bogo savings", r.totalSavingsMinorUnits === 990);
   }
+  // bogo cost floor: the discounted unit can never dip below acquisition cost.
+  {
+    const rule = baseRule({ discountType: "bogo", targetCategories: ["flower"], config: { bogo: { buyQty: 1, getQty: 1, getPercent: 100 } } });
+    const lines: EngineCartLine[] = [
+      { lineId: "a", regularPriceMinorUnits: 1000, quantity: 2, categories: ["flower"], costMinorUnits: 300 },
+    ];
+    const r = computePromotions(lines, [rule]);
+    // Floor = ceil(300 × 1.463) = 439 per unit; blended line total ≥ 878.
+    expect("bogo cost floor holds", r.lines[0].unitPriceMinorUnits >= 439);
+  }
 
   // bogo on MERCH: true freebies remain possible for non-cannabis goods.
   {
@@ -628,20 +825,33 @@ export function __runDiscountEngineTests(): void {
     expect("basket rest 15%", r.lines.find((l) => l.lineId === "a")!.unitPriceMinorUnits === 850);
   }
 
-  // basket N-for-M (Ice Cream Sunday): savings are BLENDED across the line so
-  // no unit is ever $0 — the customer pays ~2/3, every unit keeps a price.
+  // basket N-for-M (Ice Cream Sunday): the cheapest units' value becomes an
+  // equivalent whole-number percent SPREAD across all eligible lines
+  // (Math.floor — store-advantaged); no unit is ever $0. Matches checkout.
   {
     const rule = baseRule({ discountType: "basket", storewide: true, config: { basketNforM: { n: 3, m: 2 } } });
     const lines: EngineCartLine[] = [
       { lineId: "a", regularPriceMinorUnits: 1000, quantity: 3, categories: ["edible-solid"] },
     ];
     const r = computePromotions(lines, [rule]);
-    // 3 units, group savings 1000 → line total 2000 over 3 units → blended 667
-    // (×3 = 2001) → reported savings 999 after per-unit rounding.
-    expect("basket 3for2 savings", r.totalSavingsMinorUnits === 999);
+    // Target savings 1000 of 3000 → 33% spread → unit 670 → savings 990.
+    expect("basket 3for2 spread percent", r.lines[0].appliedPercent === 33);
+    expect("basket 3for2 savings", r.totalSavingsMinorUnits === 990);
     expect("basket 3for2 unit never $0", r.lines[0].unitPriceMinorUnits > 0);
   }
-  // basket N-for-M floor: single cheap cannabis line can never blend to $0.
+  // N-for-M spreads across ALL eligible lines, not just the cheapest one's line.
+  {
+    const rule = baseRule({ discountType: "basket", storewide: true, config: { basketNforM: { n: 3, m: 2 } } });
+    const lines: EngineCartLine[] = [
+      { lineId: "a", regularPriceMinorUnits: 3000, quantity: 2, categories: ["flower"] },
+      { lineId: "b", regularPriceMinorUnits: 900, quantity: 1, categories: ["preroll"] },
+    ];
+    const r = computePromotions(lines, [rule]);
+    // Target 900 of 6900 → floor(13.04) = 13% on every line.
+    expect("3for2 spread hits every line", r.lines.every((l) => l.unitSavingsMinorUnits > 0));
+    expect("3for2 store-advantaged floor pct", r.lines[0].appliedPercent === 13);
+  }
+  // basket N-for-M floor: a cheap cannabis basket can never blend to $0.
   {
     const rule = baseRule({ discountType: "basket", storewide: true, config: { basketNforM: { n: 3, m: 0 } } });
     const lines: EngineCartLine[] = [
@@ -649,6 +859,16 @@ export function __runDiscountEngineTests(): void {
     ];
     const r = computePromotions(lines, [rule]);
     expect("basket floor holds", r.lines[0].unitPriceMinorUnits > 0);
+  }
+  // basket N-for-M cost floor.
+  {
+    const rule = baseRule({ discountType: "basket", storewide: true, config: { basketNforM: { n: 3, m: 2 } } });
+    const lines: EngineCartLine[] = [
+      { lineId: "a", regularPriceMinorUnits: 1000, quantity: 3, categories: ["flower"], costMinorUnits: 500 },
+    ];
+    const r = computePromotions(lines, [rule]);
+    // Floor = ceil(500 × 1.463) = 732 > 670 spread price → clamped to 732.
+    expect("3for2 cost floor clamps", r.lines[0].unitPriceMinorUnits === 732);
   }
 
   // storewide skips merch
@@ -683,14 +903,16 @@ export function __runDiscountEngineTests(): void {
     expect("best deal rule id", r.lines[0].appliedRuleId === "r30");
   }
 
-  // stacking when opted in
+  // NO STACKING (hard block): two matching promos never combine — the line
+  // gets exactly one deal even when both target it.
   {
-    const r10 = baseRule({ id: "r10", title: "10%", discountType: "percent", discountPercent: 10, targetCategories: ["flower"], priority: 10, stackable: true });
-    const r20 = baseRule({ id: "r20", title: "20%", discountType: "percent", discountPercent: 20, targetCategories: ["flower"], priority: 5, stackable: true });
+    const r10 = baseRule({ id: "r10", title: "10%", discountType: "percent", discountPercent: 10, targetCategories: ["flower"], priority: 10 });
+    const r20 = baseRule({ id: "r20", title: "20%", discountType: "percent", discountPercent: 20, targetCategories: ["flower"], priority: 5 });
     const lines: EngineCartLine[] = [{ lineId: "a", regularPriceMinorUnits: 1000, quantity: 1, categories: ["flower"] }];
     const r = computePromotions(lines, [r10, r20]);
-    // 1000 -> 900 (10%) -> 720 (20% of 900).
-    expect("stack two", r.lines[0].unitPriceMinorUnits === 720);
+    // NOT 720 (stacked) — the single best deal (20%) applies.
+    expect("no stacking", r.lines[0].unitPriceMinorUnits === 800);
+    expect("no stacking single rule", r.lines[0].appliedRuleId === "r20");
   }
 
   console.log(`discount-engine: ${passed} passed, ${failed} failed`);

@@ -1688,3 +1688,54 @@ destruction waste-record + recall columns, vendor manifest columns,
 **Tests:** `tests/compliance/disposition-core.test.ts` (22 tests wiring both
 self-test suites + targeted assertions). Suite: **1162 passing** (was 1140).
 tsc + eslint clean. **Owner action: apply migration 0115.**
+
+## Shipped — Task R: Discounts & Promotions command center (PR #TBD)
+
+**What shipped:** the promotions program rebuilt as a professional command
+center with the CCRS cost floor enforced everywhere, the owner's set-in-stone
+daily deals wired store-advantaged, and a publish-time HARD BLOCK.
+
+**Verified ground truth (no guessing):** CCRS Upload User Guide (June 2025),
+Sale.csv `Discount` — a discount "must be available to all who meet the
+discount conditions and **may not discount the sale price below the cost of
+acquisition**"; RCW 69.50.357 (never free, $1,000/violation); WAC 314-55-018.
+Full reference: **`docs/PROMOTIONS_COMPLIANCE.md`**. Cannabis card prices are
+tax-inclusive, costs pre-tax ⇒ floor = `ceil(cost × 1.463)` (merch × 1.093),
+`Math.ceil` = store-advantaged; floor is capped at regular price so a cost
+anomaly can never RAISE a price.
+
+**Three enforcement layers:** (1) every engine clamps every mechanic at
+`max(statutory never-free floor, cost floor)` — checkout attaches
+weighted-average lot costs (same method as the COGS report) in the server
+reprice; (2) publish-time HARD BLOCK — `promo-guard-core.ts` (pure,
+self-tested) worst-cases each mechanic per product; `setPromotionStatusAction`
+refuses to publish and audits `promotion.publish_blocked`; (3) standing
+below-cost audit panel re-checks every published promo against the CURRENT
+menu + costs (drift after publish surfaces immediately).
+
+**Set-in-stone daily deals:** Tuesday = 20% off prerolls/blunts OR 4-for-3
+mix & match — the register picks WHICHEVER SAVES THE CUSTOMER LESS
+(store-advantaged, deterministic and uniform per CCRS "available to all");
+4-for-3 spreads the cheapest-unit-per-group savings across ALL eligible lines
+as an equivalent floor percent. Sunday 3-for-2 storewide uses the same spread
+math (cheapest unit sets the target). Copy updated across seeds, menu,
+specials pages. **No stacking, ever:** `stackable` removed from the engine —
+strictly best-deal-wins.
+
+**Command center (`/admin/promotions`):** stats (incl. below-cost hits +
+costed-product coverage), weekly strip, CCRS cost-floor audit panel, conflicts
+panel, drafts-only AI advisor (aggregates only), URL-driven filters
+(status/type/weekday/search) + 5 sort keys. Builder: full mechanics editor
+(qty/weight/spend tiers, BOGO ≤99%, basket N-for-M / top-item, either/or)
+persisted to `promotions.config` (existing 0006 column — **no new
+migration**); detail page shows a live pre-publish cost-floor check.
+Simulator: real costs attached, 🛡 cost-floor badges on clamped lines. AI
+mechanics drafter gains either/or + never-free/no-stacking guardrails.
+`auto-discount.ts` register helper also clamps at cost (pre-tax ⇒ floor =
+cost directly).
+
+**Tests:** parity tests rewritten for the new Tuesday either/or (incl. a
+cost-floor clamp case), `__runPromoGuardTests` + expanded
+`__runDiscountEngineTests` wired into `tests/compliance/pure-selftests.test.ts`
+and the local runner script. Suite: **1164 passing** (was 1162). tsc + eslint
+clean. No owner actions (costs flow from existing `inventory_lots`).
