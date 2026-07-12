@@ -12,7 +12,14 @@ import {
   deactivateTier,
   upsertPromotion,
   setPromotionActive,
+  getConfig,
 } from "@/lib/loyalty/loyalty-store";
+import { computeLoyaltyMetrics } from "@/lib/loyalty/loyalty-metrics";
+import {
+  generateLoyaltyAdvice,
+  isAiConfigured as isAdvisorAiConfigured,
+  type LoyaltyAdvice,
+} from "@/lib/loyalty/loyalty-advisor";
 import {
   parseConfigDraft,
   parseTierDraft,
@@ -217,4 +224,25 @@ export async function toggleLoyaltyPromotionAction(fd: FormData): Promise<Loyalt
   });
   revalidatePath("/admin/loyalty");
   return { ok: true };
+}
+
+// ── AI advisor (drafts-only, aggregates only) — Task S-a ────────────────────
+
+export type LoyaltyAdvisorResult =
+  | { ok: true; advice: LoyaltyAdvice }
+  | { ok: false; error: string };
+
+export async function generateLoyaltyAdviceAction(
+  question?: string,
+): Promise<LoyaltyAdvisorResult> {
+  await requirePermission("loyalty.view");
+  if (!isAdvisorAiConfigured) return { ok: false, error: "AI is not configured (set AI_API_KEY)." };
+  try {
+    const cfg = await getConfig();
+    const metrics = await computeLoyaltyMetrics(cfg.pointValueMinor);
+    const advice = await generateLoyaltyAdvice(metrics, question ?? null);
+    return { ok: true, advice };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Advisor failed." };
+  }
 }

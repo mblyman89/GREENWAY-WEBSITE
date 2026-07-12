@@ -6,6 +6,7 @@ import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { OrderStatusFlow } from "@/components/admin/orders/OrderStatusFlow";
 import { MedicalSaleSection } from "@/components/admin/orders/MedicalSaleSection";
+import { LoyaltySaleSection } from "@/components/admin/orders/LoyaltySaleSection";
 import { formatMinorCurrency } from "@/lib/leafly/format";
 import { getOrder } from "@/lib/orders/orders-store";
 import {
@@ -34,13 +35,15 @@ export default async function OrderDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ blocked?: string; medq?: string }>;
+  searchParams?: Promise<{ blocked?: string; medq?: string; loyq?: string; ok?: string }>;
 }) {
   const session = await requirePermission("orders.view");
   const { id } = await params;
   const sp = searchParams ? await searchParams : {};
   const blockedMessage = typeof sp.blocked === "string" ? sp.blocked : null;
+  const okMessage = typeof sp.ok === "string" ? sp.ok : null;
   const medicalQuery = typeof sp.medq === "string" ? sp.medq : "";
+  const loyaltyQuery = typeof sp.loyq === "string" ? sp.loyq : "";
 
   if (!isSupabaseServiceConfigured) notFound();
   const order = await getOrder(id);
@@ -82,6 +85,11 @@ export default async function OrderDetailPage({
               Completion blocked — compliance gate
             </p>
             <p className="mt-2 text-sm leading-6 text-red-200">{blockedMessage}</p>
+          </div>
+        ) : null}
+        {okMessage ? (
+          <div className="mb-5 rounded-2xl border border-[#7ed957]/40 bg-[#7ed957]/10 p-5">
+            <p className="text-sm leading-6 text-[#7ed957]">{okMessage}</p>
           </div>
         ) : null}
         {limitFlagged && !isClosed ? (
@@ -295,6 +303,9 @@ export default async function OrderDetailPage({
               </p>
             ) : null}
           </div>
+
+          {/* Task S-a — loyalty at the register (code entry / member pricing) */}
+          <LoyaltySaleSection order={order} searchQuery={loyaltyQuery} />
 
           {/* Task O — medical sale (attach card, per-line DOH exemption plan) */}
           <MedicalSaleSection order={order} searchQuery={medicalQuery} />

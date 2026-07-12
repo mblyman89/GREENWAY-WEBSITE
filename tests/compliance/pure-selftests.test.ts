@@ -22,6 +22,9 @@ import { __runSalesHoursCoreTests } from "@/lib/compliance/sales-hours-core";
 import { __runReceiptCoreTests } from "@/lib/printing/receipt-core";
 import { __runPinHashTests } from "@/lib/security/pin-hash";
 import { __runAtRestCryptoTests } from "@/lib/security/at-rest-crypto";
+import { __runEngineTests } from "@/lib/loyalty/engine";
+import { __runLoyaltyConfigTests } from "@/lib/loyalty/loyalty-config-core";
+import { __runLoyaltySaleTests } from "@/lib/loyalty/loyalty-sale-core";
 
 describe("embedded pure self-test suites", () => {
   it("order-pricing-core (S-2/S-3 money math + floor)", () => {
@@ -74,5 +77,14 @@ describe("embedded pure self-test suites", () => {
   });
   it("at-rest-crypto (S-10 AES-256-GCM envelope)", () => {
     expect(() => __runAtRestCryptoTests()).not.toThrow();
+  });
+  it("loyalty engine (points math, tiers, code gen)", () => {
+    expect(() => __runEngineTests()).not.toThrow();
+  });
+  it("loyalty-config-core (customizer drafts, RCW discount cap)", () => {
+    expect(() => __runLoyaltyConfigTests()).not.toThrow();
+  });
+  it("loyalty-sale-core (Task S-a: best-deal-wins, code spread, floors)", () => {
+    expect(() => __runLoyaltySaleTests()).not.toThrow();
   });
 });
