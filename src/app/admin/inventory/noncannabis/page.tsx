@@ -34,7 +34,9 @@ import {
   type MerchItem,
 } from "@/lib/noncannabis/merch-intel-core";
 import { nonCannabisTypeLabel } from "@/lib/naming/noncannabis-core";
+import { listNonCannabisInvoicePayables } from "@/lib/noncannabis/invoice-store";
 import { NonCannabisIntakeForm } from "./NonCannabisIntakeForm";
+import { InvoiceBuilderForm, type InvoiceProductOption } from "./InvoiceBuilderForm";
 import { MerchCatalog, type CatalogRow } from "./MerchCatalog";
 import { activateNonCannabisAction, archiveNonCannabisAction } from "./actions";
 
@@ -80,9 +82,10 @@ export default async function NonCannabisInventoryPage({
   await requirePermission("inventory.manage");
   const sp = await searchParams;
 
-  const [products, adjustments] = await Promise.all([
+  const [products, adjustments, invoices] = await Promise.all([
     listNonCannabisProducts(),
     listNonCannabisAdjustments({ days: 30 }),
+    listNonCannabisInvoicePayables({ includePaid: true, limit: 12 }),
   ]);
 
   const items = products.map(toMerchItem);
@@ -115,6 +118,12 @@ export default async function NonCannabisInventoryPage({
   }));
 
   const recentAdjustments = adjustments.slice(0, 12);
+
+  // Existing products the invoice builder can restock (active + drafts, so a
+  // just-staged item can be restocked on a later visit before confirmation).
+  const invoiceProducts: InvoiceProductOption[] = products
+    .filter((p) => p.status !== "archived")
+    .map((p) => ({ id: p.id, sku: p.sku, name: p.name }));
 
   return (
     <div>
@@ -332,6 +341,84 @@ export default async function NonCannabisInventoryPage({
                       <td className="px-4 py-2 text-xs text-[var(--admin-text-faint)]">{a.note ?? "—"}</td>
                     </tr>
                   ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        ) : null}
+
+        {/* Paper-invoice intake (Task N) — the manual vendor-visit flow. */}
+        <Card>
+          <div className="border-b border-[var(--admin-border)] px-5 py-4">
+            <h2 className="text-sm font-bold text-[var(--admin-text)]">
+              Enter a vendor invoice (paper intake)
+            </h2>
+            <p className="text-xs text-[var(--admin-text-faint)]">
+              The vendor came in, you picked out stock, they wrote a paper invoice — copy it here.
+              New items are staged as drafts; restocks add on-hand immediately. The saved invoice
+              becomes a payable on the Accounts Payable page.
+            </p>
+          </div>
+          <div className="p-5">
+            <InvoiceBuilderForm products={invoiceProducts} />
+          </div>
+        </Card>
+
+        {/* Recent vendor invoices (payable source documents). */}
+        {invoices.length > 0 ? (
+          <Card>
+            <div className="border-b border-[var(--admin-border)] px-5 py-4">
+              <h2 className="text-sm font-bold text-[var(--admin-text)]">Recent vendor invoices</h2>
+              <p className="text-xs text-[var(--admin-text-faint)]">
+                Source documents for vendor payments — pay them on the{" "}
+                <Link href="/admin/vendor-payments" className="text-[var(--admin-accent)] underline">
+                  Accounts Payable page
+                </Link>
+                .
+              </p>
+            </div>
+            <div className="overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-[var(--admin-surface-2)] text-left text-xs uppercase tracking-wide text-[var(--admin-text-faint)]">
+                  <tr>
+                    <th className="px-4 py-2">Invoice #</th>
+                    <th className="px-4 py-2">Vendor</th>
+                    <th className="px-4 py-2">Date</th>
+                    <th className="px-4 py-2 text-center">Lines</th>
+                    <th className="px-4 py-2 text-right">Total</th>
+                    <th className="px-4 py-2 text-right">Paid</th>
+                    <th className="px-4 py-2 text-center">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {invoices.map((inv) => {
+                    const remaining = Math.max(0, inv.totalMinorUnits - inv.paidMinorUnits);
+                    return (
+                      <tr key={inv.invoiceId} className="border-t border-[var(--admin-border)]">
+                        <td className="px-4 py-2 font-mono text-xs text-[var(--admin-text)]">
+                          {inv.invoiceNumber}
+                        </td>
+                        <td className="px-4 py-2 text-[var(--admin-text)]">{inv.vendorName}</td>
+                        <td className="px-4 py-2 text-xs text-[var(--admin-text-faint)]">
+                          {inv.invoiceDate}
+                        </td>
+                        <td className="px-4 py-2 text-center text-[var(--admin-text-muted)]">
+                          {inv.lineCount}
+                        </td>
+                        <td className="px-4 py-2 text-right text-[var(--admin-text-muted)]">
+                          {money(inv.totalMinorUnits)}
+                        </td>
+                        <td className="px-4 py-2 text-right text-[var(--admin-text-muted)]">
+                          {money(inv.paidMinorUnits)}
+                        </td>
+                        <td className="px-4 py-2 text-center">
+                          <Badge tone={remaining > 0 ? "orange" : "green"}>
+                            {remaining > 0 ? `Owe ${money(remaining)}` : "Paid"}
+                          </Badge>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
