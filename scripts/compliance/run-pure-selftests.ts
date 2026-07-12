@@ -20,6 +20,7 @@ import { __runLoyaltyConfigTests } from "../../src/lib/loyalty/loyalty-config-co
 import { __runLoyaltySaleTests } from "../../src/lib/loyalty/loyalty-sale-core";
 import { __runScheduleCoreTests } from "../../src/lib/staffing/schedule-core";
 import { __runEmployeeLifecycleTests } from "../../src/lib/staffing/employee-lifecycle-core";
+import { __runUserGuardTests } from "../../src/lib/auth/user-guards-core";
 
 async function main() {
   __runOrderPricingTests();
@@ -37,6 +38,9 @@ async function main() {
   __runEngineTests();
   __runLoyaltyConfigTests();
   __runLoyaltySaleTests();
+  __runScheduleCoreTests();
+  __runEmployeeLifecycleTests();
+  __runUserGuardTests();
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
