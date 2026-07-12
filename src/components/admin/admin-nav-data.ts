@@ -100,8 +100,10 @@ export const adminNav: AdminNavItem[] = [
   { label: "Compliance Health", href: "/admin/compliance/health", permission: "reports.view", icon: "\ud83d\udee1\ufe0f", group: "CCRS" }, // 🛡️ compliance shield
   { label: "Compliance Calendar", href: "/admin/compliance/calendar", permission: "settings.manage", icon: "\ud83d\udcc5", group: "Admin" }, // 📅 S-18 recurring obligations
 
-  // Website: media + site content, then public page editors + menu imports.
-  // Media Library is pinned to the TOP with Site Content directly under it.
+  // Website: sync dashboard first, then media + site content, then public
+  // page editors + menu imports. Website Sync is the harmony dashboard (Task
+  // T PR 5) — what the storefront is serving RIGHT NOW, with edit links.
+  { label: "Website Sync", href: "/admin/website-sync", permission: "dashboard.view", icon: "\ud83d\udd17", group: "Website" }, // 🔗 storefront harmony
   { label: "Media Library", href: "/admin/media", permission: "media.manage", icon: "\ud83d\uddbc\ufe0f", group: "Website" }, // 🖼️ media
   { label: "Site Content", href: "/admin/content", permission: "content.edit", icon: "\ud83d\udcc4", group: "Website" }, // 📄 text blocks
   { label: "Home", href: "/admin/pages/home", permission: "content.edit", icon: "\ud83c\udfe0", group: "Website" }, // 🏠 home page
