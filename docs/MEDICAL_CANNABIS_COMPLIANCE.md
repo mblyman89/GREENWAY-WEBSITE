@@ -76,9 +76,56 @@ DO NOT issue; refer the patient back to the practitioner.
 Consultant intake procedure (DOH FAQ, verbatim sequence):
 review form → compare to state ID → photograph patient (and DP) → enter form
 data + photo into MCR → **generate, print and laminate** the card → return the
-form, ID, and card to the patient. Our flow: `/admin/medical/intake` (scan on
-Canon PIXMA TS3522 → checklist → issue → print at `/admin/medical/card/[id]`
-→ laminate on the Scotch Thermal Laminator → "mark printed").
+form, ID, and card to the patient. Our flow: **guided intake wizard on
+`/admin/medical`** (scan on Canon PIXMA TS3522 → checklist → issue → print at
+`/admin/medical/card/[id]` → laminate on the Scotch Thermal Laminator →
+"mark printed").
+
+### Where the card number (UPID) comes from — NEVER invent one
+- RCW 69.51A.230(3)(a): the recognition card contains "a randomly generated
+  and unique identifying number." **The MCR generates it** when the certified
+  consultant enters the patient into the database. Staff COPY the number the
+  MCR produces onto our record — they never make one up. The wizard's card
+  number field only shape-checks for blatant errors (blank/too short/invalid
+  characters) because the exact MCR format is not published.
+- **Yes, DOH login is required** to issue a new card: the MCR (VisualVault,
+  replaced Airlift June 30 2025) is reached via **SecureAccess Washington
+  (SAW)**, runs best in Chrome, and the consultant selects the store by LCB
+  license number (413541). There is **no public API** — registration is a
+  human step; our back office records what happened and enforces the rules
+  around it.
+
+### Expiration rules (RCW 69.51A.230(4)) — enforced in `medical-intake-core`
+- Card expiration = the **authorization form's expiration**. Statutory
+  maximum: **1 year from the date the health care professional issued the
+  authorization** for adults (18+), **6 months for minors (<18)**. The
+  practitioner may authorize LESS, never more. The wizard auto-hints the
+  maximum from the authorization issue date + the patient's age class, and
+  `checkIntakeDates` BLOCKS: expiration past the statutory max, expiration ≤
+  effective, already-expired cards, future-dated authorizations, and
+  effective dates before the authorization was issued.
+- **30-day grace period**: a card renewed within 30 days after expiry keeps
+  the SAME card number (renewal only — replacements keep the same
+  expiration).
+- **Photo**: taken by a store employee at registration and uploaded INTO the
+  MCR (portrait JPEG, ≥400×600, 4:6 ratio). **Compassionate-care renewals
+  (RCW 69.51A.230(4)(b)) are photo-exempt** — the wizard waives the photo
+  checkbox when "compassionate renewal" is ticked.
+
+### Role split (who may do what) — enforced by policy + wizard confirmation
+- **DOH-Certified Consultant**: the ONLY role that may enter new patients
+  into the MCR and create/renew/replace/correct cards; may verify by
+  name+DOB or card number. The wizard requires an explicit "I am a certified
+  consultant" confirmation before issuance.
+- **Budtender (any employee)**: may SELL registered DOH-compliant products
+  to anyone holding an existing valid recognition card, and may verify cards
+  by card number only.
+- **Owner/Delegate**: manages MCR employees, pays fees, verifies by card
+  number.
+- Registration is **voluntary for adults 21+** (no registration = no tax
+  benefits); **ages 18–20 MUST register to buy at all**; **minors must
+  register** with a parent/legal-guardian designated provider
+  (RCW 69.51A.220).
 
 ---
 

@@ -6,10 +6,10 @@
  * 608-048 form checklist), validate it in the MCR, print it, and revoke/expire.
  */
 import Link from "next/link";
-import { Button, Input, Select, Field, Badge } from "@/components/admin/ui";
+import { Button, Badge } from "@/components/admin/ui";
 import { listAuthorizations, toRecognitionCard } from "@/lib/medical/store";
 import { cardValidity } from "@/lib/medical/tax";
-import { issueCardAction, setCardStatusAction, validateMcrAction } from "@/app/admin/medical/actions";
+import { setCardStatusAction, validateMcrAction } from "@/app/admin/medical/actions";
 
 function fmtDate(d: string | null): string {
   return d ?? "—";
@@ -102,69 +102,12 @@ export async function MedicalPanel({
       )}
 
       {canManage && (
-        <details className="rounded-lg border border-[var(--admin-border)] p-3">
-          <summary className="cursor-pointer text-sm font-semibold text-white/80">
-            Issue a new recognition card
-          </summary>
-          <form action={issueCardAction} className="mt-3 space-y-3">
-            <input type="hidden" name="customer_id" value={customerId} />
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Unique patient identifier (UPID)" help="From the MCR">
-                <Input name="unique_patient_identifier" placeholder="e.g. 1234567" />
-              </Field>
-              <Field label="Holder type">
-                <Select name="holder_type" defaultValue="patient">
-                  <option value="patient">Patient</option>
-                  <option value="designated_provider">Designated Provider</option>
-                </Select>
-              </Field>
-              <Field label="Effective date">
-                <Input name="effective_on" type="date" />
-              </Field>
-              <Field label="Expiration date">
-                <Input name="expires_on" type="date" />
-              </Field>
-            </div>
-
-            <div className="rounded-lg border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] p-3">
-              <p className="mb-2 text-xs font-semibold text-[var(--admin-gold)]">
-                Authorization-form checklist (DOH 608-048) — all required
-              </p>
-              <div className="space-y-2 text-sm text-white/80">
-                <label className="flex items-center gap-2">
-                  <input type="checkbox" name="chk_form" className="h-4 w-4" /> Form complete &amp; signed by a
-                  health care practitioner
-                </label>
-                <label className="flex items-center gap-2">
-                  <input type="checkbox" name="chk_tamper" className="h-4 w-4" /> Printed on tamper-resistant
-                  paper with a security feature
-                </label>
-                <label className="flex items-center gap-2">
-                  <input type="checkbox" name="chk_identity" className="h-4 w-4" /> Identity verified (full legal
-                  name, physical address)
-                </label>
-                <label className="flex items-center gap-2">
-                  <input type="checkbox" name="chk_seal" className="h-4 w-4" /> Embossed RCW 69.51A.030 seal
-                  visible
-                </label>
-              </div>
-            </div>
-
-            <label className="flex items-center gap-2 text-sm text-white/80">
-              <input type="checkbox" name="in_doh_database" defaultChecked className="h-4 w-4" /> Card is active in
-              the DOH database (MCR) — enables tax exemptions
-            </label>
-
-            <Field label="Notes (optional)">
-              <Input name="notes" placeholder="Internal note" />
-            </Field>
-
-            <Button type="submit" variant="neutral">
-              Issue recognition card
-            </Button>
-          </form>
-        </details>
+        <Link
+          href={`/admin/medical?patient=${customerId}`}
+          className="inline-flex items-center gap-2 rounded-[var(--admin-radius)] bg-[var(--admin-accent)] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+        >
+          📇 Start guided intake for this patient →
+        </Link>
       )}
     </div>
   );

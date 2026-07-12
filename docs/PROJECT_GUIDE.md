@@ -41,7 +41,7 @@ nav map, page headers) as of this writing — not aspirational.
 | **Website** | Media Library, Site Content, Home, Menu, Loyalty, Specials, Vendors, FAQ, About, Locations, Price Match |
 | **MKTG & ADV** | Marketing & Advertising, Promotions, Blog & Newsletter, Email Newsletter, Image Generator |
 | **Employee** | Time Clock, Payroll, Samples, Register Activity |
-| **Medical** | Patient Records, Authorization Intake |
+| **Medical** | (button) Medical Cannabis — patient records + guided intake |
 | **CCRS** | (button) Compliance Health |
 | **Admin** | Users, Integrations, Equipment, Sales Limits, AI Usage, Audit Log, Settings, Help & FAQ, Menu Imports |
 

@@ -41,7 +41,7 @@ type Props = {
  * keeps the nav data-driven (admin-nav-data.ts remains the single source of
  * truth) while letting a group like "Reports" behave as a plain button.
  */
-const DIRECT_LINK_GROUPS = new Set<AdminNavItem["group"]>(["Reports", "CCRS"]);
+const DIRECT_LINK_GROUPS = new Set<AdminNavItem["group"]>(["Reports", "CCRS", "Medical"]);
 
 function Wordmark() {
   return (
