@@ -1826,3 +1826,69 @@ schedule-core, employee-lifecycle, timeclock permission, user-guards,
 campaign-rules, competitive-playbook — all wired into both the vitest harness
 and the CI selftest script). tsc + eslint clean on every PR. Owner actions:
 apply migrations **0116** and **0117**.
+
+---
+
+## Shipped — Task T: Back office as the single source of truth for the website + POS (PRs #409, #410, #411, #412, #413)
+
+Owner's request: make the back office and its full feature suite the source of
+truth for the customer-facing website and the front POS side — close every
+split-brain between what staff publish and what customers see/pay; add the
+cart estimator (honest best-case range for medical); align hours to the real
+8am–11pm (footer graphic "1145"→"11" only, everything else untouched).
+
+### T-1 — Promotions Harmony (PR #409, merged; no migration)
+Closed gap G-1: the register priced carts with the DB rules engine while the
+website priced with a static weekday engine. New pure
+`published-rules-core.ts` serialises published promotions into JSON-safe
+`PublishedRuleSnapshot[]` once per render; the storefront cart and product
+cards now price with the SAME pure engine the register uses
+(`computePromotions`), resolving active rules by the store's Pacific weekday
+so a cart left open past midnight re-prices like the register would.
+Zero-blank guarantee: committed daily-deal seeds remain the fallback when the
+DB is empty (behaviour pinned by a parity test suite).
+
+### T-2 — Cart estimator (PR #410, merged; no migration)
+Register-final estimates on the cart and checkout: pure `estimator-core.ts`
++ `/api/estimator` compute the tax-inclusive total the register will charge,
+the loyalty redemption value, tier-discount nudges, and the **honest
+best-case medical range** (sales-tax relief per RCW 82.08.9998 on compliant
+products; excise relief only when carded + compliant + endorsed per WAC
+314-55-090) — never promising a discount the register can't deliver.
+
+### T-3 — Public loyalty terms + medical program page (PR #411, merged; no migration)
+`/loyalty` now publishes the LIVE program terms (earn/value/redeem/bonus/
+expiry sentences + tier ladder) derived from `loyalty_config`/`loyalty_tiers`
+via pure `program-terms-core.ts` — admin edits appear on the public page on
+next render. New `/medical` page (CMS-editable hero/intro) explains the DOH
+recognition-card program with honest fine print, the high-CBD-for-anyone
+lane ("very low THC with a high CBD ratio", chapter 246-70 WAC), the
+statutory purchase-limit table derived from the SAME register constants
+(WAC 314-55-095, 3× recreational), and no therapeutic claims (WAC
+314-55-155). Menu cards and product pages show a "Med" chip on
+DOH-compliant variants, linking to /medical.
+
+### T-4 — Order↔customer linking + live confirmation + hours polish (PR #412, merged; no migration)
+Staff-confirmed customer matching on the order detail page: pure
+`customer-link-core.ts` (exact normalized phone/email matches ONLY; a
+near-miss digit never matches) ranks candidates; staff link/unlink with
+audit events, so online member orders accrue loyalty points through the
+existing completion hook. The order confirmation page now always polls live
+status (30s refresh). Hours aligned to the real 8am–11pm everywhere: footer
+PNG edited pixel-surgically ("1145"→"11", the OPEN artwork verified
+byte-identical), CMS hours block, alt text.
+
+### T-5 — Website Sync Command Center (PR #413, merged; no migration)
+The harmony dashboard: `/admin/website-sync` shows exactly what the
+storefront is serving RIGHT NOW — published menu version stats, the Mon–Sun
+deal grid with today resolved by the store's Pacific weekday and each day's
+source (back office vs seed), the live loyalty terms + tier ladder, the
+medical endorsement status with honest language, and the footer hours copy
+next to the sales-hours completion-gate window (statutory vs
+owner-tightened, WAC 314-55-147). Every block reads through the SAME loaders
+the public site uses and links (permission-gated) to the owning admin page.
+Pinned to the top of the Website nav group.
+
+**Tests across Task T:** suite grew 1,176 → **1,272 passing** (promotions
+parity, estimator, public-surfaces, customer-link, website-sync cores). tsc +
+eslint clean on every PR. No migrations in Task T.
