@@ -4,8 +4,8 @@ import { useMemo, useState } from "react";
 import { useMockCart } from "@/components/cart/CartProvider";
 import { formatMinorCurrency } from "@/lib/leafly/format";
 import type { GreenwayMenuItem } from "@/lib/leafly/types";
-import { getActiveMenuDiscount } from "@/lib/specials/daily-deals";
-import { useStoreWeekday } from "@/lib/specials/useStoreWeekday";
+import { menuDiscountForItem } from "@/lib/promotions/published-rules-core";
+import { useActiveDealRules } from "@/components/promotions/PublishedRulesProvider";
 
 type ProductDetailPurchasePanelProps = {
   item: GreenwayMenuItem;
@@ -14,8 +14,13 @@ type ProductDetailPurchasePanelProps = {
 export function ProductDetailPurchasePanel({ item }: ProductDetailPurchasePanelProps) {
   const { addItem } = useMockCart();
   // Resolve today's deal on the client so prices stay accurate despite SSG.
-  const weekday = useStoreWeekday();
-  const salePriceMinorUnits = weekday ? getActiveMenuDiscount(item, weekday)?.salePriceMinorUnits : undefined;
+  // PROMOTIONS HARMONY (Task T / PR 1): the deal derives from the back
+  // office's PUBLISHED promotion rules (the same rules the cart charges with).
+  const activeRules = useActiveDealRules();
+  const deal = activeRules ? menuDiscountForItem(item, activeRules) : undefined;
+  // Only clean per-item deals show an exact sale price here (legacy behaviour:
+  // basket/tier deals finalize in the cart).
+  const salePriceMinorUnits = deal?.perItemSalePrice ? deal.salePriceMinorUnits : undefined;
   const variants = useMemo(
     () =>
       item.variants.length > 0

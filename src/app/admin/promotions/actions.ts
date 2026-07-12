@@ -380,6 +380,10 @@ export async function setPromotionStatusAction(formData: FormData): Promise<void
   // Promotions feed the storefront menu/specials — refresh those too.
   revalidatePath("/specials");
   revalidatePath("/menu");
+  // PROMOTIONS HARMONY (Task T / PR 1): the published-rules snapshot is loaded
+  // in the ROOT LAYOUT (it prices the cart + card badges everywhere), so a
+  // publish/unpublish must refresh every route that renders the layout.
+  revalidatePath("/", "layout");
   redirect(`/admin/promotions/${id}?status=${status}`);
 }
 

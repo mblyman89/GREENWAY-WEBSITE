@@ -1,4 +1,5 @@
 import type { GreenwayCategory, GreenwayMenuItem } from "@/lib/leafly/types";
+import { TOP_SHELF_THURSDAY_BRANDS } from "@/lib/promotions/daily-deal-seed";
 
 export type ActiveMenuDiscount = {
   label: string;
@@ -110,14 +111,10 @@ export const ounceFridayCategories: GreenwayCategory[] = [
 ];
 
 // Thursday — Top Shelf Thursday: brand-based. Greenway selects ~4–5 featured
-// brands each week. Update this list to rotate the participating brands.
-export const topShelfThursdayBrands: string[] = [
-  "Lifted",
-  "Phat Panda",
-  "Buddies",
-  "Clarity Farms",
-  "Constellation",
-];
+// brands each week. SINGLE SOURCE OF TRUTH: the committed seed list in
+// daily-deal-seed.ts (staff rotate brands in /admin/promotions; this fallback
+// only applies when the DB is empty). Re-exported here for existing importers.
+export const topShelfThursdayBrands: string[] = TOP_SHELF_THURSDAY_BRANDS;
 
 function itemMatchesBrands(item: GreenwayMenuItem, brands: string[]) {
   if (!item.brand) return false;

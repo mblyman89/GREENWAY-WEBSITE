@@ -1,8 +1,11 @@
 "use client";
 
 import type { GreenwayMenuItem } from "@/lib/leafly/types";
-import { formatActiveDiscountBadge, getActiveMenuDiscount } from "@/lib/specials/daily-deals";
-import { useStoreWeekday } from "@/lib/specials/useStoreWeekday";
+import {
+  formatMenuDealBadge,
+  menuDiscountForItem,
+} from "@/lib/promotions/published-rules-core";
+import { useActiveDealRules } from "@/components/promotions/PublishedRulesProvider";
 import { ProductCardVisual } from "./ProductCardVisual";
 
 type RelatedProductCardProps = {
@@ -13,16 +16,17 @@ type RelatedProductCardProps = {
 /**
  * Client wrapper used on the (statically generated) product detail page so the
  * daily-deal badge/sale price resolves from the live store weekday at render
- * time rather than freezing at build time.
+ * time rather than freezing at build time. PROMOTIONS HARMONY (Task T / PR 1):
+ * the deal derives from the back office's PUBLISHED promotion rules.
  */
 export function RelatedProductCard({ item, className }: RelatedProductCardProps) {
-  const weekday = useStoreWeekday();
-  const activeDiscount = weekday ? getActiveMenuDiscount(item, weekday) : undefined;
+  const activeRules = useActiveDealRules();
+  const activeDiscount = activeRules ? menuDiscountForItem(item, activeRules) : undefined;
   return (
     <ProductCardVisual
       item={item}
       salePriceMinorUnits={activeDiscount?.cardPreviewSalePriceMinorUnits}
-      saleBadgeLabel={activeDiscount ? formatActiveDiscountBadge(activeDiscount) : undefined}
+      saleBadgeLabel={activeDiscount ? formatMenuDealBadge(activeDiscount) : undefined}
       className={className}
     />
   );

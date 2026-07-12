@@ -22,110 +22,31 @@
 import "server-only";
 
 import { getPublishedPromotions } from "./promotions-store";
-import type { PublishedPromotion, Weekday } from "./types";
+import type { PublishedPromotion } from "./types";
 import { getPublishedVersion, getVersionItems } from "@/lib/pos/menu-version";
-import { storeWeekday } from "@/lib/reports/timezone";
 import {
   computePromotions,
   type EngineRule,
-  type EngineConfig,
   type EngineCartLine,
-  type Tier,
 } from "./discount-engine-core";
 
 export * from "./discount-engine-core";
 
-/** Safely coerce an unknown JSON value into a Tier[]. */
-function parseTiers(value: unknown): Tier[] | undefined {
-  if (!Array.isArray(value)) return undefined;
-  const tiers: Tier[] = [];
-  for (const t of value) {
-    if (t && typeof t === "object") {
-      const at = Number((t as Record<string, unknown>).at);
-      const percent = Number((t as Record<string, unknown>).percent);
-      if (Number.isFinite(at) && Number.isFinite(percent)) tiers.push({ at, percent });
-    }
-  }
-  return tiers.length ? tiers : undefined;
-}
-
-/** Parse a promotion's raw config jsonb into the typed EngineConfig. */
-export function parseEngineConfig(config: Record<string, unknown> | null | undefined): EngineConfig {
-  const c = config ?? {};
-  const out: EngineConfig = {};
-  out.qtyTiers = parseTiers(c.qtyTiers);
-  out.weightTiers = parseTiers(c.weightTiers);
-  out.spendTiers = parseTiers(c.spendTiers);
-
-  if (c.bogo && typeof c.bogo === "object") {
-    const b = c.bogo as Record<string, unknown>;
-    out.bogo = {
-      buyQty: Number(b.buyQty) || 1,
-      getQty: Number(b.getQty) || 1,
-      getPercent: Number(b.getPercent) || 100,
-    };
-  }
-  if (c.basketNforM && typeof c.basketNforM === "object") {
-    const n = c.basketNforM as Record<string, unknown>;
-    out.basketNforM = { n: Number(n.n) || 3, m: Number(n.m) || 2 };
-  }
-  if (c.basketTopItem && typeof c.basketTopItem === "object") {
-    const t = c.basketTopItem as Record<string, unknown>;
-    out.basketTopItem = { topPercent: Number(t.topPercent) || 0, restPercent: Number(t.restPercent) || 0 };
-  }
-  if (c.eitherOr && typeof c.eitherOr === "object") {
-    const e = c.eitherOr as Record<string, unknown>;
-    const bundle = (e.bundle && typeof e.bundle === "object" ? e.bundle : {}) as Record<string, unknown>;
-    const flatPercent = Number(e.flatPercent) || 0;
-    const n = Number(bundle.n) || 0;
-    const m = Number(bundle.m);
-    if (flatPercent > 0 && n >= 2 && Number.isFinite(m) && m >= 0 && m < n) {
-      out.eitherOr = { flatPercent, bundle: { n, m } };
-    }
-  }
-  // NOTE: legacy `stackable` configs are intentionally IGNORED — discount
-  // stacking is hard-blocked (owner directive; see docs/PROMOTIONS_COMPLIANCE.md).
-  return out;
-}
-
-/**
- * Map a PublishedPromotion into an EngineRule. PublishedPromotion does NOT carry
- * the raw `config` jsonb, so the config starts empty here; loadActiveRules
- * re-attaches the parsed config from the DB for active rows.
- */
-export function promotionToRule(p: PublishedPromotion, config: EngineConfig = {}): EngineRule {
-  return {
-    id: p.id,
-    title: p.title,
-    discountType: p.discountType,
-    discountPercent: p.discountPercent,
-    discountFixed: p.discountFixed,
-    priority: p.priority,
-    storewide: p.storewide,
-    targetCategories: p.targetCategories,
-    targetBrands: p.targetBrands,
-    targetProductKeys: p.targetProductKeys,
-    excludeCategories: p.excludeCategories,
-    excludeBrands: p.excludeBrands,
-    excludeProductKeys: p.excludeProductKeys,
-    config,
-  };
-}
-
-/** Is a published promotion active at `when`? (weekday recurring OR date window) */
-export function isActiveNow(p: PublishedPromotion, when: Date): boolean {
-  if (p.weekday != null) {
-    // S-12: weekday recurring promos follow the STORE's (Pacific) weekday.
-    // Server-local getDay() drifts ~7-8h/day on UTC hosts, making the
-    // advertised deal differ from the charged deal in the evening.
-    return p.weekday === (storeWeekday(when) as Weekday);
-  }
-  const startsOk = !p.startsAt || new Date(p.startsAt).getTime() <= when.getTime();
-  const endsOk = !p.endsAt || new Date(p.endsAt).getTime() >= when.getTime();
-  // A promo with neither a weekday nor a window is treated as always-on.
-  if (!p.startsAt && !p.endsAt) return true;
-  return startsOk && endsOk;
-}
+// Pure promotion helpers (parseEngineConfig, promotionToRule, isActiveNow,
+// seedConfigFor, the serialisable PublishedRuleSnapshot, and the card-preview
+// math) now live in the SHARED pure module so the client cart + product cards
+// can price with the SAME published rules the register uses (Task T / PR 1 —
+// Promotions Harmony, gap G-1). Re-exported here for existing importers.
+export * from "./published-rules-core";
+import {
+  parseEngineConfig,
+  promotionToRule,
+  isActiveNow,
+  seedConfigFor,
+  snapshotFromPublished,
+  seedRuleSnapshots,
+  type PublishedRuleSnapshot,
+} from "./published-rules-core";
 
 /**
  * Load the EngineRules that are active right now. We must re-read the raw
@@ -147,14 +68,46 @@ export async function loadPublishedRules(): Promise<EngineRule[]> {
   return attachConfigs(published);
 }
 
-/** Re-attach raw config jsonb from the DB (seed fallbacks carry seed config). */
-async function attachConfigs(active: PublishedPromotion[]): Promise<EngineRule[]> {
-  const { isSupabaseServiceConfigured } = await import("@/lib/supabase/env");
+/**
+ * Every PUBLISHED promotion as a JSON-safe PublishedRuleSnapshot (rule +
+ * parsed config + presentation fields) — the payload the storefront layout
+ * hands to the client so the cart + product cards price with the SAME rules
+ * the register uses. Includes ALL published promos (weekday recurring AND
+ * scheduled windows); the client resolves which are active for the store's
+ * current Pacific weekday via activeSnapshotsFor(), so a cart left open past
+ * midnight re-prices to the new day just like the register would.
+ * Falls back to the committed daily-deal seeds (identical legacy behaviour).
+ */
+export async function loadPublishedRuleSnapshots(): Promise<PublishedRuleSnapshot[]> {
+  try {
+    const published = await getPublishedPromotions();
+    if (!published.length) return seedRuleSnapshots();
+    const configs = await rawConfigsFor(published);
+    return published.map((p) => {
+      const raw = configs.get(p.id);
+      const config = raw
+        ? parseEngineConfig(raw)
+        : p.id.startsWith("seed-")
+          ? seedConfigFor(p.promoKey)
+          : {};
+      return snapshotFromPublished(p, config);
+    });
+  } catch {
+    // The storefront must never lose its deals over a transient DB error.
+    return seedRuleSnapshots();
+  }
+}
+
+/** Raw config jsonb per promotion id (DB rows only; seeds carry seed config). */
+async function rawConfigsFor(
+  promos: PublishedPromotion[],
+): Promise<Map<string, Record<string, unknown>>> {
   const configById = new Map<string, Record<string, unknown>>();
-  if (isSupabaseServiceConfigured && active.some((p) => !p.id.startsWith("seed-"))) {
+  const { isSupabaseServiceConfigured } = await import("@/lib/supabase/env");
+  if (isSupabaseServiceConfigured && promos.some((p) => !p.id.startsWith("seed-"))) {
     const { createSupabaseAdminClient } = await import("@/lib/supabase/admin");
     const admin = createSupabaseAdminClient();
-    const ids = active.filter((p) => !p.id.startsWith("seed-")).map((p) => p.id);
+    const ids = promos.filter((p) => !p.id.startsWith("seed-")).map((p) => p.id);
     if (ids.length) {
       const { data } = await admin.from("promotions").select("id, config").in("id", ids);
       for (const row of data ?? []) {
@@ -162,6 +115,12 @@ async function attachConfigs(active: PublishedPromotion[]): Promise<EngineRule[]
       }
     }
   }
+  return configById;
+}
+
+/** Re-attach raw config jsonb from the DB (seed fallbacks carry seed config). */
+async function attachConfigs(active: PublishedPromotion[]): Promise<EngineRule[]> {
+  const configById = await rawConfigsFor(active);
 
   return active.map((p) => {
     const rule = promotionToRule(p);
@@ -174,21 +133,6 @@ async function attachConfigs(active: PublishedPromotion[]): Promise<EngineRule[]
     }
     return rule;
   });
-}
-
-/** Engine config for the committed daily-deal seeds (DB-empty fallback). */
-export function seedConfigFor(promoKey: string | null): EngineConfig {
-  switch (promoKey) {
-    case "daily.tuesday":
-      // Doobie Tuesday: 20% off OR 4-for-3 mix & match, store-advantaged.
-      return { eitherOr: { flatPercent: 20, bundle: { n: 4, m: 3 } } };
-    case "daily.saturday":
-      return { basketTopItem: { topPercent: 30, restPercent: 15 } };
-    case "daily.sunday":
-      return { basketNforM: { n: 3, m: 2 } };
-    default:
-      return {};
-  }
 }
 
 // ---------------------------------------------------------------------------

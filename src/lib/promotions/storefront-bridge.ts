@@ -1,66 +1,37 @@
 /**
  * src/lib/promotions/storefront-bridge.ts
  *
- * Slice 6 follow-on — the server-side bridge between the DB-backed promotions
- * (managed in /admin/promotions) and the storefront's existing daily-deal
- * presentation layer.
+ * Server-side bridge between the DB-backed promotions (managed in
+ * /admin/promotions) and the storefront's deal presentation.
  *
- * Why a bridge (and not a rewrite): the live cart engine + product-card pricing
- * in src/lib/specials/* are battle-tested, synchronous, and shared across many
- * client components. Rewiring all of them to async DB reads would be a large,
- * risky change. Instead this bridge reads PUBLISHED promotions on the server and
- * derives the few customer-facing values staff actually edit week to week:
+ * PROMOTIONS HARMONY (Task T / PR 1): the presentation logic now lives in the
+ * PURE shared module (published-rules-core.ts — dealPresentationFor /
+ * weeklyDealPresentations / weeklyDealSummaries) so the client components can
+ * derive the same views from the serialized snapshot. This bridge keeps thin
+ * async wrappers for server callers plus the Thursday brand reader.
  *
- *   - the active day's deal TITLE + SUBTITLE (shown on home + specials hero)
- *   - the Top Shelf Thursday BRAND list (the headline editable field)
- *   - the menu "lane" link for the day
- *
- * Everything falls back to the committed daily-deal seeds / static presentation
- * when the DB is empty or unconfigured, so the storefront never goes blank and
- * behaviour is identical to today until staff publish an override.
- *
- * The exact per-item discount math stays in src/lib/specials/* (the single
- * source of truth for what a customer is charged) — unchanged by this bridge.
+ * Everything falls back to the committed daily-deal seeds / static
+ * presentation when the DB is empty or unconfigured, so the storefront never
+ * goes blank and behaviour is identical to today until staff publish an
+ * override.
  */
 import "server-only";
 import { getPublishedPromotions } from "./promotions-store";
-import type { PublishedPromotion, Weekday } from "./types";
-import {
-  getDailyDealPresentation,
-  type DailyDealPresentation,
-} from "@/lib/specials/daily-deal-presentation";
+import type { Weekday } from "./types";
+import type { DailyDealPresentation } from "@/lib/specials/daily-deal-presentation";
 import { getStoreWeekday, type StoreWeekday } from "@/lib/specials/daily-deals";
 import { TOP_SHELF_THURSDAY_BRANDS } from "./daily-deal-seed";
+import { loadPublishedRuleSnapshots } from "./discount-engine";
+import {
+  dealPresentationFor,
+  weeklyDealPresentations,
+  INDEX_TO_STORE_WEEKDAY,
+  STORE_WEEKDAY_TO_INDEX,
+} from "./published-rules-core";
 
-const WEEKDAY_TO_STORE: Record<Weekday, StoreWeekday> = {
-  0: "sunday",
-  1: "monday",
-  2: "tuesday",
-  3: "wednesday",
-  4: "thursday",
-  5: "friday",
-  6: "saturday",
-};
-
-const STORE_TO_WEEKDAY: Record<StoreWeekday, Weekday> = {
-  sunday: 0,
-  monday: 1,
-  tuesday: 2,
-  wednesday: 3,
-  thursday: 4,
-  friday: 5,
-  saturday: 6,
-};
-
-function buildMenuHref(promo: PublishedPromotion): string {
-  if (promo.targetBrands.length > 0) {
-    return `/menu?brands=${promo.targetBrands.map((b) => encodeURIComponent(b)).join(",")}`;
-  }
-  if (promo.targetCategories.length > 0) {
-    return `/menu?categories=${promo.targetCategories.join(",")}`;
-  }
-  return "/menu";
-}
+// Back-compat aliases for existing importers.
+const WEEKDAY_TO_STORE: Record<Weekday, StoreWeekday> = INDEX_TO_STORE_WEEKDAY;
+const STORE_TO_WEEKDAY: Record<StoreWeekday, Weekday> = STORE_WEEKDAY_TO_INDEX;
 
 export type ActiveDealView = {
   weekday: StoreWeekday;
@@ -77,28 +48,15 @@ export type ActiveDealView = {
  */
 export async function getActiveDealView(reference: Date = new Date()): Promise<ActiveDealView> {
   const storeWeekday = getStoreWeekday(reference);
-  const weekday = STORE_TO_WEEKDAY[storeWeekday];
-
-  const published = await getPublishedPromotions();
-  // Pick the highest-priority published promo matching today's weekday.
-  const match = published
-    .filter((p) => p.weekday === weekday)
-    .sort((a, b) => b.priority - a.priority)[0];
-
-  if (match) {
-    const fallback = getDailyDealPresentation(storeWeekday);
-    return {
-      weekday: storeWeekday,
-      title: match.title || fallback.title,
-      subtitle: match.description || match.bonusNote || fallback.subtitle,
-      menuHref: buildMenuHref(match),
-      fromDatabase: !match.id.startsWith("seed-"),
-    };
-  }
-
-  // No match at all → static presentation for the day.
-  const fallback = getDailyDealPresentation(storeWeekday);
-  return { ...fallback, weekday: storeWeekday, fromDatabase: false };
+  const snapshots = await loadPublishedRuleSnapshots();
+  const view = dealPresentationFor(snapshots, storeWeekday);
+  return {
+    weekday: storeWeekday,
+    title: view.title,
+    subtitle: view.subtitle,
+    menuHref: view.menuHref,
+    fromDatabase: view.fromDatabase,
+  };
 }
 
 /**
@@ -120,30 +78,13 @@ export async function getThursdayBrands(): Promise<string[]> {
  * grid), DB-preferred with static fallback per day.
  */
 export async function getWeeklyDealViews(): Promise<DailyDealPresentation[]> {
-  const published = await getPublishedPromotions();
-  const order: StoreWeekday[] = [
-    "monday",
-    "tuesday",
-    "wednesday",
-    "thursday",
-    "friday",
-    "saturday",
-    "sunday",
-  ];
-  return order.map((storeWeekday) => {
-    const weekday = STORE_TO_WEEKDAY[storeWeekday];
-    const match = published
-      .filter((p) => p.weekday === weekday)
-      .sort((a, b) => b.priority - a.priority)[0];
-    const fallback = getDailyDealPresentation(storeWeekday);
-    if (!match) return fallback;
-    return {
-      weekday: storeWeekday,
-      title: match.title || fallback.title,
-      subtitle: match.description || match.bonusNote || fallback.subtitle,
-      menuHref: buildMenuHref(match),
-    };
-  });
+  const snapshots = await loadPublishedRuleSnapshots();
+  return weeklyDealPresentations(snapshots).map((v) => ({
+    weekday: v.weekday,
+    title: v.title,
+    subtitle: v.subtitle,
+    menuHref: v.menuHref,
+  }));
 }
 
 export { WEEKDAY_TO_STORE, STORE_TO_WEEKDAY };

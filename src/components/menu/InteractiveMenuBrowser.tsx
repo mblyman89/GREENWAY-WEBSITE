@@ -8,8 +8,8 @@ import { FilterMobile, MenuFilterControls } from "./FilterMobile";
 import { FilterTags } from "./FilterTags";
 import { ProductCard } from "./ProductCard";
 import { SortDropdown, type SortOption } from "./SortDropdown";
-import { getActiveMenuDiscount } from "@/lib/specials/daily-deals";
-import { useStoreWeekday } from "@/lib/specials/useStoreWeekday";
+import { menuDiscountForItem } from "@/lib/promotions/published-rules-core";
+import { useActiveDealRules } from "@/components/promotions/PublishedRulesProvider";
 import { merchProductDefs } from "@/lib/merch/merch-catalog";
 import { MerchProductCard } from "@/components/merch/MerchProductCard";
 
@@ -669,7 +669,9 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
   // Specials quick-filters (top of the filter panel).
   const [clearanceOnly, setClearanceOnly] = useState(false);
   const [dailyDealsOnly, setDailyDealsOnly] = useState(false);
-  const storeWeekday = useStoreWeekday();
+  // PROMOTIONS HARMONY (Task T / PR 1): the "Daily Deals" quick-filter matches
+  // items against the back office's PUBLISHED promotion rules for today.
+  const activeDealRules = useActiveDealRules();
 
   // --- Filter persistence (Task G) ---------------------------------------
   // State is hydrated from forwarded URL params above (server + client agree,
@@ -782,11 +784,11 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
       pool = pool.filter((item) => clearanceItemIds.includes(item.id));
     }
     if (dailyDealsOnly) {
-      pool = pool.filter((item) => getActiveMenuDiscount(item, storeWeekday) !== undefined);
+      pool = pool.filter((item) => menuDiscountForItem(item, activeDealRules ?? []) !== undefined);
     }
 
     return sortItems(pool.filter((item) => itemMatchesCriteria(item, criteria, maxAvailablePrice, cannabinoidBounds)), sortBy, shuffleRanks);
-  }, [cannabinoidBounds, clearanceOnly, criteria, dailyDealsOnly, initialSpecial?.itemIds, items, maxAvailablePrice, shuffleRanks, sortBy, storeWeekday]);
+  }, [activeDealRules, cannabinoidBounds, clearanceOnly, criteria, dailyDealsOnly, initialSpecial?.itemIds, items, maxAvailablePrice, shuffleRanks, sortBy]);
 
   const categoryOptions = useMemo(() => {
     const optionItems = items.filter((item) => itemMatchesCriteria(item, criteriaWithout(criteria, "selectedCategories"), maxAvailablePrice, cannabinoidBounds));

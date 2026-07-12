@@ -1,8 +1,18 @@
 // ---------------------------------------------------------------------------
-// SMART CART DISCOUNT ENGINE
+// LEGACY STATIC WEEKDAY CART ENGINE — REFERENCE IMPLEMENTATION (Task T / PR 1)
+//
+// PROMOTIONS HARMONY: production no longer prices with this module. The cart
+// (CartProvider), the server reprice (order-pricing.ts), the product cards and
+// the register ALL use the data-driven rules engine
+// (src/lib/promotions/discount-engine-core.ts) fed by the back office's
+// PUBLISHED promotions, with the committed daily-deal seeds as the zero-blank
+// fallback. This file remains as the PINNED REFERENCE for the seed deals'
+// behaviour: tests/compliance/promotions-harmony-parity.test.ts asserts the
+// rules engine (with seed rules) produces IDENTICAL prices to this engine, so
+// the storefront migration is provably behaviour-preserving.
 //
 // The product cards show a best-case "preview" of the day's deal, but the
-// AUTHORITATIVE discount is computed HERE, at the cart level, because most of
+// AUTHORITATIVE discount is computed at the cart level, because most of
 // Greenway's daily deals are threshold-based (weight tiers, quantity tiers,
 // spend tiers, or storewide best-item) and CANNOT be determined from a single
 // product in isolation.

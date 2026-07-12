@@ -4,6 +4,8 @@ import { Analytics } from "@/components/analytics/Analytics";
 import { PreviewEditOverlay } from "@/components/site/PreviewEditOverlay";
 import { AgeGate } from "@/components/age-gate/AgeGate";
 import { CartProvider } from "@/components/cart/CartProvider";
+import { PublishedRulesProvider } from "@/components/promotions/PublishedRulesProvider";
+import { loadPublishedRuleSnapshots } from "@/lib/promotions/discount-engine";
 import { ScrollToTopButton } from "@/components/site/ScrollToTopButton";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { SITE_NAME, SITE_URL, DEFAULT_OG_IMAGE, organizationSchema, websiteSchema, storeSchema } from "@/lib/seo/seo";
@@ -81,6 +83,12 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
     "site.font.heading",
     "site.font.body",
   ]);
+
+  // PROMOTIONS HARMONY (Task T / PR 1): serialise the back office's PUBLISHED
+  // promotion rules once per render so every client surface (smart cart,
+  // product cards, menu deal filter) prices with the SAME rules the register
+  // uses. Seed fallback keeps behaviour identical when the DB is empty.
+  const publishedRules = await loadPublishedRuleSnapshots();
   const headingStack = fontStack(
     fonts["site.font.heading"],
     DEFAULT_HEADING_FONT_ID,
@@ -100,7 +108,9 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
     >
       <body>
         <JsonLd data={[organizationSchema(), websiteSchema(), storeSchema()]} id="site" />
-        <CartProvider>{children}</CartProvider>
+        <PublishedRulesProvider snapshots={publishedRules}>
+          <CartProvider>{children}</CartProvider>
+        </PublishedRulesProvider>
         <ScrollToTopButton />
         <AgeGate />
         <Analytics />
