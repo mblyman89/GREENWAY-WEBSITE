@@ -1892,3 +1892,59 @@ Pinned to the top of the Website nav group.
 **Tests across Task T:** suite grew 1,176 → **1,272 passing** (promotions
 parity, estimator, public-surfaces, customer-link, website-sync cores). tsc +
 eslint clean on every PR. No migrations in Task T.
+
+---
+
+## Shipped — Task U: Website command center — Site Content redesign + Creative Studio (PRs #415, #416, #417)
+
+Owner's request: turn the Website nav-group pages into a command-center
+masterpiece — rebuild the "ugly and cluttered" Site Content page "like how the
+big players do it"; harness the full FLUX suite so Greenway AI uses the
+store's promotions to generate perfectly-sized images for the website, blog,
+newsletters, and physical print/in-store displays — "completely fool proof and
+simple… tons of helper text and ai assistance"; give Midjourney "some love"
+but "focus all your firepower on flux."
+
+### U-1 — Site Content progressive-disclosure redesign (PR #415, merged; no migration)
+`/admin/content` rebuilt on the Shopify/Squarespace progressive-disclosure
+pattern: each block collapses to a one-line summary row (single status pill —
+● unsaved / draft pending / ✓ live — plus a content snippet) and expands on
+demand; the preview panel's "edit this" click dispatches a `gw-expand`
+CustomEvent that opens and focuses the exact block. Raw hex colors replaced
+with admin design tokens across the editor shell, preview panel, and bulk
+bar; header simplified to a short subtitle, ONE merged HelpPanel
+(workflow + SEO + WA compliance), and a StatCard row (editable blocks /
+pending drafts / SEO-flagged → /admin/content/seo).
+
+### U-2 — Creative Studio: placement-sized FLUX + promotions-grounded AI (PR #416, merged; no migration)
+The Image Generator became the **Creative Studio** (nav, header, concierge
+KB, Help & FAQ all updated), a fool-proof 3-step flow:
+1. **Pick the destination** — new pure `creative-placements-core.ts`: 20
+   verified placements across website / social / email / blog / print, each
+   with exact pixel size, format, where-used text, tip, FLUX composition
+   hint, and print DPI notes. Website slots derive LIVE from
+   `image-spec-core` so they can never drift; email at 2× retina; print sized
+   under FLUX's verified ~4MP ceiling with upscale notes.
+2. **Describe the idea** — new `creative-ai.ts`: Greenway AI drafts the full
+   brief from one line, grounded in the store profile AND the LIVE published
+   weekly deals ("a banner for our Monday deal" uses the real Monday deal);
+   brand-palette steering, no-text rule, compliance-scanned with flag chips
+   in the UI. Drafts-only.
+3. **Generate with FLUX** — `flux-core.ts` rewritten against verified
+   docs.bfl.ai contracts per endpoint family (flux-2-max/pro `disable_pup` +
+   safety 0–5 + webp + exact width/height; flux-2-flex `prompt_upsampling`;
+   kontext legacy `aspect_ratio` + 4-ref cap), captures per-run cost, shows
+   "will generate at W×H — sized for {destination}", saves drafts to the
+   media library. ~90 self-test assertions.
+
+### U-3 — Midjourney love (PR #417, merged; no migration)
+The copy-paste fallback got smarter: `closestAspectRatio(w,h)` snaps the
+Midjourney `--ar` to the Step-1 destination (log-space nearest supported
+ratio, 10 new assertions); the previously-unexposed **weird slider** and
+**omni-reference (`--oref`) picker** surfaced with plain-language guidance;
+parameters card retitled with an honest "FLUX ignores these" note.
+
+**Tests across Task U:** suite grew 1,272 → **1,275 passing**
+(midjourney-core, flux-core, creative-placements-core self-tests wired into
+both the vitest harness and the CI selftest script). tsc + eslint clean on
+every PR. No migrations in Task U.
