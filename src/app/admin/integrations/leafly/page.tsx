@@ -5,6 +5,22 @@ import { Badge, Card } from "@/components/admin/ui";
 import { StatCard } from "@/components/admin/StatCard";
 import { previewLeaflyPush } from "@/lib/leafly/push";
 import { listSyndicationLogs } from "@/lib/syndication/store";
+import { getLeaflySyncSettings, getSyncState } from "@/lib/syndication/engine-store";
+import { classifyHealth, scoreRichness } from "@/lib/syndication/richness-core";
+import { runPreflight } from "@/lib/syndication/preflight-core";
+import {
+  LEAFLY_CONNECT_STEPS,
+  SYNDICATION_CONTACTS,
+  practicesFor,
+  runbookFor,
+} from "@/lib/integrations/syndication-playbook";
+import {
+  ConnectionHealthPanel,
+  ConnectionWizard,
+  DataQualityPanel,
+} from "@/components/admin/syndication/panels";
+import { SyncSettingsPanel } from "@/components/admin/syndication/SyncSettingsPanel";
+import { saveLeaflySettingsAction, resetLeaflySyncStateAction } from "./actions";
 import { LeaflyPushClient } from "./leafly-client";
 
 export const dynamic = "force-dynamic";
@@ -20,9 +36,28 @@ function fmtDate(iso: string) {
 export default async function LeaflyIntegrationPage() {
   await requirePermission("settings.manage");
 
-  const preview = await previewLeaflyPush();
-  const logs = await listSyndicationLogs("leafly", 15);
+  const [preview, logs, settings, syncState] = await Promise.all([
+    previewLeaflyPush(),
+    listSyndicationLogs("leafly", 40),
+    getLeaflySyncSettings(),
+    getSyncState("leafly"),
+  ]);
 
+  // Health is classified from LIVE attempts that actually contacted Leafly.
+  // "skipped" logs (no changes to send / preflight-blocked) transmit nothing,
+  // so they are neither a success nor a channel failure.
+  const healthEntries = logs
+    .filter((log) => log.mode === "live" && log.status !== "skipped")
+    .map((log) => ({
+      status: log.status === "ok" ? "success" : "error",
+      at: log.created_at,
+    }));
+  const health = classifyHealth(healthEntries, new Date());
+
+  const preflight = runPreflight(preview.items);
+  const richness = scoreRichness(preview.items);
+
+  const recentLogs = logs.slice(0, 15);
   const sample = preview.payload.items.slice(0, 3);
 
   return (
@@ -43,12 +78,13 @@ export default async function LeaflyIntegrationPage() {
               currently <strong>published</strong> menu version. Hidden items are excluded.
             </p>
             <p>
-              <strong>Preview</strong> is a dry-run — it shows precisely what would be sent and
+              <strong>Preview</strong> is a dry-run &mdash; it shows precisely what would be sent and
               never contacts Leafly. <strong>Live push</strong> (POST) is a full sync that
               replaces the Leafly menu and requires credentials plus explicit confirmation.
+              Preflight errors block live pushes; the engine skips syncs when nothing changed.
             </p>
             <p>
-              AI description drafts are <strong>drafts only</strong> — review and approve before
+              AI description drafts are <strong>drafts only</strong> &mdash; review and approve before
               attaching them to a product. Leafly descriptions must be plain text.
             </p>
           </HelpPanel>
@@ -80,9 +116,34 @@ export default async function LeaflyIntegrationPage() {
         />
       </div>
 
+      <ConnectionWizard
+        channelLabel="Leafly"
+        connectSteps={LEAFLY_CONNECT_STEPS}
+        practices={practicesFor("leafly")}
+        runbook={runbookFor("leafly")}
+        contacts={SYNDICATION_CONTACTS}
+        configured={preview.readiness.configured}
+      />
+
+      <ConnectionHealthPanel health={health} lastSyncedAt={syncState.lastSyncedAt} />
+
+      <DataQualityPanel
+        richness={richness}
+        preflight={preflight}
+        channelLabel="Leafly"
+        imageRelevant={false}
+      />
+
       <LeaflyPushClient
         configured={preview.readiness.configured}
         itemCount={preview.itemCount}
+      />
+
+      <SyncSettingsPanel
+        channel="leafly"
+        settings={settings}
+        saveAction={saveLeaflySettingsAction}
+        resetStateAction={resetLeaflySyncStateAction}
       />
 
       <Card>
@@ -100,13 +161,13 @@ export default async function LeaflyIntegrationPage() {
 
       <Card>
         <h2 className="mb-3 text-sm font-bold text-[var(--admin-text)]">Recent sync activity</h2>
-        {logs.length === 0 ? (
+        {recentLogs.length === 0 ? (
           <p className="text-xs text-[var(--admin-text-muted)]">
             No Leafly sync activity recorded yet.
           </p>
         ) : (
           <div className="space-y-2">
-            {logs.map((log) => (
+            {recentLogs.map((log) => (
               <div
                 key={log.id}
                 className="flex items-center justify-between rounded-md border border-[var(--admin-border)] px-3 py-2 text-xs"
@@ -120,7 +181,7 @@ export default async function LeaflyIntegrationPage() {
                   <span className="font-medium text-[var(--admin-text)]">{log.mode}</span>
                   <span className="text-[var(--admin-text-muted)]">{log.item_count} items</span>
                   {log.message ? (
-                    <span className="text-[var(--admin-text-muted)]">— {log.message}</span>
+                    <span className="text-[var(--admin-text-muted)]">&mdash; {log.message}</span>
                   ) : null}
                 </div>
                 <span className="text-[var(--admin-text-muted)]">{fmtDate(log.created_at)}</span>

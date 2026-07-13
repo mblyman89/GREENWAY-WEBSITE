@@ -5,6 +5,22 @@ import { Badge, Card } from "@/components/admin/ui";
 import { StatCard } from "@/components/admin/StatCard";
 import { previewWeedmapsPush } from "@/lib/weedmaps/push";
 import { listSyndicationLogs } from "@/lib/syndication/store";
+import { getWeedmapsSyncSettings, getSyncState } from "@/lib/syndication/engine-store";
+import { classifyHealth, scoreRichness } from "@/lib/syndication/richness-core";
+import { runPreflight } from "@/lib/syndication/preflight-core";
+import {
+  WEEDMAPS_CONNECT_STEPS,
+  SYNDICATION_CONTACTS,
+  practicesFor,
+  runbookFor,
+} from "@/lib/integrations/syndication-playbook";
+import {
+  ConnectionHealthPanel,
+  ConnectionWizard,
+  DataQualityPanel,
+} from "@/components/admin/syndication/panels";
+import { SyncSettingsPanel } from "@/components/admin/syndication/SyncSettingsPanel";
+import { saveWeedmapsSettingsAction, resetWeedmapsSyncStateAction } from "./actions";
 import { WeedmapsPushClient } from "./weedmaps-client";
 
 export const dynamic = "force-dynamic";
@@ -20,9 +36,28 @@ function fmtDate(iso: string) {
 export default async function WeedmapsIntegrationPage() {
   await requirePermission("settings.manage");
 
-  const preview = await previewWeedmapsPush();
-  const logs = await listSyndicationLogs("weedmaps", 15);
+  const [preview, logs, settings, syncState] = await Promise.all([
+    previewWeedmapsPush(),
+    listSyndicationLogs("weedmaps", 40),
+    getWeedmapsSyncSettings(),
+    getSyncState("weedmaps"),
+  ]);
 
+  // Health is classified from LIVE attempts that actually contacted Weedmaps.
+  // "skipped" logs (no changes to send / preflight-blocked) transmit nothing,
+  // so they are neither a success nor a channel failure.
+  const healthEntries = logs
+    .filter((log) => log.mode === "live" && log.status !== "skipped")
+    .map((log) => ({
+      status: log.status === "ok" ? "success" : "error",
+      at: log.created_at,
+    }));
+  const health = classifyHealth(healthEntries, new Date());
+
+  const preflight = runPreflight(preview.items);
+  const richness = scoreRichness(preview.items);
+
+  const recentLogs = logs.slice(0, 15);
   const sample = preview.payload.items.slice(0, 3);
 
   return (
@@ -47,8 +82,11 @@ export default async function WeedmapsIntegrationPage() {
             <p>
               <strong>Preview</strong> is a dry-run &mdash; it shows precisely what would be sent
               and never contacts WeedMaps. <strong>Live push</strong> requires credentials plus
-              explicit confirmation, and sends each item to{" "}
-              <span className="font-mono">/partners/menus/&#123;menu_id&#125;/items</span>.
+              explicit confirmation, and writes each item to{" "}
+              <span className="font-mono">
+                /partners/menus/&#123;menu_id&#125;/items/external/&#123;external_id&#125;
+              </span>{" "}
+              at a paced rate. Preflight errors block live pushes; unchanged items are skipped.
             </p>
             <p>
               AI description drafts are <strong>drafts only</strong> &mdash; review and approve
@@ -83,9 +121,34 @@ export default async function WeedmapsIntegrationPage() {
         />
       </div>
 
+      <ConnectionWizard
+        channelLabel="Weedmaps"
+        connectSteps={WEEDMAPS_CONNECT_STEPS}
+        practices={practicesFor("weedmaps")}
+        runbook={runbookFor("weedmaps")}
+        contacts={SYNDICATION_CONTACTS}
+        configured={preview.readiness.configured}
+      />
+
+      <ConnectionHealthPanel health={health} lastSyncedAt={syncState.lastSyncedAt} />
+
+      <DataQualityPanel
+        richness={richness}
+        preflight={preflight}
+        channelLabel="Weedmaps"
+        imageRelevant
+      />
+
       <WeedmapsPushClient
         configured={preview.readiness.configured}
         itemCount={preview.itemCount}
+      />
+
+      <SyncSettingsPanel
+        channel="weedmaps"
+        settings={settings}
+        saveAction={saveWeedmapsSettingsAction}
+        resetStateAction={resetWeedmapsSyncStateAction}
       />
 
       <Card>
@@ -108,13 +171,13 @@ export default async function WeedmapsIntegrationPage() {
 
       <Card>
         <h2 className="mb-3 text-sm font-bold text-[var(--admin-text)]">Recent sync activity</h2>
-        {logs.length === 0 ? (
+        {recentLogs.length === 0 ? (
           <p className="text-xs text-[var(--admin-text-muted)]">
             No WeedMaps sync activity recorded yet.
           </p>
         ) : (
           <div className="space-y-2">
-            {logs.map((log) => (
+            {recentLogs.map((log) => (
               <div
                 key={log.id}
                 className="flex items-center justify-between rounded-md border border-[var(--admin-border)] px-3 py-2 text-xs"

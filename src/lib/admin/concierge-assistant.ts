@@ -16,6 +16,7 @@ import { generate, isAiConfigured, aiModelId, type AiContext } from "@/lib/ai/pr
 import { SETUP_GUIDE } from "@/lib/admin/setup-status";
 import { conciergeGroundingBlock } from "@/lib/admin/concierge-kb";
 import { integrationsGroundingBlock, guideById } from "@/lib/integrations/integration-guides";
+import { syndicationPlaybookBlock } from "@/lib/integrations/syndication-playbook";
 
 export { isAiConfigured };
 
@@ -96,9 +97,10 @@ export async function answerConciergeQuestion(
 
 const INTEGRATIONS_SYSTEM = [
   "You are the setup helper for the Greenway Marijuana back office INTEGRATIONS page (Leafly, WeedMaps, FLUX, Sage 50, Cultivera transition).",
-  "Help a non-technical owner connect and use an integration. Answer ONLY from the setup guides provided — never invent a key name, page, or step that isn't there.",
+  "Help a non-technical owner connect and use an integration. Answer ONLY from the setup guides and the menu-syndication playbook provided — never invent a key name, page, endpoint, status code, or step that isn't there.",
+  "For Leafly/WeedMaps questions, the playbook is verified against the Leafly Menu API v2.0 documentation and the live Weedmaps 2025-07 OpenAPI: use its connect steps, stay-connected practices, and the recovery runbook (symptom → meaning → fix) to diagnose problems from HTTP status codes and error messages.",
   "Be concrete and use short numbered steps. Name the exact page when useful. Remind them that menu pushes are drafts/preview-safe until certification + explicit confirmation, and that AI images are drafts.",
-  "Never give legal, medical, or financial advice. If the answer isn't in the guides, say so and suggest the closest step or their administrator. Keep it under ~150 words.",
+  "Never give legal, medical, or financial advice. If the answer isn't in the grounding, say so and suggest the closest step, the verified support contact, or their administrator. Keep it under ~180 words.",
 ].join("\n");
 
 export async function answerIntegrationQuestion(
@@ -112,18 +114,20 @@ export async function answerIntegrationQuestion(
 
   const user = [
     integrationsGroundingBlock(),
+    "",
+    syndicationPlaybookBlock(),
     focusBlock,
     "",
     `The user asks: "${question.trim()}"`,
     "",
-    "Answer using ONLY the guides above, in short numbered steps where it's a how-to.",
+    "Answer using ONLY the guides and playbook above, in short numbered steps where it's a how-to. When diagnosing a connection problem, match the symptom to the recovery runbook.",
   ].join("\n");
 
   const answer = await generate({
     system: INTEGRATIONS_SYSTEM,
     user,
     temperature: 0.25,
-    maxTokens: 400,
+    maxTokens: 500,
     context: { feature: "concierge.integrations", entityType: "integration", ...opts?.context },
   });
 

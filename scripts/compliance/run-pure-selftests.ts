@@ -39,6 +39,7 @@ import { __runPreflightTests } from "../../src/lib/syndication/preflight-core";
 import { __runRichnessTests } from "../../src/lib/syndication/richness-core";
 import { __runSyncSettingsTests } from "../../src/lib/syndication/sync-settings-core";
 import { __runApplySettingsTests } from "../../src/lib/syndication/apply-settings-core";
+import { __runSyndicationPlaybookTests } from "../../src/lib/integrations/syndication-playbook";
 
 async function main() {
   __runOrderPricingTests();
@@ -80,6 +81,7 @@ async function main() {
   __runRichnessTests();
   __runSyncSettingsTests();
   __runApplySettingsTests();
+  __runSyndicationPlaybookTests();
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

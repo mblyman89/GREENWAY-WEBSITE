@@ -98,6 +98,8 @@ export type WeedmapsPreview = {
   readiness: WeedmapsReadiness;
   /** Verified caveats surfaced to staff before any live write. */
   notes: string[];
+  /** Raw channel-agnostic feed items — used by the page for preflight/richness scoring. */
+  items: SyndicationItem[];
 };
 
 const SCHEMA_NOTES = [
@@ -122,6 +124,7 @@ export async function previewWeedmapsPush(): Promise<WeedmapsPreview> {
     payload: buildWmItemsPayload(items),
     readiness: describeWeedmapsReadiness(),
     notes: SCHEMA_NOTES,
+    items,
   };
 }
 
