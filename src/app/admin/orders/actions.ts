@@ -20,36 +20,18 @@ import { requirePermission, getStaffSession } from "@/lib/auth/session";
 import { can } from "@/lib/auth/roles";
 import { recordAudit } from "@/lib/auth/audit";
 import { setOrderStatus, updateStaffNote, getOrder } from "@/lib/orders/orders-store";
-import { verifyStoredOrderForCompletion } from "@/lib/orders/order-pricing";
-import { checkLoyaltyCodeForCompletion } from "@/lib/loyalty/loyalty-sale-core";
+// POS Slice B1: the → completed compliance gate is EXTRACTED (verbatim) into
+// src/lib/orders/completion-gate.ts so the POS sync route re-runs the exact
+// same sequence for every synced register sale. This file now just calls it.
+import { runCompletionGate } from "@/lib/orders/completion-gate";
 import {
   applyCodeToOrder,
   applyTierToOrder,
   removeLoyaltyFromOrder,
-  getOrderLoyaltyContext,
 } from "@/lib/loyalty/loyalty-sale-store";
-import { enforceSalesLimitForSale } from "@/lib/compliance/sales-limits";
-import { evaluateSalesHours } from "@/lib/compliance/sales-hours-core";
-import { getSalesHoursWindow } from "@/lib/compliance/sales-hours-store";
-import { authorizationValidityAt } from "@/lib/medical/medical-authorization-core";
-import {
-  toRecognitionCard,
-  getMedTaxSettings,
-  getEndorsementConfig,
-  customerMedicalStatus,
-} from "@/lib/medical/store";
+import { customerMedicalStatus } from "@/lib/medical/store";
 import { attachCardToOrder, detachCardFromOrder } from "@/lib/medical/sale-store";
-import {
-  getOrderMedicalContext,
-  getMedicalRegistryForKeys,
-  recordExemptSalesForOrder,
-  clearExemptSalesForOrder,
-} from "@/lib/medical/sale-store";
-import {
-  buildOrderExemptionPlan,
-  buildExemptSaleDrafts,
-  type PlanLine,
-} from "@/lib/medical/medical-sale-core";
+import { clearExemptSalesForOrder } from "@/lib/medical/sale-store";
 import type { OrderStatus } from "@/lib/orders/types";
 
 const VALID_STATUSES: OrderStatus[] = [
@@ -64,143 +46,6 @@ const VALID_STATUSES: OrderStatus[] = [
 
 function actorLabel(email: string, fullName: string | null): string {
   return fullName?.trim() ? `${fullName.trim()} (${email})` : email;
-}
-
-/**
- * The → completed compliance gate. Returns null when the order may complete,
- * or a human-readable refusal message when it must not.
- */
-async function runCompletionGate(opts: {
-  orderId: string;
-  actorId: string;
-  overridePermitted: boolean;
-  overrideReason: string | null;
-}): Promise<string | null> {
-  const order = await getOrder(opts.orderId);
-  if (!order) return "Order not found.";
-  if (order.status === "completed") return null; // idempotent re-complete
-
-  // ── S-12: sales-hours gate (WAC 314-55-147) ─────────────────────────────
-  // A sale may only complete 8:00 AM–midnight on the STORE's (Pacific) wall
-  // clock; the owner may configure a TIGHTER window in Settings → Sales hours.
-  // This is a HARD block — the statute has no override; a tighter owner
-  // window is widened in Settings, never bypassed at the register.
-  const hoursWindow = await getSalesHoursWindow();
-  const hoursVerdict = evaluateSalesHours(new Date(), hoursWindow);
-  if (!hoursVerdict.allowed) {
-    return `Sale blocked outside sales hours. ${hoursVerdict.reason}`;
-  }
-
-  // ── S-2b: money recompute gate ─────────────────────────────────────────
-  const check = await verifyStoredOrderForCompletion(order);
-  if (!check.ok) {
-    return `Money check failed — fix the order first. ${check.problems.join(" ")}`;
-  }
-
-  // ── Task S-a: loyalty-code consistency gate ────────────────────────────────
-  // An order carrying a loyalty CODE may only complete while the redemption
-  // row is consumed by THIS order (catches released/re-used codes after a
-  // reopen). Pure check; loyalty value already lives in the line prices so
-  // the money gate above covers the totals.
-  const loyaltyCtx = await getOrderLoyaltyContext(opts.orderId);
-  const loyaltyCheck = checkLoyaltyCodeForCompletion(
-    {
-      id: opts.orderId,
-      loyaltyKind: loyaltyCtx.kind,
-      loyaltyRedemptionId: loyaltyCtx.redemption?.id ?? null,
-    },
-    loyaltyCtx.redemption,
-  );
-  if (!loyaltyCheck.ok) {
-    return loyaltyCheck.reason;
-  }
-
-  // ── S-1b: sales-limit HARD gate ────────────────────────────────────────
-  // Task O — medical context first (attached recognition card). If staff
-  // attached a card to this order, RE-validate it on the completion date
-  // (tax.cardValidity via authorizationValidityAt — the single source of
-  // truth). An attached-but-invalid card BLOCKS completion: staff must fix the
-  // card or detach it so the sale knowingly completes as recreational.
-  const medCtx = await getOrderMedicalContext(opts.orderId);
-  let cardedValid = false;
-  if (medCtx) {
-    const validity = authorizationValidityAt(toRecognitionCard(medCtx.authorization), new Date());
-    if (!validity.valid) {
-      return `The attached recognition card for ${medCtx.customerName} is NOT valid: ${validity.reason ?? "unknown reason"}. Fix the card on the patient's profile or detach it before completing (an invalid card grants no exemption, and completing anyway would misreport the sale).`;
-    }
-    cardedValid = true;
-  }
-
-  // Task O — DOH 246-70 exemption plan + high-THC statutory gate. Built from
-  // the STORED lines (category snapshot) and the durable product registry.
-  // The plan is the SAME pure math the order-detail preview shows — no drift
-  // between what staff saw and what the gate enforces.
-  const [medSettings, endorsement] = await Promise.all([getMedTaxSettings(), getEndorsementConfig()]);
-  const registry = await getMedicalRegistryForKeys(order.lines.map((l) => l.product_id));
-  const planLines: PlanLine[] = order.lines.map((l) => ({
-    productId: l.product_id,
-    productName: l.product_name,
-    category: l.category ?? null,
-    quantity: l.quantity,
-    unitPriceMinorUnits: l.price_minor_units,
-  }));
-  const plan = buildOrderExemptionPlan(planLines, {
-    registry,
-    cardedValid,
-    endorsed: medSettings.medicallyEndorsed,
-    saleDate: new Date().toISOString().slice(0, 10),
-    exciseExemptionUntil: endorsement?.exciseExemptionUntil ?? "2029-06-30",
-  });
-
-  // HIGH-THC HARD GATE (chapter 246-70 WAC): these products sell ONLY to a
-  // buyer with a valid recognition card. Statutory — NO override exists.
-  if (plan.highThcViolations.length > 0) {
-    const names = plan.highThcViolations.map((n) => `"${n}"`).join(", ");
-    return `Sale blocked: ${names} ${plan.highThcViolations.length === 1 ? "is a DOH High-THC product" : "are DOH High-THC products"} (chapter 246-70 WAC) and may ONLY be sold to a patient with a valid recognition card. Attach the patient's card, or remove the item. There is no override for this rule.`;
-  }
-
-  // S-1b sales-limit HARD gate: a VALID attached recognition card evaluates
-  // against the 3× medical limits (WAC 314-55-095(2)(d)); otherwise recreational.
-  const { verdict } = await enforceSalesLimitForSale(
-    check.limitLines,
-    cardedValid ? "medical" : "recreational",
-    {
-      orderId: opts.orderId,
-      actorId: opts.actorId,
-      override: opts.overridePermitted
-        ? { permitted: true, reason: opts.overrideReason }
-        : null,
-    },
-  );
-
-  if (!verdict.allowed) {
-    const reasons = verdict.reasons.length ? verdict.reasons.join(" ") : "Cart exceeds a statutory limit.";
-    return `Sale blocked by WAC 314-55-095 limits: ${reasons} Reduce quantities, or a manager can apply a logged override with a reason.`;
-  }
-
-  // Task O — WAC 314-55-090(2) exempt-sale ledger (write-or-block). Every
-  // claimed exemption MUST have its 5-year record row; otherwise the excise
-  // "shall be presumed to have been incorrectly exempted" and the store remits
-  // it plus penalties (WAC 314-55-090(3)). Failure to write = refuse to complete.
-  if (medCtx && cardedValid && plan.claimedLineCount > 0) {
-    const draftsResult = buildExemptSaleDrafts(plan, {
-      uniquePatientIdentifier: medCtx.authorization.unique_patient_identifier,
-      effectiveOn: medCtx.authorization.effective_on ?? medCtx.authorization.issued_on,
-      expiresOn: medCtx.authorization.expires_on,
-    });
-    if (!draftsResult.ok) {
-      return `Medical exempt-sale records could not be prepared: ${draftsResult.error}`;
-    }
-    const written = await recordExemptSalesForOrder(opts.orderId, draftsResult.drafts, {
-      customerId: medCtx.authorization.customer_id,
-      authorizationId: medCtx.authorization.id,
-      actorId: opts.actorId,
-    });
-    if (!written.ok) {
-      return `Sale blocked — the WAC 314-55-090(2) exempt-sale records could not be written (${written.error}). Without these records the exemption is presumed invalid and the store owes the tax, so completion is refused.`;
-    }
-  }
-  return null;
 }
 
 export async function setOrderStatusAction(formData: FormData): Promise<void> {
