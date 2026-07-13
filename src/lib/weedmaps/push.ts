@@ -22,11 +22,13 @@
  *                    image_updated_at? } ; JPG/PNG only; HEAD must return 200.
  *   - external_id REQUIRED + STABLE on every item; one root (L1) category required.
  *
- * NOT inlined in the supplied docs (so we DO NOT guess): the exact base item / variant
- * price/weight write schema (shown in the live "API Examples"). Our payload uses the
- * VERIFIED linking fields and namespaces price/variant under `_variants`; the live push
- * therefore defaults to a non-network PREVIEW and the result clearly flags the price/
- * variant schema as pending final verification against the live API.
+ * Task X update: the base item/variant write schema (Request_MenuItem) has now been
+ * VERIFIED against the live OpenAPI on developer.weedmaps.com (recorded in
+ * docs/LEAFLY_WEEDMAPS_INTEGRATION_RESEARCH.md). payload-core.ts emits the real
+ * `variants[]` (external_id + price {amount,currency} + weight {unit,value} +
+ * inventory_quantity min 1), `category_names`, `genetics`, `published`, `image_url`.
+ * NOTE: there is NO bulk endpoint — live writes must be per-item
+ * PUT /menus/{menu_id}/items/external/{external_id} (rebuilt in the Task X actions PR).
  *
  * Safety: live writes are gated behind explicit `confirm: true` AND full credentials.
  * Every attempt is recorded to syndication_logs by the caller (channel: "weedmaps").
@@ -87,10 +89,11 @@ export type WeedmapsPreview = {
 };
 
 const SCHEMA_NOTES = [
-  "Linking fields (external_id, category_names, brand_name, strain_name, cannabinoids) are grounded in the Weedmaps 2025-07 docs.",
-  "The exact base item price/variant write schema is shown in Weedmaps' live API Examples rather than the supplied docs; price/variant is surfaced under `_variants` and must be confirmed against the live menu before enabling live writes.",
+  "Payload uses the VERIFIED Request_MenuItem write schema from the live 2025-07 OpenAPI: variants[] carry price {amount,currency} in dollars, weight {unit,value}, and inventory_quantity (min 1, omitted when out of stock).",
   "external_id uses our stable POS product key (never a batch id) so curated Weedmaps data is preserved across syncs.",
-  "Images: one per item, JPG/PNG only, set via image_url (PATCH /menu_items/{id}); the image host must answer a HEAD request with 200.",
+  "Weedmaps has NO bulk endpoint — a live sync is one PUT /menus/{menu_id}/items/external/{external_id} per item, paced under the 420-requests/10s limit.",
+  "Out-of-stock items are unpublished (published:false), never deleted, so Weedmaps-side curation survives.",
+  "Images: one per item, JPG/PNG only via image_url; the image host must answer a HEAD request with 200. Only the product's own exact photo is ever sent.",
 ];
 
 /**

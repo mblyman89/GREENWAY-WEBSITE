@@ -30,6 +30,14 @@ import { __runCreativePlacementsTests } from "../../src/lib/marketing/creative-p
 import { __runCcrsWeekTests } from "../../src/lib/compliance/ccrs-week-core";
 import { __runCcrsDeadlineTests } from "../../src/lib/compliance/ccrs-deadline-core";
 import { __runCcrsErrorTriageTests } from "../../src/lib/compliance/ccrs-error-triage-core";
+import { __runMenuFeedTests } from "../../src/lib/syndication/menu-feed-core";
+import { __runLeaflyPayloadTests } from "../../src/lib/leafly/payload-core";
+import { __runWmPayloadTests } from "../../src/lib/weedmaps/payload-core";
+import { __runIntegrationCredentialsTests } from "../../src/lib/integrations/integration-credentials-core";
+import { __runSyncPlanTests } from "../../src/lib/syndication/sync-plan-core";
+import { __runPreflightTests } from "../../src/lib/syndication/preflight-core";
+import { __runRichnessTests } from "../../src/lib/syndication/richness-core";
+import { __runSyncSettingsTests } from "../../src/lib/syndication/sync-settings-core";
 
 async function main() {
   __runOrderPricingTests();
@@ -62,6 +70,14 @@ async function main() {
   if (ccrsDeadline.failed > 0) throw new Error(`ccrs-deadline-core: ${ccrsDeadline.failed} failure(s)`);
   const ccrsTriage = __runCcrsErrorTriageTests();
   if (ccrsTriage.failed > 0) throw new Error(`ccrs-error-triage-core: ${ccrsTriage.failed} failure(s)`);
+  __runMenuFeedTests();
+  __runLeaflyPayloadTests();
+  __runWmPayloadTests();
+  __runIntegrationCredentialsTests();
+  __runSyncPlanTests();
+  __runPreflightTests();
+  __runRichnessTests();
+  __runSyncSettingsTests();
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

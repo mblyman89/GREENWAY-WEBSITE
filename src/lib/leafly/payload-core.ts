@@ -118,7 +118,11 @@ export function toLeaflyVariant(v: SyndicationVariant): LeaflyVariant {
   const variant: LeaflyVariant = {
     id: v.id,
     price: Math.round(v.priceMinorUnits),
-    inventoryLevel: v.inStock ? 1 : 0,
+    // v2 `inventoryLevel` is a STOCK QUANTITY (integer count), not a 0/1 flag.
+    // Send the real on-hand number; guarantee >=1 when in stock so Leafly's
+    // auto-publish ("items received WITH inventory are published") holds even
+    // if the quantity field lags, and 0 when out of stock.
+    inventoryLevel: v.inStock ? Math.max(1, Math.round(v.inventoryLevel)) : 0,
     medical: false,
   };
   if (v.label && v.label.trim().length > 0) {
@@ -216,19 +220,25 @@ export function __runLeaflyPayloadTests() {
     return c !== null && c.value === null && c.unit === "%";
   })());
 
-  // variant mapping: price rounded, inventoryLevel from inStock
-  const v: SyndicationVariant = { id: "v1", label: "1g", priceMinorUnits: 1500.4, inStock: true };
+  // variant mapping: price rounded, inventoryLevel = real stock quantity
+  const v: SyndicationVariant = { id: "v1", label: "1g", priceMinorUnits: 1500.4, inStock: true, inventoryLevel: 7 };
   const lv = toLeaflyVariant(v);
   ok("variant id kept", lv.id === "v1");
   ok("variant price rounded int", lv.price === 1500);
-  ok("variant inventoryLevel in stock", lv.inventoryLevel === 1);
+  ok("variant inventoryLevel real quantity", lv.inventoryLevel === 7);
   ok("variant medical false", lv.medical === false);
   ok("variant label kept", lv.label === "1g");
 
-  const vOut: SyndicationVariant = { id: "v2", label: "", priceMinorUnits: 1000, inStock: false };
+  const vOut: SyndicationVariant = { id: "v2", label: "", priceMinorUnits: 1000, inStock: false, inventoryLevel: 0 };
   const lvOut = toLeaflyVariant(vOut);
   ok("variant out of stock 0", lvOut.inventoryLevel === 0);
   ok("variant empty label dropped", lvOut.label === undefined);
+
+  // in stock but quantity missing/0 -> floor of 1 so Leafly still publishes
+  const vFloor: SyndicationVariant = { id: "v3", label: "1g", priceMinorUnits: 1000, inStock: true, inventoryLevel: 0 };
+  ok("in-stock quantity floored to 1", toLeaflyVariant(vFloor).inventoryLevel === 1);
+  const vFrac: SyndicationVariant = { id: "v4", label: "1g", priceMinorUnits: 1000, inStock: true, inventoryLevel: 3.4 };
+  ok("fractional quantity rounded", toLeaflyVariant(vFrac).inventoryLevel === 3);
 
   // item with no variants -> synthesized default variant (>=1 required)
   const noVar: SyndicationItem = {
@@ -270,7 +280,7 @@ export function __runLeaflyPayloadTests() {
     description: "",
     priceMinorUnits: 1500,
     inStock: true,
-    variants: [{ id: "x", label: "10pk", priceMinorUnits: 1500, inStock: true }],
+    variants: [{ id: "x", label: "10pk", priceMinorUnits: 1500, inStock: true, inventoryLevel: 12 }],
   };
   const li2 = toLeaflyItem(noStrain);
   ok("absent strain null", li2.strainName === null);
