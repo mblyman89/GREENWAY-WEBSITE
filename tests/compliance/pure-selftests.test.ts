@@ -34,6 +34,7 @@ import { __runCompetitivePlaybookTests } from "@/lib/marketing/competitive-playb
 import { __runMidjourneyCoreTests } from "@/lib/marketing/midjourney-core";
 import { __runFluxCoreTests } from "@/lib/marketing/flux-core";
 import { __runCreativePlacementsTests } from "@/lib/marketing/creative-placements-core";
+import { __runCcrsWeekTests } from "@/lib/compliance/ccrs-week-core";
 
 describe("embedded pure self-test suites", () => {
   it("order-pricing-core (S-2/S-3 money math + floor)", () => {
@@ -126,5 +127,10 @@ describe("embedded pure self-test suites", () => {
   });
   it("creative-placements-core (Task U: verified destination sizes, 4MP ceiling)", () => {
     expect(() => __runCreativePlacementsTests()).not.toThrow();
+  });
+  it("ccrs-week-core (Task W: Sun–Sat week, due next Sunday, reminder planner)", () => {
+    const r = __runCcrsWeekTests();
+    expect(r.failed).toBe(0);
+    expect(r.passed).toBeGreaterThan(0);
   });
 });
