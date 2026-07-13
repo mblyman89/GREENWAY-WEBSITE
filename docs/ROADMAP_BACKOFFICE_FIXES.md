@@ -2258,3 +2258,32 @@ audits remain with the callers.
 
 **Tests:** tsc 0 errors; vitest 1,289/88; pure self-tests pass; eslint clean.
 No migration.
+
+## Shipped — POS B2: offline-first POS foundation (PR #439)
+
+Foundation for the register app's offline-first sync spine, per the approved
+POS research plan (§14 owner decisions: 3 registers, cash-only launch,
+existing TSP143IIIBi Bluetooth printer kept).
+
+- `src/lib/pos/sale-event-core.ts` (pure, zero I/O): append-only POS event
+  envelope (client UUID idempotency key, per-device monotonic sequence,
+  intent-carrying punches), payment-method enum `cash | point_of_banking |
+  ach | debit` with ONLY `cash` enabled at launch (disabled methods
+  hard-blocked in validation), cash change math, mandatory ID-gate result on
+  every sale payload (manual verifies must reference their audit event UUID),
+  category snapshot per line, deterministic replay ordering
+  (device → sequence → occurred-at). 34 embedded self-tests.
+- `supabase/migrations/0120_pos_foundation.sql` (OWNER APPLIES MANUALLY):
+  `pos_devices` (register binding, provision hash, active/revoked),
+  `pos_sale_events` (client_uuid UNIQUE for idempotent ingest, status
+  pending/processed/exception with resolution fields, order FK),
+  `drawer_sessions.device_id`, `time_punches.source` comment adds `register`
+  (verified: no CHECK constraint, no ALTER needed), equipment seed
+  PRN-COUNTER-01 = Star TSP143IIIBi (front counter, Bluetooth, StarXpand,
+  drawer kick via DK port, serial 2550923021300119). RLS mirrors the 0038
+  staff pattern.
+- `tests/compliance/pos-sale-event-core.test.ts` pins the payment enum, cash
+  math, envelope + payload validation, and replay ordering (19 tests).
+
+**Tests:** tsc 0 errors; vitest 1,308/89; pure self-tests pass; eslint clean.
+Migration 0120 pending manual apply by owner.
