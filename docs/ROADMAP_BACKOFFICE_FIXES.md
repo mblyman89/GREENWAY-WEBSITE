@@ -2161,3 +2161,24 @@ omitted when out of stock, 423 = menu paused, unpublish-not-delete for OOS).
 richness/health 17, sync-settings 19, apply-settings 19,
 syndication-playbook 18 — all in both harnesses). tsc + eslint clean on
 every PR. Migration 0119 applied manually by the owner (after 0118).
+
+## Shipped — Creative Studio tabs: FLUX first, Midjourney on its own tab (PR #431)
+
+Owner directive: "the two AI generators [should be] separated into their own
+tabs in that page, with FLUX being the main one being shown first when
+entering the creative studio."
+
+- The Creative Studio (`/admin/marketing/midjourney`) now opens on the
+  **FLUX tab** (default): shared brief (destination → AI-drafted idea →
+  brief fields) on the left, FLUX generation + compliance note on the right.
+- The **Midjourney tab** carries the same shared brief plus the
+  Midjourney-only knobs (parameters, --sref/--oref references) and the
+  copy-paste prompt + structure guide.
+- Tabs are client-side state (no route change) — the brief, destination,
+  AI draft, reference selections, and results all carry over on switch;
+  nothing typed is lost. Tab styling matches the ReceivingTabs pattern.
+- Zero logic changes: handlers, actions, compliance scanning, and helper
+  text untouched (copy cross-references updated for the new layout).
+  Page help + concierge KB grounding updated so AI directions stay honest.
+
+**Tests:** suite unchanged at 1,289 passing; tsc + eslint clean. No migration.
