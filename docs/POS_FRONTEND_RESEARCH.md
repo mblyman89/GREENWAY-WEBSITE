@@ -447,3 +447,28 @@ and a guided flow where compliance failure is unrepresentable in the UI.
   `auth/session.ts` + `roles.ts` + `webauthn-core.ts`, `admin-nav-data.ts` (equipment),
   `src/lib/pos/*`, `src/lib/compliance/*`, `docs/_research_notes_ccrs.md`,
   `docs/ROADMAP_ENHANCEMENTS_AND_POS.md` + `_PART2.md`.
+
+---
+
+## 14. OWNER DECISIONS — RECORDED (Task AA; these answer §12 and are binding for the build)
+
+1. **Distribution: Unlisted App Distribution — APPROVED.** Pass normal App Review under the
+   store's legal entity, then request unlisted (link-only) conversion. Decided before first
+   submission per §3.4.
+2. **Registers: 3 at launch** — two budtender sales registers + one manager till. This matches
+   the migration-0038 seed exactly (Sales Register 1 & 2 @ $167.50 float, Manager Till @ $300);
+   no schema change needed.
+3. **Receipt printer: KEEP the store's existing Bluetooth receipt printer.** The store already
+   runs a Bluetooth receipt printer with its iPad Pros that kicks the drawer after a sale — it
+   stays. (The TSP143IV in the equipment hub is the ONLINE-order auto-print printer, a separate
+   job; do not repurpose it.) No mC-Print3 purchase. ACTION: owner to provide the exact
+   make/model of the front-counter Bluetooth printer so the correct SDK/plugin is chosen and
+   the device is added to the equipment hub.
+4. **Payments: cash-only at launch; POSaBIT pre-approved** as the first card-style integration
+   when the owner green-lights it (§8).
+5. **Seam audit: APPROVED and COMPLETED** — see `docs/POS_SEAM_AUDIT.md` for the verified
+   contracts of the five back-office surfaces the POS builds on (money core, completion gate,
+   registers/drawers, time clock, auth/PIN), plus the four additive refactors folded into
+   slices P0/P1. Notable finding: **PIN infrastructure already exists** (salted-scrypt
+   `employees.clock_pin` + throttle + `getEmployeeByPin`) — the POS PIN-per-sale layer reuses
+   it rather than building new.
