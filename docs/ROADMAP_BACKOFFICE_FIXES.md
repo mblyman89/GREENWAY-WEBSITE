@@ -2007,3 +2007,76 @@ exempt-sale ledger) verified intact end to end.
 
 **Tests:** suite at **1,276 passing** (signup-customer-core self-tests added
 in both harnesses). tsc + eslint clean on every PR. No migrations in Task V.
+
+## Shipped — Task W: CCRS Compliance Reporting Command Center (PRs #423, #424, #425)
+
+Owner: "upgraded it and enhanced it to be a compliance reporting command
+center… extremely easy, super user friendly, tons of helpers and ai
+assistance… hand held process… step by step with checks and guard rails…
+completely hardened and bullet proof… push notifications if possible, email
+reminders, bells and whistles even so there is no way we could ever miss the
+upload deadlines."
+
+Research first (standing rule): `docs/CCRS_COMMAND_CENTER_RESEARCH.md` — an
+AI-readable report covering what CCRS is (manual CSV upload only, NO API;
+SAW login, WA.gov cutover ~Oct 2026), the weekly cadence (Sun–Sat week due
+the FOLLOWING SUNDAY per the LCB FAQ), the monthly LIQ-1295 (due the 20th,
+even with no sales, 2% late penalty), all seven retailer file specs with
+enums/limits/error messages, the dependency upload order (Group 1 → 10 min →
+Group 2 → 10 min → Group 3), the error-by-email workflow + LCB contacts, the
+DOH medical 4-leg exemption (endorsement + DOH database check every
+transaction + IsMedical=TRUE inventory + RecreationalMedical $0-tax sale) —
+there is NO separate DOH report upload for retailers — and a recon of every
+existing CCRS asset.
+
+### W PR A — weekly deadline engine + submission ledger (PR #423, merged; migration 0118 owner-applied)
+- `ccrs-week-core.ts` (PURE, 40 self-tests): Sun–Sat weeks, `weekDeadline`,
+  `weeklyDeadlineOverview` (oldest-overdue most urgent), and
+  `planWeeklyReminders` (thursday_heads_up / saturday_wrap / sunday_due /
+  overdue_daily with send-once dedupe keys; overdue keys embed the date so
+  they repeat daily).
+- FIXED VERIFIED BUG: the compliance calendar's `ccrs_weekly` due date was
+  `weekEnd + 7` (following Saturday) — corrected to `weekEnd + 1` (the
+  Sunday) per the LCB FAQ; it was under-alarming by six days.
+- Migration `0118_ccrs_command_center.sql`: `ccrs_week_submissions` (ledger:
+  resolution submitted|nothing_to_report, on_time computed at write,
+  files_json manifest, error_status), `compliance_reminder_log` (unique
+  dedupe_key), `push_subscriptions` (VAPID endpoints, RLS self-policy).
+- `ccrs-week-store.ts`: fails SAFE (DB down ⇒ unresolved ⇒ MORE nagging);
+  refuses to resolve in-progress weeks.
+
+### W PR B — reminders that can't be missed (PR #424, merged; no migration)
+- `notifications/push.ts`: Web Push (web-push 3.6.7, VAPID env-gated),
+  auto-prunes dead endpoints. `public/push-sw.js` + staff-gated
+  `/api/admin/push` (GET key / POST subscribe / DELETE) +
+  `PushRemindersPanel` per-device toggle with honest degraded states.
+- `notifications/compliance-reminders.ts`: daily orchestrator — weekly
+  planner + NEW pure `planMonthlyReminders` in `ccrs-deadline-core.ts`
+  (liq_due_soon / liq_due_today / liq_overdue_daily; 5 new self-tests; the
+  Slice-106 self-tests were never harness-registered — now wired into both).
+  Email (Resend REST staff-list pattern) + push in parallel; send-once via
+  `compliance_reminder_log`; failed sends NOT logged (retry next run);
+  no-channel-configured NOT logged (fires once a channel exists).
+- `/api/cron/compliance-reminders` (GET/POST): `CRON_SECRET` Bearer with the
+  fail-closed production posture; staff-session fallback for manual runs.
+  `vercel.json` cron daily 16:00 UTC (~8–9am Pacific). Env documented in
+  `.env.example` (CRON_SECRET, VAPID keys).
+
+### W PR C — the Command Center page (PR #425, merged; no migration)
+`/admin/compliance/ccrs` (top-nav CCRS button): deadline banner → week picker
+→ activity KPIs + the SAME authoritative validation gate as the zip export →
+drafts-only AI advisor → guided upload walkthrough (steps LOCK until
+prerequisites clear; live 10-minute dependency countdowns; per-week
+localStorage via SSR-safe useSyncExternalStore) → record-the-week forms with
+hard guards (no submit while validation fails; no nothing-to-report with
+records; no resolving in-progress weeks; audited; manifest evidence;
+on-time/late stamped; undo) → error-email triage
+(`ccrs-error-triage-core.ts`, PURE, 18 self-tests: 10 verified LCB error
+signatures, duplicate-strain benign per FAQ, DRAFTS-ONLY examiner@lcb.wa.gov
+escalation builder) → DOH/medical 4-leg panel with the week's exempt-sale
+evidence → monthly LIQ-1295 strip → reminder status → submission ledger.
+
+**Tests:** suite at **1,279 passing** (ccrs-week-core 40, ccrs-deadline-core
+30 incl. monthly planner, ccrs-error-triage-core 18 — all in both
+harnesses). tsc + eslint clean on every PR. Migration 0118 applied manually
+by the owner (Task W PR A).
