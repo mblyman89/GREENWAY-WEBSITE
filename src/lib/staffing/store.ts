@@ -216,7 +216,7 @@ export type ClockResult =
  */
 export async function toggleClock(
   employeeId: string,
-  source: "web" | "station" | "phone" | "manager_edit" = "web",
+  source: "web" | "station" | "phone" | "manager_edit" | "register" = "web",
 ): Promise<ClockResult> {
   if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not configured." };
   const admin = createSupabaseAdminClient();

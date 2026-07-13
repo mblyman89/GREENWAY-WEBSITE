@@ -46,7 +46,12 @@ import {
 
 export type CompletionGateOptions = {
   orderId: string;
-  actorId: string;
+  /**
+   * staff_profiles id for audit rows. NULL for POS-synced sales made by a
+   * floor employee with no back-office login (the pos_sale_events row still
+   * pins the employees.id).
+   */
+  actorId: string | null;
   /** Caller-verified result of the sales_limit.override permission check. */
   overridePermitted: boolean;
   overrideReason: string | null;
