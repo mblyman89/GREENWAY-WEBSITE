@@ -40,6 +40,7 @@ import { __runRichnessTests } from "../../src/lib/syndication/richness-core";
 import { __runSyncSettingsTests } from "../../src/lib/syndication/sync-settings-core";
 import { __runApplySettingsTests } from "../../src/lib/syndication/apply-settings-core";
 import { __runSyndicationPlaybookTests } from "../../src/lib/integrations/syndication-playbook";
+import { __runPosSaleEventTests } from "../../src/lib/pos/sale-event-core";
 
 async function main() {
   __runOrderPricingTests();
@@ -82,6 +83,7 @@ async function main() {
   __runSyncSettingsTests();
   __runApplySettingsTests();
   __runSyndicationPlaybookTests();
+  __runPosSaleEventTests();
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
