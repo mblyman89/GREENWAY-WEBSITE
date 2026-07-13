@@ -2287,3 +2287,22 @@ existing TSP143IIIBi Bluetooth printer kept).
 
 **Tests:** tsc 0 errors; vitest 1,308/89; pure self-tests pass; eslint clean.
 Migration 0120 pending manual apply by owner.
+
+## Shipped — POS B3: pure ID gate — AAMVA scan + audited manual fallback (PR #441)
+
+`src/lib/pos/id-scan-core.ts` — the register's mandatory ID gate, zero I/O so
+it runs on the iPad. SCAN path: AAMVA PDF417 parser for US/Canada DL/ID cards
+(header validation, DL/ID subfile extraction, CRLF-scanner tolerance, DCT
+fallback for pre-2009 first names, US MMDDCCYY / Canada CCYYMMDD dates
+normalized to YYYY-MM-DD). Verdict = readable DOB + 21+ (RCW 69.50.357; the
+21st birthday itself counts) + not expired (valid through the expiry date,
+WAC 314-55-150); anything unreadable routes to the MANUAL path — never a
+silent pass. MANUAL path: the 9-type WAC 314-55-150 acceptable-ID list
+(incl. Global Entry + Permanent Resident card, eff. 11/8/2025 per WSR
+25-21-035), required reason, photo-match confirmation, same 21+/expiry math;
+callers must emit a `manual_id_verification` event (B2) whose UUID the sale
+payload references. Age math runs on Pacific wall-clock YYYY-MM-DD strings
+passed in by the caller — the core stays pure.
+
+**Tests:** tsc 0 errors; vitest 1,327/90; `__runIdScanCoreTests` 39/39 in the
+pure self-test runner; eslint clean. No migration.
