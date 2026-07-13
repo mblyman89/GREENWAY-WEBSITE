@@ -18,6 +18,7 @@ import { __runAtRestCryptoTests } from "../../src/lib/security/at-rest-crypto";
 import { __runEngineTests } from "../../src/lib/loyalty/engine";
 import { __runLoyaltyConfigTests } from "../../src/lib/loyalty/loyalty-config-core";
 import { __runLoyaltySaleTests } from "../../src/lib/loyalty/loyalty-sale-core";
+import { __runSignupCustomerTests } from "../../src/lib/loyalty/signup-customer-core";
 import { __runScheduleCoreTests } from "../../src/lib/staffing/schedule-core";
 import { __runEmployeeLifecycleTests } from "../../src/lib/staffing/employee-lifecycle-core";
 import { __runUserGuardTests } from "../../src/lib/auth/user-guards-core";
@@ -43,6 +44,7 @@ async function main() {
   __runEngineTests();
   __runLoyaltyConfigTests();
   __runLoyaltySaleTests();
+  __runSignupCustomerTests();
   __runScheduleCoreTests();
   __runEmployeeLifecycleTests();
   __runUserGuardTests();

@@ -181,7 +181,7 @@ export const HELP_SECTIONS: HelpSection[] = [
       },
       {
         q: "A customer wants to sign up for rewards online — where does that go?",
-        a: "Loyalty sign-ups collected on the site appear under Loyalty. You review and manage them there; the rewards rules live under Loyalty Program.",
+        a: "Loyalty sign-ups collected on the site appear under Loyalty signups. Mark one as entered and the customer record is created automatically; the rewards rules live under Loyalty Program.",
         href: "/admin/loyalty-signups",
       },
     ],
@@ -276,7 +276,7 @@ export const HELP_SECTIONS: HelpSection[] = [
       },
       {
         q: "Where do website loyalty signups go?",
-        a: "New signups from the public site land in Loyalty signups on the Dashboard so you can review and enter them. It shows who signed up and when.",
+        a: "New signups from the public site land in Loyalty signups on the Dashboard. Mark one as entered and its customer record is created here automatically — deduped against people you already have, and enrolled in the loyalty program.",
         href: "/admin/loyalty-signups",
       },
     ],

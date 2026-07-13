@@ -21,7 +21,7 @@ import { ACTIVE_ORDER_STATUSES, ORDER_STATUS_LABELS, type OrderStatus } from "@/
 import { liveRegisters, type RegisterLive } from "@/lib/registers/store";
 import { buildReorderSuggestions } from "@/lib/purchasing/po-store";
 import { getPublishedVersion, listImports } from "@/lib/pos/menu-version";
-import { countLoyaltySignups } from "@/lib/loyalty/store";
+import { getLoyaltyStatusCounts } from "@/lib/loyalty/signups-store";
 import {
   pacificToday,
   addPacificDays,
@@ -53,6 +53,7 @@ export type CockpitSnapshot = {
   lowStockCount: number;
   publishedItems: number | null;
   lastImportISO: string | null;
+  /** Signups in the DB queue still awaiting review (status = new). */
   loyaltySignups: number;
 };
 
@@ -98,7 +99,7 @@ export async function getCockpitSnapshot(): Promise<CockpitSnapshot> {
     reorder,
     published,
     imports,
-    loyaltySignups,
+    loyaltyCounts,
   ] = await Promise.all([
     safeData(() => getSalesReport(todayStart, nowISO), EMPTY_SALES_REPORT).then((r) => r.data),
     safeData(() => getSalesReport(yestStart, yestEnd), EMPTY_SALES_REPORT).then((r) => r.data),
@@ -113,7 +114,10 @@ export async function getCockpitSnapshot(): Promise<CockpitSnapshot> {
     ).then((r) => r.data),
     safeData(() => getPublishedVersion(), null).then((r) => r.data),
     safeData(() => listImports(1), [] as Awaited<ReturnType<typeof listImports>>).then((r) => r.data),
-    safeData(() => countLoyaltySignups(), 0).then((r) => r.data),
+    safeData(
+      () => getLoyaltyStatusCounts(),
+      { new: 0, entered: 0, duplicate: 0, archived: 0 },
+    ).then((r) => r.data),
   ]);
 
   const orderBoard: OrderBoardRow[] = ACTIVE_ORDER_STATUSES.map((s) => ({
@@ -152,6 +156,6 @@ export async function getCockpitSnapshot(): Promise<CockpitSnapshot> {
     lowStockCount,
     publishedItems: published?.item_count ?? null,
     lastImportISO: imports[0]?.created_at ?? null,
-    loyaltySignups,
+    loyaltySignups: loyaltyCounts.new,
   };
 }

@@ -413,7 +413,7 @@ export default async function AdminDashboardPage() {
             <StatCard
               label="Loyalty signups"
               value={snap.loyaltySignups}
-              hint="Awaiting POS entry"
+              hint="New — awaiting review"
               accent="gold"
               href="/admin/loyalty-signups"
               icon="⭐"

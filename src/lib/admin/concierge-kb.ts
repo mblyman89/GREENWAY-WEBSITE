@@ -109,7 +109,7 @@ export const CONCIERGE_KB: ConciergeTopic[] = [
     facts: [
       "CRM → Customers is where you build customer and patient profiles — the foundation for loyalty, purchase history, and (later) purchase-limit enforcement at the register.",
       "You can add a customer manually, or import a list under Customers → Import.",
-      "New public loyalty signups arrive in Dashboard → Loyalty signups; review them there and add them to the customer list.",
+      "New public loyalty signups arrive in Dashboard → Loyalty signups; marking one as entered automatically creates (or links) its customer record here and enrolls it in the loyalty program.",
     ],
   },
   {
