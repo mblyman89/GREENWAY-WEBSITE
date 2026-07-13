@@ -56,9 +56,14 @@ export default async function RegisterActivityPage({
           <Breadcrumbs items={[{ label: "Register Activity" }]} />
         }
         action={
-          <Button href={`${BASE}/history`} variant="neutral" size="sm">
-            Cash drawer reports
-          </Button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <Button href={`${BASE}/devices`} variant="neutral" size="sm">
+              POS devices
+            </Button>
+            <Button href={`${BASE}/history`} variant="neutral" size="sm">
+              Cash drawer reports
+            </Button>
+          </div>
         }
         help={
           <HelpPanel id="register-activity" title="What is this page?">
