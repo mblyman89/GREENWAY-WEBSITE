@@ -1948,3 +1948,62 @@ parameters card retitled with an honest "FLUX ignores these" note.
 (midjourney-core, flux-core, creative-placements-core self-tests wired into
 both the vitest harness and the CI selftest script). tsc + eslint clean on
 every PR. No migrations in Task U.
+
+## Shipped — Task V: Pre-deployment tidy-up — loyalty→customers auto-connect, Getting Started removal, count integrity (PRs #419, #420, #421)
+
+### V-1 — Loyalty signups → Customers auto-connection (PR #419, merged; no migration)
+Closed the verified gap that `customers.loyalty_signup_id` (migration 0022)
+was never written by any code path — validating a signup draft did NOT create
+the customer. Now "Mark entered" runs a connect step automatically:
+- New pure `signup-customer-core.ts` (~40 assertions): normalizers,
+  `marketingConsentFromSignup()` (consent minus opt-out), field mapping
+  (`import_source: "loyalty-signup"`, normalized email/phone, the
+  `loyalty_signup_id` back-link), match-basis ranking (phone+email > phone >
+  email), existing-customer tie-break (linked-to-this-signup → unlinked →
+  linked-to-other), and a FILL-ONLY link patch that never overwrites data and
+  never flips `do_not_contact`.
+- New `signup-customer-store.ts`: `connectSignupToCustomer()` —
+  already-linked check, dedupe match against phone_normalized /
+  email_normalized / email, create-or-link, then best-effort
+  `enrollCustomer()` (idempotent loyalty account + signup bonus).
+- Queue UX: success banner deep-linking the customer record, error banner
+  with retry guidance, a green "↗ Customer" chip on connected rows, and an
+  explicit "Add to customers" backfill button for signups entered BEFORE this
+  shipped. Audited as `loyalty.customer_created` / `.customer_linked` /
+  `.customer_connect_failed`.
+- Dashboard "Loyalty signups" tile switched from the legacy JSONL file count
+  to the DB queue's `new` count.
+
+### V-2 — Getting Started removed; SOP pack kept (PR #420, merged; no migration)
+Owner: "Please remove the getting started page." Deleted the route, wizard
+component, actions, and `ai-setup-assistant.ts` (SETUP_GUIDE retained — it
+still grounds the concierge). The printable SOP pack the wizard hosted is
+used by 9 admin pages via SopSheetLink, so it was RELOCATED to `/admin/sop`
+(`SOP_BASE_PATH` + self-test + vitest expectations updated). Nav item
+removed; dashboard buttons now read "Help & FAQ" and "Printable SOPs"; the
+setup-progress banner deep-links each check's own page; help/concierge/docs
+swept.
+
+### V-3 — Count integrity + Pacific timestamps + orders polish (PR #421, merged; no migration)
+- S-7 family: `getOrderStatusCounts()`, `getLoyaltyStatusCounts()`, and the
+  promotions report counted rows via `select("status")`, silently truncating
+  at PostgREST's `db.max_rows` cap (1000) — the dashboard/cockpit/new-order
+  poll would under-report past 1000 lifetime rows. All three now use exact
+  indexed head counts per status; the loyalty report's signup fetch now pages
+  via `pagedAll`.
+- `formatDateTime()` (pos/format) now anchors to America/Los_Angeles — on
+  UTC servers every staff-facing timestamp rendered 7–8 hours off. Order
+  detail + pick-ticket + loyalty-queue timestamps all fixed.
+- Orders list gained Cancelled / No-show filter chips; the dashboard's
+  open-orders tiles deep-link to their status filter.
+
+**Audits completed with no further gaps found:** every Reports tab
+(Overview/Sales/Benchmarks/Forecast/COGS/Tax/Customers/Loyalty/Employees/
+Medical/Compliance/Excise/Accounting) verified to enforce `reports.view`,
+guard on `isSupabaseServiceConfigured`, and read live stores (pagedAll /
+chunkedIn where row volume matters); the order detail page's compliance
+gates (sales-hours, money recompute, loyalty-code, high-THC, sales-limit,
+exempt-sale ledger) verified intact end to end.
+
+**Tests:** suite at **1,276 passing** (signup-customer-core self-tests added
+in both harnesses). tsc + eslint clean on every PR. No migrations in Task V.

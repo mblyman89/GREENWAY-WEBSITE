@@ -6,7 +6,7 @@
  *   - open orders by status (getOrderStatusCounts + ACTIVE_ORDER_STATUSES)
  *   - live registers + drawers (liveRegisters)
  *   - low-stock count (buildReorderSuggestions, onlyNeeded)
- *   - live menu size (getPublishedVersion) + loyalty signups (countLoyaltySignups)
+ *   - live menu size (getPublishedVersion) + loyalty signups (getLoyaltyStatusCounts)
  *
  * Nothing is fabricated; every number traces to a real query. Degrades
  * gracefully to zeros when Supabase isn't configured. No migration.
