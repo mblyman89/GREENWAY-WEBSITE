@@ -42,6 +42,7 @@ import { __runApplySettingsTests } from "../../src/lib/syndication/apply-setting
 import { __runSyndicationPlaybookTests } from "../../src/lib/integrations/syndication-playbook";
 import { __runPosSaleEventTests } from "../../src/lib/pos/sale-event-core";
 import { __runIdScanCoreTests } from "../../src/lib/pos/id-scan-core";
+import { __runPosSyncCoreTests } from "../../src/lib/pos/sync-core";
 
 async function main() {
   __runOrderPricingTests();
@@ -86,6 +87,7 @@ async function main() {
   __runSyndicationPlaybookTests();
   __runPosSaleEventTests();
   __runIdScanCoreTests();
+  __runPosSyncCoreTests();
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
