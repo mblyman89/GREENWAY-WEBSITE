@@ -2330,3 +2330,31 @@ back-office login; the ledger row still pins employees.id).
 
 **Tests:** tsc 0 errors; vitest 1,341/91; pure self-tests pass; eslint clean.
 Endpoint refuses clearly until migration 0120 is applied.
+
+## Shipped — POS B5: register shell + device provisioning (PR #445)
+
+The iPad-facing register app shell at `/pos` (outside admin middleware,
+noindex, AgeGate-skipped) plus its back-office console. Owner decisions
+honored (research §14): the DEVICE holds a device-scoped credential; HUMANS
+are identified per-action by PIN; the register locks on idle (2 min) and can
+be locked with one tap. `src/lib/pos/register-client-core.ts` (pure, 16
+self-tests) owns the on-device offline queue: monotonic per-device sequences
+(`buildEnvelope`), durable-ACK clearing (`applyAcks` — processed/duplicate/
+exception leave the queue; REJECTED rows are kept, flagged, and surfaced,
+never silently dropped or blindly re-sent), flush batching in true offline
+order capped at the server's 50-event limit, and corruption-tolerant
+(de)serialization so a damaged localStorage blob can never brick the till.
+`RegisterShell.tsx` wires screens setup → locked (PIN pad → `/api/pos/unlock`
+with throttle + `register.unlocked` audit) → home (identity strip, drawer
+status, sync card with pending/rejected counts, clock in/out punch intents,
+15s background flush + flush-on-reconnect). `/api/pos/sync` gained a
+zero-event heartbeat (`{acks: [], device}`) that powers the setup screen.
+Back office: `/admin/registers/devices` (gated `staffing.manage`) provisions
+devices — a 24-byte key is shown ONCE and only its scrypt hash is stored
+(same discipline as employee PINs) — plus bind-to-register, rotate, revoke,
+last-sync display; all actions audited (`pos_device.*`). "Start sale" button
+is present but disabled pending B6 (guided sale flow).
+
+**Tests:** tsc 0 errors; vitest 1,357/92; `__runRegisterClientCoreTests`
+16/16 in the pure self-test runner; eslint clean. Pages degrade with a clear
+hint until migration 0120 is applied (owner applies manually).
