@@ -2243,3 +2243,18 @@ with POSaBIT pre-approved; seam audit approved.
   pure self-tests all passing.
 
 **Docs only.** No code, no migration.
+
+## Shipped — POS B1: completion gate extracted to a shared module (PR #437)
+
+Seam-audit refactor #1 (POS_SEAM_AUDIT Seam 2). `runCompletionGate` moved
+VERBATIM from the admin orders server-actions file into
+`src/lib/orders/completion-gate.ts` (server-only) so the upcoming POS sync
+route re-runs the IDENTICAL 8-step sequence on every synced register sale:
+idempotent re-complete → S-12 sales hours → S-2b money recompute →
+loyalty-code consistency → card re-validation → DOH 246-70 high-THC hard
+gate → S-1b sales-limit hard gate (logged override) → WAC 314-55-090(2)
+write-or-block. Zero behavior change; permission checks + completion_blocked
+audits remain with the callers.
+
+**Tests:** tsc 0 errors; vitest 1,289/88; pure self-tests pass; eslint clean.
+No migration.
