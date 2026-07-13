@@ -233,8 +233,8 @@ export const CONCIERGE_KB: ConciergeTopic[] = [
     tab: "MKTG & ADV",
     href: "/admin/marketing/midjourney",
     facts: [
-      "The Creative Studio generates images with FLUX at the exact pixel size for a chosen destination — website banners, social posts, email headers, blog heroes, or print/in-store pieces.",
-      "Greenway AI drafts the image brief from a one-line idea, grounded in the store profile and LIVE weekly deals; the same brief also builds a copy-paste Midjourney prompt.",
+      "The Creative Studio has two tabs: FLUX (default, shown first) generates images at the exact pixel size for a chosen destination — website banners, social posts, email headers, blog heroes, or print/in-store pieces; the Midjourney tab builds a copy-paste prompt from the same brief.",
+      "Greenway AI drafts the image brief from a one-line idea, grounded in the store profile and LIVE weekly deals; the brief is shared between both tabs, so switching never loses your work.",
       "Generated images are DRAFTS — review before using them on the website or in marketing.",
     ],
   },

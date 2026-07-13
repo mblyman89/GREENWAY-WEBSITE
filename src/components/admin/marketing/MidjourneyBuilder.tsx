@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * MidjourneyBuilder — the Creative Studio (Task U PR B).
+ * MidjourneyBuilder — the Creative Studio (Task U PR B; tabs added Task Y).
  *
  * FOOL-PROOF FLOW (owner directive: "completely fool proof and simple…
  * tons of helper text and ai assistance", images "sized perfectly for where
@@ -17,7 +17,13 @@
  *   3. GENERATE WITH FLUX — the dominant generator (baked-in API pipeline);
  *      results save to the media library as DRAFTS for human review.
  *
- * Midjourney remains as the copy-a-prompt fallback on the same brief.
+ * TABS (Task Y, owner directive): the two generators live on separate tabs,
+ * with FLUX shown FIRST as the default. The brief (destination, idea, fields)
+ * is shared component state, so everything carries over when switching tabs —
+ * fill it once, generate with FLUX, or flip to the Midjourney tab for a
+ * copy-paste prompt built from the same brief. Client-side tabs (no route
+ * change) so nothing typed is ever lost on switch.
+ *
  * Up to 8 reference images can be selected from published media OR uploaded
  * inline (stored via the same verified media pipeline, reusable later).
  */
@@ -52,6 +58,23 @@ export type ReferenceImage = { id: string; url: string; label: string };
 
 type FluxAsset = { id: string; url: string; filename: string; title: string };
 
+type StudioTab = "flux" | "midjourney";
+
+const STUDIO_TABS: { key: StudioTab; icon: string; label: string; blurb: string }[] = [
+  {
+    key: "flux",
+    icon: "⚡",
+    label: "FLUX — generate images",
+    blurb: "One-click generation at the exact pixel size, saved to your media library as drafts.",
+  },
+  {
+    key: "midjourney",
+    icon: "📋",
+    label: "Midjourney — prompt builder",
+    blurb: "Copy-paste prompt built from the same brief, with full Midjourney parameters.",
+  },
+];
+
 const EMPTY: CreativeBrief = {
   subject: "",
   environment: "",
@@ -77,6 +100,8 @@ export function MidjourneyBuilder({
   fluxConfigured: boolean;
 }) {
   const { toast } = useToast();
+  // FLUX is the dominant generator — its tab shows first (owner directive).
+  const [activeTab, setActiveTab] = useState<StudioTab>("flux");
   const [brief, setBrief] = useState<CreativeBrief>(EMPTY);
   const [presetId, setPresetId] = useState("");
   const [idea, setIdea] = useState("");
@@ -251,429 +276,509 @@ export function MidjourneyBuilder({
     }
   }
 
-  return (
-    <div className="grid gap-6 lg:grid-cols-2">
-      {/* Left: inputs */}
-      <div className="space-y-5">
-        {/* STEP 1 — destination picker. Drives exact pixel size + art direction. */}
-        <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-accent)]/30 bg-[var(--admin-surface)] p-5">
-          <div className="mb-1 flex items-center gap-2">
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--admin-accent)] text-xs font-bold text-black">1</span>
-            <h4 className="text-sm font-semibold text-[var(--admin-text)]">Where will this image go?</h4>
-          </div>
-          <p className="mb-3 text-xs leading-relaxed text-[var(--admin-text-muted)]">
-            Pick the destination first — the image is generated at that spot&rsquo;s <strong>exact pixel size</strong> and
-            the right composition guidance is added automatically. Skip it only for freestyle experiments.
-          </p>
-          <Field label="Destination">
-            <Select value={placementId} onChange={(e) => choosePlacement(e.target.value)}>
-              <option value="">— Freestyle (no destination, uses aspect ratio below) —</option>
-              {placementsByGroup().map((g) => (
-                <optgroup key={g.group} label={g.label}>
-                  {g.placements.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.label} · {p.width}×{p.height}
-                    </option>
-                  ))}
-                </optgroup>
+  // ── Shared sections (same state on both tabs — the brief carries over) ────
+
+  const stepDestination = (
+    <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-accent)]/30 bg-[var(--admin-surface)] p-5">
+      <div className="mb-1 flex items-center gap-2">
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--admin-accent)] text-xs font-bold text-black">1</span>
+        <h4 className="text-sm font-semibold text-[var(--admin-text)]">Where will this image go?</h4>
+      </div>
+      <p className="mb-3 text-xs leading-relaxed text-[var(--admin-text-muted)]">
+        Pick the destination first — the image is generated at that spot&rsquo;s <strong>exact pixel size</strong> and
+        the right composition guidance is added automatically. Skip it only for freestyle experiments.
+      </p>
+      <Field label="Destination">
+        <Select value={placementId} onChange={(e) => choosePlacement(e.target.value)}>
+          <option value="">— Freestyle (no destination, uses aspect ratio below) —</option>
+          {placementsByGroup().map((g) => (
+            <optgroup key={g.group} label={g.label}>
+              {g.placements.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.label} · {p.width}×{p.height}
+                </option>
               ))}
-            </Select>
-          </Field>
-          {placement && (
-            <div className="mt-3 space-y-2 rounded-lg border border-[var(--admin-border)] bg-[var(--admin-canvas)] px-3 py-2.5">
-              <p className="text-xs text-[var(--admin-text)]">
-                <strong className="text-[var(--admin-accent)]">Used for:</strong> {placement.where}
-              </p>
-              <p className="text-xs text-[var(--admin-text-muted)]">{placementSummaryLine(placement)}</p>
-              <p className="text-xs text-[var(--admin-text-muted)]">
-                <strong className="text-[var(--admin-text)]">Tip:</strong> {placement.tip}
-              </p>
-              {placement.printNote && (
-                <p className="text-xs text-[var(--admin-orange)]">
-                  <strong>Print note:</strong> {placement.printNote}
-                </p>
-              )}
-            </div>
+            </optgroup>
+          ))}
+        </Select>
+      </Field>
+      {placement && (
+        <div className="mt-3 space-y-2 rounded-lg border border-[var(--admin-border)] bg-[var(--admin-canvas)] px-3 py-2.5">
+          <p className="text-xs text-[var(--admin-text)]">
+            <strong className="text-[var(--admin-accent)]">Used for:</strong> {placement.where}
+          </p>
+          <p className="text-xs text-[var(--admin-text-muted)]">{placementSummaryLine(placement)}</p>
+          <p className="text-xs text-[var(--admin-text-muted)]">
+            <strong className="text-[var(--admin-text)]">Tip:</strong> {placement.tip}
+          </p>
+          {placement.printNote && (
+            <p className="text-xs text-[var(--admin-orange)]">
+              <strong>Print note:</strong> {placement.printNote}
+            </p>
           )}
         </div>
+      )}
+    </div>
+  );
 
-        {/* STEP 2 — Preset + AI assist */}
-        <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
-          <div className="mb-3 flex items-center gap-2">
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--admin-accent)] text-xs font-bold text-black">2</span>
-            <h4 className="text-sm font-semibold text-[var(--admin-text)]">Describe the idea — Greenway AI drafts the brief</h4>
+  const stepIdea = (
+    <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
+      <div className="mb-3 flex items-center gap-2">
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--admin-accent)] text-xs font-bold text-black">2</span>
+        <h4 className="text-sm font-semibold text-[var(--admin-text)]">Describe the idea — Greenway AI drafts the brief</h4>
+      </div>
+      <Field label="Start from a preset">
+        <Select value={presetId} onChange={(e) => applyPreset(e.target.value)}>
+          <option value="">— None —</option>
+          {PRESETS.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.label}
+            </option>
+          ))}
+        </Select>
+      </Field>
+      {presetId && <p className="mt-2 text-xs text-[var(--admin-text-muted)]">{presetById(presetId)?.description}</p>}
+
+      <div className="mt-4">
+        <Field
+          label="Your idea (for AI assist)"
+          help={
+            aiConfigured
+              ? "A sentence is enough — Greenway AI drafts the brief using your store profile AND your live weekly deals. Try “a banner for our Monday deal”."
+              : "AI is not configured; fill the fields below manually."
+          }
+        >
+          <div className="flex gap-2">
+            <Input value={idea} onChange={(e) => setIdea(e.target.value)} placeholder="e.g. a cozy autumn banner for our Monday pre-roll deal" disabled={!aiConfigured} />
+            <Button variant="neutral" onClick={assist} disabled={!aiConfigured || pending}>
+              {pending ? "Thinking…" : "AI assist"}
+            </Button>
           </div>
-          <Field label="Start from a preset">
-            <Select value={presetId} onChange={(e) => applyPreset(e.target.value)}>
+        </Field>
+      </div>
+      {rationale && (
+        <p className="mt-3 rounded-lg border border-[var(--admin-accent)]/25 bg-[var(--admin-accent)]/10 px-3 py-2 text-xs text-[var(--admin-text)]">
+          <strong className="text-[var(--admin-accent)]">Why:</strong> {rationale}
+        </p>
+      )}
+      {aiFlags.length > 0 && (
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          <span className="text-xs font-semibold text-[var(--admin-orange)]">Compliance flags:</span>
+          {aiFlags.map((f) => (
+            <span key={f} className="rounded-full border border-[var(--admin-orange)]/40 bg-[var(--admin-orange)]/10 px-2 py-0.5 text-[0.65rem] font-medium text-[var(--admin-orange)]">
+              {f}
+            </span>
+          ))}
+          <span className="text-[0.65rem] text-[var(--admin-text-muted)]">— review the draft before generating.</span>
+        </div>
+      )}
+    </div>
+  );
+
+  const briefFields = (
+    <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5 space-y-3">
+      <Field label="Subject (lead with this)">
+        <Input value={brief.subject} onChange={(e) => set("subject", e.target.value)} placeholder="a jar of premium cannabis flower" />
+      </Field>
+      <Field label="Environment / setting">
+        <Input value={brief.environment ?? ""} onChange={(e) => set("environment", e.target.value)} placeholder="on a warm wooden countertop" />
+      </Field>
+      <Field label="Composition / shot">
+        <Input value={brief.composition ?? ""} onChange={(e) => set("composition", e.target.value)} placeholder="centered close-up hero shot" />
+      </Field>
+      <Field label="Lighting">
+        <Input value={brief.lighting ?? ""} onChange={(e) => set("lighting", e.target.value)} placeholder="soft diffused studio lighting" />
+      </Field>
+      <Field label="Style / medium">
+        <Input value={brief.style ?? ""} onChange={(e) => set("style", e.target.value)} placeholder="premium editorial product photography" />
+      </Field>
+      <Field label="Color / mood">
+        <Input value={brief.colorMood ?? ""} onChange={(e) => set("colorMood", e.target.value)} placeholder="warm earthy palette, calm premium mood" />
+      </Field>
+      <Field label="Exclude (→ --no)">
+        <Input value={brief.exclude ?? ""} onChange={(e) => set("exclude", e.target.value)} placeholder="text, watermark, blur" />
+      </Field>
+    </div>
+  );
+
+  const complianceNote = (
+    <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-orange)]/30 bg-[var(--admin-orange)]/5 p-4 text-xs text-[var(--admin-text)]">
+      <strong className="text-[var(--admin-orange)]">Compliance:</strong> {COMPLIANCE_NOTE}
+    </div>
+  );
+
+  // ── FLUX tab (default) — the baked-in generation pipeline ─────────────────
+
+  const fluxPanel = (
+    <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
+      <div className="mb-2 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--admin-accent)] text-xs font-bold text-black">3</span>
+          <h4 className="text-sm font-semibold text-[var(--admin-text)]">Generate with FLUX</h4>
+        </div>
+        <Badge tone={fluxConfigured ? "green" : "neutral"}>{fluxConfigured ? "Connected" : "Not configured"}</Badge>
+      </div>
+      <p className="mb-3 text-xs leading-relaxed text-[var(--admin-text-muted)]">
+        Uses the brief as a natural-language prompt (no <code>--</code> flags). With a destination picked in
+        Step&nbsp;1 the image comes out at that spot&rsquo;s exact pixel size; otherwise the brief&rsquo;s aspect ratio is used. The
+        result saves straight into your media library as a <strong>draft</strong> to review before publishing.
+      </p>
+
+      {/* Reference images — FLUX.2 multi-reference (up to 8, verified API limit) */}
+      <div className="mb-3">
+        <div className="mb-1 flex items-center justify-between">
+          <h5 className="text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-muted)]">
+            Reference images (optional · up to {MAX_FLUX_REFS})
+          </h5>
+          <span className="text-xs text-[var(--admin-text-muted)]">{fluxRefs.length}/{MAX_FLUX_REFS} selected</span>
+        </div>
+        <p className="mb-2 text-xs text-[var(--admin-text-muted)]">
+          FLUX.2 can blend up to {MAX_FLUX_REFS} references — combine product shots, styles, or brand
+          assets. Upload your own below or click to select from your media.
+        </p>
+
+        {/* Inline upload — bring your own reference images (B4) */}
+        <div className="mb-3">
+          <input
+            ref={uploadInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            multiple
+            className="hidden"
+            onChange={(e) => handleUploadFiles(e.target.files)}
+          />
+          <Button
+            variant="save"
+            size="sm"
+            onClick={() => uploadInputRef.current?.click()}
+            disabled={uploadPending || fluxRefs.length >= MAX_FLUX_REFS}
+          >
+            {uploadPending ? "Uploading…" : "Upload reference image(s)"}
+          </Button>
+          <p className="mt-1 text-xs text-[var(--admin-text-muted)]">
+            PNG, JPG, WEBP, or GIF · up to 10 MB each. Uploads are saved to your media library (draft) and selected automatically.
+          </p>
+        </div>
+
+        {allRefs.length === 0 ? (
+          <p className="text-xs text-[var(--admin-text-muted)]">No images yet. Upload one above, or publish media on the Media page.</p>
+        ) : (
+          <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
+            {allRefs.map((r) => {
+              const selected = fluxRefs.includes(r.url);
+              const idx = fluxRefs.indexOf(r.url);
+              const atCap = !selected && fluxRefs.length >= MAX_FLUX_REFS;
+              return (
+                <button
+                  key={r.id}
+                  type="button"
+                  onClick={() => toggleFluxRef(r.url)}
+                  disabled={atCap}
+                  title={r.label}
+                  className={`relative aspect-square overflow-hidden rounded-lg border transition ${
+                    selected
+                      ? "border-[var(--admin-accent)] ring-2 ring-[var(--admin-accent)]/60"
+                      : atCap
+                        ? "border-[var(--admin-border)] opacity-40"
+                        : "border-[var(--admin-border)] hover:border-[var(--admin-accent)]"
+                  }`}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={r.url} alt={r.label} className="h-full w-full object-cover" />
+                  {selected ? (
+                    <span className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--admin-accent)] text-[0.65rem] font-bold text-black">
+                      {idx + 1}
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <label className="mb-3 flex items-start gap-2 text-sm text-[var(--admin-text)]">
+        <input
+          type="checkbox"
+          checked={promptUpsampling}
+          onChange={(e) => setPromptUpsampling(e.target.checked)}
+          className="mt-0.5 accent-[var(--admin-accent)]"
+        />{" "}
+        <span>
+          FLUX enhances your prompt automatically (recommended){" "}
+          <span className="text-xs text-[var(--admin-text-muted)]">— untick to use your exact words only.</span>
+        </span>
+      </label>
+
+      <div className="flex flex-wrap items-end gap-3">
+        <Field label="Format" className="w-28">
+          <Select value={fluxFormat} onChange={(e) => setFluxFormat(e.target.value as FluxOutputFormat)}>
+            <option value="png">PNG</option>
+            <option value="jpeg">JPEG</option>
+            <option value="webp">WEBP</option>
+          </Select>
+        </Field>
+        <Button
+          variant="primary"
+          onClick={generateFlux}
+          disabled={!fluxConfigured || fluxPending || !brief.subject.trim()}
+        >
+          {fluxPending ? "Generating…" : "Generate with FLUX"}
+        </Button>
+      </div>
+      <p className="mt-2 text-xs text-[var(--admin-text-muted)]">
+        {placement ? (
+          <>
+            Will generate at <strong className="text-[var(--admin-text)]">{placement.width}×{placement.height}px</strong> — sized
+            exactly for <strong className="text-[var(--admin-text)]">{placement.label}</strong>.
+          </>
+        ) : (
+          <>No destination picked — FLUX will use the aspect ratio from the brief ({brief.aspectRatio}). Pick a destination in Step&nbsp;1 for pixel-perfect sizing.</>
+        )}
+      </p>
+
+      {!fluxConfigured && (
+        <p className="mt-3 rounded-lg border border-[var(--admin-border)] bg-[var(--admin-canvas)] px-3 py-2 text-xs text-[var(--admin-text-muted)]">
+          Add your Black Forest Labs API key in <strong>Settings → Integrations</strong> to enable one-click generation.
+        </p>
+      )}
+
+      {fluxWarnings.length > 0 && (
+        <ul className="mt-3 list-disc space-y-0.5 pl-5 text-xs text-[var(--admin-orange)]">
+          {fluxWarnings.map((w, i) => (
+            <li key={i}>{w}</li>
+          ))}
+        </ul>
+      )}
+
+      {fluxAsset && (
+        <div className="mt-4 space-y-2">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={fluxAsset.url} alt={fluxAsset.title} className="w-full rounded-lg border border-[var(--admin-border)]" />
+          <div className="flex items-center justify-between gap-2 text-xs text-[var(--admin-text-muted)]">
+            <span className="truncate">{fluxAsset.filename}</span>
+            <Link href="/admin/media" className="shrink-0 text-[var(--admin-accent)] hover:underline">
+              Open in Media →
+            </Link>
+          </div>
+          {fluxMeta && (fluxMeta.width || fluxMeta.cost !== undefined) && (
+            <p className="text-xs text-[var(--admin-text-muted)]">
+              {fluxMeta.width && fluxMeta.height ? (
+                <>Generated at <strong className="text-[var(--admin-text)]">{fluxMeta.width}×{fluxMeta.height}px</strong></>
+              ) : null}
+              {fluxMeta.cost !== undefined ? (
+                <>{fluxMeta.width ? " · " : ""}Cost: {fluxMeta.cost} credit{fluxMeta.cost === 1 ? "" : "s"}</>
+              ) : null}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+
+  // ── Midjourney tab — parameters, references, and the copy-paste prompt ────
+
+  const mjParameters = (
+    <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
+      <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-muted)]">Midjourney parameters</h4>
+      <p className="mb-3 text-xs text-[var(--admin-text-muted)]">
+        These tune the copy-paste Midjourney prompt. The FLUX tab ignores them — except aspect ratio, which FLUX uses only
+        when no destination is picked in Step&nbsp;1.
+      </p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Aspect ratio">
+          <Select value={brief.aspectRatio} onChange={(e) => set("aspectRatio", e.target.value as AspectRatio)}>
+            {ASPECT_RATIOS.map((a) => (
+              <option key={a.value} value={a.value}>
+                {a.label}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Model version">
+          <Select
+            value={brief.niji ? "niji" : String(brief.version ?? 7)}
+            onChange={(e) => {
+              if (e.target.value === "niji") setBrief((b) => ({ ...b, niji: true }));
+              else setBrief((b) => ({ ...b, niji: false, version: Number(e.target.value) }));
+            }}
+          >
+            <option value="7">V7</option>
+            <option value="6.1">V6.1</option>
+            <option value="niji">Niji (anime)</option>
+          </Select>
+        </Field>
+        <Field label={`Stylize (${brief.stylize ?? 0})`} help="0 literal · 1000 stylized">
+          <input type="range" min={0} max={1000} step={10} value={brief.stylize ?? 0} onChange={(e) => set("stylize", Number(e.target.value))} className="w-full accent-[var(--admin-accent)]" />
+        </Field>
+        <Field label={`Chaos (${brief.chaos ?? 0})`} help="variety across results">
+          <input type="range" min={0} max={100} step={5} value={brief.chaos ?? 0} onChange={(e) => set("chaos", Number(e.target.value))} className="w-full accent-[var(--admin-accent)]" />
+        </Field>
+        <Field label={`Weird (${brief.weird ?? 0})`} help="0 normal · 3000 experimental aesthetics">
+          <input type="range" min={0} max={3000} step={50} value={brief.weird ?? 0} onChange={(e) => set("weird", Number(e.target.value))} className="w-full accent-[var(--admin-accent)]" />
+        </Field>
+      </div>
+      {placement && (
+        <p className="mt-2 text-xs text-[var(--admin-text-muted)]">
+          Aspect ratio auto-set to <strong className="text-[var(--admin-text)]">{brief.aspectRatio}</strong> to match your Step&nbsp;1
+          destination (Midjourney only supports fixed ratios — FLUX uses the exact {placement.width}×{placement.height}px).
+        </p>
+      )}
+      <div className="mt-3 flex flex-wrap gap-6">
+        <label className="flex items-center gap-2 text-sm text-[var(--admin-text)]">
+          <input type="checkbox" checked={Boolean(brief.raw)} onChange={(e) => set("raw", e.target.checked)} className="accent-[var(--admin-accent)]" /> Raw mode
+        </label>
+        <label className="flex items-center gap-2 text-sm text-[var(--admin-text)]">
+          <input type="checkbox" checked={Boolean(brief.tile)} onChange={(e) => set("tile", e.target.checked)} className="accent-[var(--admin-accent)]" /> Seamless tile
+        </label>
+      </div>
+    </div>
+  );
+
+  const mjReferences = (
+    <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
+      <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-muted)]">Midjourney references (optional)</h4>
+      <p className="mb-3 text-xs text-[var(--admin-text-muted)]">
+        Pick images from your media library: a <strong>style reference</strong> (<code>--sref</code>) copies the LOOK
+        (colors, lighting, vibe); an <strong>omni-reference</strong> (<code>--oref</code>) keeps a specific PRODUCT or
+        object recognizable. The FLUX tab has its own reference grid instead.
+      </p>
+      {allRefs.length === 0 ? (
+        <p className="text-xs text-[var(--admin-text-muted)]">No images yet. Upload one on the FLUX tab, or add published media on the Media page.</p>
+      ) : (
+        <>
+          <Field label="Style reference (→ --sref)" help="Match this image's aesthetic.">
+            <Select value={brief.srefUrl ?? ""} onChange={(e) => set("srefUrl", e.target.value)}>
               <option value="">— None —</option>
-              {PRESETS.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.label}
+              {allRefs.map((r) => (
+                <option key={r.id} value={r.url}>
+                  {r.label}
                 </option>
               ))}
             </Select>
           </Field>
-          {presetId && <p className="mt-2 text-xs text-[var(--admin-text-muted)]">{presetById(presetId)?.description}</p>}
-
-          <div className="mt-4">
-            <Field
-              label="Your idea (for AI assist)"
-              help={
-                aiConfigured
-                  ? "A sentence is enough — Greenway AI drafts the brief using your store profile AND your live weekly deals. Try “a banner for our Monday deal”."
-                  : "AI is not configured; fill the fields below manually."
-              }
-            >
-              <div className="flex gap-2">
-                <Input value={idea} onChange={(e) => setIdea(e.target.value)} placeholder="e.g. a cozy autumn banner for our Monday pre-roll deal" disabled={!aiConfigured} />
-                <Button variant="neutral" onClick={assist} disabled={!aiConfigured || pending}>
-                  {pending ? "Thinking…" : "AI assist"}
-                </Button>
-              </div>
+          {brief.srefUrl && (
+            <Field label={`Style weight (${brief.styleWeight ?? 100})`} help="0 subtle · 1000 strongly matches the reference look" className="mt-3">
+              <input type="range" min={0} max={1000} step={10} value={brief.styleWeight ?? 100} onChange={(e) => set("styleWeight", Number(e.target.value))} className="w-full accent-[var(--admin-accent)]" />
             </Field>
-          </div>
-          {rationale && (
-            <p className="mt-3 rounded-lg border border-[var(--admin-accent)]/25 bg-[var(--admin-accent)]/10 px-3 py-2 text-xs text-[var(--admin-text)]">
-              <strong className="text-[var(--admin-accent)]">Why:</strong> {rationale}
-            </p>
           )}
-          {aiFlags.length > 0 && (
-            <div className="mt-2 flex flex-wrap items-center gap-1.5">
-              <span className="text-xs font-semibold text-[var(--admin-orange)]">Compliance flags:</span>
-              {aiFlags.map((f) => (
-                <span key={f} className="rounded-full border border-[var(--admin-orange)]/40 bg-[var(--admin-orange)]/10 px-2 py-0.5 text-[0.65rem] font-medium text-[var(--admin-orange)]">
-                  {f}
-                </span>
+          <Field label="Omni-reference (→ --oref)" help="Keep this exact product/object recognizable in the result." className="mt-3">
+            <Select value={brief.orefUrl ?? ""} onChange={(e) => set("orefUrl", e.target.value)}>
+              <option value="">— None —</option>
+              {allRefs.map((r) => (
+                <option key={r.id} value={r.url}>
+                  {r.label}
+                </option>
               ))}
-              <span className="text-[0.65rem] text-[var(--admin-text-muted)]">— review the draft before generating.</span>
-            </div>
-          )}
-        </div>
+            </Select>
+          </Field>
+        </>
+      )}
+    </div>
+  );
 
-        {/* Brief fields */}
-        <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5 space-y-3">
-          <Field label="Subject (lead with this)">
-            <Input value={brief.subject} onChange={(e) => set("subject", e.target.value)} placeholder="a jar of premium cannabis flower" />
-          </Field>
-          <Field label="Environment / setting">
-            <Input value={brief.environment ?? ""} onChange={(e) => set("environment", e.target.value)} placeholder="on a warm wooden countertop" />
-          </Field>
-          <Field label="Composition / shot">
-            <Input value={brief.composition ?? ""} onChange={(e) => set("composition", e.target.value)} placeholder="centered close-up hero shot" />
-          </Field>
-          <Field label="Lighting">
-            <Input value={brief.lighting ?? ""} onChange={(e) => set("lighting", e.target.value)} placeholder="soft diffused studio lighting" />
-          </Field>
-          <Field label="Style / medium">
-            <Input value={brief.style ?? ""} onChange={(e) => set("style", e.target.value)} placeholder="premium editorial product photography" />
-          </Field>
-          <Field label="Color / mood">
-            <Input value={brief.colorMood ?? ""} onChange={(e) => set("colorMood", e.target.value)} placeholder="warm earthy palette, calm premium mood" />
-          </Field>
-          <Field label="Exclude (→ --no)">
-            <Input value={brief.exclude ?? ""} onChange={(e) => set("exclude", e.target.value)} placeholder="text, watermark, blur" />
-          </Field>
-        </div>
+  const mjPromptPanel = (
+    <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-accent)]/30 bg-[var(--admin-accent)]/10 p-5">
+      <div className="mb-2 flex items-center justify-between">
+        <h4 className="text-sm font-semibold text-[var(--admin-text)]">Your Midjourney prompt</h4>
+        <Button size="sm" onClick={copyPrompt} disabled={!assembled.prompt}>
+          Copy
+        </Button>
+      </div>
+      <pre className="whitespace-pre-wrap break-words rounded-lg border border-[var(--admin-border)] bg-[var(--admin-canvas)] p-3 text-sm text-[var(--admin-text)]">
+        {assembled.prompt || "Fill in a subject to build your prompt…"}
+      </pre>
+      {assembled.warnings.length > 0 && (
+        <ul className="mt-3 list-disc space-y-0.5 pl-5 text-xs text-[var(--admin-orange)]">
+          {assembled.warnings.map((w, i) => (
+            <li key={i}>{w}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
 
-        {/* Parameters */}
-        <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
-          <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-muted)]">Midjourney parameters</h4>
-          <p className="mb-3 text-xs text-[var(--admin-text-muted)]">
-            These tune the copy-paste Midjourney prompt. FLUX ignores them — except aspect ratio, which FLUX uses only when no
-            destination is picked in Step&nbsp;1.
-          </p>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Aspect ratio">
-              <Select value={brief.aspectRatio} onChange={(e) => set("aspectRatio", e.target.value as AspectRatio)}>
-                {ASPECT_RATIOS.map((a) => (
-                  <option key={a.value} value={a.value}>
-                    {a.label}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Field label="Model version">
-              <Select
-                value={brief.niji ? "niji" : String(brief.version ?? 7)}
-                onChange={(e) => {
-                  if (e.target.value === "niji") setBrief((b) => ({ ...b, niji: true }));
-                  else setBrief((b) => ({ ...b, niji: false, version: Number(e.target.value) }));
-                }}
+  const mjStructurePanel = (
+    <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
+      <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-muted)]">Structure</h4>
+      <p className="text-xs leading-relaxed text-[var(--admin-text-muted)]">
+        <Badge tone="outline">subject</Badge> , environment , composition , lighting , style , color/mood <Badge tone="neutral">--parameters</Badge>
+      </p>
+      <p className="mt-3 text-xs text-[var(--admin-text-muted)]">
+        Parameters always go at the end, one space before each <code>--</code>, with no punctuation inside them.
+      </p>
+    </div>
+  );
+
+  // ── Layout: generator tabs (FLUX first + default), shared brief on both ───
+
+  const active = STUDIO_TABS.find((t) => t.key === activeTab) ?? STUDIO_TABS[0];
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <nav
+          aria-label="Creative Studio generators"
+          className="flex flex-wrap gap-1.5 border-b border-[var(--admin-border)] pb-3"
+        >
+          {STUDIO_TABS.map((tab) => {
+            const isActive = tab.key === activeTab;
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setActiveTab(tab.key)}
+                aria-current={isActive ? "page" : undefined}
+                title={tab.blurb}
+                className={`rounded-lg px-3.5 py-2 text-xs font-bold transition ${
+                  isActive
+                    ? "bg-[var(--admin-accent-soft)] text-[var(--admin-accent)] ring-1 ring-[var(--admin-accent)]/40"
+                    : "text-[var(--admin-text-muted)] hover:bg-[var(--admin-surface-hover)] hover:text-[var(--admin-text)]"
+                }`}
               >
-                <option value="7">V7</option>
-                <option value="6.1">V6.1</option>
-                <option value="niji">Niji (anime)</option>
-              </Select>
-            </Field>
-            <Field label={`Stylize (${brief.stylize ?? 0})`} help="0 literal · 1000 stylized">
-              <input type="range" min={0} max={1000} step={10} value={brief.stylize ?? 0} onChange={(e) => set("stylize", Number(e.target.value))} className="w-full accent-[var(--admin-accent)]" />
-            </Field>
-            <Field label={`Chaos (${brief.chaos ?? 0})`} help="variety across results">
-              <input type="range" min={0} max={100} step={5} value={brief.chaos ?? 0} onChange={(e) => set("chaos", Number(e.target.value))} className="w-full accent-[var(--admin-accent)]" />
-            </Field>
-            <Field label={`Weird (${brief.weird ?? 0})`} help="0 normal · 3000 experimental aesthetics">
-              <input type="range" min={0} max={3000} step={50} value={brief.weird ?? 0} onChange={(e) => set("weird", Number(e.target.value))} className="w-full accent-[var(--admin-accent)]" />
-            </Field>
-          </div>
-          {placement && (
-            <p className="mt-2 text-xs text-[var(--admin-text-muted)]">
-              Aspect ratio auto-set to <strong className="text-[var(--admin-text)]">{brief.aspectRatio}</strong> to match your Step&nbsp;1
-              destination (Midjourney only supports fixed ratios — FLUX uses the exact {placement.width}×{placement.height}px).
-            </p>
-          )}
-          <div className="mt-3 flex flex-wrap gap-6">
-            <label className="flex items-center gap-2 text-sm text-[var(--admin-text)]">
-              <input type="checkbox" checked={Boolean(brief.raw)} onChange={(e) => set("raw", e.target.checked)} className="accent-[var(--admin-accent)]" /> Raw mode
-            </label>
-            <label className="flex items-center gap-2 text-sm text-[var(--admin-text)]">
-              <input type="checkbox" checked={Boolean(brief.tile)} onChange={(e) => set("tile", e.target.checked)} className="accent-[var(--admin-accent)]" /> Seamless tile
-            </label>
-          </div>
-        </div>
-
-        {/* Reference images (Midjourney --sref / --oref) */}
-        <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
-          <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-muted)]">Midjourney references (optional)</h4>
-          <p className="mb-3 text-xs text-[var(--admin-text-muted)]">
-            Pick images from your media library: a <strong>style reference</strong> (<code>--sref</code>) copies the LOOK
-            (colors, lighting, vibe); an <strong>omni-reference</strong> (<code>--oref</code>) keeps a specific PRODUCT or
-            object recognizable. FLUX uses its own reference grid in Step&nbsp;3 instead.
-          </p>
-          {allRefs.length === 0 ? (
-            <p className="text-xs text-[var(--admin-text-muted)]">No images yet. Upload one in the FLUX section, or add published media on the Media page.</p>
-          ) : (
-            <>
-              <Field label="Style reference (→ --sref)" help="Match this image's aesthetic.">
-                <Select value={brief.srefUrl ?? ""} onChange={(e) => set("srefUrl", e.target.value)}>
-                  <option value="">— None —</option>
-                  {allRefs.map((r) => (
-                    <option key={r.id} value={r.url}>
-                      {r.label}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              {brief.srefUrl && (
-                <Field label={`Style weight (${brief.styleWeight ?? 100})`} help="0 subtle · 1000 strongly matches the reference look" className="mt-3">
-                  <input type="range" min={0} max={1000} step={10} value={brief.styleWeight ?? 100} onChange={(e) => set("styleWeight", Number(e.target.value))} className="w-full accent-[var(--admin-accent)]" />
-                </Field>
-              )}
-              <Field label="Omni-reference (→ --oref)" help="Keep this exact product/object recognizable in the result." className="mt-3">
-                <Select value={brief.orefUrl ?? ""} onChange={(e) => set("orefUrl", e.target.value)}>
-                  <option value="">— None —</option>
-                  {allRefs.map((r) => (
-                    <option key={r.id} value={r.url}>
-                      {r.label}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-            </>
-          )}
-        </div>
+                <span className="mr-1.5">{tab.icon}</span>
+                {tab.label}
+              </button>
+            );
+          })}
+        </nav>
+        <p className="mt-2 text-xs text-[var(--admin-text-muted)]">
+          {active.blurb} Your brief (destination, idea, fields) is shared — switch tabs any time without losing anything.
+        </p>
       </div>
 
-      {/* Right: output */}
-      <div className="space-y-4 lg:sticky lg:top-4 lg:self-start">
-        <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-accent)]/30 bg-[var(--admin-accent)]/10 p-5">
-          <div className="mb-2 flex items-center justify-between">
-            <h4 className="text-sm font-semibold text-[var(--admin-text)]">Your Midjourney prompt</h4>
-            <Button size="sm" onClick={copyPrompt} disabled={!assembled.prompt}>
-              Copy
-            </Button>
+      {activeTab === "flux" ? (
+        <div className="grid gap-6 lg:grid-cols-2">
+          {/* Left: the shared brief */}
+          <div className="space-y-5">
+            {stepDestination}
+            {stepIdea}
+            {briefFields}
           </div>
-          <pre className="whitespace-pre-wrap break-words rounded-lg border border-[var(--admin-border)] bg-[var(--admin-canvas)] p-3 text-sm text-[var(--admin-text)]">
-            {assembled.prompt || "Fill in a subject to build your prompt…"}
-          </pre>
-          {assembled.warnings.length > 0 && (
-            <ul className="mt-3 list-disc space-y-0.5 pl-5 text-xs text-[var(--admin-orange)]">
-              {assembled.warnings.map((w, i) => (
-                <li key={i}>{w}</li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        {/* FLUX 2 — baked-in API pipeline (same brief, saved to media library) */}
-        <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
-          <div className="mb-2 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--admin-accent)] text-xs font-bold text-black">3</span>
-              <h4 className="text-sm font-semibold text-[var(--admin-text)]">Generate with FLUX</h4>
-            </div>
-            <Badge tone={fluxConfigured ? "green" : "neutral"}>{fluxConfigured ? "Connected" : "Not configured"}</Badge>
+          {/* Right: FLUX generation */}
+          <div className="space-y-4 lg:sticky lg:top-4 lg:self-start">
+            {fluxPanel}
+            {complianceNote}
           </div>
-          <p className="mb-3 text-xs leading-relaxed text-[var(--admin-text-muted)]">
-            Uses the same brief above as a natural-language prompt (no <code>--</code> flags). With a destination picked in
-            Step&nbsp;1 the image comes out at that spot&rsquo;s exact pixel size; otherwise the brief&rsquo;s aspect ratio is used. The
-            result saves straight into your media library as a <strong>draft</strong> to review before publishing.
-          </p>
-
-          {/* Reference images — FLUX.2 multi-reference (up to 8, verified API limit) */}
-          <div className="mb-3">
-            <div className="mb-1 flex items-center justify-between">
-              <h5 className="text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-muted)]">
-                Reference images (optional · up to {MAX_FLUX_REFS})
-              </h5>
-              <span className="text-xs text-[var(--admin-text-muted)]">{fluxRefs.length}/{MAX_FLUX_REFS} selected</span>
-            </div>
-            <p className="mb-2 text-xs text-[var(--admin-text-muted)]">
-              FLUX.2 can blend up to {MAX_FLUX_REFS} references — combine product shots, styles, or brand
-              assets. Upload your own below or click to select from your media.
-            </p>
-
-            {/* Inline upload — bring your own reference images (B4) */}
-            <div className="mb-3">
-              <input
-                ref={uploadInputRef}
-                type="file"
-                accept="image/png,image/jpeg,image/webp,image/gif"
-                multiple
-                className="hidden"
-                onChange={(e) => handleUploadFiles(e.target.files)}
-              />
-              <Button
-                variant="save"
-                size="sm"
-                onClick={() => uploadInputRef.current?.click()}
-                disabled={uploadPending || fluxRefs.length >= MAX_FLUX_REFS}
-              >
-                {uploadPending ? "Uploading…" : "Upload reference image(s)"}
-              </Button>
-              <p className="mt-1 text-xs text-[var(--admin-text-muted)]">
-                PNG, JPG, WEBP, or GIF · up to 10 MB each. Uploads are saved to your media library (draft) and selected automatically.
-              </p>
-            </div>
-
-            {allRefs.length === 0 ? (
-              <p className="text-xs text-[var(--admin-text-muted)]">No images yet. Upload one above, or publish media on the Media page.</p>
-            ) : (
-              <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
-                {allRefs.map((r) => {
-                  const selected = fluxRefs.includes(r.url);
-                  const idx = fluxRefs.indexOf(r.url);
-                  const atCap = !selected && fluxRefs.length >= MAX_FLUX_REFS;
-                  return (
-                    <button
-                      key={r.id}
-                      type="button"
-                      onClick={() => toggleFluxRef(r.url)}
-                      disabled={atCap}
-                      title={r.label}
-                      className={`relative aspect-square overflow-hidden rounded-lg border transition ${
-                        selected
-                          ? "border-[var(--admin-accent)] ring-2 ring-[var(--admin-accent)]/60"
-                          : atCap
-                            ? "border-[var(--admin-border)] opacity-40"
-                            : "border-[var(--admin-border)] hover:border-[var(--admin-accent)]"
-                      }`}
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={r.url} alt={r.label} className="h-full w-full object-cover" />
-                      {selected ? (
-                        <span className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--admin-accent)] text-[0.65rem] font-bold text-black">
-                          {idx + 1}
-                        </span>
-                      ) : null}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+        </div>
+      ) : (
+        <div className="grid gap-6 lg:grid-cols-2">
+          {/* Left: the shared brief + Midjourney-only knobs */}
+          <div className="space-y-5">
+            {stepDestination}
+            {stepIdea}
+            {briefFields}
+            {mjParameters}
+            {mjReferences}
           </div>
-
-          <label className="mb-3 flex items-start gap-2 text-sm text-[var(--admin-text)]">
-            <input
-              type="checkbox"
-              checked={promptUpsampling}
-              onChange={(e) => setPromptUpsampling(e.target.checked)}
-              className="mt-0.5 accent-[var(--admin-accent)]"
-            />{" "}
-            <span>
-              FLUX enhances your prompt automatically (recommended){" "}
-              <span className="text-xs text-[var(--admin-text-muted)]">— untick to use your exact words only.</span>
-            </span>
-          </label>
-
-          <div className="flex flex-wrap items-end gap-3">
-            <Field label="Format" className="w-28">
-              <Select value={fluxFormat} onChange={(e) => setFluxFormat(e.target.value as FluxOutputFormat)}>
-                <option value="png">PNG</option>
-                <option value="jpeg">JPEG</option>
-                <option value="webp">WEBP</option>
-              </Select>
-            </Field>
-            <Button
-              variant="primary"
-              onClick={generateFlux}
-              disabled={!fluxConfigured || fluxPending || !brief.subject.trim()}
-            >
-              {fluxPending ? "Generating…" : "Generate with FLUX"}
-            </Button>
+          {/* Right: the copy-paste prompt */}
+          <div className="space-y-4 lg:sticky lg:top-4 lg:self-start">
+            {mjPromptPanel}
+            {mjStructurePanel}
+            {complianceNote}
           </div>
-          <p className="mt-2 text-xs text-[var(--admin-text-muted)]">
-            {placement ? (
-              <>
-                Will generate at <strong className="text-[var(--admin-text)]">{placement.width}×{placement.height}px</strong> — sized
-                exactly for <strong className="text-[var(--admin-text)]">{placement.label}</strong>.
-              </>
-            ) : (
-              <>No destination picked — FLUX will use the aspect ratio from the brief ({brief.aspectRatio}). Pick a destination in Step&nbsp;1 for pixel-perfect sizing.</>
-            )}
-          </p>
-
-          {!fluxConfigured && (
-            <p className="mt-3 rounded-lg border border-[var(--admin-border)] bg-[var(--admin-canvas)] px-3 py-2 text-xs text-[var(--admin-text-muted)]">
-              Add your Black Forest Labs API key in <strong>Settings → Integrations</strong> to enable one-click generation.
-            </p>
-          )}
-
-          {fluxWarnings.length > 0 && (
-            <ul className="mt-3 list-disc space-y-0.5 pl-5 text-xs text-[var(--admin-orange)]">
-              {fluxWarnings.map((w, i) => (
-                <li key={i}>{w}</li>
-              ))}
-            </ul>
-          )}
-
-          {fluxAsset && (
-            <div className="mt-4 space-y-2">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={fluxAsset.url} alt={fluxAsset.title} className="w-full rounded-lg border border-[var(--admin-border)]" />
-              <div className="flex items-center justify-between gap-2 text-xs text-[var(--admin-text-muted)]">
-                <span className="truncate">{fluxAsset.filename}</span>
-                <Link href="/admin/media" className="shrink-0 text-[var(--admin-accent)] hover:underline">
-                  Open in Media →
-                </Link>
-              </div>
-              {fluxMeta && (fluxMeta.width || fluxMeta.cost !== undefined) && (
-                <p className="text-xs text-[var(--admin-text-muted)]">
-                  {fluxMeta.width && fluxMeta.height ? (
-                    <>Generated at <strong className="text-[var(--admin-text)]">{fluxMeta.width}×{fluxMeta.height}px</strong></>
-                  ) : null}
-                  {fluxMeta.cost !== undefined ? (
-                    <>{fluxMeta.width ? " · " : ""}Cost: {fluxMeta.cost} credit{fluxMeta.cost === 1 ? "" : "s"}</>
-                  ) : null}
-                </p>
-              )}
-            </div>
-          )}
         </div>
-
-        <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
-          <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-muted)]">Structure</h4>
-          <p className="text-xs leading-relaxed text-[var(--admin-text-muted)]">
-            <Badge tone="outline">subject</Badge> , environment , composition , lighting , style , color/mood <Badge tone="neutral">--parameters</Badge>
-          </p>
-          <p className="mt-3 text-xs text-[var(--admin-text-muted)]">
-            Parameters always go at the end, one space before each <code>--</code>, with no punctuation inside them.
-          </p>
-        </div>
-
-        <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-orange)]/30 bg-[var(--admin-orange)]/5 p-4 text-xs text-[var(--admin-text)]">
-          <strong className="text-[var(--admin-orange)]">Compliance:</strong> {COMPLIANCE_NOTE}
-        </div>
-      </div>
+      )}
     </div>
   );
 }
