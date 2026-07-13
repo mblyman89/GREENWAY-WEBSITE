@@ -27,8 +27,10 @@
  * docs/LEAFLY_WEEDMAPS_INTEGRATION_RESEARCH.md). payload-core.ts emits the real
  * `variants[]` (external_id + price {amount,currency} + weight {unit,value} +
  * inventory_quantity min 1), `category_names`, `genetics`, `published`, `image_url`.
- * NOTE: there is NO bulk endpoint — live writes must be per-item
- * PUT /menus/{menu_id}/items/external/{external_id} (rebuilt in the Task X actions PR).
+ * There is NO bulk endpoint — pushWeedmapsMenu is now a per-item sync engine:
+ * preflight gate → owner toggles → delta plan (payload-hash idempotency) →
+ * paced PUT /menus/{menu_id}/items/external/{external_id} per item → explicit
+ * per-item DELETEs → sync-state persistence (failed items auto-retry next sync).
  *
  * Safety: live writes are gated behind explicit `confirm: true` AND full credentials.
  * Every attempt is recorded to syndication_logs by the caller (channel: "weedmaps").
@@ -37,10 +39,20 @@ import "server-only";
 
 import { getWeedmapsBaseUrl, getWeedmapsConfig } from "./config";
 import { refreshWeedmapsConfig } from "./runtime";
-import { buildWmItemsPayload, type WmItemsPayload } from "./payload-core";
+import { buildWmItemsPayload, type WmItemsPayload, type WmMenuItem } from "./payload-core";
 import { describeWeedmapsRuntime, isWeedmapsConfigured } from "./client";
 import { loadSyndicationFeed } from "@/lib/syndication/feed-source";
 import type { SyndicationItem } from "@/lib/syndication/menu-feed-core";
+import { runPreflight, PreflightBlockedError } from "@/lib/syndication/preflight-core";
+import { applyWeedmapsSettings } from "@/lib/syndication/apply-settings-core";
+import { computeSyncPlan, describeSyncPlan, hashItems } from "@/lib/syndication/sync-plan-core";
+import {
+  clearForceResendFlag,
+  getSyncState,
+  getWeedmapsSyncSettings,
+  saveSyncState,
+} from "@/lib/syndication/engine-store";
+import type { WeedmapsSyncSettings } from "@/lib/syndication/sync-settings-core";
 
 export * from "./payload-core";
 
@@ -216,8 +228,9 @@ function menuUrl(): string {
   return `${base}/menus/${encodeURIComponent(config.menuId ?? "")}`;
 }
 
-function menuItemsUrl(): string {
-  return `${menuUrl()}/items`;
+/** Per-item write endpoint keyed by OUR stable external_id (verified — no bulk endpoint). */
+function menuItemExternalUrl(externalId: string): string {
+  return `${menuUrl()}/items/external/${encodeURIComponent(externalId)}`;
 }
 
 function menuItemUrl(itemId: string): string {
@@ -235,10 +248,17 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * Authorized fetch with verified resilience:
  *   - Bearer auth.
  *   - On 401 once: clear token cache and retry (handles an expired/rotated token).
- *   - On 429 / 5xx: exponential backoff (250ms, 500ms, 1s), up to 3 attempts.
+ *   - On 429 / 5xx: exponential backoff (250ms, 500ms, 1s, …), attempts owner-
+ *     tunable via sync settings maxRetries (default 3 attempts total).
  */
-async function authedFetch(url: string, method: string, body?: unknown): Promise<FetchResult> {
-  const maxAttempts = 3;
+async function authedFetch(
+  url: string,
+  method: string,
+  body?: unknown,
+  opts?: { maxRetries?: number },
+): Promise<FetchResult> {
+  // maxRetries = extra attempts AFTER the first (settings clamp 0–5).
+  const maxAttempts = Math.max(1, (opts?.maxRetries ?? 2) + 1);
   let didRetryAuth = false;
 
   for (let attempt = 1; ; attempt += 1) {
@@ -323,22 +343,64 @@ function messageForStatus(status: number): string | null {
   return `WeedMaps responded ${status}.`;
 }
 
-export type WeedmapsPushResult = {
-  mode: "live";
-  method: "POST";
+/** One per-item write/delete outcome from the sync engine. */
+export type WeedmapsItemResult = {
+  externalId: string;
+  op: "put" | "delete";
   ok: boolean;
   httpStatus: number;
+  /** 422 detail (or other error body) — trimmed for the log. */
+  error: string | null;
+};
+
+export type WeedmapsPushResult = {
+  mode: "live";
+  method: "PUT_PER_ITEM";
+  ok: boolean;
+  /** Worst HTTP status seen (200 when everything succeeded). */
+  httpStatus: number;
   itemCount: number;
+  /** Delta plan summary, e.g. "3 new, 5 changed, 120 unchanged, 2 removed". */
+  planSummary: string;
+  sent: number;
+  skippedUnchanged: number;
+  deleted: number;
+  failed: number;
+  /** The full built payload (post-toggles) for the syndication log. */
   payload: WmItemsPayload;
-  response: unknown;
+  /** Per-item outcomes — failures first, capped for log size. */
+  response: { results: WeedmapsItemResult[]; settings: WeedmapsSyncSettings };
   message: string | null;
   notes: string[];
 };
 
+function trimmedError(body: unknown): string {
+  try {
+    const text = typeof body === "string" ? body : JSON.stringify(body);
+    return (text ?? "").slice(0, 400);
+  } catch {
+    return "";
+  }
+}
+
 /**
- * Live push of the published menu to WeedMaps (POST /partners/menus/{menu_id}/items).
- * Requires explicit `confirm: true` AND full credentials. Surfaces WeedMaps' response
- * (including 422 validation, 423 Locked, 401/403 auth) verbatim so staff can validate.
+ * Live sync of the published menu to WeedMaps — the professional per-item engine.
+ * Weedmaps has NO bulk endpoint (verified), so a live sync is:
+ *
+ *   1. Preflight-validate the feed (ERRORS block the push; warnings surface).
+ *   2. Build the verified Request_MenuItem payload and apply the owner's
+ *      transmission toggles (descriptions / cannabinoids / images / strains,
+ *      unpublish-when-out-of-stock).
+ *   3. Delta plan against the last successful sync's payload hashes: only
+ *      creates + updates are sent (unchanged are skipped) unless forceResend.
+ *   4. PUT /menus/{menu_id}/items/external/{external_id} per item, paced by
+ *      settings.pacingMs (default 150ms — well under the 420-req/10s limit),
+ *      with 401-retry-once + 429/5xx backoff per request.
+ *   5. DELETE …/items/external/{external_id} for items that left the feed.
+ *   6. Persist the new id→hash map for items that SUCCEEDED (failed items
+ *      keep their old hash so the next sync retries them automatically).
+ *
+ * Requires explicit `confirm: true` AND full credentials.
  */
 export async function pushWeedmapsMenu(opts: { confirm: boolean }): Promise<WeedmapsPushResult> {
   if (!opts.confirm) {
@@ -349,20 +411,122 @@ export async function pushWeedmapsMenu(opts: { confirm: boolean }): Promise<Weed
     throw new Error("WeedMaps is not configured: set menu id + OAuth credentials or access token.");
   }
 
-  const { items } = await loadSyndicationFeed();
-  const payload = buildWmItemsPayload(items);
+  const settings = await getWeedmapsSyncSettings();
+  const { versionId, items } = await loadSyndicationFeed();
 
-  const result = await authedFetch(menuItemsUrl(), "POST", payload);
+  // 1. Preflight: never transmit data that would corrupt the Weedmaps menu.
+  const preflight = runPreflight(items);
+  if (!preflight.ok) {
+    throw new PreflightBlockedError(preflight);
+  }
+
+  // 2. Verified payload + owner toggles. When unpublishWhenOutOfStock is OFF the
+  //    owner wants out-of-stock items visible (published) rather than hidden.
+  let wmItems: WmMenuItem[] = buildWmItemsPayload(items).items;
+  if (!settings.unpublishWhenOutOfStock) {
+    wmItems = wmItems.map((item) => (item.published ? item : { ...item, published: true }));
+  }
+  wmItems = applyWeedmapsSettings(wmItems, settings);
+  const payload: WmItemsPayload = { items: wmItems };
+
+  // 3. Delta plan against the last successful sync.
+  const state = await getSyncState("weedmaps");
+  const currentHashes = hashItems(wmItems, (i) => i.external_id);
+  const plan = computeSyncPlan({ previous: state.hashes, current: currentHashes }, settings.forceResend);
+  const byId = new Map(wmItems.map((i) => [i.external_id, i]));
+
+  const results: WeedmapsItemResult[] = [];
+  const nextHashes = new Map(state.hashes);
+  let worstStatus = 200;
+  let sent = 0;
+  let deleted = 0;
+  let failed = 0;
+  let first = true;
+
+  const pace = async () => {
+    if (!first && settings.pacingMs > 0) await sleep(settings.pacingMs);
+    first = false;
+  };
+
+  // 4. Per-item upserts (creates + updates, + unchanged when forced).
+  for (const id of plan.toSend) {
+    const item = byId.get(id);
+    if (!item) continue;
+    await pace();
+    const res = await authedFetch(menuItemExternalUrl(id), "PUT", item, {
+      maxRetries: settings.maxRetries,
+    });
+    if (res.ok) {
+      sent += 1;
+      nextHashes.set(id, currentHashes.get(id) ?? "");
+    } else {
+      failed += 1;
+      worstStatus = Math.max(worstStatus, res.status);
+    }
+    results.push({
+      externalId: id,
+      op: "put",
+      ok: res.ok,
+      httpStatus: res.status,
+      error: res.ok ? null : trimmedError(res.body),
+    });
+    // A locked (423 paused) integration will fail every request — stop early.
+    if (res.status === 423) break;
+  }
+
+  // 5. Explicit deletes for items that left the feed (no bulk full-sync to do it for us).
+  for (const id of plan.deletes) {
+    await pace();
+    const res = await authedFetch(menuItemExternalUrl(id), "DELETE", undefined, {
+      maxRetries: settings.maxRetries,
+    });
+    // 404 on delete = already gone on Weedmaps' side — treat as success.
+    const gone = res.ok || res.status === 404;
+    if (gone) {
+      deleted += 1;
+      nextHashes.delete(id);
+    } else {
+      failed += 1;
+      worstStatus = Math.max(worstStatus, res.status);
+    }
+    results.push({
+      externalId: id,
+      op: "delete",
+      ok: gone,
+      httpStatus: res.status,
+      error: gone ? null : trimmedError(res.body),
+    });
+    if (res.status === 423) break;
+  }
+
+  // 6. Persist state for everything that succeeded; failed items keep the old
+  //    hash so the next sync automatically retries them.
+  await saveSyncState("weedmaps", nextHashes, versionId);
+  if (settings.forceResend && failed === 0) {
+    await clearForceResendFlag("weedmaps");
+  }
+
+  const ok = failed === 0;
+  const skippedUnchanged = settings.forceResend ? 0 : plan.counts.unchanged;
+  const failures = results.filter((r) => !r.ok);
+  const capped = [...failures, ...results.filter((r) => r.ok)].slice(0, 100);
 
   return {
     mode: "live",
-    method: "POST",
-    ok: result.ok,
-    httpStatus: result.status,
-    itemCount: items.length,
+    method: "PUT_PER_ITEM",
+    ok,
+    httpStatus: ok ? 200 : worstStatus,
+    itemCount: wmItems.length,
+    planSummary: describeSyncPlan(plan),
+    sent,
+    skippedUnchanged,
+    deleted,
+    failed,
     payload,
-    response: result.body,
-    message: result.ok ? null : messageForStatus(result.status),
+    response: { results: capped, settings },
+    message: ok
+      ? `Synced: ${sent} sent, ${skippedUnchanged} skipped (no changes), ${deleted} removed.`
+      : `${failed} item(s) failed. ${messageForStatus(worstStatus) ?? ""}`.trim(),
     notes: SCHEMA_NOTES,
   };
 }

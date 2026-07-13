@@ -47,9 +47,11 @@ export function LeaflyPushClient({
       if (res.ok) {
         setPushOk(res.result.ok);
         setPushMsg(
-          res.result.ok
-            ? `Sync sent (${res.result.method}). HTTP ${res.result.httpStatus}, ${res.result.itemCount} items.`
-            : `Leafly returned HTTP ${res.result.httpStatus}. ${res.result.message ?? ""}`,
+          res.result.skipped
+            ? (res.result.message ?? "Skipped — no changes since the last successful sync.")
+            : res.result.ok
+              ? `Sync sent (${res.result.method}${res.result.planSummary ? ` — ${res.result.planSummary}` : ""}). ${res.result.message ?? ""}`
+              : `Leafly returned HTTP ${res.result.httpStatus}. ${res.result.message ?? ""}`,
         );
       } else {
         setPushOk(false);

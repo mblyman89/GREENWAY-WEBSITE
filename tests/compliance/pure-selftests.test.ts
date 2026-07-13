@@ -45,6 +45,7 @@ import { __runSyncPlanTests } from "@/lib/syndication/sync-plan-core";
 import { __runPreflightTests } from "@/lib/syndication/preflight-core";
 import { __runRichnessTests } from "@/lib/syndication/richness-core";
 import { __runSyncSettingsTests } from "@/lib/syndication/sync-settings-core";
+import { __runApplySettingsTests } from "@/lib/syndication/apply-settings-core";
 
 describe("embedded pure self-test suites", () => {
   it("order-pricing-core (S-2/S-3 money math + floor)", () => {
@@ -176,5 +177,8 @@ describe("embedded pure self-test suites", () => {
   });
   it("sync-settings-core (Task X: owner-tunable transmission parameters)", () => {
     expect(() => __runSyncSettingsTests()).not.toThrow();
+  });
+  it("apply-settings-core (Task X: owner toggles applied to channel payloads)", () => {
+    expect(() => __runApplySettingsTests()).not.toThrow();
   });
 });

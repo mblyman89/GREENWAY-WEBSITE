@@ -38,6 +38,7 @@ import { __runSyncPlanTests } from "../../src/lib/syndication/sync-plan-core";
 import { __runPreflightTests } from "../../src/lib/syndication/preflight-core";
 import { __runRichnessTests } from "../../src/lib/syndication/richness-core";
 import { __runSyncSettingsTests } from "../../src/lib/syndication/sync-settings-core";
+import { __runApplySettingsTests } from "../../src/lib/syndication/apply-settings-core";
 
 async function main() {
   __runOrderPricingTests();
@@ -78,6 +79,7 @@ async function main() {
   __runPreflightTests();
   __runRichnessTests();
   __runSyncSettingsTests();
+  __runApplySettingsTests();
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

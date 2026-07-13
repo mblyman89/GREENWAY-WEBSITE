@@ -44,6 +44,24 @@ export type PreflightReport = {
   issues: PreflightIssue[];
 };
 
+/**
+ * Thrown by the push engines when a LIVE push is blocked by preflight ERRORS
+ * (bad data would corrupt the third-party menu). Carries the full report so
+ * actions/UI can show exactly what to fix. Previews are never blocked.
+ */
+export class PreflightBlockedError extends Error {
+  readonly report: PreflightReport;
+  constructor(report: PreflightReport) {
+    const first = report.issues.filter((i) => i.severity === "error").slice(0, 3);
+    super(
+      `Live push blocked by ${report.errorCount} preflight error(s): ` +
+        `${first.map((i) => i.message).join(" · ")}${report.errorCount > 3 ? " · …" : ""}`,
+    );
+    this.name = "PreflightBlockedError";
+    this.report = report;
+  }
+}
+
 const MAX_NAME_LENGTH = 120;
 
 export function runPreflight(items: SyndicationItem[]): PreflightReport {
@@ -247,6 +265,12 @@ export function __runPreflightTests(): void {
 
   // Counts: p5 has exactly one error (price) and no warnings ("1g" weight parses).
   ok("error/warning counts", badPrice.errorCount === 1 && badPrice.warningCount === 0);
+
+  // PreflightBlockedError carries the report + a readable message.
+  const blocked = new PreflightBlockedError(dupItems);
+  ok("blocked error name", blocked.name === "PreflightBlockedError");
+  ok("blocked error carries report", blocked.report.errorCount === dupItems.errorCount);
+  ok("blocked error message mentions count", blocked.message.includes("preflight error"));
 
   console.log(`preflight: ${passed} passed, ${failed} failed`);
   if (failed > 0) throw new Error(`${failed} preflight test(s) failed`);
