@@ -2386,3 +2386,36 @@ before the gate and re-checked server-side at sync.
 
 **Tests:** tsc 0 errors; vitest 1,376/93; `__runSaleFlowCoreTests` 24/24 in
 the pure self-test runner; eslint clean. No migration beyond 0120.
+
+## Shipped — POS B7: pure medical-sale core (PR #449)
+
+The medical brain of the register, kept pure (zero I/O) so it can run
+offline on the iPad and be re-verified byte-for-byte by the server gate.
+`src/lib/pos/medical-pos-core.ts` ships four pieces. (1) Card capture:
+`validateCardCapture` accepts a recognition-card scan/entry only with a
+UPID, effective/expiration dates in range for the sale date, patient vs
+designated-provider type, and an explicit budtender attestation that the
+card was verified in the DOH Medical Cannabis Database (WAC 246-71's
+verification duty — we refuse to claim exemptions without it). (2) Age:
+`medicalAgeAllowed` — 21+ always; 18–20 ONLY with a valid card (RCW
+69.50.357(1)); under 18 never at the counter. (3) Pricing pass-through:
+`applyMedicalPricing` reprices each cart line using the EXACT same
+primitives the completion gate uses — `lineBaseMinor` backs the pre-tax
+base out of the tax-inclusive card price and `decideLineExemption` decides
+per line from the durable DOH registry category. A carded patient buying a
+246-70 compliant product pays base only ($14.63 shelf → $10.00): the 37%
+excise (RCW 69.50.535 exemption via HB 1453, sunset 2029-06-30 per WAC
+314-55-090(6), enforced by `exciseSunsetPassed`) and the 9.3% sales tax
+(RCW 82.08.9998(1)(a)) both come OFF the price instead of being merely
+re-reported. High-THC products hard-block for anyone without a valid card
+(statutory, no override). No card ⇒ no claims at all — the documented
+conservative policy, because WAC 314-55-090(2) exempt-sale records require
+card facts. (4) Payload: `PosMedicalSaleBlock` carries the card capture +
+its audit-event UUID + computed savings into the sale payload for B8's
+server wiring, validated by `validateMedicalSaleBlock` before enqueue.
+Because the reprice changes unit prices themselves, `computeOrderTotals`
+over the repriced lines stays self-consistent — the server's S-2b money
+recompute needs no tolerance changes.
+
+**Tests:** tsc 0 errors; vitest 1,394/94; `__runMedicalPosCoreTests` 31/31
+in the pure self-test runner; eslint clean. Pure module — no migration.
