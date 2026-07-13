@@ -2182,3 +2182,36 @@ entering the creative studio."
   Page help + concierge KB grounding updated so AI directions stay honest.
 
 **Tests:** suite unchanged at 1,289 passing; tsc + eslint clean. No migration.
+
+## Shipped — POS front-end mega research report v2 (PR #433, Task Z)
+
+Owner directive: deep research on how the best professional POS front-side
+apps work; iPad Pro deployment despite App Store cannabis constraints;
+offline mode with sale records syncing to the back office; ID scanning
+required with audited manual fallback; guided step-by-step compliant sale;
+hard blocks below cost; future card acceptance; cash-only tight controls;
+clock in/out + PIN-per-sale till accountability; front-side hardware in the
+equipment hub; findings recorded in an AI-optimized mega report.
+
+- `docs/POS_FRONTEND_RESEARCH.md` rewritten as the v2 mega report (13
+  numbered sections + source appendix), superseding v1 (PR #211).
+- Corrected v1's outdated "iOS PWA 50MB / 7-day" claim using the current
+  WebKit Safari-17 storage policy; PWA stays disqualified for the correct
+  reason (no Web Bluetooth/USB/Serial on iOS). Capacitor recommendation
+  stands: verbatim reuse of the repo's TS compliance cores.
+- Verified three legitimate App Store paths under Guideline 1.4.3
+  (public listing, **Unlisted App Distribution — recommended**, Custom
+  Apps/ABM private) with the Cultivera POS listing as live precedent.
+- Verified current WAC text: 314-55-095 full transaction limits
+  (rec + MCAD) and 314-55-150 acceptable IDs incl. the 11/8/2025
+  additions (Global Entry, Permanent Resident card).
+- Specced the guided-sale UX (ID-first gate, audited manual verify,
+  PIN-per-sale lock screen tied to drawer sessions, clock in/out,
+  hard compliance checkpoint before tender, pluggable payment enum),
+  offline-first sync design (SQLite + append-only idempotent event log,
+  inventory deltas, server-side gate re-validation), payments landscape
+  (cash/point-of-banking/ACH compliant; POSaBIT candidate; credit cards
+  federally impossible), and the per-register hardware kit for the
+  equipment hub. Build plan mapped onto POS slices P0–P7.
+
+**Docs only.** No code, no migration; suite unchanged at 1,289 passing.
