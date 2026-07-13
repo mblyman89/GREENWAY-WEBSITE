@@ -47,8 +47,8 @@ export function WeedmapsPushClient({
         setPushOk(res.result.ok);
         setPushMsg(
           res.result.ok
-            ? `Sync sent. HTTP ${res.result.httpStatus}, ${res.result.itemCount} items.`
-            : `WeedMaps returned HTTP ${res.result.httpStatus}. ${res.result.message ?? ""}`,
+            ? `Sync complete (${res.result.planSummary}). ${res.result.message ?? ""}`
+            : `Sync had failures (worst HTTP ${res.result.httpStatus}). ${res.result.message ?? ""}`,
         );
       } else {
         setPushOk(false);
@@ -77,8 +77,10 @@ export function WeedmapsPushClient({
       <Card>
         <h2 className="mb-2 text-sm font-bold text-[var(--admin-text)]">Live push to WeedMaps</h2>
         <p className="mb-3 text-xs text-[var(--admin-text-muted)]">
-          Sends the published menu to WeedMaps via{" "}
-          <span className="font-mono">POST /partners/menus/&#123;menu_id&#125;/items</span>. Items are
+          Syncs the published menu to WeedMaps one item at a time via{" "}
+          <span className="font-mono">PUT /menus/&#123;menu_id&#125;/items/external/&#123;external_id&#125;</span>{" "}
+          (WeedMaps has no bulk endpoint). Only items that changed since the last successful sync
+          are sent; items that left the menu are removed with explicit per-item deletes. Items are
           keyed by a stable <span className="font-mono">external_id</span> so curated WeedMaps data
           is preserved across syncs.
         </p>
