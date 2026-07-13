@@ -2306,3 +2306,27 @@ passed in by the caller — the core stays pure.
 
 **Tests:** tsc 0 errors; vitest 1,327/90; `__runIdScanCoreTests` 39/39 in the
 pure self-test runner; eslint clean. No migration.
+
+## Shipped — POS B4: offline-queue sync ingest (PR #443)
+
+The server half of the offline-first spine (research §4.2; seam audit Seams
+2+4). `POST /api/pos/sync` authenticates a provisioned iPad by
+`X-POS-Device-Id` + `X-POS-Device-Key` (scrypt hash in
+`pos_devices.provision_hash`; fails closed) and ingests batched event
+envelopes. `src/lib/pos/sync-core.ts` (pure, 18 self-tests): device/register
+binding checks, punch INTENT resolution (in+open ⇒ idempotent skip; out+none
+⇒ manager exception — never blind-toggle), manual-ID audit payload
+validation, ACK semantics (processed/duplicate/exception durable; rejected
+stays on-device). `src/lib/pos/sync-store.ts` (server-only): insert-once
+ledger on `client_uuid` UNIQUE — a retried flush converges as `duplicate`
+with the original outcome, never double-posts. Synced sales materialize an
+order and re-run the IDENTICAL B1 completion gate with NO override; refusals
+audit `order.completion_blocked` and land in the exception queue with the
+order id — never silently dropped, never completed. Punches replay through
+`toggleClock(…, "register")`; no-sales and manual ID verifies write audit
+rows. Exception queue reads + manager resolution included.
+`completion-gate.ts` actorId widened to `string | null` (floor staff have no
+back-office login; the ledger row still pins employees.id).
+
+**Tests:** tsc 0 errors; vitest 1,341/91; pure self-tests pass; eslint clean.
+Endpoint refuses clearly until migration 0120 is applied.
