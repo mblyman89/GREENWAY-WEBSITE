@@ -46,8 +46,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "Body must be JSON." }, { status: 400 });
   }
   const events = (body as { events?: unknown })?.events;
-  if (!Array.isArray(events) || events.length === 0) {
-    return NextResponse.json({ error: "Body must be { events: [...] } with at least one event." }, { status: 400 });
+  if (!Array.isArray(events)) {
+    return NextResponse.json({ error: "Body must be { events: [...] }." }, { status: 400 });
+  }
+  // Empty batch = credential heartbeat (device setup screens verify their
+  // key without submitting a fact).
+  if (events.length === 0) {
+    return NextResponse.json({ acks: [], device: { name: auth.device.name, registerId: auth.device.register_id } });
   }
   if (events.length > MAX_BATCH) {
     return NextResponse.json(

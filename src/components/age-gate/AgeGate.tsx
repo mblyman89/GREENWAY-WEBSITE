@@ -38,8 +38,9 @@ export function AgeGate() {
     window.dispatchEvent(new Event(STORAGE_EVENT));
   }
 
-  // The age gate is for customers only — never block the staff back office.
-  if (pathname?.startsWith("/admin")) return null;
+  // The age gate is for customers only — never block the staff back office
+  // or the register (the POS has its own, stronger ID gate per sale).
+  if (pathname?.startsWith("/admin") || pathname?.startsWith("/pos")) return null;
 
   if (isConfirmed) return null;
 
