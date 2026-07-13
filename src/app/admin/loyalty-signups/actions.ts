@@ -15,9 +15,57 @@ import {
   createLoyaltySignup,
   type LoyaltyStatus,
 } from "@/lib/loyalty/signups-store";
+import { connectSignupToCustomer } from "@/lib/loyalty/signup-customer-store";
 import { readLoyaltySignups } from "@/lib/loyalty/store";
 
 const VALID: LoyaltyStatus[] = ["new", "entered", "duplicate", "archived"];
+
+/**
+ * Create-or-link the customer record for a signup, audit the outcome, and
+ * return a banner message for the queue UI. Shared by "Mark entered" (auto)
+ * and the explicit "Add to customers" backfill button.
+ */
+async function connectAndAudit(
+  signupId: string,
+  session: { profile: { id: string }; email: string },
+): Promise<string> {
+  const result = await connectSignupToCustomer(signupId, session.profile.id);
+  if (!result.ok) {
+    await recordAudit({
+      actorId: session.profile.id,
+      actorEmail: session.email,
+      action: "loyalty.customer_connect_failed",
+      entityType: "loyalty_signup",
+      entityId: signupId,
+      after: { error: result.error },
+    });
+    return `connect_error=${encodeURIComponent(result.error)}`;
+  }
+  await recordAudit({
+    actorId: session.profile.id,
+    actorEmail: session.email,
+    action:
+      result.outcome === "created"
+        ? "loyalty.customer_created"
+        : "loyalty.customer_linked",
+    entityType: "loyalty_signup",
+    entityId: signupId,
+    after: {
+      customer_id: result.customerId,
+      outcome: result.outcome,
+      basis: result.basis,
+      enrolled: result.enrolled,
+    },
+  });
+  const qs = new URLSearchParams({
+    connected: result.outcome,
+    cid: result.customerId,
+    cname: result.customerName,
+  });
+  if (result.basisLabel) qs.set("basis", result.basisLabel);
+  if (result.enrolled) qs.set("enrolled", "1");
+  return qs.toString();
+}
 
 export async function setLoyaltyStatusAction(formData: FormData): Promise<void> {
   const session = await requirePermission("loyalty.manage");
@@ -36,7 +84,44 @@ export async function setLoyaltyStatusAction(formData: FormData): Promise<void> 
       after: { status },
     });
   }
+
+  // Marking a signup "entered" now automatically creates (or links to) the
+  // customer record — the back office IS the POS, so validated signups land
+  // in CRM → Customers without any manual re-entry.
+  if (ok && status === "entered") {
+    const qs = await connectAndAudit(id, session);
+    revalidatePath("/admin/loyalty-signups");
+    revalidatePath("/admin/customers");
+    redirect(`/admin/loyalty-signups?${withReturnView(qs, formData)}`);
+  }
+
   revalidatePath("/admin/loyalty-signups");
+}
+
+/** Preserve the queue's current filter + search across a redirect. */
+function withReturnView(qs: string, formData: FormData): string {
+  const params = new URLSearchParams(qs);
+  const view = String(formData.get("view") ?? "").trim();
+  const q = String(formData.get("view_q") ?? "").trim();
+  if (view) params.set("status", view);
+  if (q) params.set("q", q);
+  return params.toString();
+}
+
+/**
+ * Explicit backfill: create-or-link the customer for a signup that was marked
+ * "entered" before auto-connection existed (or re-run a failed connect).
+ * Idempotent — an already-connected signup just reports its customer.
+ */
+export async function connectSignupCustomerAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("loyalty.manage");
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+
+  const qs = await connectAndAudit(id, session);
+  revalidatePath("/admin/loyalty-signups");
+  revalidatePath("/admin/customers");
+  redirect(`/admin/loyalty-signups?${withReturnView(qs, formData)}`);
 }
 
 export async function updateLoyaltyNoteAction(formData: FormData): Promise<void> {

@@ -58,15 +58,15 @@ export default async function CustomersPage({
             id="customers"
             title="How customer records work"
             steps={[
-              "Add a customer with their name and (optionally) contact + birthdate.",
+              "Loyalty signups you mark as entered become customer records here automatically.",
+              "Add walk-ins with “New customer,” or import your old POS list under Customers → Import.",
               "Mark medical patients and capture their authorization on the profile.",
               "Respect marketing consent / do-not-contact flags.",
-              "Later slices link sales history + enforce purchase limits automatically.",
             ]}
           >
             <p>
-              Customer data is private and staff-only. Birthdate powers the 21+ age check at the
-              register in a later slice.
+              Customer data is private and staff-only. Birthdate powers the 21+ age check on the
+              profile, and linked customers accrue loyalty points when their orders complete.
             </p>
           </HelpPanel>
         }
@@ -92,7 +92,7 @@ export default async function CustomersPage({
           <EmptyState
             icon="👤"
             title="No customers yet"
-            description="Add your first customer with the “New customer” button, or link them from loyalty signups in a later step."
+            description="Add your first customer with the “New customer” button, import your old POS list under Customers → Import, or mark a loyalty signup as entered — it becomes a customer here automatically."
           />
         )}
 

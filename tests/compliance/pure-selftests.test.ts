@@ -25,6 +25,7 @@ import { __runAtRestCryptoTests } from "@/lib/security/at-rest-crypto";
 import { __runEngineTests } from "@/lib/loyalty/engine";
 import { __runLoyaltyConfigTests } from "@/lib/loyalty/loyalty-config-core";
 import { __runLoyaltySaleTests } from "@/lib/loyalty/loyalty-sale-core";
+import { __runSignupCustomerTests } from "@/lib/loyalty/signup-customer-core";
 import { __runScheduleCoreTests } from "@/lib/staffing/schedule-core";
 import { __runEmployeeLifecycleTests } from "@/lib/staffing/employee-lifecycle-core";
 import { __runUserGuardTests } from "@/lib/auth/user-guards-core";
@@ -94,6 +95,9 @@ describe("embedded pure self-test suites", () => {
   });
   it("loyalty-sale-core (Task S-a: best-deal-wins, code spread, floors)", () => {
     expect(() => __runLoyaltySaleTests()).not.toThrow();
+  });
+  it("signup-customer-core (Task V: signup → customer create-or-link)", () => {
+    expect(() => __runSignupCustomerTests()).not.toThrow();
   });
   it("schedule-core (week math, Pacific)", () => {
     expect(() => __runScheduleCoreTests()).not.toThrow();

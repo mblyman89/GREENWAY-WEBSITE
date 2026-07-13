@@ -14,10 +14,12 @@ import {
   LOYALTY_STATUS_LABELS,
   type LoyaltyStatus,
 } from "@/lib/loyalty/signups-store";
+import { getLinkedCustomersForSignups } from "@/lib/loyalty/signup-customer-store";
 import {
   setLoyaltyStatusAction,
   updateLoyaltyNoteAction,
   importLegacyLoyaltyAction,
+  connectSignupCustomerAction,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -50,7 +52,18 @@ function formatDate(value: string) {
 export default async function LoyaltySignupReviewPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; q?: string; imported?: string; found?: string }>;
+  searchParams: Promise<{
+    status?: string;
+    q?: string;
+    imported?: string;
+    found?: string;
+    connected?: string;
+    cid?: string;
+    cname?: string;
+    basis?: string;
+    enrolled?: string;
+    connect_error?: string;
+  }>;
 }) {
   await requirePermission("loyalty.view");
   const session = await getStaffSession();
@@ -60,6 +73,12 @@ export default async function LoyaltySignupReviewPage({
   const search = sp.q ?? "";
   const importedCount = sp.imported != null ? Number(sp.imported) : null;
   const foundCount = sp.found != null ? Number(sp.found) : null;
+  const connected = sp.connected ?? null;
+  const connectedCustomerId = sp.cid ?? null;
+  const connectedCustomerName = sp.cname ?? null;
+  const connectedBasis = sp.basis ?? null;
+  const connectedEnrolled = sp.enrolled === "1";
+  const connectError = sp.connect_error ?? null;
 
   // ----- Fallback path: Supabase not configured -> read the legacy JSONL -----
   if (!isSupabaseServiceConfigured) {
@@ -68,7 +87,7 @@ export default async function LoyaltySignupReviewPage({
       <div>
         <AdminPageHeader
           title="Loyalty Signups"
-          subtitle="Review new loyalty signups and add customers to the POS."
+          subtitle="Review new loyalty signups before they become customer records."
           action={
             <span className="rounded-full bg-[#ffd700]/15 px-4 py-2 text-sm font-semibold text-[#ffd700]">
               {legacy.length} total
@@ -116,6 +135,9 @@ export default async function LoyaltySignupReviewPage({
     getLoyaltyStatusCounts(),
   ]);
 
+  // Which of the visible signups already have a linked customer record?
+  const linkedCustomers = await getLinkedCustomersForSignups(rows.map((r) => r.id));
+
   // Resolve the "original" signup each duplicate points at, so staff can see
   // exactly who it collides with (name + when) rather than a bare flag.
   const dedupeOriginals = new Map<string, { name: string; submitted_at: string } | null>();
@@ -138,7 +160,7 @@ export default async function LoyaltySignupReviewPage({
     <div>
       <AdminPageHeader
         title="Loyalty Signups"
-        subtitle="Database-backed queue — dedupe, mark-as-entered, notes, and CSV export."
+        subtitle="Review each signup — marking it entered creates the customer record automatically."
         breadcrumbs={<Breadcrumbs items={[{ label: "Loyalty" }]} />}
         help={
           <HelpPanel
@@ -146,14 +168,15 @@ export default async function LoyaltySignupReviewPage({
             title="How loyalty signups work"
             steps={[
               "Customers who sign up on your site appear in this queue.",
-              "Review each one and add them to your POS loyalty program.",
-              "Mark them as entered so you don't double-enter.",
-              "Export the list as a CSV any time.",
+              "Review the details, then click Mark entered to validate the signup.",
+              "The customer record is created (or linked to an existing match) automatically in CRM → Customers, and they're enrolled in the loyalty program.",
+              "Export the list as a CSV or Excel file any time.",
             ]}
           >
             <p>
-              We flag likely duplicates so you don&apos;t add the same person
-              twice. Add a note on any signup that needs follow-up.
+              We flag likely duplicates so you don&apos;t create the same person twice — a
+              duplicate signup links to the existing customer instead of adding a new one. Add a
+              note on any signup that needs follow-up.
             </p>
           </HelpPanel>
         }
@@ -191,9 +214,29 @@ export default async function LoyaltySignupReviewPage({
                 } (duplicates skipped automatically).`}
           </div>
         )}
+        {connected && connectedCustomerId && (
+          <div className="mb-4 rounded-lg border border-[#7ed957]/40 bg-[#7ed957]/10 px-4 py-3 text-sm text-[#7ed957]">
+            {connected === "created"
+              ? `Customer record created for ${connectedCustomerName ?? "this signup"}`
+              : connected === "linked"
+                ? `Linked to existing customer ${connectedCustomerName ?? ""}${connectedBasis ? ` (${connectedBasis})` : ""}`
+                : `Already connected to customer ${connectedCustomerName ?? ""}`}
+            {connectedEnrolled ? " · enrolled in loyalty" : ""}
+            {" — "}
+            <Link href={`/admin/customers/${connectedCustomerId}`} className="font-bold underline underline-offset-2">
+              open customer profile
+            </Link>
+          </div>
+        )}
+        {connectError && (
+          <div className="mb-4 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+            The signup was marked entered, but the customer record could not be created:{" "}
+            {connectError}. Use <strong>Add to customers</strong> on the signup to retry.
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <StatCard label="New" value={counts.new} accent="gold" hint="Awaiting POS entry" />
-          <StatCard label="Entered" value={counts.entered} accent="green" />
+          <StatCard label="New" value={counts.new} accent="gold" hint="Awaiting review" />
+          <StatCard label="Entered" value={counts.entered} accent="green" hint="Connected to Customers" />
           <StatCard label="Duplicates" value={counts.duplicate} accent="orange" />
           <StatCard label="Archived" value={counts.archived} />
         </div>
@@ -272,6 +315,15 @@ export default async function LoyaltySignupReviewPage({
                       >
                         {LOYALTY_STATUS_LABELS[s.status]}
                       </span>
+                      {linkedCustomers.has(s.id) ? (
+                        <Link
+                          href={`/admin/customers/${linkedCustomers.get(s.id)!.customerId}`}
+                          className="rounded-full border border-[#7ed957]/40 bg-[#7ed957]/10 px-2.5 py-0.5 text-[0.62rem] font-black uppercase tracking-[0.1em] text-[#7ed957] transition hover:bg-[#7ed957]/20"
+                          title={`Open ${linkedCustomers.get(s.id)!.name}'s customer profile`}
+                        >
+                          ↗ Customer: {linkedCustomers.get(s.id)!.name}
+                        </Link>
+                      ) : null}
                       {s.dedupe_of ? (
                         <span
                           className="rounded-full border border-[#ff7f00]/40 bg-[#ff7f00]/10 px-2.5 py-0.5 text-[0.62rem] font-black uppercase tracking-[0.1em] text-[#ff7f00]"
@@ -313,6 +365,18 @@ export default async function LoyaltySignupReviewPage({
                     <div className="flex flex-wrap items-center gap-2">
                       {s.status !== "entered" ? (
                         <StatusButton id={s.id} status="entered" label="Mark entered" primary />
+                      ) : null}
+                      {s.status === "entered" && !linkedCustomers.has(s.id) ? (
+                        <form action={connectSignupCustomerAction}>
+                          <input type="hidden" name="id" value={s.id} />
+                          <button
+                            type="submit"
+                            className="rounded-lg border border-[#7ed957]/50 bg-[#7ed957]/10 px-3.5 py-2 text-xs font-black uppercase tracking-[0.08em] text-[#7ed957] transition hover:bg-[#7ed957]/20"
+                            title="Create (or link to) the customer record for this signup"
+                          >
+                            Add to customers
+                          </button>
+                        </form>
                       ) : null}
                       {s.status !== "duplicate" ? (
                         <StatusButton id={s.id} status="duplicate" label="Duplicate" />
@@ -358,16 +422,23 @@ function StatusButton({
   status,
   label,
   primary = false,
+  view,
+  viewQ,
 }: {
   id: string;
   status: LoyaltyStatus;
   label: string;
   primary?: boolean;
+  /** Current queue filter/search, preserved across the redirect after connect. */
+  view?: string;
+  viewQ?: string;
 }) {
   return (
     <form action={setLoyaltyStatusAction}>
       <input type="hidden" name="id" value={id} />
       <input type="hidden" name="status" value={status} />
+      {view ? <input type="hidden" name="view" value={view} /> : null}
+      {viewQ ? <input type="hidden" name="view_q" value={viewQ} /> : null}
       <button
         type="submit"
         className={
