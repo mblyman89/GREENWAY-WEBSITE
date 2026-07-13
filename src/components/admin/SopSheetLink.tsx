@@ -5,7 +5,7 @@ import { sopHref, TRUCK_DAY_SLUG } from "@/lib/catalog/sop-core";
 /**
  * W13 — the standard "prefer paper?" line inside each stage's HelpPanel,
  * linking to that stage's printable one-page SOP (audit G11: SOP pack lives
- * under Getting Started; linked from each HelpPanel).
+ * at /admin/sop; linked from each HelpPanel).
  *
  * Server-safe: plain markup, no hooks — HelpPanel renders it as children.
  */

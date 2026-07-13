@@ -98,13 +98,13 @@ export const HELP_SECTIONS: HelpSection[] = [
       },
       {
         q: "Where should I start?",
-        a: "Open Getting Started. It shows a checklist with the single next step to take. In general: upload your POS menu, publish it, then enrich products, set up promotions, and connect your equipment.",
-        href: "/admin/getting-started",
+        a: "Start at the Dashboard. Until your store is fully set up it shows a setup-progress banner that takes you straight to the next step. In general: upload your POS menu, publish it, then enrich products, set up promotions, and connect your equipment.",
+        href: "/admin",
       },
       {
-        q: "What's the difference between the Dashboard and Getting Started?",
-        a: "Getting Started is the setup checklist for a new store. The Dashboard is your day-to-day cockpit — the live overview of sales and store activity you check during a shift.",
-        href: "/admin",
+        q: "Where are the printable SOPs?",
+        a: "The one-page procedures — the truck-day master sheet plus a sheet for every stage of the product journey — live under Printable SOPs. Print them and put them on the wall for new hires.",
+        href: "/admin/sop",
       },
       {
         q: "Will my changes go live immediately?",

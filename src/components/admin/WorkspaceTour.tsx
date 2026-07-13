@@ -5,9 +5,8 @@ import type { StaffRole } from "@/lib/supabase/types";
 
 /**
  * WorkspaceTour — a data-driven grid that introduces every major area of the
- * back office (the 11 nav "workspaces"). Used on Getting Started as the
- * "Explore your back office" tour and, in a compact form, on the Dashboard as
- * quick navigation.
+ * back office (the 11 nav "workspaces"). Used in compact form on the Dashboard
+ * as the "Explore your back office" quick navigation.
  *
  * It reads WORKSPACES (grounded in docs/PROJECT_GUIDE.md) so it always matches
  * the real product scope, and it filters by the signed-in role's permissions

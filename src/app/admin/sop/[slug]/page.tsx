@@ -113,7 +113,7 @@ export default async function SopSheetPage({
       {/* Footer */}
       <p className="mt-6 border-t border-black/30 pt-2 text-[0.65rem] leading-4 text-black/60">
         This sheet restates the same steps the page&apos;s on-screen help panel teaches — if they ever
-        disagree, the screen is newer: reprint this sheet from Getting Started → Printable SOPs.
+        disagree, the screen is newer: reprint this sheet from Dashboard → Printable SOPs.
       </p>
     </div>
   );

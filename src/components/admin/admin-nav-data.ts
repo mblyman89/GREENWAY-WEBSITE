@@ -41,7 +41,6 @@ export const adminNav: AdminNavItem[] = [
   // reachable via the Greenway wordmark, so no separate nav item for it.)
   { label: "Online Orders", href: "/admin/orders", permission: "orders.view", icon: "\ud83d\uded2", group: "Dashboard" }, // 🛒 shopping cart
   { label: "Loyalty signups", href: "/admin/loyalty-signups", permission: "loyalty.view", icon: "\ud83c\udf9f\ufe0f", group: "Dashboard" }, // 🎟️ ticket / signup
-  { label: "Getting Started", href: "/admin/getting-started", permission: "dashboard.view", icon: "\ud83e\udded", group: "Dashboard" }, // 🧭 compass / onboarding
 
   // Reports: standalone top-header button (rendered as a direct link tab, not a
   // dropdown — see AdminTopNav DIRECT_LINK_GROUPS).

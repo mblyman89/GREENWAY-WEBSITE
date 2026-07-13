@@ -83,8 +83,8 @@ export default async function AdminDashboardPage() {
         subtitle={`Point-of-sale cockpit · signed in as ${ROLE_LABELS[session.profile.role]}.`}
         action={
           <div className="flex gap-2">
-            <Button href="/admin/getting-started" variant="neutral" size="sm">
-              Setup guide
+            <Button href="/admin/help" variant="neutral" size="sm">
+              Help & FAQ
             </Button>
             <Button href="/" external variant="neutral" size="sm">
               View live site ↗
@@ -141,11 +141,12 @@ export default async function AdminDashboardPage() {
         )}
 
         {/* ── Setup progress nudge (only until fully set up) ─────────────────
-            Top POS onboarding keeps the checklist one click away from home
-            until the store is live. Once every step is done, this disappears. */}
+            Links straight to the next incomplete step's page (the checks in
+            setup-status carry their own href). Disappears once every real
+            setup check reads done. */}
         {!setupComplete && (
           <Link
-            href="/admin/getting-started"
+            href={setup.nextAction?.href ?? "/admin/help"}
             className="admin-card-interactive flex flex-wrap items-center gap-4 rounded-[var(--admin-radius-lg)] border border-[var(--admin-accent)]/30 bg-[var(--admin-accent)]/[0.06] px-5 py-4"
           >
             <span className="text-2xl" aria-hidden="true">
@@ -455,8 +456,8 @@ export default async function AdminDashboardPage() {
           title="Explore your back office"
           description="Jump straight into any area."
           action={
-            <Button href="/admin/getting-started" variant="neutral" size="sm">
-              Guided tour
+            <Button href="/admin/sop" variant="neutral" size="sm">
+              Printable SOPs
             </Button>
           }
         >

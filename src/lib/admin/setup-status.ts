@@ -184,9 +184,9 @@ export async function getSetupStatus(): Promise<SetupStatus> {
 }
 
 /**
- * Rich, plain-language guidance for each setup step — used by the dedicated
- * Getting Started wizard (/admin/getting-started). Keyed by the same check id
- * as getSetupStatus().checks so the wizard can pair live status with how-to.
+ * Rich, plain-language guidance for each setup step — grounds the AI concierge
+ * (concierge-assistant.ts) so setup answers stay on-script. Keyed by the same
+ * check id as getSetupStatus().checks.
  */
 export type SetupGuide = {
   /** Big-picture "why this matters" sentence. */

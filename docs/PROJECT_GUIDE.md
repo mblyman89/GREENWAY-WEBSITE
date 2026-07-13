@@ -47,9 +47,10 @@ nav map, page headers) as of this writing — not aspirational.
 
 ---
 
-## 2. First-time setup (Getting Started)
+## 2. First-time setup
 
-**Dashboard → Getting Started** reads real data and turns each step green when done:
+Until the store is fully set up, the **Dashboard** shows a setup-progress
+banner that reads real data and deep-links to the next incomplete step:
 
 1. **Connect the database (Supabase)** — add `NEXT_PUBLIC_SUPABASE_URL`,
    `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, and
@@ -76,8 +77,13 @@ features soft-disable (grey out) with a clear message.
 - **Online Orders** (`/admin/orders`) — live pickup orders; acknowledge,
   prepare, complete from any device. Each order has a printable ticket.
 - **Loyalty signups** (`/admin/loyalty-signups`) — review new public loyalty
-  signups and add them to the customer list / POS.
-- **Getting Started** (`/admin/getting-started`) — the setup checklist (§2).
+  signups; marking one "entered" automatically creates (or links) its customer
+  record in CRM → Customers and enrolls it in the loyalty program.
+- **Printable SOPs** (`/admin/sop`) — the one-page truck-day master sheet and a
+  printable SOP for every stage of the product journey. (The old Getting
+  Started wizard was removed once setup was complete; the Dashboard still shows
+  a setup-progress banner that deep-links to the next step until every check is
+  green.)
 
 ---
 
