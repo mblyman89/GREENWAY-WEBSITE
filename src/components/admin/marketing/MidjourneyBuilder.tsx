@@ -28,6 +28,7 @@ import { useToast } from "@/components/admin/ux";
 import {
   assemblePrompt,
   ASPECT_RATIOS,
+  closestAspectRatio,
   PRESETS,
   presetById,
   COMPLIANCE_NOTE,
@@ -121,7 +122,12 @@ export function MidjourneyBuilder({
   function choosePlacement(id: string) {
     setPlacementId(id);
     const p = placementById(id);
-    if (p) setFluxFormat(p.format);
+    if (p) {
+      setFluxFormat(p.format);
+      // Keep the Midjourney prompt in step: snap --ar to the destination's
+      // closest supported ratio (FLUX itself uses the exact pixel size).
+      setBrief((b) => ({ ...b, aspectRatio: closestAspectRatio(p.width, p.height) }));
+    }
   }
 
   function toggleFluxRef(url: string) {
@@ -371,7 +377,11 @@ export function MidjourneyBuilder({
 
         {/* Parameters */}
         <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
-          <h4 className="mb-3 text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-muted)]">Parameters</h4>
+          <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-muted)]">Midjourney parameters</h4>
+          <p className="mb-3 text-xs text-[var(--admin-text-muted)]">
+            These tune the copy-paste Midjourney prompt. FLUX ignores them — except aspect ratio, which FLUX uses only when no
+            destination is picked in Step&nbsp;1.
+          </p>
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Aspect ratio">
               <Select value={brief.aspectRatio} onChange={(e) => set("aspectRatio", e.target.value as AspectRatio)}>
@@ -401,7 +411,16 @@ export function MidjourneyBuilder({
             <Field label={`Chaos (${brief.chaos ?? 0})`} help="variety across results">
               <input type="range" min={0} max={100} step={5} value={brief.chaos ?? 0} onChange={(e) => set("chaos", Number(e.target.value))} className="w-full accent-[var(--admin-accent)]" />
             </Field>
+            <Field label={`Weird (${brief.weird ?? 0})`} help="0 normal · 3000 experimental aesthetics">
+              <input type="range" min={0} max={3000} step={50} value={brief.weird ?? 0} onChange={(e) => set("weird", Number(e.target.value))} className="w-full accent-[var(--admin-accent)]" />
+            </Field>
           </div>
+          {placement && (
+            <p className="mt-2 text-xs text-[var(--admin-text-muted)]">
+              Aspect ratio auto-set to <strong className="text-[var(--admin-text)]">{brief.aspectRatio}</strong> to match your Step&nbsp;1
+              destination (Midjourney only supports fixed ratios — FLUX uses the exact {placement.width}×{placement.height}px).
+            </p>
+          )}
           <div className="mt-3 flex flex-wrap gap-6">
             <label className="flex items-center gap-2 text-sm text-[var(--admin-text)]">
               <input type="checkbox" checked={Boolean(brief.raw)} onChange={(e) => set("raw", e.target.checked)} className="accent-[var(--admin-accent)]" /> Raw mode
@@ -412,28 +431,44 @@ export function MidjourneyBuilder({
           </div>
         </div>
 
-        {/* Reference image (Midjourney --sref) */}
+        {/* Reference images (Midjourney --sref / --oref) */}
         <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
-          <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-muted)]">Style reference (optional)</h4>
-          <p className="mb-3 text-xs text-[var(--admin-text-muted)]">Pick an image from your media library to emit a <code>--sref</code> tag. Its public URL is used as the style reference.</p>
+          <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-[var(--admin-text-muted)]">Midjourney references (optional)</h4>
+          <p className="mb-3 text-xs text-[var(--admin-text-muted)]">
+            Pick images from your media library: a <strong>style reference</strong> (<code>--sref</code>) copies the LOOK
+            (colors, lighting, vibe); an <strong>omni-reference</strong> (<code>--oref</code>) keeps a specific PRODUCT or
+            object recognizable. FLUX uses its own reference grid in Step&nbsp;3 instead.
+          </p>
           {allRefs.length === 0 ? (
             <p className="text-xs text-[var(--admin-text-muted)]">No images yet. Upload one in the FLUX section, or add published media on the Media page.</p>
           ) : (
-            <Field label="Reference image (→ --sref)">
-              <Select value={brief.srefUrl ?? ""} onChange={(e) => set("srefUrl", e.target.value)}>
-                <option value="">— None —</option>
-                {allRefs.map((r) => (
-                  <option key={r.id} value={r.url}>
-                    {r.label}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-          )}
-          {brief.srefUrl && (
-            <Field label={`Style weight (${brief.styleWeight ?? 100})`} className="mt-3">
-              <input type="range" min={0} max={1000} step={10} value={brief.styleWeight ?? 100} onChange={(e) => set("styleWeight", Number(e.target.value))} className="w-full accent-[var(--admin-accent)]" />
-            </Field>
+            <>
+              <Field label="Style reference (→ --sref)" help="Match this image's aesthetic.">
+                <Select value={brief.srefUrl ?? ""} onChange={(e) => set("srefUrl", e.target.value)}>
+                  <option value="">— None —</option>
+                  {allRefs.map((r) => (
+                    <option key={r.id} value={r.url}>
+                      {r.label}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              {brief.srefUrl && (
+                <Field label={`Style weight (${brief.styleWeight ?? 100})`} help="0 subtle · 1000 strongly matches the reference look" className="mt-3">
+                  <input type="range" min={0} max={1000} step={10} value={brief.styleWeight ?? 100} onChange={(e) => set("styleWeight", Number(e.target.value))} className="w-full accent-[var(--admin-accent)]" />
+                </Field>
+              )}
+              <Field label="Omni-reference (→ --oref)" help="Keep this exact product/object recognizable in the result." className="mt-3">
+                <Select value={brief.orefUrl ?? ""} onChange={(e) => set("orefUrl", e.target.value)}>
+                  <option value="">— None —</option>
+                  {allRefs.map((r) => (
+                    <option key={r.id} value={r.url}>
+                      {r.label}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            </>
           )}
         </div>
       </div>
