@@ -2215,3 +2215,31 @@ equipment hub; findings recorded in an AI-optimized mega report.
   equipment hub. Build plan mapped onto POS slices P0–P7.
 
 **Docs only.** No code, no migration; suite unchanged at 1,289 passing.
+
+## Shipped — Pre-POS seam audit + owner POS decisions recorded (PR #435, Task AA)
+
+Owner directive: "complete a seam audit for me so you are completely grounded
+in our actual code and logic and such. No guessing." Plus five recorded
+decisions: Unlisted App Distribution approved; 3 registers at launch
+(2 budtender + 1 manager till); KEEP the existing Bluetooth front-counter
+receipt printer (kicks the drawer today — no mC-Print3 purchase; hub TSP143IV
+stays on online-order duty; exact model to be provided); cash-only launch
+with POSaBIT pre-approved; seam audit approved.
+
+- New `docs/POS_SEAM_AUDIT.md`: verified contracts of the five back-office
+  seams the iPad POS builds on — money core (order-pricing-core), the 8-step
+  completion gate (runCompletionGate sequence documented from source),
+  registers/drawers (blind-count lifecycle; migration-0038 seed already
+  matches the 3-register launch plan exactly), time clock (toggleClock +
+  PIN actions), and auth/PIN (corrected a v1 assumption: salted-scrypt PIN
+  infrastructure ALREADY EXISTS — employees.clock_pin + throttle +
+  getEmployeeByPin — so the POS PIN-per-sale layer reuses it).
+- Verdict: all five seams stable; four low-risk additive refactors folded
+  into POS slices P0/P1 (extract completion gate to a shared module; sale↔
+  register/session/device linkage; punch source "register" + intent-carrying
+  offline punches; employee↔staff-profile linkage + pos.* permissions).
+- `docs/POS_FRONTEND_RESEARCH.md` gained §14 (binding owner decisions).
+- Verification loop on main confirmed green: tsc 0 errors, vitest 1,289/88,
+  pure self-tests all passing.
+
+**Docs only.** No code, no migration.
