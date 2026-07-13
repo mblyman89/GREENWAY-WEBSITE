@@ -28,6 +28,7 @@ import {
   fluxFilename,
   parsePollResponse,
   parseSubmitResponse,
+  type FluxOutputFormat,
   type FluxRequest,
 } from "./flux-core";
 
@@ -53,12 +54,21 @@ export type GenerateFluxInput = {
   altText?: string;
   tags?: string[];
   uploadedBy: string | null;
-  outputFormat?: "png" | "jpeg";
+  outputFormat?: FluxOutputFormat;
   safetyTolerance?: number;
   /** Up to 8 reference-image URLs (FLUX.2 multi-reference). */
   referenceImages?: string[];
-  /** Let FLUX rewrite/expand the prompt (default off). */
+  /**
+   * Prompt upsampling. undefined = follow the endpoint's own default (ON for
+   * FLUX 2 max/pro/flex, OFF for legacy Kontext). The core emits the right
+   * field per endpoint (disable_pup vs prompt_upsampling — verified docs).
+   */
   promptUpsampling?: boolean;
+  /** Exact output size (e.g. a placement like 1080×1080). Beats aspect ratio. */
+  width?: number;
+  height?: number;
+  /** Destination-specific art direction appended to the prompt. */
+  compositionHint?: string;
 };
 
 export type GenerateFluxResult =
@@ -68,6 +78,10 @@ export type GenerateFluxResult =
       request: FluxRequest;
       endpoint: string;
       warnings: string[];
+      /** Credits charged (from the verified submit response), when reported. */
+      cost?: number;
+      /** Output megapixels (from the verified submit response), when reported. */
+      outputMp?: number;
     }
   | { ok: false; error: string; code?: "unconfigured" | "moderated" | "rate_limit" | "credits" | "timeout" | "api" };
 
@@ -88,10 +102,14 @@ export async function generateFluxImage(input: GenerateFluxInput): Promise<Gener
   if (!apiKey) return { ok: false, error: new FluxNotConfiguredError().message, code: "unconfigured" };
 
   const built = buildFluxRequest(input.brief, {
+    endpoint: overrides.endpoint,
     outputFormat: input.outputFormat,
     safetyTolerance: input.safetyTolerance,
     referenceImages: input.referenceImages,
     promptUpsampling: input.promptUpsampling,
+    width: input.width,
+    height: input.height,
+    compositionHint: input.compositionHint,
   });
   if (!built.ok) return { ok: false, error: built.error, code: "api" };
 
@@ -164,10 +182,14 @@ export async function generateFluxImage(input: GenerateFluxInput): Promise<Gener
     if (!imgRes.ok) return { ok: false, error: `Failed to download the generated image (${imgRes.status}).`, code: "api" };
     const arrayBuf = await imgRes.arrayBuffer();
     buffer = Buffer.from(arrayBuf);
-    mimeType = imgRes.headers.get("content-type") || (built.request.output_format === "jpeg" ? "image/jpeg" : "image/png");
-    if (!mimeType.startsWith("image/")) {
-      mimeType = built.request.output_format === "jpeg" ? "image/jpeg" : "image/png";
-    }
+    const fallbackMime =
+      built.request.output_format === "jpeg"
+        ? "image/jpeg"
+        : built.request.output_format === "webp"
+          ? "image/webp"
+          : "image/png";
+    mimeType = imgRes.headers.get("content-type") || fallbackMime;
+    if (!mimeType.startsWith("image/")) mimeType = fallbackMime;
   } catch (err) {
     return { ok: false, error: err instanceof Error ? `Image download error: ${err.message}` : "Image download error.", code: "api" };
   }
@@ -186,7 +208,15 @@ export async function generateFluxImage(input: GenerateFluxInput): Promise<Gener
       uploadedBy: input.uploadedBy,
       status: "draft",
     });
-    return { ok: true, asset, request: built.request, endpoint: overrides.endpoint, warnings: built.warnings };
+    return {
+      ok: true,
+      asset,
+      request: built.request,
+      endpoint: overrides.endpoint,
+      warnings: built.warnings,
+      cost: submit.cost,
+      outputMp: submit.outputMp,
+    };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? `Saving to media library failed: ${err.message}` : "Saving to media library failed.", code: "api" };
   }

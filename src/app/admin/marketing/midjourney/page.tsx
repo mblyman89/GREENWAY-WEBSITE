@@ -30,22 +30,26 @@ export default async function MidjourneyPage() {
   return (
     <div>
       <AdminPageHeader
-        title="Image prompt builder"
-        subtitle="Build one brief — copy a Midjourney prompt or generate directly with FLUX 2 and save into your media library."
-        breadcrumbs={<Breadcrumbs items={[{ label: "Marketing" }, { label: "Midjourney" }]} />}
+        title="Creative Studio"
+        subtitle="Pick where the image will go, describe the idea, and generate at the exact right size with FLUX — or copy a Midjourney prompt from the same brief."
+        breadcrumbs={<Breadcrumbs items={[{ label: "Marketing" }, { label: "Creative Studio" }]} />}
         help={
           <HelpPanel
             id="midjourney-builder"
-            title="How the prompt builder works"
+            title="How the Creative Studio works"
             steps={[
-              "Pick a preset (product hero, lifestyle, menu banner, social, signage) to start.",
-              "Optionally type your idea and press AI assist to draft the brief fields — then edit them.",
-              "Tune parameters (aspect ratio, version, stylize, chaos) with the sliders.",
-              "Copy the Midjourney prompt to paste there, OR click Generate with FLUX 2 Max.",
-              "FLUX images save into your media library as drafts — review, then publish.",
+              "Step 1 — pick the destination (website banner, social post, email header, blog hero, print/in-store). The image is generated at that spot's exact pixel size.",
+              "Step 2 — type your idea and press AI assist. Greenway AI drafts the full brief using your store profile and your LIVE weekly deals (e.g. \"a banner for our Monday deal\" uses the real Monday deal). Edit anything.",
+              "Step 3 — Generate with FLUX. Results save into your media library as DRAFTS for you to review before publishing. Nothing goes live automatically.",
+              "Prefer Midjourney? The same brief builds a copy-paste prompt with all parameters (aspect, stylize, chaos, style reference).",
+              "Add up to 8 reference images (product shots, brand assets) so FLUX matches your look.",
             ]}
           >
-            <p>Copy builds a Midjourney prompt to paste there. FLUX 2 generates the image directly via API and saves it to your media library. All AI output is a draft to review before publishing.</p>
+            <p>
+              FLUX is the dominant generator here — a baked-in API pipeline that outputs pixel-perfect images for each destination.
+              Midjourney remains as a copy-a-prompt fallback on the same brief. All AI drafting is compliance-scanned
+              (no health claims, no youth appeal, no consumption imagery) and everything lands as a draft for human review.
+            </p>
           </HelpPanel>
         }
       />

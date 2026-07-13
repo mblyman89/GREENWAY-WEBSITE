@@ -3,11 +3,16 @@
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import { suggestBrief, isAiConfigured, type BriefSuggestion } from "@/lib/marketing/midjourney-ai";
+import { suggestCreativeConcept, type CreativeConcept } from "@/lib/marketing/creative-ai";
 import { getStoreProfile } from "@/lib/admin/store-profile-store";
 import { listVendors } from "@/lib/vendors/store";
 import { generateFluxImage } from "@/lib/marketing/flux-client";
 import { publicUrlForKey, uploadMedia } from "@/lib/media/store";
 import type { CreativeBrief } from "@/lib/marketing/midjourney-core";
+import type { FluxOutputFormat } from "@/lib/marketing/flux-core";
+import { placementById } from "@/lib/marketing/creative-placements-core";
+import { loadPublishedRuleSnapshots } from "@/lib/promotions/discount-engine";
+import { weeklyDealSummaries } from "@/lib/promotions/published-rules-core";
 
 export type BriefAssistResult =
   | { ok: true; suggestion: BriefSuggestion }
@@ -61,27 +66,99 @@ export async function assistBriefAction(input: {
   }
 }
 
+/**
+ * Build a grounded blurb of the store's LIVE promotions from the published
+ * discount rules (real offer mechanics — the same source the menu uses).
+ */
+async function buildPromotionsContext(): Promise<string> {
+  try {
+    const snapshots = await loadPublishedRuleSnapshots();
+    const weekly = weeklyDealSummaries(snapshots).filter((d) => d.fromDatabase || d.title);
+    if (!weekly.length) return "";
+    const lines = weekly.map(
+      (d) =>
+        `${d.weekday[0].toUpperCase()}${d.weekday.slice(1)}: ${d.title} — ${d.offerLabel}${d.description ? ` (${d.description})` : ""}`,
+    );
+    return lines.join("\n");
+  } catch {
+    return "";
+  }
+}
+
+export type CreativeConceptActionResult =
+  | { ok: true; concept: CreativeConcept; complianceFlags: string[] }
+  | { ok: false; error: string };
+
+/**
+ * Greenway AI creative director: draft a full image concept for a chosen
+ * placement + idea, grounded in the store profile and LIVE promotions.
+ * DRAFTS-ONLY — the suggestion fills the builder's editable fields.
+ */
+export async function suggestCreativeConceptAction(input: {
+  idea: string;
+  placementId?: string | null;
+}): Promise<CreativeConceptActionResult> {
+  const session = await requirePermission("content.edit");
+  if (!isAiConfigured) return { ok: false, error: "AI is not configured. Fill the brief fields manually." };
+
+  const placement = placementById(input.placementId);
+  try {
+    const [brandContext, promotionsContext] = await Promise.all([
+      buildBrandContext(),
+      buildPromotionsContext(),
+    ]);
+    const res = await suggestCreativeConcept({
+      idea: input.idea ?? "",
+      placement,
+      brandContext,
+      promotionsContext,
+    });
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "creative.concept_assist",
+      entityType: "marketing",
+      entityId: placement?.id ?? "creative-studio",
+      after: { idea: (input.idea ?? "").slice(0, 300), placement: placement?.id ?? null, flags: res.complianceFlags },
+    });
+    return { ok: true, concept: res.concept, complianceFlags: res.complianceFlags };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "AI request failed." };
+  }
+}
+
 export type FluxGenerateResult =
   | {
       ok: true;
       asset: { id: string; url: string; filename: string; title: string };
       endpoint: string;
       warnings: string[];
+      /** Credits charged (verified BFL submit-response field), when reported. */
+      cost?: number;
+      /** Output megapixels (verified BFL submit-response field), when reported. */
+      outputMp?: number;
+      /** The exact pixels generated (for the "sized perfectly" confirmation). */
+      width?: number;
+      height?: number;
     }
   | { ok: false; error: string };
 
 /**
- * Generate an image with FLUX 2 from the SAME creative brief the builder holds
+ * Generate an image with FLUX from the SAME creative brief the builder holds
  * and save it into the media library as a DRAFT (AI output is employee-validated
- * before publish). Reuses the shared prompt builder via flux-core. content.edit.
+ * before publish). When a placement is chosen, the image is generated at the
+ * placement's EXACT verified pixel size with its composition hint appended.
+ * Reuses the shared prompt builder via flux-core. content.edit.
  */
 export async function generateFluxAction(input: {
   brief: CreativeBrief;
-  outputFormat?: "png" | "jpeg";
+  outputFormat?: FluxOutputFormat;
   /** Up to 8 reference-image URLs (FLUX.2 multi-reference). */
   referenceImages?: string[];
-  /** Let FLUX rewrite/expand the prompt. */
+  /** Prompt upsampling (undefined = the endpoint's own default). */
   promptUpsampling?: boolean;
+  /** Where the image will go — drives exact size + composition hint. */
+  placementId?: string | null;
 }): Promise<FluxGenerateResult> {
   const session = await requirePermission("content.edit");
   const brief = input.brief;
@@ -93,14 +170,19 @@ export async function generateFluxAction(input: {
     .filter((r): r is string => typeof r === "string" && r.trim().length > 0)
     .slice(0, 8);
 
+  const placement = placementById(input.placementId);
+
   const res = await generateFluxImage({
     brief,
-    outputFormat: input.outputFormat,
+    outputFormat: input.outputFormat ?? placement?.format,
     referenceImages,
     promptUpsampling: input.promptUpsampling,
+    width: placement?.width,
+    height: placement?.height,
+    compositionHint: placement?.promptHint,
     usageType: "marketing",
     title: brief.subject.trim().slice(0, 120),
-    tags: ["marketing"],
+    tags: placement ? ["marketing", `placement:${placement.id}`] : ["marketing"],
     uploadedBy: session.userId,
   });
 
@@ -113,7 +195,15 @@ export async function generateFluxAction(input: {
     action: "flux.image_generated",
     entityType: "media",
     entityId: res.asset.id,
-    after: { endpoint: res.endpoint, width: res.request.width, height: res.request.height, subject: brief.subject, referenceCount: referenceImages.length },
+    after: {
+      endpoint: res.endpoint,
+      width: res.request.width ?? null,
+      height: res.request.height ?? null,
+      placement: placement?.id ?? null,
+      subject: brief.subject,
+      referenceCount: referenceImages.length,
+      cost: res.cost ?? null,
+    },
   });
 
   return {
@@ -126,6 +216,10 @@ export async function generateFluxAction(input: {
     },
     endpoint: res.endpoint,
     warnings: res.warnings,
+    cost: res.cost,
+    outputMp: res.outputMp,
+    width: res.request.width,
+    height: res.request.height,
   };
 }
 

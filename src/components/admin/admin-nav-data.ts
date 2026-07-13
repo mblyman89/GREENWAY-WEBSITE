@@ -78,7 +78,7 @@ export const adminNav: AdminNavItem[] = [
   { label: "Promotions", href: "/admin/promotions", permission: "promotions.manage", icon: "\ud83c\udff7\ufe0f", group: "MKTG & ADV" }, // 🏷️ deal tag
   { label: "Blog & Newsletter", href: "/admin/blog", permission: "blog.manage", icon: "\ud83d\udcdd", group: "MKTG & ADV" }, // 📝 writing
   { label: "Email Newsletter", href: "/admin/newsletter", permission: "blog.manage", icon: "\u2709\ufe0f", group: "MKTG & ADV" }, // ✉️ email
-  { label: "Image Generator", href: "/admin/marketing/midjourney", permission: "content.edit", icon: "\ud83c\udfa8", group: "MKTG & ADV" }, // 🎨 creative
+  { label: "Creative Studio", href: "/admin/marketing/midjourney", permission: "content.edit", icon: "\ud83c\udfa8", group: "MKTG & ADV" }, // 🎨 creative
 
   // Employee: the command center (roster/onboarding/offboarding + handbook),
   // then schedule + time & pay + trade samples. Task S-b restructure.

@@ -23,6 +23,9 @@ import { __runEmployeeLifecycleTests } from "../../src/lib/staffing/employee-lif
 import { __runUserGuardTests } from "../../src/lib/auth/user-guards-core";
 import { __runCampaignRulesTests } from "../../src/lib/marketing/campaign-rules-core";
 import { __runCompetitivePlaybookTests } from "../../src/lib/marketing/competitive-playbook-core";
+import { __runMidjourneyCoreTests } from "../../src/lib/marketing/midjourney-core";
+import { __runFluxCoreTests } from "../../src/lib/marketing/flux-core";
+import { __runCreativePlacementsTests } from "../../src/lib/marketing/creative-placements-core";
 
 async function main() {
   __runOrderPricingTests();
@@ -45,6 +48,9 @@ async function main() {
   __runUserGuardTests();
   __runCampaignRulesTests();
   __runCompetitivePlaybookTests();
+  __runMidjourneyCoreTests();
+  __runFluxCoreTests();
+  __runCreativePlacementsTests();
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

@@ -1,19 +1,25 @@
 "use client";
 
 /**
- * MidjourneyBuilder — Slice 72 [items 7 + 17] + Beautification B4
+ * MidjourneyBuilder — the Creative Studio (Task U PR B).
  *
- * Guided Midjourney prompt builder for the marketing team. Structured brief
- * fields + parameter controls + optional reference image (from the media
- * library OR uploaded inline) assemble — live — into a syntactically-correct
- * Midjourney prompt string (via the PURE core). An optional AI assist expands a
- * short idea into draft brief fields, grounded in the store's real brand
- * context. We do NOT call Midjourney; this produces a prompt to paste there.
+ * FOOL-PROOF FLOW (owner directive: "completely fool proof and simple…
+ * tons of helper text and ai assistance", images "sized perfectly for where
+ * they will be displayed"):
  *
- * FLUX 2: the same brief generates an image via the baked-in API and saves it
- * to the media library as a draft. Up to 8 reference images can be selected
- * from published media OR uploaded directly here (each upload is stored via the
- * same verified media pipeline and becomes reusable).
+ *   1. PICK A DESTINATION — website slot, social post, email banner, blog
+ *      hero, or print/in-store — from the verified placements registry. The
+ *      image is then generated at that destination's EXACT pixel size with
+ *      destination-specific art direction appended automatically.
+ *   2. DESCRIBE THE IDEA — Greenway AI drafts the full brief, grounded in the
+ *      store's real profile AND its LIVE promotions (so "Monday deal banner"
+ *      uses the actual Monday deal). Drafts-only; compliance-scanned.
+ *   3. GENERATE WITH FLUX — the dominant generator (baked-in API pipeline);
+ *      results save to the media library as DRAFTS for human review.
+ *
+ * Midjourney remains as the copy-a-prompt fallback on the same brief.
+ * Up to 8 reference images can be selected from published media OR uploaded
+ * inline (stored via the same verified media pipeline, reusable later).
  */
 import { useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
@@ -29,10 +35,17 @@ import {
   type AspectRatio,
 } from "@/lib/marketing/midjourney-core";
 import {
-  assistBriefAction,
   generateFluxAction,
+  suggestCreativeConceptAction,
   uploadFluxReferenceAction,
 } from "@/app/admin/marketing/midjourney/actions";
+import {
+  placementById,
+  placementsByGroup,
+  placementSummaryLine,
+  type CreativePlacement,
+} from "@/lib/marketing/creative-placements-core";
+import type { FluxOutputFormat } from "@/lib/marketing/flux-core";
 
 export type ReferenceImage = { id: string; url: string; label: string };
 
@@ -67,20 +80,28 @@ export function MidjourneyBuilder({
   const [presetId, setPresetId] = useState("");
   const [idea, setIdea] = useState("");
   const [rationale, setRationale] = useState("");
+  const [aiFlags, setAiFlags] = useState<string[]>([]);
   const [pending, start] = useTransition();
 
-  // FLUX 2 generation (baked-in API pipeline; same brief, same page).
+  // STEP 1 — destination. Drives the exact output size + composition hint.
+  const [placementId, setPlacementId] = useState<string>("");
+  const placement: CreativePlacement | null = placementById(placementId);
+
+  // FLUX generation (baked-in API pipeline; same brief, same page).
   const [fluxPending, startFlux] = useTransition();
-  const [fluxFormat, setFluxFormat] = useState<"png" | "jpeg">("png");
+  const [fluxFormat, setFluxFormat] = useState<FluxOutputFormat>("png");
   const [fluxAsset, setFluxAsset] = useState<FluxAsset | null>(null);
   const [fluxWarnings, setFluxWarnings] = useState<string[]>([]);
+  const [fluxMeta, setFluxMeta] = useState<{ width?: number; height?: number; cost?: number } | null>(null);
   // FLUX.2 multi-reference: up to 8 images (verified API limit). Selected URLs.
   const [fluxRefs, setFluxRefs] = useState<string[]>([]);
   // Images uploaded directly here (merged with the published-media grid).
   const [uploadedRefs, setUploadedRefs] = useState<ReferenceImage[]>([]);
   const [uploadPending, setUploadPending] = useState(false);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
-  const [promptUpsampling, setPromptUpsampling] = useState(false);
+  // FLUX 2 enhances prompts BY DEFAULT (verified API: disable_pup=false);
+  // the checkbox mirrors that default so what you see is what the API does.
+  const [promptUpsampling, setPromptUpsampling] = useState(true);
 
   const MAX_FLUX_REFS = 8;
 
@@ -96,6 +117,12 @@ export function MidjourneyBuilder({
     }
     return out;
   }, [uploadedRefs, references]);
+
+  function choosePlacement(id: string) {
+    setPlacementId(id);
+    const p = placementById(id);
+    if (p) setFluxFormat(p.format);
+  }
 
   function toggleFluxRef(url: string) {
     setFluxRefs((prev) => {
@@ -148,16 +175,19 @@ export function MidjourneyBuilder({
   function generateFlux() {
     setFluxAsset(null);
     setFluxWarnings([]);
+    setFluxMeta(null);
     startFlux(async () => {
       const res = await generateFluxAction({
         brief,
         outputFormat: fluxFormat,
         referenceImages: fluxRefs,
         promptUpsampling,
+        placementId: placementId || null,
       });
       if (res.ok) {
         setFluxAsset(res.asset);
         setFluxWarnings(res.warnings);
+        setFluxMeta({ width: res.width, height: res.height, cost: res.cost });
         toast({ tone: "success", message: `Image generated with ${res.endpoint} and saved to your media library (draft).` });
       } else {
         toast({ tone: "error", message: res.error });
@@ -180,21 +210,26 @@ export function MidjourneyBuilder({
 
   function assist() {
     start(async () => {
-      const preset = presetById(presetId);
-      const res = await assistBriefAction({ idea, presetLabel: preset?.label });
+      const res = await suggestCreativeConceptAction({ idea, placementId: placementId || null });
       if (res.ok) {
+        const c = res.concept;
         setBrief((b) => ({
           ...b,
-          subject: res.suggestion.subject || b.subject,
-          environment: res.suggestion.environment || b.environment,
-          composition: res.suggestion.composition || b.composition,
-          lighting: res.suggestion.lighting || b.lighting,
-          style: res.suggestion.style || b.style,
-          colorMood: res.suggestion.colorMood || b.colorMood,
-          exclude: res.suggestion.exclude || b.exclude,
+          subject: c.subject || b.subject,
+          environment: c.environment || b.environment,
+          composition: c.composition || b.composition,
+          lighting: c.lighting || b.lighting,
+          style: c.style || b.style,
+          colorMood: c.colorMood || b.colorMood,
+          exclude: c.exclude || b.exclude,
         }));
-        setRationale(res.suggestion.rationale);
-        toast({ tone: "success", message: "Draft brief filled in — review and tweak it." });
+        setRationale(c.rationale);
+        setAiFlags(res.complianceFlags);
+        if (res.complianceFlags.length > 0) {
+          toast({ tone: "warning", message: `Draft filled in — but flagged: ${res.complianceFlags.join(", ")}. Review before generating.` });
+        } else {
+          toast({ tone: "success", message: "Draft brief filled in — review and tweak it, then generate." });
+        }
       } else {
         toast({ tone: "error", message: res.error });
       }
@@ -214,8 +249,54 @@ export function MidjourneyBuilder({
     <div className="grid gap-6 lg:grid-cols-2">
       {/* Left: inputs */}
       <div className="space-y-5">
-        {/* Preset + AI assist */}
+        {/* STEP 1 — destination picker. Drives exact pixel size + art direction. */}
+        <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-accent)]/30 bg-[var(--admin-surface)] p-5">
+          <div className="mb-1 flex items-center gap-2">
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--admin-accent)] text-xs font-bold text-black">1</span>
+            <h4 className="text-sm font-semibold text-[var(--admin-text)]">Where will this image go?</h4>
+          </div>
+          <p className="mb-3 text-xs leading-relaxed text-[var(--admin-text-muted)]">
+            Pick the destination first — the image is generated at that spot&rsquo;s <strong>exact pixel size</strong> and
+            the right composition guidance is added automatically. Skip it only for freestyle experiments.
+          </p>
+          <Field label="Destination">
+            <Select value={placementId} onChange={(e) => choosePlacement(e.target.value)}>
+              <option value="">— Freestyle (no destination, uses aspect ratio below) —</option>
+              {placementsByGroup().map((g) => (
+                <optgroup key={g.group} label={g.label}>
+                  {g.placements.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.label} · {p.width}×{p.height}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </Select>
+          </Field>
+          {placement && (
+            <div className="mt-3 space-y-2 rounded-lg border border-[var(--admin-border)] bg-[var(--admin-canvas)] px-3 py-2.5">
+              <p className="text-xs text-[var(--admin-text)]">
+                <strong className="text-[var(--admin-accent)]">Used for:</strong> {placement.where}
+              </p>
+              <p className="text-xs text-[var(--admin-text-muted)]">{placementSummaryLine(placement)}</p>
+              <p className="text-xs text-[var(--admin-text-muted)]">
+                <strong className="text-[var(--admin-text)]">Tip:</strong> {placement.tip}
+              </p>
+              {placement.printNote && (
+                <p className="text-xs text-[var(--admin-orange)]">
+                  <strong>Print note:</strong> {placement.printNote}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* STEP 2 — Preset + AI assist */}
         <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
+          <div className="mb-3 flex items-center gap-2">
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--admin-accent)] text-xs font-bold text-black">2</span>
+            <h4 className="text-sm font-semibold text-[var(--admin-text)]">Describe the idea — Greenway AI drafts the brief</h4>
+          </div>
           <Field label="Start from a preset">
             <Select value={presetId} onChange={(e) => applyPreset(e.target.value)}>
               <option value="">— None —</option>
@@ -229,9 +310,16 @@ export function MidjourneyBuilder({
           {presetId && <p className="mt-2 text-xs text-[var(--admin-text-muted)]">{presetById(presetId)?.description}</p>}
 
           <div className="mt-4">
-            <Field label="Your idea (for AI assist)" help={aiConfigured ? "A sentence is enough — AI will draft the brief fields." : "AI is not configured; fill the fields below manually."}>
+            <Field
+              label="Your idea (for AI assist)"
+              help={
+                aiConfigured
+                  ? "A sentence is enough — Greenway AI drafts the brief using your store profile AND your live weekly deals. Try “a banner for our Monday deal”."
+                  : "AI is not configured; fill the fields below manually."
+              }
+            >
               <div className="flex gap-2">
-                <Input value={idea} onChange={(e) => setIdea(e.target.value)} placeholder="e.g. a cozy autumn menu banner for our new pre-rolls" disabled={!aiConfigured} />
+                <Input value={idea} onChange={(e) => setIdea(e.target.value)} placeholder="e.g. a cozy autumn banner for our Monday pre-roll deal" disabled={!aiConfigured} />
                 <Button variant="neutral" onClick={assist} disabled={!aiConfigured || pending}>
                   {pending ? "Thinking…" : "AI assist"}
                 </Button>
@@ -242,6 +330,17 @@ export function MidjourneyBuilder({
             <p className="mt-3 rounded-lg border border-[var(--admin-accent)]/25 bg-[var(--admin-accent)]/10 px-3 py-2 text-xs text-[var(--admin-text)]">
               <strong className="text-[var(--admin-accent)]">Why:</strong> {rationale}
             </p>
+          )}
+          {aiFlags.length > 0 && (
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              <span className="text-xs font-semibold text-[var(--admin-orange)]">Compliance flags:</span>
+              {aiFlags.map((f) => (
+                <span key={f} className="rounded-full border border-[var(--admin-orange)]/40 bg-[var(--admin-orange)]/10 px-2 py-0.5 text-[0.65rem] font-medium text-[var(--admin-orange)]">
+                  {f}
+                </span>
+              ))}
+              <span className="text-[0.65rem] text-[var(--admin-text-muted)]">— review the draft before generating.</span>
+            </div>
           )}
         </div>
 
@@ -363,12 +462,16 @@ export function MidjourneyBuilder({
         {/* FLUX 2 — baked-in API pipeline (same brief, saved to media library) */}
         <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
           <div className="mb-2 flex items-center justify-between">
-            <h4 className="text-sm font-semibold text-[var(--admin-text)]">Generate with FLUX 2</h4>
+            <div className="flex items-center gap-2">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--admin-accent)] text-xs font-bold text-black">3</span>
+              <h4 className="text-sm font-semibold text-[var(--admin-text)]">Generate with FLUX</h4>
+            </div>
             <Badge tone={fluxConfigured ? "green" : "neutral"}>{fluxConfigured ? "Connected" : "Not configured"}</Badge>
           </div>
           <p className="mb-3 text-xs leading-relaxed text-[var(--admin-text-muted)]">
-            Uses the same brief above. FLUX takes a natural-language prompt plus the aspect ratio (no <code>--</code> flags), then saves the
-            result straight into your media library as a <strong>draft</strong> to review before publishing.
+            Uses the same brief above as a natural-language prompt (no <code>--</code> flags). With a destination picked in
+            Step&nbsp;1 the image comes out at that spot&rsquo;s exact pixel size; otherwise the brief&rsquo;s aspect ratio is used. The
+            result saves straight into your media library as a <strong>draft</strong> to review before publishing.
           </p>
 
           {/* Reference images — FLUX.2 multi-reference (up to 8, verified API limit) */}
@@ -444,21 +547,25 @@ export function MidjourneyBuilder({
             )}
           </div>
 
-          <label className="mb-3 flex items-center gap-2 text-sm text-[var(--admin-text)]">
+          <label className="mb-3 flex items-start gap-2 text-sm text-[var(--admin-text)]">
             <input
               type="checkbox"
               checked={promptUpsampling}
               onChange={(e) => setPromptUpsampling(e.target.checked)}
-              className="accent-[var(--admin-accent)]"
+              className="mt-0.5 accent-[var(--admin-accent)]"
             />{" "}
-            Let FLUX expand my prompt (prompt upsampling)
+            <span>
+              FLUX enhances your prompt automatically (recommended){" "}
+              <span className="text-xs text-[var(--admin-text-muted)]">— untick to use your exact words only.</span>
+            </span>
           </label>
 
           <div className="flex flex-wrap items-end gap-3">
             <Field label="Format" className="w-28">
-              <Select value={fluxFormat} onChange={(e) => setFluxFormat(e.target.value as "png" | "jpeg")}>
+              <Select value={fluxFormat} onChange={(e) => setFluxFormat(e.target.value as FluxOutputFormat)}>
                 <option value="png">PNG</option>
                 <option value="jpeg">JPEG</option>
+                <option value="webp">WEBP</option>
               </Select>
             </Field>
             <Button
@@ -466,9 +573,19 @@ export function MidjourneyBuilder({
               onClick={generateFlux}
               disabled={!fluxConfigured || fluxPending || !brief.subject.trim()}
             >
-              {fluxPending ? "Generating…" : "Generate with FLUX 2 Max"}
+              {fluxPending ? "Generating…" : "Generate with FLUX"}
             </Button>
           </div>
+          <p className="mt-2 text-xs text-[var(--admin-text-muted)]">
+            {placement ? (
+              <>
+                Will generate at <strong className="text-[var(--admin-text)]">{placement.width}×{placement.height}px</strong> — sized
+                exactly for <strong className="text-[var(--admin-text)]">{placement.label}</strong>.
+              </>
+            ) : (
+              <>No destination picked — FLUX will use the aspect ratio from the brief ({brief.aspectRatio}). Pick a destination in Step&nbsp;1 for pixel-perfect sizing.</>
+            )}
+          </p>
 
           {!fluxConfigured && (
             <p className="mt-3 rounded-lg border border-[var(--admin-border)] bg-[var(--admin-canvas)] px-3 py-2 text-xs text-[var(--admin-text-muted)]">
@@ -494,6 +611,16 @@ export function MidjourneyBuilder({
                   Open in Media →
                 </Link>
               </div>
+              {fluxMeta && (fluxMeta.width || fluxMeta.cost !== undefined) && (
+                <p className="text-xs text-[var(--admin-text-muted)]">
+                  {fluxMeta.width && fluxMeta.height ? (
+                    <>Generated at <strong className="text-[var(--admin-text)]">{fluxMeta.width}×{fluxMeta.height}px</strong></>
+                  ) : null}
+                  {fluxMeta.cost !== undefined ? (
+                    <>{fluxMeta.width ? " · " : ""}Cost: {fluxMeta.cost} credit{fluxMeta.cost === 1 ? "" : "s"}</>
+                  ) : null}
+                </p>
+              )}
             </div>
           )}
         </div>
