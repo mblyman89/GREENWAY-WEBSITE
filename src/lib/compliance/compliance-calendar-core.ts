@@ -148,14 +148,16 @@ export function pendingPeriodFor(id: CalendarTaskId, today: PlainDate): PendingP
       };
     }
     case "ccrs_weekly": {
-      // Most recently COMPLETED Sun–Sat week; due by the end of the week after.
+      // Most recently COMPLETED Sun–Sat week. VERIFIED (LCB CCRS FAQ, Task W):
+      // weekly reporting is expected "no later than Sunday for the previous
+      // week" — the day AFTER the week ends, NOT the end of the following week.
       const wd = weekdayOf(today); // 0 = Sunday
       const lastSaturday = addDays(today, -(wd + 1));
       const weekStart = addDays(lastSaturday, -6);
       return {
         periodKey: `W-${formatPlainDate(weekStart)}`,
         periodLabel: `Week ${formatPlainDate(weekStart)} – ${formatPlainDate(lastSaturday)}`,
-        dueDate: addDays(lastSaturday, 7),
+        dueDate: addDays(lastSaturday, 1),
       };
     }
     case "cctv_retention":

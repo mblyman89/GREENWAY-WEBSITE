@@ -71,14 +71,15 @@ describe("pendingPeriodFor — liq1295", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Weekly CCRS: last completed Sun–Sat week, due within the following week
+// Weekly CCRS: last completed Sun–Sat week, due the FOLLOWING SUNDAY (the day
+// after the week ends) per the LCB CCRS FAQ — fixed in Task W.
 // ---------------------------------------------------------------------------
 describe("pendingPeriodFor — ccrs_weekly", () => {
   it("a Wednesday points at the week ending last Saturday", () => {
     // Wed 2026-01-14 → last Saturday 2026-01-10, week start Sunday 2026-01-04.
     const p = pendingPeriodFor("ccrs_weekly", d(2026, 1, 14));
     expect(p.periodKey).toBe("W-2026-01-04");
-    expect(p.dueDate).toEqual(d(2026, 1, 17)); // Saturday of the following week
+    expect(p.dueDate).toEqual(d(2026, 1, 11)); // the Sunday after the week ends
   });
 
   it("a Sunday points at the week that ended YESTERDAY", () => {
