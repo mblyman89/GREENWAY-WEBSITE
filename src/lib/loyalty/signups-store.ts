@@ -180,6 +180,13 @@ export async function listLoyaltySignups(
   return (data as LoyaltySignupRow[]) ?? [];
 }
 
+/**
+ * Per-status queue counts via exact server-side head counts (one cheap indexed
+ * count per status \u2014 loyalty_signups_status_idx). The previous
+ * `select("status")` fetch silently truncated at PostgREST's `db.max_rows` cap
+ * (default 1000), which would under-report the queue stat cards and the
+ * dashboard "Loyalty signups" tile once the store passed 1000 lifetime signups.
+ */
 export async function getLoyaltyStatusCounts(): Promise<Record<LoyaltyStatus, number>> {
   const empty: Record<LoyaltyStatus, number> = {
     new: 0,
@@ -189,11 +196,19 @@ export async function getLoyaltyStatusCounts(): Promise<Record<LoyaltyStatus, nu
   };
   if (!isSupabaseServiceConfigured) return empty;
   const admin = createSupabaseAdminClient();
-  const { data } = await admin.from("loyalty_signups").select("status");
-  if (!data) return empty;
-  for (const row of data as { status: LoyaltyStatus }[]) {
-    empty[row.status] = (empty[row.status] ?? 0) + 1;
-  }
+  const statuses = Object.keys(empty) as LoyaltyStatus[];
+  const counts = await Promise.all(
+    statuses.map(async (status) => {
+      const { count } = await admin
+        .from("loyalty_signups")
+        .select("id", { count: "exact", head: true })
+        .eq("status", status);
+      return count ?? 0;
+    }),
+  );
+  statuses.forEach((status, i) => {
+    empty[status] = counts[i];
+  });
   return empty;
 }
 

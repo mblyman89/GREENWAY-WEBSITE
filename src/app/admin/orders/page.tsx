@@ -42,6 +42,8 @@ const FILTERS: { key: string; label: string }[] = [
   { key: "preparing", label: "Preparing" },
   { key: "ready", label: "Ready" },
   { key: "completed", label: "Completed" },
+  { key: "cancelled", label: "Cancelled" },
+  { key: "no_show", label: "No-show" },
   { key: "all", label: "All" },
 ];
 

@@ -11,7 +11,11 @@ export function formatDateTime(iso: string | null | undefined): string {
   if (!iso) return "—";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "—";
+  // Anchor to the store's wall clock (Port Orchard, WA). Server components
+  // render on UTC servers, so an unanchored toLocaleString would show times
+  // 7-8 hours off for staff.
   return d.toLocaleString("en-US", {
+    timeZone: "America/Los_Angeles",
     month: "short",
     day: "numeric",
     year: "numeric",

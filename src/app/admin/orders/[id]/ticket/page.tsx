@@ -4,6 +4,7 @@ import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { formatMinorCurrency } from "@/lib/leafly/format";
 import { getOrder } from "@/lib/orders/orders-store";
 import { ORDER_STATUS_LABELS } from "@/lib/orders/types";
+import { formatDateTime } from "@/lib/pos/format";
 import { PrintButton } from "@/components/admin/orders/PrintButton";
 
 export const dynamic = "force-dynamic";
@@ -57,7 +58,7 @@ export default async function OrderTicketPage({
         {order.customer_phone ? (
           <p className="text-sm font-bold">{order.customer_phone}</p>
         ) : null}
-        <p className="text-xs text-black/60">Placed {new Date(order.placed_at).toLocaleString()}</p>
+        <p className="text-xs text-black/60">Placed {formatDateTime(order.placed_at)}</p>
       </div>
 
       {/* Items — large, scannable */}
