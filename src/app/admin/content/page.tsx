@@ -6,6 +6,7 @@ import { ContentEditorShell } from "@/components/admin/ContentEditorShell";
 import { type BlockVM } from "@/components/admin/ContentBlocksBrowser";
 import type { MediaChoice } from "@/components/admin/ContentImageField";
 import { ContentBulkBar } from "@/components/admin/ContentBulkBar";
+import { StatCard } from "@/components/admin/StatCard";
 import { Button } from "@/components/admin/ui";
 import {
   listContentBlocks,
@@ -176,32 +177,40 @@ export default async function SiteContentPage({
     })),
   }));
 
+  // At-a-glance numbers for the stat row (SEO-flagged blocks get a shortcut).
+  const seoCount = blocks.filter((b) => b.seo_impact).length;
+
   return (
     <div>
       <AdminPageHeader
         title="Site Content"
-        subtitle="Edit your site-wide text in one place — the footer (store hours, hours line, the required WA compliance warning), business info, the wording on your About, Locations, and Price-Match pages, and the titles on your Privacy Policy, Terms of Use, and Consumer Health Data pages. Edit a draft, preview it, then Publish to go live."
+        subtitle="Your site-wide wording — footer, business info, and simple text pages. Edit a draft, preview it, then Publish."
         breadcrumbs={<Breadcrumbs items={[{ label: "Site Content" }]} />}
         help={
           <HelpPanel
             id="content"
-            title="How Site Content works"
+            title="How Site Content works (and where SEO fits in)"
             steps={[
-              "Use the search box or the page filters to find the wording you want to change.",
-              "Click Edit on a block and change the draft — nothing goes live yet.",
-              "Use the live preview to see exactly how it will look.",
-              "Click Publish (or “Publish all drafts”) to update the public site.",
+              "Search or use the page filters to find the wording you want to change, then click a block to open it.",
+              "Edit the draft — nothing goes live yet. Use the live preview to see exactly how it will look (click ✎ Edit on the preview to jump to a field).",
+              "Click Publish on the block (or “Publish all drafts”) to update the public site. Every publish is snapshotted so you can roll back from History.",
+              "SEO editor (button top-right): set each page’s Google Title (~50–60 characters, unique, include “Greenway Marijuana” + “Port Orchard, WA”), Description (~150–160 characters with a reason to click), and a 1200×630 social share image from Media.",
             ]}
           >
             <p className="mb-2">
               You can only edit specific approved spots, which keeps your site looking right —
               there&apos;s no way to accidentally break the layout.
             </p>
-            <p>
+            <p className="mb-2">
               <strong>Where things live:</strong> footer &amp; business info and your simple text
               pages (About, Locations, Price Match) are edited here. Your richer pages with banners
               and sections — Home, Menu, Loyalty, Specials, Vendors, FAQ — are edited under{" "}
               <strong>Pages</strong> in the sidebar.
+            </p>
+            <p>
+              <strong>Cannabis compliance:</strong> Washington I-502 rules apply to public wording.
+              Keep it factual and age-appropriate, never make health/medical claims, and never
+              imply appeal to minors. Describe the experience and the deal — not medical benefits.
             </p>
           </HelpPanel>
         }
@@ -209,39 +218,6 @@ export default async function SiteContentPage({
           <Button href="/admin/content/seo" variant="neutral">SEO editor →</Button>
         }
       />
-
-      {/* SEO guidance — baked in so employees learn it in-context. */}
-      <div className="px-5 pt-4 sm:px-8">
-        <HelpPanel
-          id="seo-explainer"
-          title="What is the SEO editor, and how do I use it well?"
-          steps={[
-            "SEO (Search Engine Optimization) controls how each page looks in Google results and when shared on social media.",
-            "Open the SEO editor (button top-right). Pick a page, then set its Title and Description.",
-            "Title: ~50–60 characters. Lead with what the page is + “Greenway Marijuana” + “Port Orchard, WA”. One clear idea per page; make each page’s title unique.",
-            "Description: ~150–160 characters. A friendly, accurate summary with a reason to click (e.g. daily deals, fast pickup). Each page should have its own.",
-            "The social/Open-Graph image is what shows when a page is shared on Facebook/Instagram — use a clean 1200×630px image from your Media library.",
-            "Edit as a draft, preview, then Publish — exactly like the content blocks here.",
-          ]}
-        >
-          <p className="mb-2">
-            <strong>Why it matters:</strong> good titles and descriptions help customers find you
-            on Google and make your links look professional when shared. You don&apos;t need to be
-            technical — just write clear, honest wording about each page.
-          </p>
-          <p className="mb-2">
-            <strong>Cannabis compliance:</strong> Washington I-502 rules apply to how you advertise.
-            Keep wording factual and age-appropriate, never make health/medical claims, and never
-            imply the product is appealing to minors. When in doubt, describe the experience and the
-            deal — not medical benefits.
-          </p>
-          <p>
-            <strong>Best results:</strong> one unique title + description per page, real keywords
-            your customers actually search (your city, “dispensary”, product categories, brands),
-            and keep them fresh when you run a new promotion.
-          </p>
-        </HelpPanel>
-      </div>
 
       <div className="space-y-6 px-5 py-6 sm:px-8">
         {warning_error ? (
@@ -277,6 +253,27 @@ export default async function SiteContentPage({
           </div>
         ) : (
           <>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <StatCard
+              label="Editable blocks"
+              value={blocks.length}
+              hint="Approved site-wide text & image slots"
+              accent="muted"
+            />
+            <StatCard
+              label="Pending drafts"
+              value={pendingCount}
+              hint={pendingCount > 0 ? "Unpublished edits waiting below" : "Everything is live"}
+              accent={pendingCount > 0 ? "orange" : "green"}
+            />
+            <StatCard
+              label="SEO-flagged blocks"
+              value={seoCount}
+              hint="Wording that affects Google results"
+              accent="gold"
+              href="/admin/content/seo"
+            />
+          </div>
           <ContentBulkBar
             pendingCount={pendingCount}
             publishAllAction={publishAllDraftsAction}

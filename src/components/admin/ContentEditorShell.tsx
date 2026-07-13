@@ -67,11 +67,15 @@ export function ContentEditorShell({
     const el = document.getElementById(`block-${blockKey}`);
     if (!el) return false;
     el.scrollIntoView({ behavior: "smooth", block: "center" });
-    el.classList.add("ring-2", "ring-[#7ed957]");
-    const focusable =
-      el.querySelector("textarea") ?? el.querySelector("input[type='text']");
-    if (focusable) (focusable as HTMLElement).focus();
-    setTimeout(() => el.classList.remove("ring-2", "ring-[#7ed957]"), 2200);
+    el.classList.add("ring-2", "ring-[var(--admin-accent)]");
+    // Cards are collapsed by default; ask the card to expand itself. The
+    // card's own `gw-expand` listener opens it and focuses the first field
+    // once it is in the DOM (a collapsed card has no textarea to focus).
+    el.dispatchEvent(new CustomEvent("gw-expand"));
+    setTimeout(
+      () => el.classList.remove("ring-2", "ring-[var(--admin-accent)]"),
+      2200,
+    );
     return true;
   }, []);
 

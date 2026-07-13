@@ -1,19 +1,26 @@
 "use client";
 
 /**
- * ContentBlockEditor — the Squarespace-style editor card for ONE controlled
- * site-text block (UX-3). Wraps the existing save-draft / publish server
- * actions and layers on:
- *   - live character count + gentle SEO-length guidance for SEO blocks
- *   - "✨ Write with AI" → compliant draft suggestion with Accept / Edit /
- *     Reject and visible compliance flags (drafts-only; never auto-saves)
- *   - clear draft-vs-live state, "View on site" link, and toast feedback
+ * ContentBlockEditor — the editor card for ONE controlled site-text block.
  *
- * Server enforcement is unchanged: saving/publishing still go through the
- * permission-gated server actions; AI output is a suggestion the human must
- * accept. This component only improves the editing experience.
+ * Task U PR A redesign — "how the big players do it":
+ *   - PROGRESSIVE DISCLOSURE (Squarespace/Shopify pattern): each block renders
+ *     as a compact summary row (label · status · current text snippet) and
+ *     expands into the full editor only when clicked. A page of 30 blocks is
+ *     now a scannable list instead of a wall of forms.
+ *   - Design-token styling (var(--admin-*)) so the page matches the rest of
+ *     the back office instead of the old raw-hex look.
+ *   - One clear status pill per block: Live ✓ · Draft pending · Unsaved edits.
+ *   - The primary action tracks state: "Save draft" lights up when there are
+ *     unsaved edits; "Publish" appears when the draft differs from live.
+ *   - Auto-expands (and focuses) when the live preview's "✎ Edit" hotspot or a
+ *     ?block= deep link targets it — via a `gw-expand` DOM event from the shell.
+ *
+ * Everything else is unchanged: saving/publishing still flow through the
+ * permission-gated server actions; AI writes DRAFTS ONLY that a human must
+ * accept; compliance flags stay visible on every AI suggestion.
  */
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useToast } from "@/components/admin/ux";
 import { suggestContentAction, type AiSuggestResult } from "@/app/admin/content/actions";
 import {
@@ -77,6 +84,15 @@ function seoTarget(blockKey: string): { min: number; max: number; what: string }
   return null;
 }
 
+/** Short human snippet of a value for the collapsed summary row. */
+function snippet(value: string | null, fieldType: string): string {
+  if (fieldType === "image") return value ? "🖼 image set" : "no image yet";
+  if (fieldType === "font") return value || "default font";
+  const v = (value ?? "").replace(/\s+/g, " ").trim();
+  if (!v) return "— empty —";
+  return v.length > 90 ? `${v.slice(0, 90)}…` : v;
+}
+
 export function ContentBlockEditor({
   block,
   aiEnabled,
@@ -88,6 +104,8 @@ export function ContentBlockEditor({
   mediaChoices = [],
 }: Props) {
   const { toast } = useToast();
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const [open, setOpen] = useState(false);
   const [value, setValue] = useState(block.draft_value ?? "");
   const [instruction, setInstruction] = useState("");
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
@@ -100,9 +118,8 @@ export function ContentBlockEditor({
   const isFont = block.field_type === "font";
   const isRich = block.field_type === "rich" || block.field_type === "markdown";
   const dirty = (value ?? "") !== (block.published_value ?? "");
-  // VALUE-ADD: an "unsaved edits" indicator. `savedValue` tracks what's been
-  // committed to the draft via Save; if the textarea differs, we nudge the user
-  // so they don't lose work by navigating away.
+  // `savedValue` tracks what's been committed to the draft via Save; if the
+  // editor differs, we nudge so nobody loses work by navigating away.
   const [savedValue, setSavedValue] = useState(block.draft_value ?? "");
   const unsaved = (value ?? "") !== (savedValue ?? "");
 
@@ -116,16 +133,34 @@ export function ContentBlockEditor({
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
   }, [unsaved]);
+
+  // Auto-expand + focus when the shell targets this block (preview "✎ Edit"
+  // hotspot or ?block= deep link). The shell dispatches `gw-expand` on our root.
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el) return;
+    const onExpand = () => {
+      setOpen(true);
+      window.setTimeout(() => {
+        const focusable =
+          el.querySelector("textarea") ?? el.querySelector("input[type='text']");
+        if (focusable) (focusable as HTMLElement).focus();
+      }, 80);
+    };
+    el.addEventListener("gw-expand", onExpand);
+    return () => el.removeEventListener("gw-expand", onExpand);
+  }, []);
+
   const target = block.seo_impact ? seoTarget(block.block_key) : null;
   const len = value.length;
   const lenTone =
     target == null
-      ? "text-white/35"
+      ? "text-[var(--admin-text-faint)]"
       : len < target.min
-        ? "text-[#ffd700]"
+        ? "text-[var(--admin-gold)]"
         : len > target.max
-          ? "text-[#ff7f00]"
-          : "text-[#7ed957]";
+          ? "text-[var(--admin-orange)]"
+          : "text-[var(--admin-accent)]";
 
   async function runAi() {
     setSuggestion(null);
@@ -155,224 +190,256 @@ export function ContentBlockEditor({
     toast({ tone: "info", message: "Inserted into your draft. Remember to Save, then Publish." });
   }
 
+  // One clear status pill (priority: unsaved > pending draft > live).
+  const statusPill = unsaved ? (
+    <span className="rounded-full border border-[var(--admin-gold)]/50 bg-[var(--admin-gold-soft)] px-2 py-0.5 text-[0.65rem] font-semibold text-[var(--admin-gold)]">
+      ● unsaved edits
+    </span>
+  ) : dirty ? (
+    <span className="rounded-full border border-[var(--admin-orange)]/40 bg-[var(--admin-orange-soft)] px-2 py-0.5 text-[0.65rem] font-semibold text-[var(--admin-orange)]">
+      draft pending
+    </span>
+  ) : (
+    <span className="rounded-full border border-[var(--admin-accent)]/30 bg-[var(--admin-accent-soft)] px-2 py-0.5 text-[0.65rem] font-semibold text-[var(--admin-accent)]">
+      ✓ live
+    </span>
+  );
+
   return (
     <div
+      ref={rootRef}
       id={`block-${block.block_key}`}
-      className="scroll-mt-24 rounded-xl border border-white/10 bg-[#0a0a0a] p-4"
+      className={`scroll-mt-24 rounded-[var(--admin-radius-lg)] border bg-[var(--admin-surface)] transition ${
+        open ? "border-[var(--admin-border-strong)]" : "border-[var(--admin-border)]"
+      }`}
     >
-      {/* Header row */}
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <div className="text-sm font-semibold text-white">{block.label}</div>
-          <div className="font-mono text-xs text-white/35">{block.block_key}</div>
-        </div>
-        <div className="flex items-center gap-2">
-          {block.seo_impact && (
-            <span className="rounded-full border border-[#ffd700]/40 bg-[#ffd700]/10 px-2 py-0.5 text-[0.65rem] font-semibold text-[#ffd700]">
-              SEO impact
-            </span>
-          )}
-          <span className="rounded-full border border-white/15 px-2 py-0.5 text-[0.65rem] font-semibold text-white/50">
-            {block.field_type}
+      {/* Summary row — always visible; click to expand/collapse. */}
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-[var(--admin-surface-hover)]"
+      >
+        <span
+          className={`text-xs transition-transform ${open ? "rotate-90" : ""} text-[var(--admin-text-faint)]`}
+          aria-hidden
+        >
+          ▶
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-semibold text-[var(--admin-text)]">{block.label}</span>
+            {block.seo_impact && (
+              <span className="rounded-full border border-[var(--admin-gold)]/40 bg-[var(--admin-gold-soft)] px-1.5 py-0.5 text-[0.6rem] font-semibold text-[var(--admin-gold)]">
+                SEO
+              </span>
+            )}
+            {statusPill}
           </span>
-          {unsaved && (
-            <span className="rounded-full border border-[#ffd700]/50 bg-[#ffd700]/10 px-2 py-0.5 text-[0.65rem] font-semibold text-[#ffd700]">
-              ● unsaved edits
+          {!open && (
+            <span className="mt-0.5 block truncate text-xs text-[var(--admin-text-faint)]">
+              {snippet(value, block.field_type)}
             </span>
           )}
-          {!unsaved && dirty && (
-            <span className="rounded-full border border-[#ff7f00]/40 bg-[#ff7f00]/10 px-2 py-0.5 text-[0.65rem] font-semibold text-[#ff7f00]">
-              unpublished draft
-            </span>
+        </span>
+        <span className="shrink-0 text-xs font-semibold text-[var(--admin-accent)]">
+          {open ? "Close" : "Edit"}
+        </span>
+      </button>
+
+      {/* Full editor — progressive disclosure. */}
+      {open && (
+        <div className="border-t border-[var(--admin-border)] px-4 pb-4 pt-3">
+          {block.help_text && (
+            <p className="mb-2 text-xs text-[var(--admin-text-muted)]">{block.help_text}</p>
           )}
-        </div>
-      </div>
-      {block.help_text && <p className="mt-1 text-xs text-white/45">{block.help_text}</p>}
 
-      {/* Editor */}
-      <form action={saveDraftAction} className="mt-3 space-y-2">
-        <input type="hidden" name="block_key" value={block.block_key} />
-        <input type="hidden" name="draft_value" value={value} />
+          <form action={saveDraftAction} className="space-y-2">
+            <input type="hidden" name="block_key" value={block.block_key} />
+            <input type="hidden" name="draft_value" value={value} />
 
-        {isImage ? (
-          <ContentImageField
-            value={value}
-            onChange={setValue}
-            mediaChoices={mediaChoices}
-            spec={resolveImageSpec(block.block_key)}
-          />
-        ) : isFont ? (
-          <ContentFontField value={value} onChange={setValue} />
-        ) : (
-          <textarea
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            rows={isRich ? 4 : 2}
-            className="w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#7ed957]"
-            placeholder={`Type the ${block.label.toLowerCase()}…`}
-          />
-        )}
-
-        {/* Meta row: length + AI toggle (text blocks only) */}
-        {!isImage && !isFont && (
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className={`text-[0.7rem] ${lenTone}`}>
-              {len} characters
-              {target && (
-                <span className="ml-1 text-white/35">
-                  · aim for {target.min}–{target.max} for a strong {target.what}
-                </span>
-              )}
-            </div>
-            <button
-              type="button"
-              onClick={() => setAiPanelOpen((o) => !o)}
-              className="rounded-lg border border-[#7ed957]/40 bg-[#7ed957]/10 px-3 py-1.5 text-xs font-bold text-[#7ed957] transition hover:bg-[#7ed957]/20"
-            >
-              ✨ Write with AI
-            </button>
-          </div>
-        )}
-
-        {/* AI panel */}
-        {!isImage && !isFont && aiPanelOpen && (
-          <div className="rounded-lg border border-[#7ed957]/25 bg-[#7ed957]/[0.04] p-3">
-            {!aiEnabled ? (
-              <p className="text-xs text-[#ffd700]">
-                AI isn&apos;t set up yet. Add an <code className="font-mono">AI_API_KEY</code> to
-                enable “Write with AI.” You can still edit by hand.
-              </p>
+            {isImage ? (
+              <ContentImageField
+                value={value}
+                onChange={setValue}
+                mediaChoices={mediaChoices}
+                spec={resolveImageSpec(block.block_key)}
+              />
+            ) : isFont ? (
+              <ContentFontField value={value} onChange={setValue} />
             ) : (
-              <>
-                <label className="block text-[0.7rem] font-semibold uppercase tracking-wide text-white/45">
-                  Tell the AI what you want (optional)
-                </label>
-                <div className="mt-1 flex flex-wrap gap-2">
-                  <input
-                    type="text"
-                    value={instruction}
-                    onChange={(e) => setInstruction(e.target.value)}
-                    placeholder="e.g. friendlier, shorter, mention fast pickup"
-                    className="min-w-[12rem] flex-1 rounded-lg border border-white/15 bg-black px-3 py-1.5 text-xs text-white outline-none focus:border-[#7ed957]"
-                  />
-                  <button
-                    type="button"
-                    onClick={runAi}
-                    disabled={pending}
-                    className="rounded-lg bg-[#7ed957] px-3 py-1.5 text-xs font-bold text-black transition hover:bg-[#6bc746] disabled:opacity-50"
-                  >
-                    {pending ? "Writing…" : "Generate draft"}
-                  </button>
-                </div>
+              <textarea
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+                rows={isRich ? 4 : 2}
+                className="admin-focus w-full rounded-[var(--admin-radius)] border border-[var(--admin-border-strong)] bg-[var(--admin-surface-2)] px-3 py-2 text-sm text-[var(--admin-text)] outline-none transition focus:border-[var(--admin-accent)]"
+                placeholder={`Type the ${block.label.toLowerCase()}…`}
+              />
+            )}
 
-                {suggestion && (
-                  <div className="mt-3 rounded-lg border border-white/10 bg-black/40 p-3">
-                    <div className="mb-1 flex items-center justify-between">
-                      <span className="text-[0.65rem] font-semibold uppercase tracking-wide text-white/40">
-                        AI suggestion · {suggestion.model}
-                      </span>
-                      {suggestion.flags.length > 0 ? (
-                        <span className="rounded-full border border-red-500/40 bg-red-500/10 px-2 py-0.5 text-[0.6rem] font-semibold text-red-300">
-                          ⚠ {suggestion.flags.join(", ")}
-                        </span>
-                      ) : (
-                        <span className="rounded-full border border-[#7ed957]/40 bg-[#7ed957]/10 px-2 py-0.5 text-[0.6rem] font-semibold text-[#7ed957]">
-                          ✓ no compliance flags
-                        </span>
-                      )}
-                    </div>
-                    <p className="whitespace-pre-wrap text-sm text-white/90">{suggestion.value}</p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={acceptSuggestion}
-                        className="rounded-lg bg-[#7ed957] px-3 py-1.5 text-xs font-bold text-black hover:bg-[#6bc746]"
-                      >
-                        Use it
-                      </button>
+            {/* Meta row: length + AI toggle (text blocks only) */}
+            {!isImage && !isFont && (
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className={`text-[0.7rem] ${lenTone}`}>
+                  {len} characters
+                  {target && (
+                    <span className="ml-1 text-[var(--admin-text-faint)]">
+                      · aim for {target.min}–{target.max} for a strong {target.what}
+                    </span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAiPanelOpen((o) => !o)}
+                  className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-3 py-1.5 text-xs font-bold text-[var(--admin-accent)] transition hover:brightness-110"
+                >
+                  ✨ Write with AI
+                </button>
+              </div>
+            )}
+
+            {/* AI panel */}
+            {!isImage && !isFont && aiPanelOpen && (
+              <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/25 bg-[var(--admin-accent)]/[0.04] p-3">
+                {!aiEnabled ? (
+                  <p className="text-xs text-[var(--admin-gold)]">
+                    AI isn&apos;t set up yet. Add an <code className="font-mono">AI_API_KEY</code> to
+                    enable &ldquo;Write with AI.&rdquo; You can still edit by hand.
+                  </p>
+                ) : (
+                  <>
+                    <label className="block text-[0.7rem] font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
+                      Tell the AI what you want (optional)
+                    </label>
+                    <div className="mt-1 flex flex-wrap gap-2">
+                      <input
+                        type="text"
+                        value={instruction}
+                        onChange={(e) => setInstruction(e.target.value)}
+                        placeholder="e.g. friendlier, shorter, mention fast pickup"
+                        className="admin-focus min-w-[12rem] flex-1 rounded-[var(--admin-radius)] border border-[var(--admin-border-strong)] bg-[var(--admin-surface-2)] px-3 py-1.5 text-xs text-[var(--admin-text)] outline-none transition focus:border-[var(--admin-accent)]"
+                      />
                       <button
                         type="button"
                         onClick={runAi}
                         disabled={pending}
-                        className="rounded-lg border border-white/15 px-3 py-1.5 text-xs font-bold text-white/80 hover:bg-white/10 disabled:opacity-50"
+                        className="rounded-[var(--admin-radius)] bg-[var(--admin-accent)] px-3 py-1.5 text-xs font-bold text-black transition hover:brightness-110 disabled:opacity-50"
                       >
-                        Try again
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setSuggestion(null)}
-                        className="rounded-lg border border-white/15 px-3 py-1.5 text-xs font-bold text-white/60 hover:bg-white/10"
-                      >
-                        Discard
+                        {pending ? "Writing…" : "Generate draft"}
                       </button>
                     </div>
-                    <p className="mt-2 text-[0.65rem] text-white/35">
-                      AI writes a draft only — nothing changes on your site until you Save the draft
-                      and then Publish.
-                    </p>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        )}
 
-        {/* Actions */}
-        <div className="flex flex-wrap items-center gap-2 pt-1">
-          <button
-            type="submit"
-            onClick={() => setSavedValue(value)}
-            className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${
-              unsaved
-                ? "bg-[#ffd700] text-black hover:bg-[#e6c200]"
-                : "border border-white/15 text-white/80 hover:bg-white/10"
-            }`}
-          >
-            {unsaved ? "Save draft ●" : "Save draft"}
-          </button>
-          {publicPath && (
-            <a
-              href={publicPath}
-              target="_blank"
-              rel="noreferrer"
-              className="rounded-lg border border-white/15 px-3 py-1.5 text-xs font-bold text-white/60 hover:bg-white/10"
+                    {suggestion && (
+                      <div className="mt-3 rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-canvas)]/60 p-3">
+                        <div className="mb-1 flex items-center justify-between">
+                          <span className="text-[0.65rem] font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
+                            AI suggestion · {suggestion.model}
+                          </span>
+                          {suggestion.flags.length > 0 ? (
+                            <span className="rounded-full border border-[var(--admin-danger)]/40 bg-[var(--admin-danger-soft)] px-2 py-0.5 text-[0.6rem] font-semibold text-[var(--admin-danger)]">
+                              ⚠ {suggestion.flags.join(", ")}
+                            </span>
+                          ) : (
+                            <span className="rounded-full border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-2 py-0.5 text-[0.6rem] font-semibold text-[var(--admin-accent)]">
+                              ✓ no compliance flags
+                            </span>
+                          )}
+                        </div>
+                        <p className="whitespace-pre-wrap text-sm text-[var(--admin-text)]">{suggestion.value}</p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={acceptSuggestion}
+                            className="rounded-[var(--admin-radius)] bg-[var(--admin-accent)] px-3 py-1.5 text-xs font-bold text-black hover:brightness-110"
+                          >
+                            Use it
+                          </button>
+                          <button
+                            type="button"
+                            onClick={runAi}
+                            disabled={pending}
+                            className="rounded-[var(--admin-radius)] border border-[var(--admin-border-strong)] px-3 py-1.5 text-xs font-bold text-[var(--admin-text-muted)] hover:bg-[var(--admin-surface-hover)] disabled:opacity-50"
+                          >
+                            Try again
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSuggestion(null)}
+                            className="rounded-[var(--admin-radius)] border border-[var(--admin-border-strong)] px-3 py-1.5 text-xs font-bold text-[var(--admin-text-faint)] hover:bg-[var(--admin-surface-hover)]"
+                          >
+                            Discard
+                          </button>
+                        </div>
+                        <p className="mt-2 text-[0.65rem] text-[var(--admin-text-faint)]">
+                          AI writes a draft only — nothing changes on your site until you Save the
+                          draft and then Publish.
+                        </p>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <button
+                type="submit"
+                onClick={() => setSavedValue(value)}
+                className={`rounded-[var(--admin-radius)] px-3 py-1.5 text-xs font-bold transition ${
+                  unsaved
+                    ? "bg-[var(--admin-gold)] text-black hover:brightness-110"
+                    : "border border-[var(--admin-border-strong)] text-[var(--admin-text-muted)] hover:bg-[var(--admin-surface-hover)]"
+                }`}
+              >
+                {unsaved ? "Save draft ●" : "Save draft"}
+              </button>
+              {publicPath && (
+                <a
+                  href={publicPath}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-[var(--admin-radius)] border border-[var(--admin-border-strong)] px-3 py-1.5 text-xs font-bold text-[var(--admin-text-faint)] hover:bg-[var(--admin-surface-hover)]"
+                >
+                  View on site ↗
+                </a>
+              )}
+            </div>
+          </form>
+
+          <form action={publishAction} className="mt-2">
+            <input type="hidden" name="block_key" value={block.block_key} />
+            <button
+              type="submit"
+              className="rounded-[var(--admin-radius)] bg-[var(--admin-accent)] px-3 py-1.5 text-xs font-bold text-black hover:brightness-110"
             >
-              View on site ↗
-            </a>
+              Publish live
+            </button>
+          </form>
+
+          {block.published_value != null && (
+            <p className="mt-2 text-xs text-[var(--admin-text-faint)]">
+              <span className="font-semibold text-[var(--admin-text-muted)]">Live:</span>{" "}
+              {block.published_value}
+            </p>
+          )}
+
+          {relTime(block.updated_at) && (
+            <p className="mt-1 text-[0.65rem] text-[var(--admin-text-faint)]">
+              Last edited {relTime(block.updated_at)}
+            </p>
+          )}
+
+          {restoreAction && (
+            <ContentRevisionHistory
+              blockKey={block.block_key}
+              liveValue={block.published_value ?? ""}
+              draftValue={value}
+              revisions={revisions}
+              restoreAction={restoreAction}
+            />
           )}
         </div>
-      </form>
-
-      <form action={publishAction} className="mt-2">
-        <input type="hidden" name="block_key" value={block.block_key} />
-        <button
-          type="submit"
-          className="rounded-lg bg-[#7ed957] px-3 py-1.5 text-xs font-bold text-black hover:bg-[#6bc746]"
-        >
-          Publish live
-        </button>
-      </form>
-
-      {block.published_value != null && (
-        <p className="mt-2 text-xs text-white/35">
-          <span className="font-semibold text-white/45">Live:</span> {block.published_value}
-        </p>
-      )}
-
-      {relTime(block.updated_at) && (
-        <p className="mt-1 text-[0.65rem] text-white/30">
-          Last edited {relTime(block.updated_at)}
-        </p>
-      )}
-
-      {restoreAction && (
-        <ContentRevisionHistory
-          blockKey={block.block_key}
-          liveValue={block.published_value ?? ""}
-          draftValue={value}
-          revisions={revisions}
-          restoreAction={restoreAction}
-        />
       )}
     </div>
   );

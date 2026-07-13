@@ -33,19 +33,19 @@ export function ContentBulkBar({
 
   return (
     <div
-      className={`sticky top-2 z-20 flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 backdrop-blur ${
+      className={`sticky top-2 z-20 flex flex-wrap items-center justify-between gap-3 rounded-[var(--admin-radius-lg)] border px-4 py-3 backdrop-blur ${
         hasPending
-          ? "border-[#ff7f00]/40 bg-[#ff7f00]/[0.08]"
-          : "border-[#7ed957]/30 bg-[#7ed957]/[0.06]"
+          ? "border-[var(--admin-orange)]/40 bg-[var(--admin-orange-soft)]"
+          : "border-[var(--admin-accent)]/30 bg-[var(--admin-accent-soft)]"
       }`}
     >
       <div className="text-sm font-semibold">
         {hasPending ? (
-          <span className="text-[#ff7f00]">
+          <span className="text-[var(--admin-orange)]">
             {pendingCount} block{pendingCount === 1 ? "" : "s"} {pendingCount === 1 ? "has" : "have"} unpublished changes
           </span>
         ) : (
-          <span className="text-[#7ed957]">✓ All changes are live — nothing pending</span>
+          <span className="text-[var(--admin-accent)]">✓ All changes are live — nothing pending</span>
         )}
       </div>
 
@@ -55,7 +55,7 @@ export function ContentBulkBar({
             type="button"
             disabled={!hasPending}
             onClick={() => setConfirm("publish")}
-            className="rounded-lg bg-[#7ed957] px-4 py-1.5 text-xs font-bold text-black transition hover:bg-[#6bc746] disabled:cursor-not-allowed disabled:opacity-40"
+            className="admin-focus rounded-[var(--admin-radius-sm)] bg-[var(--admin-accent)] px-4 py-1.5 text-xs font-bold text-black transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
           >
             🚀 Publish all drafts
           </button>
@@ -65,7 +65,7 @@ export function ContentBulkBar({
             type="button"
             disabled={!hasPending}
             onClick={() => setConfirm("discard")}
-            className="rounded-lg border border-white/15 px-4 py-1.5 text-xs font-bold text-white/70 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+            className="admin-focus rounded-[var(--admin-radius-sm)] border border-[var(--admin-border-strong)] px-4 py-1.5 text-xs font-bold text-[var(--admin-text-muted)] transition hover:bg-[var(--admin-surface-hover)] disabled:cursor-not-allowed disabled:opacity-40"
           >
             Discard all drafts
           </button>
