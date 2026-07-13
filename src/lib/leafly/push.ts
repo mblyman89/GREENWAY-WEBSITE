@@ -86,6 +86,8 @@ export type LeaflyPreview = {
   versionId: string | null;
   payload: LeaflyItemsPayload;
   readiness: LeaflyReadiness;
+  /** Raw channel-agnostic feed items — used by the page for preflight/richness scoring. */
+  items: SyndicationItem[];
 };
 
 /**
@@ -101,6 +103,7 @@ export async function previewLeaflyPush(): Promise<LeaflyPreview> {
     versionId,
     payload: buildLeaflyItemsPayload(items),
     readiness: describeLeaflyReadiness(),
+    items,
   };
 }
 

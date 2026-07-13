@@ -46,6 +46,7 @@ import { __runPreflightTests } from "@/lib/syndication/preflight-core";
 import { __runRichnessTests } from "@/lib/syndication/richness-core";
 import { __runSyncSettingsTests } from "@/lib/syndication/sync-settings-core";
 import { __runApplySettingsTests } from "@/lib/syndication/apply-settings-core";
+import { __runSyndicationPlaybookTests } from "@/lib/integrations/syndication-playbook";
 
 describe("embedded pure self-test suites", () => {
   it("order-pricing-core (S-2/S-3 money math + floor)", () => {
@@ -180,5 +181,8 @@ describe("embedded pure self-test suites", () => {
   });
   it("apply-settings-core (Task X: owner toggles applied to channel payloads)", () => {
     expect(() => __runApplySettingsTests()).not.toThrow();
+  });
+  it("syndication-playbook (Task X: verified connect/stay/reconnect playbook + AI grounding)", () => {
+    expect(() => __runSyndicationPlaybookTests()).not.toThrow();
   });
 });
