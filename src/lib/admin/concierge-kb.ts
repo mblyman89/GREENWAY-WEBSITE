@@ -65,7 +65,7 @@ export const CONCIERGE_KB: ConciergeTopic[] = [
       "Product Intake: Product Discovery, CCRS Benchmarks, Catalog Hub, Purchasing, Receiving, Product Onboarding, Product Enrichment, Product Mastering, Accounts Payable, Knowledge Base.",
       "Inventory: Inventory, Other Inventory, Vendors & Brands, Types & Categories, Cycle Counts, Returns & Destruction.",
       "Website: Media Library, Site Content, Home, Menu, Loyalty, Specials, Vendors, FAQ, About, Locations, Price Match.",
-      "MKTG & ADV: Marketing & Advertising, Promotions, Blog & Newsletter, Email Newsletter, Image Generator.",
+      "MKTG & ADV: Marketing & Advertising, Promotions, Blog & Newsletter, Email Newsletter, Creative Studio.",
       "Employee: Time Clock, Payroll, Samples, Register Activity.",
       "Medical: Patient Records, Authorization Intake.",
       "CCRS: opens Compliance Health.",
@@ -229,11 +229,12 @@ export const CONCIERGE_KB: ConciergeTopic[] = [
   {
     id: "image-generator",
     area: "back-office",
-    title: "Image Generator (image prompt builder)",
+    title: "Creative Studio (AI image generation)",
     tab: "MKTG & ADV",
     href: "/admin/marketing/midjourney",
     facts: [
-      "The Image Generator builds one image brief you can either copy as a Midjourney prompt or generate directly with FLUX and save into your Media Library.",
+      "The Creative Studio generates images with FLUX at the exact pixel size for a chosen destination — website banners, social posts, email headers, blog heroes, or print/in-store pieces.",
+      "Greenway AI drafts the image brief from a one-line idea, grounded in the store profile and LIVE weekly deals; the same brief also builds a copy-paste Midjourney prompt.",
       "Generated images are DRAFTS — review before using them on the website or in marketing.",
     ],
   },
@@ -446,7 +447,7 @@ export const CONCIERGE_KB: ConciergeTopic[] = [
     title: "How the AI helpers work",
     facts: [
       "AI features are drafts-only and grounded in your real data — they never invent facts and always pass a compliance scan.",
-      "You'll find AI assistants in Marketing (strategy), Image Generator, Blog & Newsletter, Purchasing, Reports → COGS, Integrations, the Receipt Printer diagnostics, and this global concierge (the chat bubble, bottom-right).",
+      "You'll find AI assistants in Marketing (strategy), Creative Studio, Blog & Newsletter, Purchasing, Reports → COGS, Integrations, the Receipt Printer diagnostics, and this global concierge (the chat bubble, bottom-right).",
       "If an AI feature is greyed out, an AI key (AI_API_KEY or OPENAI_API_KEY) isn't set in the environment.",
       "You can see AI usage and cost under Admin → AI Usage (also linked from Settings → AI usage & cost).",
     ],

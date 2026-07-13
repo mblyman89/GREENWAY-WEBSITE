@@ -614,7 +614,7 @@ export const HELP_SECTIONS: HelpSection[] = [
       },
       {
         q: "How do I generate marketing images?",
-        a: "Image Generator lets you build one image brief, then either copy a Midjourney prompt or generate an image with FLUX straight into your Media Library (as a draft) for use on the site or in campaigns.",
+        a: "Open the Creative Studio: pick where the image will go (website banner, social post, email header, blog hero, print), describe the idea so Greenway AI drafts the brief from your live deals, then generate with FLUX at the exact right size — saved to your Media Library as a draft. A Midjourney copy-paste prompt is built from the same brief.",
         href: "/admin/marketing/midjourney",
       },
     ],

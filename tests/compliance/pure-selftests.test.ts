@@ -30,6 +30,9 @@ import { __runEmployeeLifecycleTests } from "@/lib/staffing/employee-lifecycle-c
 import { __runUserGuardTests } from "@/lib/auth/user-guards-core";
 import { __runCampaignRulesTests } from "@/lib/marketing/campaign-rules-core";
 import { __runCompetitivePlaybookTests } from "@/lib/marketing/competitive-playbook-core";
+import { __runMidjourneyCoreTests } from "@/lib/marketing/midjourney-core";
+import { __runFluxCoreTests } from "@/lib/marketing/flux-core";
+import { __runCreativePlacementsTests } from "@/lib/marketing/creative-placements-core";
 
 describe("embedded pure self-test suites", () => {
   it("order-pricing-core (S-2/S-3 money math + floor)", () => {
@@ -110,5 +113,14 @@ describe("embedded pure self-test suites", () => {
   it("competitive-playbook-core (Task S-d: legal plays, in-app tool links, guardrails)", () => {
     const n = __runCompetitivePlaybookTests();
     expect(n).toBeGreaterThan(0);
+  });
+  it("midjourney-core (Creative Studio brief -> prompt assembly)", () => {
+    expect(() => __runMidjourneyCoreTests()).not.toThrow();
+  });
+  it("flux-core (Task U: verified per-endpoint FLUX request contracts)", () => {
+    expect(() => __runFluxCoreTests()).not.toThrow();
+  });
+  it("creative-placements-core (Task U: verified destination sizes, 4MP ceiling)", () => {
+    expect(() => __runCreativePlacementsTests()).not.toThrow();
   });
 });
