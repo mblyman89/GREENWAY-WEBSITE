@@ -210,6 +210,18 @@ export default async function CompliancePage({
         </div>
       ) : null}
 
+      {/* Task W: point at the hand-held weekly workflow */}
+      <div className="rounded-2xl border border-[var(--admin-accent)]/30 bg-[var(--admin-accent)]/5 p-4 text-xs">
+        <span className="font-bold text-white/85">New: the CCRS Command Center</span>{" "}
+        <span className="text-white/55">
+          walks the weekly upload step-by-step — deadline tracking, guided upload order with the
+          10-minute waits, submission ledger, error triage, and DOH/medical checks.
+        </span>{" "}
+        <Link href="/admin/compliance/ccrs" className="font-bold text-[var(--admin-accent)] underline">
+          Open the Command Center →
+        </Link>
+      </div>
+
       {/* Deadline push notifications (Task W) */}
       <PushRemindersPanel />
 

@@ -95,8 +95,11 @@ export const adminNav: AdminNavItem[] = [
   // Rendered as a direct-link tab (no dropdown) — see DIRECT_LINK_GROUPS.
   { label: "Medical Cannabis", href: "/admin/medical", permission: "medical.manage", icon: "\ud83c\udfe5", group: "Medical" }, // 🏥 medical
 
-  // CCRS: standalone top-header button → Compliance Health (direct link, no dropdown).
-  { label: "Compliance Health", href: "/admin/compliance/health", permission: "reports.view", icon: "\ud83d\udee1\ufe0f", group: "CCRS" }, // 🛡️ compliance shield
+  // CCRS: standalone top-header button → the Compliance Command Center (Task W;
+  // direct link, no dropdown). Compliance Health stays reachable from the
+  // command center's header link + the second item below.
+  { label: "CCRS Command Center", href: "/admin/compliance/ccrs", permission: "reports.view", icon: "\ud83d\udee1\ufe0f", group: "CCRS" }, // 🛡️ compliance shield
+  { label: "Compliance Health", href: "/admin/compliance/health", permission: "reports.view", icon: "\ud83e\ude7a", group: "CCRS" }, // 🩺 health check
   { label: "Compliance Calendar", href: "/admin/compliance/calendar", permission: "settings.manage", icon: "\ud83d\udcc5", group: "Admin" }, // 📅 S-18 recurring obligations
 
   // Website: sync dashboard first, then media + site content, then public

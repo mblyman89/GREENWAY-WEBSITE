@@ -36,6 +36,7 @@ import { __runFluxCoreTests } from "@/lib/marketing/flux-core";
 import { __runCreativePlacementsTests } from "@/lib/marketing/creative-placements-core";
 import { __runCcrsWeekTests } from "@/lib/compliance/ccrs-week-core";
 import { __runCcrsDeadlineTests } from "@/lib/compliance/ccrs-deadline-core";
+import { __runCcrsErrorTriageTests } from "@/lib/compliance/ccrs-error-triage-core";
 
 describe("embedded pure self-test suites", () => {
   it("order-pricing-core (S-2/S-3 money math + floor)", () => {
@@ -136,6 +137,11 @@ describe("embedded pure self-test suites", () => {
   });
   it("ccrs-deadline-core (Slice 106 + Task W: LIQ-1295 due dates + monthly reminder planner)", () => {
     const r = __runCcrsDeadlineTests();
+    expect(r.failed).toBe(0);
+    expect(r.passed).toBeGreaterThan(0);
+  });
+  it("ccrs-error-triage-core (Task W: error-email triage + examiner draft)", () => {
+    const r = __runCcrsErrorTriageTests();
     expect(r.failed).toBe(0);
     expect(r.passed).toBeGreaterThan(0);
   });
