@@ -31,24 +31,26 @@ export default async function MidjourneyPage() {
     <div>
       <AdminPageHeader
         title="Creative Studio"
-        subtitle="Pick where the image will go, describe the idea, and generate at the exact right size with FLUX — or copy a Midjourney prompt from the same brief."
+        subtitle="Two generators, two tabs: FLUX (default) generates at the exact right size in one click; the Midjourney tab builds a copy-paste prompt from the same brief."
         breadcrumbs={<Breadcrumbs items={[{ label: "Marketing" }, { label: "Creative Studio" }]} />}
         help={
           <HelpPanel
             id="midjourney-builder"
             title="How the Creative Studio works"
             steps={[
+              "The studio opens on the FLUX tab — the main generator. Switch to the Midjourney tab any time; your brief carries over, nothing is lost.",
               "Step 1 — pick the destination (website banner, social post, email header, blog hero, print/in-store). The image is generated at that spot's exact pixel size.",
               "Step 2 — type your idea and press AI assist. Greenway AI drafts the full brief using your store profile and your LIVE weekly deals (e.g. \"a banner for our Monday deal\" uses the real Monday deal). Edit anything.",
               "Step 3 — Generate with FLUX. Results save into your media library as DRAFTS for you to review before publishing. Nothing goes live automatically.",
-              "Prefer Midjourney? The same brief builds a copy-paste prompt with all parameters (aspect, stylize, chaos, style reference).",
+              "Prefer Midjourney? Its tab builds a copy-paste prompt from the same brief with all parameters (aspect, stylize, chaos, style reference).",
               "Add up to 8 reference images (product shots, brand assets) so FLUX matches your look.",
             ]}
           >
             <p>
-              FLUX is the dominant generator here — a baked-in API pipeline that outputs pixel-perfect images for each destination.
-              Midjourney remains as a copy-a-prompt fallback on the same brief. All AI drafting is compliance-scanned
-              (no health claims, no youth appeal, no consumption imagery) and everything lands as a draft for human review.
+              FLUX is the dominant generator here — a baked-in API pipeline that outputs pixel-perfect images for each
+              destination, shown first when you enter the studio. Midjourney lives on its own tab as a copy-a-prompt
+              fallback on the same shared brief. All AI drafting is compliance-scanned (no health claims, no youth appeal,
+              no consumption imagery) and everything lands as a draft for human review.
             </p>
           </HelpPanel>
         }

@@ -614,7 +614,7 @@ export const HELP_SECTIONS: HelpSection[] = [
       },
       {
         q: "How do I generate marketing images?",
-        a: "Open the Creative Studio: pick where the image will go (website banner, social post, email header, blog hero, print), describe the idea so Greenway AI drafts the brief from your live deals, then generate with FLUX at the exact right size — saved to your Media Library as a draft. A Midjourney copy-paste prompt is built from the same brief.",
+        a: "Open the Creative Studio — it opens on the FLUX tab: pick where the image will go (website banner, social post, email header, blog hero, print), describe the idea so Greenway AI drafts the brief from your live deals, then generate with FLUX at the exact right size — saved to your Media Library as a draft. The Midjourney tab builds a copy-paste prompt from the same brief.",
         href: "/admin/marketing/midjourney",
       },
     ],
