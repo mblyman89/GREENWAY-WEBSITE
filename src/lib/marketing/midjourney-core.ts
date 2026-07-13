@@ -32,6 +32,38 @@ export const ASPECT_RATIOS: { value: AspectRatio; label: string }[] = [
   { value: "16:9", label: "16:9 Widescreen (web hero)" },
 ];
 
+/** Numeric value of each supported aspect ratio (width / height). */
+const ASPECT_VALUES: Record<AspectRatio, number> = {
+  "1:1": 1,
+  "4:5": 4 / 5,
+  "9:16": 9 / 16,
+  "2:3": 2 / 3,
+  "3:2": 3 / 2,
+  "16:9": 16 / 9,
+};
+
+/**
+ * The supported Midjourney aspect ratio closest to an exact pixel size.
+ * Lets a Creative Studio destination (e.g. 1600x560 website banner) also set
+ * a sensible `--ar` on the copy-paste Midjourney prompt. Falls back to 1:1
+ * for degenerate input.
+ */
+export function closestAspectRatio(width: number, height: number): AspectRatio {
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return "1:1";
+  const target = width / height;
+  let best: AspectRatio = "1:1";
+  let bestDiff = Infinity;
+  for (const ar of Object.keys(ASPECT_VALUES) as AspectRatio[]) {
+    // Compare in log space so 2:1 and 1:2 are equally distant from 1:1.
+    const diff = Math.abs(Math.log(ASPECT_VALUES[ar]) - Math.log(target));
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      best = ar;
+    }
+  }
+  return best;
+}
+
 export type CreativeBrief = {
   /** The main subject, lead with this. */
   subject: string;
@@ -343,6 +375,18 @@ export function __runMidjourneyCoreTests(): string {
   // presets
   assert(PRESETS.length >= 5, "5+ presets");
   assert(presetById("product-hero")?.brief.aspectRatio === "1:1", "preset lookup");
+
+  // closestAspectRatio: destination sizes map to sensible --ar values
+  assert(closestAspectRatio(1080, 1080) === "1:1", "square -> 1:1");
+  assert(closestAspectRatio(1080, 1350) === "4:5", "IG portrait -> 4:5");
+  assert(closestAspectRatio(1080, 1920) === "9:16", "story -> 9:16");
+  assert(closestAspectRatio(1600, 560) === "16:9", "wide banner -> 16:9 (closest supported)");
+  assert(closestAspectRatio(1600, 900) === "16:9", "blog hero -> 16:9");
+  assert(closestAspectRatio(1000, 1500) === "2:3", "Pinterest -> 2:3");
+  assert(closestAspectRatio(1200, 630) === "16:9", "OG card -> 16:9 (nearest)");
+  assert(closestAspectRatio(1664, 2144) === "4:5", "flyer 0.776 -> 4:5 (nearest of 4:5=0.8 vs 2:3=0.667)");
+  assert(closestAspectRatio(0, 100) === "1:1", "degenerate -> 1:1");
+  assert(closestAspectRatio(NaN, 5) === "1:1", "NaN -> 1:1");
 
   return "OK: midjourney-core tests passed";
 }
