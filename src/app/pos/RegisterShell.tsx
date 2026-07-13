@@ -30,6 +30,8 @@ import {
 } from "@/lib/pos/register-client-core";
 import type { PosSyncAck } from "@/lib/pos/sync-core";
 import type { PosEventType } from "@/lib/pos/sale-event-core";
+import type { PosMenuBundle } from "@/lib/pos/sale-flow-core";
+import { SaleFlow } from "./SaleFlow";
 
 // ---------------------------------------------------------------------------
 // Local storage keys (device-scoped; every durable fact lives server-side)
@@ -38,6 +40,7 @@ import type { PosEventType } from "@/lib/pos/sale-event-core";
 const LS_DEVICE = "gw-pos-device"; // { deviceId, deviceKey, name, registerId }
 const LS_QUEUE = "gw-pos-queue"; // serialized offline queue
 const LS_SEQ = "gw-pos-seq"; // last used sequence (monotonic)
+const LS_MENU = "gw-pos-menu"; // cached PosMenuBundle (offline sales use the last download)
 
 const IDLE_LOCK_MS = 2 * 60 * 1000; // auto-lock after 2 minutes of inactivity
 
@@ -70,6 +73,9 @@ export function RegisterShell() {
   const [online, setOnline] = useState(true);
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
+  const [saleActive, setSaleActive] = useState(false);
+  const [menuBundle, setMenuBundle] = useState<PosMenuBundle | null>(null);
+  const [menuLoading, setMenuLoading] = useState(false);
   const seqRef = useRef(0);
   const queueRef = useRef<QueuedPosEvent[]>([]);
   const flushingRef = useRef(false);
@@ -94,6 +100,16 @@ export function RegisterShell() {
     setCreds(c);
     setScreen(c ? "locked" : "setup");
     setOnline(navigator.onLine);
+    // Cached menu bundle (offline sales use the last download until refresh).
+    try {
+      const rawMenu = window.localStorage.getItem(LS_MENU);
+      if (rawMenu) {
+        const cached = JSON.parse(rawMenu) as PosMenuBundle;
+        if (cached && Array.isArray(cached.products)) setMenuBundle(cached);
+      }
+    } catch {
+      // Corrupted cache — the online refresh replaces it.
+    }
   }, []);
   /* eslint-enable react-hooks/set-state-in-effect */
 
@@ -107,10 +123,11 @@ export function RegisterShell() {
 
   // ── enqueue + flush ──
   const enqueue = useCallback(
-    (eventType: PosEventType, payload: Record<string, unknown>, employeeId: string) => {
-      if (!creds?.registerId) return;
+    (eventType: PosEventType, payload: Record<string, unknown>, employeeId: string): string | null => {
+      if (!creds?.registerId) return null;
+      const clientUuid = crypto.randomUUID();
       const { envelope, nextSequence } = buildEnvelope({
-        clientUuid: crypto.randomUUID(),
+        clientUuid,
         deviceId: creds.deviceId,
         registerId: creds.registerId,
         employeeId,
@@ -121,6 +138,7 @@ export function RegisterShell() {
       });
       seqRef.current = nextSequence;
       setQueue((q) => [...q, envelope]);
+      return clientUuid;
     },
     [creds],
   );
@@ -190,9 +208,47 @@ export function RegisterShell() {
     return () => clearInterval(id);
   }, [creds, flush]);
 
+  // ── menu bundle: refresh when online, cache for offline sales ──
+  const refreshMenu = useCallback(async () => {
+    if (!creds || menuLoading) return;
+    setMenuLoading(true);
+    try {
+      const res = await fetch("/api/pos/menu", {
+        headers: {
+          "x-pos-device-id": creds.deviceId,
+          "x-pos-device-key": creds.deviceKey,
+        },
+      });
+      if (!res.ok) return;
+      const bundle = (await res.json()) as PosMenuBundle;
+      setMenuBundle(bundle);
+      try {
+        window.localStorage.setItem(LS_MENU, JSON.stringify(bundle));
+      } catch {
+        // Cache write failure is non-fatal — the in-memory bundle still works.
+      }
+    } catch {
+      // Offline — the cached bundle (loaded below) covers the sale.
+    } finally {
+      setMenuLoading(false);
+    }
+  }, [creds, menuLoading]);
+
+  // Refresh the bundle from the server once creds exist (cached copy was
+  // hydrated in the boot effect; offline sales use it until this succeeds).
+  // The setState inside refreshMenu is a busy-flag around a network fetch
+  // (external system), deferred to a microtask so the effect body stays pure.
+  useEffect(() => {
+    if (!creds) return;
+    const t = setTimeout(() => void refreshMenu(), 0);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [creds]);
+
   // ── auto-lock on idle ──
   const lock = useCallback(() => {
     setEmployee(null);
+    setSaleActive(false);
     setScreen("locked");
   }, []);
 
@@ -255,6 +311,28 @@ export function RegisterShell() {
     );
   }
 
+  if (saleActive && employee && drawer && menuBundle) {
+    return (
+      <SaleFlow
+        bundle={menuBundle}
+        drawerSessionId={drawer.sessionId}
+        onEnqueue={(eventType, payload) => {
+          const uuid = enqueue(eventType, payload, employee.id);
+          void flush();
+          return uuid ?? "";
+        }}
+        onComplete={() => {
+          // Owner decision: the register locks after EVERY sale so the next
+          // sale is PIN-attributed to whoever actually rings it.
+          setBanner(null);
+          lock();
+          void flush();
+        }}
+        onCancel={() => setSaleActive(false)}
+      />
+    );
+  }
+
   return (
     <HomeScreen
       creds={creds}
@@ -265,6 +343,10 @@ export function RegisterShell() {
       rejectedCount={rejected.length}
       lastSyncAt={lastSyncAt}
       banner={banner}
+      menuReady={!!menuBundle}
+      menuFetchedAt={menuBundle?.fetchedAt ?? null}
+      onStartSale={() => setSaleActive(true)}
+      onRefreshMenu={() => void refreshMenu()}
       onClearBanner={() => setBanner(null)}
       onLock={lock}
       onSyncNow={() => void flush()}
@@ -509,6 +591,10 @@ function HomeScreen({
   rejectedCount,
   lastSyncAt,
   banner,
+  menuReady,
+  menuFetchedAt,
+  onStartSale,
+  onRefreshMenu,
   onClearBanner,
   onLock,
   onSyncNow,
@@ -522,6 +608,10 @@ function HomeScreen({
   rejectedCount: number;
   lastSyncAt: string | null;
   banner: string | null;
+  menuReady: boolean;
+  menuFetchedAt: string | null;
+  onStartSale: () => void;
+  onRefreshMenu: () => void;
   onClearBanner: () => void;
   onLock: () => void;
   onSyncNow: () => void;
@@ -571,22 +661,42 @@ function HomeScreen({
             {pendingCount} pending · last sync {syncLabel}
             {rejectedCount > 0 ? ` · ${rejectedCount} rejected (see back office)` : ""}
           </p>
-          <button type="button" onClick={onSyncNow} className="mt-3 rounded-lg bg-neutral-800 px-4 py-2 text-sm font-semibold">
-            Sync now
-          </button>
+          <p className="mt-1 text-xs text-neutral-500">
+            Menu:{" "}
+            {menuFetchedAt
+              ? `downloaded ${new Date(menuFetchedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`
+              : "not downloaded yet"}
+          </p>
+          <div className="mt-3 flex gap-2">
+            <button type="button" onClick={onSyncNow} className="rounded-lg bg-neutral-800 px-4 py-2 text-sm font-semibold">
+              Sync now
+            </button>
+            <button type="button" onClick={onRefreshMenu} className="rounded-lg bg-neutral-800 px-4 py-2 text-sm font-semibold">
+              Refresh menu
+            </button>
+          </div>
         </div>
       </section>
 
       <section className="mt-6 grid gap-4 sm:grid-cols-3">
         <button
           type="button"
-          disabled={!drawer || !employee.clockedIn}
-          title={!drawer ? "Open a drawer first" : !employee.clockedIn ? "Clock in first" : undefined}
+          disabled={!drawer || !employee.clockedIn || !menuReady}
+          onClick={onStartSale}
+          title={
+            !drawer
+              ? "Open a drawer first"
+              : !employee.clockedIn
+                ? "Clock in first"
+                : !menuReady
+                  ? "Menu not downloaded yet — connect to the internet once"
+                  : undefined
+          }
           className="rounded-2xl bg-emerald-600 p-8 text-left text-xl font-bold text-white disabled:opacity-40"
         >
           Start sale
           <span className="mt-1 block text-sm font-normal text-emerald-100">
-            ID check → cart → tender (Slice B6)
+            ID check → cart → cash tender
           </span>
         </button>
         <button type="button" onClick={onPunch} className="rounded-2xl bg-neutral-800 p-8 text-left text-xl font-semibold">
