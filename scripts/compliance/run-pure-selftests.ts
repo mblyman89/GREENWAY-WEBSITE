@@ -28,6 +28,7 @@ import { __runMidjourneyCoreTests } from "../../src/lib/marketing/midjourney-cor
 import { __runFluxCoreTests } from "../../src/lib/marketing/flux-core";
 import { __runCreativePlacementsTests } from "../../src/lib/marketing/creative-placements-core";
 import { __runCcrsWeekTests } from "../../src/lib/compliance/ccrs-week-core";
+import { __runCcrsDeadlineTests } from "../../src/lib/compliance/ccrs-deadline-core";
 
 async function main() {
   __runOrderPricingTests();
@@ -56,6 +57,8 @@ async function main() {
   __runCreativePlacementsTests();
   const ccrsWeek = __runCcrsWeekTests();
   if (ccrsWeek.failed > 0) throw new Error(`ccrs-week-core: ${ccrsWeek.failed} failure(s)`);
+  const ccrsDeadline = __runCcrsDeadlineTests();
+  if (ccrsDeadline.failed > 0) throw new Error(`ccrs-deadline-core: ${ccrsDeadline.failed} failure(s)`);
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
