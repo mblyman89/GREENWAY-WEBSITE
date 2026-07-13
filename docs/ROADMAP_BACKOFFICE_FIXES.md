@@ -2080,3 +2080,84 @@ evidence → monthly LIQ-1295 strip → reminder status → submission ledger.
 30 incl. monthly planner, ccrs-error-triage-core 18 — all in both
 harnesses). tsc + eslint clean on every PR. Migration 0118 applied manually
 by the owner (Task W PR A).
+
+## Shipped — Task X: Leafly + Weedmaps menu syndication, rock solid (PRs #427, #428, #429)
+
+Owner directive (condensed): "Focus on the integrations page. Make sure they
+are rock solid and ready to start transmitting data to Leafly and Weedmaps,
+Leafly being of higher priority. Hold my hand through this process — getting
+connected, staying connected, help if we get unconnected, AI assistance
+deep-trained on the Leafly v2 docs. If there are settings that allow us to
+tune parameters, I want full control. What would a professional do and add.
+Never guess, no shortcuts, no cutting corners."
+
+### Research first (never guess)
+`docs/LEAFLY_WEEDMAPS_INTEGRATION_RESEARCH.md` — AI-readable deep-dive:
+Leafly Menu API v2.0 (OAuth2 client-credentials at sso.leafly.com /
+sso-sandbox.leafly.io, POST = full sync deleting omitted items, PUT = upsert,
+DELETE {ids}, GET /status, integer-cent prices, real `inventoryLevel`,
+null-never-"NA" for absent strain/cannabinoids, NO image field in v2 items,
+per-environment integration keys, ~2.5 min sandbox / ~5 min prod latency) and
+the Weedmaps Menu API 2025-07 (live OpenAPI verified: 14-day JWT from
+/auth/token at 1 req/min, scopes menu_items + menus:write, global 420
+requests/10 s, NO bulk endpoint — per-item PUT
+/menus/{menu_id}/items/external/{external_id} + per-item DELETE, price
+{amount,currency} in dollars + weight per variant, inventory_quantity min 1
+omitted when out of stock, 423 = menu paused, unpublish-not-delete for OOS).
+
+### X PR A — verified wire formats + pure sync cores (PR #427, merged)
+- `weedmaps/payload-core.ts` REBUILT against the live 2025-07
+  Request_MenuItem schema (variants with external_id/price/weight,
+  genetics, published flag, single exact image_url).
+- Leafly payload sends the REAL stock quantity as `inventoryLevel`; the feed
+  (`menu-feed-core`) carries `inventoryLevel` + exact-photo `imageUrl`.
+- 4 new pure cores, all self-tested in both harnesses: `sync-plan-core`
+  (FNV-1a payload hashes + delta plan), `preflight-core` (blocking
+  validation: dup ids, missing names, non-positive prices),
+  `richness-core` (menu richness scoring + connection-health classifier),
+  `sync-settings-core` (owner-tunable parameters, clamped).
+
+### X PR B — the sync engine + owner transmission parameters (PR #428, merged; migration 0119)
+- **Migration 0119** (owner applies MANUALLY after 0118):
+  `syndication_sync_settings` (per-channel settings jsonb) +
+  `syndication_sync_state` (per-item payload hashes from the last
+  successful sync).
+- Preflight GATE: `PreflightBlockedError` stops live pushes when blocking
+  errors exist — logged as "skipped", nothing transmitted.
+- Delta sync on both channels: only changed items are sent; unchanged
+  Leafly syncs are skipped honestly ("no changes"); failed items keep their
+  old hash so they auto-retry next sync; one-shot force-resend clears
+  itself after a clean forced sync.
+- Weedmaps engine: paced per-item PUT loop (default 150 ms ≈ 66 req/10 s,
+  far under the 420/10 s cap), explicit per-item DELETEs (404 = already
+  gone), 423-paused stops the loop early, republish when the owner turns
+  off hide-out-of-stock.
+- Leafly engine: POST always sends the FULL menu (POST deletes omissions);
+  PUT sends changed items then explicit DELETE {ids}; 401-retry-once +
+  429/5xx exponential backoff on both channels with owner-tunable retries.
+- 6 new audited server actions: get/save settings + reset sync state per
+  channel; saves clamp through the pure core so bad input can't break a sync.
+
+### X PR C — hold-my-hand UI + playbook-trained AI (PR #429, merged; no migration)
+- `syndication-playbook.ts` (pure, 18 self-tests): 5 verified connect steps
+  per channel, channel-tagged stay-connected practices, an 11-row recovery
+  runbook (symptom → meaning → fix keyed to real HTTP statuses: 401/403,
+  404 menu id, 422, 423 paused, 429, 5xx, preflight-blocked, skipped),
+  verified support contacts, and `syndicationPlaybookBlock()` — the
+  grounding injected into the integrations AI helper so it diagnoses from
+  the runbook and never invents an endpoint or key name.
+- Channel pages now mount: **ConnectionWizard** (get connected / stay
+  connected / get reconnected, auto-opens until credentials are set),
+  **ConnectionHealthPanel** (connected/degraded/down from LIVE attempts
+  only — skipped syncs transmit nothing so they don't count),
+  **DataQualityPanel** (preflight gate + per-field richness bars with
+  weakest-first guidance; image row hidden on Leafly since v2 has no image
+  field), and **SyncSettingsPanel** (full owner control: pacing 0–5000 ms,
+  retries 0–5, Leafly POST/PUT default mode, field toggles for
+  descriptions/THC-CBD/strains, Weedmaps exact-photo + hide-OOS toggles,
+  one-shot resend-everything, armed-confirm reset-sync-memory).
+
+**Tests:** suite at **1,289 passing** (sync-plan 21, preflight 17,
+richness/health 17, sync-settings 19, apply-settings 19,
+syndication-playbook 18 — all in both harnesses). tsc + eslint clean on
+every PR. Migration 0119 applied manually by the owner (after 0118).
