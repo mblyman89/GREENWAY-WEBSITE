@@ -21,6 +21,7 @@ import { assertCcrsBatchSubmittable } from "@/lib/compliance/ccrs-submit-gate-co
 import { getCcrsFilingOverview } from "@/lib/compliance/ccrs-filing-status";
 import { isAiConfigured } from "@/lib/ai/provider";
 import { CcrsAdvisorPanel } from "@/components/admin/reports/CcrsAdvisorPanel";
+import { PushRemindersPanel } from "@/components/admin/compliance/PushRemindersPanel";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -208,6 +209,9 @@ export default async function CompliancePage({
           </p>
         </div>
       ) : null}
+
+      {/* Deadline push notifications (Task W) */}
+      <PushRemindersPanel />
 
       {/* Preview KPIs */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">

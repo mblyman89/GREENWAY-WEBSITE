@@ -218,6 +218,78 @@ export function reportingDeadlineOverview(
 
 // ── Self-tests (tsx) ────────────────────────────────────────────────────────
 
+// ── Monthly reminder planner (Task W) ────────────────────────────────────────
+
+export type MonthlyReminderStage = "liq_due_soon" | "liq_due_today" | "liq_overdue_daily";
+
+export type PlannedMonthlyReminder = {
+  stage: MonthlyReminderStage;
+  /** "YYYY-MM" sales month the reminder is about. */
+  periodKey: string;
+  /** Unique send-once key. liq_overdue_daily embeds the date so it repeats daily. */
+  dedupeKey: string;
+  subject: string;
+  body: string;
+  urgency: "info" | "warning" | "critical";
+};
+
+/**
+ * Which monthly LIQ-1295 reminders should fire on `todayIso` given the period
+ * deadline picture (from reportingDeadlineOverview / getCcrsFilingOverview).
+ * Deterministic + idempotent per day. PURE.
+ *
+ *   • liq_due_soon      — once per period, when it enters the "due soon" window.
+ *   • liq_due_today     — once, on the statutory due date.
+ *   • liq_overdue_daily — EVERY day past due while no filing/export is on record.
+ */
+export function planMonthlyReminders(
+  todayIso: string,
+  periods: readonly PeriodDeadline[],
+): PlannedMonthlyReminder[] {
+  const out: PlannedMonthlyReminder[] = [];
+  for (const p of periods) {
+    if (p.filed) continue;
+    const key = periodKey(p.period);
+    const label = `${p.period.year}-${String(p.period.month).padStart(2, "0")}`;
+    if (p.status === "due_soon") {
+      out.push({
+        stage: "liq_due_soon",
+        periodKey: key,
+        dedupeKey: `liq_due_soon:${key}`,
+        subject: `LIQ-1295 monthly cannabis tax report due ${p.dueDate} (${label} sales)`,
+        body:
+          `The monthly Retailer Sales and Tax report (LIQ-1295) for ${label} sales is due ${p.dueDate} ` +
+          `(${p.daysUntilDue} day(s) away). It is required EVEN WITH NO SALES, and a 2% late penalty ` +
+          `accrues after the due date. File it and keep the export on record in the Command Center.`,
+        urgency: "warning",
+      });
+    } else if (p.status === "due_today") {
+      out.push({
+        stage: "liq_due_today",
+        periodKey: key,
+        dedupeKey: `liq_due_today:${key}`,
+        subject: `LIQ-1295 monthly report DUE TODAY (${label} sales)`,
+        body:
+          `Today (${p.dueDate}) is the statutory deadline for the LIQ-1295 monthly report covering ${label} sales. ` +
+          `It is required even with no sales; a 2% late-payment penalty accrues after today.`,
+        urgency: "critical",
+      });
+    } else if (p.status === "overdue") {
+      out.push({
+        stage: "liq_overdue_daily",
+        periodKey: key,
+        dedupeKey: `liq_overdue_daily:${key}:${todayIso}`,
+        subject: `⚠ LIQ-1295 monthly report OVERDUE by ${Math.abs(p.daysUntilDue)} day(s) (${label} sales)`,
+        body:
+          `The LIQ-1295 monthly report for ${label} sales was due ${p.dueDate} and no filing/export is on record. ` +
+          `A 2% late-payment penalty accrues on the balance. File it immediately and record it in the Command Center.`,
+        urgency: "critical",
+      });
+    }
+  }
+  return out;
+}
+
 export function __runCcrsDeadlineTests(): { passed: number; failed: number } {
   let passed = 0;
   let failed = 0;
@@ -336,6 +408,40 @@ export function __runCcrsDeadlineTests(): { passed: number; failed: number } {
     { lookbackMonths: 3 },
   );
   ok(allFiled.mostUrgentUnfiled === null && !allFiled.anyOverdue, "all filed → clear");
+
+  // ── planMonthlyReminders ──
+  // Jan 2025 sales due 2025-02-20. On 2025-02-17 (due_soon window) → liq_due_soon once.
+  {
+    const jan = { year: 2025, month: 1 };
+    const soon = planMonthlyReminders("2025-02-17", [periodDeadline(jan, "2025-02-17", false)]);
+    ok(
+      soon.length === 1 &&
+        soon[0].stage === "liq_due_soon" &&
+        soon[0].dedupeKey === "liq_due_soon:2025-01",
+      `monthly due_soon fires once with stable key (got ${JSON.stringify(soon.map((r) => r.dedupeKey))})`,
+    );
+    const dueDay = planMonthlyReminders("2025-02-20", [periodDeadline(jan, "2025-02-20", false)]);
+    ok(
+      dueDay.length === 1 &&
+        dueDay[0].stage === "liq_due_today" &&
+        dueDay[0].dedupeKey === "liq_due_today:2025-01" &&
+        dueDay[0].urgency === "critical",
+      "monthly due_today fires on the statutory due date",
+    );
+    const od1 = planMonthlyReminders("2025-02-21", [periodDeadline(jan, "2025-02-21", false)]);
+    const od2 = planMonthlyReminders("2025-02-22", [periodDeadline(jan, "2025-02-22", false)]);
+    ok(
+      od1.length === 1 &&
+        od1[0].stage === "liq_overdue_daily" &&
+        od1[0].dedupeKey === "liq_overdue_daily:2025-01:2025-02-21" &&
+        od2[0]?.dedupeKey === "liq_overdue_daily:2025-01:2025-02-22",
+      "monthly overdue repeats daily with date-scoped dedupe keys",
+    );
+    const filedNow = planMonthlyReminders("2025-02-21", [periodDeadline(jan, "2025-02-21", true)]);
+    ok(filedNow.length === 0, "filed period produces no monthly reminders");
+    const upcoming = planMonthlyReminders("2025-02-05", [periodDeadline(jan, "2025-02-05", false)]);
+    ok(upcoming.length === 0, "upcoming (outside soon window) produces no reminders");
+  }
 
   if (failed === 0) console.log(`ccrs-deadline-core: all ${passed} tests passed`);
   return { passed, failed };

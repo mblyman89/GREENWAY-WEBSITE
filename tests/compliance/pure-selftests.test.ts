@@ -35,6 +35,7 @@ import { __runMidjourneyCoreTests } from "@/lib/marketing/midjourney-core";
 import { __runFluxCoreTests } from "@/lib/marketing/flux-core";
 import { __runCreativePlacementsTests } from "@/lib/marketing/creative-placements-core";
 import { __runCcrsWeekTests } from "@/lib/compliance/ccrs-week-core";
+import { __runCcrsDeadlineTests } from "@/lib/compliance/ccrs-deadline-core";
 
 describe("embedded pure self-test suites", () => {
   it("order-pricing-core (S-2/S-3 money math + floor)", () => {
@@ -130,6 +131,11 @@ describe("embedded pure self-test suites", () => {
   });
   it("ccrs-week-core (Task W: Sun–Sat week, due next Sunday, reminder planner)", () => {
     const r = __runCcrsWeekTests();
+    expect(r.failed).toBe(0);
+    expect(r.passed).toBeGreaterThan(0);
+  });
+  it("ccrs-deadline-core (Slice 106 + Task W: LIQ-1295 due dates + monthly reminder planner)", () => {
+    const r = __runCcrsDeadlineTests();
     expect(r.failed).toBe(0);
     expect(r.passed).toBeGreaterThan(0);
   });
