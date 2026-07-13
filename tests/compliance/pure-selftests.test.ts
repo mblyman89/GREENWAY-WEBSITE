@@ -37,6 +37,14 @@ import { __runCreativePlacementsTests } from "@/lib/marketing/creative-placement
 import { __runCcrsWeekTests } from "@/lib/compliance/ccrs-week-core";
 import { __runCcrsDeadlineTests } from "@/lib/compliance/ccrs-deadline-core";
 import { __runCcrsErrorTriageTests } from "@/lib/compliance/ccrs-error-triage-core";
+import { __runMenuFeedTests } from "@/lib/syndication/menu-feed-core";
+import { __runLeaflyPayloadTests } from "@/lib/leafly/payload-core";
+import { __runWmPayloadTests } from "@/lib/weedmaps/payload-core";
+import { __runIntegrationCredentialsTests } from "@/lib/integrations/integration-credentials-core";
+import { __runSyncPlanTests } from "@/lib/syndication/sync-plan-core";
+import { __runPreflightTests } from "@/lib/syndication/preflight-core";
+import { __runRichnessTests } from "@/lib/syndication/richness-core";
+import { __runSyncSettingsTests } from "@/lib/syndication/sync-settings-core";
 
 describe("embedded pure self-test suites", () => {
   it("order-pricing-core (S-2/S-3 money math + floor)", () => {
@@ -144,5 +152,29 @@ describe("embedded pure self-test suites", () => {
     const r = __runCcrsErrorTriageTests();
     expect(r.failed).toBe(0);
     expect(r.passed).toBeGreaterThan(0);
+  });
+  it("menu-feed-core (syndication feed mapping: strain normalize, stock, quantity, image)", () => {
+    expect(() => __runMenuFeedTests()).not.toThrow();
+  });
+  it("leafly-payload-core (Leafly v2 wire format: cents, quantity, null-not-NA)", () => {
+    expect(() => __runLeaflyPayloadTests()).not.toThrow();
+  });
+  it("weedmaps-payload-core (Task X: verified Request_MenuItem variants/price/weight)", () => {
+    expect(() => __runWmPayloadTests()).not.toThrow();
+  });
+  it("integration-credentials-core (DB-over-env overrides + masking)", () => {
+    expect(() => __runIntegrationCredentialsTests()).not.toThrow();
+  });
+  it("sync-plan-core (Task X: payload-hash idempotency + delta sync plan)", () => {
+    expect(() => __runSyncPlanTests()).not.toThrow();
+  });
+  it("preflight-core (Task X: pre-push validation — dup ids, prices, weights)", () => {
+    expect(() => __runPreflightTests()).not.toThrow();
+  });
+  it("richness-core (Task X: menu richness scoring + connection health)", () => {
+    expect(() => __runRichnessTests()).not.toThrow();
+  });
+  it("sync-settings-core (Task X: owner-tunable transmission parameters)", () => {
+    expect(() => __runSyncSettingsTests()).not.toThrow();
   });
 });

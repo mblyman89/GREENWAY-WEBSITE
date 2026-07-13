@@ -19,6 +19,12 @@ export type SyndicationVariant = {
   label: string;
   priceMinorUnits: number;
   inStock: boolean;
+  /**
+   * Real on-hand quantity (Task X). Leafly v2 `inventoryLevel` is a stock
+   * QUANTITY (not a 0/1 flag) and Weedmaps `inventory_quantity` is an integer
+   * count — sending the true number is a certification data-quality item.
+   */
+  inventoryLevel: number;
 };
 
 export type SyndicationItem = {
@@ -36,6 +42,13 @@ export type SyndicationItem = {
   priceMinorUnits: number;
   inStock: boolean;
   variants: SyndicationVariant[];
+  /**
+   * Exact product photo URL (Task X). Populated ONLY when the image resolver
+   * returns the product's OWN approved image (never a representative
+   * substitute) — third-party menus must show honest imagery. Absent when no
+   * exact photo exists.
+   */
+  imageUrl?: string;
 };
 
 /** Minimal shape of a published menu item the mapper needs (subset of MenuItemRow + variants). */
@@ -53,6 +66,8 @@ export type FeedSourceItem = {
   inventory_status: string | null;
   hidden: boolean;
   variants: { source_variant_id: string; label: string; price_minor_units: number; inventory_level: number }[];
+  /** Exact (non-fallback) product photo URL when one exists; null/absent otherwise. */
+  image_url?: string | null;
 };
 
 // Our own (granular) strain vocabulary for the website + menu filters. The two
@@ -118,7 +133,11 @@ export function toSyndicationItem(item: FeedSourceItem): SyndicationItem {
       label: v.label,
       priceMinorUnits: v.price_minor_units,
       inStock: v.inventory_level > 0,
+      // Never send a negative or fractional count downstream; clamp+round here
+      // so both channel builders can trust the number.
+      inventoryLevel: Math.max(0, Math.round(v.inventory_level)),
     })),
+    ...(item.image_url && item.image_url.trim() ? { imageUrl: item.image_url.trim() } : {}),
   };
 }
 
@@ -189,6 +208,26 @@ export function __runMenuFeedTests(): void {
   expect("in stock true (one variant >0)", mapped.inStock === true);
   expect("variant1 in stock", mapped.variants[0].inStock === true);
   expect("variant2 out", mapped.variants[1].inStock === false);
+  expect("variant1 inventoryLevel carried", mapped.variants[0].inventoryLevel === 5);
+  expect("variant2 inventoryLevel zero", mapped.variants[1].inventoryLevel === 0);
+  expect("no image_url -> imageUrl absent", mapped.imageUrl === undefined);
+
+  const withImage = toSyndicationItem({ ...base, image_url: " https://cdn.example.com/p.jpg " });
+  expect("image_url trimmed onto item", withImage.imageUrl === "https://cdn.example.com/p.jpg");
+  const blankImage = toSyndicationItem({ ...base, image_url: "   " });
+  expect("blank image_url -> absent", blankImage.imageUrl === undefined);
+
+  const messyInv = toSyndicationItem({
+    ...base,
+    variants: [{ source_variant_id: "v9", label: "1g", price_minor_units: 800, inventory_level: -3 }],
+  });
+  expect("negative inventory clamped to 0", messyInv.variants[0].inventoryLevel === 0);
+  expect("negative inventory means out of stock", messyInv.variants[0].inStock === false);
+  const fracInv = toSyndicationItem({
+    ...base,
+    variants: [{ source_variant_id: "v10", label: "1g", price_minor_units: 800, inventory_level: 2.6 }],
+  });
+  expect("fractional inventory rounded", fracInv.variants[0].inventoryLevel === 3);
 
   const unavailable: FeedSourceItem = { ...base, inventory_status: "unavailable" };
   expect("unavailable not in stock", itemInStock(unavailable) === false);
