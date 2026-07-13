@@ -17,6 +17,7 @@ import {
   type OrderStatus,
 } from "@/lib/orders/types";
 import { ORDER_REVERSAL_TARGETS } from "@/lib/orders/order-lifecycle-core";
+import { formatDateTime } from "@/lib/pos/format";
 import { setOrderStatusAction, updateOrderNoteAction } from "../actions";
 
 export const dynamic = "force-dynamic";
@@ -60,7 +61,7 @@ export default async function OrderDetailPage({
     <div>
       <AdminPageHeader
         title={`Order #${order.order_number}`}
-        subtitle={`Placed ${new Date(order.placed_at).toLocaleString()}`}
+        subtitle={`Placed ${formatDateTime(order.placed_at)}`}
         action={
           <div className="flex items-center gap-2">
             <Link
@@ -279,7 +280,7 @@ export default async function OrderDetailPage({
                       </p>
                       {ev.note ? <p className="text-xs text-white/50">{ev.note}</p> : null}
                       <p className="text-[0.66rem] uppercase tracking-[0.1em] text-white/30">
-                        {ev.actor_label ?? "system"} · {new Date(ev.created_at).toLocaleString()}
+                        {ev.actor_label ?? "system"} · {formatDateTime(ev.created_at)}
                       </p>
                     </div>
                   </li>

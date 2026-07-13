@@ -41,9 +41,13 @@ const FILTERS: { key: string; label: string }[] = [
 
 function formatDate(value: string) {
   try {
-    return new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(
-      new Date(value),
-    );
+    // Anchor to the store's wall clock — server components render on UTC
+    // servers, so an unanchored format would show times 7-8 hours off.
+    return new Intl.DateTimeFormat("en-US", {
+      dateStyle: "medium",
+      timeStyle: "short",
+      timeZone: "America/Los_Angeles",
+    }).format(new Date(value));
   } catch {
     return value;
   }

@@ -219,13 +219,18 @@ export async function getLoyaltyReport(days = 30): Promise<LoyaltyReport> {
   const admin = createSupabaseAdminClient();
   const startISO = rangeStartISO(days);
 
-  const { data } = await admin
-    .from("loyalty_signups")
-    .select("status, dedupe_of, submitted_at")
-    .gte("submitted_at", startISO);
-
-  const rows =
-    (data as { status: string; dedupe_of: string | null; submitted_at: string }[] | null) ?? [];
+  // S-7 family: paginate past PostgREST's db.max_rows cap (default 1000) so a
+  // busy signup window is never silently truncated.
+  type SignupReportRow = { status: string; dedupe_of: string | null; submitted_at: string };
+  const rows = await pagedAll<SignupReportRow>(async (from, to) => {
+    const { data } = await admin
+      .from("loyalty_signups")
+      .select("status, dedupe_of, submitted_at, id")
+      .gte("submitted_at", startISO)
+      .order("id", { ascending: true })
+      .range(from, to);
+    return (data as SignupReportRow[] | null) ?? [];
+  });
 
   const byDay = emptyDaySeries(days);
   const idx = new Map(byDay.map((p, i) => [p.date, i]));
@@ -350,14 +355,22 @@ export async function getPromotionsReport(): Promise<PromotionsReport> {
   };
   if (!isSupabaseServiceConfigured) return base;
   const admin = createSupabaseAdminClient();
-  const { data } = await admin.from("promotions").select("status");
-  const rows = (data as { status: string }[] | null) ?? [];
-  for (const r of rows) {
-    base.total += 1;
-    if (r.status === "published") base.published += 1;
-    else if (r.status === "draft") base.draft += 1;
-    else if (r.status === "scheduled") base.scheduled += 1;
-    else if (r.status === "archived") base.archived += 1;
-  }
+  // Exact head counts per status (promotions_status_idx) \u2014 immune to the
+  // PostgREST db.max_rows row cap, and cheaper than fetching every row.
+  const statuses = ["published", "draft", "scheduled", "archived"] as const;
+  const counts = await Promise.all(
+    statuses.map(async (status) => {
+      const { count } = await admin
+        .from("promotions")
+        .select("id", { count: "exact", head: true })
+        .eq("status", status);
+      return count ?? 0;
+    }),
+  );
+  base.published = counts[0];
+  base.draft = counts[1];
+  base.scheduled = counts[2];
+  base.archived = counts[3];
+  base.total = counts.reduce((a, n) => a + n, 0);
   return base;
 }

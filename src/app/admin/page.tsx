@@ -321,7 +321,7 @@ export default async function AdminDashboardPage() {
               {snap.orderBoard.map((o) => (
                 <Link
                   key={o.status}
-                  href="/admin/orders"
+                  href={`/admin/orders?status=${o.status}`}
                   className="admin-card-interactive rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] p-3 text-center"
                 >
                   <div className="text-2xl font-bold text-[var(--admin-text)]">{o.count}</div>

@@ -209,7 +209,15 @@ export async function getOrder(id: string): Promise<OrderWithLines | null> {
   };
 }
 
-/** Quick counts per active status for the dashboard header. */
+/**
+ * Quick counts per status for the dashboard header.
+ *
+ * Uses exact server-side head counts (one cheap indexed count per status \u2014
+ * orders_status_idx) instead of fetching every row. The previous
+ * `select("status")` approach silently truncated at PostgREST's `db.max_rows`
+ * cap (default 1000), so once the store passed 1000 lifetime orders the
+ * dashboard/cockpit/new-order-poll counts all under-reported.
+ */
 export async function getOrderStatusCounts(): Promise<Record<OrderStatus, number>> {
   const empty: Record<OrderStatus, number> = {
     new: 0,
@@ -222,11 +230,19 @@ export async function getOrderStatusCounts(): Promise<Record<OrderStatus, number
   };
   if (!isSupabaseServiceConfigured) return empty;
   const admin = createSupabaseAdminClient();
-  const { data } = await admin.from("orders").select("status");
-  if (!data) return empty;
-  for (const row of data as { status: OrderStatus }[]) {
-    empty[row.status] = (empty[row.status] ?? 0) + 1;
-  }
+  const statuses = Object.keys(empty) as OrderStatus[];
+  const counts = await Promise.all(
+    statuses.map(async (status) => {
+      const { count } = await admin
+        .from("orders")
+        .select("id", { count: "exact", head: true })
+        .eq("status", status);
+      return count ?? 0;
+    }),
+  );
+  statuses.forEach((status, i) => {
+    empty[status] = counts[i];
+  });
   return empty;
 }
 
