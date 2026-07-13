@@ -32,26 +32,26 @@ export function ContentPreviewPanel({
   onEditBlock: (blockKey: string) => void;
 }) {
   return (
-    <div className="rounded-xl border border-white/10 bg-[#0a0a0a] p-4">
+    <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-sm font-semibold text-white">Live preview</h2>
-          <p className="text-xs text-white/50">
+          <h2 className="text-sm font-semibold text-[var(--admin-text)]">Live preview</h2>
+          <p className="text-xs text-[var(--admin-text-muted)]">
             See your draft changes exactly as visitors will. Click{" "}
-            <span className="text-[#7ed957]">✎ Edit</span> on any highlighted
+            <span className="text-[var(--admin-accent)]">✎ Edit</span> on any highlighted
             text or image to jump straight to it below.
           </p>
         </div>
-        <div className="flex flex-wrap overflow-hidden rounded-lg border border-white/15">
+        <div className="flex flex-wrap overflow-hidden rounded-[var(--admin-radius-sm)] border border-[var(--admin-border-strong)]">
           {PREVIEW_PAGES.map((p) => (
             <button
               key={p.path}
               type="button"
               onClick={() => onSelectPath(p.path)}
-              className={`px-3 py-1.5 text-xs transition ${
+              className={`admin-focus px-3 py-1.5 text-xs transition ${
                 activePath === p.path
-                  ? "bg-[#7ed957] text-black"
-                  : "text-white/60 hover:bg-white/5"
+                  ? "bg-[var(--admin-accent)] font-semibold text-black"
+                  : "text-[var(--admin-text-muted)] hover:bg-[var(--admin-surface-hover)]"
               }`}
             >
               {p.label}

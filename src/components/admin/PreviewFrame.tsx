@@ -57,24 +57,24 @@ export function PreviewFrame({
   const width = DEVICE_WIDTH[device];
 
   return (
-    <div className="rounded-xl border border-white/10 bg-[#0a0a0a]">
+    <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)]">
       {/* Toolbar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
-        <div className="flex items-center gap-2 text-xs text-white/50">
-          <span className="inline-block h-2 w-2 rounded-full bg-[#7ed957]" />
-          Live preview · <span className="font-mono text-white/70">{path}</span>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--admin-border)] px-4 py-3">
+        <div className="flex items-center gap-2 text-xs text-[var(--admin-text-muted)]">
+          <span className="inline-block h-2 w-2 rounded-full bg-[var(--admin-accent)]" />
+          Live preview · <span className="font-mono text-[var(--admin-text)]">{path}</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex overflow-hidden rounded-lg border border-white/15">
+          <div className="flex overflow-hidden rounded-[var(--admin-radius-sm)] border border-[var(--admin-border-strong)]">
             {(["desktop", "tablet", "phone"] as Device[]).map((d) => (
               <button
                 key={d}
                 type="button"
                 onClick={() => setDevice(d)}
-                className={`px-3 py-1.5 text-xs capitalize transition ${
+                className={`admin-focus px-3 py-1.5 text-xs capitalize transition ${
                   device === d
-                    ? "bg-[#7ed957] text-black"
-                    : "text-white/60 hover:bg-white/5"
+                    ? "bg-[var(--admin-accent)] font-semibold text-black"
+                    : "text-[var(--admin-text-muted)] hover:bg-[var(--admin-surface-hover)]"
                 }`}
               >
                 {d === "desktop" ? "🖥 Desktop" : d === "tablet" ? "📱 Tablet" : "📱 Phone"}
@@ -84,7 +84,7 @@ export function PreviewFrame({
           <button
             type="button"
             onClick={() => setNonce((n) => n + 1)}
-            className="rounded-lg border border-white/15 px-3 py-1.5 text-xs text-white/70 hover:bg-white/5"
+            className="admin-focus rounded-[var(--admin-radius-sm)] border border-[var(--admin-border-strong)] px-3 py-1.5 text-xs text-[var(--admin-text-muted)] hover:bg-[var(--admin-surface-hover)]"
             title="Reload preview"
           >
             ↻ Refresh
@@ -93,7 +93,7 @@ export function PreviewFrame({
             href={`/api/admin/preview/enable?path=${encodeURIComponent(path)}`}
             target="_blank"
             rel="noreferrer"
-            className="rounded-lg border border-white/15 px-3 py-1.5 text-xs text-white/70 hover:bg-white/5"
+            className="admin-focus rounded-[var(--admin-radius-sm)] border border-[var(--admin-border-strong)] px-3 py-1.5 text-xs text-[var(--admin-text-muted)] hover:bg-[var(--admin-surface-hover)]"
             title="Open preview in a new tab"
           >
             ↗ Open
@@ -102,7 +102,7 @@ export function PreviewFrame({
       </div>
 
       {/* Frame */}
-      <div className="flex justify-center overflow-auto bg-[#050505] p-4" style={{ minHeight: height }}>
+      <div className="flex justify-center overflow-auto bg-[var(--admin-canvas)] p-4" style={{ minHeight: height }}>
         <iframe
           ref={frameRef}
           src={src}
@@ -112,12 +112,12 @@ export function PreviewFrame({
             height,
             maxWidth: "100%",
           }}
-          className="rounded-lg border border-white/10 bg-white"
+          className="rounded-[var(--admin-radius-sm)] border border-[var(--admin-border)] bg-white"
         />
       </div>
 
-      <p className="px-4 pb-3 text-center text-xs text-white/40">
-        Hover the page and click <span className="text-[#7ed957]">✎ Edit</span>{" "}
+      <p className="px-4 pb-3 text-center text-xs text-[var(--admin-text-faint)]">
+        Hover the page and click <span className="text-[var(--admin-accent)]">✎ Edit</span>{" "}
         on any highlighted text to jump straight to it.
       </p>
     </div>
