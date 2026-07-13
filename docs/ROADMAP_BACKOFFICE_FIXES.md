@@ -2358,3 +2358,31 @@ is present but disabled pending B6 (guided sale flow).
 **Tests:** tsc 0 errors; vitest 1,357/92; `__runRegisterClientCoreTests`
 16/16 in the pure self-test runner; eslint clean. Pages degrade with a clear
 hint until migration 0120 is applied (owner applies manually).
+
+## Shipped — POS B6: the guided sale (PR #447)
+
+The register's sale loop: ID gate → cart → cash tender → auto-lock. Owner
+decisions honored — nothing enters the cart before the ID gate passes, cash
+only at launch, and the register locks after EVERY sale so the next one is
+PIN-attributed to whoever actually rings it. `src/lib/pos/sale-flow-core.ts`
+(pure, 24 self-tests) prices the cart with the IDENTICAL shared engine the
+website checkout and the server-side completion gate use — `computePromotions`
+over the published rules, statutory cannabis floor (RCW 69.50.357), CCRS
+acquisition-cost floor, `computeOrderTotals` tax back-out — so an offline
+sale can never disagree with the server's S-2b money recompute. `judgeLimits`
+wraps the WAC 314-55-095 evaluator with the owner's settings semantics (hard
+block / soft warning / off; rec vs medical), rendered as a live bucket meter
+in the cart. `buildSalePayload` validates with `validateSalePayload` BEFORE
+enqueue — short tenders, manual verifies without their audit UUID, and empty
+carts can never enter the offline queue. `GET /api/pos/menu` (device-auth)
+ships one bundle: published menu flattened per variant, promotions active
+now as pure EngineRules, limit settings, sales-hours window — cached locally
+so offline sales price with the last download (every synced sale is re-gated
+server-side regardless). The ID gate takes PDF417 keyboard-wedge scans
+(21+ Pacific wall-clock, expired refused) or the audited WAC 314-55-150
+manual fallback whose `manual_id_verification` event is enqueued FIRST and
+referenced by the sale. Sales hours (WAC 314-55-147) checked on-device
+before the gate and re-checked server-side at sync.
+
+**Tests:** tsc 0 errors; vitest 1,376/93; `__runSaleFlowCoreTests` 24/24 in
+the pure self-test runner; eslint clean. No migration beyond 0120.
