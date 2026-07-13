@@ -5,11 +5,11 @@
  *
  * WHY THIS EXISTS
  * ---------------
- * The Getting Started tour and the Dashboard "Explore your back office" quick
- * links both need a single, truthful map of what the product can do and where
- * to go for each area. Rather than hand-writing that list twice (and letting it
- * drift from the real nav), both surfaces read from here. Descriptions are
- * grounded in docs/PROJECT_GUIDE.md — no guessing.
+ * The Dashboard "Explore your back office" quick links need a single, truthful
+ * map of what the product can do and where to go for each area. Rather than
+ * hand-writing that list (and letting it drift from the real nav), the surface
+ * reads from here. Descriptions are grounded in docs/PROJECT_GUIDE.md — no
+ * guessing.
  *
  * Each entry names the nav group, a one-line "what it's for", a short list of
  * the concrete things you do there, an emoji, the landing route, and the
@@ -45,7 +45,7 @@ export const WORKSPACES: Workspace[] = [
     does: [
       "See today's revenue, orders, and top sellers at a glance",
       "Work online orders and loyalty signups",
-      "Jump into Getting Started to finish setup",
+      "Print one-page SOPs for truck day and every intake stage",
     ],
     icon: "📊",
     href: "/admin",

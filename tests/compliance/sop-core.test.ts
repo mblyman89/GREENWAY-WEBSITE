@@ -44,9 +44,9 @@ describe("sop-core (W13)", () => {
     }
   });
 
-  it("hrefs live under Getting Started and unknown slugs miss safely", () => {
-    expect(SOP_BASE_PATH).toBe("/admin/getting-started/sop");
-    expect(sopHref("receive")).toBe("/admin/getting-started/sop/receive");
+  it("hrefs live under /admin/sop and unknown slugs miss safely", () => {
+    expect(SOP_BASE_PATH).toBe("/admin/sop");
+    expect(sopHref("receive")).toBe("/admin/sop/receive");
     expect(findSopDoc("not-a-sop")).toBeNull();
   });
 

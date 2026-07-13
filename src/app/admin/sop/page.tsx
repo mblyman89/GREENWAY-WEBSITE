@@ -32,8 +32,8 @@ export default async function SopPackPage() {
         title="Printable SOPs"
         subtitle="One-page standard operating procedures for every stage of the product journey — print them and put them on the wall."
         action={
-          <Link href="/admin/getting-started" className="text-sm text-white/60 hover:text-white">
-            ← Getting Started
+          <Link href="/admin" className="text-sm text-white/60 hover:text-white">
+            ← Dashboard
           </Link>
         }
       />

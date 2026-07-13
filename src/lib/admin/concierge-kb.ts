@@ -59,7 +59,7 @@ export const CONCIERGE_KB: ConciergeTopic[] = [
     area: "back-office",
     title: "What's in each tab (menu contents)",
     facts: [
-      "Dashboard: Online Orders, Loyalty signups, Getting Started.",
+      "Dashboard: Online Orders, Loyalty signups.",
       "Reports: opens the reporting hub (sales, tax, excise, COGS, customers, employees, loyalty, medical, compliance, forecast, accounting export).",
       "CRM: Customers, Loyalty Program.",
       "Product Intake: Product Discovery, CCRS Benchmarks, Catalog Hub, Purchasing, Receiving, Product Onboarding, Product Enrichment, Product Mastering, Accounts Payable, Knowledge Base.",
@@ -75,13 +75,13 @@ export const CONCIERGE_KB: ConciergeTopic[] = [
   {
     id: "dashboard",
     area: "back-office",
-    title: "Dashboard & Getting Started",
+    title: "Dashboard",
     tab: "Dashboard",
-    href: "/admin/getting-started",
+    href: "/admin",
     facts: [
       "The Dashboard is the home page — click the Greenway wordmark (top-left) to reach it.",
-      "Getting Started (Dashboard → Getting Started) walks you through connecting the database, running migrations, importing your menu, publishing it, setting up email, and inviting staff.",
-      "Each step turns green automatically once it's actually done — it reads real data, so the checkmarks are trustworthy.",
+      "Until the store is fully set up, the Dashboard shows a setup-progress banner that links straight to the next incomplete step (database, migrations, menu import, publish, email, team). It reads real data, so the progress is trustworthy.",
+      "Printable one-page SOPs (truck day + every intake stage) live at Dashboard → Printable SOPs (/admin/sop).",
     ],
   },
 

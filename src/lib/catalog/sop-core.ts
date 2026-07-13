@@ -27,7 +27,7 @@ import {
 } from "@/lib/catalog/journey-core";
 
 export type SopDoc = {
-  /** URL segment under /admin/getting-started/sop/. Stage key or "truck-day". */
+  /** URL segment under /admin/sop/. Stage key or "truck-day". */
   slug: string;
   /** The journey stage this SOP covers, or null for the truck-day master SOP. */
   stageKey: JourneyStageKey | null;
@@ -50,7 +50,7 @@ export type SopDoc = {
 export const TRUCK_DAY_SLUG = "truck-day";
 
 /** Base path for the SOP pack routes. */
-export const SOP_BASE_PATH = "/admin/getting-started/sop";
+export const SOP_BASE_PATH = "/admin/sop";
 
 /** Href for a single printable SOP sheet. */
 export function sopHref(slug: string): string {
@@ -328,7 +328,7 @@ export function __runSopCoreTests(): { passed: number } {
   assert(findSopDoc("receive")?.stageKey === "receive", "findSopDoc hits");
   assert(findSopDoc("nope") === null, "findSopDoc misses safely");
   assert(sopForStage("pay").slug === "pay", "sopForStage works");
-  assert(sopHref("truck-day") === "/admin/getting-started/sop/truck-day", "sopHref shape");
+  assert(sopHref("truck-day") === "/admin/sop/truck-day", "sopHref shape");
 
   // Drafts-first ethos is printed on paper: the master SOP says it explicitly.
   assert(
