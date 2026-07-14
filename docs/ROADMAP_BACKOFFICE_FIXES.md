@@ -2865,3 +2865,33 @@ screen tells the cashier the blind count protects them.
 **Tests:** 1,448 vitest tests / 100 files (6 new in
 `tests/compliance/till-core.test.ts`); selftest runner registers import
 AND call. No migration needed. CI green on PR #477.
+
+### Shipped: POS B22 — X/Z day report printed on the Star (PR #479)
+
+**What was missing (verified in code):** no per-register end-of-day report
+existed anywhere, even though the register's own append-only ledger
+(`pos_sale_events`, 0120) already carried everything — processed SALE
+payloads hold the totals the compliance gate recomputed and accepted at
+sync, and `drawer_sessions`/`drawer_drops` hold the cash-custody story.
+
+Pure core `src/lib/pos/day-report-core.ts` (25 assertions):
+`summarizeDayEvents` sums money from PROCESSED sales only (gross/subtotal/
+tax + medical count and tax-exempt savings) — exceptions and pendings are
+counted, never summed; `summarizeDrawerDay` reports floats/drops and sums
+over/short ONLY from manager-reconciled/verified sessions (null until
+then — blind counts stay blind, nothing computes expected early);
+`reportKind` = X while any session is open, Z once all closed;
+`buildDayReportSlipHtml` renders the 576px Star slip (same page family as
+receipts) with SALES / REGISTER ACTIVITY / CASH DRAWER sections.
+
+`POST /api/pos/day-report`: device-auth + MANAGER/LEAD PIN (same role
+gate as /api/pos/approve) because gross cash + float − drops IS the
+expected-drawer figure the blind close hides from the cashier. Pacific
+business-day window via the reporting suite's DST-correct helpers.
+Audits `register.day_report`. The register builds the slip client-side
+and prints via PassPRNT with the drawer kick OFF — a report never pops
+the drawer. "Day report (X/Z)" card added to the home screen.
+
+**Tests:** 1,452 vitest tests / 101 files (4 new in
+`tests/compliance/day-report-core.test.ts`); selftest runner registers
+import AND call. No migration needed. CI green on PR #479.
