@@ -263,6 +263,13 @@ export type BuildSaleArgs = {
   tenderedMinor: number;
   drawerSessionId: string;
   idVerification: { method: "scan" | "manual"; manualEventUuid?: string };
+  /**
+   * Present on MEDICAL sales (B9): the captured recognition card, the client
+   * UUID of its already-enqueued medical_card_capture event, and the savings
+   * passed through by applyMedicalPricing. validateSalePayload enforces the
+   * structure (including the MCR attestation) before the queue accepts it.
+   */
+  medical?: PosSalePayload["medical"];
 };
 
 export type BuildSaleResult =
@@ -293,6 +300,7 @@ export function buildSalePayload(args: BuildSaleArgs): BuildSaleResult {
     changeMinor: tender.changeMinor,
     drawerSessionId: args.drawerSessionId,
     idVerification: args.idVerification,
+    ...(args.medical ? { medical: args.medical } : {}),
   };
   const check = validateSalePayload(payload);
   if (!check.ok) return { ok: false, errors: check.errors };
@@ -446,6 +454,39 @@ export function __runSaleFlowCoreTests(): void {
     idVerification: { method: "manual" },
   });
   ok(!manualNoUuid.ok, "manual ID without audit-event UUID refused");
+
+  // Medical block pass-through (B9): buildSalePayload carries it verbatim and
+  // validateSalePayload enforces its structure before the queue accepts it.
+  const medBlock = {
+    card: {
+      upid: "WA-UPID-0001",
+      effectiveOn: "2026-01-01",
+      expiresOn: "2027-01-01",
+      holderType: "patient" as const,
+      mcrVerified: true,
+    },
+    cardEventUuid: "66666666-6666-4666-8666-666666666666",
+    medicalSavingsMinor: 0,
+  };
+  const medBuilt = buildSalePayload({
+    lines: priced.lines,
+    totals: priced.totals,
+    tenderedMinor: 4000,
+    drawerSessionId: drawerId,
+    idVerification: { method: "scan" },
+    medical: medBlock,
+  });
+  ok(medBuilt.ok, "medical sale builds with the full block");
+  if (medBuilt.ok) ok(medBuilt.payload.medical?.card.upid === "WA-UPID-0001", "medical block carried verbatim");
+  const medNoMcr = buildSalePayload({
+    lines: priced.lines,
+    totals: priced.totals,
+    tenderedMinor: 4000,
+    drawerSessionId: drawerId,
+    idVerification: { method: "scan" },
+    medical: { ...medBlock, card: { ...medBlock.card, mcrVerified: false } },
+  });
+  ok(!medNoMcr.ok, "medical sale without MCR attestation refused before enqueue");
 
   console.log(`pos/sale-flow-core: ${pass} passed, ${fail} failed`);
   if (fail > 0) throw new Error(`sale-flow-core self-tests failed: ${fail}`);
