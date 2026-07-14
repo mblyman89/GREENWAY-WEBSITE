@@ -2700,3 +2700,48 @@ button added to Register Activity.
 **Tests:** tsc 0 errors; vitest 1,424/97; pure self-tests all pass
 (pos/receipt-core now 49 asserts); eslint clean. No migration (reuses
 0115 `customer_returns` + 0120 `pos_sale_events`).
+
+### Shipped: POS B17 — register polish pack (PR #469)
+
+Three register features the big POS players all ship, on the existing
+offline-queue / device-auth / PassPRNT machinery. No migrations.
+
+**Audited no-sale drawer open.** The server path already existed
+(`validateNoSalePayload` + `processNoSale` → `register.no_sale` audit);
+this slice added the register UI plus the missing approval mechanic. New
+`POST /api/pos/approve`: device-authenticated manager-PIN check — same
+salted-scrypt verify + shared brute-force throttle as `/api/pos/unlock`,
+then role-gated to `manager`/`lead`. Returns only `employees.id` + name;
+the approver's PIN never rides in a queue payload, and the endpoint
+writes no audit of its own (the approved `no_sale` event is audited once
+at sync with the approver's id inside it). The home-screen modal takes a
+preset or free-text reason (3–500 chars, mirroring the server validator)
+plus the manager PIN, online-only. The drawer opens ONLY behind paper:
+PassPRNT's kick fires after a print (`drawer=after`, verified from the
+manual), so the flow enqueues the event, prints the new NO SALE audit
+slip (`buildNoSaleSlipHtml` — same 576px family, B13 header/address,
+reason + "Opened by" + "Approved by", escaped), and the kick follows.
+
+**Reprint last receipt.** The register locks after EVERY sale (owner
+rule), which unmounted SaleFlow and lost the frozen receipt. SaleFlow
+now fires `onReceiptFrozen` with the exact enqueue-time snapshot; the
+shell persists it (`gw-pos-last-receipt`) and `parseLastReceipt` REALLY
+validates the stored shape (integer minor-units, non-empty lines,
+versioned envelope) — corruption yields null, never a garbage print.
+Home screen shows the receipt number + age; reprints use
+`openDrawer:false` so the drawer never pops on a reprint.
+
+**Hold / resume sale.** Hold parks a MINIMAL snapshot (variant ids +
+counts, never prices; one hold at a time). Resume rebuilds against the
+CURRENT bundle (`rebuildHeldCart`): fresh prices, vanished/out-of-stock
+variants dropped and named, quantities clamped. The ID gate always
+re-runs — a held cart never inherits the previous customer's age
+verification, medical card, or member. Completing a resumed sale
+consumes the hold; cancelling leaves it parked.
+
+New pure `src/lib/pos/register-polish-core.ts` (23 asserts) + 9 new
+no-sale-slip asserts in pos/receipt-core (58 total) + vitest mirror
+`pos-register-polish-core.test.ts`.
+
+**Tests:** tsc 0 errors; vitest 1,431/98; pure self-tests all pass;
+eslint clean. No migration; no schema changes; no new env vars.
