@@ -10,6 +10,7 @@ import {
   __runPosReceiptCoreTests,
   buildPassPrntUrl,
   buildPosReceiptHtml,
+  buildRefundReceiptHtml,
   escapeReceiptHtml,
   receiptNumber,
   type PosReceiptInput,
@@ -84,5 +85,44 @@ describe("pos/receipt-core (POS B10)", () => {
 
   it("__runPosReceiptCoreTests passes", () => {
     expect(() => __runPosReceiptCoreTests()).not.toThrow();
+  });
+});
+
+describe("pos/receipt-core refund receipt (POS B16)", () => {
+  it("prints the refund banner, original receipt number, and exact cash", () => {
+    const html = buildRefundReceiptHtml({
+      originalSaleClientUuid: BASE.saleClientUuid,
+      refundedAtIso: "2026-07-16T20:00:00.000Z",
+      memberLabel: "Jane D.",
+      lines: [{ productName: "Blue Dream 3.5g", quantity: 1, refundMinor: 1463 }],
+      refundTotalMinor: 1463,
+      disposition: "destroy",
+      reason: "adverse_reaction",
+      processedBy: "Casey",
+      pointsClawed: 7,
+    });
+    expect(html).toContain("REFUND &mdash; CUSTOMER RETURN");
+    expect(html).toContain(`Original receipt ${receiptNumber(BASE.saleClientUuid)}`);
+    expect(html).toContain("CASH REFUNDED");
+    expect(html).toContain("-$14.63");
+    expect(html).toContain("Loyalty points adjusted: -7");
+    expect(html).toContain("576px"); // same PassPRNT size=3 family
+  });
+
+  it("escapes member/product text and omits the points row when nothing clawed", () => {
+    const html = buildRefundReceiptHtml({
+      originalSaleClientUuid: BASE.saleClientUuid,
+      refundedAtIso: "2026-07-16T20:00:00.000Z",
+      memberLabel: "Jane <script>",
+      lines: [{ productName: "X & Y", quantity: 1, refundMinor: 100 }],
+      refundTotalMinor: 100,
+      disposition: "restock",
+      reason: "defective",
+      pointsClawed: 0,
+    });
+    expect(html).toContain("Jane &lt;script&gt;");
+    expect(html).toContain("X &amp; Y");
+    expect(html).not.toContain("points adjusted");
+    expect(html).toContain("restocked");
   });
 });

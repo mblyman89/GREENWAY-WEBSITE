@@ -188,6 +188,98 @@ export function buildPosReceiptHtml(input: PosReceiptInput): string {
 }
 
 // ---------------------------------------------------------------------------
+// Refund receipt (POS B16) — same 576px family, printed for counter returns
+// ---------------------------------------------------------------------------
+
+export type RefundReceiptLine = {
+  productName: string;
+  quantity: number;
+  /** Refund for this line, minor units (already computed by returns-core). */
+  refundMinor: number;
+};
+
+export type RefundReceiptInput = {
+  /** Client UUID of the ORIGINAL sale — ties the refund paper to the sale. */
+  originalSaleClientUuid: string;
+  refundedAtIso: string;
+  headerText?: string | null;
+  footerText?: string | null;
+  addressLines?: string[];
+  memberLabel: string;
+  lines: RefundReceiptLine[];
+  refundTotalMinor: number;
+  disposition: "restock" | "destroy";
+  reason: string;
+  processedBy?: string | null;
+  /** Loyalty points clawed back on this refund (0 = none / not a member). */
+  pointsClawed: number;
+};
+
+/**
+ * Build the refund receipt HTML — identical page setup (576px, PassPRNT
+ * size=3, format-detection meta) and styling family as the sale receipt so
+ * the same print path (PassPRNT or browser fallback) handles both. Shows the
+ * ORIGINAL receipt number, the refunded lines, cash refunded, and the points
+ * adjustment; never any card/medical details.
+ */
+export function buildRefundReceiptHtml(input: RefundReceiptInput): string {
+  const header = escapeReceiptHtml((input.headerText ?? DEFAULT_HEADER).trim());
+  const footer = escapeReceiptHtml((input.footerText ?? DEFAULT_FOOTER).trim());
+  const rows = input.lines.map(
+    (l) =>
+      `<tr><td class="n">${l.quantity}x ${escapeReceiptHtml(l.productName)}</td><td class="a">-${formatMoneyMinor(l.refundMinor)}</td></tr>`,
+  );
+  const totals = [
+    `<tr class="t"><td class="n">CASH REFUNDED</td><td class="a">-${formatMoneyMinor(input.refundTotalMinor)}</td></tr>`,
+  ];
+  return [
+    "<!DOCTYPE html>",
+    '<html><head><meta charset="utf-8">',
+    '<meta name="format-detection" content="telephone=no">',
+    "<style>",
+    "body{width:576px;margin:0;padding:8px 4px;font-family:'Helvetica Neue',Arial,sans-serif;color:#000;}",
+    "h1{font-size:34px;text-align:center;margin:0 0 4px;}",
+    ".sub{font-size:24px;text-align:center;margin:0 0 8px;}",
+    ".addr{font-size:22px;text-align:center;margin:0 0 2px;}",
+    ".refbanner{font-size:26px;font-weight:bold;text-align:center;border:3px solid #000;padding:6px;margin:8px 0;}",
+    "table{width:100%;border-collapse:collapse;font-size:26px;}",
+    "td{padding:4px 0;vertical-align:top;}",
+    "td.n{text-align:left;}",
+    "td.a{text-align:right;white-space:nowrap;}",
+    "tr.t td{font-size:32px;font-weight:bold;border-top:3px solid #000;padding-top:8px;}",
+    "hr{border:none;border-top:2px dashed #000;margin:10px 0;}",
+    ".foot{font-size:22px;text-align:center;margin-top:12px;}",
+    "@media print{body{width:auto;}}",
+    "</style></head><body>",
+    `<h1>${header}</h1>`,
+    ...(input.addressLines ?? [])
+      .map((l) => l.trim())
+      .filter(Boolean)
+      .map((l) => `<p class="addr">${escapeReceiptHtml(l)}</p>`),
+    '<p class="refbanner">REFUND &mdash; CUSTOMER RETURN</p>',
+    `<p class="sub">Original receipt ${receiptNumber(input.originalSaleClientUuid)}</p>`,
+    `<p class="sub">${escapeReceiptHtml(formatReceiptTimestamp(input.refundedAtIso))}</p>`,
+    input.processedBy?.trim() ? `<p class="sub">Processed by ${escapeReceiptHtml(input.processedBy.trim())}</p>` : "",
+    `<p class="sub">Member: ${escapeReceiptHtml(input.memberLabel)}</p>`,
+    "<hr>",
+    `<table>${rows.join("")}</table>`,
+    "<hr>",
+    `<table>${totals.join("")}</table>`,
+    input.pointsClawed > 0
+      ? `<p class="sub">Loyalty points adjusted: -${Math.floor(input.pointsClawed)}</p>`
+      : "",
+    `<p class="sub">Reason: ${escapeReceiptHtml(input.reason.replace(/_/g, " "))} &middot; ${
+      input.disposition === "destroy" ? "product withdrawn for destruction" : "product restocked"
+    }</p>`,
+    "<hr>",
+    `<p class="foot">${footer}</p>`,
+    "</body></html>",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+// ---------------------------------------------------------------------------
 // Star PassPRNT URL (verified from the Star PassPRNT manual)
 // ---------------------------------------------------------------------------
 
@@ -322,6 +414,45 @@ export function __runPosReceiptCoreTests(): void {
   });
   ok(zeroPoints.includes("Loyalty: Jane D.") && !zeroPoints.includes("Points earned"), "zero points row omitted");
   ok(!buildPosReceiptHtml(base).includes("Loyalty:"), "no loyalty block when absent");
+
+  // B16 refund receipt: same 576px family, original receipt number, no card data.
+  const refund = buildRefundReceiptHtml({
+    originalSaleClientUuid: "123e4567-e89b-12d3-a456-426614174000",
+    refundedAtIso: "2026-07-16T20:00:00.000Z",
+    headerText: "GREENWAY <MARIJUANA>",
+    addressLines: ["9107 SW State Hwy 3", ""],
+    memberLabel: "Jane D. <vip>",
+    lines: [{ productName: "Blue Dream 3.5g <flower>", quantity: 1, refundMinor: 1463 }],
+    refundTotalMinor: 1463,
+    disposition: "destroy",
+    reason: "adverse_reaction",
+    processedBy: "Casey",
+    pointsClawed: 7,
+  });
+  ok(refund.includes("576px"), "refund receipt sized for 576 dots");
+  ok(refund.includes("REFUND &mdash; CUSTOMER RETURN"), "refund banner present");
+  ok(refund.includes("Original receipt 14174000"), "original receipt number printed");
+  ok(refund.includes("GREENWAY &lt;MARIJUANA&gt;"), "refund header escaped");
+  ok(refund.includes("Blue Dream 3.5g &lt;flower&gt;"), "refund line escaped");
+  ok(refund.includes("-$14.63") && refund.includes("CASH REFUNDED"), "refund total row");
+  ok(refund.includes("Loyalty points adjusted: -7"), "points clawback printed");
+  ok(refund.includes("Member: Jane D. &lt;vip&gt;"), "member label escaped");
+  ok(refund.includes("Processed by Casey"), "processed-by printed");
+  ok(refund.includes("adverse reaction") && refund.includes("destruction"), "reason + disposition printed");
+  ok(!refund.includes('<p class="addr"></p>'), "blank refund address lines dropped");
+  const refundNoPoints = buildRefundReceiptHtml({
+    originalSaleClientUuid: "123e4567-e89b-12d3-a456-426614174000",
+    refundedAtIso: "2026-07-16T20:00:00.000Z",
+    memberLabel: "Jane D.",
+    lines: [{ productName: "X", quantity: 1, refundMinor: 100 }],
+    refundTotalMinor: 100,
+    disposition: "restock",
+    reason: "defective",
+    pointsClawed: 0,
+  });
+  ok(!refundNoPoints.includes("points adjusted"), "no points row when nothing clawed");
+  ok(refundNoPoints.includes("restocked"), "restock disposition printed");
+  ok(refundNoPoints.includes(DEFAULT_HEADER), "refund defaults to standard header");
 
   // PassPRNT URL: verified scheme + encoded params + drawer kick.
   const url = buildPassPrntUrl("<html>a&b</html>", { backUrl: "https://pos.example/pos?x=1" });
