@@ -117,6 +117,16 @@ export type SaleFlowProps = {
    */
   onMemberHistory?: (customerId: string) => Promise<{ ok: true; history: MemberHistory } | { ok: false; error: string }>;
   /**
+   * B30 — email the frozen receipt snapshot (opt-in digital receipt). Only
+   * provided when the shell has confirmed the email provider is configured
+   * (undefined hides the option entirely). ONLINE-ONLY; the address is used
+   * once server-side and never stored.
+   */
+  onEmailReceipt?: (
+    email: string,
+    receipt: PosReceiptInput,
+  ) => Promise<{ ok: true; receiptNumber: string } | { ok: false; error: string }>;
+  /**
    * B24 — manager PIN approval for a price override. ONLINE-ONLY (a PIN
    * can't be verified offline). The shell implements it with the SAME
    * /api/pos/approve endpoint the no-sale flow uses (scrypt + throttle +
@@ -197,7 +207,7 @@ function priceForBuyer(
   };
 }
 
-export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, initialCart, onHold, onReceiptFrozen, onMemberLookup, onMemberHistory, onApprove, onEnqueue, onComplete, onCancel }: SaleFlowProps) {
+export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, initialCart, onHold, onReceiptFrozen, onMemberLookup, onMemberHistory, onEmailReceipt, onApprove, onEnqueue, onComplete, onCancel }: SaleFlowProps) {
   const [step, setStep] = useState<Step>("idgate");
   const [verdict, setVerdict] = useState<Extract<IdGateVerdict, { allowed: true }> | null>(null);
   const [manualEventUuid, setManualEventUuid] = useState<string | null>(null);
@@ -367,6 +377,7 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
         the register locks when you tap below.
       </p>
       {receipt ? <ReceiptButtons receipt={receipt} /> : null}
+      {receipt && onEmailReceipt ? <EmailReceiptPanel receipt={receipt} onEmailReceipt={onEmailReceipt} /> : null}
       <button
         type="button"
         onClick={onComplete}
@@ -375,6 +386,103 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
         Done — lock register
       </button>
     </Frame>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// POS B30 — opt-in email receipt (digital copy of the SAME frozen snapshot)
+// ---------------------------------------------------------------------------
+
+/**
+ * "Email this receipt?" panel on the Sale-complete screen. Opt-in only: the
+ * customer asks, the budtender types the address, one tap sends. The server
+ * emails a restyled copy of the SAME frozen snapshot the paper prints from
+ * and never stores the address (masked in the audit trail only). The input
+ * is cleared after send — nothing lingers for the next customer.
+ */
+function EmailReceiptPanel({
+  receipt,
+  onEmailReceipt,
+}: {
+  receipt: PosReceiptInput;
+  onEmailReceipt: NonNullable<SaleFlowProps["onEmailReceipt"]>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [email, setEmail] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const [sent, setSent] = useState(false);
+
+  if (sent) {
+    return (
+      <p className="mt-4 rounded-xl bg-emerald-950/60 px-4 py-3 text-sm text-emerald-300">
+        Receipt emailed. The address was used once and not saved.
+      </p>
+    );
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="mt-4 rounded-2xl border border-neutral-600 px-8 py-4 text-lg font-semibold text-neutral-200"
+      >
+        Email receipt
+      </button>
+    );
+  }
+
+  const send = async () => {
+    const trimmed = email.trim();
+    if (!trimmed) {
+      setNote("Type the customer's email address first.");
+      return;
+    }
+    setBusy(true);
+    setNote(null);
+    const result = await onEmailReceipt(trimmed, receipt);
+    setBusy(false);
+    if (result.ok) {
+      setEmail("");
+      setSent(true);
+    } else {
+      setNote(result.error);
+    }
+  };
+
+  return (
+    <div className="mt-4 w-full max-w-md rounded-2xl border border-neutral-700 bg-neutral-900/70 p-4 text-left">
+      <p className="text-sm font-semibold text-neutral-200">Email this receipt (customer&apos;s request)</p>
+      <p className="mt-1 text-xs text-neutral-500">
+        The address is used once to send this receipt and is not saved. Transactional copy only — no marketing.
+      </p>
+      <div className="mt-3 flex gap-2">
+        <input
+          type="email"
+          inputMode="email"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="customer@example.com"
+          className="min-w-0 flex-1 rounded-xl border border-neutral-600 bg-neutral-950 px-4 py-3 text-base text-neutral-100 placeholder:text-neutral-600"
+        />
+        <button
+          type="button"
+          onClick={() => void send()}
+          disabled={busy}
+          className="rounded-xl bg-neutral-100 px-5 py-3 text-base font-bold text-neutral-900 disabled:opacity-50"
+        >
+          {busy ? "Sending…" : "Send"}
+        </button>
+      </div>
+      {note ? <p className="mt-2 text-sm text-amber-300">{note}</p> : null}
+      <button type="button" onClick={() => { setOpen(false); setEmail(""); setNote(null); }} className="mt-3 text-xs text-neutral-500 underline">
+        Never mind
+      </button>
+    </div>
   );
 }
 
