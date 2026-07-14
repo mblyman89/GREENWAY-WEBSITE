@@ -2629,3 +2629,39 @@ ships `loyalty.pointsPerDollar` so the receipt prints a points ESTIMATE
 **Tests:** tsc 0 errors; vitest 1,416/96; pure self-tests all pass
 (pos/sale-event-core 46, pos/sale-flow-core 29); eslint clean. No
 migration.
+
+### Shipped: POS B15 — customer-return policy core (PR #465)
+
+Pure, zero-I/O policy module (`src/lib/pos/returns-core.ts`) for counter
+returns, holding every SALE-level verdict the B16 flow enforces. Rule vs
+policy is verified and separated: WAC 314-55-079(12) (scraped
+app.leg.wa.gov) lets a retailer accept returns of open cannabis products
+— ALL products, not vape-only — only in original packaging with the
+lot/batch/inventory ID fully legible (those per-line attestations remain
+in Task Q's `validateCustomerReturn`); the CCRS FAQ correction shape
+(Sale Delete/Update + positive InventoryAdjustment with details) remains
+in the Task Q machinery. The OWNER'S STORE POLICY — stricter than rule,
+which is allowed — is what this core adds: the buyer must be a loyalty
+member (`orders.customer_id`, set at the register by B14), the original
+receipt must be in hand, and the return must be requested within 15
+Pacific calendar days of purchase (purchase day = day 0).
+
+Contracts: `normalizeReceiptNumber` turns sloppy input into the canonical
+8-hex-uppercase receipt number exactly as `receiptNumber()` prints it
+(inputs whose stray characters are themselves hex are rejected, never
+mis-read); `receiptLookupSuffix` yields the lowercase suffix for the
+`client_uuid::text LIKE '%xxxxxxxx'` server lookup.
+`pacificDaysBetween`/`returnWindowVerdict` count DST-safe Pacific
+calendar days and refuse future-dated sales (clock skew).
+`evaluateReturnEligibility` reports ALL sale-level failures at once.
+`refundForLine(s)` computes exact integer-cent refunds off the stored
+FINAL tax-inclusive paid price (medical lines were repriced at sale
+time, so no special-casing). `pointsClawback` is proportional to the
+refunded share of the order total, floored (customer-favorable), and
+clamped to the points actually earned — a full refund claws back
+everything, a zero-earn order claws back nothing.
+
+**Tests:** tsc 0 errors; vitest 1,422/97; pure self-tests all pass
+(import AND call grep-verified — the call was silently dropped once
+again and re-applied); eslint clean. No migration; no server/UI changes
+(that's B16).
