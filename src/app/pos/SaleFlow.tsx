@@ -37,7 +37,9 @@ import {
   type PosMenuBundle,
   type PosCartEntry,
   type PricedSaleLine,
+  type PosMenuProduct,
 } from "@/lib/pos/sale-flow-core";
+import { resolveScan } from "@/lib/pos/scan-to-cart-core";
 import {
   validateCardCapture,
   medicalAgeAllowed,
@@ -756,12 +758,37 @@ function CartScreen({
   onTender: () => void;
 }) {
   const [query, setQuery] = useState("");
+  // B23 — a scan that matched a MULTI-variant product: the cashier picks the
+  // size (we never guess which variant left the shelf).
+  const [scanPick, setScanPick] = useState<PosMenuProduct[] | null>(null);
+  const [scanFlash, setScanFlash] = useState<string | null>(null);
   const carded = !!medicalCard;
 
   const results = useMemo(
     () => searchProducts(bundle.products, query).slice(0, 30),
     [bundle.products, query],
   );
+
+  /**
+   * B23 — Enter in the search box tries the text as a package barcode first
+   * (keyboard-wedge scanners type the code and press Enter). A hit adds to
+   * cart (or opens the size pick); a miss leaves the text as a search query.
+   */
+  const tryScan = () => {
+    const resolved = resolveScan(bundle.products, bundle.barcodes, query);
+    if (resolved.status === "add") {
+      setCart(addToCart(cart, resolved.product));
+      setScanFlash(`Scanned: ${resolved.product.name}${resolved.product.variantLabel ? ` · ${resolved.product.variantLabel}` : ""}`);
+      setQuery("");
+      return;
+    }
+    if (resolved.status === "pick") {
+      setScanPick(resolved.candidates);
+      setScanFlash(null);
+      setQuery("");
+    }
+    // none: keep the text — it's a search query, not a barcode.
+  };
   const priced = useMemo(() => priceForBuyer(cart, bundle, carded), [cart, bundle, carded]);
   const limits = useMemo(
     () => judgeLimits(limitLinesFor(priced.lines), carded ? "medical" : "recreational", bundle.limits),
@@ -804,10 +831,55 @@ function CartScreen({
         <section className="rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
           <input
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search name, brand, category, size…"
+            onChange={(e) => {
+              setQuery(e.target.value);
+              if (scanFlash) setScanFlash(null);
+            }}
+            onKeyDown={(e) => {
+              // B23 — wedge scanners type the code then press Enter.
+              if (e.key === "Enter" && query.trim().length > 0) {
+                e.preventDefault();
+                tryScan();
+              }
+            }}
+            placeholder="Scan a package barcode or search name, brand, category, size…"
             className="w-full rounded-xl border border-neutral-700 bg-neutral-950 p-3 text-sm"
           />
+          {scanFlash ? (
+            <p className="mt-2 rounded-lg bg-emerald-950/60 px-3 py-2 text-xs font-semibold text-emerald-300">
+              {scanFlash} — added to cart
+            </p>
+          ) : null}
+          {scanPick ? (
+            <div className="mt-2 rounded-xl border border-sky-900/60 bg-sky-950/30 p-3">
+              <p className="text-xs font-semibold text-sky-200">
+                Barcode matched {scanPick[0]?.name} — pick the size that left the shelf:
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {scanPick.map((p) => (
+                  <button
+                    key={p.variantId}
+                    type="button"
+                    onClick={() => {
+                      setCart(addToCart(cart, p));
+                      setScanFlash(`Scanned: ${p.name}${p.variantLabel ? ` · ${p.variantLabel}` : ""}`);
+                      setScanPick(null);
+                    }}
+                    className="rounded-full bg-sky-600 px-3 py-1.5 text-xs font-bold text-white"
+                  >
+                    {p.variantLabel ?? "each"} · {money(p.regularPriceMinor)}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setScanPick(null)}
+                  className="rounded-full bg-neutral-800 px-3 py-1.5 text-xs font-semibold text-neutral-300"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : null}
           <ul className="mt-3 max-h-[52vh] space-y-2 overflow-y-auto">
             {results.map((p) => (
               <li key={p.variantId}>

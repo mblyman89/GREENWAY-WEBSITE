@@ -53,6 +53,7 @@ import { __runPosReturnsCoreTests } from "../../src/lib/pos/returns-core";
 import { __runSaleDecrementCoreTests } from "../../src/lib/inventory/sale-decrement-core";
 import { __runTillCoreTests } from "../../src/lib/pos/till-core";
 import { __runDayReportCoreTests } from "../../src/lib/pos/day-report-core";
+import { __runScanToCartCoreTests } from "../../src/lib/pos/scan-to-cart-core";
 
 async function main() {
   __runOrderPricingTests();
@@ -108,6 +109,7 @@ async function main() {
   __runSaleDecrementCoreTests();
   __runTillCoreTests();
   __runDayReportCoreTests();
+  __runScanToCartCoreTests();
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
