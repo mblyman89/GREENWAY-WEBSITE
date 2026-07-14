@@ -166,6 +166,23 @@ export type PosSaleLine = {
    * variant match (no label fallback) and the CCRS export a precise line.
    */
   variantId?: string;
+  /**
+   * Manager price override applied to this line at the register (POS B24).
+   * OPTIONAL so pre-B24 queued sales still validate. `unitPriceMinor` above
+   * IS the overridden (charged) price; this block records what the engine
+   * would have charged, why the manager changed it, and which manager
+   * approved it. The approver was verified server-side by /api/pos/approve
+   * (scrypt PIN + role gate) moments before enqueue — the PIN itself never
+   * rides in any queue payload. The sync audits every overridden line.
+   */
+  override?: {
+    /** The engine-computed unit price this override replaced (minor units). */
+    originalUnitPriceMinor: number;
+    /** Why the price was changed (3–500 chars — same discipline as no-sale). */
+    reason: string;
+    /** employees.id of the approving manager/lead. */
+    approvedByEmployeeId: string;
+  };
 };
 
 export type PosSalePayload = {
@@ -236,6 +253,28 @@ export function validateSalePayload(p: Partial<PosSalePayload>): SalePayloadChec
       // present it must be a non-empty string — a blank id is corruption.
       if (l.variantId !== undefined && (typeof l.variantId !== "string" || !l.variantId.trim())) {
         errors.push(`Line ${i + 1}: variantId, when present, must be a non-empty string.`);
+      }
+      // POS B24: the manager price-override block is OPTIONAL, but when
+      // present it must be complete and coherent — the charged price must be
+      // a genuine MARKDOWN of the recorded engine price, the reason must meet
+      // the no-sale discipline, and the approver must be an employees.id.
+      if (l.override !== undefined) {
+        const o = l.override;
+        if (o == null || typeof o !== "object") {
+          errors.push(`Line ${i + 1}: override, when present, must be an object.`);
+        } else {
+          if (!Number.isInteger(o.originalUnitPriceMinor) || o.originalUnitPriceMinor <= 0) {
+            errors.push(`Line ${i + 1}: override.originalUnitPriceMinor must be a positive integer (cents).`);
+          } else if (Number.isInteger(l.unitPriceMinor) && l.unitPriceMinor >= o.originalUnitPriceMinor) {
+            errors.push(`Line ${i + 1}: an override must LOWER the price — charged unit price must be below override.originalUnitPriceMinor.`);
+          }
+          const reason = typeof o.reason === "string" ? o.reason.trim() : "";
+          if (reason.length < 3) errors.push(`Line ${i + 1}: override.reason must be at least 3 characters.`);
+          if (reason.length > 500) errors.push(`Line ${i + 1}: override.reason is too long (max 500 characters).`);
+          if (!isUuid(o.approvedByEmployeeId)) {
+            errors.push(`Line ${i + 1}: override.approvedByEmployeeId must be the approving manager's employee id.`);
+          }
+        }
       }
     });
   }
@@ -447,6 +486,41 @@ export function __runPosSaleEventTests(): void {
   ok(
     validateSalePayload({ ...goodSale, idVerification: { method: "manual", manualEventUuid: U1 } }).ok,
     "manual ID with audit event uuid ok",
+  );
+
+  // Override block (POS B24) — optional; complete + markdown-only when present.
+  const goodOverride = { originalUnitPriceMinor: 1663, reason: "damaged packaging", approvedByEmployeeId: U4 };
+  ok(
+    validateSalePayload({ ...goodSale, lines: [{ ...goodSale.lines[0], override: goodOverride }] }).ok,
+    "B24: line with a complete override block passes",
+  );
+  ok(
+    !validateSalePayload({
+      ...goodSale,
+      lines: [{ ...goodSale.lines[0], override: { ...goodOverride, originalUnitPriceMinor: 1463 } }],
+    }).ok,
+    "B24: override that does not lower the price refused",
+  );
+  ok(
+    !validateSalePayload({
+      ...goodSale,
+      lines: [{ ...goodSale.lines[0], override: { ...goodOverride, reason: "x" } }],
+    }).ok,
+    "B24: override with a short reason refused",
+  );
+  ok(
+    !validateSalePayload({
+      ...goodSale,
+      lines: [{ ...goodSale.lines[0], override: { ...goodOverride, approvedByEmployeeId: "mgr-1" } }],
+    }).ok,
+    "B24: override without a manager employee id refused",
+  );
+  ok(
+    !validateSalePayload({
+      ...goodSale,
+      lines: [{ ...goodSale.lines[0], override: { ...goodOverride, originalUnitPriceMinor: 16.63 as unknown as number } }],
+    }).ok,
+    "B24: override with non-integer money refused",
   );
   ok(
     !validateSalePayload({

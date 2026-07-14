@@ -466,6 +466,35 @@ async function processSale(
     note: `Register sale synced from ${device.name} (event ${envelope.clientUuid}). Payment: ${sale.paymentMethod}.${sale.medical ? " MEDICAL sale (recognition card attached)." : ""}`,
   });
 
+  // POS B24 — audit every manager price override that rode this sale. The
+  // approver's PIN was verified by /api/pos/approve moments before enqueue;
+  // validateSalePayload already enforced the block's shape (markdown-only,
+  // reason, approver employees.id). One audit row per overridden line keeps
+  // the trail queryable by manager, product, and order.
+  for (const l of sale.lines) {
+    if (!l.override) continue;
+    await recordAudit({
+      actorId: null,
+      actorEmail: `pos-device:${device.id}`,
+      action: "register.price_override",
+      entityType: "order",
+      entityId: order.id,
+      after: {
+        productId: l.productId,
+        productName: l.productName,
+        variantId: l.variantId ?? null,
+        quantity: l.quantity,
+        originalUnitPriceMinor: l.override.originalUnitPriceMinor,
+        overriddenUnitPriceMinor: l.unitPriceMinor,
+        reason: l.override.reason,
+        approvedByEmployeeId: l.override.approvedByEmployeeId,
+        soldByEmployeeId: envelope.employeeId,
+        clientUuid: envelope.clientUuid,
+        occurredAt: envelope.occurredAt,
+      },
+    });
+  }
+
   // POS B8 — attach the resolved recognition card BEFORE the gate runs, so
   // the gate re-validates the card, evaluates the 3× MEDICAL limits (WAC
   // 314-55-095(2)(d)), and writes the WAC 314-55-090(2) exempt-sale ledger
