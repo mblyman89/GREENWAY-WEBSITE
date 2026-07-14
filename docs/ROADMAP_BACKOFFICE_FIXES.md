@@ -2895,3 +2895,33 @@ the drawer. "Day report (X/Z)" card added to the home screen.
 **Tests:** 1,452 vitest tests / 101 files (4 new in
 `tests/compliance/day-report-core.test.ts`); selftest runner registers
 import AND call. No migration needed. CI green on PR #479.
+
+### Shipped: POS B23 — barcode scan-to-cart on the sale screen (PR #481)
+
+**What was missing (verified in code):** the register had no product
+barcode path at all — the sale screen's search box matched name/brand/
+category text only, and the menu bundle carried no code→product mapping.
+In WA I-502 the package label barcode is the traceability lot code (the
+same fact cycle-count scanning already relies on), so every jar/unit on
+the floor already carries a scannable id the system knows.
+
+Pure core `src/lib/pos/scan-to-cart-core.ts` (18 assertions):
+`normalizeBarcode` reuses the cycle-count scan normalizer; 
+`buildBarcodeIndex` maps each active lot's lot_code AND canonical CCRS
+external id (via `deriveInventoryExternalId`) to its sellable product
+key — sub-4-char codes excluded, delisted products excluded, and a code
+seen on two different products is dropped AND poisoned so it can never
+silently pick the wrong item; `resolveScan` returns add (one sellable
+variant), pick (several — cashier chooses the size), or none (falls
+through to plain text search).
+
+`/api/pos/menu` ships the index in the bundle (active lots with stock,
+built in a try/catch so an index failure can never break the menu
+download), which means scanning works OFFLINE from the cached bundle.
+On the cart screen, Enter in the search box tries the text as a scan
+first — exactly how a keyboard-wedge scanner types — with a green flash
+on add and a variant-pick chip panel when one code covers multiple sizes.
+
+**Tests:** 1,456 vitest tests / 102 files (4 new in
+`tests/compliance/scan-to-cart-core.test.ts`); selftest runner registers
+import AND call. No migration needed. CI green on PR #481.
