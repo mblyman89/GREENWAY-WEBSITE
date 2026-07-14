@@ -56,6 +56,7 @@ import { __runDayReportCoreTests } from "../../src/lib/pos/day-report-core";
 import { __runScanToCartCoreTests } from "../../src/lib/pos/scan-to-cart-core";
 import { __runPriceOverrideCoreTests } from "../../src/lib/pos/price-override-core";
 import { __runDeviceSetupCoreTests } from "../../src/lib/pos/device-setup-core";
+import { __runVoidSaleCoreTests } from "../../src/lib/pos/void-sale-core";
 
 async function main() {
   __runOrderPricingTests();
@@ -114,6 +115,7 @@ async function main() {
   __runScanToCartCoreTests();
   __runPriceOverrideCoreTests();
   __runDeviceSetupCoreTests();
+  __runVoidSaleCoreTests();
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
