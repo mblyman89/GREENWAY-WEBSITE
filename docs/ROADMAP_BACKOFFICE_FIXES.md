@@ -2961,3 +2961,29 @@ recompute and the stored-price floor check hold unchanged.
 **Tests:** 1,471 vitest tests / 103 files (15 new in
 `tests/compliance/price-override-core.test.ts`); selftest runner registers
 import AND call. No migration needed. CI green on PR #483.
+
+### Shipped: POS B25 — register setup credential shape-check (PR #485)
+
+**What happened in the field (verified from the owner's screenshot):**
+first provisioning failed with the server's terse "Missing or malformed
+device credentials." — the DEVICE ID field held the one-time KEY and the
+DEVICE KEY field held the UUID id (pasted into each other's fields).
+authenticateDevice checks isUuid(deviceId) and correctly refused, but the
+register offered no explanation.
+
+The two credentials have unmistakable shapes — pos_devices.id is a
+Postgres UUID; the key is randomBytes(24).toString("base64url"), a
+32-char dash-free string — so a swap is detectable with certainty.
+
+Pure core `src/lib/pos/device-setup-core.ts` (13 assertions):
+`checkSetupCredentials` strips pasted whitespace + zero-width characters,
+detects the id↔key swap and returns the values in the correct slots,
+explains a malformed id in human terms, points a UUID-in-the-key-field at
+key rotation (the plaintext key shows only once), and catches too-short
+keys — all BEFORE any network round-trip. The SetupScreen runs it on
+Verify & save: a detected swap is fixed with a visible notice, then the
+verify proceeds. Server behavior unchanged.
+
+**Tests:** 1,478 vitest tests / 104 files (7 new in
+`tests/compliance/device-setup-core.test.ts`); selftest runner registers
+import AND call. No migration needed. CI green on PR #485.
