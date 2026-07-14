@@ -88,6 +88,16 @@ export function RegisterShell() {
   // in a useState initializer would cause a hydration mismatch instead.
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
+    // POS B11 — register the tiny shell service worker so the Home-Screen
+    // app boots offline. Scoped to "/pos" so it never collides with the
+    // admin push worker (push-sw.js at scope "/"): a controlled /pos page
+    // still routes ALL of its fetches — including /_next/static assets —
+    // through this worker, and it never intercepts /api/* (see
+    // public/pos-sw.js). Best-effort: registration failure (private mode,
+    // old iPadOS) leaves the register fully online-only.
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/pos-sw.js", { scope: "/pos" }).catch(() => {});
+    }
     const c = loadCreds();
     const parsed = parseQueue(window.localStorage.getItem(LS_QUEUE));
     const seqStored = Number(window.localStorage.getItem(LS_SEQ) ?? "0");
