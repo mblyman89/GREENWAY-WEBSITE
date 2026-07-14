@@ -17,6 +17,17 @@
  *
  * So the setup screen can DETECT a swap with certainty and fix it, and can
  * explain a malformed id before burning a network round-trip.
+ *
+ * B26 (verified second failure in the field): with the id correct, the
+ * server answered "Device key rejected." even after a key rotation. The key
+ * is TYPED on the iPad and is case-sensitive base64url; the setup inputs
+ * lacked autoCapitalize="none"/autoCorrect="off", so iOS silently mangles a
+ * typed key (first-letter capitalization, autocorrect, smart dashes). This
+ * module now also normalizes typographic dashes to ASCII hyphens and
+ * verifies the key's exact shape (32 chars, base64url alphabet — both
+ * minting sites, provisionDevice and rotateDeviceKey, use
+ * randomBytes(24).toString("base64url") which is always exactly 32 chars)
+ * so a keyboard-mangled key is explained BEFORE the network call.
  */
 
 /** RFC-4122-shaped UUID (any version) — mirrors sale-event-core's isUuid. */
@@ -24,6 +35,18 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 function isUuidShaped(v: string): boolean {
   return UUID_RE.test(v);
+}
+
+/**
+ * The exact shape of every device key ever minted: base64url of 24 random
+ * bytes = exactly 32 chars from [A-Za-z0-9_-]. (Both minting sites —
+ * provisionDevice and rotateDeviceKey in device-store.ts — use
+ * randomBytes(24).toString("base64url").)
+ */
+const KEY_RE = /^[A-Za-z0-9_-]{32}$/;
+
+function isKeyShaped(v: string): boolean {
+  return KEY_RE.test(v);
 }
 
 export type SetupCredentialsCheck = {
@@ -42,7 +65,12 @@ export type SetupCredentialsCheck = {
  * whitespace/zero-width characters that ride along with copied text.
  */
 export function checkSetupCredentials(idRaw: string, keyRaw: string): SetupCredentialsCheck {
-  const clean = (s: string) => s.replace(/[\s\u200b\u200c\u200d\ufeff]/g, "");
+  // Strip whitespace/zero-width paste artifacts, and normalize the smart
+  // dashes iOS substitutes for typed hyphens (en dash, em dash, minus,
+  // figure dash, non-breaking hyphen) back to ASCII "-": UUIDs use hyphens
+  // and base64url keys may legitimately contain "-".
+  const clean = (s: string) =>
+    s.replace(/[\s\u200b\u200c\u200d\ufeff]/g, "").replace(/[\u2010\u2011\u2012\u2013\u2014\u2212]/g, "-");
   let deviceId = clean(idRaw);
   let deviceKey = clean(keyRaw);
   let swapped = false;
@@ -84,6 +112,29 @@ export function checkSetupCredentials(idRaw: string, keyRaw: string): SetupCrede
       deviceKey,
       swapped,
       problem: "That device key looks too short — copy the full one-time key (32 characters).",
+    };
+  }
+  if (!isKeyShaped(deviceKey)) {
+    // Every key ever minted is exactly 32 base64url chars. A wrong length or
+    // an out-of-alphabet character means the key was mangled in transit —
+    // on an iPad this is usually autocorrect/auto-capitalize rewriting a
+    // TYPED key. The server would answer "Device key rejected."; explain
+    // the real cause here instead.
+    const badChar = deviceKey.match(/[^A-Za-z0-9_-]/)?.[0];
+    const detail =
+      deviceKey.length !== 32
+        ? `it has ${deviceKey.length} characters instead of 32`
+        : `it contains "${badChar ?? "?"}", which never appears in a key`;
+    return {
+      deviceId,
+      deviceKey,
+      swapped,
+      problem:
+        `That device key doesn't match the shape of a real key (${detail}). ` +
+        "Keys are exactly 32 letters/digits/dashes/underscores and are CASE-SENSITIVE. " +
+        "If you typed it, the iPad keyboard may have auto-capitalized or auto-corrected it — " +
+        "retype it carefully or paste it, and compare character by character with the key shown in " +
+        "Admin → Registers → POS devices (rotate the key there to get a fresh one you can copy).",
     };
   }
   return { deviceId, deviceKey, swapped, problem: null };
@@ -140,6 +191,33 @@ export function __runDeviceSetupCoreTests(): void {
 
   // A too-short key is caught before the network call.
   ok((checkSetupCredentials(ID, "shortkey").problem ?? "").includes("too short"), "short key caught");
+
+  // --- B26: key-shape integrity (the "Device key rejected." field failure) ---
+
+  // A key with a stray character (e.g. autocorrect inserted a period) is
+  // explained, naming the bad character.
+  const badChar = checkSetupCredentials(ID, "RJH5doEHCd78c2fneJmS7vgKGb1TXWi.");
+  ok((badChar.problem ?? "").includes('"."'), "out-of-alphabet char named");
+  ok((badChar.problem ?? "").includes("CASE-SENSITIVE"), "case sensitivity called out");
+
+  // A 31- or 33-char key (missed/extra character) is explained with the count.
+  ok((checkSetupCredentials(ID, KEY.slice(0, 31)).problem ?? "").includes("31 characters"), "31-char key counted");
+  ok((checkSetupCredentials(ID, `${KEY}X`).problem ?? "").includes("33 characters"), "33-char key counted");
+
+  // iOS smart-dash substitution in either field is normalized back to "-".
+  const enDashId = ID.replace(/-/g, "\u2013");
+  ok(checkSetupCredentials(enDashId, KEY).problem === null, "en-dash uuid normalized");
+  const KEY_WITH_DASH = "RJH5doEHCd78c2fneJmS7vgKGb1TXW-A"; // 32 chars, one hyphen
+  ok(
+    checkSetupCredentials(ID, KEY_WITH_DASH.replace("-", "\u2014")).problem === null,
+    "em-dash in key normalized",
+  );
+
+  // Keys with base64url specials (- and _) pass untouched.
+  ok(checkSetupCredentials(ID, "A-b_C-d_E-f_G-h_I-j_K-l_M-n_O-p_").problem === null, "base64url specials accepted");
+
+  // A well-formed 32-char key still passes (regression guard).
+  ok(checkSetupCredentials(ID, KEY).problem === null, "canonical key still accepted");
 
   if (fail > 0) throw new Error(`device-setup-core self-tests: ${fail} FAILED (${pass} passed)`);
   console.log(`device-setup-core self-tests: ALL PASS (${pass} assertions)`);
