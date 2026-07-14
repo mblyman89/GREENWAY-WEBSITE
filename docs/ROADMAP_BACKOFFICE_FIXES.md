@@ -2665,3 +2665,38 @@ everything, a zero-earn order claws back nothing.
 (import AND call grep-verified — the call was silently dropped once
 again and re-applied); eslint clean. No migration; no server/UI changes
 (that's B16).
+
+### Shipped: POS B16 — returns desk (PR #467)
+
+Receipt-first counter returns at `/admin/registers/returns`
+(inventory.manage — the Task Q level, since returns move inventory and
+queue CCRS corrections). The flow follows the counter conversation:
+type the 8-char number off the customer's ORIGINAL receipt →
+`lookupSaleByReceipt` scans processed `pos_sale_events` sales from the
+last 17 days (the 15-day policy window + 2-day clock-skew buffer — the
+policy bounds the scan, so no uuid-cast tricks) and suffix-matches the
+`client_uuid` exactly as `receiptNumber()` prints it, then evaluates
+EVERY sale-level gate at once (completed-only, loyalty member attached
+via B14's `orders.customer_id`, 15 Pacific days). Pick the line and
+quantity — the refund is computed from the stored FINAL tax-inclusive
+paid price (`refundForLine`), so staff never type an amount and medical
+exemptions carry through automatically. Attest to WAC 314-55-079(12)
+(original packaging + fully legible lot ID), pick restock vs destroy,
+submit: the server re-verifies ALL policy (UI verdicts are advisory)
+and runs Task Q's `createCustomerReturn` — CCRS Sale-row snapshot,
+Sale Delete/Update correction queued, positive inventory add-back,
+optional destruction event.
+
+Loyalty points are clawed back proportionally (`pointsClawback`:
+floored, clamped) as a negative `adjustPoints` ledger row tied to the
+order — `adjustPoints` gained an optional `orderId` so repeated partial
+returns subtract prior clawbacks and can never over-claw. A new pure
+`buildRefundReceiptHtml` (same 576px PassPRNT size=3 family, owner's
+B13 header/address/footer, REFUND banner, original receipt number,
+exact cash, points adjustment, never card details) prints straight from
+the result panel. Audited as `customer_return.counter`; "Returns desk"
+button added to Register Activity.
+
+**Tests:** tsc 0 errors; vitest 1,424/97; pure self-tests all pass
+(pos/receipt-core now 49 asserts); eslint clean. No migration (reuses
+0115 `customer_returns` + 0120 `pos_sale_events`).
