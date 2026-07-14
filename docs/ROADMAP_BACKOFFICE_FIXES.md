@@ -2800,3 +2800,32 @@ changes — the order's own lines are the sale audit trail).
 **Tests:** 1,441 vitest tests / 99 files (10 new in
 `tests/compliance/sale-decrement-core.test.ts`); selftest runner
 registers import AND call. No migration needed. CI green on PR #473.
+
+### Shipped: POS B20 — exact variant + lot CCRS-id capture on sale lines (PR #475)
+
+**What was missing (verified in code):** the register never told the
+server WHICH variant it sold — `order_lines.variant_id` (present since
+migration 0007) stayed NULL and `order_lines.ccrs_inventory_external_id`
+(0031) was only ever set by hand, so the weekly Sale.csv builder fell
+back to `pos_product_key` fuzzy resolution (`fallbackKeyIds`) instead of
+the exact line-level id CCRS wants.
+
+Register → server: `PosSaleLine` gained an OPTIONAL `variantId` (blank
+rejected if present; pre-B20 offline queues still validate), carried
+through `priceCart` → `buildSalePayload` → `/api/pos/sync`, where
+`processSale` now writes `order_lines.variant_id`.
+
+Lot id stamping: `buildLotDecrementPlan` (B19's pure FIFO planner) now
+returns `lineExternalIds` — per product key, the canonical CCRS external
+id of the FIRST lot consumed, derived with the same
+`deriveInventoryExternalId` used by the Sale.csv builder. On completion
+the B19 wrapper stamps `order_lines.ccrs_inventory_external_id` ONLY
+where NULL (`.is(..., null)`) so explicit manual overrides are never
+clobbered, and never fabricates an id when no lot matched.
+
+Result: Sale.csv resolution preference (line → lot → product-key) now
+lands on "line" (exact) for every sale rung after this ships.
+
+**Tests:** 1,442 vitest tests / 99 files;
+`sale-decrement-core` self-tests now 33 assertions (variantId carry,
+stamping, no-fabrication). No migration needed. CI green on PR #475.
