@@ -3117,3 +3117,79 @@ the device.
 `tests/compliance/member-history-core.test.ts`); member-history-core
 self-tests (17 assertions) registered in the runner with import AND call.
 No migration. CI green on PR #492.
+
+### Shipped: POS B30 — email receipts from the register (PR #494)
+
+Cash-only doesn't have to mean paper-only. The sale-complete screen now
+offers "Email receipt" whenever the server is configured for it (GET
+capability check — no dead buttons when Resend keys are absent). The email
+renders from the SAME frozen `PosReceiptInput` snapshot captured at sale
+enqueue (B10/B17), so paper and email can never disagree — same conditional
+rows (savings gated on `savingsMinor > 0 && !hideSavings`, medical banner
+and medical-savings row, loyalty block), same receipt number (last 8 hex of
+the sale UUID), restyled to a 420px inline-CSS email layout. No card
+details ever (WAC 314-55-090(2)); transactional-only content stays clear of
+WAC 314-55-155 advertising rules, and the email says so: the address is
+used once, never persisted, and not added to marketing.
+
+New pure core `src/lib/pos/email-receipt-core.ts` (strict email
+normalization, `maskEmailForAudit` → "j***@gmail.com", full snapshot
+re-validation server-side with ALL errors reported at once, HTML builder,
+subject line). Store `email-receipt-store.ts` sends via the same Resend
+REST pattern as order/PO notify (env-gated on `RESEND_API_KEY` +
+`ORDER_EMAIL_FROM`, never throws) and audits
+`register.receipt_emailed` / `register.receipt_email_failed` with the
+masked address only. Device-authenticated `POST /api/pos/email-receipt`.
+
+**Tests:** 1,517 vitest tests / 108 files (+9 in
+`tests/compliance/email-receipt-core.test.ts`); email-receipt-core
+self-tests (40+ assertions) registered in the runner with import AND call.
+No migration. CI green on PR #494.
+
+### Shipped: POS B31 — denomination change calculator (PR #495)
+
+Count-back is where cash-only registers win or lose the drawer. The tender
+screen's fixed quick-bill row is gone, replaced by
+`smartTenderSuggestions(total)` — exact amount plus the next $1/$5/$10/$20
+steps and covering $50/$100, deduped ascending — and the moment tendered ≥
+total, a color-coded count-back plan appears: emerald pills for bills,
+neutral pills for coins ("1×$20 · 3×$1 · 1×25¢"). The same plan renders on
+the sale-complete screen under the change figure and in the B28 pickup
+modal's "Change due" line, so every change moment reads identically.
+
+New pure core `src/lib/pos/change-calc-core.ts`. The change-MAKING set is
+deliberately $20/$10/$5/$1/25¢/10¢/5¢/1¢ — $50s and $100s are accepted but
+never given back, and $2s/half-dollars/dollar coins stay till-countable
+(B21's 13 denominations) but are never change-planned. Greedy is provably
+optimal for canonical US denominations, and a belt-and-suspenders sum check
+returns null rather than ever showing a wrong plan.
+
+**Tests:** 1,526 vitest tests / 109 files (+9 in
+`tests/compliance/change-calc-core.test.ts`); change-calc-core self-tests
+(23 assertions) registered in the runner with import AND call. No
+migration. CI green on PR #495.
+
+### Shipped: POS B32 — low-stock warnings on the register (PR #496)
+
+Budtenders used to learn a product was nearly gone only when the sync
+completion gate bounced the sale. Now stock pressure surfaces at three
+touchpoints, and never blocks anything: red/amber `StockBadge` pills on
+sale-screen product rows ("LAST ONE", "2 LEFT", "MAY BE OUT", "LOW STOCK"),
+an amber advisory list on the cart screen when quantities press against
+known remaining units, and a home-screen heads-up in the Sync card ("N
+items running low — flagged on the sale screen").
+
+New pure core `src/lib/pos/low-stock-core.ts`: exact variant-level counts
+(when known) beat item-level status — 0 → "MAY BE OUT", 1 → "LAST ONE",
+2–3 → "N LEFT", ≥4 clears a stale item-level flag — with fallback to the
+item status (`statusForInventory`: ≤3 = low-stock) when the count is
+unknown. `PosMenuProduct` gains `unitsLeft?: number | null` and the menu
+route ships real counts only for items with explicit variants (synthetic
+default variants carry a placeholder 0, so they ship null = unknown).
+Advisory only by design: the cached menu can lag the shelf, and B19's
+decrement + the sync completion gate remain the inventory authority.
+
+**Tests:** 1,532 vitest tests / 110 files (+6 in
+`tests/compliance/low-stock-core.test.ts`); low-stock-core self-tests (21
+assertions) registered in the runner with import AND call. No migration.
+CI green on PR #496.
