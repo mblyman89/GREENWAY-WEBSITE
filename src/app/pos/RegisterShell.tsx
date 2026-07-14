@@ -41,6 +41,7 @@ import {
 import { normalizePosReceiptConfig, receiptAddressLines } from "@/lib/pos/receipt-config-core";
 import { DENOM_FIELDS, EMPTY_DENOMS, denomTotalMinor, formatCents, type DenomCounts } from "@/lib/registers/cash";
 import { dollarsToMinor } from "@/lib/pos/till-core";
+import { changeBreakdown, formatChangeBreakdown } from "@/lib/pos/change-calc-core";
 import { checkSetupCredentials } from "@/lib/pos/device-setup-core";
 import { VOID_REASON_PRESETS } from "@/lib/pos/void-sale-core";
 import type { PickupQueueEntry } from "@/lib/pos/pickup-core";
@@ -1972,9 +1973,17 @@ function PickupQueueModal({
               onChange={(e) => setTendered(e.target.value)}
             />
             {tenderedMinor !== null && tenderedMinor >= detail.totalMinor ? (
-              <p className="mt-1 text-sm text-emerald-300">
-                Change due: {formatCents(tenderedMinor - detail.totalMinor)}
-              </p>
+              <>
+                <p className="mt-1 text-sm text-emerald-300">
+                  Change due: {formatCents(tenderedMinor - detail.totalMinor)}
+                </p>
+                {/* B31 — count-back plan (fewest bills/coins) for the handover. */}
+                {tenderedMinor > detail.totalMinor ? (
+                  <p className="mt-1 text-sm font-semibold text-neutral-300">
+                    {formatChangeBreakdown(changeBreakdown(tenderedMinor - detail.totalMinor) ?? [])}
+                  </p>
+                ) : null}
+              </>
             ) : null}
 
             <button
