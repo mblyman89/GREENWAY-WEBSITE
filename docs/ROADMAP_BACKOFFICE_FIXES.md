@@ -2519,3 +2519,28 @@ header.
 **Tests:** tsc 0 errors; vitest 1,407/95; `pos/receipt-core` 25/25 in the
 pure self-test runner (import + call both verified); eslint clean. No
 migration, no server changes.
+
+## Shipped — POS B11: iPad Home-Screen PWA for /pos (PR #456)
+
+The register now installs to the counter iPads as a real Home-Screen app —
+full-screen with no Safari chrome, landscape, dark status bar, Greenway
+icon — and the shell BOOTS OFFLINE, completing the offline-first story
+(the app layer already kept the event queue and menu bundle in
+localStorage). `public/pos/manifest.webmanifest` declares the standalone
+app (scope + start_url `/pos`, 192/512 icons rendered from the brand logo
+with sharp); `src/app/pos/page.tsx` exports the Next metadata (`manifest`,
+`icons.apple` 180px, `appleWebApp` capable + black-translucent status bar)
+and a `Viewport` (dark theme color, no pinch-zoom at the counter).
+
+The service worker (`public/pos-sw.js`) is deliberately tiny: `/pos` HTML
+is network-first with cache fallback so the register opens with the
+store's internet down; `/_next/static/*` hashed assets and the `/pos/*`
+icons are cache-first (immutable by content hash); and it NEVER intercepts
+`/api/*`, so sync/unlock/menu semantics stay exactly as built. It is
+registered best-effort from `RegisterShell` mount with `scope: "/pos"` so
+it can never collide with the Task-W admin push worker (`push-sw.js` at
+scope `/`); old caches are cleaned on activate, and registration failure
+(private mode, old iPadOS) simply leaves the register online-only.
+
+**Tests:** tsc 0 errors; vitest 1,407/95; pure self-tests all pass; eslint
+clean. No migration, no server changes.
