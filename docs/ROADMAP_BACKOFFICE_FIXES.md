@@ -2770,3 +2770,33 @@ ch. 246-70 WAC, CCRS reporting, and drawer accountability.
 
 **Tests:** docs-only — no code changes, no migration. CI green
 (compliance + Vercel) on PR #471.
+
+### Shipped: POS B19 — inventory decrement on completed sales (PR #473)
+
+Closed the verified gap where NOTHING reduced stock at sale:
+`menu_variants.inventory_level` was only written by imports/intake/
+draft-injection and `inventory_lots.on_hand_qty` only by dispositions and
+cycle counts (migration 0023's comment promised the sell flow "in a later
+slice" — this is that slice). Every completed order now decrements BOTH
+layers through one funnel in `setOrderStatus`, so POS-synced sales and
+back-office completions behave identically.
+
+Pure core (`src/lib/inventory/sale-decrement-core.ts`, 32 assertions):
+variant matching (explicit variant_id → single-variant fallback → the
+trailing "(label)" the register bakes into product names), demand
+accumulation, oversell clamped at 0 and reported (never a stored
+negative), item `inventory_status` recompute with the import pipeline's
+exact thresholds (≤0 unavailable / ≤3 low-stock) guarded so an UNTRACKED
+item (all-zero levels) never flips status on a sale; FIFO oldest-first
+lot consumption keyed by `pos_product_key` with `sold_out` marking and
+exact-remainder shortfall reporting.
+
+Server wrapper (`src/lib/inventory/sale-decrement.ts`): idempotent per
+order via an `inventory_decremented` order_event marker; NEVER blocks
+completion (failures leave a visible note event); sales deliberately do
+not write `inventory_adjustments` (0023 scopes that ledger to non-sale
+changes — the order's own lines are the sale audit trail).
+
+**Tests:** 1,441 vitest tests / 99 files (10 new in
+`tests/compliance/sale-decrement-core.test.ts`); selftest runner
+registers import AND call. No migration needed. CI green on PR #473.
