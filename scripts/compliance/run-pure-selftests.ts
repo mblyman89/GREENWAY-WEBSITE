@@ -50,6 +50,7 @@ import { __runMedicalPosCoreTests } from "../../src/lib/pos/medical-pos-core";
 import { __runPosReceiptCoreTests } from "../../src/lib/pos/receipt-core";
 import { __runReceiptConfigCoreTests } from "../../src/lib/pos/receipt-config-core";
 import { __runPosReturnsCoreTests } from "../../src/lib/pos/returns-core";
+import { __runSaleDecrementCoreTests } from "../../src/lib/inventory/sale-decrement-core";
 
 async function main() {
   __runOrderPricingTests();
@@ -102,6 +103,7 @@ async function main() {
   __runPosReceiptCoreTests();
   __runReceiptConfigCoreTests();
   __runPosReturnsCoreTests();
+  __runSaleDecrementCoreTests();
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
