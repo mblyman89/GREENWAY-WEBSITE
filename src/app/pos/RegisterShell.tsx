@@ -661,7 +661,18 @@ function SetupScreen({ onProvisioned }: { onProvisioned: (c: DeviceCreds) => voi
         | { device?: { name: string; registerId: string | null }; error?: string }
         | null;
       if (!res.ok || !body?.device) {
-        setError(body?.error ?? "Verification failed — check the id and key.");
+        // B26 — a shape-valid key the server still refuses means the key
+        // doesn't match this device row's hash: a stale key (rotated since
+        // it was copied) or credentials from a different device row.
+        const raw = body?.error ?? "Verification failed — check the id and key.";
+        setError(
+          raw === "Device key rejected."
+            ? "Device key rejected — the key doesn't match this device id. The key is CASE-SENSITIVE and " +
+                "only the NEWEST key works (rotating invalidates all older ones). In Admin → Registers → " +
+                "POS devices: rotate the key on the SAME device row as this id, then copy BOTH values " +
+                "shown together and paste them here without retyping."
+            : raw,
+        );
         return;
       }
       onProvisioned({
@@ -685,12 +696,18 @@ function SetupScreen({ onProvisioned }: { onProvisioned: (c: DeviceCreds) => voi
           A manager provisions this iPad in the back office (Register Activity → POS devices) and
           enters the device id + one-time key here. The key is stored only on this device.
         </p>
+        {/* B26 — autoCapitalize/autoCorrect OFF: the key is case-sensitive
+            base64url and iOS silently capitalizes the first letter and
+            autocorrects typed keys, which the server then (correctly)
+            rejects. spellCheck alone does not stop either behavior. */}
         <label className="mt-6 block text-xs font-semibold uppercase tracking-wide text-neutral-400">Device id</label>
         <input
           className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-3 font-mono text-sm"
           value={deviceId}
           onChange={(e) => setDeviceId(e.target.value)}
           autoComplete="off"
+          autoCapitalize="none"
+          autoCorrect="off"
           spellCheck={false}
         />
         <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-neutral-400">Device key</label>
@@ -699,6 +716,8 @@ function SetupScreen({ onProvisioned }: { onProvisioned: (c: DeviceCreds) => voi
           value={deviceKey}
           onChange={(e) => setDeviceKey(e.target.value)}
           autoComplete="off"
+          autoCapitalize="none"
+          autoCorrect="off"
           spellCheck={false}
         />
         {notice ? <p className="mt-4 rounded-lg bg-sky-950/60 px-3 py-2 text-sm text-sky-300">{notice}</p> : null}

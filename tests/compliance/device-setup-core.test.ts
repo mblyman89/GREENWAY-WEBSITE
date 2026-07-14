@@ -48,6 +48,27 @@ describe("setup credential shape-check", () => {
   });
 });
 
+describe("B26 key-shape integrity (the 'Device key rejected.' field failure)", () => {
+  it("names an out-of-alphabet character and calls out case sensitivity", () => {
+    const r = checkSetupCredentials(ID, "RJH5doEHCd78c2fneJmS7vgKGb1TXWi.");
+    expect(r.problem).toContain('"."');
+    expect(r.problem).toContain("CASE-SENSITIVE");
+  });
+  it("counts a wrong-length key (missed or extra character)", () => {
+    expect(checkSetupCredentials(ID, KEY.slice(0, 31)).problem).toContain("31 characters");
+    expect(checkSetupCredentials(ID, `${KEY}X`).problem).toContain("33 characters");
+  });
+  it("normalizes iOS smart dashes back to ASCII hyphens in both fields", () => {
+    expect(checkSetupCredentials(ID.replace(/-/g, "\u2013"), KEY).problem).toBeNull();
+    const keyWithDash = "RJH5doEHCd78c2fneJmS7vgKGb1TXW-A";
+    expect(checkSetupCredentials(ID, keyWithDash.replace("-", "\u2014")).problem).toBeNull();
+  });
+  it("accepts base64url specials (- and _) and the canonical key", () => {
+    expect(checkSetupCredentials(ID, "A-b_C-d_E-f_G-h_I-j_K-l_M-n_O-p_").problem).toBeNull();
+    expect(checkSetupCredentials(ID, KEY).problem).toBeNull();
+  });
+});
+
 describe("embedded self-tests", () => {
   it("__runDeviceSetupCoreTests passes", () => {
     expect(() => __runDeviceSetupCoreTests()).not.toThrow();
