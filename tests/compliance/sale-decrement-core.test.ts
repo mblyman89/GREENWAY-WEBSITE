@@ -85,8 +85,8 @@ describe("inventory/sale-decrement-core — variant plan (POS B19)", () => {
 
 describe("inventory/sale-decrement-core — lot plan (POS B19)", () => {
   const lots: LotForDecrement[] = [
-    { id: "lot-a", posProductKey: "prod-1", onHandQty: 2 },
-    { id: "lot-b", posProductKey: "prod-1", onHandQty: 5 },
+    { id: "lot-a", posProductKey: "prod-1", onHandQty: 2, ccrsExternalId: "LOT-A-CCRS" },
+    { id: "lot-b", posProductKey: "prod-1", onHandQty: 5, ccrsExternalId: "LOT-B-CCRS" },
   ];
 
   it("consumes lots FIFO and marks drained lots sold out", () => {
@@ -95,10 +95,23 @@ describe("inventory/sale-decrement-core — lot plan (POS B19)", () => {
       lots,
     );
     expect(plan.lotUpdates).toEqual([
-      { id: "lot-a", newOnHand: 0, soldOut: true },
-      { id: "lot-b", newOnHand: 4, soldOut: false },
+      { id: "lot-a", posProductKey: "prod-1", newOnHand: 0, soldOut: true },
+      { id: "lot-b", posProductKey: "prod-1", newOnHand: 4, soldOut: false },
     ]);
     expect(plan.shortfalls).toHaveLength(0);
+  });
+
+  it("B20: stamps the FIRST consumed lot's CCRS id per product key, never fabricates", () => {
+    const plan = buildLotDecrementPlan(
+      [{ lineId: "l1", productId: "prod-1", variantId: null, productName: "BD", quantity: 3 }],
+      lots,
+    );
+    expect(plan.lineExternalIds.get("prod-1")).toBe("LOT-A-CCRS");
+    const noId = buildLotDecrementPlan(
+      [{ lineId: "l1", productId: "p", variantId: null, productName: "X", quantity: 1 }],
+      [{ id: "lot-x", posProductKey: "p", onHandQty: 5 }],
+    );
+    expect(noId.lineExternalIds.size).toBe(0);
   });
 
   it("reports the exact uncovered remainder as a shortfall", () => {
@@ -126,13 +139,13 @@ describe("inventory/sale-decrement-core — helpers", () => {
   it("summary carries warnings only when they exist", () => {
     const clean = summarizeDecrement({
       variantPlan: { variantUpdates: [], itemStatusUpdates: [], oversold: [], unmatched: [] },
-      lotPlan: { lotUpdates: [], shortfalls: [] },
+      lotPlan: { lotUpdates: [], lineExternalIds: new Map(), shortfalls: [] },
       lineCount: 1,
     });
     expect(clean).not.toContain("OVERSOLD");
     const dirty = summarizeDecrement({
       variantPlan: { variantUpdates: [], itemStatusUpdates: [], oversold: ["x"], unmatched: [] },
-      lotPlan: { lotUpdates: [], shortfalls: ["y"] },
+      lotPlan: { lotUpdates: [], lineExternalIds: new Map(), shortfalls: ["y"] },
       lineCount: 1,
     });
     expect(dirty).toContain("OVERSOLD");

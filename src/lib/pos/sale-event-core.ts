@@ -159,6 +159,13 @@ export type PosSaleLine = {
   unitPriceMinor: number;
   /** Pre-discount tax-inclusive unit price, minor units. */
   regularPriceMinor: number;
+  /**
+   * The sold variant's source_variant_id (POS B20). OPTIONAL so sales queued
+   * by pre-B20 registers still validate and sync. When present it lands on
+   * order_lines.variant_id, giving the B19 inventory decrement an EXACT
+   * variant match (no label fallback) and the CCRS export a precise line.
+   */
+  variantId?: string;
 };
 
 export type PosSalePayload = {
@@ -225,6 +232,11 @@ export function validateSalePayload(p: Partial<PosSalePayload>): SalePayloadChec
       if (!Number.isInteger(l.quantity) || l.quantity < 1) errors.push(`Line ${i + 1}: quantity must be a positive integer.`);
       if (!Number.isInteger(l.unitPriceMinor) || l.unitPriceMinor < 0) errors.push(`Line ${i + 1}: unitPriceMinor must be a non-negative integer.`);
       if (!Number.isInteger(l.regularPriceMinor) || l.regularPriceMinor < 0) errors.push(`Line ${i + 1}: regularPriceMinor must be a non-negative integer.`);
+      // POS B20: variantId is OPTIONAL (pre-B20 queues omit it) but when
+      // present it must be a non-empty string — a blank id is corruption.
+      if (l.variantId !== undefined && (typeof l.variantId !== "string" || !l.variantId.trim())) {
+        errors.push(`Line ${i + 1}: variantId, when present, must be a non-empty string.`);
+      }
     });
   }
   for (const k of ["totalMinor", "subtotalMinor", "taxMinor"] as const) {
@@ -449,6 +461,22 @@ export function __runPosSaleEventTests(): void {
       lines: [{ ...goodSale.lines[0], category: "" }],
     }).ok,
     "missing category snapshot refused",
+  );
+  // POS B20: variantId is optional — absent OK (pre-B20 queues), present must
+  // be non-empty.
+  ok(
+    validateSalePayload({
+      ...goodSale,
+      lines: [{ ...goodSale.lines[0], variantId: "var-1" }],
+    }).ok,
+    "line with variantId ok",
+  );
+  ok(
+    !validateSalePayload({
+      ...goodSale,
+      lines: [{ ...goodSale.lines[0], variantId: "  " }],
+    }).ok,
+    "blank variantId refused",
   );
 
   // Medical block (POS B8) — optional; structurally validated when present.
