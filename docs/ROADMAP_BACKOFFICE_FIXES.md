@@ -3053,3 +3053,67 @@ reaches the weekly filing in the first place.
 `tests/compliance/void-sale-core.test.ts`); void-sale-core self-tests
 (23 assertions) registered in the runner with import AND call. No
 migration. CI green on PR #489.
+
+### Shipped: POS B28 — online-order pickup queue at the register (PR #491)
+
+Online orders used to live only in the back office; the budtender at the
+counter had no view of who was walking in. Now the register home screen has
+a "Pickup orders" tile with a live count badge (45-second poll, online-only)
+opening a queue sorted the way a counter actually works: ready first, then
+preparing, acknowledged, new — oldest first within each group. Labels are
+privacy-lean ("Jordan T.", order number, age of order); tapping in shows
+lines, totals, and the customer note.
+
+Handover is a real sale, not a shortcut. Completion requires an explicit
+ID-attestation checkbox naming WAC 314-55-150, cash tendered with live
+change math, and it runs the SAME server completion gate as every other
+sale (hours, money recompute, loyalty, medical card, high-THC, sales
+limits, exempt ledger) with NO override path. POS-materialized orders are
+excluded from the queue by the staff_note contract AND the
+pos_sale_events.order_id link (belt and suspenders), so a register-rung
+sale can never appear as its own pickup.
+
+The subtle-but-critical piece: pickup cash enters the drawer, but X/Z day
+reports read pos_sale_events. So completion writes a server-materialized
+already-`processed` ledger row (sequence 0, unique client_uuid, order_id
+set, sale-shaped payload plus a pickup block with the attesting employee).
+Replay only touches `pending` rows so nothing double-processes; CCRS reads
+orders and inventory/loyalty are idempotent per order, so nothing
+double-counts. Bonus: pickups get a printed receipt number findable by the
+returns desk (B15/B16) and void (B27). `register.pickup_completed` audit,
+receipt prints, drawer pops. New pure core `src/lib/pos/pickup-core.ts`
+(queue sorting, labels, completion evaluation).
+
+**Tests:** 1,501 vitest tests / 106 files (+9 in
+`tests/compliance/pickup-core.test.ts`); pickup-core self-tests (22
+assertions) registered in the runner with import AND call. No migration.
+CI green on PR #491.
+
+### Shipped: POS B29 — member purchase history at the register (PR #492)
+
+Big-player POSes show the budtender a member's recent purchases and go-to
+products the moment the member is attached to a sale — it's how a regular
+gets greeted like a regular. Ours now does too, with a deliberate PRIVACY
+BUDGET so the register never becomes a data-mining terminal: last 5
+completed purchases, top 3 favorites (ranked by quantity in that window,
+tie-broken by order count then name), and at most 4 line names echoed per
+purchase. Nothing else leaves the server.
+
+New pure core `src/lib/pos/member-history-core.ts` (Pacific-midnight-safe
+date labels — "Feb 8" same-year, "Nov 30, 2025" across years — plus
+defensive shaping of malformed rows), store keyed by orders.customer_id
+(works for both website and POS-rung sales), and a device-authenticated
+`GET /api/pos/member-history` route (UUID-validated, no new tables).
+
+On the register, the attached-member card gains a History / Hide history
+toggle: "Usually buys: Blue Dream · Sour Gummies · Preroll 2-pack" plus
+rows like "Feb 8 · $45.50 · 2× Blue Dream + 1 more". Empty history reads
+"First visit on record — make it a good one." Privacy discipline in the
+UI too: fetched history is dropped from component state the moment it's
+hidden or the member is removed, and it's online-only — never cached on
+the device.
+
+**Tests:** 1,508 vitest tests / 107 files (+7 in
+`tests/compliance/member-history-core.test.ts`); member-history-core
+self-tests (17 assertions) registered in the runner with import AND call.
+No migration. CI green on PR #492.
