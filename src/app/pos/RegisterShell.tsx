@@ -44,6 +44,7 @@ import { dollarsToMinor } from "@/lib/pos/till-core";
 import { checkSetupCredentials } from "@/lib/pos/device-setup-core";
 import { VOID_REASON_PRESETS } from "@/lib/pos/void-sale-core";
 import type { PickupQueueEntry } from "@/lib/pos/pickup-core";
+import type { MemberHistory } from "@/lib/pos/member-history-core";
 import { buildDayReportSlipHtml, type DaySummary, type DrawerDaySummary } from "@/lib/pos/day-report-core";
 import {
   LAST_RECEIPT_KEY,
@@ -493,6 +494,27 @@ export function RegisterShell() {
             return { ok: true as const, members: body.members };
           } catch {
             return { ok: false as const, error: "Network error — try again or ring without the member." };
+          }
+        }}
+        onMemberHistory={async (customerId) => {
+          // POS B29 — privacy-budgeted purchase history for the attached
+          // member ("the usual?"). ONLINE-ONLY, same discipline as lookup.
+          if (!navigator.onLine) {
+            return { ok: false as const, error: "Offline — history needs a connection." };
+          }
+          try {
+            const res = await fetch(`/api/pos/member-history?customerId=${encodeURIComponent(customerId)}`, {
+              headers: { "x-pos-device-id": creds.deviceId, "x-pos-device-key": creds.deviceKey },
+            });
+            const body = (await res.json().catch(() => null)) as
+              | { history?: MemberHistory; error?: string }
+              | null;
+            if (!res.ok || !body?.history) {
+              return { ok: false as const, error: body?.error ?? "Could not load history." };
+            }
+            return { ok: true as const, history: body.history };
+          } catch {
+            return { ok: false as const, error: "Network error — try again." };
           }
         }}
         onEnqueue={(eventType, payload) => {

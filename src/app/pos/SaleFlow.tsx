@@ -66,6 +66,7 @@ import {
   normalizePosReceiptConfig,
   receiptAddressLines,
 } from "@/lib/pos/receipt-config-core";
+import type { MemberHistory } from "@/lib/pos/member-history-core";
 
 type Step = "idgate" | "cart" | "tender" | "done";
 
@@ -109,6 +110,12 @@ export type SaleFlowProps = {
    * ever cached on the iPad). Returns matches or an error message.
    */
   onMemberLookup?: (q: string) => Promise<{ ok: true; members: PosMemberHit[] } | { ok: false; error: string }>;
+  /**
+   * B29 — privacy-budgeted purchase history for an ATTACHED member ("the
+   * usual?"): last few completed purchases + favorites, nothing else.
+   * ONLINE-ONLY like the lookup; nothing is cached beyond the open panel.
+   */
+  onMemberHistory?: (customerId: string) => Promise<{ ok: true; history: MemberHistory } | { ok: false; error: string }>;
   /**
    * B24 — manager PIN approval for a price override. ONLINE-ONLY (a PIN
    * can't be verified offline). The shell implements it with the SAME
@@ -190,7 +197,7 @@ function priceForBuyer(
   };
 }
 
-export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, initialCart, onHold, onReceiptFrozen, onMemberLookup, onApprove, onEnqueue, onComplete, onCancel }: SaleFlowProps) {
+export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, initialCart, onHold, onReceiptFrozen, onMemberLookup, onMemberHistory, onApprove, onEnqueue, onComplete, onCancel }: SaleFlowProps) {
   const [step, setStep] = useState<Step>("idgate");
   const [verdict, setVerdict] = useState<Extract<IdGateVerdict, { allowed: true }> | null>(null);
   const [manualEventUuid, setManualEventUuid] = useState<string | null>(null);
@@ -253,6 +260,7 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
         member={member}
         setMember={setMember}
         onMemberLookup={onMemberLookup}
+        onMemberHistory={onMemberHistory}
         onApprove={onApprove}
         overrides={overrides}
         setOverrides={setOverrides}
@@ -793,6 +801,7 @@ function CartScreen({
   member,
   setMember,
   onMemberLookup,
+  onMemberHistory,
   onApprove,
   overrides,
   setOverrides,
@@ -809,6 +818,8 @@ function CartScreen({
   member: PosMemberHit | null;
   setMember: (m: PosMemberHit | null) => void;
   onMemberLookup?: (q: string) => Promise<{ ok: true; members: PosMemberHit[] } | { ok: false; error: string }>;
+  /** B29 — history for the ATTACHED member (ONLINE-ONLY via the shell). */
+  onMemberHistory?: (customerId: string) => Promise<{ ok: true; history: MemberHistory } | { ok: false; error: string }>;
   /** B24 — manager PIN verify (ONLINE-ONLY; /api/pos/approve via the shell). */
   onApprove?: (pin: string) => Promise<{ ok: true; approver: { id: string; fullName: string } } | { ok: false; error: string }>;
   /** B24 — this sale's manager price overrides, keyed by variantId. */
@@ -1112,7 +1123,7 @@ function CartScreen({
           ) : null}
 
           {/* POS B14 — loyalty member attach (online lookup only) */}
-          <MemberPanel member={member} setMember={setMember} onMemberLookup={onMemberLookup} />
+          <MemberPanel member={member} setMember={setMember} onMemberLookup={onMemberLookup} onMemberHistory={onMemberHistory} />
 
           <div className="mt-4 border-t border-neutral-800 pt-3 text-sm">
             <Row label="Subtotal (pre-tax)" value={money(priced.totals.subtotalMinorUnits)} />
@@ -1359,33 +1370,107 @@ function MemberPanel({
   member,
   setMember,
   onMemberLookup,
+  onMemberHistory,
 }: {
   member: PosMemberHit | null;
   setMember: (m: PosMemberHit | null) => void;
   onMemberLookup?: (q: string) => Promise<{ ok: true; members: PosMemberHit[] } | { ok: false; error: string }>;
+  onMemberHistory?: (customerId: string) => Promise<{ ok: true; history: MemberHistory } | { ok: false; error: string }>;
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState(false);
   const [hits, setHits] = useState<PosMemberHit[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // B29 — "the usual?": history for the attached member, fetched on demand,
+  // held only while the panel shows it (nothing cached beyond this sale).
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [history, setHistory] = useState<MemberHistory | null>(null);
+  const [historyBusy, setHistoryBusy] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+
+  const toggleHistory = async () => {
+    if (!member || !onMemberHistory) return;
+    if (historyOpen) {
+      setHistoryOpen(false);
+      setHistory(null); // privacy budget: drop it the moment it's hidden
+      setHistoryError(null);
+      return;
+    }
+    setHistoryOpen(true);
+    setHistoryBusy(true);
+    setHistoryError(null);
+    const res = await onMemberHistory(member.customerId);
+    setHistoryBusy(false);
+    if (res.ok) setHistory(res.history);
+    else setHistoryError(res.error);
+  };
 
   if (member) {
     return (
-      <div className="mt-3 flex items-center justify-between rounded-xl border border-amber-700/50 bg-amber-950/30 px-4 py-2.5">
-        <span className="text-sm">
-          <span className="font-semibold text-amber-300">★ {member.label}</span>
-          <span className="ml-2 text-xs text-neutral-400">
-            {member.points.toLocaleString()} pts{member.tierName ? ` · ${member.tierName}` : ""}
+      <div className="mt-3 rounded-xl border border-amber-700/50 bg-amber-950/30 px-4 py-2.5">
+        <div className="flex items-center justify-between">
+          <span className="text-sm">
+            <span className="font-semibold text-amber-300">★ {member.label}</span>
+            <span className="ml-2 text-xs text-neutral-400">
+              {member.points.toLocaleString()} pts{member.tierName ? ` · ${member.tierName}` : ""}
+            </span>
           </span>
-        </span>
-        <button
-          type="button"
-          onClick={() => setMember(null)}
-          className="rounded-lg bg-neutral-800 px-3 py-1.5 text-xs font-semibold"
-        >
-          Remove
-        </button>
+          <span className="flex gap-2">
+            {onMemberHistory ? (
+              <button
+                type="button"
+                onClick={() => void toggleHistory()}
+                className="rounded-lg bg-neutral-800 px-3 py-1.5 text-xs font-semibold"
+              >
+                {historyOpen ? "Hide history" : "History"}
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => {
+                setMember(null);
+                setHistoryOpen(false);
+                setHistory(null);
+                setHistoryError(null);
+              }}
+              className="rounded-lg bg-neutral-800 px-3 py-1.5 text-xs font-semibold"
+            >
+              Remove
+            </button>
+          </span>
+        </div>
+        {historyOpen ? (
+          <div className="mt-2 border-t border-amber-900/40 pt-2">
+            {historyBusy ? (
+              <p className="text-xs text-neutral-400">Loading…</p>
+            ) : historyError ? (
+              <p className="text-xs text-amber-300">{historyError}</p>
+            ) : history ? (
+              history.purchases.length === 0 ? (
+                <p className="text-xs text-neutral-400">First visit on record — make it a good one.</p>
+              ) : (
+                <>
+                  {history.favorites.length > 0 ? (
+                    <p className="text-xs text-neutral-300">
+                      <span className="font-semibold text-amber-300/90">Usually buys:</span>{" "}
+                      {history.favorites.map((f) => f.productName).join(" · ")}
+                    </p>
+                  ) : null}
+                  <ul className="mt-1.5 space-y-1">
+                    {history.purchases.map((p) => (
+                      <li key={p.orderId} className="text-xs text-neutral-400">
+                        <span className="font-semibold text-neutral-300">{p.dateLabel}</span> · {money(p.totalMinor)} ·{" "}
+                        {p.items.join(", ")}
+                        {p.moreCount > 0 ? ` + ${p.moreCount} more` : ""}
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )
+            ) : null}
+          </div>
+        ) : null}
       </div>
     );
   }
