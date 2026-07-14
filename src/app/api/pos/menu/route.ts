@@ -25,6 +25,7 @@ import { loadActiveRules, loadProductCosts } from "@/lib/promotions/discount-eng
 import { getSalesLimitSettings } from "@/lib/compliance/sales-limits";
 import { getSalesHoursWindow } from "@/lib/compliance/sales-hours-store";
 import { getMedTaxSettings, getEndorsementConfig } from "@/lib/medical/store";
+import { getPosReceiptConfig } from "@/lib/pos/receipt-config-store";
 import { listMedicalRegistry } from "@/lib/medical/sale-store";
 import type { DohCategory } from "@/lib/medical/medical-sale-core";
 import type { PosMedicalConfig } from "@/lib/pos/medical-pos-core";
@@ -42,16 +43,18 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
-  const [menu, rules, costs, limitSettings, hours, medSettings, endorsement, registryRows] = await Promise.all([
-    loadLiveMenuAll(),
-    loadActiveRules(),
-    loadProductCosts(),
-    getSalesLimitSettings(),
-    getSalesHoursWindow(),
-    getMedTaxSettings(),
-    getEndorsementConfig(),
-    listMedicalRegistry({ limit: 2000 }),
-  ]);
+  const [menu, rules, costs, limitSettings, hours, medSettings, endorsement, registryRows, receipt] =
+    await Promise.all([
+      loadLiveMenuAll(),
+      loadActiveRules(),
+      loadProductCosts(),
+      getSalesLimitSettings(),
+      getSalesHoursWindow(),
+      getMedTaxSettings(),
+      getEndorsementConfig(),
+      listMedicalRegistry({ limit: 2000 }),
+      getPosReceiptConfig(),
+    ]);
 
   // POS B8 — the medical-sale config the device prices with OFFLINE. The
   // registry is the durable DOH 246-70 table keyed by the stable POS product
@@ -118,6 +121,9 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     },
     hours,
     medical,
+    // POS B13 — owner receipt customization travels with the bundle so
+    // OFFLINE sales print the customized receipt.
+    receipt,
     fetchedAt: new Date().toISOString(),
   };
 

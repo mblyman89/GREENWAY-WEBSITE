@@ -327,6 +327,7 @@ export function RegisterShell() {
         bundle={menuBundle}
         drawerSessionId={drawer.sessionId}
         registerName={creds.name}
+        employeeName={employee.fullName}
         onEnqueue={(eventType, payload) => {
           const uuid = enqueue(eventType, payload, employee.id);
           void flush();

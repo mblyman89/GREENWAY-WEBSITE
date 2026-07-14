@@ -57,6 +57,24 @@ export type PosReceiptInput = {
   changeMinor: number;
   headerText?: string | null;
   footerText?: string | null;
+  /**
+   * B13 receipt customization — address/contact block printed one centered
+   * line each under the header (street, city, phone, license #, …).
+   */
+  addressLines?: string[];
+  /** B13 — "Served by <name>" line (owner toggle showEmployee). */
+  servedBy?: string | null;
+  /** B13 — hide the "You saved" row even when savings > 0 (owner toggle). */
+  hideSavings?: boolean;
+  /**
+   * B14 loyalty block — printed above the footer when a member is attached
+   * (and the owner's showLoyalty toggle is on; caller omits when off).
+   */
+  loyalty?: {
+    memberLabel: string;
+    /** Points this sale will earn once synced (device estimate). */
+    pointsEarned: number | null;
+  } | null;
 };
 
 /** Escape text for safe embedding in the receipt HTML. */
@@ -103,7 +121,7 @@ export function buildPosReceiptHtml(input: PosReceiptInput): string {
     `<tr><td class="n">Subtotal (pre-tax)</td><td class="a">${formatMoneyMinor(input.subtotalMinor)}</td></tr>`,
     `<tr><td class="n">Tax</td><td class="a">${formatMoneyMinor(input.taxMinor)}</td></tr>`,
   ];
-  if (input.savingsMinor > 0) {
+  if (input.savingsMinor > 0 && !input.hideSavings) {
     totals.push(
       `<tr><td class="n">You saved</td><td class="a">-${formatMoneyMinor(input.savingsMinor)}</td></tr>`,
     );
@@ -127,6 +145,7 @@ export function buildPosReceiptHtml(input: PosReceiptInput): string {
     "body{width:576px;margin:0;padding:8px 4px;font-family:'Helvetica Neue',Arial,sans-serif;color:#000;}",
     "h1{font-size:34px;text-align:center;margin:0 0 4px;}",
     ".sub{font-size:24px;text-align:center;margin:0 0 8px;}",
+    ".addr{font-size:22px;text-align:center;margin:0 0 2px;}",
     ".medbanner{font-size:26px;font-weight:bold;text-align:center;border:3px solid #000;padding:6px;margin:8px 0;}",
     "table{width:100%;border-collapse:collapse;font-size:26px;}",
     "td{padding:4px 0;vertical-align:top;}",
@@ -139,13 +158,27 @@ export function buildPosReceiptHtml(input: PosReceiptInput): string {
     "@media print{body{width:auto;}}",
     "</style></head><body>",
     `<h1>${header}</h1>`,
+    ...(input.addressLines ?? [])
+      .map((l) => l.trim())
+      .filter(Boolean)
+      .map((l) => `<p class="addr">${escapeReceiptHtml(l)}</p>`),
     `<p class="sub">Receipt ${receiptNumber(input.saleClientUuid)} &middot; ${escapeReceiptHtml(input.registerLabel)}</p>`,
     `<p class="sub">${escapeReceiptHtml(formatReceiptTimestamp(input.soldAtIso))}</p>`,
+    input.servedBy?.trim() ? `<p class="sub">Served by ${escapeReceiptHtml(input.servedBy.trim())}</p>` : "",
     input.medicalSale ? '<p class="medbanner">MEDICAL &mdash; TAX EXEMPT SALE</p>' : "",
     "<hr>",
     `<table>${rows.join("")}</table>`,
     "<hr>",
     `<table>${totals.join("")}</table>`,
+    ...(input.loyalty
+      ? [
+          "<hr>",
+          `<p class="sub">Loyalty: ${escapeReceiptHtml(input.loyalty.memberLabel)}</p>`,
+          input.loyalty.pointsEarned != null && input.loyalty.pointsEarned > 0
+            ? `<p class="sub">Points earned this visit: ${Math.floor(input.loyalty.pointsEarned)}</p>`
+            : "",
+        ]
+      : []),
     "<hr>",
     `<p class="foot">${footer}</p>`,
     "</body></html>",
@@ -260,6 +293,35 @@ export function __runPosReceiptCoreTests(): void {
   // Promo savings row appears when > 0.
   const promo = buildPosReceiptHtml({ ...base, savingsMinor: 200 });
   ok(promo.includes("You saved") && promo.includes("-$2.00"), "promo savings row");
+
+  // B13 customization: address block, served-by, savings toggle.
+  const custom = buildPosReceiptHtml({
+    ...base,
+    savingsMinor: 200,
+    hideSavings: true,
+    addressLines: ["9107 SW State Hwy 3", "  ", "License <413541>"],
+    servedBy: "Casey",
+  });
+  ok(custom.includes('<p class="addr">9107 SW State Hwy 3</p>'), "address line printed");
+  ok(custom.includes("License &lt;413541&gt;"), "address line escaped");
+  ok(!custom.includes('<p class="addr"></p>'), "blank address lines dropped");
+  ok(custom.includes("Served by Casey"), "served-by line printed");
+  ok(!custom.includes("You saved"), "savings row suppressed by owner toggle");
+  ok(!buildPosReceiptHtml(base).includes("Served by"), "no served-by when omitted");
+
+  // B14 loyalty block.
+  const withLoyalty = buildPosReceiptHtml({
+    ...base,
+    loyalty: { memberLabel: "Jane D. <vip>", pointsEarned: 20 },
+  });
+  ok(withLoyalty.includes("Loyalty: Jane D. &lt;vip&gt;"), "loyalty member label escaped");
+  ok(withLoyalty.includes("Points earned this visit: 20"), "points earned printed");
+  const zeroPoints = buildPosReceiptHtml({
+    ...base,
+    loyalty: { memberLabel: "Jane D.", pointsEarned: 0 },
+  });
+  ok(zeroPoints.includes("Loyalty: Jane D.") && !zeroPoints.includes("Points earned"), "zero points row omitted");
+  ok(!buildPosReceiptHtml(base).includes("Loyalty:"), "no loyalty block when absent");
 
   // PassPRNT URL: verified scheme + encoded params + drawer kick.
   const url = buildPassPrntUrl("<html>a&b</html>", { backUrl: "https://pos.example/pos?x=1" });
