@@ -440,7 +440,10 @@ async function processSale(
   const lineRows = sale.lines.map((l) => ({
     order_id: order.id,
     product_id: l.productId || null,
-    variant_id: null,
+    // POS B20: exact variant identity from the register (null on pre-B20
+    // queued sales) — powers the B19 exact-variant decrement and gives the
+    // CCRS Sale.csv resolver its most precise input.
+    variant_id: l.variantId?.trim() || null,
     product_name: l.productName,
     brand: null,
     variant_label: null,

@@ -216,6 +216,9 @@ export function priceCart(cart: PosCartEntry[], rules: EngineRule[]): PriceCartR
       quantity: entry.quantity,
       unitPriceMinor: unit,
       regularPriceMinor: regular,
+      // POS B20: exact variant identity travels with the line so the synced
+      // order can decrement inventory precisely and CCRS resolves per-line.
+      variantId: entry.product.variantId,
       brand: entry.product.brand,
       variantLabel: entry.product.variantLabel,
       appliedLabel: d?.appliedLabel,
@@ -313,6 +316,9 @@ export function buildSalePayload(args: BuildSaleArgs): BuildSaleResult {
       quantity: l.quantity,
       unitPriceMinor: l.unitPriceMinor,
       regularPriceMinor: l.regularPriceMinor,
+      // POS B20: optional exact-variant identity (omitted when absent so
+      // pre-B20 payload shapes stay byte-identical).
+      ...(l.variantId ? { variantId: l.variantId } : {}),
     })),
     totalMinor: args.totals.totalMinorUnits,
     subtotalMinor: args.totals.subtotalMinorUnits,
@@ -460,6 +466,9 @@ export function __runSaleFlowCoreTests(): void {
   if (built.ok) {
     ok(built.changeMinor === 4000 - 3500, "change computed exactly");
     ok(built.payload.paymentMethod === "cash", "cash-only payment method");
+    // POS B20: the cart's exact variant identity travels through pricing into
+    // the payload line.
+    ok(built.payload.lines[0].variantId === "var-flower-35", "B20: variantId carried price→payload");
   }
   const short = buildSalePayload({
     lines: priced.lines,

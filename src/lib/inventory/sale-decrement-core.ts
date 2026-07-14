@@ -95,10 +95,23 @@ export type LotForDecrement = {
   /** inventory_lots.pos_product_key (= order_lines.product_id). */
   posProductKey: string;
   onHandQty: number;
+  /**
+   * The lot's canonical CCRS InventoryExternalIdentifier (POS B20) — the
+   * caller derives it via deriveInventoryExternalId. Optional; when present
+   * the plan reports which id each product key consumed FIRST so the sale
+   * lines can be stamped for a precise "line"-source CCRS Sale.csv.
+   */
+  ccrsExternalId?: string | null;
 };
 
 export type LotDecrementPlan = {
-  lotUpdates: { id: string; newOnHand: number; soldOut: boolean }[];
+  lotUpdates: { id: string; posProductKey: string; newOnHand: number; soldOut: boolean }[];
+  /**
+   * POS B20: product key → the CCRS external id of the FIRST (oldest) lot the
+   * sale consumed. Used to stamp order_lines.ccrs_inventory_external_id so the
+   * weekly Sale.csv resolves source "line" (exact), not "product_key".
+   */
+  lineExternalIds: Map<string, string>;
   /** Human notes: demand that exceeded ALL active lots for a product key. */
   shortfalls: string[];
 };
@@ -230,7 +243,8 @@ export function buildLotDecrementPlan(
     demand.set(line.productId, (demand.get(line.productId) ?? 0) + qty);
   }
 
-  const lotUpdates: { id: string; newOnHand: number; soldOut: boolean }[] = [];
+  const lotUpdates: { id: string; posProductKey: string; newOnHand: number; soldOut: boolean }[] = [];
+  const lineExternalIds = new Map<string, string>();
   const shortfalls: string[] = [];
 
   for (const [key, qtyNeeded] of demand) {
@@ -243,7 +257,11 @@ export function buildLotDecrementPlan(
       const take = Math.min(onHand, remaining);
       remaining -= take;
       const newOnHand = onHand - take;
-      lotUpdates.push({ id: lot.id, newOnHand, soldOut: newOnHand === 0 });
+      lotUpdates.push({ id: lot.id, posProductKey: key, newOnHand, soldOut: newOnHand === 0 });
+      // POS B20: the FIRST (oldest) consumed lot's canonical CCRS id stamps
+      // the sale lines for this product key — matching the FIFO consumption.
+      const extId = (lot.ccrsExternalId ?? "").trim();
+      if (extId && !lineExternalIds.has(key)) lineExternalIds.set(key, extId);
     }
     if (remaining > 0) {
       shortfalls.push(
@@ -252,7 +270,7 @@ export function buildLotDecrementPlan(
     }
   }
 
-  return { lotUpdates, shortfalls };
+  return { lotUpdates, lineExternalIds, shortfalls };
 }
 
 // ---------------------------------------------------------------------------
@@ -378,8 +396,8 @@ export function __runSaleDecrementCoreTests(): void {
 
   // Lot FIFO plan.
   const lots: LotForDecrement[] = [
-    { id: "lot-a", posProductKey: "prod-1", onHandQty: 2 },
-    { id: "lot-b", posProductKey: "prod-1", onHandQty: 5 },
+    { id: "lot-a", posProductKey: "prod-1", onHandQty: 2, ccrsExternalId: "LOT-A-CCRS" },
+    { id: "lot-b", posProductKey: "prod-1", onHandQty: 5, ccrsExternalId: "LOT-B-CCRS" },
     { id: "lot-c", posProductKey: "prod-2", onHandQty: 1 },
   ];
   const lp1 = buildLotDecrementPlan(
@@ -390,6 +408,7 @@ export function __runSaleDecrementCoreTests(): void {
   ok(lp1.lotUpdates[0].id === "lot-a" && lp1.lotUpdates[0].newOnHand === 0 && lp1.lotUpdates[0].soldOut, "oldest lot drained first and marked sold out");
   ok(lp1.lotUpdates[1].id === "lot-b" && lp1.lotUpdates[1].newOnHand === 4 && !lp1.lotUpdates[1].soldOut, "second lot partially consumed");
   ok(lp1.shortfalls.length === 0, "no shortfall when lots cover demand");
+  ok(lp1.lineExternalIds.get("prod-1") === "LOT-A-CCRS", "B20: FIRST consumed lot's CCRS id stamps the key");
 
   const lp2 = buildLotDecrementPlan(
     [{ lineId: "l1", productId: "prod-2", variantId: null, productName: "SG", quantity: 4 }],

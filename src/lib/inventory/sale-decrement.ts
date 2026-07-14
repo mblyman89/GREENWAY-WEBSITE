@@ -37,6 +37,7 @@ import {
   type VariantForDecrement,
   type LotForDecrement,
 } from "@/lib/inventory/sale-decrement-core";
+import { deriveInventoryExternalId } from "@/lib/compliance/ccrs-identifiers";
 
 const EVENT_TYPE = "inventory_decremented";
 
@@ -119,14 +120,34 @@ export async function decrementInventoryForOrder(orderId: string): Promise<void>
     if (productKeys.length > 0) {
       const { data: lotRows } = await admin
         .from("inventory_lots")
-        .select("id, pos_product_key, on_hand_qty")
+        .select("id, pos_product_key, on_hand_qty, ccrs_inventory_external_id, lot_code")
         .in("pos_product_key", productKeys)
         .eq("status", "active")
         .gt("on_hand_qty", 0)
         .order("created_at", { ascending: true });
-      lots = ((lotRows as { id: string; pos_product_key: string | null; on_hand_qty: number }[] | null) ?? [])
+      lots = ((lotRows as
+        | {
+            id: string;
+            pos_product_key: string | null;
+            on_hand_qty: number;
+            ccrs_inventory_external_id: string | null;
+            lot_code: string | null;
+          }[]
+        | null) ?? [])
         .filter((r) => !!r.pos_product_key)
-        .map((r) => ({ id: r.id, posProductKey: r.pos_product_key as string, onHandQty: r.on_hand_qty }));
+        .map((r) => ({
+          id: r.id,
+          posProductKey: r.pos_product_key as string,
+          onHandQty: r.on_hand_qty,
+          // The lot's canonical CCRS id — identical derivation to the weekly
+          // Sale.csv builder's lot index (explicit → lot_code → key → LOT-id).
+          ccrsExternalId: deriveInventoryExternalId({
+            ccrs_inventory_external_id: r.ccrs_inventory_external_id,
+            pos_product_key: r.pos_product_key,
+            lot_code: r.lot_code,
+            id: r.id,
+          }),
+        }));
     }
     const lotPlan = buildLotDecrementPlan(lines, lots);
     for (const u of lotPlan.lotUpdates) {
@@ -134,6 +155,21 @@ export async function decrementInventoryForOrder(orderId: string): Promise<void>
         .from("inventory_lots")
         .update(u.soldOut ? { on_hand_qty: u.newOnHand, status: "sold_out" } : { on_hand_qty: u.newOnHand })
         .eq("id", u.id);
+    }
+
+    // ── POS B20: stamp each line's CCRS InventoryExternalIdentifier ───────
+    // The FIRST (oldest) lot the FIFO consumption drew from is the id the
+    // weekly Sale.csv should carry — resolveSaleInventoryExternalId then
+    // reports source "line" (exact) instead of the product_key fallback.
+    // Only fills blanks: an explicit per-line override is never overwritten.
+    for (const line of lines) {
+      const extId = line.productId ? lotPlan.lineExternalIds.get(line.productId) : undefined;
+      if (!extId) continue;
+      await admin
+        .from("order_lines")
+        .update({ ccrs_inventory_external_id: extId })
+        .eq("id", line.lineId)
+        .is("ccrs_inventory_external_id", null);
     }
 
     // ── Marker + human trail (this is also the idempotency latch) ─────────
