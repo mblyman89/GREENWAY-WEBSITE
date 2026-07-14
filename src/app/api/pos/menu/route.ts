@@ -87,8 +87,11 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     );
     const cost = costs.get(item.id) ?? null;
     // Items without explicit variants sell at the item price — same synthetic
-    // default the website's price selector renders.
-    const variants = item.variants.length
+    // default the website's price selector renders. Its inventoryLevel of 0
+    // is a placeholder, NOT a real count — flagged below so B32 treats the
+    // units as unknown instead of "out".
+    const hasRealVariants = item.variants.length > 0;
+    const variants = hasRealVariants
       ? item.variants
       : [
           {
@@ -111,6 +114,10 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         regularPriceMinor: variant.priceMinorUnits,
         costMinorUnits: cost,
         inventoryStatus: item.inventoryStatus,
+        // B32 — variant-level count for low-stock badges. Synthetic default
+        // variants carry no real count (null = unknown, falls back to the
+        // item-level status). Warnings only; never blocks a sale.
+        unitsLeft: hasRealVariants ? variant.inventoryLevel : null,
       });
     }
   }

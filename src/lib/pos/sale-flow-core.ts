@@ -67,6 +67,13 @@ export type PosMenuProduct = {
   /** Weighted-average acquisition cost when known (CCRS cost floor). */
   costMinorUnits: number | null;
   inventoryStatus: "in-stock" | "low-stock" | "unavailable";
+  /**
+   * B32 — variant-level units remaining from the published menu, when known.
+   * null = unknown (items sold at the item price without explicit variants);
+   * optional so bundles cached before B32 still parse (undefined = unknown).
+   * Warnings only — the B19 decrement + completion gate are the authority.
+   */
+  unitsLeft?: number | null;
 };
 
 /** Owner's sales-limit settings as shipped to the device. */

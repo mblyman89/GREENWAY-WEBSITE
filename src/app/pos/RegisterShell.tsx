@@ -42,6 +42,7 @@ import { normalizePosReceiptConfig, receiptAddressLines } from "@/lib/pos/receip
 import { DENOM_FIELDS, EMPTY_DENOMS, denomTotalMinor, formatCents, type DenomCounts } from "@/lib/registers/cash";
 import { dollarsToMinor } from "@/lib/pos/till-core";
 import { changeBreakdown, formatChangeBreakdown } from "@/lib/pos/change-calc-core";
+import { lowStockCount } from "@/lib/pos/low-stock-core";
 import { checkSetupCredentials } from "@/lib/pos/device-setup-core";
 import { VOID_REASON_PRESETS } from "@/lib/pos/void-sale-core";
 import type { PickupQueueEntry } from "@/lib/pos/pickup-core";
@@ -610,6 +611,7 @@ export function RegisterShell() {
         banner={banner}
         menuReady={!!menuBundle}
         menuFetchedAt={menuBundle?.fetchedAt ?? null}
+        lowStock={menuBundle ? lowStockCount(menuBundle.products) : 0}
         lastReceipt={lastReceipt}
         heldSale={heldSale}
         onStartSale={() => {
@@ -1032,6 +1034,7 @@ function HomeScreen({
   banner,
   menuReady,
   menuFetchedAt,
+  lowStock,
   lastReceipt,
   heldSale,
   onStartSale,
@@ -1060,6 +1063,8 @@ function HomeScreen({
   banner: string | null;
   menuReady: boolean;
   menuFetchedAt: string | null;
+  /** B32 — products flagged low/last-units in the downloaded menu (0 = none). */
+  lowStock: number;
   /** B17 — the last frozen receipt (null until the first sale). */
   lastReceipt: PosReceiptInput | null;
   /** B17 — the parked sale (null = nothing on hold). */
@@ -1165,6 +1170,11 @@ function HomeScreen({
               ? `downloaded ${new Date(menuFetchedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`
               : "not downloaded yet"}
           </p>
+          {lowStock > 0 ? (
+            <p className="mt-1 text-xs font-semibold text-amber-300">
+              {lowStock} item{lowStock === 1 ? "" : "s"} running low — flagged on the sale screen
+            </p>
+          ) : null}
           <div className="mt-3 flex gap-2">
             <button type="button" onClick={onSyncNow} className="rounded-lg bg-neutral-800 px-4 py-2 text-sm font-semibold">
               Sync now
