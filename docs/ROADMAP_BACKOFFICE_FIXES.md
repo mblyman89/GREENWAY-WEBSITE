@@ -2544,3 +2544,29 @@ scope `/`); old caches are cleaned on activate, and registration failure
 
 **Tests:** tsc 0 errors; vitest 1,407/95; pure self-tests all pass; eslint
 clean. No migration, no server changes.
+
+## Shipped — POS B12: register exception-queue manager (PR #458)
+
+The manager UI for the sync exception ledger — the last piece of the
+B7–B12 run. Every register event the ingest could not process safely lands
+in the queue with a staff-actionable reason (the B4/B8 discipline: nothing
+is ever silently dropped), and `/admin/registers/exceptions`
+(`staffing.manage`) is where a manager works it. Open exceptions render
+oldest-first with an event-type badge, Pacific timestamp, register and
+employee NAMES (resolved through the existing stores), the client UUID,
+the actionable reason, and a collapsible full-payload inspector so the
+manager sees exactly what the register sent — lines, totals, tender, card
+facts. Resolving requires a written note (min 5 chars, enforced
+server-side by the existing `resolvePosException`) and records an audited
+`pos.exception_resolved`; the help panel spells out the workflow — fix the
+underlying problem FIRST (intake the card, apply the migration, correct
+the price), re-ring at the register if the sale still needs to happen,
+then resolve, because resolution never replays the event. A "Recently
+resolved" section keeps the durable paper trail (reason, note, resolver,
+timestamps, payload). `listPosExceptions` now selects the payload and a
+new `listResolvedPosExceptions` reads the resolution columns migration
+0120 already carries; the Register Activity page gained an "Exceptions"
+button with a live open-count.
+
+**Tests:** tsc 0 errors; vitest 1,407/95; pure self-tests all pass; eslint
+clean. No migration, no register-app changes.
