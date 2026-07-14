@@ -291,12 +291,18 @@ export async function accrueForOrder(opts: {
   return { ok: true, points };
 }
 
-/** Manual staff adjustment (positive or negative). */
+/**
+ * Manual staff adjustment (positive or negative). `orderId` (optional) ties
+ * the adjustment to an order — the B16 return clawback uses it so repeated
+ * partial returns on the same order can see prior clawbacks and never
+ * over-claw.
+ */
 export async function adjustPoints(opts: {
   accountId: string;
   points: number;
   note: string;
   actorId?: string | null;
+  orderId?: string | null;
 }): Promise<{ ok: boolean; error?: string }> {
   if (!isSupabaseServiceConfigured) return { ok: false, error: "Supabase not configured" };
   if (opts.points === 0) return { ok: false, error: "Adjustment cannot be zero" };
@@ -305,6 +311,7 @@ export async function adjustPoints(opts: {
     kind: "adjust",
     points: opts.points,
     note: opts.note,
+    orderId: opts.orderId ?? null,
     actorId: opts.actorId ?? null,
   });
   return { ok: true };
