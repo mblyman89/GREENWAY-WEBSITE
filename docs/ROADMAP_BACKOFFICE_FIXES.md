@@ -3013,3 +3013,43 @@ values must be copied from the SAME device row without retyping.
 **Tests:** 1,482 vitest tests / 104 files (+4 in
 `tests/compliance/device-setup-core.test.ts`); device-setup-core self-tests
 13 → 21 assertions. No migration. No money paths. CI green on PR #487.
+
+### Shipped: POS B27 — same-day void sale at the register (PR #489)
+
+A void is not a return. A return is a customer bringing product back on any
+later day (B15/B16 handle that, CCRS corrections included); a void is "that
+sale should never have happened" — wrong items rung, customer walked before
+taking product, trainee error — caught the SAME day. Every major cannabis
+POS (Dutchie, Flowhub, Cova, Treez) separates these, and now so do we.
+
+New pure core `src/lib/pos/void-sale-core.ts`: eligibility is server-
+authoritative and returns a COMPLETE error list — the order must be
+completed TODAY (Pacific wall-clock, DST-safe via the tested
+pacificToday()/pacificWallTimeToUtcISO helpers), must have no prior partial
+returns against it, and can never be voided twice (order_events
+`sale_voided` marker). Reason is mandatory (3–500 chars, five one-tap
+presets: wrong items, customer walked, trainee error, duplicate ring,
+price dispute) and a manager/lead PIN is required — same scrypt + throttle
+discipline as every other two-man-rule action.
+
+The reversal reuses existing tested machinery instead of inventing new
+paths: S-15 reasoned lifecycle (completed→ready with reversalReason
+"VOID: …", then ready→cancelled), both B19 inventory layers restocked
+idempotently (`sale_void_restocked` marker; menu_variants level + item
+status recompute, newest non-quarantine lot per product, sold_out
+reactivates), FULL loyalty clawback (cumulative-safe: earn minus prior
+adjust clawbacks), and medical_exempt_sales rows deleted so the WAC
+314-55-090(2) ledger never shows a voided sale. `register.sale_voided`
+audit row records who, why, and how much. A 576px void slip prints with a
+"SALE VOIDED" banner and the drawer pops — cash goes back to the customer.
+ONLINE-ONLY (no offline voids). Register home gets a "Void a sale (today)"
+tile: receipt lookup → sale preview → reason → manager PIN → red confirm.
+
+No CCRS correction file is needed: Sale.csv exports COMPLETED orders only
+(verified in ccrs-sales.ts) and voids are same-day, so a voided order never
+reaches the weekly filing in the first place.
+
+**Tests:** 1,492 vitest tests / 105 files (+10 in
+`tests/compliance/void-sale-core.test.ts`); void-sale-core self-tests
+(23 assertions) registered in the runner with import AND call. No
+migration. CI green on PR #489.
