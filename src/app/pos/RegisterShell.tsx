@@ -42,6 +42,7 @@ import { normalizePosReceiptConfig, receiptAddressLines } from "@/lib/pos/receip
 import { DENOM_FIELDS, EMPTY_DENOMS, denomTotalMinor, formatCents, type DenomCounts } from "@/lib/registers/cash";
 import { dollarsToMinor } from "@/lib/pos/till-core";
 import { checkSetupCredentials } from "@/lib/pos/device-setup-core";
+import { VOID_REASON_PRESETS } from "@/lib/pos/void-sale-core";
 import { buildDayReportSlipHtml, type DaySummary, type DrawerDaySummary } from "@/lib/pos/day-report-core";
 import {
   LAST_RECEIPT_KEY,
@@ -115,6 +116,7 @@ export function RegisterShell() {
   const [tillMode, setTillMode] = useState<"open" | "drop" | "close" | null>(null);
   // B22 — X/Z day report modal (manager PIN inside).
   const [dayReportOpen, setDayReportOpen] = useState(false);
+  const [voidOpen, setVoidOpen] = useState(false); // B27
   const seqRef = useRef(0);
   const queueRef = useRef<QueuedPosEvent[]>([]);
   const flushingRef = useRef(false);
@@ -552,6 +554,7 @@ export function RegisterShell() {
         onNoSale={() => setNoSaleOpen(true)}
         onTill={(mode) => setTillMode(mode)}
         onDayReport={() => setDayReportOpen(true)}
+        onVoidSale={online ? () => setVoidOpen(true) : undefined}
         onRefreshMenu={() => void refreshMenu()}
         onClearBanner={() => setBanner(null)}
         onLock={lock}
@@ -597,6 +600,20 @@ export function RegisterShell() {
           creds={creds}
           receiptConfig={menuBundle ? normalizePosReceiptConfig(menuBundle.receipt) : null}
           onClose={() => setDayReportOpen(false)}
+        />
+      ) : null}
+      {voidOpen && employee ? (
+        <VoidSaleModal
+          creds={creds}
+          employeeName={employee.fullName}
+          onClose={() => setVoidOpen(false)}
+          onVoided={(slipHtml, message) => {
+            setVoidOpen(false);
+            setBanner(message);
+            // Print the void slip; the drawer POPS — the cash goes back out.
+            const backUrl = window.location.origin + window.location.pathname;
+            window.location.href = buildPassPrntUrl(slipHtml, { backUrl, openDrawer: true });
+          }}
         />
       ) : null}
       {tillMode && employee ? (
@@ -894,6 +911,7 @@ function HomeScreen({
   onNoSale,
   onTill,
   onDayReport,
+  onVoidSale,
   onRefreshMenu,
   onClearBanner,
   onLock,
@@ -927,6 +945,8 @@ function HomeScreen({
   onTill: (mode: "open" | "drop" | "close") => void;
   /** B22 — open the manager-gated X/Z day-report flow. */
   onDayReport: () => void;
+  /** B27 — open the manager-gated same-day void flow (undefined offline). */
+  onVoidSale?: () => void;
   onRefreshMenu: () => void;
   onClearBanner: () => void;
   onLock: () => void;
@@ -1119,6 +1139,18 @@ function HomeScreen({
             Manager PIN required — prints the day&rsquo;s totals; never pops the drawer
           </span>
         </button>
+        <button
+          type="button"
+          onClick={onVoidSale}
+          disabled={!onVoidSale}
+          title={onVoidSale ? undefined : "Voids need a connection — the server reverses the sale"}
+          className="rounded-2xl bg-neutral-900 border border-neutral-800 p-5 text-left text-base font-semibold disabled:opacity-40"
+        >
+          Void a sale (today)
+          <span className="mt-1 block text-xs font-normal text-neutral-500">
+            Same-day mistakes only — manager PIN; restocks stock and returns the cash. Older sales: returns desk
+          </span>
+        </button>
       </section>
 
       <footer className="mt-auto pt-8 text-center text-xs text-neutral-600">
@@ -1270,6 +1302,233 @@ function NoSaleModal({
         >
           {busy ? "Verifying…" : "Approve, print slip & open drawer"}
         </button>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// B27 — Void sale modal: receipt lookup → reason + manager PIN → reversal
+// ---------------------------------------------------------------------------
+
+/**
+ * Void a SAME-DAY sale. Two steps: (1) type the receipt number and the
+ * server shows exactly what would be voided (lines + cash back) or the
+ * complete list of policy failures; (2) a reason + a manager/lead PIN
+ * processes the reversal server-side (/api/pos/void — lifecycle, restock,
+ * loyalty clawback, audit) and hands back a void slip. The drawer POPS on
+ * print: the customer's cash goes back out. ONLINE-ONLY — a void reverses
+ * durable server facts; there is nothing sensible to queue offline.
+ */
+function VoidSaleModal({
+  creds,
+  employeeName,
+  onClose,
+  onVoided,
+}: {
+  creds: DeviceCreds;
+  employeeName: string;
+  onClose: () => void;
+  onVoided: (slipHtml: string, message: string) => void;
+}) {
+  const PRESETS = VOID_REASON_PRESETS;
+  const [receipt, setReceipt] = useState("");
+  const [sale, setSale] = useState<{
+    receiptNumber: string;
+    orderNumber: string;
+    totalMinor: number;
+    lines: { productName: string; quantity: number }[];
+  } | null>(null);
+  const [preset, setPreset] = useState<string | null>(null);
+  const [custom, setCustom] = useState("");
+  const [pin, setPin] = useState("");
+  const [errors, setErrors] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+
+  const reason = (preset ?? custom).trim();
+  const reasonOk = reason.length >= 3 && reason.length <= 500;
+
+  const call = async (body: Record<string, unknown>) => {
+    const res = await fetch("/api/pos/void", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-pos-device-id": creds.deviceId,
+        "x-pos-device-key": creds.deviceKey,
+      },
+      body: JSON.stringify(body),
+    });
+    const json = (await res.json().catch(() => null)) as Record<string, unknown> | null;
+    return { ok: res.ok, json };
+  };
+
+  const lookup = async () => {
+    if (busy || receipt.trim().length < 4) return;
+    setBusy(true);
+    setErrors([]);
+    try {
+      const { ok, json } = await call({ receipt: receipt.trim() });
+      if (!ok || !json?.sale) {
+        const errs = Array.isArray(json?.errors) ? (json.errors as string[]) : [String(json?.error ?? "Lookup failed.")];
+        setErrors(errs);
+        setSale(null);
+        return;
+      }
+      setSale(json.sale as typeof sale);
+    } catch {
+      setErrors(["Could not reach the server — try again."]);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const processVoid = async () => {
+    if (busy || !sale || !reasonOk || pin.length < 4) return;
+    setBusy(true);
+    setErrors([]);
+    try {
+      const { ok, json } = await call({
+        receipt: sale.receiptNumber,
+        reason,
+        pin,
+        processedByName: employeeName,
+      });
+      if (!ok || !json?.slipHtml) {
+        setErrors([String(json?.error ?? "Void failed.")]);
+        setPin("");
+        return;
+      }
+      const refund = Number(json.refundMinor ?? 0);
+      const points = Number(json.pointsClawed ?? 0);
+      onVoided(
+        String(json.slipHtml),
+        `Sale ${sale.receiptNumber} voided — hand back $${(refund / 100).toFixed(2)} cash${points > 0 ? `; ${points} points reversed` : ""}.`,
+      );
+    } catch {
+      setErrors(["Could not reach the server — try again."]);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-neutral-700 bg-neutral-900 p-6 text-neutral-100">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Void a sale (today)</h2>
+          <button type="button" onClick={onClose} className="rounded-lg bg-neutral-800 px-3 py-1.5 text-sm">
+            Cancel
+          </button>
+        </div>
+        <p className="mt-2 text-xs text-neutral-400">
+          Same-day mistakes only — the whole sale reverses: stock goes back, points come back off, and the
+          customer gets their cash. Older sales belong at the returns desk (back office).
+        </p>
+
+        <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-neutral-400">
+          Receipt number
+        </label>
+        <div className="mt-1 flex gap-2">
+          <input
+            className="w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2.5 font-mono text-lg uppercase"
+            value={receipt}
+            autoComplete="off"
+            autoCapitalize="characters"
+            autoCorrect="off"
+            spellCheck={false}
+            maxLength={8}
+            placeholder="8 characters"
+            onChange={(e) => {
+              setReceipt(e.target.value.toUpperCase());
+              setSale(null);
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => void lookup()}
+            disabled={busy || receipt.trim().length < 4}
+            className="rounded-lg bg-neutral-700 px-4 py-2 text-sm font-semibold disabled:opacity-40"
+          >
+            {busy && !sale ? "…" : "Find"}
+          </button>
+        </div>
+
+        {sale ? (
+          <>
+            <div className="mt-4 rounded-xl border border-neutral-700 bg-neutral-950 p-4">
+              <p className="text-sm font-semibold">
+                Order {sale.orderNumber} · {formatCents(sale.totalMinor)} cash back
+              </p>
+              <ul className="mt-2 space-y-1 text-xs text-neutral-400">
+                {sale.lines.map((l, i) => (
+                  <li key={i}>
+                    {l.quantity}x {l.productName}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-neutral-400">Reason</label>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {PRESETS.map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => {
+                    setPreset(preset === p ? null : p);
+                    setCustom("");
+                  }}
+                  className={`rounded-lg px-3 py-2 text-xs font-semibold ${
+                    preset === p ? "bg-emerald-600 text-white" : "bg-neutral-800 text-neutral-300"
+                  }`}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+            <input
+              className="mt-2 w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2.5 text-sm"
+              placeholder="…or type a reason"
+              value={custom}
+              onChange={(e) => {
+                setCustom(e.target.value);
+                if (e.target.value) setPreset(null);
+              }}
+            />
+
+            <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-neutral-400">
+              Manager / lead PIN
+            </label>
+            <input
+              className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2.5 text-center font-mono text-lg tracking-[0.5em]"
+              type="password"
+              inputMode="numeric"
+              autoComplete="off"
+              value={pin}
+              maxLength={6}
+              onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
+            />
+          </>
+        ) : null}
+
+        {errors.length > 0 ? (
+          <ul className="mt-3 space-y-1 rounded-lg bg-red-950/60 px-3 py-2 text-sm text-red-300">
+            {errors.map((e, i) => (
+              <li key={i}>{e}</li>
+            ))}
+          </ul>
+        ) : null}
+
+        {sale ? (
+          <button
+            type="button"
+            onClick={() => void processVoid()}
+            disabled={!reasonOk || pin.length < 4 || busy}
+            className="mt-5 w-full rounded-xl bg-red-700 py-3 text-base font-semibold text-white disabled:opacity-40"
+          >
+            {busy ? "Voiding…" : `Void sale & return ${formatCents(sale.totalMinor)}`}
+          </button>
+        ) : null}
       </div>
     </div>
   );
