@@ -663,6 +663,8 @@ export type PosExceptionRow = {
   received_at: string;
   exception_reason: string | null;
   order_id: string | null;
+  /** Full validated envelope payload — managers inspect it before resolving. */
+  payload: Record<string, unknown> | null;
 };
 
 export async function listPosExceptions(limit = 100): Promise<PosExceptionRow[]> {
@@ -671,7 +673,7 @@ export async function listPosExceptions(limit = 100): Promise<PosExceptionRow[]>
   const { data, error } = await admin
     .from("pos_sale_events")
     .select(
-      "id, client_uuid, device_id, register_id, employee_id, event_type, occurred_at, received_at, exception_reason, order_id",
+      "id, client_uuid, device_id, register_id, employee_id, event_type, occurred_at, received_at, exception_reason, order_id, payload",
     )
     .eq("status", "exception")
     .is("resolved_at", null)
@@ -679,6 +681,29 @@ export async function listPosExceptions(limit = 100): Promise<PosExceptionRow[]>
     .limit(limit);
   if (error) return [];
   return (data as PosExceptionRow[] | null) ?? [];
+}
+
+export type PosResolvedExceptionRow = PosExceptionRow & {
+  resolved_by: string | null;
+  resolved_at: string | null;
+  resolution_note: string | null;
+};
+
+/** Recently resolved exceptions — the manager's paper trail. */
+export async function listResolvedPosExceptions(limit = 25): Promise<PosResolvedExceptionRow[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("pos_sale_events")
+    .select(
+      "id, client_uuid, device_id, register_id, employee_id, event_type, occurred_at, received_at, exception_reason, order_id, payload, resolved_by, resolved_at, resolution_note",
+    )
+    .eq("status", "exception")
+    .not("resolved_at", "is", null)
+    .order("resolved_at", { ascending: false })
+    .limit(limit);
+  if (error) return [];
+  return (data as PosResolvedExceptionRow[] | null) ?? [];
 }
 
 /** Manager resolution: mark an exception reviewed with a written note. */

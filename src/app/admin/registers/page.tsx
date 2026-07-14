@@ -7,6 +7,7 @@ import { StatCard } from "@/components/admin/StatCard";
 import { Input, Button, Badge, Card, Section } from "@/components/admin/ui";
 import { RegisterControls } from "@/components/admin/registers/RegisterControls";
 import { getRegisterActivity, type ActivityKind } from "@/lib/registers/oversight";
+import { listPosExceptions } from "@/lib/pos/sync-store";
 import { formatCents, overShortLabel } from "@/lib/registers/cash";
 import { reconcileDrawerAction, verifyTillAction } from "./actions";
 
@@ -44,7 +45,7 @@ export default async function RegisterActivityPage({
     );
   }
 
-  const data = await getRegisterActivity();
+  const [data, openExceptions] = await Promise.all([getRegisterActivity(), listPosExceptions(200)]);
   const { kpis, onClock, registers, attention, feed, employees } = data;
 
   return (
@@ -59,6 +60,9 @@ export default async function RegisterActivityPage({
           <div style={{ display: "flex", gap: 8 }}>
             <Button href={`${BASE}/devices`} variant="neutral" size="sm">
               POS devices
+            </Button>
+            <Button href={`${BASE}/exceptions`} variant="neutral" size="sm">
+              Exceptions{openExceptions.length > 0 ? ` (${openExceptions.length})` : ""}
             </Button>
             <Button href={`${BASE}/history`} variant="neutral" size="sm">
               Cash drawer reports
