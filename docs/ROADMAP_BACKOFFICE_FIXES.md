@@ -2745,3 +2745,28 @@ no-sale-slip asserts in pos/receipt-core (58 total) + vitest mirror
 
 **Tests:** tsc 0 errors; vitest 1,431/98; pure self-tests all pass;
 eslint clean. No migration; no schema changes; no new env vars.
+
+### Shipped: POS B18 — handoff-ready operations guide (PR #471)
+
+Docs-only. `docs/POS_OPERATIONS_GUIDE.md` is the single handoff
+reference for owners, managers, and budtenders — every claim verified
+against the shipping code, with file references embedded so a future
+maintainer can follow the trail.
+
+Covers: one-time setup (device provisioning, employee PINs with scrypt
+self-upgrade, Star TSP100IIIBi + PassPRNT pairing with verified URL
+parameters, B13 receipt design studio); daily operations (drawer
+count-in, clock-in, menu refresh, the guided sale rail with medical
+path + loyalty attach + cash tender, B17 hold/resume + reprint +
+manager-approved no-sale, closing with drop/blind-close/reconcile/
+verify); the returns desk counter script with the sourced regulatory
+note (WAC 314-55-079(12) = ALL products in original packaging with
+legible lot ID; CCRS Sale Delete/Update + positive InventoryAdjustment;
+15-day + loyalty-member = store policy, stricter than rule); loyalty
+mechanics; offline queue + exception-queue behavior; a 13-row
+troubleshooting table grounded in real code paths; and a compliance map
+(rule → enforcing code) for WAC 314-55-079/-095/-147, RCW 69.50.375,
+ch. 246-70 WAC, CCRS reporting, and drawer accountability.
+
+**Tests:** docs-only — no code changes, no migration. CI green
+(compliance + Vercel) on PR #471.
