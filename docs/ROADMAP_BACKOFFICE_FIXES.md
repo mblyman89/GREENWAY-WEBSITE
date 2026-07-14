@@ -2599,3 +2599,33 @@ are normalized server-side and audited (`pos.receipt_config_saved`).
 
 **Tests:** tsc 0 errors; vitest 1,413/96; pure self-tests all pass
 (import AND call grep-verified); eslint clean. No migration.
+
+### Shipped: POS B14 — loyalty at the register (PR #463)
+
+The loyalty program now works at the till the way the big POS players do
+— attach a member, earn points automatically, see it on the receipt —
+without ever letting the register compute authoritative points. A new
+device-authenticated `GET /api/pos/member` searches customers by
+name/phone/email (the existing listCustomers matcher) and returns a
+privacy-lean hit: first name + last initial, points balance, tier — never
+birthdate/contact/notes. Lookup is ONLINE-ONLY by design (no customer
+book is ever cached on an iPad); an offline register simply rings the
+sale without the member.
+
+The cart screen gained a "★ Add loyalty member" panel (search → pick →
+attached chip with Remove). The sale payload carries an optional
+`loyalty { customerId, memberLabel }` block (structurally validated:
+UUID + 1–80-char label). At sync, processSale re-verifies the customer
+exists (dangling id = actionable exception, never a silent anonymous
+completion that loses points) and — on medical sales — that the member
+IS the recognition-card holder (mismatch = exception; points must never
+land on the wrong person). It then writes `orders.customer_id` BEFORE
+the gate, so the EXISTING idempotent completion accrual
+(setOrderStatus → accrueForOrder, auto-enroll, pretax basis) earns the
+points exactly like website orders — zero new accrual paths. The bundle
+ships `loyalty.pointsPerDollar` so the receipt prints a points ESTIMATE
+(B13 loyalty block, owner-toggleable); the ledger stays authoritative.
+
+**Tests:** tsc 0 errors; vitest 1,416/96; pure self-tests all pass
+(pos/sale-event-core 46, pos/sale-flow-core 29); eslint clean. No
+migration.
