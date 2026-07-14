@@ -47,6 +47,7 @@ import {
   type PosLineOverride,
 } from "@/lib/pos/price-override-core";
 import { dollarsToMinor } from "@/lib/pos/till-core";
+import { changeBreakdown, smartTenderSuggestions } from "@/lib/pos/change-calc-core";
 import {
   validateCardCapture,
   medicalAgeAllowed,
@@ -372,6 +373,7 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
   return (
     <Frame title="Sale complete" onCancel={onComplete} cancelLabel="Lock register">
       <p className="text-5xl font-bold text-emerald-300">{money(changeMinor ?? 0)} change</p>
+      {changeMinor != null && changeMinor > 0 ? <ChangePlan changeMinor={changeMinor} /> : null}
       <p className="mt-4 max-w-md text-sm text-neutral-400">
         Count the change back to the customer. The sale is queued and will sync to the back office —
         the register locks when you tap below.
@@ -1685,7 +1687,33 @@ function cartVariantId(cart: PosCartEntry[], productId: string, variantLabel: st
 // Step 3 — cash tender
 // ---------------------------------------------------------------------------
 
-const QUICK_BILLS = [500, 1000, 2000, 5000, 10000] as const;
+/**
+ * B31 — the count-back panel: the exact bills and coins to hand back,
+ * fewest pieces first (greedy — optimal for US denominations; $50/$100
+ * are never planned as change). Rendered live on the tender screen and
+ * again on the Sale-complete screen so the budtender counts back with
+ * confidence instead of doing mental math on a line.
+ */
+function ChangePlan({ changeMinor, compact }: { changeMinor: number; compact?: boolean }) {
+  const parts = changeBreakdown(changeMinor);
+  if (!parts || parts.length === 0) return null;
+  return (
+    <div className={`flex flex-wrap justify-center gap-2 ${compact ? "mt-2" : "mt-3"}`}>
+      {parts.map((p) => (
+        <span
+          key={p.label}
+          className={`inline-flex items-center gap-1 rounded-lg px-3 py-1.5 font-semibold ${
+            p.kind === "bill"
+              ? "bg-emerald-900/60 text-emerald-200"
+              : "bg-neutral-800 text-neutral-300"
+          } ${compact ? "text-sm" : "text-base"}`}
+        >
+          {p.count}&times;{p.label}
+        </span>
+      ))}
+    </div>
+  );
+}
 
 function TenderScreen({
   bundle,
@@ -1714,7 +1742,9 @@ function TenderScreen({
   const [tendered, setTendered] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
-  const exactUp = Math.ceil(total / 100) * 100; // next whole dollar
+  // B31 — the amounts customers actually hand over: exact, next whole
+  // dollar, then $5/$10/$20 steps plus the $50/$100 bills, deduplicated.
+  const suggestions = useMemo(() => smartTenderSuggestions(total), [total]);
   const change = tendered - total;
 
   const pay = () => {
@@ -1737,12 +1767,13 @@ function TenderScreen({
       ) : null}
 
       <div className="mt-6 flex flex-wrap justify-center gap-3">
-        <TenderChip label={`Exact ${money(total)}`} onClick={() => setTendered(total)} active={tendered === total} />
-        {exactUp > total ? (
-          <TenderChip label={money(exactUp)} onClick={() => setTendered(exactUp)} active={tendered === exactUp} />
-        ) : null}
-        {QUICK_BILLS.filter((b) => b >= total).slice(0, 3).map((b) => (
-          <TenderChip key={b} label={money(b)} onClick={() => setTendered(b)} active={tendered === b} />
+        {suggestions.map((amt, i) => (
+          <TenderChip
+            key={amt}
+            label={i === 0 ? `Exact ${money(amt)}` : money(amt)}
+            onClick={() => setTendered(amt)}
+            active={tendered === amt}
+          />
         ))}
       </div>
 
@@ -1763,6 +1794,7 @@ function TenderScreen({
       <p className={`mt-6 text-2xl font-bold ${change >= 0 ? "text-emerald-300" : "text-neutral-600"}`}>
         {change >= 0 ? `${money(change)} change` : `${money(-change)} more needed`}
       </p>
+      {tendered >= total && change > 0 ? <ChangePlan changeMinor={change} compact /> : null}
 
       <div className="mt-6 flex gap-3">
         <button
