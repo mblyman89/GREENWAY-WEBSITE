@@ -1,0 +1,276 @@
+/**
+ * src/lib/pos/receipt-core.ts
+ *
+ * PURE register-receipt builder for the POS (Slice B10). No I/O, no React —
+ * safe to import from the tsx self-test harness and vitest.
+ *
+ * Two outputs:
+ *  1. `buildPosReceiptHtml` — a self-contained HTML document sized for the
+ *     Star TSP100IIIBi at PassPRNT size=3 (576 dots / 72mm printable width,
+ *     verified from the Star PassPRNT manual). The SAME HTML is used for the
+ *     browser-print fallback, so paper and fallback always match.
+ *  2. `buildPassPrntUrl` — the `starpassprnt://v1/print/nopreview` URL that
+ *     hands the HTML to Star's PassPRNT iOS app (App Store) which prints on
+ *     the paired Bluetooth printer and opens the cash drawer AFTER the print
+ *     (`drawer=after`, verified parameter names from the manual).
+ *
+ * Money is in MINOR UNITS (cents) everywhere, matching the rest of the app.
+ * Formatting helpers are REUSED from printing/receipt-core (pure) so the POS
+ * receipt and the CloudPRNT pickup receipt can never drift on money/timestamp
+ * rendering.
+ *
+ * Medical: the receipt shows a "MEDICAL — tax exempt sale" banner and the
+ * savings line when the sale was carded, but deliberately prints NO card
+ * details (no UPID, no dates) — WAC 314-55-090(2) records live in the
+ * back-office exempt-sale ledger, not on the customer's paper.
+ */
+import { formatMoneyMinor, formatReceiptTimestamp } from "@/lib/printing/receipt-core";
+
+export type PosReceiptLine = {
+  productName: string;
+  quantity: number;
+  /** Final (post-discount, post-medical-reprice) tax-inclusive unit price. */
+  unitPriceMinor: number;
+  /** Pre-discount tax-inclusive unit price (for the "was" strike). */
+  regularPriceMinor: number;
+  /** True when this line's taxes were passed through to a carded patient. */
+  medicalTaxOff?: boolean;
+};
+
+export type PosReceiptInput = {
+  /** Offline client UUID of the sale event — the durable receipt number. */
+  saleClientUuid: string;
+  /** ISO timestamp when the sale was rung (device clock). */
+  soldAtIso: string;
+  registerLabel: string;
+  lines: PosReceiptLine[];
+  subtotalMinor: number;
+  taxMinor: number;
+  totalMinor: number;
+  /** Promo/loyalty savings already reflected in unit prices (display only). */
+  savingsMinor: number;
+  /** Tax passed through to a carded patient (display only). 0 = not medical. */
+  medicalSavingsMinor: number;
+  /** True when the sale was rung against a validated recognition card. */
+  medicalSale: boolean;
+  tenderedMinor: number;
+  changeMinor: number;
+  headerText?: string | null;
+  footerText?: string | null;
+};
+
+/** Escape text for safe embedding in the receipt HTML. */
+export function escapeReceiptHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/** Short human receipt number from the durable sale UUID (last 8, upper). */
+export function receiptNumber(saleClientUuid: string): string {
+  const clean = saleClientUuid.replace(/-/g, "");
+  return clean.slice(-8).toUpperCase();
+}
+
+const DEFAULT_HEADER = "GREENWAY MARIJUANA";
+const DEFAULT_FOOTER =
+  "This product has intoxicating effects and may be habit forming. Keep out of reach of children. Thank you!";
+
+/**
+ * Build the full self-contained receipt HTML. Body width is 576px — the
+ * printable width of the TSP100IIIBi at PassPRNT size=3 (Star manual).
+ * `format-detection` meta stops iOS from mangling numbers into phone links
+ * (recommended by the PassPRNT manual).
+ */
+export function buildPosReceiptHtml(input: PosReceiptInput): string {
+  const header = escapeReceiptHtml((input.headerText ?? DEFAULT_HEADER).trim());
+  const footer = escapeReceiptHtml((input.footerText ?? DEFAULT_FOOTER).trim());
+  const rows: string[] = [];
+
+  for (const line of input.lines) {
+    const lineTotal = line.unitPriceMinor * line.quantity;
+    const discounted = line.unitPriceMinor < line.regularPriceMinor;
+    rows.push(
+      `<tr><td class="n">${line.quantity}x ${escapeReceiptHtml(line.productName)}${
+        line.medicalTaxOff ? ' <span class="med">MED TAX OFF</span>' : ""
+      }${discounted ? ` <s>${formatMoneyMinor(line.regularPriceMinor)}</s>` : ""}</td><td class="a">${formatMoneyMinor(lineTotal)}</td></tr>`,
+    );
+  }
+
+  const totals: string[] = [
+    `<tr><td class="n">Subtotal (pre-tax)</td><td class="a">${formatMoneyMinor(input.subtotalMinor)}</td></tr>`,
+    `<tr><td class="n">Tax</td><td class="a">${formatMoneyMinor(input.taxMinor)}</td></tr>`,
+  ];
+  if (input.savingsMinor > 0) {
+    totals.push(
+      `<tr><td class="n">You saved</td><td class="a">-${formatMoneyMinor(input.savingsMinor)}</td></tr>`,
+    );
+  }
+  if (input.medicalSale && input.medicalSavingsMinor > 0) {
+    totals.push(
+      `<tr><td class="n">Medical savings (tax off)</td><td class="a">-${formatMoneyMinor(input.medicalSavingsMinor)}</td></tr>`,
+    );
+  }
+  totals.push(
+    `<tr class="t"><td class="n">TOTAL</td><td class="a">${formatMoneyMinor(input.totalMinor)}</td></tr>`,
+    `<tr><td class="n">Cash tendered</td><td class="a">${formatMoneyMinor(input.tenderedMinor)}</td></tr>`,
+    `<tr><td class="n">Change</td><td class="a">${formatMoneyMinor(input.changeMinor)}</td></tr>`,
+  );
+
+  return [
+    "<!DOCTYPE html>",
+    '<html><head><meta charset="utf-8">',
+    '<meta name="format-detection" content="telephone=no">',
+    "<style>",
+    "body{width:576px;margin:0;padding:8px 4px;font-family:'Helvetica Neue',Arial,sans-serif;color:#000;}",
+    "h1{font-size:34px;text-align:center;margin:0 0 4px;}",
+    ".sub{font-size:24px;text-align:center;margin:0 0 8px;}",
+    ".medbanner{font-size:26px;font-weight:bold;text-align:center;border:3px solid #000;padding:6px;margin:8px 0;}",
+    "table{width:100%;border-collapse:collapse;font-size:26px;}",
+    "td{padding:4px 0;vertical-align:top;}",
+    "td.n{text-align:left;}",
+    "td.a{text-align:right;white-space:nowrap;}",
+    "tr.t td{font-size:32px;font-weight:bold;border-top:3px solid #000;padding-top:8px;}",
+    ".med{font-size:20px;font-weight:bold;border:2px solid #000;padding:0 4px;}",
+    "hr{border:none;border-top:2px dashed #000;margin:10px 0;}",
+    ".foot{font-size:22px;text-align:center;margin-top:12px;}",
+    "@media print{body{width:auto;}}",
+    "</style></head><body>",
+    `<h1>${header}</h1>`,
+    `<p class="sub">Receipt ${receiptNumber(input.saleClientUuid)} &middot; ${escapeReceiptHtml(input.registerLabel)}</p>`,
+    `<p class="sub">${escapeReceiptHtml(formatReceiptTimestamp(input.soldAtIso))}</p>`,
+    input.medicalSale ? '<p class="medbanner">MEDICAL &mdash; TAX EXEMPT SALE</p>' : "",
+    "<hr>",
+    `<table>${rows.join("")}</table>`,
+    "<hr>",
+    `<table>${totals.join("")}</table>`,
+    "<hr>",
+    `<p class="foot">${footer}</p>`,
+    "</body></html>",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+// ---------------------------------------------------------------------------
+// Star PassPRNT URL (verified from the Star PassPRNT manual)
+// ---------------------------------------------------------------------------
+
+export type PassPrntOptions = {
+  /** Callback URL PassPRNT returns to after printing (usually location.href). */
+  backUrl: string;
+  /** Open the cash drawer after the print. Default true (cash-only store). */
+  openDrawer?: boolean;
+};
+
+/**
+ * Build the `starpassprnt://v1/print/nopreview` URL. `size=3` = 576 dots /
+ * 72mm — the TSP100IIIBi's printable width. PassPRNT appends
+ * `passprnt_code=0&passprnt_message=SUCCESS` to the back URL on success.
+ */
+export function buildPassPrntUrl(html: string, opts: PassPrntOptions): string {
+  const drawer = opts.openDrawer === false ? "" : "&drawer=after&drawerpulse=200";
+  return (
+    "starpassprnt://v1/print/nopreview?back=" +
+    encodeURIComponent(opts.backUrl) +
+    "&html=" +
+    encodeURIComponent(html) +
+    "&size=3" +
+    drawer
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Self-tests (registered in scripts/compliance/run-pure-selftests.ts)
+// ---------------------------------------------------------------------------
+
+export function __runPosReceiptCoreTests(): void {
+  let pass = 0;
+  let fail = 0;
+  const ok = (cond: boolean, msg: string) => {
+    if (cond) pass += 1;
+    else {
+      fail += 1;
+      console.log("FAIL:", msg);
+    }
+  };
+
+  ok(escapeReceiptHtml('<b>"A&B"</b>') === "&lt;b&gt;&quot;A&amp;B&quot;&lt;/b&gt;", "html escaped");
+  ok(receiptNumber("123e4567-e89b-12d3-a456-426614174000") === "14174000", "receipt number = last 8");
+
+  const base: PosReceiptInput = {
+    saleClientUuid: "123e4567-e89b-12d3-a456-426614174000",
+    soldAtIso: "2026-07-15T20:00:00.000Z",
+    registerLabel: "Register 1",
+    lines: [
+      { productName: "Blue Dream 3.5g <flower>", quantity: 2, unitPriceMinor: 1463, regularPriceMinor: 1463 },
+    ],
+    subtotalMinor: 2000,
+    taxMinor: 926,
+    totalMinor: 2926,
+    savingsMinor: 0,
+    medicalSavingsMinor: 0,
+    medicalSale: false,
+    tenderedMinor: 3000,
+    changeMinor: 74,
+  };
+
+  const html = buildPosReceiptHtml(base);
+  ok(html.includes("576px"), "sized for 576 dots (size=3)");
+  ok(html.includes('format-detection" content="telephone=no'), "format-detection meta present");
+  ok(html.includes("Blue Dream 3.5g &lt;flower&gt;"), "product name escaped");
+  ok(html.includes("2x "), "quantity shown");
+  ok(html.includes("$29.26"), "line total = unit x qty");
+  ok(html.includes("TOTAL") && html.includes("$29.26"), "total row");
+  ok(html.includes("Cash tendered") && html.includes("$30.00"), "tendered row");
+  ok(html.includes("Change") && html.includes("$0.74"), "change row");
+  ok(!html.includes("MEDICAL"), "no medical banner on recreational sale");
+  ok(!html.includes("You saved"), "no savings row when zero");
+  ok(html.includes("Receipt 14174000"), "receipt number printed");
+
+  // Medical sale: banner + savings row, discounted strike, NO card details.
+  const med = buildPosReceiptHtml({
+    ...base,
+    lines: [
+      {
+        productName: "RSO Syringe",
+        quantity: 1,
+        unitPriceMinor: 1000,
+        regularPriceMinor: 1463,
+        medicalTaxOff: true,
+      },
+    ],
+    subtotalMinor: 1000,
+    taxMinor: 0,
+    totalMinor: 1000,
+    savingsMinor: 0,
+    medicalSavingsMinor: 463,
+    medicalSale: true,
+    tenderedMinor: 1000,
+    changeMinor: 0,
+  });
+  ok(med.includes("MEDICAL &mdash; TAX EXEMPT SALE"), "medical banner present");
+  ok(med.includes("Medical savings (tax off)") && med.includes("-$4.63"), "medical savings row");
+  ok(med.includes("MED TAX OFF"), "per-line MED chip");
+  ok(med.includes("<s>$14.63</s>"), "regular price struck when discounted");
+  ok(!med.toLowerCase().includes("upid"), "no card details on paper");
+
+  // Promo savings row appears when > 0.
+  const promo = buildPosReceiptHtml({ ...base, savingsMinor: 200 });
+  ok(promo.includes("You saved") && promo.includes("-$2.00"), "promo savings row");
+
+  // PassPRNT URL: verified scheme + encoded params + drawer kick.
+  const url = buildPassPrntUrl("<html>a&b</html>", { backUrl: "https://pos.example/pos?x=1" });
+  ok(url.startsWith("starpassprnt://v1/print/nopreview?back="), "verified scheme + action");
+  ok(url.includes(encodeURIComponent("https://pos.example/pos?x=1")), "back url encoded");
+  ok(url.includes("&html=" + encodeURIComponent("<html>a&b</html>")), "html encoded");
+  ok(url.includes("&size=3"), "size=3 (576 dots)");
+  ok(url.includes("&drawer=after&drawerpulse=200"), "drawer kick after print");
+  const noDrawer = buildPassPrntUrl("x", { backUrl: "b", openDrawer: false });
+  ok(!noDrawer.includes("drawer="), "drawer omitted when disabled");
+
+  console.log(`pos/receipt-core: ${pass} passed, ${fail} failed`);
+  if (fail > 0) throw new Error("pos/receipt-core self-tests failed");
+}
