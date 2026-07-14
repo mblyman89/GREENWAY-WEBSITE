@@ -194,6 +194,20 @@ export type PosSalePayload = {
     cardEventUuid: string;
     medicalSavingsMinor: number;
   };
+  /**
+   * Present when a LOYALTY MEMBER was attached at the register (POS B14).
+   * The customerId came from the server's own member lookup, so at sync it
+   * MUST resolve — a dangling id is an exception, never a silent drop. The
+   * sync writes orders.customer_id, which makes the EXISTING completion
+   * accrual (setOrderStatus → accrueForOrder) earn the points; the register
+   * never computes authoritative points.
+   */
+  loyalty?: {
+    /** customers.id from the /api/pos/member lookup. */
+    customerId: string;
+    /** Display label frozen at attach time (receipt + exception readability). */
+    memberLabel: string;
+  };
 };
 
 export type SalePayloadCheck = { ok: true } | { ok: false; errors: string[] };
@@ -277,6 +291,20 @@ export function validateSalePayload(p: Partial<PosSalePayload>): SalePayloadChec
       }
       if (!Number.isInteger(m.medicalSavingsMinor) || m.medicalSavingsMinor < 0) {
         errors.push("medical.medicalSavingsMinor must be a non-negative integer (cents).");
+      }
+    }
+  }
+  if (p.loyalty !== undefined) {
+    const ly = p.loyalty;
+    if (ly == null || typeof ly !== "object") {
+      errors.push("loyalty must be an object when present.");
+    } else {
+      if (!isUuid(ly.customerId)) {
+        errors.push("loyalty.customerId must be a UUID (from the member lookup).");
+      }
+      const label = typeof ly.memberLabel === "string" ? ly.memberLabel.trim() : "";
+      if (!label || label.length > 80) {
+        errors.push("loyalty.memberLabel must be 1–80 characters.");
       }
     }
   }
@@ -459,6 +487,28 @@ export function __runPosSaleEventTests(): void {
   ok(
     !validateSalePayload({ ...goodSale, medical: { ...goodMedical, card: undefined as unknown as typeof goodMedical.card } }).ok,
     "medical without card refused",
+  );
+
+  // Loyalty block (POS B14) — optional; structurally validated when present.
+  ok(
+    validateSalePayload({ ...goodSale, loyalty: { customerId: U4, memberLabel: "Jane D." } }).ok,
+    "loyalty member attach ok",
+  );
+  ok(
+    !validateSalePayload({ ...goodSale, loyalty: { customerId: "cust-1", memberLabel: "Jane D." } }).ok,
+    "loyalty with non-uuid customer refused",
+  );
+  ok(
+    !validateSalePayload({ ...goodSale, loyalty: { customerId: U4, memberLabel: "  " } }).ok,
+    "loyalty with blank label refused",
+  );
+  ok(
+    !validateSalePayload({ ...goodSale, loyalty: { customerId: U4, memberLabel: "x".repeat(81) } }).ok,
+    "loyalty with over-long label refused",
+  );
+  ok(
+    !validateSalePayload({ ...goodSale, loyalty: "member" as unknown as { customerId: string; memberLabel: string } }).ok,
+    "loyalty non-object refused",
   );
 
   // Punch payload

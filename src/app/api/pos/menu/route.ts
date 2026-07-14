@@ -26,6 +26,7 @@ import { getSalesLimitSettings } from "@/lib/compliance/sales-limits";
 import { getSalesHoursWindow } from "@/lib/compliance/sales-hours-store";
 import { getMedTaxSettings, getEndorsementConfig } from "@/lib/medical/store";
 import { getPosReceiptConfig } from "@/lib/pos/receipt-config-store";
+import { getConfig as getLoyaltyConfig } from "@/lib/loyalty/loyalty-store";
 import { listMedicalRegistry } from "@/lib/medical/sale-store";
 import type { DohCategory } from "@/lib/medical/medical-sale-core";
 import type { PosMedicalConfig } from "@/lib/pos/medical-pos-core";
@@ -55,6 +56,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       listMedicalRegistry({ limit: 2000 }),
       getPosReceiptConfig(),
     ]);
+  const loyaltyCfg = await getLoyaltyConfig();
 
   // POS B8 — the medical-sale config the device prices with OFFLINE. The
   // registry is the durable DOH 246-70 table keyed by the stable POS product
@@ -124,6 +126,9 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     // POS B13 — owner receipt customization travels with the bundle so
     // OFFLINE sales print the customized receipt.
     receipt,
+    // POS B14 — earn rate for the device's points ESTIMATE on the receipt
+    // (authoritative accrual runs server-side at completion).
+    loyalty: { pointsPerDollar: loyaltyCfg.pointsPerDollar },
     fetchedAt: new Date().toISOString(),
   };
 

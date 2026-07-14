@@ -99,6 +99,13 @@ export type PosMenuBundle = {
    * the pure defaults in receipt-config-core.
    */
   receipt?: PosReceiptConfig;
+  /**
+   * Loyalty program facts the device needs OFFLINE (POS B14): the earn rate
+   * for the receipt's points ESTIMATE (authoritative accrual happens
+   * server-side at completion via orders.customer_id — never on-device).
+   * Optional so pre-B14 cached bundles still parse.
+   */
+  loyalty?: { pointsPerDollar: number };
   /** ISO timestamp of the download (staleness display on-device). */
   fetchedAt: string;
 };
@@ -278,6 +285,13 @@ export type BuildSaleArgs = {
    * structure (including the MCR attestation) before the queue accepts it.
    */
   medical?: PosSalePayload["medical"];
+  /**
+   * Present when a loyalty member was attached at the register (B14): the
+   * customers.id + display label the server's member lookup returned. The
+   * sync writes orders.customer_id so the EXISTING completion accrual earns
+   * the points; the device only estimates for the receipt.
+   */
+  loyalty?: PosSalePayload["loyalty"];
 };
 
 export type BuildSaleResult =
@@ -309,6 +323,7 @@ export function buildSalePayload(args: BuildSaleArgs): BuildSaleResult {
     drawerSessionId: args.drawerSessionId,
     idVerification: args.idVerification,
     ...(args.medical ? { medical: args.medical } : {}),
+    ...(args.loyalty ? { loyalty: args.loyalty } : {}),
   };
   const check = validateSalePayload(payload);
   if (!check.ok) return { ok: false, errors: check.errors };
@@ -462,6 +477,26 @@ export function __runSaleFlowCoreTests(): void {
     idVerification: { method: "manual" },
   });
   ok(!manualNoUuid.ok, "manual ID without audit-event UUID refused");
+
+  // Loyalty attach (B14) — travels intact through the payload builder.
+  const withMember = buildSalePayload({
+    lines: priced.lines,
+    totals: priced.totals,
+    tenderedMinor: 4000,
+    drawerSessionId: drawerId,
+    idVerification: { method: "scan" },
+    loyalty: { customerId: "66666666-6666-4666-8666-666666666666", memberLabel: "Jane D." },
+  });
+  ok(withMember.ok && withMember.payload.loyalty?.memberLabel === "Jane D.", "loyalty block carried in payload");
+  const badMember = buildSalePayload({
+    lines: priced.lines,
+    totals: priced.totals,
+    tenderedMinor: 4000,
+    drawerSessionId: drawerId,
+    idVerification: { method: "scan" },
+    loyalty: { customerId: "not-a-uuid", memberLabel: "Jane D." },
+  });
+  ok(!badMember.ok, "loyalty with bad customer id refused before enqueue");
 
   // Medical block pass-through (B9): buildSalePayload carries it verbatim and
   // validateSalePayload enforces its structure before the queue accepts it.

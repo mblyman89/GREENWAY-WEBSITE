@@ -142,6 +142,23 @@ describe("sale payload", () => {
     expect(validateSalePayload({ ...good, drawerSessionId: "till-1" }).ok).toBe(false);
   });
 
+  describe("loyalty block (POS B14)", () => {
+    it("accepts a valid member attach", () => {
+      expect(validateSalePayload({ ...good, loyalty: { customerId: U4, memberLabel: "Jane D." } }).ok).toBe(true);
+    });
+    it("refuses non-uuid customer ids, blank/over-long labels, non-objects", () => {
+      expect(validateSalePayload({ ...good, loyalty: { customerId: "cust-1", memberLabel: "Jane D." } }).ok).toBe(false);
+      expect(validateSalePayload({ ...good, loyalty: { customerId: U4, memberLabel: " " } }).ok).toBe(false);
+      expect(validateSalePayload({ ...good, loyalty: { customerId: U4, memberLabel: "x".repeat(81) } }).ok).toBe(false);
+      expect(
+        validateSalePayload({ ...good, loyalty: "member" as unknown as { customerId: string; memberLabel: string } }).ok,
+      ).toBe(false);
+    });
+    it("stays optional — a sale with no loyalty block is untouched", () => {
+      expect(validateSalePayload(good).ok).toBe(true);
+    });
+  });
+
   describe("medical block (POS B8)", () => {
     const medical = {
       card: {
