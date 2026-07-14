@@ -352,6 +352,19 @@ export async function setOrderStatus(
     }
   }
 
+  // Inventory decrement (POS B19): when an order completes, reduce the
+  // published menu variant levels and consume inventory lots FIFO. Idempotent
+  // per order (order_events marker); best-effort — a stock-write failure
+  // leaves a visible note but NEVER blocks the completed sale.
+  if (toStatus === "completed" && fromStatus !== "completed") {
+    try {
+      const { decrementInventoryForOrder } = await import("@/lib/inventory/sale-decrement");
+      await decrementInventoryForOrder(id);
+    } catch {
+      // Decrement must never block order completion.
+    }
+  }
+
   // Loyalty accrual: when an order is completed, earn points on the PRETAX
   // subtotal for the linked customer (idempotent per order; no-op if there is
   // no customer or no points to earn). The subtotal is post-discount, so
