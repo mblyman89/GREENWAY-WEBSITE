@@ -46,6 +46,7 @@ import { __runPosSyncCoreTests } from "../../src/lib/pos/sync-core";
 import { __runRegisterClientCoreTests } from "../../src/lib/pos/register-client-core";
 import { __runSaleFlowCoreTests } from "../../src/lib/pos/sale-flow-core";
 import { __runMedicalPosCoreTests } from "../../src/lib/pos/medical-pos-core";
+import { __runPosReceiptCoreTests } from "../../src/lib/pos/receipt-core";
 
 async function main() {
   __runOrderPricingTests();
@@ -94,6 +95,7 @@ async function main() {
   __runRegisterClientCoreTests();
   __runSaleFlowCoreTests();
   __runMedicalPosCoreTests();
+  __runPosReceiptCoreTests();
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

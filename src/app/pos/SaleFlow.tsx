@@ -48,12 +48,19 @@ import {
 import { computeOrderTotals, type OrderTotals } from "@/lib/orders/order-pricing-core";
 import { evaluateSalesHours } from "@/lib/compliance/sales-hours-core";
 import { pacificDayKey } from "@/lib/reports/timezone";
+import {
+  buildPosReceiptHtml,
+  buildPassPrntUrl,
+  type PosReceiptInput,
+} from "@/lib/pos/receipt-core";
 
 type Step = "idgate" | "cart" | "tender" | "done";
 
 export type SaleFlowProps = {
   bundle: PosMenuBundle;
   drawerSessionId: string;
+  /** Register/device display name — printed on the receipt (B10). */
+  registerName?: string;
   /** Enqueue an event; returns the clientUuid assigned to it. */
   onEnqueue: (
     eventType: "sale" | "manual_id_verification" | "medical_card_capture",
@@ -96,7 +103,7 @@ function priceForBuyer(
   return { lines: carded ? med.lines : priced.lines, totals, problems: priced.problems, med };
 }
 
-export function SaleFlow({ bundle, drawerSessionId, onEnqueue, onComplete, onCancel }: SaleFlowProps) {
+export function SaleFlow({ bundle, drawerSessionId, registerName, onEnqueue, onComplete, onCancel }: SaleFlowProps) {
   const [step, setStep] = useState<Step>("idgate");
   const [verdict, setVerdict] = useState<Extract<IdGateVerdict, { allowed: true }> | null>(null);
   const [manualEventUuid, setManualEventUuid] = useState<string | null>(null);
@@ -107,6 +114,9 @@ export function SaleFlow({ bundle, drawerSessionId, onEnqueue, onComplete, onCan
   const [cardEventUuid, setCardEventUuid] = useState<string | null>(null);
   const [cart, setCart] = useState<PosCartEntry[]>([]);
   const [changeMinor, setChangeMinor] = useState<number | null>(null);
+  // POS B10 — snapshot of the finished sale for printing/reprint. Captured at
+  // the moment the sale is enqueued so the receipt always matches the payload.
+  const [receipt, setReceipt] = useState<PosReceiptInput | null>(null);
 
   // Sales hours (WAC 314-55-147) checked on-device with the owner's window;
   // the server completion gate re-checks with ITS clock at sync time.
@@ -181,8 +191,30 @@ export function SaleFlow({ bundle, drawerSessionId, onEnqueue, onComplete, onCan
               : {}),
           });
           if (!built.ok) return built.errors.join(" ");
-          onEnqueue("sale", built.payload as unknown as Record<string, unknown>);
+          const saleUuid = onEnqueue("sale", built.payload as unknown as Record<string, unknown>);
           setChangeMinor(built.changeMinor);
+          // B10 — freeze the receipt from EXACTLY what was enqueued.
+          const isMedical = !!(medicalCard && cardEventUuid);
+          setReceipt({
+            saleClientUuid: saleUuid || crypto.randomUUID(),
+            soldAtIso: new Date().toISOString(),
+            registerLabel: registerName ?? "Register",
+            lines: priced.lines.map((l, i) => ({
+              productName: l.productName,
+              quantity: l.quantity,
+              unitPriceMinor: l.unitPriceMinor,
+              regularPriceMinor: l.regularPriceMinor,
+              medicalTaxOff: (priced.med?.lines[i]?.medicalSavingsMinor ?? 0) > 0,
+            })),
+            subtotalMinor: priced.totals.subtotalMinorUnits,
+            taxMinor: priced.totals.estimatedTaxMinorUnits,
+            totalMinor: priced.totals.totalMinorUnits,
+            savingsMinor: priced.totals.savingsMinorUnits,
+            medicalSavingsMinor: isMedical ? (priced.med?.medicalSavingsMinor ?? 0) : 0,
+            medicalSale: isMedical,
+            tenderedMinor,
+            changeMinor: built.changeMinor,
+          });
           setStep("done");
           return null;
         }}
@@ -198,6 +230,7 @@ export function SaleFlow({ bundle, drawerSessionId, onEnqueue, onComplete, onCan
         Count the change back to the customer. The sale is queued and will sync to the back office —
         the register locks when you tap below.
       </p>
+      {receipt ? <ReceiptButtons receipt={receipt} /> : null}
       <button
         type="button"
         onClick={onComplete}
@@ -206,6 +239,68 @@ export function SaleFlow({ bundle, drawerSessionId, onEnqueue, onComplete, onCan
         Done — lock register
       </button>
     </Frame>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// POS B10 — receipt printing (Star PassPRNT + browser fallback)
+// ---------------------------------------------------------------------------
+
+/**
+ * Print via the Star PassPRNT iOS app (App Store) on the paired TSP100IIIBi:
+ * navigating to the `starpassprnt://` URL opens PassPRNT, which prints the
+ * HTML at 576 dots, kicks the drawer, then returns to this page via `back=`.
+ * The browser fallback opens the SAME HTML in a new window and calls
+ * window.print() — receipts can never differ between the two paths.
+ * Reprint is just tapping again: the snapshot is immutable.
+ */
+function ReceiptButtons({ receipt }: { receipt: PosReceiptInput }) {
+  const [fallbackNote, setFallbackNote] = useState<string | null>(null);
+
+  const printStar = () => {
+    const html = buildPosReceiptHtml(receipt);
+    // Return to the register page itself; PassPRNT appends its result codes.
+    const backUrl = window.location.origin + window.location.pathname;
+    window.location.href = buildPassPrntUrl(html, { backUrl, openDrawer: true });
+  };
+
+  const printBrowser = () => {
+    const html = buildPosReceiptHtml(receipt);
+    const w = window.open("", "_blank", "width=400,height=640");
+    if (!w) {
+      setFallbackNote("Pop-up blocked — allow pop-ups for this site to use browser printing.");
+      return;
+    }
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    w.print();
+  };
+
+  return (
+    <div className="mt-6 flex flex-col items-center gap-3">
+      <div className="flex flex-wrap justify-center gap-3">
+        <button
+          type="button"
+          onClick={printStar}
+          className="rounded-2xl bg-neutral-100 px-8 py-4 text-lg font-bold text-neutral-900"
+        >
+          Print receipt
+        </button>
+        <button
+          type="button"
+          onClick={printBrowser}
+          className="rounded-2xl border border-neutral-600 px-8 py-4 text-lg font-semibold text-neutral-200"
+        >
+          Browser print
+        </button>
+      </div>
+      <p className="max-w-md text-center text-xs text-neutral-500">
+        “Print receipt” opens the Star PassPRNT app (paired Bluetooth printer) and pops the drawer.
+        Tap again to reprint. Use “Browser print” if PassPRNT isn’t installed on this device.
+      </p>
+      {fallbackNote ? <p className="text-xs text-amber-300">{fallbackNote}</p> : null}
+    </div>
   );
 }
 
