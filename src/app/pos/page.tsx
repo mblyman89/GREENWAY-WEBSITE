@@ -8,12 +8,33 @@
  * matters lives server-side after sync; the device holds only its offline
  * queue (append-only, idempotent client UUIDs — see register-client-core).
  */
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { RegisterShell } from "./RegisterShell";
 
 export const metadata: Metadata = {
   title: "Register",
   robots: { index: false, follow: false },
+  // POS B11 — installable Home-Screen app on the counter iPads. Safari reads
+  // the manifest + apple-touch icon; `appleWebApp.capable` renders the
+  // apple-mobile-web-app meta so the installed app runs standalone
+  // (no browser chrome) with a dark status bar matching the register UI.
+  manifest: "/pos/manifest.webmanifest",
+  icons: {
+    apple: "/pos/apple-touch-icon.png",
+  },
+  appleWebApp: {
+    capable: true,
+    title: "Register",
+    statusBarStyle: "black-translucent",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#0a0a0a",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
 };
 
 export const dynamic = "force-dynamic";
