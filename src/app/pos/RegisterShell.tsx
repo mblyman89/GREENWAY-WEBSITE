@@ -41,6 +41,7 @@ import {
 import { normalizePosReceiptConfig, receiptAddressLines } from "@/lib/pos/receipt-config-core";
 import { DENOM_FIELDS, EMPTY_DENOMS, denomTotalMinor, formatCents, type DenomCounts } from "@/lib/registers/cash";
 import { dollarsToMinor } from "@/lib/pos/till-core";
+import { checkSetupCredentials } from "@/lib/pos/device-setup-core";
 import { buildDayReportSlipHtml, type DaySummary, type DrawerDaySummary } from "@/lib/pos/day-report-core";
 import {
   LAST_RECEIPT_KEY,
@@ -624,18 +625,35 @@ function SetupScreen({ onProvisioned }: { onProvisioned: (c: DeviceCreds) => voi
   const [deviceId, setDeviceId] = useState("");
   const [deviceKey, setDeviceKey] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const verify = async () => {
     setBusy(true);
     setError(null);
+    setNotice(null);
+    // B25 — shape-check BEFORE the network call. The device id is a UUID and
+    // the key is a 32-char random string; a swap (the exact field mix-up that
+    // blocked first provisioning) is detected and corrected here, and a
+    // malformed id gets a human explanation instead of the server's terse 401.
+    const checked = checkSetupCredentials(deviceId, deviceKey);
+    if (checked.swapped) {
+      setDeviceId(checked.deviceId);
+      setDeviceKey(checked.deviceKey);
+      setNotice("The id and key were in each other's fields — swapped them back for you.");
+    }
+    if (checked.problem) {
+      setError(checked.problem);
+      setBusy(false);
+      return;
+    }
     try {
       const res = await fetch("/api/pos/sync", {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          "x-pos-device-id": deviceId.trim(),
-          "x-pos-device-key": deviceKey.trim(),
+          "x-pos-device-id": checked.deviceId,
+          "x-pos-device-key": checked.deviceKey,
         },
         body: JSON.stringify({ events: [] }),
       });
@@ -647,8 +665,8 @@ function SetupScreen({ onProvisioned }: { onProvisioned: (c: DeviceCreds) => voi
         return;
       }
       onProvisioned({
-        deviceId: deviceId.trim(),
-        deviceKey: deviceKey.trim(),
+        deviceId: checked.deviceId,
+        deviceKey: checked.deviceKey,
         name: body.device.name,
         registerId: body.device.registerId,
       });
@@ -683,6 +701,7 @@ function SetupScreen({ onProvisioned }: { onProvisioned: (c: DeviceCreds) => voi
           autoComplete="off"
           spellCheck={false}
         />
+        {notice ? <p className="mt-4 rounded-lg bg-sky-950/60 px-3 py-2 text-sm text-sky-300">{notice}</p> : null}
         {error ? <p className="mt-4 rounded-lg bg-red-950/60 px-3 py-2 text-sm text-red-300">{error}</p> : null}
         <button
           type="button"
