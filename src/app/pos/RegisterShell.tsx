@@ -43,6 +43,7 @@ import { DENOM_FIELDS, EMPTY_DENOMS, denomTotalMinor, formatCents, type DenomCou
 import { dollarsToMinor } from "@/lib/pos/till-core";
 import { checkSetupCredentials } from "@/lib/pos/device-setup-core";
 import { VOID_REASON_PRESETS } from "@/lib/pos/void-sale-core";
+import type { PickupQueueEntry } from "@/lib/pos/pickup-core";
 import { buildDayReportSlipHtml, type DaySummary, type DrawerDaySummary } from "@/lib/pos/day-report-core";
 import {
   LAST_RECEIPT_KEY,
@@ -117,6 +118,9 @@ export function RegisterShell() {
   // B22 — X/Z day report modal (manager PIN inside).
   const [dayReportOpen, setDayReportOpen] = useState(false);
   const [voidOpen, setVoidOpen] = useState(false); // B27
+  const [pickupOpen, setPickupOpen] = useState(false); // B28
+  // B28 — live count of website pickup orders (polled while unlocked+online).
+  const [pickupCount, setPickupCount] = useState<number | null>(null);
   const seqRef = useRef(0);
   const queueRef = useRef<QueuedPosEvent[]>([]);
   const flushingRef = useRef(false);
@@ -300,12 +304,39 @@ export function RegisterShell() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [creds]);
 
+  // ── B28: pickup-queue badge poll (unlocked + online only; 45s cadence).
+  //    The badge itself is gated on `online` at render time, so no state
+  //    reset is needed here when connectivity drops.
+  useEffect(() => {
+    if (screen !== "home" || !creds || !online) return;
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const res = await fetch("/api/pos/pickup", {
+          headers: { "x-pos-device-id": creds.deviceId, "x-pos-device-key": creds.deviceKey },
+        });
+        const body = (await res.json().catch(() => null)) as { queue?: unknown[] } | null;
+        if (!cancelled) setPickupCount(res.ok && Array.isArray(body?.queue) ? body.queue.length : null);
+      } catch {
+        if (!cancelled) setPickupCount(null);
+      }
+    };
+    const t0 = setTimeout(() => void poll(), 0);
+    const t = setInterval(() => void poll(), 45_000);
+    return () => {
+      cancelled = true;
+      clearTimeout(t0);
+      clearInterval(t);
+    };
+  }, [screen, creds, online]);
+
   // ── auto-lock on idle ──
   const lock = useCallback(() => {
     setEmployee(null);
     setSaleActive(false);
     setResumeCart(null);
     setNoSaleOpen(false);
+    setPickupOpen(false);
     setScreen("locked");
   }, []);
 
@@ -555,6 +586,8 @@ export function RegisterShell() {
         onTill={(mode) => setTillMode(mode)}
         onDayReport={() => setDayReportOpen(true)}
         onVoidSale={online ? () => setVoidOpen(true) : undefined}
+        pickupCount={online ? pickupCount : null}
+        onPickupQueue={online && drawer ? () => setPickupOpen(true) : undefined}
         onRefreshMenu={() => void refreshMenu()}
         onClearBanner={() => setBanner(null)}
         onLock={lock}
@@ -613,6 +646,22 @@ export function RegisterShell() {
             // Print the void slip; the drawer POPS — the cash goes back out.
             const backUrl = window.location.origin + window.location.pathname;
             window.location.href = buildPassPrntUrl(slipHtml, { backUrl, openDrawer: true });
+          }}
+        />
+      ) : null}
+      {pickupOpen && employee && drawer ? (
+        <PickupQueueModal
+          creds={creds}
+          employee={employee}
+          drawerSessionId={drawer.sessionId}
+          onClose={() => setPickupOpen(false)}
+          onCompleted={(receiptHtml, message) => {
+            setPickupOpen(false);
+            setBanner(message);
+            setPickupCount((c) => (typeof c === "number" && c > 0 ? c - 1 : c));
+            // Print the pickup receipt; the drawer POPS — cash just came in.
+            const backUrl = window.location.origin + window.location.pathname;
+            window.location.href = buildPassPrntUrl(receiptHtml, { backUrl, openDrawer: true });
           }}
         />
       ) : null}
@@ -912,6 +961,8 @@ function HomeScreen({
   onTill,
   onDayReport,
   onVoidSale,
+  pickupCount,
+  onPickupQueue,
   onRefreshMenu,
   onClearBanner,
   onLock,
@@ -947,6 +998,10 @@ function HomeScreen({
   onDayReport: () => void;
   /** B27 — open the manager-gated same-day void flow (undefined offline). */
   onVoidSale?: () => void;
+  /** B28 — live website-pickup count (null offline / not yet fetched). */
+  pickupCount: number | null;
+  /** B28 — open the pickup queue (undefined offline or with no open drawer). */
+  onPickupQueue?: () => void;
   onRefreshMenu: () => void;
   onClearBanner: () => void;
   onLock: () => void;
@@ -1040,7 +1095,7 @@ function HomeScreen({
         </div>
       </section>
 
-      <section className="mt-6 grid gap-4 sm:grid-cols-3">
+      <section className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <button
           type="button"
           disabled={!drawer || !employee.clockedIn || !menuReady}
@@ -1059,6 +1114,33 @@ function HomeScreen({
           Start sale
           <span className="mt-1 block text-sm font-normal text-emerald-100">
             ID check → cart → cash tender
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={onPickupQueue}
+          disabled={!onPickupQueue}
+          title={
+            onPickupQueue
+              ? undefined
+              : !drawer
+                ? "Open a drawer first — pickup orders take cash"
+                : "Pickup orders need a connection — the queue lives on the server"
+          }
+          className="relative rounded-2xl bg-sky-700 p-8 text-left text-xl font-bold text-white disabled:opacity-40"
+        >
+          Pickup orders
+          {typeof pickupCount === "number" && pickupCount > 0 ? (
+            <span className="absolute right-4 top-4 flex h-9 min-w-9 items-center justify-center rounded-full bg-white px-2 text-base font-extrabold text-sky-700">
+              {pickupCount}
+            </span>
+          ) : null}
+          <span className="mt-1 block text-sm font-normal text-sky-100">
+            {typeof pickupCount === "number"
+              ? pickupCount === 0
+                ? "No website orders waiting"
+                : `${pickupCount} website order${pickupCount === 1 ? "" : "s"} waiting`
+              : "Website orders — ID check at handover"}
           </span>
         </button>
         <button type="button" onClick={onPunch} className="rounded-2xl bg-neutral-800 p-8 text-left text-xl font-semibold">
@@ -1528,6 +1610,310 @@ function VoidSaleModal({
           >
             {busy ? "Voiding…" : `Void sale & return ${formatCents(sale.totalMinor)}`}
           </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// B28 — Pickup queue modal: website orders → ID check at handover → cash →
+// the SAME server completion gate every sale runs → receipt + drawer pop
+// ---------------------------------------------------------------------------
+
+type PickupDetail = {
+  orderId: string;
+  orderNumber: string;
+  customerLabel: string;
+  status: string;
+  itemCount: number;
+  subtotalMinor: number;
+  taxMinor: number;
+  totalMinor: number;
+  customerNote: string | null;
+  placedAtIso: string;
+  lines: { productName: string; variantLabel: string | null; quantity: number; priceMinor: number }[];
+};
+
+/**
+ * The register's window into the website order queue. Three panes in one
+ * modal: the queue (ready-first, oldest-first), one order's lines, and the
+ * handover (explicit ID attestation checkbox → cash tendered → complete).
+ * The server re-runs EVERYTHING (evaluatePickupCompletion + the full
+ * completion gate), so this UI can never hand over what the law wouldn't.
+ * ONLINE-ONLY; requires an open drawer (the cash goes into it).
+ */
+function PickupQueueModal({
+  creds,
+  employee,
+  drawerSessionId,
+  onClose,
+  onCompleted,
+}: {
+  creds: DeviceCreds;
+  employee: UnlockedEmployee;
+  drawerSessionId: string;
+  onClose: () => void;
+  onCompleted: (receiptHtml: string, message: string) => void;
+}) {
+  const [queue, setQueue] = useState<PickupQueueEntry[] | null>(null);
+  const [detail, setDetail] = useState<PickupDetail | null>(null);
+  const [idConfirmed, setIdConfirmed] = useState(false);
+  const [tendered, setTendered] = useState("");
+  const [errors, setErrors] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+
+  const headers = useMemo(
+    () => ({
+      "content-type": "application/json",
+      "x-pos-device-id": creds.deviceId,
+      "x-pos-device-key": creds.deviceKey,
+    }),
+    [creds],
+  );
+
+  const loadQueue = useCallback(async () => {
+    setErrors([]);
+    try {
+      const res = await fetch("/api/pos/pickup", { headers });
+      const body = (await res.json().catch(() => null)) as { queue?: PickupQueueEntry[]; error?: string } | null;
+      if (!res.ok || !Array.isArray(body?.queue)) {
+        setErrors([body?.error ?? "Could not load the pickup queue."]);
+        setQueue([]);
+        return;
+      }
+      setQueue(body.queue);
+    } catch {
+      setErrors(["Could not reach the server — try again."]);
+      setQueue([]);
+    }
+  }, [headers]);
+
+  useEffect(() => {
+    // Deferred a tick (same pattern as the shell's menu refresh) so the
+    // effect body never sets state synchronously during mount.
+    const t = setTimeout(() => void loadQueue(), 0);
+    return () => clearTimeout(t);
+  }, [loadQueue]);
+
+  const openOrder = async (orderId: string) => {
+    if (busy) return;
+    setBusy(true);
+    setErrors([]);
+    try {
+      const res = await fetch("/api/pos/pickup", { method: "POST", headers, body: JSON.stringify({ orderId }) });
+      const body = (await res.json().catch(() => null)) as { order?: PickupDetail; error?: string } | null;
+      if (!res.ok || !body?.order) {
+        setErrors([body?.error ?? "Could not load the order."]);
+        return;
+      }
+      setDetail(body.order);
+      setIdConfirmed(false);
+      setTendered("");
+    } catch {
+      setErrors(["Could not reach the server — try again."]);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const tenderedMinor = dollarsToMinor(tendered);
+  const canComplete =
+    !!detail && idConfirmed && tenderedMinor !== null && tenderedMinor >= detail.totalMinor && !busy;
+
+  const complete = async () => {
+    if (!detail || !canComplete || tenderedMinor === null) return;
+    setBusy(true);
+    setErrors([]);
+    try {
+      const res = await fetch("/api/pos/pickup", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          orderId: detail.orderId,
+          complete: { employeeId: employee.id, tenderedMinor, idConfirmed, drawerSessionId },
+        }),
+      });
+      const body = (await res.json().catch(() => null)) as
+        | { changeMinor?: number; receiptHtml?: string; orderNumber?: string; errors?: string[]; error?: string }
+        | null;
+      if (!res.ok || !body?.receiptHtml) {
+        setErrors(Array.isArray(body?.errors) ? body.errors : [body?.error ?? "Completion failed."]);
+        return;
+      }
+      const change = Number(body.changeMinor ?? 0);
+      onCompleted(
+        body.receiptHtml,
+        `Order ${body.orderNumber ?? detail.orderNumber} handed over — give ${formatCents(change)} change.`,
+      );
+    } catch {
+      setErrors(["Could not reach the server — try again."]);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-neutral-700 bg-neutral-900 p-6 text-neutral-100">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">
+            {detail ? `Order ${detail.orderNumber} — ${detail.customerLabel}` : "Pickup orders"}
+          </h2>
+          <div className="flex gap-2">
+            {detail ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setDetail(null);
+                  setErrors([]);
+                  void loadQueue();
+                }}
+                className="rounded-lg bg-neutral-800 px-3 py-1.5 text-sm"
+              >
+                Back
+              </button>
+            ) : null}
+            <button type="button" onClick={onClose} className="rounded-lg bg-neutral-800 px-3 py-1.5 text-sm">
+              Close
+            </button>
+          </div>
+        </div>
+
+        {!detail ? (
+          <>
+            <p className="mt-2 text-xs text-neutral-400">
+              Website orders, ready first. Tap one to hand it over — the ID check happens HERE, at the counter,
+              and the sale runs the same compliance gate as every register sale.
+            </p>
+            {queue === null ? (
+              <p className="mt-6 text-center text-sm text-neutral-500">Loading…</p>
+            ) : queue.length === 0 ? (
+              <p className="mt-6 rounded-xl border border-neutral-800 bg-neutral-950 p-6 text-center text-sm text-neutral-500">
+                No website orders waiting. New orders appear here the moment they&rsquo;re placed.
+              </p>
+            ) : (
+              <ul className="mt-4 space-y-2">
+                {queue.map((q) => (
+                  <li key={q.orderId}>
+                    <button
+                      type="button"
+                      onClick={() => void openOrder(q.orderId)}
+                      disabled={busy}
+                      className={`w-full rounded-xl border p-4 text-left disabled:opacity-40 ${
+                        q.status === "ready"
+                          ? "border-emerald-800 bg-emerald-950/40"
+                          : "border-neutral-800 bg-neutral-950"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-semibold">
+                          {q.orderNumber} · {q.customerLabel}
+                        </span>
+                        <span
+                          className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                            q.status === "ready" ? "bg-emerald-600 text-white" : "bg-neutral-800 text-neutral-300"
+                          }`}
+                        >
+                          {q.statusLabel}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs text-neutral-400">
+                        {q.itemCount} item{q.itemCount === 1 ? "" : "s"} · {formatCents(q.totalMinor)} · waiting{" "}
+                        {q.minutesWaiting < 60
+                          ? `${q.minutesWaiting} min`
+                          : `${Math.floor(q.minutesWaiting / 60)}h ${q.minutesWaiting % 60}m`}
+                        {q.hasCustomerNote ? " · has a note" : ""}
+                      </p>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
+        ) : (
+          <>
+            <div className="mt-4 rounded-xl border border-neutral-700 bg-neutral-950 p-4">
+              <ul className="space-y-1.5 text-sm">
+                {detail.lines.map((l, i) => (
+                  <li key={i} className="flex items-baseline justify-between gap-3">
+                    <span>
+                      {l.quantity}x {l.productName}
+                      {l.variantLabel ? ` (${l.variantLabel})` : ""}
+                    </span>
+                    <span className="shrink-0 font-mono text-neutral-300">{formatCents(l.priceMinor * l.quantity)}</span>
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-3 border-t border-neutral-800 pt-2 text-sm">
+                <div className="flex justify-between text-neutral-400">
+                  <span>Subtotal</span>
+                  <span className="font-mono">{formatCents(detail.subtotalMinor)}</span>
+                </div>
+                <div className="flex justify-between text-neutral-400">
+                  <span>Tax</span>
+                  <span className="font-mono">{formatCents(detail.taxMinor)}</span>
+                </div>
+                <div className="mt-1 flex justify-between text-base font-bold">
+                  <span>Total due (cash)</span>
+                  <span className="font-mono">{formatCents(detail.totalMinor)}</span>
+                </div>
+              </div>
+            </div>
+
+            {detail.customerNote ? (
+              <p className="mt-3 rounded-lg bg-sky-950/60 px-3 py-2 text-xs text-sky-200">
+                Customer note: {detail.customerNote}
+              </p>
+            ) : null}
+
+            <label className="mt-4 flex items-start gap-3 rounded-xl border border-amber-900/60 bg-amber-950/30 p-4">
+              <input
+                type="checkbox"
+                checked={idConfirmed}
+                onChange={(e) => setIdConfirmed(e.target.checked)}
+                className="mt-0.5 h-5 w-5"
+              />
+              <span className="text-sm text-amber-100">
+                I checked <strong>{detail.customerLabel}</strong>&rsquo;s ID at the counter — valid, photo matches,
+                21+ (WAC 314-55-150). Age verification happens at handover, not at checkout.
+              </span>
+            </label>
+
+            <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-neutral-400">
+              Cash tendered
+            </label>
+            <input
+              className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2.5 font-mono text-lg"
+              inputMode="decimal"
+              autoComplete="off"
+              placeholder={`at least ${formatCents(detail.totalMinor)}`}
+              value={tendered}
+              onChange={(e) => setTendered(e.target.value)}
+            />
+            {tenderedMinor !== null && tenderedMinor >= detail.totalMinor ? (
+              <p className="mt-1 text-sm text-emerald-300">
+                Change due: {formatCents(tenderedMinor - detail.totalMinor)}
+              </p>
+            ) : null}
+
+            <button
+              type="button"
+              onClick={() => void complete()}
+              disabled={!canComplete}
+              className="mt-5 w-full rounded-xl bg-emerald-600 py-3 text-base font-semibold text-white disabled:opacity-40"
+            >
+              {busy ? "Completing…" : `Complete pickup — ${formatCents(detail.totalMinor)} cash`}
+            </button>
+          </>
+        )}
+
+        {errors.length > 0 ? (
+          <ul className="mt-3 space-y-1 rounded-lg bg-red-950/60 px-3 py-2 text-sm text-red-300">
+            {errors.map((e, i) => (
+              <li key={i}>{e}</li>
+            ))}
+          </ul>
         ) : null}
       </div>
     </div>
