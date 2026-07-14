@@ -49,6 +49,10 @@ import {
   type PosSyncAck,
   type ManualIdEventPayload,
 } from "./sync-core";
+import { validateCardCapture, type PosCardCapture } from "./medical-pos-core";
+import { findAuthorizationByUpid, attachCardToOrder } from "@/lib/medical/sale-store";
+import { toRecognitionCard } from "@/lib/medical/store";
+import { authorizationValidityAt } from "@/lib/medical/medical-authorization-core";
 
 // ---------------------------------------------------------------------------
 // Schema guard (migration 0120 applied manually by the owner)
@@ -213,6 +217,16 @@ async function ingestOne(
     if (isMissingSchemaError(insertError)) {
       return { clientUuid: envelope.clientUuid, status: "rejected", reason: MIGRATION_HINT };
     }
+    // A medical_card_capture rejected by the 0120 CHECK constraint means
+    // migration 0121 hasn't been applied yet — say so precisely.
+    if (insertError.code === "23514" && envelope.eventType === "medical_card_capture") {
+      return {
+        clientUuid: envelope.clientUuid,
+        status: "rejected",
+        reason:
+          "Medical card-capture events are not accepted yet — apply supabase/migrations/0121_pos_medical.sql first.",
+      };
+    }
     // FK violations (unknown employee/register) are rejections — the event
     // never became a ledger fact, the device keeps it visible.
     return { clientUuid: envelope.clientUuid, status: "rejected", reason: insertError.message };
@@ -232,6 +246,8 @@ async function ingestOne(
         return await processNoSale(admin, envelope, inserted.id);
       case "manual_id_verification":
         return await processManualId(admin, envelope, inserted.id);
+      case "medical_card_capture":
+        return await processCardCapture(admin, envelope, inserted.id);
       default:
         return await markException(admin, inserted.id, envelope.clientUuid, "Unknown event type.");
     }
@@ -306,6 +322,52 @@ async function processSale(
     }
   }
 
+  // POS B8 — medical sale: resolve the captured card BEFORE materializing the
+  // order, so a bad card never creates an order at all. Three checks:
+  //  1. the medical_card_capture audit event was synced first (flush order),
+  //  2. the UPID resolves to an ACTIVE back-office authorization row (the
+  //     durable card the gate re-validates — DOH 608-048 intake enforced),
+  //  3. that row is VALID today (authorizationValidityAt — same source of
+  //     truth as the completion gate; catches revocations since the download).
+  // The resolved row is attached to the order AFTER insert and BEFORE the
+  // gate, so the gate's medCtx / medical limits / WAC 090(2) ledger all fire.
+  let medicalAuth: { id: string; customer_id: string } | null = null;
+  if (sale.medical) {
+    const { data: cardEvent } = await admin
+      .from("pos_sale_events")
+      .select("id")
+      .eq("client_uuid", sale.medical.cardEventUuid)
+      .eq("event_type", "medical_card_capture")
+      .maybeSingle<{ id: string }>();
+    if (!cardEvent) {
+      return markException(
+        admin,
+        ledgerId,
+        envelope.clientUuid,
+        "Medical sale references a card-capture event that has not been synced — flush order violated or the capture event was rejected.",
+      );
+    }
+    const auth = await findAuthorizationByUpid(sale.medical.card.upid);
+    if (!auth) {
+      return markException(
+        admin,
+        ledgerId,
+        envelope.clientUuid,
+        `Medical sale: no ACTIVE recognition card with UPID "${sale.medical.card.upid}" exists in the back office. Intake the patient's card (Admin → Medical) before ringing medical sales, then resolve this exception.`,
+      );
+    }
+    const validity = authorizationValidityAt(toRecognitionCard(auth), new Date());
+    if (!validity.valid) {
+      return markException(
+        admin,
+        ledgerId,
+        envelope.clientUuid,
+        `Medical sale: the recognition card for UPID "${sale.medical.card.upid}" is not valid: ${validity.reason ?? "unknown reason"}. Fix the card on the patient's profile, then resolve this exception.`,
+      );
+    }
+    medicalAuth = { id: auth.id, customer_id: auth.customer_id };
+  }
+
   // Employee name for the customer-facing snapshot (orders require a name).
   const { data: emp } = await admin
     .from("employees")
@@ -365,8 +427,26 @@ async function processSale(
     event_type: "placed",
     to_status: "ready",
     actor_label: `POS · ${employeeName}`,
-    note: `Register sale synced from ${device.name} (event ${envelope.clientUuid}). Payment: ${sale.paymentMethod}.`,
+    note: `Register sale synced from ${device.name} (event ${envelope.clientUuid}). Payment: ${sale.paymentMethod}.${sale.medical ? " MEDICAL sale (recognition card attached)." : ""}`,
   });
+
+  // POS B8 — attach the resolved recognition card BEFORE the gate runs, so
+  // the gate re-validates the card, evaluates the 3× MEDICAL limits (WAC
+  // 314-55-095(2)(d)), and writes the WAC 314-55-090(2) exempt-sale ledger
+  // rows from the repriced lines. Attach failure is an exception, never a
+  // silent recreational completion — that would misreport a medical sale.
+  if (medicalAuth) {
+    const attached = await attachCardToOrder(order.id, medicalAuth);
+    if (!attached.ok) {
+      return markException(
+        admin,
+        ledgerId,
+        envelope.clientUuid,
+        `Medical sale: could not attach the recognition card to the order (${attached.error ?? "unknown error"}).`,
+        { order_id: order.id },
+      );
+    }
+  }
 
   // ── The compliance gate (B1): the IDENTICAL 8-step sequence the back
   //    office runs. POS sync NEVER carries an override — an over-limit sale
@@ -515,6 +595,50 @@ async function processManualId(
       dateOfBirth: payload.dateOfBirth,
       expirationDate: payload.expirationDate,
       reason: payload.reason,
+      employeeId: envelope.employeeId,
+      clientUuid: envelope.clientUuid,
+      occurredAt: envelope.occurredAt,
+    },
+  });
+  await markProcessed(admin, ledgerId);
+  return { clientUuid: envelope.clientUuid, status: "processed" };
+}
+
+// ---------------------------------------------------------------------------
+// medical_card_capture — the audit record every medical sale references (B8)
+// ---------------------------------------------------------------------------
+
+async function processCardCapture(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  envelope: PosEventEnvelope,
+  ledgerId: string,
+): Promise<PosSyncAck> {
+  const payload = envelope.payload as Partial<PosCardCapture>;
+  // Validate against the DEVICE's wall-clock date (the capture happened
+  // then, possibly offline days ago) — the SALE re-validates against the
+  // durable authorization row at its own ingest.
+  const capturedYmd = envelope.occurredAt.slice(0, 10);
+  const check = validateCardCapture(payload, capturedYmd);
+  if (!check.ok) {
+    return markException(
+      admin,
+      ledgerId,
+      envelope.clientUuid,
+      `Invalid medical card capture: ${check.errors.join(" ")}`,
+    );
+  }
+  await recordAudit({
+    actorId: null,
+    actorEmail: `pos-device:${envelope.deviceId}`,
+    action: "register.medical_card_capture",
+    entityType: "register",
+    entityId: envelope.registerId,
+    after: {
+      upid: check.card.upid,
+      effectiveOn: check.card.effectiveOn,
+      expiresOn: check.card.expiresOn,
+      holderType: check.card.holderType,
+      mcrVerified: check.card.mcrVerified,
       employeeId: envelope.employeeId,
       clientUuid: envelope.clientUuid,
       occurredAt: envelope.occurredAt,

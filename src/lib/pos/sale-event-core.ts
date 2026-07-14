@@ -81,6 +81,13 @@ export const POS_EVENT_TYPES = [
   "no_sale",
   /** ID verification performed manually (audit trail; WAC 314-55-150 list). */
   "manual_id_verification",
+  /**
+   * Recognition-card capture for a medical sale (POS B8). Enqueued BEFORE the
+   * sale that references it (same discipline as manual_id_verification) so the
+   * card facts + MCR attestation are an audit fact even if the sale is
+   * abandoned. Requires migration 0121.
+   */
+  "medical_card_capture",
 ] as const;
 export type PosEventType = (typeof POS_EVENT_TYPES)[number];
 
@@ -168,6 +175,25 @@ export type PosSalePayload = {
   drawerSessionId: string;
   /** How the customer's ID was verified before the cart was started. */
   idVerification: { method: "scan" | "manual"; manualEventUuid?: string };
+  /**
+   * Present when this is a MEDICAL sale (POS B7/B8): the captured recognition
+   * card + the client UUID of its medical_card_capture audit event + the
+   * savings the device passed through. Deep validation (card dates vs the
+   * sale date, MCR attestation) runs in medical-pos-core on-device BEFORE
+   * enqueue and again server-side at sync; here we enforce the structural
+   * invariants every enqueued sale must satisfy.
+   */
+  medical?: {
+    card: {
+      upid: string;
+      effectiveOn: string;
+      expiresOn: string;
+      holderType: "patient" | "designated_provider";
+      mcrVerified: boolean;
+    };
+    cardEventUuid: string;
+    medicalSavingsMinor: number;
+  };
 };
 
 export type SalePayloadCheck = { ok: true } | { ok: false; errors: string[] };
@@ -218,6 +244,41 @@ export function validateSalePayload(p: Partial<PosSalePayload>): SalePayloadChec
     errors.push('idVerification.method must be "scan" or "manual" — a sale cannot exist without an ID gate result.');
   } else if (idv.method === "manual" && !isUuid(idv.manualEventUuid)) {
     errors.push("Manual ID verification must reference its manual_id_verification event UUID (audit trail).");
+  }
+  if (p.medical !== undefined) {
+    const m = p.medical;
+    if (m == null || typeof m !== "object") {
+      errors.push("medical must be an object when present.");
+    } else {
+      const card = m.card;
+      if (card == null || typeof card !== "object") {
+        errors.push("medical.card (the captured recognition card) is required on a medical sale.");
+      } else {
+        if (typeof card.upid !== "string" || card.upid.trim().length < 4 || card.upid.trim().length > 64) {
+          errors.push("medical.card.upid must be the recognition card's unique patient identifier (4–64 chars).");
+        }
+        if (typeof card.effectiveOn !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(card.effectiveOn)) {
+          errors.push("medical.card.effectiveOn must be YYYY-MM-DD.");
+        }
+        if (typeof card.expiresOn !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(card.expiresOn)) {
+          errors.push("medical.card.expiresOn must be YYYY-MM-DD.");
+        }
+        if (card.holderType !== "patient" && card.holderType !== "designated_provider") {
+          errors.push('medical.card.holderType must be "patient" or "designated_provider".');
+        }
+        if (card.mcrVerified !== true) {
+          errors.push(
+            "medical.card.mcrVerified must be true — the consultant must verify the card in the DOH Medical Cannabis Database before a medical sale (WAC 246-71).",
+          );
+        }
+      }
+      if (!isUuid(m.cardEventUuid)) {
+        errors.push("Medical sale must reference its medical_card_capture event UUID (audit trail).");
+      }
+      if (!Number.isInteger(m.medicalSavingsMinor) || m.medicalSavingsMinor < 0) {
+        errors.push("medical.medicalSavingsMinor must be a non-negative integer (cents).");
+      }
+    }
   }
   return errors.length ? { ok: false, errors } : { ok: true };
 }
@@ -360,6 +421,44 @@ export function __runPosSaleEventTests(): void {
       lines: [{ ...goodSale.lines[0], category: "" }],
     }).ok,
     "missing category snapshot refused",
+  );
+
+  // Medical block (POS B8) — optional; structurally validated when present.
+  const goodMedical = {
+    card: {
+      upid: "WA-UPID-0001",
+      effectiveOn: "2026-01-01",
+      expiresOn: "2027-01-01",
+      holderType: "patient" as const,
+      mcrVerified: true,
+    },
+    cardEventUuid: U3,
+    medicalSavingsMinor: 463,
+  };
+  ok(
+    validateSalePayload({ ...goodSale, totalMinor: 2000, subtotalMinor: 2000, taxMinor: 0, tenderedMinor: 2000, changeMinor: 0, medical: goodMedical }).ok,
+    "medical sale with full block ok",
+  );
+  ok(!validateSalePayload({ ...goodSale, medical: { ...goodMedical, cardEventUuid: "not-a-uuid" } }).ok, "medical without card-capture event uuid refused");
+  ok(
+    !validateSalePayload({ ...goodSale, medical: { ...goodMedical, card: { ...goodMedical.card, mcrVerified: false } } }).ok,
+    "medical without MCR attestation refused",
+  );
+  ok(
+    !validateSalePayload({ ...goodSale, medical: { ...goodMedical, card: { ...goodMedical.card, upid: "x" } } }).ok,
+    "medical with bad UPID refused",
+  );
+  ok(
+    !validateSalePayload({ ...goodSale, medical: { ...goodMedical, card: { ...goodMedical.card, holderType: "friend" as "patient" } } }).ok,
+    "medical with bad holder type refused",
+  );
+  ok(
+    !validateSalePayload({ ...goodSale, medical: { ...goodMedical, medicalSavingsMinor: -1 } }).ok,
+    "medical with negative savings refused",
+  );
+  ok(
+    !validateSalePayload({ ...goodSale, medical: { ...goodMedical, card: undefined as unknown as typeof goodMedical.card } }).ok,
+    "medical without card refused",
   );
 
   // Punch payload
