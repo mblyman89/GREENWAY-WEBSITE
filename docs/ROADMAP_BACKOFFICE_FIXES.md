@@ -2987,3 +2987,29 @@ verify proceeds. Server behavior unchanged.
 **Tests:** 1,478 vitest tests / 104 files (7 new in
 `tests/compliance/device-setup-core.test.ts`); selftest runner registers
 import AND call. No migration needed. CI green on PR #485.
+
+### Shipped: POS B26 — setup key integrity, the field "Device key rejected." failure (PR #487)
+
+After B25 fixed the id/key field swap, provisioning failed in the field a
+second time: the server answered "Device key rejected." with the correct id,
+the original key, AND a freshly rotated key. That error fires only when
+verifyPin(deviceKey, provision_hash) is false — the key string arriving is
+not the key that was minted. Root cause: the key is TYPED on the iPad and is
+case-sensitive base64url (randomBytes(24).toString("base64url"), always
+exactly 32 chars of [A-Za-z0-9_-] at both minting sites), but the setup
+inputs lacked autoCapitalize="none"/autoCorrect="off" — iOS silently
+capitalizes the first typed letter, autocorrects letter runs, and swaps
+smart dashes for hyphens; spellCheck={false} stops none of that.
+
+Fix (client-only): (1) autoCapitalize="none" + autoCorrect="off" on both
+setup inputs; (2) device-setup-core's clean() also normalizes typographic
+dashes (en/em/minus/figure/non-breaking) to ASCII "-"; (3) an exact
+key-shape check (^[A-Za-z0-9_-]{32}$) that names the bad character or the
+wrong count and explains case sensitivity + keyboard mangling BEFORE the
+network call; (4) a server "Device key rejected." is translated on-screen:
+the key is case-sensitive, only the NEWEST key survives rotation, and both
+values must be copied from the SAME device row without retyping.
+
+**Tests:** 1,482 vitest tests / 104 files (+4 in
+`tests/compliance/device-setup-core.test.ts`); device-setup-core self-tests
+13 → 21 assertions. No migration. No money paths. CI green on PR #487.
