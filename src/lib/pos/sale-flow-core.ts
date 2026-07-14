@@ -327,6 +327,9 @@ export function buildSalePayload(args: BuildSaleArgs): BuildSaleResult {
       // POS B20: optional exact-variant identity (omitted when absent so
       // pre-B20 payload shapes stay byte-identical).
       ...(l.variantId ? { variantId: l.variantId } : {}),
+      // POS B24: optional manager price-override block (applyPriceOverrides
+      // stamped it onto the line; forwarded verbatim so the sync can audit).
+      ...(l.override ? { override: l.override } : {}),
     })),
     totalMinor: args.totals.totalMinorUnits,
     subtotalMinor: args.totals.subtotalMinorUnits,

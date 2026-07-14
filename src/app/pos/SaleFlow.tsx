@@ -18,7 +18,7 @@
  * re-refused server-side if it somehow synced.
  */
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   parseAamvaPdf417,
   evaluateScannedId,
@@ -40,6 +40,13 @@ import {
   type PosMenuProduct,
 } from "@/lib/pos/sale-flow-core";
 import { resolveScan } from "@/lib/pos/scan-to-cart-core";
+import {
+  applyPriceOverrides,
+  overrideFloorMinor,
+  validateOverrideRequest,
+  type PosLineOverride,
+} from "@/lib/pos/price-override-core";
+import { dollarsToMinor } from "@/lib/pos/till-core";
 import {
   validateCardCapture,
   medicalAgeAllowed,
@@ -102,6 +109,13 @@ export type SaleFlowProps = {
    * ever cached on the iPad). Returns matches or an error message.
    */
   onMemberLookup?: (q: string) => Promise<{ ok: true; members: PosMemberHit[] } | { ok: false; error: string }>;
+  /**
+   * B24 — manager PIN approval for a price override. ONLINE-ONLY (a PIN
+   * can't be verified offline). The shell implements it with the SAME
+   * /api/pos/approve endpoint the no-sale flow uses (scrypt + throttle +
+   * manager/lead role gate); the PIN never leaves that call.
+   */
+  onApprove?: (pin: string) => Promise<{ ok: true; approver: { id: string; fullName: string } } | { ok: false; error: string }>;
   /** Enqueue an event; returns the clientUuid assigned to it. */
   onEnqueue: (
     eventType: "sale" | "manual_id_verification" | "medical_card_capture",
@@ -124,10 +138,35 @@ function priceForBuyer(
   cart: PosCartEntry[],
   bundle: PosMenuBundle,
   carded: boolean,
-): { lines: PricedSaleLine[]; totals: OrderTotals; problems: string[]; med: MedicalPricingResult | null } {
+  overrides: Record<string, PosLineOverride>,
+): {
+  lines: PricedSaleLine[];
+  totals: OrderTotals;
+  problems: string[];
+  med: MedicalPricingResult | null;
+  /** B24 — the RAW engine lines (pre-override, pre-medical): what a manager
+   * approves an override against, keyed by variantId in the override modal. */
+  engineLines: PricedSaleLine[];
+  /** B24 — overrides dropped because the engine repriced the line. */
+  staleVariantIds: string[];
+} {
   const priced = priceCart(cart, bundle.rules);
-  if (!bundle.medical) return { ...priced, med: null };
-  const med = applyMedicalPricing(priced.lines, bundle.medical, {
+  // B24 — manager overrides apply to the ENGINE price (that is what the
+  // manager approved against); the medical exemption pass then reprices
+  // FROM the overridden price, so a carded patient gets both. A stale
+  // override (engine repriced the line since approval) never applies.
+  const withOverrides = applyPriceOverrides(priced.lines, overrides);
+  if (!bundle.medical) {
+    return {
+      lines: withOverrides.lines,
+      totals: withOverrides.totals,
+      problems: priced.problems,
+      med: null,
+      engineLines: priced.lines,
+      staleVariantIds: withOverrides.staleVariantIds,
+    };
+  }
+  const med = applyMedicalPricing(withOverrides.lines, bundle.medical, {
     cardedValid: carded,
     saleDateYmd: pacificDayKey(new Date()),
   });
@@ -140,11 +179,18 @@ function priceForBuyer(
           regularPriceMinorUnits: l.regularPriceMinor,
         })),
       )
-    : priced.totals;
-  return { lines: carded ? med.lines : priced.lines, totals, problems: priced.problems, med };
+    : withOverrides.totals;
+  return {
+    lines: carded ? med.lines : withOverrides.lines,
+    totals,
+    problems: priced.problems,
+    med,
+    engineLines: priced.lines,
+    staleVariantIds: withOverrides.staleVariantIds,
+  };
 }
 
-export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, initialCart, onHold, onReceiptFrozen, onMemberLookup, onEnqueue, onComplete, onCancel }: SaleFlowProps) {
+export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, initialCart, onHold, onReceiptFrozen, onMemberLookup, onApprove, onEnqueue, onComplete, onCancel }: SaleFlowProps) {
   const [step, setStep] = useState<Step>("idgate");
   const [verdict, setVerdict] = useState<Extract<IdGateVerdict, { allowed: true }> | null>(null);
   const [manualEventUuid, setManualEventUuid] = useState<string | null>(null);
@@ -158,6 +204,10 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
   const [cart, setCart] = useState<PosCartEntry[]>(initialCart ?? []);
   // POS B14 — the loyalty member attached to this sale (server lookup only).
   const [member, setMember] = useState<PosMemberHit | null>(null);
+  // POS B24 — manager-approved price overrides for THIS sale, keyed by
+  // variantId. Cleared with the sale; never persisted (a hold resumes at
+  // fresh engine prices, and the next customer never inherits a markdown).
+  const [overrides, setOverrides] = useState<Record<string, PosLineOverride>>({});
   const [changeMinor, setChangeMinor] = useState<number | null>(null);
   // POS B10 — snapshot of the finished sale for printing/reprint. Captured at
   // the moment the sale is enqueued so the receipt always matches the payload.
@@ -203,6 +253,9 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
         member={member}
         setMember={setMember}
         onMemberLookup={onMemberLookup}
+        onApprove={onApprove}
+        overrides={overrides}
+        setOverrides={setOverrides}
         onCancel={onCancel}
         onHold={onHold}
         onTender={() => setStep("tender")}
@@ -216,10 +269,11 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
         bundle={bundle}
         cart={cart}
         medicalCard={medicalCard}
+        overrides={overrides}
         onBack={() => setStep("cart")}
         onCancel={onCancel}
         onPaid={(tenderedMinor) => {
-          const priced = priceForBuyer(cart, bundle, !!medicalCard);
+          const priced = priceForBuyer(cart, bundle, !!medicalCard, overrides);
           const built = buildSalePayload({
             lines: priced.lines,
             totals: priced.totals,
@@ -739,6 +793,9 @@ function CartScreen({
   member,
   setMember,
   onMemberLookup,
+  onApprove,
+  overrides,
+  setOverrides,
   onCancel,
   onHold,
   onTender,
@@ -752,12 +809,19 @@ function CartScreen({
   member: PosMemberHit | null;
   setMember: (m: PosMemberHit | null) => void;
   onMemberLookup?: (q: string) => Promise<{ ok: true; members: PosMemberHit[] } | { ok: false; error: string }>;
+  /** B24 — manager PIN verify (ONLINE-ONLY; /api/pos/approve via the shell). */
+  onApprove?: (pin: string) => Promise<{ ok: true; approver: { id: string; fullName: string } } | { ok: false; error: string }>;
+  /** B24 — this sale's manager price overrides, keyed by variantId. */
+  overrides: Record<string, PosLineOverride>;
+  setOverrides: (o: Record<string, PosLineOverride>) => void;
   onCancel: () => void;
   /** B17 — park the cart (undefined = a hold already exists; button hidden). */
   onHold?: (cart: PosCartEntry[]) => void;
   onTender: () => void;
 }) {
   const [query, setQuery] = useState("");
+  // B24 — the line the manager is overriding (engine-priced snapshot).
+  const [overrideTarget, setOverrideTarget] = useState<{ product: PosMenuProduct; engineLine: PricedSaleLine } | null>(null);
   // B23 — a scan that matched a MULTI-variant product: the cashier picks the
   // size (we never guess which variant left the shelf).
   const [scanPick, setScanPick] = useState<PosMenuProduct[] | null>(null);
@@ -789,7 +853,22 @@ function CartScreen({
     }
     // none: keep the text — it's a search query, not a barcode.
   };
-  const priced = useMemo(() => priceForBuyer(cart, bundle, carded), [cart, bundle, carded]);
+  const priced = useMemo(() => priceForBuyer(cart, bundle, carded, overrides), [cart, bundle, carded, overrides]);
+
+  // B24 — an override approved against a price the engine no longer charges
+  // (promo tier moved with a quantity change) is dropped LOUDLY: clear it
+  // from state so the cashier sees the fresh engine price, never a silent
+  // apply of a markdown the manager did not look at.
+  const staleKey = priced.staleVariantIds.join(",");
+  useEffect(() => {
+    if (!staleKey) return;
+    const next = { ...overrides };
+    for (const id of staleKey.split(",")) delete next[id];
+    setOverrides(next);
+    // overrides/setOverrides intentionally omitted: this effect reacts to the
+    // PRICING result; including the map would loop the cleanup.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [staleKey]);
   const limits = useMemo(
     () => judgeLimits(limitLinesFor(priced.lines), carded ? "medical" : "recreational", bundle.limits),
     [priced.lines, carded, bundle.limits],
@@ -916,6 +995,12 @@ function CartScreen({
             {priced.lines.map((l, i) => {
               const medLine = carded ? priced.med?.lines[i] : null;
               const exempt = !!medLine && (medLine.salesExempt || medLine.exciseExempt);
+              // B24 — the raw engine line (pre-override, pre-medical) this
+              // line derives from; applyPriceOverrides and applyMedicalPricing
+              // both map 1:1 in order, so index i lines up exactly.
+              const engineLine = priced.engineLines[i];
+              const activeOverride = l.variantId ? overrides[l.variantId] : undefined;
+              const cartEntry = cart.find((e) => e.product.variantId === l.variantId);
               return (
               <li key={`${l.productId}-${l.variantLabel ?? ""}`} className="rounded-xl bg-neutral-800 px-4 py-3">
                 <div className="flex items-center justify-between">
@@ -926,6 +1011,11 @@ function CartScreen({
                         MED · TAX OFF
                       </span>
                     ) : null}
+                    {activeOverride ? (
+                      <span className="ml-2 rounded bg-amber-900/80 px-1.5 py-0.5 text-[10px] font-bold text-amber-300">
+                        OVERRIDE · {activeOverride.approvedByName}
+                      </span>
+                    ) : null}
                   </span>
                   <span className="text-sm font-bold">{money(l.unitPriceMinor * l.quantity)}</span>
                 </div>
@@ -933,8 +1023,36 @@ function CartScreen({
                   <span>
                     {money(l.unitPriceMinor)} each
                     {l.appliedLabel ? <span className="text-emerald-300"> · {l.appliedLabel}</span> : null}
+                    {activeOverride ? (
+                      <span className="text-amber-300"> · was {money(activeOverride.originalUnitPriceMinor)}</span>
+                    ) : null}
                   </span>
                   <span className="flex items-center gap-2">
+                    {onApprove && cartEntry && engineLine ? (
+                      activeOverride ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const next = { ...overrides };
+                            delete next[l.variantId ?? ""];
+                            setOverrides(next);
+                          }}
+                          className="rounded-lg bg-neutral-700 px-2 py-1 text-[11px] font-semibold text-amber-300"
+                          title="Remove the manager override — the line returns to the engine price."
+                        >
+                          Undo override
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setOverrideTarget({ product: cartEntry.product, engineLine })}
+                          className="rounded-lg bg-neutral-700 px-2 py-1 text-[11px] font-semibold text-neutral-300"
+                          title="Manager price override (markdown only; PIN + reason required)."
+                        >
+                          Override
+                        </button>
+                      )
+                    ) : null}
                     <QtyButton label="−" onClick={() => setCart(setCartQuantity(cart, cartVariantId(cart, l.productId, l.variantLabel), l.quantity - 1))} />
                     <span className="w-6 text-center text-sm font-semibold text-neutral-200">{l.quantity}</span>
                     <QtyButton label="+" onClick={() => setCart(setCartQuantity(cart, cartVariantId(cart, l.productId, l.variantLabel), l.quantity + 1))} />
@@ -1038,7 +1156,197 @@ function CartScreen({
           </div>
         </section>
       </div>
+
+      {overrideTarget && onApprove ? (
+        <PriceOverrideModal
+          product={overrideTarget.product}
+          engineLine={overrideTarget.engineLine}
+          onApprove={onApprove}
+          onClose={() => setOverrideTarget(null)}
+          onApplied={(o) => {
+            setOverrides({ ...overrides, [overrideTarget.product.variantId]: o });
+            setOverrideTarget(null);
+          }}
+        />
+      ) : null}
     </main>
+  );
+}
+
+/**
+ * POS B24 — manager price override (markdown only). The cashier asks; a
+ * manager or lead approves with THEIR PIN — verified server-side by
+ * /api/pos/approve (same scrypt + throttle + role gate as the no-sale flow).
+ * The floor is enforced BEFORE the PIN is spent: the statutory cannabis
+ * minimum (RCW 69.50.357) and the CCRS acquisition-cost floor — no PIN can
+ * take cannabis below either. ONLINE-ONLY: a PIN can't be verified offline.
+ * The override is approved against the CURRENT engine price; if the engine
+ * reprices the line later (quantity changes a promo tier), the override is
+ * dropped loudly, never silently reapplied.
+ */
+function PriceOverrideModal({
+  product,
+  engineLine,
+  onApprove,
+  onClose,
+  onApplied,
+}: {
+  product: PosMenuProduct;
+  engineLine: PricedSaleLine;
+  onApprove: (pin: string) => Promise<{ ok: true; approver: { id: string; fullName: string } } | { ok: false; error: string }>;
+  onClose: () => void;
+  onApplied: (o: PosLineOverride) => void;
+}) {
+  const PRESETS = [
+    "Damaged packaging",
+    "Price match (posted price discrepancy)",
+    "Last unit — short expiry",
+    "Customer recovery (manager decision)",
+  ];
+  const [priceText, setPriceText] = useState("");
+  const [preset, setPreset] = useState<string | null>(null);
+  const [custom, setCustom] = useState("");
+  const [pin, setPin] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const floorMinor = overrideFloorMinor(product);
+  const newUnitMinor = dollarsToMinor(priceText);
+  const reason = (preset ?? custom).trim();
+  const request =
+    newUnitMinor !== null
+      ? validateOverrideRequest({
+          engineUnitMinor: engineLine.unitPriceMinor,
+          floorMinor,
+          newUnitMinor,
+          reason,
+        })
+      : null;
+  const ready = request?.ok === true && pin.length >= 4 && !busy;
+
+  const approve = async () => {
+    if (!ready || newUnitMinor === null) return;
+    if (!navigator.onLine) {
+      setError("Offline — manager approval needs a connection to verify the PIN.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await onApprove(pin);
+      if (!res.ok) {
+        setError(res.error);
+        setPin("");
+        return;
+      }
+      onApplied({
+        unitPriceMinor: newUnitMinor,
+        originalUnitPriceMinor: engineLine.unitPriceMinor,
+        reason,
+        approvedByEmployeeId: res.approver.id,
+        approvedByName: res.approver.fullName,
+      });
+    } catch {
+      setError("Could not reach the server — try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+      <div className="w-full max-w-md rounded-2xl border border-neutral-700 bg-neutral-900 p-6 text-neutral-100">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Price override</h2>
+          <button type="button" onClick={onClose} className="rounded-lg bg-neutral-800 px-3 py-1.5 text-sm">
+            Cancel
+          </button>
+        </div>
+        <p className="mt-2 text-sm">
+          {engineLine.productName} — currently {money(engineLine.unitPriceMinor)} each
+          {engineLine.appliedLabel ? ` (${engineLine.appliedLabel})` : ""}.
+        </p>
+        <p className="mt-1 text-xs text-neutral-400">
+          Markdowns only — raise prices in the back office menu. Floor for this item:{" "}
+          <span className="font-semibold text-neutral-200">{money(Math.max(1, floorMinor))}</span> (statutory minimum /
+          acquisition cost). A manager or lead approves with their PIN; the override is audited at sync.
+        </p>
+
+        <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-neutral-400">
+          New price per unit
+        </label>
+        <input
+          className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2.5 text-lg font-semibold"
+          inputMode="decimal"
+          placeholder="0.00"
+          value={priceText}
+          onChange={(e) => {
+            setPriceText(e.target.value);
+            setError(null);
+          }}
+        />
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          {PRESETS.map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => {
+                setPreset(preset === p ? null : p);
+                setCustom("");
+              }}
+              className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
+                preset === p ? "bg-amber-600 text-white" : "bg-neutral-800 text-neutral-300"
+              }`}
+            >
+              {p}
+            </button>
+          ))}
+        </div>
+        <input
+          className="mt-3 w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2.5 text-sm"
+          placeholder="Or type another reason (3–500 characters)…"
+          value={custom}
+          maxLength={500}
+          onChange={(e) => {
+            setCustom(e.target.value);
+            if (e.target.value) setPreset(null);
+          }}
+        />
+
+        <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-neutral-400">
+          Manager / lead PIN
+        </label>
+        <input
+          className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2.5 text-center font-mono text-lg tracking-[0.5em]"
+          type="password"
+          inputMode="numeric"
+          autoComplete="off"
+          maxLength={6}
+          value={pin}
+          onChange={(e) => {
+            setPin(e.target.value.replace(/\D/g, ""));
+            setError(null);
+          }}
+        />
+
+        {request && !request.ok ? (
+          <p className="mt-3 rounded-lg bg-amber-950/60 px-3 py-2 text-xs font-semibold text-amber-300">{request.error}</p>
+        ) : null}
+        {error ? (
+          <p className="mt-3 rounded-lg bg-red-950/60 px-3 py-2 text-xs font-semibold text-red-300">{error}</p>
+        ) : null}
+
+        <button
+          type="button"
+          disabled={!ready}
+          onClick={approve}
+          className="mt-4 w-full rounded-xl bg-amber-600 px-4 py-3 text-sm font-bold text-white disabled:opacity-40"
+        >
+          {busy ? "Verifying…" : "Approve override"}
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -1190,6 +1498,7 @@ function TenderScreen({
   bundle,
   cart,
   medicalCard,
+  overrides,
   onBack,
   onCancel,
   onPaid,
@@ -1197,14 +1506,16 @@ function TenderScreen({
   bundle: PosMenuBundle;
   cart: PosCartEntry[];
   medicalCard: PosCardCapture | null;
+  /** B24 — this sale's manager price overrides (same map the cart used). */
+  overrides: Record<string, PosLineOverride>;
   onBack: () => void;
   onCancel: () => void;
   /** Returns an error string, or null when the sale was enqueued. */
   onPaid: (tenderedMinor: number) => string | null;
 }) {
   const priced = useMemo(
-    () => priceForBuyer(cart, bundle, medicalCard !== null),
-    [cart, bundle, medicalCard],
+    () => priceForBuyer(cart, bundle, medicalCard !== null, overrides),
+    [cart, bundle, medicalCard, overrides],
   );
   const total = priced.totals.totalMinorUnits;
   const [tendered, setTendered] = useState(0);

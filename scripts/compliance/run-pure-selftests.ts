@@ -54,6 +54,7 @@ import { __runSaleDecrementCoreTests } from "../../src/lib/inventory/sale-decrem
 import { __runTillCoreTests } from "../../src/lib/pos/till-core";
 import { __runDayReportCoreTests } from "../../src/lib/pos/day-report-core";
 import { __runScanToCartCoreTests } from "../../src/lib/pos/scan-to-cart-core";
+import { __runPriceOverrideCoreTests } from "../../src/lib/pos/price-override-core";
 
 async function main() {
   __runOrderPricingTests();
@@ -110,6 +111,7 @@ async function main() {
   __runTillCoreTests();
   __runDayReportCoreTests();
   __runScanToCartCoreTests();
+  __runPriceOverrideCoreTests();
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

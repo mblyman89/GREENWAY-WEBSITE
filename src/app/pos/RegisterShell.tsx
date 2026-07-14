@@ -411,6 +411,35 @@ export function RegisterShell() {
             setHeldSale(null);
           }
         }}
+        onApprove={async (pin) => {
+          // POS B24 — manager PIN verify for a price override: the SAME
+          // /api/pos/approve endpoint the no-sale flow uses (scrypt PIN +
+          // shared throttle + manager/lead role gate). ONLINE-ONLY; the PIN
+          // never rides in any queue payload — only the approver's id does.
+          if (!navigator.onLine) {
+            return { ok: false as const, error: "Offline — manager approval needs a connection to verify the PIN." };
+          }
+          try {
+            const res = await fetch("/api/pos/approve", {
+              method: "POST",
+              headers: {
+                "content-type": "application/json",
+                "x-pos-device-id": creds.deviceId,
+                "x-pos-device-key": creds.deviceKey,
+              },
+              body: JSON.stringify({ pin }),
+            });
+            const body = (await res.json().catch(() => null)) as
+              | { approver?: { id: string; fullName: string }; error?: string }
+              | null;
+            if (!res.ok || !body?.approver) {
+              return { ok: false as const, error: body?.error ?? "Approval failed." };
+            }
+            return { ok: true as const, approver: body.approver };
+          } catch {
+            return { ok: false as const, error: "Could not reach the server — try again." };
+          }
+        }}
         onMemberLookup={async (q) => {
           // POS B14 — member lookup is ONLINE-ONLY (no customer book is ever
           // cached on the iPad). Offline: ring the sale without the member.
