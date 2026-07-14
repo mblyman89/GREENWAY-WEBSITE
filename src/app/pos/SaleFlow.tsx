@@ -48,6 +48,7 @@ import {
 } from "@/lib/pos/price-override-core";
 import { dollarsToMinor } from "@/lib/pos/till-core";
 import { changeBreakdown, smartTenderSuggestions } from "@/lib/pos/change-calc-core";
+import { stockSignal, cartStockWarnings } from "@/lib/pos/low-stock-core";
 import {
   validateCardCapture,
   medicalAgeAllowed,
@@ -995,6 +996,22 @@ function CartScreen({
     [priced.lines, carded, bundle.limits],
   );
 
+  // B32 — cart lines whose quantity meets/exceeds the cached count. Advisory
+  // only; the sale is never blocked on a cached number.
+  const stockWarnings = useMemo(
+    () =>
+      cartStockWarnings(
+        cart.map((e) => ({
+          productName: e.product.name,
+          variantLabel: e.product.variantLabel,
+          quantity: e.quantity,
+          inventoryStatus: e.product.inventoryStatus,
+          unitsLeft: e.product.unitsLeft,
+        })),
+      ),
+    [cart],
+  );
+
   // High-THC statutory lock (chapter 246-70 WAC): applyMedicalPricing flags
   // any cart line a NON-carded buyer cannot receive; no override exists.
   const highThcViolations = priced.med?.highThcViolations ?? [];
@@ -1092,11 +1109,11 @@ function CartScreen({
                     <span className="block text-sm font-semibold">
                       {p.name}
                       {p.variantLabel ? <span className="text-neutral-400"> · {p.variantLabel}</span> : null}
+                      <StockBadge product={p} />
                     </span>
                     <span className="block text-xs text-neutral-500">
                       {p.brand ? `${p.brand} · ` : ""}
                       {p.category}
-                      {p.inventoryStatus === "low-stock" ? " · LOW STOCK" : ""}
                     </span>
                   </span>
                   <span className="text-sm font-bold">{money(p.regularPriceMinor)}</span>
@@ -1230,6 +1247,17 @@ function CartScreen({
             <p className="mt-2 rounded-lg bg-amber-950/60 px-3 py-2 text-xs font-semibold text-amber-300">
               Over the configured limit (soft warning). {limits.evaluation.reasons.join(" ")}
             </p>
+          ) : null}
+
+          {/* B32 — cart-level stock awareness. Warnings only, NEVER blocks:
+              the cached menu can lag the shelf; the B19 decrement + server
+              completion gate are the authority at sync. */}
+          {stockWarnings.length > 0 ? (
+            <ul className="mt-2 space-y-1 rounded-lg bg-amber-950/50 px-3 py-2 text-xs text-amber-200">
+              {stockWarnings.map((w, i) => (
+                <li key={i}>{w}</li>
+              ))}
+            </ul>
           ) : null}
 
           {/* POS B14 — loyalty member attach (online lookup only) */}
@@ -1850,6 +1878,25 @@ function ToggleChip({ active, onClick, label }: { active: boolean; onClick: () =
     >
       {label}
     </button>
+  );
+}
+
+/**
+ * B32 — stock badge on a product row: exact variant counts ("2 LEFT",
+ * "LAST ONE") beat the item-level "LOW STOCK"; healthy counts render
+ * nothing. Amber = low, red = last units. Informational only.
+ */
+function StockBadge({ product }: { product: PosMenuProduct }) {
+  const signal = stockSignal(product.inventoryStatus, product.unitsLeft);
+  if (!signal) return null;
+  return (
+    <span
+      className={`ml-2 inline-block rounded px-1.5 py-0.5 align-middle text-[10px] font-bold tracking-wide ${
+        signal.severity === "last-units" ? "bg-red-900/70 text-red-200" : "bg-amber-900/70 text-amber-200"
+      }`}
+    >
+      {signal.badge}
+    </span>
   );
 }
 
