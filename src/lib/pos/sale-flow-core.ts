@@ -39,6 +39,7 @@ import type { SalesHoursWindow } from "@/lib/compliance/sales-hours-core";
 // Type-only (erased at compile time) — medical-pos-core imports PricedSaleLine
 // from this module, so a VALUE import here would create a runtime cycle.
 import type { PosMedicalConfig } from "./medical-pos-core";
+import type { PosReceiptConfig } from "./receipt-config-core";
 import {
   computeCashChange,
   validateSalePayload,
@@ -91,6 +92,13 @@ export type PosMenuBundle = {
    * a missing block as "medical path unavailable — refresh the menu".
    */
   medical?: PosMedicalConfig;
+  /**
+   * Receipt customization (POS B13) — the owner's header/address/footer and
+   * display toggles, so OFFLINE sales print the customized receipt. Optional
+   * so a bundle cached before B13 still parses; the register falls back to
+   * the pure defaults in receipt-config-core.
+   */
+  receipt?: PosReceiptConfig;
   /** ISO timestamp of the download (staleness display on-device). */
   fetchedAt: string;
 };

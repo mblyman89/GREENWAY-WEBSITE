@@ -53,6 +53,10 @@ import {
   buildPassPrntUrl,
   type PosReceiptInput,
 } from "@/lib/pos/receipt-core";
+import {
+  normalizePosReceiptConfig,
+  receiptAddressLines,
+} from "@/lib/pos/receipt-config-core";
 
 type Step = "idgate" | "cart" | "tender" | "done";
 
@@ -61,6 +65,8 @@ export type SaleFlowProps = {
   drawerSessionId: string;
   /** Register/device display name — printed on the receipt (B10). */
   registerName?: string;
+  /** Unlocked employee's display name — "Served by" line when enabled (B13). */
+  employeeName?: string;
   /** Enqueue an event; returns the clientUuid assigned to it. */
   onEnqueue: (
     eventType: "sale" | "manual_id_verification" | "medical_card_capture",
@@ -103,7 +109,7 @@ function priceForBuyer(
   return { lines: carded ? med.lines : priced.lines, totals, problems: priced.problems, med };
 }
 
-export function SaleFlow({ bundle, drawerSessionId, registerName, onEnqueue, onComplete, onCancel }: SaleFlowProps) {
+export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, onEnqueue, onComplete, onCancel }: SaleFlowProps) {
   const [step, setStep] = useState<Step>("idgate");
   const [verdict, setVerdict] = useState<Extract<IdGateVerdict, { allowed: true }> | null>(null);
   const [manualEventUuid, setManualEventUuid] = useState<string | null>(null);
@@ -194,11 +200,19 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, onEnqueue, onC
           const saleUuid = onEnqueue("sale", built.payload as unknown as Record<string, unknown>);
           setChangeMinor(built.changeMinor);
           // B10 — freeze the receipt from EXACTLY what was enqueued.
+          // B13 — apply the owner's customization from the bundle (normalize
+          // defends against a pre-B13 cached bundle carrying no config).
           const isMedical = !!(medicalCard && cardEventUuid);
+          const rc = normalizePosReceiptConfig(bundle.receipt);
           setReceipt({
             saleClientUuid: saleUuid || crypto.randomUUID(),
             soldAtIso: new Date().toISOString(),
             registerLabel: registerName ?? "Register",
+            headerText: rc.headerText,
+            footerText: rc.footerText,
+            addressLines: receiptAddressLines(rc),
+            servedBy: rc.showEmployee ? (employeeName ?? null) : null,
+            hideSavings: !rc.showSavings,
             lines: priced.lines.map((l, i) => ({
               productName: l.productName,
               quantity: l.quantity,

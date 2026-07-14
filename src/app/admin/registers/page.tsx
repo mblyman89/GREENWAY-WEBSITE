@@ -61,6 +61,9 @@ export default async function RegisterActivityPage({
             <Button href={`${BASE}/devices`} variant="neutral" size="sm">
               POS devices
             </Button>
+            <Button href={`${BASE}/receipt`} variant="neutral" size="sm">
+              Receipt design
+            </Button>
             <Button href={`${BASE}/exceptions`} variant="neutral" size="sm">
               Exceptions{openExceptions.length > 0 ? ` (${openExceptions.length})` : ""}
             </Button>
