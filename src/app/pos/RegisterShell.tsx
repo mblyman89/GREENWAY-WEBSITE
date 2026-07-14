@@ -39,6 +39,8 @@ import {
   type PosReceiptInput,
 } from "@/lib/pos/receipt-core";
 import { normalizePosReceiptConfig, receiptAddressLines } from "@/lib/pos/receipt-config-core";
+import { DENOM_FIELDS, EMPTY_DENOMS, denomTotalMinor, formatCents, type DenomCounts } from "@/lib/registers/cash";
+import { dollarsToMinor } from "@/lib/pos/till-core";
 import {
   LAST_RECEIPT_KEY,
   HELD_SALE_KEY,
@@ -107,6 +109,8 @@ export function RegisterShell() {
   const [resumeCart, setResumeCart] = useState<PosCartEntry[] | null>(null);
   // B17 — no-sale modal visibility (manager PIN approval happens inside).
   const [noSaleOpen, setNoSaleOpen] = useState(false);
+  // B21 — register-side till action in progress (count-in / drop / blind close).
+  const [tillMode, setTillMode] = useState<"open" | "drop" | "close" | null>(null);
   const seqRef = useRef(0);
   const queueRef = useRef<QueuedPosEvent[]>([]);
   const flushingRef = useRef(false);
@@ -513,6 +517,7 @@ export function RegisterShell() {
             : undefined
         }
         onNoSale={() => setNoSaleOpen(true)}
+        onTill={(mode) => setTillMode(mode)}
         onRefreshMenu={() => void refreshMenu()}
         onClearBanner={() => setBanner(null)}
         onLock={lock}
@@ -550,6 +555,20 @@ export function RegisterShell() {
             });
             const backUrl = window.location.origin + window.location.pathname;
             window.location.href = buildPassPrntUrl(html, { backUrl, openDrawer: true });
+          }}
+        />
+      ) : null}
+      {tillMode && employee ? (
+        <TillModal
+          creds={creds}
+          mode={tillMode}
+          employeeName={employee.fullName}
+          onClose={() => setTillMode(null)}
+          onDone={(mode, drawerInfo, message) => {
+            setTillMode(null);
+            if (mode === "open") setDrawer(drawerInfo);
+            if (mode === "close") setDrawer(null);
+            setBanner(message);
           }}
         />
       ) : null}
@@ -795,6 +814,7 @@ function HomeScreen({
   onDiscardHold,
   onReprintLast,
   onNoSale,
+  onTill,
   onRefreshMenu,
   onClearBanner,
   onLock,
@@ -824,6 +844,8 @@ function HomeScreen({
   onReprintLast?: () => void;
   /** B17 — open the manager-approved no-sale drawer flow. */
   onNoSale: () => void;
+  /** B21 — open a register-side till action (count-in / drop / blind close). */
+  onTill: (mode: "open" | "drop" | "close") => void;
   onRefreshMenu: () => void;
   onClearBanner: () => void;
   onLock: () => void;
@@ -857,15 +879,41 @@ function HomeScreen({
         <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-5">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-400">Cash drawer</h2>
           {drawer ? (
-            <p className="mt-2 text-sm">
-              Open session for {drawer.businessDay}
-              {drawer.openedAt ? ` since ${new Date(drawer.openedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}` : ""}.
-            </p>
+            <>
+              <p className="mt-2 text-sm">
+                Open session for {drawer.businessDay}
+                {drawer.openedAt ? ` since ${new Date(drawer.openedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}` : ""}.
+              </p>
+              <div className="mt-3 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => onTill("drop")}
+                  className="rounded-lg bg-neutral-800 px-4 py-2 text-sm font-semibold"
+                >
+                  Cash drop
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onTill("close")}
+                  className="rounded-lg bg-neutral-800 px-4 py-2 text-sm font-semibold"
+                >
+                  Close drawer (blind count)
+                </button>
+              </div>
+            </>
           ) : (
-            <p className="mt-2 text-sm text-amber-300">
-              No open drawer on this register — count one in from the back office (Register Activity)
-              before ringing sales.
-            </p>
+            <>
+              <p className="mt-2 text-sm text-amber-300">
+                No open drawer on this register — count in your starting float before ringing sales.
+              </p>
+              <button
+                type="button"
+                onClick={() => onTill("open")}
+                className="mt-3 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white"
+              >
+                Count in drawer
+              </button>
+            </>
           )}
         </div>
         <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-5">
@@ -1130,6 +1178,231 @@ function NoSaleModal({
           className="mt-5 w-full rounded-xl bg-emerald-600 py-3 text-base font-semibold text-white disabled:opacity-40"
         >
           {busy ? "Verifying…" : "Approve, print slip & open drawer"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// B21 — Till modal: count-in / cash drop / BLIND close, done at the register
+// ---------------------------------------------------------------------------
+
+/**
+ * The cashier's hands-on drawer work (owner's direction: this belongs on the
+ * iPad, not the back office). Every action is PIN-attributed and lands on
+ * /api/pos/till (device-authenticated). ONLINE-ONLY: a PIN cannot be
+ * verified offline, and cash custody must be durable the moment cash moves.
+ *
+ * Blind discipline: the CLOSE screen shows the cashier their own running
+ * count (they need it to count accurately) but the server NEVER returns
+ * expected cash or variance — the manager reveals over/short at reconcile.
+ */
+function TillModal({
+  creds,
+  mode,
+  employeeName,
+  onClose,
+  onDone,
+}: {
+  creds: DeviceCreds;
+  mode: "open" | "drop" | "close";
+  employeeName: string;
+  onClose: () => void;
+  onDone: (mode: "open" | "drop" | "close", drawer: DrawerInfo, message: string) => void;
+}) {
+  const [denoms, setDenoms] = useState<DenomCounts>({ ...EMPTY_DENOMS });
+  const [amount, setAmount] = useState("");
+  const [dropWindow, setDropWindow] = useState<"afternoon" | "night" | "other">("afternoon");
+  const [witnessPin, setWitnessPin] = useState("");
+  const [notes, setNotes] = useState("");
+  const [pin, setPin] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const countedMinor = denomTotalMinor(denoms);
+  const amountMinor = dollarsToMinor(amount);
+
+  const ready =
+    pin.length >= 4 &&
+    (mode === "open" ? countedMinor > 0 : mode === "drop" ? amountMinor !== null : true);
+
+  const TITLES = {
+    open: "Count in drawer",
+    drop: "Cash drop to safe",
+    close: "Close drawer — blind count",
+  } as const;
+
+  const submit = async () => {
+    if (!ready || busy) return;
+    if (!navigator.onLine) {
+      setError("Offline — drawer actions need a connection to verify your PIN and record the cash.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const body =
+        mode === "drop"
+          ? {
+              action: "drop",
+              pin,
+              amountMinor,
+              window: dropWindow,
+              ...(witnessPin ? { witnessPin } : {}),
+              ...(notes.trim() ? { notes: notes.trim() } : {}),
+            }
+          : { action: mode, pin, denoms };
+      const res = await fetch("/api/pos/till", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-pos-device-id": creds.deviceId,
+          "x-pos-device-key": creds.deviceKey,
+        },
+        body: JSON.stringify(body),
+      });
+      const resBody = (await res.json().catch(() => null)) as
+        | { ok?: boolean; drawer?: NonNullable<DrawerInfo>; error?: string }
+        | null;
+      if (!res.ok || !resBody?.ok) {
+        setError(resBody?.error ?? "Till action failed — try again.");
+        setPin("");
+        return;
+      }
+      if (mode === "open") {
+        onDone("open", resBody.drawer ?? null, `Drawer counted in at ${formatCents(countedMinor)} — ready to ring sales.`);
+      } else if (mode === "drop") {
+        onDone("drop", null, `${formatCents(amountMinor ?? 0)} dropped to the safe (${dropWindow}).`);
+      } else {
+        onDone("close", null, "Blind count recorded — a manager reconciles it in the back office.");
+      }
+    } catch {
+      setError("Could not reach the server — try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/70 p-4">
+      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-neutral-700 bg-neutral-900 p-6 text-neutral-100">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">{TITLES[mode]}</h2>
+          <button type="button" onClick={onClose} className="rounded-lg bg-neutral-800 px-3 py-1.5 text-sm">
+            Cancel
+          </button>
+        </div>
+        <p className="mt-2 text-xs text-neutral-400">
+          {mode === "open"
+            ? `Count every bill and coin going into the drawer. The total is your starting float, recorded under ${employeeName}'s PIN.`
+            : mode === "drop"
+              ? `Cash pulled from the drawer into the safe. Recorded under ${employeeName}'s PIN; a second person can witness with theirs.`
+              : `Count what's in the drawer right now. You will NOT see the expected amount — a manager reveals over/short at reconcile. That protects you.`}
+        </p>
+
+        {mode === "drop" ? (
+          <>
+            <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-neutral-400">
+              Amount dropped
+            </label>
+            <input
+              className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2.5 text-lg"
+              inputMode="decimal"
+              placeholder="$0.00"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+            />
+            <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-neutral-400">
+              Drop window
+            </label>
+            <div className="mt-1 flex gap-2">
+              {(["afternoon", "night", "other"] as const).map((w) => (
+                <button
+                  key={w}
+                  type="button"
+                  onClick={() => setDropWindow(w)}
+                  className={`rounded-full px-3 py-1.5 text-xs font-semibold capitalize ${
+                    dropWindow === w ? "bg-emerald-600 text-white" : "bg-neutral-800 text-neutral-300"
+                  }`}
+                >
+                  {w}
+                </button>
+              ))}
+            </div>
+            <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-neutral-400">
+              Witness PIN (optional, second person)
+            </label>
+            <input
+              className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2.5 text-center font-mono text-lg tracking-[0.5em]"
+              type="password"
+              inputMode="numeric"
+              autoComplete="off"
+              value={witnessPin}
+              maxLength={6}
+              onChange={(e) => setWitnessPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
+            />
+            <input
+              className="mt-3 w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2.5 text-sm"
+              placeholder="Notes (optional)…"
+              value={notes}
+              maxLength={500}
+              onChange={(e) => setNotes(e.target.value)}
+            />
+          </>
+        ) : (
+          <>
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              {DENOM_FIELDS.map(({ key, label }) => (
+                <label key={key} className="flex items-center justify-between gap-2 rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2">
+                  <span className="text-sm font-semibold text-neutral-300">{label}</span>
+                  <input
+                    className="w-20 rounded-md border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-right text-sm"
+                    inputMode="numeric"
+                    value={denoms[key] === 0 ? "" : String(denoms[key])}
+                    placeholder="0"
+                    onChange={(e) => {
+                      const n = Math.max(0, Math.floor(Number(e.target.value.replace(/\D/g, "")) || 0));
+                      setDenoms((d) => ({ ...d, [key]: n }));
+                    }}
+                  />
+                </label>
+              ))}
+            </div>
+            <p className="mt-3 rounded-lg bg-neutral-950 px-3 py-2 text-right text-base font-bold">
+              Counted: {formatCents(countedMinor)}
+            </p>
+          </>
+        )}
+
+        <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-neutral-400">
+          Your PIN
+        </label>
+        <input
+          className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2.5 text-center font-mono text-lg tracking-[0.5em]"
+          type="password"
+          inputMode="numeric"
+          autoComplete="off"
+          value={pin}
+          maxLength={6}
+          onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
+        />
+
+        {error ? <p className="mt-3 rounded-lg bg-red-950/60 px-3 py-2 text-sm text-red-300">{error}</p> : null}
+
+        <button
+          type="button"
+          onClick={() => void submit()}
+          disabled={!ready || busy}
+          className="mt-5 w-full rounded-xl bg-emerald-600 py-3 text-base font-semibold text-white disabled:opacity-40"
+        >
+          {busy
+            ? "Recording…"
+            : mode === "open"
+              ? `Open drawer with ${formatCents(countedMinor)}`
+              : mode === "drop"
+                ? `Record drop${amountMinor !== null ? ` of ${formatCents(amountMinor)}` : ""}`
+                : "Record blind count & close"}
         </button>
       </div>
     </div>

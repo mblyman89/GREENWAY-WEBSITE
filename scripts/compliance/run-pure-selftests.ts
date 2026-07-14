@@ -51,6 +51,7 @@ import { __runPosReceiptCoreTests } from "../../src/lib/pos/receipt-core";
 import { __runReceiptConfigCoreTests } from "../../src/lib/pos/receipt-config-core";
 import { __runPosReturnsCoreTests } from "../../src/lib/pos/returns-core";
 import { __runSaleDecrementCoreTests } from "../../src/lib/inventory/sale-decrement-core";
+import { __runTillCoreTests } from "../../src/lib/pos/till-core";
 
 async function main() {
   __runOrderPricingTests();
@@ -104,6 +105,7 @@ async function main() {
   __runReceiptConfigCoreTests();
   __runPosReturnsCoreTests();
   __runSaleDecrementCoreTests();
+  __runTillCoreTests();
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
