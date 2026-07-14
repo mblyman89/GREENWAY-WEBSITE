@@ -41,6 +41,7 @@ import {
 import { normalizePosReceiptConfig, receiptAddressLines } from "@/lib/pos/receipt-config-core";
 import { DENOM_FIELDS, EMPTY_DENOMS, denomTotalMinor, formatCents, type DenomCounts } from "@/lib/registers/cash";
 import { dollarsToMinor } from "@/lib/pos/till-core";
+import { buildDayReportSlipHtml, type DaySummary, type DrawerDaySummary } from "@/lib/pos/day-report-core";
 import {
   LAST_RECEIPT_KEY,
   HELD_SALE_KEY,
@@ -111,6 +112,8 @@ export function RegisterShell() {
   const [noSaleOpen, setNoSaleOpen] = useState(false);
   // B21 — register-side till action in progress (count-in / drop / blind close).
   const [tillMode, setTillMode] = useState<"open" | "drop" | "close" | null>(null);
+  // B22 — X/Z day report modal (manager PIN inside).
+  const [dayReportOpen, setDayReportOpen] = useState(false);
   const seqRef = useRef(0);
   const queueRef = useRef<QueuedPosEvent[]>([]);
   const flushingRef = useRef(false);
@@ -518,6 +521,7 @@ export function RegisterShell() {
         }
         onNoSale={() => setNoSaleOpen(true)}
         onTill={(mode) => setTillMode(mode)}
+        onDayReport={() => setDayReportOpen(true)}
         onRefreshMenu={() => void refreshMenu()}
         onClearBanner={() => setBanner(null)}
         onLock={lock}
@@ -556,6 +560,13 @@ export function RegisterShell() {
             const backUrl = window.location.origin + window.location.pathname;
             window.location.href = buildPassPrntUrl(html, { backUrl, openDrawer: true });
           }}
+        />
+      ) : null}
+      {dayReportOpen && employee ? (
+        <DayReportModal
+          creds={creds}
+          receiptConfig={menuBundle ? normalizePosReceiptConfig(menuBundle.receipt) : null}
+          onClose={() => setDayReportOpen(false)}
         />
       ) : null}
       {tillMode && employee ? (
@@ -815,6 +826,7 @@ function HomeScreen({
   onReprintLast,
   onNoSale,
   onTill,
+  onDayReport,
   onRefreshMenu,
   onClearBanner,
   onLock,
@@ -846,6 +858,8 @@ function HomeScreen({
   onNoSale: () => void;
   /** B21 — open a register-side till action (count-in / drop / blind close). */
   onTill: (mode: "open" | "drop" | "close") => void;
+  /** B22 — open the manager-gated X/Z day-report flow. */
+  onDayReport: () => void;
   onRefreshMenu: () => void;
   onClearBanner: () => void;
   onLock: () => void;
@@ -1001,7 +1015,7 @@ function HomeScreen({
         </section>
       ) : null}
 
-      <section className="mt-4 grid gap-4 sm:grid-cols-2">
+      <section className="mt-4 grid gap-4 sm:grid-cols-3">
         <button
           type="button"
           onClick={onReprintLast}
@@ -1026,6 +1040,16 @@ function HomeScreen({
           No sale — open drawer
           <span className="mt-1 block text-xs font-normal text-neutral-500">
             Needs a reason + a manager&rsquo;s PIN; prints an audit slip, then the drawer pops
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={onDayReport}
+          className="rounded-2xl bg-neutral-900 border border-neutral-800 p-5 text-left text-base font-semibold"
+        >
+          Day report (X/Z)
+          <span className="mt-1 block text-xs font-normal text-neutral-500">
+            Manager PIN required — prints the day&rsquo;s totals; never pops the drawer
           </span>
         </button>
       </section>
@@ -1178,6 +1202,130 @@ function NoSaleModal({
           className="mt-5 w-full rounded-xl bg-emerald-600 py-3 text-base font-semibold text-white disabled:opacity-40"
         >
           {busy ? "Verifying…" : "Approve, print slip & open drawer"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// B22 — Day report modal: manager PIN → X/Z slip printed on the Star
+// ---------------------------------------------------------------------------
+
+/**
+ * X/Z day report for THIS register. MANAGER-GATED: the slip reveals gross
+ * cash + opening float − drops (the expected drawer figure the blind close
+ * hides), so /api/pos/day-report requires a manager/lead PIN — same role
+ * gate as /api/pos/approve. The server returns DATA; the slip is built
+ * here (576px, same family as receipts) and printed with the drawer kick
+ * OFF — a report never pops the drawer. ONLINE-ONLY (PIN verification).
+ */
+function DayReportModal({
+  creds,
+  receiptConfig,
+  onClose,
+}: {
+  creds: DeviceCreds;
+  receiptConfig: ReturnType<typeof normalizePosReceiptConfig> | null;
+  onClose: () => void;
+}) {
+  const [pin, setPin] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const run = async () => {
+    if (pin.length < 4 || busy) return;
+    if (!navigator.onLine) {
+      setError("Offline — the day report needs a connection to verify the PIN and read the day's ledger.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/pos/day-report", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-pos-device-id": creds.deviceId,
+          "x-pos-device-key": creds.deviceKey,
+        },
+        body: JSON.stringify({ pin }),
+      });
+      const body = (await res.json().catch(() => null)) as
+        | {
+            ok?: boolean;
+            kind?: "X" | "Z";
+            businessDay?: string;
+            requestedByName?: string;
+            summary?: DaySummary;
+            drawer?: DrawerDaySummary | null;
+            error?: string;
+          }
+        | null;
+      if (!res.ok || !body?.ok || !body.summary || !body.kind || !body.businessDay) {
+        setError(body?.error ?? "Day report failed — try again.");
+        setPin("");
+        return;
+      }
+      const html = buildDayReportSlipHtml({
+        kind: body.kind,
+        registerLabel: creds.name,
+        businessDay: body.businessDay,
+        printedAtIso: new Date().toISOString(),
+        requestedByName: body.requestedByName ?? "Manager",
+        summary: body.summary,
+        drawer: body.drawer ?? null,
+        headerText: receiptConfig?.headerText ?? null,
+        addressLines: receiptConfig ? receiptAddressLines(receiptConfig) : [],
+      });
+      onClose();
+      const backUrl = window.location.origin + window.location.pathname;
+      // A report NEVER pops the drawer.
+      window.location.href = buildPassPrntUrl(html, { backUrl, openDrawer: false });
+    } catch {
+      setError("Could not reach the server — try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+      <div className="w-full max-w-md rounded-2xl border border-neutral-700 bg-neutral-900 p-6 text-neutral-100">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Day report (X/Z)</h2>
+          <button type="button" onClick={onClose} className="rounded-lg bg-neutral-800 px-3 py-1.5 text-sm">
+            Cancel
+          </button>
+        </div>
+        <p className="mt-2 text-xs text-neutral-400">
+          Prints this register&rsquo;s totals for today: sales, tax, medical exemptions, no-sales, drops,
+          and reconciled over/short. X while a drawer is open, Z once the day is closed. Manager or lead
+          PIN required — this slip reveals expected drawer cash.
+        </p>
+
+        <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-neutral-400">
+          Manager / lead PIN
+        </label>
+        <input
+          className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2.5 text-center font-mono text-lg tracking-[0.5em]"
+          type="password"
+          inputMode="numeric"
+          autoComplete="off"
+          value={pin}
+          maxLength={6}
+          onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
+        />
+
+        {error ? <p className="mt-3 rounded-lg bg-red-950/60 px-3 py-2 text-sm text-red-300">{error}</p> : null}
+
+        <button
+          type="button"
+          onClick={() => void run()}
+          disabled={pin.length < 4 || busy}
+          className="mt-5 w-full rounded-xl bg-emerald-600 py-3 text-base font-semibold text-white disabled:opacity-40"
+        >
+          {busy ? "Building report…" : "Print day report"}
         </button>
       </div>
     </div>
