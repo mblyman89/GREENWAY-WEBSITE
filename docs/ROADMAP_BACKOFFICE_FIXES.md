@@ -2570,3 +2570,32 @@ button with a live open-count.
 
 **Tests:** tsc 0 errors; vitest 1,407/95; pure self-tests all pass; eslint
 clean. No migration, no register-app changes.
+
+### Shipped: POS B13 — receipt customization (PR #461)
+
+Owner directive (Task AD): "the ability to customize the receipt, like
+other POS systems offer." The new `/admin/registers/receipt` page
+(`settings.manage`) styles the REGISTER receipt the way the big POS
+players do: header (store name), an address/contact block printed one
+centered line each (street, city, phone, license #), the footer message,
+and three display toggles — Served-by (budtender name), You-saved (promo
+savings row), and Loyalty points (member block, consumed by B14). The
+page's live preview is a sandboxed iframe running the IDENTICAL pure
+`buildPosReceiptHtml` the register hands to Star PassPRNT, fed a sample
+sale — preview and paper are the same builder, so they can never drift.
+
+Config lives in a pure core (`receipt-config-core`, 19 self-test
+assertions in the compliance harness + vitest mirror) with foolproof
+normalization: garbage degrades to safe defaults, header/footer clamp to
+60/400 chars, the address clamps to 5 printable lines, blank header/footer
+reset to the compliant defaults while a cleared address stays empty.
+Storage is a single `site_settings` JSON row (`pos_receipt_config`) — the
+same NO-migration pattern as the sales-hours window — and the config
+ships inside the `/api/pos/menu` bundle (optional field; pre-B13 cached
+bundles still parse) so OFFLINE sales print the customized design. The
+pure receipt builder gained addressLines / servedBy / hideSavings /
+loyalty inputs (10 new assertions; card details still never print). Saves
+are normalized server-side and audited (`pos.receipt_config_saved`).
+
+**Tests:** tsc 0 errors; vitest 1,413/96; pure self-tests all pass
+(import AND call grep-verified); eslint clean. No migration.
