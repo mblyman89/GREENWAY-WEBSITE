@@ -106,6 +106,14 @@ export type PosMenuBundle = {
    * Optional so pre-B14 cached bundles still parse.
    */
   loyalty?: { pointsPerDollar: number };
+  /**
+   * Barcode index (POS B23): normalized package barcode (lot code / CCRS
+   * external id, lowercased) → the stable POS product key, built server-side
+   * from ACTIVE inventory lots so keyboard-wedge scanning works OFFLINE.
+   * Optional so pre-B23 cached bundles still parse; without it, scanning
+   * falls back to exact product-key matches only.
+   */
+  barcodes?: Record<string, string>;
   /** ISO timestamp of the download (staleness display on-device). */
   fetchedAt: string;
 };

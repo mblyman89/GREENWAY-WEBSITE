@@ -31,6 +31,10 @@ import { listMedicalRegistry } from "@/lib/medical/sale-store";
 import type { DohCategory } from "@/lib/medical/medical-sale-core";
 import type { PosMedicalConfig } from "@/lib/pos/medical-pos-core";
 import type { PosMenuBundle, PosMenuProduct } from "@/lib/pos/sale-flow-core";
+import { buildBarcodeIndex, type LotBarcodeSource } from "@/lib/pos/scan-to-cart-core";
+import { deriveInventoryExternalId } from "@/lib/compliance/ccrs-identifiers";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -111,6 +115,41 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     }
   }
 
+  // POS B23 — barcode index for keyboard-wedge scan-to-cart. Built from
+  // ACTIVE lots' codes (lot_code + the same canonical CCRS derivation the
+  // Sale.csv builder and B19 decrement use), restricted to product keys that
+  // are actually sellable in THIS bundle. Best-effort: a lot-read failure
+  // ships an empty index (scanning degrades to product-key matches), never
+  // a failed menu download.
+  let barcodes: Record<string, string> = {};
+  if (isSupabaseServiceConfigured) {
+    try {
+      const admin = createSupabaseAdminClient();
+      const { data: lotRows } = await admin
+        .from("inventory_lots")
+        .select("id, lot_code, pos_product_key, ccrs_inventory_external_id")
+        .eq("status", "active")
+        .gt("on_hand_qty", 0)
+        .limit(5000);
+      const sellableKeys = new Set(products.map((p) => p.productId));
+      const sources: LotBarcodeSource[] = (
+        (lotRows as {
+          id: string;
+          lot_code: string | null;
+          pos_product_key: string | null;
+          ccrs_inventory_external_id: string | null;
+        }[] | null) ?? []
+      ).map((l) => ({
+        lotCode: l.lot_code,
+        posProductKey: l.pos_product_key,
+        ccrsExternalId: deriveInventoryExternalId(l),
+      }));
+      barcodes = buildBarcodeIndex(sources, sellableKeys);
+    } catch {
+      barcodes = {};
+    }
+  }
+
   const bundle: PosMenuBundle = {
     products,
     rules,
@@ -129,6 +168,8 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     // POS B14 — earn rate for the device's points ESTIMATE on the receipt
     // (authoritative accrual runs server-side at completion).
     loyalty: { pointsPerDollar: loyaltyCfg.pointsPerDollar },
+    // POS B23 — barcode → product-key index for scan-to-cart.
+    barcodes,
     fetchedAt: new Date().toISOString(),
   };
 
