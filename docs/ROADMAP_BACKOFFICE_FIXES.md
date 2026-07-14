@@ -2925,3 +2925,39 @@ on add and a variant-pick chip panel when one code covers multiple sizes.
 **Tests:** 1,456 vitest tests / 102 files (4 new in
 `tests/compliance/scan-to-cart-core.test.ts`); selftest runner registers
 import AND call. No migration needed. CI green on PR #481.
+
+### Shipped: POS B24 — manager-PIN price override at the register (PR #483)
+
+**What was missing (verified in code):** the register had no price-override
+path at all — priceCart's output was final, POS sync runs the completion
+gate with `overridePermitted: false`, and the only manager-PIN pattern was
+the no-sale drawer open. Damaged packaging or a posted-price discrepancy
+had no compliant markdown path.
+
+Pure core `src/lib/pos/price-override-core.ts` (26 assertions):
+`overrideFloorMinor` mirrors priceCart's floors EXACTLY — the statutory
+cannabis minimum (RCW 69.50.357, never free cannabis) plus the CCRS
+acquisition-cost floor via the same lineCostFloor/EngineCartLine shapes,
+so no PIN can approve a price below either; `validateOverrideRequest` is
+MARKDOWN-ONLY (raising a price is a back-office menu edit) and enforces
+the floor + a 3–500-char reason BEFORE the PIN is spent;
+`applyPriceOverrides` is stale-safe — an override approved against a
+specific engine price is DROPPED and reported if the engine reprices the
+line (quantity change moving a promo tier), never silently applied.
+
+Register UI: per-line "Override" button → modal with new price, reason
+presets + free text, and manager/lead PIN, verified server-side by the
+EXISTING /api/pos/approve (scrypt + shared throttle + role gate) —
+ONLINE-ONLY, and the PIN never enters any queue payload; only the
+approver's employees.id rides the sale line's new OPTIONAL `override`
+block (validated in validateSalePayload; pre-B24 queues still sync).
+Overridden lines show an amber chip with the approver + "was" price and
+an Undo; overrides are per-sale state, never inherited by holds. The
+medical exemption pass reprices FROM the overridden price. At sync,
+processSale audits one `register.price_override` row per overridden line;
+the overridden price IS the stored line price, so the S-2b money
+recompute and the stored-price floor check hold unchanged.
+
+**Tests:** 1,471 vitest tests / 103 files (15 new in
+`tests/compliance/price-override-core.test.ts`); selftest runner registers
+import AND call. No migration needed. CI green on PR #483.
