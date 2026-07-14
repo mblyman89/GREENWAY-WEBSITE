@@ -368,6 +368,39 @@ async function processSale(
     medicalAuth = { id: auth.id, customer_id: auth.customer_id };
   }
 
+  // POS B14 — loyalty member attach: the customerId came from the server's
+  // own /api/pos/member lookup, so it MUST resolve. A dangling id is an
+  // exception (customer deleted/merged since the attach), never a silent
+  // recreational-anonymous completion — that would quietly lose the
+  // customer's points. When the sale is ALSO medical, the recognition card's
+  // customer is authoritative; a mismatch is an exception because points
+  // would otherwise land on the wrong person.
+  let loyaltyCustomerId: string | null = null;
+  if (sale.loyalty) {
+    const { data: customer } = await admin
+      .from("customers")
+      .select("id")
+      .eq("id", sale.loyalty.customerId)
+      .maybeSingle<{ id: string }>();
+    if (!customer) {
+      return markException(
+        admin,
+        ledgerId,
+        envelope.clientUuid,
+        `Loyalty sale: customer ${sale.loyalty.customerId} ("${sale.loyalty.memberLabel}") no longer exists — the profile was deleted or merged after the register attached it. Re-ring the sale with the correct member, then resolve this exception.`,
+      );
+    }
+    if (medicalAuth && medicalAuth.customer_id !== customer.id) {
+      return markException(
+        admin,
+        ledgerId,
+        envelope.clientUuid,
+        `Loyalty sale: the attached member ("${sale.loyalty.memberLabel}") is a different customer than the recognition-card holder — points would land on the wrong person. Re-ring with the card holder's own profile, then resolve this exception.`,
+      );
+    }
+    loyaltyCustomerId = customer.id;
+  }
+
   // Employee name for the customer-facing snapshot (orders require a name).
   const { data: emp } = await admin
     .from("employees")
@@ -443,6 +476,24 @@ async function processSale(
         ledgerId,
         envelope.clientUuid,
         `Medical sale: could not attach the recognition card to the order (${attached.error ?? "unknown error"}).`,
+        { order_id: order.id },
+      );
+    }
+  } else if (loyaltyCustomerId) {
+    // POS B14 — link the member BEFORE the gate/completion so the EXISTING
+    // completion accrual (setOrderStatus → accrueForOrder) earns the points.
+    // Medical sales skip this branch: attachCardToOrder already wrote the
+    // card holder's customer_id (verified same person above).
+    const { error: linkError } = await admin
+      .from("orders")
+      .update({ customer_id: loyaltyCustomerId })
+      .eq("id", order.id);
+    if (linkError) {
+      return markException(
+        admin,
+        ledgerId,
+        envelope.clientUuid,
+        `Loyalty sale: could not link the member to the order (${linkError.message}).`,
         { order_id: order.id },
       );
     }

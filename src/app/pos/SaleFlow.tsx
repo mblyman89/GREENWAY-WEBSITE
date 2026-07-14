@@ -60,6 +60,14 @@ import {
 
 type Step = "idgate" | "cart" | "tender" | "done";
 
+/** A loyalty member hit from the server lookup (B14). */
+export type PosMemberHit = {
+  customerId: string;
+  label: string;
+  points: number;
+  tierName: string | null;
+};
+
 export type SaleFlowProps = {
   bundle: PosMenuBundle;
   drawerSessionId: string;
@@ -67,6 +75,11 @@ export type SaleFlowProps = {
   registerName?: string;
   /** Unlocked employee's display name — "Served by" line when enabled (B13). */
   employeeName?: string;
+  /**
+   * Loyalty member lookup (B14) — ONLINE-ONLY by design (no customer book is
+   * ever cached on the iPad). Returns matches or an error message.
+   */
+  onMemberLookup?: (q: string) => Promise<{ ok: true; members: PosMemberHit[] } | { ok: false; error: string }>;
   /** Enqueue an event; returns the clientUuid assigned to it. */
   onEnqueue: (
     eventType: "sale" | "manual_id_verification" | "medical_card_capture",
@@ -109,7 +122,7 @@ function priceForBuyer(
   return { lines: carded ? med.lines : priced.lines, totals, problems: priced.problems, med };
 }
 
-export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, onEnqueue, onComplete, onCancel }: SaleFlowProps) {
+export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, onMemberLookup, onEnqueue, onComplete, onCancel }: SaleFlowProps) {
   const [step, setStep] = useState<Step>("idgate");
   const [verdict, setVerdict] = useState<Extract<IdGateVerdict, { allowed: true }> | null>(null);
   const [manualEventUuid, setManualEventUuid] = useState<string | null>(null);
@@ -119,6 +132,8 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
   const [medicalCard, setMedicalCard] = useState<PosCardCapture | null>(null);
   const [cardEventUuid, setCardEventUuid] = useState<string | null>(null);
   const [cart, setCart] = useState<PosCartEntry[]>([]);
+  // POS B14 — the loyalty member attached to this sale (server lookup only).
+  const [member, setMember] = useState<PosMemberHit | null>(null);
   const [changeMinor, setChangeMinor] = useState<number | null>(null);
   // POS B10 — snapshot of the finished sale for printing/reprint. Captured at
   // the moment the sale is enqueued so the receipt always matches the payload.
@@ -161,6 +176,9 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
         setCart={setCart}
         medicalCard={medicalCard}
         verdict={verdict}
+        member={member}
+        setMember={setMember}
+        onMemberLookup={onMemberLookup}
         onCancel={onCancel}
         onTender={() => setStep("tender")}
       />
@@ -195,6 +213,7 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
                   },
                 }
               : {}),
+            ...(member ? { loyalty: { customerId: member.customerId, memberLabel: member.label } } : {}),
           });
           if (!built.ok) return built.errors.join(" ");
           const saleUuid = onEnqueue("sale", built.payload as unknown as Record<string, unknown>);
@@ -228,6 +247,18 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
             medicalSale: isMedical,
             tenderedMinor,
             changeMinor: built.changeMinor,
+            // B14 — member block: points ESTIMATE from the bundle's earn rate
+            // (floor of pre-tax dollars × rate; authoritative accrual runs
+            // server-side at completion). Hidden by the owner's toggle.
+            loyalty:
+              member && rc.showLoyalty
+                ? {
+                    memberLabel: member.label,
+                    pointsEarned: bundle.loyalty
+                      ? Math.floor((priced.totals.subtotalMinorUnits / 100) * bundle.loyalty.pointsPerDollar)
+                      : null,
+                  }
+                : null,
           });
           setStep("done");
           return null;
@@ -676,6 +707,9 @@ function CartScreen({
   setCart,
   medicalCard,
   verdict,
+  member,
+  setMember,
+  onMemberLookup,
   onCancel,
   onTender,
 }: {
@@ -685,6 +719,9 @@ function CartScreen({
   /** Non-null = medical sale (card captured at the gate). */
   medicalCard: PosCardCapture | null;
   verdict: Extract<IdGateVerdict, { allowed: true }>;
+  member: PosMemberHit | null;
+  setMember: (m: PosMemberHit | null) => void;
+  onMemberLookup?: (q: string) => Promise<{ ok: true; members: PosMemberHit[] } | { ok: false; error: string }>;
   onCancel: () => void;
   onTender: () => void;
 }) {
@@ -854,6 +891,9 @@ function CartScreen({
             </p>
           ) : null}
 
+          {/* POS B14 — loyalty member attach (online lookup only) */}
+          <MemberPanel member={member} setMember={setMember} onMemberLookup={onMemberLookup} />
+
           <div className="mt-4 border-t border-neutral-800 pt-3 text-sm">
             <Row label="Subtotal (pre-tax)" value={money(priced.totals.subtotalMinorUnits)} />
             <Row label="Tax (excise + sales)" value={money(priced.totals.estimatedTaxMinorUnits)} />
@@ -884,6 +924,136 @@ function CartScreen({
         </section>
       </div>
     </main>
+  );
+}
+
+/**
+ * POS B14 — loyalty member panel: search (online only), pick, or detach. The
+ * privacy budget is deliberately tiny — first name + last initial, points,
+ * tier — and nothing is cached beyond the current sale.
+ */
+function MemberPanel({
+  member,
+  setMember,
+  onMemberLookup,
+}: {
+  member: PosMemberHit | null;
+  setMember: (m: PosMemberHit | null) => void;
+  onMemberLookup?: (q: string) => Promise<{ ok: true; members: PosMemberHit[] } | { ok: false; error: string }>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [hits, setHits] = useState<PosMemberHit[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  if (member) {
+    return (
+      <div className="mt-3 flex items-center justify-between rounded-xl border border-amber-700/50 bg-amber-950/30 px-4 py-2.5">
+        <span className="text-sm">
+          <span className="font-semibold text-amber-300">★ {member.label}</span>
+          <span className="ml-2 text-xs text-neutral-400">
+            {member.points.toLocaleString()} pts{member.tierName ? ` · ${member.tierName}` : ""}
+          </span>
+        </span>
+        <button
+          type="button"
+          onClick={() => setMember(null)}
+          className="rounded-lg bg-neutral-800 px-3 py-1.5 text-xs font-semibold"
+        >
+          Remove
+        </button>
+      </div>
+    );
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="mt-3 rounded-xl border border-dashed border-neutral-700 px-4 py-2.5 text-left text-sm text-neutral-400 active:bg-neutral-800"
+      >
+        ★ Add loyalty member (optional)
+      </button>
+    );
+  }
+
+  const search = async () => {
+    const term = q.trim();
+    if (term.length < 2 || !onMemberLookup) return;
+    setBusy(true);
+    setError(null);
+    const res = await onMemberLookup(term);
+    setBusy(false);
+    if (res.ok) {
+      setHits(res.members);
+      if (res.members.length === 0) setError("No members match — sign them up in the back office.");
+    } else {
+      setHits(null);
+      setError(res.error);
+    }
+  };
+
+  return (
+    <div className="mt-3 rounded-xl border border-neutral-700 bg-neutral-950 p-3">
+      <div className="flex items-center gap-2">
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") void search();
+          }}
+          placeholder="Member name, phone, or email…"
+          className="flex-1 rounded-lg border border-neutral-700 bg-neutral-900 p-2.5 text-sm"
+        />
+        <button
+          type="button"
+          onClick={() => void search()}
+          disabled={busy || q.trim().length < 2}
+          className="rounded-lg bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
+        >
+          {busy ? "…" : "Find"}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setOpen(false);
+            setHits(null);
+            setError(null);
+            setQ("");
+          }}
+          className="rounded-lg bg-neutral-800 px-3 py-2.5 text-sm"
+        >
+          ✕
+        </button>
+      </div>
+      {error ? <p className="mt-2 text-xs text-amber-300">{error}</p> : null}
+      {hits && hits.length > 0 ? (
+        <ul className="mt-2 space-y-1.5">
+          {hits.map((h) => (
+            <li key={h.customerId}>
+              <button
+                type="button"
+                onClick={() => {
+                  setMember(h);
+                  setOpen(false);
+                  setHits(null);
+                  setQ("");
+                  setError(null);
+                }}
+                className="flex w-full items-center justify-between rounded-lg bg-neutral-800 px-3 py-2.5 text-left active:bg-neutral-700"
+              >
+                <span className="text-sm font-semibold">{h.label}</span>
+                <span className="text-xs text-neutral-400">
+                  {h.points.toLocaleString()} pts{h.tierName ? ` · ${h.tierName}` : ""}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
   );
 }
 

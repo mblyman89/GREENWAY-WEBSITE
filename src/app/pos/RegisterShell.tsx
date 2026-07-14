@@ -328,6 +328,27 @@ export function RegisterShell() {
         drawerSessionId={drawer.sessionId}
         registerName={creds.name}
         employeeName={employee.fullName}
+        onMemberLookup={async (q) => {
+          // POS B14 — member lookup is ONLINE-ONLY (no customer book is ever
+          // cached on the iPad). Offline: ring the sale without the member.
+          if (!navigator.onLine) {
+            return { ok: false as const, error: "Offline — ring the sale without the member, or reconnect first." };
+          }
+          try {
+            const res = await fetch(`/api/pos/member?q=${encodeURIComponent(q)}`, {
+              headers: { "x-pos-device-id": creds.deviceId, "x-pos-device-key": creds.deviceKey },
+            });
+            const body = (await res.json().catch(() => null)) as
+              | { members?: { customerId: string; label: string; points: number; tierName: string | null }[]; error?: string }
+              | null;
+            if (!res.ok || !body?.members) {
+              return { ok: false as const, error: body?.error ?? "Lookup failed — try again." };
+            }
+            return { ok: true as const, members: body.members };
+          } catch {
+            return { ok: false as const, error: "Network error — try again or ring without the member." };
+          }
+        }}
         onEnqueue={(eventType, payload) => {
           const uuid = enqueue(eventType, payload, employee.id);
           void flush();
