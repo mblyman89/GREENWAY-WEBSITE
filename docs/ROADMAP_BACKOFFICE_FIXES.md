@@ -2419,3 +2419,37 @@ recompute needs no tolerance changes.
 
 **Tests:** tsc 0 errors; vitest 1,394/94; `__runMedicalPosCoreTests` 31/31
 in the pure self-test runner; eslint clean. Pure module — no migration.
+
+## Shipped — POS B8: medical server wiring (PR #451)
+
+The B7 medical core is now wired through every server seam, so a medical
+sale rung at the register — even fully OFFLINE — resolves, attaches,
+re-gates, and records exactly like a back-office medical sale.
+`GET /api/pos/menu` ships a `medical` config block (endorsement flag, the
+WAC 314-55-090(6) excise sunset with the gate's own 2029-06-30 fallback,
+and the durable DOH 246-70 registry as productId → category), cached with
+the bundle so `applyMedicalPricing` runs offline with the IDENTICAL inputs
+the completion gate re-derives at sync. `PosSalePayload` gained an optional
+`medical` block (card facts + card-capture event UUID + passed-through
+savings); `validateSalePayload` enforces its structure including the
+mandatory MCR-verification attestation (the consultant must check the card
+in the DOH Database — HB 1453 FAQ). A new `medical_card_capture` event type
+is enqueued BEFORE the sale that references it (same discipline as
+manual_id_verification) so the card facts are an immutable audit fact even
+for abandoned sales; **migration 0121** widens the 0120 event-type CHECK to
+accept it, and until the owner applies it the sync route returns a precise
+"apply 0121 first" rejection (23514 detected — nothing silently dropped).
+At ingest, a medical sale (1) verifies its card-capture event synced first,
+(2) resolves the UPID to an ACTIVE `patient_authorizations` row via the new
+`findAuthorizationByUpid` (the durable card from DOH 608-048 intake), and
+(3) re-validates it TODAY with `authorizationValidityAt` — any failure is
+an exception with a staff-actionable reason and NO order is created. The
+resolved card is attached with `attachCardToOrder` before `runCompletionGate`,
+so the gate's existing medical machinery all fires: card re-validation,
+high-THC statutory gate, 3× medical limits (WAC 314-55-095(2)(d)), and the
+WAC 314-55-090(2) exempt-ledger write-or-block. The S-2b money gate needed
+NO changes: B7's pass-through reprices unit prices themselves, so the
+server recompute is self-consistent with the device's totals.
+
+**Tests:** tsc 0 errors; vitest 1,400/94; sale-event-core self-tests now
+41/41; eslint clean. Owner applies migration 0121 (after 0120).
