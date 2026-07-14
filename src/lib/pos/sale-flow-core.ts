@@ -36,6 +36,9 @@ import {
   type LimitProfile,
 } from "@/lib/compliance/sales-limits-core";
 import type { SalesHoursWindow } from "@/lib/compliance/sales-hours-core";
+// Type-only (erased at compile time) — medical-pos-core imports PricedSaleLine
+// from this module, so a VALUE import here would create a runtime cycle.
+import type { PosMedicalConfig } from "./medical-pos-core";
 import {
   computeCashChange,
   validateSalePayload,
@@ -80,6 +83,14 @@ export type PosMenuBundle = {
   rules: EngineRule[];
   limits: PosLimitSettings;
   hours: SalesHoursWindow;
+  /**
+   * Medical-sale config (POS B8): endorsement status, the WAC 314-55-090(6)
+   * excise sunset, and the durable DOH 246-70 registry (productId → category)
+   * so applyMedicalPricing runs OFFLINE with the gate's exact inputs.
+   * Optional so a bundle cached before B8 still parses; the register treats
+   * a missing block as "medical path unavailable — refresh the menu".
+   */
+  medical?: PosMedicalConfig;
   /** ISO timestamp of the download (staleness display on-device). */
   fetchedAt: string;
 };

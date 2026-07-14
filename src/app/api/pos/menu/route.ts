@@ -24,6 +24,10 @@ import { loadLiveMenuAll } from "@/lib/pos/live-menu";
 import { loadActiveRules, loadProductCosts } from "@/lib/promotions/discount-engine";
 import { getSalesLimitSettings } from "@/lib/compliance/sales-limits";
 import { getSalesHoursWindow } from "@/lib/compliance/sales-hours-store";
+import { getMedTaxSettings, getEndorsementConfig } from "@/lib/medical/store";
+import { listMedicalRegistry } from "@/lib/medical/sale-store";
+import type { DohCategory } from "@/lib/medical/medical-sale-core";
+import type { PosMedicalConfig } from "@/lib/pos/medical-pos-core";
 import type { PosMenuBundle, PosMenuProduct } from "@/lib/pos/sale-flow-core";
 
 export const runtime = "nodejs";
@@ -38,13 +42,31 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
-  const [menu, rules, costs, limitSettings, hours] = await Promise.all([
+  const [menu, rules, costs, limitSettings, hours, medSettings, endorsement, registryRows] = await Promise.all([
     loadLiveMenuAll(),
     loadActiveRules(),
     loadProductCosts(),
     getSalesLimitSettings(),
     getSalesHoursWindow(),
+    getMedTaxSettings(),
+    getEndorsementConfig(),
+    listMedicalRegistry({ limit: 2000 }),
   ]);
+
+  // POS B8 — the medical-sale config the device prices with OFFLINE. The
+  // registry is the durable DOH 246-70 table keyed by the stable POS product
+  // key (= order_lines.product_id), so applyMedicalPricing on-device uses the
+  // IDENTICAL inputs the server completion gate re-derives at sync.
+  const registry: Record<string, DohCategory> = {};
+  for (const row of registryRows) {
+    registry[row.pos_product_key] = row.doh_category;
+  }
+  const medical: PosMedicalConfig = {
+    endorsed: medSettings.medicallyEndorsed,
+    // Same fallback the completion gate uses (WAC 314-55-090(6) statutory sunset).
+    exciseExemptionUntil: endorsement?.exciseExemptionUntil ?? "2029-06-30",
+    registry,
+  };
 
   const products: PosMenuProduct[] = [];
   for (const item of menu) {
@@ -95,6 +117,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       unitGrams: limitSettings.unitGrams,
     },
     hours,
+    medical,
     fetchedAt: new Date().toISOString(),
   };
 

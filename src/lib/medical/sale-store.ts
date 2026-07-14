@@ -138,6 +138,32 @@ export async function removeMedicalRegistryEntry(id: string): Promise<{ ok: bool
   return { ok: true };
 }
 
+/**
+ * POS B8 — resolve a register-captured UPID to its ACTIVE recognition-card
+ * row. The register only carries the card facts the budtender read off the
+ * card; the durable authorization row (created at back-office intake, DOH
+ * 608-048 checklist enforced) is the source of truth the completion gate
+ * re-validates. Newest active row wins (renewals create new rows).
+ */
+export async function findAuthorizationByUpid(upid: string): Promise<AuthorizationRow | null> {
+  const clean = upid.trim();
+  if (!isSupabaseServiceConfigured || !clean) return null;
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("patient_authorizations")
+    .select("*")
+    .eq("unique_patient_identifier", clean)
+    .eq("status", "active")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) {
+    if (isMissingSchemaError(error)) return null;
+    throw new Error(`findAuthorizationByUpid: ${error.message}`);
+  }
+  return (data as AuthorizationRow | null) ?? null;
+}
+
 // ---------------------------------------------------------------------------
 // Order ↔ recognition-card attachment
 // ---------------------------------------------------------------------------

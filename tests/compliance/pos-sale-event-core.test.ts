@@ -141,6 +141,74 @@ describe("sale payload", () => {
   it("sale must belong to an open drawer session", () => {
     expect(validateSalePayload({ ...good, drawerSessionId: "till-1" }).ok).toBe(false);
   });
+
+  describe("medical block (POS B8)", () => {
+    const medical = {
+      card: {
+        upid: "WA-UPID-0001",
+        effectiveOn: "2026-01-01",
+        expiresOn: "2027-01-01",
+        holderType: "patient" as const,
+        mcrVerified: true,
+      },
+      cardEventUuid: U3,
+      medicalSavingsMinor: 463,
+    };
+    // A fully exempt medical version of the same cart: patient pays base only.
+    const goodMed: PosSalePayload = {
+      ...good,
+      lines: [{ ...good.lines[0], unitPriceMinor: 1000 }],
+      totalMinor: 2000,
+      subtotalMinor: 2000,
+      taxMinor: 0,
+      tenderedMinor: 2000,
+      changeMinor: 0,
+      medical,
+    };
+    it("accepts a medical sale with the full block", () => {
+      expect(validateSalePayload(goodMed).ok).toBe(true);
+    });
+    it("a sale without the medical block is still valid (recreational)", () => {
+      expect(validateSalePayload(good).ok).toBe(true);
+    });
+    it("requires the card-capture audit event UUID", () => {
+      const r = validateSalePayload({ ...goodMed, medical: { ...medical, cardEventUuid: "nope" } });
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.errors.join(" ")).toContain("medical_card_capture");
+    });
+    it("requires the MCR verification attestation", () => {
+      const r = validateSalePayload({
+        ...goodMed,
+        medical: { ...medical, card: { ...medical.card, mcrVerified: false } },
+      });
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.errors.join(" ")).toContain("DOH Medical Cannabis Database");
+    });
+    it("refuses malformed card facts (UPID, dates, holder type)", () => {
+      expect(
+        validateSalePayload({ ...goodMed, medical: { ...medical, card: { ...medical.card, upid: "x" } } }).ok,
+      ).toBe(false);
+      expect(
+        validateSalePayload({
+          ...goodMed,
+          medical: { ...medical, card: { ...medical.card, effectiveOn: "01/01/2026" } },
+        }).ok,
+      ).toBe(false);
+      expect(
+        validateSalePayload({
+          ...goodMed,
+          medical: { ...medical, card: { ...medical.card, holderType: "friend" as "patient" } },
+        }).ok,
+      ).toBe(false);
+    });
+    it("savings must be a non-negative integer", () => {
+      expect(validateSalePayload({ ...goodMed, medical: { ...medical, medicalSavingsMinor: -1 } }).ok).toBe(false);
+      expect(
+        validateSalePayload({ ...goodMed, medical: { ...medical, medicalSavingsMinor: 4.63 as unknown as number } })
+          .ok,
+      ).toBe(false);
+    });
+  });
 });
 
 describe("punch + no-sale payloads", () => {
