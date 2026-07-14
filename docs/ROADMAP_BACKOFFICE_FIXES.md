@@ -2486,3 +2486,36 @@ the total due, and `buildSalePayload` carries the medical block verbatim
 **Tests:** tsc 0 errors; vitest 1,400/94; id-scan-core self-tests 43/43,
 sale-flow-core 27/27; eslint clean. UI-only — no migration, no server
 changes (B8 already shipped the ingest + gate wiring).
+
+## Shipped — POS B10: register receipts (PR #455)
+
+Receipts print two ways from the sale-complete screen, and both render the
+SAME pure HTML so paper can never differ: "Print receipt" hands the document
+to Star's PassPRNT iOS app (App Store) which prints on the paired
+TSP100IIIBi over Bluetooth, kicks the cash drawer AFTER the print
+(`drawer=after&drawerpulse=200`), and returns to the register via the
+`back=` callback; "Browser print" opens the same HTML in a popup with
+`window.print()` for devices without PassPRNT. The URL scheme, `size=3`
+(576 dots / 72mm printable width), and drawer parameters were verified from
+the Star PassPRNT manual — never guessed.
+
+The new pure module `src/lib/pos/receipt-core.ts` (25 self-tests, vitest
+mirror `pos-receipt-core.test.ts`) builds a self-contained 576px document:
+money in minor units via the existing `formatMoneyMinor` and Pacific
+wall-clock timestamps via `formatReceiptTimestamp` — both REUSED from
+`printing/receipt-core` so the POS receipt and the CloudPRNT pickup receipt
+can never drift. Medical sales print a "MEDICAL — TAX EXEMPT SALE" banner,
+a "Medical savings (tax off)" row, per-line MED TAX OFF chips, and struck
+regular prices — but deliberately NO card details (no UPID, no dates): the
+WAC 314-55-090(2) records live in the back-office exempt ledger, not on the
+customer's paper (asserted by self-test). Every customer-visible string is
+HTML-escaped; the receipt number is the last 8 of the durable sale
+`client_uuid`, so paper always traces to the synced event. The receipt
+snapshot is frozen at enqueue time from EXACTLY the priced lines/totals/
+tender in the payload, so reprint (tap again) always reproduces the
+original. `RegisterShell` passes the provisioned device name for the
+header.
+
+**Tests:** tsc 0 errors; vitest 1,407/95; `pos/receipt-core` 25/25 in the
+pure self-test runner (import + call both verified); eslint clean. No
+migration, no server changes.
