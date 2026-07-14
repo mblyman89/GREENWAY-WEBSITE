@@ -59,6 +59,7 @@ import { __runDeviceSetupCoreTests } from "../../src/lib/pos/device-setup-core";
 import { __runVoidSaleCoreTests } from "../../src/lib/pos/void-sale-core";
 import { __runPickupCoreTests } from "../../src/lib/pos/pickup-core";
 import { __runMemberHistoryCoreTests } from "../../src/lib/pos/member-history-core";
+import { __runEmailReceiptCoreTests } from "../../src/lib/pos/email-receipt-core";
 
 async function main() {
   __runOrderPricingTests();
@@ -120,6 +121,7 @@ async function main() {
   __runVoidSaleCoreTests();
   __runPickupCoreTests();
   __runMemberHistoryCoreTests();
+  __runEmailReceiptCoreTests();
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

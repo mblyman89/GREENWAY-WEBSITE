@@ -122,6 +122,9 @@ export function RegisterShell() {
   const [pickupOpen, setPickupOpen] = useState(false); // B28
   // B28 — live count of website pickup orders (polled while unlocked+online).
   const [pickupCount, setPickupCount] = useState<number | null>(null);
+  // B30 — whether the server's email provider is configured (checked once
+  // after creds bind; null = unknown). Gates the email-receipt option.
+  const [emailReceiptReady, setEmailReceiptReady] = useState<boolean | null>(null);
   const seqRef = useRef(0);
   const queueRef = useRef<QueuedPosEvent[]>([]);
   const flushingRef = useRef(false);
@@ -303,6 +306,30 @@ export function RegisterShell() {
     const t = setTimeout(() => void refreshMenu(), 0);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [creds]);
+
+  // ── B30: one-time email-provider capability check (device-authed). When
+  //    the provider isn't configured the email-receipt option never renders —
+  //    no dead buttons at the counter. Deferred like the menu refresh.
+  useEffect(() => {
+    if (!creds) return;
+    let cancelled = false;
+    const check = async () => {
+      try {
+        const res = await fetch("/api/pos/email-receipt", {
+          headers: { "x-pos-device-id": creds.deviceId, "x-pos-device-key": creds.deviceKey },
+        });
+        const body = (await res.json().catch(() => null)) as { configured?: boolean } | null;
+        if (!cancelled) setEmailReceiptReady(res.ok && body?.configured === true);
+      } catch {
+        if (!cancelled) setEmailReceiptReady(false);
+      }
+    };
+    const t = setTimeout(() => void check(), 0);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
   }, [creds]);
 
   // ── B28: pickup-queue badge poll (unlocked + online only; 45s cadence).
@@ -496,6 +523,37 @@ export function RegisterShell() {
             return { ok: false as const, error: "Network error — try again or ring without the member." };
           }
         }}
+        onEmailReceipt={
+          emailReceiptReady
+            ? async (email, receipt) => {
+                // POS B30 — opt-in digital receipt. ONLINE-ONLY (an email
+                // can't leave an offline device; paper always works).
+                if (!navigator.onLine) {
+                  return { ok: false as const, error: "Offline — print the paper receipt instead." };
+                }
+                try {
+                  const res = await fetch("/api/pos/email-receipt", {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                      "x-pos-device-id": creds.deviceId,
+                      "x-pos-device-key": creds.deviceKey,
+                    },
+                    body: JSON.stringify({ email, receipt }),
+                  });
+                  const body = (await res.json().catch(() => null)) as
+                    | { sent?: boolean; receiptNumber?: string; error?: string }
+                    | null;
+                  if (!res.ok || !body?.sent) {
+                    return { ok: false as const, error: body?.error ?? "Email failed — offer the paper receipt." };
+                  }
+                  return { ok: true as const, receiptNumber: body.receiptNumber ?? "" };
+                } catch {
+                  return { ok: false as const, error: "Network error — print the paper receipt instead." };
+                }
+              }
+            : undefined
+        }
         onMemberHistory={async (customerId) => {
           // POS B29 — privacy-budgeted purchase history for the attached
           // member ("the usual?"). ONLINE-ONLY, same discipline as lookup.
