@@ -2453,3 +2453,36 @@ server recompute is self-consistent with the device's totals.
 
 **Tests:** tsc 0 errors; vitest 1,400/94; sale-event-core self-tests now
 41/41; eslint clean. Owner applies migration 0121 (after 0120).
+
+## Shipped — POS B9: medical register UX (PR #453)
+
+Selling to a medical cardholder at the register is now one extra step at
+the ID gate — nothing more. The recognition card is captured AT the gate
+(not a cart toggle) because it changes the legal age floor, unlocks
+high-THC products, and drives pricing and the sale payload. When the store
+is endorsed (the menu bundle carries a `medical` config), the gate shows a
+"Medical recognition card" checkbox with UPID / effective / expires /
+holder-type fields and the mandatory MCR-verified attestation. The card is
+validated with `validateCardCapture` WITHOUT enqueueing; the
+`medical_card_capture` event is enqueued only after the WHOLE gate passes,
+so retries never litter the offline queue. Carded buyers pass the gate at
+18+ (RCW 69.50.357(1)) — both scan and manual paths take a new optional
+`minimumAgeYears` param (default 21) and re-assert with `medicalAgeAllowed`.
+
+From there everything reprices automatically. A module-level
+`priceForBuyer(cart, bundle, carded)` helper leaves non-carded carts
+untouched and runs carded carts through `applyMedicalPricing` (tax-off
+pass-through) plus the SAME `computeOrderTotals` the server uses — device
+totals and the S-2b server recompute can never disagree. The cart shows a
+MEDICAL · UPID header badge, per-line "MED · TAX OFF" chips, and a
+"Medical savings (tax off)" totals row; `judgeLimits` runs the "medical"
+3× profile (WAC 314-55-095(2)(d)); chapter 246-70 WAC high-THC violations
+render a red blocking banner that disables tender with NO override. The
+tender screen reprices with the same helper and shows the savings under
+the total due, and `buildSalePayload` carries the medical block verbatim
+(`card`, `cardEventUuid`, `medicalSavingsMinor`) — exactly the B8
+`validateSalePayload` contract that sync ingest resolves and re-gates.
+
+**Tests:** tsc 0 errors; vitest 1,400/94; id-scan-core self-tests 43/43,
+sale-flow-core 27/27; eslint clean. UI-only — no migration, no server
+changes (B8 already shipped the ingest + gate wiring).
