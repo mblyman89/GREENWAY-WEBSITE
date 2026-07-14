@@ -2829,3 +2829,39 @@ lands on "line" (exact) for every sale rung after this ships.
 **Tests:** 1,442 vitest tests / 99 files;
 `sale-decrement-core` self-tests now 33 assertions (variantId carry,
 stamping, no-fabrication). No migration needed. CI green on PR #475.
+
+### Shipped: POS B21 — register-side till: count-in, drops, blind close (PR #477)
+
+**What was missing (verified in code):** every drawer primitive existed
+server-side (`openDrawer`/`recordDrop`/`closeDrawerBlind` in
+`src/lib/registers/store.ts`, pure denom math in `registers/cash.ts`,
+schema 0038/0077/0120) but was reachable ONLY through back-office admin
+actions requiring a staff login the iPad doesn't have — the register home
+screen literally said "count one in from the back office." Owner's
+direction (recorded in `registers/oversight.ts`): the hands-on till work
+belongs at the register; the back office keeps oversight/reconcile/verify.
+
+New device-authenticated `POST /api/pos/till` (same two-factor discipline
+as /api/pos/unlock — provisioned device + human PIN with shared scrypt
+throttle): **open** counts in the float from a full 13-denomination
+breakdown, stamps `drawer_sessions.device_id` best-effort, and returns
+live DrawerInfo so Start Sale unlocks immediately; **drop** records a
+mid-shift safe drop with an optional SECOND person's witness PIN verified
+server-side (a drop can never witness itself); **close** records the
+count-out BLIND — the response carries no expected/variance/total, the
+manager reveals over/short at back-office reconcile. Every action writes
+an audit row (`drawer.opened`/`drawer.drop`/`drawer.closed_blind` with
+`via: "register"`). ONLINE-ONLY: PINs can't verify offline and cash
+custody must be durable the moment cash moves.
+
+Pure core `src/lib/pos/till-core.ts` (30 assertions): request validation
+(empty float rejected on open, zero-count close legitimate, drop window +
+plausibility cap, register-side reconcile rejected), `dollarsToMinor`
+returning null (never 0) for bad input, `sanitizeDenoms` clamping.
+`TillModal` in RegisterShell: denom count grid ($100→1¢) with live total,
+drop amount/window/witness/notes, actor PIN on everything; the close
+screen tells the cashier the blind count protects them.
+
+**Tests:** 1,448 vitest tests / 100 files (6 new in
+`tests/compliance/till-core.test.ts`); selftest runner registers import
+AND call. No migration needed. CI green on PR #477.
