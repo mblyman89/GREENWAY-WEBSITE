@@ -76,6 +76,26 @@ export type SaleFlowProps = {
   /** Unlocked employee's display name — "Served by" line when enabled (B13). */
   employeeName?: string;
   /**
+   * B17 — resume a held sale: cart lines rebuilt by the SHELL against the
+   * CURRENT bundle (fresh prices; vanished/out-of-stock lines already
+   * dropped). The ID gate still runs first — a held cart never inherits the
+   * previous customer's age verification.
+   */
+  initialCart?: PosCartEntry[];
+  /**
+   * B17 — park this cart and exit the sale ("customer forgot their wallet").
+   * The shell persists a MINIMAL snapshot (variant ids + counts). Omitted
+   * when a hold already exists — one parked sale at a time keeps the drawer
+   * story simple.
+   */
+  onHold?: (cart: PosCartEntry[]) => void;
+  /**
+   * B17 — the frozen receipt snapshot, fired the moment the sale is
+   * enqueued. The shell persists it so "reprint last receipt" survives the
+   * post-sale auto-lock.
+   */
+  onReceiptFrozen?: (receipt: PosReceiptInput) => void;
+  /**
    * Loyalty member lookup (B14) — ONLINE-ONLY by design (no customer book is
    * ever cached on the iPad). Returns matches or an error message.
    */
@@ -122,7 +142,7 @@ function priceForBuyer(
   return { lines: carded ? med.lines : priced.lines, totals, problems: priced.problems, med };
 }
 
-export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, onMemberLookup, onEnqueue, onComplete, onCancel }: SaleFlowProps) {
+export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, initialCart, onHold, onReceiptFrozen, onMemberLookup, onEnqueue, onComplete, onCancel }: SaleFlowProps) {
   const [step, setStep] = useState<Step>("idgate");
   const [verdict, setVerdict] = useState<Extract<IdGateVerdict, { allowed: true }> | null>(null);
   const [manualEventUuid, setManualEventUuid] = useState<string | null>(null);
@@ -131,7 +151,9 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
   // medical: it drives pricing, the 3× limits, and the payload block.
   const [medicalCard, setMedicalCard] = useState<PosCardCapture | null>(null);
   const [cardEventUuid, setCardEventUuid] = useState<string | null>(null);
-  const [cart, setCart] = useState<PosCartEntry[]>([]);
+  // B17 — a resumed hold seeds the cart, but ONLY the cart: the ID gate,
+  // medical path, and member attach all start fresh for the returning buyer.
+  const [cart, setCart] = useState<PosCartEntry[]>(initialCart ?? []);
   // POS B14 — the loyalty member attached to this sale (server lookup only).
   const [member, setMember] = useState<PosMemberHit | null>(null);
   const [changeMinor, setChangeMinor] = useState<number | null>(null);
@@ -180,6 +202,7 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
         setMember={setMember}
         onMemberLookup={onMemberLookup}
         onCancel={onCancel}
+        onHold={onHold}
         onTender={() => setStep("tender")}
       />
     );
@@ -223,7 +246,7 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
           // defends against a pre-B13 cached bundle carrying no config).
           const isMedical = !!(medicalCard && cardEventUuid);
           const rc = normalizePosReceiptConfig(bundle.receipt);
-          setReceipt({
+          const frozen: PosReceiptInput = {
             saleClientUuid: saleUuid || crypto.randomUUID(),
             soldAtIso: new Date().toISOString(),
             registerLabel: registerName ?? "Register",
@@ -259,7 +282,11 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
                       : null,
                   }
                 : null,
-          });
+          };
+          setReceipt(frozen);
+          // B17 — hand the frozen snapshot to the shell so "reprint last
+          // receipt" survives the post-sale auto-lock.
+          onReceiptFrozen?.(frozen);
           setStep("done");
           return null;
         }}
@@ -711,6 +738,7 @@ function CartScreen({
   setMember,
   onMemberLookup,
   onCancel,
+  onHold,
   onTender,
 }: {
   bundle: PosMenuBundle;
@@ -723,6 +751,8 @@ function CartScreen({
   setMember: (m: PosMemberHit | null) => void;
   onMemberLookup?: (q: string) => Promise<{ ok: true; members: PosMemberHit[] } | { ok: false; error: string }>;
   onCancel: () => void;
+  /** B17 — park the cart (undefined = a hold already exists; button hidden). */
+  onHold?: (cart: PosCartEntry[]) => void;
   onTender: () => void;
 }) {
   const [query, setQuery] = useState("");
@@ -913,14 +943,27 @@ function CartScreen({
             </div>
           </div>
 
-          <button
-            type="button"
-            disabled={!canTender}
-            onClick={onTender}
-            className="mt-4 rounded-2xl bg-emerald-600 px-6 py-4 text-lg font-bold text-white disabled:opacity-40"
-          >
-            Cash tender →
-          </button>
+          <div className="mt-4 flex gap-3">
+            {onHold ? (
+              <button
+                type="button"
+                disabled={cart.length === 0}
+                onClick={() => onHold(cart)}
+                title="Park this cart (customer stepped away). Items + counts are kept; the ID check re-runs on resume."
+                className="rounded-2xl border border-neutral-600 px-5 py-4 text-lg font-semibold text-neutral-200 disabled:opacity-40"
+              >
+                Hold
+              </button>
+            ) : null}
+            <button
+              type="button"
+              disabled={!canTender}
+              onClick={onTender}
+              className="flex-1 rounded-2xl bg-emerald-600 px-6 py-4 text-lg font-bold text-white disabled:opacity-40"
+            >
+              Cash tender →
+            </button>
+          </div>
         </section>
       </div>
     </main>

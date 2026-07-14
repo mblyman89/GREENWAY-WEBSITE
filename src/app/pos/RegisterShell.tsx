@@ -30,7 +30,27 @@ import {
 } from "@/lib/pos/register-client-core";
 import type { PosSyncAck } from "@/lib/pos/sync-core";
 import type { PosEventType } from "@/lib/pos/sale-event-core";
-import type { PosMenuBundle } from "@/lib/pos/sale-flow-core";
+import type { PosCartEntry, PosMenuBundle } from "@/lib/pos/sale-flow-core";
+import {
+  buildNoSaleSlipHtml,
+  buildPassPrntUrl,
+  buildPosReceiptHtml,
+  receiptNumber,
+  type PosReceiptInput,
+} from "@/lib/pos/receipt-core";
+import { normalizePosReceiptConfig, receiptAddressLines } from "@/lib/pos/receipt-config-core";
+import {
+  LAST_RECEIPT_KEY,
+  HELD_SALE_KEY,
+  ageLabel,
+  holdFromCart,
+  parseHeldSale,
+  parseLastReceipt,
+  rebuildHeldCart,
+  serializeHeldSale,
+  serializeLastReceipt,
+  type HeldSale,
+} from "@/lib/pos/register-polish-core";
 import { SaleFlow } from "./SaleFlow";
 
 // ---------------------------------------------------------------------------
@@ -41,6 +61,9 @@ const LS_DEVICE = "gw-pos-device"; // { deviceId, deviceKey, name, registerId }
 const LS_QUEUE = "gw-pos-queue"; // serialized offline queue
 const LS_SEQ = "gw-pos-seq"; // last used sequence (monotonic)
 const LS_MENU = "gw-pos-menu"; // cached PosMenuBundle (offline sales use the last download)
+// B17 — LAST_RECEIPT_KEY ("gw-pos-last-receipt") and HELD_SALE_KEY
+// ("gw-pos-held-sale") are defined in register-polish-core next to their
+// serialize/parse validators so the key and the shape can never drift apart.
 
 const IDLE_LOCK_MS = 2 * 60 * 1000; // auto-lock after 2 minutes of inactivity
 
@@ -76,6 +99,14 @@ export function RegisterShell() {
   const [saleActive, setSaleActive] = useState(false);
   const [menuBundle, setMenuBundle] = useState<PosMenuBundle | null>(null);
   const [menuLoading, setMenuLoading] = useState(false);
+  // B17 — the last frozen receipt snapshot (survives the post-sale auto-lock)
+  // and the parked sale, both hydrated from localStorage at boot.
+  const [lastReceipt, setLastReceipt] = useState<PosReceiptInput | null>(null);
+  const [heldSale, setHeldSale] = useState<HeldSale | null>(null);
+  // B17 — the cart a resumed hold seeds into the next SaleFlow mount.
+  const [resumeCart, setResumeCart] = useState<PosCartEntry[] | null>(null);
+  // B17 — no-sale modal visibility (manager PIN approval happens inside).
+  const [noSaleOpen, setNoSaleOpen] = useState(false);
   const seqRef = useRef(0);
   const queueRef = useRef<QueuedPosEvent[]>([]);
   const flushingRef = useRef(false);
@@ -110,6 +141,10 @@ export function RegisterShell() {
     setCreds(c);
     setScreen(c ? "locked" : "setup");
     setOnline(navigator.onLine);
+    // B17 — last receipt + held sale survive restarts; validators return
+    // null on any corruption so a bad blob can never garbage-print.
+    setLastReceipt(parseLastReceipt(window.localStorage.getItem(LAST_RECEIPT_KEY)));
+    setHeldSale(parseHeldSale(window.localStorage.getItem(HELD_SALE_KEY)));
     // Cached menu bundle (offline sales use the last download until refresh).
     try {
       const rawMenu = window.localStorage.getItem(LS_MENU);
@@ -259,6 +294,8 @@ export function RegisterShell() {
   const lock = useCallback(() => {
     setEmployee(null);
     setSaleActive(false);
+    setResumeCart(null);
+    setNoSaleOpen(false);
     setScreen("locked");
   }, []);
 
@@ -328,6 +365,45 @@ export function RegisterShell() {
         drawerSessionId={drawer.sessionId}
         registerName={creds.name}
         employeeName={employee.fullName}
+        initialCart={resumeCart ?? undefined}
+        onHold={
+          // One parked sale at a time (unless THIS sale is the resumed one —
+          // it may be re-parked, replacing its own snapshot).
+          heldSale && !resumeCart
+            ? undefined
+            : (cartLines) => {
+                const hold = holdFromCart(cartLines, employee.fullName, new Date().toISOString());
+                if (hold.lines.length === 0) return;
+                try {
+                  window.localStorage.setItem(HELD_SALE_KEY, serializeHeldSale(hold));
+                } catch {
+                  // Storage full — the in-memory hold still works this session.
+                }
+                setHeldSale(hold);
+                setResumeCart(null);
+                setSaleActive(false);
+                setBanner(`Sale on hold (${hold.lines.reduce((s, l) => s + l.quantity, 0)} item(s)) — resume it from the home screen.`);
+              }
+        }
+        onReceiptFrozen={(frozen) => {
+          // B17 — persist the frozen snapshot so "reprint last receipt"
+          // survives the post-sale auto-lock (and app restarts).
+          try {
+            window.localStorage.setItem(LAST_RECEIPT_KEY, serializeLastReceipt(frozen));
+          } catch {
+            // Storage full — reprint just won't survive a restart.
+          }
+          setLastReceipt(frozen);
+          // A completed sale consumes the hold it was resumed from.
+          if (resumeCart) {
+            try {
+              window.localStorage.removeItem(HELD_SALE_KEY);
+            } catch {
+              // Best-effort.
+            }
+            setHeldSale(null);
+          }
+        }}
         onMemberLookup={async (q) => {
           // POS B14 — member lookup is ONLINE-ONLY (no customer book is ever
           // cached on the iPad). Offline: ring the sale without the member.
@@ -361,37 +437,123 @@ export function RegisterShell() {
           lock();
           void flush();
         }}
-        onCancel={() => setSaleActive(false)}
+        onCancel={() => {
+          // A cancelled resume leaves the hold parked (nothing was sold).
+          setResumeCart(null);
+          setSaleActive(false);
+        }}
       />
     );
   }
 
   return (
-    <HomeScreen
-      creds={creds}
-      employee={employee!}
-      drawer={drawer}
-      online={online}
-      pendingCount={pendingCount}
-      rejectedCount={rejected.length}
-      lastSyncAt={lastSyncAt}
-      banner={banner}
-      menuReady={!!menuBundle}
-      menuFetchedAt={menuBundle?.fetchedAt ?? null}
-      onStartSale={() => setSaleActive(true)}
-      onRefreshMenu={() => void refreshMenu()}
-      onClearBanner={() => setBanner(null)}
-      onLock={lock}
-      onSyncNow={() => void flush()}
-      onPunch={() => {
-        if (!employee) return;
-        const intent = employee.clockedIn ? "out" : "in";
-        enqueue("punch", { intent }, employee.id);
-        setEmployee({ ...employee, clockedIn: !employee.clockedIn });
-        setBanner(`Clock-${intent} recorded${navigator.onLine ? "" : " (offline — will sync)"}.`);
-        void flush();
-      }}
-    />
+    <>
+      <HomeScreen
+        creds={creds}
+        employee={employee!}
+        drawer={drawer}
+        online={online}
+        pendingCount={pendingCount}
+        rejectedCount={rejected.length}
+        lastSyncAt={lastSyncAt}
+        banner={banner}
+        menuReady={!!menuBundle}
+        menuFetchedAt={menuBundle?.fetchedAt ?? null}
+        lastReceipt={lastReceipt}
+        heldSale={heldSale}
+        onStartSale={() => {
+          setResumeCart(null);
+          setSaleActive(true);
+        }}
+        onResumeHold={
+          heldSale && menuBundle
+            ? () => {
+                // Rebuild against the CURRENT bundle: fresh prices, and
+                // vanished/out-of-stock lines are dropped + reported.
+                const rebuilt = rebuildHeldCart(heldSale, menuBundle.products);
+                if (rebuilt.cart.length === 0) {
+                  try {
+                    window.localStorage.removeItem(HELD_SALE_KEY);
+                  } catch {
+                    // Best-effort.
+                  }
+                  setHeldSale(null);
+                  setBanner("The held items are no longer sellable — the hold was cleared.");
+                  return;
+                }
+                if (rebuilt.dropped.length > 0) {
+                  setBanner(`Restored the held cart, but dropped: ${rebuilt.dropped.join(", ")}.`);
+                }
+                setResumeCart(rebuilt.cart);
+                setSaleActive(true);
+              }
+            : undefined
+        }
+        onDiscardHold={
+          heldSale
+            ? () => {
+                try {
+                  window.localStorage.removeItem(HELD_SALE_KEY);
+                } catch {
+                  // Best-effort.
+                }
+                setHeldSale(null);
+                setBanner("Held sale discarded.");
+              }
+            : undefined
+        }
+        onReprintLast={
+          lastReceipt
+            ? () => {
+                const html = buildPosReceiptHtml(lastReceipt);
+                const backUrl = window.location.origin + window.location.pathname;
+                // Reprint NEVER pops the drawer — no cash moves on a reprint.
+                window.location.href = buildPassPrntUrl(html, { backUrl, openDrawer: false });
+              }
+            : undefined
+        }
+        onNoSale={() => setNoSaleOpen(true)}
+        onRefreshMenu={() => void refreshMenu()}
+        onClearBanner={() => setBanner(null)}
+        onLock={lock}
+        onSyncNow={() => void flush()}
+        onPunch={() => {
+          if (!employee) return;
+          const intent = employee.clockedIn ? "out" : "in";
+          enqueue("punch", { intent }, employee.id);
+          setEmployee({ ...employee, clockedIn: !employee.clockedIn });
+          setBanner(`Clock-${intent} recorded${navigator.onLine ? "" : " (offline — will sync)"}.`);
+          void flush();
+        }}
+      />
+      {noSaleOpen && employee ? (
+        <NoSaleModal
+          creds={creds}
+          employeeName={employee.fullName}
+          onClose={() => setNoSaleOpen(false)}
+          onApproved={(reason, approver) => {
+            // Queue the audited no_sale event (validated + audited at sync),
+            // then print the slip — PassPRNT's drawer kick fires AFTER the
+            // print, so the drawer only ever opens behind this paper record.
+            enqueue("no_sale", { reason, approvedByEmployeeId: approver.id }, employee.id);
+            void flush();
+            setNoSaleOpen(false);
+            const bundleReceipt = menuBundle ? normalizePosReceiptConfig(menuBundle.receipt) : null;
+            const html = buildNoSaleSlipHtml({
+              registerLabel: creds.name,
+              openedAtIso: new Date().toISOString(),
+              reason,
+              openedByName: employee.fullName,
+              approvedByName: approver.fullName,
+              headerText: bundleReceipt?.headerText ?? null,
+              addressLines: bundleReceipt ? receiptAddressLines(bundleReceipt) : [],
+            });
+            const backUrl = window.location.origin + window.location.pathname;
+            window.location.href = buildPassPrntUrl(html, { backUrl, openDrawer: true });
+          }}
+        />
+      ) : null}
+    </>
   );
 }
 
@@ -626,7 +788,13 @@ function HomeScreen({
   banner,
   menuReady,
   menuFetchedAt,
+  lastReceipt,
+  heldSale,
   onStartSale,
+  onResumeHold,
+  onDiscardHold,
+  onReprintLast,
+  onNoSale,
   onRefreshMenu,
   onClearBanner,
   onLock,
@@ -643,7 +811,19 @@ function HomeScreen({
   banner: string | null;
   menuReady: boolean;
   menuFetchedAt: string | null;
+  /** B17 — the last frozen receipt (null until the first sale). */
+  lastReceipt: PosReceiptInput | null;
+  /** B17 — the parked sale (null = nothing on hold). */
+  heldSale: HeldSale | null;
   onStartSale: () => void;
+  /** B17 — resume the parked sale (undefined when none / menu not ready). */
+  onResumeHold?: () => void;
+  /** B17 — discard the parked sale. */
+  onDiscardHold?: () => void;
+  /** B17 — reprint the last receipt (undefined until a sale exists). */
+  onReprintLast?: () => void;
+  /** B17 — open the manager-approved no-sale drawer flow. */
+  onNoSale: () => void;
   onRefreshMenu: () => void;
   onClearBanner: () => void;
   onLock: () => void;
@@ -742,12 +922,217 @@ function HomeScreen({
         </button>
       </section>
 
+      {heldSale ? (
+        <section className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-900/60 bg-amber-950/30 p-4">
+          <div>
+            <h2 className="text-sm font-semibold text-amber-200">
+              Sale on hold — {heldSale.lines.reduce((s, l) => s + l.quantity, 0)} item(s)
+            </h2>
+            <p className="text-xs text-amber-200/70">
+              Held by {heldSale.heldByName} {ageLabel(heldSale.heldAtIso, new Date())}. Resuming re-runs the ID check
+              and reprices against the current menu.
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={onResumeHold}
+              disabled={!onResumeHold || !drawer || !employee.clockedIn || !menuReady}
+              className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-40"
+            >
+              Resume
+            </button>
+            <button
+              type="button"
+              onClick={onDiscardHold}
+              className="rounded-lg bg-neutral-800 px-4 py-2 text-sm font-semibold text-neutral-300"
+            >
+              Discard
+            </button>
+          </div>
+        </section>
+      ) : null}
+
+      <section className="mt-4 grid gap-4 sm:grid-cols-2">
+        <button
+          type="button"
+          onClick={onReprintLast}
+          disabled={!onReprintLast}
+          title={onReprintLast ? undefined : "No receipt stored yet — completes with the first sale"}
+          className="rounded-2xl bg-neutral-900 border border-neutral-800 p-5 text-left text-base font-semibold disabled:opacity-40"
+        >
+          Reprint last receipt
+          <span className="mt-1 block text-xs font-normal text-neutral-500">
+            {lastReceipt
+              ? `Receipt ${receiptNumber(lastReceipt.saleClientUuid)} · ${ageLabel(lastReceipt.soldAtIso, new Date())} — prints without opening the drawer`
+              : "Available after the first sale on this device"}
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={onNoSale}
+          disabled={!drawer}
+          title={!drawer ? "Open a drawer first" : undefined}
+          className="rounded-2xl bg-neutral-900 border border-neutral-800 p-5 text-left text-base font-semibold disabled:opacity-40"
+        >
+          No sale — open drawer
+          <span className="mt-1 block text-xs font-normal text-neutral-500">
+            Needs a reason + a manager&rsquo;s PIN; prints an audit slip, then the drawer pops
+          </span>
+        </button>
+      </section>
+
       <footer className="mt-auto pt-8 text-center text-xs text-neutral-600">
         Every action is tied to the person whose PIN unlocked the register. Sales re-run the full
         compliance gate on the server — an offline sale that fails there goes to the manager
         exception queue, never silently through.
       </footer>
     </main>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// B17 — No-sale modal: reason + manager PIN approval, then slip + drawer pop
+// ---------------------------------------------------------------------------
+
+/**
+ * The audited no-sale drawer open. Two humans are on the hook: the session
+ * owner (whose PIN unlocked the register) types WHY, and a manager or lead
+ * approves with THEIR PIN — verified server-side by /api/pos/approve (same
+ * scrypt + throttle as the lock screen; role-gated). The approver's PIN
+ * never rides in the queue payload — only their employees.id does, which
+ * validateNoSalePayload requires and the sync audit records. ONLINE-ONLY:
+ * a PIN can't be verified offline, and an unverifiable approval would be
+ * theater. Reasons are preset-first (fast + consistent) with a free-text
+ * option, matching how the big POS players do drawer accountability.
+ */
+function NoSaleModal({
+  creds,
+  employeeName,
+  onClose,
+  onApproved,
+}: {
+  creds: DeviceCreds;
+  employeeName: string;
+  onClose: () => void;
+  onApproved: (reason: string, approver: { id: string; fullName: string }) => void;
+}) {
+  const PRESETS = [
+    "Change for a large bill",
+    "Change fund swap with the safe",
+    "Stuck bill / jammed drawer",
+    "Drawer count check (manager)",
+  ];
+  const [preset, setPreset] = useState<string | null>(null);
+  const [custom, setCustom] = useState("");
+  const [pin, setPin] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const reason = (preset ?? custom).trim();
+  const reasonOk = reason.length >= 3 && reason.length <= 500;
+
+  const approve = async () => {
+    if (!reasonOk || pin.length < 4 || busy) return;
+    if (!navigator.onLine) {
+      setError("Offline — manager approval needs a connection to verify the PIN.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/pos/approve", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-pos-device-id": creds.deviceId,
+          "x-pos-device-key": creds.deviceKey,
+        },
+        body: JSON.stringify({ pin }),
+      });
+      const body = (await res.json().catch(() => null)) as
+        | { approver?: { id: string; fullName: string }; error?: string }
+        | null;
+      if (!res.ok || !body?.approver) {
+        setError(body?.error ?? "Approval failed.");
+        setPin("");
+        return;
+      }
+      onApproved(reason, body.approver);
+    } catch {
+      setError("Could not reach the server — try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+      <div className="w-full max-w-md rounded-2xl border border-neutral-700 bg-neutral-900 p-6 text-neutral-100">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">No sale — open drawer</h2>
+          <button type="button" onClick={onClose} className="rounded-lg bg-neutral-800 px-3 py-1.5 text-sm">
+            Cancel
+          </button>
+        </div>
+        <p className="mt-2 text-xs text-neutral-400">
+          Opened by {employeeName}. Pick a reason, then a manager or lead approves with their PIN.
+          An audit slip prints and the drawer pops after the print.
+        </p>
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          {PRESETS.map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => {
+                setPreset(preset === p ? null : p);
+                setCustom("");
+              }}
+              className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
+                preset === p ? "bg-emerald-600 text-white" : "bg-neutral-800 text-neutral-300"
+              }`}
+            >
+              {p}
+            </button>
+          ))}
+        </div>
+        <input
+          className="mt-3 w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2.5 text-sm"
+          placeholder="Or type another reason (3–500 characters)…"
+          value={custom}
+          maxLength={500}
+          onChange={(e) => {
+            setCustom(e.target.value);
+            if (e.target.value) setPreset(null);
+          }}
+        />
+
+        <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-neutral-400">
+          Manager / lead PIN
+        </label>
+        <input
+          className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2.5 text-center font-mono text-lg tracking-[0.5em]"
+          type="password"
+          inputMode="numeric"
+          autoComplete="off"
+          value={pin}
+          maxLength={6}
+          onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
+        />
+
+        {error ? <p className="mt-3 rounded-lg bg-red-950/60 px-3 py-2 text-sm text-red-300">{error}</p> : null}
+
+        <button
+          type="button"
+          onClick={() => void approve()}
+          disabled={!reasonOk || pin.length < 4 || busy}
+          className="mt-5 w-full rounded-xl bg-emerald-600 py-3 text-base font-semibold text-white disabled:opacity-40"
+        >
+          {busy ? "Verifying…" : "Approve, print slip & open drawer"}
+        </button>
+      </div>
+    </div>
   );
 }
 

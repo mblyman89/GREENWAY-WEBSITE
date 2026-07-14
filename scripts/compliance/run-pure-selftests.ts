@@ -44,6 +44,7 @@ import { __runPosSaleEventTests } from "../../src/lib/pos/sale-event-core";
 import { __runIdScanCoreTests } from "../../src/lib/pos/id-scan-core";
 import { __runPosSyncCoreTests } from "../../src/lib/pos/sync-core";
 import { __runRegisterClientCoreTests } from "../../src/lib/pos/register-client-core";
+import { __runRegisterPolishCoreTests } from "../../src/lib/pos/register-polish-core";
 import { __runSaleFlowCoreTests } from "../../src/lib/pos/sale-flow-core";
 import { __runMedicalPosCoreTests } from "../../src/lib/pos/medical-pos-core";
 import { __runPosReceiptCoreTests } from "../../src/lib/pos/receipt-core";
@@ -95,6 +96,7 @@ async function main() {
   __runIdScanCoreTests();
   __runPosSyncCoreTests();
   __runRegisterClientCoreTests();
+  __runRegisterPolishCoreTests();
   __runSaleFlowCoreTests();
   __runMedicalPosCoreTests();
   __runPosReceiptCoreTests();
