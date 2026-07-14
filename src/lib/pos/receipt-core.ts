@@ -280,6 +280,65 @@ export function buildRefundReceiptHtml(input: RefundReceiptInput): string {
 }
 
 // ---------------------------------------------------------------------------
+// No-sale slip (POS B17) — the drawer opens ONLY behind a print
+// ---------------------------------------------------------------------------
+
+export type NoSaleSlipInput = {
+  registerLabel: string;
+  openedAtIso: string;
+  /** Why the drawer was opened without a sale (3–500 chars, validated upstream). */
+  reason: string;
+  /** Employee whose PIN owns the register session. */
+  openedByName: string;
+  /** Manager/lead who approved (PIN-verified server-side). */
+  approvedByName: string;
+  headerText?: string | null;
+  addressLines?: string[];
+};
+
+/**
+ * Build the NO SALE audit slip. PassPRNT's drawer kick (`drawer=after`,
+ * verified from the manual) fires AFTER a print — there is no print-less
+ * kick — so the no-sale drawer open always produces this paper record, the
+ * same discipline the big POS players enforce. Identical 576px page setup as
+ * the sale receipt so the one print path handles everything.
+ */
+export function buildNoSaleSlipHtml(input: NoSaleSlipInput): string {
+  const header = escapeReceiptHtml((input.headerText ?? DEFAULT_HEADER).trim());
+  return [
+    "<!DOCTYPE html>",
+    '<html><head><meta charset="utf-8">',
+    '<meta name="format-detection" content="telephone=no">',
+    "<style>",
+    "body{width:576px;margin:0;padding:8px 4px;font-family:'Helvetica Neue',Arial,sans-serif;color:#000;}",
+    "h1{font-size:34px;text-align:center;margin:0 0 4px;}",
+    ".sub{font-size:24px;text-align:center;margin:0 0 8px;}",
+    ".addr{font-size:22px;text-align:center;margin:0 0 2px;}",
+    ".banner{font-size:26px;font-weight:bold;text-align:center;border:3px solid #000;padding:6px;margin:8px 0;}",
+    ".body{font-size:24px;margin:6px 0;}",
+    "hr{border:none;border-top:2px dashed #000;margin:10px 0;}",
+    "@media print{body{width:auto;}}",
+    "</style></head><body>",
+    `<h1>${header}</h1>`,
+    ...(input.addressLines ?? [])
+      .map((l) => l.trim())
+      .filter(Boolean)
+      .map((l) => `<p class="addr">${escapeReceiptHtml(l)}</p>`),
+    '<p class="banner">NO SALE &mdash; DRAWER OPENED</p>',
+    `<p class="sub">${escapeReceiptHtml(input.registerLabel)} &middot; ${escapeReceiptHtml(formatReceiptTimestamp(input.openedAtIso))}</p>`,
+    "<hr>",
+    `<p class="body">Reason: ${escapeReceiptHtml(input.reason.trim())}</p>`,
+    `<p class="body">Opened by: ${escapeReceiptHtml(input.openedByName)}</p>`,
+    `<p class="body">Approved by: ${escapeReceiptHtml(input.approvedByName)}</p>`,
+    "<hr>",
+    '<p class="sub">No merchandise sold. This event is recorded and audited.</p>',
+    "</body></html>",
+  ]
+    .filter(Boolean)
+    .join("");
+}
+
+// ---------------------------------------------------------------------------
 // Star PassPRNT URL (verified from the Star PassPRNT manual)
 // ---------------------------------------------------------------------------
 
@@ -453,6 +512,33 @@ export function __runPosReceiptCoreTests(): void {
   ok(!refundNoPoints.includes("points adjusted"), "no points row when nothing clawed");
   ok(refundNoPoints.includes("restocked"), "restock disposition printed");
   ok(refundNoPoints.includes(DEFAULT_HEADER), "refund defaults to standard header");
+
+  // No-sale slip (B17): drawer opens only behind this paper record.
+  const noSale = buildNoSaleSlipHtml({
+    registerLabel: "Register 1",
+    openedAtIso: "2026-07-16T20:00:00.000Z",
+    reason: "Change for a $20 <swap>",
+    openedByName: "Jane D.",
+    approvedByName: "Mark L.",
+    headerText: "GREENWAY",
+    addressLines: ["Port Orchard, WA"],
+  });
+  ok(noSale.includes("NO SALE &mdash; DRAWER OPENED"), "no-sale banner printed");
+  ok(noSale.includes("Change for a $20 &lt;swap&gt;"), "reason escaped + printed");
+  ok(noSale.includes("Opened by: Jane D."), "opener named");
+  ok(noSale.includes("Approved by: Mark L."), "approver named");
+  ok(noSale.includes("Register 1"), "register label printed");
+  ok(noSale.includes('body{width:576px'), "same 576px page family as receipts");
+  ok(noSale.includes("Port Orchard, WA"), "address block carried");
+  ok(!noSale.includes("TOTAL"), "no totals on a no-sale slip");
+  const noSaleDefault = buildNoSaleSlipHtml({
+    registerLabel: "R",
+    openedAtIso: "2026-07-16T20:00:00.000Z",
+    reason: "abc",
+    openedByName: "A",
+    approvedByName: "B",
+  });
+  ok(noSaleDefault.includes(DEFAULT_HEADER), "no-sale slip defaults to standard header");
 
   // PassPRNT URL: verified scheme + encoded params + drawer kick.
   const url = buildPassPrntUrl("<html>a&b</html>", { backUrl: "https://pos.example/pos?x=1" });
