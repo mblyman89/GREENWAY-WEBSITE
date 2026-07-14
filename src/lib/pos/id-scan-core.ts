@@ -212,17 +212,25 @@ export type IdGateVerdict =
   | { allowed: false; method: "scan" | "manual"; reason: string };
 
 /**
- * Evaluate a SCANNED license against the gate: readable DOB, 21+, not expired.
- * `todayYmd` = today's date on the store's Pacific wall clock.
+ * Evaluate a SCANNED license against the gate: readable DOB, of age, not
+ * expired. `todayYmd` = today's date on the store's Pacific wall clock.
+ * `minimumAgeYears` defaults to the recreational 21 (RCW 69.50.357); the
+ * MEDICAL path passes 18 — but ONLY after a valid recognition card was
+ * captured, and the caller must still assert medicalAgeAllowed (B7 core)
+ * so under-18 can never pass.
  */
-export function evaluateScannedId(license: AamvaLicense, todayYmd: string): IdGateVerdict {
+export function evaluateScannedId(
+  license: AamvaLicense,
+  todayYmd: string,
+  minimumAgeYears: number = MINIMUM_AGE_YEARS,
+): IdGateVerdict {
   if (!isYmd(todayYmd)) return { allowed: false, method: "scan", reason: "Internal error: invalid store date." };
   if (!license.dateOfBirth || !isYmd(license.dateOfBirth)) {
     return { allowed: false, method: "scan", reason: "Scan has no readable date of birth — use manual verification." };
   }
   const age = ageOn(license.dateOfBirth, todayYmd);
-  if (age === null || age < MINIMUM_AGE_YEARS) {
-    return { allowed: false, method: "scan", reason: `Customer is under ${MINIMUM_AGE_YEARS} (age ${age ?? "unknown"}). Sale refused.` };
+  if (age === null || age < minimumAgeYears) {
+    return { allowed: false, method: "scan", reason: `Customer is under ${minimumAgeYears} (age ${age ?? "unknown"}). Sale refused.` };
   }
   if (license.expirationDate) {
     const expired = isExpired(license.expirationDate, todayYmd);
@@ -264,7 +272,11 @@ export type ManualIdInput = {
  * `manual_id_verification` event (sale-event-core) so the audit trail exists;
  * the sale payload then references that event's UUID.
  */
-export function evaluateManualId(input: ManualIdInput, todayYmd: string): IdGateVerdict {
+export function evaluateManualId(
+  input: ManualIdInput,
+  todayYmd: string,
+  minimumAgeYears: number = MINIMUM_AGE_YEARS,
+): IdGateVerdict {
   if (!isYmd(todayYmd)) return { allowed: false, method: "manual", reason: "Internal error: invalid store date." };
   if (!isAcceptableIdType(input.idType)) {
     return { allowed: false, method: "manual", reason: "Select an acceptable ID type from the WAC 314-55-150 list." };
@@ -280,8 +292,8 @@ export function evaluateManualId(input: ManualIdInput, todayYmd: string): IdGate
     return { allowed: false, method: "manual", reason: "Enter the date of birth exactly as shown on the document." };
   }
   const age = ageOn(input.dateOfBirth, todayYmd);
-  if (age === null || age < MINIMUM_AGE_YEARS) {
-    return { allowed: false, method: "manual", reason: `Customer is under ${MINIMUM_AGE_YEARS} (age ${age ?? "unknown"}). Sale refused.` };
+  if (age === null || age < minimumAgeYears) {
+    return { allowed: false, method: "manual", reason: `Customer is under ${minimumAgeYears} (age ${age ?? "unknown"}). Sale refused.` };
   }
   const expiry = (input.expirationDate ?? "").trim();
   if (!isYmd(expiry)) {
@@ -374,6 +386,11 @@ export function __runIdScanCoreTests(): void {
       ok(!expired.allowed && expired.reason.includes("Expired"), "expired ID blocked");
       const noExp = evaluateScannedId({ ...r.license, expirationDate: null }, "2026-07-13");
       ok(!noExp.allowed, "unreadable expiry forces manual");
+      // Medical path (B9): a carded patient may be 18–20 (RCW 69.50.357(1)).
+      const med19 = evaluateScannedId({ ...r.license, dateOfBirth: "2007-01-01" }, "2026-07-13", 18);
+      ok(med19.allowed && med19.age === 19, "19-year-old passes with medical minimum age 18");
+      const med17 = evaluateScannedId({ ...r.license, dateOfBirth: "2009-01-01" }, "2026-07-13", 18);
+      ok(!med17.allowed && med17.reason.includes("under 18"), "17-year-old blocked even on medical path");
     }
   }
 
@@ -390,6 +407,14 @@ export function __runIdScanCoreTests(): void {
   ok(!evaluateManualId({ ...manualGood, reason: "x" }, "2026-07-13").allowed, "short reason refused");
   ok(!evaluateManualId({ ...manualGood, photoMatchConfirmed: false }, "2026-07-13").allowed, "photo match required");
   ok(!evaluateManualId({ ...manualGood, dateOfBirth: "2007-01-01" }, "2026-07-13").allowed, "manual under-21 blocked");
+  ok(
+    evaluateManualId({ ...manualGood, dateOfBirth: "2007-01-01" }, "2026-07-13", 18).allowed,
+    "manual 19-year-old passes with medical minimum age 18",
+  );
+  ok(
+    !evaluateManualId({ ...manualGood, dateOfBirth: "2009-01-01" }, "2026-07-13", 18).allowed,
+    "manual 17-year-old blocked even on medical path",
+  );
   ok(!evaluateManualId({ ...manualGood, expirationDate: "2026-07-12" }, "2026-07-13").allowed, "manual expired blocked");
   ok(!evaluateManualId({ ...manualGood, expirationDate: "" }, "2026-07-13").allowed, "manual missing expiry blocked");
   ok(evaluateManualId({ ...manualGood, idType: "global_entry" }, "2026-07-13").allowed, "Global Entry accepted (eff. 11/8/2025)");
