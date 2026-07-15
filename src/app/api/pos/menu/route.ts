@@ -187,7 +187,13 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     receipt,
     // POS B14 — earn rate for the device's points ESTIMATE on the receipt
     // (authoritative accrual runs server-side at completion).
-    loyalty: { pointsPerDollar: loyaltyCfg.pointsPerDollar },
+    // Task AM-B — point cash value + minimum balance so the register can
+    // offer "Redeem points" (the ONLINE /api/pos/loyalty route re-verifies).
+    loyalty: {
+      pointsPerDollar: loyaltyCfg.pointsPerDollar,
+      pointValueMinor: loyaltyCfg.pointValueMinor,
+      minRedeemPoints: loyaltyCfg.minRedeemPoints,
+    },
     // POS B23 — barcode → product-key index for scan-to-cart.
     barcodes,
     // POS B33 — the owner's cash-rounding policy rides the bundle so OFFLINE

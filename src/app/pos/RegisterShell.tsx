@@ -49,6 +49,7 @@ import { checkSetupCredentials } from "@/lib/pos/device-setup-core";
 import { VOID_REASON_PRESETS } from "@/lib/pos/void-sale-core";
 import type { PickupQueueEntry } from "@/lib/pos/pickup-core";
 import type { MemberHistory } from "@/lib/pos/member-history-core";
+import type { PosLoyaltyGrant } from "@/lib/pos/register-loyalty-core";
 import { buildDayReportSlipHtml, type DaySummary, type DrawerDaySummary } from "@/lib/pos/day-report-core";
 import { medalFor } from "@/lib/pos/leaderboard-core";
 import {
@@ -572,6 +573,56 @@ export function RegisterShell() {
               return next;
             });
             return { ok: true as const };
+          } catch {
+            return { ok: false as const, error: "Could not reach the server — try again." };
+          }
+        }}
+        onLoyalty={async (req) => {
+          // Task AM-B — loyalty redemption at the register. ONLINE-ONLY:
+          // the server holds the live balance and the legal price floors.
+          if (!navigator.onLine) {
+            return { ok: false as const, error: "Offline — loyalty redemption needs a connection. Ring the sale without it, or reconnect." };
+          }
+          try {
+            const res = await fetch("/api/pos/loyalty", {
+              method: "POST",
+              headers: {
+                "content-type": "application/json",
+                "x-pos-device-id": creds.deviceId,
+                "x-pos-device-key": creds.deviceKey,
+              },
+              body: JSON.stringify(req),
+            });
+            const body = (await res.json().catch(() => null)) as
+              | (Partial<PosLoyaltyGrant> & { error?: string; released?: boolean })
+              | null;
+            if (req.action === "release") {
+              // Best-effort cleanup — the caller never blocks on it.
+              return { ok: true as const, grant: { redemptionId: "", code: "", valueMinor: 0, appliedMinor: 0, pointsSpent: 0, source: "points" as const, perVariant: {} } };
+            }
+            if (
+              !res.ok ||
+              !body ||
+              typeof body.redemptionId !== "string" ||
+              typeof body.code !== "string" ||
+              !Number.isInteger(body.appliedMinor) ||
+              !body.perVariant ||
+              typeof body.perVariant !== "object"
+            ) {
+              return { ok: false as const, error: body?.error ?? "Loyalty request failed — try again." };
+            }
+            return {
+              ok: true as const,
+              grant: {
+                redemptionId: body.redemptionId,
+                code: body.code,
+                valueMinor: body.valueMinor ?? 0,
+                appliedMinor: body.appliedMinor as number,
+                pointsSpent: body.pointsSpent ?? 0,
+                source: body.source === "code" ? ("code" as const) : ("points" as const),
+                perVariant: body.perVariant as Record<string, number>,
+              },
+            };
           } catch {
             return { ok: false as const, error: "Could not reach the server — try again." };
           }

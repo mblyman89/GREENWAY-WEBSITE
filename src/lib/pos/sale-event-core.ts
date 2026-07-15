@@ -183,6 +183,15 @@ export type PosSaleLine = {
     /** employees.id of the approving manager/lead. */
     approvedByEmployeeId: string;
   };
+  /**
+   * Per-UNIT loyalty reduction taken by a redemption code (Task AM-B).
+   * OPTIONAL so pre-AM-B queued sales still validate. `unitPriceMinor` above
+   * IS the reduced (charged) price; this records how much of it the code
+   * paid, and at sync it lands on order_lines.loyalty_discount_minor_units
+   * (migration 0116) — the same per-line snapshot the back office writes.
+   * Only valid when the payload carries a `loyaltyRedemption` block.
+   */
+  loyaltyDiscountMinor?: number;
 };
 
 export type PosSalePayload = {
@@ -233,6 +242,26 @@ export type PosSalePayload = {
     memberLabel: string;
   };
   /**
+   * Present when a loyalty REDEMPTION CODE was applied at the register
+   * (Task AM-B). The code was issued (or looked up) ONLINE moments before
+   * enqueue by /api/pos/loyalty, which computed the per-line spread with the
+   * SAME pure spreadCodeValue + legal floors the back office uses; the
+   * reduced prices already live in the lines above (each reduced line
+   * carries its loyaltyDiscountMinor). At sync the server re-verifies the
+   * redemption row, ATOMICALLY claims it against the materialized order
+   * (markRedemptionUsed — two registers can't both win), and writes the
+   * migration-0116 loyalty columns so the EXISTING completion gate's code
+   * check (checkLoyaltyCodeForCompletion) passes untouched.
+   */
+  loyaltyRedemption?: {
+    /** loyalty_redemptions.id the device applied. */
+    redemptionId: string;
+    /** The human code (GW-XXXX-XXXX) — receipts + exception readability. */
+    code: string;
+    /** Σ per-line loyaltyDiscountMinor × quantity (server re-sums and must match). */
+    appliedMinor: number;
+  };
+  /**
    * Present when CASH ROUNDING adjusted the amount due (POS B33). WA DOR
    * interim guidance: tax is computed on the PRE-ROUNDED price, so
    * totalMinor/subtotalMinor/taxMinor above stay exactly as priced and the
@@ -270,6 +299,16 @@ export function validateSalePayload(p: Partial<PosSalePayload>): SalePayloadChec
       // present it must be a non-empty string — a blank id is corruption.
       if (l.variantId !== undefined && (typeof l.variantId !== "string" || !l.variantId.trim())) {
         errors.push(`Line ${i + 1}: variantId, when present, must be a non-empty string.`);
+      }
+      // Task AM-B: optional per-UNIT loyalty reduction — a whole-cent
+      // positive integer that never exceeds the charged price context
+      // (unitPriceMinor is the ALREADY-reduced price, so the reduction must
+      // leave the pre-loyalty price ≥ reduction + 1 cent implicitly; the
+      // sync re-verifies against the redemption row).
+      if (l.loyaltyDiscountMinor !== undefined) {
+        if (!Number.isInteger(l.loyaltyDiscountMinor) || l.loyaltyDiscountMinor <= 0) {
+          errors.push(`Line ${i + 1}: loyaltyDiscountMinor, when present, must be a positive integer (cents).`);
+        }
       }
       // POS B24: the manager price-override block is OPTIONAL, but when
       // present it must be complete and coherent — the charged price must be
@@ -403,6 +442,45 @@ export function validateSalePayload(p: Partial<PosSalePayload>): SalePayloadChec
         errors.push("loyalty.memberLabel must be 1–80 characters.");
       }
     }
+  }
+  // Task AM-B — optional loyalty-redemption block. When present it must be
+  // coherent with the lines: appliedMinor must equal the sum of the per-line
+  // reductions × quantity, and at least one line must carry a reduction.
+  // Per-line reductions WITHOUT the block are corruption (orphaned discount).
+  const lineLoyaltySum = Array.isArray(p.lines)
+    ? p.lines.reduce(
+        (s, l) =>
+          s +
+          (l && Number.isInteger(l.loyaltyDiscountMinor) && Number.isInteger(l.quantity)
+            ? (l.loyaltyDiscountMinor as number) * (l.quantity as number)
+            : 0),
+        0,
+      )
+    : 0;
+  if (p.loyaltyRedemption !== undefined) {
+    const lr = p.loyaltyRedemption;
+    if (lr == null || typeof lr !== "object") {
+      errors.push("loyaltyRedemption must be an object when present.");
+    } else {
+      if (!isUuid(lr.redemptionId)) {
+        errors.push("loyaltyRedemption.redemptionId must be a UUID (loyalty_redemptions.id).");
+      }
+      const code = typeof lr.code === "string" ? lr.code.trim() : "";
+      if (!code || code.length > 20) {
+        errors.push("loyaltyRedemption.code must be 1–20 characters.");
+      }
+      if (!Number.isInteger(lr.appliedMinor) || lr.appliedMinor <= 0) {
+        errors.push("loyaltyRedemption.appliedMinor must be a positive integer (cents).");
+      } else if (lr.appliedMinor !== lineLoyaltySum) {
+        errors.push(
+          "loyaltyRedemption.appliedMinor must equal the sum of per-line loyaltyDiscountMinor × quantity.",
+        );
+      }
+    }
+  } else if (lineLoyaltySum > 0) {
+    errors.push(
+      "Lines carry loyaltyDiscountMinor but the payload has no loyaltyRedemption block — orphaned discount refused.",
+    );
   }
   return errors.length ? { ok: false, errors } : { ok: true };
 }
@@ -706,6 +784,54 @@ export function __runPosSaleEventTests(): void {
   ok(
     !validateSalePayload({ ...goodSale, loyalty: "member" as unknown as { customerId: string; memberLabel: string } }).ok,
     "loyalty non-object refused",
+  );
+
+  // Task AM-B — loyalty redemption block + per-line reductions.
+  const redeemedSale: PosSalePayload = {
+    ...goodSale,
+    lines: [
+      {
+        productId: "prod-1", productName: "Blue Dream 3.5g", category: "flower",
+        quantity: 2, unitPriceMinor: 1363, regularPriceMinor: 1463, loyaltyDiscountMinor: 100,
+      },
+    ],
+    totalMinor: 2726, subtotalMinor: 1863, taxMinor: 863,
+    tenderedMinor: 3000, changeMinor: 274,
+    loyaltyRedemption: { redemptionId: U4, code: "GW-7K3M-92QF", appliedMinor: 200 },
+  };
+  ok(validateSalePayload(redeemedSale).ok, "loyalty redemption sale passes");
+  ok(
+    !validateSalePayload({
+      ...redeemedSale,
+      loyaltyRedemption: { redemptionId: U4, code: "GW-7K3M-92QF", appliedMinor: 150 },
+    }).ok,
+    "appliedMinor mismatching the per-line sum refused",
+  );
+  ok(
+    !validateSalePayload({
+      ...redeemedSale,
+      loyaltyRedemption: { redemptionId: "not-a-uuid", code: "GW-7K3M-92QF", appliedMinor: 200 },
+    }).ok,
+    "redemption with non-uuid id refused",
+  );
+  ok(
+    !validateSalePayload({ ...redeemedSale, loyaltyRedemption: undefined }).ok,
+    "orphaned per-line loyalty reductions (no block) refused",
+  );
+  ok(
+    !validateSalePayload({
+      ...redeemedSale,
+      lines: [{ ...redeemedSale.lines[0], loyaltyDiscountMinor: -5 }],
+      loyaltyRedemption: { redemptionId: U4, code: "GW-7K3M-92QF", appliedMinor: 200 },
+    }).ok,
+    "negative per-line loyalty reduction refused",
+  );
+  ok(
+    !validateSalePayload({
+      ...redeemedSale,
+      loyaltyRedemption: { redemptionId: U4, code: "", appliedMinor: 200 },
+    }).ok,
+    "blank redemption code refused",
   );
 
   // Punch payload
