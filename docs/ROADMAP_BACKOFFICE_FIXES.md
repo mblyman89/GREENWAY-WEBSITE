@@ -3291,3 +3291,20 @@ hard-coded status colors moved onto semantic tokens
 block re-tints the whole register; ☀️/🌙 toggle in the home header works
 offline. 16 assertions + mirror; suite 1,591 tests / 119 files. No
 migration. CI green on PR #511.
+
+### Shipped: Task AK — Receiving → website menu pipeline FIXED (PR #513)
+
+The owner's long-standing blocker: accepted inventory could NEVER reach
+the website menu (only the one-time Cultivera "Menu Imports" upload
+worked). Root cause: `seedDraftsForManifest` upserted onboarding drafts
+with `onConflict: "pos_product_key"` against a column whose ONLY unique
+index is PARTIAL (0026) — PostgREST can't target partial indexes in
+ON CONFLICT (42P10) and the error was never read, so EVERY draft insert
+failed silently. No drafts → nothing to approve → intake auto-carry
+always skipped → menu starved. Fixed with pure planner
+`draft-seed-core.ts` (dedupe: published match → open draft → in-run;
+keyless lots always seed) + plain inserts with errors READ and
+classified (23505 = benign race duplicate); honest created/failed
+counts to the UI + a `draft_seed_error` manifest-timeline event on real
+failures. B45/B46 marked CANCELLED per owner. 20 assertions + mirror;
+suite 1,597/120. No migration. CI green on PR #513.
