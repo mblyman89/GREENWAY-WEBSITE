@@ -487,7 +487,7 @@ export function RegisterShell() {
                 setHeldSale(hold);
                 setResumeCart(null);
                 setSaleActive(false);
-                setBanner(`Sale on hold (${hold.lines.reduce((s, l) => s + l.quantity, 0)} item(s)) — resume it from the home screen.`);
+                setBanner(`Sale saved (${hold.lines.reduce((s, l) => s + l.quantity, 0)} item(s)) — load it from the home screen.`);
               }
         }
         onReceiptFrozen={(frozen) => {
@@ -739,7 +739,7 @@ export function RegisterShell() {
                   // Best-effort.
                 }
                 setHeldSale(null);
-                setBanner("Held sale discarded.");
+                setBanner("Saved sale discarded.");
               }
             : undefined
         }
@@ -1250,10 +1250,10 @@ function HomeScreen({
         <section className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] p-4">
           <div>
             <h2 className="text-sm font-semibold text-[var(--pos-warn)]">
-              Sale on hold — {heldSale.lines.reduce((s, l) => s + l.quantity, 0)} item(s)
+              Saved sale — {heldSale.lines.reduce((s, l) => s + l.quantity, 0)} item(s)
             </h2>
             <p className="text-xs text-[var(--pos-warn-muted)]">
-              Held by {heldSale.heldByName} {ageLabel(heldSale.heldAtIso, new Date())}. Resuming re-runs the ID check
+              Saved by {heldSale.heldByName} {ageLabel(heldSale.heldAtIso, new Date())}. Loading re-runs the ID check
               and reprices against the current menu.
             </p>
           </div>
@@ -1264,7 +1264,7 @@ function HomeScreen({
               disabled={!onResumeHold || !drawer || !employee.clockedIn || !menuReady}
               className="pos-tile rounded-lg bg-[var(--pos-warn-solid)] px-4 py-2 text-sm font-bold text-white disabled:opacity-40"
             >
-              Resume
+              Load sale
             </button>
             <button
               type="button"

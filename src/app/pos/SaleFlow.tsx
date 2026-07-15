@@ -18,7 +18,7 @@
  * re-refused server-side if it somehow synced.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   parseAamvaPdf417,
   evaluateScannedId,
@@ -39,6 +39,7 @@ import {
   type PosMenuProduct,
 } from "@/lib/pos/sale-flow-core";
 import { resolveScan } from "@/lib/pos/scan-to-cart-core";
+import { emptyWedgeState, wedgeKey, type WedgeState } from "@/lib/pos/wedge-scan-core";
 import { categoryColorIndex, filterMenuProducts, menuCategoryChips, CATEGORY_COLOR_COUNT } from "@/lib/pos/sale-grid-core";
 import {
   FAVORITES_KEY,
@@ -1237,6 +1238,11 @@ function CartScreen({
   // size (we never guess which variant left the shelf).
   const [scanPick, setScanPick] = useState<PosMenuProduct[] | null>(null);
   const [scanFlash, setScanFlash] = useState<string | null>(null);
+  // AM-A — a global-wedge scan that matched nothing (typo'd label, item not
+  // on the menu). Surfaced loudly; a silent miss looks like a broken scanner.
+  const [scanMiss, setScanMiss] = useState<string | null>(null);
+  // AM-A — the on-demand browse overlay (menu grid / favorites / keypad).
+  const [browseOpen, setBrowseOpen] = useState(false);
   // B41 — scan-required mode. `scanUnlocked` is manager-lifted for THIS SALE
   // only: the register locks after every sale (owner rule), which unmounts
   // this screen, so an unlock can never leak into the next customer.
@@ -1271,6 +1277,12 @@ function CartScreen({
     () => filterMenuProducts(bundle.products, query, category).slice(0, 60),
     [bundle.products, query, category],
   );
+  // AM-A — main-screen quick-search rows ignore the overlay's category chip:
+  // an invisible filter on the main screen would look like missing products.
+  const quickResults = useMemo(
+    () => filterMenuProducts(bundle.products, query, null).slice(0, 6),
+    [bundle.products, query],
+  );
 
   /**
    * B23 — Enter in the search box tries the text as a package barcode first
@@ -1282,16 +1294,67 @@ function CartScreen({
     if (resolved.status === "add") {
       setCart(addToCart(cart, resolved.product));
       setScanFlash(`Scanned: ${resolved.product.name}${resolved.product.variantLabel ? ` · ${resolved.product.variantLabel}` : ""}`);
+      setScanMiss(null);
       setQuery("");
       return;
     }
     if (resolved.status === "pick") {
       setScanPick(resolved.candidates);
       setScanFlash(null);
+      setScanMiss(null);
       setQuery("");
     }
     // none: keep the text — it's a search query, not a barcode.
   };
+
+  /**
+   * AM-A — handle a GLOBAL wedge scan (captured with nothing focused).
+   * Same resolveScan path as the search box; a miss is reported loudly.
+   * A hit closes the browse overlay so the cashier sees the item land.
+   */
+  const handleGlobalScan = useCallback(
+    (code: string) => {
+      const resolved = resolveScan(bundle.products, bundle.barcodes, code);
+      if (resolved.status === "add") {
+        setCart(addToCart(cart, resolved.product));
+        setScanFlash(`Scanned: ${resolved.product.name}${resolved.product.variantLabel ? ` · ${resolved.product.variantLabel}` : ""}`);
+        setScanMiss(null);
+        setBrowseOpen(false);
+        return;
+      }
+      if (resolved.status === "pick") {
+        setScanPick(resolved.candidates);
+        setScanFlash(null);
+        setScanMiss(null);
+        setBrowseOpen(false);
+        return;
+      }
+      setScanMiss(`Barcode "${code}" matched nothing on the menu — check the label or search by name.`);
+    },
+    [bundle.products, bundle.barcodes, cart, setCart],
+  );
+
+  // AM-A — document-level wedge capture: fast keystroke bursts ending in
+  // Enter are scans even when NOTHING is focused (the owner's "scan without
+  // pushing any buttons"). Keystrokes going INTO an input/textarea/select
+  // are ignored — the search box (Enter-to-scan) and modal fields keep
+  // their own behavior; this listener only owns the dead space.
+  const wedgeRef = useRef<WedgeState>(emptyWedgeState());
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      const tag = t?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || t?.isContentEditable) return;
+      const r = wedgeKey(wedgeRef.current, e.key, performance.now());
+      wedgeRef.current = r.state;
+      if (r.scan) {
+        e.preventDefault();
+        handleGlobalScan(r.scan);
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [handleGlobalScan]);
   const priced = useMemo(() => priceForBuyer(cart, bundle, carded, overrides), [cart, bundle, carded, overrides]);
 
   // B24 — an override approved against a price the engine no longer charges
@@ -1368,14 +1431,419 @@ function CartScreen({
         </div>
       </header>
 
-      {/* AL-A — 60/40 split (Square/Toast put the browse grid on the larger
-          side, the check on the narrower): products need the room, a check
-          line only needs one comfortable row. min-h-0 lets each pane's OWN
-          list scroll instead of growing the page. */}
-      <div className="mt-4 grid flex-1 gap-4 lg:min-h-0 lg:grid-cols-[3fr_2fr]">
+      {/* AM-A — Dutchie-style customer band: attach the member up top; their
+          points/tier stats ride the band and history ("the usual?") is one
+          tap. Everything below prices against the attached member. */}
+      <MemberPanel member={member} setMember={setMember} onMemberLookup={onMemberLookup} onMemberHistory={onMemberHistory} />
+
+      {/* AM-A — the register's main surface (owner + Dutchie/Flowhub
+          examples): a LARGE item area where scans land, and the checkout
+          rail. The browse grid moved to an on-demand overlay — scanning is
+          how items enter; browsing is the exception, not the layout. */}
+      <div className="mt-3 grid flex-1 gap-4 lg:min-h-0 lg:grid-cols-[3fr_2fr]">
+        <section className="flex flex-col rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-4 lg:min-h-0">
+          {/* AM-A — always-live scan/search bar on the MAIN screen. Wedge
+              scanners need NO click: a document-level listener
+              (wedge-scan-core) catches fast keystroke bursts ending in
+              Enter even when nothing is focused. */}
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-lg" aria-hidden>
+                🔍
+              </span>
+              <input
+                value={query}
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  if (scanFlash) setScanFlash(null);
+                  if (scanMiss) setScanMiss(null);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && query.trim().length > 0) {
+                    e.preventDefault();
+                    tryScan();
+                  }
+                }}
+                placeholder="Scan a barcode (no click needed) or search name, brand, size…"
+                className="w-full rounded-xl border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] py-3 pl-10 pr-3 text-base focus:border-[var(--pos-accent-border)] focus:outline-none"
+              />
+            </div>
+            {scanRequiredOn ? (
+              <span className="flex shrink-0 items-center gap-2">
+                <span
+                  className={`rounded-full border px-3 py-1.5 text-xs font-bold ${
+                    scanUnlocked
+                      ? "border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] text-[var(--pos-warn)]"
+                      : "border-[var(--pos-accent-border)] bg-[var(--pos-accent-soft)] text-[var(--pos-accent)]"
+                  }`}
+                >
+                  {scanUnlocked ? "Scan lifted (this sale)" : "Scan required"}
+                </span>
+                {!scanUnlocked && onApprove ? (
+                  <button
+                    type="button"
+                    onClick={() => setScanUnlockOpen(true)}
+                    className="pos-tile min-h-11 rounded-full border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-1.5 text-xs font-semibold text-[var(--pos-text-muted)]"
+                  >
+                    Manager unlock
+                  </button>
+                ) : null}
+              </span>
+            ) : null}
+          </div>
+          {scanBlockNotice ? (
+            <div className="mt-2 flex items-start justify-between gap-3 rounded-xl border border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] px-3 py-2">
+              <p className="text-xs font-semibold text-[var(--pos-warn)]">{scanBlockNotice}</p>
+              <button type="button" onClick={() => setScanBlockNotice(null)} aria-label="Dismiss" className="text-xs font-bold text-[var(--pos-warn-muted)]">
+                ✕
+              </button>
+            </div>
+          ) : null}
+          {scanFlash ? (
+            <p className="mt-2 rounded-lg border border-[var(--pos-accent-border)] bg-[var(--pos-accent-soft)] px-3 py-2 text-xs font-semibold text-[var(--pos-accent)]">
+              {scanFlash} — added to sale
+            </p>
+          ) : null}
+          {scanMiss ? (
+            <p className="mt-2 rounded-lg border border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] px-3 py-2 text-xs font-semibold text-[var(--pos-warn)]">
+              {scanMiss}
+            </p>
+          ) : null}
+          {scanPick ? (
+            <div className="mt-2 rounded-xl border border-[var(--pos-info-border)] bg-[var(--pos-info-soft)] p-3">
+              <p className="text-xs font-semibold text-[var(--pos-info)]">
+                Barcode matched {scanPick[0]?.name} — pick the size that left the shelf:
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {scanPick.map((p) => (
+                  <button
+                    key={p.variantId}
+                    type="button"
+                    onClick={() => {
+                      setCart(addToCart(cart, p));
+                      setScanFlash(`Scanned: ${p.name}${p.variantLabel ? ` · ${p.variantLabel}` : ""}`);
+                      setScanPick(null);
+                    }}
+                    className="min-h-11 rounded-full bg-[var(--pos-info-solid)] px-4 py-2 text-sm font-bold text-white"
+                  >
+                    {p.variantLabel ?? "each"} · {money(p.regularPriceMinor)}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setScanPick(null)}
+                  className="pos-tile min-h-11 rounded-full border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-4 py-2 text-sm font-semibold text-[var(--pos-text)]"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : null}
+          {/* AM-A — quick search results: typing shows tap-to-add rows right
+              here (search never leaves the main screen). */}
+          {query.trim().length > 0 && !scanPick ? (
+            <ul className="mt-2 space-y-1.5">
+              {quickResults.map((p) => (
+                <li key={p.variantId}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      manualAdd(p);
+                      setQuery("");
+                    }}
+                    className="flex min-h-11 w-full items-center justify-between gap-2 rounded-lg border border-[var(--pos-border)] bg-[var(--pos-surface-2)] px-3 py-2 text-left active:bg-[var(--pos-surface-hover)]"
+                  >
+                    <span className="min-w-0 truncate text-sm font-semibold">
+                      {p.name}
+                      {p.variantLabel ? <span className="text-[var(--pos-text-muted)]"> · {p.variantLabel}</span> : null}
+                      <span className="ml-2 text-xs font-normal capitalize text-[var(--pos-text-faint)]">{p.category}</span>
+                    </span>
+                    <span className="shrink-0 text-sm font-bold text-[var(--pos-accent)]">{money(p.regularPriceMinor)}</span>
+                  </button>
+                </li>
+              ))}
+              {quickResults.length === 0 ? (
+                <li className="px-2 py-3 text-center text-sm text-[var(--pos-text-faint)]">No products match — press Enter to try it as a barcode.</li>
+              ) : null}
+            </ul>
+          ) : null}
+          <ul className="mt-3 min-h-0 flex-1 space-y-2 overflow-y-auto">
+            {priced.lines.map((l, i) => {
+              const medLine = carded ? priced.med?.lines[i] : null;
+              const exempt = !!medLine && (medLine.salesExempt || medLine.exciseExempt);
+              // B24 — the raw engine line (pre-override, pre-medical) this
+              // line derives from; applyPriceOverrides and applyMedicalPricing
+              // both map 1:1 in order, so index i lines up exactly.
+              const engineLine = priced.engineLines[i];
+              const activeOverride = l.variantId ? overrides[l.variantId] : undefined;
+              const cartEntry = cart.find((e) => e.product.variantId === l.variantId);
+              const lineKey = `${l.productId}-${l.variantLabel ?? ""}`;
+              const open = expandedLine === lineKey;
+              const variantId = cartVariantId(cart, l.productId, l.variantLabel);
+              return (
+              <li
+                key={lineKey}
+                className={`rounded-xl border ${open ? "border-[var(--pos-accent-border)] bg-[var(--pos-surface-hover)]" : "border-[var(--pos-border)] bg-[var(--pos-surface-2)]"}`}
+              >
+                <button
+                  type="button"
+                  onClick={() => setExpandedLine(open ? null : lineKey)}
+                  className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left"
+                  aria-expanded={open}
+                >
+                  <span className="text-sm font-semibold">
+                    <span className="mr-2 inline-block min-w-7 rounded-md bg-[var(--pos-surface-hover)] px-1.5 py-0.5 text-center text-xs font-bold text-[var(--pos-text-muted)]">
+                      {l.quantity}×
+                    </span>
+                    {l.productName}
+                    {l.variantLabel ? <span className="text-[var(--pos-text-muted)]"> · {l.variantLabel}</span> : null}
+                    {exempt ? (
+                      <span className="ml-2 rounded bg-[var(--pos-info-soft)] px-1.5 py-0.5 text-[10px] font-bold text-[var(--pos-info)]">
+                        MED · TAX OFF
+                      </span>
+                    ) : null}
+                    {activeOverride ? (
+                      <span className="ml-2 rounded bg-[var(--pos-warn-soft)] px-1.5 py-0.5 text-[10px] font-bold text-[var(--pos-warn)]">
+                        OVERRIDE · {activeOverride.approvedByName}
+                      </span>
+                    ) : null}
+                    <span className="mt-0.5 block text-xs font-normal text-[var(--pos-text-faint)]">
+                      {money(l.unitPriceMinor)} each
+                      {l.appliedLabel ? <span className="text-[var(--pos-accent)]"> · {l.appliedLabel}</span> : null}
+                      {activeOverride ? (
+                        <span className="text-[var(--pos-warn)]"> · was {money(activeOverride.originalUnitPriceMinor)}</span>
+                      ) : null}
+                    </span>
+                  </span>
+                  <span className="text-sm font-bold">{money(l.unitPriceMinor * l.quantity)}</span>
+                </button>
+                {open ? (
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--pos-border)] px-4 py-3">
+                    <span className="flex items-center gap-3">
+                      <QtyButton label="−" onClick={() => setCart(setCartQuantity(cart, variantId, l.quantity - 1))} />
+                      <span className="w-8 text-center text-lg font-bold">{l.quantity}</span>
+                      <QtyButton label="+" onClick={() => setCart(setCartQuantity(cart, variantId, l.quantity + 1))} />
+                    </span>
+                    <span className="flex items-center gap-2">
+                      {onApprove && cartEntry && engineLine ? (
+                        activeOverride ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const next = { ...overrides };
+                              delete next[l.variantId ?? ""];
+                              setOverrides(next);
+                            }}
+                            className="pos-tile min-h-11 rounded-lg border border-[var(--pos-border)] bg-[var(--pos-surface)] px-4 py-2 text-sm font-semibold text-[var(--pos-warn)]"
+                            title="Remove the manager override — the line returns to the engine price."
+                          >
+                            Undo override
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setOverrideTarget({ product: cartEntry.product, engineLine })}
+                            className="pos-tile min-h-11 rounded-lg border border-[var(--pos-border)] bg-[var(--pos-surface)] px-4 py-2 text-sm font-semibold text-[var(--pos-text-muted)]"
+                            title="Manager price override (markdown only; PIN + reason required)."
+                          >
+                            Override
+                          </button>
+                        )
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCart(setCartQuantity(cart, variantId, 0));
+                          setExpandedLine(null);
+                        }}
+                        className="pos-tile min-h-11 rounded-lg border border-[var(--pos-danger-border)] bg-[var(--pos-danger-soft)] px-4 py-2 text-sm font-semibold text-[var(--pos-danger)]"
+                        title="Remove this line from the check."
+                      >
+                        Remove
+                      </button>
+                    </span>
+                  </div>
+                ) : null}
+              </li>
+              );
+            })}
+            {cart.length === 0 ? (
+              <li className="flex flex-col items-center justify-center gap-1 px-2 py-12 text-center">
+                <span className="text-3xl" aria-hidden>📦</span>
+                <span className="text-sm font-semibold text-[var(--pos-text-muted)]">Scan a package barcode — items land here.</span>
+                <span className="text-xs text-[var(--pos-text-faint)]">No clicks needed. Or search above, or open the menu below.</span>
+              </li>
+            ) : null}
+          </ul>
+          {/* AM-A — browse is on demand: menu grid, favorites, and the
+              keypad open in an overlay so the item area stays LARGE. */}
+          <div className="mt-3 flex gap-2 border-t border-[var(--pos-border)] pt-3">
+            <button
+              type="button"
+              onClick={() => {
+                setBrowseTab("menu");
+                setBrowseOpen(true);
+              }}
+              className="pos-tile min-h-11 flex-1 rounded-xl border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-4 py-2 text-sm font-semibold"
+            >
+              ☰ Browse menu
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setBrowseTab("favorites");
+                setBrowseOpen(true);
+              }}
+              className="pos-tile min-h-11 flex-1 rounded-xl border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-4 py-2 text-sm font-semibold"
+            >
+              ★ Favorites{favorites.length > 0 ? ` (${favoriteTiles.length})` : ""}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setBrowseTab("keypad");
+                setBrowseOpen(true);
+              }}
+              className="pos-tile min-h-11 flex-1 rounded-xl border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-4 py-2 text-sm font-semibold"
+            >
+              ⌨ Keypad
+            </button>
+          </div>
+        </section>
+
+        {/* AM-A — the checkout rail (Dutchie's right column): limits
+            (allotment), warnings, totals, Save sale + tender — always on
+            the main screen. */}
+        <section className="flex flex-col rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-4 lg:min-h-0">
+          <h2 className="flex items-baseline justify-between text-sm font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
+            Checkout
+            <span className="text-xs font-normal normal-case text-[var(--pos-text-faint)]">
+              {cart.length === 0 ? "no items yet" : `${cart.reduce((s, e) => s + e.quantity, 0)} item(s)`}
+            </span>
+          </h2>
+          <div className="min-h-0 flex-1 overflow-y-auto">
+          {highThcViolations.length > 0 ? (
+            <p className="mt-3 rounded-lg border border-[var(--pos-danger-border)] bg-[var(--pos-danger-soft)] px-3 py-2 text-xs font-semibold text-[var(--pos-danger)]">
+              {highThcViolations.map((n) => `"${n}"`).join(", ")}{" "}
+              {highThcViolations.length === 1 ? "is a DOH High-THC product" : "are DOH High-THC products"} and may
+              ONLY be sold to a patient with a valid recognition card (chapter 246-70 WAC). Remove{" "}
+              {highThcViolations.length === 1 ? "it" : "them"}, or restart the sale on the medical path. No override
+              exists.
+            </p>
+          ) : null}
+
+          {priced.problems.length > 0 ? (
+            <p className="mt-3 rounded-lg border border-[var(--pos-danger-border)] bg-[var(--pos-danger-soft)] px-3 py-2 text-xs text-[var(--pos-danger)]">{priced.problems.join(" ")}</p>
+          ) : null}
+
+          {/* WAC 314-55-095 limit meter — brand green while safe, amber near
+              the line, red over it. */}
+          <div className="mt-3 space-y-1">
+            {limits.evaluation.buckets
+              .filter((b) => b.usedGrams > 0)
+              .map((b) => (
+                <div key={b.bucket} className="text-xs">
+                  <div className="flex justify-between text-[var(--pos-text-muted)]">
+                    <span>{b.label}</span>
+                    <span className={b.exceeded ? "font-bold text-[var(--pos-danger)]" : ""}>
+                      {b.usedGrams}g / {b.maxGrams}g
+                    </span>
+                  </div>
+                  <div className="mt-0.5 h-1.5 w-full rounded bg-[var(--pos-surface-hover)]">
+                    <div
+                      className={`h-1.5 rounded ${b.exceeded ? "bg-[var(--pos-danger)]" : b.ratio > 0.8 ? "bg-[var(--pos-warn-dot)]" : "bg-[var(--pos-accent)]"}`}
+                      style={{ width: `${Math.min(100, Math.round(b.ratio * 100))}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+          </div>
+          {limits.blocked ? (
+            <p className="mt-2 rounded-lg border border-[var(--pos-danger-border)] bg-[var(--pos-danger-soft)] px-3 py-2 text-xs font-semibold text-[var(--pos-danger)]">
+              Over the WAC 314-55-095 single-transaction limit — remove items. {limits.evaluation.reasons.join(" ")}
+            </p>
+          ) : limits.softWarning ? (
+            <p className="mt-2 rounded-lg border border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] px-3 py-2 text-xs font-semibold text-[var(--pos-warn)]">
+              Over the configured limit (soft warning). {limits.evaluation.reasons.join(" ")}
+            </p>
+          ) : null}
+
+          {/* B32 — cart-level stock awareness. Warnings only, NEVER blocks:
+              the cached menu can lag the shelf; the B19 decrement + server
+              completion gate are the authority at sync. */}
+          {stockWarnings.length > 0 ? (
+            <ul className="mt-2 space-y-1 rounded-lg border border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] px-3 py-2 text-xs text-[var(--pos-warn)]">
+              {stockWarnings.map((w, i) => (
+                <li key={i}>{w}</li>
+              ))}
+            </ul>
+          ) : null}
+
+          </div>
+          {/* B37 — sticky totals: the money and the tender button stay pinned
+              to the panel's bottom edge while a long check scrolls behind. */}
+          <div className="sticky bottom-0 -mx-4 -mb-4 mt-4 rounded-b-2xl border-t border-[var(--pos-border-strong)] bg-[var(--pos-surface)] px-4 pb-4 pt-3 text-sm">
+            <Row label="Subtotal (pre-tax)" value={money(priced.totals.subtotalMinorUnits)} />
+            <Row label="Tax (excise + sales)" value={money(priced.totals.estimatedTaxMinorUnits)} />
+            {priced.totals.savingsMinorUnits > 0 ? (
+              <Row label="You saved" value={`−${money(priced.totals.savingsMinorUnits)}`} accent />
+            ) : null}
+            {carded && (priced.med?.medicalSavingsMinor ?? 0) > 0 ? (
+              <Row
+                label="Medical savings (tax off)"
+                value={`−${money(priced.med?.medicalSavingsMinor ?? 0)}`}
+                accent
+              />
+            ) : null}
+            <div className="mt-1 flex justify-between text-xl font-bold">
+              <span>Total</span>
+              <span className="text-[var(--pos-accent)]">{money(priced.totals.totalMinorUnits)}</span>
+            </div>
+
+            <div className="mt-3 flex gap-3">
+              {onHold ? (
+                <button
+                  type="button"
+                  disabled={cart.length === 0}
+                  onClick={() => onHold(cart)}
+                  title="Save this sale for later (customer stepped away). Items + counts are kept; load it from the home screen — the ID check re-runs."
+                  className="pos-tile rounded-2xl border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-5 py-4 text-lg font-semibold disabled:opacity-40"
+                >
+                  Save sale
+                </button>
+              ) : null}
+              <button
+                type="button"
+                disabled={!canTender}
+                onClick={onTender}
+                className="pos-tile flex-1 rounded-2xl bg-[var(--pos-accent)] px-6 py-4 text-lg font-bold text-[var(--pos-accent-ink)] disabled:opacity-40"
+              >
+                Cash tender →
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      {/* AM-A — the browse overlay: the full B36/B39/B40 surface (menu grid
+          with search + category chips, favorites, keypad) on demand. A
+          successful scan closes it so the cashier sees the item land. */}
+      {browseOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="flex h-[92vh] w-full max-w-5xl flex-col">
+            <div className="mb-2 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-white">Browse products</h2>
+              <button
+                type="button"
+                onClick={() => setBrowseOpen(false)}
+                className="pos-tile min-h-11 rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-5 py-2 text-sm font-semibold text-[var(--pos-text)]"
+              >
+                Done
+              </button>
+            </div>
         {/* B36 — product browser: prominent scan/search bar, category filter
             chips (Toast groups), then a Square/Shopify-style tile grid. */}
-        <section className="flex flex-col rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-4 lg:min-h-0">
+        <section className="flex min-h-0 flex-1 flex-col rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-4">
           {/* B39 — browse surface tabs: the item grid (default) and the
               quick-amount keypad (Square's Keypad, non-cannabis only). */}
           <div className="mb-3 flex gap-2">
@@ -1449,14 +1917,14 @@ function CartScreen({
             </div>
           ) : null}
           {browseTab === "keypad" ? (
-            <div className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+            <div className="min-h-0 flex-1 overflow-y-auto">
               <KeypadPanel onAdd={(p) => manualAdd(p)} />
             </div>
           ) : browseTab === "favorites" ? (
-            <div className="flex flex-col lg:min-h-0 lg:flex-1">
+            <div className="flex min-h-0 flex-1 flex-col">
               {/* B40 — Square-style Favorites page: this register's pinned
                   best-sellers, one tap to ring. Pins live per device. */}
-              <ul className="grid max-h-[58vh] grid-cols-2 content-start gap-2.5 overflow-y-auto lg:max-h-none lg:flex-1 lg:min-h-0 xl:grid-cols-3 2xl:grid-cols-4">
+              <ul className="grid min-h-0 flex-1 grid-cols-2 content-start gap-2.5 overflow-y-auto xl:grid-cols-3 2xl:grid-cols-4">
                 {favoriteTiles.map((p) => (
                   <li key={p.variantId}>
                     <ProductTile
@@ -1575,7 +2043,7 @@ function CartScreen({
               </div>
             </div>
           ) : null}
-          <ul className="mt-3 grid max-h-[52vh] grid-cols-2 content-start gap-2.5 overflow-y-auto lg:max-h-none lg:flex-1 lg:min-h-0 xl:grid-cols-3 2xl:grid-cols-4">
+          <ul className="mt-3 grid min-h-0 flex-1 grid-cols-2 content-start gap-2.5 overflow-y-auto xl:grid-cols-3 2xl:grid-cols-4">
             {results.map((p) => (
               <li key={p.variantId}>
                 <ProductTile
@@ -1595,227 +2063,9 @@ function CartScreen({
           )}
         </section>
 
-        {/* B37 — the check (Toast-style): tap a line to edit it in place; the
-            row expands with a big qty stepper, Remove, and the B24 override
-            controls. Collapsed rows stay clean: qty × name + line total. */}
-        <section className="flex flex-col rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-4 lg:min-h-0">
-          <h2 className="flex items-baseline justify-between text-sm font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
-            Check
-            <span className="text-xs font-normal normal-case text-[var(--pos-text-faint)]">
-              {cart.length === 0
-                ? "empty"
-                : `${cart.reduce((s, e) => s + e.quantity, 0)} item(s) · tap a line to edit`}
-            </span>
-          </h2>
-          <ul className="mt-3 min-h-0 flex-1 space-y-2 overflow-y-auto">
-            {priced.lines.map((l, i) => {
-              const medLine = carded ? priced.med?.lines[i] : null;
-              const exempt = !!medLine && (medLine.salesExempt || medLine.exciseExempt);
-              // B24 — the raw engine line (pre-override, pre-medical) this
-              // line derives from; applyPriceOverrides and applyMedicalPricing
-              // both map 1:1 in order, so index i lines up exactly.
-              const engineLine = priced.engineLines[i];
-              const activeOverride = l.variantId ? overrides[l.variantId] : undefined;
-              const cartEntry = cart.find((e) => e.product.variantId === l.variantId);
-              const lineKey = `${l.productId}-${l.variantLabel ?? ""}`;
-              const open = expandedLine === lineKey;
-              const variantId = cartVariantId(cart, l.productId, l.variantLabel);
-              return (
-              <li
-                key={lineKey}
-                className={`rounded-xl border ${open ? "border-[var(--pos-accent-border)] bg-[var(--pos-surface-hover)]" : "border-[var(--pos-border)] bg-[var(--pos-surface-2)]"}`}
-              >
-                <button
-                  type="button"
-                  onClick={() => setExpandedLine(open ? null : lineKey)}
-                  className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left"
-                  aria-expanded={open}
-                >
-                  <span className="text-sm font-semibold">
-                    <span className="mr-2 inline-block min-w-7 rounded-md bg-[var(--pos-surface-hover)] px-1.5 py-0.5 text-center text-xs font-bold text-[var(--pos-text-muted)]">
-                      {l.quantity}×
-                    </span>
-                    {l.productName}
-                    {l.variantLabel ? <span className="text-[var(--pos-text-muted)]"> · {l.variantLabel}</span> : null}
-                    {exempt ? (
-                      <span className="ml-2 rounded bg-[var(--pos-info-soft)] px-1.5 py-0.5 text-[10px] font-bold text-[var(--pos-info)]">
-                        MED · TAX OFF
-                      </span>
-                    ) : null}
-                    {activeOverride ? (
-                      <span className="ml-2 rounded bg-[var(--pos-warn-soft)] px-1.5 py-0.5 text-[10px] font-bold text-[var(--pos-warn)]">
-                        OVERRIDE · {activeOverride.approvedByName}
-                      </span>
-                    ) : null}
-                    <span className="mt-0.5 block text-xs font-normal text-[var(--pos-text-faint)]">
-                      {money(l.unitPriceMinor)} each
-                      {l.appliedLabel ? <span className="text-[var(--pos-accent)]"> · {l.appliedLabel}</span> : null}
-                      {activeOverride ? (
-                        <span className="text-[var(--pos-warn)]"> · was {money(activeOverride.originalUnitPriceMinor)}</span>
-                      ) : null}
-                    </span>
-                  </span>
-                  <span className="text-sm font-bold">{money(l.unitPriceMinor * l.quantity)}</span>
-                </button>
-                {open ? (
-                  <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--pos-border)] px-4 py-3">
-                    <span className="flex items-center gap-3">
-                      <QtyButton label="−" onClick={() => setCart(setCartQuantity(cart, variantId, l.quantity - 1))} />
-                      <span className="w-8 text-center text-lg font-bold">{l.quantity}</span>
-                      <QtyButton label="+" onClick={() => setCart(setCartQuantity(cart, variantId, l.quantity + 1))} />
-                    </span>
-                    <span className="flex items-center gap-2">
-                      {onApprove && cartEntry && engineLine ? (
-                        activeOverride ? (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const next = { ...overrides };
-                              delete next[l.variantId ?? ""];
-                              setOverrides(next);
-                            }}
-                            className="pos-tile min-h-11 rounded-lg border border-[var(--pos-border)] bg-[var(--pos-surface)] px-4 py-2 text-sm font-semibold text-[var(--pos-warn)]"
-                            title="Remove the manager override — the line returns to the engine price."
-                          >
-                            Undo override
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => setOverrideTarget({ product: cartEntry.product, engineLine })}
-                            className="pos-tile min-h-11 rounded-lg border border-[var(--pos-border)] bg-[var(--pos-surface)] px-4 py-2 text-sm font-semibold text-[var(--pos-text-muted)]"
-                            title="Manager price override (markdown only; PIN + reason required)."
-                          >
-                            Override
-                          </button>
-                        )
-                      ) : null}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setCart(setCartQuantity(cart, variantId, 0));
-                          setExpandedLine(null);
-                        }}
-                        className="pos-tile min-h-11 rounded-lg border border-[var(--pos-danger-border)] bg-[var(--pos-danger-soft)] px-4 py-2 text-sm font-semibold text-[var(--pos-danger)]"
-                        title="Remove this line from the check."
-                      >
-                        Remove
-                      </button>
-                    </span>
-                  </div>
-                ) : null}
-              </li>
-              );
-            })}
-            {cart.length === 0 ? (
-              <li className="px-2 py-6 text-center text-sm text-[var(--pos-text-faint)]">Tap products to add them.</li>
-            ) : null}
-          </ul>
-
-          {highThcViolations.length > 0 ? (
-            <p className="mt-3 rounded-lg border border-[var(--pos-danger-border)] bg-[var(--pos-danger-soft)] px-3 py-2 text-xs font-semibold text-[var(--pos-danger)]">
-              {highThcViolations.map((n) => `"${n}"`).join(", ")}{" "}
-              {highThcViolations.length === 1 ? "is a DOH High-THC product" : "are DOH High-THC products"} and may
-              ONLY be sold to a patient with a valid recognition card (chapter 246-70 WAC). Remove{" "}
-              {highThcViolations.length === 1 ? "it" : "them"}, or restart the sale on the medical path. No override
-              exists.
-            </p>
-          ) : null}
-
-          {priced.problems.length > 0 ? (
-            <p className="mt-3 rounded-lg border border-[var(--pos-danger-border)] bg-[var(--pos-danger-soft)] px-3 py-2 text-xs text-[var(--pos-danger)]">{priced.problems.join(" ")}</p>
-          ) : null}
-
-          {/* WAC 314-55-095 limit meter — brand green while safe, amber near
-              the line, red over it. */}
-          <div className="mt-3 space-y-1">
-            {limits.evaluation.buckets
-              .filter((b) => b.usedGrams > 0)
-              .map((b) => (
-                <div key={b.bucket} className="text-xs">
-                  <div className="flex justify-between text-[var(--pos-text-muted)]">
-                    <span>{b.label}</span>
-                    <span className={b.exceeded ? "font-bold text-[var(--pos-danger)]" : ""}>
-                      {b.usedGrams}g / {b.maxGrams}g
-                    </span>
-                  </div>
-                  <div className="mt-0.5 h-1.5 w-full rounded bg-[var(--pos-surface-hover)]">
-                    <div
-                      className={`h-1.5 rounded ${b.exceeded ? "bg-[var(--pos-danger)]" : b.ratio > 0.8 ? "bg-[var(--pos-warn-dot)]" : "bg-[var(--pos-accent)]"}`}
-                      style={{ width: `${Math.min(100, Math.round(b.ratio * 100))}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
           </div>
-          {limits.blocked ? (
-            <p className="mt-2 rounded-lg border border-[var(--pos-danger-border)] bg-[var(--pos-danger-soft)] px-3 py-2 text-xs font-semibold text-[var(--pos-danger)]">
-              Over the WAC 314-55-095 single-transaction limit — remove items. {limits.evaluation.reasons.join(" ")}
-            </p>
-          ) : limits.softWarning ? (
-            <p className="mt-2 rounded-lg border border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] px-3 py-2 text-xs font-semibold text-[var(--pos-warn)]">
-              Over the configured limit (soft warning). {limits.evaluation.reasons.join(" ")}
-            </p>
-          ) : null}
-
-          {/* B32 — cart-level stock awareness. Warnings only, NEVER blocks:
-              the cached menu can lag the shelf; the B19 decrement + server
-              completion gate are the authority at sync. */}
-          {stockWarnings.length > 0 ? (
-            <ul className="mt-2 space-y-1 rounded-lg border border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] px-3 py-2 text-xs text-[var(--pos-warn)]">
-              {stockWarnings.map((w, i) => (
-                <li key={i}>{w}</li>
-              ))}
-            </ul>
-          ) : null}
-
-          {/* POS B14 — loyalty member attach (online lookup only) */}
-          <MemberPanel member={member} setMember={setMember} onMemberLookup={onMemberLookup} onMemberHistory={onMemberHistory} />
-
-          {/* B37 — sticky totals: the money and the tender button stay pinned
-              to the panel's bottom edge while a long check scrolls behind. */}
-          <div className="sticky bottom-0 -mx-4 -mb-4 mt-4 rounded-b-2xl border-t border-[var(--pos-border-strong)] bg-[var(--pos-surface)] px-4 pb-4 pt-3 text-sm">
-            <Row label="Subtotal (pre-tax)" value={money(priced.totals.subtotalMinorUnits)} />
-            <Row label="Tax (excise + sales)" value={money(priced.totals.estimatedTaxMinorUnits)} />
-            {priced.totals.savingsMinorUnits > 0 ? (
-              <Row label="You saved" value={`−${money(priced.totals.savingsMinorUnits)}`} accent />
-            ) : null}
-            {carded && (priced.med?.medicalSavingsMinor ?? 0) > 0 ? (
-              <Row
-                label="Medical savings (tax off)"
-                value={`−${money(priced.med?.medicalSavingsMinor ?? 0)}`}
-                accent
-              />
-            ) : null}
-            <div className="mt-1 flex justify-between text-xl font-bold">
-              <span>Total</span>
-              <span className="text-[var(--pos-accent)]">{money(priced.totals.totalMinorUnits)}</span>
-            </div>
-
-            <div className="mt-3 flex gap-3">
-              {onHold ? (
-                <button
-                  type="button"
-                  disabled={cart.length === 0}
-                  onClick={() => onHold(cart)}
-                  title="Park this cart (customer stepped away). Items + counts are kept; the ID check re-runs on resume."
-                  className="pos-tile rounded-2xl border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-5 py-4 text-lg font-semibold disabled:opacity-40"
-                >
-                  Hold
-                </button>
-              ) : null}
-              <button
-                type="button"
-                disabled={!canTender}
-                onClick={onTender}
-                className="pos-tile flex-1 rounded-2xl bg-[var(--pos-accent)] px-6 py-4 text-lg font-bold text-[var(--pos-accent-ink)] disabled:opacity-40"
-              >
-                Cash tender →
-              </button>
-            </div>
-          </div>
-        </section>
-      </div>
+        </div>
+      ) : null}
 
       {overrideTarget && onApprove ? (
         <PriceOverrideModal
@@ -2436,13 +2686,15 @@ function MemberPanel({
   }
 
   if (!open) {
+    // AM-A — the collapsed customer band: one obvious tap to attach a member
+    // (Dutchie puts the customer at the top; so do we).
     return (
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="mt-3 rounded-xl border border-dashed border-[var(--pos-border-strong)] px-4 py-2.5 text-left text-sm text-[var(--pos-text-muted)] active:bg-[var(--pos-surface-hover)]"
+        className="mt-3 flex min-h-11 w-full items-center gap-2 rounded-xl border border-dashed border-[var(--pos-border-strong)] px-4 py-2.5 text-left text-sm text-[var(--pos-text-muted)] active:bg-[var(--pos-surface-hover)]"
       >
-        ★ Add loyalty member (optional)
+        <span aria-hidden>👤</span> Attach customer — name, phone, or email (optional)
       </button>
     );
   }
