@@ -982,6 +982,9 @@ function CartScreen({
   const [query, setQuery] = useState("");
   // B36 — the active category filter chip (null = All).
   const [category, setCategory] = useState<string | null>(null);
+  // B37 — the check line whose in-place editor is open (Toast-style: tap a
+  // line to edit; the row expands with qty stepper / remove / override).
+  const [expandedLine, setExpandedLine] = useState<string | null>(null);
   // B24 — the line the manager is overriding (engine-priced snapshot).
   const [overrideTarget, setOverrideTarget] = useState<{ product: PosMenuProduct; engineLine: PricedSaleLine } | null>(null);
   // B23 — a scan that matched a MULTI-variant product: the cashier picks the
@@ -1219,9 +1222,18 @@ function CartScreen({
           </ul>
         </section>
 
-        {/* Cart + limits + totals */}
-        <section className="flex flex-col rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-400">Cart</h2>
+        {/* B37 — the check (Toast-style): tap a line to edit it in place; the
+            row expands with a big qty stepper, Remove, and the B24 override
+            controls. Collapsed rows stay clean: qty × name + line total. */}
+        <section className="flex flex-col rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-4">
+          <h2 className="flex items-baseline justify-between text-sm font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
+            Check
+            <span className="text-xs font-normal normal-case text-[var(--pos-text-faint)]">
+              {cart.length === 0
+                ? "empty"
+                : `${cart.reduce((s, e) => s + e.quantity, 0)} item(s) · tap a line to edit`}
+            </span>
+          </h2>
           <ul className="mt-3 flex-1 space-y-2 overflow-y-auto">
             {priced.lines.map((l, i) => {
               const medLine = carded ? priced.med?.lines[i] : null;
@@ -1232,11 +1244,26 @@ function CartScreen({
               const engineLine = priced.engineLines[i];
               const activeOverride = l.variantId ? overrides[l.variantId] : undefined;
               const cartEntry = cart.find((e) => e.product.variantId === l.variantId);
+              const lineKey = `${l.productId}-${l.variantLabel ?? ""}`;
+              const open = expandedLine === lineKey;
+              const variantId = cartVariantId(cart, l.productId, l.variantLabel);
               return (
-              <li key={`${l.productId}-${l.variantLabel ?? ""}`} className="rounded-xl bg-neutral-800 px-4 py-3">
-                <div className="flex items-center justify-between">
+              <li
+                key={lineKey}
+                className={`rounded-xl border ${open ? "border-[var(--pos-accent-border)] bg-[var(--pos-surface-hover)]" : "border-[var(--pos-border)] bg-[var(--pos-surface-2)]"}`}
+              >
+                <button
+                  type="button"
+                  onClick={() => setExpandedLine(open ? null : lineKey)}
+                  className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left"
+                  aria-expanded={open}
+                >
                   <span className="text-sm font-semibold">
+                    <span className="mr-2 inline-block min-w-7 rounded-md bg-[var(--pos-surface-hover)] px-1.5 py-0.5 text-center text-xs font-bold text-[var(--pos-text-muted)]">
+                      {l.quantity}×
+                    </span>
                     {l.productName}
+                    {l.variantLabel ? <span className="text-[var(--pos-text-muted)]"> · {l.variantLabel}</span> : null}
                     {exempt ? (
                       <span className="ml-2 rounded bg-sky-900/80 px-1.5 py-0.5 text-[10px] font-bold text-sky-300">
                         MED · TAX OFF
@@ -1247,58 +1274,73 @@ function CartScreen({
                         OVERRIDE · {activeOverride.approvedByName}
                       </span>
                     ) : null}
+                    <span className="mt-0.5 block text-xs font-normal text-[var(--pos-text-faint)]">
+                      {money(l.unitPriceMinor)} each
+                      {l.appliedLabel ? <span className="text-[var(--pos-accent)]"> · {l.appliedLabel}</span> : null}
+                      {activeOverride ? (
+                        <span className="text-amber-300"> · was {money(activeOverride.originalUnitPriceMinor)}</span>
+                      ) : null}
+                    </span>
                   </span>
                   <span className="text-sm font-bold">{money(l.unitPriceMinor * l.quantity)}</span>
-                </div>
-                <div className="mt-1 flex items-center justify-between text-xs text-neutral-400">
-                  <span>
-                    {money(l.unitPriceMinor)} each
-                    {l.appliedLabel ? <span className="text-emerald-300"> · {l.appliedLabel}</span> : null}
-                    {activeOverride ? (
-                      <span className="text-amber-300"> · was {money(activeOverride.originalUnitPriceMinor)}</span>
-                    ) : null}
-                  </span>
-                  <span className="flex items-center gap-2">
-                    {onApprove && cartEntry && engineLine ? (
-                      activeOverride ? (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const next = { ...overrides };
-                            delete next[l.variantId ?? ""];
-                            setOverrides(next);
-                          }}
-                          className="rounded-lg bg-neutral-700 px-2 py-1 text-[11px] font-semibold text-amber-300"
-                          title="Remove the manager override — the line returns to the engine price."
-                        >
-                          Undo override
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setOverrideTarget({ product: cartEntry.product, engineLine })}
-                          className="rounded-lg bg-neutral-700 px-2 py-1 text-[11px] font-semibold text-neutral-300"
-                          title="Manager price override (markdown only; PIN + reason required)."
-                        >
-                          Override
-                        </button>
-                      )
-                    ) : null}
-                    <QtyButton label="−" onClick={() => setCart(setCartQuantity(cart, cartVariantId(cart, l.productId, l.variantLabel), l.quantity - 1))} />
-                    <span className="w-6 text-center text-sm font-semibold text-neutral-200">{l.quantity}</span>
-                    <QtyButton label="+" onClick={() => setCart(setCartQuantity(cart, cartVariantId(cart, l.productId, l.variantLabel), l.quantity + 1))} />
-                  </span>
-                </div>
+                </button>
+                {open ? (
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--pos-border)] px-4 py-3">
+                    <span className="flex items-center gap-3">
+                      <QtyButton label="−" onClick={() => setCart(setCartQuantity(cart, variantId, l.quantity - 1))} />
+                      <span className="w-8 text-center text-lg font-bold">{l.quantity}</span>
+                      <QtyButton label="+" onClick={() => setCart(setCartQuantity(cart, variantId, l.quantity + 1))} />
+                    </span>
+                    <span className="flex items-center gap-2">
+                      {onApprove && cartEntry && engineLine ? (
+                        activeOverride ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const next = { ...overrides };
+                              delete next[l.variantId ?? ""];
+                              setOverrides(next);
+                            }}
+                            className="pos-tile rounded-lg border border-[var(--pos-border)] bg-[var(--pos-surface)] px-3 py-2 text-xs font-semibold text-amber-300"
+                            title="Remove the manager override — the line returns to the engine price."
+                          >
+                            Undo override
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setOverrideTarget({ product: cartEntry.product, engineLine })}
+                            className="pos-tile rounded-lg border border-[var(--pos-border)] bg-[var(--pos-surface)] px-3 py-2 text-xs font-semibold text-[var(--pos-text-muted)]"
+                            title="Manager price override (markdown only; PIN + reason required)."
+                          >
+                            Override
+                          </button>
+                        )
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCart(setCartQuantity(cart, variantId, 0));
+                          setExpandedLine(null);
+                        }}
+                        className="pos-tile rounded-lg border border-red-900/60 bg-red-950/40 px-3 py-2 text-xs font-semibold text-red-300"
+                        title="Remove this line from the check."
+                      >
+                        Remove
+                      </button>
+                    </span>
+                  </div>
+                ) : null}
               </li>
               );
             })}
             {cart.length === 0 ? (
-              <li className="px-2 py-6 text-center text-sm text-neutral-500">Tap products to add them.</li>
+              <li className="px-2 py-6 text-center text-sm text-[var(--pos-text-faint)]">Tap products to add them.</li>
             ) : null}
           </ul>
 
           {highThcViolations.length > 0 ? (
-            <p className="mt-3 rounded-lg bg-red-950/60 px-3 py-2 text-xs font-semibold text-red-300">
+            <p className="mt-3 rounded-lg border border-red-900/60 bg-red-950/60 px-3 py-2 text-xs font-semibold text-red-300">
               {highThcViolations.map((n) => `"${n}"`).join(", ")}{" "}
               {highThcViolations.length === 1 ? "is a DOH High-THC product" : "are DOH High-THC products"} and may
               ONLY be sold to a patient with a valid recognition card (chapter 246-70 WAC). Remove{" "}
@@ -1308,24 +1350,25 @@ function CartScreen({
           ) : null}
 
           {priced.problems.length > 0 ? (
-            <p className="mt-3 rounded-lg bg-red-950/60 px-3 py-2 text-xs text-red-300">{priced.problems.join(" ")}</p>
+            <p className="mt-3 rounded-lg border border-red-900/60 bg-red-950/60 px-3 py-2 text-xs text-red-300">{priced.problems.join(" ")}</p>
           ) : null}
 
-          {/* WAC 314-55-095 limit meter */}
+          {/* WAC 314-55-095 limit meter — brand green while safe, amber near
+              the line, red over it. */}
           <div className="mt-3 space-y-1">
             {limits.evaluation.buckets
               .filter((b) => b.usedGrams > 0)
               .map((b) => (
                 <div key={b.bucket} className="text-xs">
-                  <div className="flex justify-between text-neutral-400">
+                  <div className="flex justify-between text-[var(--pos-text-muted)]">
                     <span>{b.label}</span>
                     <span className={b.exceeded ? "font-bold text-red-400" : ""}>
                       {b.usedGrams}g / {b.maxGrams}g
                     </span>
                   </div>
-                  <div className="mt-0.5 h-1.5 w-full rounded bg-neutral-800">
+                  <div className="mt-0.5 h-1.5 w-full rounded bg-[var(--pos-surface-hover)]">
                     <div
-                      className={`h-1.5 rounded ${b.exceeded ? "bg-red-500" : b.ratio > 0.8 ? "bg-amber-400" : "bg-emerald-500"}`}
+                      className={`h-1.5 rounded ${b.exceeded ? "bg-red-500" : b.ratio > 0.8 ? "bg-amber-400" : "bg-[var(--pos-accent)]"}`}
                       style={{ width: `${Math.min(100, Math.round(b.ratio * 100))}%` }}
                     />
                   </div>
@@ -1333,11 +1376,11 @@ function CartScreen({
               ))}
           </div>
           {limits.blocked ? (
-            <p className="mt-2 rounded-lg bg-red-950/60 px-3 py-2 text-xs font-semibold text-red-300">
+            <p className="mt-2 rounded-lg border border-red-900/60 bg-red-950/60 px-3 py-2 text-xs font-semibold text-red-300">
               Over the WAC 314-55-095 single-transaction limit — remove items. {limits.evaluation.reasons.join(" ")}
             </p>
           ) : limits.softWarning ? (
-            <p className="mt-2 rounded-lg bg-amber-950/60 px-3 py-2 text-xs font-semibold text-amber-300">
+            <p className="mt-2 rounded-lg border border-amber-900/60 bg-amber-950/60 px-3 py-2 text-xs font-semibold text-amber-300">
               Over the configured limit (soft warning). {limits.evaluation.reasons.join(" ")}
             </p>
           ) : null}
@@ -1346,7 +1389,7 @@ function CartScreen({
               the cached menu can lag the shelf; the B19 decrement + server
               completion gate are the authority at sync. */}
           {stockWarnings.length > 0 ? (
-            <ul className="mt-2 space-y-1 rounded-lg bg-amber-950/50 px-3 py-2 text-xs text-amber-200">
+            <ul className="mt-2 space-y-1 rounded-lg border border-amber-900/60 bg-amber-950/50 px-3 py-2 text-xs text-amber-200">
               {stockWarnings.map((w, i) => (
                 <li key={i}>{w}</li>
               ))}
@@ -1356,7 +1399,9 @@ function CartScreen({
           {/* POS B14 — loyalty member attach (online lookup only) */}
           <MemberPanel member={member} setMember={setMember} onMemberLookup={onMemberLookup} onMemberHistory={onMemberHistory} />
 
-          <div className="mt-4 border-t border-neutral-800 pt-3 text-sm">
+          {/* B37 — sticky totals: the money and the tender button stay pinned
+              to the panel's bottom edge while a long check scrolls behind. */}
+          <div className="sticky bottom-0 -mx-4 -mb-4 mt-4 rounded-b-2xl border-t border-[var(--pos-border-strong)] bg-[var(--pos-surface)] px-4 pb-4 pt-3 text-sm">
             <Row label="Subtotal (pre-tax)" value={money(priced.totals.subtotalMinorUnits)} />
             <Row label="Tax (excise + sales)" value={money(priced.totals.estimatedTaxMinorUnits)} />
             {priced.totals.savingsMinorUnits > 0 ? (
@@ -1369,32 +1414,32 @@ function CartScreen({
                 accent
               />
             ) : null}
-            <div className="mt-1 flex justify-between text-lg font-bold">
+            <div className="mt-1 flex justify-between text-xl font-bold">
               <span>Total</span>
-              <span>{money(priced.totals.totalMinorUnits)}</span>
+              <span className="text-[var(--pos-accent)]">{money(priced.totals.totalMinorUnits)}</span>
             </div>
-          </div>
 
-          <div className="mt-4 flex gap-3">
-            {onHold ? (
+            <div className="mt-3 flex gap-3">
+              {onHold ? (
+                <button
+                  type="button"
+                  disabled={cart.length === 0}
+                  onClick={() => onHold(cart)}
+                  title="Park this cart (customer stepped away). Items + counts are kept; the ID check re-runs on resume."
+                  className="pos-tile rounded-2xl border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-5 py-4 text-lg font-semibold disabled:opacity-40"
+                >
+                  Hold
+                </button>
+              ) : null}
               <button
                 type="button"
-                disabled={cart.length === 0}
-                onClick={() => onHold(cart)}
-                title="Park this cart (customer stepped away). Items + counts are kept; the ID check re-runs on resume."
-                className="rounded-2xl border border-neutral-600 px-5 py-4 text-lg font-semibold text-neutral-200 disabled:opacity-40"
+                disabled={!canTender}
+                onClick={onTender}
+                className="pos-tile flex-1 rounded-2xl bg-[var(--pos-accent)] px-6 py-4 text-lg font-bold text-[var(--pos-accent-ink)] disabled:opacity-40"
               >
-                Hold
+                Cash tender →
               </button>
-            ) : null}
-            <button
-              type="button"
-              disabled={!canTender}
-              onClick={onTender}
-              className="flex-1 rounded-2xl bg-emerald-600 px-6 py-4 text-lg font-bold text-white disabled:opacity-40"
-            >
-              Cash tender →
-            </button>
+            </div>
           </div>
         </section>
       </div>
@@ -2026,7 +2071,7 @@ function QtyButton({ label, onClick }: { label: string; onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="h-8 w-8 rounded-lg bg-neutral-700 text-lg font-bold text-neutral-100 active:bg-neutral-600"
+      className="pos-tile h-11 w-11 rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface)] text-xl font-bold active:bg-[var(--pos-surface-hover)]"
     >
       {label}
     </button>
@@ -2035,7 +2080,7 @@ function QtyButton({ label, onClick }: { label: string; onClick: () => void }) {
 
 function Row({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {
   return (
-    <div className={`flex justify-between ${accent ? "text-emerald-300" : "text-neutral-400"}`}>
+    <div className={`flex justify-between ${accent ? "text-[var(--pos-accent)]" : "text-[var(--pos-text-muted)]"}`}>
       <span>{label}</span>
       <span>{value}</span>
     </div>
