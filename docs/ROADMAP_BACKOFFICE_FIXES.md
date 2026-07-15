@@ -3193,3 +3193,52 @@ decrement + the sync completion gate remain the inventory authority.
 `tests/compliance/low-stock-core.test.ts`); low-stock-core self-tests (21
 assertions) registered in the runner with import AND call. No migration.
 CI green on PR #496.
+
+### Shipped: POS B33 — WA-lawful cash rounding (PR #499)
+
+Owner-configurable nickel rounding (off / nearest / always-down /
+always-up) in `site_settings`, shipped via the menu bundle, applied at
+tender to the amount due only — `totalMinor` and tax stay pre-rounded per
+DOR interim guidance. Own payload block, receipt line, and day-report row.
+Pure core `cash-rounding-core.ts` (41 assertions) + vitest mirror. No
+migration. CI green on PR #499.
+
+### Shipped: POS B34 — budtender leaderboard (PR #500)
+
+Device-authenticated `/api/pos/leaderboard` over `pos_sale_events`; pure
+core `leaderboard-core.ts` ranks with medals/tie-breaks (18 assertions +
+mirror). Register modal: today by sale count (dollars hidden — blind
+drawer counts), week by gross. No migration. CI green on PR #500.
+
+### Shipped: POS B35 — theme foundation + home screen overhaul (PR #501)
+
+POS design tokens in `globals.css` (canvas/surfaces/borders/text tiers +
+greenway/gold/orange/danger accents, `--pos-accent-ink` for solid-green
+fills), `.pos-shell` brand-glow canvas, `.pos-tile` press feedback. Home
+rebuilt as a branded dashboard: offline-safe wordmark, status strip,
+color-coded action tiles. PWA chrome matched (#060807). Presentation
+foundation, no migration. CI green on PR #501.
+
+### Shipped: POS B36 — sale screen tile grid (PR #502)
+
+Responsive product tile grid with deterministic category colors (djb2 →
+8-slot palette, module-load guard pins SaleFlow to
+`CATEGORY_COLOR_COUNT`), busiest-first category chips, prominent
+search/scan bar; stock badges carry onto tiles. Pure core
+`sale-grid-core.ts` (20 assertions) + mirror; suite 1,549 → 1,558 tests /
+113 files. No migration. CI green on PR #502.
+
+### Shipped: POS B37 — cart/check overhaul (PR #503)
+
+Toast-style check: tap a line to edit quantity/override in place, sticky
+totals panel, limit meter and advisories on brand tokens. Presentation
+only, one file, suite unchanged. No migration. CI green on PR #503.
+
+### Shipped: POS B38 — tender/done polish + global modal unification (PR #504)
+
+Tender hero due-card, accent/ink chips and primaries, celebratory done
+screen, tokened receipt/email/ID-gate/override/member surfaces, and all
+six RegisterShell modals (no-sale, void, pickup, day report, leaderboard,
+till) unified on the POS tokens. Zero legacy neutral/emerald classes
+remain in SaleFlow/RegisterShell. Presentation only; 1,558 tests green.
+No migration. CI green on PR #504.
