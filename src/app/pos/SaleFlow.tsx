@@ -50,6 +50,7 @@ import {
 } from "@/lib/pos/favorites-core";
 import { manualAddBlocked } from "@/lib/pos/scan-required-core";
 import { buildProductInfo } from "@/lib/pos/product-info-core";
+import { STOCK_FLAG_REASONS, canFlagOutOfStock, type StockFlagReason } from "@/lib/pos/stock-flag-core";
 import {
   buildCustomProduct,
   keypadAppend,
@@ -188,6 +189,13 @@ export type SaleFlowProps = {
    * failed = null image; the card still shows every fact.
    */
   onProductImage?: (productId: string) => Promise<{ url: string; isFallback: boolean } | null>;
+  /**
+   * B43 — out-of-stock quick-flag (Toast "86 it"). ONLINE-ONLY: the shell
+   * posts /api/pos/stock-flag (device auth, audited) and, on success,
+   * removes the item from its cached bundle so the tile disappears at once.
+   * One-way — bringing an item back is a back-office action.
+   */
+  onStockFlag?: (productId: string, reason: StockFlagReason) => Promise<{ ok: true } | { ok: false; error: string }>;
   /** Enqueue an event; returns the clientUuid assigned to it. */
   onEnqueue: (
     eventType: "sale" | "manual_id_verification" | "medical_card_capture",
@@ -262,7 +270,7 @@ function priceForBuyer(
   };
 }
 
-export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, initialCart, onHold, onReceiptFrozen, onMemberLookup, onMemberHistory, onEmailReceipt, onApprove, onProductImage, onEnqueue, onComplete, onCancel }: SaleFlowProps) {
+export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, initialCart, onHold, onReceiptFrozen, onMemberLookup, onMemberHistory, onEmailReceipt, onApprove, onProductImage, onStockFlag, onEnqueue, onComplete, onCancel }: SaleFlowProps) {
   const [step, setStep] = useState<Step>("idgate");
   const [verdict, setVerdict] = useState<Extract<IdGateVerdict, { allowed: true }> | null>(null);
   const [manualEventUuid, setManualEventUuid] = useState<string | null>(null);
@@ -328,6 +336,7 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
         onMemberHistory={onMemberHistory}
         onApprove={onApprove}
         onProductImage={onProductImage}
+        onStockFlag={onStockFlag}
         overrides={overrides}
         setOverrides={setOverrides}
         onCancel={onCancel}
@@ -1158,6 +1167,7 @@ function CartScreen({
   onMemberHistory,
   onApprove,
   onProductImage,
+  onStockFlag,
   overrides,
   setOverrides,
   onCancel,
@@ -1179,6 +1189,8 @@ function CartScreen({
   onApprove?: (pin: string) => Promise<{ ok: true; approver: { id: string; fullName: string } } | { ok: false; error: string }>;
   /** B42 — info-card photo resolve (ONLINE-ONLY via the shell). */
   onProductImage?: (productId: string) => Promise<{ url: string; isFallback: boolean } | null>;
+  /** B43 — out-of-stock quick-flag (ONLINE-ONLY via the shell; one-way). */
+  onStockFlag?: (productId: string, reason: StockFlagReason) => Promise<{ ok: true } | { ok: false; error: string }>;
   /** B24 — this sale's manager price overrides, keyed by variantId. */
   overrides: Record<string, PosLineOverride>;
   setOverrides: (o: Record<string, PosLineOverride>) => void;
@@ -1816,6 +1828,7 @@ function CartScreen({
         <ProductInfoModal
           product={infoProduct}
           onProductImage={onProductImage}
+          onStockFlag={onStockFlag}
           onAdd={() => {
             manualAdd(infoProduct);
             setInfoProduct(null);
@@ -1838,17 +1851,42 @@ function CartScreen({
 function ProductInfoModal({
   product,
   onProductImage,
+  onStockFlag,
   onAdd,
   onClose,
 }: {
   product: PosMenuProduct;
   onProductImage?: (productId: string) => Promise<{ url: string; isFallback: boolean } | null>;
+  /** B43 — flag this item out of stock (undefined = affordance hidden). */
+  onStockFlag?: (productId: string, reason: StockFlagReason) => Promise<{ ok: true } | { ok: false; error: string }>;
   onAdd: () => void;
   onClose: () => void;
 }) {
   const info = useMemo(() => buildProductInfo(product), [product]);
   const [image, setImage] = useState<{ url: string; isFallback: boolean } | null>(null);
   const [imageState, setImageState] = useState<"loading" | "done">(onProductImage ? "loading" : "done");
+  // B43 — the two-tap flag flow: closed → picking a reason → posting.
+  const [flagOpen, setFlagOpen] = useState(false);
+  const [flagBusy, setFlagBusy] = useState<StockFlagReason | null>(null);
+  const [flagError, setFlagError] = useState<string | null>(null);
+
+  const flag = async (reason: StockFlagReason) => {
+    if (!onStockFlag || flagBusy) return;
+    setFlagBusy(reason);
+    setFlagError(null);
+    try {
+      const res = await onStockFlag(product.productId, reason);
+      if (!res.ok) {
+        setFlagError(res.error);
+        return;
+      }
+      onClose(); // The shell already removed the item from the cached bundle.
+    } catch {
+      setFlagError("Could not reach the server — try again.");
+    } finally {
+      setFlagBusy(null);
+    }
+  };
 
   useEffect(() => {
     // ONLINE-ONLY, best-effort photo fetch when the card opens. `active`
@@ -1945,6 +1983,57 @@ function ProductInfoModal({
             Add to check
           </button>
         </div>
+
+        {/* B43 — Toast-style "86 it": the shelf is empty but the menu still
+            shows the item. One-way (bringing it back is a back-office
+            action), online-only, audited server-side. */}
+        {onStockFlag && canFlagOutOfStock(product) ? (
+          <div className="mt-4 border-t border-[var(--pos-border)] pt-3">
+            {!flagOpen ? (
+              <button
+                type="button"
+                onClick={() => setFlagOpen(true)}
+                className="text-xs font-semibold text-[var(--pos-text-faint)] underline underline-offset-2"
+              >
+                Shelf is empty? Mark out of stock…
+              </button>
+            ) : (
+              <div>
+                <p className="text-xs font-semibold text-amber-300">
+                  Remove {info.name} from every register and the website? Pick why — a manager
+                  brings it back through the back office when stock returns.
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {STOCK_FLAG_REASONS.map((r) => (
+                    <button
+                      key={r}
+                      type="button"
+                      disabled={flagBusy !== null}
+                      onClick={() => void flag(r)}
+                      className="pos-tile rounded-lg border border-amber-900/60 bg-amber-950/40 px-3 py-2 text-xs font-semibold capitalize text-amber-300 disabled:opacity-40"
+                    >
+                      {flagBusy === r ? "Flagging…" : r}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    disabled={flagBusy !== null}
+                    onClick={() => {
+                      setFlagOpen(false);
+                      setFlagError(null);
+                    }}
+                    className="pos-tile rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2 text-xs font-semibold text-[var(--pos-text-muted)]"
+                  >
+                    Cancel
+                  </button>
+                </div>
+                {flagError ? (
+                  <p className="mt-2 rounded-lg border border-red-900/60 bg-red-950/60 px-3 py-2 text-xs font-semibold text-red-300">{flagError}</p>
+                ) : null}
+              </div>
+            )}
+          </div>
+        ) : null}
       </div>
     </div>
   );
