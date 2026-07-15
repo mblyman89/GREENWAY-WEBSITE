@@ -180,8 +180,8 @@ drawer math.
 | Register-side product info on demand (COA/terpene/THC detail card) | Cova "Product Info On Demand" | B42 |
 | Out-of-stock quick-flag from the register (Toast Quick Edit) | Toast | B43 |
 | Light/dark mode toggle per device | Toast | B44 |
-| Fees/donations line items | Dutchie | B45 |
-| Pre-order creation at register (phone orders) | Dutchie | B46 |
+| ~~Fees/donations line items~~ | Dutchie | **B45 — CANCELLED (owner: "I don't need or want those last two slices")** |
+| ~~Pre-order creation at register (phone orders)~~ | Dutchie | **B46 — CANCELLED (owner: "I don't need or want those last two slices")** |
 | ~~Customer-facing display~~ | — | **SKIPPED (owner choice)** |
 | ~~Gift cards~~ | — | **EXCLUDED (not allowed under license — never propose)** |
 

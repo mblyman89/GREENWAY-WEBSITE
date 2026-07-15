@@ -802,11 +802,24 @@ export async function finalizeManifestDispositions(
   );
 
   // Seed drafts + archive COAs only when something was accepted. Best-effort.
+  // Task AK: report VERIFIED draft writes (not attempts) and surface real
+  // insert failures on the manifest timeline — the old code counted unmatched
+  // lots as "drafts created" even while every insert silently failed.
   let draftsCreated = 0;
   if (activated > 0) {
     try {
       const match = await seedDraftsForManifest(manifestId, actorId);
-      draftsCreated = match.unmatched;
+      draftsCreated = match.draftsCreated;
+      if (match.draftsFailed > 0) {
+        await logManifestEvent(
+          manifestId,
+          "draft_seed_error",
+          `Onboarding draft creation FAILED for ${match.draftsFailed} product(s): ${
+            match.firstError ?? "unknown error"
+          }. These received products will NOT appear under Inventory → Product Onboarding until re-finalized successfully.`,
+          actorId,
+        );
+      }
     } catch (err) {
       console.error("[intake-store] seedDraftsForManifest failed:", err);
     }
