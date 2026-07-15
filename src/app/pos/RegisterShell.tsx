@@ -392,7 +392,16 @@ export function RegisterShell() {
   const pendingCount = queue.length;
 
   if (screen === "loading") {
-    return <main className="flex min-h-screen items-center justify-center bg-neutral-950 text-neutral-400">Loading register…</main>;
+    return (
+      <main className="pos-shell flex min-h-screen flex-col items-center justify-center gap-4">
+        {/* Plain <img>, NOT next/image: the /pos service worker caches /pos/*
+            cache-first so the wordmark renders on OFFLINE boot; the
+            /_next/image optimizer endpoint is never cached. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/pos/wordmark.png" alt="Greenway Marijuana" className="h-10 w-auto opacity-90" />
+        <p className="text-sm text-[var(--pos-text-faint)]">Loading register…</p>
+      </main>
+    );
   }
 
   if (screen === "setup" || !creds) {
@@ -844,10 +853,12 @@ function SetupScreen({ onProvisioned }: { onProvisioned: (c: DeviceCreds) => voi
   };
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-neutral-950 p-6 text-neutral-100">
-      <div className="w-full max-w-md rounded-2xl border border-neutral-800 bg-neutral-900 p-8">
+    <main className="pos-shell flex min-h-screen flex-col items-center justify-center p-6">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/pos/wordmark.png" alt="Greenway Marijuana" className="mb-6 h-9 w-auto opacity-90" />
+      <div className="w-full max-w-md rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-8 shadow-[var(--admin-shadow)]">
         <h1 className="text-xl font-semibold">Register setup</h1>
-        <p className="mt-2 text-sm text-neutral-400">
+        <p className="mt-2 text-sm text-[var(--pos-text-muted)]">
           A manager provisions this iPad in the back office (Register Activity → POS devices) and
           enters the device id + one-time key here. The key is stored only on this device.
         </p>
@@ -855,9 +866,9 @@ function SetupScreen({ onProvisioned }: { onProvisioned: (c: DeviceCreds) => voi
             base64url and iOS silently capitalizes the first letter and
             autocorrects typed keys, which the server then (correctly)
             rejects. spellCheck alone does not stop either behavior. */}
-        <label className="mt-6 block text-xs font-semibold uppercase tracking-wide text-neutral-400">Device id</label>
+        <label className="mt-6 block text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">Device id</label>
         <input
-          className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-3 font-mono text-sm"
+          className="mt-1 w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-3 font-mono text-sm"
           value={deviceId}
           onChange={(e) => setDeviceId(e.target.value)}
           autoComplete="off"
@@ -865,9 +876,9 @@ function SetupScreen({ onProvisioned }: { onProvisioned: (c: DeviceCreds) => voi
           autoCorrect="off"
           spellCheck={false}
         />
-        <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-neutral-400">Device key</label>
+        <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">Device key</label>
         <input
-          className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-3 font-mono text-sm"
+          className="mt-1 w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-3 font-mono text-sm"
           value={deviceKey}
           onChange={(e) => setDeviceKey(e.target.value)}
           autoComplete="off"
@@ -881,7 +892,7 @@ function SetupScreen({ onProvisioned }: { onProvisioned: (c: DeviceCreds) => voi
           type="button"
           onClick={() => void verify()}
           disabled={busy || !deviceId.trim() || !deviceKey.trim()}
-          className="mt-6 w-full rounded-xl bg-emerald-600 py-3 text-base font-semibold text-white disabled:opacity-40"
+          className="pos-tile mt-6 w-full rounded-xl bg-[var(--pos-accent)] py-3 text-base font-bold text-[var(--pos-accent-ink)] disabled:opacity-40"
         >
           {busy ? "Verifying…" : "Verify & save"}
         </button>
@@ -969,7 +980,9 @@ function LockScreen({
   };
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-neutral-950 p-6 text-neutral-100">
+    <main className="pos-shell flex min-h-screen flex-col items-center justify-center p-6">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/pos/wordmark.png" alt="Greenway Marijuana" className="mb-5 h-10 w-auto opacity-90" />
       <StatusChips online={online} pendingCount={pendingCount} name={creds.name} />
       {banner ? (
         <button type="button" onClick={onClearBanner} className="mb-4 max-w-md rounded-lg bg-amber-950/70 px-4 py-2 text-sm text-amber-200">
@@ -981,7 +994,7 @@ function LockScreen({
         {[0, 1, 2, 3, 4, 5].map((i) => (
           <span
             key={i}
-            className={`h-4 w-4 rounded-full ${i < pin.length ? "bg-emerald-400" : "bg-neutral-700"}`}
+            className={`h-4 w-4 rounded-full ${i < pin.length ? "bg-[var(--pos-accent)]" : "bg-[var(--pos-surface-hover)]"}`}
           />
         ))}
       </div>
@@ -994,7 +1007,7 @@ function LockScreen({
               type="button"
               onClick={() => void submit()}
               disabled={pin.length < 4 || busy}
-              className="h-16 w-20 rounded-xl bg-emerald-600 text-lg font-bold text-white disabled:opacity-40"
+              className="pos-tile h-16 w-20 rounded-xl bg-[var(--pos-accent)] text-lg font-bold text-[var(--pos-accent-ink)] disabled:opacity-40"
             >
               {busy ? "…" : "GO"}
             </button>
@@ -1003,7 +1016,7 @@ function LockScreen({
               key={k}
               type="button"
               onClick={() => press(k)}
-              className="h-16 w-20 rounded-xl bg-neutral-800 text-xl font-semibold active:bg-neutral-700"
+              className="pos-tile h-16 w-20 rounded-xl border border-[var(--pos-border)] bg-[var(--pos-surface-2)] text-xl font-semibold active:bg-[var(--pos-surface-hover)]"
             >
               {k}
             </button>
@@ -1017,7 +1030,7 @@ function LockScreen({
           setPin("");
           setError(null);
         }}
-        className="mt-6 text-sm text-neutral-400 underline"
+        className="mt-6 text-sm text-[var(--pos-text-muted)] underline"
       >
         {mode === "unlock" ? "Clock in / out instead" : "Back to unlock"}
       </button>
@@ -1109,13 +1122,25 @@ function HomeScreen({
   }, [lastSyncAt]);
 
   return (
-    <main className="flex min-h-screen flex-col bg-neutral-950 p-6 text-neutral-100">
-      <header className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold">{creds.name}</h1>
-          <p className="text-sm text-neutral-400">
-            {employee.fullName} ({employee.jobRole}) · {employee.clockedIn ? "clocked in" : "NOT clocked in"}
-          </p>
+    <main className="pos-shell flex min-h-screen flex-col p-6">
+      {/* Header: store identity + who's on this register. Square-style: the
+          brand owns the top-left, the live status chips own the top-right. */}
+      <header className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/pos/wordmark.png" alt="Greenway Marijuana" className="h-8 w-auto opacity-90" />
+          <div className="hidden h-9 w-px bg-[var(--pos-border-strong)] sm:block" aria-hidden />
+          <div>
+            <h1 className="text-lg font-semibold leading-tight">{creds.name}</h1>
+            <p className="text-sm text-[var(--pos-text-muted)]">
+              {employee.fullName} ({employee.jobRole}) ·{" "}
+              {employee.clockedIn ? (
+                <span className="font-semibold text-[var(--pos-accent)]">clocked in</span>
+              ) : (
+                <span className="font-semibold text-amber-300">NOT clocked in</span>
+              )}
+            </p>
+          </div>
         </div>
         <StatusChips online={online} pendingCount={pendingCount} name={null} />
       </header>
@@ -1126,75 +1151,113 @@ function HomeScreen({
         </button>
       ) : null}
 
-      <section className="mt-6 grid gap-4 sm:grid-cols-2">
-        <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-5">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-400">Cash drawer</h2>
+      {/* Status strip — drawer / sync / menu / queue at a glance, each with a
+          colored state dot and its actions right where the status is. */}
+      <section className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-4">
+          <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
+            <span className={`h-2 w-2 rounded-full ${drawer ? "bg-[var(--pos-accent)]" : "bg-amber-400"}`} aria-hidden />
+            Cash drawer
+          </h2>
           {drawer ? (
             <>
               <p className="mt-2 text-sm">
-                Open session for {drawer.businessDay}
-                {drawer.openedAt ? ` since ${new Date(drawer.openedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}` : ""}.
+                Open for {drawer.businessDay}
+                {drawer.openedAt ? ` since ${new Date(drawer.openedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}` : ""}
               </p>
-              <div className="mt-3 flex gap-2">
+              <div className="mt-3 flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={() => onTill("drop")}
-                  className="rounded-lg bg-neutral-800 px-4 py-2 text-sm font-semibold"
+                  className="pos-tile rounded-lg border border-[var(--pos-border)] bg-[var(--pos-surface-2)] px-3 py-2 text-sm font-semibold"
                 >
                   Cash drop
                 </button>
                 <button
                   type="button"
                   onClick={() => onTill("close")}
-                  className="rounded-lg bg-neutral-800 px-4 py-2 text-sm font-semibold"
+                  className="pos-tile rounded-lg border border-[var(--pos-border)] bg-[var(--pos-surface-2)] px-3 py-2 text-sm font-semibold"
                 >
-                  Close drawer (blind count)
+                  Close (blind count)
                 </button>
               </div>
             </>
           ) : (
             <>
               <p className="mt-2 text-sm text-amber-300">
-                No open drawer on this register — count in your starting float before ringing sales.
+                No open drawer — count in your starting float before ringing sales.
               </p>
               <button
                 type="button"
                 onClick={() => onTill("open")}
-                className="mt-3 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white"
+                className="pos-tile mt-3 rounded-lg bg-[var(--pos-accent)] px-3 py-2 text-sm font-bold text-[var(--pos-accent-ink)]"
               >
                 Count in drawer
               </button>
             </>
           )}
         </div>
-        <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-5">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-400">Sync</h2>
+        <div className="rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-4">
+          <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
+            <span
+              className={`h-2 w-2 rounded-full ${!online ? "bg-red-400" : pendingCount > 0 ? "bg-amber-400" : "bg-[var(--pos-accent)]"}`}
+              aria-hidden
+            />
+            Sync
+          </h2>
           <p className="mt-2 text-sm">
             {pendingCount} pending · last sync {syncLabel}
-            {rejectedCount > 0 ? ` · ${rejectedCount} rejected (see back office)` : ""}
           </p>
-          <p className="mt-1 text-xs text-neutral-500">
-            Menu:{" "}
+          <button
+            type="button"
+            onClick={onSyncNow}
+            className="pos-tile mt-3 rounded-lg border border-[var(--pos-border)] bg-[var(--pos-surface-2)] px-3 py-2 text-sm font-semibold"
+          >
+            Sync now
+          </button>
+        </div>
+        <div className="rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-4">
+          <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
+            <span className={`h-2 w-2 rounded-full ${menuReady ? "bg-[var(--pos-accent)]" : "bg-amber-400"}`} aria-hidden />
+            Menu
+          </h2>
+          <p className="mt-2 text-sm">
             {menuFetchedAt
-              ? `downloaded ${new Date(menuFetchedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`
-              : "not downloaded yet"}
+              ? `Downloaded ${new Date(menuFetchedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`
+              : "Not downloaded yet"}
           </p>
           {lowStock > 0 ? (
             <p className="mt-1 text-xs font-semibold text-amber-300">
               {lowStock} item{lowStock === 1 ? "" : "s"} running low — flagged on the sale screen
             </p>
           ) : null}
-          <div className="mt-3 flex gap-2">
-            <button type="button" onClick={onSyncNow} className="rounded-lg bg-neutral-800 px-4 py-2 text-sm font-semibold">
-              Sync now
-            </button>
-            <button type="button" onClick={onRefreshMenu} className="rounded-lg bg-neutral-800 px-4 py-2 text-sm font-semibold">
-              Refresh menu
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={onRefreshMenu}
+            className="pos-tile mt-3 rounded-lg border border-[var(--pos-border)] bg-[var(--pos-surface-2)] px-3 py-2 text-sm font-semibold"
+          >
+            Refresh menu
+          </button>
+        </div>
+        <div className="rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-4">
+          <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
+            <span className={`h-2 w-2 rounded-full ${rejectedCount > 0 ? "bg-red-400" : "bg-[var(--pos-accent)]"}`} aria-hidden />
+            Queue health
+          </h2>
+          {rejectedCount > 0 ? (
+            <p className="mt-2 text-sm font-semibold text-red-300">
+              {rejectedCount} rejected event{rejectedCount === 1 ? "" : "s"} — a manager reviews these in the back office.
+            </p>
+          ) : (
+            <p className="mt-2 text-sm text-[var(--pos-text-muted)]">
+              All clear — nothing rejected on this device.
+            </p>
+          )}
         </div>
       </section>
 
+      {/* Big action tiles — color-coded to the brand: green sells, gold hands
+          off website orders, orange is the time clock, charcoal locks up. */}
       <section className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <button
           type="button"
@@ -1209,12 +1272,13 @@ function HomeScreen({
                   ? "Menu not downloaded yet — connect to the internet once"
                   : undefined
           }
-          className="rounded-2xl bg-emerald-600 p-8 text-left text-xl font-bold text-white disabled:opacity-40"
+          className="pos-tile rounded-2xl bg-[var(--pos-accent)] p-6 text-left text-xl font-bold text-[var(--pos-accent-ink)] shadow-[var(--admin-shadow)] disabled:opacity-40"
         >
-          Start sale
-          <span className="mt-1 block text-sm font-normal text-emerald-100">
-            ID check → cart → cash tender
+          <span className="block text-3xl" aria-hidden>
+            🛒
           </span>
+          <span className="mt-2 block">Start sale</span>
+          <span className="mt-1 block text-sm font-semibold opacity-80">ID check → cart → cash tender</span>
         </button>
         <button
           type="button"
@@ -1227,15 +1291,18 @@ function HomeScreen({
                 ? "Open a drawer first — pickup orders take cash"
                 : "Pickup orders need a connection — the queue lives on the server"
           }
-          className="relative rounded-2xl bg-sky-700 p-8 text-left text-xl font-bold text-white disabled:opacity-40"
+          className="pos-tile relative rounded-2xl border border-[var(--pos-gold-border)] bg-[var(--pos-gold-soft)] p-6 text-left text-xl font-bold text-[var(--pos-gold)] disabled:opacity-40"
         >
-          Pickup orders
+          <span className="block text-3xl" aria-hidden>
+            🛍️
+          </span>
+          <span className="mt-2 block">Pickup orders</span>
           {typeof pickupCount === "number" && pickupCount > 0 ? (
-            <span className="absolute right-4 top-4 flex h-9 min-w-9 items-center justify-center rounded-full bg-white px-2 text-base font-extrabold text-sky-700">
+            <span className="absolute right-4 top-4 flex h-9 min-w-9 items-center justify-center rounded-full bg-[var(--pos-gold)] px-2 text-base font-extrabold text-black">
               {pickupCount}
             </span>
           ) : null}
-          <span className="mt-1 block text-sm font-normal text-sky-100">
+          <span className="mt-1 block text-sm font-normal text-[var(--pos-text-muted)]">
             {typeof pickupCount === "number"
               ? pickupCount === 0
                 ? "No website orders waiting"
@@ -1243,13 +1310,27 @@ function HomeScreen({
               : "Website orders — ID check at handover"}
           </span>
         </button>
-        <button type="button" onClick={onPunch} className="rounded-2xl bg-neutral-800 p-8 text-left text-xl font-semibold">
-          {employee.clockedIn ? "Clock out" : "Clock in"}
-          <span className="mt-1 block text-sm font-normal text-neutral-400">Recorded as a register punch</span>
+        <button
+          type="button"
+          onClick={onPunch}
+          className="pos-tile rounded-2xl border border-[var(--pos-orange-border)] bg-[var(--pos-orange-soft)] p-6 text-left text-xl font-semibold text-[var(--pos-orange)]"
+        >
+          <span className="block text-3xl" aria-hidden>
+            ⏱️
+          </span>
+          <span className="mt-2 block">{employee.clockedIn ? "Clock out" : "Clock in"}</span>
+          <span className="mt-1 block text-sm font-normal text-[var(--pos-text-muted)]">Recorded as a register punch</span>
         </button>
-        <button type="button" onClick={onLock} className="rounded-2xl bg-neutral-800 p-8 text-left text-xl font-semibold">
-          Lock register
-          <span className="mt-1 block text-sm font-normal text-neutral-400">Auto-locks after 2 minutes idle</span>
+        <button
+          type="button"
+          onClick={onLock}
+          className="pos-tile rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface-2)] p-6 text-left text-xl font-semibold"
+        >
+          <span className="block text-3xl" aria-hidden>
+            🔒
+          </span>
+          <span className="mt-2 block">Lock register</span>
+          <span className="mt-1 block text-sm font-normal text-[var(--pos-text-muted)]">Auto-locks after 2 minutes idle</span>
         </button>
       </section>
 
@@ -1269,14 +1350,14 @@ function HomeScreen({
               type="button"
               onClick={onResumeHold}
               disabled={!onResumeHold || !drawer || !employee.clockedIn || !menuReady}
-              className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-40"
+              className="pos-tile rounded-lg bg-amber-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-40"
             >
               Resume
             </button>
             <button
               type="button"
               onClick={onDiscardHold}
-              className="rounded-lg bg-neutral-800 px-4 py-2 text-sm font-semibold text-neutral-300"
+              className="pos-tile rounded-lg border border-[var(--pos-border)] bg-[var(--pos-surface-2)] px-4 py-2 text-sm font-semibold text-[var(--pos-text-muted)]"
             >
               Discard
             </button>
@@ -1290,10 +1371,10 @@ function HomeScreen({
           onClick={onReprintLast}
           disabled={!onReprintLast}
           title={onReprintLast ? undefined : "No receipt stored yet — completes with the first sale"}
-          className="rounded-2xl bg-neutral-900 border border-neutral-800 p-5 text-left text-base font-semibold disabled:opacity-40"
+          className="pos-tile rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-5 text-left text-base font-semibold disabled:opacity-40"
         >
-          Reprint last receipt
-          <span className="mt-1 block text-xs font-normal text-neutral-500">
+          <span aria-hidden>🧾</span> Reprint last receipt
+          <span className="mt-1 block text-xs font-normal text-[var(--pos-text-faint)]">
             {lastReceipt
               ? `Receipt ${receiptNumber(lastReceipt.saleClientUuid)} · ${ageLabel(lastReceipt.soldAtIso, new Date())} — prints without opening the drawer`
               : "Available after the first sale on this device"}
@@ -1304,20 +1385,20 @@ function HomeScreen({
           onClick={onNoSale}
           disabled={!drawer}
           title={!drawer ? "Open a drawer first" : undefined}
-          className="rounded-2xl bg-neutral-900 border border-neutral-800 p-5 text-left text-base font-semibold disabled:opacity-40"
+          className="pos-tile rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-5 text-left text-base font-semibold disabled:opacity-40"
         >
-          No sale — open drawer
-          <span className="mt-1 block text-xs font-normal text-neutral-500">
+          <span aria-hidden>💵</span> No sale — open drawer
+          <span className="mt-1 block text-xs font-normal text-[var(--pos-text-faint)]">
             Needs a reason + a manager&rsquo;s PIN; prints an audit slip, then the drawer pops
           </span>
         </button>
         <button
           type="button"
           onClick={onDayReport}
-          className="rounded-2xl bg-neutral-900 border border-neutral-800 p-5 text-left text-base font-semibold"
+          className="pos-tile rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-5 text-left text-base font-semibold"
         >
-          Day report (X/Z)
-          <span className="mt-1 block text-xs font-normal text-neutral-500">
+          <span aria-hidden>📊</span> Day report (X/Z)
+          <span className="mt-1 block text-xs font-normal text-[var(--pos-text-faint)]">
             Manager PIN required — prints the day&rsquo;s totals; never pops the drawer
           </span>
         </button>
@@ -1326,10 +1407,10 @@ function HomeScreen({
           onClick={onVoidSale}
           disabled={!onVoidSale}
           title={onVoidSale ? undefined : "Voids need a connection — the server reverses the sale"}
-          className="rounded-2xl bg-neutral-900 border border-neutral-800 p-5 text-left text-base font-semibold disabled:opacity-40"
+          className="pos-tile rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-5 text-left text-base font-semibold disabled:opacity-40"
         >
-          Void a sale (today)
-          <span className="mt-1 block text-xs font-normal text-neutral-500">
+          <span aria-hidden>↩️</span> Void a sale (today)
+          <span className="mt-1 block text-xs font-normal text-[var(--pos-text-faint)]">
             Same-day mistakes only — manager PIN; restocks stock and returns the cash. Older sales: returns desk
           </span>
         </button>
@@ -1338,16 +1419,16 @@ function HomeScreen({
           onClick={onLeaderboard}
           disabled={!onLeaderboard}
           title={onLeaderboard ? undefined : "The leaderboard needs a connection — it reads the store's ledger"}
-          className="rounded-2xl bg-neutral-900 border border-neutral-800 p-5 text-left text-base font-semibold disabled:opacity-40"
+          className="pos-tile rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-5 text-left text-base font-semibold disabled:opacity-40"
         >
-          Leaderboard 🏆
-          <span className="mt-1 block text-xs font-normal text-neutral-500">
+          <span aria-hidden>🏆</span> Leaderboard
+          <span className="mt-1 block text-xs font-normal text-[var(--pos-text-faint)]">
             Today&rsquo;s top budtenders by sales + this week&rsquo;s champions — whole store competes
           </span>
         </button>
       </section>
 
-      <footer className="mt-auto pt-8 text-center text-xs text-neutral-600">
+      <footer className="mt-auto pt-8 text-center text-xs text-[var(--pos-text-faint)]">
         Every action is tied to the person whose PIN unlocked the register. Sales re-run the full
         compliance gate on the server — an offline sale that fails there goes to the manager
         exception queue, never silently through.
@@ -2510,11 +2591,23 @@ function TillModal({
 function StatusChips({ online, pendingCount, name }: { online: boolean; pendingCount: number; name: string | null }) {
   return (
     <div className="mb-4 flex items-center gap-2 text-xs">
-      {name ? <span className="rounded-full bg-neutral-800 px-3 py-1 text-neutral-300">{name}</span> : null}
-      <span className={`rounded-full px-3 py-1 font-semibold ${online ? "bg-emerald-950 text-emerald-300" : "bg-red-950 text-red-300"}`}>
+      {name ? (
+        <span className="rounded-full border border-[var(--pos-border)] bg-[var(--pos-surface-2)] px-3 py-1 text-[var(--pos-text-muted)]">
+          {name}
+        </span>
+      ) : null}
+      <span
+        className={`rounded-full border px-3 py-1 font-semibold ${
+          online
+            ? "border-[var(--pos-accent-border)] bg-[var(--pos-accent-soft)] text-[var(--pos-accent)]"
+            : "border-red-900 bg-red-950 text-red-300"
+        }`}
+      >
         {online ? "Online" : "Offline"}
       </span>
-      <span className="rounded-full bg-neutral-800 px-3 py-1 text-neutral-300">{pendingCount} queued</span>
+      <span className="rounded-full border border-[var(--pos-border)] bg-[var(--pos-surface-2)] px-3 py-1 text-[var(--pos-text-muted)]">
+        {pendingCount} queued
+      </span>
     </div>
   );
 }
