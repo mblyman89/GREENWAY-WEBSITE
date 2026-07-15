@@ -294,12 +294,13 @@ export async function buildCcrsSaleCsv(fromISO: string, toISO: string): Promise<
     price_minor_units: number;
     regular_price_minor_units: number | null;
     ccrs_inventory_external_id: string | null;
+    category: string | null;
   };
   const lines = await chunkedIn<string, CcrsLineRow>(orderIds, async (chunk, from, to) => {
     const { data } = await admin
       .from("order_lines")
       .select(
-        "id, order_id, product_id, quantity, price_minor_units, regular_price_minor_units, ccrs_inventory_external_id",
+        "id, order_id, product_id, quantity, price_minor_units, regular_price_minor_units, ccrs_inventory_external_id, category",
       )
       .in("order_id", chunk)
       .order("id", { ascending: true })
@@ -342,7 +343,12 @@ export async function buildCcrsSaleCsv(fromISO: string, toISO: string): Promise<
     // Taxable base = post-discount price × qty.
     const baseCents = soldUnit * qty;
 
-    const category = (l.product_id ? categoryLookup.get(l.product_id) : "") || "";
+    // Category: menu catalog first (existing behavior), then the line's own
+    // placement-time snapshot (migration 0096; POS B39 keypad lines carry a
+    // reserved "pos-custom-*" key that never appears in the catalog, and an
+    // empty category is conservatively treated as cannabis - which would
+    // wrongly charge excise on a merch keypad line).
+    const category = ((l.product_id ? categoryLookup.get(l.product_id) : "") || l.category?.trim() || "");
     const isCannabis = isCannabisCategory(category, cannabisSet);
 
     // S-8: a line covered by a WAC 314-55-090(2) exempt-sale record reports
