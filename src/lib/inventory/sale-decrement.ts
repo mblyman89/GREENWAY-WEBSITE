@@ -38,6 +38,7 @@ import {
   type LotForDecrement,
 } from "@/lib/inventory/sale-decrement-core";
 import { deriveInventoryExternalId } from "@/lib/compliance/ccrs-identifiers";
+import { isCustomLineProductId } from "@/lib/pos/custom-sale-core";
 
 const EVENT_TYPE = "inventory_decremented";
 
@@ -67,13 +68,18 @@ export async function decrementInventoryForOrder(orderId: string): Promise<void>
           product_name: string;
           quantity: number;
         }[]
-      | null) ?? []).map((r) => ({
-      lineId: r.id,
-      productId: r.product_id,
-      variantId: r.variant_id,
-      productName: r.product_name,
-      quantity: r.quantity,
-    }));
+      | null) ?? [])
+      // POS B39: keypad custom lines (reserved "pos-custom-*" keys) track no
+      // stock by design - skip them so they never emit UNMATCHED noise or
+      // burn lot inventory that was never behind them.
+      .filter((r) => !isCustomLineProductId(r.product_id))
+      .map((r) => ({
+        lineId: r.id,
+        productId: r.product_id,
+        variantId: r.variant_id,
+        productName: r.product_name,
+        quantity: r.quantity,
+      }));
     if (lines.length === 0) return;
 
     const productKeys = [...new Set(lines.map((l) => l.productId).filter((k): k is string => !!k))];

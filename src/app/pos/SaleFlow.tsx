@@ -41,6 +41,15 @@ import {
 import { resolveScan } from "@/lib/pos/scan-to-cart-core";
 import { categoryColorIndex, filterMenuProducts, menuCategoryChips, CATEGORY_COLOR_COUNT } from "@/lib/pos/sale-grid-core";
 import {
+  buildCustomProduct,
+  keypadAppend,
+  keypadBackspace,
+  keypadClear,
+  CUSTOM_SALE_CATEGORIES,
+  MAX_CUSTOM_NOTE_LENGTH,
+  type CustomSaleCategory,
+} from "@/lib/pos/custom-sale-core";
+import {
   applyPriceOverrides,
   overrideFloorMinor,
   validateOverrideRequest,
@@ -943,6 +952,108 @@ function IdGateScreen({
 }
 
 // ---------------------------------------------------------------------------
+// B39 — quick-amount keypad (Square's Keypad tab, cannabis-lawful edition)
+// ---------------------------------------------------------------------------
+
+/**
+ * Custom amounts are restricted to NON-CANNABIS categories (merch /
+ * accessories) — every cannabis line must map to real menu inventory for
+ * CCRS, excise, and purchase limits (see custom-sale-core.ts). The keypad
+ * works like a cash register: digits shift in from the right.
+ */
+function KeyButton({ label, onPress, wide }: { label: string; onPress: () => void; wide?: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={onPress}
+      className={`pos-tile rounded-xl border border-[var(--pos-border)] bg-[var(--pos-surface-2)] py-4 text-xl font-bold text-[var(--pos-text)] ${wide ? "col-span-2" : ""}`}
+    >
+      {label}
+    </button>
+  );
+}
+
+function KeypadPanel({ onAdd }: { onAdd: (product: PosMenuProduct) => void }) {
+  const [amountMinor, setAmountMinor] = useState(0);
+  const [kpCategory, setKpCategory] = useState<CustomSaleCategory>("merch");
+  const [note, setNote] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const addLine = () => {
+    setError(null);
+    const built = buildCustomProduct({
+      category: kpCategory,
+      amountMinor,
+      note,
+      uid: crypto.randomUUID(),
+    });
+    if (!built.ok) {
+      setError(built.errors.join(" "));
+      return;
+    }
+    onAdd(built.product);
+    setAmountMinor(keypadClear());
+    setNote("");
+  };
+
+  return (
+    <div className="mx-auto w-full max-w-sm">
+      <p className="rounded-lg border border-[var(--pos-border)] bg-[var(--pos-surface-2)] px-3 py-2 text-xs text-[var(--pos-text-muted)]">
+        Non-cannabis only (merch &amp; accessories) — cannabis must be rung from the menu so
+        inventory, excise, and limits stay exact.
+      </p>
+      <div className="mt-3 rounded-xl border border-[var(--pos-accent-border)] bg-[var(--pos-accent-soft)] px-4 py-3 text-center">
+        <span className="text-4xl font-bold tabular-nums text-[var(--pos-accent)]">{money(amountMinor)}</span>
+      </div>
+      <div className="mt-3 flex gap-2">
+        {CUSTOM_SALE_CATEGORIES.map((c) => (
+          <button
+            key={c}
+            type="button"
+            onClick={() => setKpCategory(c)}
+            className={`flex-1 rounded-full px-3 py-2 text-sm font-semibold capitalize ${
+              kpCategory === c
+                ? "bg-[var(--pos-accent)] text-[var(--pos-accent-ink)]"
+                : "border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] text-[var(--pos-text-muted)]"
+            }`}
+          >
+            {c}
+          </button>
+        ))}
+      </div>
+      <input
+        value={note}
+        maxLength={MAX_CUSTOM_NOTE_LENGTH}
+        onChange={(e) => setNote(e.target.value)}
+        placeholder="What is it? (optional — prints on the receipt)"
+        className="mt-3 w-full rounded-xl border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] p-3 text-sm"
+      />
+      <div className="mt-3 grid grid-cols-3 gap-2">
+        {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((d) => (
+          <KeyButton key={d} label={d} onPress={() => setAmountMinor((a) => keypadAppend(a, Number(d)))} />
+        ))}
+        <KeyButton label="C" onPress={() => setAmountMinor(keypadClear())} />
+        <KeyButton label="0" onPress={() => setAmountMinor((a) => keypadAppend(a, 0))} />
+        <KeyButton label="⌫" onPress={() => setAmountMinor((a) => keypadBackspace(a))} />
+      </div>
+      {error ? (
+        <p className="mt-3 rounded-lg border border-red-900/60 bg-red-950/60 px-3 py-2 text-xs font-semibold text-red-300">
+          {error}
+        </p>
+      ) : null}
+      <button
+        type="button"
+        onClick={addLine}
+        disabled={amountMinor < 1}
+        className="pos-tile mt-3 w-full rounded-xl bg-[var(--pos-accent)] py-3 text-base font-bold text-[var(--pos-accent-ink)] disabled:opacity-40"
+      >
+        Add to check
+      </button>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Step 2 — cart with live limit meter
 // ---------------------------------------------------------------------------
 
@@ -987,6 +1098,8 @@ function CartScreen({
   const [query, setQuery] = useState("");
   // B36 — the active category filter chip (null = All).
   const [category, setCategory] = useState<string | null>(null);
+  // B39 — which browse surface is showing: the item grid or the keypad.
+  const [browseTab, setBrowseTab] = useState<"menu" | "keypad">("menu");
   // B37 — the check line whose in-place editor is open (Toast-style: tap a
   // line to edit; the row expands with qty stepper / remove / override).
   const [expandedLine, setExpandedLine] = useState<string | null>(null);
@@ -1103,6 +1216,36 @@ function CartScreen({
         {/* B36 — product browser: prominent scan/search bar, category filter
             chips (Toast groups), then a Square/Shopify-style tile grid. */}
         <section className="rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-4">
+          {/* B39 — browse surface tabs: the item grid (default) and the
+              quick-amount keypad (Square's Keypad, non-cannabis only). */}
+          <div className="mb-3 flex gap-2">
+            <button
+              type="button"
+              onClick={() => setBrowseTab("menu")}
+              className={`rounded-full px-4 py-2 text-sm font-semibold ${
+                browseTab === "menu"
+                  ? "bg-[var(--pos-accent)] text-[var(--pos-accent-ink)]"
+                  : "border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] text-[var(--pos-text-muted)]"
+              }`}
+            >
+              Menu
+            </button>
+            <button
+              type="button"
+              onClick={() => setBrowseTab("keypad")}
+              className={`rounded-full px-4 py-2 text-sm font-semibold ${
+                browseTab === "keypad"
+                  ? "bg-[var(--pos-accent)] text-[var(--pos-accent-ink)]"
+                  : "border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] text-[var(--pos-text-muted)]"
+              }`}
+            >
+              Keypad
+            </button>
+          </div>
+          {browseTab === "keypad" ? (
+            <KeypadPanel onAdd={(p) => setCart(addToCart(cart, p))} />
+          ) : (
+          <>
           <div className="relative">
             <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-lg" aria-hidden>
               🔍
@@ -1225,6 +1368,8 @@ function CartScreen({
               <li className="col-span-full px-2 py-6 text-center text-sm text-[var(--pos-text-faint)]">No products match.</li>
             ) : null}
           </ul>
+          </>
+          )}
         </section>
 
         {/* B37 — the check (Toast-style): tap a line to edit it in place; the
