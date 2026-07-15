@@ -55,6 +55,16 @@ export type PosReceiptInput = {
   medicalSale: boolean;
   tenderedMinor: number;
   changeMinor: number;
+  /**
+   * B33 cash rounding — the nickel adjustment applied to the amount due
+   * (dueMinor − totalMinor; never 0 when present). TOTAL stays pre-rounded
+   * (tax was computed on it, per WA DOR guidance); the receipt prints the
+   * adjustment as its OWN line plus the resulting CASH DUE row, the way
+   * Square and Toast disclose it. Omitted on non-rounded sales.
+   */
+  roundingAdjustmentMinor?: number;
+  /** B33 — cash amount due after rounding (multiple of 5¢). */
+  roundedDueMinor?: number;
   headerText?: string | null;
   footerText?: string | null;
   /**
@@ -133,6 +143,19 @@ export function buildPosReceiptHtml(input: PosReceiptInput): string {
   }
   totals.push(
     `<tr class="t"><td class="n">TOTAL</td><td class="a">${formatMoneyMinor(input.totalMinor)}</td></tr>`,
+  );
+  // B33 — cash rounding printed as its OWN line + the resulting CASH DUE,
+  // exactly the Square/Toast disclosure pattern. Tax above was computed on
+  // the pre-rounded TOTAL (WA DOR interim guidance).
+  const adj = input.roundingAdjustmentMinor ?? 0;
+  if (adj !== 0 && typeof input.roundedDueMinor === "number") {
+    const sign = adj > 0 ? "" : "-";
+    totals.push(
+      `<tr><td class="n">Cash rounding</td><td class="a">${sign}${formatMoneyMinor(Math.abs(adj))}</td></tr>`,
+      `<tr><td class="n">Cash due</td><td class="a">${formatMoneyMinor(input.roundedDueMinor)}</td></tr>`,
+    );
+  }
+  totals.push(
     `<tr><td class="n">Cash tendered</td><td class="a">${formatMoneyMinor(input.tenderedMinor)}</td></tr>`,
     `<tr><td class="n">Change</td><td class="a">${formatMoneyMinor(input.changeMinor)}</td></tr>`,
   );
@@ -444,6 +467,29 @@ export function __runPosReceiptCoreTests(): void {
   // Promo savings row appears when > 0.
   const promo = buildPosReceiptHtml({ ...base, savingsMinor: 200 });
   ok(promo.includes("You saved") && promo.includes("-$2.00"), "promo savings row");
+
+  // B33 — cash rounding: separate line + cash due; TOTAL stays pre-rounded.
+  const roundedDown = buildPosReceiptHtml({
+    ...base,
+    totalMinor: 2926,
+    roundingAdjustmentMinor: -1,
+    roundedDueMinor: 2925,
+    tenderedMinor: 3000,
+    changeMinor: 75,
+  });
+  ok(roundedDown.includes("Cash rounding") && roundedDown.includes("-$0.01"), "rounding line with sign");
+  ok(roundedDown.includes("Cash due") && roundedDown.includes("$29.25"), "cash-due row after rounding");
+  ok(roundedDown.includes("$29.26"), "TOTAL stays pre-rounded on paper");
+  const roundedUp = buildPosReceiptHtml({
+    ...base,
+    totalMinor: 2923,
+    roundingAdjustmentMinor: 2,
+    roundedDueMinor: 2925,
+    tenderedMinor: 3000,
+    changeMinor: 75,
+  });
+  ok(roundedUp.includes("Cash rounding") && roundedUp.includes("$0.02"), "positive rounding printed");
+  ok(!buildPosReceiptHtml(base).includes("Cash rounding"), "no rounding line on exact-penny sales");
 
   // B13 customization: address block, served-by, savings toggle.
   const custom = buildPosReceiptHtml({

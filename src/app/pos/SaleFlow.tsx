@@ -48,6 +48,7 @@ import {
 } from "@/lib/pos/price-override-core";
 import { dollarsToMinor } from "@/lib/pos/till-core";
 import { changeBreakdown, smartTenderSuggestions } from "@/lib/pos/change-calc-core";
+import { roundCashDue, normalizePosCashRoundingConfig } from "@/lib/pos/cash-rounding-core";
 import { stockSignal, cartStockWarnings } from "@/lib/pos/low-stock-core";
 import {
   validateCardCapture,
@@ -313,6 +314,9 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
                 }
               : {}),
             ...(member ? { loyalty: { customerId: member.customerId, memberLabel: member.label } } : {}),
+            // B33 — the owner's cash-rounding policy from the bundle decides
+            // the amount due; totals stay pre-rounded (tax on original price).
+            rounding: normalizePosCashRoundingConfig(bundle.rounding),
           });
           if (!built.ok) return built.errors.join(" ");
           const saleUuid = onEnqueue("sale", built.payload as unknown as Record<string, unknown>);
@@ -346,6 +350,14 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
             medicalSale: isMedical,
             tenderedMinor,
             changeMinor: built.changeMinor,
+            // B33 — cash-rounding disclosure: separate line + cash due, only
+            // when the policy actually adjusted this sale.
+            ...(built.roundingAdjustmentMinor !== 0
+              ? {
+                  roundingAdjustmentMinor: built.roundingAdjustmentMinor,
+                  roundedDueMinor: built.dueMinor,
+                }
+              : {}),
             // B14 — member block: points ESTIMATE from the bundle's earn rate
             // (floor of pre-tax dollars × rate; authoritative accrual runs
             // server-side at completion). Hidden by the owner's toggle.
@@ -1767,13 +1779,21 @@ function TenderScreen({
     [cart, bundle, medicalCard, overrides],
   );
   const total = priced.totals.totalMinorUnits;
+  // B33 — the owner's cash-rounding policy decides the amount DUE at the
+  // drawer. TOTAL (and its tax) stays pre-rounded per WA DOR guidance; the
+  // adjustment is shown as its own line, Square/Toast style.
+  const roundingCfg = useMemo(() => normalizePosCashRoundingConfig(bundle.rounding), [bundle.rounding]);
+  const rounded = useMemo(() => roundCashDue(total, roundingCfg.mode), [total, roundingCfg.mode]);
+  const due = rounded?.dueMinor ?? total;
+  const roundingAdj = rounded?.adjustmentMinor ?? 0;
   const [tendered, setTendered] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   // B31 — the amounts customers actually hand over: exact, next whole
   // dollar, then $5/$10/$20 steps plus the $50/$100 bills, deduplicated.
-  const suggestions = useMemo(() => smartTenderSuggestions(total), [total]);
-  const change = tendered - total;
+  // B33 — chips and count-back run off the ROUNDED due amount.
+  const suggestions = useMemo(() => smartTenderSuggestions(due), [due]);
+  const change = tendered - due;
 
   const pay = () => {
     const err = onPaid(tendered);
@@ -1782,8 +1802,16 @@ function TenderScreen({
 
   return (
     <Frame title="Cash tender" onCancel={onCancel}>
-      <p className="text-4xl font-bold">{money(total)}</p>
-      <p className="mt-1 text-sm text-neutral-400">Total due — cash only at this store.</p>
+      <p className="text-4xl font-bold">{money(due)}</p>
+      <p className="mt-1 text-sm text-neutral-400">
+        {roundingAdj !== 0 ? "Cash due — cash only at this store." : "Total due — cash only at this store."}
+      </p>
+      {roundingAdj !== 0 ? (
+        <p className="mt-1 text-sm text-neutral-400">
+          Total {money(total)} · cash rounding {roundingAdj > 0 ? "+" : "−"}
+          {money(Math.abs(roundingAdj))} — tax is charged on the pre-rounded total.
+        </p>
+      ) : null}
       {medicalCard && (priced.med?.medicalSavingsMinor ?? 0) > 0 ? (
         <p className="mt-1 text-sm font-semibold text-emerald-300">
           Medical savings −{money(priced.med?.medicalSavingsMinor ?? 0)} (tax exempt)
@@ -1822,13 +1850,13 @@ function TenderScreen({
       <p className={`mt-6 text-2xl font-bold ${change >= 0 ? "text-emerald-300" : "text-neutral-600"}`}>
         {change >= 0 ? `${money(change)} change` : `${money(-change)} more needed`}
       </p>
-      {tendered >= total && change > 0 ? <ChangePlan changeMinor={change} compact /> : null}
+      {tendered >= due && change > 0 ? <ChangePlan changeMinor={change} compact /> : null}
 
       <div className="mt-6 flex gap-3">
         <button
           type="button"
           onClick={pay}
-          disabled={tendered < total}
+          disabled={tendered < due}
           className="rounded-2xl bg-emerald-600 px-10 py-4 text-lg font-bold text-white disabled:opacity-40"
         >
           Complete sale

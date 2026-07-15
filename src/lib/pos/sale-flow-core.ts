@@ -40,6 +40,7 @@ import type { SalesHoursWindow } from "@/lib/compliance/sales-hours-core";
 // from this module, so a VALUE import here would create a runtime cycle.
 import type { PosMedicalConfig } from "./medical-pos-core";
 import type { PosReceiptConfig } from "./receipt-config-core";
+import { roundCashDue, type PosCashRoundingConfig } from "./cash-rounding-core";
 import {
   computeCashChange,
   validateSalePayload,
@@ -121,6 +122,13 @@ export type PosMenuBundle = {
    * falls back to exact product-key matches only.
    */
   barcodes?: Record<string, string>;
+  /**
+   * Cash-rounding policy (POS B33): the owner's penny-elimination choice
+   * (off / nearest / up / down), shipped with the bundle so OFFLINE sales
+   * round the amount due exactly like online ones. Optional so pre-B33
+   * cached bundles still parse; a missing block means "off" (exact pennies).
+   */
+  rounding?: PosCashRoundingConfig;
   /** ISO timestamp of the download (staleness display on-device). */
   fetchedAt: string;
 };
@@ -310,15 +318,37 @@ export type BuildSaleArgs = {
    * the points; the device only estimates for the receipt.
    */
   loyalty?: PosSalePayload["loyalty"];
+  /**
+   * Cash-rounding policy from the bundle (POS B33). When set and the mode
+   * rounds this total, the customer owes the ROUNDED due amount: change is
+   * computed against it and the payload carries the auditable `rounding`
+   * block. totalMinor/subtotalMinor/taxMinor stay PRE-ROUNDED per WA DOR
+   * interim guidance (tax on the original price).
+   */
+  rounding?: PosCashRoundingConfig;
 };
 
 export type BuildSaleResult =
-  | { ok: true; payload: PosSalePayload; changeMinor: number }
+  | {
+      ok: true;
+      payload: PosSalePayload;
+      changeMinor: number;
+      /** Cash amount actually due at the drawer (= total when no rounding). */
+      dueMinor: number;
+      /** dueMinor − totalMinor (0 when no rounding applied). */
+      roundingAdjustmentMinor: number;
+    }
   | { ok: false; errors: string[] };
 
 export function buildSalePayload(args: BuildSaleArgs): BuildSaleResult {
+  const totalMinor = args.totals.totalMinorUnits;
+  // POS B33 — the owner's rounding policy decides the cash amount DUE.
+  const mode = args.rounding?.mode ?? "off";
+  const rounded = roundCashDue(totalMinor, mode);
+  if (!rounded) return { ok: false, errors: ["Order total must be a non-negative integer (cents)."] };
+  const dueMinor = rounded.dueMinor;
   const tender = computeCashChange({
-    totalMinor: args.totals.totalMinorUnits,
+    totalMinor: dueMinor,
     tenderedMinor: args.tenderedMinor,
   });
   if (!tender.ok) return { ok: false, errors: [tender.error] };
@@ -348,10 +378,22 @@ export function buildSalePayload(args: BuildSaleArgs): BuildSaleResult {
     idVerification: args.idVerification,
     ...(args.medical ? { medical: args.medical } : {}),
     ...(args.loyalty ? { loyalty: args.loyalty } : {}),
+    // POS B33 — carry the rounding block only when a real adjustment
+    // happened (mode !== off AND the total missed the nickel), so pre-B33
+    // payload shapes stay byte-identical.
+    ...(mode !== "off" && rounded.adjustmentMinor !== 0
+      ? { rounding: { mode, adjustmentMinor: rounded.adjustmentMinor, dueMinor } }
+      : {}),
   };
   const check = validateSalePayload(payload);
   if (!check.ok) return { ok: false, errors: check.errors };
-  return { ok: true, payload, changeMinor: tender.changeMinor };
+  return {
+    ok: true,
+    payload,
+    changeMinor: tender.changeMinor,
+    dueMinor,
+    roundingAdjustmentMinor: mode !== "off" ? rounded.adjustmentMinor : 0,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -487,7 +529,61 @@ export function __runSaleFlowCoreTests(): void {
     // POS B20: the cart's exact variant identity travels through pricing into
     // the payload line.
     ok(built.payload.lines[0].variantId === "var-flower-35", "B20: variantId carried price→payload");
+    // POS B33: no rounding config = no rounding block, due = total.
+    ok(built.payload.rounding === undefined, "B33: no policy → no rounding block");
+    ok(built.dueMinor === 3500 && built.roundingAdjustmentMinor === 0, "B33: due = total when off");
   }
+
+  // POS B33 — rounding policy shapes the payload and the change math.
+  const oddTotals = { ...priced.totals, totalMinorUnits: 3502 };
+  const roundedBuild = buildSalePayload({
+    lines: priced.lines,
+    totals: oddTotals,
+    tenderedMinor: 4000,
+    drawerSessionId: drawerId,
+    idVerification: { method: "scan" },
+    rounding: { mode: "nearest" },
+  });
+  ok(roundedBuild.ok, "B33: rounded sale builds");
+  if (roundedBuild.ok) {
+    ok(roundedBuild.dueMinor === 3500 && roundedBuild.roundingAdjustmentMinor === -2, "B33: $35.02 → $35.00 due (−2¢)");
+    ok(roundedBuild.changeMinor === 500, "B33: change runs off the ROUNDED due");
+    ok(roundedBuild.payload.totalMinor === 3502, "B33: payload total stays PRE-rounded (tax on original price)");
+    ok(
+      roundedBuild.payload.rounding?.mode === "nearest" &&
+        roundedBuild.payload.rounding.adjustmentMinor === -2 &&
+        roundedBuild.payload.rounding.dueMinor === 3500,
+      "B33: coherent rounding block in payload",
+    );
+  }
+  // Policy on but total already on the nickel — block omitted (byte-identical
+  // to a pre-B33 payload).
+  const nickelBuild = buildSalePayload({
+    lines: priced.lines,
+    totals: priced.totals,
+    tenderedMinor: 4000,
+    drawerSessionId: drawerId,
+    idVerification: { method: "scan" },
+    rounding: { mode: "nearest" },
+  });
+  ok(
+    nickelBuild.ok && nickelBuild.payload.rounding === undefined && nickelBuild.roundingAdjustmentMinor === 0,
+    "B33: nickel-exact total under a live policy carries no block",
+  );
+  // A tender that covers the rounded due but not the raw total still builds
+  // (down-rounding means the customer legitimately owes less).
+  const downBuild = buildSalePayload({
+    lines: priced.lines,
+    totals: { ...priced.totals, totalMinorUnits: 3504 },
+    tenderedMinor: 3500,
+    drawerSessionId: drawerId,
+    idVerification: { method: "scan" },
+    rounding: { mode: "down" },
+  });
+  ok(
+    downBuild.ok && downBuild.dueMinor === 3500 && downBuild.changeMinor === 0,
+    "B33: down-rounded due accepts exact rounded tender",
+  );
   const short = buildSalePayload({
     lines: priced.lines,
     totals: priced.totals,

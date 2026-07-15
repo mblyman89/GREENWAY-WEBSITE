@@ -232,6 +232,23 @@ export type PosSalePayload = {
     /** Display label frozen at attach time (receipt + exception readability). */
     memberLabel: string;
   };
+  /**
+   * Present when CASH ROUNDING adjusted the amount due (POS B33). WA DOR
+   * interim guidance: tax is computed on the PRE-ROUNDED price, so
+   * totalMinor/subtotalMinor/taxMinor above stay exactly as priced and the
+   * rounding travels as its own auditable block. Omitted when the policy is
+   * off or the total already lands on a nickel — pre-B33 payload shapes stay
+   * byte-identical. When present, the cash-tender check runs against
+   * dueMinor (the cash actually owed at the drawer).
+   */
+  rounding?: {
+    /** The owner's policy that produced this adjustment. */
+    mode: "nearest" | "up" | "down";
+    /** dueMinor − totalMinor. Never 0 (omit the block instead); |x| ≤ 4. */
+    adjustmentMinor: number;
+    /** Cash amount due after rounding — always a multiple of 5 cents. */
+    dueMinor: number;
+  };
 };
 
 export type SalePayloadCheck = { ok: true } | { ok: false; errors: string[] };
@@ -289,17 +306,45 @@ export function validateSalePayload(p: Partial<PosSalePayload>): SalePayloadChec
         : "paymentMethod is missing or unknown.",
     );
   }
+  // POS B33 — optional cash-rounding block. When present it must be
+  // internally coherent: a real nickel adjustment (never 0, |x| ≤ 4), a due
+  // amount that lands on the nickel, and due = total + adjustment. Tax stays
+  // on the PRE-ROUNDED total (WA DOR interim guidance) — the block never
+  // touches totalMinor/subtotalMinor/taxMinor.
+  let roundedDueMinor: number | null = null;
+  if (p.rounding !== undefined) {
+    const rb = p.rounding;
+    if (rb == null || typeof rb !== "object") {
+      errors.push("rounding, when present, must be an object.");
+    } else if (rb.mode !== "nearest" && rb.mode !== "up" && rb.mode !== "down") {
+      errors.push('rounding.mode must be "nearest", "up", or "down".');
+    } else if (!Number.isInteger(rb.adjustmentMinor) || rb.adjustmentMinor === 0 || Math.abs(rb.adjustmentMinor) > 4) {
+      errors.push("rounding.adjustmentMinor must be a non-zero integer within ±4 cents (omit the block when no adjustment applies).");
+    } else if (!Number.isInteger(rb.dueMinor) || rb.dueMinor < 0 || rb.dueMinor % 5 !== 0) {
+      errors.push("rounding.dueMinor must be a non-negative multiple of 5 cents.");
+    } else if (Number.isInteger(p.totalMinor) && rb.dueMinor !== (p.totalMinor as number) + rb.adjustmentMinor) {
+      errors.push("rounding.dueMinor must equal totalMinor + rounding.adjustmentMinor.");
+    } else if (rb.mode === "up" && rb.adjustmentMinor < 0) {
+      errors.push("rounding.adjustmentMinor cannot be negative when mode is \"up\".");
+    } else if (rb.mode === "down" && rb.adjustmentMinor > 0) {
+      errors.push("rounding.adjustmentMinor cannot be positive when mode is \"down\".");
+    } else {
+      roundedDueMinor = rb.dueMinor;
+    }
+  }
   if (method === "cash") {
     if (!Number.isInteger(p.tenderedMinor)) {
       errors.push("Cash sales must record tenderedMinor.");
     } else if (Number.isInteger(p.totalMinor)) {
+      // B33: the customer owes the ROUNDED due amount when rounding applied.
+      const owedMinor = roundedDueMinor ?? (p.totalMinor as number);
       const tender = computeCashChange({
-        totalMinor: p.totalMinor as number,
+        totalMinor: owedMinor,
         tenderedMinor: p.tenderedMinor as number,
       });
       if (!tender.ok) errors.push(tender.error);
       else if (p.changeMinor !== undefined && p.changeMinor !== tender.changeMinor) {
-        errors.push("changeMinor does not match tendered − total.");
+        errors.push("changeMinor does not match tendered − amount due.");
       }
     }
   }
@@ -477,6 +522,56 @@ export function __runPosSaleEventTests(): void {
   ok(!validateSalePayload({ ...goodSale, tenderedMinor: 2000 }).ok, "short cash refused");
   ok(!validateSalePayload({ ...goodSale, changeMinor: 999 }).ok, "wrong change refused");
   ok(!validateSalePayload({ ...goodSale, tenderedMinor: undefined }).ok, "cash without tendered refused");
+
+  // POS B33 — optional cash-rounding block.
+  const roundedSale: PosSalePayload = {
+    ...goodSale,
+    rounding: { mode: "nearest", adjustmentMinor: -1, dueMinor: 2925 },
+    tenderedMinor: 3000,
+    changeMinor: 75, // change runs off the ROUNDED due (3000 − 2925)
+  };
+  ok(validateSalePayload(roundedSale).ok, "rounded sale passes — change against dueMinor");
+  ok(
+    !validateSalePayload({ ...roundedSale, changeMinor: 74 }).ok,
+    "rounded sale with change against the PRE-rounded total refused",
+  );
+  ok(
+    !validateSalePayload({ ...roundedSale, rounding: { mode: "nearest", adjustmentMinor: 0, dueMinor: 2926 } }).ok,
+    "zero adjustment refused — omit the block instead",
+  );
+  ok(
+    !validateSalePayload({ ...roundedSale, rounding: { mode: "nearest", adjustmentMinor: -1, dueMinor: 2926 } }).ok,
+    "due not on the nickel refused",
+  );
+  ok(
+    !validateSalePayload({ ...roundedSale, rounding: { mode: "nearest", adjustmentMinor: -6, dueMinor: 2920 } }).ok,
+    "adjustment beyond ±4¢ refused",
+  );
+  ok(
+    !validateSalePayload({ ...roundedSale, rounding: { mode: "nearest", adjustmentMinor: 4, dueMinor: 2925 } }).ok,
+    "incoherent due (≠ total + adjustment) refused",
+  );
+  ok(
+    !validateSalePayload({
+      ...roundedSale,
+      rounding: { mode: "up", adjustmentMinor: -1, dueMinor: 2925 },
+    }).ok,
+    "mode up cannot round down",
+  );
+  ok(
+    !validateSalePayload({
+      ...roundedSale,
+      rounding: { mode: "down", adjustmentMinor: 4, dueMinor: 2930 },
+    }).ok,
+    "mode down cannot round up",
+  );
+  ok(
+    !validateSalePayload({
+      ...roundedSale,
+      rounding: { mode: "off" as unknown as "nearest", adjustmentMinor: -1, dueMinor: 2925 },
+    }).ok,
+    "mode off cannot ride a rounding block",
+  );
   ok(!validateSalePayload({ ...goodSale, drawerSessionId: "till-1" }).ok, "non-uuid drawer session refused");
   ok(!validateSalePayload({ ...goodSale, idVerification: undefined }).ok, "sale without ID gate refused");
   ok(
