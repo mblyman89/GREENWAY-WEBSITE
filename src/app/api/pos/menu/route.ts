@@ -27,6 +27,7 @@ import { getSalesHoursWindow } from "@/lib/compliance/sales-hours-store";
 import { getMedTaxSettings, getEndorsementConfig } from "@/lib/medical/store";
 import { getPosReceiptConfig } from "@/lib/pos/receipt-config-store";
 import { getPosCashRoundingConfig } from "@/lib/pos/cash-rounding-store";
+import { getPosScanRequiredConfig } from "@/lib/pos/scan-required-store";
 import { getConfig as getLoyaltyConfig } from "@/lib/loyalty/loyalty-store";
 import { listMedicalRegistry } from "@/lib/medical/sale-store";
 import type { DohCategory } from "@/lib/medical/medical-sale-core";
@@ -49,7 +50,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
-  const [menu, rules, costs, limitSettings, hours, medSettings, endorsement, registryRows, receipt, rounding] =
+  const [menu, rules, costs, limitSettings, hours, medSettings, endorsement, registryRows, receipt, rounding, scanRequired] =
     await Promise.all([
       loadLiveMenuAll(),
       loadActiveRules(),
@@ -61,6 +62,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       listMedicalRegistry({ limit: 2000 }),
       getPosReceiptConfig(),
       getPosCashRoundingConfig(),
+      getPosScanRequiredConfig(),
     ]);
   const loyaltyCfg = await getLoyaltyConfig();
 
@@ -182,6 +184,9 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     // POS B33 — the owner's cash-rounding policy rides the bundle so OFFLINE
     // sales round the amount due exactly like online ones.
     rounding,
+    // POS B41 — scan-required mode rides the bundle so OFFLINE registers
+    // keep enforcing the cached policy.
+    scanRequired,
     fetchedAt: new Date().toISOString(),
   };
 

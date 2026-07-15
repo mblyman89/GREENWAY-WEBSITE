@@ -41,6 +41,8 @@ import type { SalesHoursWindow } from "@/lib/compliance/sales-hours-core";
 import type { PosMedicalConfig } from "./medical-pos-core";
 import type { PosReceiptConfig } from "./receipt-config-core";
 import { roundCashDue, type PosCashRoundingConfig } from "./cash-rounding-core";
+// Type-only (erased at compile time) — no runtime cycle with scan-required-core.
+import type { PosScanRequiredConfig } from "./scan-required-core";
 import {
   computeCashChange,
   validateSalePayload,
@@ -129,6 +131,14 @@ export type PosMenuBundle = {
    * cached bundles still parse; a missing block means "off" (exact pennies).
    */
   rounding?: PosCashRoundingConfig;
+  /**
+   * Scan-required register mode (POS B41): when enabled, cannabis items must
+   * be SCANNED at the register (manual tile taps blocked; manager PIN lifts
+   * it for one sale). Rides the bundle so OFFLINE registers keep enforcing
+   * the cached policy. Optional so pre-B41 cached bundles still parse; a
+   * missing block means OFF.
+   */
+  scanRequired?: PosScanRequiredConfig;
   /** ISO timestamp of the download (staleness display on-device). */
   fetchedAt: string;
 };
