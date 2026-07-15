@@ -157,6 +157,13 @@ export type SaleFlowProps = {
    */
   initialCart?: PosCartEntry[];
   /**
+   * AM-D — pre-attach this loyalty member when a WEBSITE ORDER was loaded
+   * into the sale (the order's linked customer, shaped like a /api/pos/member
+   * hit by the load endpoint). The ID gate still runs first — an attached
+   * member never skips age verification.
+   */
+  initialMember?: PosMemberHit;
+  /**
    * B17 — park this cart and exit the sale ("customer forgot their wallet").
    * The shell persists a MINIMAL snapshot (variant ids + counts). Omitted
    * when a hold already exists — one parked sale at a time keeps the drawer
@@ -295,7 +302,7 @@ function priceForBuyer(
   };
 }
 
-export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, initialCart, onHold, onReceiptFrozen, onMemberLookup, onMemberHistory, onEmailReceipt, onApprove, onProductImage, onStockFlag, onLoyalty, onEnqueue, onComplete, onCancel }: SaleFlowProps) {
+export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, initialCart, initialMember, onHold, onReceiptFrozen, onMemberLookup, onMemberHistory, onEmailReceipt, onApprove, onProductImage, onStockFlag, onLoyalty, onEnqueue, onComplete, onCancel }: SaleFlowProps) {
   const [step, setStep] = useState<Step>("idgate");
   const [verdict, setVerdict] = useState<Extract<IdGateVerdict, { allowed: true }> | null>(null);
   const [manualEventUuid, setManualEventUuid] = useState<string | null>(null);
@@ -308,7 +315,8 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
   // medical path, and member attach all start fresh for the returning buyer.
   const [cart, setCart] = useState<PosCartEntry[]>(initialCart ?? []);
   // POS B14 — the loyalty member attached to this sale (server lookup only).
-  const [member, setMember] = useState<PosMemberHit | null>(null);
+  // AM-D: a loaded website order pre-attaches its linked customer.
+  const [member, setMember] = useState<PosMemberHit | null>(initialMember ?? null);
   // Task AM-B — the loyalty redemption applied to THIS sale (server-issued
   // code + per-variant spread). Dropped automatically the moment the priced
   // cart drifts from the fingerprint it was computed for.

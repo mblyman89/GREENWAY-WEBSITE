@@ -49,6 +49,9 @@ import { getPosReceiptConfig } from "@/lib/pos/receipt-config-store";
 import { normalizePosReceiptConfig, receiptAddressLines } from "@/lib/pos/receipt-config-core";
 import { buildPosReceiptHtml, receiptNumber } from "@/lib/pos/receipt-core";
 import { recordAudit } from "@/lib/auth/audit";
+import { supersedeNote, type LoadedOrderLine } from "@/lib/pos/order-to-cart-core";
+import { getAccountByCustomer, listTiers } from "@/lib/loyalty/loyalty-store";
+import { tierForPoints } from "@/lib/loyalty/engine";
 
 // The queue only ever shows a screenful — the store is a single register shop.
 const QUEUE_LIMIT = 50;
@@ -305,5 +308,125 @@ export async function completePickupAtRegister(input: CompletePickupInput): Prom
     receiptHtml,
     orderNumber: order.order_number,
     receiptNumber: receiptNumber(saleClientUuid),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Load into the register cart (Task AM-D)
+// ---------------------------------------------------------------------------
+
+export type LoadOrderResult =
+  | {
+      ok: true;
+      orderNumber: string;
+      customerLabel: string;
+      customerNote: string | null;
+      /** Raw line ids + facts — the DEVICE rebuilds against its CURRENT bundle. */
+      lines: LoadedOrderLine[];
+      /**
+       * The customer already linked to the order (customers.id), shaped like
+       * a /api/pos/member hit so the register can attach them to the new
+       * sale in one step. Null when the order has no linked profile.
+       */
+      member: { customerId: string; label: string; points: number; tierName: string | null } | null;
+    }
+  | { ok: false; error: string };
+
+/**
+ * Load a website order INTO a register sale ("the customer is here and
+ * wants to add items"). The order is SUPERSEDED — cancelled with a loud
+ * timeline note — the moment it is loaded, because the register sale
+ * materializes its OWN order at sync: if both stayed live, both could
+ * complete (double inventory decrement, double loyalty accrual, two CCRS
+ * sales). Cancelling first makes the failure mode safe: if the register
+ * sale never happens, the order sits cancelled with a note saying exactly
+ * why, and the back office can reopen it via the reasoned-reversal path.
+ *
+ * The device rebuilds the cart lines against its CURRENT menu bundle
+ * (order-to-cart-core.rebuildOrderCart) — fresh prices, live promotions,
+ * vanished/out-of-stock lines dropped and reported. The website order's
+ * prices are history, not a pricing source.
+ */
+export async function loadOrderIntoRegister(input: {
+  orderId: string;
+  deviceName: string;
+  employeeName: string;
+}): Promise<LoadOrderResult> {
+  if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not configured." };
+
+  const order = await getOrder(input.orderId);
+  if (!order) return { ok: false, error: "Order not found." };
+  if (isPosMaterializedOrder(order.staff_note)) {
+    return { ok: false, error: "That order is a register sale, not a website pickup." };
+  }
+  const ACTIVE = new Set(["new", "acknowledged", "preparing", "ready"]);
+  if (!ACTIVE.has(order.status)) {
+    return { ok: false, error: `Order is ${order.status} — only an active website order can be loaded.` };
+  }
+
+  // ── Supersede FIRST (see above): cancel with the loud note ───────────────
+  const cancelled = await setOrderStatus(order.id, "cancelled", {
+    actorLabel: `POS load · ${input.employeeName}`,
+    note: supersedeNote(input.deviceName, input.employeeName),
+  });
+  if (!cancelled.ok) {
+    return { ok: false, error: cancelled.refusal ?? "Could not supersede the order — load it again or use the pickup queue." };
+  }
+
+  await recordAudit({
+    actorId: null,
+    actorEmail: `pos-load:${input.deviceName}`,
+    action: "order.loaded_into_register",
+    entityType: "order",
+    entityId: order.id,
+    after: {
+      orderNumber: order.order_number,
+      employeeName: input.employeeName,
+      lineCount: order.lines.length,
+      superseded: true,
+    },
+  });
+
+  // ── Linked customer → one-tap member attach on the new sale ─────────────
+  const admin = createSupabaseAdminClient();
+  let member: { customerId: string; label: string; points: number; tierName: string | null } | null = null;
+  const { data: orderRow } = await admin
+    .from("orders")
+    .select("customer_id")
+    .eq("id", order.id)
+    .maybeSingle<{ customer_id: string | null }>();
+  if (orderRow?.customer_id) {
+    const { data: c } = await admin
+      .from("customers")
+      .select("id, first_name, last_name")
+      .eq("id", orderRow.customer_id)
+      .maybeSingle<{ id: string; first_name: string; last_name: string | null }>();
+    if (c) {
+      try {
+        const [account, tiers] = await Promise.all([getAccountByCustomer(c.id), listTiers()]);
+        member = {
+          customerId: c.id,
+          label: customerPickupLabel(c.first_name, c.last_name),
+          points: account?.balance_points ?? 0,
+          tierName: tierForPoints(account?.lifetime_points ?? 0, tiers)?.name ?? null,
+        };
+      } catch {
+        member = { customerId: c.id, label: customerPickupLabel(c.first_name, c.last_name), points: 0, tierName: null };
+      }
+    }
+  }
+
+  return {
+    ok: true,
+    orderNumber: order.order_number,
+    customerLabel: customerPickupLabel(order.customer_first_name, order.customer_last_name),
+    customerNote: (order.customer_note ?? "").trim() || null,
+    lines: order.lines.map((l) => ({
+      productId: l.product_id,
+      variantId: l.variant_id,
+      productName: l.variant_label ? `${l.product_name} (${l.variant_label})` : l.product_name,
+      quantity: l.quantity,
+    })),
+    member,
   };
 }

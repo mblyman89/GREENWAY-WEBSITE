@@ -13,6 +13,15 @@
  *                              (inventory decrement + loyalty accrual fire
  *                              exactly like every other completion) → day
  *                              ledger row → printable receipt.
+ *   POST { orderId, load: { employeeName } }   (Task AM-D)
+ *                            → load the order INTO a register sale: the
+ *                              order is SUPERSEDED (cancelled with a loud
+ *                              timeline note — the register sale becomes
+ *                              the sale of record, so nothing can double-
+ *                              decrement or double-accrue) and the line
+ *                              ids come back for the device to rebuild
+ *                              against its CURRENT menu bundle, plus the
+ *                              linked customer as a one-tap member attach.
  *
  * Device-authenticated (x-pos-device-id/-key) like every register endpoint.
  * ONLINE-ONLY by design: the queue lives on the server and completion
@@ -24,6 +33,7 @@ import {
   listRegisterPickupQueue,
   getRegisterPickupOrder,
   completePickupAtRegister,
+  loadOrderIntoRegister,
 } from "@/lib/pos/pickup-store";
 
 export const runtime = "nodejs";
@@ -61,6 +71,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   let body: {
     orderId?: unknown;
     complete?: { employeeId?: unknown; tenderedMinor?: unknown; idConfirmed?: unknown; drawerSessionId?: unknown };
+    load?: { employeeName?: unknown };
   };
   try {
     body = (await req.json()) as typeof body;
@@ -69,6 +80,29 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
   if (!isUuid(body.orderId)) {
     return NextResponse.json({ error: "orderId must be a UUID." }, { status: 400 });
+  }
+
+  // ── Load mode (AM-D): supersede the order and hand back its lines ────────
+  if (body.load) {
+    const employeeName = String(body.load.employeeName ?? "").trim();
+    if (!employeeName) {
+      return NextResponse.json({ error: "load.employeeName is required." }, { status: 400 });
+    }
+    const loaded = await loadOrderIntoRegister({
+      orderId: body.orderId,
+      deviceName: auth.device.name,
+      employeeName,
+    });
+    if (!loaded.ok) return NextResponse.json({ error: loaded.error }, { status: 422 });
+    return NextResponse.json({
+      loaded: {
+        orderNumber: loaded.orderNumber,
+        customerLabel: loaded.customerLabel,
+        customerNote: loaded.customerNote,
+        lines: loaded.lines,
+        member: loaded.member,
+      },
+    });
   }
 
   // ── Detail mode ───────────────────────────────────────────────────────────
