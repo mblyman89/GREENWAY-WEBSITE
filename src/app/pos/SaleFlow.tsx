@@ -41,6 +41,14 @@ import {
 import { resolveScan } from "@/lib/pos/scan-to-cart-core";
 import { categoryColorIndex, filterMenuProducts, menuCategoryChips, CATEGORY_COLOR_COUNT } from "@/lib/pos/sale-grid-core";
 import {
+  FAVORITES_KEY,
+  MAX_FAVORITES,
+  favoriteProducts,
+  parseFavorites,
+  serializeFavorites,
+  toggleFavorite,
+} from "@/lib/pos/favorites-core";
+import {
   buildCustomProduct,
   keypadAppend,
   keypadBackspace,
@@ -961,6 +969,63 @@ function IdGateScreen({
  * CCRS, excise, and purchase limits (see custom-sale-core.ts). The keypad
  * works like a cash register: digits shift in from the right.
  */
+/**
+ * B36/B40 — one product tile, shared by the menu grid and the Favorites page.
+ * The ☆/★ in the corner pins the variant to this register's Favorites
+ * (Square Favorites / Shopify smart grid); tapping anywhere else adds to cart.
+ * The star is a sibling overlay, not a nested button — nested interactive
+ * elements are invalid HTML and break tap targets.
+ */
+function ProductTile({
+  product,
+  pinned,
+  onAdd,
+  onTogglePin,
+}: {
+  product: PosMenuProduct;
+  pinned: boolean;
+  onAdd: () => void;
+  onTogglePin: () => void;
+}) {
+  const style = categoryStyle(product.category);
+  return (
+    <div className="relative h-full">
+      <button
+        type="button"
+        onClick={onAdd}
+        className="pos-tile flex h-full w-full flex-col rounded-xl border border-[var(--pos-border)] bg-[var(--pos-surface-2)] p-3 text-left active:bg-[var(--pos-surface-hover)]"
+      >
+        <span className="flex items-center gap-1.5 pr-6 text-[10px] font-bold uppercase tracking-wide text-[var(--pos-text-faint)]">
+          <span className={`h-2 w-2 rounded-full ${style.dot}`} aria-hidden />
+          <span className="truncate capitalize">{product.category}</span>
+        </span>
+        <span className="mt-1 block text-sm font-semibold leading-snug">
+          {product.name}
+          {product.variantLabel ? <span className="text-[var(--pos-text-muted)]"> · {product.variantLabel}</span> : null}
+          <StockBadge product={product} />
+        </span>
+        {product.brand ? (
+          <span className="mt-0.5 block truncate text-xs text-[var(--pos-text-faint)]">{product.brand}</span>
+        ) : null}
+        <span className="mt-auto block pt-2 text-base font-bold text-[var(--pos-accent)]">
+          {money(product.regularPriceMinor)}
+        </span>
+      </button>
+      <button
+        type="button"
+        onClick={onTogglePin}
+        aria-label={pinned ? "Unpin from favorites" : "Pin to favorites"}
+        title={pinned ? "Unpin from favorites" : "Pin to favorites"}
+        className={`absolute right-1.5 top-1.5 rounded-full px-1.5 py-0.5 text-sm leading-none ${
+          pinned ? "text-[var(--pos-accent)]" : "text-[var(--pos-text-faint)] opacity-60"
+        }`}
+      >
+        {pinned ? "★" : "☆"}
+      </button>
+    </div>
+  );
+}
+
 function KeyButton({ label, onPress, wide }: { label: string; onPress: () => void; wide?: boolean }) {
   return (
     <button
@@ -1098,8 +1163,27 @@ function CartScreen({
   const [query, setQuery] = useState("");
   // B36 — the active category filter chip (null = All).
   const [category, setCategory] = useState<string | null>(null);
-  // B39 — which browse surface is showing: the item grid or the keypad.
-  const [browseTab, setBrowseTab] = useState<"menu" | "keypad">("menu");
+  // B39/B40 — which browse surface is showing: item grid, favorites, keypad.
+  const [browseTab, setBrowseTab] = useState<"menu" | "favorites" | "keypad">("menu");
+  // B40 — pinned variantIds for THIS register, hydrated from localStorage
+  // (per-device by design: the drive-thru window pins different best-sellers
+  // than the main counter, and pins must work offline).
+  const [favorites, setFavorites] = useState<string[]>([]);
+  // Mount-time hydration from localStorage (an external store) — SSR cannot
+  // read it, and reading window in the useState initializer would cause a
+  // hydration mismatch. Same one-time burst RegisterShell uses at boot.
+  /* eslint-disable-next-line react-hooks/set-state-in-effect */
+  useEffect(() => setFavorites(parseFavorites(window.localStorage.getItem(FAVORITES_KEY))), []);
+  const togglePin = (variantId: string) => {
+    setFavorites((prev) => {
+      const next = toggleFavorite(prev, variantId);
+      window.localStorage.setItem(FAVORITES_KEY, serializeFavorites(next));
+      return next;
+    });
+  };
+  // B40 — pins resolve against the LIVE bundle every render: prices/stock are
+  // always current and a delisted product never shows a tile.
+  const favoriteTiles = useMemo(() => favoriteProducts(bundle.products, favorites), [bundle.products, favorites]);
   // B37 — the check line whose in-place editor is open (Toast-style: tap a
   // line to edit; the row expands with qty stepper / remove / override).
   const [expandedLine, setExpandedLine] = useState<string | null>(null);
@@ -1232,6 +1316,17 @@ function CartScreen({
             </button>
             <button
               type="button"
+              onClick={() => setBrowseTab("favorites")}
+              className={`rounded-full px-4 py-2 text-sm font-semibold ${
+                browseTab === "favorites"
+                  ? "bg-[var(--pos-accent)] text-[var(--pos-accent-ink)]"
+                  : "border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] text-[var(--pos-text-muted)]"
+              }`}
+            >
+              ★ Favorites{favorites.length > 0 ? ` (${favoriteTiles.length})` : ""}
+            </button>
+            <button
+              type="button"
               onClick={() => setBrowseTab("keypad")}
               className={`rounded-full px-4 py-2 text-sm font-semibold ${
                 browseTab === "keypad"
@@ -1244,6 +1339,34 @@ function CartScreen({
           </div>
           {browseTab === "keypad" ? (
             <KeypadPanel onAdd={(p) => setCart(addToCart(cart, p))} />
+          ) : browseTab === "favorites" ? (
+            <div>
+              {/* B40 — Square-style Favorites page: this register's pinned
+                  best-sellers, one tap to ring. Pins live per device. */}
+              <ul className="grid max-h-[58vh] grid-cols-2 content-start gap-2 overflow-y-auto xl:grid-cols-3">
+                {favoriteTiles.map((p) => (
+                  <li key={p.variantId}>
+                    <ProductTile
+                      product={p}
+                      pinned
+                      onAdd={() => setCart(addToCart(cart, p))}
+                      onTogglePin={() => togglePin(p.variantId)}
+                    />
+                  </li>
+                ))}
+                {favoriteTiles.length === 0 ? (
+                  <li className="col-span-full px-2 py-8 text-center text-sm text-[var(--pos-text-faint)]">
+                    No favorites pinned on this register yet. Tap the ☆ on any Menu tile to pin your
+                    best-sellers here (up to {MAX_FAVORITES}).
+                  </li>
+                ) : null}
+              </ul>
+              {favorites.length >= MAX_FAVORITES ? (
+                <p className="mt-2 text-center text-xs text-[var(--pos-text-faint)]">
+                  Favorites page is full ({MAX_FAVORITES}) — unpin a tile to add another.
+                </p>
+              ) : null}
+            </div>
           ) : (
           <>
           <div className="relative">
@@ -1336,34 +1459,16 @@ function CartScreen({
             </div>
           ) : null}
           <ul className="mt-3 grid max-h-[52vh] grid-cols-2 content-start gap-2 overflow-y-auto xl:grid-cols-3">
-            {results.map((p) => {
-              const style = categoryStyle(p.category);
-              return (
-                <li key={p.variantId}>
-                  <button
-                    type="button"
-                    onClick={() => setCart(addToCart(cart, p))}
-                    className="pos-tile flex h-full w-full flex-col rounded-xl border border-[var(--pos-border)] bg-[var(--pos-surface-2)] p-3 text-left active:bg-[var(--pos-surface-hover)]"
-                  >
-                    <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-[var(--pos-text-faint)]">
-                      <span className={`h-2 w-2 rounded-full ${style.dot}`} aria-hidden />
-                      <span className="truncate capitalize">{p.category}</span>
-                    </span>
-                    <span className="mt-1 block text-sm font-semibold leading-snug">
-                      {p.name}
-                      {p.variantLabel ? <span className="text-[var(--pos-text-muted)]"> · {p.variantLabel}</span> : null}
-                      <StockBadge product={p} />
-                    </span>
-                    {p.brand ? (
-                      <span className="mt-0.5 block truncate text-xs text-[var(--pos-text-faint)]">{p.brand}</span>
-                    ) : null}
-                    <span className="mt-auto block pt-2 text-base font-bold text-[var(--pos-accent)]">
-                      {money(p.regularPriceMinor)}
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
+            {results.map((p) => (
+              <li key={p.variantId}>
+                <ProductTile
+                  product={p}
+                  pinned={favorites.includes(p.variantId)}
+                  onAdd={() => setCart(addToCart(cart, p))}
+                  onTogglePin={() => togglePin(p.variantId)}
+                />
+              </li>
+            ))}
             {results.length === 0 ? (
               <li className="col-span-full px-2 py-6 text-center text-sm text-[var(--pos-text-faint)]">No products match.</li>
             ) : null}
