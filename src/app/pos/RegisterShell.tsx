@@ -44,6 +44,7 @@ import { dollarsToMinor } from "@/lib/pos/till-core";
 import { changeBreakdown, formatChangeBreakdown } from "@/lib/pos/change-calc-core";
 import { lowStockCount } from "@/lib/pos/low-stock-core";
 import { applyLocalStockFlag } from "@/lib/pos/stock-flag-core";
+import { THEME_KEY, parseTheme, themeToggleLabel, toggleTheme, type PosTheme } from "@/lib/pos/theme-core";
 import { checkSetupCredentials } from "@/lib/pos/device-setup-core";
 import { VOID_REASON_PRESETS } from "@/lib/pos/void-sale-core";
 import type { PickupQueueEntry } from "@/lib/pos/pickup-core";
@@ -130,6 +131,9 @@ export function RegisterShell() {
   // B30 — whether the server's email provider is configured (checked once
   // after creds bind; null = unknown). Gates the email-receipt option.
   const [emailReceiptReady, setEmailReceiptReady] = useState<boolean | null>(null);
+  // B44 — per-device display mode (localStorage, like favorites). Dark is
+  // the default; hydrated in the boot effect below.
+  const [theme, setTheme] = useState<PosTheme>("dark");
   const seqRef = useRef(0);
   const queueRef = useRef<QueuedPosEvent[]>([]);
   const flushingRef = useRef(false);
@@ -168,6 +172,8 @@ export function RegisterShell() {
     // null on any corruption so a bad blob can never garbage-print.
     setLastReceipt(parseLastReceipt(window.localStorage.getItem(LAST_RECEIPT_KEY)));
     setHeldSale(parseHeldSale(window.localStorage.getItem(HELD_SALE_KEY)));
+    // B44 — per-device display mode (parseTheme degrades corruption to dark).
+    setTheme(parseTheme(window.localStorage.getItem(THEME_KEY)));
     // Cached menu bundle (offline sales use the last download until refresh).
     try {
       const rawMenu = window.localStorage.getItem(LS_MENU);
@@ -180,6 +186,22 @@ export function RegisterShell() {
     }
   }, []);
   /* eslint-enable react-hooks/set-state-in-effect */
+
+  // ── B44: apply + persist the display mode ──
+  // The attribute lives on <html> so the ONE globals.css override block
+  // (html[data-pos-theme="light"]) re-tints every --pos-* token at once.
+  // Removed on unmount so navigating away never leaves the attribute behind.
+  useEffect(() => {
+    document.documentElement.setAttribute("data-pos-theme", theme);
+    try {
+      window.localStorage.setItem(THEME_KEY, theme);
+    } catch {
+      // Best-effort — a full disk just means the choice doesn't survive restart.
+    }
+    return () => {
+      document.documentElement.removeAttribute("data-pos-theme");
+    };
+  }, [theme]);
 
   // ── persist queue on change (and mirror into the ref flush() reads) ──
   useEffect(() => {
@@ -738,6 +760,8 @@ export function RegisterShell() {
         onLeaderboard={online ? () => setLeaderboardOpen(true) : undefined}
         pickupCount={online ? pickupCount : null}
         onPickupQueue={online && drawer ? () => setPickupOpen(true) : undefined}
+        themeLabel={themeToggleLabel(theme)}
+        onToggleTheme={() => setTheme((t) => toggleTheme(t))}
         onRefreshMenu={() => void refreshMenu()}
         onClearBanner={() => setBanner(null)}
         onLock={lock}
@@ -941,8 +965,8 @@ function SetupScreen({ onProvisioned }: { onProvisioned: (c: DeviceCreds) => voi
           autoCorrect="off"
           spellCheck={false}
         />
-        {notice ? <p className="mt-4 rounded-lg bg-sky-950/60 px-3 py-2 text-sm text-sky-300">{notice}</p> : null}
-        {error ? <p className="mt-4 rounded-lg bg-red-950/60 px-3 py-2 text-sm text-red-300">{error}</p> : null}
+        {notice ? <p className="mt-4 rounded-lg bg-[var(--pos-info-soft)] px-3 py-2 text-sm text-[var(--pos-info)]">{notice}</p> : null}
+        {error ? <p className="mt-4 rounded-lg bg-[var(--pos-danger-soft)] px-3 py-2 text-sm text-[var(--pos-danger)]">{error}</p> : null}
         <button
           type="button"
           onClick={() => void verify()}
@@ -1040,7 +1064,7 @@ function LockScreen({
       <img src="/pos/wordmark.png" alt="Greenway Marijuana" className="mb-5 h-10 w-auto opacity-90" />
       <StatusChips online={online} pendingCount={pendingCount} name={creds.name} />
       {banner ? (
-        <button type="button" onClick={onClearBanner} className="mb-4 max-w-md rounded-lg bg-amber-950/70 px-4 py-2 text-sm text-amber-200">
+        <button type="button" onClick={onClearBanner} className="mb-4 max-w-md rounded-lg bg-[var(--pos-warn-soft)] px-4 py-2 text-sm text-[var(--pos-warn)]">
           {banner} <span className="underline">dismiss</span>
         </button>
       ) : null}
@@ -1053,7 +1077,7 @@ function LockScreen({
           />
         ))}
       </div>
-      {error ? <p className="mt-4 max-w-sm rounded-lg bg-red-950/60 px-3 py-2 text-center text-sm text-red-300">{error}</p> : null}
+      {error ? <p className="mt-4 max-w-sm rounded-lg bg-[var(--pos-danger-soft)] px-3 py-2 text-center text-sm text-[var(--pos-danger)]">{error}</p> : null}
       <div className="mt-6 grid grid-cols-3 gap-3">
         {["1", "2", "3", "4", "5", "6", "7", "8", "9", "⌫", "0", "GO"].map((k) =>
           k === "GO" ? (
@@ -1122,6 +1146,8 @@ function HomeScreen({
   onLeaderboard,
   pickupCount,
   onPickupQueue,
+  themeLabel,
+  onToggleTheme,
   onRefreshMenu,
   onClearBanner,
   onLock,
@@ -1165,6 +1191,10 @@ function HomeScreen({
   pickupCount: number | null;
   /** B28 — open the pickup queue (undefined offline or with no open drawer). */
   onPickupQueue?: () => void;
+  /** B44 — the display mode the toggle would SWITCH TO ("Light mode" / "Dark mode"). */
+  themeLabel: string;
+  /** B44 — flip this device's display mode (persists per device). */
+  onToggleTheme: () => void;
   onRefreshMenu: () => void;
   onClearBanner: () => void;
   onLock: () => void;
@@ -1192,16 +1222,26 @@ function HomeScreen({
               {employee.clockedIn ? (
                 <span className="font-semibold text-[var(--pos-accent)]">clocked in</span>
               ) : (
-                <span className="font-semibold text-amber-300">NOT clocked in</span>
+                <span className="font-semibold text-[var(--pos-warn)]">NOT clocked in</span>
               )}
             </p>
           </div>
         </div>
-        <StatusChips online={online} pendingCount={pendingCount} name={null} />
+        <div className="flex items-center gap-3">
+          <StatusChips online={online} pendingCount={pendingCount} name={null} />
+          {/* B44 — per-device display mode. Offline-friendly (pure localStorage). */}
+          <button
+            type="button"
+            onClick={onToggleTheme}
+            className="pos-tile rounded-full border border-[var(--pos-border)] bg-[var(--pos-surface-2)] px-3 py-1.5 text-xs font-semibold text-[var(--pos-text-muted)]"
+          >
+            {themeLabel === "Light mode" ? "☀️" : "🌙"} {themeLabel}
+          </button>
+        </div>
       </header>
 
       {banner ? (
-        <button type="button" onClick={onClearBanner} className="mt-4 rounded-lg bg-amber-950/70 px-4 py-2 text-left text-sm text-amber-200">
+        <button type="button" onClick={onClearBanner} className="mt-4 rounded-lg bg-[var(--pos-warn-soft)] px-4 py-2 text-left text-sm text-[var(--pos-warn)]">
           {banner} <span className="underline">dismiss</span>
         </button>
       ) : null}
@@ -1211,7 +1251,7 @@ function HomeScreen({
       <section className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-4">
           <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
-            <span className={`h-2 w-2 rounded-full ${drawer ? "bg-[var(--pos-accent)]" : "bg-amber-400"}`} aria-hidden />
+            <span className={`h-2 w-2 rounded-full ${drawer ? "bg-[var(--pos-accent)]" : "bg-[var(--pos-warn-dot)]"}`} aria-hidden />
             Cash drawer
           </h2>
           {drawer ? (
@@ -1239,7 +1279,7 @@ function HomeScreen({
             </>
           ) : (
             <>
-              <p className="mt-2 text-sm text-amber-300">
+              <p className="mt-2 text-sm text-[var(--pos-warn)]">
                 No open drawer — count in your starting float before ringing sales.
               </p>
               <button
@@ -1255,7 +1295,7 @@ function HomeScreen({
         <div className="rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-4">
           <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
             <span
-              className={`h-2 w-2 rounded-full ${!online ? "bg-red-400" : pendingCount > 0 ? "bg-amber-400" : "bg-[var(--pos-accent)]"}`}
+              className={`h-2 w-2 rounded-full ${!online ? "bg-[var(--pos-danger)]" : pendingCount > 0 ? "bg-[var(--pos-warn-dot)]" : "bg-[var(--pos-accent)]"}`}
               aria-hidden
             />
             Sync
@@ -1273,7 +1313,7 @@ function HomeScreen({
         </div>
         <div className="rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-4">
           <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
-            <span className={`h-2 w-2 rounded-full ${menuReady ? "bg-[var(--pos-accent)]" : "bg-amber-400"}`} aria-hidden />
+            <span className={`h-2 w-2 rounded-full ${menuReady ? "bg-[var(--pos-accent)]" : "bg-[var(--pos-warn-dot)]"}`} aria-hidden />
             Menu
           </h2>
           <p className="mt-2 text-sm">
@@ -1282,7 +1322,7 @@ function HomeScreen({
               : "Not downloaded yet"}
           </p>
           {lowStock > 0 ? (
-            <p className="mt-1 text-xs font-semibold text-amber-300">
+            <p className="mt-1 text-xs font-semibold text-[var(--pos-warn)]">
               {lowStock} item{lowStock === 1 ? "" : "s"} running low — flagged on the sale screen
             </p>
           ) : null}
@@ -1296,11 +1336,11 @@ function HomeScreen({
         </div>
         <div className="rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-4">
           <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
-            <span className={`h-2 w-2 rounded-full ${rejectedCount > 0 ? "bg-red-400" : "bg-[var(--pos-accent)]"}`} aria-hidden />
+            <span className={`h-2 w-2 rounded-full ${rejectedCount > 0 ? "bg-[var(--pos-danger)]" : "bg-[var(--pos-accent)]"}`} aria-hidden />
             Queue health
           </h2>
           {rejectedCount > 0 ? (
-            <p className="mt-2 text-sm font-semibold text-red-300">
+            <p className="mt-2 text-sm font-semibold text-[var(--pos-danger)]">
               {rejectedCount} rejected event{rejectedCount === 1 ? "" : "s"} — a manager reviews these in the back office.
             </p>
           ) : (
@@ -1353,7 +1393,7 @@ function HomeScreen({
           </span>
           <span className="mt-2 block">Pickup orders</span>
           {typeof pickupCount === "number" && pickupCount > 0 ? (
-            <span className="absolute right-4 top-4 flex h-9 min-w-9 items-center justify-center rounded-full bg-[var(--pos-gold)] px-2 text-base font-extrabold text-black">
+            <span className="absolute right-4 top-4 flex h-9 min-w-9 items-center justify-center rounded-full bg-[var(--pos-gold)] px-2 text-base font-extrabold text-[var(--pos-gold-ink)]">
               {pickupCount}
             </span>
           ) : null}
@@ -1390,12 +1430,12 @@ function HomeScreen({
       </section>
 
       {heldSale ? (
-        <section className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-900/60 bg-amber-950/30 p-4">
+        <section className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] p-4">
           <div>
-            <h2 className="text-sm font-semibold text-amber-200">
+            <h2 className="text-sm font-semibold text-[var(--pos-warn)]">
               Sale on hold — {heldSale.lines.reduce((s, l) => s + l.quantity, 0)} item(s)
             </h2>
-            <p className="text-xs text-amber-200/70">
+            <p className="text-xs text-[var(--pos-warn-muted)]">
               Held by {heldSale.heldByName} {ageLabel(heldSale.heldAtIso, new Date())}. Resuming re-runs the ID check
               and reprices against the current menu.
             </p>
@@ -1405,7 +1445,7 @@ function HomeScreen({
               type="button"
               onClick={onResumeHold}
               disabled={!onResumeHold || !drawer || !employee.clockedIn || !menuReady}
-              className="pos-tile rounded-lg bg-amber-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-40"
+              className="pos-tile rounded-lg bg-[var(--pos-warn-solid)] px-4 py-2 text-sm font-bold text-white disabled:opacity-40"
             >
               Resume
             </button>
@@ -1622,7 +1662,7 @@ function NoSaleModal({
           onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
         />
 
-        {error ? <p className="mt-3 rounded-lg bg-red-950/60 px-3 py-2 text-sm text-red-300">{error}</p> : null}
+        {error ? <p className="mt-3 rounded-lg bg-[var(--pos-danger-soft)] px-3 py-2 text-sm text-[var(--pos-danger)]">{error}</p> : null}
 
         <button
           type="button"
@@ -1842,7 +1882,7 @@ function VoidSaleModal({
         ) : null}
 
         {errors.length > 0 ? (
-          <ul className="mt-3 space-y-1 rounded-lg bg-red-950/60 px-3 py-2 text-sm text-red-300">
+          <ul className="mt-3 space-y-1 rounded-lg bg-[var(--pos-danger-soft)] px-3 py-2 text-sm text-[var(--pos-danger)]">
             {errors.map((e, i) => (
               <li key={i}>{e}</li>
             ))}
@@ -1854,7 +1894,7 @@ function VoidSaleModal({
             type="button"
             onClick={() => void processVoid()}
             disabled={!reasonOk || pin.length < 4 || busy}
-            className="mt-5 w-full rounded-xl bg-red-700 py-3 text-base font-semibold text-white disabled:opacity-40"
+            className="mt-5 w-full rounded-xl bg-[var(--pos-danger-solid)] py-3 text-base font-semibold text-white disabled:opacity-40"
           >
             {busy ? "Voiding…" : `Void sale & return ${formatCents(sale.totalMinor)}`}
           </button>
@@ -2110,19 +2150,19 @@ function PickupQueueModal({
             </div>
 
             {detail.customerNote ? (
-              <p className="mt-3 rounded-lg bg-sky-950/60 px-3 py-2 text-xs text-sky-200">
+              <p className="mt-3 rounded-lg bg-[var(--pos-info-soft)] px-3 py-2 text-xs text-[var(--pos-info)]">
                 Customer note: {detail.customerNote}
               </p>
             ) : null}
 
-            <label className="mt-4 flex items-start gap-3 rounded-xl border border-amber-900/60 bg-amber-950/30 p-4">
+            <label className="mt-4 flex items-start gap-3 rounded-xl border border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] p-4">
               <input
                 type="checkbox"
                 checked={idConfirmed}
                 onChange={(e) => setIdConfirmed(e.target.checked)}
                 className="mt-0.5 h-5 w-5"
               />
-              <span className="text-sm text-amber-100">
+              <span className="text-sm text-[var(--pos-warn)]">
                 I checked <strong>{detail.customerLabel}</strong>&rsquo;s ID at the counter — valid, photo matches,
                 21+ (WAC 314-55-150). Age verification happens at handover, not at checkout.
               </span>
@@ -2165,7 +2205,7 @@ function PickupQueueModal({
         )}
 
         {errors.length > 0 ? (
-          <ul className="mt-3 space-y-1 rounded-lg bg-red-950/60 px-3 py-2 text-sm text-red-300">
+          <ul className="mt-3 space-y-1 rounded-lg bg-[var(--pos-danger-soft)] px-3 py-2 text-sm text-[var(--pos-danger)]">
             {errors.map((e, i) => (
               <li key={i}>{e}</li>
             ))}
@@ -2285,7 +2325,7 @@ function DayReportModal({
           onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
         />
 
-        {error ? <p className="mt-3 rounded-lg bg-red-950/60 px-3 py-2 text-sm text-red-300">{error}</p> : null}
+        {error ? <p className="mt-3 rounded-lg bg-[var(--pos-danger-soft)] px-3 py-2 text-sm text-[var(--pos-danger)]">{error}</p> : null}
 
         <button
           type="button"
@@ -2376,7 +2416,7 @@ function LeaderboardModal({ creds, onClose }: { creds: DeviceCreds; onClose: () 
             : "Ranked by gross sales across the trailing 7 days — every register counts."}
         </p>
 
-        {error ? <p className="mt-4 rounded-lg bg-red-950/60 px-3 py-2 text-sm text-red-300">{error}</p> : null}
+        {error ? <p className="mt-4 rounded-lg bg-[var(--pos-danger-soft)] px-3 py-2 text-sm text-[var(--pos-danger)]">{error}</p> : null}
         {!boards && !error ? <p className="mt-4 text-sm text-[var(--pos-text-muted)]">Loading the standings…</p> : null}
         {boards && entries.length === 0 ? (
           <p className="mt-4 text-sm text-[var(--pos-text-muted)]">
@@ -2390,7 +2430,7 @@ function LeaderboardModal({ creds, onClose }: { creds: DeviceCreds; onClose: () 
               <li
                 key={`${e.rank}-${e.name}`}
                 className={`flex items-center justify-between rounded-xl px-4 py-3 ${
-                  e.rank === 1 ? "border border-amber-500/60 bg-amber-950/30" : "border border-[var(--pos-border)] bg-[var(--pos-surface-2)]"
+                  e.rank === 1 ? "border border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)]" : "border border-[var(--pos-border)] bg-[var(--pos-surface-2)]"
                 }`}
               >
                 <span className="flex items-center gap-3">
@@ -2618,7 +2658,7 @@ function TillModal({
           onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
         />
 
-        {error ? <p className="mt-3 rounded-lg bg-red-950/60 px-3 py-2 text-sm text-red-300">{error}</p> : null}
+        {error ? <p className="mt-3 rounded-lg bg-[var(--pos-danger-soft)] px-3 py-2 text-sm text-[var(--pos-danger)]">{error}</p> : null}
 
         <button
           type="button"
@@ -2655,7 +2695,7 @@ function StatusChips({ online, pendingCount, name }: { online: boolean; pendingC
         className={`rounded-full border px-3 py-1 font-semibold ${
           online
             ? "border-[var(--pos-accent-border)] bg-[var(--pos-accent-soft)] text-[var(--pos-accent)]"
-            : "border-red-900 bg-red-950 text-red-300"
+            : "border-[var(--pos-danger-border)] bg-[var(--pos-danger-soft)] text-[var(--pos-danger)]"
         }`}
       >
         {online ? "Online" : "Offline"}

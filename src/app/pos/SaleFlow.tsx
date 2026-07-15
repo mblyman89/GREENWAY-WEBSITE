@@ -101,9 +101,9 @@ type Step = "idgate" | "cart" | "tender" | "done";
  * Each entry: chip = filter-chip accents, dot = the tile's category dot.
  */
 const CATEGORY_TILE_STYLES: { chip: string; dot: string }[] = [
-  { chip: "border-emerald-500/50 text-emerald-300", dot: "bg-emerald-400" },
-  { chip: "border-sky-500/50 text-sky-300", dot: "bg-sky-400" },
-  { chip: "border-amber-500/50 text-amber-300", dot: "bg-amber-400" },
+  { chip: "border-[var(--pos-ok-border)] text-[var(--pos-ok)]", dot: "bg-[var(--pos-ok)]" },
+  { chip: "border-[var(--pos-info-border)] text-[var(--pos-info)]", dot: "bg-[var(--pos-info)]" },
+  { chip: "border-[var(--pos-warn-border)] text-[var(--pos-warn)]", dot: "bg-[var(--pos-warn-dot)]" },
   { chip: "border-fuchsia-500/50 text-fuchsia-300", dot: "bg-fuchsia-400" },
   { chip: "border-rose-500/50 text-rose-300", dot: "bg-rose-400" },
   { chip: "border-teal-500/50 text-teal-300", dot: "bg-teal-400" },
@@ -299,7 +299,7 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
   if (!hours.allowed && step !== "done") {
     return (
       <Frame title="Sales hours" onCancel={onCancel}>
-        <p className="max-w-md rounded-lg bg-red-950/60 px-4 py-3 text-sm text-red-300">{hours.reason}</p>
+        <p className="max-w-md rounded-lg bg-[var(--pos-danger-soft)] px-4 py-3 text-sm text-[var(--pos-danger)]">{hours.reason}</p>
       </Frame>
     );
   }
@@ -560,7 +560,7 @@ function EmailReceiptPanel({
           {busy ? "Sending…" : "Send"}
         </button>
       </div>
-      {note ? <p className="mt-2 text-sm text-amber-300">{note}</p> : null}
+      {note ? <p className="mt-2 text-sm text-[var(--pos-warn)]">{note}</p> : null}
       <button type="button" onClick={() => { setOpen(false); setEmail(""); setNote(null); }} className="mt-3 text-xs text-[var(--pos-text-faint)] underline">
         Never mind
       </button>
@@ -625,7 +625,7 @@ function ReceiptButtons({ receipt }: { receipt: PosReceiptInput }) {
         “Print receipt” opens the Star PassPRNT app (paired Bluetooth printer) and pops the drawer.
         Tap again to reprint. Use “Browser print” if PassPRNT isn’t installed on this device.
       </p>
-      {fallbackNote ? <p className="text-xs text-amber-300">{fallbackNote}</p> : null}
+      {fallbackNote ? <p className="text-xs text-[var(--pos-warn)]">{fallbackNote}</p> : null}
     </div>
   );
 }
@@ -760,7 +760,7 @@ function IdGateScreen({
   return (
     <Frame title="Check ID — required before anything enters the cart" onCancel={onCancel}>
       {error ? (
-        <p className="mb-4 w-full max-w-lg rounded-lg border border-red-900/60 bg-red-950/60 px-4 py-3 text-sm text-red-300">{error}</p>
+        <p className="mb-4 w-full max-w-lg rounded-lg border border-[var(--pos-danger-border)] bg-[var(--pos-danger-soft)] px-4 py-3 text-sm text-[var(--pos-danger)]">{error}</p>
       ) : null}
 
       {/* POS B9 — medical recognition card (RCW 69.51A.230). Captured AT the
@@ -781,7 +781,7 @@ function IdGateScreen({
           Medical patient (DOH recognition card)
         </label>
         {!medicalAvailable ? (
-          <p className="mt-2 text-xs text-amber-300">
+          <p className="mt-2 text-xs text-[var(--pos-warn)]">
             Medical config not in the cached menu — refresh the menu while online to enable medical sales.
           </p>
         ) : null}
@@ -892,7 +892,7 @@ function IdGateScreen({
         </div>
       ) : (
         <div className="w-full max-w-lg space-y-4">
-          <p className="text-sm text-amber-300">
+          <p className="text-sm text-[var(--pos-warn)]">
             Manual verifications are audited. Only use when the barcode will not scan or the document
             has no barcode (passport, tribal, armed forces…).
           </p>
@@ -1135,7 +1135,7 @@ function KeypadPanel({ onAdd }: { onAdd: (product: PosMenuProduct) => void }) {
         <KeyButton label="⌫" onPress={() => setAmountMinor((a) => keypadBackspace(a))} />
       </div>
       {error ? (
-        <p className="mt-3 rounded-lg border border-red-900/60 bg-red-950/60 px-3 py-2 text-xs font-semibold text-red-300">
+        <p className="mt-3 rounded-lg border border-[var(--pos-danger-border)] bg-[var(--pos-danger-soft)] px-3 py-2 text-xs font-semibold text-[var(--pos-danger)]">
           {error}
         </p>
       ) : null}
@@ -1338,7 +1338,7 @@ function CartScreen({
           <h1 className="text-lg font-semibold">
             Sale — ID verified ({verdict.method}, age {verdict.age})
             {carded ? (
-              <span className="ml-2 rounded-full bg-sky-600 px-3 py-1 text-xs font-bold text-white align-middle">
+              <span className="ml-2 rounded-full bg-[var(--pos-info-solid)] px-3 py-1 text-xs font-bold text-white align-middle">
                 MEDICAL · {medicalCard?.upid}
               </span>
             ) : null}
@@ -1404,7 +1404,7 @@ function CartScreen({
                 <span
                   className={`rounded-full border px-3 py-1.5 text-xs font-bold ${
                     scanUnlocked
-                      ? "border-amber-700/60 bg-amber-950/40 text-amber-300"
+                      ? "border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] text-[var(--pos-warn)]"
                       : "border-[var(--pos-accent-border)] bg-[var(--pos-accent-soft)] text-[var(--pos-accent)]"
                   }`}
                 >
@@ -1423,13 +1423,13 @@ function CartScreen({
             ) : null}
           </div>
           {scanBlockNotice ? (
-            <div className="mb-3 flex items-start justify-between gap-3 rounded-xl border border-amber-900/60 bg-amber-950/40 px-3 py-2">
-              <p className="text-xs font-semibold text-amber-300">{scanBlockNotice}</p>
+            <div className="mb-3 flex items-start justify-between gap-3 rounded-xl border border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] px-3 py-2">
+              <p className="text-xs font-semibold text-[var(--pos-warn)]">{scanBlockNotice}</p>
               <button
                 type="button"
                 onClick={() => setScanBlockNotice(null)}
                 aria-label="Dismiss"
-                className="text-xs font-bold text-amber-300/70"
+                className="text-xs font-bold text-[var(--pos-warn-muted)]"
               >
                 ✕
               </button>
@@ -1528,8 +1528,8 @@ function CartScreen({
             </p>
           ) : null}
           {scanPick ? (
-            <div className="mt-2 rounded-xl border border-sky-900/60 bg-sky-950/30 p-3">
-              <p className="text-xs font-semibold text-sky-200">
+            <div className="mt-2 rounded-xl border border-[var(--pos-info-border)] bg-[var(--pos-info-soft)] p-3">
+              <p className="text-xs font-semibold text-[var(--pos-info)]">
                 Barcode matched {scanPick[0]?.name} — pick the size that left the shelf:
               </p>
               <div className="mt-2 flex flex-wrap gap-2">
@@ -1542,7 +1542,7 @@ function CartScreen({
                       setScanFlash(`Scanned: ${p.name}${p.variantLabel ? ` · ${p.variantLabel}` : ""}`);
                       setScanPick(null);
                     }}
-                    className="rounded-full bg-sky-600 px-3 py-1.5 text-xs font-bold text-white"
+                    className="rounded-full bg-[var(--pos-info-solid)] px-3 py-1.5 text-xs font-bold text-white"
                   >
                     {p.variantLabel ?? "each"} · {money(p.regularPriceMinor)}
                   </button>
@@ -1620,12 +1620,12 @@ function CartScreen({
                     {l.productName}
                     {l.variantLabel ? <span className="text-[var(--pos-text-muted)]"> · {l.variantLabel}</span> : null}
                     {exempt ? (
-                      <span className="ml-2 rounded bg-sky-900/80 px-1.5 py-0.5 text-[10px] font-bold text-sky-300">
+                      <span className="ml-2 rounded bg-[var(--pos-info-soft)] px-1.5 py-0.5 text-[10px] font-bold text-[var(--pos-info)]">
                         MED · TAX OFF
                       </span>
                     ) : null}
                     {activeOverride ? (
-                      <span className="ml-2 rounded bg-amber-900/80 px-1.5 py-0.5 text-[10px] font-bold text-amber-300">
+                      <span className="ml-2 rounded bg-[var(--pos-warn-soft)] px-1.5 py-0.5 text-[10px] font-bold text-[var(--pos-warn)]">
                         OVERRIDE · {activeOverride.approvedByName}
                       </span>
                     ) : null}
@@ -1633,7 +1633,7 @@ function CartScreen({
                       {money(l.unitPriceMinor)} each
                       {l.appliedLabel ? <span className="text-[var(--pos-accent)]"> · {l.appliedLabel}</span> : null}
                       {activeOverride ? (
-                        <span className="text-amber-300"> · was {money(activeOverride.originalUnitPriceMinor)}</span>
+                        <span className="text-[var(--pos-warn)]"> · was {money(activeOverride.originalUnitPriceMinor)}</span>
                       ) : null}
                     </span>
                   </span>
@@ -1656,7 +1656,7 @@ function CartScreen({
                               delete next[l.variantId ?? ""];
                               setOverrides(next);
                             }}
-                            className="pos-tile rounded-lg border border-[var(--pos-border)] bg-[var(--pos-surface)] px-3 py-2 text-xs font-semibold text-amber-300"
+                            className="pos-tile rounded-lg border border-[var(--pos-border)] bg-[var(--pos-surface)] px-3 py-2 text-xs font-semibold text-[var(--pos-warn)]"
                             title="Remove the manager override — the line returns to the engine price."
                           >
                             Undo override
@@ -1678,7 +1678,7 @@ function CartScreen({
                           setCart(setCartQuantity(cart, variantId, 0));
                           setExpandedLine(null);
                         }}
-                        className="pos-tile rounded-lg border border-red-900/60 bg-red-950/40 px-3 py-2 text-xs font-semibold text-red-300"
+                        className="pos-tile rounded-lg border border-[var(--pos-danger-border)] bg-[var(--pos-danger-soft)] px-3 py-2 text-xs font-semibold text-[var(--pos-danger)]"
                         title="Remove this line from the check."
                       >
                         Remove
@@ -1695,7 +1695,7 @@ function CartScreen({
           </ul>
 
           {highThcViolations.length > 0 ? (
-            <p className="mt-3 rounded-lg border border-red-900/60 bg-red-950/60 px-3 py-2 text-xs font-semibold text-red-300">
+            <p className="mt-3 rounded-lg border border-[var(--pos-danger-border)] bg-[var(--pos-danger-soft)] px-3 py-2 text-xs font-semibold text-[var(--pos-danger)]">
               {highThcViolations.map((n) => `"${n}"`).join(", ")}{" "}
               {highThcViolations.length === 1 ? "is a DOH High-THC product" : "are DOH High-THC products"} and may
               ONLY be sold to a patient with a valid recognition card (chapter 246-70 WAC). Remove{" "}
@@ -1705,7 +1705,7 @@ function CartScreen({
           ) : null}
 
           {priced.problems.length > 0 ? (
-            <p className="mt-3 rounded-lg border border-red-900/60 bg-red-950/60 px-3 py-2 text-xs text-red-300">{priced.problems.join(" ")}</p>
+            <p className="mt-3 rounded-lg border border-[var(--pos-danger-border)] bg-[var(--pos-danger-soft)] px-3 py-2 text-xs text-[var(--pos-danger)]">{priced.problems.join(" ")}</p>
           ) : null}
 
           {/* WAC 314-55-095 limit meter — brand green while safe, amber near
@@ -1717,13 +1717,13 @@ function CartScreen({
                 <div key={b.bucket} className="text-xs">
                   <div className="flex justify-between text-[var(--pos-text-muted)]">
                     <span>{b.label}</span>
-                    <span className={b.exceeded ? "font-bold text-red-400" : ""}>
+                    <span className={b.exceeded ? "font-bold text-[var(--pos-danger)]" : ""}>
                       {b.usedGrams}g / {b.maxGrams}g
                     </span>
                   </div>
                   <div className="mt-0.5 h-1.5 w-full rounded bg-[var(--pos-surface-hover)]">
                     <div
-                      className={`h-1.5 rounded ${b.exceeded ? "bg-red-500" : b.ratio > 0.8 ? "bg-amber-400" : "bg-[var(--pos-accent)]"}`}
+                      className={`h-1.5 rounded ${b.exceeded ? "bg-[var(--pos-danger)]" : b.ratio > 0.8 ? "bg-[var(--pos-warn-dot)]" : "bg-[var(--pos-accent)]"}`}
                       style={{ width: `${Math.min(100, Math.round(b.ratio * 100))}%` }}
                     />
                   </div>
@@ -1731,11 +1731,11 @@ function CartScreen({
               ))}
           </div>
           {limits.blocked ? (
-            <p className="mt-2 rounded-lg border border-red-900/60 bg-red-950/60 px-3 py-2 text-xs font-semibold text-red-300">
+            <p className="mt-2 rounded-lg border border-[var(--pos-danger-border)] bg-[var(--pos-danger-soft)] px-3 py-2 text-xs font-semibold text-[var(--pos-danger)]">
               Over the WAC 314-55-095 single-transaction limit — remove items. {limits.evaluation.reasons.join(" ")}
             </p>
           ) : limits.softWarning ? (
-            <p className="mt-2 rounded-lg border border-amber-900/60 bg-amber-950/60 px-3 py-2 text-xs font-semibold text-amber-300">
+            <p className="mt-2 rounded-lg border border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] px-3 py-2 text-xs font-semibold text-[var(--pos-warn)]">
               Over the configured limit (soft warning). {limits.evaluation.reasons.join(" ")}
             </p>
           ) : null}
@@ -1744,7 +1744,7 @@ function CartScreen({
               the cached menu can lag the shelf; the B19 decrement + server
               completion gate are the authority at sync. */}
           {stockWarnings.length > 0 ? (
-            <ul className="mt-2 space-y-1 rounded-lg border border-amber-900/60 bg-amber-950/50 px-3 py-2 text-xs text-amber-200">
+            <ul className="mt-2 space-y-1 rounded-lg border border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] px-3 py-2 text-xs text-[var(--pos-warn)]">
               {stockWarnings.map((w, i) => (
                 <li key={i}>{w}</li>
               ))}
@@ -1999,7 +1999,7 @@ function ProductInfoModal({
               </button>
             ) : (
               <div>
-                <p className="text-xs font-semibold text-amber-300">
+                <p className="text-xs font-semibold text-[var(--pos-warn)]">
                   Remove {info.name} from every register and the website? Pick why — a manager
                   brings it back through the back office when stock returns.
                 </p>
@@ -2010,7 +2010,7 @@ function ProductInfoModal({
                       type="button"
                       disabled={flagBusy !== null}
                       onClick={() => void flag(r)}
-                      className="pos-tile rounded-lg border border-amber-900/60 bg-amber-950/40 px-3 py-2 text-xs font-semibold capitalize text-amber-300 disabled:opacity-40"
+                      className="pos-tile rounded-lg border border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] px-3 py-2 text-xs font-semibold capitalize text-[var(--pos-warn)] disabled:opacity-40"
                     >
                       {flagBusy === r ? "Flagging…" : r}
                     </button>
@@ -2028,7 +2028,7 @@ function ProductInfoModal({
                   </button>
                 </div>
                 {flagError ? (
-                  <p className="mt-2 rounded-lg border border-red-900/60 bg-red-950/60 px-3 py-2 text-xs font-semibold text-red-300">{flagError}</p>
+                  <p className="mt-2 rounded-lg border border-[var(--pos-danger-border)] bg-[var(--pos-danger-soft)] px-3 py-2 text-xs font-semibold text-[var(--pos-danger)]">{flagError}</p>
                 ) : null}
               </div>
             )}
@@ -2110,14 +2110,14 @@ function ScanUnlockModal({
         />
 
         {error ? (
-          <p className="mt-3 rounded-lg border border-red-900/60 bg-red-950/60 px-3 py-2 text-xs font-semibold text-red-300">{error}</p>
+          <p className="mt-3 rounded-lg border border-[var(--pos-danger-border)] bg-[var(--pos-danger-soft)] px-3 py-2 text-xs font-semibold text-[var(--pos-danger)]">{error}</p>
         ) : null}
 
         <button
           type="button"
           disabled={busy || pin.length < 4}
           onClick={unlock}
-          className="pos-tile mt-4 w-full rounded-xl bg-amber-600 px-4 py-3 text-sm font-bold text-white disabled:opacity-40"
+          className="pos-tile mt-4 w-full rounded-xl bg-[var(--pos-warn-solid)] px-4 py-3 text-sm font-bold text-white disabled:opacity-40"
         >
           {busy ? "Verifying…" : "Lift for this sale"}
         </button>
@@ -2249,7 +2249,7 @@ function PriceOverrideModal({
                 setCustom("");
               }}
               className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
-                preset === p ? "bg-amber-600 text-white" : "border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] text-[var(--pos-text-muted)]"
+                preset === p ? "bg-[var(--pos-warn-solid)] text-white" : "border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] text-[var(--pos-text-muted)]"
               }`}
             >
               {p}
@@ -2284,17 +2284,17 @@ function PriceOverrideModal({
         />
 
         {request && !request.ok ? (
-          <p className="mt-3 rounded-lg border border-amber-900/60 bg-amber-950/60 px-3 py-2 text-xs font-semibold text-amber-300">{request.error}</p>
+          <p className="mt-3 rounded-lg border border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] px-3 py-2 text-xs font-semibold text-[var(--pos-warn)]">{request.error}</p>
         ) : null}
         {error ? (
-          <p className="mt-3 rounded-lg border border-red-900/60 bg-red-950/60 px-3 py-2 text-xs font-semibold text-red-300">{error}</p>
+          <p className="mt-3 rounded-lg border border-[var(--pos-danger-border)] bg-[var(--pos-danger-soft)] px-3 py-2 text-xs font-semibold text-[var(--pos-danger)]">{error}</p>
         ) : null}
 
         <button
           type="button"
           disabled={!ready}
           onClick={approve}
-          className="pos-tile mt-4 w-full rounded-xl bg-amber-600 px-4 py-3 text-sm font-bold text-white disabled:opacity-40"
+          className="pos-tile mt-4 w-full rounded-xl bg-[var(--pos-warn-solid)] px-4 py-3 text-sm font-bold text-white disabled:opacity-40"
         >
           {busy ? "Verifying…" : "Approve override"}
         </button>
@@ -2350,10 +2350,10 @@ function MemberPanel({
 
   if (member) {
     return (
-      <div className="mt-3 rounded-xl border border-amber-700/50 bg-amber-950/30 px-4 py-2.5">
+      <div className="mt-3 rounded-xl border border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] px-4 py-2.5">
         <div className="flex items-center justify-between">
           <span className="text-sm">
-            <span className="font-semibold text-amber-300">★ {member.label}</span>
+            <span className="font-semibold text-[var(--pos-warn)]">★ {member.label}</span>
             <span className="ml-2 text-xs text-[var(--pos-text-muted)]">
               {member.points.toLocaleString()} pts{member.tierName ? ` · ${member.tierName}` : ""}
             </span>
@@ -2383,11 +2383,11 @@ function MemberPanel({
           </span>
         </div>
         {historyOpen ? (
-          <div className="mt-2 border-t border-amber-900/40 pt-2">
+          <div className="mt-2 border-t border-[var(--pos-warn-border)] pt-2">
             {historyBusy ? (
               <p className="text-xs text-[var(--pos-text-muted)]">Loading…</p>
             ) : historyError ? (
-              <p className="text-xs text-amber-300">{historyError}</p>
+              <p className="text-xs text-[var(--pos-warn)]">{historyError}</p>
             ) : history ? (
               history.purchases.length === 0 ? (
                 <p className="text-xs text-[var(--pos-text-muted)]">First visit on record — make it a good one.</p>
@@ -2395,7 +2395,7 @@ function MemberPanel({
                 <>
                   {history.favorites.length > 0 ? (
                     <p className="text-xs text-[var(--pos-text-muted)]">
-                      <span className="font-semibold text-amber-300/90">Usually buys:</span>{" "}
+                      <span className="font-semibold text-[var(--pos-warn-muted)]">Usually buys:</span>{" "}
                       {history.favorites.map((f) => f.productName).join(" · ")}
                     </p>
                   ) : null}
@@ -2461,7 +2461,7 @@ function MemberPanel({
           type="button"
           onClick={() => void search()}
           disabled={busy || q.trim().length < 2}
-          className="pos-tile rounded-lg bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
+          className="pos-tile rounded-lg bg-[var(--pos-warn-solid)] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
         >
           {busy ? "…" : "Find"}
         </button>
@@ -2478,7 +2478,7 @@ function MemberPanel({
           ✕
         </button>
       </div>
-      {error ? <p className="mt-2 text-xs text-amber-300">{error}</p> : null}
+      {error ? <p className="mt-2 text-xs text-[var(--pos-warn)]">{error}</p> : null}
       {hits && hits.length > 0 ? (
         <ul className="mt-2 space-y-1.5">
           {hits.map((h) => (
@@ -2613,7 +2613,7 @@ function TenderScreen({
       </div>
 
       {error ? (
-        <p className="mt-4 w-full max-w-md rounded-lg border border-red-900/60 bg-red-950/60 px-4 py-3 text-sm text-red-300">{error}</p>
+        <p className="mt-4 w-full max-w-md rounded-lg border border-[var(--pos-danger-border)] bg-[var(--pos-danger-soft)] px-4 py-3 text-sm text-[var(--pos-danger)]">{error}</p>
       ) : null}
 
       <div className="mt-6 flex flex-wrap justify-center gap-3">
@@ -2726,7 +2726,7 @@ function StockBadge({ product }: { product: PosMenuProduct }) {
   return (
     <span
       className={`ml-2 inline-block rounded px-1.5 py-0.5 align-middle text-[10px] font-bold tracking-wide ${
-        signal.severity === "last-units" ? "bg-red-900/70 text-red-200" : "bg-amber-900/70 text-amber-200"
+        signal.severity === "last-units" ? "bg-[var(--pos-danger-soft)] text-[var(--pos-danger)]" : "bg-[var(--pos-warn-soft)] text-[var(--pos-warn)]"
       }`}
     >
       {signal.badge}

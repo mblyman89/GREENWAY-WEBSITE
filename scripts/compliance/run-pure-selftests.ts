@@ -70,6 +70,7 @@ import { __runFavoritesCoreTests } from "../../src/lib/pos/favorites-core";
 import { __runScanRequiredCoreTests } from "../../src/lib/pos/scan-required-core";
 import { __runProductInfoCoreTests } from "../../src/lib/pos/product-info-core";
 import { __runStockFlagCoreTests } from "../../src/lib/pos/stock-flag-core";
+import { __runThemeCoreTests } from "../../src/lib/pos/theme-core";
 
 async function main() {
   __runOrderPricingTests();
@@ -142,6 +143,7 @@ async function main() {
   __runScanRequiredCoreTests();
   __runProductInfoCoreTests();
   __runStockFlagCoreTests();
+  __runThemeCoreTests();
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

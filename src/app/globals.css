@@ -94,6 +94,76 @@
   --pos-orange-border: rgba(255, 127, 0, 0.35);
   --pos-danger: #ff5a5a;
   --pos-danger-soft: rgba(255, 90, 90, 0.14);
+
+  /* Semantic status tokens (POS B44). The register used hard-coded Tailwind
+     amber/red/sky/emerald utilities for warnings, errors, info and ok states
+     — all tuned for a dark canvas. B44's light mode needs BOTH palettes, so
+     the last hard-coded status colors moved onto these tokens (finishing the
+     B38 sweep). Ink on gold fills is also a token: near-black on bright gold
+     (dark), white on deep gold (light). */
+  --pos-gold-ink: #08130b;
+  --pos-warn: #fcd34d;
+  --pos-warn-muted: rgba(252, 211, 77, 0.72);
+  --pos-warn-soft: rgba(217, 119, 6, 0.15);
+  --pos-warn-dot: #fbbf24;
+  --pos-warn-solid: #d97706;
+  --pos-warn-border: rgba(217, 119, 6, 0.45);
+  --pos-danger-border: rgba(255, 90, 90, 0.35);
+  --pos-danger-solid: #b91c1c;
+  --pos-info: #7dd3fc;
+  --pos-info-soft: rgba(2, 132, 199, 0.16);
+  --pos-info-border: rgba(2, 132, 199, 0.4);
+  --pos-info-solid: #0284c7;
+  --pos-ok: #6ee7b7;
+  --pos-ok-border: rgba(16, 185, 129, 0.45);
+}
+
+/* ---------------------------------------------------------------------------
+ * POS LIGHT MODE (POS Slice B44)
+ * Toast-style per-device display mode: RegisterShell sets data-pos-theme on
+ * <html> from a localStorage choice (gw-pos-theme), and this ONE block
+ * re-tints every --pos-* token for a bright-room register. Scoped to the
+ * attribute so the website, the back office, and dark registers never move.
+ * Brand accents shift to their readable-on-white equivalents (the bright
+ * #7ed957 green and #ffd700 gold fail contrast as TEXT on white).
+ * ------------------------------------------------------------------------- */
+html[data-pos-theme="light"] {
+  --pos-canvas: #eef1ee;
+  --pos-surface: #ffffff;
+  --pos-surface-2: #f2f4f2;
+  --pos-surface-hover: #e9ede9;
+  --pos-border: rgba(10, 20, 12, 0.1);
+  --pos-border-strong: rgba(10, 20, 12, 0.22);
+  --pos-text: #101713;
+  --pos-text-muted: rgba(16, 23, 19, 0.62);
+  --pos-text-faint: rgba(16, 23, 19, 0.42);
+  --pos-accent: #2f8722;
+  --pos-accent-ink: #ffffff;
+  --pos-accent-soft: rgba(47, 135, 34, 0.12);
+  --pos-accent-border: rgba(47, 135, 34, 0.45);
+  --pos-gold: #8a6a00;
+  --pos-gold-ink: #ffffff;
+  --pos-gold-soft: rgba(179, 138, 0, 0.14);
+  --pos-gold-border: rgba(138, 106, 0, 0.4);
+  --pos-orange: #c2410c;
+  --pos-orange-soft: rgba(194, 65, 12, 0.1);
+  --pos-orange-border: rgba(194, 65, 12, 0.4);
+  --pos-danger: #b91c1c;
+  --pos-danger-soft: rgba(220, 38, 38, 0.1);
+  --pos-danger-border: rgba(220, 38, 38, 0.35);
+  --pos-danger-solid: #dc2626;
+  --pos-warn: #92400e;
+  --pos-warn-muted: rgba(146, 64, 14, 0.75);
+  --pos-warn-soft: rgba(217, 119, 6, 0.12);
+  --pos-warn-dot: #d97706;
+  --pos-warn-solid: #d97706;
+  --pos-warn-border: rgba(217, 119, 6, 0.45);
+  --pos-info: #075985;
+  --pos-info-soft: rgba(2, 132, 199, 0.1);
+  --pos-info-border: rgba(2, 132, 199, 0.35);
+  --pos-info-solid: #0284c7;
+  --pos-ok: #047857;
+  --pos-ok-border: rgba(5, 150, 105, 0.45);
 }
 
 * {
@@ -252,6 +322,16 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--pos-text);
   /* Native controls (inputs on setup, selects in modals) render dark. */
   color-scheme: dark;
+}
+
+/* Light mode (B44): same quiet brand glow, tuned for a bright canvas, and
+   native controls flip to light so selects/inputs match. */
+html[data-pos-theme="light"] .pos-shell {
+  background:
+    radial-gradient(120% 60% at 50% -10%, rgba(47, 135, 34, 0.1), transparent 60%),
+    radial-gradient(90% 50% at 100% -10%, rgba(194, 65, 12, 0.06), transparent 55%),
+    var(--pos-canvas);
+  color-scheme: light;
 }
 
 /* Register action tiles: instant, tactile press feedback for finger-first
