@@ -29,7 +29,6 @@ import {
 import {
   addToCart,
   setCartQuantity,
-  searchProducts,
   priceCart,
   judgeLimits,
   limitLinesFor,
@@ -40,6 +39,7 @@ import {
   type PosMenuProduct,
 } from "@/lib/pos/sale-flow-core";
 import { resolveScan } from "@/lib/pos/scan-to-cart-core";
+import { categoryColorIndex, filterMenuProducts, menuCategoryChips, CATEGORY_COLOR_COUNT } from "@/lib/pos/sale-grid-core";
 import {
   applyPriceOverrides,
   overrideFloorMinor,
@@ -72,6 +72,32 @@ import {
 import type { MemberHistory } from "@/lib/pos/member-history-core";
 
 type Step = "idgate" | "cart" | "tender" | "done";
+
+/**
+ * B36 — the category chip/tile palette. Index = categoryColorIndex(category),
+ * so "flower" paints identically on every register with zero config. MUST
+ * hold exactly CATEGORY_COLOR_COUNT entries — the guard below throws at
+ * module load (and therefore in every test run) if the two drift apart.
+ * Each entry: chip = filter-chip accents, dot = the tile's category dot.
+ */
+const CATEGORY_TILE_STYLES: { chip: string; dot: string }[] = [
+  { chip: "border-emerald-500/50 text-emerald-300", dot: "bg-emerald-400" },
+  { chip: "border-sky-500/50 text-sky-300", dot: "bg-sky-400" },
+  { chip: "border-amber-500/50 text-amber-300", dot: "bg-amber-400" },
+  { chip: "border-fuchsia-500/50 text-fuchsia-300", dot: "bg-fuchsia-400" },
+  { chip: "border-rose-500/50 text-rose-300", dot: "bg-rose-400" },
+  { chip: "border-teal-500/50 text-teal-300", dot: "bg-teal-400" },
+  { chip: "border-indigo-500/50 text-indigo-300", dot: "bg-indigo-400" },
+  { chip: "border-orange-500/50 text-orange-300", dot: "bg-orange-400" },
+];
+if (CATEGORY_TILE_STYLES.length !== CATEGORY_COLOR_COUNT) {
+  throw new Error("CATEGORY_TILE_STYLES must match CATEGORY_COLOR_COUNT (sale-grid-core)");
+}
+
+/** B36 — the palette entry for a category (deterministic, shared hash). */
+function categoryStyle(category: string): { chip: string; dot: string } {
+  return CATEGORY_TILE_STYLES[categoryColorIndex(category)] ?? CATEGORY_TILE_STYLES[0];
+}
 
 /** A loyalty member hit from the server lookup (B14). */
 export type PosMemberHit = {
@@ -954,6 +980,8 @@ function CartScreen({
   onTender: () => void;
 }) {
   const [query, setQuery] = useState("");
+  // B36 — the active category filter chip (null = All).
+  const [category, setCategory] = useState<string | null>(null);
   // B24 — the line the manager is overriding (engine-priced snapshot).
   const [overrideTarget, setOverrideTarget] = useState<{ product: PosMenuProduct; engineLine: PricedSaleLine } | null>(null);
   // B23 — a scan that matched a MULTI-variant product: the cashier picks the
@@ -962,9 +990,13 @@ function CartScreen({
   const [scanFlash, setScanFlash] = useState<string | null>(null);
   const carded = !!medicalCard;
 
+  // B36 — category chips from the cached menu (busiest categories first).
+  const chips = useMemo(() => menuCategoryChips(bundle.products), [bundle.products]);
+  // B36 — search + chip combine; tile grids breathe better than lists, so the
+  // cap rises 30 → 60 (still bounded: an iPad renders 60 tiles instantly).
   const results = useMemo(
-    () => searchProducts(bundle.products, query).slice(0, 30),
-    [bundle.products, query],
+    () => filterMenuProducts(bundle.products, query, category).slice(0, 60),
+    [bundle.products, query, category],
   );
 
   /**
@@ -1032,7 +1064,7 @@ function CartScreen({
     cart.length > 0 && priced.problems.length === 0 && !limits.blocked && highThcViolations.length === 0;
 
   return (
-    <main className="flex min-h-screen flex-col bg-neutral-950 p-4 text-neutral-100 sm:p-6">
+    <main className="pos-shell flex min-h-screen flex-col p-4 sm:p-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-lg font-semibold">
@@ -1043,39 +1075,82 @@ function CartScreen({
               </span>
             ) : null}
           </h1>
-          <p className="text-xs text-neutral-500">
+          <p className="text-xs text-[var(--pos-text-faint)]">
             Menu as of {new Date(bundle.fetchedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
             {carded ? " · tax exemptions applied per line (RCW 82.08.9998 / WAC 314-55-090)" : ""}
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button type="button" onClick={onCancel} className="rounded-lg bg-neutral-800 px-4 py-2 text-sm">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="pos-tile rounded-lg border border-[var(--pos-border)] bg-[var(--pos-surface-2)] px-4 py-2 text-sm font-semibold"
+          >
             Cancel sale
           </button>
         </div>
       </header>
 
       <div className="mt-4 grid flex-1 gap-4 lg:grid-cols-2">
-        {/* Product search */}
-        <section className="rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
-          <input
-            value={query}
-            onChange={(e) => {
-              setQuery(e.target.value);
-              if (scanFlash) setScanFlash(null);
-            }}
-            onKeyDown={(e) => {
-              // B23 — wedge scanners type the code then press Enter.
-              if (e.key === "Enter" && query.trim().length > 0) {
-                e.preventDefault();
-                tryScan();
-              }
-            }}
-            placeholder="Scan a package barcode or search name, brand, category, size…"
-            className="w-full rounded-xl border border-neutral-700 bg-neutral-950 p-3 text-sm"
-          />
+        {/* B36 — product browser: prominent scan/search bar, category filter
+            chips (Toast groups), then a Square/Shopify-style tile grid. */}
+        <section className="rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-4">
+          <div className="relative">
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-lg" aria-hidden>
+              🔍
+            </span>
+            <input
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                if (scanFlash) setScanFlash(null);
+              }}
+              onKeyDown={(e) => {
+                // B23 — wedge scanners type the code then press Enter.
+                if (e.key === "Enter" && query.trim().length > 0) {
+                  e.preventDefault();
+                  tryScan();
+                }
+              }}
+              placeholder="Scan a package barcode or search name, brand, category, size…"
+              className="w-full rounded-xl border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] py-3 pl-10 pr-3 text-base focus:border-[var(--pos-accent-border)] focus:outline-none"
+            />
+          </div>
+          {chips.length > 0 ? (
+            <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+              <button
+                type="button"
+                onClick={() => setCategory(null)}
+                className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-bold ${
+                  category === null
+                    ? "border-[var(--pos-accent-border)] bg-[var(--pos-accent-soft)] text-[var(--pos-accent)]"
+                    : "border-[var(--pos-border)] bg-[var(--pos-surface-2)] text-[var(--pos-text-muted)]"
+                }`}
+              >
+                All
+              </button>
+              {chips.map((c) => {
+                const active = category !== null && c.category.toLowerCase() === category.toLowerCase();
+                const style = categoryStyle(c.category);
+                return (
+                  <button
+                    key={c.category.toLowerCase()}
+                    type="button"
+                    onClick={() => setCategory(active ? null : c.category)}
+                    className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-bold capitalize ${
+                      active ? `${style.chip} bg-[var(--pos-surface-hover)]` : "border-[var(--pos-border)] bg-[var(--pos-surface-2)] text-[var(--pos-text-muted)]"
+                    }`}
+                  >
+                    <span className={`mr-1.5 inline-block h-2 w-2 rounded-full align-middle ${style.dot}`} aria-hidden />
+                    {c.category}
+                    <span className="ml-1 font-normal opacity-60">{c.count}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
           {scanFlash ? (
-            <p className="mt-2 rounded-lg bg-emerald-950/60 px-3 py-2 text-xs font-semibold text-emerald-300">
+            <p className="mt-2 rounded-lg border border-[var(--pos-accent-border)] bg-[var(--pos-accent-soft)] px-3 py-2 text-xs font-semibold text-[var(--pos-accent)]">
               {scanFlash} — added to cart
             </p>
           ) : null}
@@ -1109,31 +1184,37 @@ function CartScreen({
               </div>
             </div>
           ) : null}
-          <ul className="mt-3 max-h-[52vh] space-y-2 overflow-y-auto">
-            {results.map((p) => (
-              <li key={p.variantId}>
-                <button
-                  type="button"
-                  onClick={() => setCart(addToCart(cart, p))}
-                  className="flex w-full items-center justify-between rounded-xl bg-neutral-800 px-4 py-3 text-left active:bg-neutral-700"
-                >
-                  <span>
-                    <span className="block text-sm font-semibold">
+          <ul className="mt-3 grid max-h-[52vh] grid-cols-2 content-start gap-2 overflow-y-auto xl:grid-cols-3">
+            {results.map((p) => {
+              const style = categoryStyle(p.category);
+              return (
+                <li key={p.variantId}>
+                  <button
+                    type="button"
+                    onClick={() => setCart(addToCart(cart, p))}
+                    className="pos-tile flex h-full w-full flex-col rounded-xl border border-[var(--pos-border)] bg-[var(--pos-surface-2)] p-3 text-left active:bg-[var(--pos-surface-hover)]"
+                  >
+                    <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-[var(--pos-text-faint)]">
+                      <span className={`h-2 w-2 rounded-full ${style.dot}`} aria-hidden />
+                      <span className="truncate capitalize">{p.category}</span>
+                    </span>
+                    <span className="mt-1 block text-sm font-semibold leading-snug">
                       {p.name}
-                      {p.variantLabel ? <span className="text-neutral-400"> · {p.variantLabel}</span> : null}
+                      {p.variantLabel ? <span className="text-[var(--pos-text-muted)]"> · {p.variantLabel}</span> : null}
                       <StockBadge product={p} />
                     </span>
-                    <span className="block text-xs text-neutral-500">
-                      {p.brand ? `${p.brand} · ` : ""}
-                      {p.category}
+                    {p.brand ? (
+                      <span className="mt-0.5 block truncate text-xs text-[var(--pos-text-faint)]">{p.brand}</span>
+                    ) : null}
+                    <span className="mt-auto block pt-2 text-base font-bold text-[var(--pos-accent)]">
+                      {money(p.regularPriceMinor)}
                     </span>
-                  </span>
-                  <span className="text-sm font-bold">{money(p.regularPriceMinor)}</span>
-                </button>
-              </li>
-            ))}
+                  </button>
+                </li>
+              );
+            })}
             {results.length === 0 ? (
-              <li className="px-2 py-6 text-center text-sm text-neutral-500">No products match.</li>
+              <li className="col-span-full px-2 py-6 text-center text-sm text-[var(--pos-text-faint)]">No products match.</li>
             ) : null}
           </ul>
         </section>
