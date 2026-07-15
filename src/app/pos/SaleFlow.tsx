@@ -67,7 +67,12 @@ import {
   type PosLineOverride,
 } from "@/lib/pos/price-override-core";
 import { dollarsToMinor } from "@/lib/pos/till-core";
-import { changeBreakdown, smartTenderSuggestions } from "@/lib/pos/change-calc-core";
+import {
+  changeBreakdown,
+  smartTenderSuggestions,
+  tenderKeypadAppend,
+  tenderKeypadBackspace,
+} from "@/lib/pos/change-calc-core";
 import { roundCashDue, normalizePosCashRoundingConfig } from "@/lib/pos/cash-rounding-core";
 import { stockSignal, cartStockWarnings } from "@/lib/pos/low-stock-core";
 import {
@@ -2592,7 +2597,18 @@ function TenderScreen({
   const due = rounded?.dueMinor ?? total;
   const roundingAdj = rounded?.adjustmentMinor ?? 0;
   const [tendered, setTendered] = useState(0);
+  // AL-B — true when the amount came from the keypad (renders live in the
+  // keypad display); a preset chip resets it so the two inputs never fight.
+  const [keypadUsed, setKeypadUsed] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // AL-B — one digit onto the keypad amount. If the current amount came from
+  // a CHIP, the keypad starts fresh — appending digits to $30.00 would read
+  // $300.0x and surprise everyone.
+  const pressKey = (digit: number) => {
+    setTendered(tenderKeypadAppend(keypadUsed ? tendered : 0, digit));
+    setKeypadUsed(true);
+  };
 
   // B31 — the amounts customers actually hand over: exact, next whole
   // dollar, then $5/$10/$20 steps plus the $50/$100 bills, deduplicated.
@@ -2629,32 +2645,56 @@ function TenderScreen({
         <p className="mt-4 w-full max-w-md rounded-lg border border-[var(--pos-danger-border)] bg-[var(--pos-danger-soft)] px-4 py-3 text-sm text-[var(--pos-danger)]">{error}</p>
       ) : null}
 
+      {/* AL-B — preset chips FIRST ("don't make me think"): one tap covers
+          the overwhelming majority of real tenders. */}
       <div className="mt-6 flex flex-wrap justify-center gap-3">
         {suggestions.map((amt, i) => (
           <TenderChip
             key={amt}
             label={i === 0 ? `Exact ${money(amt)}` : money(amt)}
-            onClick={() => setTendered(amt)}
+            onClick={() => {
+              setTendered(amt);
+              setKeypadUsed(false);
+            }}
             active={tendered === amt}
           />
         ))}
       </div>
 
-      <div className="mt-4 flex items-center gap-3">
-        <label htmlFor="pos-tender" className="text-sm text-[var(--pos-text-muted)]">Custom $</label>
-        <input
-          id="pos-tender"
-          inputMode="decimal"
-          placeholder="0.00"
-          onChange={(e) => {
-            const v = Math.round(parseFloat(e.target.value || "0") * 100);
-            setTendered(Number.isFinite(v) && v > 0 ? v : 0);
-          }}
-          className="w-32 rounded-xl border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] p-3 text-right text-lg font-semibold focus:border-[var(--pos-accent-border)] focus:outline-none"
-        />
+      {/* AL-B — a register KEYPAD for odd amounts, replacing the old naked
+          text input: cash-register digit entry (2-6-4-1 reads $26.41) is
+          the muscle-memory instrument budtenders already know, and big keys
+          beat a cramped text field on a touch screen. Pure math lives in
+          change-calc-core (tenderKeypadAppend/Backspace, self-tested). */}
+      <div className="mt-5 w-full max-w-xs">
+        <div
+          className={`rounded-xl border px-4 py-2.5 text-center ${
+            keypadUsed
+              ? "border-[var(--pos-accent-border)] bg-[var(--pos-accent-soft)]"
+              : "border-[var(--pos-border)] bg-[var(--pos-surface-2)]"
+          }`}
+        >
+          <span className={`text-2xl font-bold tabular-nums ${keypadUsed ? "text-[var(--pos-accent)]" : "text-[var(--pos-text-faint)]"}`}>
+            {keypadUsed ? money(tendered) : "Custom amount"}
+          </span>
+        </div>
+        <div className="mt-2.5 grid grid-cols-3 gap-2">
+          {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((d) => (
+            <KeyButton key={d} label={d} onPress={() => pressKey(Number(d))} />
+          ))}
+          <KeyButton label="C" onPress={() => { setTendered(0); setKeypadUsed(false); }} />
+          <KeyButton label="0" onPress={() => pressKey(0)} />
+          <KeyButton
+            label="⌫"
+            onPress={() => {
+              setTendered(tenderKeypadBackspace(keypadUsed ? tendered : 0));
+              setKeypadUsed(true);
+            }}
+          />
+        </div>
       </div>
 
-      <p className={`mt-6 text-2xl font-bold ${change >= 0 ? "text-[var(--pos-accent)]" : "text-[var(--pos-text-faint)]"}`}>
+      <p className={`mt-5 text-2xl font-bold ${change >= 0 ? "text-[var(--pos-accent)]" : "text-[var(--pos-text-faint)]"}`}>
         {change >= 0 ? `${money(change)} change` : `${money(-change)} more needed`}
       </p>
       {tendered >= due && change > 0 ? <ChangePlan changeMinor={change} compact /> : null}

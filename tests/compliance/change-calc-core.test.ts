@@ -12,7 +12,10 @@ import {
   changeBreakdown,
   formatChangeBreakdown,
   smartTenderSuggestions,
+  tenderKeypadAppend,
+  tenderKeypadBackspace,
   CHANGE_DENOMS,
+  MAX_TENDER_MINOR,
   __runChangeCalcCoreTests,
 } from "@/lib/pos/change-calc-core";
 
@@ -76,8 +79,35 @@ describe("smartTenderSuggestions", () => {
   });
 });
 
+describe("tenderKeypadAppend / tenderKeypadBackspace (AL-B)", () => {
+  it("shifts digits in from the right, register style", () => {
+    let v = 0;
+    for (const d of [2, 6, 4, 1]) v = tenderKeypadAppend(v, d);
+    expect(v).toBe(2641); // $26.41
+    expect(tenderKeypadAppend(0, 0)).toBe(0); // leading zero stays zero
+  });
+
+  it("caps at $9,999.99 and ignores bad digits", () => {
+    expect(tenderKeypadAppend(MAX_TENDER_MINOR, 9)).toBe(MAX_TENDER_MINOR);
+    expect(tenderKeypadAppend(5, -1)).toBe(5);
+    expect(tenderKeypadAppend(5, 10)).toBe(5);
+    expect(MAX_TENDER_MINOR).toBe(999_999);
+  });
+
+  it("resets invalid state before acting", () => {
+    expect(tenderKeypadAppend(-50, 3)).toBe(3);
+    expect(tenderKeypadAppend(10.5, 3)).toBe(3);
+    expect(tenderKeypadBackspace(-7)).toBe(0);
+  });
+
+  it("backspace drops the rightmost digit", () => {
+    expect(tenderKeypadBackspace(2641)).toBe(264);
+    expect(tenderKeypadBackspace(0)).toBe(0);
+  });
+});
+
 describe("embedded self-tests", () => {
-  it("run clean (23 assertions)", () => {
+  it("run clean (35 assertions)", () => {
     expect(() => __runChangeCalcCoreTests()).not.toThrow();
   });
 });
