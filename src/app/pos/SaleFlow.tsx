@@ -408,12 +408,17 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
     );
   }
 
-  // done
+  // done — B38: a celebratory brand-green moment (Square's "all set" energy).
   return (
     <Frame title="Sale complete" onCancel={onComplete} cancelLabel="Lock register">
-      <p className="text-5xl font-bold text-emerald-300">{money(changeMinor ?? 0)} change</p>
+      <div className="w-full max-w-md rounded-2xl border border-[var(--pos-accent-border)] bg-[var(--pos-accent-soft)] px-6 py-6 text-center">
+        <p className="text-4xl" aria-hidden>
+          ✅
+        </p>
+        <p className="mt-2 text-5xl font-bold text-[var(--pos-accent)]">{money(changeMinor ?? 0)} change</p>
+      </div>
       {changeMinor != null && changeMinor > 0 ? <ChangePlan changeMinor={changeMinor} /> : null}
-      <p className="mt-4 max-w-md text-sm text-neutral-400">
+      <p className="mt-4 max-w-md text-center text-sm text-[var(--pos-text-muted)]">
         Count the change back to the customer. The sale is queued and will sync to the back office —
         the register locks when you tap below.
       </p>
@@ -422,7 +427,7 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
       <button
         type="button"
         onClick={onComplete}
-        className="mt-8 rounded-2xl bg-emerald-600 px-10 py-5 text-xl font-bold text-white"
+        className="pos-tile mt-8 rounded-2xl bg-[var(--pos-accent)] px-10 py-5 text-xl font-bold text-[var(--pos-accent-ink)]"
       >
         Done — lock register
       </button>
@@ -456,7 +461,7 @@ function EmailReceiptPanel({
 
   if (sent) {
     return (
-      <p className="mt-4 rounded-xl bg-emerald-950/60 px-4 py-3 text-sm text-emerald-300">
+      <p className="mt-4 rounded-xl border border-[var(--pos-accent-border)] bg-[var(--pos-accent-soft)] px-4 py-3 text-sm text-[var(--pos-accent)]">
         Receipt emailed. The address was used once and not saved.
       </p>
     );
@@ -467,7 +472,7 @@ function EmailReceiptPanel({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="mt-4 rounded-2xl border border-neutral-600 px-8 py-4 text-lg font-semibold text-neutral-200"
+        className="pos-tile mt-4 rounded-2xl border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-8 py-4 text-lg font-semibold"
       >
         Email receipt
       </button>
@@ -493,9 +498,9 @@ function EmailReceiptPanel({
   };
 
   return (
-    <div className="mt-4 w-full max-w-md rounded-2xl border border-neutral-700 bg-neutral-900/70 p-4 text-left">
-      <p className="text-sm font-semibold text-neutral-200">Email this receipt (customer&apos;s request)</p>
-      <p className="mt-1 text-xs text-neutral-500">
+    <div className="mt-4 w-full max-w-md rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-4 text-left">
+      <p className="text-sm font-semibold">Email this receipt (customer&apos;s request)</p>
+      <p className="mt-1 text-xs text-[var(--pos-text-faint)]">
         The address is used once to send this receipt and is not saved. Transactional copy only — no marketing.
       </p>
       <div className="mt-3 flex gap-2">
@@ -508,19 +513,19 @@ function EmailReceiptPanel({
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="customer@example.com"
-          className="min-w-0 flex-1 rounded-xl border border-neutral-600 bg-neutral-950 px-4 py-3 text-base text-neutral-100 placeholder:text-neutral-600"
+          className="min-w-0 flex-1 rounded-xl border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-4 py-3 text-base placeholder:text-[var(--pos-text-faint)] focus:border-[var(--pos-accent-border)] focus:outline-none"
         />
         <button
           type="button"
           onClick={() => void send()}
           disabled={busy}
-          className="rounded-xl bg-neutral-100 px-5 py-3 text-base font-bold text-neutral-900 disabled:opacity-50"
+          className="pos-tile rounded-xl bg-[var(--pos-accent)] px-5 py-3 text-base font-bold text-[var(--pos-accent-ink)] disabled:opacity-50"
         >
           {busy ? "Sending…" : "Send"}
         </button>
       </div>
       {note ? <p className="mt-2 text-sm text-amber-300">{note}</p> : null}
-      <button type="button" onClick={() => { setOpen(false); setEmail(""); setNote(null); }} className="mt-3 text-xs text-neutral-500 underline">
+      <button type="button" onClick={() => { setOpen(false); setEmail(""); setNote(null); }} className="mt-3 text-xs text-[var(--pos-text-faint)] underline">
         Never mind
       </button>
     </div>
@@ -568,19 +573,19 @@ function ReceiptButtons({ receipt }: { receipt: PosReceiptInput }) {
         <button
           type="button"
           onClick={printStar}
-          className="rounded-2xl bg-neutral-100 px-8 py-4 text-lg font-bold text-neutral-900"
+          className="pos-tile rounded-2xl bg-[var(--pos-accent)] px-8 py-4 text-lg font-bold text-[var(--pos-accent-ink)]"
         >
           Print receipt
         </button>
         <button
           type="button"
           onClick={printBrowser}
-          className="rounded-2xl border border-neutral-600 px-8 py-4 text-lg font-semibold text-neutral-200"
+          className="pos-tile rounded-2xl border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-8 py-4 text-lg font-semibold text-[var(--pos-text)]"
         >
           Browser print
         </button>
       </div>
-      <p className="max-w-md text-center text-xs text-neutral-500">
+      <p className="max-w-md text-center text-xs text-[var(--pos-text-faint)]">
         “Print receipt” opens the Star PassPRNT app (paired Bluetooth printer) and pops the drawer.
         Tap again to reprint. Use “Browser print” if PassPRNT isn’t installed on this device.
       </p>
@@ -719,13 +724,13 @@ function IdGateScreen({
   return (
     <Frame title="Check ID — required before anything enters the cart" onCancel={onCancel}>
       {error ? (
-        <p className="mb-4 w-full max-w-lg rounded-lg bg-red-950/60 px-4 py-3 text-sm text-red-300">{error}</p>
+        <p className="mb-4 w-full max-w-lg rounded-lg border border-red-900/60 bg-red-950/60 px-4 py-3 text-sm text-red-300">{error}</p>
       ) : null}
 
       {/* POS B9 — medical recognition card (RCW 69.51A.230). Captured AT the
           gate: it changes the age floor (18–20 patients), unlocks High-THC
           products, and passes the tax exemptions through to the price. */}
-      <div className="mb-4 w-full max-w-lg rounded-xl border border-neutral-800 bg-neutral-900 p-4">
+      <div className="mb-4 w-full max-w-lg rounded-xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-4">
         <label className="flex items-center gap-3 text-sm font-semibold">
           <input
             type="checkbox"
@@ -747,7 +752,7 @@ function IdGateScreen({
         {medical ? (
           <div className="mt-3 space-y-3">
             <div>
-              <label htmlFor="pos-upid" className="text-sm text-neutral-400">
+              <label htmlFor="pos-upid" className="text-sm text-[var(--pos-text-muted)]">
                 Unique patient identifier (UPID) — exactly as printed on the card
               </label>
               <input
@@ -755,30 +760,30 @@ function IdGateScreen({
                 value={upid}
                 onChange={(e) => setUpid(e.target.value)}
                 autoCapitalize="characters"
-                className="mt-1 w-full rounded-xl border border-neutral-700 bg-neutral-950 p-3 font-mono text-sm"
+                className="mt-1 w-full rounded-xl border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] p-3 font-mono text-sm"
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label htmlFor="pos-card-eff" className="text-sm text-neutral-400">Card effective (YYYY-MM-DD)</label>
+                <label htmlFor="pos-card-eff" className="text-sm text-[var(--pos-text-muted)]">Card effective (YYYY-MM-DD)</label>
                 <input
                   id="pos-card-eff"
                   value={cardEffective}
                   onChange={(e) => setCardEffective(e.target.value)}
                   inputMode="numeric"
                   placeholder="2026-01-01"
-                  className="mt-1 w-full rounded-xl border border-neutral-700 bg-neutral-950 p-3 text-sm"
+                  className="mt-1 w-full rounded-xl border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] p-3 text-sm"
                 />
               </div>
               <div>
-                <label htmlFor="pos-card-exp" className="text-sm text-neutral-400">Card expires (YYYY-MM-DD)</label>
+                <label htmlFor="pos-card-exp" className="text-sm text-[var(--pos-text-muted)]">Card expires (YYYY-MM-DD)</label>
                 <input
                   id="pos-card-exp"
                   value={cardExpires}
                   onChange={(e) => setCardExpires(e.target.value)}
                   inputMode="numeric"
                   placeholder="2027-01-01"
-                  className="mt-1 w-full rounded-xl border border-neutral-700 bg-neutral-950 p-3 text-sm"
+                  className="mt-1 w-full rounded-xl border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] p-3 text-sm"
                 />
               </div>
             </div>
@@ -808,7 +813,7 @@ function IdGateScreen({
 
       {mode === "scan" ? (
         <div className="w-full max-w-lg">
-          <label htmlFor="pos-scan" className="text-sm text-neutral-400">
+          <label htmlFor="pos-scan" className="text-sm text-[var(--pos-text-muted)]">
             Scan the barcode on the back of the license/ID. The scanner types into the box below —
             keep it focused. Scanner sends Enter when done.
           </label>
@@ -825,7 +830,7 @@ function IdGateScreen({
             }}
             autoFocus
             rows={4}
-            className="mt-2 w-full rounded-xl border border-neutral-700 bg-neutral-900 p-3 font-mono text-xs text-neutral-200"
+            className="mt-2 w-full rounded-xl border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] p-3 font-mono text-xs text-[var(--pos-text)]"
             placeholder="@ … ANSI 636045 …"
           />
           <div className="mt-3 flex gap-3">
@@ -833,7 +838,7 @@ function IdGateScreen({
               type="button"
               onClick={submitScan}
               disabled={scanBuffer.trim().length === 0}
-              className="rounded-xl bg-emerald-600 px-6 py-3 font-semibold text-white disabled:opacity-40"
+              className="pos-tile rounded-xl bg-[var(--pos-accent)] px-6 py-3 font-semibold text-[var(--pos-accent-ink)] disabled:opacity-40"
             >
               Check scan
             </button>
@@ -843,7 +848,7 @@ function IdGateScreen({
                 setMode("manual");
                 setError(null);
               }}
-              className="rounded-xl bg-neutral-800 px-6 py-3 font-semibold"
+              className="pos-tile rounded-xl border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-6 py-3 font-semibold text-[var(--pos-text)]"
             >
               Manual verification instead
             </button>
@@ -856,12 +861,12 @@ function IdGateScreen({
             has no barcode (passport, tribal, armed forces…).
           </p>
           <div>
-            <label htmlFor="pos-idtype" className="text-sm text-neutral-400">Document type (WAC 314-55-150)</label>
+            <label htmlFor="pos-idtype" className="text-sm text-[var(--pos-text-muted)]">Document type (WAC 314-55-150)</label>
             <select
               id="pos-idtype"
               value={idType}
               onChange={(e) => setIdType(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-neutral-700 bg-neutral-900 p-3 text-sm"
+              className="mt-1 w-full rounded-xl border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] p-3 text-sm"
             >
               <option value="">— select —</option>
               {ACCEPTABLE_ID_TYPES.map((t) => (
@@ -871,36 +876,36 @@ function IdGateScreen({
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label htmlFor="pos-dob" className="text-sm text-neutral-400">Date of birth (YYYY-MM-DD)</label>
+              <label htmlFor="pos-dob" className="text-sm text-[var(--pos-text-muted)]">Date of birth (YYYY-MM-DD)</label>
               <input
                 id="pos-dob"
                 value={dob}
                 onChange={(e) => setDob(e.target.value)}
                 inputMode="numeric"
                 placeholder="1990-07-13"
-                className="mt-1 w-full rounded-xl border border-neutral-700 bg-neutral-900 p-3 text-sm"
+                className="mt-1 w-full rounded-xl border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] p-3 text-sm"
               />
             </div>
             <div>
-              <label htmlFor="pos-exp" className="text-sm text-neutral-400">Expiration date (YYYY-MM-DD)</label>
+              <label htmlFor="pos-exp" className="text-sm text-[var(--pos-text-muted)]">Expiration date (YYYY-MM-DD)</label>
               <input
                 id="pos-exp"
                 value={expiry}
                 onChange={(e) => setExpiry(e.target.value)}
                 inputMode="numeric"
                 placeholder="2028-01-31"
-                className="mt-1 w-full rounded-xl border border-neutral-700 bg-neutral-900 p-3 text-sm"
+                className="mt-1 w-full rounded-xl border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] p-3 text-sm"
               />
             </div>
           </div>
           <div>
-            <label htmlFor="pos-reason" className="text-sm text-neutral-400">Why manual? (audited, 3–500 chars)</label>
+            <label htmlFor="pos-reason" className="text-sm text-[var(--pos-text-muted)]">Why manual? (audited, 3–500 chars)</label>
             <input
               id="pos-reason"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder="Barcode scratched — visual check of WA DL"
-              className="mt-1 w-full rounded-xl border border-neutral-700 bg-neutral-900 p-3 text-sm"
+              className="mt-1 w-full rounded-xl border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] p-3 text-sm"
             />
           </div>
           <label className="flex items-center gap-3 text-sm">
@@ -916,7 +921,7 @@ function IdGateScreen({
             <button
               type="button"
               onClick={submitManual}
-              className="rounded-xl bg-emerald-600 px-6 py-3 font-semibold text-white"
+              className="pos-tile rounded-xl bg-[var(--pos-accent)] px-6 py-3 font-semibold text-[var(--pos-accent-ink)]"
             >
               Verify manually
             </button>
@@ -926,7 +931,7 @@ function IdGateScreen({
                 setMode("scan");
                 setError(null);
               }}
-              className="rounded-xl bg-neutral-800 px-6 py-3 font-semibold"
+              className="pos-tile rounded-xl border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-6 py-3 font-semibold text-[var(--pos-text)]"
             >
               Back to scanning
             </button>
@@ -1180,7 +1185,7 @@ function CartScreen({
                 <button
                   type="button"
                   onClick={() => setScanPick(null)}
-                  className="rounded-full bg-neutral-800 px-3 py-1.5 text-xs font-semibold text-neutral-300"
+                  className="pos-tile rounded-full border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-1.5 text-xs font-semibold text-[var(--pos-text)]"
                 >
                   Cancel
                 </button>
@@ -1542,10 +1547,10 @@ function PriceOverrideModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className="w-full max-w-md rounded-2xl border border-neutral-700 bg-neutral-900 p-6 text-neutral-100">
+      <div className="w-full max-w-md rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-6 text-[var(--pos-text)]">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">Price override</h2>
-          <button type="button" onClick={onClose} className="rounded-lg bg-neutral-800 px-3 py-1.5 text-sm">
+          <button type="button" onClick={onClose} className="pos-tile rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-1.5 text-sm">
             Cancel
           </button>
         </div>
@@ -1553,17 +1558,17 @@ function PriceOverrideModal({
           {engineLine.productName} — currently {money(engineLine.unitPriceMinor)} each
           {engineLine.appliedLabel ? ` (${engineLine.appliedLabel})` : ""}.
         </p>
-        <p className="mt-1 text-xs text-neutral-400">
+        <p className="mt-1 text-xs text-[var(--pos-text-muted)]">
           Markdowns only — raise prices in the back office menu. Floor for this item:{" "}
-          <span className="font-semibold text-neutral-200">{money(Math.max(1, floorMinor))}</span> (statutory minimum /
+          <span className="font-semibold text-[var(--pos-text)]">{money(Math.max(1, floorMinor))}</span> (statutory minimum /
           acquisition cost). A manager or lead approves with their PIN; the override is audited at sync.
         </p>
 
-        <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-neutral-400">
+        <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
           New price per unit
         </label>
         <input
-          className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2.5 text-lg font-semibold"
+          className="mt-1 w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2.5 text-lg font-semibold"
           inputMode="decimal"
           placeholder="0.00"
           value={priceText}
@@ -1583,7 +1588,7 @@ function PriceOverrideModal({
                 setCustom("");
               }}
               className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
-                preset === p ? "bg-amber-600 text-white" : "bg-neutral-800 text-neutral-300"
+                preset === p ? "bg-amber-600 text-white" : "border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] text-[var(--pos-text-muted)]"
               }`}
             >
               {p}
@@ -1591,7 +1596,7 @@ function PriceOverrideModal({
           ))}
         </div>
         <input
-          className="mt-3 w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2.5 text-sm"
+          className="mt-3 w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2.5 text-sm"
           placeholder="Or type another reason (3–500 characters)…"
           value={custom}
           maxLength={500}
@@ -1601,11 +1606,11 @@ function PriceOverrideModal({
           }}
         />
 
-        <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-neutral-400">
+        <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
           Manager / lead PIN
         </label>
         <input
-          className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2.5 text-center font-mono text-lg tracking-[0.5em]"
+          className="mt-1 w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2.5 text-center font-mono text-lg tracking-[0.5em]"
           type="password"
           inputMode="numeric"
           autoComplete="off"
@@ -1618,17 +1623,17 @@ function PriceOverrideModal({
         />
 
         {request && !request.ok ? (
-          <p className="mt-3 rounded-lg bg-amber-950/60 px-3 py-2 text-xs font-semibold text-amber-300">{request.error}</p>
+          <p className="mt-3 rounded-lg border border-amber-900/60 bg-amber-950/60 px-3 py-2 text-xs font-semibold text-amber-300">{request.error}</p>
         ) : null}
         {error ? (
-          <p className="mt-3 rounded-lg bg-red-950/60 px-3 py-2 text-xs font-semibold text-red-300">{error}</p>
+          <p className="mt-3 rounded-lg border border-red-900/60 bg-red-950/60 px-3 py-2 text-xs font-semibold text-red-300">{error}</p>
         ) : null}
 
         <button
           type="button"
           disabled={!ready}
           onClick={approve}
-          className="mt-4 w-full rounded-xl bg-amber-600 px-4 py-3 text-sm font-bold text-white disabled:opacity-40"
+          className="pos-tile mt-4 w-full rounded-xl bg-amber-600 px-4 py-3 text-sm font-bold text-white disabled:opacity-40"
         >
           {busy ? "Verifying…" : "Approve override"}
         </button>
@@ -1688,7 +1693,7 @@ function MemberPanel({
         <div className="flex items-center justify-between">
           <span className="text-sm">
             <span className="font-semibold text-amber-300">★ {member.label}</span>
-            <span className="ml-2 text-xs text-neutral-400">
+            <span className="ml-2 text-xs text-[var(--pos-text-muted)]">
               {member.points.toLocaleString()} pts{member.tierName ? ` · ${member.tierName}` : ""}
             </span>
           </span>
@@ -1697,7 +1702,7 @@ function MemberPanel({
               <button
                 type="button"
                 onClick={() => void toggleHistory()}
-                className="rounded-lg bg-neutral-800 px-3 py-1.5 text-xs font-semibold"
+                className="pos-tile rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-1.5 text-xs font-semibold text-[var(--pos-text)]"
               >
                 {historyOpen ? "Hide history" : "History"}
               </button>
@@ -1710,7 +1715,7 @@ function MemberPanel({
                 setHistory(null);
                 setHistoryError(null);
               }}
-              className="rounded-lg bg-neutral-800 px-3 py-1.5 text-xs font-semibold"
+              className="pos-tile rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-1.5 text-xs font-semibold text-[var(--pos-text)]"
             >
               Remove
             </button>
@@ -1719,24 +1724,24 @@ function MemberPanel({
         {historyOpen ? (
           <div className="mt-2 border-t border-amber-900/40 pt-2">
             {historyBusy ? (
-              <p className="text-xs text-neutral-400">Loading…</p>
+              <p className="text-xs text-[var(--pos-text-muted)]">Loading…</p>
             ) : historyError ? (
               <p className="text-xs text-amber-300">{historyError}</p>
             ) : history ? (
               history.purchases.length === 0 ? (
-                <p className="text-xs text-neutral-400">First visit on record — make it a good one.</p>
+                <p className="text-xs text-[var(--pos-text-muted)]">First visit on record — make it a good one.</p>
               ) : (
                 <>
                   {history.favorites.length > 0 ? (
-                    <p className="text-xs text-neutral-300">
+                    <p className="text-xs text-[var(--pos-text-muted)]">
                       <span className="font-semibold text-amber-300/90">Usually buys:</span>{" "}
                       {history.favorites.map((f) => f.productName).join(" · ")}
                     </p>
                   ) : null}
                   <ul className="mt-1.5 space-y-1">
                     {history.purchases.map((p) => (
-                      <li key={p.orderId} className="text-xs text-neutral-400">
-                        <span className="font-semibold text-neutral-300">{p.dateLabel}</span> · {money(p.totalMinor)} ·{" "}
+                      <li key={p.orderId} className="text-xs text-[var(--pos-text-muted)]">
+                        <span className="font-semibold text-[var(--pos-text)]">{p.dateLabel}</span> · {money(p.totalMinor)} ·{" "}
                         {p.items.join(", ")}
                         {p.moreCount > 0 ? ` + ${p.moreCount} more` : ""}
                       </li>
@@ -1756,7 +1761,7 @@ function MemberPanel({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="mt-3 rounded-xl border border-dashed border-neutral-700 px-4 py-2.5 text-left text-sm text-neutral-400 active:bg-neutral-800"
+        className="mt-3 rounded-xl border border-dashed border-[var(--pos-border-strong)] px-4 py-2.5 text-left text-sm text-[var(--pos-text-muted)] active:bg-[var(--pos-surface-hover)]"
       >
         ★ Add loyalty member (optional)
       </button>
@@ -1780,7 +1785,7 @@ function MemberPanel({
   };
 
   return (
-    <div className="mt-3 rounded-xl border border-neutral-700 bg-neutral-950 p-3">
+    <div className="mt-3 rounded-xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-3">
       <div className="flex items-center gap-2">
         <input
           value={q}
@@ -1789,13 +1794,13 @@ function MemberPanel({
             if (e.key === "Enter") void search();
           }}
           placeholder="Member name, phone, or email…"
-          className="flex-1 rounded-lg border border-neutral-700 bg-neutral-900 p-2.5 text-sm"
+          className="flex-1 rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] p-2.5 text-sm"
         />
         <button
           type="button"
           onClick={() => void search()}
           disabled={busy || q.trim().length < 2}
-          className="rounded-lg bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
+          className="pos-tile rounded-lg bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
         >
           {busy ? "…" : "Find"}
         </button>
@@ -1807,7 +1812,7 @@ function MemberPanel({
             setError(null);
             setQ("");
           }}
-          className="rounded-lg bg-neutral-800 px-3 py-2.5 text-sm"
+          className="pos-tile rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2.5 text-sm"
         >
           ✕
         </button>
@@ -1826,10 +1831,10 @@ function MemberPanel({
                   setQ("");
                   setError(null);
                 }}
-                className="flex w-full items-center justify-between rounded-lg bg-neutral-800 px-3 py-2.5 text-left active:bg-neutral-700"
+                className="flex w-full items-center justify-between rounded-lg border border-[var(--pos-border)] bg-[var(--pos-surface-2)] px-3 py-2.5 text-left active:bg-[var(--pos-surface-hover)]"
               >
                 <span className="text-sm font-semibold">{h.label}</span>
-                <span className="text-xs text-neutral-400">
+                <span className="text-xs text-[var(--pos-text-muted)]">
                   {h.points.toLocaleString()} pts{h.tierName ? ` · ${h.tierName}` : ""}
                 </span>
               </button>
@@ -1870,8 +1875,8 @@ function ChangePlan({ changeMinor, compact }: { changeMinor: number; compact?: b
           key={p.label}
           className={`inline-flex items-center gap-1 rounded-lg px-3 py-1.5 font-semibold ${
             p.kind === "bill"
-              ? "bg-emerald-900/60 text-emerald-200"
-              : "bg-neutral-800 text-neutral-300"
+              ? "border border-[var(--pos-accent-border)] bg-[var(--pos-accent-soft)] text-[var(--pos-accent)]"
+              : "border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] text-[var(--pos-text)]"
           } ${compact ? "text-sm" : "text-base"}`}
         >
           {p.count}&times;{p.label}
@@ -1928,24 +1933,26 @@ function TenderScreen({
 
   return (
     <Frame title="Cash tender" onCancel={onCancel}>
-      <p className="text-4xl font-bold">{money(due)}</p>
-      <p className="mt-1 text-sm text-neutral-400">
-        {roundingAdj !== 0 ? "Cash due — cash only at this store." : "Total due — cash only at this store."}
-      </p>
-      {roundingAdj !== 0 ? (
-        <p className="mt-1 text-sm text-neutral-400">
-          Total {money(total)} · cash rounding {roundingAdj > 0 ? "+" : "−"}
-          {money(Math.abs(roundingAdj))} — tax is charged on the pre-rounded total.
+      <div className="w-full max-w-md rounded-2xl border border-[var(--pos-accent-border)] bg-[var(--pos-accent-soft)] px-6 py-5 text-center">
+        <p className="text-5xl font-bold text-[var(--pos-accent)]">{money(due)}</p>
+        <p className="mt-1 text-sm text-[var(--pos-text-muted)]">
+          {roundingAdj !== 0 ? "Cash due — cash only at this store." : "Total due — cash only at this store."}
         </p>
-      ) : null}
-      {medicalCard && (priced.med?.medicalSavingsMinor ?? 0) > 0 ? (
-        <p className="mt-1 text-sm font-semibold text-emerald-300">
-          Medical savings −{money(priced.med?.medicalSavingsMinor ?? 0)} (tax exempt)
-        </p>
-      ) : null}
+        {roundingAdj !== 0 ? (
+          <p className="mt-1 text-sm text-[var(--pos-text-muted)]">
+            Total {money(total)} · cash rounding {roundingAdj > 0 ? "+" : "−"}
+            {money(Math.abs(roundingAdj))} — tax is charged on the pre-rounded total.
+          </p>
+        ) : null}
+        {medicalCard && (priced.med?.medicalSavingsMinor ?? 0) > 0 ? (
+          <p className="mt-1 text-sm font-semibold text-[var(--pos-accent)]">
+            Medical savings −{money(priced.med?.medicalSavingsMinor ?? 0)} (tax exempt)
+          </p>
+        ) : null}
+      </div>
 
       {error ? (
-        <p className="mt-4 w-full max-w-md rounded-lg bg-red-950/60 px-4 py-3 text-sm text-red-300">{error}</p>
+        <p className="mt-4 w-full max-w-md rounded-lg border border-red-900/60 bg-red-950/60 px-4 py-3 text-sm text-red-300">{error}</p>
       ) : null}
 
       <div className="mt-6 flex flex-wrap justify-center gap-3">
@@ -1960,7 +1967,7 @@ function TenderScreen({
       </div>
 
       <div className="mt-4 flex items-center gap-3">
-        <label htmlFor="pos-tender" className="text-sm text-neutral-400">Custom $</label>
+        <label htmlFor="pos-tender" className="text-sm text-[var(--pos-text-muted)]">Custom $</label>
         <input
           id="pos-tender"
           inputMode="decimal"
@@ -1969,11 +1976,11 @@ function TenderScreen({
             const v = Math.round(parseFloat(e.target.value || "0") * 100);
             setTendered(Number.isFinite(v) && v > 0 ? v : 0);
           }}
-          className="w-32 rounded-xl border border-neutral-700 bg-neutral-900 p-3 text-right text-lg font-semibold"
+          className="w-32 rounded-xl border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] p-3 text-right text-lg font-semibold focus:border-[var(--pos-accent-border)] focus:outline-none"
         />
       </div>
 
-      <p className={`mt-6 text-2xl font-bold ${change >= 0 ? "text-emerald-300" : "text-neutral-600"}`}>
+      <p className={`mt-6 text-2xl font-bold ${change >= 0 ? "text-[var(--pos-accent)]" : "text-[var(--pos-text-faint)]"}`}>
         {change >= 0 ? `${money(change)} change` : `${money(-change)} more needed`}
       </p>
       {tendered >= due && change > 0 ? <ChangePlan changeMinor={change} compact /> : null}
@@ -1983,11 +1990,15 @@ function TenderScreen({
           type="button"
           onClick={pay}
           disabled={tendered < due}
-          className="rounded-2xl bg-emerald-600 px-10 py-4 text-lg font-bold text-white disabled:opacity-40"
+          className="pos-tile rounded-2xl bg-[var(--pos-accent)] px-10 py-4 text-lg font-bold text-[var(--pos-accent-ink)] disabled:opacity-40"
         >
           Complete sale
         </button>
-        <button type="button" onClick={onBack} className="rounded-2xl bg-neutral-800 px-6 py-4 text-lg font-semibold">
+        <button
+          type="button"
+          onClick={onBack}
+          className="pos-tile rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface-2)] px-6 py-4 text-lg font-semibold"
+        >
           Back to cart
         </button>
       </div>
@@ -2011,10 +2022,14 @@ function Frame({
   cancelLabel?: string;
 }) {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-neutral-950 p-6 text-neutral-100">
+    <main className="pos-shell flex min-h-screen flex-col items-center justify-center p-6">
       <div className="mb-6 flex w-full max-w-lg items-center justify-between">
         <h1 className="text-lg font-semibold">{title}</h1>
-        <button type="button" onClick={onCancel} className="rounded-lg bg-neutral-800 px-4 py-2 text-sm">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="pos-tile rounded-lg border border-[var(--pos-border)] bg-[var(--pos-surface-2)] px-4 py-2 text-sm font-semibold"
+        >
           {cancelLabel}
         </button>
       </div>
@@ -2028,7 +2043,11 @@ function ToggleChip({ active, onClick, label }: { active: boolean; onClick: () =
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-full px-4 py-2 text-sm font-semibold ${active ? "bg-emerald-600 text-white" : "bg-neutral-800 text-neutral-300"}`}
+      className={`pos-tile rounded-full px-4 py-2 text-sm font-semibold ${
+        active
+          ? "bg-[var(--pos-accent)] text-[var(--pos-accent-ink)]"
+          : "border border-[var(--pos-border)] bg-[var(--pos-surface-2)] text-[var(--pos-text-muted)]"
+      }`}
     >
       {label}
     </button>
@@ -2059,7 +2078,11 @@ function TenderChip({ label, onClick, active }: { label: string; onClick: () => 
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-xl px-5 py-3 text-sm font-bold ${active ? "bg-emerald-600 text-white" : "bg-neutral-800 text-neutral-200"}`}
+      className={`pos-tile rounded-xl px-5 py-3 text-sm font-bold ${
+        active
+          ? "bg-[var(--pos-accent)] text-[var(--pos-accent-ink)]"
+          : "border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)]"
+      }`}
     >
       {label}
     </button>

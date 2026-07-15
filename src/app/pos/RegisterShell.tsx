@@ -1514,14 +1514,14 @@ function NoSaleModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className="w-full max-w-md rounded-2xl border border-neutral-700 bg-neutral-900 p-6 text-neutral-100">
+      <div className="w-full max-w-md rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-6 text-[var(--pos-text)]">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">No sale — open drawer</h2>
-          <button type="button" onClick={onClose} className="rounded-lg bg-neutral-800 px-3 py-1.5 text-sm">
+          <button type="button" onClick={onClose} className="pos-tile rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-1.5 text-sm">
             Cancel
           </button>
         </div>
-        <p className="mt-2 text-xs text-neutral-400">
+        <p className="mt-2 text-xs text-[var(--pos-text-muted)]">
           Opened by {employeeName}. Pick a reason, then a manager or lead approves with their PIN.
           An audit slip prints and the drawer pops after the print.
         </p>
@@ -1536,7 +1536,7 @@ function NoSaleModal({
                 setCustom("");
               }}
               className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
-                preset === p ? "bg-emerald-600 text-white" : "bg-neutral-800 text-neutral-300"
+                preset === p ? "bg-[var(--pos-accent)] text-[var(--pos-accent-ink)]" : "border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] text-[var(--pos-text-muted)]"
               }`}
             >
               {p}
@@ -1544,7 +1544,7 @@ function NoSaleModal({
           ))}
         </div>
         <input
-          className="mt-3 w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2.5 text-sm"
+          className="mt-3 w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2.5 text-sm"
           placeholder="Or type another reason (3–500 characters)…"
           value={custom}
           maxLength={500}
@@ -1554,11 +1554,11 @@ function NoSaleModal({
           }}
         />
 
-        <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-neutral-400">
+        <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
           Manager / lead PIN
         </label>
         <input
-          className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2.5 text-center font-mono text-lg tracking-[0.5em]"
+          className="mt-1 w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2.5 text-center font-mono text-lg tracking-[0.5em]"
           type="password"
           inputMode="numeric"
           autoComplete="off"
@@ -1573,7 +1573,7 @@ function NoSaleModal({
           type="button"
           onClick={() => void approve()}
           disabled={!reasonOk || pin.length < 4 || busy}
-          className="mt-5 w-full rounded-xl bg-emerald-600 py-3 text-base font-semibold text-white disabled:opacity-40"
+          className="mt-5 pos-tile w-full rounded-xl bg-[var(--pos-accent)] py-3 text-base font-semibold text-[var(--pos-accent-ink)] disabled:opacity-40"
         >
           {busy ? "Verifying…" : "Approve, print slip & open drawer"}
         </button>
@@ -1688,24 +1688,24 @@ function VoidSaleModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-neutral-700 bg-neutral-900 p-6 text-neutral-100">
+      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-6 text-[var(--pos-text)]">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">Void a sale (today)</h2>
-          <button type="button" onClick={onClose} className="rounded-lg bg-neutral-800 px-3 py-1.5 text-sm">
+          <button type="button" onClick={onClose} className="pos-tile rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-1.5 text-sm">
             Cancel
           </button>
         </div>
-        <p className="mt-2 text-xs text-neutral-400">
+        <p className="mt-2 text-xs text-[var(--pos-text-muted)]">
           Same-day mistakes only — the whole sale reverses: stock goes back, points come back off, and the
           customer gets their cash. Older sales belong at the returns desk (back office).
         </p>
 
-        <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-neutral-400">
+        <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
           Receipt number
         </label>
         <div className="mt-1 flex gap-2">
           <input
-            className="w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2.5 font-mono text-lg uppercase"
+            className="w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2.5 font-mono text-lg uppercase"
             value={receipt}
             autoComplete="off"
             autoCapitalize="characters"
@@ -1722,7 +1722,7 @@ function VoidSaleModal({
             type="button"
             onClick={() => void lookup()}
             disabled={busy || receipt.trim().length < 4}
-            className="rounded-lg bg-neutral-700 px-4 py-2 text-sm font-semibold disabled:opacity-40"
+            className="pos-tile rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-4 py-2 text-sm font-semibold disabled:opacity-40"
           >
             {busy && !sale ? "…" : "Find"}
           </button>
@@ -1730,11 +1730,11 @@ function VoidSaleModal({
 
         {sale ? (
           <>
-            <div className="mt-4 rounded-xl border border-neutral-700 bg-neutral-950 p-4">
+            <div className="mt-4 rounded-xl border border-[var(--pos-border)] bg-[var(--pos-surface-2)] p-4">
               <p className="text-sm font-semibold">
                 Order {sale.orderNumber} · {formatCents(sale.totalMinor)} cash back
               </p>
-              <ul className="mt-2 space-y-1 text-xs text-neutral-400">
+              <ul className="mt-2 space-y-1 text-xs text-[var(--pos-text-muted)]">
                 {sale.lines.map((l, i) => (
                   <li key={i}>
                     {l.quantity}x {l.productName}
@@ -1743,7 +1743,7 @@ function VoidSaleModal({
               </ul>
             </div>
 
-            <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-neutral-400">Reason</label>
+            <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">Reason</label>
             <div className="mt-2 flex flex-wrap gap-2">
               {PRESETS.map((p) => (
                 <button
@@ -1754,7 +1754,7 @@ function VoidSaleModal({
                     setCustom("");
                   }}
                   className={`rounded-lg px-3 py-2 text-xs font-semibold ${
-                    preset === p ? "bg-emerald-600 text-white" : "bg-neutral-800 text-neutral-300"
+                    preset === p ? "bg-[var(--pos-accent)] text-[var(--pos-accent-ink)]" : "border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] text-[var(--pos-text-muted)]"
                   }`}
                 >
                   {p}
@@ -1762,7 +1762,7 @@ function VoidSaleModal({
               ))}
             </div>
             <input
-              className="mt-2 w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2.5 text-sm"
+              className="mt-2 w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2.5 text-sm"
               placeholder="…or type a reason"
               value={custom}
               onChange={(e) => {
@@ -1771,11 +1771,11 @@ function VoidSaleModal({
               }}
             />
 
-            <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-neutral-400">
+            <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
               Manager / lead PIN
             </label>
             <input
-              className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2.5 text-center font-mono text-lg tracking-[0.5em]"
+              className="mt-1 w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2.5 text-center font-mono text-lg tracking-[0.5em]"
               type="password"
               inputMode="numeric"
               autoComplete="off"
@@ -1948,7 +1948,7 @@ function PickupQueueModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-neutral-700 bg-neutral-900 p-6 text-neutral-100">
+      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-6 text-[var(--pos-text)]">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">
             {detail ? `Order ${detail.orderNumber} — ${detail.customerLabel}` : "Pickup orders"}
@@ -1962,12 +1962,12 @@ function PickupQueueModal({
                   setErrors([]);
                   void loadQueue();
                 }}
-                className="rounded-lg bg-neutral-800 px-3 py-1.5 text-sm"
+                className="pos-tile rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-1.5 text-sm"
               >
                 Back
               </button>
             ) : null}
-            <button type="button" onClick={onClose} className="rounded-lg bg-neutral-800 px-3 py-1.5 text-sm">
+            <button type="button" onClick={onClose} className="pos-tile rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-1.5 text-sm">
               Close
             </button>
           </div>
@@ -1975,14 +1975,14 @@ function PickupQueueModal({
 
         {!detail ? (
           <>
-            <p className="mt-2 text-xs text-neutral-400">
+            <p className="mt-2 text-xs text-[var(--pos-text-muted)]">
               Website orders, ready first. Tap one to hand it over — the ID check happens HERE, at the counter,
               and the sale runs the same compliance gate as every register sale.
             </p>
             {queue === null ? (
-              <p className="mt-6 text-center text-sm text-neutral-500">Loading…</p>
+              <p className="mt-6 text-center text-sm text-[var(--pos-text-faint)]">Loading…</p>
             ) : queue.length === 0 ? (
-              <p className="mt-6 rounded-xl border border-neutral-800 bg-neutral-950 p-6 text-center text-sm text-neutral-500">
+              <p className="mt-6 rounded-xl border border-[var(--pos-border)] bg-[var(--pos-surface-2)] p-6 text-center text-sm text-[var(--pos-text-faint)]">
                 No website orders waiting. New orders appear here the moment they&rsquo;re placed.
               </p>
             ) : (
@@ -1995,8 +1995,8 @@ function PickupQueueModal({
                       disabled={busy}
                       className={`w-full rounded-xl border p-4 text-left disabled:opacity-40 ${
                         q.status === "ready"
-                          ? "border-emerald-800 bg-emerald-950/40"
-                          : "border-neutral-800 bg-neutral-950"
+                          ? "border-[var(--pos-accent-border)] bg-[var(--pos-accent-soft)]"
+                          : "border-[var(--pos-border)] bg-[var(--pos-surface-2)]"
                       }`}
                     >
                       <div className="flex items-center justify-between">
@@ -2005,13 +2005,13 @@ function PickupQueueModal({
                         </span>
                         <span
                           className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                            q.status === "ready" ? "bg-emerald-600 text-white" : "bg-neutral-800 text-neutral-300"
+                            q.status === "ready" ? "bg-[var(--pos-accent)] text-[var(--pos-accent-ink)]" : "border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] text-[var(--pos-text-muted)]"
                           }`}
                         >
                           {q.statusLabel}
                         </span>
                       </div>
-                      <p className="mt-1 text-xs text-neutral-400">
+                      <p className="mt-1 text-xs text-[var(--pos-text-muted)]">
                         {q.itemCount} item{q.itemCount === 1 ? "" : "s"} · {formatCents(q.totalMinor)} · waiting{" "}
                         {q.minutesWaiting < 60
                           ? `${q.minutesWaiting} min`
@@ -2026,7 +2026,7 @@ function PickupQueueModal({
           </>
         ) : (
           <>
-            <div className="mt-4 rounded-xl border border-neutral-700 bg-neutral-950 p-4">
+            <div className="mt-4 rounded-xl border border-[var(--pos-border)] bg-[var(--pos-surface-2)] p-4">
               <ul className="space-y-1.5 text-sm">
                 {detail.lines.map((l, i) => (
                   <li key={i} className="flex items-baseline justify-between gap-3">
@@ -2034,16 +2034,16 @@ function PickupQueueModal({
                       {l.quantity}x {l.productName}
                       {l.variantLabel ? ` (${l.variantLabel})` : ""}
                     </span>
-                    <span className="shrink-0 font-mono text-neutral-300">{formatCents(l.priceMinor * l.quantity)}</span>
+                    <span className="shrink-0 font-mono text-[var(--pos-text)]">{formatCents(l.priceMinor * l.quantity)}</span>
                   </li>
                 ))}
               </ul>
-              <div className="mt-3 border-t border-neutral-800 pt-2 text-sm">
-                <div className="flex justify-between text-neutral-400">
+              <div className="mt-3 border-t border-[var(--pos-border)] pt-2 text-sm">
+                <div className="flex justify-between text-[var(--pos-text-muted)]">
                   <span>Subtotal</span>
                   <span className="font-mono">{formatCents(detail.subtotalMinor)}</span>
                 </div>
-                <div className="flex justify-between text-neutral-400">
+                <div className="flex justify-between text-[var(--pos-text-muted)]">
                   <span>Tax</span>
                   <span className="font-mono">{formatCents(detail.taxMinor)}</span>
                 </div>
@@ -2073,11 +2073,11 @@ function PickupQueueModal({
               </span>
             </label>
 
-            <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-neutral-400">
+            <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
               Cash tendered
             </label>
             <input
-              className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2.5 font-mono text-lg"
+              className="mt-1 w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2.5 font-mono text-lg"
               inputMode="decimal"
               autoComplete="off"
               placeholder={`at least ${formatCents(detail.totalMinor)}`}
@@ -2086,12 +2086,12 @@ function PickupQueueModal({
             />
             {tenderedMinor !== null && tenderedMinor >= detail.totalMinor ? (
               <>
-                <p className="mt-1 text-sm text-emerald-300">
+                <p className="mt-1 text-sm text-[var(--pos-accent)]">
                   Change due: {formatCents(tenderedMinor - detail.totalMinor)}
                 </p>
                 {/* B31 — count-back plan (fewest bills/coins) for the handover. */}
                 {tenderedMinor > detail.totalMinor ? (
-                  <p className="mt-1 text-sm font-semibold text-neutral-300">
+                  <p className="mt-1 text-sm font-semibold text-[var(--pos-text)]">
                     {formatChangeBreakdown(changeBreakdown(tenderedMinor - detail.totalMinor) ?? [])}
                   </p>
                 ) : null}
@@ -2102,7 +2102,7 @@ function PickupQueueModal({
               type="button"
               onClick={() => void complete()}
               disabled={!canComplete}
-              className="mt-5 w-full rounded-xl bg-emerald-600 py-3 text-base font-semibold text-white disabled:opacity-40"
+              className="mt-5 pos-tile w-full rounded-xl bg-[var(--pos-accent)] py-3 text-base font-semibold text-[var(--pos-accent-ink)] disabled:opacity-40"
             >
               {busy ? "Completing…" : `Complete pickup — ${formatCents(detail.totalMinor)} cash`}
             </button>
@@ -2204,24 +2204,24 @@ function DayReportModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className="w-full max-w-md rounded-2xl border border-neutral-700 bg-neutral-900 p-6 text-neutral-100">
+      <div className="w-full max-w-md rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-6 text-[var(--pos-text)]">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">Day report (X/Z)</h2>
-          <button type="button" onClick={onClose} className="rounded-lg bg-neutral-800 px-3 py-1.5 text-sm">
+          <button type="button" onClick={onClose} className="pos-tile rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-1.5 text-sm">
             Cancel
           </button>
         </div>
-        <p className="mt-2 text-xs text-neutral-400">
+        <p className="mt-2 text-xs text-[var(--pos-text-muted)]">
           Prints this register&rsquo;s totals for today: sales, tax, medical exemptions, no-sales, drops,
           and reconciled over/short. X while a drawer is open, Z once the day is closed. Manager or lead
           PIN required — this slip reveals expected drawer cash.
         </p>
 
-        <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-neutral-400">
+        <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
           Manager / lead PIN
         </label>
         <input
-          className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2.5 text-center font-mono text-lg tracking-[0.5em]"
+          className="mt-1 w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2.5 text-center font-mono text-lg tracking-[0.5em]"
           type="password"
           inputMode="numeric"
           autoComplete="off"
@@ -2236,7 +2236,7 @@ function DayReportModal({
           type="button"
           onClick={() => void run()}
           disabled={pin.length < 4 || busy}
-          className="mt-5 w-full rounded-xl bg-emerald-600 py-3 text-base font-semibold text-white disabled:opacity-40"
+          className="mt-5 pos-tile w-full rounded-xl bg-[var(--pos-accent)] py-3 text-base font-semibold text-[var(--pos-accent-ink)] disabled:opacity-40"
         >
           {busy ? "Building report…" : "Print day report"}
         </button>
@@ -2292,10 +2292,10 @@ function LeaderboardModal({ creds, onClose }: { creds: DeviceCreds; onClose: () 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className="w-full max-w-lg rounded-2xl border border-neutral-700 bg-neutral-900 p-6 text-neutral-100">
+      <div className="w-full max-w-lg rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-6 text-[var(--pos-text)]">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">Leaderboard 🏆</h2>
-          <button type="button" onClick={onClose} className="rounded-lg bg-neutral-800 px-3 py-1.5 text-sm">
+          <button type="button" onClick={onClose} className="pos-tile rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-1.5 text-sm">
             Close
           </button>
         </div>
@@ -2303,28 +2303,28 @@ function LeaderboardModal({ creds, onClose }: { creds: DeviceCreds; onClose: () 
           <button
             type="button"
             onClick={() => setTab("today")}
-            className={`rounded-full px-4 py-2 text-sm font-semibold ${tab === "today" ? "bg-emerald-600 text-white" : "bg-neutral-800 text-neutral-300"}`}
+            className={`rounded-full px-4 py-2 text-sm font-semibold ${tab === "today" ? "bg-[var(--pos-accent)] text-[var(--pos-accent-ink)]" : "border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] text-[var(--pos-text-muted)]"}`}
           >
             Today — by sales
           </button>
           <button
             type="button"
             onClick={() => setTab("week")}
-            className={`rounded-full px-4 py-2 text-sm font-semibold ${tab === "week" ? "bg-emerald-600 text-white" : "bg-neutral-800 text-neutral-300"}`}
+            className={`rounded-full px-4 py-2 text-sm font-semibold ${tab === "week" ? "bg-[var(--pos-accent)] text-[var(--pos-accent-ink)]" : "border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] text-[var(--pos-text-muted)]"}`}
           >
             This week — by dollars
           </button>
         </div>
-        <p className="mt-2 text-xs text-neutral-500">
+        <p className="mt-2 text-xs text-[var(--pos-text-faint)]">
           {tab === "today"
             ? "Ranked by completed sales across every register today. Dollar totals stay off the same-day board so drawer counts stay blind."
             : "Ranked by gross sales across the trailing 7 days — every register counts."}
         </p>
 
         {error ? <p className="mt-4 rounded-lg bg-red-950/60 px-3 py-2 text-sm text-red-300">{error}</p> : null}
-        {!boards && !error ? <p className="mt-4 text-sm text-neutral-400">Loading the standings…</p> : null}
+        {!boards && !error ? <p className="mt-4 text-sm text-[var(--pos-text-muted)]">Loading the standings…</p> : null}
         {boards && entries.length === 0 ? (
-          <p className="mt-4 text-sm text-neutral-400">
+          <p className="mt-4 text-sm text-[var(--pos-text-muted)]">
             No completed sales {tab === "today" ? "yet today" : "this week"} — the board starts with the first sale.
           </p>
         ) : null}
@@ -2335,18 +2335,18 @@ function LeaderboardModal({ creds, onClose }: { creds: DeviceCreds; onClose: () 
               <li
                 key={`${e.rank}-${e.name}`}
                 className={`flex items-center justify-between rounded-xl px-4 py-3 ${
-                  e.rank === 1 ? "border border-amber-500/60 bg-amber-950/30" : "bg-neutral-800/60"
+                  e.rank === 1 ? "border border-amber-500/60 bg-amber-950/30" : "border border-[var(--pos-border)] bg-[var(--pos-surface-2)]"
                 }`}
               >
                 <span className="flex items-center gap-3">
-                  <span className="w-8 text-lg font-bold text-neutral-400">
+                  <span className="w-8 text-lg font-bold text-[var(--pos-text-muted)]">
                     {medalFor(e.rank) || `#${e.rank}`}
                   </span>
                   <span className="text-base font-semibold">{e.name}</span>
                 </span>
-                <span className="text-right text-sm text-neutral-300">
+                <span className="text-right text-sm text-[var(--pos-text)]">
                   {tab === "week" && typeof e.grossMinor === "number" ? (
-                    <span className="block text-base font-bold text-emerald-300">{formatCents(e.grossMinor)}</span>
+                    <span className="block text-base font-bold text-[var(--pos-accent)]">{formatCents(e.grossMinor)}</span>
                   ) : null}
                   {e.saleCount} sale{e.saleCount === 1 ? "" : "s"} · {e.itemCount} item{e.itemCount === 1 ? "" : "s"}
                 </span>
@@ -2461,14 +2461,14 @@ function TillModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/70 p-4">
-      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-neutral-700 bg-neutral-900 p-6 text-neutral-100">
+      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-6 text-[var(--pos-text)]">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">{TITLES[mode]}</h2>
-          <button type="button" onClick={onClose} className="rounded-lg bg-neutral-800 px-3 py-1.5 text-sm">
+          <button type="button" onClick={onClose} className="pos-tile rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-1.5 text-sm">
             Cancel
           </button>
         </div>
-        <p className="mt-2 text-xs text-neutral-400">
+        <p className="mt-2 text-xs text-[var(--pos-text-muted)]">
           {mode === "open"
             ? `Count every bill and coin going into the drawer. The total is your starting float, recorded under ${employeeName}'s PIN.`
             : mode === "drop"
@@ -2478,17 +2478,17 @@ function TillModal({
 
         {mode === "drop" ? (
           <>
-            <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-neutral-400">
+            <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
               Amount dropped
             </label>
             <input
-              className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2.5 text-lg"
+              className="mt-1 w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2.5 text-lg"
               inputMode="decimal"
               placeholder="$0.00"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
             />
-            <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-neutral-400">
+            <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
               Drop window
             </label>
             <div className="mt-1 flex gap-2">
@@ -2498,18 +2498,18 @@ function TillModal({
                   type="button"
                   onClick={() => setDropWindow(w)}
                   className={`rounded-full px-3 py-1.5 text-xs font-semibold capitalize ${
-                    dropWindow === w ? "bg-emerald-600 text-white" : "bg-neutral-800 text-neutral-300"
+                    dropWindow === w ? "bg-[var(--pos-accent)] text-[var(--pos-accent-ink)]" : "border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] text-[var(--pos-text-muted)]"
                   }`}
                 >
                   {w}
                 </button>
               ))}
             </div>
-            <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-neutral-400">
+            <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
               Witness PIN (optional, second person)
             </label>
             <input
-              className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2.5 text-center font-mono text-lg tracking-[0.5em]"
+              className="mt-1 w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2.5 text-center font-mono text-lg tracking-[0.5em]"
               type="password"
               inputMode="numeric"
               autoComplete="off"
@@ -2518,7 +2518,7 @@ function TillModal({
               onChange={(e) => setWitnessPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
             />
             <input
-              className="mt-3 w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2.5 text-sm"
+              className="mt-3 w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2.5 text-sm"
               placeholder="Notes (optional)…"
               value={notes}
               maxLength={500}
@@ -2529,10 +2529,10 @@ function TillModal({
           <>
             <div className="mt-4 grid grid-cols-2 gap-2">
               {DENOM_FIELDS.map(({ key, label }) => (
-                <label key={key} className="flex items-center justify-between gap-2 rounded-lg border border-neutral-800 bg-neutral-950 px-3 py-2">
-                  <span className="text-sm font-semibold text-neutral-300">{label}</span>
+                <label key={key} className="flex items-center justify-between gap-2 rounded-lg border border-[var(--pos-border)] bg-[var(--pos-surface-2)] px-3 py-2">
+                  <span className="text-sm font-semibold text-[var(--pos-text)]">{label}</span>
                   <input
-                    className="w-20 rounded-md border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-right text-sm"
+                    className="w-20 rounded-md border border-[var(--pos-border-strong)] bg-[var(--pos-surface)] px-2 py-1.5 text-right text-sm"
                     inputMode="numeric"
                     value={denoms[key] === 0 ? "" : String(denoms[key])}
                     placeholder="0"
@@ -2544,17 +2544,17 @@ function TillModal({
                 </label>
               ))}
             </div>
-            <p className="mt-3 rounded-lg bg-neutral-950 px-3 py-2 text-right text-base font-bold">
+            <p className="mt-3 rounded-lg bg-[var(--pos-surface-2)] px-3 py-2 text-right text-base font-bold">
               Counted: {formatCents(countedMinor)}
             </p>
           </>
         )}
 
-        <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-neutral-400">
+        <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
           Your PIN
         </label>
         <input
-          className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2.5 text-center font-mono text-lg tracking-[0.5em]"
+          className="mt-1 w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2.5 text-center font-mono text-lg tracking-[0.5em]"
           type="password"
           inputMode="numeric"
           autoComplete="off"
@@ -2569,7 +2569,7 @@ function TillModal({
           type="button"
           onClick={() => void submit()}
           disabled={!ready || busy}
-          className="mt-5 w-full rounded-xl bg-emerald-600 py-3 text-base font-semibold text-white disabled:opacity-40"
+          className="mt-5 pos-tile w-full rounded-xl bg-[var(--pos-accent)] py-3 text-base font-semibold text-[var(--pos-accent-ink)] disabled:opacity-40"
         >
           {busy
             ? "Recording…"
