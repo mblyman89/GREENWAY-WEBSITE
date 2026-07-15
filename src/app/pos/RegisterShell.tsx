@@ -47,6 +47,7 @@ import { applyLocalStockFlag } from "@/lib/pos/stock-flag-core";
 import { THEME_KEY, parseTheme, themeToggleLabel, toggleTheme, type PosTheme } from "@/lib/pos/theme-core";
 import { checkSetupCredentials } from "@/lib/pos/device-setup-core";
 import { VOID_REASON_PRESETS } from "@/lib/pos/void-sale-core";
+import { CUSTOMER_RETURN_REASONS } from "@/lib/inventory/disposition-core";
 import type { PickupQueueEntry } from "@/lib/pos/pickup-core";
 import type { MemberHistory } from "@/lib/pos/member-history-core";
 import type { PosLoyaltyGrant } from "@/lib/pos/register-loyalty-core";
@@ -125,6 +126,7 @@ export function RegisterShell() {
   // B22 — X/Z day report modal (manager PIN inside).
   const [dayReportOpen, setDayReportOpen] = useState(false);
   const [voidOpen, setVoidOpen] = useState(false); // B27
+  const [returnsOpen, setReturnsOpen] = useState(false); // AM-C
   const [leaderboardOpen, setLeaderboardOpen] = useState(false); // B34
   const [pickupOpen, setPickupOpen] = useState(false); // B28
   // B28 — live count of website pickup orders (polled while unlocked+online).
@@ -808,6 +810,7 @@ export function RegisterShell() {
         onTill={(mode) => setTillMode(mode)}
         onDayReport={() => setDayReportOpen(true)}
         onVoidSale={online ? () => setVoidOpen(true) : undefined}
+        onReturnSale={online ? () => setReturnsOpen(true) : undefined}
         onLeaderboard={online ? () => setLeaderboardOpen(true) : undefined}
         pickupCount={online ? pickupCount : null}
         onPickupQueue={online && drawer ? () => setPickupOpen(true) : undefined}
@@ -874,6 +877,20 @@ export function RegisterShell() {
             // Print the void slip; the drawer POPS — the cash goes back out.
             const backUrl = window.location.origin + window.location.pathname;
             window.location.href = buildPassPrntUrl(slipHtml, { backUrl, openDrawer: true });
+          }}
+        />
+      ) : null}
+      {returnsOpen && employee ? (
+        <ReturnsModal
+          creds={creds}
+          employeeName={employee.fullName}
+          onClose={() => setReturnsOpen(false)}
+          onReturned={(receiptHtml, message) => {
+            setReturnsOpen(false);
+            setBanner(message);
+            // Print the refund receipt; the drawer POPS — the refund cash goes out.
+            const backUrl = window.location.origin + window.location.pathname;
+            window.location.href = buildPassPrntUrl(receiptHtml, { backUrl, openDrawer: true });
           }}
         />
       ) : null}
@@ -1194,6 +1211,7 @@ function HomeScreen({
   onTill,
   onDayReport,
   onVoidSale,
+  onReturnSale,
   onLeaderboard,
   pickupCount,
   onPickupQueue,
@@ -1236,6 +1254,8 @@ function HomeScreen({
   onDayReport: () => void;
   /** B27 — open the manager-gated same-day void flow (undefined offline). */
   onVoidSale?: () => void;
+  /** AM-C — open the manager-gated counter-return flow (undefined offline). */
+  onReturnSale?: () => void;
   /** B34 — open the budtender leaderboard (undefined offline — it reads the server ledger). */
   onLeaderboard?: () => void;
   /** B28 — live website-pickup count (null offline / not yet fetched). */
@@ -1563,6 +1583,18 @@ function HomeScreen({
           <span aria-hidden>↩️</span> Void a sale (today)
           <span className="mt-1 block text-xs font-normal text-[var(--pos-text-faint)]">
             Same-day mistakes only — manager PIN; restocks stock and returns the cash. Older sales: returns desk
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={onReturnSale}
+          disabled={!onReturnSale}
+          title={onReturnSale ? undefined : "Returns need a connection — the server moves inventory and queues the CCRS correction"}
+          className="pos-tile rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-5 text-left text-base font-semibold disabled:opacity-40"
+        >
+          <span aria-hidden>📦</span> Return an item
+          <span className="mt-1 block text-xs font-normal text-[var(--pos-text-faint)]">
+            Loyalty members, 15-day window — manager PIN; exact refund from the receipt, restock or destroy
           </span>
         </button>
         <button
@@ -1953,6 +1985,388 @@ function VoidSaleModal({
             className="mt-5 w-full rounded-xl bg-[var(--pos-danger-solid)] py-3 text-base font-semibold text-white disabled:opacity-40"
           >
             {busy ? "Voiding…" : `Void sale & return ${formatCents(sale.totalMinor)}`}
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// AM-C — Counter returns at the register: receipt-first, policy-gated,
+// manager PIN, exact refund from the stored paid price, restock/destroy
+// ---------------------------------------------------------------------------
+
+/** Human labels for the compliance reason codes (values stay canonical). */
+const RETURN_REASON_LABELS: Record<string, string> = {
+  defective: "Defective",
+  wrong_item: "Wrong item",
+  adverse_reaction: "Adverse reaction",
+  quality: "Quality issue",
+  mislabeled: "Mislabeled",
+  other: "Other",
+};
+
+type ReturnableSale = {
+  receiptNumber: string;
+  orderNumber: string;
+  purchasedAtIso: string;
+  memberLabel: string;
+  daysRemaining: number;
+  orderTotalMinor: number;
+  lines: {
+    lineId: string;
+    productName: string;
+    quantity: number;
+    priceMinorUnits: number;
+    alreadyReturned: number;
+    remainingReturnable: number;
+  }[];
+};
+
+/**
+ * Return an item at the register. Same machinery as the back-office returns
+ * desk (B16) — receipt lookup with the COMPLETE policy verdict, pick the
+ * line + quantity, reason, restock/destroy, the two WAC 314-55-079(12)
+ * attestations (original packaging + legible lot ID), then a manager/lead
+ * PIN processes it server-side (/api/pos/returns → Task Q pipeline, CCRS
+ * correction queue, proportional loyalty clawback) and hands back a refund
+ * receipt. The drawer POPS on print: the refund cash goes out. ONLINE-ONLY.
+ */
+function ReturnsModal({
+  creds,
+  employeeName,
+  onClose,
+  onReturned,
+}: {
+  creds: DeviceCreds;
+  employeeName: string;
+  onClose: () => void;
+  onReturned: (receiptHtml: string, message: string) => void;
+}) {
+  const [receipt, setReceipt] = useState("");
+  const [sale, setSale] = useState<ReturnableSale | null>(null);
+  const [lineId, setLineId] = useState<string | null>(null);
+  const [quantity, setQuantity] = useState(1);
+  const [reason, setReason] = useState<string | null>(null);
+  const [detail, setDetail] = useState("");
+  const [disposition, setDisposition] = useState<"restock" | "destroy" | null>(null);
+  const [originalPackaging, setOriginalPackaging] = useState(false);
+  const [lotIdLegible, setLotIdLegible] = useState(false);
+  const [pin, setPin] = useState("");
+  const [errors, setErrors] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+
+  const line = sale?.lines.find((l) => l.lineId === lineId) ?? null;
+  const maxQty = line?.remainingReturnable ?? 0;
+  const refundPreviewMinor = line ? line.priceMinorUnits * Math.min(quantity, maxQty) : 0;
+  const ready =
+    !!sale && !!line && quantity >= 1 && quantity <= maxQty && !!reason && !!disposition &&
+    originalPackaging && lotIdLegible && pin.length >= 4;
+
+  const call = async (body: Record<string, unknown>) => {
+    const res = await fetch("/api/pos/returns", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-pos-device-id": creds.deviceId,
+        "x-pos-device-key": creds.deviceKey,
+      },
+      body: JSON.stringify(body),
+    });
+    const json = (await res.json().catch(() => null)) as Record<string, unknown> | null;
+    return { ok: res.ok, json };
+  };
+
+  const lookup = async () => {
+    if (busy || receipt.trim().length < 4) return;
+    setBusy(true);
+    setErrors([]);
+    setSale(null);
+    setLineId(null);
+    try {
+      const { ok, json } = await call({ receipt: receipt.trim() });
+      if (!ok || !json?.sale) {
+        const errs = Array.isArray(json?.errors) ? (json.errors as string[]) : [String(json?.error ?? "Lookup failed.")];
+        setErrors(errs);
+        return;
+      }
+      const found = json.sale as ReturnableSale;
+      setSale(found);
+      const returnable = found.lines.filter((l) => l.remainingReturnable > 0);
+      if (returnable.length === 1) {
+        setLineId(returnable[0].lineId);
+        setQuantity(1);
+      }
+    } catch {
+      setErrors(["Could not reach the server — try again."]);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const processReturn = async () => {
+    if (busy || !ready || !sale || !line) return;
+    setBusy(true);
+    setErrors([]);
+    try {
+      const { ok, json } = await call({
+        receipt: sale.receiptNumber,
+        orderLineId: line.lineId,
+        quantity,
+        reason,
+        detail: detail.trim(),
+        disposition,
+        originalPackaging,
+        lotIdLegible,
+        pin,
+        processedByName: employeeName,
+      });
+      if (!ok || !json?.receiptHtml) {
+        setErrors([String(json?.error ?? "Return failed.")]);
+        setPin("");
+        return;
+      }
+      const refund = Number(json.refundMinor ?? 0);
+      const points = Number(json.pointsClawed ?? 0);
+      onReturned(
+        String(json.receiptHtml),
+        `Return processed — hand back ${formatCents(refund)} cash${points > 0 ? `; ${points} points reversed` : ""}.${disposition === "destroy" ? " Product goes to the quarantine bin." : ""}`,
+      );
+    } catch {
+      setErrors(["Could not reach the server — try again."]);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-6 text-[var(--pos-text)]">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Return an item</h2>
+          <button type="button" onClick={onClose} className="pos-tile rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-1.5 text-sm">
+            Cancel
+          </button>
+        </div>
+        <p className="mt-2 text-xs text-[var(--pos-text-muted)]">
+          Loyalty members within the 15-day window. The refund is the exact price paid on the receipt —
+          nothing is typed by hand. Product must be in its original packaging with the lot ID fully legible
+          (state law), or the return must be refused.
+        </p>
+
+        <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
+          Receipt number
+        </label>
+        <div className="mt-1 flex gap-2">
+          <input
+            className="w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2.5 font-mono text-lg uppercase"
+            value={receipt}
+            autoComplete="off"
+            autoCapitalize="characters"
+            autoCorrect="off"
+            spellCheck={false}
+            maxLength={8}
+            placeholder="8 characters"
+            onChange={(e) => {
+              setReceipt(e.target.value.toUpperCase());
+              setSale(null);
+              setLineId(null);
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => void lookup()}
+            disabled={busy || receipt.trim().length < 4}
+            className="pos-tile rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-4 py-2 text-sm font-semibold disabled:opacity-40"
+          >
+            {busy && !sale ? "…" : "Find"}
+          </button>
+        </div>
+
+        {sale ? (
+          <>
+            <div className="mt-4 rounded-xl border border-[var(--pos-border)] bg-[var(--pos-surface-2)] p-4">
+              <p className="text-sm font-semibold">
+                Order {sale.orderNumber} · {sale.memberLabel}
+              </p>
+              <p className="mt-1 text-xs text-[var(--pos-text-muted)]">
+                {sale.daysRemaining} day{sale.daysRemaining === 1 ? "" : "s"} left in the return window
+              </p>
+            </div>
+
+            <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
+              Item being returned
+            </label>
+            <div className="mt-2 space-y-2">
+              {sale.lines.map((l) => {
+                const selectable = l.remainingReturnable > 0;
+                const selected = lineId === l.lineId;
+                return (
+                  <button
+                    key={l.lineId}
+                    type="button"
+                    disabled={!selectable}
+                    onClick={() => {
+                      setLineId(selected ? null : l.lineId);
+                      setQuantity(1);
+                    }}
+                    className={`w-full rounded-lg px-3 py-2.5 text-left text-sm disabled:opacity-40 ${
+                      selected
+                        ? "bg-[var(--pos-accent)] font-semibold text-[var(--pos-accent-ink)]"
+                        : "border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)]"
+                    }`}
+                  >
+                    <span className="flex items-center justify-between gap-2">
+                      <span>{l.productName}</span>
+                      <span className="font-mono">{formatCents(l.priceMinorUnits)}</span>
+                    </span>
+                    <span className={`mt-0.5 block text-xs ${selected ? "" : "text-[var(--pos-text-muted)]"}`}>
+                      {selectable
+                        ? `${l.remainingReturnable} of ${l.quantity} returnable${l.alreadyReturned > 0 ? ` (${l.alreadyReturned} already returned)` : ""}`
+                        : "Fully returned"}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {line ? (
+              <>
+                {maxQty > 1 ? (
+                  <>
+                    <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
+                      Quantity (max {maxQty})
+                    </label>
+                    <div className="mt-2 flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                        className="pos-tile h-11 w-11 rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] text-xl font-bold"
+                      >
+                        −
+                      </button>
+                      <span className="min-w-[2ch] text-center font-mono text-xl font-semibold">{quantity}</span>
+                      <button
+                        type="button"
+                        onClick={() => setQuantity((q) => Math.min(maxQty, q + 1))}
+                        className="pos-tile h-11 w-11 rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] text-xl font-bold"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </>
+                ) : null}
+
+                <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">Reason</label>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {CUSTOMER_RETURN_REASONS.map((r) => (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => setReason(reason === r ? null : r)}
+                      className={`rounded-lg px-3 py-2 text-xs font-semibold ${
+                        reason === r
+                          ? "bg-[var(--pos-accent)] text-[var(--pos-accent-ink)]"
+                          : "border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] text-[var(--pos-text-muted)]"
+                      }`}
+                    >
+                      {RETURN_REASON_LABELS[r] ?? r}
+                    </button>
+                  ))}
+                </div>
+                <input
+                  className="mt-2 w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2.5 text-sm"
+                  placeholder="Detail (optional — required context for CCRS on 'Other')"
+                  value={detail}
+                  onChange={(e) => setDetail(e.target.value)}
+                />
+
+                <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
+                  What happens to the product
+                </label>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setDisposition("restock")}
+                    className={`rounded-lg px-3 py-2.5 text-sm font-semibold ${
+                      disposition === "restock"
+                        ? "bg-[var(--pos-accent)] text-[var(--pos-accent-ink)]"
+                        : "border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] text-[var(--pos-text-muted)]"
+                    }`}
+                  >
+                    Restock — sellable
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDisposition("destroy")}
+                    className={`rounded-lg px-3 py-2.5 text-sm font-semibold ${
+                      disposition === "destroy"
+                        ? "bg-[var(--pos-danger-solid)] text-white"
+                        : "border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] text-[var(--pos-text-muted)]"
+                    }`}
+                  >
+                    Destroy — quarantine
+                  </button>
+                </div>
+
+                <div className="mt-4 space-y-2 rounded-xl border border-[var(--pos-border)] bg-[var(--pos-surface-2)] p-3">
+                  <label className="flex items-start gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5 h-5 w-5"
+                      checked={originalPackaging}
+                      onChange={(e) => setOriginalPackaging(e.target.checked)}
+                    />
+                    <span>Product is in its ORIGINAL packaging</span>
+                  </label>
+                  <label className="flex items-start gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5 h-5 w-5"
+                      checked={lotIdLegible}
+                      onChange={(e) => setLotIdLegible(e.target.checked)}
+                    />
+                    <span>Lot / batch ID on the package is FULLY LEGIBLE</span>
+                  </label>
+                  <p className="text-xs text-[var(--pos-text-faint)]">
+                    Both are required by WAC 314-55-079(12) — if either fails, refuse the return.
+                  </p>
+                </div>
+
+                <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
+                  Manager / lead PIN
+                </label>
+                <input
+                  className="mt-1 w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2.5 text-center font-mono text-lg tracking-[0.5em]"
+                  type="password"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  value={pin}
+                  maxLength={6}
+                  onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                />
+              </>
+            ) : null}
+          </>
+        ) : null}
+
+        {errors.length > 0 ? (
+          <ul className="mt-3 space-y-1 rounded-lg bg-[var(--pos-danger-soft)] px-3 py-2 text-sm text-[var(--pos-danger)]">
+            {errors.map((e, i) => (
+              <li key={i}>{e}</li>
+            ))}
+          </ul>
+        ) : null}
+
+        {sale && line ? (
+          <button
+            type="button"
+            onClick={() => void processReturn()}
+            disabled={!ready || busy}
+            className="mt-5 w-full rounded-xl bg-[var(--pos-accent)] py-3 text-base font-semibold text-[var(--pos-accent-ink)] disabled:opacity-40"
+          >
+            {busy ? "Processing…" : `Process return & refund ${formatCents(refundPreviewMinor)}`}
           </button>
         ) : null}
       </div>
