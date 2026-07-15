@@ -74,6 +74,7 @@ import { __runThemeCoreTests } from "../../src/lib/pos/theme-core";
 import { __runDraftSeedCoreTests } from "../../src/lib/inventory/draft-seed-core";
 import { __runWedgeScanCoreTests } from "../../src/lib/pos/wedge-scan-core";
 import { __runRegisterLoyaltyCoreTests } from "../../src/lib/pos/register-loyalty-core";
+import { __runOrderToCartCoreTests } from "../../src/lib/pos/order-to-cart-core";
 
 async function main() {
   __runOrderPricingTests();
@@ -150,6 +151,7 @@ async function main() {
   __runDraftSeedCoreTests();
   __runWedgeScanCoreTests();
   __runRegisterLoyaltyCoreTests();
+  __runOrderToCartCoreTests();
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

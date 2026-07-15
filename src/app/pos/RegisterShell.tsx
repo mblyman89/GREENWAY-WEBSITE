@@ -65,7 +65,8 @@ import {
   serializeLastReceipt,
   type HeldSale,
 } from "@/lib/pos/register-polish-core";
-import { SaleFlow } from "./SaleFlow";
+import { SaleFlow, type PosMemberHit } from "./SaleFlow";
+import { rebuildOrderCart, type LoadedOrderLine } from "@/lib/pos/order-to-cart-core";
 
 // ---------------------------------------------------------------------------
 // Local storage keys (device-scoped; every durable fact lives server-side)
@@ -119,6 +120,12 @@ export function RegisterShell() {
   const [heldSale, setHeldSale] = useState<HeldSale | null>(null);
   // B17 — the cart a resumed hold seeds into the next SaleFlow mount.
   const [resumeCart, setResumeCart] = useState<PosCartEntry[] | null>(null);
+  // AM-D — a website order loaded into the next sale: cart lines rebuilt
+  // against the CURRENT bundle + the order's linked customer pre-attached.
+  // Separate from resumeCart on purpose: completing a RESUMED sale consumes
+  // the parked hold, and a loaded order must never do that.
+  const [loadedCart, setLoadedCart] = useState<PosCartEntry[] | null>(null);
+  const [loadedMember, setLoadedMember] = useState<PosMemberHit | null>(null);
   // B17 — no-sale modal visibility (manager PIN approval happens inside).
   const [noSaleOpen, setNoSaleOpen] = useState(false);
   // B21 — register-side till action in progress (count-in / drop / blind close).
@@ -473,7 +480,8 @@ export function RegisterShell() {
         drawerSessionId={drawer.sessionId}
         registerName={creds.name}
         employeeName={employee.fullName}
-        initialCart={resumeCart ?? undefined}
+        initialCart={resumeCart ?? loadedCart ?? undefined}
+        initialMember={loadedMember ?? undefined}
         onHold={
           // One parked sale at a time (unless THIS sale is the resumed one —
           // it may be re-parked, replacing its own snapshot).
@@ -732,7 +740,11 @@ export function RegisterShell() {
         }}
         onCancel={() => {
           // A cancelled resume leaves the hold parked (nothing was sold).
+          // A cancelled LOADED order stays superseded — reopen it from the
+          // back office (reasoned reversal) if the customer changed their mind.
           setResumeCart(null);
+          setLoadedCart(null);
+          setLoadedMember(null);
           setSaleActive(false);
         }}
       />
@@ -757,6 +769,8 @@ export function RegisterShell() {
         heldSale={heldSale}
         onStartSale={() => {
           setResumeCart(null);
+          setLoadedCart(null);
+          setLoadedMember(null);
           setSaleActive(true);
         }}
         onResumeHold={
@@ -907,6 +921,27 @@ export function RegisterShell() {
             // Print the pickup receipt; the drawer POPS — cash just came in.
             const backUrl = window.location.origin + window.location.pathname;
             window.location.href = buildPassPrntUrl(receiptHtml, { backUrl, openDrawer: true });
+          }}
+          onLoaded={(loaded) => {
+            // AM-D — the order is already superseded server-side. Rebuild its
+            // lines against the CURRENT bundle (fresh prices, live promos;
+            // vanished/out-of-stock dropped + reported) and open the sale with
+            // the linked customer pre-attached. The ID gate still runs first.
+            setPickupOpen(false);
+            setPickupCount((c) => (typeof c === "number" && c > 0 ? c - 1 : c));
+            if (!menuBundle) {
+              setBanner(`Order ${loaded.orderNumber} was loaded but the menu isn't ready — refresh the menu and ring the items manually.`);
+              return;
+            }
+            const rebuilt = rebuildOrderCart(loaded.lines, menuBundle.products);
+            const parts: string[] = [`Order ${loaded.orderNumber} (${loaded.customerLabel}) loaded into this sale.`];
+            if (rebuilt.dropped.length > 0) parts.push(`Dropped: ${rebuilt.dropped.join(", ")}.`);
+            if (loaded.customerNote) parts.push(`Customer note: ${loaded.customerNote}`);
+            setBanner(parts.join(" "));
+            setResumeCart(null);
+            setLoadedCart(rebuilt.cart.length > 0 ? rebuilt.cart : null);
+            setLoadedMember(loaded.member);
+            setSaleActive(true);
           }}
         />
       ) : null}
@@ -2407,12 +2442,25 @@ function PickupQueueModal({
   drawerSessionId,
   onClose,
   onCompleted,
+  onLoaded,
 }: {
   creds: DeviceCreds;
   employee: UnlockedEmployee;
   drawerSessionId: string;
   onClose: () => void;
   onCompleted: (receiptHtml: string, message: string) => void;
+  /**
+   * AM-D — the order was SUPERSEDED server-side and its raw lines returned;
+   * the shell rebuilds them against the CURRENT bundle and opens a sale with
+   * the linked customer pre-attached.
+   */
+  onLoaded: (loaded: {
+    orderNumber: string;
+    customerLabel: string;
+    customerNote: string | null;
+    lines: LoadedOrderLine[];
+    member: PosMemberHit | null;
+  }) => void;
 }) {
   const [queue, setQueue] = useState<PickupQueueEntry[] | null>(null);
   const [detail, setDetail] = useState<PickupDetail | null>(null);
@@ -2478,6 +2526,43 @@ function PickupQueueModal({
   const tenderedMinor = dollarsToMinor(tendered);
   const canComplete =
     !!detail && idConfirmed && tenderedMinor !== null && tenderedMinor >= detail.totalMinor && !busy;
+
+  // AM-D — load the order into a register sale: the server supersedes the
+  // order (cancels with a loud note — the register sale becomes the sale of
+  // record) and hands back the raw lines + the linked customer.
+  const loadIntoSale = async () => {
+    if (!detail || busy) return;
+    setBusy(true);
+    setErrors([]);
+    try {
+      const res = await fetch("/api/pos/pickup", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ orderId: detail.orderId, load: { employeeName: employee.fullName } }),
+      });
+      const body = (await res.json().catch(() => null)) as
+        | {
+            loaded?: {
+              orderNumber: string;
+              customerLabel: string;
+              customerNote: string | null;
+              lines: LoadedOrderLine[];
+              member: PosMemberHit | null;
+            };
+            error?: string;
+          }
+        | null;
+      if (!res.ok || !body?.loaded) {
+        setErrors([body?.error ?? "Could not load the order into a sale."]);
+        return;
+      }
+      onLoaded(body.loaded);
+    } catch {
+      setErrors(["Could not reach the server — try again."]);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const complete = async () => {
     if (!detail || !canComplete || tenderedMinor === null) return;
@@ -2671,6 +2756,23 @@ function PickupQueueModal({
             >
               {busy ? "Completing…" : `Complete pickup — ${formatCents(detail.totalMinor)} cash`}
             </button>
+
+            {/* AM-D — the customer wants to ADD items: pull the order into a
+                register sale instead. The order is superseded server-side
+                (the register sale becomes the sale of record), the items
+                reprice against the LIVE menu, and their profile attaches
+                automatically. */}
+            <button
+              type="button"
+              onClick={() => void loadIntoSale()}
+              disabled={busy}
+              className="mt-3 pos-tile w-full rounded-xl border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] py-3 text-base font-semibold disabled:opacity-40"
+            >
+              🛒 Load into a sale — customer wants to add items
+            </button>
+            <p className="mt-1 text-center text-xs text-[var(--pos-text-faint)]">
+              Items reprice at today&rsquo;s menu prices; the website order closes so it can&rsquo;t be filled twice
+            </p>
           </>
         )}
 
