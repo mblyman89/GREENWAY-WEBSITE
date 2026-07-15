@@ -405,3 +405,26 @@ timeline event on real failures. Batched published-key lookup replaces
 per-lot round-trips. B45/B46 struck through as CANCELLED (owner
 choice). 20 assertions + vitest mirror; suite 1,597 tests / 120 files.
 No migration — the partial index stays as the race backstop.
+
+### Task AL — Front-end presentation & workflow overhaul (PR #515, 43f6c7c)
+
+Owner's mission: "build me a front end that has a great workflow…
+using already proven methods and strategies… really actually research
+what a great pos frontside should look like… make my front end
+beautiful, and clean, and simple and enjoyable." Research (Shopify POS
+UI, Bright Inventions payment UX, Creative Navy POS principles,
+Dynamics 365 transaction anatomy, Rossul dispensary case study,
+Flowhub, Apple HIG 44pt / WCAG 2.5.5 touch targets) is distilled into
+`docs/POS_UI_DESIGN_BRIEF.md`; every slice cites a rule. AL-A: the
+sale screen owns the viewport at lg+ (h-dvh, no page scroll — grid and
+check scroll internally, totals + tender always visible), 60/40
+browse/check split (3fr_2fr, 4-col grid at 2xl), 44px minimum touch
+targets on chips/tabs/line-editor buttons, 36px tile ★/ⓘ hit areas.
+AL-B: register keypad replaces the naked custom-$ text input on the
+tender screen — pure `tenderKeypadAppend`/`tenderKeypadBackspace` in
+change-calc-core ($9,999.99 cap), chips reset the keypad so the two
+inputs never fight; +12 assertions (35 in core) + vitest mirror.
+AL-C: home screen reordered hero-first — held-sale banner (urgent),
+double-width Start sale hero + action tiles, status strip demoted
+below (Dynamics welcome-screen pattern). Suite 1,601 tests / 120
+files. No migration; compliance gates and offline-first untouched.

@@ -3308,3 +3308,15 @@ classified (23505 = benign race duplicate); honest created/failed
 counts to the UI + a `draft_seed_error` manifest-timeline event on real
 failures. B45/B46 marked CANCELLED per owner. 20 assertions + mirror;
 suite 1,597/120. No migration. CI green on PR #513.
+
+### Task AL — POS front-end presentation & workflow overhaul (PR #515, 43f6c7c)
+
+Register front-end only (no back-office logic touched). Research-backed
+redesign per the owner's "use proven methods" mission: full-height
+transaction screen (no page scroll; internal grid/check scrolling,
+totals + tender pinned), 60/40 browse/check split, 44px touch targets,
+register-style tender keypad (pure core in change-calc-core, +12
+assertions + vitest mirror), home screen reordered hero-first with a
+double-width Start sale tile and the status strip demoted. Design
+rules + sources: `docs/POS_UI_DESIGN_BRIEF.md`. Suite 1,601/120. No
+migration.
