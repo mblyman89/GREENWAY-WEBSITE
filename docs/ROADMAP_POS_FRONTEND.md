@@ -222,4 +222,79 @@ vitest mirrors, tsc/eslint/suite green, CI, squash-merge, roadmap notes).
 
 ## 5. Shipped
 
-(Notes appended as slices merge.)
+### B33 — Cash rounding, the WA-lawful way (PR #499, 8ed2e67)
+
+Owner-configurable rounding mode (off / nearest / always-down /
+always-up) lives in `site_settings` (B13 pattern — **no migration**) and
+rides the menu bundle to every register. Pure core
+`src/lib/pos/cash-rounding-core.ts` rounds the **amount due only** to the
+nearest nickel; `totalMinor` and tax stay pre-rounded per DOR interim
+guidance. The adjustment is its own sale-payload block, its own receipt
+line ("Cash rounding"), and its own day-report row, so the books always
+reconcile to the penny. B31 change plans and the smart tender suggestion
+chips run off the rounded due. 41 self-test assertions registered in the
+runner (import + call) with a vitest mirror.
+
+### B34 — Budtender leaderboard (PR #500, 80f502a)
+
+Device-authenticated `/api/pos/leaderboard` aggregates completed
+register-rung sales per employee from `pos_sale_events` — today and the
+trailing week. Pure core `src/lib/pos/leaderboard-core.ts` ranks with
+medals and deterministic tie-breaks. The register modal shows two boards:
+**today ranks by sale count with dollars deliberately hidden** (blind
+drawer-count discipline), the week board ranks by gross. SparkPlug's
+motivation loop, zero SaaS bill. 18 self-test assertions + vitest mirror.
+No migration.
+
+### B35 — Theme foundation + home screen overhaul (PR #501, be10f8e)
+
+The POS design-token block in `globals.css` mirrors the public site and
+back office: `--pos-canvas/surface/surface-2/hover`, hairline borders,
+three text tiers, and brand accents (`--pos-accent` = Greenway #7ed957
+with `--pos-accent-ink` dark-green text for solid green fills, plus
+gold/orange/danger soft+border variants). `.pos-shell` paints a subtle
+brand glow over near-black; `.pos-tile` gives every tappable surface
+:active press feedback. Home screen rebuilt as a branded dashboard:
+wordmark header (plain `<img>` on `/pos/wordmark.png` so the service
+worker's cache-first `/pos/*` strategy keeps it offline-boot-safe),
+status strip (drawer/sync/menu/queue with state dots), and big
+color-coded action tiles — Start sale solid green, Pickup gold, Clock
+orange, Lock charcoal. Loading/setup/lock screens and PWA chrome colors
+(`#060807`) match. No migration.
+
+### B36 — Sale screen tile grid (PR #502, 519dc6d)
+
+Product results became a responsive tile grid with deterministic category
+colors: pure core `src/lib/pos/sale-grid-core.ts` hashes category names
+(djb2) into `CATEGORY_COLOR_COUNT = 8` palette slots, so "flower" paints
+identically on every register with zero config — a module-load guard
+throws if the SaleFlow palette ever drifts from the core constant.
+Busiest-first category filter chips (`menuCategoryChips`) sit above the
+grid; `filterMenuProducts` delegates to the existing `searchProducts` so
+search behavior is unchanged. Stock badges carry over onto tiles. 20
+self-test assertions + vitest mirror (suite 1,549 → 1,558 / 113 files).
+No migration.
+
+### B37 — Cart/check overhaul (PR #503, 7657717)
+
+Toast-style check panel: tapping a line expands it in place for
+quantity/override editing (`expandedLine`), Remove is
+`setCartQuantity(…, 0)`, line rows are cleaner, and the totals panel is
+sticky at the bottom of the check. The limit meter and every advisory
+restyled onto the brand tokens. Presentation-only, one file, suite
+unchanged. No migration.
+
+### B38 — Tender/done polish + global modal unification (PR #504, 79df8d5)
+
+The finishing sweep. TenderScreen: the amount due is a green-soft hero
+card, suggestion/toggle chips use the accent/ink active pattern, Complete
+sale is solid greenway with dark-green ink. Done screen: celebratory
+green card with the change amount large in brand green; count-back pills
+(B31) restyled. ReceiptButtons, EmailReceiptPanel, IdGateScreen,
+PriceOverrideModal (approve stays amber — caution color), and MemberPanel
+all tokened. In RegisterShell every modal — no-sale, void, pickup queue,
+day report, leaderboard, till — now shares one container/close/primary
+pattern on the tokens; every `bg-emerald-600` primary became
+accent/accent-ink. Zero legacy neutral/emerald classes remain in
+SaleFlow/RegisterShell (the pinned B36 category palette is intentional).
+Presentation-only; 1,558 tests / 113 files green. No migration.
