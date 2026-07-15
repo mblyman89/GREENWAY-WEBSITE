@@ -48,6 +48,7 @@ import { VOID_REASON_PRESETS } from "@/lib/pos/void-sale-core";
 import type { PickupQueueEntry } from "@/lib/pos/pickup-core";
 import type { MemberHistory } from "@/lib/pos/member-history-core";
 import { buildDayReportSlipHtml, type DaySummary, type DrawerDaySummary } from "@/lib/pos/day-report-core";
+import { medalFor } from "@/lib/pos/leaderboard-core";
 import {
   LAST_RECEIPT_KEY,
   HELD_SALE_KEY,
@@ -121,6 +122,7 @@ export function RegisterShell() {
   // B22 — X/Z day report modal (manager PIN inside).
   const [dayReportOpen, setDayReportOpen] = useState(false);
   const [voidOpen, setVoidOpen] = useState(false); // B27
+  const [leaderboardOpen, setLeaderboardOpen] = useState(false); // B34
   const [pickupOpen, setPickupOpen] = useState(false); // B28
   // B28 — live count of website pickup orders (polled while unlocked+online).
   const [pickupCount, setPickupCount] = useState<number | null>(null);
@@ -669,6 +671,7 @@ export function RegisterShell() {
         onTill={(mode) => setTillMode(mode)}
         onDayReport={() => setDayReportOpen(true)}
         onVoidSale={online ? () => setVoidOpen(true) : undefined}
+        onLeaderboard={online ? () => setLeaderboardOpen(true) : undefined}
         pickupCount={online ? pickupCount : null}
         onPickupQueue={online && drawer ? () => setPickupOpen(true) : undefined}
         onRefreshMenu={() => void refreshMenu()}
@@ -717,6 +720,9 @@ export function RegisterShell() {
           receiptConfig={menuBundle ? normalizePosReceiptConfig(menuBundle.receipt) : null}
           onClose={() => setDayReportOpen(false)}
         />
+      ) : null}
+      {leaderboardOpen ? (
+        <LeaderboardModal creds={creds} onClose={() => setLeaderboardOpen(false)} />
       ) : null}
       {voidOpen && employee ? (
         <VoidSaleModal
@@ -1045,6 +1051,7 @@ function HomeScreen({
   onTill,
   onDayReport,
   onVoidSale,
+  onLeaderboard,
   pickupCount,
   onPickupQueue,
   onRefreshMenu,
@@ -1084,6 +1091,8 @@ function HomeScreen({
   onDayReport: () => void;
   /** B27 — open the manager-gated same-day void flow (undefined offline). */
   onVoidSale?: () => void;
+  /** B34 — open the budtender leaderboard (undefined offline — it reads the server ledger). */
+  onLeaderboard?: () => void;
   /** B28 — live website-pickup count (null offline / not yet fetched). */
   pickupCount: number | null;
   /** B28 — open the pickup queue (undefined offline or with no open drawer). */
@@ -1322,6 +1331,18 @@ function HomeScreen({
           Void a sale (today)
           <span className="mt-1 block text-xs font-normal text-neutral-500">
             Same-day mistakes only — manager PIN; restocks stock and returns the cash. Older sales: returns desk
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={onLeaderboard}
+          disabled={!onLeaderboard}
+          title={onLeaderboard ? undefined : "The leaderboard needs a connection — it reads the store's ledger"}
+          className="rounded-2xl bg-neutral-900 border border-neutral-800 p-5 text-left text-base font-semibold disabled:opacity-40"
+        >
+          Leaderboard 🏆
+          <span className="mt-1 block text-xs font-normal text-neutral-500">
+            Today&rsquo;s top budtenders by sales + this week&rsquo;s champions — whole store competes
           </span>
         </button>
       </section>
@@ -2138,6 +2159,120 @@ function DayReportModal({
         >
           {busy ? "Building report…" : "Print day report"}
         </button>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// B34 — Budtender leaderboard: today by SALES (no dollars — blind-count
+// discipline), trailing week by GROSS. Whole store competes; no PIN needed.
+// ---------------------------------------------------------------------------
+
+type LeaderboardEntry = {
+  rank: number;
+  name: string;
+  saleCount: number;
+  itemCount: number;
+  grossMinor?: number;
+};
+
+function LeaderboardModal({ creds, onClose }: { creds: DeviceCreds; onClose: () => void }) {
+  const [tab, setTab] = useState<"today" | "week">("today");
+  const [boards, setBoards] = useState<{ today: LeaderboardEntry[]; week: LeaderboardEntry[] } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/pos/leaderboard", {
+          headers: { "x-pos-device-id": creds.deviceId, "x-pos-device-key": creds.deviceKey },
+        });
+        const body = (await res.json().catch(() => null)) as
+          | { ok?: boolean; today?: LeaderboardEntry[]; week?: LeaderboardEntry[]; error?: string }
+          | null;
+        if (cancelled) return;
+        if (!res.ok || !body?.ok || !body.today || !body.week) {
+          setError(body?.error ?? "Leaderboard failed — try again.");
+          return;
+        }
+        setBoards({ today: body.today, week: body.week });
+      } catch {
+        if (!cancelled) setError("Could not reach the server — try again.");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [creds]);
+
+  const entries = boards ? (tab === "today" ? boards.today : boards.week) : [];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+      <div className="w-full max-w-lg rounded-2xl border border-neutral-700 bg-neutral-900 p-6 text-neutral-100">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Leaderboard 🏆</h2>
+          <button type="button" onClick={onClose} className="rounded-lg bg-neutral-800 px-3 py-1.5 text-sm">
+            Close
+          </button>
+        </div>
+        <div className="mt-3 flex gap-2">
+          <button
+            type="button"
+            onClick={() => setTab("today")}
+            className={`rounded-full px-4 py-2 text-sm font-semibold ${tab === "today" ? "bg-emerald-600 text-white" : "bg-neutral-800 text-neutral-300"}`}
+          >
+            Today — by sales
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("week")}
+            className={`rounded-full px-4 py-2 text-sm font-semibold ${tab === "week" ? "bg-emerald-600 text-white" : "bg-neutral-800 text-neutral-300"}`}
+          >
+            This week — by dollars
+          </button>
+        </div>
+        <p className="mt-2 text-xs text-neutral-500">
+          {tab === "today"
+            ? "Ranked by completed sales across every register today. Dollar totals stay off the same-day board so drawer counts stay blind."
+            : "Ranked by gross sales across the trailing 7 days — every register counts."}
+        </p>
+
+        {error ? <p className="mt-4 rounded-lg bg-red-950/60 px-3 py-2 text-sm text-red-300">{error}</p> : null}
+        {!boards && !error ? <p className="mt-4 text-sm text-neutral-400">Loading the standings…</p> : null}
+        {boards && entries.length === 0 ? (
+          <p className="mt-4 text-sm text-neutral-400">
+            No completed sales {tab === "today" ? "yet today" : "this week"} — the board starts with the first sale.
+          </p>
+        ) : null}
+
+        {entries.length > 0 ? (
+          <ul className="mt-4 space-y-2">
+            {entries.slice(0, 10).map((e) => (
+              <li
+                key={`${e.rank}-${e.name}`}
+                className={`flex items-center justify-between rounded-xl px-4 py-3 ${
+                  e.rank === 1 ? "border border-amber-500/60 bg-amber-950/30" : "bg-neutral-800/60"
+                }`}
+              >
+                <span className="flex items-center gap-3">
+                  <span className="w-8 text-lg font-bold text-neutral-400">
+                    {medalFor(e.rank) || `#${e.rank}`}
+                  </span>
+                  <span className="text-base font-semibold">{e.name}</span>
+                </span>
+                <span className="text-right text-sm text-neutral-300">
+                  {tab === "week" && typeof e.grossMinor === "number" ? (
+                    <span className="block text-base font-bold text-emerald-300">{formatCents(e.grossMinor)}</span>
+                  ) : null}
+                  {e.saleCount} sale{e.saleCount === 1 ? "" : "s"} · {e.itemCount} item{e.itemCount === 1 ? "" : "s"}
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : null}
       </div>
     </div>
   );
