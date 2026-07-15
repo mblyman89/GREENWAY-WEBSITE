@@ -77,6 +77,18 @@ export type PosMenuProduct = {
    * Warnings only — the B19 decrement + completion gate are the authority.
    */
   unitsLeft?: number | null;
+  /**
+   * B42 — product-info facts for the on-demand detail card. SENSORY/
+   * descriptive only (no effects/medical claims — website posture). ALL
+   * optional so bundles cached before B42 still parse; missing facts are
+   * simply omitted from the card. Descriptions are trimmed server-side
+   * (product-info-core.trimDescription) so the cached bundle stays small.
+   */
+  strainType?: string | null;
+  thc?: string | null;
+  cbd?: string | null;
+  terpenes?: string[];
+  description?: string | null;
 };
 
 /** Owner's sales-limit settings as shipped to the device. */

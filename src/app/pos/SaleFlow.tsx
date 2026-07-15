@@ -49,6 +49,7 @@ import {
   toggleFavorite,
 } from "@/lib/pos/favorites-core";
 import { manualAddBlocked } from "@/lib/pos/scan-required-core";
+import { buildProductInfo } from "@/lib/pos/product-info-core";
 import {
   buildCustomProduct,
   keypadAppend,
@@ -180,6 +181,13 @@ export type SaleFlowProps = {
    * manager/lead role gate); the PIN never leaves that call.
    */
   onApprove?: (pin: string) => Promise<{ ok: true; approver: { id: string; fullName: string } } | { ok: false; error: string }>;
+  /**
+   * B42 — resolve the info card's photo (ONLINE-ONLY; the shell calls
+   * /api/pos/product-image with device auth). The ONE image the register
+   * ever shows — the grid stays text-first by owner decision. Offline or
+   * failed = null image; the card still shows every fact.
+   */
+  onProductImage?: (productId: string) => Promise<{ url: string; isFallback: boolean } | null>;
   /** Enqueue an event; returns the clientUuid assigned to it. */
   onEnqueue: (
     eventType: "sale" | "manual_id_verification" | "medical_card_capture",
@@ -254,7 +262,7 @@ function priceForBuyer(
   };
 }
 
-export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, initialCart, onHold, onReceiptFrozen, onMemberLookup, onMemberHistory, onEmailReceipt, onApprove, onEnqueue, onComplete, onCancel }: SaleFlowProps) {
+export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, initialCart, onHold, onReceiptFrozen, onMemberLookup, onMemberHistory, onEmailReceipt, onApprove, onProductImage, onEnqueue, onComplete, onCancel }: SaleFlowProps) {
   const [step, setStep] = useState<Step>("idgate");
   const [verdict, setVerdict] = useState<Extract<IdGateVerdict, { allowed: true }> | null>(null);
   const [manualEventUuid, setManualEventUuid] = useState<string | null>(null);
@@ -319,6 +327,7 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
         onMemberLookup={onMemberLookup}
         onMemberHistory={onMemberHistory}
         onApprove={onApprove}
+        onProductImage={onProductImage}
         overrides={overrides}
         setOverrides={setOverrides}
         onCancel={onCancel}
@@ -982,11 +991,14 @@ function ProductTile({
   pinned,
   onAdd,
   onTogglePin,
+  onInfo,
 }: {
   product: PosMenuProduct;
   pinned: boolean;
   onAdd: () => void;
   onTogglePin: () => void;
+  /** B42 — open the product-info card (undefined = no affordance). */
+  onInfo?: () => void;
 }) {
   const style = categoryStyle(product.category);
   return (
@@ -1023,6 +1035,17 @@ function ProductTile({
       >
         {pinned ? "★" : "☆"}
       </button>
+      {onInfo ? (
+        <button
+          type="button"
+          onClick={onInfo}
+          aria-label={`Product info for ${product.name}`}
+          title="Product info"
+          className="absolute bottom-1.5 right-1.5 rounded-full px-1.5 py-0.5 text-sm font-semibold leading-none text-[var(--pos-text-faint)] opacity-70"
+        >
+          ⓘ
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -1134,6 +1157,7 @@ function CartScreen({
   onMemberLookup,
   onMemberHistory,
   onApprove,
+  onProductImage,
   overrides,
   setOverrides,
   onCancel,
@@ -1153,6 +1177,8 @@ function CartScreen({
   onMemberHistory?: (customerId: string) => Promise<{ ok: true; history: MemberHistory } | { ok: false; error: string }>;
   /** B24 — manager PIN verify (ONLINE-ONLY; /api/pos/approve via the shell). */
   onApprove?: (pin: string) => Promise<{ ok: true; approver: { id: string; fullName: string } } | { ok: false; error: string }>;
+  /** B42 — info-card photo resolve (ONLINE-ONLY via the shell). */
+  onProductImage?: (productId: string) => Promise<{ url: string; isFallback: boolean } | null>;
   /** B24 — this sale's manager price overrides, keyed by variantId. */
   overrides: Record<string, PosLineOverride>;
   setOverrides: (o: Record<string, PosLineOverride>) => void;
@@ -1201,6 +1227,8 @@ function CartScreen({
   const [scanUnlocked, setScanUnlocked] = useState(false);
   const [scanBlockNotice, setScanBlockNotice] = useState<string | null>(null);
   const [scanUnlockOpen, setScanUnlockOpen] = useState(false);
+  // B42 — the product whose info card is open (Cova: info on demand).
+  const [infoProduct, setInfoProduct] = useState<PosMenuProduct | null>(null);
   const carded = !!medicalCard;
 
   /**
@@ -1409,6 +1437,7 @@ function CartScreen({
                       pinned
                       onAdd={() => manualAdd(p)}
                       onTogglePin={() => togglePin(p.variantId)}
+                      onInfo={() => setInfoProduct(p)}
                     />
                   </li>
                 ))}
@@ -1524,6 +1553,7 @@ function CartScreen({
                   pinned={favorites.includes(p.variantId)}
                   onAdd={() => manualAdd(p)}
                   onTogglePin={() => togglePin(p.variantId)}
+                  onInfo={() => setInfoProduct(p)}
                 />
               </li>
             ))}
@@ -1781,7 +1811,142 @@ function CartScreen({
           }}
         />
       ) : null}
+
+      {infoProduct ? (
+        <ProductInfoModal
+          product={infoProduct}
+          onProductImage={onProductImage}
+          onAdd={() => {
+            manualAdd(infoProduct);
+            setInfoProduct(null);
+          }}
+          onClose={() => setInfoProduct(null)}
+        />
+      ) : null}
     </main>
+  );
+}
+
+/**
+ * POS B42 — product info on demand (Cova). Potency, strain type, terpenes
+ * and a trimmed description come from the CACHED bundle, so the card works
+ * fully offline; the single photo resolves ONLINE when the card opens (the
+ * grid stays text-first by owner decision — no per-product images ride the
+ * device cache). Sensory/descriptive facts only — no effects or medical
+ * claims (website posture, WAC 314-55-155).
+ */
+function ProductInfoModal({
+  product,
+  onProductImage,
+  onAdd,
+  onClose,
+}: {
+  product: PosMenuProduct;
+  onProductImage?: (productId: string) => Promise<{ url: string; isFallback: boolean } | null>;
+  onAdd: () => void;
+  onClose: () => void;
+}) {
+  const info = useMemo(() => buildProductInfo(product), [product]);
+  const [image, setImage] = useState<{ url: string; isFallback: boolean } | null>(null);
+  const [imageState, setImageState] = useState<"loading" | "done">(onProductImage ? "loading" : "done");
+
+  useEffect(() => {
+    // ONLINE-ONLY, best-effort photo fetch when the card opens. `active`
+    // guards against a late response landing on a different product's card.
+    if (!onProductImage) return;
+    let active = true;
+    onProductImage(product.productId)
+      .then((img) => {
+        if (!active) return;
+        setImage(img);
+        setImageState("done");
+      })
+      .catch(() => {
+        if (active) setImageState("done");
+      });
+    return () => {
+      active = false;
+    };
+  }, [onProductImage, product.productId]);
+
+  const style = categoryStyle(info.category);
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+      <div className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-6 text-[var(--pos-text)]">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-[var(--pos-text-faint)]">
+              <span className={`h-2 w-2 rounded-full ${style.dot}`} aria-hidden />
+              <span className="capitalize">{info.category}</span>
+            </p>
+            <h2 className="mt-1 text-lg font-semibold leading-snug">
+              {info.name}
+              {info.variantLabel ? <span className="text-[var(--pos-text-muted)]"> · {info.variantLabel}</span> : null}
+            </h2>
+            {info.brand ? <p className="text-xs text-[var(--pos-text-faint)]">{info.brand}</p> : null}
+          </div>
+          <button type="button" onClick={onClose} className="pos-tile shrink-0 rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-1.5 text-sm">
+            Close
+          </button>
+        </div>
+
+        {imageState === "loading" ? (
+          <div className="mt-4 h-40 animate-pulse rounded-xl border border-[var(--pos-border)] bg-[var(--pos-surface-2)]" />
+        ) : image ? (
+          <div className="mt-4">
+            {/* eslint-disable-next-line @next/next/no-img-element -- one-off,
+                online-only card photo; next/image adds nothing on the register PWA. */}
+            <img
+              src={image.url}
+              alt={info.name}
+              className="max-h-52 w-full rounded-xl border border-[var(--pos-border)] object-contain"
+            />
+            {image.isFallback ? (
+              <p className="mt-1 text-[10px] text-[var(--pos-text-faint)]">Representative photo — not this exact package.</p>
+            ) : null}
+          </div>
+        ) : null}
+
+        {info.rows.length > 0 ? (
+          <dl className="mt-4 grid grid-cols-3 gap-2">
+            {info.rows.map((r) => (
+              <div key={r.label} className="rounded-xl border border-[var(--pos-border)] bg-[var(--pos-surface-2)] px-3 py-2 text-center">
+                <dt className="text-[10px] font-bold uppercase tracking-wide text-[var(--pos-text-faint)]">{r.label}</dt>
+                <dd className="mt-0.5 text-sm font-semibold">{r.value}</dd>
+              </div>
+            ))}
+          </dl>
+        ) : null}
+
+        {info.terpenes.length > 0 ? (
+          <div className="mt-3">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--pos-text-faint)]">Dominant terpenes</p>
+            <div className="mt-1 flex flex-wrap gap-1.5">
+              {info.terpenes.map((t) => (
+                <span key={t} className="rounded-full border border-[var(--pos-border)] bg-[var(--pos-surface-2)] px-2.5 py-1 text-xs capitalize text-[var(--pos-text-muted)]">
+                  {t}
+                </span>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {info.description ? (
+          <p className="mt-3 text-sm leading-relaxed text-[var(--pos-text-muted)]">{info.description}</p>
+        ) : null}
+
+        <div className="mt-5 flex items-center justify-between gap-3">
+          <span className="text-lg font-bold text-[var(--pos-accent)]">{money(info.priceMinor)}</span>
+          <button
+            type="button"
+            onClick={onAdd}
+            className="pos-tile rounded-xl bg-[var(--pos-accent)] px-6 py-3 text-sm font-bold text-[var(--pos-accent-ink)]"
+          >
+            Add to check
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

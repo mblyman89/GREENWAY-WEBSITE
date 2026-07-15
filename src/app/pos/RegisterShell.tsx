@@ -515,6 +515,22 @@ export function RegisterShell() {
             return { ok: false as const, error: "Could not reach the server — try again." };
           }
         }}
+        onProductImage={async (productId) => {
+          // POS B42 — the info card's photo, ONLINE-ONLY and best-effort:
+          // offline/failed = no photo, the card still shows every cached fact.
+          if (!navigator.onLine) return null;
+          try {
+            const res = await fetch(`/api/pos/product-image?productId=${encodeURIComponent(productId)}`, {
+              headers: { "x-pos-device-id": creds.deviceId, "x-pos-device-key": creds.deviceKey },
+            });
+            const body = (await res.json().catch(() => null)) as
+              | { image?: { url: string; isFallback: boolean } | null }
+              | null;
+            return res.ok ? (body?.image ?? null) : null;
+          } catch {
+            return null;
+          }
+        }}
         onMemberLookup={async (q) => {
           // POS B14 — member lookup is ONLINE-ONLY (no customer book is ever
           // cached on the iPad). Offline: ring the sale without the member.
