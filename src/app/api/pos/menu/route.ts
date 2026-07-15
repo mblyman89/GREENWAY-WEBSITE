@@ -26,6 +26,7 @@ import { getSalesLimitSettings } from "@/lib/compliance/sales-limits";
 import { getSalesHoursWindow } from "@/lib/compliance/sales-hours-store";
 import { getMedTaxSettings, getEndorsementConfig } from "@/lib/medical/store";
 import { getPosReceiptConfig } from "@/lib/pos/receipt-config-store";
+import { getPosCashRoundingConfig } from "@/lib/pos/cash-rounding-store";
 import { getConfig as getLoyaltyConfig } from "@/lib/loyalty/loyalty-store";
 import { listMedicalRegistry } from "@/lib/medical/sale-store";
 import type { DohCategory } from "@/lib/medical/medical-sale-core";
@@ -48,7 +49,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
-  const [menu, rules, costs, limitSettings, hours, medSettings, endorsement, registryRows, receipt] =
+  const [menu, rules, costs, limitSettings, hours, medSettings, endorsement, registryRows, receipt, rounding] =
     await Promise.all([
       loadLiveMenuAll(),
       loadActiveRules(),
@@ -59,6 +60,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       getEndorsementConfig(),
       listMedicalRegistry({ limit: 2000 }),
       getPosReceiptConfig(),
+      getPosCashRoundingConfig(),
     ]);
   const loyaltyCfg = await getLoyaltyConfig();
 
@@ -177,6 +179,9 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     loyalty: { pointsPerDollar: loyaltyCfg.pointsPerDollar },
     // POS B23 — barcode → product-key index for scan-to-cart.
     barcodes,
+    // POS B33 — the owner's cash-rounding policy rides the bundle so OFFLINE
+    // sales round the amount due exactly like online ones.
+    rounding,
     fetchedAt: new Date().toISOString(),
   };
 

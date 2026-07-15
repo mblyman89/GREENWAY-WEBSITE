@@ -46,6 +46,14 @@ export type DaySummary = {
   /** Medical (recognition-card) sales within saleCount. */
   medicalSaleCount: number;
   medicalSavingsMinor: number;
+  /**
+   * B33 cash rounding — sales where the amount due was rounded, and the NET
+   * adjustment (positive = the store collected more cash than the priced
+   * totals; negative = less). Cash expected in the drawer =
+   * grossMinor + roundingMinor. Tax was computed on the pre-rounded totals.
+   */
+  roundedSaleCount: number;
+  roundingMinor: number;
   /** Audited no-sale drawer opens. */
   noSaleCount: number;
   /** Events the gate bounced to the manager exception queue. */
@@ -71,6 +79,8 @@ export function summarizeDayEvents(rows: DayEventRow[]): DaySummary {
     taxMinor: 0,
     medicalSaleCount: 0,
     medicalSavingsMinor: 0,
+    roundedSaleCount: 0,
+    roundingMinor: 0,
     noSaleCount: 0,
     exceptionCount: 0,
     pendingCount: 0,
@@ -99,6 +109,13 @@ export function summarizeDayEvents(rows: DayEventRow[]): DaySummary {
     if (medical) {
       out.medicalSaleCount += 1;
       out.medicalSavingsMinor += intOrZero(medical.medicalSavingsMinor);
+    }
+    // B33 — sum the cash-rounding adjustments (separate row, Toast-style:
+    // rounding is cash over/short territory, never part of gross or tax).
+    const rounding = p.rounding && typeof p.rounding === "object" ? (p.rounding as Record<string, unknown>) : null;
+    if (rounding) {
+      out.roundedSaleCount += 1;
+      out.roundingMinor += intOrZero(rounding.adjustmentMinor);
     }
   }
   return out;
@@ -202,6 +219,11 @@ export function buildDayReportSlipHtml(input: DayReportSlipInput): string {
     row("Tax collected", formatCents(s.taxMinor)),
     row("Medical sales", String(s.medicalSaleCount)),
     row("Medical tax exempt", formatCents(s.medicalSavingsMinor)),
+    // B33 — the rounding row prints whenever the policy touched a sale, so
+    // the drawer math (gross + rounding) is visible on paper.
+    ...(s.roundedSaleCount > 0
+      ? [row(`Cash rounding (${s.roundedSaleCount} sales)`, formatCents(s.roundingMinor))]
+      : []),
   ].join("");
 
   const activityRows = [
@@ -291,7 +313,26 @@ export function __runDayReportCoreTests(): void {
   ok(s.grossMinor === 8000, "gross sums only processed sales — exceptions and pending excluded");
   ok(s.subtotalMinor === 7000 && s.taxMinor === 1000, "subtotal + tax summed");
   ok(s.medicalSaleCount === 1 && s.medicalSavingsMinor === 555, "medical sale + exempt savings counted");
+  ok(s.roundedSaleCount === 0 && s.roundingMinor === 0, "no rounding blocks → zero rounding row");
   ok(s.noSaleCount === 1, "no-sale counted");
+
+  // B33 — rounding adjustments sum into their own row (net of + and −).
+  const roundedDay = summarizeDayEvents([
+    {
+      eventType: "sale",
+      status: "processed",
+      payload: { totalMinor: 2926, rounding: { mode: "nearest", adjustmentMinor: -1, dueMinor: 2925 } },
+    },
+    {
+      eventType: "sale",
+      status: "processed",
+      payload: { totalMinor: 2923, rounding: { mode: "nearest", adjustmentMinor: 2, dueMinor: 2925 } },
+    },
+    { eventType: "sale", status: "processed", payload: { totalMinor: 3000 } },
+  ]);
+  ok(roundedDay.roundedSaleCount === 2, "B33: two rounded sales counted");
+  ok(roundedDay.roundingMinor === 1, "B33: net rounding = −1 + 2 = +1¢");
+  ok(roundedDay.grossMinor === 2926 + 2923 + 3000, "B33: gross stays PRE-rounded");
   ok(s.exceptionCount === 1 && s.pendingCount === 1, "exceptions and pending surfaced, never silently dropped");
   ok(summarizeDayEvents([]).grossMinor === 0, "empty day is all zeros");
 
@@ -344,6 +385,22 @@ export function __runDayReportCoreTests(): void {
   ok(slip.includes("-$1.00"), "net short printed with sign");
   ok(slip.includes("body{width:576px"), "same 576px page family as receipts");
   ok(slip.includes("Port Orchard, WA"), "address carried");
+  ok(!slip.includes("Cash rounding"), "B33: no rounding row when no sale was rounded");
+
+  // B33 — the rounding row prints when the policy touched sales.
+  const slipRounded = buildDayReportSlipHtml({
+    kind: "Z",
+    registerLabel: "Register 1",
+    businessDay: "2026-07-16",
+    printedAtIso: "2026-07-17T04:55:00.000Z",
+    requestedByName: "Mark",
+    summary: roundedDay,
+    drawer: d2,
+    headerText: null,
+    addressLines: [],
+  });
+  ok(slipRounded.includes("Cash rounding (2 sales)"), "B33: rounding row with sale count");
+  ok(slipRounded.includes("$0.01"), "B33: net rounding amount printed");
 
   const slipX = buildDayReportSlipHtml({
     kind: "X",

@@ -180,6 +180,15 @@ export function validateEmailReceiptSnapshot(
       medicalSale: r.medicalSale as boolean,
       tenderedMinor: r.tenderedMinor as number,
       changeMinor: r.changeMinor as number,
+      // B33 — optional cash-rounding disclosure passes through when coherent.
+      ...(Number.isInteger(r.roundingAdjustmentMinor) &&
+      (r.roundingAdjustmentMinor as number) !== 0 &&
+      Number.isInteger(r.roundedDueMinor)
+        ? {
+            roundingAdjustmentMinor: r.roundingAdjustmentMinor as number,
+            roundedDueMinor: r.roundedDueMinor as number,
+          }
+        : {}),
       headerText: isShortString(r.headerText, 120) ? (r.headerText as string) : null,
       footerText: isShortString(r.footerText, 500) ? (r.footerText as string) : null,
       addressLines,
@@ -243,6 +252,17 @@ export function buildEmailReceiptHtml(receipt: PosReceiptInput): string {
   }
   totals.push(
     `<tr><td style="padding:8px 0 3px;text-align:left;font-size:17px;font-weight:bold;border-top:2px solid #111;">TOTAL</td><td style="padding:8px 0 3px;text-align:right;font-size:17px;font-weight:bold;border-top:2px solid #111;">${formatMoneyMinor(receipt.totalMinor)}</td></tr>`,
+  );
+  // B33 — cash-rounding disclosure mirrors the paper receipt exactly.
+  const emailAdj = receipt.roundingAdjustmentMinor ?? 0;
+  if (emailAdj !== 0 && typeof receipt.roundedDueMinor === "number") {
+    const sign = emailAdj > 0 ? "" : "-";
+    totals.push(
+      `<tr><td style="padding:3px 0;text-align:left;">Cash rounding</td><td style="padding:3px 0;text-align:right;">${sign}${formatMoneyMinor(Math.abs(emailAdj))}</td></tr>`,
+      `<tr><td style="padding:3px 0;text-align:left;">Cash due</td><td style="padding:3px 0;text-align:right;">${formatMoneyMinor(receipt.roundedDueMinor)}</td></tr>`,
+    );
+  }
+  totals.push(
     `<tr><td style="padding:3px 0;text-align:left;">Cash tendered</td><td style="padding:3px 0;text-align:right;">${formatMoneyMinor(receipt.tenderedMinor)}</td></tr>`,
     `<tr><td style="padding:3px 0;text-align:left;">Change</td><td style="padding:3px 0;text-align:right;">${formatMoneyMinor(receipt.changeMinor)}</td></tr>`,
   );
@@ -383,7 +403,33 @@ export function __runEmailReceiptCoreTests(): void {
       lines: [{ productName: "<script>alert(1)</script>", quantity: 1, unitPriceMinor: 100, regularPriceMinor: 100 }],
     });
     ok(!xss.includes("<script>"), "product names escaped");
+
+    // B33 — rounding disclosure mirrors paper: separate line + cash due.
+    const roundedEmail = buildEmailReceiptHtml({
+      ...v.receipt,
+      roundingAdjustmentMinor: -2,
+      roundedDueMinor: 4998,
+    });
+    ok(roundedEmail.includes("Cash rounding") && roundedEmail.includes("-$0.02"), "B33: rounding line in email");
+    ok(roundedEmail.includes("Cash due"), "B33: cash-due row in email");
+    ok(!buildEmailReceiptHtml(v.receipt).includes("Cash rounding"), "B33: no rounding line when absent");
   }
+
+  // B33 — snapshot validation passes coherent rounding fields through and
+  // drops incoherent ones (never refuses the receipt over a display extra).
+  const roundedSnap = validateEmailReceiptSnapshot({
+    ...goodReceipt,
+    roundingAdjustmentMinor: -2,
+    roundedDueMinor: 4998,
+  });
+  ok(
+    roundedSnap.ok && roundedSnap.receipt.roundingAdjustmentMinor === -2 && roundedSnap.receipt.roundedDueMinor === 4998,
+    "B33: rounding fields survive snapshot validation",
+  );
+  const zeroSnap = validateEmailReceiptSnapshot({ ...goodReceipt, roundingAdjustmentMinor: 0, roundedDueMinor: 5000 });
+  ok(zeroSnap.ok && zeroSnap.receipt.roundingAdjustmentMinor === undefined, "B33: zero adjustment dropped");
+  const fracSnap = validateEmailReceiptSnapshot({ ...goodReceipt, roundingAdjustmentMinor: 1.5, roundedDueMinor: 5001.5 });
+  ok(fracSnap.ok && fracSnap.receipt.roundingAdjustmentMinor === undefined, "B33: fractional rounding dropped");
 
   // Subject
   ok(
