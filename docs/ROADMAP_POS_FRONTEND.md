@@ -298,3 +298,87 @@ pattern on the tokens; every `bg-emerald-600` primary became
 accent/accent-ink. Zero legacy neutral/emerald classes remain in
 SaleFlow/RegisterShell (the pinned B36 category palette is intentional).
 Presentation-only; 1,558 tests / 113 files green. No migration.
+
+### B39 — Quick-amount keypad tab (PR #506, ebd7606)
+
+Square-style keypad for the "it's not on the menu" moment — deliberately
+**non-cannabis only** (misc/sundry: lighters, a bag fee, a one-off):
+every cannabis line must stay item-tied for CCRS, so the keypad refuses
+cannabis by construction. Pure core `custom-sale-core.ts`: keypad math,
+price cap, `buildCustomProduct` emits `pos-custom-` product keys carrying
+one of the NON_CANNABIS_TAX_CATEGORIES (invariant guarded in the
+self-test); the B19 sale-decrement skips custom keys, and ccrs-sales
+falls back to the category snapshot. KeypadPanel tab in SaleFlow with a
+hoisted KeyButton. 27 self-test assertions + vitest mirror. No migration.
+
+### B40 — Favorites tile page (PR #507, 0ae515a)
+
+Per-register pinned best-sellers (Square Favorites): a ★ Favorites tab
+first in the grid, pin/unpin via a star overlay on every tile (shared
+`ProductTile` component). Pure core `favorites-core.ts`: versioned
+envelope in localStorage (`gw-pos-favorites`, per device, cap 24),
+corruption-proof parsing, and — the compliance-relevant part —
+`favoriteProducts` resolves pins against the **live bundle in pin
+order**, so a delisted product never renders and prices are never stale.
+22 self-test assertions + vitest mirror. No migration.
+
+### B41 — Scan-required register mode (PR #508, 5189b14)
+
+Dutchie-style owner setting: when ON, cannabis items must be SCANNED —
+manual tile taps and search-adds are blocked, and a manager/lead PIN
+(`/api/pos/approve`) lifts it for ONE sale. Pure core
+`scan-required-core.ts`: `productRequiresScan` is the exact complement of
+NON_CANNABIS_TAX_CATEGORIES (blank category conservatively cannabis);
+`manualAddBlocked(config, unlockedThisSale, product)` is the single gate.
+Config lives in `site_settings` (`pos_scan_required`, B33 pattern — no
+migration), rides the bundle as `scanRequired?` so OFFLINE registers keep
+enforcing it, and has an admin page (Registers → Scanning) with audit.
+Every manual add in SaleFlow funnels through one `manualAdd` guard; a
+status pill + per-sale unlock modal surface the mode. 24 self-test
+assertions + vitest mirror. No migration.
+
+### B42 — Product info on demand (PR #509, eacf017)
+
+Cova-style detail card: an ⓘ on every tile opens facts — strain type,
+THC/CBD, terpenes (top 4), a 400-char word-boundary-trimmed description —
+all riding the menu bundle so the card works OFFLINE. A single
+representative photo loads ONLINE-ONLY via device-authed
+`/api/pos/product-image` (DF-3 resolver ladder vs the published item;
+best-effort `{image:null}`, skeleton + "Representative photo" fallback in
+the modal). "Add to check" funnels through the same manualAdd guard (B41
+respected). Pure core `product-info-core.ts` (25 assertions) + vitest
+mirror. Deliberate scope: NO images on the sale grid — the catalog is
+large, the register is an offline-first PWA, and tile photos would add
+curation burden and cache weight for zero speed; one on-demand photo
+answers "is this the right jar?" without any of that. No migration.
+
+### B43 — Out-of-stock quick-flag (PR #510, a31fc3b)
+
+Toast's "86 it": the shelf is empty but the menu still shows it → open
+the ⓘ card, tap "Mark out of stock", pick a reason (closed set: shelf
+empty / damaged / wrong listing — no free text), and the item leaves
+every register and the website. The server flips
+`menu_items.inventory_status → "unavailable"` on the PUBLISHED version —
+the SAME field B19's sale-decrement writes, so every downstream consumer
+already honors it. ONE-WAY at the register (a register can kill a
+phantom listing but never invent inventory — restock happens in the back
+office), ONLINE-ONLY, audited (`pos.stock_flag` with reason + who),
+idempotent across registers. Optimistic local apply removes every
+variant from the cached bundle immediately. Pure core
+`stock-flag-core.ts` (19 assertions) + vitest mirror. No migration.
+
+### B44 — Per-device light/dark display mode (PR #511, 0b6ab32)
+
+Toast-style: each terminal picks its own mode (bright front window →
+light; corner register → dark). Pure core `theme-core.ts`:
+`gw-pos-theme` in localStorage per device, corruption degrades to dark,
+strict two-state toggle. The register's last hard-coded status colors
+(67 amber/red/sky/emerald spots) moved onto new semantic tokens
+(`--pos-warn/-danger/-info/-ok` families + `--pos-gold-ink`), finishing
+the B38 sweep — then ONE `html[data-pos-theme="light"]` block in
+globals.css re-tints every `--pos-*` token (brand accents shift to
+readable-on-white equivalents; `.pos-shell` gets a light glow +
+`color-scheme: light`). RegisterShell sets the attribute on `<html>`,
+removes it on unmount, and offers a ☀️/🌙 toggle in the home header that
+works offline. 16 self-test assertions + vitest mirror. Suite now 1,591
+tests / 119 files. No migration.

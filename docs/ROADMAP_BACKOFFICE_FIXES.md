@@ -3242,3 +3242,52 @@ six RegisterShell modals (no-sale, void, pickup, day report, leaderboard,
 till) unified on the POS tokens. Zero legacy neutral/emerald classes
 remain in SaleFlow/RegisterShell. Presentation only; 1,558 tests green.
 No migration. CI green on PR #504.
+
+### Shipped: POS B39 — quick-amount keypad tab (PR #506)
+
+Square-style keypad, deliberately NON-CANNABIS ONLY (cannabis lines must
+stay item-tied for CCRS). Pure core `custom-sale-core.ts` emits
+`pos-custom-` keys on NON_CANNABIS_TAX_CATEGORIES (invariant guarded);
+sale-decrement skips them, ccrs-sales uses the category snapshot. 27
+assertions + mirror. No migration. CI green on PR #506.
+
+### Shipped: POS B40 — favorites tile page (PR #507)
+
+Per-register pinned best-sellers: ★ tab, star overlay on tiles,
+localStorage envelope (`gw-pos-favorites`, cap 24), pins resolve against
+the LIVE bundle so delisted products never render and prices are never
+stale. 22 assertions + mirror. No migration. CI green on PR #507.
+
+### Shipped: POS B41 — scan-required register mode (PR #508)
+
+Owner setting (`site_settings.pos_scan_required`, no migration): cannabis
+must be scanned; manual adds blocked through one `manualAdd` gate;
+manager/lead PIN (`/api/pos/approve`) unlocks ONE sale. Rides the bundle
+so offline registers keep enforcing it. Admin page Registers → Scanning,
+audited. 24 assertions + mirror. CI green on PR #508.
+
+### Shipped: POS B42 — product info on demand (PR #509)
+
+ⓘ detail card: strain/THC/CBD/terpenes/trimmed description ride the
+bundle (offline); ONE representative photo online-only via device-authed
+`/api/pos/product-image` (DF-3 ladder, best-effort). No grid images by
+design (large catalog, offline-first PWA, curation burden). 25 assertions
++ mirror. No migration. CI green on PR #509.
+
+### Shipped: POS B43 — out-of-stock quick-flag (PR #510)
+
+Toast "86 it" from the register: reason from a closed set, server flips
+`menu_items.inventory_status → "unavailable"` on the PUBLISHED version
+(same field as B19's decrement — all consumers already honor it).
+ONE-WAY, online-only, audited (`pos.stock_flag`), idempotent; optimistic
+local bundle removal. 19 assertions + mirror. No migration. CI green on
+PR #510.
+
+### Shipped: POS B44 — per-device light/dark display mode (PR #511)
+
+`gw-pos-theme` in localStorage per device (corruption → dark); last 67
+hard-coded status colors moved onto semantic tokens
+(`--pos-warn/-danger/-info/-ok`); ONE `html[data-pos-theme="light"]`
+block re-tints the whole register; ☀️/🌙 toggle in the home header works
+offline. 16 assertions + mirror; suite 1,591 tests / 119 files. No
+migration. CI green on PR #511.
