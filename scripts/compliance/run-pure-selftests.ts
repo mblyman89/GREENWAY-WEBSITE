@@ -68,6 +68,7 @@ import { __runSaleGridCoreTests } from "../../src/lib/pos/sale-grid-core";
 import { __runCustomSaleCoreTests } from "../../src/lib/pos/custom-sale-core";
 import { __runFavoritesCoreTests } from "../../src/lib/pos/favorites-core";
 import { __runScanRequiredCoreTests } from "../../src/lib/pos/scan-required-core";
+import { __runProductInfoCoreTests } from "../../src/lib/pos/product-info-core";
 
 async function main() {
   __runOrderPricingTests();
@@ -138,6 +139,7 @@ async function main() {
   __runCustomSaleCoreTests();
   __runFavoritesCoreTests();
   __runScanRequiredCoreTests();
+  __runProductInfoCoreTests();
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

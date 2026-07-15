@@ -28,6 +28,7 @@ import { getMedTaxSettings, getEndorsementConfig } from "@/lib/medical/store";
 import { getPosReceiptConfig } from "@/lib/pos/receipt-config-store";
 import { getPosCashRoundingConfig } from "@/lib/pos/cash-rounding-store";
 import { getPosScanRequiredConfig } from "@/lib/pos/scan-required-store";
+import { trimDescription } from "@/lib/pos/product-info-core";
 import { getConfig as getLoyaltyConfig } from "@/lib/loyalty/loyalty-store";
 import { listMedicalRegistry } from "@/lib/medical/sale-store";
 import type { DohCategory } from "@/lib/medical/medical-sale-core";
@@ -122,6 +123,14 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         // variants carry no real count (null = unknown, falls back to the
         // item-level status). Warnings only; never blocks a sale.
         unitsLeft: hasRealVariants ? variant.inventoryLevel : null,
+        // B42 — product-info facts for the on-demand detail card (sensory/
+        // descriptive only). Descriptions trimmed so the device cache stays
+        // small; missing facts ship as absent, and the card omits them.
+        strainType: item.strainType ?? null,
+        thc: item.thc,
+        cbd: item.cbd,
+        terpenes: item.terpenes?.length ? item.terpenes : undefined,
+        description: trimDescription(item.description) || undefined,
       });
     }
   }
