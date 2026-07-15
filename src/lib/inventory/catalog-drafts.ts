@@ -9,7 +9,12 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
-import { getPublishedVersion, getItemBySourceKey } from "@/lib/pos/menu-version";
+import { getPublishedVersion } from "@/lib/pos/menu-version";
+import {
+  classifyInsertError,
+  planDraftSeeding,
+  type SeedLotInput,
+} from "@/lib/inventory/draft-seed-core";
 import {
   getPricingSettings,
   getVelocityForProduct,
@@ -67,33 +72,104 @@ export type CatalogMatchResult = {
   unmatched: number;
   /** Whether a published menu version exists to match against. */
   hasPublishedMenu: boolean;
+  /** Draft rows actually WRITTEN this run (verified inserts, not attempts). */
+  draftsCreated: number;
+  /** Inserts that FAILED with a real error (not benign duplicates). */
+  draftsFailed: number;
+  /** First real insert error message, for the timeline/UI. */
+  firstError: string | null;
 };
 
 /**
  * For each lot on a manifest, check if its pos_product_key matches a
  * source_item_id in the published menu. For unmatched lots, seed a draft.
- * Returns counts for the UI. Idempotent: a partial unique index prevents
- * piling up duplicate open drafts for the same POS key.
+ * Returns HONEST counts for the UI — draftsCreated only counts rows the
+ * database confirmed, and real insert errors are surfaced, never swallowed.
+ *
+ * Task AK fix: this used to `.upsert(..., { onConflict: "pos_product_key" })`,
+ * but the only unique index on that column is PARTIAL (0026), which PostgREST
+ * cannot target in ON CONFLICT (Postgres 42P10) — and the error was never
+ * read, so EVERY insert failed silently and no draft was ever created. The
+ * dedupe now happens up front in the pure planner (planDraftSeeding:
+ * published-menu match → existing open draft → within-run duplicates) and the
+ * writes are PLAIN INSERTS with errors read. The partial unique index still
+ * backstops races: a 23505 unique violation is classified as a benign
+ * duplicate, anything else counts as a failure.
  */
 export async function seedDraftsForManifest(
   manifestId: string,
   actorId: string | null,
 ): Promise<CatalogMatchResult> {
-  const empty: CatalogMatchResult = { matched: 0, unmatched: 0, hasPublishedMenu: false };
+  const empty: CatalogMatchResult = {
+    matched: 0,
+    unmatched: 0,
+    hasPublishedMenu: false,
+    draftsCreated: 0,
+    draftsFailed: 0,
+    firstError: null,
+  };
   if (!isSupabaseServiceConfigured) return empty;
   const admin = createSupabaseAdminClient();
 
   const published = await getPublishedVersion();
   const hasPublishedMenu = Boolean(published);
 
-  const { data: lotsData } = await admin
+  const { data: lotsData, error: lotsError } = await admin
     .from("inventory_lots")
     .select(
       "id, pos_product_key, product_name, brand_id, vendor_id, category, inventory_type, strain_name, lab_result_id, unit_cost_minor_units",
     )
     .eq("manifest_id", manifestId)
     .neq("status", "destroyed");
+  if (lotsError) {
+    console.error("[catalog-drafts] lots read failed:", lotsError.message);
+    return { ...empty, hasPublishedMenu, firstError: lotsError.message };
+  }
   const lots = (lotsData as LotForMatch[] | null) ?? [];
+  if (lots.length === 0) return { ...empty, hasPublishedMenu };
+
+  // Batched lookups for the pure planner: which of THIS manifest's keys are
+  // already on the published menu, and which already have an OPEN draft.
+  const lotKeys = Array.from(
+    new Set(lots.map((l) => l.pos_product_key).filter((k): k is string => Boolean(k))),
+  );
+  const publishedKeys = new Set<string>();
+  if (published && lotKeys.length > 0) {
+    const { data: itemRows, error: itemsError } = await admin
+      .from("menu_items")
+      .select("source_item_id")
+      .eq("menu_version_id", published.id)
+      .in("source_item_id", lotKeys);
+    if (itemsError) {
+      console.error("[catalog-drafts] published-items read failed:", itemsError.message);
+      return { ...empty, hasPublishedMenu, firstError: itemsError.message };
+    }
+    for (const r of (itemRows as { source_item_id: string }[] | null) ?? []) {
+      publishedKeys.add(r.source_item_id);
+    }
+  }
+  const openDraftKeys = new Set<string>();
+  if (lotKeys.length > 0) {
+    const { data: draftRows, error: draftsError } = await admin
+      .from("catalog_product_drafts")
+      .select("pos_product_key")
+      .eq("status", "draft")
+      .in("pos_product_key", lotKeys);
+    if (draftsError) {
+      console.error("[catalog-drafts] open-drafts read failed:", draftsError.message);
+      return { ...empty, hasPublishedMenu, firstError: draftsError.message };
+    }
+    for (const r of (draftRows as { pos_product_key: string | null }[] | null) ?? []) {
+      if (r.pos_product_key) openDraftKeys.add(r.pos_product_key);
+    }
+  }
+
+  const seedInputs: SeedLotInput[] = lots.map((l) => ({
+    lotId: l.id,
+    posProductKey: l.pos_product_key,
+  }));
+  const plan = planDraftSeeding({ lots: seedInputs, publishedKeys, openDraftKeys });
+  const lotById = new Map(lots.map((l) => [l.id, l] as const));
 
   // Cache vendor/brand name lookups so we don't refetch per lot.
   const vendorNames = new Map<string, string | null>();
@@ -111,19 +187,13 @@ export async function seedDraftsForManifest(
 
   const pricingSettings = await getPricingSettings();
 
-  let matched = 0;
-  let unmatched = 0;
+  let draftsCreated = 0;
+  let draftsFailed = 0;
+  let firstError: string | null = null;
 
-  for (const lot of lots) {
-    // Match against the published menu by POS key.
-    if (published && lot.pos_product_key) {
-      const hit = await getItemBySourceKey(published.id, lot.pos_product_key);
-      if (hit) {
-        matched += 1;
-        continue;
-      }
-    }
-    unmatched += 1;
+  for (const seed of plan.toSeed) {
+    const lot = lotById.get(seed.lotId);
+    if (!lot) continue;
 
     // Resolve display names (best-effort).
     let vendorName: string | null = null;
@@ -176,40 +246,62 @@ export async function seedDraftsForManifest(
     const velocity = await getVelocityForProduct(lot.pos_product_key, 60);
     const suggestion = suggestPrice(lot.unit_cost_minor_units, velocity, pricingSettings);
 
-    // Upsert by open POS key (the partial unique index makes this idempotent).
-    await admin
-      .from("catalog_product_drafts")
-      .upsert(
-        {
-          pos_product_key: lot.pos_product_key,
-          source_item_id: lot.pos_product_key,
-          name: lot.product_name ?? "",
-          brand_name: brandName,
-          vendor_name: vendorName,
-          category: lot.category,
-          inventory_type: lot.inventory_type,
-          strain_name: lot.strain_name,
-          thc_pct: lab.thc_pct,
-          cbd_pct: lab.cbd_pct,
-          total_thc_pct: lab.total_thc_pct,
-          total_cannabinoids_pct: lab.total_cannabinoids_pct,
-          potency_json: lab.potency_json,
-          manifest_id: manifestId,
-          lot_id: lot.id,
-          lab_result_id: lot.lab_result_id,
-          unit_cost_minor_units: lot.unit_cost_minor_units,
-          price_floor_minor_units: suggestion.floorMinor,
-          suggested_price_minor_units: suggestion.suggestedMinor,
-          price_rationale: suggestion.rationale,
-          status: "draft",
-          created_by: actorId,
-          updated_by: actorId,
-        },
-        { onConflict: "pos_product_key", ignoreDuplicates: true },
+    // PLAIN INSERT (dedupe already planned above) — READ the error. The old
+    // upsert targeted a PARTIAL unique index (impossible in ON CONFLICT via
+    // PostgREST → 42P10) and never read the error, so drafts silently never
+    // existed. A 23505 here is the partial index catching a race (the draft
+    // already exists — benign); anything else is a real failure we surface.
+    const { error: insertError } = await admin.from("catalog_product_drafts").insert({
+      pos_product_key: lot.pos_product_key,
+      source_item_id: lot.pos_product_key,
+      name: lot.product_name ?? "",
+      brand_name: brandName,
+      vendor_name: vendorName,
+      category: lot.category,
+      inventory_type: lot.inventory_type,
+      strain_name: lot.strain_name,
+      thc_pct: lab.thc_pct,
+      cbd_pct: lab.cbd_pct,
+      total_thc_pct: lab.total_thc_pct,
+      total_cannabinoids_pct: lab.total_cannabinoids_pct,
+      potency_json: lab.potency_json,
+      manifest_id: manifestId,
+      lot_id: lot.id,
+      lab_result_id: lot.lab_result_id,
+      unit_cost_minor_units: lot.unit_cost_minor_units,
+      price_floor_minor_units: suggestion.floorMinor,
+      suggested_price_minor_units: suggestion.suggestedMinor,
+      price_rationale: suggestion.rationale,
+      status: "draft",
+      created_by: actorId,
+      updated_by: actorId,
+    });
+    if (!insertError) {
+      draftsCreated += 1;
+    } else if (classifyInsertError(insertError.code) === "duplicate") {
+      // Race backstop: another finalize seeded this key between our planning
+      // read and this write. The draft exists — that's the desired end state.
+      console.warn(
+        `[catalog-drafts] draft for key ${lot.pos_product_key ?? "(none)"} already exists (race) — skipped`,
       );
+    } else {
+      draftsFailed += 1;
+      if (!firstError) firstError = insertError.message;
+      console.error(
+        `[catalog-drafts] draft insert FAILED for lot ${lot.id} (key ${lot.pos_product_key ?? "(none)"}):`,
+        insertError.message,
+      );
+    }
   }
 
-  return { matched, unmatched, hasPublishedMenu };
+  return {
+    matched: plan.matched,
+    unmatched: plan.unmatched,
+    hasPublishedMenu,
+    draftsCreated,
+    draftsFailed,
+    firstError,
+  };
 }
 
 /** List drafts, optionally filtered by status. */
