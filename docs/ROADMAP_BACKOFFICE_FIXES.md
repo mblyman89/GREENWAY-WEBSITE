@@ -3320,3 +3320,29 @@ assertions + vitest mirror), home screen reordered hero-first with a
 double-width Start sale tile and the status strip demoted. Design
 rules + sources: `docs/POS_UI_DESIGN_BRIEF.md`. Suite 1,601/120. No
 migration.
+
+### Task AM — Dutchie-style scan-first register (PRs #517–#520)
+
+Register front end, but four seams touch shared machinery — recorded
+here for the back-office view. AM-A (#517): scan-first sale screen
+(customer band / large scan-populated item list + live search /
+checkout rail; browse becomes an overlay; global keyboard-wedge core so
+scanning needs no focus; Save/Load sale rename). AM-B (#518): loyalty
+redemption at the register through the SAME S-a machinery the back
+office uses — `/api/pos/loyalty` issues/looks up codes and computes the
+per-variant spread server-side (`spreadCodeValue`, statutory 1¢ +
+acquisition-cost floors, `loadProductCosts`); sync re-verifies the
+redemption row and claims it ATOMICALLY with rollback, writing the
+migration-0116 header columns (pre-0116 DBs get a clean exception);
+release refunds points via `adjustPoints`. AM-C (#519):
+`/api/pos/returns` wraps the B16 `returns-store` (policy re-check,
+Task Q pipeline, CCRS Sale correction queue, proportional loyalty
+clawback) behind a manager/lead PIN on the shared throttle — same
+`customer_return.counter` audit action, tagged `via: "register"`.
+AM-D (#520): a website order loads into a register sale by
+SUPERSEDING the original (cancel + loud note + audit) so both can
+never complete — the back office can reopen via the S-15
+reasoned-reversal path if the register sale never happens; the linked
+customer rides along as a one-tap member attach. Three new pure cores
+(wedge-scan, register-loyalty, order-to-cart) with self-tests +
+mirrors; suite 1,625/123. No new migrations.

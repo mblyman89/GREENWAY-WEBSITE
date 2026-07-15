@@ -428,3 +428,64 @@ AL-C: home screen reordered hero-first — held-sale banner (urgent),
 double-width Start sale hero + action tiles, status strip demoted
 below (Dynamics welcome-screen pattern). Suite 1,601 tests / 120
 files. No migration; compliance gates and offline-first untouched.
+
+### Task AM — Dutchie-style scan-first register (PRs #517, #518, #519, #520)
+
+Owner's mission (with two Dutchie POS screenshots to mimic): scan
+without touching anything, customer band with stats on screen, a large
+blank space for scanned items, checkout with discount buttons on the
+main screen, returns, revokes, save/load sale, and online orders that
+load into the cart.
+
+**AM-A (PR #517, 5b6b010)** — sale screen re-architecture: customer
+band on top (MemberPanel promoted — attach a member, their points/tier
+stats appear), center = the large item list that scans populate plus an
+always-live search bar, right rail = the checkout (allotment meters,
+totals, action buttons, cash tender). The browse grid/favorites moved
+to an on-demand overlay. NEW pure `wedge-scan-core.ts`: GLOBAL
+keyboard-wedge capture (interkey ≤80 ms, min length 4) so a scanner
+works with NOTHING focused — no button, no click. Hold/Resume renamed
+Save sale / Load sale (owner's words). 14 assertions + vitest mirror;
+suite 1,609/121.
+
+**AM-B (PR #518, 899267f)** — loyalty redemption AT the register (the
+"discount buttons"): new pure `register-loyalty-core.ts`
+(`pricingFingerprint`, `applyLoyaltyToPricedLines` with the 1¢ floor,
+`maxRedeemablePoints`, GW-XXXX-XXXX code recognition; 20 assertions +
+mirror) + new ONLINE-ONLY `/api/pos/loyalty` (redeem-points sized to
+what the cart can absorb, apply-code via the SAME S-a
+`spreadCodeValue` machinery with statutory + acquisition-cost floors,
+release refunds points). The rail shows "★ Redeem N pts" when a member
+is attached plus a loyalty-code input; a fingerprint drops the grant
+the moment the cart drifts. Payload carries per-line
+`loyaltyDiscountMinor` + a `loyaltyRedemption` block
+(validateSalePayload enforces coherence); sync re-verifies and claims
+the code ATOMICALLY (status='redeemed' iff 'issued') with rollback,
+writing the 0116 header columns. Suite 1,617/122.
+
+**AM-C (PR #519, 184c89d)** — counter returns at the register: new
+`/api/pos/returns` following the `/api/pos/void` dual-mode pattern
+(lookup `{receipt}` → the returnable sale or the COMPLETE policy-failure
+list; process adds line/qty/reason/disposition + the two WAC
+314-55-079(12) attestations + a manager/lead PIN on the shared scrypt
+throttle) wrapping the EXACT B16 returns-store machinery (exact refund
+from the stored paid price, Task Q pipeline, CCRS correction queue,
+proportional loyalty clawback, refund receipt). ReturnsModal + a
+"📦 Return an item" home tile (ONLINE-ONLY) next to Void; the drawer
+pops on the refund print. "Revokes" = the existing B27 void flow.
+
+**AM-D (PR #520, f684bac)** — load a website order into the register
+cart ("customer wants to add items"): the order is SUPERSEDED
+server-side the moment it loads (cancelled with a loud timeline note +
+`order.loaded_into_register` audit) so the register sale becomes the
+sale of record — nothing can double-decrement or double-accrue. New
+pure `order-to-cart-core.ts` rebuilds the lines against the CURRENT
+bundle exactly like a resumed hold (real variant ids + the synthetic
+`-default` fallback; vanished/out-of-stock dropped AND reported; merge
++ clamp; fresh prices — the order's prices are history, not a pricing
+source; 11 assertions + mirror). `/api/pos/pickup` gained a load mode;
+the pickup modal gained "🛒 Load into a sale"; SaleFlow gained
+`initialMember` so the order's linked customer is pre-attached (stats
+band + AM-B redemption buttons work immediately). The ID gate still
+runs first. Suite 1,625/123. No migrations (AM-B rides 0116, already
+shipped with S-a).
