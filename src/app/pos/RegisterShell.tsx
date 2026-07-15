@@ -43,6 +43,7 @@ import { DENOM_FIELDS, EMPTY_DENOMS, denomTotalMinor, formatCents, type DenomCou
 import { dollarsToMinor } from "@/lib/pos/till-core";
 import { changeBreakdown, formatChangeBreakdown } from "@/lib/pos/change-calc-core";
 import { lowStockCount } from "@/lib/pos/low-stock-core";
+import { applyLocalStockFlag } from "@/lib/pos/stock-flag-core";
 import { checkSetupCredentials } from "@/lib/pos/device-setup-core";
 import { VOID_REASON_PRESETS } from "@/lib/pos/void-sale-core";
 import type { PickupQueueEntry } from "@/lib/pos/pickup-core";
@@ -511,6 +512,44 @@ export function RegisterShell() {
               return { ok: false as const, error: body?.error ?? "Approval failed." };
             }
             return { ok: true as const, approver: body.approver };
+          } catch {
+            return { ok: false as const, error: "Could not reach the server — try again." };
+          }
+        }}
+        onStockFlag={async (productId, reason) => {
+          // POS B43 — Toast-style "86 it". ONLINE-ONLY (an offline register
+          // can't change the shared menu). On success the item leaves this
+          // device's cached bundle immediately — the same exclusion the next
+          // menu download would apply — and every other register drops it on
+          // its next refresh.
+          if (!navigator.onLine) {
+            return { ok: false as const, error: "Offline — flagging stock needs a connection (it changes the shared menu)." };
+          }
+          try {
+            const res = await fetch("/api/pos/stock-flag", {
+              method: "POST",
+              headers: {
+                "content-type": "application/json",
+                "x-pos-device-id": creds.deviceId,
+                "x-pos-device-key": creds.deviceKey,
+              },
+              body: JSON.stringify({ productId, reason, flaggedByName: employee?.fullName ?? "" }),
+            });
+            const body = (await res.json().catch(() => null)) as { flagged?: boolean; error?: string } | null;
+            if (!res.ok || !body?.flagged) {
+              return { ok: false as const, error: body?.error ?? "Could not flag the item — try again." };
+            }
+            setMenuBundle((prev) => {
+              if (!prev) return prev;
+              const next = applyLocalStockFlag(prev, productId);
+              try {
+                window.localStorage.setItem(LS_MENU, JSON.stringify(next));
+              } catch {
+                // Cache write failure is non-fatal — the in-memory bundle still works.
+              }
+              return next;
+            });
+            return { ok: true as const };
           } catch {
             return { ok: false as const, error: "Could not reach the server — try again." };
           }
