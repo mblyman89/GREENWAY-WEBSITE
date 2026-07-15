@@ -1015,7 +1015,7 @@ function ProductTile({
       <button
         type="button"
         onClick={onAdd}
-        className="pos-tile flex h-full w-full flex-col rounded-xl border border-[var(--pos-border)] bg-[var(--pos-surface-2)] p-3 text-left active:bg-[var(--pos-surface-hover)]"
+        className="pos-tile flex h-full min-h-24 w-full flex-col rounded-xl border border-[var(--pos-border)] bg-[var(--pos-surface-2)] p-3 text-left active:bg-[var(--pos-surface-hover)]"
       >
         <span className="flex items-center gap-1.5 pr-6 text-[10px] font-bold uppercase tracking-wide text-[var(--pos-text-faint)]">
           <span className={`h-2 w-2 rounded-full ${style.dot}`} aria-hidden />
@@ -1038,7 +1038,7 @@ function ProductTile({
         onClick={onTogglePin}
         aria-label={pinned ? "Unpin from favorites" : "Pin to favorites"}
         title={pinned ? "Unpin from favorites" : "Pin to favorites"}
-        className={`absolute right-1.5 top-1.5 rounded-full px-1.5 py-0.5 text-sm leading-none ${
+        className={`absolute right-0.5 top-0.5 flex h-9 w-9 items-center justify-center rounded-full text-base leading-none ${
           pinned ? "text-[var(--pos-accent)]" : "text-[var(--pos-text-faint)] opacity-60"
         }`}
       >
@@ -1050,7 +1050,7 @@ function ProductTile({
           onClick={onInfo}
           aria-label={`Product info for ${product.name}`}
           title="Product info"
-          className="absolute bottom-1.5 right-1.5 rounded-full px-1.5 py-0.5 text-sm font-semibold leading-none text-[var(--pos-text-faint)] opacity-70"
+          className="absolute bottom-0.5 right-0.5 flex h-9 w-9 items-center justify-center rounded-full text-base font-semibold leading-none text-[var(--pos-text-faint)] opacity-70"
         >
           ⓘ
         </button>
@@ -1332,7 +1332,11 @@ function CartScreen({
     cart.length > 0 && priced.problems.length === 0 && !limits.blocked && highThcViolations.length === 0;
 
   return (
-    <main className="pos-shell flex min-h-screen flex-col p-4 sm:p-6">
+    // AL-A — full-height app layout (Square/Toast/Dynamics anatomy): at lg+
+    // the register OWNS the viewport (h-dvh, no page scroll) and the browse
+    // grid + check list scroll INTERNALLY. Below lg (narrow/portrait) the
+    // panes stack and the page scrolls like before.
+    <main className="pos-shell flex min-h-screen flex-col p-4 sm:p-6 lg:h-dvh lg:min-h-0 lg:overflow-hidden">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-lg font-semibold">
@@ -1352,24 +1356,28 @@ function CartScreen({
           <button
             type="button"
             onClick={onCancel}
-            className="pos-tile rounded-lg border border-[var(--pos-border)] bg-[var(--pos-surface-2)] px-4 py-2 text-sm font-semibold"
+            className="pos-tile min-h-11 rounded-lg border border-[var(--pos-border)] bg-[var(--pos-surface-2)] px-4 py-2 text-sm font-semibold"
           >
             Cancel sale
           </button>
         </div>
       </header>
 
-      <div className="mt-4 grid flex-1 gap-4 lg:grid-cols-2">
+      {/* AL-A — 60/40 split (Square/Toast put the browse grid on the larger
+          side, the check on the narrower): products need the room, a check
+          line only needs one comfortable row. min-h-0 lets each pane's OWN
+          list scroll instead of growing the page. */}
+      <div className="mt-4 grid flex-1 gap-4 lg:min-h-0 lg:grid-cols-[3fr_2fr]">
         {/* B36 — product browser: prominent scan/search bar, category filter
             chips (Toast groups), then a Square/Shopify-style tile grid. */}
-        <section className="rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-4">
+        <section className="flex flex-col rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-4 lg:min-h-0">
           {/* B39 — browse surface tabs: the item grid (default) and the
               quick-amount keypad (Square's Keypad, non-cannabis only). */}
           <div className="mb-3 flex gap-2">
             <button
               type="button"
               onClick={() => setBrowseTab("menu")}
-              className={`rounded-full px-4 py-2 text-sm font-semibold ${
+              className={`min-h-11 rounded-full px-5 py-2 text-sm font-semibold ${
                 browseTab === "menu"
                   ? "bg-[var(--pos-accent)] text-[var(--pos-accent-ink)]"
                   : "border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] text-[var(--pos-text-muted)]"
@@ -1380,7 +1388,7 @@ function CartScreen({
             <button
               type="button"
               onClick={() => setBrowseTab("favorites")}
-              className={`rounded-full px-4 py-2 text-sm font-semibold ${
+              className={`min-h-11 rounded-full px-5 py-2 text-sm font-semibold ${
                 browseTab === "favorites"
                   ? "bg-[var(--pos-accent)] text-[var(--pos-accent-ink)]"
                   : "border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] text-[var(--pos-text-muted)]"
@@ -1391,7 +1399,7 @@ function CartScreen({
             <button
               type="button"
               onClick={() => setBrowseTab("keypad")}
-              className={`rounded-full px-4 py-2 text-sm font-semibold ${
+              className={`min-h-11 rounded-full px-5 py-2 text-sm font-semibold ${
                 browseTab === "keypad"
                   ? "bg-[var(--pos-accent)] text-[var(--pos-accent-ink)]"
                   : "border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] text-[var(--pos-text-muted)]"
@@ -1436,12 +1444,14 @@ function CartScreen({
             </div>
           ) : null}
           {browseTab === "keypad" ? (
-            <KeypadPanel onAdd={(p) => manualAdd(p)} />
+            <div className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+              <KeypadPanel onAdd={(p) => manualAdd(p)} />
+            </div>
           ) : browseTab === "favorites" ? (
-            <div>
+            <div className="flex flex-col lg:min-h-0 lg:flex-1">
               {/* B40 — Square-style Favorites page: this register's pinned
                   best-sellers, one tap to ring. Pins live per device. */}
-              <ul className="grid max-h-[58vh] grid-cols-2 content-start gap-2 overflow-y-auto xl:grid-cols-3">
+              <ul className="grid max-h-[58vh] grid-cols-2 content-start gap-2.5 overflow-y-auto lg:max-h-none lg:flex-1 lg:min-h-0 xl:grid-cols-3 2xl:grid-cols-4">
                 {favoriteTiles.map((p) => (
                   <li key={p.variantId}>
                     <ProductTile
@@ -1491,10 +1501,13 @@ function CartScreen({
           </div>
           {chips.length > 0 ? (
             <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+              {/* AL-A — 44px-min touch targets (Apple HIG 44pt / WCAG 2.5.5):
+                  chips were px-3 py-1.5 text-xs, too small for confident
+                  finger taps during an 8-hour shift. */}
               <button
                 type="button"
                 onClick={() => setCategory(null)}
-                className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-bold ${
+                className={`min-h-11 shrink-0 rounded-full border px-4 py-2 text-sm font-bold ${
                   category === null
                     ? "border-[var(--pos-accent-border)] bg-[var(--pos-accent-soft)] text-[var(--pos-accent)]"
                     : "border-[var(--pos-border)] bg-[var(--pos-surface-2)] text-[var(--pos-text-muted)]"
@@ -1510,7 +1523,7 @@ function CartScreen({
                     key={c.category.toLowerCase()}
                     type="button"
                     onClick={() => setCategory(active ? null : c.category)}
-                    className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-bold capitalize ${
+                    className={`min-h-11 shrink-0 rounded-full border px-4 py-2 text-sm font-bold capitalize ${
                       active ? `${style.chip} bg-[var(--pos-surface-hover)]` : "border-[var(--pos-border)] bg-[var(--pos-surface-2)] text-[var(--pos-text-muted)]"
                     }`}
                   >
@@ -1557,7 +1570,7 @@ function CartScreen({
               </div>
             </div>
           ) : null}
-          <ul className="mt-3 grid max-h-[52vh] grid-cols-2 content-start gap-2 overflow-y-auto xl:grid-cols-3">
+          <ul className="mt-3 grid max-h-[52vh] grid-cols-2 content-start gap-2.5 overflow-y-auto lg:max-h-none lg:flex-1 lg:min-h-0 xl:grid-cols-3 2xl:grid-cols-4">
             {results.map((p) => (
               <li key={p.variantId}>
                 <ProductTile
@@ -1580,7 +1593,7 @@ function CartScreen({
         {/* B37 — the check (Toast-style): tap a line to edit it in place; the
             row expands with a big qty stepper, Remove, and the B24 override
             controls. Collapsed rows stay clean: qty × name + line total. */}
-        <section className="flex flex-col rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-4">
+        <section className="flex flex-col rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-4 lg:min-h-0">
           <h2 className="flex items-baseline justify-between text-sm font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
             Check
             <span className="text-xs font-normal normal-case text-[var(--pos-text-faint)]">
@@ -1589,7 +1602,7 @@ function CartScreen({
                 : `${cart.reduce((s, e) => s + e.quantity, 0)} item(s) · tap a line to edit`}
             </span>
           </h2>
-          <ul className="mt-3 flex-1 space-y-2 overflow-y-auto">
+          <ul className="mt-3 min-h-0 flex-1 space-y-2 overflow-y-auto">
             {priced.lines.map((l, i) => {
               const medLine = carded ? priced.med?.lines[i] : null;
               const exempt = !!medLine && (medLine.salesExempt || medLine.exciseExempt);
@@ -1656,7 +1669,7 @@ function CartScreen({
                               delete next[l.variantId ?? ""];
                               setOverrides(next);
                             }}
-                            className="pos-tile rounded-lg border border-[var(--pos-border)] bg-[var(--pos-surface)] px-3 py-2 text-xs font-semibold text-[var(--pos-warn)]"
+                            className="pos-tile min-h-11 rounded-lg border border-[var(--pos-border)] bg-[var(--pos-surface)] px-4 py-2 text-sm font-semibold text-[var(--pos-warn)]"
                             title="Remove the manager override — the line returns to the engine price."
                           >
                             Undo override
@@ -1665,7 +1678,7 @@ function CartScreen({
                           <button
                             type="button"
                             onClick={() => setOverrideTarget({ product: cartEntry.product, engineLine })}
-                            className="pos-tile rounded-lg border border-[var(--pos-border)] bg-[var(--pos-surface)] px-3 py-2 text-xs font-semibold text-[var(--pos-text-muted)]"
+                            className="pos-tile min-h-11 rounded-lg border border-[var(--pos-border)] bg-[var(--pos-surface)] px-4 py-2 text-sm font-semibold text-[var(--pos-text-muted)]"
                             title="Manager price override (markdown only; PIN + reason required)."
                           >
                             Override
@@ -1678,7 +1691,7 @@ function CartScreen({
                           setCart(setCartQuantity(cart, variantId, 0));
                           setExpandedLine(null);
                         }}
-                        className="pos-tile rounded-lg border border-[var(--pos-danger-border)] bg-[var(--pos-danger-soft)] px-3 py-2 text-xs font-semibold text-[var(--pos-danger)]"
+                        className="pos-tile min-h-11 rounded-lg border border-[var(--pos-danger-border)] bg-[var(--pos-danger-soft)] px-4 py-2 text-sm font-semibold text-[var(--pos-danger)]"
                         title="Remove this line from the check."
                       >
                         Remove
