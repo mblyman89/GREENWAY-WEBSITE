@@ -64,6 +64,7 @@ import { __runChangeCalcCoreTests } from "../../src/lib/pos/change-calc-core";
 import { __runLowStockCoreTests } from "../../src/lib/pos/low-stock-core";
 import { __runCashRoundingCoreTests } from "../../src/lib/pos/cash-rounding-core";
 import { __runLeaderboardCoreTests } from "../../src/lib/pos/leaderboard-core";
+import { __runSaleGridCoreTests } from "../../src/lib/pos/sale-grid-core";
 
 async function main() {
   __runOrderPricingTests();
@@ -130,6 +131,7 @@ async function main() {
   __runLowStockCoreTests();
   __runCashRoundingCoreTests();
   __runLeaderboardCoreTests();
+  __runSaleGridCoreTests();
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
