@@ -48,6 +48,7 @@ import {
   serializeFavorites,
   toggleFavorite,
 } from "@/lib/pos/favorites-core";
+import { manualAddBlocked } from "@/lib/pos/scan-required-core";
 import {
   buildCustomProduct,
   keypadAppend,
@@ -1193,7 +1194,29 @@ function CartScreen({
   // size (we never guess which variant left the shelf).
   const [scanPick, setScanPick] = useState<PosMenuProduct[] | null>(null);
   const [scanFlash, setScanFlash] = useState<string | null>(null);
+  // B41 — scan-required mode. `scanUnlocked` is manager-lifted for THIS SALE
+  // only: the register locks after every sale (owner rule), which unmounts
+  // this screen, so an unlock can never leak into the next customer.
+  const scanRequiredOn = bundle.scanRequired?.enabled === true;
+  const [scanUnlocked, setScanUnlocked] = useState(false);
+  const [scanBlockNotice, setScanBlockNotice] = useState<string | null>(null);
+  const [scanUnlockOpen, setScanUnlockOpen] = useState(false);
   const carded = !!medicalCard;
+
+  /**
+   * B41 — every MANUAL add (menu tile, favorites tile, keypad) funnels
+   * through this guard. Scanning bypasses it by design — tryScan and the
+   * scan size-pick call setCart directly; the scan IS the proof.
+   */
+  const manualAdd = (p: PosMenuProduct) => {
+    if (manualAddBlocked(bundle.scanRequired, scanUnlocked, p)) {
+      setScanBlockNotice(
+        `${p.name} is a cannabis item — scan its package barcode to add it. (Manager PIN can lift this for one sale.)`,
+      );
+      return;
+    }
+    setCart(addToCart(cart, p));
+  };
 
   // B36 — category chips from the cached menu (busiest categories first).
   const chips = useMemo(() => menuCategoryChips(bundle.products), [bundle.products]);
@@ -1336,9 +1359,44 @@ function CartScreen({
             >
               Keypad
             </button>
+            {scanRequiredOn ? (
+              <span className="ml-auto flex items-center gap-2">
+                <span
+                  className={`rounded-full border px-3 py-1.5 text-xs font-bold ${
+                    scanUnlocked
+                      ? "border-amber-700/60 bg-amber-950/40 text-amber-300"
+                      : "border-[var(--pos-accent-border)] bg-[var(--pos-accent-soft)] text-[var(--pos-accent)]"
+                  }`}
+                >
+                  {scanUnlocked ? "Scan requirement lifted (this sale)" : "Scan required"}
+                </span>
+                {!scanUnlocked && onApprove ? (
+                  <button
+                    type="button"
+                    onClick={() => setScanUnlockOpen(true)}
+                    className="pos-tile rounded-full border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-1.5 text-xs font-semibold text-[var(--pos-text-muted)]"
+                  >
+                    Manager unlock
+                  </button>
+                ) : null}
+              </span>
+            ) : null}
           </div>
+          {scanBlockNotice ? (
+            <div className="mb-3 flex items-start justify-between gap-3 rounded-xl border border-amber-900/60 bg-amber-950/40 px-3 py-2">
+              <p className="text-xs font-semibold text-amber-300">{scanBlockNotice}</p>
+              <button
+                type="button"
+                onClick={() => setScanBlockNotice(null)}
+                aria-label="Dismiss"
+                className="text-xs font-bold text-amber-300/70"
+              >
+                ✕
+              </button>
+            </div>
+          ) : null}
           {browseTab === "keypad" ? (
-            <KeypadPanel onAdd={(p) => setCart(addToCart(cart, p))} />
+            <KeypadPanel onAdd={(p) => manualAdd(p)} />
           ) : browseTab === "favorites" ? (
             <div>
               {/* B40 — Square-style Favorites page: this register's pinned
@@ -1349,7 +1407,7 @@ function CartScreen({
                     <ProductTile
                       product={p}
                       pinned
-                      onAdd={() => setCart(addToCart(cart, p))}
+                      onAdd={() => manualAdd(p)}
                       onTogglePin={() => togglePin(p.variantId)}
                     />
                   </li>
@@ -1464,7 +1522,7 @@ function CartScreen({
                 <ProductTile
                   product={p}
                   pinned={favorites.includes(p.variantId)}
-                  onAdd={() => setCart(addToCart(cart, p))}
+                  onAdd={() => manualAdd(p)}
                   onTogglePin={() => togglePin(p.variantId)}
                 />
               </li>
@@ -1711,7 +1769,106 @@ function CartScreen({
           }}
         />
       ) : null}
+
+      {scanUnlockOpen && onApprove ? (
+        <ScanUnlockModal
+          onApprove={onApprove}
+          onClose={() => setScanUnlockOpen(false)}
+          onUnlocked={() => {
+            setScanUnlocked(true);
+            setScanBlockNotice(null);
+            setScanUnlockOpen(false);
+          }}
+        />
+      ) : null}
     </main>
+  );
+}
+
+/**
+ * POS B41 — manager unlock for scan-required mode. A manager or lead lifts
+ * the scan requirement for THE CURRENT SALE ONLY (damaged label, scanner
+ * down) with their PIN — verified server-side by /api/pos/approve (same
+ * scrypt + throttle + role gate as the B24 price override), so this is
+ * ONLINE-ONLY. The register locks after every sale, which unmounts the sale
+ * screen — the unlock can never leak into the next customer.
+ */
+function ScanUnlockModal({
+  onApprove,
+  onClose,
+  onUnlocked,
+}: {
+  onApprove: (pin: string) => Promise<{ ok: true; approver: { id: string; fullName: string } } | { ok: false; error: string }>;
+  onClose: () => void;
+  onUnlocked: () => void;
+}) {
+  const [pin, setPin] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const unlock = async () => {
+    if (busy || pin.length < 4) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await onApprove(pin);
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      onUnlocked();
+    } catch {
+      setError("Could not reach the server — try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+      <div className="w-full max-w-md rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-6 text-[var(--pos-text)]">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Lift scan requirement</h2>
+          <button type="button" onClick={onClose} className="pos-tile rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-1.5 text-sm">
+            Cancel
+          </button>
+        </div>
+        <p className="mt-2 text-xs text-[var(--pos-text-muted)]">
+          Cannabis items can then be added by tapping tiles for THIS SALE ONLY (damaged label,
+          scanner down). The register re-locks after the sale, so the next customer starts with
+          scanning required again.
+        </p>
+
+        <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
+          Manager / lead PIN
+        </label>
+        <input
+          className="mt-1 w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2.5 text-center font-mono text-lg tracking-[0.5em]"
+          type="password"
+          inputMode="numeric"
+          autoComplete="off"
+          maxLength={6}
+          value={pin}
+          onChange={(e) => {
+            setPin(e.target.value.replace(/\D/g, ""));
+            setError(null);
+          }}
+        />
+
+        {error ? (
+          <p className="mt-3 rounded-lg border border-red-900/60 bg-red-950/60 px-3 py-2 text-xs font-semibold text-red-300">{error}</p>
+        ) : null}
+
+        <button
+          type="button"
+          disabled={busy || pin.length < 4}
+          onClick={unlock}
+          className="pos-tile mt-4 w-full rounded-xl bg-amber-600 px-4 py-3 text-sm font-bold text-white disabled:opacity-40"
+        >
+          {busy ? "Verifying…" : "Lift for this sale"}
+        </button>
+      </div>
+    </div>
   );
 }
 

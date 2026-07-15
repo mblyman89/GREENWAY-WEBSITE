@@ -67,6 +67,9 @@ export default async function RegisterActivityPage({
             <Button href={`${BASE}/rounding`} variant="neutral" size="sm">
               Cash rounding
             </Button>
+            <Button href={`${BASE}/scanning`} variant="neutral" size="sm">
+              Scan-required mode
+            </Button>
             <Button href={`${BASE}/returns`} variant="neutral" size="sm">
               Returns desk
             </Button>
