@@ -105,6 +105,40 @@ export function smartTenderSuggestions(totalMinor: number): number[] {
 }
 
 // ---------------------------------------------------------------------------
+// Tender keypad (Task AL-B)
+// ---------------------------------------------------------------------------
+
+/**
+ * Cap for a keypad-entered tender: $9,999.99. Fat-finger protection only —
+ * far above any legal single transaction, far below an overflow.
+ * (custom-sale-core's keypad caps at $999.99, which is right for a merch
+ * line but too low for the cash a customer might put on the counter.)
+ */
+export const MAX_TENDER_MINOR = 999_999;
+
+/**
+ * Append one digit (0-9), register style: digits shift in from the right,
+ * so 2-6-4-1 reads $26.41. Input past the cap or a bad digit is ignored;
+ * invalid state resets to 0 first.
+ */
+export function tenderKeypadAppend(amountMinor: number, digit: number): number {
+  const base = clampTender(amountMinor);
+  if (!Number.isInteger(digit) || digit < 0 || digit > 9) return base;
+  const next = base * 10 + digit;
+  return next > MAX_TENDER_MINOR ? base : next;
+}
+
+/** Remove the rightmost digit. */
+export function tenderKeypadBackspace(amountMinor: number): number {
+  return Math.floor(clampTender(amountMinor) / 10);
+}
+
+function clampTender(amountMinor: number): number {
+  if (!Number.isInteger(amountMinor) || amountMinor < 0) return 0;
+  return Math.min(amountMinor, MAX_TENDER_MINOR);
+}
+
+// ---------------------------------------------------------------------------
 // Self-tests
 // ---------------------------------------------------------------------------
 
@@ -162,6 +196,20 @@ export function __runChangeCalcCoreTests(): void {
   ok(smartTenderSuggestions(0).length === 0, "zero total → no suggestions");
   ok(smartTenderSuggestions(-100).length === 0, "negative total → no suggestions");
   ok(smartTenderSuggestions(12.5).length === 0, "fractional total → no suggestions");
+
+  // tenderKeypadAppend / tenderKeypadBackspace (AL-B)
+  ok(tenderKeypadAppend(0, 2) === 2, "keypad: first digit");
+  ok(tenderKeypadAppend(tenderKeypadAppend(tenderKeypadAppend(tenderKeypadAppend(0, 2), 6), 4), 1) === 2641, "keypad: 2-6-4-1 → $26.41");
+  ok(tenderKeypadAppend(0, 0) === 0, "keypad: leading zero stays zero");
+  ok(tenderKeypadAppend(MAX_TENDER_MINOR, 9) === MAX_TENDER_MINOR, "keypad: append past cap ignored");
+  ok(tenderKeypadAppend(99_999_9, 9) === MAX_TENDER_MINOR, "keypad: at exactly the cap, append ignored");
+  ok(tenderKeypadAppend(5, -1) === 5 && tenderKeypadAppend(5, 10) === 5, "keypad: bad digit ignored");
+  ok(tenderKeypadAppend(-50, 3) === 3, "keypad: negative state resets before append");
+  ok(tenderKeypadAppend(10.5, 3) === 3, "keypad: fractional state resets before append");
+  ok(tenderKeypadBackspace(2641) === 264, "keypad: backspace drops rightmost digit");
+  ok(tenderKeypadBackspace(0) === 0, "keypad: backspace at zero stays zero");
+  ok(tenderKeypadBackspace(-7) === 0, "keypad: backspace on invalid state → 0");
+  ok(MAX_TENDER_MINOR === 999_999, "keypad cap is $9,999.99");
 
   console.log(`change-calc-core self-tests: ALL PASS (${pass} assertions)`);
 }

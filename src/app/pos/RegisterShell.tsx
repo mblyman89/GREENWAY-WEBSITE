@@ -1246,9 +1246,123 @@ function HomeScreen({
         </button>
       ) : null}
 
+      {heldSale ? (
+        <section className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] p-4">
+          <div>
+            <h2 className="text-sm font-semibold text-[var(--pos-warn)]">
+              Sale on hold — {heldSale.lines.reduce((s, l) => s + l.quantity, 0)} item(s)
+            </h2>
+            <p className="text-xs text-[var(--pos-warn-muted)]">
+              Held by {heldSale.heldByName} {ageLabel(heldSale.heldAtIso, new Date())}. Resuming re-runs the ID check
+              and reprices against the current menu.
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={onResumeHold}
+              disabled={!onResumeHold || !drawer || !employee.clockedIn || !menuReady}
+              className="pos-tile rounded-lg bg-[var(--pos-warn-solid)] px-4 py-2 text-sm font-bold text-white disabled:opacity-40"
+            >
+              Resume
+            </button>
+            <button
+              type="button"
+              onClick={onDiscardHold}
+              className="pos-tile rounded-lg border border-[var(--pos-border)] bg-[var(--pos-surface-2)] px-4 py-2 text-sm font-semibold text-[var(--pos-text-muted)]"
+            >
+              Discard
+            </button>
+          </div>
+        </section>
+      ) : null}
+
+      {/* Big action tiles — color-coded to the brand: green sells, gold hands
+          off website orders, orange is the time clock, charcoal locks up.
+          AL-C: the biggest button is the most frequent action (payment-UX
+          research) — Start sale is the hero, double-width at lg+. */}
+      <section className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <button
+          type="button"
+          disabled={!drawer || !employee.clockedIn || !menuReady}
+          onClick={onStartSale}
+          title={
+            !drawer
+              ? "Open a drawer first"
+              : !employee.clockedIn
+                ? "Clock in first"
+                : !menuReady
+                  ? "Menu not downloaded yet — connect to the internet once"
+                  : undefined
+          }
+          className="pos-tile rounded-2xl bg-[var(--pos-accent)] p-6 text-left text-2xl font-bold text-[var(--pos-accent-ink)] shadow-[var(--admin-shadow)] disabled:opacity-40 lg:col-span-2"
+        >
+          <span className="block text-4xl" aria-hidden>
+            🛒
+          </span>
+          <span className="mt-2 block">Start sale</span>
+          <span className="mt-1 block text-sm font-semibold opacity-80">ID check → cart → cash tender</span>
+        </button>
+        <button
+          type="button"
+          onClick={onPickupQueue}
+          disabled={!onPickupQueue}
+          title={
+            onPickupQueue
+              ? undefined
+              : !drawer
+                ? "Open a drawer first — pickup orders take cash"
+                : "Pickup orders need a connection — the queue lives on the server"
+          }
+          className="pos-tile relative rounded-2xl border border-[var(--pos-gold-border)] bg-[var(--pos-gold-soft)] p-6 text-left text-xl font-bold text-[var(--pos-gold)] disabled:opacity-40"
+        >
+          <span className="block text-3xl" aria-hidden>
+            🛍️
+          </span>
+          <span className="mt-2 block">Pickup orders</span>
+          {typeof pickupCount === "number" && pickupCount > 0 ? (
+            <span className="absolute right-4 top-4 flex h-9 min-w-9 items-center justify-center rounded-full bg-[var(--pos-gold)] px-2 text-base font-extrabold text-[var(--pos-gold-ink)]">
+              {pickupCount}
+            </span>
+          ) : null}
+          <span className="mt-1 block text-sm font-normal text-[var(--pos-text-muted)]">
+            {typeof pickupCount === "number"
+              ? pickupCount === 0
+                ? "No website orders waiting"
+                : `${pickupCount} website order${pickupCount === 1 ? "" : "s"} waiting`
+              : "Website orders — ID check at handover"}
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={onPunch}
+          className="pos-tile rounded-2xl border border-[var(--pos-orange-border)] bg-[var(--pos-orange-soft)] p-6 text-left text-xl font-semibold text-[var(--pos-orange)]"
+        >
+          <span className="block text-3xl" aria-hidden>
+            ⏱️
+          </span>
+          <span className="mt-2 block">{employee.clockedIn ? "Clock out" : "Clock in"}</span>
+          <span className="mt-1 block text-sm font-normal text-[var(--pos-text-muted)]">Recorded as a register punch</span>
+        </button>
+        <button
+          type="button"
+          onClick={onLock}
+          className="pos-tile rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface-2)] p-6 text-left text-xl font-semibold"
+        >
+          <span className="block text-3xl" aria-hidden>
+            🔒
+          </span>
+          <span className="mt-2 block">Lock register</span>
+          <span className="mt-1 block text-sm font-normal text-[var(--pos-text-muted)]">Auto-locks after 2 minutes idle</span>
+        </button>
+      </section>
+
       {/* Status strip — drawer / sync / menu / queue at a glance, each with a
-          colored state dot and its actions right where the status is. */}
-      <section className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          colored state dot and its actions right where the status is.
+          AL-C: DEMOTED below the action tiles (Dynamics welcome-screen
+          pattern — the hero action leads; status is glanceable, not the
+          headline). */}
+      <section className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-4">
           <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
             <span className={`h-2 w-2 rounded-full ${drawer ? "bg-[var(--pos-accent)]" : "bg-[var(--pos-warn-dot)]"}`} aria-hidden />
@@ -1350,115 +1464,6 @@ function HomeScreen({
           )}
         </div>
       </section>
-
-      {/* Big action tiles — color-coded to the brand: green sells, gold hands
-          off website orders, orange is the time clock, charcoal locks up. */}
-      <section className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <button
-          type="button"
-          disabled={!drawer || !employee.clockedIn || !menuReady}
-          onClick={onStartSale}
-          title={
-            !drawer
-              ? "Open a drawer first"
-              : !employee.clockedIn
-                ? "Clock in first"
-                : !menuReady
-                  ? "Menu not downloaded yet — connect to the internet once"
-                  : undefined
-          }
-          className="pos-tile rounded-2xl bg-[var(--pos-accent)] p-6 text-left text-xl font-bold text-[var(--pos-accent-ink)] shadow-[var(--admin-shadow)] disabled:opacity-40"
-        >
-          <span className="block text-3xl" aria-hidden>
-            🛒
-          </span>
-          <span className="mt-2 block">Start sale</span>
-          <span className="mt-1 block text-sm font-semibold opacity-80">ID check → cart → cash tender</span>
-        </button>
-        <button
-          type="button"
-          onClick={onPickupQueue}
-          disabled={!onPickupQueue}
-          title={
-            onPickupQueue
-              ? undefined
-              : !drawer
-                ? "Open a drawer first — pickup orders take cash"
-                : "Pickup orders need a connection — the queue lives on the server"
-          }
-          className="pos-tile relative rounded-2xl border border-[var(--pos-gold-border)] bg-[var(--pos-gold-soft)] p-6 text-left text-xl font-bold text-[var(--pos-gold)] disabled:opacity-40"
-        >
-          <span className="block text-3xl" aria-hidden>
-            🛍️
-          </span>
-          <span className="mt-2 block">Pickup orders</span>
-          {typeof pickupCount === "number" && pickupCount > 0 ? (
-            <span className="absolute right-4 top-4 flex h-9 min-w-9 items-center justify-center rounded-full bg-[var(--pos-gold)] px-2 text-base font-extrabold text-[var(--pos-gold-ink)]">
-              {pickupCount}
-            </span>
-          ) : null}
-          <span className="mt-1 block text-sm font-normal text-[var(--pos-text-muted)]">
-            {typeof pickupCount === "number"
-              ? pickupCount === 0
-                ? "No website orders waiting"
-                : `${pickupCount} website order${pickupCount === 1 ? "" : "s"} waiting`
-              : "Website orders — ID check at handover"}
-          </span>
-        </button>
-        <button
-          type="button"
-          onClick={onPunch}
-          className="pos-tile rounded-2xl border border-[var(--pos-orange-border)] bg-[var(--pos-orange-soft)] p-6 text-left text-xl font-semibold text-[var(--pos-orange)]"
-        >
-          <span className="block text-3xl" aria-hidden>
-            ⏱️
-          </span>
-          <span className="mt-2 block">{employee.clockedIn ? "Clock out" : "Clock in"}</span>
-          <span className="mt-1 block text-sm font-normal text-[var(--pos-text-muted)]">Recorded as a register punch</span>
-        </button>
-        <button
-          type="button"
-          onClick={onLock}
-          className="pos-tile rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface-2)] p-6 text-left text-xl font-semibold"
-        >
-          <span className="block text-3xl" aria-hidden>
-            🔒
-          </span>
-          <span className="mt-2 block">Lock register</span>
-          <span className="mt-1 block text-sm font-normal text-[var(--pos-text-muted)]">Auto-locks after 2 minutes idle</span>
-        </button>
-      </section>
-
-      {heldSale ? (
-        <section className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] p-4">
-          <div>
-            <h2 className="text-sm font-semibold text-[var(--pos-warn)]">
-              Sale on hold — {heldSale.lines.reduce((s, l) => s + l.quantity, 0)} item(s)
-            </h2>
-            <p className="text-xs text-[var(--pos-warn-muted)]">
-              Held by {heldSale.heldByName} {ageLabel(heldSale.heldAtIso, new Date())}. Resuming re-runs the ID check
-              and reprices against the current menu.
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={onResumeHold}
-              disabled={!onResumeHold || !drawer || !employee.clockedIn || !menuReady}
-              className="pos-tile rounded-lg bg-[var(--pos-warn-solid)] px-4 py-2 text-sm font-bold text-white disabled:opacity-40"
-            >
-              Resume
-            </button>
-            <button
-              type="button"
-              onClick={onDiscardHold}
-              className="pos-tile rounded-lg border border-[var(--pos-border)] bg-[var(--pos-surface-2)] px-4 py-2 text-sm font-semibold text-[var(--pos-text-muted)]"
-            >
-              Discard
-            </button>
-          </div>
-        </section>
-      ) : null}
 
       <section className="mt-4 grid gap-4 sm:grid-cols-3">
         <button
