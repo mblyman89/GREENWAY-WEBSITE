@@ -53,6 +53,47 @@
   --admin-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   --admin-shadow: 0 8px 24px -12px rgba(0, 0, 0, 0.7);
   --admin-shadow-lg: 0 24px 60px -24px rgba(0, 0, 0, 0.8);
+
+  /* ---------------------------------------------------------------------------
+   * POS DESIGN TOKENS (register only \u2014 POS Slice B35)
+   * The counter iPads get the same brand language as the website and the back
+   * office: Greenway green, gold, orange accents over deliberate charcoal
+   * surfaces. Values intentionally mirror the admin scale above so a manager
+   * moving between the back office and the register sees ONE product.
+   * Register screens read these via arbitrary-value Tailwind classes
+   * (bg-[var(--pos-surface)] etc.) \u2014 change a value here, the whole POS moves.
+   * ------------------------------------------------------------------------- */
+
+  /* Surfaces \u2014 darkest canvas \u2192 cards \u2192 raised/pressed. */
+  --pos-canvas: #060807;
+  --pos-surface: #0c0e0d;
+  --pos-surface-2: #121514;
+  --pos-surface-hover: #171b19;
+
+  /* Hairlines & borders. */
+  --pos-border: rgba(255, 255, 255, 0.08);
+  --pos-border-strong: rgba(255, 255, 255, 0.16);
+
+  /* Text. */
+  --pos-text: #f5f7f5;
+  --pos-text-muted: rgba(255, 255, 255, 0.62);
+  --pos-text-faint: rgba(255, 255, 255, 0.4);
+
+  /* Brand accents (mirror the public palette). --pos-accent-ink is the dark
+     green text that sits ON a solid greenway fill (the Start-sale tile, the
+     keypad GO button) \u2014 same ink as the public site's ::selection. */
+  --pos-accent: var(--greenway);
+  --pos-accent-ink: #08130b;
+  --pos-accent-soft: rgba(126, 217, 87, 0.14);
+  --pos-accent-border: rgba(126, 217, 87, 0.4);
+  --pos-gold: var(--gold);
+  --pos-gold-soft: rgba(255, 215, 0, 0.12);
+  --pos-gold-border: rgba(255, 215, 0, 0.35);
+  --pos-orange: var(--orange);
+  --pos-orange-soft: rgba(255, 127, 0, 0.12);
+  --pos-orange-border: rgba(255, 127, 0, 0.35);
+  --pos-danger: #ff5a5a;
+  --pos-danger-soft: rgba(255, 90, 90, 0.14);
 }
 
 * {
@@ -195,6 +236,35 @@ h1, h2, h3, h4, h5, h6 {
 .admin-shell .bg-\[\#0f0f0f\],
 .admin-shell .bg-\[\#0f1a10\] {
   background-color: var(--admin-surface) !important;
+}
+
+/* ---------------------------------------------------------------------------
+ * POS SHELL CANVAS (POS Slice B35)
+ * The register gets the same quiet, app-like brand backdrop as the back
+ * office: a subtle top-of-screen green/orange glow over near-black instead of
+ * flat neutral-950. Scoped to .pos-shell so nothing else is touched.
+ * ------------------------------------------------------------------------- */
+.pos-shell {
+  background:
+    radial-gradient(120% 60% at 50% -10%, rgba(126, 217, 87, 0.08), transparent 60%),
+    radial-gradient(90% 50% at 100% -10%, rgba(255, 127, 0, 0.06), transparent 55%),
+    var(--pos-canvas);
+  color: var(--pos-text);
+  /* Native controls (inputs on setup, selects in modals) render dark. */
+  color-scheme: dark;
+}
+
+/* Register action tiles: instant, tactile press feedback for finger-first
+   use \u2014 the whole POS is tapped, never hovered, so :active is what matters. */
+.pos-tile {
+  transition: border-color 0.15s ease, background-color 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
+}
+.pos-tile:not(:disabled):hover {
+  border-color: var(--pos-border-strong);
+  box-shadow: var(--admin-shadow);
+}
+.pos-tile:not(:disabled):active {
+  transform: scale(0.98);
 }
 
 /* Reusable focus ring so every interactive admin control matches. */

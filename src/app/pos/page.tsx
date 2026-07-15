@@ -30,7 +30,9 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0a0a0a",
+  // B35 — matches the POS canvas token (--pos-canvas) so the standalone app's
+  // status bar blends into the branded register backdrop.
+  themeColor: "#060807",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
