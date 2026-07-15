@@ -382,3 +382,26 @@ readable-on-white equivalents; `.pos-shell` gets a light glow +
 removes it on unmount, and offers a ☀️/🌙 toggle in the home header that
 works offline. 16 self-test assertions + vitest mirror. Suite now 1,591
 tests / 119 files. No migration.
+
+### Task AK — Receiving → website menu FIXED (PR #513, ad6c7bf)
+
+Owner's mission: "I can accept inventory successfully but there is no
+way to add those items to the website menu." Root cause (verified,
+never guessed): `seedDraftsForManifest` upserted onboarding drafts with
+`onConflict: "pos_product_key"`, but the only unique index on that
+column is PARTIAL (`catalog_drafts_open_poskey_uidx`, migration 0026) —
+PostgREST cannot target partial indexes in ON CONFLICT (Postgres 42P10,
+postgrest-js#403) and the error was NEVER READ, so every draft insert
+failed silently on every receive. No drafts → nothing to approve → the
+intake auto-carry always skipped `no-approved-drafts` → received
+products could never reach the menu; the UI even reported
+`draftsCreated = unmatched` while writing zero rows. Fix: new pure core
+`draft-seed-core.ts` (`planDraftSeeding`: published match → open-draft
+skip → in-run dedupe; keyless lots always seed; `classifyInsertError`:
+23505 = benign race duplicate, else real failure) + plain INSERTs whose
+errors are read; honest `draftsCreated`/`draftsFailed`/`firstError`
+returned; `finalizeManifestDispositions` logs a `draft_seed_error`
+timeline event on real failures. Batched published-key lookup replaces
+per-lot round-trips. B45/B46 struck through as CANCELLED (owner
+choice). 20 assertions + vitest mirror; suite 1,597 tests / 120 files.
+No migration — the partial index stays as the race backstop.
