@@ -72,6 +72,7 @@ import { __runProductInfoCoreTests } from "../../src/lib/pos/product-info-core";
 import { __runStockFlagCoreTests } from "../../src/lib/pos/stock-flag-core";
 import { __runThemeCoreTests } from "../../src/lib/pos/theme-core";
 import { __runDraftSeedCoreTests } from "../../src/lib/inventory/draft-seed-core";
+import { __runWedgeScanCoreTests } from "../../src/lib/pos/wedge-scan-core";
 
 async function main() {
   __runOrderPricingTests();
@@ -146,6 +147,7 @@ async function main() {
   __runStockFlagCoreTests();
   __runThemeCoreTests();
   __runDraftSeedCoreTests();
+  __runWedgeScanCoreTests();
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
