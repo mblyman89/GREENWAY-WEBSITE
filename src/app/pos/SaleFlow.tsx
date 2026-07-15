@@ -40,6 +40,15 @@ import {
 } from "@/lib/pos/sale-flow-core";
 import { resolveScan } from "@/lib/pos/scan-to-cart-core";
 import { emptyWedgeState, wedgeKey, type WedgeState } from "@/lib/pos/wedge-scan-core";
+import {
+  applyLoyaltyToPricedLines,
+  maxRedeemablePoints,
+  normalizeLoyaltyCodeInput,
+  pricingFingerprint,
+  type AppliedLoyalty,
+  type PosLoyaltyGrant,
+  type PosLoyaltyRequest,
+} from "@/lib/pos/register-loyalty-core";
 import { categoryColorIndex, filterMenuProducts, menuCategoryChips, CATEGORY_COLOR_COUNT } from "@/lib/pos/sale-grid-core";
 import {
   FAVORITES_KEY,
@@ -202,6 +211,16 @@ export type SaleFlowProps = {
    * One-way — bringing an item back is a back-office action.
    */
   onStockFlag?: (productId: string, reason: StockFlagReason) => Promise<{ ok: true } | { ok: false; error: string }>;
+  /**
+   * Task AM-B — loyalty redemption at the register. ONLINE-ONLY: the shell
+   * posts /api/pos/loyalty (device auth), which verifies the balance, issues
+   * (or looks up) the code, and computes the per-variant spread with the
+   * server's legal floors. "release" cancels a points-issued code and
+   * refunds the points when the register drops the discount.
+   */
+  onLoyalty?: (
+    req: PosLoyaltyRequest,
+  ) => Promise<{ ok: true; grant: PosLoyaltyGrant } | { ok: false; error: string }>;
   /** Enqueue an event; returns the clientUuid assigned to it. */
   onEnqueue: (
     eventType: "sale" | "manual_id_verification" | "medical_card_capture",
@@ -276,7 +295,7 @@ function priceForBuyer(
   };
 }
 
-export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, initialCart, onHold, onReceiptFrozen, onMemberLookup, onMemberHistory, onEmailReceipt, onApprove, onProductImage, onStockFlag, onEnqueue, onComplete, onCancel }: SaleFlowProps) {
+export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, initialCart, onHold, onReceiptFrozen, onMemberLookup, onMemberHistory, onEmailReceipt, onApprove, onProductImage, onStockFlag, onLoyalty, onEnqueue, onComplete, onCancel }: SaleFlowProps) {
   const [step, setStep] = useState<Step>("idgate");
   const [verdict, setVerdict] = useState<Extract<IdGateVerdict, { allowed: true }> | null>(null);
   const [manualEventUuid, setManualEventUuid] = useState<string | null>(null);
@@ -290,6 +309,10 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
   const [cart, setCart] = useState<PosCartEntry[]>(initialCart ?? []);
   // POS B14 — the loyalty member attached to this sale (server lookup only).
   const [member, setMember] = useState<PosMemberHit | null>(null);
+  // Task AM-B — the loyalty redemption applied to THIS sale (server-issued
+  // code + per-variant spread). Dropped automatically the moment the priced
+  // cart drifts from the fingerprint it was computed for.
+  const [appliedLoyalty, setAppliedLoyalty] = useState<AppliedLoyalty | null>(null);
   // POS B24 — manager-approved price overrides for THIS sale, keyed by
   // variantId. Cleared with the sale; never persisted (a hold resumes at
   // fresh engine prices, and the next customer never inherits a markdown).
@@ -298,6 +321,41 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
   // POS B10 — snapshot of the finished sale for printing/reprint. Captured at
   // the moment the sale is enqueued so the receipt always matches the payload.
   const [receipt, setReceipt] = useState<PosReceiptInput | null>(null);
+
+  // Task AM-B — release a loyalty grant the sale no longer uses: a
+  // points-issued code is cancelled server-side (points refunded);
+  // a customer-brought code was never claimed, so nothing to do.
+  // Fire-and-forget: even if the release call is lost, an unclaimed
+  // 'issued' code simply expires (value returns via the expiry sweep).
+  const releaseLoyalty = useCallback(
+    (applied: AppliedLoyalty | null) => {
+      if (applied && applied.source === "points" && onLoyalty) {
+        void onLoyalty({ action: "release", redemptionId: applied.redemptionId });
+      }
+    },
+    [onLoyalty],
+  );
+
+  // Task AM-B — the spread is only valid for the EXACT priced cart it was
+  // computed on. Any drift (item added/removed, quantity changed, override
+  // applied, reprice) drops the discount and releases the code — a stale
+  // spread must never ship.
+  const pricedForLoyalty = priceForBuyer(cart, bundle, !!medicalCard, overrides);
+  const loyaltyFingerprint = pricingFingerprint(
+    pricedForLoyalty.lines.map((l) => ({
+      variantId: l.variantId,
+      productId: l.productId,
+      quantity: l.quantity,
+      unitPriceMinor: l.unitPriceMinor,
+    })),
+  );
+  useEffect(() => {
+    if (appliedLoyalty && appliedLoyalty.fingerprint !== loyaltyFingerprint) {
+      releaseLoyalty(appliedLoyalty);
+      /* eslint-disable-next-line react-hooks/set-state-in-effect */
+      setAppliedLoyalty(null);
+    }
+  }, [appliedLoyalty, loyaltyFingerprint, releaseLoyalty]);
 
   // Sales hours (WAC 314-55-147) checked on-device with the owner's window;
   // the server completion gate re-checks with ITS clock at sync time.
@@ -343,10 +401,29 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
         onApprove={onApprove}
         onProductImage={onProductImage}
         onStockFlag={onStockFlag}
+        onLoyalty={onLoyalty}
+        appliedLoyalty={appliedLoyalty}
+        setAppliedLoyalty={setAppliedLoyalty}
+        releaseLoyalty={releaseLoyalty}
+        loyaltyFingerprint={loyaltyFingerprint}
         overrides={overrides}
         setOverrides={setOverrides}
-        onCancel={onCancel}
-        onHold={onHold}
+        onCancel={() => {
+          // AM-B — a cancelled sale returns the customer's points at once.
+          releaseLoyalty(appliedLoyalty);
+          onCancel();
+        }}
+        onHold={
+          onHold
+            ? (c) => {
+                // AM-B — a saved sale reprices on load; the discount cannot
+                // survive, so the code is released (points refunded) now.
+                releaseLoyalty(appliedLoyalty);
+                setAppliedLoyalty(null);
+                onHold(c);
+              }
+            : undefined
+        }
         onTender={() => setStep("tender")}
       />
     );
@@ -359,10 +436,25 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
         cart={cart}
         medicalCard={medicalCard}
         overrides={overrides}
+        appliedLoyalty={appliedLoyalty}
         onBack={() => setStep("cart")}
-        onCancel={onCancel}
+        onCancel={() => {
+          releaseLoyalty(appliedLoyalty);
+          onCancel();
+        }}
         onPaid={(tenderedMinor) => {
-          const priced = priceForBuyer(cart, bundle, !!medicalCard, overrides);
+          const base = priceForBuyer(cart, bundle, !!medicalCard, overrides);
+          // AM-B — apply the server-computed loyalty spread to the FINAL
+          // priced lines (the drift effect guarantees the fingerprint still
+          // matches; a mismatch here would have dropped the discount).
+          const loyaltyAdj = appliedLoyalty
+            ? applyLoyaltyToPricedLines(base.lines, appliedLoyalty.perVariant)
+            : null;
+          const priced = {
+            ...base,
+            lines: loyaltyAdj ? loyaltyAdj.lines : base.lines,
+            totals: loyaltyAdj ? loyaltyAdj.totals : base.totals,
+          };
           const built = buildSalePayload({
             lines: priced.lines,
             totals: priced.totals,
@@ -382,6 +474,17 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
                 }
               : {}),
             ...(member ? { loyalty: { customerId: member.customerId, memberLabel: member.label } } : {}),
+            // AM-B — the redemption block: sync claims the code atomically
+            // against the materialized order and writes the 0116 columns.
+            ...(appliedLoyalty && loyaltyAdj && loyaltyAdj.appliedMinor > 0
+              ? {
+                  loyaltyRedemption: {
+                    redemptionId: appliedLoyalty.redemptionId,
+                    code: appliedLoyalty.code,
+                    appliedMinor: loyaltyAdj.appliedMinor,
+                  },
+                }
+              : {}),
             // B33 — the owner's cash-rounding policy from the bundle decides
             // the amount due; totals stay pre-rounded (tax on original price).
             rounding: normalizePosCashRoundingConfig(bundle.rounding),
@@ -1174,6 +1277,11 @@ function CartScreen({
   onApprove,
   onProductImage,
   onStockFlag,
+  onLoyalty,
+  appliedLoyalty,
+  setAppliedLoyalty,
+  releaseLoyalty,
+  loyaltyFingerprint,
   overrides,
   setOverrides,
   onCancel,
@@ -1197,6 +1305,17 @@ function CartScreen({
   onProductImage?: (productId: string) => Promise<{ url: string; isFallback: boolean } | null>;
   /** B43 — out-of-stock quick-flag (ONLINE-ONLY via the shell; one-way). */
   onStockFlag?: (productId: string, reason: StockFlagReason) => Promise<{ ok: true } | { ok: false; error: string }>;
+  /** AM-B — loyalty redemption via /api/pos/loyalty (ONLINE-ONLY via the shell). */
+  onLoyalty?: (
+    req: PosLoyaltyRequest,
+  ) => Promise<{ ok: true; grant: PosLoyaltyGrant } | { ok: false; error: string }>;
+  /** AM-B — the redemption applied to this sale (null = none). */
+  appliedLoyalty: AppliedLoyalty | null;
+  setAppliedLoyalty: (a: AppliedLoyalty | null) => void;
+  /** AM-B — release a points-issued code (refund) when the discount drops. */
+  releaseLoyalty: (a: AppliedLoyalty | null) => void;
+  /** AM-B — fingerprint of the CURRENT priced cart (stale-spread guard). */
+  loyaltyFingerprint: string;
   /** B24 — this sale's manager price overrides, keyed by variantId. */
   overrides: Record<string, PosLineOverride>;
   setOverrides: (o: Record<string, PosLineOverride>) => void;
@@ -1356,6 +1475,13 @@ function CartScreen({
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [handleGlobalScan]);
   const priced = useMemo(() => priceForBuyer(cart, bundle, carded, overrides), [cart, bundle, carded, overrides]);
+  // AM-B — the loyalty-reduced view of the money (the check keeps showing
+  // per-line engine prices; the rail's totals show what the customer owes).
+  const loyaltyView = useMemo(
+    () => (appliedLoyalty ? applyLoyaltyToPricedLines(priced.lines, appliedLoyalty.perVariant) : null),
+    [priced.lines, appliedLoyalty],
+  );
+  const railTotals = loyaltyView ? loyaltyView.totals : priced.totals;
 
   // B24 — an override approved against a price the engine no longer charges
   // (promo tier moved with a quantity change) is dropped LOUDLY: clear it
@@ -1783,8 +1909,27 @@ function CartScreen({
           {/* B37 — sticky totals: the money and the tender button stay pinned
               to the panel's bottom edge while a long check scrolls behind. */}
           <div className="sticky bottom-0 -mx-4 -mb-4 mt-4 rounded-b-2xl border-t border-[var(--pos-border-strong)] bg-[var(--pos-surface)] px-4 pb-4 pt-3 text-sm">
-            <Row label="Subtotal (pre-tax)" value={money(priced.totals.subtotalMinorUnits)} />
-            <Row label="Tax (excise + sales)" value={money(priced.totals.estimatedTaxMinorUnits)} />
+            {/* AM-B — loyalty discount buttons: redeem the attached member's
+                points, or apply a code the customer brought. ONLINE-ONLY;
+                the server sizes the value to what the cart can legally
+                absorb. One application per sale (no stacking — S-a policy). */}
+            {onLoyalty ? (
+              <LoyaltyRedeemPanel
+                bundle={bundle}
+                member={member}
+                appliedLoyalty={appliedLoyalty}
+                setAppliedLoyalty={setAppliedLoyalty}
+                releaseLoyalty={releaseLoyalty}
+                loyaltyFingerprint={loyaltyFingerprint}
+                pricedLines={priced.lines}
+                onLoyalty={onLoyalty}
+                cartEmpty={cart.length === 0}
+              />
+            ) : null}
+            <Row label="Subtotal (pre-tax)" value={money(railTotals.subtotalMinorUnits)} />
+            <Row label="Tax (excise + sales)" value={money(railTotals.estimatedTaxMinorUnits)} />
+            {/* Promo savings only — the loyalty reduction gets its OWN row
+                below, so the two never double-count in the display. */}
             {priced.totals.savingsMinorUnits > 0 ? (
               <Row label="You saved" value={`−${money(priced.totals.savingsMinorUnits)}`} accent />
             ) : null}
@@ -1795,9 +1940,12 @@ function CartScreen({
                 accent
               />
             ) : null}
+            {appliedLoyalty && loyaltyView ? (
+              <Row label={`Loyalty ${appliedLoyalty.code}`} value={`−${money(loyaltyView.appliedMinor)}`} accent />
+            ) : null}
             <div className="mt-1 flex justify-between text-xl font-bold">
               <span>Total</span>
-              <span className="text-[var(--pos-accent)]">{money(priced.totals.totalMinorUnits)}</span>
+              <span className="text-[var(--pos-accent)]">{money(railTotals.totalMinorUnits)}</span>
             </div>
 
             <div className="mt-3 flex gap-3">
@@ -2576,6 +2724,180 @@ function PriceOverrideModal({
  * privacy budget is deliberately tiny — first name + last initial, points,
  * tier — and nothing is cached beyond the current sale.
  */
+/**
+ * AM-B — the loyalty discount controls in the checkout rail: redeem the
+ * attached member's points in one tap (server sizes the value to what the
+ * cart can legally absorb) or apply a code the customer brought. Applied
+ * state shows the code + value with a remove button (points refunded).
+ * ONLINE-ONLY via onLoyalty; hidden entirely when the bundle predates AM-B.
+ */
+function LoyaltyRedeemPanel({
+  bundle,
+  member,
+  appliedLoyalty,
+  setAppliedLoyalty,
+  releaseLoyalty,
+  loyaltyFingerprint,
+  pricedLines,
+  onLoyalty,
+  cartEmpty,
+}: {
+  bundle: PosMenuBundle;
+  member: PosMemberHit | null;
+  appliedLoyalty: AppliedLoyalty | null;
+  setAppliedLoyalty: (a: AppliedLoyalty | null) => void;
+  releaseLoyalty: (a: AppliedLoyalty | null) => void;
+  loyaltyFingerprint: string;
+  pricedLines: PricedSaleLine[];
+  onLoyalty: (
+    req: PosLoyaltyRequest,
+  ) => Promise<{ ok: true; grant: PosLoyaltyGrant } | { ok: false; error: string }>;
+  cartEmpty: boolean;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [codeOpen, setCodeOpen] = useState(false);
+  const [codeInput, setCodeInput] = useState("");
+
+  const pointValueMinor = bundle.loyalty?.pointValueMinor ?? 0;
+  const minRedeemPoints = bundle.loyalty?.minRedeemPoints ?? 0;
+  const redeemable = member ? maxRedeemablePoints(member.points, minRedeemPoints) : 0;
+  // The most the member's balance could be worth — the server may size it
+  // DOWN to the cart's legal capacity; this is only the button's estimate.
+  const estimateMinor = Math.floor(redeemable * pointValueMinor);
+
+  const requestLines = () =>
+    pricedLines.map((l) => ({
+      ...(l.variantId ? { variantId: l.variantId } : {}),
+      productId: l.productId,
+      category: l.category,
+      quantity: l.quantity,
+      unitPriceMinor: l.unitPriceMinor,
+      regularPriceMinor: l.regularPriceMinor,
+    }));
+
+  const grantToApplied = (grant: PosLoyaltyGrant, fingerprint: string): AppliedLoyalty => ({
+    redemptionId: grant.redemptionId,
+    code: grant.code,
+    valueMinor: grant.valueMinor,
+    appliedMinor: grant.appliedMinor,
+    source: grant.source,
+    pointsSpent: grant.pointsSpent,
+    fingerprint,
+    perVariant: grant.perVariant,
+  });
+
+  const redeemPoints = async () => {
+    if (!member || busy) return;
+    setBusy(true);
+    setError(null);
+    // Fingerprint captured BEFORE the request: if the cart changes while
+    // the server works, the drift effect drops (and refunds) the grant the
+    // moment it lands — a spread is only ever honored for its exact cart.
+    const requestedFor = loyaltyFingerprint;
+    const res = await onLoyalty({ action: "redeem-points", customerId: member.customerId, lines: requestLines() });
+    setBusy(false);
+    if (res.ok) setAppliedLoyalty(grantToApplied(res.grant, requestedFor));
+    else setError(res.error);
+  };
+
+  const applyCode = async () => {
+    const code = normalizeLoyaltyCodeInput(codeInput);
+    if (!code || busy) return;
+    setBusy(true);
+    setError(null);
+    const requestedFor = loyaltyFingerprint;
+    const res = await onLoyalty({ action: "apply-code", code, lines: requestLines() });
+    setBusy(false);
+    if (res.ok) {
+      setAppliedLoyalty(grantToApplied(res.grant, requestedFor));
+      setCodeOpen(false);
+      setCodeInput("");
+    } else setError(res.error);
+  };
+
+  // Applied state — show what's on, offer removal.
+  if (appliedLoyalty) {
+    return (
+      <div className="mb-3 flex items-center justify-between gap-2 rounded-xl border border-[var(--pos-accent-border)] bg-[var(--pos-accent-soft)] px-3 py-2">
+        <p className="text-xs font-semibold text-[var(--pos-accent)]">
+          ★ Loyalty {appliedLoyalty.code} — {money(appliedLoyalty.appliedMinor)} off
+          {appliedLoyalty.source === "points" ? ` (${appliedLoyalty.pointsSpent} pts)` : ""}
+        </p>
+        <button
+          type="button"
+          onClick={() => {
+            releaseLoyalty(appliedLoyalty);
+            setAppliedLoyalty(null);
+          }}
+          className="pos-tile min-h-11 rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-1.5 text-xs font-semibold text-[var(--pos-text-muted)]"
+        >
+          Remove{appliedLoyalty.source === "points" ? " (refund pts)" : ""}
+        </button>
+      </div>
+    );
+  }
+
+  const showRedeem = member !== null && redeemable > 0 && pointValueMinor > 0;
+
+  return (
+    <div className="mb-3">
+      <div className="flex flex-wrap gap-2">
+        {showRedeem ? (
+          <button
+            type="button"
+            disabled={busy || cartEmpty}
+            onClick={redeemPoints}
+            title="Spend the member's points on this sale. The server sizes the discount to what the cart can legally absorb — points are never partially burned."
+            className="pos-tile min-h-11 flex-1 rounded-xl border border-[var(--pos-accent-border)] bg-[var(--pos-accent-soft)] px-3 py-2 text-xs font-bold text-[var(--pos-accent)] disabled:opacity-40"
+          >
+            ★ Redeem {redeemable.toLocaleString("en-US")} pts (~{money(estimateMinor)})
+          </button>
+        ) : null}
+        <button
+          type="button"
+          disabled={busy || cartEmpty}
+          onClick={() => {
+            setCodeOpen((v) => !v);
+            setError(null);
+          }}
+          className="pos-tile min-h-11 rounded-xl border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2 text-xs font-semibold text-[var(--pos-text-muted)] disabled:opacity-40"
+        >
+          Loyalty code…
+        </button>
+      </div>
+      {codeOpen ? (
+        <div className="mt-2 flex gap-2">
+          <input
+            value={codeInput}
+            onChange={(e) => setCodeInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") void applyCode();
+            }}
+            placeholder="GW-XXXX-XXXX"
+            autoCapitalize="characters"
+            className="min-w-0 flex-1 rounded-xl border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2 text-sm uppercase placeholder:text-[var(--pos-text-faint)] focus:border-[var(--pos-accent-border)] focus:outline-none"
+          />
+          <button
+            type="button"
+            disabled={busy || normalizeLoyaltyCodeInput(codeInput).length === 0}
+            onClick={() => void applyCode()}
+            className="pos-tile min-h-11 rounded-xl bg-[var(--pos-accent)] px-4 py-2 text-sm font-bold text-[var(--pos-accent-ink)] disabled:opacity-40"
+          >
+            Apply
+          </button>
+        </div>
+      ) : null}
+      {busy ? <p className="mt-1 text-xs text-[var(--pos-text-faint)]">Checking with the server…</p> : null}
+      {error ? (
+        <p className="mt-1 rounded-lg border border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] px-3 py-1.5 text-xs text-[var(--pos-warn)]">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function MemberPanel({
   member,
   setMember,
@@ -2822,6 +3144,7 @@ function TenderScreen({
   cart,
   medicalCard,
   overrides,
+  appliedLoyalty,
   onBack,
   onCancel,
   onPaid,
@@ -2831,15 +3154,21 @@ function TenderScreen({
   medicalCard: PosCardCapture | null;
   /** B24 — this sale's manager price overrides (same map the cart used). */
   overrides: Record<string, PosLineOverride>;
+  /** AM-B — the loyalty redemption applied to this sale (reduces the due). */
+  appliedLoyalty: AppliedLoyalty | null;
   onBack: () => void;
   onCancel: () => void;
   /** Returns an error string, or null when the sale was enqueued. */
   onPaid: (tenderedMinor: number) => string | null;
 }) {
-  const priced = useMemo(
-    () => priceForBuyer(cart, bundle, medicalCard !== null, overrides),
-    [cart, bundle, medicalCard, overrides],
-  );
+  const priced = useMemo(() => {
+    const base = priceForBuyer(cart, bundle, medicalCard !== null, overrides);
+    if (!appliedLoyalty) return base;
+    // AM-B — the customer owes the loyalty-reduced total; the SAME spread
+    // buildSalePayload will apply, so the display and the payload agree.
+    const adj = applyLoyaltyToPricedLines(base.lines, appliedLoyalty.perVariant);
+    return { ...base, lines: adj.lines, totals: adj.totals };
+  }, [cart, bundle, medicalCard, overrides, appliedLoyalty]);
   const total = priced.totals.totalMinorUnits;
   // B33 — the owner's cash-rounding policy decides the amount DUE at the
   // drawer. TOTAL (and its tax) stays pre-rounded per WA DOR guidance; the
@@ -2889,6 +3218,11 @@ function TenderScreen({
         {medicalCard && (priced.med?.medicalSavingsMinor ?? 0) > 0 ? (
           <p className="mt-1 text-sm font-semibold text-[var(--pos-accent)]">
             Medical savings −{money(priced.med?.medicalSavingsMinor ?? 0)} (tax exempt)
+          </p>
+        ) : null}
+        {appliedLoyalty ? (
+          <p className="mt-1 text-sm font-semibold text-[var(--pos-accent)]">
+            Loyalty {appliedLoyalty.code} −{money(appliedLoyalty.appliedMinor)}
           </p>
         ) : null}
       </div>

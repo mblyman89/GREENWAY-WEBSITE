@@ -127,7 +127,17 @@ export type PosMenuBundle = {
    * server-side at completion via orders.customer_id — never on-device).
    * Optional so pre-B14 cached bundles still parse.
    */
-  loyalty?: { pointsPerDollar: number };
+  loyalty?: {
+    pointsPerDollar: number;
+    /**
+     * Task AM-B — cash value of one point + the minimum redeemable balance,
+     * so the register can show the "Redeem points" button with an estimate.
+     * OPTIONAL so pre-AM-B cached bundles still parse (button hidden). The
+     * ONLINE /api/pos/loyalty route re-verifies both before issuing.
+     */
+    pointValueMinor?: number;
+    minRedeemPoints?: number;
+  };
   /**
    * Barcode index (POS B23): normalized package barcode (lot code / CCRS
    * external id, lowercased) → the stable POS product key, built server-side
@@ -341,6 +351,15 @@ export type BuildSaleArgs = {
    */
   loyalty?: PosSalePayload["loyalty"];
   /**
+   * Present when a loyalty REDEMPTION CODE was applied at the register
+   * (Task AM-B): the /api/pos/loyalty route issued (or looked up) the code
+   * and computed the per-line spread server-side; the reduced prices already
+   * live in `lines` (each reduced line carries loyaltyDiscountMinor).
+   * validateSalePayload enforces block/line coherence before the queue
+   * accepts the sale; the sync claims the code atomically.
+   */
+  loyaltyRedemption?: PosSalePayload["loyaltyRedemption"];
+  /**
    * Cash-rounding policy from the bundle (POS B33). When set and the mode
    * rounds this total, the customer owes the ROUNDED due amount: change is
    * computed against it and the payload carries the auditable `rounding`
@@ -389,6 +408,9 @@ export function buildSalePayload(args: BuildSaleArgs): BuildSaleResult {
       // POS B24: optional manager price-override block (applyPriceOverrides
       // stamped it onto the line; forwarded verbatim so the sync can audit).
       ...(l.override ? { override: l.override } : {}),
+      // Task AM-B: optional per-UNIT loyalty reduction (forwarded verbatim;
+      // validateSalePayload proves the sum matches the redemption block).
+      ...(l.loyaltyDiscountMinor ? { loyaltyDiscountMinor: l.loyaltyDiscountMinor } : {}),
     })),
     totalMinor: args.totals.totalMinorUnits,
     subtotalMinor: args.totals.subtotalMinorUnits,
@@ -400,6 +422,7 @@ export function buildSalePayload(args: BuildSaleArgs): BuildSaleResult {
     idVerification: args.idVerification,
     ...(args.medical ? { medical: args.medical } : {}),
     ...(args.loyalty ? { loyalty: args.loyalty } : {}),
+    ...(args.loyaltyRedemption ? { loyaltyRedemption: args.loyaltyRedemption } : {}),
     // POS B33 — carry the rounding block only when a real adjustment
     // happened (mode !== off AND the total missed the nickel), so pre-B33
     // payload shapes stay byte-identical.

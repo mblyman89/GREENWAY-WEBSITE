@@ -401,6 +401,55 @@ async function processSale(
     loyaltyCustomerId = customer.id;
   }
 
+  // Task AM-B — loyalty redemption applied at the register: resolve the
+  // redemption row BEFORE materializing the order, so a bad code never
+  // creates an order at all. The row must exist, match the code the device
+  // saw, still be 'issued' (the atomic claim happens after the order
+  // exists), and be worth at least what the device applied. The reduced
+  // prices already live in the lines (validateSalePayload proved the
+  // per-line reductions sum to appliedMinor).
+  let redemptionRow: { id: string; code: string; account_id: string; value_minor: number } | null = null;
+  if (sale.loyaltyRedemption) {
+    const { data: row } = await admin
+      .from("loyalty_redemptions")
+      .select("id, code, status, value_minor, account_id")
+      .eq("id", sale.loyaltyRedemption.redemptionId)
+      .maybeSingle<{ id: string; code: string; status: string; value_minor: number; account_id: string }>();
+    if (!row) {
+      return markException(
+        admin,
+        ledgerId,
+        envelope.clientUuid,
+        `Loyalty redemption ${sale.loyaltyRedemption.redemptionId} does not exist — the discount cannot be honored. Re-ring the sale, then resolve this exception.`,
+      );
+    }
+    if (row.code !== sale.loyaltyRedemption.code) {
+      return markException(
+        admin,
+        ledgerId,
+        envelope.clientUuid,
+        `Loyalty redemption code mismatch (device saw ${sale.loyaltyRedemption.code}, row holds ${row.code}) — refused.`,
+      );
+    }
+    if (row.status !== "issued") {
+      return markException(
+        admin,
+        ledgerId,
+        envelope.clientUuid,
+        `Loyalty code ${row.code} is ${row.status} — it was used, cancelled, or expired after the register applied it. Re-ring the sale, then resolve this exception.`,
+      );
+    }
+    if (sale.loyaltyRedemption.appliedMinor > row.value_minor) {
+      return markException(
+        admin,
+        ledgerId,
+        envelope.clientUuid,
+        `Loyalty code ${row.code} is worth $${(row.value_minor / 100).toFixed(2)} but the register applied $${(sale.loyaltyRedemption.appliedMinor / 100).toFixed(2)} — refused.`,
+      );
+    }
+    redemptionRow = { id: row.id, code: row.code, account_id: row.account_id, value_minor: row.value_minor };
+  }
+
   // Employee name for the customer-facing snapshot (orders require a name).
   const { data: emp } = await admin
     .from("employees")
@@ -451,6 +500,12 @@ async function processSale(
     quantity: l.quantity,
     price_minor_units: l.unitPriceMinor,
     regular_price_minor_units: l.regularPriceMinor,
+    // Task AM-B — per-UNIT loyalty reduction snapshot (migration 0116).
+    // Only written when a redemption rode this sale, so pre-0116 databases
+    // never see the column on loyalty-free sales.
+    ...(redemptionRow && l.loyaltyDiscountMinor
+      ? { loyalty_discount_minor_units: l.loyaltyDiscountMinor }
+      : {}),
   }));
   const { error: linesError } = await admin.from("order_lines").insert(lineRows);
   if (linesError) {
@@ -529,6 +584,62 @@ async function processSale(
         { order_id: order.id },
       );
     }
+  }
+
+  // Task AM-B — ATOMIC CLAIM of the register-applied redemption, exactly the
+  // back-office discipline (loyalty-sale-store): conditional on status still
+  // being 'issued' so two syncs (or a register + the back office) presenting
+  // the same code can't both win. Then the migration-0116 header columns —
+  // the completion gate's checkLoyaltyCodeForCompletion re-verifies the row
+  // is consumed by THIS order before the sale may complete.
+  if (redemptionRow && sale.loyaltyRedemption) {
+    const { data: claimed } = await admin
+      .from("loyalty_redemptions")
+      .update({ status: "redeemed", redeemed_at: new Date().toISOString(), redeemed_order_id: order.id })
+      .eq("id", redemptionRow.id)
+      .eq("status", "issued")
+      .select("id");
+    if (!claimed || claimed.length === 0) {
+      return markException(
+        admin,
+        ledgerId,
+        envelope.clientUuid,
+        `Loyalty code ${redemptionRow.code} was just used elsewhere — it can only be redeemed once. Re-ring the sale, then resolve this exception.`,
+        { order_id: order.id },
+      );
+    }
+    const { error: loyaltyHeaderError } = await admin
+      .from("orders")
+      .update({
+        loyalty_kind: "code",
+        loyalty_redemption_id: redemptionRow.id,
+        loyalty_code: redemptionRow.code,
+        loyalty_discount_minor_units: sale.loyaltyRedemption.appliedMinor,
+      })
+      .eq("id", order.id);
+    if (loyaltyHeaderError) {
+      // Release the claim we just took — never strand a consumed code on an
+      // order that can't record it (pre-0116 databases land here).
+      await admin
+        .from("loyalty_redemptions")
+        .update({ status: "issued", redeemed_at: null, redeemed_order_id: null })
+        .eq("id", redemptionRow.id)
+        .eq("status", "redeemed")
+        .eq("redeemed_order_id", order.id);
+      return markException(
+        admin,
+        ledgerId,
+        envelope.clientUuid,
+        `Loyalty redemption could not be recorded on the order (${loyaltyHeaderError.message}) — apply migration 0116, then resolve this exception.`,
+        { order_id: order.id },
+      );
+    }
+    await admin.from("order_events").insert({
+      order_id: order.id,
+      event_type: "note",
+      note: `Loyalty code ${redemptionRow.code} applied at the register ($${(sale.loyaltyRedemption.appliedMinor / 100).toFixed(2)} off).`,
+      actor_label: `POS · ${employeeName}`,
+    });
   }
 
   // ── The compliance gate (B1): the IDENTICAL 8-step sequence the back
