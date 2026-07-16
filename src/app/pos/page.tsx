@@ -17,7 +17,10 @@ export const metadata: Metadata = {
   // POS B11 — installable Home-Screen app on the counter iPads. Safari reads
   // the manifest + apple-touch icon; `appleWebApp.capable` renders the
   // apple-mobile-web-app meta so the installed app runs standalone
-  // (no browser chrome) with a dark status bar matching the register UI.
+  // (no browser chrome). AO-5: light is the register default (theme-core
+  // DEFAULT_THEME), so the status bar uses "default" (dark text on light) —
+  // the old "black-translucent" floated white clock digits over the light
+  // canvas, unreadable.
   manifest: "/pos/manifest.webmanifest",
   icons: {
     apple: "/pos/apple-touch-icon.png",
@@ -25,14 +28,15 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     title: "Register",
-    statusBarStyle: "black-translucent",
+    statusBarStyle: "default",
   },
 };
 
 export const viewport: Viewport = {
-  // B35 — matches the POS canvas token (--pos-canvas) so the standalone app's
-  // status bar blends into the branded register backdrop.
-  themeColor: "#060807",
+  // B35/AO-5 — matches the LIGHT --pos-canvas token (the register's default
+  // theme since Task AO) so the standalone app's status bar blends into the
+  // register backdrop. Devices toggled to dark simply show a light bar.
+  themeColor: "#f4f6f9",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,

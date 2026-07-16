@@ -121,6 +121,27 @@
   --pos-info-solid: #0284c7;
   --pos-ok: #6ee7b7;
   --pos-ok-border: rgba(16, 185, 129, 0.45);
+
+  /* Category accent tokens (Task AO-5). The B36 category chip/dot palette's
+     last five entries were hard-coded Tailwind -300/-400 shades tuned for the
+     dark canvas — illegible on the light default. AO-5 moves them onto tokens
+     (same pattern as B44's semantic status tokens): dark keeps the original
+     shades, the light block below re-tints to readable -600/-700 shades. */
+  --pos-cat-fuchsia: #f0abfc;
+  --pos-cat-fuchsia-border: rgba(217, 70, 239, 0.5);
+  --pos-cat-fuchsia-dot: #e879f9;
+  --pos-cat-rose: #fda4af;
+  --pos-cat-rose-border: rgba(244, 63, 94, 0.5);
+  --pos-cat-rose-dot: #fb7185;
+  --pos-cat-teal: #5eead4;
+  --pos-cat-teal-border: rgba(20, 184, 166, 0.5);
+  --pos-cat-teal-dot: #2dd4bf;
+  --pos-cat-indigo: #a5b4fc;
+  --pos-cat-indigo-border: rgba(99, 102, 241, 0.5);
+  --pos-cat-indigo-dot: #818cf8;
+  --pos-cat-orange: #fdba74;
+  --pos-cat-orange-border: rgba(249, 115, 22, 0.5);
+  --pos-cat-orange-dot: #fb923c;
 }
 
 /* ---------------------------------------------------------------------------
@@ -176,6 +197,24 @@ html[data-pos-theme="light"] {
   --pos-info-solid: #0284c7;
   --pos-ok: #047857;
   --pos-ok-border: rgba(5, 150, 105, 0.45);
+
+  /* Category accents (AO-5) — deep -700 text / -600 dots read cleanly on the
+     white cards; borders stay the mid-hue at reduced alpha. */
+  --pos-cat-fuchsia: #a21caf;
+  --pos-cat-fuchsia-border: rgba(192, 38, 211, 0.4);
+  --pos-cat-fuchsia-dot: #c026d3;
+  --pos-cat-rose: #be123c;
+  --pos-cat-rose-border: rgba(225, 29, 72, 0.4);
+  --pos-cat-rose-dot: #e11d48;
+  --pos-cat-teal: #0f766e;
+  --pos-cat-teal-border: rgba(13, 148, 136, 0.4);
+  --pos-cat-teal-dot: #0d9488;
+  --pos-cat-indigo: #4338ca;
+  --pos-cat-indigo-border: rgba(79, 70, 229, 0.4);
+  --pos-cat-indigo-dot: #4f46e5;
+  --pos-cat-orange: #c2410c;
+  --pos-cat-orange-border: rgba(234, 88, 12, 0.4);
+  --pos-cat-orange-dot: #ea580c;
 }
 
 * {
