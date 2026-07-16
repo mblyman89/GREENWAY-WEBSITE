@@ -69,6 +69,11 @@
   --pos-surface: #0c0e0d;
   --pos-surface-2: #121514;
   --pos-surface-hover: #171b19;
+  /* Task AO \u2014 navy chrome (top bar / primary-dark buttons). In dark mode the
+     chrome sits on the same dark family so it never glows. */
+  --pos-chrome: #0c0e0d;
+  --pos-chrome-ink: #ffffff;
+  --pos-chrome-muted: rgba(255, 255, 255, 0.55);
 
   /* Hairlines & borders. */
   --pos-border: rgba(255, 255, 255, 0.08);
@@ -128,19 +133,26 @@
  * #7ed957 green and #ffd700 gold fail contrast as TEXT on white).
  * ------------------------------------------------------------------------- */
 html[data-pos-theme="light"] {
-  --pos-canvas: #eef1ee;
+  /* Task AO — owner-approved Dutchie-style palette: cool white canvas, white
+     cards, navy chrome, and a confident retail green for primary actions. */
+  --pos-canvas: #f4f6f9;
   --pos-surface: #ffffff;
-  --pos-surface-2: #f2f4f2;
-  --pos-surface-hover: #e9ede9;
-  --pos-border: rgba(10, 20, 12, 0.1);
-  --pos-border-strong: rgba(10, 20, 12, 0.22);
-  --pos-text: #101713;
-  --pos-text-muted: rgba(16, 23, 19, 0.62);
-  --pos-text-faint: rgba(16, 23, 19, 0.42);
-  --pos-accent: #2f8722;
+  --pos-surface-2: #fbfcfd;
+  --pos-surface-hover: #eef1f5;
+  --pos-border: #e4e9ef;
+  --pos-border-strong: #c4cfdb;
+  --pos-text: #1e2b3a;
+  --pos-text-muted: #5c6b7d;
+  --pos-text-faint: rgba(92, 107, 125, 0.65);
+  --pos-accent: #178a5c;
   --pos-accent-ink: #ffffff;
-  --pos-accent-soft: rgba(47, 135, 34, 0.12);
-  --pos-accent-border: rgba(47, 135, 34, 0.45);
+  --pos-accent-soft: rgba(31, 169, 113, 0.12);
+  --pos-accent-border: rgba(31, 169, 113, 0.45);
+  /* Navy chrome tokens (top bar / primary-dark buttons) — light theme only;
+     dark theme maps them onto its existing surfaces below. */
+  --pos-chrome: #12233d;
+  --pos-chrome-ink: #ffffff;
+  --pos-chrome-muted: #8fa2ba;
   --pos-gold: #8a6a00;
   --pos-gold-ink: #ffffff;
   --pos-gold-soft: rgba(179, 138, 0, 0.14);
@@ -324,13 +336,11 @@ h1, h2, h3, h4, h5, h6 {
   color-scheme: dark;
 }
 
-/* Light mode (B44): same quiet brand glow, tuned for a bright canvas, and
-   native controls flip to light so selects/inputs match. */
+/* Light mode (B44, re-tuned in Task AO): the owner-approved Dutchie-style
+   canvas is a clean cool grey-white with NO brand glow \u2014 white cards read
+   crisply against it. Native controls flip to light so selects/inputs match. */
 html[data-pos-theme="light"] .pos-shell {
-  background:
-    radial-gradient(120% 60% at 50% -10%, rgba(47, 135, 34, 0.1), transparent 60%),
-    radial-gradient(90% 50% at 100% -10%, rgba(194, 65, 12, 0.06), transparent 55%),
-    var(--pos-canvas);
+  background: var(--pos-canvas);
   color-scheme: light;
 }
 
