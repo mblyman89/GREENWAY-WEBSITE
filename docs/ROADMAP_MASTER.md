@@ -227,9 +227,21 @@ only quantitative compliance gaps and go first.
   Register Activity dropdown item, and mobile accordion; caps at 99+); admin layout
   fetches the count server-side only for roles with orders.manage. 30 self-tests + vitest
   mirror. No migration — rides compliance_reminder_log (0118). Suite 1,678/128.*
-- [ ] **AN-7 (F-8) — Recall/quarantine hard stop in the sale path.** No hold gate exists in
+- [x] **AN-7 (F-8) — Recall/quarantine hard stop in the sale path.** No hold gate exists in
   the sell flow today. Build: recall hold flag → excluded from the published menu bundle
   AND a completion-gate hard block (same discipline as the DOH high-THC gate).
+  *SHIPPED (PR #546): pure core `recall-hold-core.ts` — a product key is held while ANY of
+  its lots has status `recalled` (deliberately NOT `quarantine`: intake lots start
+  quarantined and the 72h destruction hold parks return lots there — holding on quarantine
+  would false-block a product the moment a restock arrives). Whole-key hold because order
+  lines carry no lot identity (B19 decrements FIFO after the fact). Two layers with an
+  ASYMMETRIC fail posture: `/api/pos/menu` excludes held products from the register bundle
+  best-effort (read failure ships an unfiltered menu, never a blank register); the
+  completion gate (both callers — admin dashboard + POS sync) hard-blocks right after the
+  sales-hours gate, fail-CLOSED (a recall-status read failure refuses the sale rather than
+  guessing safe), NO override — same posture as the DOH high-THC gate. Mark/release path is
+  the existing Admin → Inventory lot-status editor. 11 self-tests + vitest mirror. No
+  migration — rides inventory_lots.status (0023). Suite 1,684/129.*
 - [ ] **AN-8 (F-9, lowest) — Durable PIN throttle.** Current 5-fails/60 s throttle is
   in-memory per lambda instance (resets on cold start, not shared across instances). Move
   to a durable store keyed per device+employee.
