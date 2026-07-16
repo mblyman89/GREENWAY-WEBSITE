@@ -144,10 +144,21 @@ only quantitative compliance gaps and go first.
   orders-store both retry without the column (PGRST204/42703 ladder) so an unapplied
   migration never breaks a sale. No backfill — old rows meter on category defaults
   exactly as before. Suite 1,649/126.*
-- [ ] **AN-2 (F-2) — Statutory clamp on sales-limit settings.** `updateSalesLimitSettingsAction`
+- [x] **AN-2 (F-2) — Statutory clamp on sales-limit settings.** `updateSalesLimitSettingsAction`
   accepts any ≥ 0 values with no clamp (unlike sales hours, which clamp INTO the statute via
   `normalizeSalesHoursWindow`). Apply the same clamp pattern so owner-entered limits can
   never exceed WAC 314-55-095 maximums (recreational and medical-endorsement tiers).
+  *Shipped (PR #536): new pure `clampLimitProfile(raw, base)` in sales-limits-core —
+  tighten below the statutory max allowed; above it clamps to the statute; zero/negative/
+  NaN/garbage collapses to the statute (mirrors normalizeSalesHoursWindow's collapse-to-
+  legal-window); pg numeric-as-string accepted. Applied at THREE layers: (1) WRITE — the
+  admin action clamps before persisting and before the audit record, and
+  updateSalesLimitSettings clamps again server-side; (2) READ — getSalesLimitSettings
+  clamps rows so manual DB edits can tighten but never widen; (3) ENGINE CHOKE POINT —
+  resolveLimits clamps overrides, so every evaluation (register meter, website placement,
+  completion hard gate) is protected even against a STALE CACHED DEVICE BUNDLE carrying
+  widened values. No migration. +10 pure self-tests (sales-limits-core → 57) + 2 vitest
+  cases. Suite 1,651/126.*
 - [ ] **AN-3 (F-4 + F-6 + F-10a) — Sync-ingest hardening.** (a) hours gate evaluated on the
   event's `occurredAt`, not sync-arrival time; (b) re-run manual-ID age/expiry math at sync
   (today `validateManualIdEventPayload` is format-only); (c) validate `drawerSessionId`
