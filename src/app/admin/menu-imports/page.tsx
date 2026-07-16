@@ -160,15 +160,14 @@ export default async function MenuImportsPage({
         <section className="rounded-xl border border-[#7ed957]/25 bg-[#7ed957]/5 p-5">
           <h2 className="text-sm font-semibold text-white">Menu drafts from receiving</h2>
           <p className="mt-1 text-xs text-white/50">
-            When you receive products and approve them with a price, they&apos;re automatically carried
-            onto a copy of your live menu here &mdash; <strong>no upload needed</strong>. Review each
-            draft and publish it to make those products show on the website and become sellable at the
-            register.
+            When you approve a received product with a price, it&apos;s published to the live menu
+            automatically &mdash; <strong>no upload, no publish click needed</strong>. This section is
+            the safety net: if an automatic publish ever hiccups, the staged menu update lands here so
+            you can press Publish yourself.
           </p>
           {intakeStaged.length === 0 ? (
             <p className="mt-3 text-xs text-white/40">
-              No menu drafts waiting from receiving right now. Approve a received product&apos;s price on
-              the Enrich / catalog drafts screen and it will appear here to publish.
+              Nothing waiting &mdash; every menu update from receiving has published automatically.
             </p>
           ) : (
             <div className="mt-4 divide-y divide-white/10 overflow-hidden rounded-lg border border-white/10">

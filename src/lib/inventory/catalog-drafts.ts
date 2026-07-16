@@ -381,13 +381,15 @@ export async function approveDraftWithPrice(
     .eq("id", draftId);
   if (error) return { ok: false, error: error.message };
 
-  // Intake auto-carry (owner Option B, NOT auto-published): the moment a
+  // Intake auto-carry + auto-publish (owner-approved Option 1): the moment a
   // received product is APPROVED with a price, stage an intake-origin menu
   // version (current live menu carried forward + this newly approved product)
-  // so it reaches the customer menu + front POS WITHOUT the one-time Cultivera
-  // "Menu Imports" upload. A human still reviews + Publishes. Best-effort +
-  // dynamic import to avoid pulling server-only menu code into every caller of
-  // this module; a staging hiccup must never fail the approval itself.
+  // and publish it immediately — pressing "Approve" IS the go-live decision,
+  // so the product reaches the customer menu + front POS with no further
+  // clicks. On a publish hiccup the staged version lands on Menu Imports as
+  // the manual fallback. Best-effort + dynamic import to avoid pulling
+  // server-only menu code into every caller of this module; a staging/publish
+  // hiccup must never fail the approval itself.
   if (row?.manifest_id) {
     try {
       const { stageIntakeMenuVersionForManifest } = await import("@/lib/pos/intake-menu-staging");

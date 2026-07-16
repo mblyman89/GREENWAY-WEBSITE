@@ -93,13 +93,13 @@ export function draftsWhatDoIDoHere(
       };
     }
     return {
-      text: `${counts.draft} new product${counts.draft === 1 ? "" : "s"} below ${counts.draft === 1 ? "is" : "are"} blocked from the menu until you act. For each one: check the details, set the retail price, then press “Approve” — or “Dismiss” if it isn't really a new product.`,
+      text: `${counts.draft} new product${counts.draft === 1 ? "" : "s"} below ${counts.draft === 1 ? "is" : "are"} blocked from the menu until you act. For each one: check the details, set the retail price, then press “Approve” — it goes live on the website and register automatically — or “Dismiss” if it isn't really a new product.`,
       primaryAction: "Approve",
     };
   }
   if (view === "approved") {
     return {
-      text: "These products are approved. Each is added automatically to the next menu import you stage and goes live when you publish that version. Nothing to do here — this tab is your record of what you've validated.",
+      text: "These products are approved and were published to the live menu automatically the moment you approved them. Nothing to do here — this tab is your record of what you've validated. Add photos & descriptions in Product Enrichment whenever you're ready.",
       primaryAction: null,
     };
   }

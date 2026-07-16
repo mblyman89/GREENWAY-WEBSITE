@@ -24,6 +24,8 @@ import {
   CONCIERGE_HINTS,
 } from "@/lib/inventory/guided-accept-core";
 import { GuidedAcceptRibbon } from "@/components/admin/inventory/GuidedAcceptRibbon";
+import { menuStep } from "@/lib/inventory/menu-live-step-core";
+import { intakeMenuStepSnapshot } from "@/lib/pos/intake-menu-staging";
 import { getManifestPoLinkState } from "@/lib/inventory/po-link-store";
 import { ManifestPoLinkPanel } from "@/components/admin/inventory/ManifestPoLinkPanel";
 import {
@@ -139,6 +141,13 @@ export default async function ManifestReviewPage({
   // them (never guess whether a human typed a value).
   const autoFilled = transportWasAutoFilled(events);
   const manifestChips = fromManifestChips(manifest, autoFilled);
+
+  // ④ "On menu" ribbon step (intake auto-publish): draft/staged counts for
+  // THIS manifest decide whether the delivery's products are live, still need
+  // pricing, or are stuck staged (publish fallback). Snapshot is null on read
+  // failure — the core then renders a neutral todo rather than guessing.
+  const menuSnapshot = await intakeMenuStepSnapshot(id);
+  const menuStepView = menuStep(manifest.status, menuSnapshot);
 
   // Convert each intake line's raw LCB classification to OUR website category
   // for display (Request B). Read-only — never mutates the stored CCRS values.
@@ -354,9 +363,14 @@ export default async function ManifestReviewPage({
           </div>
         )}
 
-        {/* H15f — guided accept: ① Arrived → ② Verify counts → ③ Accept,
+        {/* H15f — guided accept: ① Arrived → ② Verify counts → ③ Accept → ④ On menu,
             plain-English stage guidance + green "from the manifest" chips. */}
-        <GuidedAcceptRibbon status={manifest.status} etaDate={manifest.eta_date} chips={manifestChips} />
+        <GuidedAcceptRibbon
+          status={manifest.status}
+          etaDate={manifest.eta_date}
+          chips={manifestChips}
+          menuStep={menuStepView}
+        />
 
         {/* W5: which order is this delivery for? (suggest-and-confirm; hidden
             entirely until migration 0102 is applied) */}
