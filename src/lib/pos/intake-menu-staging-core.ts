@@ -1,7 +1,9 @@
 /**
  * src/lib/pos/intake-menu-staging-core.ts
  *
- * Intake auto-carry (owner Option B, NOT auto-published) — PURE planner.
+ * Intake auto-carry — PURE planner. (The server executor now also
+ * AUTO-PUBLISHES the staged result per owner-approved Option 1; this planner
+ * itself remains publish-agnostic — it only builds the snapshot.)
  *
  * WHY: products received via the new receiving/intake system must reach the
  * customer-facing menu AND become sellable in the front POS WITHOUT the
@@ -18,8 +20,10 @@
  * carried forward + the newly approved intake items appended. If it only held
  * the new items, publishing would wipe the live menu down to just those.
  *
- * DRAFTS-ONLY IS PRESERVED: this only plans a STAGED version. A human still
- * reviews it and presses Publish. Nothing here goes live on its own.
+ * SCOPE: this only PLANS the snapshot for a staged version. The go-live
+ * decision (auto-publish after item-by-item draft approval, with the Menu
+ * Imports Publish button as the fallback) lives entirely in the server
+ * executor — nothing in this planner touches publish state.
  *
  * NEVER GUESS: the approved-draft rows are turned into menu items by the
  * existing, verified pure planner `buildDraftInjectionPlan` — an approved draft

@@ -1,7 +1,7 @@
 /**
  * src/lib/pos/intake-menu-staging.ts
  *
- * Intake auto-carry (owner Option B, NOT auto-published) — SERVER executor.
+ * Intake auto-carry + AUTO-PUBLISH (owner-approved Option 1) — SERVER executor.
  *
  * When a manifest is accepted, this stages a NEW menu version made of every
  * currently-published item (carried forward) plus the manifest's APPROVED
@@ -14,17 +14,27 @@
  * with the source manifest id + the planner diagnostics, so the review surface
  * can show what was carried / added / skipped WITHOUT a pos_imports row.
  *
- * DRAFTS-ONLY: only a STAGED version is created — a human still reviews it and
- * presses Publish. Nothing here goes live on its own.
+ * AUTO-PUBLISH: the human review already happened item-by-item at draft
+ * approval (price set + Approve pressed on Product Onboarding) — that IS the
+ * go-live decision, so after staging succeeds the version is published
+ * immediately via the same gated `publish_menu_version` RPC the Menu Imports
+ * page uses (atomic swap; archives the previously-published version). On a
+ * publish hiccup the STAGED version remains and lands on Menu Imports as the
+ * manual fallback — nothing can be silently lost. After a successful publish,
+ * stale intake-origin staged siblings (built from an older live snapshot —
+ * publishing one would DROP newer products) are archived as housekeeping.
  *
  * BEST-EFFORT: called from finalizeManifestDispositions AFTER lots activate and
- * drafts are seeded. Any failure logs and returns a skipped result; it must
- * NEVER fail the manifest finalize. No-op when Supabase isn't configured or the
+ * drafts are seeded, and from approveDraftWithPrice after each approval. Any
+ * failure logs and returns a skipped result; it must NEVER fail the manifest
+ * finalize or the draft approval. No-op when Supabase isn't configured or the
  * manifest has no APPROVED drafts to carry.
  */
 import "server-only";
+import { revalidatePath } from "next/cache";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import { recordAudit } from "@/lib/auth/audit";
 import { resolveWebsiteCategories } from "@/lib/inventory/website-category-resolver-server";
 import { canonicalStrainType } from "@/lib/menu/strain-taxonomy";
 import {
@@ -37,7 +47,9 @@ import type { MenuItemRow, MenuVariantRow, MenuVersion } from "@/lib/pos/db-type
 export type IntakeStagingOutcome = {
   /** True when a staged version was created. */
   staged: boolean;
-  /** The new staged version id (when staged). */
+  /** True when the version also went LIVE (auto-publish succeeded). */
+  published: boolean;
+  /** The new version id (when staged). */
   versionId: string | null;
   carried: number;
   added: number;
@@ -59,6 +71,7 @@ export async function stageIntakeMenuVersionForManifest(
 ): Promise<IntakeStagingOutcome> {
   const skip = (reason: string): IntakeStagingOutcome => ({
     staged: false,
+    published: false,
     versionId: null,
     carried: 0,
     added: 0,
@@ -229,8 +242,16 @@ export async function stageIntakeMenuVersionForManifest(
     // 6) Persist items + variants in batches (same shape as persistMenuItems).
     await persistSnapshotItems(version.id, plan.items);
 
+    // 7) AUTO-PUBLISH (owner-approved Option 1): the item-by-item human review
+    //    already happened at draft approval, so promote the fresh snapshot to
+    //    live immediately via the same atomic RPC the Menu Imports publish
+    //    button uses. Best-effort: on ANY failure the STAGED version remains
+    //    and surfaces on Menu Imports as the manual-publish fallback.
+    const publishedOk = await autoPublishIntakeVersion(version.id, actorId, manifestId);
+
     return {
       staged: true,
+      published: publishedOk,
       versionId: version.id,
       carried: plan.carriedCount,
       added: plan.addedCount,
@@ -238,6 +259,152 @@ export async function stageIntakeMenuVersionForManifest(
   } catch (err) {
     console.error("[intake-menu-staging] staging failed:", err);
     return skip("exception");
+  }
+}
+
+/**
+ * Promote a freshly-staged intake-origin version to LIVE via the same atomic
+ * `publish_menu_version` RPC the Menu Imports publish button uses (archives
+ * the previously-published version in the same transaction). Returns true on
+ * success. BEST-EFFORT: any failure logs, records a `menu_auto_publish_failed`
+ * timeline event, and returns false — the staged version remains on Menu
+ * Imports as the manual-publish fallback. The freshly-inserted version always
+ * has error_count = 0 (intake staging never writes error diagnostics), so the
+ * Menu Imports error guard is satisfied by construction.
+ */
+async function autoPublishIntakeVersion(
+  versionId: string,
+  actorId: string | null,
+  manifestId: string,
+): Promise<boolean> {
+  const admin = createSupabaseAdminClient();
+
+  const logEvent = async (eventType: string, note: string): Promise<void> => {
+    try {
+      await admin.from("manifest_events").insert({
+        manifest_id: manifestId,
+        event_type: eventType,
+        note,
+        actor_id: actorId,
+      });
+    } catch (err) {
+      console.error("[intake-menu-staging] timeline event insert failed:", err);
+    }
+  };
+
+  try {
+    const { error } = await admin.rpc("publish_menu_version", {
+      p_version_id: versionId,
+      p_actor: actorId,
+    });
+    if (error) {
+      console.error("[intake-menu-staging] auto-publish failed:", error.message);
+      await logEvent(
+        "menu_auto_publish_failed",
+        "Automatic publish didn't finish — the menu update is STAGED on Admin → Menu Imports. Press Publish there to put it live.",
+      );
+      return false;
+    }
+  } catch (err) {
+    console.error("[intake-menu-staging] auto-publish exception:", err);
+    await logEvent(
+      "menu_auto_publish_failed",
+      "Automatic publish didn't finish — the menu update is STAGED on Admin → Menu Imports. Press Publish there to put it live.",
+    );
+    return false;
+  }
+
+  // Housekeeping: archive STALE intake-origin staged siblings. Each was built
+  // from an OLDER live snapshot — publishing one later would silently DROP the
+  // products this publish just added, so they must not linger as landmines.
+  // (The RPC only archives staged siblings that belong to a pos_import; for
+  // intake-origin versions import_id is NULL, so we sweep them here.)
+  try {
+    await admin
+      .from("menu_versions")
+      .update({ status: "archived", updated_at: new Date().toISOString() })
+      .is("import_id", null)
+      .eq("status", "staged")
+      .neq("id", versionId);
+  } catch (err) {
+    console.error("[intake-menu-staging] stale staged sweep failed:", err);
+  }
+
+  // Audit trail — same action name as the manual Menu Imports publish, with
+  // the intake origin recorded (recordAudit never throws).
+  await recordAudit({
+    actorId,
+    action: "menu_version.published",
+    entityType: "menu_version",
+    entityId: versionId,
+    after: { origin: "intake", manifest_id: manifestId, auto: true },
+  });
+
+  await logEvent(
+    "menu_auto_publish",
+    "Published to the live menu automatically — the approved products from this delivery are now on the website and sellable at the register.",
+  );
+
+  // Refresh the public menu surfaces + the Menu Imports admin list (same set
+  // the manual publish action revalidates).
+  try {
+    revalidatePath("/admin/menu-imports");
+    revalidatePath("/menu");
+    revalidatePath("/shop");
+    revalidatePath("/");
+  } catch (err) {
+    console.error("[intake-menu-staging] revalidate failed:", err);
+  }
+
+  return true;
+}
+
+/**
+ * Ribbon step ④ snapshot for a manifest: how many onboarding drafts are still
+ * unpriced vs approved, and whether an intake-origin STAGED version for this
+ * manifest is still waiting (auto-publish fallback). Returns null when the
+ * counts can't be read — the ribbon then shows a neutral step rather than
+ * guessing.
+ */
+export async function intakeMenuStepSnapshot(
+  manifestId: string,
+): Promise<{ pendingDrafts: number; approvedDrafts: number; stagedWaiting: boolean } | null> {
+  if (!isSupabaseServiceConfigured) return null;
+  try {
+    const admin = createSupabaseAdminClient();
+    const [pendingRes, approvedRes, stagedRes] = await Promise.all([
+      admin
+        .from("catalog_product_drafts")
+        .select("id", { count: "exact", head: true })
+        .eq("manifest_id", manifestId)
+        .eq("status", "draft"),
+      admin
+        .from("catalog_product_drafts")
+        .select("id", { count: "exact", head: true })
+        .eq("manifest_id", manifestId)
+        .eq("status", "approved"),
+      admin
+        .from("menu_versions")
+        .select("id", { count: "exact", head: true })
+        .is("import_id", null)
+        .eq("status", "staged")
+        .eq("summary_json->>manifest_id", manifestId),
+    ]);
+    if (pendingRes.error || approvedRes.error || stagedRes.error) {
+      console.error(
+        "[intake-menu-staging] menu-step snapshot read failed:",
+        pendingRes.error?.message ?? approvedRes.error?.message ?? stagedRes.error?.message,
+      );
+      return null;
+    }
+    return {
+      pendingDrafts: pendingRes.count ?? 0,
+      approvedDrafts: approvedRes.count ?? 0,
+      stagedWaiting: (stagedRes.count ?? 0) > 0,
+    };
+  } catch (err) {
+    console.error("[intake-menu-staging] menu-step snapshot exception:", err);
+    return null;
   }
 }
 

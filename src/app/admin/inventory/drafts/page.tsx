@@ -49,7 +49,7 @@ export default async function CatalogDraftsPage({
   const [drafts, counts] = await Promise.all([listCatalogDrafts(view), countCatalogDrafts()]);
 
   const banner =
-    approved ? "Approved with its price — it will be added automatically to the next menu import you stage, and goes live when that version is published. After it publishes, add photos & a description in Product Enrichment."
+    approved ? "Approved — it's live on the website and sellable at the register now. Add photos & a description in Product Enrichment whenever you're ready."
       : dismissed ? "Draft dismissed."
         : restored ? "Draft restored to the review queue."
           : error === "floor" ? (msg || "Price is below the cost floor.")
