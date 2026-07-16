@@ -56,12 +56,18 @@
   compliance/offline changes; suite 1,625/123 green. The always-focused wedge scan box on
   the home screen itself arrives with AO-3 (scan needs the match endpoint to be useful
   before the sale starts).*
-- [ ] **AO-3 — ID scan auto-attaches the customer.** After a passing AAMVA scan, the
+- [x] **AO-3 — ID scan auto-attaches the customer.** After a passing AAMVA scan, the
   register (online) sends parsed name + DOB to a new device-authenticated match endpoint;
   an unambiguous single match auto-attaches the loyalty member (points/tier ride the
   band); ambiguous/no match falls back to today's manual lookup. Privacy budget
   unchanged (label + points + tier only; DOB never returned — matching happens
   server-side). Offline: scan still gates age locally; member attach skipped as today.
+  *Shipped (PR #527): `member-match-core.ts` pure matcher (exact DOB + normalized
+  first/last; nicknames and duplicates never attach; 16 self-tests + vitest mirror),
+  `POST /api/pos/member-match` (device-authed, candidates via exact-birthdate query,
+  ambiguous reported as null), fire-and-forget wiring after the gate passes —
+  cart opens instantly, member band appears when the server answers; an AM-D
+  order-loaded member is never overridden. Suite 1,635/124.*
 - [ ] **AO-4 — Sale screen rebuild.** Customer band (name + ID✓age + tier/points badges +
   History/Hold/Cancel), "THE USUAL" one-tap re-add chips from member history (B29 data),
   live scan/search bar + category chips, cart as a clean table (qty steppers, remove,
