@@ -103,7 +103,7 @@
 One PR per slice. These close the gaps found in the front-end audit; AN-1/AN-2 are the
 only quantitative compliance gaps and go first.
 
-- [ ] **AN-0 — POS PWA update affordance** *(small; fixes the owner's "I can't see the new
+- [x] **AN-0 — POS PWA update affordance** *(small; fixes the owner's "I can't see the new
   front end" pain)*. The installed Home-Screen app has NO in-app refresh path today
   (`public/pos-sw.js` has no version stamp, no skipWaiting message handler; RegisterShell
   has no update UI). Build: bump SW cache names to versioned constants tied to a build id;
@@ -111,6 +111,16 @@ only quantitative compliance gaps and go first.
   unobtrusive "Update available — tap to refresh" banner in RegisterShell (guarded so it
   never interrupts an in-progress sale, i.e. only offered when the cart is empty and no
   sale is held); show the running app version in Settings so staleness is visible.
+  *Shipped (PR #532): new `sw-core.ts` pure core (23 self-tests + vitest mirror) builds
+  the worker source with the deploy's short commit SHA in its cache names; served by
+  `src/app/pos-sw.js/route.ts` at the same URL registers already use (static file
+  deleted). Install-time skipWaiting REMOVED — activation is message-driven only, so an
+  update can never land mid-sale (self-test pins exactly one skipWaiting call, inside
+  the message handler). RegisterShell watches for a waiting worker (+ proactive
+  reg.update() since a standalone PWA rarely navigates), shows the banner ONLY on the
+  home screen and never while a sale is held, and reloads once on controllerchange.
+  Running version (same resolver as the worker) shown in the status footer.
+  Suite 1,642/125.*
 - [ ] **AN-1 (F-1) — Per-variant grams → limit engine.** `lineGrams()` already honors
   `line.grams` but NO caller passes it — both the register meter (`limitLinesFor`) and the
   server gate fall back to `DEFAULT_UNIT_GRAMS` category defaults (a 7 g flower jar counts
