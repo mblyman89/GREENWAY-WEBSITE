@@ -18,7 +18,7 @@
  */
 
 import { validateEnvelope, type PosEventEnvelope } from "./sale-event-core";
-import { isAcceptableIdType, isYmd } from "./id-scan-core";
+import { MINIMUM_AGE_YEARS, ageOn, isAcceptableIdType, isExpired, isYmd } from "./id-scan-core";
 
 // ---------------------------------------------------------------------------
 // Envelope-vs-authenticated-device checks
@@ -108,6 +108,156 @@ export function validateManualIdEventPayload(p: Partial<ManualIdEventPayload>): 
   const reason = (p.reason ?? "").trim();
   if (reason.length < 3 || reason.length > 500) errors.push("reason must be 3–500 characters.");
   return errors.length ? { ok: false, errors } : { ok: true };
+}
+
+/**
+ * AN-3(b) — re-run the manual-ID AGE and EXPIRY math at sync, against the
+ * event's OWN date (the verification happened then, possibly offline days
+ * ago — grading it against the sync-arrival date would wrongly fail a
+ * document that expired in between). `validateManualIdEventPayload` proves
+ * the SHAPE; this proves the SUBSTANCE: the DOB really was 21+ and the
+ * document really was unexpired on the day the budtender said so. A device
+ * whose math was tampered with (or a corrupted queue row) becomes an
+ * exception for manager review, never a silently-honored audit record.
+ */
+export function checkManualIdMathAtSync(
+  p: Pick<ManualIdEventPayload, "dateOfBirth" | "expirationDate">,
+  occurredYmd: string,
+  minimumAgeYears: number = MINIMUM_AGE_YEARS,
+): PayloadCheck {
+  const errors: string[] = [];
+  if (!isYmd(occurredYmd)) {
+    return { ok: false, errors: ["Internal error: event date is not YYYY-MM-DD."] };
+  }
+  const age = ageOn(p.dateOfBirth ?? "", occurredYmd);
+  if (age === null || age < minimumAgeYears) {
+    errors.push(
+      `Manual ID math failed at sync: DOB ${p.dateOfBirth} is under ${minimumAgeYears} (age ${age ?? "unknown"}) on ${occurredYmd}.`,
+    );
+  }
+  const expired = isExpired(p.expirationDate ?? "", occurredYmd);
+  if (expired !== false) {
+    errors.push(
+      `Manual ID math failed at sync: document expiry ${p.expirationDate} was not valid on ${occurredYmd} (WAC 314-55-150).`,
+    );
+  }
+  return errors.length ? { ok: false, errors } : { ok: true };
+}
+
+// ---------------------------------------------------------------------------
+// AN-3(c) — drawer-session validation (a sale must belong to a REAL session)
+// ---------------------------------------------------------------------------
+
+/** The minimal drawer_sessions shape the sale-vs-session check needs. */
+export type DrawerSessionForSale = {
+  id: string;
+  register_id: string;
+  opened_at: string | null;
+  closed_at: string | null;
+};
+
+/**
+ * May this synced sale claim this drawer session? Today only the UUID shape
+ * is checked (validateSalePayload) — a fabricated or foreign session id
+ * would be written into the day's cash story unchallenged. Rules:
+ *   - the session must EXIST (caller resolves the row; null = unknown id),
+ *   - it must belong to THE REGISTER the authenticated device is bound to,
+ *   - the sale's occurredAt must fall INSIDE the session's open interval
+ *     (opened_at ≤ occurredAt, and occurredAt ≤ closed_at when closed —
+ *     an offline queue may flush AFTER the drawer closed, which is fine;
+ *     a sale claiming to have happened before open or after close is not).
+ * Pure: the row and instants are passed in; the caller queries.
+ */
+export function checkDrawerSessionForSale(
+  session: DrawerSessionForSale | null,
+  registerId: string,
+  occurredAtIso: string,
+): IngestCheck {
+  if (!session) {
+    return {
+      ok: false,
+      reason:
+        "Sale references a drawer session that does not exist on the server — the cash story cannot absorb it. Needs manager review.",
+    };
+  }
+  if (session.register_id !== registerId) {
+    return {
+      ok: false,
+      reason: "Sale references a drawer session belonging to a DIFFERENT register. Needs manager review.",
+    };
+  }
+  const occurred = Date.parse(occurredAtIso);
+  if (!Number.isFinite(occurred)) {
+    return { ok: false, reason: "Sale occurredAt does not parse as a timestamp." };
+  }
+  if (session.opened_at) {
+    const opened = Date.parse(session.opened_at);
+    if (Number.isFinite(opened) && occurred < opened) {
+      return {
+        ok: false,
+        reason: "Sale claims to have occurred BEFORE its drawer session was opened. Needs manager review.",
+      };
+    }
+  }
+  if (session.closed_at) {
+    const closed = Date.parse(session.closed_at);
+    if (Number.isFinite(closed) && occurred > closed) {
+      return {
+        ok: false,
+        reason:
+          "Sale claims to have occurred AFTER its drawer session was closed — it cannot join that session's cash story. Needs manager review.",
+      };
+    }
+  }
+  return { ok: true };
+}
+
+// ---------------------------------------------------------------------------
+// AN-3(d) — device clock drift
+// ---------------------------------------------------------------------------
+
+/**
+ * How far ahead of the SERVER's clock an event's occurredAt may sit before
+ * it is flagged. Events legitimately arrive LATE (offline queues flush hours
+ * or days after the sale) so lateness is never drift — only a timestamp from
+ * the FUTURE proves the device's clock is wrong. 5 minutes absorbs normal
+ * NTP skew on a healthy iPad.
+ */
+export const CLOCK_DRIFT_TOLERANCE_MS = 5 * 60 * 1000;
+
+export type ClockDriftCheck =
+  | { drifted: false }
+  | { drifted: true; aheadMs: number; reason: string };
+
+/**
+ * Flag an envelope whose occurredAt is ahead of the server's now by more
+ * than the tolerance. Pure: both instants are passed in. The caller marks
+ * the event a POS EXCEPTION (the ledger fact is preserved and the manager
+ * reviews it) — a future timestamp poisons the sales-hours gate and the
+ * business-day ledger, so the event must not be auto-processed as if its
+ * clock were trustworthy. Lateness is NEVER drift: offline queues
+ * legitimately flush hours or days after the fact.
+ */
+export function checkClockDrift(
+  occurredAtIso: string,
+  serverNowMs: number,
+  toleranceMs: number = CLOCK_DRIFT_TOLERANCE_MS,
+): ClockDriftCheck {
+  const occurred = Date.parse(occurredAtIso);
+  if (!Number.isFinite(occurred)) {
+    return { drifted: true, aheadMs: Number.NaN, reason: "occurredAt does not parse as a timestamp." };
+  }
+  const aheadMs = occurred - serverNowMs;
+  if (aheadMs <= toleranceMs) return { drifted: false };
+  const minutes = Math.round(aheadMs / 60000);
+  return {
+    drifted: true,
+    aheadMs,
+    reason:
+      `Device clock drift: the event claims it occurred ~${minutes} minute${minutes === 1 ? "" : "s"} in the FUTURE ` +
+      `(beyond the ${Math.round(toleranceMs / 60000)}-minute tolerance). Fix the device's clock — ` +
+      `its timestamps drive the sales-hours gate and the business-day ledger.`,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -210,6 +360,61 @@ export function __runPosSyncCoreTests(): void {
   ok(ackMeansDurablyAccepted("duplicate"), "duplicate → durable");
   ok(ackMeansDurablyAccepted("exception"), "exception → durable (manager queue)");
   ok(!ackMeansDurablyAccepted("rejected"), "rejected → NOT durable (device keeps it)");
+
+  // AN-3(b): manual-ID math re-run at sync, against the EVENT's date
+  const manualMath = { dateOfBirth: "1990-07-13", expirationDate: "2030-01-01" };
+  ok(checkManualIdMathAtSync(manualMath, "2026-07-13").ok, "21+ and unexpired on event date passes");
+  ok(!checkManualIdMathAtSync({ ...manualMath, dateOfBirth: "2010-01-01" }, "2026-07-13").ok, "underage DOB fails at sync");
+  ok(
+    !checkManualIdMathAtSync({ ...manualMath, expirationDate: "2026-07-12" }, "2026-07-13").ok,
+    "document expired the day before the event fails",
+  );
+  ok(
+    checkManualIdMathAtSync({ ...manualMath, expirationDate: "2026-07-13" }, "2026-07-13").ok,
+    "document valid THROUGH its expiry date",
+  );
+  {
+    // Graded against the EVENT date, not sync arrival: expiry after the event
+    // but (hypothetically) before sync must still pass.
+    const r = checkManualIdMathAtSync({ dateOfBirth: "1990-01-01", expirationDate: "2026-07-14" }, "2026-07-13");
+    ok(r.ok, "expiry between event and sync still passes (event-date grading)");
+  }
+  ok(!checkManualIdMathAtSync(manualMath, "13/07/2026").ok, "bad event date refused");
+  {
+    // Exactly 21 on the event date passes; the day before fails.
+    ok(checkManualIdMathAtSync({ ...manualMath, dateOfBirth: "2005-07-13" }, "2026-07-13").ok, "21st birthday passes");
+    ok(!checkManualIdMathAtSync({ ...manualMath, dateOfBirth: "2005-07-14" }, "2026-07-13").ok, "day before 21st fails");
+  }
+
+  // AN-3(c): drawer-session validation
+  const SES = { id: U("5"), register_id: REG, opened_at: "2026-07-13T15:00:00.000Z", closed_at: null };
+  ok(checkDrawerSessionForSale(SES, REG, "2026-07-13T18:00:00.000Z").ok, "sale inside open session ok");
+  ok(!checkDrawerSessionForSale(null, REG, "2026-07-13T18:00:00.000Z").ok, "unknown session refused");
+  {
+    const r = checkDrawerSessionForSale({ ...SES, register_id: U("9") }, REG, "2026-07-13T18:00:00.000Z");
+    ok(!r.ok && r.reason.includes("DIFFERENT register"), "foreign register session refused");
+  }
+  {
+    const r = checkDrawerSessionForSale(SES, REG, "2026-07-13T14:00:00.000Z");
+    ok(!r.ok && r.reason.includes("BEFORE"), "sale before session open refused");
+  }
+  {
+    const closed = { ...SES, closed_at: "2026-07-13T23:00:00.000Z" };
+    ok(checkDrawerSessionForSale(closed, REG, "2026-07-13T18:00:00.000Z").ok, "sale inside closed session's interval ok (late flush)");
+    const r = checkDrawerSessionForSale(closed, REG, "2026-07-13T23:30:00.000Z");
+    ok(!r.ok && r.reason.includes("AFTER"), "sale after session close refused");
+  }
+
+  // AN-3(d): clock drift — only FUTURE timestamps are drift; lateness never is.
+  const NOW = Date.parse("2026-07-13T18:00:00.000Z");
+  ok(!checkClockDrift("2026-07-13T18:00:00.000Z", NOW).drifted, "same instant not drifted");
+  ok(!checkClockDrift("2026-07-10T18:00:00.000Z", NOW).drifted, "days-late offline flush not drifted");
+  ok(!checkClockDrift("2026-07-13T18:04:00.000Z", NOW).drifted, "4 minutes ahead within tolerance");
+  {
+    const r = checkClockDrift("2026-07-13T18:06:00.000Z", NOW);
+    ok(r.drifted && r.reason.includes("FUTURE"), "6 minutes ahead flagged");
+  }
+  ok(checkClockDrift("garbage", NOW).drifted, "unparseable timestamp flagged");
 
   console.log(`pos/sync-core: ${pass} passed, ${fail} failed`);
   if (fail > 0) throw new Error(`${fail} pos/sync-core tests failed`);

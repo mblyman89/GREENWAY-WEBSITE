@@ -9,7 +9,10 @@
  */
 import { describe, it, expect } from "vitest";
 import {
+  checkClockDrift,
+  checkDrawerSessionForSale,
   checkEnvelopeForDevice,
+  checkManualIdMathAtSync,
   resolvePunchIntent,
   validateManualIdEventPayload,
   ackMeansDurablyAccepted,
@@ -103,6 +106,58 @@ describe("ACK semantics — when may the device clear a queue row?", () => {
   });
   it("rejected is NOT durable — the device keeps and surfaces it", () => {
     expect(ackMeansDurablyAccepted("rejected")).toBe(false);
+  });
+});
+
+describe("AN-3(b): manual-ID math re-run at sync (event-date grading)", () => {
+  const good = { dateOfBirth: "1990-07-13", expirationDate: "2030-01-01" };
+  it("passes a 21+ unexpired verification on its own date", () => {
+    expect(checkManualIdMathAtSync(good, "2026-07-13").ok).toBe(true);
+  });
+  it("refuses an underage DOB the shape check could not catch", () => {
+    expect(checkManualIdMathAtSync({ ...good, dateOfBirth: "2010-01-01" }, "2026-07-13").ok).toBe(false);
+  });
+  it("21st birthday passes; the day before fails", () => {
+    expect(checkManualIdMathAtSync({ ...good, dateOfBirth: "2005-07-13" }, "2026-07-13").ok).toBe(true);
+    expect(checkManualIdMathAtSync({ ...good, dateOfBirth: "2005-07-14" }, "2026-07-13").ok).toBe(false);
+  });
+  it("grades expiry against the EVENT date, not sync arrival", () => {
+    // Valid through expiry day; expired the day after.
+    expect(checkManualIdMathAtSync({ ...good, expirationDate: "2026-07-13" }, "2026-07-13").ok).toBe(true);
+    expect(checkManualIdMathAtSync({ ...good, expirationDate: "2026-07-12" }, "2026-07-13").ok).toBe(false);
+    // A doc that expires between event and sync must still pass.
+    expect(checkManualIdMathAtSync({ ...good, expirationDate: "2026-07-14" }, "2026-07-13").ok).toBe(true);
+  });
+});
+
+describe("AN-3(c): drawer-session validation for synced sales", () => {
+  const SES = { id: "55555555-5555-4555-8555-555555555555", register_id: REG, opened_at: "2026-07-13T15:00:00.000Z", closed_at: null };
+  it("accepts a sale inside its open session on the right register", () => {
+    expect(checkDrawerSessionForSale(SES, REG, "2026-07-13T18:00:00.000Z").ok).toBe(true);
+  });
+  it("refuses an unknown session and a foreign register's session", () => {
+    expect(checkDrawerSessionForSale(null, REG, "2026-07-13T18:00:00.000Z").ok).toBe(false);
+    expect(checkDrawerSessionForSale({ ...SES, register_id: OTHER }, REG, "2026-07-13T18:00:00.000Z").ok).toBe(false);
+  });
+  it("refuses sales outside the session's open interval, but allows late flushes", () => {
+    expect(checkDrawerSessionForSale(SES, REG, "2026-07-13T14:00:00.000Z").ok).toBe(false); // before open
+    const closed = { ...SES, closed_at: "2026-07-13T23:00:00.000Z" };
+    expect(checkDrawerSessionForSale(closed, REG, "2026-07-13T18:00:00.000Z").ok).toBe(true); // late flush of an in-window sale
+    expect(checkDrawerSessionForSale(closed, REG, "2026-07-13T23:30:00.000Z").ok).toBe(false); // after close
+  });
+});
+
+describe("AN-3(d): device clock drift — future-only, lateness never flags", () => {
+  const NOW = Date.parse("2026-07-13T18:00:00.000Z");
+  it("late offline flushes are never drift", () => {
+    expect(checkClockDrift("2026-07-10T18:00:00.000Z", NOW).drifted).toBe(false);
+  });
+  it("small forward skew is tolerated; beyond tolerance flags", () => {
+    expect(checkClockDrift("2026-07-13T18:04:00.000Z", NOW).drifted).toBe(false);
+    expect(checkClockDrift("2026-07-13T18:06:00.000Z", NOW).drifted).toBe(true);
+  });
+  it("unparseable timestamps flag", () => {
+    expect(checkClockDrift("garbage", NOW).drifted).toBe(true);
   });
 });
 
