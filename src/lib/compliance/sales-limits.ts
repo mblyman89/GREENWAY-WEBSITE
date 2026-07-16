@@ -9,6 +9,9 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import {
+  MEDICAL_LIMITS,
+  RECREATIONAL_LIMITS,
+  clampLimitProfile,
   evaluateCart,
   type LimitCartLine,
   type LimitEvaluation,
@@ -83,18 +86,27 @@ export async function getSalesLimitSettings(): Promise<SalesLimitSettings> {
   return {
     enforce: row.enforce,
     hardBlock: row.hard_block,
-    rec: {
-      usable: Number(row.rec_usable_grams),
-      solid_edible: Number(row.rec_solid_grams),
-      concentrate: Number(row.rec_concentrate_grams),
-      liquid_edible: Number(row.rec_liquid_grams),
-    },
-    med: {
-      usable: Number(row.med_usable_grams),
-      solid_edible: Number(row.med_solid_grams),
-      concentrate: Number(row.med_concentrate_grams),
-      liquid_edible: Number(row.med_liquid_grams),
-    },
+    // AN-2: clamp INTO the statute on READ too (mirrors sales-hours-store
+    // normalizing on read) — a pre-clamp row or manual DB edit can tighten
+    // limits but never widen them past WAC 314-55-095 maximums.
+    rec: clampLimitProfile(
+      {
+        usable: Number(row.rec_usable_grams),
+        solid_edible: Number(row.rec_solid_grams),
+        concentrate: Number(row.rec_concentrate_grams),
+        liquid_edible: Number(row.rec_liquid_grams),
+      },
+      RECREATIONAL_LIMITS,
+    ),
+    med: clampLimitProfile(
+      {
+        usable: Number(row.med_usable_grams),
+        solid_edible: Number(row.med_solid_grams),
+        concentrate: Number(row.med_concentrate_grams),
+        liquid_edible: Number(row.med_liquid_grams),
+      },
+      MEDICAL_LIMITS,
+    ),
     unitGrams: numericMap(row.unit_grams_json),
     notes: row.notes,
     updatedAt: row.updated_at,
@@ -118,19 +130,25 @@ export async function updateSalesLimitSettings(
     return { ok: false, error: "Supabase service role not configured." };
   }
   const admin = createSupabaseAdminClient();
+  // AN-2: statutory clamp on WRITE (mirrors updateSalesHoursAction running
+  // normalizeSalesHoursWindow before persisting). The owner may tighten any
+  // bucket below the WAC 314-55-095 maximum; anything above it, and any
+  // nonsense value, collapses to the statutory maximum.
+  const rec = clampLimitProfile(input.rec, RECREATIONAL_LIMITS);
+  const med = clampLimitProfile(input.med, MEDICAL_LIMITS);
   const { error } = await admin
     .from("sales_limit_settings")
     .update({
       enforce: input.enforce,
       hard_block: input.hardBlock,
-      rec_usable_grams: input.rec.usable,
-      rec_solid_grams: input.rec.solid_edible,
-      rec_concentrate_grams: input.rec.concentrate,
-      rec_liquid_grams: input.rec.liquid_edible,
-      med_usable_grams: input.med.usable,
-      med_solid_grams: input.med.solid_edible,
-      med_concentrate_grams: input.med.concentrate,
-      med_liquid_grams: input.med.liquid_edible,
+      rec_usable_grams: rec.usable,
+      rec_solid_grams: rec.solid_edible,
+      rec_concentrate_grams: rec.concentrate,
+      rec_liquid_grams: rec.liquid_edible,
+      med_usable_grams: med.usable,
+      med_solid_grams: med.solid_edible,
+      med_concentrate_grams: med.concentrate,
+      med_liquid_grams: med.liquid_edible,
       unit_grams_json: input.unitGrams,
       notes: input.notes,
       updated_by: actorId,

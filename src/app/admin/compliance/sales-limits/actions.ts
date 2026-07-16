@@ -6,6 +6,9 @@ import { requirePermission } from "@/lib/auth/session";
 import { isOwnerRole } from "@/lib/auth/roles";
 import { recordAudit } from "@/lib/auth/audit";
 import {
+  MEDICAL_LIMITS,
+  RECREATIONAL_LIMITS,
+  clampLimitProfile,
   updateSalesLimitSettings,
   type SalesLimitSettingsInput,
 } from "@/lib/compliance/sales-limits";
@@ -40,18 +43,27 @@ export async function updateSalesLimitSettingsAction(formData: FormData) {
   const input: SalesLimitSettingsInput = {
     enforce: formData.get("enforce") === "on",
     hardBlock: formData.get("hard_block") === "on",
-    rec: {
-      usable: num(formData, "rec_usable", 28),
-      solid_edible: num(formData, "rec_solid", 448),
-      concentrate: num(formData, "rec_concentrate", 7),
-      liquid_edible: num(formData, "rec_liquid", 2016),
-    },
-    med: {
-      usable: num(formData, "med_usable", 84),
-      solid_edible: num(formData, "med_solid", 1344),
-      concentrate: num(formData, "med_concentrate", 21),
-      liquid_edible: num(formData, "med_liquid", 6048),
-    },
+    // AN-2: clamp INTO the statute before persisting AND before the audit
+    // record — the owner may tighten below WAC 314-55-095 maximums but can
+    // never widen past them (same discipline as normalizeSalesHoursWindow).
+    rec: clampLimitProfile(
+      {
+        usable: num(formData, "rec_usable", 28),
+        solid_edible: num(formData, "rec_solid", 448),
+        concentrate: num(formData, "rec_concentrate", 7),
+        liquid_edible: num(formData, "rec_liquid", 2016),
+      },
+      RECREATIONAL_LIMITS,
+    ),
+    med: clampLimitProfile(
+      {
+        usable: num(formData, "med_usable", 84),
+        solid_edible: num(formData, "med_solid", 1344),
+        concentrate: num(formData, "med_concentrate", 21),
+        liquid_edible: num(formData, "med_liquid", 6048),
+      },
+      MEDICAL_LIMITS,
+    ),
     unitGrams,
     notes: ((formData.get("notes") as string | null) ?? "").trim() || null,
   };
