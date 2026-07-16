@@ -15,6 +15,7 @@ type IntakeSummary = {
   manifest_id?: string;
   carried?: number;
   added?: number;
+  merged?: number;
   diagnostics?: { severity: "info" | "warning" | "error"; code: string; message: string }[];
 };
 
@@ -66,7 +67,7 @@ export default async function IntakeVersionReviewPage({
     <div>
       <AdminPageHeader
         title="Menu draft from receiving"
-        subtitle={`Auto-carried ${formatDateTime(version.created_at)} \u00b7 ${summary.added ?? 0} new product(s) on top of ${summary.carried ?? 0} live item(s)`}
+        subtitle={`Auto-carried ${formatDateTime(version.created_at)} \u00b7 ${summary.added ?? 0} new card(s)${(summary.merged ?? 0) > 0 ? ` + ${summary.merged} restock option(s)` : ""} on top of ${summary.carried ?? 0} live item(s)`}
         action={
           <Link
             href="/admin/menu-imports"
@@ -97,8 +98,9 @@ export default async function IntakeVersionReviewPage({
         </div>
 
         {/* Summary cards */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <StatCard label="New from receiving" value={summary.added ?? 0} accent="green" />
+          <StatCard label="Restocks merged into cards" value={summary.merged ?? 0} accent="green" />
           <StatCard label="Carried from live menu" value={summary.carried ?? 0} accent="muted" />
           <StatCard label="Total items" value={version.item_count} accent="muted" />
           <StatCard

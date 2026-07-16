@@ -172,7 +172,11 @@ export default async function MenuImportsPage({
           ) : (
             <div className="mt-4 divide-y divide-white/10 overflow-hidden rounded-lg border border-white/10">
               {intakeStaged.map((v) => {
-                const s = (v.summary_json ?? {}) as { added?: number; carried?: number };
+                const s = (v.summary_json ?? {}) as {
+                  added?: number;
+                  carried?: number;
+                  merged?: number;
+                };
                 return (
                   <div
                     key={v.id}
@@ -181,7 +185,9 @@ export default async function MenuImportsPage({
                     <div>
                       <p className="text-sm font-medium text-white">{formatDateTime(v.created_at)}</p>
                       <p className="text-xs text-white/40">
-                        {s.added ?? 0} new from receiving &middot; {s.carried ?? 0} carried from live menu
+                        {s.added ?? 0} new from receiving
+                        {(s.merged ?? 0) > 0 ? <> &middot; {s.merged} restock option(s) merged</> : null} &middot;{" "}
+                        {s.carried ?? 0} carried from live menu
                       </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 text-xs text-white/60">

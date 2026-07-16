@@ -53,6 +53,8 @@ export type IntakeStagingOutcome = {
   versionId: string | null;
   carried: number;
   added: number;
+  /** Restock variants merged into existing live cards (product mastering). */
+  merged: number;
   /** Why nothing was staged (for the timeline note). */
   reason?: string;
 };
@@ -75,6 +77,7 @@ export async function stageIntakeMenuVersionForManifest(
     versionId: null,
     carried: 0,
     added: 0,
+    merged: 0,
     reason,
   });
 
@@ -226,9 +229,10 @@ export async function stageIntakeMenuVersionForManifest(
           manifest_id: manifestId,
           carried: plan.carriedCount,
           added: plan.addedCount,
+          merged: plan.mergedCount,
           diagnostics: plan.diagnostics,
         },
-        notes: `Auto-carried from accepted manifest ${manifestId}: ${plan.addedCount} new product(s) staged on top of ${plan.carriedCount} live item(s).`,
+        notes: `Auto-carried from accepted manifest ${manifestId}: ${plan.addedCount} new product card(s) and ${plan.mergedCount} restock option(s) staged on top of ${plan.carriedCount} live item(s).`,
         created_by: actorId,
       })
       .select("*")
@@ -255,6 +259,7 @@ export async function stageIntakeMenuVersionForManifest(
       versionId: version.id,
       carried: plan.carriedCount,
       added: plan.addedCount,
+      merged: plan.mergedCount,
     };
   } catch (err) {
     console.error("[intake-menu-staging] staging failed:", err);
