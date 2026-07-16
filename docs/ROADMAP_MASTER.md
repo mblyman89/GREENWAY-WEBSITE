@@ -68,15 +68,35 @@
   ambiguous reported as null), fire-and-forget wiring after the gate passes —
   cart opens instantly, member band appears when the server answers; an AM-D
   order-loaded member is never overridden. Suite 1,635/124.*
-- [ ] **AO-4 — Sale screen rebuild.** Customer band (name + ID✓age + tier/points badges +
+- [x] **AO-4 — Sale screen rebuild.** Customer band (name + ID✓age + tier/points badges +
   History/Hold/Cancel), "THE USUAL" one-tap re-add chips from member history (B29 data),
   live scan/search bar + category chips, cart as a clean table (qty steppers, remove,
   "just scanned" flash), Cart Summary rail (legal-limit meter wired to the real B22 meter,
   itemized lines, loyalty box with earn preview + redeem, subtotal/discount/tax/TOTAL,
   green "Tender Cash" + quick-tender denomination buttons that compute change instantly).
-- [ ] **AO-5 — Remaining surfaces restyle.** Tender/change + receipt screens, pickup
+  *Shipped (PR #529): new CustomerBand (member/walk-in identity, ID✓ + MEDICAL + tier
+  badges, detach, History/Hold/Cancel chips, embedded lookup for walk-ins); THE USUAL
+  chips render only when a B29 favorite matches exactly ONE in-stock variant and route
+  through the same manualAdd guard (scan-required still gates cannabis); cart rebuilt as
+  a table with qty steppers, JUST SCANNED tag on the latest scan (all 4 scan paths), and
+  an expandable row for the B24 override/undo controls; "Cart Summary" rail with boxed
+  LEGAL LIMIT meter (real B22 math), itemized lines, loyalty box (balance/cash value/earn
+  preview), reordered totals, and quick-tender chips that derive from the SAME B31
+  smartTenderSuggestions + B33 roundCashDue as the tender screen — a chip preseeds the
+  tendered amount via a new initialTenderedMinor prop so amounts can never disagree.
+  Re-skin/re-flow only; suite 1,635/124 green.*
+- [x] **AO-5 — Remaining surfaces restyle.** Tender/change + receipt screens, pickup
   fulfillment, drawer (open/drop/close), returns/void flows, day report, leaderboard —
   all restyled to the approved light theme so no screen drops back to the old dark UI.
+  *Shipped (PR #530): full audit found the token system already carried every listed
+  surface; the three real remnants were fixed — (1) the B36 category chip/dot palette's
+  last five entries were dark-only Tailwind -300/-400 shades, now on new `--pos-cat-*`
+  tokens re-tinted per theme (deep -700/-600 on light; array still exactly
+  CATEGORY_COLOR_COUNT); (2) the PWA metadata still declared the dark canvas —
+  viewport themeColor → #f4f6f9 (light --pos-canvas), status bar "black-translucent" →
+  "default", manifest background/theme colors matched; (3) sweep verified zero remaining
+  Tailwind palette colors or hex literals in src/app/pos/ (text-white only on solid
+  semantic fills or the always-dark modal scrim). Task AO complete. Suite 1,635/124.*
 
 ## Phase 0 — Task AN: POS compliance hardening (HIGHEST PRIORITY)
 
