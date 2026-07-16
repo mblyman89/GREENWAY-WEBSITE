@@ -119,11 +119,14 @@ const CATEGORY_TILE_STYLES: { chip: string; dot: string }[] = [
   { chip: "border-[var(--pos-ok-border)] text-[var(--pos-ok)]", dot: "bg-[var(--pos-ok)]" },
   { chip: "border-[var(--pos-info-border)] text-[var(--pos-info)]", dot: "bg-[var(--pos-info)]" },
   { chip: "border-[var(--pos-warn-border)] text-[var(--pos-warn)]", dot: "bg-[var(--pos-warn-dot)]" },
-  { chip: "border-fuchsia-500/50 text-fuchsia-300", dot: "bg-fuchsia-400" },
-  { chip: "border-rose-500/50 text-rose-300", dot: "bg-rose-400" },
-  { chip: "border-teal-500/50 text-teal-300", dot: "bg-teal-400" },
-  { chip: "border-indigo-500/50 text-indigo-300", dot: "bg-indigo-400" },
-  { chip: "border-orange-500/50 text-orange-300", dot: "bg-orange-400" },
+  // AO-5 — the last five entries were hard-coded Tailwind -300/-400 shades
+  // (dark-canvas only, illegible on the light default). Now tokens: the
+  // html[data-pos-theme] blocks in globals.css re-tint each per theme.
+  { chip: "border-[var(--pos-cat-fuchsia-border)] text-[var(--pos-cat-fuchsia)]", dot: "bg-[var(--pos-cat-fuchsia-dot)]" },
+  { chip: "border-[var(--pos-cat-rose-border)] text-[var(--pos-cat-rose)]", dot: "bg-[var(--pos-cat-rose-dot)]" },
+  { chip: "border-[var(--pos-cat-teal-border)] text-[var(--pos-cat-teal)]", dot: "bg-[var(--pos-cat-teal-dot)]" },
+  { chip: "border-[var(--pos-cat-indigo-border)] text-[var(--pos-cat-indigo)]", dot: "bg-[var(--pos-cat-indigo-dot)]" },
+  { chip: "border-[var(--pos-cat-orange-border)] text-[var(--pos-cat-orange)]", dot: "bg-[var(--pos-cat-orange-dot)]" },
 ];
 if (CATEGORY_TILE_STYLES.length !== CATEGORY_COLOR_COUNT) {
   throw new Error("CATEGORY_TILE_STYLES must match CATEGORY_COLOR_COUNT (sale-grid-core)");
