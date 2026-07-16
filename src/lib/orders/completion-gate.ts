@@ -55,6 +55,15 @@ export type CompletionGateOptions = {
   /** Caller-verified result of the sales_limit.override permission check. */
   overridePermitted: boolean;
   overrideReason: string | null;
+  /**
+   * AN-3(a) — the instant the SALE OCCURRED, for the sales-hours gate.
+   * Defaults to now (back-office and pickup complete in real time). POS sync
+   * passes the event's occurredAt: an offline sale rung at 11 PM that
+   * flushes at 2 AM was LEGAL and must not be refused for arriving late —
+   * and a sale actually rung at 2 AM must be refused even if it syncs at
+   * noon. The statute governs when the SALE happened, not when it synced.
+   */
+  hoursAt?: Date | string;
 };
 
 /**
@@ -72,7 +81,7 @@ export async function runCompletionGate(opts: CompletionGateOptions): Promise<st
   // This is a HARD block — the statute has no override; a tighter owner
   // window is widened in Settings, never bypassed at the register.
   const hoursWindow = await getSalesHoursWindow();
-  const hoursVerdict = evaluateSalesHours(new Date(), hoursWindow);
+  const hoursVerdict = evaluateSalesHours(opts.hoursAt ?? new Date(), hoursWindow);
   if (!hoursVerdict.allowed) {
     return `Sale blocked outside sales hours. ${hoursVerdict.reason}`;
   }

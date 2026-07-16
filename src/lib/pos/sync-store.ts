@@ -43,9 +43,13 @@ import {
   type PosNoSalePayload,
 } from "./sale-event-core";
 import {
+  checkClockDrift,
+  checkDrawerSessionForSale,
   checkEnvelopeForDevice,
+  checkManualIdMathAtSync,
   resolvePunchIntent,
   validateManualIdEventPayload,
+  type DrawerSessionForSale,
   type PosSyncAck,
   type ManualIdEventPayload,
 } from "./sync-core";
@@ -235,7 +239,17 @@ async function ingestOne(
     return { clientUuid: envelope.clientUuid, status: "rejected", reason: "Ledger insert returned no row." };
   }
 
-  // ── 2. Process by type ──
+  // ── 2. AN-3(d): device clock drift ──
+  // A FUTURE occurredAt (beyond tolerance) poisons the sales-hours gate and
+  // the business-day ledger, so the event is preserved as an EXCEPTION for
+  // manager review instead of being processed as if the clock were right.
+  // Lateness is never drift — offline queues legitimately flush days later.
+  const drift = checkClockDrift(envelope.occurredAt, Date.now());
+  if (drift.drifted) {
+    return await markException(admin, inserted.id, envelope.clientUuid, drift.reason);
+  }
+
+  // ── 3. Process by type ──
   try {
     switch (envelope.eventType) {
       case "sale":
@@ -303,21 +317,58 @@ async function processSale(
   }
   const sale = payload as PosSalePayload;
 
+  // AN-3(c) — the drawer session must be REAL: it must exist, belong to the
+  // register this device is bound to, and its open interval must contain the
+  // sale's occurredAt (a late offline flush is fine; a sale claiming to
+  // predate the open or postdate the close is not). Today only the UUID
+  // shape was checked — a fabricated or foreign session id would have joined
+  // the day's cash story unchallenged.
+  {
+    const { data: sessionRow, error: sessionError } = await admin
+      .from("drawer_sessions")
+      .select("id, register_id, opened_at, closed_at")
+      .eq("id", sale.drawerSessionId)
+      .maybeSingle<DrawerSessionForSale>();
+    if (sessionError) {
+      return markException(
+        admin,
+        ledgerId,
+        envelope.clientUuid,
+        `Drawer session lookup failed: ${sessionError.message}.`,
+      );
+    }
+    const sessionCheck = checkDrawerSessionForSale(sessionRow, envelope.registerId, envelope.occurredAt);
+    if (!sessionCheck.ok) {
+      return markException(admin, ledgerId, envelope.clientUuid, sessionCheck.reason);
+    }
+  }
+
   // Manual ID verifies must reference an ALREADY-SYNCED audit event from the
   // same device (the queue is flushed in order, so it precedes the sale).
   if (sale.idVerification.method === "manual") {
     const { data: audit } = await admin
       .from("pos_sale_events")
-      .select("id")
+      .select("id, status")
       .eq("client_uuid", sale.idVerification.manualEventUuid!)
       .eq("event_type", "manual_id_verification")
-      .maybeSingle<{ id: string }>();
+      .maybeSingle<{ id: string; status: string }>();
     if (!audit) {
       return markException(
         admin,
         ledgerId,
         envelope.clientUuid,
         "Sale references a manual ID verification event that has not been synced — flush order violated or the audit event was rejected.",
+      );
+    }
+    // AN-3(b): the verification must have PASSED ingest. An excepted
+    // verification (age/expiry math failed at sync) grants nothing — the
+    // sale that leaned on it needs the same manager review.
+    if (audit.status !== "processed") {
+      return markException(
+        admin,
+        ledgerId,
+        envelope.clientUuid,
+        "Sale references a manual ID verification event that FAILED server-side re-checks (see its exception). The sale cannot rely on it.",
       );
     }
   }
@@ -666,6 +717,12 @@ async function processSale(
     actorId: null,
     overridePermitted: false,
     overrideReason: null,
+    // AN-3(a): grade the sales-hours gate on when the sale OCCURRED, not
+    // when the queue flushed — a legal 11 PM sale syncing at 2 AM must pass;
+    // an illegal 2 AM sale syncing at noon must be refused. The clock-drift
+    // check upstream already excepted any future-stamped envelope, so this
+    // instant cannot be gamed forward.
+    hoursAt: envelope.occurredAt,
   });
   if (refusal) {
     await recordAudit({
@@ -793,6 +850,19 @@ async function processManualId(
       envelope.clientUuid,
       `Invalid manual ID verification payload: ${check.errors.join(" ")}`,
     );
+  }
+  // AN-3(b) — re-run the AGE and EXPIRY math server-side, against the
+  // EVENT's own date (the verification happened then, possibly offline days
+  // ago). validateManualIdEventPayload proved the shape; this proves the
+  // substance — a tampered device or corrupted queue row cannot smuggle an
+  // underage or expired-document verification into the audit trail. Sales
+  // referencing an excepted verification are themselves refused below.
+  const math = checkManualIdMathAtSync(
+    payload as Pick<ManualIdEventPayload, "dateOfBirth" | "expirationDate">,
+    envelope.occurredAt.slice(0, 10),
+  );
+  if (!math.ok) {
+    return markException(admin, ledgerId, envelope.clientUuid, math.errors.join(" "));
   }
   await recordAudit({
     actorId: null,
