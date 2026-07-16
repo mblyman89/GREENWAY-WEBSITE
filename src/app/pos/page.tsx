@@ -9,6 +9,7 @@
  * queue (append-only, idempotent client UUIDs — see register-client-core).
  */
 import type { Metadata, Viewport } from "next";
+import { resolveBuildVersion } from "@/lib/pos/sw-core";
 import { RegisterShell } from "./RegisterShell";
 
 export const metadata: Metadata = {
@@ -46,5 +47,8 @@ export const viewport: Viewport = {
 export const dynamic = "force-dynamic";
 
 export default function PosPage() {
-  return <RegisterShell />;
+  // AN-0 — the deploy's short commit SHA ("dev" locally), shown in the status
+  // footer so a stale installed app is visible at a glance. Same resolver the
+  // service-worker route uses, so footer version and worker version agree.
+  return <RegisterShell buildVersion={resolveBuildVersion(process.env)} />;
 }
