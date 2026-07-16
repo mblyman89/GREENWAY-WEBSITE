@@ -359,3 +359,14 @@ they are optional data loads, not schema, and each is idempotent (safe to run an
 ## Shipped notes
 
 *(Append one line per merged slice: slice id — PR # — one-sentence summary.)*
+
+- **Intake auto-publish (owner request, Option 1) — PR #550** — approving a priced
+  onboarding draft now publishes the menu automatically (same gated
+  `publish_menu_version` RPC as Menu Imports; atomic swap; timeline + audit events;
+  staged-version fallback on Menu Imports if the auto-publish ever hiccups, with stale
+  intake-origin staged siblings archived after each successful publish); the intake
+  ribbon gained step ④ "On menu" (pure core `menu-live-step-core`, 24 self-tests +
+  vitest mirror) that deep-links to Product Onboarding while drafts are unpriced or to
+  Menu Imports when a staged version is stuck — the owner never has to visit Menu
+  Imports on the normal receiving path. Copy truthed-up on drafts page / next-action
+  guidance / Menu Imports intake section. No migration. Suite 1,703/131.
