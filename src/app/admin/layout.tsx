@@ -11,6 +11,8 @@ import { ConciergeWidget } from "@/components/admin/ConciergeWidget";
 import { MobileLauncher } from "@/components/admin/mobile/MobileLauncher";
 import { adminNav } from "@/components/admin/admin-nav-data";
 import { can, type Permission } from "@/lib/auth/roles";
+import { posExceptionSnapshot } from "@/lib/pos/sync-store";
+import { formatBadgeCount } from "@/lib/pos/exception-reminder-core";
 
 // Admin must never be indexed.
 export const metadata: Metadata = {
@@ -51,6 +53,16 @@ export default async function AdminLayout({
       group: item.group,
     }));
 
+  // AN-6: unresolved POS-exception count → nav badge on "Register Activity"
+  // (and its Employee group tab). Only fetched for roles that can even open
+  // the page; best-effort inside posExceptionSnapshot (failure → 0 → no chip).
+  const badges: Record<string, string> = {};
+  if (can(session.profile.role, "orders.manage" as Permission)) {
+    const snap = await posExceptionSnapshot();
+    const label = formatBadgeCount(snap.count);
+    if (label) badges["/admin/registers"] = label;
+  }
+
   return (
     <div className="admin-shell flex min-h-screen flex-col">
       <div className="admin-chrome">
@@ -58,6 +70,7 @@ export default async function AdminLayout({
           role={session.profile.role}
           fullName={session.profile.full_name ?? ""}
           email={session.email}
+          badges={badges}
         />
       </div>
       <main className="admin-main min-w-0 flex-1">

@@ -33,7 +33,39 @@ type Props = {
   role: StaffRole;
   fullName: string;
   email: string;
+  /**
+   * AN-6: badge labels keyed by nav-item href (e.g. { "/admin/registers":
+   * "3" } for pending POS exceptions). Fetched server-side by the admin
+   * layout; absent/empty means no badges render. Data-driven so future
+   * counts (approvals, recalls…) reuse the same plumbing.
+   */
+  badges?: Record<string, string>;
 };
+
+/** Small attention chip rendered next to a nav label / group tab. */
+function BadgeChip({ label }: { label: string }) {
+  return (
+    <span
+      aria-label={`${label} pending`}
+      className="ml-1 inline-flex min-w-[1.1rem] items-center justify-center rounded-full bg-[var(--admin-orange)] px-1.5 py-0.5 text-[9px] font-bold leading-none text-white"
+    >
+      {label}
+    </span>
+  );
+}
+
+/** First badge found among a group's items (drives the group-tab chip). */
+function groupBadge(
+  items: { href: string }[],
+  badges: Record<string, string> | undefined,
+): string | null {
+  if (!badges) return null;
+  for (const it of items) {
+    const b = badges[it.href];
+    if (b) return b;
+  }
+  return null;
+}
 
 /**
  * Groups that render as a single direct-link TAB instead of a dropdown.
@@ -65,7 +97,7 @@ function Wordmark() {
   );
 }
 
-export function AdminTopNav({ role, fullName, email }: Props) {
+export function AdminTopNav({ role, fullName, email, badges }: Props) {
   const pathname = usePathname();
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -175,6 +207,10 @@ export function AdminTopNav({ role, fullName, email }: Props) {
                   }`}
                 >
                   {g.group}
+                  {(() => {
+                    const b = groupBadge(g.items, badges);
+                    return b ? <BadgeChip label={b} /> : null;
+                  })()}
                   <span
                     className={`text-[9px] opacity-70 transition-transform ${isOpen ? "rotate-180" : ""}`}
                     aria-hidden="true"
@@ -209,6 +245,7 @@ export function AdminTopNav({ role, fullName, email }: Props) {
                         >
                           <span className="w-4 text-center text-xs opacity-80"><NavGlyph item={item} /></span>
                           <span className="flex-1">{item.label}</span>
+                          {badges?.[item.href] && <BadgeChip label={badges[item.href]} />}
                           {item.comingSoon && (
                             <span className="rounded bg-white/10 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-[var(--admin-text-faint)]">
                               Soon
@@ -326,6 +363,7 @@ export function AdminTopNav({ role, fullName, email }: Props) {
                         >
                           <span className="w-4 text-center text-xs opacity-80"><NavGlyph item={item} /></span>
                           <span className="flex-1">{item.label}</span>
+                          {badges?.[item.href] && <BadgeChip label={badges[item.href]} />}
                           {item.comingSoon && (
                             <span className="rounded bg-white/10 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-[var(--admin-text-faint)]">
                               Soon
