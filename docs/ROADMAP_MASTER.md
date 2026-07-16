@@ -194,10 +194,24 @@ only quantitative compliance gaps and go first.
   day). STORE-WIDE by design: neither refund record carries register attribution (void
   audits only name the device; customer_returns has no register column) — we say so on
   paper rather than guess a register. No migration. Suite 1,664/126.*
-- [ ] **AN-5 (F-3) — Price-drift exception at sync.** Sync trusts device-stored prices
+- [x] **AN-5 (F-3) — Price-drift exception at sync.** Sync trusts device-stored prices
   (correct for offline integrity) but never cross-checks against the current menu. Add a
   tolerance-based, override-aware comparison that raises a POS exception (never blocks the
   sale) when a synced sale's prices drift from the menu of record.
+  *Shipped PR #542. New pure `price-drift-core`: `buildMenuPriceIndex` +
+  `checkPriceDrift` + `summarizePriceDrift`. Override-aware BY CONSTRUCTION — compares
+  the line's `regularPriceMinor` (the device's PRE-discount menu snapshot; overrides,
+  promos, and loyalty only ever change `unitPriceMinor`) against the current published
+  variant price, so discounts can never false-positive. Detects price moves (signed
+  delta), delisted products, and missing variants; pre-B20 lines without a variantId
+  are SKIPPED (never guess a variant); default tolerance 0¢ (both sides are integer
+  cents from the same source), garbage tolerance collapses to 0. Implementation note:
+  shipped as a durable `register.price_drift` AUDIT ROW after the sale completes rather
+  than a queue exception — excepting the sale would strip its money from the X/Z report
+  (only PROCESSED sales are summed) for what is usually a benign reprice; the audit
+  trail still tells the manager exactly which register needs a menu refresh. Wrapped in
+  try/catch so a drift-check failure can never affect a completed sale. 16 self-tests +
+  7 vitest mirrors. No migration. Suite 1,671/127.*
 - [ ] **AN-6 (F-7) — POS exception reminders + nav badge.** Unresolved POS exceptions are
   invisible until someone opens the page. Ride the existing Task W reminders engine
   (`compliance-reminders.ts`, currently CCRS-deadlines-only) + add an admin-nav badge count.
