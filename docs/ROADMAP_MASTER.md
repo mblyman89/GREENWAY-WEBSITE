@@ -177,10 +177,23 @@ only quantitative compliance gaps and go first.
   >5 min in the FUTURE before any processing (lateness is never drift), which also
   makes (a) ungameable forward. All failures are EXCEPTIONS (ledger fact preserved,
   manager reviews) — never silent drops. No migration. Suite 1,661/126.*
-- [ ] **AN-4 (F-5) — Refunds in the drawer story.** Voids/returns pop the drawer and pay
+- [x] **AN-4 (F-5) — Refunds in the drawer story.** Voids/returns pop the drawer and pay
   cash out but are ABSENT from the X/Z day report and reconcile math
   (`expectedClose = opening + cashSales − drops` today). Add refund lines to X/Z and a
   refund total to the reconcile screen so blind counts stop showing false shortages.
+  *Shipped PR #540. day-report-core gains pure `summarizeRefunds` + `auditRefundMinor`
+  and an optional `DayReportSlipInput.refunds` (absent → no section, so older cached
+  register bundles keep printing); the slip gains a REFUNDS — STORE-WIDE CASH OUT
+  section (voids + counter returns, negative amounts, explicit caveat). New
+  `refunds-store.refundsForBusinessDay` is the ONE query (audit_logs
+  `register.sale_voided` after_json.refundMinor + customer_returns.refund_minor_units,
+  Pacific-day window) shared by the day-report route AND the back-office reconcile
+  cards, so both print the same number; best-effort (read failure → zeros, never blocks
+  the slip). Reconcile cards show "refunded store-wide this day — enter cash sales NET
+  of refunds" (`AttentionItem.dayRefundTotalMinor`, one query per distinct business
+  day). STORE-WIDE by design: neither refund record carries register attribution (void
+  audits only name the device; customer_returns has no register column) — we say so on
+  paper rather than guess a register. No migration. Suite 1,664/126.*
 - [ ] **AN-5 (F-3) — Price-drift exception at sync.** Sync trusts device-stored prices
   (correct for offline integrity) but never cross-checks against the current menu. Add a
   tolerance-based, override-aware comparison that raises a POS exception (never blocks the
