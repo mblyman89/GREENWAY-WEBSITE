@@ -28,7 +28,9 @@ import "server-only";
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
-import { pacificToday } from "@/lib/reports/timezone";
+import { pacificToday, pacificDayKey } from "@/lib/reports/timezone";
+import { planPosExceptionReminder } from "@/lib/pos/exception-reminder-core";
+import { posExceptionSnapshot } from "@/lib/pos/sync-store";
 import { planWeeklyReminders } from "@/lib/compliance/ccrs-week-core";
 import { getWeekResolutions } from "@/lib/compliance/ccrs-week-store";
 import { planMonthlyReminders } from "@/lib/compliance/ccrs-deadline-core";
@@ -38,7 +40,7 @@ import { sendPushToAll, isPushConfigured } from "@/lib/notifications/push";
 const RESEND_ENDPOINT = "https://api.resend.com/emails";
 const COMMAND_CENTER_PATH = "/admin/compliance/ccrs";
 
-/** One reminder normalized across the weekly + monthly planners. */
+/** One reminder normalized across the weekly + monthly + POS planners. */
 type Reminder = {
   dedupeKey: string;
   stage: string;
@@ -46,6 +48,12 @@ type Reminder = {
   subject: string;
   body: string;
   urgency: "info" | "warning" | "critical";
+  /** AN-6: optional deep-link override (defaults to the CCRS Command Center). */
+  linkPath?: string;
+  /** AN-6: optional button label override. */
+  linkLabel?: string;
+  /** AN-6: optional footer override (defaults to the CCRS upload-portal note). */
+  footnote?: string;
 };
 
 export type ReminderRunResult = {
@@ -82,21 +90,24 @@ function urgencyColor(u: Reminder["urgency"]): string {
   return "#12351f";
 }
 
-function reminderHtml(r: Reminder, commandCenterUrl: string): string {
+function reminderHtml(r: Reminder, linkUrl: string): string {
+  const footnote =
+    r.footnote ??
+    `Upload portal: <a href="https://cannabisreporting.lcb.wa.gov">cannabisreporting.lcb.wa.gov</a> (SAW login).
+        This is an automated Greenway compliance reminder; it repeats until the week is recorded as
+        submitted or nothing-to-report.`;
   return `
     <div style="font-family:system-ui,Arial,sans-serif;color:#111;max-width:560px">
       <h2 style="color:${urgencyColor(r.urgency)};margin-bottom:4px">${r.subject}</h2>
       <p style="line-height:1.5">${r.body}</p>
       <p>
-        <a href="${commandCenterUrl}"
+        <a href="${linkUrl}"
            style="display:inline-block;background:#12351f;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none">
-          Open the Compliance Command Center
+          ${r.linkLabel ?? "Open the Compliance Command Center"}
         </a>
       </p>
       <p style="color:#555;font-size:13px">
-        Upload portal: <a href="https://cannabisreporting.lcb.wa.gov">cannabisreporting.lcb.wa.gov</a> (SAW login).
-        This is an automated Greenway compliance reminder; it repeats until the week is recorded as
-        submitted or nothing-to-report.
+        ${footnote}
       </p>
     </div>`;
 }
@@ -115,7 +126,7 @@ async function sendReminderEmail(r: Reminder): Promise<boolean> {
         from,
         to,
         subject: r.subject,
-        html: reminderHtml(r, `${site}${COMMAND_CENTER_PATH}`),
+        html: reminderHtml(r, `${site}${r.linkPath ?? COMMAND_CENTER_PATH}`),
       }),
     });
     return res.ok;
@@ -222,6 +233,23 @@ export async function runComplianceReminders(): Promise<ReminderRunResult> {
     );
   }
 
+  // 3) AN-6: daily nag while ANY register exception sits unresolved. The
+  //    dedupe key is per Pacific day, so this re-fires each day the queue is
+  //    non-empty and goes quiet the day it drains. Best-effort — a failed
+  //    snapshot must never break the CCRS deadline reminders above.
+  try {
+    const snap = await posExceptionSnapshot();
+    const r = planPosExceptionReminder(todayIso, {
+      count: snap.count,
+      oldestDayKey: snap.oldestOccurredAt ? pacificDayKey(snap.oldestOccurredAt) : null,
+    });
+    if (r) reminders.push(r);
+  } catch (e) {
+    result.notes.push(
+      `POS exception planner failed: ${e instanceof Error ? e.message : "unknown error"}`,
+    );
+  }
+
   result.planned = reminders.length;
   if (reminders.length === 0) {
     result.notes.push("Nothing due today — no reminders planned.");
@@ -262,7 +290,7 @@ export async function runComplianceReminders(): Promise<ReminderRunResult> {
       const count = await sendPushToAll({
         title: r.subject,
         body: r.body,
-        url: COMMAND_CENTER_PATH,
+        url: r.linkPath ?? COMMAND_CENTER_PATH,
         tag: r.dedupeKey,
       });
       if (count > 0) {

@@ -1025,6 +1025,34 @@ export type PosExceptionRow = {
   payload: Record<string, unknown> | null;
 };
 
+/**
+ * AN-6: lightweight snapshot of the unresolved exception queue — exact count
+ * plus the oldest occurred_at — for the daily reminder and the admin-nav
+ * badge. Best-effort: unconfigured or failing DB reports an empty queue
+ * (never blocks a page render or the reminder cron).
+ */
+export async function posExceptionSnapshot(): Promise<{
+  count: number;
+  oldestOccurredAt: string | null;
+}> {
+  if (!isSupabaseServiceConfigured) return { count: 0, oldestOccurredAt: null };
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error, count } = await admin
+      .from("pos_sale_events")
+      .select("occurred_at", { count: "exact" })
+      .eq("status", "exception")
+      .is("resolved_at", null)
+      .order("occurred_at", { ascending: true })
+      .limit(1);
+    if (error) return { count: 0, oldestOccurredAt: null };
+    const oldest = (data as { occurred_at: string | null }[] | null)?.[0]?.occurred_at ?? null;
+    return { count: count ?? 0, oldestOccurredAt: oldest };
+  } catch {
+    return { count: 0, oldestOccurredAt: null };
+  }
+}
+
 export async function listPosExceptions(limit = 100): Promise<PosExceptionRow[]> {
   if (!isSupabaseServiceConfigured) return [];
   const admin = createSupabaseAdminClient();
