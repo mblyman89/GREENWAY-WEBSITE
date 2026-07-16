@@ -18,7 +18,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { authenticateDevice } from "@/lib/pos/sync-store";
 import { getEmployeeByPin } from "@/lib/staffing/store";
 import { isValidPin } from "@/lib/staffing/time";
-import { pinThrottleBlocked, recordPinFailure, recordPinSuccess } from "@/lib/security/pin-hash";
+import { pinPadBlocked, notePinFailure, notePinSuccess, deviceThrottleScope } from "@/lib/security/pin-throttle-store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,7 +34,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
-  const locked = pinThrottleBlocked();
+  const throttleScope = deviceThrottleScope(auth.device.id);
+  const locked = await pinPadBlocked(throttleScope);
   if (locked) return NextResponse.json({ error: locked }, { status: 429 });
 
   let pin = "";
@@ -49,10 +50,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   const employee = await getEmployeeByPin(pin);
   if (!employee) {
-    recordPinFailure();
+    await notePinFailure(throttleScope);
     return NextResponse.json({ error: "No active employee for that PIN." }, { status: 401 });
   }
-  recordPinSuccess();
+  await notePinSuccess(throttleScope);
 
   if (!APPROVER_ROLES.has(employee.job_role)) {
     return NextResponse.json(

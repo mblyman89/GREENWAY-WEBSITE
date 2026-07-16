@@ -28,7 +28,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { authenticateDevice } from "@/lib/pos/sync-store";
 import { getEmployeeByPin } from "@/lib/staffing/store";
 import { isValidPin } from "@/lib/staffing/time";
-import { pinThrottleBlocked, recordPinFailure, recordPinSuccess } from "@/lib/security/pin-hash";
+import { pinPadBlocked, notePinFailure, notePinSuccess, deviceThrottleScope } from "@/lib/security/pin-throttle-store";
 import { validateTillRequest } from "@/lib/pos/till-core";
 import { openDrawer, recordDrop, closeDrawerBlind, openSessionForRegister, getSession } from "@/lib/registers/store";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -52,7 +52,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const locked = pinThrottleBlocked();
+  const throttleScope = deviceThrottleScope(auth.device.id);
+  const locked = await pinPadBlocked(throttleScope);
   if (locked) return NextResponse.json({ error: locked }, { status: 429 });
 
   let body: unknown = null;
@@ -72,10 +73,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
   const employee = await getEmployeeByPin(till.pin);
   if (!employee) {
-    recordPinFailure();
+    await notePinFailure(throttleScope);
     return NextResponse.json({ error: "No active employee for that PIN." }, { status: 401 });
   }
-  recordPinSuccess();
+  await notePinSuccess(throttleScope);
 
   // ── open: count-in ──
   if (till.action === "open") {
@@ -132,10 +133,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       }
       const witness = await getEmployeeByPin(till.witnessPin);
       if (!witness) {
-        recordPinFailure();
+        await notePinFailure(throttleScope);
         return NextResponse.json({ error: "No active employee for the witness PIN." }, { status: 401 });
       }
-      recordPinSuccess();
+      await notePinSuccess(throttleScope);
       if (witness.id === employee.id) {
         return NextResponse.json({ error: "A drop cannot witness itself — a second person must enter their PIN." }, { status: 400 });
       }
