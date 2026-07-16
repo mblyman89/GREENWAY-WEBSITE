@@ -182,6 +182,15 @@ export type SaleFlowProps = {
    */
   onMemberLookup?: (q: string) => Promise<{ ok: true; members: PosMemberHit[] } | { ok: false; error: string }>;
   /**
+   * AO-3 — auto-attach after a PASSING scan: the parsed name + DOB go to the
+   * server-side match endpoint; an unambiguous single match comes back as
+   * the same privacy-lean hit the manual lookup returns (or null). Best
+   * effort and ONLINE-ONLY — any failure just means no auto-attach, and the
+   * budtender can still use the manual lookup. Never overrides a member
+   * already on the sale (AM-D order load).
+   */
+  onMemberMatch?: (identity: { firstName: string | null; lastName: string | null; dateOfBirth: string }) => Promise<PosMemberHit | null>;
+  /**
    * B29 — privacy-budgeted purchase history for an ATTACHED member ("the
    * usual?"): last few completed purchases + favorites, nothing else.
    * ONLINE-ONLY like the lookup; nothing is cached beyond the open panel.
@@ -302,7 +311,7 @@ function priceForBuyer(
   };
 }
 
-export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, initialCart, initialMember, onHold, onReceiptFrozen, onMemberLookup, onMemberHistory, onEmailReceipt, onApprove, onProductImage, onStockFlag, onLoyalty, onEnqueue, onComplete, onCancel }: SaleFlowProps) {
+export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, initialCart, initialMember, onHold, onReceiptFrozen, onMemberLookup, onMemberMatch, onMemberHistory, onEmailReceipt, onApprove, onProductImage, onStockFlag, onLoyalty, onEnqueue, onComplete, onCancel }: SaleFlowProps) {
   const [step, setStep] = useState<Step>("idgate");
   const [verdict, setVerdict] = useState<Extract<IdGateVerdict, { allowed: true }> | null>(null);
   const [manualEventUuid, setManualEventUuid] = useState<string | null>(null);
@@ -381,12 +390,22 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
       <IdGateScreen
         medicalAvailable={!!bundle.medical}
         onCancel={onCancel}
-        onPassed={(v, manualUuid, card, cardUuid) => {
+        onPassed={(v, manualUuid, card, cardUuid, scannedName) => {
           setVerdict(v);
           setManualEventUuid(manualUuid);
           setMedicalCard(card);
           setCardEventUuid(cardUuid);
           setStep("cart");
+          // AO-3 — best-effort auto-attach off the PASSING scan. Fire-and-
+          // forget: the cart opens immediately and the member band appears a
+          // beat later when the server answers. Never overrides a member a
+          // loaded website order already attached (AM-D), and a failed or
+          // ambiguous match changes nothing — manual lookup still works.
+          if (scannedName && onMemberMatch) {
+            void onMemberMatch({ ...scannedName, dateOfBirth: v.dateOfBirth }).then((hit) => {
+              if (hit) setMember((prev) => prev ?? hit);
+            });
+          }
         }}
         onEnqueueManual={(payload) => onEnqueue("manual_id_verification", payload)}
         onEnqueueCardCapture={(payload) => onEnqueue("medical_card_capture", payload)}
@@ -765,6 +784,12 @@ function IdGateScreen({
     manualEventUuid: string | null,
     medicalCard: PosCardCapture | null,
     cardEventUuid: string | null,
+    /**
+     * AO-3 — name parsed off a PASSING scan (null for the manual path, which
+     * never captures a name). Used only to ask the server for an unambiguous
+     * loyalty-member match; never stored on the device.
+     */
+    scannedName: { firstName: string | null; lastName: string | null } | null,
   ) => void;
   onCancel: () => void;
   onEnqueueManual: (payload: Record<string, unknown>) => string;
@@ -842,7 +867,8 @@ function IdGateScreen({
     // Gate fully passed — NOW enqueue the card-capture audit event (the sale
     // references its UUID; queue flush order guarantees it syncs first).
     const cardUuid = card ? onEnqueueCardCapture(card as unknown as Record<string, unknown>) : null;
-    onPassed(v, null, card, cardUuid);
+    // AO-3 — hand the parsed name up so the sale can auto-attach the member.
+    onPassed(v, null, card, cardUuid, { firstName: parsed.license.firstName, lastName: parsed.license.lastName });
   };
 
   const submitManual = () => {
@@ -871,7 +897,8 @@ function IdGateScreen({
       expirationDate: expiry.trim(),
       reason: reason.trim(),
     });
-    onPassed(v, uuid, card, cardUuid);
+    // Manual path has no machine-read name — no auto-attach (lookup still works).
+    onPassed(v, uuid, card, cardUuid, null);
   };
 
   return (

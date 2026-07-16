@@ -674,6 +674,30 @@ export function RegisterShell() {
             return { ok: false as const, error: "Network error — try again or ring without the member." };
           }
         }}
+        onMemberMatch={async (identity) => {
+          // AO-3 — scan auto-attach: parsed name + DOB (already in hand from
+          // the physical card) go to the server-side matcher; an unambiguous
+          // single match returns the same privacy-lean hit as manual lookup.
+          // Best-effort + ONLINE-ONLY: any failure = no attach, nothing else.
+          if (!navigator.onLine) return null;
+          try {
+            const res = await fetch("/api/pos/member-match", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "x-pos-device-id": creds.deviceId,
+                "x-pos-device-key": creds.deviceKey,
+              },
+              body: JSON.stringify(identity),
+            });
+            const body = (await res.json().catch(() => null)) as
+              | { member?: { customerId: string; label: string; points: number; tierName: string | null } | null }
+              | null;
+            return res.ok ? (body?.member ?? null) : null;
+          } catch {
+            return null;
+          }
+        }}
         onEmailReceipt={
           emailReceiptReady
             ? async (email, receipt) => {
