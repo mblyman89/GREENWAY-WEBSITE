@@ -1312,173 +1312,321 @@ function HomeScreen({
     return new Date(lastSyncAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
   }, [lastSyncAt]);
 
+  // AO-2 — the MORE ▾ dropdown holds every non-primary function so the home
+  // screen can lead with the one thing budtenders do all day: start a sale.
+  const [moreOpen, setMoreOpen] = useState(false);
+
   return (
-    <main className="pos-shell flex min-h-screen flex-col p-6">
-      {/* Header: store identity + who's on this register. Square-style: the
-          brand owns the top-left, the live status chips own the top-right. */}
-      <header className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/pos/wordmark.png" alt="Greenway Marijuana" className="h-8 w-auto opacity-90" />
-          <div className="hidden h-9 w-px bg-[var(--pos-border-strong)] sm:block" aria-hidden />
-          <div>
-            <h1 className="text-lg font-semibold leading-tight">{creds.name}</h1>
-            <p className="text-sm text-[var(--pos-text-muted)]">
-              {employee.fullName} ({employee.jobRole}) ·{" "}
-              {employee.clockedIn ? (
-                <span className="font-semibold text-[var(--pos-accent)]">clocked in</span>
-              ) : (
-                <span className="font-semibold text-[var(--pos-warn)]">NOT clocked in</span>
-              )}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <StatusChips online={online} pendingCount={pendingCount} name={null} />
-          {/* B44 — per-device display mode. Offline-friendly (pure localStorage). */}
+    <main className="pos-shell flex min-h-screen flex-col">
+      {/* AO-2 — navy chrome top bar (owner-approved mockup): brand + tabs on
+          the left, who/where/status on the right. Chrome tokens keep this
+          readable in BOTH themes (navy on light, near-black on dark). */}
+      <header className="flex flex-wrap items-center gap-x-6 gap-y-0 bg-[var(--pos-chrome)] px-5 text-[var(--pos-chrome-ink)]">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/pos/wordmark.png" alt="Greenway Marijuana" className="h-6 w-auto" />
+        <nav className="flex items-center text-xs font-bold tracking-[0.08em]">
+          <span className="border-b-2 border-[var(--pos-accent)] px-3 py-4">REGISTER</span>
           <button
             type="button"
-            onClick={onToggleTheme}
-            className="pos-tile rounded-full border border-[var(--pos-border)] bg-[var(--pos-surface-2)] px-3 py-1.5 text-xs font-semibold text-[var(--pos-text-muted)]"
+            onClick={onPickupQueue}
+            disabled={!onPickupQueue}
+            title={onPickupQueue ? undefined : !drawer ? "Open a drawer first — pickup orders take cash" : "Pickup orders need a connection"}
+            className="relative px-3 py-4 text-[var(--pos-chrome-muted)] disabled:opacity-40"
           >
-            {themeLabel === "Light mode" ? "☀️" : "🌙"} {themeLabel}
+            PICKUP
+            {typeof pickupCount === "number" && pickupCount > 0 ? (
+              <span className="absolute right-0 top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-[var(--pos-accent)] px-1 text-[10px] font-extrabold text-[var(--pos-accent-ink)]">
+                {pickupCount}
+              </span>
+            ) : null}
           </button>
+          <button type="button" onClick={onDayReport} className="px-3 py-4 text-[var(--pos-chrome-muted)]">
+            REPORTS
+          </button>
+          <div className="relative">
+            <button type="button" onClick={() => setMoreOpen((o) => !o)} className="px-3 py-4 text-[var(--pos-chrome-muted)]">
+              MORE {moreOpen ? "▴" : "▾"}
+            </button>
+            {moreOpen ? (
+              <div className="absolute left-0 top-full z-30 w-72 rounded-xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-2 text-[var(--pos-text)] shadow-2xl">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMoreOpen(false);
+                    onReprintLast?.();
+                  }}
+                  disabled={!onReprintLast}
+                  className="block w-full rounded-lg px-3 py-2.5 text-left text-sm font-semibold hover:bg-[var(--pos-surface-hover)] disabled:opacity-40"
+                >
+                  🧾 Reprint last receipt
+                  <span className="block text-xs font-normal text-[var(--pos-text-faint)]">
+                    {lastReceipt
+                      ? `Receipt ${receiptNumber(lastReceipt.saleClientUuid)} — never pops the drawer`
+                      : "Available after the first sale on this device"}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMoreOpen(false);
+                    onNoSale();
+                  }}
+                  disabled={!drawer}
+                  className="block w-full rounded-lg px-3 py-2.5 text-left text-sm font-semibold hover:bg-[var(--pos-surface-hover)] disabled:opacity-40"
+                >
+                  💵 No sale — open drawer
+                  <span className="block text-xs font-normal text-[var(--pos-text-faint)]">Reason + manager PIN; prints an audit slip</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMoreOpen(false);
+                    onVoidSale?.();
+                  }}
+                  disabled={!onVoidSale}
+                  className="block w-full rounded-lg px-3 py-2.5 text-left text-sm font-semibold hover:bg-[var(--pos-surface-hover)] disabled:opacity-40"
+                >
+                  ↩️ Void a sale (today)
+                  <span className="block text-xs font-normal text-[var(--pos-text-faint)]">Same-day only — manager PIN; restocks + returns cash</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMoreOpen(false);
+                    onReturnSale?.();
+                  }}
+                  disabled={!onReturnSale}
+                  className="block w-full rounded-lg px-3 py-2.5 text-left text-sm font-semibold hover:bg-[var(--pos-surface-hover)] disabled:opacity-40"
+                >
+                  📦 Return an item
+                  <span className="block text-xs font-normal text-[var(--pos-text-faint)]">Loyalty members, 15-day window — manager PIN</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMoreOpen(false);
+                    onLeaderboard?.();
+                  }}
+                  disabled={!onLeaderboard}
+                  className="block w-full rounded-lg px-3 py-2.5 text-left text-sm font-semibold hover:bg-[var(--pos-surface-hover)] disabled:opacity-40"
+                >
+                  🏆 Leaderboard
+                </button>
+                <div className="my-1 border-t border-[var(--pos-border)]" />
+                {drawer ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMoreOpen(false);
+                        onTill("drop");
+                      }}
+                      className="block w-full rounded-lg px-3 py-2.5 text-left text-sm font-semibold hover:bg-[var(--pos-surface-hover)]"
+                    >
+                      💰 Cash drop
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMoreOpen(false);
+                        onTill("close");
+                      }}
+                      className="block w-full rounded-lg px-3 py-2.5 text-left text-sm font-semibold hover:bg-[var(--pos-surface-hover)]"
+                    >
+                      🔐 Close drawer (blind count)
+                    </button>
+                  </>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMoreOpen(false);
+                    onRefreshMenu();
+                  }}
+                  className="block w-full rounded-lg px-3 py-2.5 text-left text-sm font-semibold hover:bg-[var(--pos-surface-hover)]"
+                >
+                  🔄 Refresh menu
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMoreOpen(false);
+                    onToggleTheme();
+                  }}
+                  className="block w-full rounded-lg px-3 py-2.5 text-left text-sm font-semibold hover:bg-[var(--pos-surface-hover)]"
+                >
+                  {themeLabel === "Light mode" ? "☀️" : "🌙"} {themeLabel}
+                </button>
+                <div className="my-1 border-t border-[var(--pos-border)]" />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMoreOpen(false);
+                    onPunch();
+                  }}
+                  className="block w-full rounded-lg px-3 py-2.5 text-left text-sm font-semibold hover:bg-[var(--pos-surface-hover)]"
+                >
+                  ⏱️ {employee.clockedIn ? "Clock out" : "Clock in"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMoreOpen(false);
+                    onLock();
+                  }}
+                  className="block w-full rounded-lg px-3 py-2.5 text-left text-sm font-semibold hover:bg-[var(--pos-surface-hover)]"
+                >
+                  🔒 Lock register
+                </button>
+              </div>
+            ) : null}
+          </div>
+        </nav>
+        <div className="ml-auto py-2 text-right text-[11px] leading-tight">
+          <div className="font-semibold">
+            {employee.fullName} ({employee.jobRole}) · {employee.clockedIn ? "clocked in" : "NOT clocked in"}
+          </div>
+          <div className="text-[var(--pos-chrome-muted)]">
+            <span
+              className={`mr-1.5 inline-block h-1.5 w-1.5 rounded-full align-middle ${online ? "bg-[var(--pos-accent)]" : "bg-[var(--pos-danger-solid)]"}`}
+              aria-hidden
+            />
+            {creds.name} · {online ? "Online" : "OFFLINE"} · {drawer ? "Drawer open" : "No drawer"}
+          </div>
         </div>
       </header>
 
-      {banner ? (
-        <button type="button" onClick={onClearBanner} className="mt-4 rounded-lg bg-[var(--pos-warn-soft)] px-4 py-2 text-left text-sm text-[var(--pos-warn)]">
-          {banner} <span className="underline">dismiss</span>
-        </button>
-      ) : null}
-
-      {heldSale ? (
-        <section className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] p-4">
-          <div>
-            <h2 className="text-sm font-semibold text-[var(--pos-warn)]">
-              Saved sale — {heldSale.lines.reduce((s, l) => s + l.quantity, 0)} item(s)
-            </h2>
-            <p className="text-xs text-[var(--pos-warn-muted)]">
-              Saved by {heldSale.heldByName} {ageLabel(heldSale.heldAtIso, new Date())}. Loading re-runs the ID check
-              and reprices against the current menu.
-            </p>
-          </div>
-          <div className="flex gap-2">
+      <div className="mx-auto grid w-full max-w-6xl flex-1 gap-6 p-6 lg:grid-cols-[1fr_330px]">
+        <div className="flex flex-col">
+          {banner ? (
             <button
               type="button"
-              onClick={onResumeHold}
-              disabled={!onResumeHold || !drawer || !employee.clockedIn || !menuReady}
-              className="pos-tile rounded-lg bg-[var(--pos-warn-solid)] px-4 py-2 text-sm font-bold text-white disabled:opacity-40"
+              onClick={onClearBanner}
+              className="mb-4 rounded-lg border border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] px-4 py-2 text-left text-sm text-[var(--pos-warn)]"
             >
-              Load sale
+              {banner} <span className="underline">dismiss</span>
             </button>
-            <button
-              type="button"
-              onClick={onDiscardHold}
-              className="pos-tile rounded-lg border border-[var(--pos-border)] bg-[var(--pos-surface-2)] px-4 py-2 text-sm font-semibold text-[var(--pos-text-muted)]"
-            >
-              Discard
-            </button>
-          </div>
-        </section>
-      ) : null}
-
-      {/* Big action tiles — color-coded to the brand: green sells, gold hands
-          off website orders, orange is the time clock, charcoal locks up.
-          AL-C: the biggest button is the most frequent action (payment-UX
-          research) — Start sale is the hero, double-width at lg+. */}
-      <section className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-        <button
-          type="button"
-          disabled={!drawer || !employee.clockedIn || !menuReady}
-          onClick={onStartSale}
-          title={
-            !drawer
-              ? "Open a drawer first"
-              : !employee.clockedIn
-                ? "Clock in first"
-                : !menuReady
-                  ? "Menu not downloaded yet — connect to the internet once"
-                  : undefined
-          }
-          className="pos-tile rounded-2xl bg-[var(--pos-accent)] p-6 text-left text-2xl font-bold text-[var(--pos-accent-ink)] shadow-[var(--admin-shadow)] disabled:opacity-40 lg:col-span-2"
-        >
-          <span className="block text-4xl" aria-hidden>
-            🛒
-          </span>
-          <span className="mt-2 block">Start sale</span>
-          <span className="mt-1 block text-sm font-semibold opacity-80">ID check → cart → cash tender</span>
-        </button>
-        <button
-          type="button"
-          onClick={onPickupQueue}
-          disabled={!onPickupQueue}
-          title={
-            onPickupQueue
-              ? undefined
-              : !drawer
-                ? "Open a drawer first — pickup orders take cash"
-                : "Pickup orders need a connection — the queue lives on the server"
-          }
-          className="pos-tile relative rounded-2xl border border-[var(--pos-gold-border)] bg-[var(--pos-gold-soft)] p-6 text-left text-xl font-bold text-[var(--pos-gold)] disabled:opacity-40"
-        >
-          <span className="block text-3xl" aria-hidden>
-            🛍️
-          </span>
-          <span className="mt-2 block">Pickup orders</span>
-          {typeof pickupCount === "number" && pickupCount > 0 ? (
-            <span className="absolute right-4 top-4 flex h-9 min-w-9 items-center justify-center rounded-full bg-[var(--pos-gold)] px-2 text-base font-extrabold text-[var(--pos-gold-ink)]">
-              {pickupCount}
-            </span>
           ) : null}
-          <span className="mt-1 block text-sm font-normal text-[var(--pos-text-muted)]">
+
+          {!drawer ? (
+            <section className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] p-5">
+              <div>
+                <h2 className="text-base font-bold text-[var(--pos-warn)]">Count in your drawer to start the day</h2>
+                <p className="text-sm text-[var(--pos-warn-muted)]">Sales stay locked until the starting float is counted in.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => onTill("open")}
+                className="pos-tile rounded-lg bg-[var(--pos-accent)] px-5 py-3 text-sm font-bold text-[var(--pos-accent-ink)]"
+              >
+                Count in drawer
+              </button>
+            </section>
+          ) : null}
+
+          {/* AO-2 — the scan-first hero (approved mockup): one big affordance.
+              Tapping it opens the ID gate with its scanner box already focused
+              — a wedge scan there lands with zero extra taps. */}
+          <section className="flex flex-1 flex-col items-center justify-center rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-10 text-center shadow-[var(--admin-shadow)]">
+            <span className="text-5xl" aria-hidden>
+              🪪
+            </span>
+            <h1 className="mt-4 text-2xl font-extrabold tracking-tight">Scan an ID to start a sale</h1>
+            <p className="mt-2 max-w-md text-sm leading-relaxed text-[var(--pos-text-muted)]">
+              Age and expiry are verified instantly. If the customer is a loyalty member, their profile and points ride
+              along to the cart.
+            </p>
+            <button
+              type="button"
+              disabled={!drawer || !employee.clockedIn || !menuReady}
+              onClick={onStartSale}
+              title={
+                !drawer
+                  ? "Open a drawer first"
+                  : !employee.clockedIn
+                    ? "Clock in first"
+                    : !menuReady
+                      ? "Menu not downloaded yet — connect to the internet once"
+                      : undefined
+              }
+              className="pos-tile mt-7 rounded-xl bg-[var(--pos-accent)] px-10 py-5 text-xl font-extrabold text-[var(--pos-accent-ink)] shadow-lg disabled:opacity-40"
+            >
+              Start sale — scan ID
+            </button>
+            <p className="mt-3 text-xs text-[var(--pos-text-faint)]">
+              ID check → cart → cash tender · manual verification available at the gate
+            </p>
+          </section>
+
+          {heldSale ? (
+            <section className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] p-4">
+              <div>
+                <h2 className="text-sm font-semibold text-[var(--pos-warn)]">
+                  Saved sale — {heldSale.lines.reduce((s, l) => s + l.quantity, 0)} item(s)
+                </h2>
+                <p className="text-xs text-[var(--pos-warn-muted)]">
+                  Saved by {heldSale.heldByName} {ageLabel(heldSale.heldAtIso, new Date())}. Loading re-runs the ID check
+                  and reprices against the current menu.
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={onResumeHold}
+                  disabled={!onResumeHold || !drawer || !employee.clockedIn || !menuReady}
+                  className="pos-tile rounded-lg bg-[var(--pos-warn-solid)] px-4 py-2 text-sm font-bold text-white disabled:opacity-40"
+                >
+                  Load sale
+                </button>
+                <button
+                  type="button"
+                  onClick={onDiscardHold}
+                  className="pos-tile rounded-lg border border-[var(--pos-border)] bg-[var(--pos-surface-2)] px-4 py-2 text-sm font-semibold text-[var(--pos-text-muted)]"
+                >
+                  Discard
+                </button>
+              </div>
+            </section>
+          ) : null}
+        </div>
+
+        {/* AO-2 — pickup orders are THE side rail (owner: the only queue). */}
+        <aside className="flex flex-col rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-5">
+          <h2 className="flex items-center justify-between text-sm font-extrabold">
+            Pickup orders
+            {typeof pickupCount === "number" ? (
+              <span className="rounded-full bg-[var(--pos-accent)] px-2.5 py-0.5 text-xs font-extrabold text-[var(--pos-accent-ink)]">
+                {pickupCount}
+              </span>
+            ) : null}
+          </h2>
+          <p className="mt-2 text-sm text-[var(--pos-text-muted)]">
             {typeof pickupCount === "number"
               ? pickupCount === 0
-                ? "No website orders waiting"
-                : `${pickupCount} website order${pickupCount === 1 ? "" : "s"} waiting`
-              : "Website orders — ID check at handover"}
-          </span>
-        </button>
-        <button
-          type="button"
-          onClick={onPunch}
-          className="pos-tile rounded-2xl border border-[var(--pos-orange-border)] bg-[var(--pos-orange-soft)] p-6 text-left text-xl font-semibold text-[var(--pos-orange)]"
-        >
-          <span className="block text-3xl" aria-hidden>
-            ⏱️
-          </span>
-          <span className="mt-2 block">{employee.clockedIn ? "Clock out" : "Clock in"}</span>
-          <span className="mt-1 block text-sm font-normal text-[var(--pos-text-muted)]">Recorded as a register punch</span>
-        </button>
-        <button
-          type="button"
-          onClick={onLock}
-          className="pos-tile rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface-2)] p-6 text-left text-xl font-semibold"
-        >
-          <span className="block text-3xl" aria-hidden>
-            🔒
-          </span>
-          <span className="mt-2 block">Lock register</span>
-          <span className="mt-1 block text-sm font-normal text-[var(--pos-text-muted)]">Auto-locks after 2 minutes idle</span>
-        </button>
-      </section>
+                ? "No website orders waiting."
+                : `${pickupCount} website order${pickupCount === 1 ? "" : "s"} waiting — ID check at handover.`
+              : online
+                ? "Website orders — ID check at handover."
+                : "Offline — the pickup queue lives on the server."}
+          </p>
+          <button
+            type="button"
+            onClick={onPickupQueue}
+            disabled={!onPickupQueue}
+            title={onPickupQueue ? undefined : !drawer ? "Open a drawer first — pickup orders take cash" : "Pickup orders need a connection"}
+            className="pos-tile mt-4 rounded-lg bg-[var(--pos-chrome)] px-4 py-3 text-sm font-bold text-[var(--pos-chrome-ink)] disabled:opacity-40"
+          >
+            Open pickup queue →
+          </button>
 
-      {/* Status strip — drawer / sync / menu / queue at a glance, each with a
-          colored state dot and its actions right where the status is.
-          AL-C: DEMOTED below the action tiles (Dynamics welcome-screen
-          pattern — the hero action leads; status is glanceable, not the
-          headline). */}
-      <section className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-4">
-          <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
-            <span className={`h-2 w-2 rounded-full ${drawer ? "bg-[var(--pos-accent)]" : "bg-[var(--pos-warn-dot)]"}`} aria-hidden />
-            Cash drawer
-          </h2>
           {drawer ? (
-            <>
-              <p className="mt-2 text-sm">
+            <div className="mt-6 border-t border-[var(--pos-border)] pt-4">
+              <h3 className="text-xs font-bold uppercase tracking-wide text-[var(--pos-text-muted)]">Cash drawer</h3>
+              <p className="mt-1.5 text-sm">
                 Open for {drawer.businessDay}
-                {drawer.openedAt ? ` since ${new Date(drawer.openedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}` : ""}
+                {drawer.openedAt
+                  ? ` since ${new Date(drawer.openedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`
+                  : ""}
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <button
@@ -1496,160 +1644,47 @@ function HomeScreen({
                   Close (blind count)
                 </button>
               </div>
-            </>
-          ) : (
-            <>
-              <p className="mt-2 text-sm text-[var(--pos-warn)]">
-                No open drawer — count in your starting float before ringing sales.
-              </p>
-              <button
-                type="button"
-                onClick={() => onTill("open")}
-                className="pos-tile mt-3 rounded-lg bg-[var(--pos-accent)] px-3 py-2 text-sm font-bold text-[var(--pos-accent-ink)]"
-              >
-                Count in drawer
-              </button>
-            </>
-          )}
-        </div>
-        <div className="rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-4">
-          <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
+            </div>
+          ) : null}
+        </aside>
+      </div>
+
+      {/* AO-2 — slim status footer (approved mockup): sync / menu / queue at a
+          glance with their one-tap actions, plus the accountability line. */}
+      <footer className="border-t border-[var(--pos-border)] bg-[var(--pos-surface-2)] px-6 py-3">
+        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-center gap-x-7 gap-y-2 text-xs text-[var(--pos-text-muted)]">
+          <span className="flex items-center gap-1.5">
             <span
-              className={`h-2 w-2 rounded-full ${!online ? "bg-[var(--pos-danger)]" : pendingCount > 0 ? "bg-[var(--pos-warn-dot)]" : "bg-[var(--pos-accent)]"}`}
+              className={`h-2 w-2 rounded-full ${!online ? "bg-[var(--pos-danger-solid)]" : pendingCount > 0 ? "bg-[var(--pos-warn-dot)]" : "bg-[var(--pos-accent)]"}`}
               aria-hidden
             />
-            Sync
-          </h2>
-          <p className="mt-2 text-sm">
-            {pendingCount} pending · last sync {syncLabel}
-          </p>
-          <button
-            type="button"
-            onClick={onSyncNow}
-            className="pos-tile mt-3 rounded-lg border border-[var(--pos-border)] bg-[var(--pos-surface-2)] px-3 py-2 text-sm font-semibold"
-          >
-            Sync now
-          </button>
-        </div>
-        <div className="rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-4">
-          <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
+            SYNC: <b className="font-semibold text-[var(--pos-text)]">{pendingCount} pending</b> · last {syncLabel}
+            <button type="button" onClick={onSyncNow} className="ml-1 font-semibold underline">
+              Sync now
+            </button>
+          </span>
+          <span className="flex items-center gap-1.5">
             <span className={`h-2 w-2 rounded-full ${menuReady ? "bg-[var(--pos-accent)]" : "bg-[var(--pos-warn-dot)]"}`} aria-hidden />
-            Menu
-          </h2>
-          <p className="mt-2 text-sm">
-            {menuFetchedAt
-              ? `Downloaded ${new Date(menuFetchedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`
-              : "Not downloaded yet"}
-          </p>
-          {lowStock > 0 ? (
-            <p className="mt-1 text-xs font-semibold text-[var(--pos-warn)]">
-              {lowStock} item{lowStock === 1 ? "" : "s"} running low — flagged on the sale screen
-            </p>
-          ) : null}
-          <button
-            type="button"
-            onClick={onRefreshMenu}
-            className="pos-tile mt-3 rounded-lg border border-[var(--pos-border)] bg-[var(--pos-surface-2)] px-3 py-2 text-sm font-semibold"
-          >
-            Refresh menu
-          </button>
+            MENU:{" "}
+            <b className="font-semibold text-[var(--pos-text)]">
+              {menuFetchedAt
+                ? new Date(menuFetchedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
+                : "not downloaded"}
+            </b>
+            {lowStock > 0 ? <span className="font-semibold text-[var(--pos-warn)]">· {lowStock} low</span> : null}
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className={`h-2 w-2 rounded-full ${rejectedCount > 0 ? "bg-[var(--pos-danger-solid)]" : "bg-[var(--pos-accent)]"}`} aria-hidden />
+            QUEUE:{" "}
+            <b className={`font-semibold ${rejectedCount > 0 ? "text-[var(--pos-danger)]" : "text-[var(--pos-text)]"}`}>
+              {rejectedCount > 0 ? `${rejectedCount} rejected — manager reviews in the back office` : "all clear"}
+            </b>
+          </span>
         </div>
-        <div className="rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-4">
-          <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
-            <span className={`h-2 w-2 rounded-full ${rejectedCount > 0 ? "bg-[var(--pos-danger)]" : "bg-[var(--pos-accent)]"}`} aria-hidden />
-            Queue health
-          </h2>
-          {rejectedCount > 0 ? (
-            <p className="mt-2 text-sm font-semibold text-[var(--pos-danger)]">
-              {rejectedCount} rejected event{rejectedCount === 1 ? "" : "s"} — a manager reviews these in the back office.
-            </p>
-          ) : (
-            <p className="mt-2 text-sm text-[var(--pos-text-muted)]">
-              All clear — nothing rejected on this device.
-            </p>
-          )}
-        </div>
-      </section>
-
-      <section className="mt-4 grid gap-4 sm:grid-cols-3">
-        <button
-          type="button"
-          onClick={onReprintLast}
-          disabled={!onReprintLast}
-          title={onReprintLast ? undefined : "No receipt stored yet — completes with the first sale"}
-          className="pos-tile rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-5 text-left text-base font-semibold disabled:opacity-40"
-        >
-          <span aria-hidden>🧾</span> Reprint last receipt
-          <span className="mt-1 block text-xs font-normal text-[var(--pos-text-faint)]">
-            {lastReceipt
-              ? `Receipt ${receiptNumber(lastReceipt.saleClientUuid)} · ${ageLabel(lastReceipt.soldAtIso, new Date())} — prints without opening the drawer`
-              : "Available after the first sale on this device"}
-          </span>
-        </button>
-        <button
-          type="button"
-          onClick={onNoSale}
-          disabled={!drawer}
-          title={!drawer ? "Open a drawer first" : undefined}
-          className="pos-tile rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-5 text-left text-base font-semibold disabled:opacity-40"
-        >
-          <span aria-hidden>💵</span> No sale — open drawer
-          <span className="mt-1 block text-xs font-normal text-[var(--pos-text-faint)]">
-            Needs a reason + a manager&rsquo;s PIN; prints an audit slip, then the drawer pops
-          </span>
-        </button>
-        <button
-          type="button"
-          onClick={onDayReport}
-          className="pos-tile rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-5 text-left text-base font-semibold"
-        >
-          <span aria-hidden>📊</span> Day report (X/Z)
-          <span className="mt-1 block text-xs font-normal text-[var(--pos-text-faint)]">
-            Manager PIN required — prints the day&rsquo;s totals; never pops the drawer
-          </span>
-        </button>
-        <button
-          type="button"
-          onClick={onVoidSale}
-          disabled={!onVoidSale}
-          title={onVoidSale ? undefined : "Voids need a connection — the server reverses the sale"}
-          className="pos-tile rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-5 text-left text-base font-semibold disabled:opacity-40"
-        >
-          <span aria-hidden>↩️</span> Void a sale (today)
-          <span className="mt-1 block text-xs font-normal text-[var(--pos-text-faint)]">
-            Same-day mistakes only — manager PIN; restocks stock and returns the cash. Older sales: returns desk
-          </span>
-        </button>
-        <button
-          type="button"
-          onClick={onReturnSale}
-          disabled={!onReturnSale}
-          title={onReturnSale ? undefined : "Returns need a connection — the server moves inventory and queues the CCRS correction"}
-          className="pos-tile rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-5 text-left text-base font-semibold disabled:opacity-40"
-        >
-          <span aria-hidden>📦</span> Return an item
-          <span className="mt-1 block text-xs font-normal text-[var(--pos-text-faint)]">
-            Loyalty members, 15-day window — manager PIN; exact refund from the receipt, restock or destroy
-          </span>
-        </button>
-        <button
-          type="button"
-          onClick={onLeaderboard}
-          disabled={!onLeaderboard}
-          title={onLeaderboard ? undefined : "The leaderboard needs a connection — it reads the store's ledger"}
-          className="pos-tile rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-5 text-left text-base font-semibold disabled:opacity-40"
-        >
-          <span aria-hidden>🏆</span> Leaderboard
-          <span className="mt-1 block text-xs font-normal text-[var(--pos-text-faint)]">
-            Today&rsquo;s top budtenders by sales + this week&rsquo;s champions — whole store competes
-          </span>
-        </button>
-      </section>
-
-      <footer className="mt-auto pt-8 text-center text-xs text-[var(--pos-text-faint)]">
-        Every action is tied to the person whose PIN unlocked the register. Sales re-run the full
-        compliance gate on the server — an offline sale that fails there goes to the manager
-        exception queue, never silently through.
+        <p className="mx-auto mt-2 w-full max-w-6xl text-center text-[11px] text-[var(--pos-text-faint)]">
+          Every action is tied to the person whose PIN unlocked the register. Sales re-run the full compliance gate on
+          the server — an offline sale that fails there goes to the manager exception queue, never silently through.
+        </p>
       </footer>
     </main>
   );
