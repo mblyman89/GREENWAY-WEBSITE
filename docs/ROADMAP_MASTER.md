@@ -37,15 +37,25 @@
 > compliance/offline mechanism underneath (ID gate, WAC limits, offline queue, drawer,
 > voids/returns, sync) is kept exactly as built.
 
-- [ ] **AO-1 — Light theme + shell.** New POS design tokens (light bg, navy `#12233d`
+- [x] **AO-1 — Light theme + shell.** New POS design tokens (light bg, navy `#12233d`
   top bar, teal/green accents), top tab nav (REGISTER · PICKUP · DRAWER · REPORTS · MORE ▾)
   replacing the wall-of-cards home, status strip (sync/menu/queue/app version) moved to a
   slim footer. Employee + register + online/drawer state in the top-right.
-- [ ] **AO-2 — Scan-first home screen.** Landing surface = "Scan an ID to start a sale"
+  *Shipped (PR #524): `DEFAULT_THEME` flipped to `"light"` (devices that chose dark keep
+  it), approved mockup palette + navy chrome tokens (`--pos-chrome*`) in globals.css,
+  flat light canvas. Tab nav itself landed with AO-2.*
+- [x] **AO-2 — Scan-first home screen.** Landing surface = "Scan an ID to start a sale"
   hero with an always-focused scan box (wedge-ready), Manual ID check + member lookup as
   secondary buttons, held-sales resume strip, pickup-orders rail (the only queue, per
   owner). All existing functions (no-sale, day report, void, return, reprint, leaderboard,
   clock out, lock) move under MORE ▾ / DRAWER / REPORTS tabs — nothing is removed.
+  *Shipped (PR #525): navy chrome top bar (REGISTER · PICKUP w/ badge · REPORTS · MORE ▾
+  dropdown holding all demoted functions + theme toggle + clock + lock), ID-scan hero with
+  the same drawer/menu/clock-in gating, held-sale strip, pickup rail with drawer
+  info/drop/close shortcuts, slim SYNC/MENU/QUEUE status footer. Render-only — zero
+  compliance/offline changes; suite 1,625/123 green. The always-focused wedge scan box on
+  the home screen itself arrives with AO-3 (scan needs the match endpoint to be useful
+  before the sale starts).*
 - [ ] **AO-3 — ID scan auto-attaches the customer.** After a passing AAMVA scan, the
   register (online) sends parsed name + DOB to a new device-authenticated match endpoint;
   an unambiguous single match auto-attaches the loyalty member (points/tier ride the
