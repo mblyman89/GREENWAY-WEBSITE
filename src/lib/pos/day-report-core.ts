@@ -122,6 +122,71 @@ export function summarizeDayEvents(rows: DayEventRow[]): DaySummary {
 }
 
 // ---------------------------------------------------------------------------
+// Refund aggregation (AN-4)
+// ---------------------------------------------------------------------------
+//
+// Cash refunded OUT of a drawer comes from two flows, neither of which writes
+// to pos_sale_events:
+//   - same-day VOIDS   -> audit_logs action "register.sale_voided"
+//                         (refundMinor lives in after_json)
+//   - counter RETURNS  -> customer_returns.refund_minor_units
+//
+// Neither record carries register attribution (void audits only name the
+// device in actor_email; customer_returns has no device/register column), so
+// refunds are reported STORE-WIDE and the slip says so explicitly — we never
+// guess a register. Without these rows, gross + float − drops overstates the
+// expected drawer cash and blind counts show FALSE SHORTAGES.
+
+/** One refund fact, pre-queried by the caller (core stays I/O-free). */
+export type RefundRow = {
+  source: "void" | "return";
+  refundMinor: number;
+};
+
+export type RefundSummary = {
+  voidCount: number;
+  voidRefundMinor: number;
+  returnCount: number;
+  returnRefundMinor: number;
+  /** Total cash paid out of drawers (voids + returns), cents. */
+  refundTotalMinor: number;
+};
+
+/** Aggregate refund facts. Defensive: garbage/negative amounts count as $0. */
+export function summarizeRefunds(rows: RefundRow[]): RefundSummary {
+  const out: RefundSummary = {
+    voidCount: 0,
+    voidRefundMinor: 0,
+    returnCount: 0,
+    returnRefundMinor: 0,
+    refundTotalMinor: 0,
+  };
+  for (const r of rows) {
+    const minor = Math.max(0, intOrZero(r.refundMinor));
+    if (r.source === "void") {
+      out.voidCount += 1;
+      out.voidRefundMinor += minor;
+    } else if (r.source === "return") {
+      out.returnCount += 1;
+      out.returnRefundMinor += minor;
+    } else {
+      continue;
+    }
+    out.refundTotalMinor += minor;
+  }
+  return out;
+}
+
+/**
+ * Pull refundMinor out of a `register.sale_voided` audit after_json blob.
+ * Defensive on shape — a malformed blob contributes $0, never NaN.
+ */
+export function auditRefundMinor(afterJson: unknown): number {
+  const a = afterJson && typeof afterJson === "object" ? (afterJson as Record<string, unknown>) : {};
+  return Math.max(0, intOrZero(a.refundMinor));
+}
+
+// ---------------------------------------------------------------------------
 // Drawer-day aggregation
 // ---------------------------------------------------------------------------
 
@@ -191,6 +256,12 @@ export type DayReportSlipInput = {
   requestedByName: string;
   summary: DaySummary;
   drawer: DrawerDaySummary | null;
+  /**
+   * AN-4: store-wide cash refunded out today (voids + counter returns).
+   * Optional so cached registers running an older bundle keep printing;
+   * null/absent prints no refund section.
+   */
+  refunds?: RefundSummary | null;
   headerText: string | null;
   addressLines: string[];
 };
@@ -225,6 +296,27 @@ export function buildDayReportSlipHtml(input: DayReportSlipInput): string {
       ? [row(`Cash rounding (${s.roundedSaleCount} sales)`, formatCents(s.roundingMinor))]
       : []),
   ].join("");
+
+  // AN-4 — cash refunded OUT (store-wide: voids + counter returns carry no
+  // register attribution). Printed so the manager reconciling drawers knows
+  // the day's expected cash is lower than gross + float − drops.
+  const r = input.refunds ?? null;
+  const refundRows = r
+    ? [
+        row(`Voided sales (${r.voidCount})`, formatCents(-r.voidRefundMinor)),
+        row(`Counter returns (${r.returnCount})`, formatCents(-r.returnRefundMinor)),
+        row("Total cash refunded", formatCents(-r.refundTotalMinor)),
+      ].join("")
+    : "";
+  const refundSection =
+    r && (r.voidCount > 0 || r.returnCount > 0)
+      ? [
+          "<hr>",
+          '<p class="sec">REFUNDS &mdash; STORE-WIDE CASH OUT</p>',
+          `<table>${refundRows}</table>`,
+          '<p class="sub">Voids/returns are not tied to one register &mdash; count them against the drawer that paid.</p>',
+        ].join("")
+      : "";
 
   const activityRows = [
     row("No-sale drawer opens", String(s.noSaleCount)),
@@ -272,6 +364,7 @@ export function buildDayReportSlipHtml(input: DayReportSlipInput): string {
     "<hr>",
     '<p class="sec">SALES</p>',
     `<table>${salesRows}</table>`,
+    refundSection,
     "<hr>",
     '<p class="sec">REGISTER ACTIVITY</p>',
     `<table>${activityRows}</table>`,
@@ -336,6 +429,26 @@ export function __runDayReportCoreTests(): void {
   ok(s.exceptionCount === 1 && s.pendingCount === 1, "exceptions and pending surfaced, never silently dropped");
   ok(summarizeDayEvents([]).grossMinor === 0, "empty day is all zeros");
 
+  // AN-4 — summarizeRefunds
+  const r1 = summarizeRefunds([
+    { source: "void", refundMinor: 2500 },
+    { source: "void", refundMinor: 1000 },
+    { source: "return", refundMinor: 750 },
+    { source: "return", refundMinor: -50 }, // garbage negative -> $0, still counted
+    { source: "return", refundMinor: 12.5 as unknown as number }, // non-integer -> $0
+  ]);
+  ok(r1.voidCount === 2 && r1.voidRefundMinor === 3500, "AN-4: voids counted and summed");
+  ok(r1.returnCount === 3 && r1.returnRefundMinor === 750, "AN-4: returns counted; garbage amounts contribute $0");
+  ok(r1.refundTotalMinor === 4250, "AN-4: total = voids + returns");
+  const r0 = summarizeRefunds([]);
+  ok(r0.refundTotalMinor === 0 && r0.voidCount === 0 && r0.returnCount === 0, "AN-4: empty refunds all zeros");
+
+  // AN-4 — auditRefundMinor (defensive on after_json shape)
+  ok(auditRefundMinor({ refundMinor: 4321 }) === 4321, "AN-4: refundMinor extracted from audit blob");
+  ok(auditRefundMinor({ refundMinor: "42" }) === 0, "AN-4: string refundMinor -> $0 (never NaN)");
+  ok(auditRefundMinor(null) === 0 && auditRefundMinor("garbage") === 0, "AN-4: malformed audit blob -> $0");
+  ok(auditRefundMinor({ refundMinor: -100 }) === 0, "AN-4: negative refund clamps to $0");
+
   // summarizeDrawerDay
   const d1 = summarizeDrawerDay(
     [
@@ -386,6 +499,41 @@ export function __runDayReportCoreTests(): void {
   ok(slip.includes("body{width:576px"), "same 576px page family as receipts");
   ok(slip.includes("Port Orchard, WA"), "address carried");
   ok(!slip.includes("Cash rounding"), "B33: no rounding row when no sale was rounded");
+  ok(!slip.includes("REFUNDS"), "AN-4: no refund section when refunds absent (older cached bundles keep printing)");
+
+  // AN-4 — refund section prints when the day had cash out.
+  const slipRefunds = buildDayReportSlipHtml({
+    kind: "Z",
+    registerLabel: "Register 1",
+    businessDay: "2026-07-16",
+    printedAtIso: "2026-07-17T04:55:00.000Z",
+    requestedByName: "Mark",
+    summary: s,
+    drawer: d2,
+    refunds: r1,
+    headerText: null,
+    addressLines: [],
+  });
+  ok(slipRefunds.includes("REFUNDS &mdash; STORE-WIDE CASH OUT"), "AN-4: refund banner printed");
+  ok(slipRefunds.includes("Voided sales (2)") && slipRefunds.includes("-$35.00"), "AN-4: void row negative");
+  ok(slipRefunds.includes("Counter returns (3)") && slipRefunds.includes("-$7.50"), "AN-4: return row negative");
+  ok(slipRefunds.includes("Total cash refunded") && slipRefunds.includes("-$42.50"), "AN-4: total row");
+  ok(slipRefunds.includes("not tied to one register"), "AN-4: store-wide caveat printed");
+
+  // AN-4 — zero-refund day omits the section (nothing to reconcile against).
+  const slipZeroRefunds = buildDayReportSlipHtml({
+    kind: "Z",
+    registerLabel: "Register 1",
+    businessDay: "2026-07-16",
+    printedAtIso: "2026-07-17T04:55:00.000Z",
+    requestedByName: "Mark",
+    summary: s,
+    drawer: d2,
+    refunds: r0,
+    headerText: null,
+    addressLines: [],
+  });
+  ok(!slipZeroRefunds.includes("REFUNDS"), "AN-4: zero-refund day omits section");
 
   // B33 — the rounding row prints when the policy touched sales.
   const slipRounded = buildDayReportSlipHtml({
