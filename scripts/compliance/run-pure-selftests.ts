@@ -72,6 +72,7 @@ import { __runProductInfoCoreTests } from "../../src/lib/pos/product-info-core";
 import { __runStockFlagCoreTests } from "../../src/lib/pos/stock-flag-core";
 import { __runThemeCoreTests } from "../../src/lib/pos/theme-core";
 import { __runSwCoreTests } from "../../src/lib/pos/sw-core";
+import { __runVariantGramsCoreTests } from "../../src/lib/pos/variant-grams-core";
 import { __runDraftSeedCoreTests } from "../../src/lib/inventory/draft-seed-core";
 import { __runWedgeScanCoreTests } from "../../src/lib/pos/wedge-scan-core";
 import { __runRegisterLoyaltyCoreTests } from "../../src/lib/pos/register-loyalty-core";
@@ -156,6 +157,7 @@ async function main() {
   __runOrderToCartCoreTests();
   __runMemberMatchCoreTests();
   __runSwCoreTests();
+  __runVariantGramsCoreTests();
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

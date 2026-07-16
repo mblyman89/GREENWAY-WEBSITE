@@ -486,28 +486,44 @@ async function processSale(
     );
   }
 
-  const lineRows = sale.lines.map((l) => ({
-    order_id: order.id,
-    product_id: l.productId || null,
-    // POS B20: exact variant identity from the register (null on pre-B20
-    // queued sales) — powers the B19 exact-variant decrement and gives the
-    // CCRS Sale.csv resolver its most precise input.
-    variant_id: l.variantId?.trim() || null,
-    product_name: l.productName,
-    brand: null,
-    variant_label: null,
-    category: l.category,
-    quantity: l.quantity,
-    price_minor_units: l.unitPriceMinor,
-    regular_price_minor_units: l.regularPriceMinor,
-    // Task AM-B — per-UNIT loyalty reduction snapshot (migration 0116).
-    // Only written when a redemption rode this sale, so pre-0116 databases
-    // never see the column on loyalty-free sales.
-    ...(redemptionRow && l.loyaltyDiscountMinor
-      ? { loyalty_discount_minor_units: l.loyaltyDiscountMinor }
-      : {}),
-  }));
-  const { error: linesError } = await admin.from("order_lines").insert(lineRows);
+  const buildLineRows = (withUnitGrams: boolean) =>
+    sale.lines.map((l) => ({
+      order_id: order.id,
+      product_id: l.productId || null,
+      // POS B20: exact variant identity from the register (null on pre-B20
+      // queued sales) — powers the B19 exact-variant decrement and gives the
+      // CCRS Sale.csv resolver its most precise input.
+      variant_id: l.variantId?.trim() || null,
+      product_name: l.productName,
+      brand: null,
+      variant_label: null,
+      category: l.category,
+      quantity: l.quantity,
+      price_minor_units: l.unitPriceMinor,
+      regular_price_minor_units: l.regularPriceMinor,
+      // Task AM-B — per-UNIT loyalty reduction snapshot (migration 0116).
+      // Only written when a redemption rode this sale, so pre-0116 databases
+      // never see the column on loyalty-free sales.
+      ...(redemptionRow && l.loyaltyDiscountMinor
+        ? { loyalty_discount_minor_units: l.loyaltyDiscountMinor }
+        : {}),
+      // AN-1 — per-UNIT grams snapshot (migration 0122). The completion gate
+      // prefers this over the category default; null = unknown weight.
+      ...(withUnitGrams && typeof l.unitGrams === "number" && l.unitGrams > 0
+        ? { unit_grams: l.unitGrams }
+        : {}),
+    }));
+  let { error: linesError } = await admin.from("order_lines").insert(buildLineRows(true));
+  if (
+    linesError &&
+    (linesError.code === "PGRST204" ||
+      linesError.code === "42703" ||
+      /unit_grams/i.test(linesError.message ?? ""))
+  ) {
+    // Migration 0122 not applied yet — retry without the weight snapshot
+    // (the gate falls back to category defaults, exactly the pre-AN-1 math).
+    ({ error: linesError } = await admin.from("order_lines").insert(buildLineRows(false)));
+  }
   if (linesError) {
     await admin.from("orders").delete().eq("id", order.id); // never strand a header
     return markException(admin, ledgerId, envelope.clientUuid, `Order lines insert failed: ${linesError.message}.`);

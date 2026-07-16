@@ -192,6 +192,14 @@ export type PosSaleLine = {
    * Only valid when the payload carries a `loyaltyRedemption` block.
    */
   loyaltyDiscountMinor?: number;
+  /**
+   * AN-1 — grams ONE unit of the sold variant weighs, from the menu bundle
+   * (parsed server-side from the package label: "3.5g" → 3.5, "1oz" → 28).
+   * OPTIONAL so pre-AN-1 queued sales still validate; absent/null = unknown
+   * → the server's WAC 314-55-095 gate falls back to the category default.
+   * At sync it snapshots onto order_lines.unit_grams (migration 0122).
+   */
+  unitGrams?: number | null;
 };
 
 export type PosSalePayload = {
@@ -299,6 +307,14 @@ export function validateSalePayload(p: Partial<PosSalePayload>): SalePayloadChec
       // present it must be a non-empty string — a blank id is corruption.
       if (l.variantId !== undefined && (typeof l.variantId !== "string" || !l.variantId.trim())) {
         errors.push(`Line ${i + 1}: variantId, when present, must be a non-empty string.`);
+      }
+      // AN-1: unitGrams is OPTIONAL (pre-AN-1 queues omit it; null = unknown
+      // weight) but when present-and-non-null it must be a positive finite
+      // number — garbage weights never reach the server's limit gate.
+      if (l.unitGrams !== undefined && l.unitGrams !== null) {
+        if (typeof l.unitGrams !== "number" || !Number.isFinite(l.unitGrams) || l.unitGrams <= 0) {
+          errors.push(`Line ${i + 1}: unitGrams, when present, must be a positive number (grams per unit).`);
+        }
       }
       // Task AM-B: optional per-UNIT loyalty reduction — a whole-cent
       // positive integer that never exceeds the charged price context

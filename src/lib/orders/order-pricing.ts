@@ -40,6 +40,12 @@ import {
   type OrderTotals,
 } from "@/lib/orders/order-pricing-core";
 import type { NewOrderLineInput, OrderLineRow } from "@/lib/orders/types";
+// AN-1 — pure per-variant grams helpers (label → grams; stored numeric → grams).
+import {
+  gramsFromVariantLabel,
+  lineGramsFromUnit,
+  normalizeUnitGrams,
+} from "@/lib/pos/variant-grams-core";
 
 export type PricedOrderLine = {
   productId: string | null;
@@ -54,6 +60,8 @@ export type PricedOrderLine = {
   /** SERVER regular (pre-discount) unit price from the published menu. */
   regularPriceMinorUnits: number;
   appliedLabel?: string;
+  /** AN-1 — grams one unit weighs (from the variant label; null = unknown). */
+  unitGrams?: number | null;
 };
 
 export type RepriceSuccess = {
@@ -214,6 +222,8 @@ export async function repriceOrderLines(rawLines: NewOrderLineInput[]): Promise<
       priceMinorUnits: unit,
       regularPriceMinorUnits: regular,
       appliedLabel: d?.appliedLabel,
+      // AN-1: true per-unit weight from the resolved variant's label.
+      unitGrams: gramsFromVariantLabel(w.resolved.variant.label),
     });
   }
 
@@ -235,10 +245,12 @@ export async function repriceOrderLines(rawLines: NewOrderLineInput[]): Promise<
     })),
   );
 
-  const limitLines: LimitCartLine[] = priced.map((l) => ({
-    category: l.category,
-    quantity: l.quantity,
-  }));
+  const limitLines: LimitCartLine[] = priced.map((l) => {
+    // AN-1: hand the engine the true whole-line grams when known; null keeps
+    // the conservative category-default math.
+    const grams = lineGramsFromUnit(l.unitGrams, l.quantity);
+    return { category: l.category, quantity: l.quantity, ...(grams !== null ? { grams } : {}) };
+  });
 
   return { ok: true, lines: priced, totals, limitLines };
 }
@@ -315,7 +327,11 @@ export async function verifyStoredOrderForCompletion(order: {
       );
     }
 
-    limitLines.push({ category, quantity: line.quantity });
+    // AN-1: prefer the sale-time unit_grams SNAPSHOT (migration 0122; pg
+    // numeric may arrive as string — normalized either way). Legacy rows and
+    // unknown-weight items stay null → category-default math, as before.
+    const grams = lineGramsFromUnit(normalizeUnitGrams(line.unit_grams), line.quantity);
+    limitLines.push({ category, quantity: line.quantity, ...(grams !== null ? { grams } : {}) });
     totalsLines.push({
       category,
       quantity: line.quantity,
