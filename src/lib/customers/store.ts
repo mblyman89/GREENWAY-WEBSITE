@@ -44,6 +44,22 @@ export async function listCustomers(opts?: { q?: string; limit?: number }): Prom
   return (data as Customer[] | null) ?? [];
 }
 
+/**
+ * Task AO-3 — candidate pool for the register's scan-to-member match: every
+ * customer whose birthdate equals the scanned DOB (yyyy-mm-dd). DOB is the
+ * strictest single filter available (a store has few customers per exact
+ * birthday), so the pure matcher only ever sees a handful of rows and the
+ * name comparison happens in code, not in SQL (normalization lives in ONE
+ * place: member-match-core).
+ */
+export async function listCustomersByBirthdate(birthdate: string): Promise<Customer[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(birthdate)) return [];
+  const admin = createSupabaseAdminClient();
+  const { data } = await admin.from("customers").select("*").eq("birthdate", birthdate).limit(25);
+  return (data as Customer[] | null) ?? [];
+}
+
 export async function countCustomers(): Promise<{ total: number; medical: number; consented: number }> {
   if (!isSupabaseServiceConfigured) return { total: 0, medical: 0, consented: 0 };
   const admin = createSupabaseAdminClient();
