@@ -15,12 +15,13 @@ import {
 import { isValidPin } from "@/lib/staffing/time";
 import { parsePunchEdit, composeEditNote } from "@/lib/staffing/timeclock-core";
 import { pacificWallTimeToUtcISO } from "@/lib/reports/timezone";
+import { hashPin } from "@/lib/security/pin-hash";
 import {
-  hashPin,
-  pinThrottleBlocked,
-  recordPinFailure,
-  recordPinSuccess,
-} from "@/lib/security/pin-hash";
+  pinPadBlocked,
+  notePinFailure,
+  notePinSuccess,
+  TIMECLOCK_THROTTLE_SCOPE,
+} from "@/lib/security/pin-throttle-store";
 
 const BASE = "/admin/staffing";
 
@@ -54,16 +55,16 @@ export async function clockToggleAction(formData: FormData): Promise<void> {
 export async function clockByPinAction(formData: FormData): Promise<void> {
   await requirePermission("timeclock.use");
   // S-10: brute-force throttle on the shared PIN pad.
-  const locked = pinThrottleBlocked();
+  const locked = await pinPadBlocked(TIMECLOCK_THROTTLE_SCOPE);
   if (locked) redirect(`${BASE}?error=` + encodeURIComponent(locked));
   const pin = str(formData, "pin");
   if (!isValidPin(pin)) redirect(`${BASE}?error=` + encodeURIComponent("Enter a valid 4–6 digit PIN."));
   const emp = await getEmployeeByPin(pin);
   if (!emp) {
-    recordPinFailure();
+    await notePinFailure(TIMECLOCK_THROTTLE_SCOPE);
     redirect(`${BASE}?error=` + encodeURIComponent("No active employee for that PIN."));
   }
-  recordPinSuccess();
+  await notePinSuccess(TIMECLOCK_THROTTLE_SCOPE);
   const result = await toggleClock(emp.id, "station");
   if (!result.ok) redirect(`${BASE}?error=` + encodeURIComponent(result.error));
   await recordAudit({
@@ -88,15 +89,15 @@ export async function clockByPinPhoneAction(formData: FormData): Promise<void> {
   const pin = str(formData, "pin");
   const CLOCK = `${BASE}/clock`;
   // S-10: brute-force throttle on the PIN entry (shared with the station pad).
-  const locked = pinThrottleBlocked();
+  const locked = await pinPadBlocked(TIMECLOCK_THROTTLE_SCOPE);
   if (locked) redirect(`${CLOCK}?error=` + encodeURIComponent(locked));
   if (!isValidPin(pin)) redirect(`${CLOCK}?error=` + encodeURIComponent("Enter a valid 4–6 digit PIN."));
   const emp = await getEmployeeByPin(pin);
   if (!emp) {
-    recordPinFailure();
+    await notePinFailure(TIMECLOCK_THROTTLE_SCOPE);
     redirect(`${CLOCK}?error=` + encodeURIComponent("No active employee for that PIN."));
   }
-  recordPinSuccess();
+  await notePinSuccess(TIMECLOCK_THROTTLE_SCOPE);
   const result = await toggleClock(emp.id, "phone");
   if (!result.ok) redirect(`${CLOCK}?error=` + encodeURIComponent(result.error));
   await recordAudit({

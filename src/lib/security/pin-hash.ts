@@ -51,12 +51,12 @@ export function verifyPin(pin: string, stored: string | null | undefined): boole
 }
 
 // ---------------------------------------------------------------------------
-// Attempt throttle (S-10). In-memory, per server process: the PIN pad is a
-// single shared station, so a global failure window is the right model. After
-// MAX_FAILURES failed attempts within WINDOW_MS the pad locks for LOCK_MS.
-// (A horizontally-scaled deployment would need a shared store; the back
-// office runs as a single instance, and even per-instance throttling defeats
-// online brute force of a 4–6 digit space.)
+// Attempt throttle (S-10). In-memory, per server process. AN-8 NOTE: this is
+// now the FALLBACK layer only — every PIN entry point goes through the
+// durable per-scope throttle in pin-throttle-store.ts (pin_throttle table,
+// migration 0123), which survives cold starts and is shared across
+// instances. These functions remain so the pad is never LESS protected than
+// before when the durable store is unconfigured/missing/failing.
 // ---------------------------------------------------------------------------
 const MAX_FAILURES = 5;
 const WINDOW_MS = 60_000;

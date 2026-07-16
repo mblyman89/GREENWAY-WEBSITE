@@ -19,7 +19,7 @@ import { authenticateDevice } from "@/lib/pos/sync-store";
 import { getEmployeeByPin, openWorkPunch } from "@/lib/staffing/store";
 import { openSessionForRegister } from "@/lib/registers/store";
 import { isValidPin } from "@/lib/staffing/time";
-import { pinThrottleBlocked, recordPinFailure, recordPinSuccess } from "@/lib/security/pin-hash";
+import { pinPadBlocked, notePinFailure, notePinSuccess, deviceThrottleScope } from "@/lib/security/pin-throttle-store";
 import { recordAudit } from "@/lib/auth/audit";
 
 export const runtime = "nodejs";
@@ -39,7 +39,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const locked = pinThrottleBlocked();
+  const throttleScope = deviceThrottleScope(auth.device.id);
+  const locked = await pinPadBlocked(throttleScope);
   if (locked) return NextResponse.json({ error: locked }, { status: 429 });
 
   let pin = "";
@@ -54,10 +55,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   const employee = await getEmployeeByPin(pin);
   if (!employee) {
-    recordPinFailure();
+    await notePinFailure(throttleScope);
     return NextResponse.json({ error: "No active employee for that PIN." }, { status: 401 });
   }
-  recordPinSuccess();
+  await notePinSuccess(throttleScope);
 
   const [openPunch, drawerSession] = await Promise.all([
     openWorkPunch(employee.id),
