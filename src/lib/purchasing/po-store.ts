@@ -17,6 +17,8 @@ import "server-only";
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+// Mastering Slice 1: sold lines resolve the variant's own lot key first.
+import { lotKeyForSaleLine } from "@/lib/pos/variant-lot-core";
 import {
   computeReorder,
   passesFilter,
@@ -209,8 +211,10 @@ export async function buildReorderSuggestions(opts: {
     }
   }
 
-  // 2) Sales velocity per product over the window (order_lines.product_id maps
-  //    to pos_product_key snapshot). Sum quantity within the window.
+  // 2) Sales velocity per product over the window. Mastering Slice 1: the
+  //    variant's own encoded lot key wins over product_id (each size on a
+  //    mastered card credits ITS lot's velocity; single-lot cards resolve
+  //    the identical key either way).
   const since = new Date(Date.now() - settings.velocity_window_days * 24 * 60 * 60 * 1000).toISOString();
   const { data: recentOrders } = await admin
     .from("orders")
@@ -221,10 +225,13 @@ export async function buildReorderSuggestions(opts: {
   if (orderIds.length) {
     const { data: ols } = await admin
       .from("order_lines")
-      .select("product_id, quantity")
+      .select("product_id, variant_id, quantity")
       .in("order_id", orderIds);
     for (const ol of ols ?? []) {
-      const k = (ol.product_id as string | null) ?? "";
+      const k = lotKeyForSaleLine({
+        productId: (ol.product_id as string | null) ?? null,
+        variantId: (ol.variant_id as string | null) ?? null,
+      });
       if (!k) continue;
       soldByKey.set(k, (soldByKey.get(k) ?? 0) + Number(ol.quantity ?? 0));
     }

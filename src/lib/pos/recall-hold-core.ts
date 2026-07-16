@@ -1,9 +1,10 @@
 /**
  * recall-hold-core.ts (Task AN-7)
  *
- * PURE recall-hold math for the sale path. No imports, no I/O — the server
- * wrapper (recall-hold-store.ts) loads lot rows and the two enforcement
- * points (the POS menu bundle and the completion gate) call these helpers.
+ * PURE recall-hold math for the sale path. No I/O (its only import is the
+ * equally pure variant-lot-core) — the server wrapper (recall-hold-store.ts)
+ * loads lot rows and the two enforcement points (the POS menu bundle and the
+ * completion gate) call these helpers.
  *
  * WHY THIS EXISTS (verified gap): `inventory_lots.status` has carried a
  * `recalled` lifecycle state since migration 0023, and the admin inventory
@@ -35,6 +36,10 @@
  * are skipped — they can never hold (or un-hold) anything.
  */
 
+// Pure variant → lot-key extraction (Mastering Slice 1). No cycle:
+// variant-lot-core imports nothing.
+import { lotKeyFromVariantId } from "@/lib/pos/variant-lot-core";
+
 /** The lot lifecycle status that places its product key on sale hold. */
 export const HOLD_LOT_STATUS = "recalled";
 
@@ -60,23 +65,38 @@ export function buildRecallHoldIndex(rows: LotStatusRow[]): Set<string> {
 export type HoldLineInput = {
   /** order_lines.product_id (nullable snapshot — null lines can't match a hold). */
   productId: string | null;
+  /**
+   * order_lines.variant_id (nullable). Mastering Slice 1: intake variants
+   * encode their own lot's pos_product_key (`${lotKey}-onboarded`), so a
+   * recalled lot must hold the SIZE that lot is — even when the card's
+   * product_id is a different (mastered) key. Optional so existing callers
+   * keep compiling; absent = product-key check only, exactly as before.
+   */
+  variantId?: string | null;
   productName: string;
 };
 
 /**
  * Names of the held products among an order's lines, deduped, in line order.
- * Lines without a product key are skipped (they cannot be proven held — but
- * they also cannot be proven safe; the money/limit gates own those cases).
+ * A line is held when EITHER its product key OR its variant's own encoded
+ * lot key is under recall. Lines without any key are skipped (they cannot be
+ * proven held — but they also cannot be proven safe; the money/limit gates
+ * own those cases).
  */
 export function findHeldLines(lines: HoldLineInput[], held: Set<string>): string[] {
   const names: string[] = [];
   const seen = new Set<string>();
   for (const line of Array.isArray(lines) ? lines : []) {
-    if (!line || typeof line.productId !== "string") continue;
-    if (!held.has(line.productId)) continue;
-    if (seen.has(line.productId)) continue;
-    seen.add(line.productId);
-    names.push(line.productName || line.productId);
+    if (!line) continue;
+    const productKey = typeof line.productId === "string" ? line.productId : null;
+    const variantLotKey = lotKeyFromVariantId(line.variantId);
+    const matched =
+      (productKey && held.has(productKey) ? productKey : null) ??
+      (variantLotKey && held.has(variantLotKey) ? variantLotKey : null);
+    if (!matched) continue;
+    if (seen.has(matched)) continue;
+    seen.add(matched);
+    names.push(line.productName || matched);
   }
   return names;
 }
@@ -142,6 +162,43 @@ export function __runRecallHoldCoreTests(): void {
     findHeldLines([{ productId: "p1", productName: "" }], held),
     ["p1"],
     "blank name falls back to the product key",
+  );
+
+  // Mastering Slice 1 — variant-encoded lot keys also trip the hold.
+  eq(
+    findHeldLines(
+      [{ productId: "mastered-card", variantId: "p1-onboarded", productName: "BD (3.5g)" }],
+      held,
+    ),
+    ["BD (3.5g)"],
+    "recalled lot holds ITS size on a mastered card (variant key match)",
+  );
+  eq(
+    findHeldLines(
+      [{ productId: "mastered-card", variantId: "safe-lot-onboarded", productName: "BD (1g)" }],
+      held,
+    ),
+    [],
+    "sibling size from a safe lot is NOT held",
+  );
+  eq(
+    findHeldLines(
+      [{ productId: "p1", variantId: "pos-abc-hash", productName: "Bulk Card" }],
+      held,
+    ),
+    ["Bulk Card"],
+    "product-key match still holds when the variant id encodes nothing",
+  );
+  eq(
+    findHeldLines(
+      [
+        { productId: "card", variantId: "p1-onboarded", productName: "Size A" },
+        { productId: "p1", variantId: null, productName: "Legacy card" }, // same held key
+      ],
+      held,
+    ),
+    ["Size A"],
+    "variant-key and product-key hits on the SAME held key dedupe",
   );
 
   // recallHoldRefusal

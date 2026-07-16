@@ -43,6 +43,8 @@ import {
 import { canRedeem, pointsValueMinor } from "@/lib/loyalty/engine";
 import { spreadCodeValue, type LoyaltySaleLine } from "@/lib/loyalty/loyalty-sale-core";
 import { loadProductCosts } from "@/lib/promotions/discount-engine";
+// Mastering Slice 1: sold lines resolve the variant's own lot key first.
+import { lotKeyForSaleLine } from "@/lib/pos/variant-lot-core";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 
@@ -96,7 +98,12 @@ async function toSaleLines(lines: DeviceLine[]): Promise<LoyaltySaleLine[]> {
     quantity: l.quantity,
     unitPriceMinorUnits: l.unitPriceMinor,
     regularPriceMinorUnits: l.regularPriceMinor,
-    costMinorUnits: costs.get(l.productId) ?? null,
+    // Mastering Slice 1: the variant's own lot cost wins; single-lot cards
+    // resolve the identical key either way.
+    costMinorUnits: (() => {
+      const key = lotKeyForSaleLine({ productId: l.productId, variantId: l.variantId ?? null });
+      return key ? (costs.get(key) ?? null) : null;
+    })(),
   }));
 }
 

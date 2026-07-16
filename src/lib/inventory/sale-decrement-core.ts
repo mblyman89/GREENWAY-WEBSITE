@@ -46,6 +46,10 @@
  * Quantities are integer sellable units throughout; money never appears here.
  */
 
+// Pure variant → lot-key resolution (Product Mastering Slice 1). No cycle:
+// variant-lot-core imports nothing.
+import { lotKeyForSaleLine } from "@/lib/pos/variant-lot-core";
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -234,13 +238,17 @@ export function buildLotDecrementPlan(
   lines: SaleLineForDecrement[],
   lotsFifo: LotForDecrement[],
 ): LotDecrementPlan {
-  // Aggregate demand per product key.
+  // Aggregate demand per LOT key — the variant's own encoded lot key when
+  // present (mastered cards carry one lot per size variant), else the line's
+  // product_id snapshot (single-lot cards: the two keys coincide, so this is
+  // byte-for-byte the pre-mastering behaviour). See variant-lot-core.ts.
   const demand = new Map<string, number>();
   for (const line of lines) {
-    if (!line.productId) continue;
+    const key = lotKeyForSaleLine(line);
+    if (!key) continue;
     const qty = Math.max(0, Math.trunc(Number(line.quantity) || 0));
     if (qty <= 0) continue;
-    demand.set(line.productId, (demand.get(line.productId) ?? 0) + qty);
+    demand.set(key, (demand.get(key) ?? 0) + qty);
   }
 
   const lotUpdates: { id: string; posProductKey: string; newOnHand: number; soldOut: boolean }[] = [];
@@ -433,6 +441,52 @@ export function __runSaleDecrementCoreTests(): void {
   );
   ok(lp4.lotUpdates.reduce((s, u) => s + u.newOnHand, 0) === 0 && lp4.lotUpdates.length === 2, "aggregated demand drains both lots exactly");
   ok(lp4.shortfalls.length === 0, "7 demanded, 7 available — no shortfall");
+
+  // ── Mastering Slice 1: variant-encoded lot keys ────────────────────────
+  // A mastered card ("card-1") whose two size variants each carry their own
+  // lot's key: LOT-A (1g) and LOT-B (3.5g).
+  const masteredLots: LotForDecrement[] = [
+    { id: "lot-A", posProductKey: "LOT-A", onHandQty: 4, ccrsExternalId: "CCRS-A" },
+    { id: "lot-B", posProductKey: "LOT-B", onHandQty: 4, ccrsExternalId: "CCRS-B" },
+    { id: "lot-card", posProductKey: "card-1", onHandQty: 9, ccrsExternalId: "CCRS-CARD" },
+  ];
+  const mp1 = buildLotDecrementPlan(
+    [
+      { lineId: "l1", productId: "card-1", variantId: "LOT-A-onboarded", productName: "BD (1g)", quantity: 2 },
+      { lineId: "l2", productId: "card-1", variantId: "LOT-B-onboarded", productName: "BD (3.5g)", quantity: 1 },
+    ],
+    masteredLots,
+  );
+  ok(mp1.lotUpdates.length === 2, "mastered: each size consumed ITS OWN lot");
+  ok(
+    mp1.lotUpdates.some((u) => u.id === "lot-A" && u.newOnHand === 2) &&
+      mp1.lotUpdates.some((u) => u.id === "lot-B" && u.newOnHand === 3),
+    "mastered: exact per-lot quantities",
+  );
+  ok(
+    !mp1.lotUpdates.some((u) => u.id === "lot-card"),
+    "mastered: the card-keyed lot is NEVER touched when variants carry their own keys",
+  );
+  ok(
+    mp1.lineExternalIds.get("LOT-A") === "CCRS-A" && mp1.lineExternalIds.get("LOT-B") === "CCRS-B",
+    "mastered: CCRS ids stamp per LOT key, not per card",
+  );
+  // Pre-mastering single-lot card: variant id encodes the SAME key as the
+  // product id — behaviour identical to a bare product_id line.
+  const mp2 = buildLotDecrementPlan(
+    [{ lineId: "l1", productId: "prod-1", variantId: "prod-1-onboarded", productName: "SG", quantity: 3 }],
+    lots,
+  );
+  ok(
+    mp2.lotUpdates.length === 2 && mp2.lotUpdates[0].id === "lot-a" && mp2.lotUpdates[0].newOnHand === 0,
+    "single-lot card: -onboarded variant resolves to the same key (FIFO unchanged)",
+  );
+  // Non-intake variant ids (bulk import hashes) fall back to product_id.
+  const mp3 = buildLotDecrementPlan(
+    [{ lineId: "l1", productId: "prod-2", variantId: "pos-x-y", productName: "SG", quantity: 1 }],
+    lots,
+  );
+  ok(mp3.lotUpdates.length === 1 && mp3.lotUpdates[0].id === "lot-c", "bulk-import variant id falls back to product_id");
 
   // Summary composition.
   const summary = summarizeDecrement({ variantPlan: p3, lotPlan: lp2, lineCount: 1 });

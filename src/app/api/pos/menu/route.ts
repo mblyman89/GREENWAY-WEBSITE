@@ -36,6 +36,8 @@ import type { DohCategory } from "@/lib/medical/medical-sale-core";
 import type { PosMedicalConfig } from "@/lib/pos/medical-pos-core";
 import type { PosMenuBundle, PosMenuProduct } from "@/lib/pos/sale-flow-core";
 import { buildBarcodeIndex, type LotBarcodeSource } from "@/lib/pos/scan-to-cart-core";
+// Mastering Slice 1: intake variants encode their own lot key (`${key}-onboarded`).
+import { lotKeyFromVariantId } from "@/lib/pos/variant-lot-core";
 import { recalledProductKeys } from "@/lib/pos/recall-hold-store";
 import { deriveInventoryExternalId } from "@/lib/compliance/ccrs-identifiers";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -119,6 +121,13 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
           },
         ];
     for (const variant of variants) {
+      // Mastering Slice 1: a variant that encodes its own lot key resolves
+      // recall + cost against THAT lot (single-lot cards: key = item.id, so
+      // both lookups behave exactly as before).
+      const variantLotKey = lotKeyFromVariantId(variant.id);
+      // AN-7 — a recalled lot excludes ITS size, not just cards whose item
+      // key matches (mastered cards would otherwise sell a recalled size).
+      if (variantLotKey && recalled.has(variantLotKey)) continue;
       products.push({
         productId: item.id,
         variantId: variant.id,
@@ -128,7 +137,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         categories,
         variantLabel: variant.label || null,
         regularPriceMinor: variant.priceMinorUnits,
-        costMinorUnits: cost,
+        costMinorUnits: (variantLotKey ? costs.get(variantLotKey) : undefined) ?? cost,
         // AN-1 — true per-unit grams parsed from the package-size label the
         // transform generated ("3.5g" → 3.5, "1oz" → 28; mg/ml/pack/each →
         // null = unknown → the limit engine keeps its category default).
@@ -166,7 +175,15 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         .eq("status", "active")
         .gt("on_hand_qty", 0)
         .limit(5000);
+      // Sellable = every card key PLUS every variant's own encoded lot key
+      // (mastered cards' lots carry the LOT's pos_product_key, not the card
+      // key — without the union their barcodes would be dropped as
+      // "delisted"). Single-lot cards contribute the same key twice.
       const sellableKeys = new Set(products.map((p) => p.productId));
+      for (const p of products) {
+        const k = lotKeyFromVariantId(p.variantId);
+        if (k) sellableKeys.add(k);
+      }
       const sources: LotBarcodeSource[] = (
         (lotRows as {
           id: string;

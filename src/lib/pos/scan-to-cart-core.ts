@@ -23,6 +23,9 @@
 
 import type { PosMenuProduct } from "@/lib/pos/sale-flow-core";
 import { normalizeScan } from "@/lib/inventory/cycle-count-scan-core";
+// Mastering Slice 1: intake variants encode their own lot key in the variant
+// id (`${lotKey}-onboarded`), so a lot-code scan can resolve the EXACT size.
+import { lotKeyFromVariantId } from "@/lib/pos/variant-lot-core";
 
 // ---------------------------------------------------------------------------
 // Index building (server-side at bundle time; pure so it is testable)
@@ -87,8 +90,12 @@ export type ScanResolution =
  * Resolve a raw scan/typed string against the bundle. Priority:
  *   1. exact product key (the code IS the product id — non-cannabis SKUs
  *      and hand-typed keys)
- *   2. the barcode index (lot code / CCRS id → product key)
- * One sellable variant → add. Several → pick (cashier chooses the size).
+ *   2. a variant's own encoded lot key (mastered cards: hand-typed lot keys
+ *      resolve straight to the size that lot IS)
+ *   3. the barcode index (lot code / CCRS id → lot/product key)
+ * A key that IS a specific variant's lot key → add that EXACT variant (the
+ * barcode on the package identifies the size — no guessing needed). Else,
+ * one sellable variant → add; several → pick (cashier chooses the size).
  * No match → none (the caller keeps the text as a search query).
  */
 export function resolveScan(
@@ -99,21 +106,42 @@ export function resolveScan(
   const code = normalizeBarcode(raw);
   if (code.length < 4) return { status: "none" };
 
-  let productId: string | null = null;
+  let key: string | null = null;
 
   const direct = products.filter((p) => p.productId.toLowerCase() === code);
   if (direct.length > 0) {
-    productId = direct[0].productId;
-  } else if (barcodes) {
-    const hit = barcodes[code];
-    if (hit) productId = hit;
+    key = direct[0].productId;
+  } else {
+    // Hand-typed lot key that IS a specific variant on a mastered card.
+    const typedVariant = products.filter(
+      (p) => (lotKeyFromVariantId(p.variantId) ?? "").toLowerCase() === code,
+    );
+    if (typedVariant.length === 1) return { status: "add", product: typedVariant[0] };
+    if (typedVariant.length > 1) {
+      return { status: "pick", productId: typedVariant[0].productId, candidates: typedVariant };
+    }
+    if (barcodes) {
+      const hit = barcodes[code];
+      if (hit) key = hit;
+    }
   }
-  if (!productId) return { status: "none" };
+  if (!key) return { status: "none" };
 
-  const candidates = products.filter((p) => p.productId === productId);
+  // Mastering Slice 1: the resolved key names ONE variant's own lot — the
+  // package in the cashier's hand IS that size. Add it directly; a "pick"
+  // here would make the cashier re-answer what the barcode already said.
+  const exact = products.filter((p) => lotKeyFromVariantId(p.variantId) === key);
+  if (exact.length === 1) return { status: "add", product: exact[0] };
+  if (exact.length > 1) {
+    // Defensive: one lot key should map to one variant; if data ever
+    // disagrees, let the cashier choose — never silently pick.
+    return { status: "pick", productId: exact[0].productId, candidates: exact };
+  }
+
+  const candidates = products.filter((p) => p.productId === key);
   if (candidates.length === 0) return { status: "none" };
   if (candidates.length === 1) return { status: "add", product: candidates[0] };
-  return { status: "pick", productId, candidates };
+  return { status: "pick", productId: key, candidates };
 }
 
 // ---------------------------------------------------------------------------
@@ -201,6 +229,48 @@ export function __runScanToCartCoreTests(): void {
   // stale index entry pointing at a product no longer in the bundle
   const staleIdx = { "old-code": "prod-vanished" };
   ok(resolveScan(products, staleIdx, "old-code").status === "none", "scan: stale index entry resolves to none, never a ghost product");
+
+  // ── Mastering Slice 1: variant-encoded lot keys ────────────────────────
+  // A mastered card: ONE productId, one variant per size, each variant's id
+  // carrying ITS OWN lot's pos_product_key + "-onboarded".
+  const mastered = [
+    product("card-1", "LOT-A-onboarded", "1g"),
+    product("card-1", "LOT-B-onboarded", "3.5g"),
+    product("solo", "solo-onboarded", "each"), // pre-mastering single-lot card
+  ];
+  // Barcode index maps each lot's code to the lot's OWN key (route builds it
+  // from inventory_lots.pos_product_key, which for mastered cards is the
+  // variant's key, kept sellable via the union in the menu route).
+  const masteredIdx = {
+    "code-lot-a": "LOT-A",
+    "code-lot-b": "LOT-B",
+    "code-solo": "solo",
+  };
+  const m1 = resolveScan(mastered, masteredIdx, "CODE-LOT-A");
+  ok(
+    m1.status === "add" && m1.product.variantId === "LOT-A-onboarded",
+    "mastered: lot barcode adds the EXACT size (no pick)",
+  );
+  const m2 = resolveScan(mastered, masteredIdx, "code-lot-b");
+  ok(
+    m2.status === "add" && m2.product.variantId === "LOT-B-onboarded",
+    "mastered: second lot's barcode adds ITS size",
+  );
+  const m3 = resolveScan(mastered, masteredIdx, "code-solo");
+  ok(
+    m3.status === "add" && m3.product.productId === "solo",
+    "mastered: single-lot card still auto-adds (backward compatible)",
+  );
+  // Hand-typed lot key (no barcode index) resolves the exact variant too.
+  const m4 = resolveScan(mastered, null, "LOT-B");
+  ok(
+    m4.status === "add" && m4.product.variantId === "LOT-B-onboarded",
+    "mastered: hand-typed lot key resolves the exact size without an index",
+  );
+  // Typing the CARD key still shows the pick — the cashier chose the product,
+  // not a package, so the size question is real.
+  const m5 = resolveScan(mastered, masteredIdx, "card-1");
+  ok(m5.status === "pick" && m5.candidates.length === 2, "mastered: card key still asks for the size");
 
   console.log("scan-to-cart-core self-tests passed");
 }

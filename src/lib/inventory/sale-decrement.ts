@@ -39,6 +39,9 @@ import {
 } from "@/lib/inventory/sale-decrement-core";
 import { deriveInventoryExternalId } from "@/lib/compliance/ccrs-identifiers";
 import { isCustomLineProductId } from "@/lib/pos/custom-sale-core";
+// Product Mastering Slice 1: sold lines resolve the VARIANT's own lot key
+// (mastered cards carry one lot per size) before the product_id fallback.
+import { lotKeyForSaleLine, lotKeysForLines } from "@/lib/pos/variant-lot-core";
 
 const EVENT_TYPE = "inventory_decremented";
 
@@ -122,12 +125,16 @@ export async function decrementInventoryForOrder(orderId: string): Promise<void>
     }
 
     // ── Layer 2: inventory lots (FIFO oldest-first, active only) ──────────
+    // Mastering Slice 1: load lots for BOTH the card keys and each variant's
+    // own encoded lot key (single-lot cards: identical set, so nothing new
+    // is fetched; mastered cards: every size's lot is present for the plan).
+    const lotKeys = lotKeysForLines(lines);
     let lots: LotForDecrement[] = [];
-    if (productKeys.length > 0) {
+    if (lotKeys.length > 0) {
       const { data: lotRows } = await admin
         .from("inventory_lots")
         .select("id, pos_product_key, on_hand_qty, ccrs_inventory_external_id, lot_code")
-        .in("pos_product_key", productKeys)
+        .in("pos_product_key", lotKeys)
         .eq("status", "active")
         .gt("on_hand_qty", 0)
         .order("created_at", { ascending: true });
@@ -169,7 +176,9 @@ export async function decrementInventoryForOrder(orderId: string): Promise<void>
     // reports source "line" (exact) instead of the product_key fallback.
     // Only fills blanks: an explicit per-line override is never overwritten.
     for (const line of lines) {
-      const extId = line.productId ? lotPlan.lineExternalIds.get(line.productId) : undefined;
+      // Same key the plan aggregated the line's demand under (variant-first).
+      const key = lotKeyForSaleLine(line);
+      const extId = key ? lotPlan.lineExternalIds.get(key) : undefined;
       if (!extId) continue;
       await admin
         .from("order_lines")

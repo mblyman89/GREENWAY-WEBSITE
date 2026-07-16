@@ -14,6 +14,8 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+// Mastering Slice 1: intake variant ids encode their lot key + this suffix.
+import { ONBOARDED_VARIANT_SUFFIX } from "@/lib/pos/variant-lot-core";
 
 export type PricingSettings = {
   min_markup_multiple: number;
@@ -176,12 +178,33 @@ export async function getVelocityForProduct(
   try {
     const admin = createSupabaseAdminClient();
     const since = new Date(Date.now() - lookbackDays * 24 * 3600 * 1000).toISOString();
-    const { data } = await admin
-      .from("order_lines")
-      .select("quantity, created_at")
-      .eq("product_id", posProductKey)
-      .gte("created_at", since);
-    const rows = (data as { quantity: number; created_at: string }[] | null) ?? [];
+    // Mastering Slice 1: a lot sold from a mastered card carries the CARD's
+    // product_id, but its variant_id encodes THIS lot's key ("-onboarded").
+    // Count both shapes; dedupe by line id (a single-lot card's line matches
+    // both filters).
+    const [byProduct, byVariant] = await Promise.all([
+      admin
+        .from("order_lines")
+        .select("id, quantity, created_at")
+        .eq("product_id", posProductKey)
+        .gte("created_at", since),
+      admin
+        .from("order_lines")
+        .select("id, quantity, created_at")
+        .eq("variant_id", `${posProductKey}${ONBOARDED_VARIANT_SUFFIX}`)
+        .gte("created_at", since),
+    ]);
+    type Row = { id: string; quantity: number; created_at: string };
+    const seen = new Set<string>();
+    const rows: Row[] = [];
+    for (const r of [
+      ...((byProduct.data as Row[] | null) ?? []),
+      ...((byVariant.data as Row[] | null) ?? []),
+    ]) {
+      if (seen.has(r.id)) continue;
+      seen.add(r.id);
+      rows.push(r);
+    }
     if (rows.length === 0) return null;
     const unitsSold = rows.reduce((s, r) => s + (r.quantity ?? 0), 0);
     return { unitsSold, daysAvailable: lookbackDays, onHand: 0 };

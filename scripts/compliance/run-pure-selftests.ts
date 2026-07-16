@@ -58,6 +58,7 @@ import { __runExceptionReminderCoreTests } from "../../src/lib/pos/exception-rem
 import { __runRecallHoldCoreTests } from "../../src/lib/pos/recall-hold-core";
 import { __runPinThrottleCoreTests } from "../../src/lib/security/pin-throttle-core";
 import { __runScanToCartCoreTests } from "../../src/lib/pos/scan-to-cart-core";
+import { __runVariantLotCoreTests } from "../../src/lib/pos/variant-lot-core";
 import { __runPriceOverrideCoreTests } from "../../src/lib/pos/price-override-core";
 import { __runDeviceSetupCoreTests } from "../../src/lib/pos/device-setup-core";
 import { __runVoidSaleCoreTests } from "../../src/lib/pos/void-sale-core";
@@ -143,6 +144,7 @@ async function main() {
   __runRecallHoldCoreTests();
   __runPinThrottleCoreTests();
   __runScanToCartCoreTests();
+  __runVariantLotCoreTests();
   __runPriceOverrideCoreTests();
   __runDeviceSetupCoreTests();
   __runVoidSaleCoreTests();
