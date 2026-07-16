@@ -242,9 +242,20 @@ only quantitative compliance gaps and go first.
   guessing safe), NO override — same posture as the DOH high-THC gate. Mark/release path is
   the existing Admin → Inventory lot-status editor. 11 self-tests + vitest mirror. No
   migration — rides inventory_lots.status (0023). Suite 1,684/129.*
-- [ ] **AN-8 (F-9, lowest) — Durable PIN throttle.** Current 5-fails/60 s throttle is
+- [x] **AN-8 (F-9, lowest) — Durable PIN throttle.** Current 5-fails/60 s throttle is
   in-memory per lambda instance (resets on cold start, not shared across instances). Move
   to a durable store keyed per device+employee.
+  *SHIPPED (PR #548): **MIGRATION 0123 pending — owner applies manually** (`pin_throttle`
+  table, one row per scope: `pos-device:<uuid>` per register pad, `timeclock` for the
+  shared staffing pad — a failed PIN identifies no employee, so per-entry-point scoping
+  replaces the roadmap's device+employee idea; RLS staff-read, service-role writes). Pure
+  core `pin-throttle-core.ts` computes the identical S-10 policy over the durable row with
+  defensive parsing (future/garbage timestamps dropped; a locked_until beyond now+LOCK_MS
+  is corrupt and ignored — a tampered row can never hold an unbounded lock). Store falls
+  back to the legacy in-memory window whenever the durable layer is unconfigured/missing/
+  failing, so protection never regresses even before 0123 lands. All 8 call sites migrated
+  (6 POS routes incl. the till witness PIN → per-device scope; station + phone timeclock →
+  shared scope). 18 self-tests + vitest mirror. Suite 1,691/130.*
 
 *(F-10 minor leftovers — bundle-staleness enforcement — fold into AN-3 or AN-0 where natural.)*
 
