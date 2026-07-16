@@ -121,7 +121,7 @@ only quantitative compliance gaps and go first.
   home screen and never while a sale is held, and reloads once on controllerchange.
   Running version (same resolver as the worker) shown in the status footer.
   Suite 1,642/125.*
-- [ ] **AN-1 (F-1) — Per-variant grams → limit engine.** `lineGrams()` already honors
+- [x] **AN-1 (F-1) — Per-variant grams → limit engine.** `lineGrams()` already honors
   `line.grams` but NO caller passes it — both the register meter (`limitLinesFor`) and the
   server gate fall back to `DEFAULT_UNIT_GRAMS` category defaults (a 7 g flower jar counts
   as 3.5 g). `transform.ts` already parses `gramsEquivalent` from package sizes. Build:
@@ -129,6 +129,21 @@ only quantitative compliance gaps and go first.
   field), snapshot grams onto `order_lines` (migration), and pass real grams through BOTH
   the register meter and `enforceSalesLimitForSale`. Closes the only quantitative
   WAC 314-55-095 gap.
+  *Shipped (PR #534): new `variant-grams-core.ts` pure core (38 self-tests + vitest
+  mirror) parses per-unit grams back OUT of the variant label — a closed, machine-
+  generated vocabulary from the same transform parse that computes `gramsEquivalent`
+  (g → qty, oz → qty × 28), so already-published menus work with NO re-import and no
+  menu-schema change. Non-weight labels (mg/ml/fl oz/pk/each/free text) → null = keep
+  the conservative category default. Menu API stamps `unitGrams` per product; register
+  carries it priceCart → limitLinesFor (live meter) → buildSalePayload (queued
+  snapshot, validated positive-finite when present; pre-AN-1 queues stay valid);
+  website reprice stamps it and BOTH the placement soft-check and the completion hard
+  gate meter on stored `unit_grams` (`normalizeUnitGrams` accepts pg numeric-as-text).
+  Grams semantics verified: `LimitCartLine.grams` is the WHOLE-line total. Migration
+  0122 (owner applies manually) adds nullable `order_lines.unit_grams`; sync-store and
+  orders-store both retry without the column (PGRST204/42703 ladder) so an unapplied
+  migration never breaks a sale. No backfill — old rows meter on category defaults
+  exactly as before. Suite 1,649/126.*
 - [ ] **AN-2 (F-2) — Statutory clamp on sales-limit settings.** `updateSalesLimitSettingsAction`
   accepts any ≥ 0 values with no clamp (unlike sales hours, which clamp INTO the statute via
   `normalizeSalesHoursWindow`). Apply the same clamp pattern so owner-entered limits can
