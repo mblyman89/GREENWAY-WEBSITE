@@ -159,11 +159,24 @@ only quantitative compliance gaps and go first.
   completion hard gate) is protected even against a STALE CACHED DEVICE BUNDLE carrying
   widened values. No migration. +10 pure self-tests (sales-limits-core → 57) + 2 vitest
   cases. Suite 1,651/126.*
-- [ ] **AN-3 (F-4 + F-6 + F-10a) — Sync-ingest hardening.** (a) hours gate evaluated on the
+- [x] **AN-3 (F-4 + F-6 + F-10a) — Sync-ingest hardening.** (a) hours gate evaluated on the
   event's `occurredAt`, not sync-arrival time; (b) re-run manual-ID age/expiry math at sync
   (today `validateManualIdEventPayload` is format-only); (c) validate `drawerSessionId`
   refers to a real open session (today only UUID-shape checked); (d) flag device clock
   drift beyond tolerance as a POS exception. All pure-core testable.
+  *Shipped (PR #538): all four as pure functions in sync-core.ts (+21 self-tests → 37,
+  vitest mirrors). (a) `CompletionGateOptions.hoursAt` (defaults to now for back office +
+  pickup); POS sync passes `envelope.occurredAt` — a legal 11 PM sale flushing at 2 AM
+  passes, an illegal 2 AM sale syncing at noon is refused. (b) `checkManualIdMathAtSync`
+  re-runs ageOn + isExpired against the EVENT's own date (not sync arrival — a doc
+  expiring in between must still pass); excepted verifications grant nothing (the sale
+  path now also requires the referenced verification's ledger status = processed).
+  (c) `checkDrawerSessionForSale`: session must exist, belong to the device's register,
+  and its open interval must contain occurredAt (late flushes fine; sales predating
+  open/postdating close are exceptions). (d) `checkClockDrift` excepts envelopes stamped
+  >5 min in the FUTURE before any processing (lateness is never drift), which also
+  makes (a) ungameable forward. All failures are EXCEPTIONS (ledger fact preserved,
+  manager reviews) — never silent drops. No migration. Suite 1,661/126.*
 - [ ] **AN-4 (F-5) — Refunds in the drawer story.** Voids/returns pop the drawer and pay
   cash out but are ABSENT from the X/Z day report and reconcile math
   (`expectedClose = opening + cashSales − drops` today). Add refund lines to X/Z and a
