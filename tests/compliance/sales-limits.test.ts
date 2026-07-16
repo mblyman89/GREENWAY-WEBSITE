@@ -14,6 +14,7 @@ import {
   LIMIT_BUCKETS,
   DEFAULT_UNIT_GRAMS,
   categoryToBucket,
+  clampLimitProfile,
   evaluateCart,
   gramsToOunces,
   lineGrams,
@@ -124,6 +125,25 @@ describe("explicit grams and overrides", () => {
     // Tightened limit blocks a half-ounce+1 cart.
     const v = evaluateCart([{ category: "flower", quantity: 5 }], "recreational", { usable: 14 });
     expect(v.blocked).toBe(true); // 17.5 g > 14 g
+  });
+  it("AN-2: overrides can tighten but NEVER widen past the statute", () => {
+    // A widened override (999 g usable) clamps back to the statutory 28 g.
+    expect(resolveLimits("recreational", { usable: 999 }).usable).toBe(28);
+    expect(resolveLimits("medical", { concentrate: 500 }).concentrate).toBe(21);
+    // The engine itself refuses the widened cart: 10 × 3.5 g = 35 g > 28 g
+    // blocks even when the override claims a 999 g allowance.
+    const v = evaluateCart([{ category: "flower", quantity: 10 }], "recreational", { usable: 999 });
+    expect(v.blocked).toBe(true);
+  });
+  it("AN-2: clampLimitProfile collapses garbage to the statutory base", () => {
+    const clamped = clampLimitProfile(
+      { usable: 0, solid_edible: -5, concentrate: NaN, liquid_edible: "junk" },
+      RECREATIONAL_LIMITS,
+    );
+    expect(clamped).toEqual(RECREATIONAL_LIMITS);
+    expect(clampLimitProfile(null, MEDICAL_LIMITS)).toEqual(MEDICAL_LIMITS);
+    // Numeric strings are accepted (pg numeric can arrive as text).
+    expect(clampLimitProfile({ usable: "14" }, RECREATIONAL_LIMITS).usable).toBe(14);
   });
   it("per-category unit-gram overrides are applied", () => {
     const v = evaluateCart(

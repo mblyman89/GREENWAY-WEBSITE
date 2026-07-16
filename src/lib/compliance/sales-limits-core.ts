@@ -227,18 +227,50 @@ export function gramsToOunces(g: number): number {
   return round3(g / GRAMS_PER_OUNCE);
 }
 
-/** Resolve the active limit profile, applying owner overrides. */
+/**
+ * AN-2 — statutory clamp for owner-entered limit profiles (mirrors the
+ * sales-hours pattern: `normalizeSalesHoursWindow` clamps INTO the statute).
+ *
+ * The owner may TIGHTEN a bucket below the WAC 314-55-095 maximum but can
+ * never widen it: values above the statutory base clamp down to the base,
+ * and nonsense (non-numeric, zero, negative, NaN/Infinity) collapses to the
+ * statutory base — exactly how sales-hours collapses garbage to the widest
+ * legal window. Values are rounded to 3 decimals like all limit math.
+ */
+export function clampLimitProfile(raw: unknown, base: LimitProfile): LimitProfile {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  const clamp = (v: unknown, max: number): number => {
+    const n = typeof v === "number" ? v : typeof v === "string" ? Number(v) : NaN;
+    if (!Number.isFinite(n) || n <= 0) return max;
+    return round3(Math.min(n, max));
+  };
+  return {
+    usable: clamp(r.usable, base.usable),
+    solid_edible: clamp(r.solid_edible, base.solid_edible),
+    concentrate: clamp(r.concentrate, base.concentrate),
+    liquid_edible: clamp(r.liquid_edible, base.liquid_edible),
+  };
+}
+
+/** Resolve the active limit profile, applying owner overrides.
+ * AN-2: overrides are clamped INTO the statute at this single choke point —
+ * every evaluation (register meter, website check, completion gate) flows
+ * through here, so even a stale cached device bundle carrying pre-clamp
+ * values can only ever TIGHTEN the WAC 314-55-095 maximums, never widen. */
 export function resolveLimits(
   customerType: "recreational" | "medical",
   overrides?: LimitOverrides,
 ): LimitProfile {
   const base = customerType === "medical" ? MEDICAL_LIMITS : RECREATIONAL_LIMITS;
-  return {
-    usable: overrides?.usable ?? base.usable,
-    solid_edible: overrides?.solid_edible ?? base.solid_edible,
-    concentrate: overrides?.concentrate ?? base.concentrate,
-    liquid_edible: overrides?.liquid_edible ?? base.liquid_edible,
-  };
+  return clampLimitProfile(
+    {
+      usable: overrides?.usable ?? base.usable,
+      solid_edible: overrides?.solid_edible ?? base.solid_edible,
+      concentrate: overrides?.concentrate ?? base.concentrate,
+      liquid_edible: overrides?.liquid_edible ?? base.liquid_edible,
+    },
+    base,
+  );
 }
 
 /** Grams a single cart line contributes to its bucket. */
@@ -356,6 +388,44 @@ export function __runSalesLimitTests(): void {
     resolveLimits("recreational", { usable: 14 }).concentrate === 7,
     "override leaves others",
   );
+
+  // AN-2: clampLimitProfile — tighten allowed, widen impossible.
+  ok(
+    clampLimitProfile({ usable: 14, solid_edible: 448, concentrate: 7, liquid_edible: 2016 }, RECREATIONAL_LIMITS)
+      .usable === 14,
+    "clamp: tighter usable kept",
+  );
+  ok(
+    clampLimitProfile({ usable: 999, solid_edible: 448, concentrate: 7, liquid_edible: 2016 }, RECREATIONAL_LIMITS)
+      .usable === 28,
+    "clamp: usable above statute collapses to 28",
+  );
+  ok(
+    clampLimitProfile({ usable: 28, solid_edible: 448, concentrate: 50, liquid_edible: 2016 }, RECREATIONAL_LIMITS)
+      .concentrate === 7,
+    "clamp: concentrate above statute collapses to 7",
+  );
+  ok(
+    clampLimitProfile({ usable: 0, solid_edible: -5, concentrate: NaN, liquid_edible: "junk" }, RECREATIONAL_LIMITS)
+      .usable === 28,
+    "clamp: zero collapses to statute",
+  );
+  ok(
+    clampLimitProfile({ usable: 0, solid_edible: -5, concentrate: NaN, liquid_edible: "junk" }, RECREATIONAL_LIMITS)
+      .liquid_edible === 2016,
+    "clamp: garbage string collapses to statute",
+  );
+  ok(clampLimitProfile(null, MEDICAL_LIMITS).usable === 84, "clamp: null profile → med statute");
+  ok(
+    clampLimitProfile({ usable: "42" }, MEDICAL_LIMITS).usable === 42,
+    "clamp: numeric string accepted (pg numeric as text)",
+  );
+
+  // AN-2: resolveLimits clamps overrides at the engine choke point — a stale
+  // cached bundle carrying widened values can never exceed the statute.
+  ok(resolveLimits("recreational", { usable: 999 }).usable === 28, "resolve clamps widened usable");
+  ok(resolveLimits("medical", { concentrate: 500 }).concentrate === 21, "resolve clamps widened med concentrate");
+  ok(resolveLimits("recreational", { concentrate: 3 }).concentrate === 3, "resolve keeps tightened value");
 
   // lineGrams: defaults
   ok(lineGrams({ category: "flower", quantity: 2 }) === 7, "2x flower 3.5=7g");
