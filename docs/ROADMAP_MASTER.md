@@ -24,6 +24,44 @@
 
 ---
 
+## Phase −1 — Task AO: Register front-end rebuild to the approved Dutchie-style design (TOP PRIORITY)
+
+> Owner reviewed the shipped dark register and rejected the visual design outright, then
+> APPROVED two light-theme mockups modeled directly on their Dutchie example screenshot
+> (`another_example_of_pos.png`): white/light background, navy top bar with tab nav,
+> customer band header, clean product TABLE, and a right-hand "Cart Summary" rail with
+> legal-limit meter and a single green tender button. Owner decisions locked:
+> **no "Checked In"/"In Progress" queue columns — pickup orders are the only queue**;
+> **ID scan should auto-load the matching customer**; owner delegated feature/flow
+> decisions ("executive decisions") to the agent. This is a RE-SKIN + RE-FLOW: every
+> compliance/offline mechanism underneath (ID gate, WAC limits, offline queue, drawer,
+> voids/returns, sync) is kept exactly as built.
+
+- [ ] **AO-1 — Light theme + shell.** New POS design tokens (light bg, navy `#12233d`
+  top bar, teal/green accents), top tab nav (REGISTER · PICKUP · DRAWER · REPORTS · MORE ▾)
+  replacing the wall-of-cards home, status strip (sync/menu/queue/app version) moved to a
+  slim footer. Employee + register + online/drawer state in the top-right.
+- [ ] **AO-2 — Scan-first home screen.** Landing surface = "Scan an ID to start a sale"
+  hero with an always-focused scan box (wedge-ready), Manual ID check + member lookup as
+  secondary buttons, held-sales resume strip, pickup-orders rail (the only queue, per
+  owner). All existing functions (no-sale, day report, void, return, reprint, leaderboard,
+  clock out, lock) move under MORE ▾ / DRAWER / REPORTS tabs — nothing is removed.
+- [ ] **AO-3 — ID scan auto-attaches the customer.** After a passing AAMVA scan, the
+  register (online) sends parsed name + DOB to a new device-authenticated match endpoint;
+  an unambiguous single match auto-attaches the loyalty member (points/tier ride the
+  band); ambiguous/no match falls back to today's manual lookup. Privacy budget
+  unchanged (label + points + tier only; DOB never returned — matching happens
+  server-side). Offline: scan still gates age locally; member attach skipped as today.
+- [ ] **AO-4 — Sale screen rebuild.** Customer band (name + ID✓age + tier/points badges +
+  History/Hold/Cancel), "THE USUAL" one-tap re-add chips from member history (B29 data),
+  live scan/search bar + category chips, cart as a clean table (qty steppers, remove,
+  "just scanned" flash), Cart Summary rail (legal-limit meter wired to the real B22 meter,
+  itemized lines, loyalty box with earn preview + redeem, subtotal/discount/tax/TOTAL,
+  green "Tender Cash" + quick-tender denomination buttons that compute change instantly).
+- [ ] **AO-5 — Remaining surfaces restyle.** Tender/change + receipt screens, pickup
+  fulfillment, drawer (open/drop/close), returns/void flows, day report, leaderboard —
+  all restyled to the approved light theme so no screen drops back to the old dark UI.
+
 ## Phase 0 — Task AN: POS compliance hardening (HIGHEST PRIORITY)
 
 One PR per slice. These close the gaps found in the front-end audit; AN-1/AN-2 are the
