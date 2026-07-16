@@ -2,9 +2,10 @@
  * POS Slice B44 — vitest mirror for the per-device display-mode core.
  *
  * Runs the full self-test suite, then pins the behaviors the register shell
- * depends on: corruption ALWAYS degrades to dark (a bad localStorage blob
- * can never break the register), the toggle is a strict two-state flip, and
- * the button names the mode you'd switch TO.
+ * depends on: corruption ALWAYS degrades to the default (light since Task AO;
+ * a bad localStorage blob can never break the register), a device's CHOSEN
+ * dark still parses, the toggle is a strict two-state flip, and the button
+ * names the mode you'd switch TO.
  */
 import { describe, expect, it } from "vitest";
 
@@ -25,15 +26,15 @@ describe("theme-core self-tests", () => {
 });
 
 describe("theme-core pins", () => {
-  it("uses a stable per-device localStorage key and defaults dark", () => {
+  it("uses a stable per-device localStorage key and defaults light (Task AO)", () => {
     expect(THEME_KEY).toBe("gw-pos-theme");
-    expect(DEFAULT_THEME).toBe("dark");
+    expect(DEFAULT_THEME).toBe("light");
     expect(POS_THEMES).toEqual(["dark", "light"]);
   });
 
-  it("corruption always degrades to dark, never throws", () => {
+  it("corruption always degrades to light, never throws — and a chosen dark survives", () => {
     for (const garbage of [null, undefined, "", "sepia", "LIGHT", 1, [], {}, true]) {
-      expect(parseTheme(garbage)).toBe("dark");
+      expect(parseTheme(garbage)).toBe("light");
     }
     expect(parseTheme("light")).toBe("light");
     expect(parseTheme("dark")).toBe("dark");

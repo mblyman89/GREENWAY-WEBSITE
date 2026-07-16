@@ -24,8 +24,13 @@ export const THEME_KEY = "gw-pos-theme";
 export const POS_THEMES = ["dark", "light"] as const;
 export type PosTheme = (typeof POS_THEMES)[number];
 
-/** Dark is the default: it's what every register has run since B1. */
-export const DEFAULT_THEME: PosTheme = "dark";
+/**
+ * Light is the default (Task AO): the owner approved a Dutchie-style light
+ * register design — white/light canvas, navy chrome, green accents. Dark
+ * remains available as the per-device toggle for dim rooms. Devices that
+ * previously CHOSE dark keep it (their stored "dark" still parses).
+ */
+export const DEFAULT_THEME: PosTheme = "light";
 
 /**
  * Parse a stored/untrusted value into a theme. Anything unexpected (null,
@@ -62,19 +67,19 @@ export function __runThemeCoreTests(): void {
   };
 
   ok(THEME_KEY === "gw-pos-theme", "stable localStorage key");
-  ok(DEFAULT_THEME === "dark", "dark is the default");
+  ok(DEFAULT_THEME === "light", "light is the default (Task AO approved design)");
 
-  // parseTheme — valid values pass through.
+  // parseTheme — valid values pass through (a device that CHOSE dark keeps it).
   ok(parseTheme("dark") === "dark", "parse dark");
   ok(parseTheme("light") === "light", "parse light");
   // parseTheme — everything else degrades to the default, never throws.
-  ok(parseTheme(null) === "dark", "null degrades to default");
-  ok(parseTheme(undefined) === "dark", "undefined degrades to default");
-  ok(parseTheme("") === "dark", "empty string degrades to default");
-  ok(parseTheme("LIGHT") === "dark", "case-sensitive (stored by us, so exact)");
-  ok(parseTheme("sepia") === "dark", "unknown mode degrades to default");
-  ok(parseTheme(42) === "dark", "number degrades to default");
-  ok(parseTheme({ theme: "light" }) === "dark", "object degrades to default");
+  ok(parseTheme(null) === "light", "null degrades to default");
+  ok(parseTheme(undefined) === "light", "undefined degrades to default");
+  ok(parseTheme("") === "light", "empty string degrades to default");
+  ok(parseTheme("LIGHT") === "light", "case-sensitive (stored by us, so exact)");
+  ok(parseTheme("sepia") === "light", "unknown mode degrades to default");
+  ok(parseTheme(42) === "light", "number degrades to default");
+  ok(parseTheme({ theme: "light" }) === "light", "object degrades to default");
 
   // toggleTheme — a strict two-state flip.
   ok(toggleTheme("dark") === "light", "dark toggles to light");
