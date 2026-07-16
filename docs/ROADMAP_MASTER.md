@@ -212,9 +212,21 @@ only quantitative compliance gaps and go first.
   trail still tells the manager exactly which register needs a menu refresh. Wrapped in
   try/catch so a drift-check failure can never affect a completed sale. 16 self-tests +
   7 vitest mirrors. No migration. Suite 1,671/127.*
-- [ ] **AN-6 (F-7) — POS exception reminders + nav badge.** Unresolved POS exceptions are
+- [x] **AN-6 (F-7) — POS exception reminders + nav badge.** Unresolved POS exceptions are
   invisible until someone opens the page. Ride the existing Task W reminders engine
   (`compliance-reminders.ts`, currently CCRS-deadlines-only) + add an admin-nav badge count.
+  *SHIPPED (PR #544): pure planner `exception-reminder-core.ts` — one reminder per Pacific
+  day while ANY exception is unresolved (dedupe key `pos-exceptions:<date>`; per-day keys
+  re-fire daily until the queue drains, then go quiet). Urgency warning → critical when
+  the oldest exception is 3+ Pacific days old; unknown age never escalates and invents no
+  number. `posExceptionSnapshot()` in sync-store (exact count + oldest occurred_at,
+  best-effort). Task W `Reminder` gained optional linkPath/linkLabel/footnote overrides so
+  the POS reminder deep-links to `/admin/registers/exceptions`; the POS planner is wired
+  best-effort so its failure never breaks CCRS deadline mails. Nav badge: data-driven
+  `badges` prop on AdminTopNav (href → label, orange chip on the Employee tab, the
+  Register Activity dropdown item, and mobile accordion; caps at 99+); admin layout
+  fetches the count server-side only for roles with orders.manage. 30 self-tests + vitest
+  mirror. No migration — rides compliance_reminder_log (0118). Suite 1,678/128.*
 - [ ] **AN-7 (F-8) — Recall/quarantine hard stop in the sale path.** No hold gate exists in
   the sell flow today. Build: recall hold flag → excluded from the published menu bundle
   AND a completion-gate hard block (same discipline as the DOH high-THC gate).
