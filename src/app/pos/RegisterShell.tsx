@@ -51,7 +51,7 @@ import { CUSTOMER_RETURN_REASONS } from "@/lib/inventory/disposition-core";
 import type { PickupQueueEntry } from "@/lib/pos/pickup-core";
 import type { MemberHistory } from "@/lib/pos/member-history-core";
 import type { PosLoyaltyGrant } from "@/lib/pos/register-loyalty-core";
-import { buildDayReportSlipHtml, type DaySummary, type DrawerDaySummary } from "@/lib/pos/day-report-core";
+import { buildDayReportSlipHtml, type DaySummary, type DrawerDaySummary, type RefundSummary } from "@/lib/pos/day-report-core";
 import { medalFor } from "@/lib/pos/leaderboard-core";
 import {
   LAST_RECEIPT_KEY,
@@ -2969,6 +2969,7 @@ function DayReportModal({
             requestedByName?: string;
             summary?: DaySummary;
             drawer?: DrawerDaySummary | null;
+            refunds?: RefundSummary | null;
             error?: string;
           }
         | null;
@@ -2985,6 +2986,7 @@ function DayReportModal({
         requestedByName: body.requestedByName ?? "Manager",
         summary: body.summary,
         drawer: body.drawer ?? null,
+        refunds: body.refunds ?? null,
         headerText: receiptConfig?.headerText ?? null,
         addressLines: receiptConfig ? receiptAddressLines(receiptConfig) : [],
       });

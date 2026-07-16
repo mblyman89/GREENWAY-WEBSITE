@@ -36,6 +36,7 @@ import {
   type DayEventRow,
   type DaySessionRow,
 } from "@/lib/pos/day-report-core";
+import { refundsForBusinessDay } from "@/lib/pos/refunds-store";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { recordAudit } from "@/lib/auth/audit";
@@ -134,6 +135,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const drawer = sessions.length > 0 ? summarizeDrawerDay(sessionSummaries, drops) : null;
   const kind = reportKind(drawer);
 
+  // ── AN-4: cash refunded OUT today (STORE-WIDE — voids and counter returns
+  // carry no register attribution, so we never guess a register). Shared
+  // query with the back-office reconcile screen so both print the same
+  // number. Best-effort: a read failure yields all-zeros, never blocks.
+  const refunds = await refundsForBusinessDay(businessDay);
+
   await recordAudit({
     actorId: employee.staff_id,
     actorEmail: employee.full_name,
@@ -147,6 +154,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       businessDay,
       saleCount: summary.saleCount,
       grossMinor: summary.grossMinor,
+      refundTotalMinor: refunds.refundTotalMinor,
     },
   });
 
@@ -157,5 +165,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     requestedByName: employee.full_name,
     summary,
     drawer,
+    refunds,
   });
 }

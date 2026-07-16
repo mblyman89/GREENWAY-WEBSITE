@@ -8,6 +8,8 @@ import { describe, expect, it } from "vitest";
 import {
   summarizeDayEvents,
   summarizeDrawerDay,
+  summarizeRefunds,
+  auditRefundMinor,
   reportKind,
   buildDayReportSlipHtml,
   __runDayReportCoreTests,
@@ -85,5 +87,65 @@ describe("day-report-core (POS B22)", () => {
     expect(html).toContain("body{width:576px");
     expect(html).toContain("blind");
     expect(html).toContain("Port Orchard, WA");
+  });
+
+  // ── AN-4: refunds on the X/Z slip ──────────────────────────────────────────
+
+  it("AN-4: summarizeRefunds splits voids vs returns; garbage amounts contribute $0", () => {
+    const r = summarizeRefunds([
+      { source: "void", refundMinor: 2500 },
+      { source: "void", refundMinor: 1000 },
+      { source: "return", refundMinor: 750 },
+      { source: "return", refundMinor: -50 },
+      { source: "return", refundMinor: 12.5 as unknown as number },
+    ]);
+    expect(r.voidCount).toBe(2);
+    expect(r.voidRefundMinor).toBe(3500);
+    expect(r.returnCount).toBe(3);
+    expect(r.returnRefundMinor).toBe(750);
+    expect(r.refundTotalMinor).toBe(4250);
+    expect(summarizeRefunds([]).refundTotalMinor).toBe(0);
+  });
+
+  it("AN-4: auditRefundMinor is defensive on after_json shape", () => {
+    expect(auditRefundMinor({ refundMinor: 4321 })).toBe(4321);
+    expect(auditRefundMinor({ refundMinor: "42" })).toBe(0);
+    expect(auditRefundMinor(null)).toBe(0);
+    expect(auditRefundMinor("garbage")).toBe(0);
+    expect(auditRefundMinor({ refundMinor: -100 })).toBe(0);
+  });
+
+  it("AN-4: slip prints store-wide refund section only when the day had cash out", () => {
+    const base = {
+      kind: "Z" as const,
+      registerLabel: "Register 1",
+      businessDay: "2026-07-16",
+      printedAtIso: "2026-07-17T04:55:00.000Z",
+      requestedByName: "Mark",
+      summary: summarizeDayEvents([]),
+      drawer: null,
+      headerText: null,
+      addressLines: [],
+    };
+    const withRefunds = buildDayReportSlipHtml({
+      ...base,
+      refunds: summarizeRefunds([
+        { source: "void", refundMinor: 3500 },
+        { source: "return", refundMinor: 750 },
+      ]),
+    });
+    expect(withRefunds).toContain("REFUNDS &mdash; STORE-WIDE CASH OUT");
+    expect(withRefunds).toContain("Voided sales (1)");
+    expect(withRefunds).toContain("-$35.00");
+    expect(withRefunds).toContain("Counter returns (1)");
+    expect(withRefunds).toContain("-$7.50");
+    expect(withRefunds).toContain("Total cash refunded");
+    expect(withRefunds).toContain("-$42.50");
+    expect(withRefunds).toContain("not tied to one register");
+
+    // Zero refunds — no section.
+    expect(buildDayReportSlipHtml({ ...base, refunds: summarizeRefunds([]) })).not.toContain("REFUNDS");
+    // Absent (older cached bundle) — no section, slip still builds.
+    expect(buildDayReportSlipHtml(base)).not.toContain("REFUNDS");
   });
 });

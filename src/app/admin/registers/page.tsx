@@ -165,6 +165,12 @@ export default async function RegisterActivityPage({
                         {a.businessDay} · counted {formatCents(a.closingCountMinor)} vs expected{" "}
                         {formatCents(a.expectedCloseMinor)}
                       </p>
+                      {a.dayRefundTotalMinor > 0 && (
+                        <p className="mb-3 text-xs font-medium text-[var(--admin-text)]">
+                          {formatCents(a.dayRefundTotalMinor)} refunded store-wide this day (voids +
+                          returns) — enter cash sales NET of refunds paid from this drawer.
+                        </p>
+                      )}
                       <form action={reconcileDrawerAction} className="flex flex-wrap items-end gap-2">
                         <input type="hidden" name="session_id" value={a.sessionId} />
                         <label className="flex-1 text-xs text-[var(--admin-text-muted)]">
