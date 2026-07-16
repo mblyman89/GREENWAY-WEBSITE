@@ -54,6 +54,13 @@ import {
   type ManualIdEventPayload,
 } from "./sync-core";
 import { validateCardCapture, type PosCardCapture } from "./medical-pos-core";
+import {
+  buildMenuPriceIndex,
+  checkPriceDrift,
+  summarizePriceDrift,
+  type MenuPriceRow,
+} from "./price-drift-core";
+import { getPublishedVersion } from "./menu-version";
 import { findAuthorizationByUpid, attachCardToOrder } from "@/lib/medical/sale-store";
 import { toRecognitionCard } from "@/lib/medical/store";
 import { authorizationValidityAt } from "@/lib/medical/medical-authorization-core";
@@ -756,8 +763,79 @@ async function processSale(
     );
   }
 
+  // AN-5 — price-drift NOTICE (never blocks): compare the device's
+  // pre-discount menu snapshots (regularPriceMinor — overrides/promos/
+  // loyalty only ever touch unitPriceMinor) against the CURRENT published
+  // menu. Drift means the register priced from a stale bundle; the sale
+  // stands (the customer paid the displayed price, and excepting it would
+  // strip its money from the X/Z report), but a durable audit row tells the
+  // manager which register needs a menu refresh. Best-effort by design.
+  try {
+    const drift = await detectSalePriceDrift(admin, sale.lines);
+    if (drift.length > 0) {
+      await recordAudit({
+        actorId: null,
+        actorEmail: `pos-device:${device.id}`,
+        action: "register.price_drift",
+        entityType: "order",
+        entityId: order.id,
+        after: {
+          clientUuid: envelope.clientUuid,
+          occurredAt: envelope.occurredAt,
+          summary: summarizePriceDrift(drift),
+          findings: drift,
+        },
+      });
+    }
+  } catch {
+    // A drift-check failure must never affect an already-completed sale.
+  }
+
   await markProcessed(admin, ledgerId, { order_id: order.id });
   return { clientUuid: envelope.clientUuid, status: "processed", orderId: order.id };
+}
+
+/**
+ * AN-5 helper: build the published-menu price index for JUST the products a
+ * sale touched and run the pure drift check. Returns [] when there is no
+ * published version (nothing to compare against — never a false positive).
+ */
+async function detectSalePriceDrift(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  lines: PosSalePayload["lines"],
+): Promise<ReturnType<typeof checkPriceDrift>> {
+  const productKeys = [...new Set(lines.map((l) => l.productId).filter(Boolean))];
+  if (productKeys.length === 0) return [];
+  const version = await getPublishedVersion();
+  if (!version) return [];
+  const { data: itemRows } = await admin
+    .from("menu_items")
+    .select("id, source_item_id")
+    .eq("menu_version_id", version.id)
+    .in("source_item_id", productKeys);
+  const items = (itemRows as { id: string; source_item_id: string }[] | null) ?? [];
+  const priceRows: MenuPriceRow[] = [];
+  if (items.length > 0) {
+    const { data: variantRows } = await admin
+      .from("menu_variants")
+      .select("menu_item_id, source_variant_id, price_minor_units")
+      .in("menu_item_id", items.map((i) => i.id));
+    const bySourceKey = new Map(items.map((i) => [i.id, i.source_item_id]));
+    for (const v of (variantRows as { menu_item_id: string; source_variant_id: string; price_minor_units: number }[] | null) ?? []) {
+      const productId = bySourceKey.get(v.menu_item_id);
+      if (!productId) continue;
+      priceRows.push({ productId, variantId: v.source_variant_id, priceMinor: v.price_minor_units });
+    }
+  }
+  return checkPriceDrift(
+    lines.map((l) => ({
+      productId: l.productId,
+      productName: l.productName,
+      variantId: l.variantId ?? null,
+      regularPriceMinor: l.regularPriceMinor,
+    })),
+    buildMenuPriceIndex(priceRows),
+  );
 }
 
 // ---------------------------------------------------------------------------
