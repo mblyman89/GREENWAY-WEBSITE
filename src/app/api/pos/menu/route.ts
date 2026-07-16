@@ -36,6 +36,7 @@ import type { DohCategory } from "@/lib/medical/medical-sale-core";
 import type { PosMedicalConfig } from "@/lib/pos/medical-pos-core";
 import type { PosMenuBundle, PosMenuProduct } from "@/lib/pos/sale-flow-core";
 import { buildBarcodeIndex, type LotBarcodeSource } from "@/lib/pos/scan-to-cart-core";
+import { recalledProductKeys } from "@/lib/pos/recall-hold-store";
 import { deriveInventoryExternalId } from "@/lib/compliance/ccrs-identifiers";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
@@ -68,6 +69,13 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     ]);
   const loyaltyCfg = await getLoyaltyConfig();
 
+  // AN-7 — recall hold: products with ANY lot in `recalled` status are
+  // EXCLUDED from the register bundle so they can't even be rung up. This is
+  // the advisory layer (best-effort: a lot-read failure ships an unfiltered
+  // menu, never a blank register); the completion gate is the fail-closed
+  // statutory stop that re-checks at sync.
+  const recalled = await recalledProductKeys();
+
   // POS B8 — the medical-sale config the device prices with OFFLINE. The
   // registry is the durable DOH 246-70 table keyed by the stable POS product
   // key (= order_lines.product_id), so applyMedicalPricing on-device uses the
@@ -88,6 +96,8 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     if (item.hidden) continue;
     // Item-level availability gates the whole card, same as the website.
     if (item.inventoryStatus === "unavailable") continue;
+    // AN-7 — recall hold excludes the product from the register entirely.
+    if (recalled.has(item.id)) continue;
     const categories = (item.filterCategories?.length ? item.filterCategories : [item.category]).map(
       (c) => String(c).toLowerCase(),
     );
