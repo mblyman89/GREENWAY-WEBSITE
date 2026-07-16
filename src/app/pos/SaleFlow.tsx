@@ -18,7 +18,7 @@
  * re-refused server-side if it somehow synced.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   parseAamvaPdf417,
   evaluateScannedId,
@@ -335,6 +335,10 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
   // fresh engine prices, and the next customer never inherits a markdown).
   const [overrides, setOverrides] = useState<Record<string, PosLineOverride>>({});
   const [changeMinor, setChangeMinor] = useState<number | null>(null);
+  // AO-4 — a rail quick-tender button ($130/$140/…/Exact) carries its amount
+  // into the tender screen so the drawer opens one tap later. null = the
+  // cashier used the plain tender button and starts from $0 as before.
+  const [initialTendered, setInitialTendered] = useState<number | null>(null);
   // POS B10 — snapshot of the finished sale for printing/reprint. Captured at
   // the moment the sale is enqueued so the receipt always matches the payload.
   const [receipt, setReceipt] = useState<PosReceiptInput | null>(null);
@@ -451,7 +455,12 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
               }
             : undefined
         }
-        onTender={() => setStep("tender")}
+        onTender={(presetTenderedMinor) => {
+          // AO-4 — a quick-tender chip carries the handed-over cash straight
+          // into the tender screen; the plain button starts at $0.
+          setInitialTendered(presetTenderedMinor ?? null);
+          setStep("tender");
+        }}
       />
     );
   }
@@ -464,6 +473,7 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
         medicalCard={medicalCard}
         overrides={overrides}
         appliedLoyalty={appliedLoyalty}
+        initialTenderedMinor={initialTendered}
         onBack={() => setStep("cart")}
         onCancel={() => {
           releaseLoyalty(appliedLoyalty);
@@ -1357,7 +1367,12 @@ function CartScreen({
   onCancel: () => void;
   /** B17 — park the cart (undefined = a hold already exists; button hidden). */
   onHold?: (cart: PosCartEntry[]) => void;
-  onTender: () => void;
+  /**
+   * AO-4 — advance to the tender screen. A quick-tender chip passes the
+   * cash amount the customer handed over so the tender screen opens with
+   * it already entered; undefined = start at $0 as before.
+   */
+  onTender: (presetTenderedMinor?: number) => void;
 }) {
   const [query, setQuery] = useState("");
   // B36 — the active category filter chip (null = All).
@@ -1392,6 +1407,9 @@ function CartScreen({
   // size (we never guess which variant left the shelf).
   const [scanPick, setScanPick] = useState<PosMenuProduct[] | null>(null);
   const [scanFlash, setScanFlash] = useState<string | null>(null);
+  // AO-4 — the variant the LAST scan added, so its check row can wear the
+  // mockup's "JUST SCANNED" tag until the next scan replaces it.
+  const [lastScannedId, setLastScannedId] = useState<string | null>(null);
   // AM-A — a global-wedge scan that matched nothing (typo'd label, item not
   // on the menu). Surfaced loudly; a silent miss looks like a broken scanner.
   const [scanMiss, setScanMiss] = useState<string | null>(null);
@@ -1448,6 +1466,7 @@ function CartScreen({
     if (resolved.status === "add") {
       setCart(addToCart(cart, resolved.product));
       setScanFlash(`Scanned: ${resolved.product.name}${resolved.product.variantLabel ? ` · ${resolved.product.variantLabel}` : ""}`);
+      setLastScannedId(resolved.product.variantId);
       setScanMiss(null);
       setQuery("");
       return;
@@ -1472,6 +1491,7 @@ function CartScreen({
       if (resolved.status === "add") {
         setCart(addToCart(cart, resolved.product));
         setScanFlash(`Scanned: ${resolved.product.name}${resolved.product.variantLabel ? ` · ${resolved.product.variantLabel}` : ""}`);
+        setLastScannedId(resolved.product.variantId);
         setScanMiss(null);
         setBrowseOpen(false);
         return;
@@ -1560,42 +1580,47 @@ function CartScreen({
   const canTender =
     cart.length > 0 && priced.problems.length === 0 && !limits.blocked && highThcViolations.length === 0;
 
+  // AO-4 — quick-tender chips for the rail (mockup: "$130 / $140 / $150 /
+  // Exact"). Built from the SAME B31 smart suggestions and B33 cash-rounded
+  // due the tender screen uses, so the chip amount and the change math can
+  // never disagree. Exact first (it's suggestion[0]), then up to three
+  // realistic bill amounts.
+  const quickTender = useMemo(() => {
+    const roundingCfg = normalizePosCashRoundingConfig(bundle.rounding);
+    const dueMinor = roundCashDue(railTotals.totalMinorUnits, roundingCfg.mode)?.dueMinor ?? railTotals.totalMinorUnits;
+    const suggestions = smartTenderSuggestions(dueMinor);
+    const chips = suggestions.slice(0, 4).map((amt, i) => ({
+      label: i === 0 ? "Exact" : money(amt),
+      amountMinor: amt,
+    }));
+    return { dueMinor, chips };
+  }, [bundle.rounding, railTotals.totalMinorUnits]);
+
   return (
     // AL-A — full-height app layout (Square/Toast/Dynamics anatomy): at lg+
     // the register OWNS the viewport (h-dvh, no page scroll) and the browse
     // grid + check list scroll INTERNALLY. Below lg (narrow/portrait) the
     // panes stack and the page scrolls like before.
     <main className="pos-shell flex min-h-screen flex-col p-4 sm:p-6 lg:h-dvh lg:min-h-0 lg:overflow-hidden">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-lg font-semibold">
-            Sale — ID verified ({verdict.method}, age {verdict.age})
-            {carded ? (
-              <span className="ml-2 rounded-full bg-[var(--pos-info-solid)] px-3 py-1 text-xs font-bold text-white align-middle">
-                MEDICAL · {medicalCard?.upid}
-              </span>
-            ) : null}
-          </h1>
-          <p className="text-xs text-[var(--pos-text-faint)]">
-            Menu as of {new Date(bundle.fetchedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
-            {carded ? " · tax exemptions applied per line (RCW 82.08.9998 / WAC 314-55-090)" : ""}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="pos-tile min-h-11 rounded-lg border border-[var(--pos-border)] bg-[var(--pos-surface-2)] px-4 py-2 text-sm font-semibold"
-          >
-            Cancel sale
-          </button>
-        </div>
-      </header>
-
-      {/* AM-A — Dutchie-style customer band: attach the member up top; their
-          points/tier stats ride the band and history ("the usual?") is one
-          tap. Everything below prices against the attached member. */}
-      <MemberPanel member={member} setMember={setMember} onMemberLookup={onMemberLookup} onMemberHistory={onMemberHistory} />
+      {/* AO-4 — the customer band (owner-approved register.html mockup): the
+          person owns the top of the screen. Name (or walk-in), ID✓age,
+          MEDICAL and tier/points badges on the left; History / Hold / Cancel
+          chips on the right; "THE USUAL" one-tap re-add chips (B29 history)
+          underneath. Everything below prices against the attached member. */}
+      <CustomerBand
+        member={member}
+        setMember={setMember}
+        onMemberLookup={onMemberLookup}
+        onMemberHistory={onMemberHistory}
+        verdict={verdict}
+        medicalCard={medicalCard}
+        menuFetchedAt={bundle.fetchedAt}
+        products={bundle.products}
+        onAddUsual={(p) => manualAdd(p)}
+        holdDisabled={cart.length === 0}
+        onHold={onHold ? () => onHold(cart) : undefined}
+        onCancel={onCancel}
+      />
 
       {/* AM-A — the register's main surface (owner + Dutchie/Flowhub
           examples): a LARGE item area where scans land, and the checkout
@@ -1683,6 +1708,7 @@ function CartScreen({
                     onClick={() => {
                       setCart(addToCart(cart, p));
                       setScanFlash(`Scanned: ${p.name}${p.variantLabel ? ` · ${p.variantLabel}` : ""}`);
+                      setLastScannedId(p.variantId);
                       setScanPick(null);
                     }}
                     className="min-h-11 rounded-full bg-[var(--pos-info-solid)] px-4 py-2 text-sm font-bold text-white"
@@ -1728,114 +1754,146 @@ function CartScreen({
               ) : null}
             </ul>
           ) : null}
-          <ul className="mt-3 min-h-0 flex-1 space-y-2 overflow-y-auto">
-            {priced.lines.map((l, i) => {
-              const medLine = carded ? priced.med?.lines[i] : null;
-              const exempt = !!medLine && (medLine.salesExempt || medLine.exciseExempt);
-              // B24 — the raw engine line (pre-override, pre-medical) this
-              // line derives from; applyPriceOverrides and applyMedicalPricing
-              // both map 1:1 in order, so index i lines up exactly.
-              const engineLine = priced.engineLines[i];
-              const activeOverride = l.variantId ? overrides[l.variantId] : undefined;
-              const cartEntry = cart.find((e) => e.product.variantId === l.variantId);
-              const lineKey = `${l.productId}-${l.variantLabel ?? ""}`;
-              const open = expandedLine === lineKey;
-              const variantId = cartVariantId(cart, l.productId, l.variantLabel);
-              return (
-              <li
-                key={lineKey}
-                className={`rounded-xl border ${open ? "border-[var(--pos-accent-border)] bg-[var(--pos-surface-hover)]" : "border-[var(--pos-border)] bg-[var(--pos-surface-2)]"}`}
-              >
-                <button
-                  type="button"
-                  onClick={() => setExpandedLine(open ? null : lineKey)}
-                  className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left"
-                  aria-expanded={open}
-                >
-                  <span className="text-sm font-semibold">
-                    <span className="mr-2 inline-block min-w-7 rounded-md bg-[var(--pos-surface-hover)] px-1.5 py-0.5 text-center text-xs font-bold text-[var(--pos-text-muted)]">
-                      {l.quantity}×
-                    </span>
-                    {l.productName}
-                    {l.variantLabel ? <span className="text-[var(--pos-text-muted)]"> · {l.variantLabel}</span> : null}
-                    {exempt ? (
-                      <span className="ml-2 rounded bg-[var(--pos-info-soft)] px-1.5 py-0.5 text-[10px] font-bold text-[var(--pos-info)]">
-                        MED · TAX OFF
-                      </span>
-                    ) : null}
-                    {activeOverride ? (
-                      <span className="ml-2 rounded bg-[var(--pos-warn-soft)] px-1.5 py-0.5 text-[10px] font-bold text-[var(--pos-warn)]">
-                        OVERRIDE · {activeOverride.approvedByName}
-                      </span>
-                    ) : null}
-                    <span className="mt-0.5 block text-xs font-normal text-[var(--pos-text-faint)]">
-                      {money(l.unitPriceMinor)} each
-                      {l.appliedLabel ? <span className="text-[var(--pos-accent)]"> · {l.appliedLabel}</span> : null}
-                      {activeOverride ? (
-                        <span className="text-[var(--pos-warn)]"> · was {money(activeOverride.originalUnitPriceMinor)}</span>
-                      ) : null}
-                    </span>
-                  </span>
-                  <span className="text-sm font-bold">{money(l.unitPriceMinor * l.quantity)}</span>
-                </button>
-                {open ? (
-                  <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--pos-border)] px-4 py-3">
-                    <span className="flex items-center gap-3">
-                      <QtyButton label="−" onClick={() => setCart(setCartQuantity(cart, variantId, l.quantity - 1))} />
-                      <span className="w-8 text-center text-lg font-bold">{l.quantity}</span>
-                      <QtyButton label="+" onClick={() => setCart(setCartQuantity(cart, variantId, l.quantity + 1))} />
-                    </span>
-                    <span className="flex items-center gap-2">
-                      {onApprove && cartEntry && engineLine ? (
-                        activeOverride ? (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const next = { ...overrides };
-                              delete next[l.variantId ?? ""];
-                              setOverrides(next);
-                            }}
-                            className="pos-tile min-h-11 rounded-lg border border-[var(--pos-border)] bg-[var(--pos-surface)] px-4 py-2 text-sm font-semibold text-[var(--pos-warn)]"
-                            title="Remove the manager override — the line returns to the engine price."
-                          >
-                            Undo override
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => setOverrideTarget({ product: cartEntry.product, engineLine })}
-                            className="pos-tile min-h-11 rounded-lg border border-[var(--pos-border)] bg-[var(--pos-surface)] px-4 py-2 text-sm font-semibold text-[var(--pos-text-muted)]"
-                            title="Manager price override (markdown only; PIN + reason required)."
-                          >
-                            Override
-                          </button>
-                        )
-                      ) : null}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setCart(setCartQuantity(cart, variantId, 0));
-                          setExpandedLine(null);
-                        }}
-                        className="pos-tile min-h-11 rounded-lg border border-[var(--pos-danger-border)] bg-[var(--pos-danger-soft)] px-4 py-2 text-sm font-semibold text-[var(--pos-danger)]"
-                        title="Remove this line from the check."
-                      >
-                        Remove
-                      </button>
-                    </span>
-                  </div>
-                ) : null}
-              </li>
-              );
-            })}
+          {/* AO-4 — the check as the mockup's clean table: PRODUCT /
+              CATEGORY / PRICE / QTY steppers / TOTAL / remove, with the last
+              scan wearing a JUST SCANNED tag. Tap the product cell to expand
+              the row for Override/Undo (B24) — same machinery, table shape. */}
+          <div className="mt-3 min-h-0 flex-1 overflow-y-auto">
             {cart.length === 0 ? (
-              <li className="flex flex-col items-center justify-center gap-1 px-2 py-12 text-center">
+              <div className="flex h-full flex-col items-center justify-center gap-1 px-2 py-12 text-center">
                 <span className="text-3xl" aria-hidden>📦</span>
                 <span className="text-sm font-semibold text-[var(--pos-text-muted)]">Scan a package barcode — items land here.</span>
                 <span className="text-xs text-[var(--pos-text-faint)]">No clicks needed. Or search above, or open the menu below.</span>
-              </li>
-            ) : null}
-          </ul>
+              </div>
+            ) : (
+              <table className="w-full border-separate border-spacing-0 text-sm">
+                <thead>
+                  <tr className="text-left text-[11px] font-bold uppercase tracking-wider text-[var(--pos-text-faint)]">
+                    <th className="sticky top-0 bg-[var(--pos-surface)] px-2 pb-2">Product</th>
+                    <th className="sticky top-0 hidden bg-[var(--pos-surface)] px-2 pb-2 md:table-cell">Category</th>
+                    <th className="sticky top-0 bg-[var(--pos-surface)] px-2 pb-2 text-right">Price</th>
+                    <th className="sticky top-0 bg-[var(--pos-surface)] px-2 pb-2 text-center">Qty</th>
+                    <th className="sticky top-0 bg-[var(--pos-surface)] px-2 pb-2 text-right">Total</th>
+                    <th className="sticky top-0 bg-[var(--pos-surface)] px-1 pb-2" aria-label="Remove" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {priced.lines.map((l, i) => {
+                    const medLine = carded ? priced.med?.lines[i] : null;
+                    const exempt = !!medLine && (medLine.salesExempt || medLine.exciseExempt);
+                    // B24 — the raw engine line (pre-override, pre-medical) this
+                    // line derives from; applyPriceOverrides and applyMedicalPricing
+                    // both map 1:1 in order, so index i lines up exactly.
+                    const engineLine = priced.engineLines[i];
+                    const activeOverride = l.variantId ? overrides[l.variantId] : undefined;
+                    const cartEntry = cart.find((e) => e.product.variantId === l.variantId);
+                    const lineKey = `${l.productId}-${l.variantLabel ?? ""}`;
+                    const open = expandedLine === lineKey;
+                    const variantId = cartVariantId(cart, l.productId, l.variantLabel);
+                    const justScanned = lastScannedId !== null && l.variantId === lastScannedId;
+                    return (
+                      <Fragment key={lineKey}>
+                        <tr className={open ? "bg-[var(--pos-surface-hover)]" : ""}>
+                          <td className="border-t border-[var(--pos-border)] px-2 py-2.5">
+                            <button
+                              type="button"
+                              onClick={() => setExpandedLine(open ? null : lineKey)}
+                              className="block w-full text-left"
+                              aria-expanded={open}
+                              title="Tap for line options (override, remove)."
+                            >
+                              <span className="font-semibold">
+                                {l.productName}
+                                {l.variantLabel ? <span className="text-[var(--pos-text-muted)]"> — {l.variantLabel}</span> : null}
+                              </span>
+                              {justScanned ? (
+                                <span className="ml-2 rounded bg-[var(--pos-accent-soft)] px-1.5 py-0.5 text-[10px] font-bold text-[var(--pos-accent)]">
+                                  JUST SCANNED
+                                </span>
+                              ) : null}
+                              {exempt ? (
+                                <span className="ml-2 rounded bg-[var(--pos-info-soft)] px-1.5 py-0.5 text-[10px] font-bold text-[var(--pos-info)]">
+                                  MED · TAX OFF
+                                </span>
+                              ) : null}
+                              {activeOverride ? (
+                                <span className="ml-2 rounded bg-[var(--pos-warn-soft)] px-1.5 py-0.5 text-[10px] font-bold text-[var(--pos-warn)]">
+                                  OVERRIDE · {activeOverride.approvedByName}
+                                </span>
+                              ) : null}
+                              {l.appliedLabel ? (
+                                <span className="mt-0.5 block text-xs text-[var(--pos-accent)]">{l.appliedLabel}</span>
+                              ) : null}
+                              {activeOverride ? (
+                                <span className="mt-0.5 block text-xs text-[var(--pos-warn)]">was {money(activeOverride.originalUnitPriceMinor)}</span>
+                              ) : null}
+                            </button>
+                          </td>
+                          <td className="hidden border-t border-[var(--pos-border)] px-2 py-2.5 text-xs capitalize text-[var(--pos-text-muted)] md:table-cell">
+                            {l.category}
+                          </td>
+                          <td className="border-t border-[var(--pos-border)] px-2 py-2.5 text-right tabular-nums">{money(l.unitPriceMinor)}</td>
+                          <td className="border-t border-[var(--pos-border)] px-2 py-2.5">
+                            <span className="flex items-center justify-center gap-1.5">
+                              <QtyButton label="−" onClick={() => setCart(setCartQuantity(cart, variantId, l.quantity - 1))} />
+                              <span className="w-7 text-center font-bold tabular-nums">{l.quantity}</span>
+                              <QtyButton label="+" onClick={() => setCart(setCartQuantity(cart, variantId, l.quantity + 1))} />
+                            </span>
+                          </td>
+                          <td className="border-t border-[var(--pos-border)] px-2 py-2.5 text-right font-bold tabular-nums">
+                            {money(l.unitPriceMinor * l.quantity)}
+                          </td>
+                          <td className="border-t border-[var(--pos-border)] px-1 py-2.5 text-center">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCart(setCartQuantity(cart, variantId, 0));
+                                setExpandedLine(null);
+                              }}
+                              aria-label={`Remove ${l.productName}`}
+                              title="Remove this line from the check."
+                              className="pos-tile min-h-9 min-w-9 rounded-lg border border-[var(--pos-border)] px-2 py-1 text-sm font-bold text-[var(--pos-danger)]"
+                            >
+                              ✕
+                            </button>
+                          </td>
+                        </tr>
+                        {open && onApprove && cartEntry && engineLine ? (
+                          <tr>
+                            <td colSpan={6} className="bg-[var(--pos-surface-hover)] px-2 py-2">
+                              {activeOverride ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const next = { ...overrides };
+                                    delete next[l.variantId ?? ""];
+                                    setOverrides(next);
+                                  }}
+                                  className="pos-tile min-h-11 rounded-lg border border-[var(--pos-border)] bg-[var(--pos-surface)] px-4 py-2 text-sm font-semibold text-[var(--pos-warn)]"
+                                  title="Remove the manager override — the line returns to the engine price."
+                                >
+                                  Undo override
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setOverrideTarget({ product: cartEntry.product, engineLine })}
+                                  className="pos-tile min-h-11 rounded-lg border border-[var(--pos-border)] bg-[var(--pos-surface)] px-4 py-2 text-sm font-semibold text-[var(--pos-text-muted)]"
+                                  title="Manager price override (markdown only; PIN + reason required)."
+                                >
+                                  Override price…
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ) : null}
+                      </Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
           {/* AM-A — browse is on demand: menu grid, favorites, and the
               keypad open in an overlay so the item area stays LARGE. */}
           <div className="mt-3 flex gap-2 border-t border-[var(--pos-border)] pt-3">
@@ -1872,13 +1930,15 @@ function CartScreen({
           </div>
         </section>
 
-        {/* AM-A — the checkout rail (Dutchie's right column): limits
-            (allotment), warnings, totals, Save sale + tender — always on
-            the main screen. */}
+        {/* AO-4 — the Cart Summary rail (owner-approved register.html
+            mockup): legal-limit meter first, itemized lines, loyalty box
+            with earn preview, totals, then the green Tender Cash button
+            with quick-tender denomination chips. Same machinery as before
+            (B22 limits, AM-B loyalty, B24 overrides) — mockup shape. */}
         <section className="flex flex-col rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] p-4 lg:min-h-0">
-          <h2 className="flex items-baseline justify-between text-sm font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
-            Checkout
-            <span className="text-xs font-normal normal-case text-[var(--pos-text-faint)]">
+          <h2 className="flex items-baseline justify-between text-base font-bold">
+            Cart Summary
+            <span className="text-xs font-normal text-[var(--pos-text-faint)]">
               {cart.length === 0 ? "no items yet" : `${cart.reduce((s, e) => s + e.quantity, 0)} item(s)`}
             </span>
           </h2>
@@ -1898,8 +1958,28 @@ function CartScreen({
           ) : null}
 
           {/* WAC 314-55-095 limit meter — brand green while safe, amber near
-              the line, red over it. */}
-          <div className="mt-3 space-y-1">
+              the line, red over it. AO-4: mockup's LEGAL LIMIT header + OK
+              badge so "are we fine?" reads at a glance. */}
+          <div className="mt-3 rounded-xl border border-[var(--pos-border)] bg-[var(--pos-surface-2)] px-3 py-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--pos-text-faint)]">
+                Legal limit (WAC 314-55-095)
+              </span>
+              {cart.length > 0 ? (
+                <span
+                  className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
+                    limits.blocked
+                      ? "bg-[var(--pos-danger-soft)] text-[var(--pos-danger)]"
+                      : limits.softWarning
+                        ? "bg-[var(--pos-warn-soft)] text-[var(--pos-warn)]"
+                        : "bg-[var(--pos-accent-soft)] text-[var(--pos-accent)]"
+                  }`}
+                >
+                  {limits.blocked ? "OVER" : limits.softWarning ? "NEAR" : "OK"}
+                </span>
+              ) : null}
+            </div>
+            <div className="mt-1.5 space-y-1">
             {limits.evaluation.buckets
               .filter((b) => b.usedGrams > 0)
               .map((b) => (
@@ -1918,6 +1998,13 @@ function CartScreen({
                   </div>
                 </div>
               ))}
+            {cart.length > 0 && limits.evaluation.buckets.every((b) => b.usedGrams === 0) ? (
+              <p className="text-xs text-[var(--pos-text-faint)]">No cannabis items yet — nothing counts toward the limit.</p>
+            ) : null}
+            {cart.length === 0 ? (
+              <p className="text-xs text-[var(--pos-text-faint)]">The meter fills as cannabis items land in the cart.</p>
+            ) : null}
+            </div>
           </div>
           {limits.blocked ? (
             <p className="mt-2 rounded-lg border border-[var(--pos-danger-border)] bg-[var(--pos-danger-soft)] px-3 py-2 text-xs font-semibold text-[var(--pos-danger)]">
@@ -1940,6 +2027,28 @@ function CartScreen({
             </ul>
           ) : null}
 
+          {/* AO-4 — the mockup's itemized ITEMS list: every line + its money
+              at a glance, so the rail reads like the receipt will. */}
+          {priced.lines.length > 0 ? (
+            <div className="mt-3">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--pos-text-faint)]">
+                Items ({cart.reduce((s, e) => s + e.quantity, 0)})
+              </p>
+              <ul className="mt-1 space-y-0.5">
+                {priced.lines.map((l) => (
+                  <li key={`${l.productId}-${l.variantLabel ?? ""}`} className="flex justify-between gap-2 text-xs text-[var(--pos-text-muted)]">
+                    <span className="min-w-0 truncate">
+                      {l.quantity > 1 ? `${l.quantity}× ` : ""}
+                      {l.productName}
+                      {l.variantLabel ? ` — ${l.variantLabel}` : ""}
+                    </span>
+                    <span className="shrink-0 tabular-nums">{money(l.unitPriceMinor * l.quantity)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
           </div>
           {/* B37 — sticky totals: the money and the tender button stay pinned
               to the panel's bottom edge while a long check scrolls behind. */}
@@ -1948,6 +2057,25 @@ function CartScreen({
                 points, or apply a code the customer brought. ONLINE-ONLY;
                 the server sizes the value to what the cart can legally
                 absorb. One application per sale (no stacking — S-a policy). */}
+            {/* AO-4 — the mockup's loyalty box: the member's balance + what
+                THIS sale will earn (same floor(pre-tax $ × rate) estimate the
+                receipt prints; authoritative accrual runs server-side at
+                completion), with the redeem/code buttons underneath. */}
+            {member && bundle.loyalty ? (
+              <div className="mb-2 rounded-xl border border-[var(--pos-accent-border)] bg-[var(--pos-accent-soft)] px-3 py-2 text-xs">
+                <p className="font-semibold text-[var(--pos-accent)]">
+                  💚 {member.label} has {member.points.toLocaleString("en-US")} points
+                  {bundle.loyalty.pointValueMinor ? ` (= ${money(member.points * bundle.loyalty.pointValueMinor)})` : ""}
+                </p>
+                {cart.length > 0 ? (
+                  <p className="mt-0.5 text-[var(--pos-text-muted)]">
+                    This sale earns ~
+                    {Math.floor((railTotals.subtotalMinorUnits / 100) * bundle.loyalty.pointsPerDollar).toLocaleString("en-US")}{" "}
+                    points.
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
             {onLoyalty ? (
               <LoyaltyRedeemPanel
                 bundle={bundle}
@@ -1962,11 +2090,10 @@ function CartScreen({
               />
             ) : null}
             <Row label="Subtotal (pre-tax)" value={money(railTotals.subtotalMinorUnits)} />
-            <Row label="Tax (excise + sales)" value={money(railTotals.estimatedTaxMinorUnits)} />
             {/* Promo savings only — the loyalty reduction gets its OWN row
                 below, so the two never double-count in the display. */}
             {priced.totals.savingsMinorUnits > 0 ? (
-              <Row label="You saved" value={`−${money(priced.totals.savingsMinorUnits)}`} accent />
+              <Row label="Discount" value={`−${money(priced.totals.savingsMinorUnits)}`} accent />
             ) : null}
             {carded && (priced.med?.medicalSavingsMinor ?? 0) > 0 ? (
               <Row
@@ -1978,32 +2105,40 @@ function CartScreen({
             {appliedLoyalty && loyaltyView ? (
               <Row label={`Loyalty ${appliedLoyalty.code}`} value={`−${money(loyaltyView.appliedMinor)}`} accent />
             ) : null}
+            <Row label="Tax (excise + sales)" value={money(railTotals.estimatedTaxMinorUnits)} />
             <div className="mt-1 flex justify-between text-xl font-bold">
-              <span>Total</span>
+              <span>TOTAL</span>
               <span className="text-[var(--pos-accent)]">{money(railTotals.totalMinorUnits)}</span>
             </div>
 
-            <div className="mt-3 flex gap-3">
-              {onHold ? (
-                <button
-                  type="button"
-                  disabled={cart.length === 0}
-                  onClick={() => onHold(cart)}
-                  title="Save this sale for later (customer stepped away). Items + counts are kept; load it from the home screen — the ID check re-runs."
-                  className="pos-tile rounded-2xl border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-5 py-4 text-lg font-semibold disabled:opacity-40"
-                >
-                  Save sale
-                </button>
-              ) : null}
-              <button
-                type="button"
-                disabled={!canTender}
-                onClick={onTender}
-                className="pos-tile flex-1 rounded-2xl bg-[var(--pos-accent)] px-6 py-4 text-lg font-bold text-[var(--pos-accent-ink)] disabled:opacity-40"
-              >
-                Cash tender →
-              </button>
-            </div>
+            {/* AO-4 — the mockup's big green tender button, TOTAL on its
+                face, quick-tender denomination chips underneath: one tap
+                records the cash handed over and opens the tender screen
+                with change already computed. Chips run off the SAME B31
+                smart suggestions + B33 rounded due as the tender screen. */}
+            <button
+              type="button"
+              disabled={!canTender}
+              onClick={() => onTender()}
+              className="pos-tile mt-3 w-full rounded-2xl bg-[var(--pos-accent)] px-6 py-4 text-lg font-bold text-[var(--pos-accent-ink)] disabled:opacity-40"
+            >
+              Tender Cash{canTender ? ` — ${money(quickTender.dueMinor)}` : ""}
+            </button>
+            {canTender && quickTender.chips.length > 0 ? (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {quickTender.chips.map((c) => (
+                  <button
+                    key={c.label}
+                    type="button"
+                    onClick={() => onTender(c.amountMinor)}
+                    title={`Customer hands ${c.label === "Exact" ? "exact change" : money(c.amountMinor)} — opens the tender screen with change computed.`}
+                    className="pos-tile min-h-11 flex-1 rounded-xl border border-[var(--pos-accent-border)] bg-[var(--pos-accent-soft)] px-3 py-2 text-sm font-bold text-[var(--pos-accent)]"
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </div>
         </section>
       </div>
@@ -2209,6 +2344,7 @@ function CartScreen({
                     onClick={() => {
                       setCart(addToCart(cart, p));
                       setScanFlash(`Scanned: ${p.name}${p.variantLabel ? ` · ${p.variantLabel}` : ""}`);
+                      setLastScannedId(p.variantId);
                       setScanPick(null);
                     }}
                     className="rounded-full bg-[var(--pos-info-solid)] px-3 py-1.5 text-xs font-bold text-white"
@@ -2933,6 +3069,214 @@ function LoyaltyRedeemPanel({
   );
 }
 
+/**
+ * AO-4 — the customer band (owner-approved register.html mockup). The person
+ * owns the top of the sale screen:
+ *
+ *   - name (member label, or "Walk-in customer"), ID✓age badge, MEDICAL
+ *     badge, tier + points badge;
+ *   - History / Hold sale / Cancel chips on the right;
+ *   - "THE USUAL" one-tap re-add chips built from the member's B29
+ *     favorites, matched against TODAY's menu — a chip renders only when
+ *     the favorite resolves to exactly ONE variant on the menu (we never
+ *     guess which size a "usually buys" means), and adds through the same
+ *     manualAdd guard as every other button (scan-required still applies).
+ *
+ * History auto-loads when a member attaches (the same privacy-budgeted B29
+ * call the History button used to make; it is dropped when the sale ends
+ * because the whole screen unmounts). The attach/search flow for walk-ins
+ * is the existing MemberPanel, unchanged.
+ */
+function CustomerBand({
+  member,
+  setMember,
+  onMemberLookup,
+  onMemberHistory,
+  verdict,
+  medicalCard,
+  menuFetchedAt,
+  products,
+  onAddUsual,
+  holdDisabled,
+  onHold,
+  onCancel,
+}: {
+  member: PosMemberHit | null;
+  setMember: (m: PosMemberHit | null) => void;
+  onMemberLookup?: (q: string) => Promise<{ ok: true; members: PosMemberHit[] } | { ok: false; error: string }>;
+  onMemberHistory?: (customerId: string) => Promise<{ ok: true; history: MemberHistory } | { ok: false; error: string }>;
+  verdict: Extract<IdGateVerdict, { allowed: true }>;
+  medicalCard: PosCardCapture | null;
+  menuFetchedAt: string;
+  products: PosMenuProduct[];
+  onAddUsual: (p: PosMenuProduct) => void;
+  holdDisabled: boolean;
+  onHold?: () => void;
+  onCancel: () => void;
+}) {
+  const memberId = member?.customerId ?? null;
+  // History + drawer state are KEYED to the member they belong to, so a
+  // detach/re-attach never needs a reset-in-effect: state for a previous
+  // member simply derives to null/closed the moment the id changes.
+  const [historyState, setHistoryState] = useState<{ forId: string; history: MemberHistory } | null>(null);
+  const [openForId, setOpenForId] = useState<string | null>(null);
+  const history = historyState && historyState.forId === memberId ? historyState.history : null;
+  const historyOpen = memberId !== null && openForId === memberId;
+
+  // Auto-load the attached member's history (B29) so "THE USUAL" chips can
+  // render without a tap. Effect keys off the customerId: attach fetches,
+  // re-attach re-fetches. Best-effort — a failure just means no chips.
+  useEffect(() => {
+    if (!memberId || !onMemberHistory) return;
+    let cancelled = false;
+    void onMemberHistory(memberId).then((res) => {
+      if (!cancelled && res.ok) setHistoryState({ forId: memberId, history: res.history });
+    });
+    return () => {
+      cancelled = true;
+    };
+    // onMemberHistory is a stable shell callback; keying off it too would
+    // refetch on every render of the parent.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [memberId]);
+
+  // THE USUAL — favorites resolved against TODAY's menu, kept only when the
+  // product name maps to exactly ONE variant (never guess a size).
+  const usualChips = useMemo(() => {
+    if (!history || history.favorites.length === 0) return [];
+    const chips: PosMenuProduct[] = [];
+    for (const f of history.favorites) {
+      const matches = products.filter((p) => p.name.toLowerCase() === f.productName.toLowerCase());
+      if (matches.length === 1 && matches[0].inventoryStatus !== "unavailable") chips.push(matches[0]);
+    }
+    return chips;
+  }, [history, products]);
+
+  const carded = !!medicalCard;
+
+  return (
+    <div className="rounded-2xl border border-[var(--pos-border)] bg-[var(--pos-surface)] px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <h1 className="text-lg font-bold">{member ? member.label : "Walk-in customer"}</h1>
+          <span className="rounded-full bg-[var(--pos-accent-soft)] px-2.5 py-0.5 text-xs font-bold text-[var(--pos-accent)]">
+            ID ✓ {verdict.age}
+          </span>
+          {carded ? (
+            <span className="rounded-full bg-[var(--pos-info-solid)] px-2.5 py-0.5 text-xs font-bold text-white">
+              MEDICAL · {medicalCard?.upid}
+            </span>
+          ) : null}
+          {member ? (
+            <span className="rounded-full border border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] px-2.5 py-0.5 text-xs font-bold text-[var(--pos-warn)]">
+              {member.tierName ? `${member.tierName.toUpperCase()} · ` : ""}
+              {member.points.toLocaleString("en-US")} pts
+            </span>
+          ) : null}
+          {member ? (
+            <button
+              type="button"
+              onClick={() => setMember(null)}
+              aria-label="Detach this member from the sale"
+              title="Detach this member from the sale."
+              className="rounded-full border border-[var(--pos-border)] px-2 py-0.5 text-xs font-bold text-[var(--pos-text-faint)]"
+            >
+              ✕
+            </button>
+          ) : null}
+        </div>
+        <div className="flex items-center gap-2">
+          {member && onMemberHistory ? (
+            <button
+              type="button"
+              onClick={() => setOpenForId(historyOpen ? null : memberId)}
+              className="pos-tile min-h-11 rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2 text-sm font-semibold"
+            >
+              🕘 History
+            </button>
+          ) : null}
+          {onHold ? (
+            <button
+              type="button"
+              disabled={holdDisabled}
+              onClick={onHold}
+              title="Save this sale for later (customer stepped away). Items + counts are kept; load it from the home screen — the ID check re-runs."
+              className="pos-tile min-h-11 rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2 text-sm font-semibold disabled:opacity-40"
+            >
+              ⏸ Hold sale
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={onCancel}
+            className="pos-tile min-h-11 rounded-lg border border-[var(--pos-border)] bg-[var(--pos-surface-2)] px-3 py-2 text-sm font-semibold text-[var(--pos-danger)]"
+          >
+            ✕ Cancel
+          </button>
+        </div>
+      </div>
+      <p className="mt-1 text-xs text-[var(--pos-text-faint)]">
+        ID verified ({verdict.method}) · menu as of{" "}
+        {new Date(menuFetchedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+        {carded ? " · tax exemptions applied per line (RCW 82.08.9998 / WAC 314-55-090)" : ""}
+      </p>
+
+      {/* Walk-in: the existing attach/search flow (B14), unchanged. */}
+      {!member ? (
+        <MemberPanel member={member} setMember={setMember} onMemberLookup={onMemberLookup} onMemberHistory={onMemberHistory} />
+      ) : null}
+
+      {/* THE USUAL — one-tap re-adds from B29 favorites. */}
+      {usualChips.length > 0 ? (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--pos-text-faint)]">The usual:</span>
+          {usualChips.map((p) => (
+            <button
+              key={p.variantId}
+              type="button"
+              onClick={() => onAddUsual(p)}
+              title={`Add ${p.name}${p.variantLabel ? ` — ${p.variantLabel}` : ""} to the sale.`}
+              className="pos-tile min-h-9 rounded-full border border-[var(--pos-accent-border)] bg-[var(--pos-accent-soft)] px-3 py-1.5 text-xs font-bold text-[var(--pos-accent)]"
+            >
+              + {p.name}
+              {p.variantLabel ? ` · ${p.variantLabel}` : ""}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      {/* History drawer — the same B29 purchases the old panel showed. */}
+      {historyOpen && member ? (
+        <div className="mt-2 border-t border-[var(--pos-border)] pt-2">
+          {history === null ? (
+            <p className="text-xs text-[var(--pos-text-muted)]">Loading…</p>
+          ) : history.purchases.length === 0 ? (
+            <p className="text-xs text-[var(--pos-text-muted)]">First visit on record — make it a good one.</p>
+          ) : (
+            <>
+              {history.favorites.length > 0 ? (
+                <p className="text-xs text-[var(--pos-text-muted)]">
+                  <span className="font-semibold">Usually buys:</span>{" "}
+                  {history.favorites.map((f) => f.productName).join(" · ")}
+                </p>
+              ) : null}
+              <ul className="mt-1.5 space-y-1">
+                {history.purchases.map((p) => (
+                  <li key={p.orderId} className="text-xs text-[var(--pos-text-muted)]">
+                    <span className="font-semibold text-[var(--pos-text)]">{p.dateLabel}</span> · {money(p.totalMinor)} ·{" "}
+                    {p.items.join(", ")}
+                    {p.moreCount > 0 ? ` + ${p.moreCount} more` : ""}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function MemberPanel({
   member,
   setMember,
@@ -3180,6 +3524,7 @@ function TenderScreen({
   medicalCard,
   overrides,
   appliedLoyalty,
+  initialTenderedMinor,
   onBack,
   onCancel,
   onPaid,
@@ -3191,6 +3536,8 @@ function TenderScreen({
   overrides: Record<string, PosLineOverride>;
   /** AM-B — the loyalty redemption applied to this sale (reduces the due). */
   appliedLoyalty: AppliedLoyalty | null;
+  /** AO-4 — cash amount pre-entered by a rail quick-tender chip (null = $0). */
+  initialTenderedMinor: number | null;
   onBack: () => void;
   onCancel: () => void;
   /** Returns an error string, or null when the sale was enqueued. */
@@ -3212,7 +3559,8 @@ function TenderScreen({
   const rounded = useMemo(() => roundCashDue(total, roundingCfg.mode), [total, roundingCfg.mode]);
   const due = rounded?.dueMinor ?? total;
   const roundingAdj = rounded?.adjustmentMinor ?? 0;
-  const [tendered, setTendered] = useState(0);
+  // AO-4 — a rail quick-tender chip arrives with the cash already entered.
+  const [tendered, setTendered] = useState(initialTenderedMinor ?? 0);
   // AL-B — true when the amount came from the keypad (renders live in the
   // keypad display); a preset chip resets it so the two inputs never fight.
   const [keypadUsed, setKeypadUsed] = useState(false);
