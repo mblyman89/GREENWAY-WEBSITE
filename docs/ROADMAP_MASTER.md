@@ -370,3 +370,17 @@ they are optional data loads, not schema, and each is idempotent (safe to run an
   Menu Imports when a staged version is stuck — the owner never has to visit Menu
   Imports on the normal receiving path. Copy truthed-up on drafts page / next-action
   guidance / Menu Imports intake section. No migration. Suite 1,703/131.
+
+- **Product Mastering Slice 1 (variant-aware sale path) — PR #552** — sold lines now
+  resolve the VARIANT's own inventory lot key (intake variants have always encoded it
+  as `source_variant_id = `${lotKey}-onboarded``) before the `product_id` fallback,
+  across every lot-keyed surface: B19 FIFO decrement + B20 CCRS line stamping, weekly
+  Sale.csv lot index, void restock, scan-to-cart (a lot barcode adds the EXACT size on
+  a multi-lot card — no redundant pick), POS menu bundle (per-variant cost + AN-7
+  recall exclusion + barcode sellable-key union), recall-hold completion gate
+  (variant-aware `findHeldLines`), website repricing / COGS / loyalty cost lookups,
+  purchasing + draft-seeding velocity, and returns lot resolution. New pure core
+  `variant-lot-core` (registered self-tests + vitest mirror). 100% backward compatible:
+  single-lot cards encode the same key both ways. Readiness for Slice 2 (intake
+  mastering: one card per brand+category+product family, one variant per size/lot).
+  No migration. Suite 1,710/132.
