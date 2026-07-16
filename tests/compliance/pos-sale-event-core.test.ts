@@ -138,6 +138,15 @@ describe("sale payload", () => {
       validateSalePayload({ ...good, lines: [{ ...good.lines[0], unitPriceMinor: 14.63 as unknown as number }] }).ok,
     ).toBe(false);
   });
+  it("AN-1: unitGrams is optional but must be a positive number when present", () => {
+    expect(validateSalePayload({ ...good, lines: [{ ...good.lines[0], unitGrams: 3.5 }] }).ok).toBe(true);
+    expect(validateSalePayload({ ...good, lines: [{ ...good.lines[0], unitGrams: null }] }).ok).toBe(true);
+    expect(validateSalePayload({ ...good, lines: [{ ...good.lines[0], unitGrams: 0 }] }).ok).toBe(false);
+    expect(validateSalePayload({ ...good, lines: [{ ...good.lines[0], unitGrams: -1 }] }).ok).toBe(false);
+    expect(
+      validateSalePayload({ ...good, lines: [{ ...good.lines[0], unitGrams: "3.5" as unknown as number }] }).ok,
+    ).toBe(false);
+  });
   it("sale must belong to an open drawer session", () => {
     expect(validateSalePayload({ ...good, drawerSessionId: "till-1" }).ok).toBe(false);
   });

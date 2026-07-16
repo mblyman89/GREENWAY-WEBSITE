@@ -43,6 +43,8 @@ import type { PosReceiptConfig } from "./receipt-config-core";
 import { roundCashDue, type PosCashRoundingConfig } from "./cash-rounding-core";
 // Type-only (erased at compile time) — no runtime cycle with scan-required-core.
 import type { PosScanRequiredConfig } from "./scan-required-core";
+// AN-1 — pure per-variant grams helpers (no cycle: variant-grams-core imports nothing from here).
+import { lineGramsFromUnit } from "./variant-grams-core";
 import {
   computeCashChange,
   validateSalePayload,
@@ -70,6 +72,14 @@ export type PosMenuProduct = {
   /** Weighted-average acquisition cost when known (CCRS cost floor). */
   costMinorUnits: number | null;
   inventoryStatus: "in-stock" | "low-stock" | "unavailable";
+  /**
+   * AN-1 — grams ONE unit of this variant weighs, parsed from the variant
+   * label server-side (gramsFromVariantLabel: "3.5g" → 3.5, "1oz" → 28).
+   * null/absent = unknown → the limit meter falls back to the owner's
+   * per-category default, exactly as before AN-1. Optional so bundles
+   * cached before AN-1 still parse.
+   */
+  unitGrams?: number | null;
   /**
    * B32 — variant-level units remaining from the published menu, when known.
    * null = unknown (items sold at the item price without explicit variants);
@@ -211,6 +221,12 @@ export type PricedSaleLine = PosSaleLine & {
   brand: string | null;
   variantLabel: string | null;
   appliedLabel?: string;
+  /**
+   * AN-1 — per-UNIT grams carried from the menu variant (null = unknown).
+   * Drives the register's limit meter AND rides the sale payload so the
+   * synced order snapshots the true weight for the server's hard gate.
+   */
+  unitGrams?: number | null;
 };
 
 export type PriceCartResult = {
@@ -277,6 +293,8 @@ export function priceCart(cart: PosCartEntry[], rules: EngineRule[]): PriceCartR
       brand: entry.product.brand,
       variantLabel: entry.product.variantLabel,
       appliedLabel: d?.appliedLabel,
+      // AN-1: true per-unit weight from the bundle (null/absent = unknown).
+      unitGrams: entry.product.unitGrams ?? null,
     });
   }
 
@@ -321,9 +339,15 @@ export function judgeLimits(
   };
 }
 
-/** Limit lines for a priced cart (category snapshot drives the bucket). */
+/** Limit lines for a priced cart (category snapshot drives the bucket).
+ * AN-1: when the variant's true per-unit weight is known, the WHOLE-LINE
+ * grams ride along (lineGrams honors an explicit total over the category
+ * default) — a 7 g jar finally counts as 7 g on the register meter. */
 export function limitLinesFor(lines: PricedSaleLine[]): LimitCartLine[] {
-  return lines.map((l) => ({ category: l.category, quantity: l.quantity }));
+  return lines.map((l) => {
+    const grams = lineGramsFromUnit(l.unitGrams, l.quantity);
+    return { category: l.category, quantity: l.quantity, ...(grams !== null ? { grams } : {}) };
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -411,6 +435,9 @@ export function buildSalePayload(args: BuildSaleArgs): BuildSaleResult {
       // Task AM-B: optional per-UNIT loyalty reduction (forwarded verbatim;
       // validateSalePayload proves the sum matches the redemption block).
       ...(l.loyaltyDiscountMinor ? { loyaltyDiscountMinor: l.loyaltyDiscountMinor } : {}),
+      // AN-1: true per-unit weight (omitted when unknown so pre-AN-1 payload
+      // shapes stay byte-identical for weightless items).
+      ...(typeof l.unitGrams === "number" && l.unitGrams > 0 ? { unitGrams: l.unitGrams } : {}),
     })),
     totalMinor: args.totals.totalMinorUnits,
     subtotalMinor: args.totals.subtotalMinorUnits,

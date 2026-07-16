@@ -83,7 +83,7 @@ export async function createOrder(input: PersistOrderInput): Promise<PlacedOrder
 
   if (error || !order) return null;
 
-  const buildLineRows = (withCategory: boolean) =>
+  const buildLineRows = (withCategory: boolean, withUnitGrams: boolean) =>
     input.lines.map((l) => ({
       order_id: order!.id,
       product_id: l.productId ?? null,
@@ -95,11 +95,22 @@ export async function createOrder(input: PersistOrderInput): Promise<PlacedOrder
       quantity: l.quantity,
       price_minor_units: l.priceMinorUnits,
       regular_price_minor_units: l.regularPriceMinorUnits ?? null,
+      // AN-1 — sale-time weight snapshot (migration 0122); omitted when
+      // unknown so unknown-weight lines keep the category-default gate math.
+      ...(withUnitGrams && typeof l.unitGrams === "number" && l.unitGrams > 0
+        ? { unit_grams: l.unitGrams }
+        : {}),
     }));
 
-  let { error: linesError } = await admin.from("order_lines").insert(buildLineRows(true));
+  // Missing-column ladder: full row → without unit_grams (0122 unapplied) →
+  // without category too (0096 unapplied). Same degrade-don't-fail posture
+  // the category snapshot shipped with.
+  let { error: linesError } = await admin.from("order_lines").insert(buildLineRows(true, true));
   if (linesError && isMissingColumnError(linesError)) {
-    ({ error: linesError } = await admin.from("order_lines").insert(buildLineRows(false)));
+    ({ error: linesError } = await admin.from("order_lines").insert(buildLineRows(true, false)));
+  }
+  if (linesError && isMissingColumnError(linesError)) {
+    ({ error: linesError } = await admin.from("order_lines").insert(buildLineRows(false, false)));
   }
   if (linesError) {
     // Roll back the orphaned order so we never strand a header with no lines.

@@ -182,6 +182,14 @@ describe("limit meter — WAC 314-55-095 semantics", () => {
     const priced = priceCart([{ product: FLOWER, quantity: 2 }], []);
     expect(limitLinesFor(priced.lines)).toEqual([{ category: "flower", quantity: 2 }]);
   });
+
+  it("AN-1: limitLinesFor carries whole-LINE grams when the variant weight is known", () => {
+    // A 7 g jar must meter as 7 g per unit — not the 3.5 g category default.
+    const priced = priceCart([{ product: { ...FLOWER, unitGrams: 7 }, quantity: 2 }], []);
+    expect(limitLinesFor(priced.lines)).toEqual([
+      { category: "flower", quantity: 2, grams: 14 },
+    ]);
+  });
 });
 
 describe("sale payload assembly — validated before enqueue", () => {

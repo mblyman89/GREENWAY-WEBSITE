@@ -150,6 +150,10 @@ export async function POST(request: Request) {
       quantity: l.quantity,
       priceMinorUnits: l.priceMinorUnits,
       regularPriceMinorUnits: l.regularPriceMinorUnits,
+      // AN-1: per-unit grams snapshot (parsed from the variant label) so the
+      // completion gate can meter WAC 314-55-095 limits on actual package
+      // sizes instead of category defaults.
+      unitGrams: l.unitGrams ?? null,
     })),
   };
 

@@ -29,6 +29,7 @@ import { getPosReceiptConfig } from "@/lib/pos/receipt-config-store";
 import { getPosCashRoundingConfig } from "@/lib/pos/cash-rounding-store";
 import { getPosScanRequiredConfig } from "@/lib/pos/scan-required-store";
 import { trimDescription } from "@/lib/pos/product-info-core";
+import { gramsFromVariantLabel } from "@/lib/pos/variant-grams-core";
 import { getConfig as getLoyaltyConfig } from "@/lib/loyalty/loyalty-store";
 import { listMedicalRegistry } from "@/lib/medical/sale-store";
 import type { DohCategory } from "@/lib/medical/medical-sale-core";
@@ -118,6 +119,10 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         variantLabel: variant.label || null,
         regularPriceMinor: variant.priceMinorUnits,
         costMinorUnits: cost,
+        // AN-1 — true per-unit grams parsed from the package-size label the
+        // transform generated ("3.5g" → 3.5, "1oz" → 28; mg/ml/pack/each →
+        // null = unknown → the limit engine keeps its category default).
+        unitGrams: gramsFromVariantLabel(variant.label),
         inventoryStatus: item.inventoryStatus,
         // B32 — variant-level count for low-stock badges. Synthetic default
         // variants carry no real count (null = unknown, falls back to the

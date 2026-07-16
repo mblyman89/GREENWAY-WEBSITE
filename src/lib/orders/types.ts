@@ -95,6 +95,13 @@ export type OrderLineRow = {
   quantity: number;
   price_minor_units: number;
   regular_price_minor_units: number | null;
+  /**
+   * AN-1 — sale-time grams-per-unit snapshot (migration 0122). Null/absent on
+   * legacy rows and unknown-weight items (mg edibles, packs, "each"). Postgres
+   * numeric may deserialize as string; consumers normalize via
+   * variant-grams-core.normalizeUnitGrams.
+   */
+  unit_grams?: number | string | null;
   created_at: string;
 };
 
@@ -141,6 +148,8 @@ export type PricedNewOrderLine = {
   /** SERVER-computed final unit price (minor units, tax-inclusive). */
   priceMinorUnits: number;
   regularPriceMinorUnits: number;
+  /** AN-1 — grams one unit weighs (from the variant label; null = unknown). */
+  unitGrams?: number | null;
 };
 
 export type NewOrderInput = {
