@@ -31,6 +31,8 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { chunkedIn, pagedAll } from "@/lib/supabase/chunked-in";
+// Mastering Slice 1: sold lines resolve the variant's own lot key first.
+import { lotKeyForSaleLine } from "@/lib/pos/variant-lot-core";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -351,6 +353,7 @@ export async function getCogsReport(fromISO: string, toISO: string): Promise<Cog
     type CogsLineRow = {
       order_id: string;
       product_id: string | null;
+      variant_id: string | null;
       product_name: string | null;
       brand: string | null;
       quantity: number;
@@ -359,7 +362,7 @@ export async function getCogsReport(fromISO: string, toISO: string): Promise<Cog
     const lines = await chunkedIn<string, CogsLineRow>(validOrderIds, async (chunk, from, to) => {
       const { data } = await admin
         .from("order_lines")
-        .select("order_id, product_id, product_name, brand, quantity, price_minor_units")
+        .select("order_id, product_id, variant_id, product_name, brand, quantity, price_minor_units")
         .in("order_id", chunk)
         .order("id", { ascending: true })
         .range(from, to);
@@ -369,20 +372,24 @@ export async function getCogsReport(fromISO: string, toISO: string): Promise<Cog
     for (const l of lines) {
       const qty = l.quantity ?? 0;
       const revenue = (l.price_minor_units ?? 0) * qty;
-      const resolvedCost = l.product_id ? costMap.cost.get(l.product_id) : undefined;
+      // Mastering Slice 1: the variant's own lot key wins over the card's
+      // product_id (each size costs against ITS lot; single-lot cards
+      // resolve the same key either way).
+      const costKey = lotKeyForSaleLine({ productId: l.product_id, variantId: l.variant_id });
+      const resolvedCost = costKey ? costMap.cost.get(costKey) : undefined;
       const unitCost = resolvedCost ?? 0;
       const cogs = unitCost * qty;
 
       // Diagnose missing cost so a $0 COGS is explainable.
       if (resolvedCost == null && revenue > 0) {
-        const pid = l.product_id ?? "(no product_id)";
+        const pid = costKey ?? "(no product_id)";
         let reason: string;
-        if (!l.product_id) {
+        if (!costKey) {
           reason = "Order line has no product_id (sold off-catalog or legacy import).";
-        } else if (!costMap.lotKeys.has(l.product_id)) {
+        } else if (!costMap.lotKeys.has(costKey)) {
           reason =
             "No inventory lot matches this product key (received outside this system, or pos_product_key ≠ order product_id).";
-        } else if (costMap.keysWithLotsButNoCost.has(l.product_id)) {
+        } else if (costMap.keysWithLotsButNoCost.has(costKey)) {
           reason = "Inventory lot exists but unit_cost_minor_units is empty (no cost captured at intake).";
         } else {
           reason = "Cost could not be resolved.";

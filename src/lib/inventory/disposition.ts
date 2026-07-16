@@ -35,6 +35,8 @@ import {
   deriveInventoryExternalId,
   resolveSaleInventoryExternalId,
 } from "@/lib/compliance/ccrs-identifiers";
+// Mastering Slice 1: sold lines resolve the variant's own lot key first.
+import { lotKeyForSaleLine } from "@/lib/pos/variant-lot-core";
 
 /**
  * LEGACY default pre-destruction hold (hours). The old 72-hour WSLCB notice
@@ -468,7 +470,7 @@ export async function createCustomerReturn(
     admin
       .from("order_lines")
       .select(
-        "id, order_id, product_id, product_name, quantity, price_minor_units, regular_price_minor_units, ccrs_inventory_external_id",
+        "id, order_id, product_id, variant_id, product_name, quantity, price_minor_units, regular_price_minor_units, ccrs_inventory_external_id",
       )
       .eq("id", input.orderLineId)
       .maybeSingle(),
@@ -484,12 +486,16 @@ export async function createCustomerReturn(
   const l = line as {
     id: string;
     product_id: string | null;
+    variant_id: string | null;
     product_name: string;
     quantity: number;
     price_minor_units: number;
     regular_price_minor_units: number | null;
     ccrs_inventory_external_id: string | null;
   };
+  // Mastering Slice 1: the variant's own encoded lot key wins over the card's
+  // product_id (single-lot cards resolve the identical key either way).
+  const lineLotKey = lotKeyForSaleLine({ productId: l.product_id, variantId: l.variant_id });
 
   // Quantity already returned on this line (double-return guard).
   let alreadyReturned = 0;
@@ -534,11 +540,11 @@ export async function createCustomerReturn(
       .maybeSingle();
     lotRow = (data as typeof lotRow) ?? null;
     if (!lotRow) return { ok: false, error: "Selected lot not found." };
-  } else if (l.product_id) {
+  } else if (lineLotKey) {
     const { data } = await admin
       .from("inventory_lots")
       .select("id, lot_code, pos_product_key, status, created_at")
-      .eq("pos_product_key", l.product_id)
+      .eq("pos_product_key", lineLotKey)
       .order("created_at", { ascending: false })
       .limit(5);
     const candidates =
@@ -562,7 +568,7 @@ export async function createCustomerReturn(
       pos_product_key: lotRow.pos_product_key,
       id: lotRow.id,
     }),
-    posProductKey: l.product_id,
+    posProductKey: lineLotKey,
   }).value;
 
   const qty = Number(l.quantity) || 0;

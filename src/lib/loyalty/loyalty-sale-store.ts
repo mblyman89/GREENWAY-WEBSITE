@@ -25,6 +25,8 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { computeOrderTotals } from "@/lib/orders/order-pricing-core";
 import { loadProductCosts } from "@/lib/promotions/discount-engine";
+// Mastering Slice 1: sold lines resolve the variant's own lot key first.
+import { lotKeyForSaleLine } from "@/lib/pos/variant-lot-core";
 import {
   applyTierPricing,
   spreadCodeValue,
@@ -85,7 +87,12 @@ function toSaleLines(
     quantity: l.quantity,
     unitPriceMinorUnits: l.price_minor_units,
     regularPriceMinorUnits: l.regular_price_minor_units ?? l.price_minor_units,
-    costMinorUnits: l.product_id ? (costs.get(l.product_id) ?? null) : null,
+    costMinorUnits: (() => {
+      // Mastering Slice 1: the variant's own lot cost wins; single-lot cards
+      // resolve the identical key either way.
+      const key = lotKeyForSaleLine({ productId: l.product_id, variantId: l.variant_id });
+      return key ? (costs.get(key) ?? null) : null;
+    })(),
   }));
 }
 

@@ -26,6 +26,8 @@ import "server-only";
 import type { GreenwayMenuItem } from "@/lib/leafly/types";
 import { loadLiveMenuAll } from "@/lib/pos/live-menu";
 import { loadActiveRules, loadProductCosts } from "@/lib/promotions/discount-engine";
+// Mastering Slice 1: intake variants encode their own lot key.
+import { lotKeyFromVariantId } from "@/lib/pos/variant-lot-core";
 import {
   computePromotions,
   lineCostFloor,
@@ -175,6 +177,7 @@ export async function repriceOrderLines(rawLines: NewOrderLineInput[]): Promise<
   const discountInput: EngineCartLine[] = work.map((w) => {
     const item = w.resolved.item;
     const cats = item.filterCategories?.length ? item.filterCategories : [item.category];
+    const variantLotKey = lotKeyFromVariantId(w.resolved.variant.id);
     return {
       lineId: w.lineId,
       regularPriceMinorUnits: w.resolved.variant.priceMinorUnits,
@@ -183,7 +186,13 @@ export async function repriceOrderLines(rawLines: NewOrderLineInput[]): Promise<
       brand: item.brand || null,
       productKey: item.id,
       variantLabel: w.resolved.variant.label,
-      costMinorUnits: productCosts.get(item.id) ?? null,
+      // Mastering Slice 1: the variant's own lot cost wins (each size on a
+      // mastered card has its own acquisition cost); single-lot cards
+      // resolve the identical key either way.
+      costMinorUnits:
+        (variantLotKey ? productCosts.get(variantLotKey) : undefined) ??
+        productCosts.get(item.id) ??
+        null,
     };
   });
   const discountInputByLine = new Map(discountInput.map((l) => [l.lineId, l]));

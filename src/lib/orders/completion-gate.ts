@@ -102,7 +102,13 @@ export async function runCompletionGate(opts: CompletionGateOptions): Promise<st
     const held = await recalledProductKeys({ failClosed: true });
     if (held.size > 0) {
       const heldNames = findHeldLines(
-        order.lines.map((l) => ({ productId: l.product_id, productName: l.product_name })),
+        order.lines.map((l) => ({
+          productId: l.product_id,
+          // Mastering Slice 1: the variant's own encoded lot key must also
+          // trip the hold (a recalled size on a mastered card).
+          variantId: l.variant_id,
+          productName: l.product_name,
+        })),
         held,
       );
       const refusal = recallHoldRefusal(heldNames);

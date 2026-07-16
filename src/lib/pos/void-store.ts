@@ -41,6 +41,8 @@ import { setOrderStatus } from "@/lib/orders/orders-store";
 import { getAccountByCustomer, adjustPoints } from "@/lib/loyalty/loyalty-store";
 import { getPublishedVersion } from "@/lib/pos/menu-version";
 import { statusForLevelTotal } from "@/lib/inventory/sale-decrement-core";
+// Mastering Slice 1: restock lands on the variant's own lot (variant-first key).
+import { lotKeyForSaleLine } from "@/lib/pos/variant-lot-core";
 import { receiptLookupSuffix, clientUuidMatchesReceipt } from "@/lib/pos/returns-core";
 import { receiptNumber } from "@/lib/pos/receipt-core";
 import { pacificToday, pacificWallTimeToUtcISO } from "@/lib/reports/timezone";
@@ -236,11 +238,14 @@ async function restockInventoryForVoid(
   // ── Layer 2: inventory lots (newest non-quarantine lot per product key —
   //    the returns desk's lot-resolution convention) ─────────────────────────
   for (const line of lines) {
-    if (!line.productId) continue;
+    // Variant-first lot key: a void of one size on a mastered card restocks
+    // THAT size's lot (single-lot cards resolve identically to product_id).
+    const restockKey = lotKeyForSaleLine(line);
+    if (!restockKey) continue;
     const { data: lotRows } = await admin
       .from("inventory_lots")
       .select("id, on_hand_qty, status")
-      .eq("pos_product_key", line.productId)
+      .eq("pos_product_key", restockKey)
       .neq("status", "quarantine")
       .order("created_at", { ascending: false })
       .limit(1);

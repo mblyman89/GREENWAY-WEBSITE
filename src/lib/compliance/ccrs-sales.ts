@@ -33,6 +33,8 @@ import {
   resolveSaleInventoryExternalId,
   validateExternalId,
 } from "@/lib/compliance/ccrs-identifiers";
+// Mastering Slice 1: sold lines resolve the variant's own lot key first.
+import { lotKeyForSaleLine } from "@/lib/pos/variant-lot-core";
 import {
   assembleCcrsFile,
   ccrsFileName,
@@ -290,6 +292,7 @@ export async function buildCcrsSaleCsv(fromISO: string, toISO: string): Promise<
     id: string;
     order_id: string;
     product_id: string | null;
+    variant_id: string | null;
     quantity: number;
     price_minor_units: number;
     regular_price_minor_units: number | null;
@@ -300,7 +303,7 @@ export async function buildCcrsSaleCsv(fromISO: string, toISO: string): Promise<
     const { data } = await admin
       .from("order_lines")
       .select(
-        "id, order_id, product_id, quantity, price_minor_units, regular_price_minor_units, ccrs_inventory_external_id, category",
+        "id, order_id, product_id, variant_id, quantity, price_minor_units, regular_price_minor_units, ccrs_inventory_external_id, category",
       )
       .in("order_id", chunk)
       .order("id", { ascending: true })
@@ -364,11 +367,15 @@ export async function buildCcrsSaleCsv(fromISO: string, toISO: string): Promise<
     // External identifiers (deterministic, stable, idempotent), hardened to the
     // CCRS spec: prefer the line's explicit id, then the matched lot's canonical
     // id, then a sanitized product key as a degraded fallback.
-    const lot = l.product_id ? lotIndex.get(l.product_id) : undefined;
+    // Mastering Slice 1: the variant's own encoded lot key wins over the
+    // card's product_id (single-lot cards: the two keys coincide) so each
+    // size on a mastered card reports ITS OWN lot's CCRS identifier.
+    const lineLotKey = lotKeyForSaleLine({ productId: l.product_id, variantId: l.variant_id });
+    const lot = lineLotKey ? lotIndex.get(lineLotKey) : undefined;
     const resolved = resolveSaleInventoryExternalId({
       lineExplicit: l.ccrs_inventory_external_id,
       lotCanonical: lot?.canonicalExternalId,
-      posProductKey: l.product_id,
+      posProductKey: lineLotKey,
     });
     const inventoryExternalId = resolved.value;
 
