@@ -11,12 +11,15 @@
  * Gate sequence (order matters; see docs/POS_SEAM_AUDIT.md §Seam 2):
  *   1. idempotent re-complete (already completed → allow)
  *   2. S-12 sales-hours gate (WAC 314-55-147) — HARD, no override
- *   3. S-2b money recompute gate (verifyStoredOrderForCompletion)
- *   4. Task S-a loyalty-code consistency gate
- *   5. Task O attached-card re-validation (invalid card BLOCKS)
- *   6. Task O DOH 246-70 high-THC HARD gate — statutory, NO override
- *   7. S-1b sales-limit HARD gate (WAC 314-55-095) — logged override only
- *   8. Task O WAC 314-55-090(2) exempt-sale ledger write-or-block
+ *   3. AN-7 recall-hold HARD gate — a line whose product has ANY lot in
+ *      `recalled` status may not sell; NO override. Fail-CLOSED: if recall
+ *      status cannot be read, the sale is refused rather than guessed safe.
+ *   4. S-2b money recompute gate (verifyStoredOrderForCompletion)
+ *   5. Task S-a loyalty-code consistency gate
+ *   6. Task O attached-card re-validation (invalid card BLOCKS)
+ *   7. Task O DOH 246-70 high-THC HARD gate — statutory, NO override
+ *   8. S-1b sales-limit HARD gate (WAC 314-55-095) — logged override only
+ *   9. Task O WAC 314-55-090(2) exempt-sale ledger write-or-block
  *
  * Returns null when the order may complete, or a human-readable refusal.
  * The CALLER is responsible for permission checks (sales_limit.override) and
@@ -43,6 +46,8 @@ import {
   buildExemptSaleDrafts,
   type PlanLine,
 } from "@/lib/medical/medical-sale-core";
+import { findHeldLines, recallHoldRefusal } from "@/lib/pos/recall-hold-core";
+import { recalledProductKeys } from "@/lib/pos/recall-hold-store";
 
 export type CompletionGateOptions = {
   orderId: string;
@@ -84,6 +89,27 @@ export async function runCompletionGate(opts: CompletionGateOptions): Promise<st
   const hoursVerdict = evaluateSalesHours(opts.hoursAt ?? new Date(), hoursWindow);
   if (!hoursVerdict.allowed) {
     return `Sale blocked outside sales hours. ${hoursVerdict.reason}`;
+  }
+
+  // ── AN-7: recall-hold HARD gate ────────────────────────────────────────────
+  // A product with ANY lot in `recalled` status may not sell — recalled
+  // product must be segregated and held (LCB recall discipline; same posture
+  // as the DOH high-THC gate: NO override). Fail-CLOSED: if the recall table
+  // cannot be read we refuse rather than guess the product is safe. Routine
+  // `quarantine` lots (intake holds, 72h destruction holds) never trip this —
+  // see recall-hold-core.ts.
+  try {
+    const held = await recalledProductKeys({ failClosed: true });
+    if (held.size > 0) {
+      const heldNames = findHeldLines(
+        order.lines.map((l) => ({ productId: l.product_id, productName: l.product_name })),
+        held,
+      );
+      const refusal = recallHoldRefusal(heldNames);
+      if (refusal) return refusal;
+    }
+  } catch {
+    return "Sale blocked: the recall-hold status of this order's products could not be verified (inventory read failed). Try again; if it persists, contact the administrator. Selling cannot proceed while recall status is unknown.";
   }
 
   // ── S-2b: money recompute gate ───────────────────────────────────────────────
