@@ -101,7 +101,7 @@ function loadCreds(): DeviceCreds | null {
   }
 }
 
-export function RegisterShell() {
+export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
   const [screen, setScreen] = useState<Screen | "loading">("loading");
   const [creds, setCreds] = useState<DeviceCreds | null>(null);
   const [employee, setEmployee] = useState<UnlockedEmployee | null>(null);
@@ -144,6 +144,9 @@ export function RegisterShell() {
   // B44 — per-device display mode (localStorage, like favorites). Dark is
   // the default; hydrated in the boot effect below.
   const [theme, setTheme] = useState<PosTheme>("dark");
+  // AN-0 — a new build's service worker parked in the "waiting" state
+  // (null = up to date). Only surfaced on the home screen, never mid-sale.
+  const [updateWaiting, setUpdateWaiting] = useState<ServiceWorker | null>(null);
   const seqRef = useRef(0);
   const queueRef = useRef<QueuedPosEvent[]>([]);
   const flushingRef = useRef(false);
@@ -163,8 +166,40 @@ export function RegisterShell() {
     // through this worker, and it never intercepts /api/* (see
     // public/pos-sw.js). Best-effort: registration failure (private mode,
     // old iPadOS) leaves the register fully online-only.
+    // AN-0 — the worker is now versioned per deploy (served by
+    // /pos-sw.js/route.ts with the commit SHA in its cache names). After
+    // registering, watch for a WAITING worker: that's a new build parked
+    // behind the running one (it no longer auto-activates — sw-core removed
+    // install-time skipWaiting so an update can never land mid-sale). The
+    // home screen offers it as an "Update available" banner; accepting posts
+    // SKIP_WAITING and the controllerchange listener below reloads once.
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/pos-sw.js", { scope: "/pos" }).catch(() => {});
+      navigator.serviceWorker
+        .register("/pos-sw.js", { scope: "/pos" })
+        .then((reg) => {
+          if (reg.waiting) setUpdateWaiting(reg.waiting);
+          reg.addEventListener("updatefound", () => {
+            const installing = reg.installing;
+            if (!installing) return;
+            installing.addEventListener("statechange", () => {
+              // "installed" WITH an active controller = an update is parked
+              // (first-ever install has no controller and needs no banner).
+              if (installing.state === "installed" && navigator.serviceWorker.controller) {
+                setUpdateWaiting(reg.waiting);
+              }
+            });
+          });
+          // Belt-and-braces: also ask the browser to check for a new worker
+          // now (it otherwise checks on navigation, which a standalone PWA
+          // that never navigates may not trigger for a long time).
+          reg.update().catch(() => {});
+        })
+        .catch(() => {});
+      navigator.serviceWorker.addEventListener("controllerchange", () => {
+        // The waiting worker took over (we posted SKIP_WAITING) — reload once
+        // so the shell + assets come from the new build's caches.
+        window.location.reload();
+      });
     }
     const c = loadCreds();
     const parsed = parseQueue(window.localStorage.getItem(LS_QUEUE));
@@ -854,6 +889,18 @@ export function RegisterShell() {
         onPickupQueue={online && drawer ? () => setPickupOpen(true) : undefined}
         themeLabel={themeToggleLabel(theme)}
         onToggleTheme={() => setTheme((t) => toggleTheme(t))}
+        buildVersion={buildVersion ?? null}
+        onApplyUpdate={
+          // AN-0 — offered ONLY here on the home screen (a sale in progress
+          // renders SaleFlow instead, and a held sale means a cart is parked
+          // — never yank the app out from under either).
+          updateWaiting && !heldSale
+            ? () => {
+                updateWaiting.postMessage({ type: "SKIP_WAITING" });
+                // controllerchange (registered at boot) reloads the shell.
+              }
+            : undefined
+        }
         onRefreshMenu={() => void refreshMenu()}
         onClearBanner={() => setBanner(null)}
         onLock={lock}
@@ -1276,6 +1323,8 @@ function HomeScreen({
   onPickupQueue,
   themeLabel,
   onToggleTheme,
+  buildVersion,
+  onApplyUpdate,
   onRefreshMenu,
   onClearBanner,
   onLock,
@@ -1325,6 +1374,10 @@ function HomeScreen({
   themeLabel: string;
   /** B44 — flip this device's display mode (persists per device). */
   onToggleTheme: () => void;
+  /** AN-0 — the running build's version (short commit SHA; "dev" locally). */
+  buildVersion: string | null;
+  /** AN-0 — apply a parked update (undefined = up to date, or a sale is held). */
+  onApplyUpdate?: () => void;
   onRefreshMenu: () => void;
   onClearBanner: () => void;
   onLock: () => void;
@@ -1532,6 +1585,22 @@ function HomeScreen({
             </button>
           ) : null}
 
+          {/* AN-0 — a new build is parked behind the running one. Offered
+              ONLY on the home screen (never mid-sale) and suppressed while a
+              sale is held; tapping activates the waiting worker + reloads. */}
+          {onApplyUpdate ? (
+            <button
+              type="button"
+              onClick={onApplyUpdate}
+              className="pos-tile mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--pos-info-border)] bg-[var(--pos-info-soft)] px-4 py-2.5 text-left text-sm text-[var(--pos-info)]"
+            >
+              <span className="font-semibold">⬆️ Update available — a new register version is ready.</span>
+              <span className="rounded-full bg-[var(--pos-info-solid)] px-3 py-1 text-xs font-bold text-white">
+                Tap to refresh
+              </span>
+            </button>
+          ) : null}
+
           {!drawer ? (
             <section className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] p-5">
               <div>
@@ -1708,6 +1777,8 @@ function HomeScreen({
         <p className="mx-auto mt-2 w-full max-w-6xl text-center text-[11px] text-[var(--pos-text-faint)]">
           Every action is tied to the person whose PIN unlocked the register. Sales re-run the full compliance gate on
           the server — an offline sale that fails there goes to the manager exception queue, never silently through.
+          {/* AN-0 — the running build version, so staleness is visible at a glance. */}
+          {buildVersion ? <span> · v{buildVersion}</span> : null}
         </p>
       </footer>
     </main>
