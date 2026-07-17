@@ -438,3 +438,21 @@ they are optional data loads, not schema, and each is idempotent (safe to run an
   the cores still speak YYYY-MM-DD. Sale-screen customer attach verified
   already shipped (CustomerBand/MemberPanel; AO-3 scan auto-attach unchanged).
   No migration. Suite 1,740/133.
+
+- **Vendor-axis product mastering (PR #560).** Intake mastering now groups by
+  VENDOR, not brand. Root cause of the "one card per size" report: WCIA/
+  Cultivera manifests carry the vendor at the DOCUMENT level and no per-line
+  brand at all (`parseWciaLine` correctly leaves `brand_name` null — verified
+  against a real Cultivera transfer JSON), so every draft had a blank brand and
+  the planner refused to group anything (`intake_master_no_brand` per line).
+  Owner rule update: the store's vendors are licensed per-brand ("they are all
+  vendor names"), so the vendor IS the brand axis. Identity is now
+  `vendor|categoryAxis|family`; blank vendor → standalone card +
+  `intake_master_no_vendor` (message points at the manifest header);
+  `LiveCardCandidate` gains `vendor_name` and the staging composer passes it so
+  restock merges match on the vendor axis; `deriveFamily` strips BOTH the
+  vendor and any present brand prefix from names; grouped-card description
+  falls back to the vendor when no brand exists. New test pins that different
+  brand labels under the SAME vendor roll up into one card. Everything else
+  unchanged (eligibility delegation, `-onboarded` lot accuracy, never merge on
+  a guess, pack-axis folding). No migration. Suite 1,742/133.
