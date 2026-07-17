@@ -8,16 +8,20 @@
  * sizes of the SAME product piled up as duplicate cards. This planner rolls
  * approved drafts up into proper product cards:
  *
- *   • WITHIN-INVOICE ROLLUP — drafts on one manifest that are the same brand +
+ *   • WITHIN-INVOICE ROLLUP — drafts on one manifest that are the same vendor +
  *     website category + product family become ONE card with one variant per
  *     lot/size.
  *   • RESTOCK MERGE — when a group's identity matches exactly ONE live card,
  *     its lots are APPENDED to that card as new variants (a restock or a new
  *     size) instead of spawning a duplicate card.
  *
- * OWNER RULE: "Only the same products with variants from the same brand
- * should be rolled up into one product card." Brand is always part of the
- * grouping identity; a blank brand is never grouped (standalone + warning).
+ * OWNER RULE (vendor axis): rollup identity is the VENDOR, not the brand.
+ * WCIA/Cultivera manifests carry the vendor at the DOCUMENT level and no
+ * per-line brand at all, and every one of the store's vendors is licensed
+ * per-brand ("they are all vendor names"), so vendor + website category +
+ * family is the owner's "same product" identity. A blank vendor is never
+ * grouped (standalone + warning). Brand, when a manifest DOES carry one, is
+ * still stripped from name prefixes so families fold consistently.
  *
  * LOT ACCURACY IS PRESERVED: every variant keeps ITS OWN lot's identity —
  * `source_variant_id = ${lotPosProductKey}-onboarded`, the exact encoding the
@@ -71,6 +75,7 @@ export type LiveCardCandidate = {
   source_item_id: string;
   name: string;
   brand_name: string;
+  vendor_name: string | null;
   category: string;
   strain_name: string | null;
   hidden: boolean;
@@ -167,10 +172,12 @@ function titleCase(value: string): string {
  * to the raw name or the category (that would over-merge), so an
  * unconfident result returns NULL instead.
  */
-export function familyFromName(value: string, brand: string): string | null {
+export function familyFromName(value: string, labels: string | string[]): string | null {
   let s = normalizeWhitespace(value).replace(/_+/g, " ").replace(/\s+/g, " ").trim();
-  const brandComparable = normalizeWhitespace(brand).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  if (brandComparable) s = s.replace(new RegExp(`^${brandComparable}\\s*[-:|]?\\s*`, "i"), "");
+  for (const label of Array.isArray(labels) ? labels : [labels]) {
+    const comparable = normalizeWhitespace(label).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    if (comparable) s = s.replace(new RegExp(`^${comparable}\\s*[-:|]?\\s*`, "i"), "");
+  }
   s = s
     .replace(
       /\b\d+(?:\.\d+)?\s*(?:g|gram|grams|mg|milligram|milligrams|oz|ounce|ounces|ml|milliliter|milliliters|fl\.?\s*oz|fluid\s*ounce|fluidounce)\b/gi,
@@ -204,7 +211,10 @@ export function familyFromName(value: string, brand: string): string | null {
  */
 export function deriveFamily(input: {
   category: string;
-  brand: string;
+  /** The grouping vendor — always stripped from name prefixes. */
+  vendor: string;
+  /** Optional brand — also stripped from name prefixes when present. */
+  brand?: string | null;
   name: string;
   strainName: string | null;
 }): { family: string; display: string } | null {
@@ -212,7 +222,7 @@ export function deriveFamily(input: {
   if (STRAIN_LED_CATEGORIES.has(input.category) && strain) {
     return { family: collapseFamilyKeyPart(strain), display: strain };
   }
-  const stripped = familyFromName(input.name, input.brand);
+  const stripped = familyFromName(input.name, [input.brand ?? "", input.vendor]);
   if (!stripped) return null;
   return { family: collapseFamilyKeyPart(stripped), display: stripped };
 }
@@ -237,9 +247,9 @@ export function groupingCategoryAxis(category: string): string {
   return PACK_CATEGORY_AXIS[category] ?? category;
 }
 
-/** brand|categoryAxis|family — the owner's "same product, same brand" identity. */
-function identityKey(brand: string, category: string, family: string): string {
-  return [collapseFamilyKeyPart(brand), groupingCategoryAxis(category), family].join("|");
+/** vendor|categoryAxis|family — the owner's "same product, same vendor" identity. */
+function identityKey(vendor: string, category: string, family: string): string {
+  return [collapseFamilyKeyPart(vendor), groupingCategoryAxis(category), family].join("|");
 }
 
 // --- Planner ----------------------------------------------------------------
@@ -279,8 +289,8 @@ function sortVariants(variants: MasteredVariant[]): MasteredVariant[] {
  *  1. `buildDraftInjectionPlan` decides eligibility exactly as before (its
  *     diagnostics pass through untouched).
  *  2. Lots already live as a VARIANT on a live card are dropped (info).
- *  3. Eligible items are grouped by brand|websiteCategory|family; unconfident
- *     family or blank brand → standalone card + warning (never auto-merge).
+ *  3. Eligible items are grouped by vendor|websiteCategory|family; unconfident
+ *     family or blank vendor → standalone card + warning (never auto-merge).
  *  4. A group matching exactly ONE live card merges into it (restock); more
  *     than one match → new card + warning; no match → new card.
  */
@@ -310,16 +320,17 @@ export function buildIntakeMasteringPlan(inputs: IntakeMasteringInputs): IntakeM
   for (const card of inputs.liveCards) {
     if (card.hidden) continue;
     if (card.variants.length > 0 && card.variants.every((v) => v.medical)) continue;
-    const brand = normalizeWhitespace(card.brand_name);
-    if (!brand) continue;
+    const vendor = normalizeWhitespace(card.vendor_name);
+    if (!vendor) continue;
     const fam = deriveFamily({
       category: card.category,
-      brand,
+      vendor,
+      brand: card.brand_name,
       name: card.name,
       strainName: card.strain_name,
     });
     if (!fam) continue;
-    const key = identityKey(brand, card.category, fam.family);
+    const key = identityKey(vendor, card.category, fam.family);
     const list = liveByIdentity.get(key) ?? [];
     list.push(card);
     liveByIdentity.set(key, list);
@@ -334,6 +345,7 @@ export function buildIntakeMasteringPlan(inputs: IntakeMasteringInputs): IntakeM
   type Group = {
     identity: string;
     display: string;
+    vendor: string;
     items: PlannedInjectedItem[];
   };
   const groups = new Map<string, Group>();
@@ -351,13 +363,13 @@ export function buildIntakeMasteringPlan(inputs: IntakeMasteringInputs): IntakeM
       continue;
     }
 
-    const brand = normalizeWhitespace(it.brand_name);
-    if (!brand) {
-      // Owner rule: rollup is per-brand; a blank brand is never grouped.
+    const vendor = normalizeWhitespace(it.vendor_name);
+    if (!vendor) {
+      // Owner rule: rollup is per-vendor; a blank vendor is never grouped.
       diagnostics.push({
         severity: "warning",
-        code: "intake_master_no_brand",
-        message: `Approved product “${it.name}” has no brand, so it was added as its own card (never grouped without a brand). Fix the brand on Product Onboarding if it should roll up.`,
+        code: "intake_master_no_vendor",
+        message: `Approved product “${it.name}” has no vendor, so it was added as its own card (never grouped without a vendor). The vendor comes from the manifest header — fix the manifest's vendor on Intake if it should roll up.`,
         context: { pos_product_key: it.source_item_id },
       });
       newCards.push(standaloneCard(it));
@@ -366,7 +378,8 @@ export function buildIntakeMasteringPlan(inputs: IntakeMasteringInputs): IntakeM
 
     const fam = deriveFamily({
       category: it.category,
-      brand,
+      vendor,
+      brand: it.brand_name,
       name: it.product_name ?? it.name,
       strainName: it.strain_name,
     });
@@ -381,10 +394,10 @@ export function buildIntakeMasteringPlan(inputs: IntakeMasteringInputs): IntakeM
       continue;
     }
 
-    const key = identityKey(brand, it.category, fam.family);
+    const key = identityKey(vendor, it.category, fam.family);
     const group = groups.get(key);
     if (group) group.items.push(it);
-    else groups.set(key, { identity: key, display: fam.display, items: [it] });
+    else groups.set(key, { identity: key, display: fam.display, vendor, items: [it] });
   }
 
   for (const group of groups.values()) {
@@ -485,7 +498,9 @@ export function buildIntakeMasteringPlan(inputs: IntakeMasteringInputs): IntakeM
         if (total <= 3) return "low-stock";
         return "in-stock";
       })(),
-      description: `${group.display} from ${base.brand_name}. Browse current availability, package options, and pricing at Greenway Marijuana in Port Orchard.`,
+      // Display only: prefer the brand when the manifest carried one (generic
+      // JSON); WCIA has no per-line brand, so fall back to the vendor.
+      description: `${group.display} from ${normalizeWhitespace(base.brand_name) || group.vendor}. Browse current availability, package options, and pricing at Greenway Marijuana in Port Orchard.`,
       variants: sorted,
     });
     if (group.items.length > 1) {
@@ -547,6 +562,7 @@ export function __runIntakeMasteringCoreTests(): { passed: number } {
     source_item_id: "card-1",
     name: "Blue Dream",
     brand_name: "Fairwinds",
+    vendor_name: "Fairwinds LLC",
     category: "flower",
     strain_name: "Blue Dream",
     hidden: false,
@@ -593,19 +609,36 @@ export function __runIntakeMasteringCoreTests(): { passed: number } {
     assert(p.diagnostics.some((d) => d.code === "intake_master_grouped"), "rollup: grouped diagnostic");
   }
 
-  // Same strain, DIFFERENT brand → two cards (owner rule: same brand only).
+  // Same strain, DIFFERENT vendor → two cards (owner rule: same vendor only).
   {
     const p = plan(
-      [draft({}), draft({ id: "d2", pos_product_key: "LOT-B", brand_name: "Other Farms" })],
+      [draft({}), draft({ id: "d2", pos_product_key: "LOT-B", vendor_name: "Other Farms LLC" })],
       [
         ["d1", enrich({})],
         ["d2", enrich({})],
       ],
     );
-    assert(p.newCards.length === 2, "brand split: two cards");
+    assert(p.newCards.length === 2, "vendor split: two cards");
   }
 
-  // Same brand, different strains → two cards.
+  // DIFFERENT brand labels under the SAME vendor still roll up — the owner's
+  // vendors are licensed per-brand, so the vendor IS the brand axis.
+  {
+    const p = plan(
+      [
+        draft({}),
+        draft({ id: "d2", pos_product_key: "LOT-B", name: "Blue Dream 3.5g", brand_name: "Other Label", price_minor_units: 3500 }),
+      ],
+      [
+        ["d1", enrich({})],
+        ["d2", enrich({ packageLabel: "3.5g" })],
+      ],
+    );
+    assert(p.newCards.length === 1, "same vendor, different brand label: one card");
+    assert(p.newCards[0].variants.length === 2, "same vendor rollup: two variants");
+  }
+
+  // Same vendor, different strains → two cards.
   {
     const p = plan(
       [draft({}), draft({ id: "d2", pos_product_key: "LOT-B", strain_name: "GG4", name: "GG4 1g" })],
@@ -719,19 +752,19 @@ export function __runIntakeMasteringCoreTests(): { passed: number } {
     );
   }
 
-  // Blank brand → standalone + warning (owner rule: rollup is per-brand).
+  // Blank vendor → standalone + warning (owner rule: rollup is per-vendor).
   {
     const p = plan(
-      [draft({ brand_name: null }), draft({ id: "d2", pos_product_key: "LOT-B", brand_name: "  " })],
+      [draft({ vendor_name: null }), draft({ id: "d2", pos_product_key: "LOT-B", vendor_name: "  " })],
       [
         ["d1", enrich({})],
         ["d2", enrich({})],
       ],
     );
-    assert(p.newCards.length === 2, "no brand: standalone cards");
+    assert(p.newCards.length === 2, "no vendor: standalone cards");
     assert(
-      p.diagnostics.filter((d) => d.code === "intake_master_no_brand").length === 2,
-      "no brand: warnings",
+      p.diagnostics.filter((d) => d.code === "intake_master_no_vendor").length === 2,
+      "no vendor: warnings",
     );
   }
 
@@ -775,9 +808,13 @@ export function __runIntakeMasteringCoreTests(): { passed: number } {
   // Family helpers: strain-led uses strain; underscores normalize; category
   // fallback is refused (null), never guessed.
   {
-    const fam = deriveFamily({ category: "flower", brand: "X", name: "whatever", strainName: "Blue_Dream" });
+    const fam = deriveFamily({ category: "flower", vendor: "X", name: "whatever", strainName: "Blue_Dream" });
     assert(!!fam && fam.display === "Blue Dream" && fam.family === "blue-dream", "family: strain-led");
     assert(familyFromName("Fairwinds 3.5g", "Fairwinds") === null, "family: strips to nothing → null");
+    assert(
+      familyFromName("Fairwinds LLC Healing Balm 300mg", ["", "Fairwinds LLC"]) === "Healing Balm",
+      "family: vendor prefix strips (label list form)",
+    );
     assert(
       familyFromName("Bite_ind_peanut_butter_chip_1:1_10pk", "") ===
         "Bite Ind Peanut Butter Chip 1:1",

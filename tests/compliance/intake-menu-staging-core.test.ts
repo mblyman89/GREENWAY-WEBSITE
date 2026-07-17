@@ -199,7 +199,7 @@ describe("intake-menu-staging-core: pack-axis restock (composer filter union)", 
         draft({
           pos_product_key: "LOT-NEWPK",
           name: "Blue Dream Prerolls 5pk",
-          brand_name: "House",
+          vendor_name: "House LLC", // matches the live card's vendor (the axis)
           strain_name: "Blue Dream",
           price_minor_units: 3000,
         }),
