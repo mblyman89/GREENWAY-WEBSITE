@@ -18,7 +18,7 @@
  */
 
 import { validateEnvelope, type PosEventEnvelope } from "./sale-event-core";
-import { MINIMUM_AGE_YEARS, ageOn, isAcceptableIdType, isExpired, isYmd } from "./id-scan-core";
+import { MINIMUM_AGE_YEARS, OVER40_VISUAL_MIN_AGE, ageOn, isAcceptableIdType, isExpired, isYmd } from "./id-scan-core";
 
 // ---------------------------------------------------------------------------
 // Envelope-vs-authenticated-device checks
@@ -96,6 +96,12 @@ export type ManualIdEventPayload = {
   expirationDate: string;
   /** Why the ID was verified manually (owner rule: audit trail attached). */
   reason: string;
+  /**
+   * HOUSE POLICY over-40 visual verification (id-scan-core): DOB-only entry.
+   * When true the payload may carry expirationDate "" and the math check
+   * requires the DOB to prove age ≥ 40 on the event date.
+   */
+  visualOver40?: boolean;
 };
 
 export type PayloadCheck = { ok: true } | { ok: false; errors: string[] };
@@ -104,7 +110,15 @@ export function validateManualIdEventPayload(p: Partial<ManualIdEventPayload>): 
   const errors: string[] = [];
   if (!isAcceptableIdType(p.idType)) errors.push("idType must be a WAC 314-55-150 acceptable ID type.");
   if (!isYmd(p.dateOfBirth)) errors.push("dateOfBirth must be YYYY-MM-DD.");
-  if (!isYmd(p.expirationDate)) errors.push("expirationDate must be YYYY-MM-DD.");
+  // Over-40 visual verifications (house policy) carry no expiry — "" is the
+  // signal; anything else must still be a real date.
+  if (p.visualOver40 === true) {
+    if (p.expirationDate !== "" && !isYmd(p.expirationDate)) {
+      errors.push('expirationDate must be YYYY-MM-DD or "" on an over-40 visual verification.');
+    }
+  } else if (!isYmd(p.expirationDate)) {
+    errors.push("expirationDate must be YYYY-MM-DD.");
+  }
   const reason = (p.reason ?? "").trim();
   if (reason.length < 3 || reason.length > 500) errors.push("reason must be 3–500 characters.");
   return errors.length ? { ok: false, errors } : { ok: true };
@@ -121,7 +135,7 @@ export function validateManualIdEventPayload(p: Partial<ManualIdEventPayload>): 
  * exception for manager review, never a silently-honored audit record.
  */
 export function checkManualIdMathAtSync(
-  p: Pick<ManualIdEventPayload, "dateOfBirth" | "expirationDate">,
+  p: Pick<ManualIdEventPayload, "dateOfBirth" | "expirationDate" | "visualOver40">,
   occurredYmd: string,
   minimumAgeYears: number = MINIMUM_AGE_YEARS,
 ): PayloadCheck {
@@ -134,6 +148,16 @@ export function checkManualIdMathAtSync(
     errors.push(
       `Manual ID math failed at sync: DOB ${p.dateOfBirth} is under ${minimumAgeYears} (age ${age ?? "unknown"}) on ${occurredYmd}.`,
     );
+  }
+  const visual40 = p.visualOver40 === true;
+  if (visual40 && age !== null && age >= minimumAgeYears && age < OVER40_VISUAL_MIN_AGE) {
+    errors.push(
+      `Manual ID math failed at sync: over-40 visual verification but DOB ${p.dateOfBirth} is age ${age} on ${occurredYmd} — house policy requires a scan under ${OVER40_VISUAL_MIN_AGE}.`,
+    );
+  }
+  if (visual40 && (p.expirationDate ?? "") === "") {
+    // Over-40 visual path: validity was checked in hand — no expiry to grade.
+    return errors.length ? { ok: false, errors } : { ok: true };
   }
   const expired = isExpired(p.expirationDate ?? "", occurredYmd);
   if (expired !== false) {
@@ -354,6 +378,18 @@ export function __runPosSyncCoreTests(): void {
   ok(!validateManualIdEventPayload({ ...goodManual, dateOfBirth: "13/07/1990" }).ok, "bad DOB refused");
   ok(!validateManualIdEventPayload({ ...goodManual, expirationDate: "" }).ok, "missing expiry refused");
   ok(!validateManualIdEventPayload({ ...goodManual, reason: "x" }).ok, "short reason refused");
+  // House policy — over-40 visual verification payloads
+  const over40Manual: ManualIdEventPayload = {
+    idType: "drivers_license",
+    dateOfBirth: "1980-01-01",
+    expirationDate: "",
+    reason: "House policy: customer clearly 40+ — ID checked visually for validity; DOB entered from the document.",
+    visualOver40: true,
+  };
+  ok(validateManualIdEventPayload(over40Manual).ok, "over-40 visual payload with empty expiry ok");
+  ok(validateManualIdEventPayload({ ...over40Manual, expirationDate: "2030-01-01" }).ok, "over-40 visual payload with a real expiry ok");
+  ok(!validateManualIdEventPayload({ ...over40Manual, expirationDate: "junk" }).ok, "over-40 visual payload with garbage expiry refused");
+  ok(!validateManualIdEventPayload({ ...goodManual, expirationDate: "", visualOver40: false }).ok, "explicit false does not waive the expiry");
 
   // ACK semantics
   ok(ackMeansDurablyAccepted("processed"), "processed → durable");
@@ -380,6 +416,14 @@ export function __runPosSyncCoreTests(): void {
     ok(r.ok, "expiry between event and sync still passes (event-date grading)");
   }
   ok(!checkManualIdMathAtSync(manualMath, "13/07/2026").ok, "bad event date refused");
+  // House policy — over-40 math at sync
+  const over40Math = { dateOfBirth: "1980-01-01", expirationDate: "", visualOver40: true };
+  ok(checkManualIdMathAtSync(over40Math, "2026-07-13").ok, "over-40 visual: 46-year-old with no expiry passes");
+  ok(checkManualIdMathAtSync({ ...over40Math, dateOfBirth: "1986-07-13" }, "2026-07-13").ok, "over-40 visual: 40th birthday passes");
+  ok(!checkManualIdMathAtSync({ ...over40Math, dateOfBirth: "1987-01-01" }, "2026-07-13").ok, "over-40 visual: 39-year-old fails at sync (should have scanned)");
+  ok(!checkManualIdMathAtSync({ ...over40Math, dateOfBirth: "2010-01-01" }, "2026-07-13").ok, "over-40 visual: underage still fails");
+  ok(!checkManualIdMathAtSync({ ...over40Math, expirationDate: "2026-07-12" }, "2026-07-13").ok, "over-40 visual: an entered expiry is still graded");
+  ok(!checkManualIdMathAtSync({ ...manualMath, expirationDate: "" }, "2026-07-13").ok, "non-visual manual with empty expiry still fails");
   {
     // Exactly 21 on the event date passes; the day before fails.
     ok(checkManualIdMathAtSync({ ...manualMath, dateOfBirth: "2005-07-13" }, "2026-07-13").ok, "21st birthday passes");

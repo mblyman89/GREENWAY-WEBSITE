@@ -96,6 +96,13 @@ describe("manual_id_verification event payload", () => {
     expect(validateManualIdEventPayload({ ...good, expirationDate: "" }).ok).toBe(false);
     expect(validateManualIdEventPayload({ ...good, reason: "x" }).ok).toBe(false);
   });
+  it("house policy: over-40 visual payloads may carry an empty expiry", () => {
+    const visual = { ...good, idType: "drivers_license", expirationDate: "", visualOver40: true };
+    expect(validateManualIdEventPayload(visual).ok).toBe(true);
+    expect(validateManualIdEventPayload({ ...visual, expirationDate: "2030-01-01" }).ok).toBe(true);
+    expect(validateManualIdEventPayload({ ...visual, expirationDate: "junk" }).ok).toBe(false);
+    expect(validateManualIdEventPayload({ ...good, expirationDate: "", visualOver40: false }).ok).toBe(false);
+  });
 });
 
 describe("ACK semantics — when may the device clear a queue row?", () => {
@@ -127,6 +134,15 @@ describe("AN-3(b): manual-ID math re-run at sync (event-date grading)", () => {
     expect(checkManualIdMathAtSync({ ...good, expirationDate: "2026-07-12" }, "2026-07-13").ok).toBe(false);
     // A doc that expires between event and sync must still pass.
     expect(checkManualIdMathAtSync({ ...good, expirationDate: "2026-07-14" }, "2026-07-13").ok).toBe(true);
+  });
+  it("house policy: over-40 visual math — age ≥ 40 enforced, empty expiry skipped", () => {
+    const visual = { dateOfBirth: "1980-01-01", expirationDate: "", visualOver40: true };
+    expect(checkManualIdMathAtSync(visual, "2026-07-13").ok).toBe(true);
+    expect(checkManualIdMathAtSync({ ...visual, dateOfBirth: "1986-07-13" }, "2026-07-13").ok).toBe(true); // 40th birthday
+    expect(checkManualIdMathAtSync({ ...visual, dateOfBirth: "1987-01-01" }, "2026-07-13").ok).toBe(false); // 39 — should have scanned
+    expect(checkManualIdMathAtSync({ ...visual, dateOfBirth: "2010-01-01" }, "2026-07-13").ok).toBe(false); // underage still fails
+    expect(checkManualIdMathAtSync({ ...visual, expirationDate: "2026-07-12" }, "2026-07-13").ok).toBe(false); // entered expiry still graded
+    expect(checkManualIdMathAtSync({ ...good, expirationDate: "" }, "2026-07-13").ok).toBe(false); // non-visual empty expiry still fails
   });
 });
 
