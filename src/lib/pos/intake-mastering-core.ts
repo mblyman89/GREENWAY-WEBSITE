@@ -105,6 +105,13 @@ export type IntakeMasteringPlan = {
   newCards: MasteredNewCard[];
   /** Variants to APPEND to live cards, keyed by the card's source_item_id. */
   mergesByCardKey: Map<string, MasteredVariant[]>;
+  /**
+   * Resolved categories (category + filter_categories) of the merged lots per
+   * live card, so the composer can extend the card's filter_categories — e.g.
+   * a 5-pack restock merged onto a single-preroll card must stay reachable
+   * from the pack browse section too.
+   */
+  mergeCategoriesByCardKey: Map<string, string[]>;
   diagnostics: InjectionDiagnostic[];
   addedCardCount: number;
   mergedVariantCount: number;
@@ -121,7 +128,10 @@ const STRAIN_LED_CATEGORIES = new Set([
   "preroll-pack",
   "infused-preroll",
   "infused-preroll-pack",
+  "blunt",
+  "infused-blunt",
   "concentrate",
+  "rso",
   "cartridge",
   "disposable-cartridge",
   "trim",
@@ -166,6 +176,12 @@ export function familyFromName(value: string, brand: string): string | null {
       /\b\d+(?:\.\d+)?\s*(?:g|gram|grams|mg|milligram|milligrams|oz|ounce|ounces|ml|milliliter|milliliters|fl\.?\s*oz|fluid\s*ounce|fluidounce)\b/gi,
       " ",
     )
+    // Numbered pack tokens ("5pk", "3 pack", "2-pack") strip away so a
+    // multi-pack lands on the same family as its single form. Safe deviation
+    // from transform.ts stripVariantNoise: identity here is computed by THIS
+    // function on BOTH sides (intake group and live card), so both fold
+    // identically.
+    .replace(/\b\d+\s*(?:-\s*)?(?:pk|pack|packs)\b/gi, " ")
     .replace(/\b(?:single|pack|packs|pouch|jar|tin|unit|each)\b/gi, " ")
     .replace(
       /\b(?:pre[- ]?rolls?|infused|blunt|flower|cartridge|disposable|vape|rosin|resin|bho|badder|hash|gummies|edible|beverage|shot|topical)\b/gi,
@@ -201,9 +217,29 @@ export function deriveFamily(input: {
   return { family: collapseFamilyKeyPart(stripped), display: stripped };
 }
 
-/** brand|category|family — the owner's "same product, same brand" identity. */
+/**
+ * PACK AXIS (owner rule): multi-pack prerolls / infused prerolls / blunts are
+ * the SAME PRODUCT as their single-form siblings, so for IDENTITY ONLY the
+ * pack category folds onto its single-form axis. Blunts already reach the
+ * preroll axis upstream (the inventory-type catalog maps "Blunt" → "preroll"
+ * and "Infused Blunt" → "infused-preroll"); the explicit "blunt" /
+ * "infused-blunt" taxonomy values are deliberately NOT folded here — they are
+ * browse-focus categories, and folding them would be a guess. Infused NEVER
+ * folds onto non-infused.
+ */
+export const PACK_CATEGORY_AXIS: Record<string, string> = {
+  "preroll-pack": "preroll",
+  "infused-preroll-pack": "infused-preroll",
+};
+
+/** The category used for grouping identity (a pack folds to its single form). */
+export function groupingCategoryAxis(category: string): string {
+  return PACK_CATEGORY_AXIS[category] ?? category;
+}
+
+/** brand|categoryAxis|family — the owner's "same product, same brand" identity. */
 function identityKey(brand: string, category: string, family: string): string {
-  return [collapseFamilyKeyPart(brand), category, family].join("|");
+  return [collapseFamilyKeyPart(brand), groupingCategoryAxis(category), family].join("|");
 }
 
 // --- Planner ----------------------------------------------------------------
@@ -291,6 +327,7 @@ export function buildIntakeMasteringPlan(inputs: IntakeMasteringInputs): IntakeM
 
   const newCards: MasteredNewCard[] = [];
   const mergesByCardKey = new Map<string, MasteredVariant[]>();
+  const mergeCategoriesByCardKey = new Map<string, string[]>();
   let mergedVariantCount = 0;
 
   // Group eligible planned items by identity, preserving first-seen order.
@@ -372,6 +409,13 @@ export function buildIntakeMasteringPlan(inputs: IntakeMasteringInputs): IntakeM
       const list = mergesByCardKey.get(target.source_item_id) ?? [];
       list.push(...sortVariants(variants));
       mergesByCardKey.set(target.source_item_id, list);
+      const cats = mergeCategoriesByCardKey.get(target.source_item_id) ?? [];
+      for (const gi of group.items) {
+        for (const c of [gi.category, ...gi.filter_categories]) {
+          if (!cats.includes(c)) cats.push(c);
+        }
+      }
+      mergeCategoriesByCardKey.set(target.source_item_id, cats);
       mergedVariantCount += variants.length;
       diagnostics.push({
         severity: "info",
@@ -414,6 +458,15 @@ export function buildIntakeMasteringPlan(inputs: IntakeMasteringInputs): IntakeM
       continue;
     }
 
+    // The card must be reachable from EVERY browse section its lots belong
+    // to (e.g. a single preroll + its 5-pack → "preroll" AND "preroll-pack").
+    const filterUnion: string[] = [];
+    for (const gi of group.items) {
+      for (const c of [gi.category, ...gi.filter_categories]) {
+        if (!filterUnion.includes(c)) filterUnion.push(c);
+      }
+    }
+
     const cheapest = sorted[0];
     const labelPart = cheapest.label === "each" ? "" : cheapest.label;
     const { variant: _v, sort_order: _s, ...baseRest } = base;
@@ -423,6 +476,7 @@ export function buildIntakeMasteringPlan(inputs: IntakeMasteringInputs): IntakeM
       ...baseRest,
       source_item_id: base.source_item_id,
       name: group.display,
+      filter_categories: filterUnion,
       price_minor_units: cheapest.price_minor_units,
       price_label: [formatMoney(cheapest.price_minor_units), labelPart].filter(Boolean).join(" "),
       inventory_status: ((): MasteredNewCard["inventory_status"] => {
@@ -450,6 +504,7 @@ export function buildIntakeMasteringPlan(inputs: IntakeMasteringInputs): IntakeM
   return {
     newCards,
     mergesByCardKey,
+    mergeCategoriesByCardKey,
     diagnostics,
     addedCardCount: newCards.length,
     mergedVariantCount,
@@ -725,9 +780,139 @@ export function __runIntakeMasteringCoreTests(): { passed: number } {
     assert(familyFromName("Fairwinds 3.5g", "Fairwinds") === null, "family: strips to nothing → null");
     assert(
       familyFromName("Bite_ind_peanut_butter_chip_1:1_10pk", "") ===
-        "Bite Ind Peanut Butter Chip 1:1 10pk",
-      "family: underscore names normalize like transform.ts Section E",
+        "Bite Ind Peanut Butter Chip 1:1",
+      "family: underscores normalize AND the pack token strips (pack-axis rule)",
     );
+    assert(
+      familyFromName("Healing Balm 2-pack", "") === "Healing Balm",
+      "family: hyphenated pack token strips",
+    );
+  }
+
+  // PACK AXIS — a single preroll and its 5-pack roll up into ONE card; the
+  // card's filter_categories covers BOTH browse sections.
+  {
+    const p = plan(
+      [
+        draft({ id: "d1", pos_product_key: "LOT-S", name: "Blue Dream Preroll 1g", price_minor_units: 800 }),
+        draft({ id: "d2", pos_product_key: "LOT-P5", name: "Blue Dream Prerolls 5pk", price_minor_units: 3000 }),
+      ],
+      [
+        ["d1", enrich({ websiteCategory: "preroll", packageLabel: "1g" })],
+        ["d2", enrich({ websiteCategory: "preroll-pack", packageLabel: "5pk" })],
+      ],
+    );
+    assert(p.newCards.length === 1, "pack axis: one card for single + 5pk");
+    const card = p.newCards[0];
+    assert(card.variants.length === 2, "pack axis: two variants");
+    assert(card.variants[0].source_variant_id === "LOT-S-onboarded", "pack axis: single keeps own lot key");
+    assert(card.variants[1].source_variant_id === "LOT-P5-onboarded", "pack axis: pack keeps own lot key");
+    assert(
+      card.filter_categories.includes("preroll") && card.filter_categories.includes("preroll-pack"),
+      "pack axis: filter union covers both browse sections",
+    );
+  }
+
+  // Infused NEVER folds onto non-infused: infused single + infused pack roll
+  // up together; the plain single stays its own card.
+  {
+    const p = plan(
+      [
+        draft({ id: "i1", pos_product_key: "LOT-I1", name: "GG4 Infused Preroll", strain_name: "GG4", price_minor_units: 1500 }),
+        draft({ id: "i2", pos_product_key: "LOT-I2", name: "GG4 Infused Prerolls 2pk", strain_name: "GG4", price_minor_units: 2800 }),
+        draft({ id: "n1", pos_product_key: "LOT-N1", name: "GG4 Preroll", strain_name: "GG4", price_minor_units: 700 }),
+      ],
+      [
+        ["i1", enrich({ websiteCategory: "infused-preroll" })],
+        ["i2", enrich({ websiteCategory: "infused-preroll-pack", packageLabel: "2pk" })],
+        ["n1", enrich({ websiteCategory: "preroll" })],
+      ],
+    );
+    assert(p.newCards.length === 2, "infused split: infused and non-infused never merge");
+    const infused = p.newCards.find((c) => c.variants.length === 2);
+    assert(!!infused, "infused split: infused card carries both lots");
+    assert(
+      infused!.variants.map((v) => v.source_variant_id).join(",") ===
+        "LOT-I1-onboarded,LOT-I2-onboarded",
+      "infused split: infused variants keep own lot keys",
+    );
+  }
+
+  // Blunts ride the preroll axis (inventory-type catalog maps "Blunt" →
+  // "preroll"): a single blunt and its 3-pack roll up into ONE card.
+  {
+    const p = plan(
+      [
+        draft({ id: "b1", pos_product_key: "LOT-B1", name: "Grape Ape Blunt 1g", strain_name: "Grape Ape", price_minor_units: 900 }),
+        draft({ id: "b3", pos_product_key: "LOT-B3", name: "Grape Ape Blunts 3 pack", strain_name: "Grape Ape", price_minor_units: 2400 }),
+      ],
+      [
+        ["b1", enrich({ websiteCategory: "preroll" })],
+        ["b3", enrich({ websiteCategory: "preroll-pack", packageLabel: "3pk" })],
+      ],
+    );
+    assert(p.newCards.length === 1, "blunts: single + 3-pack roll up");
+    assert(p.newCards[0].variants.length === 2, "blunts: two variants");
+  }
+
+  // PACK-AXIS RESTOCK — a 5-pack lot merges into the live single-preroll
+  // card, and the merged lot's pack category is recorded for the composer's
+  // filter_categories union.
+  {
+    const p = plan(
+      [draft({ id: "d1", pos_product_key: "LOT-NEWPK", name: "Blue Dream Prerolls 5pk", price_minor_units: 3000 })],
+      [["d1", enrich({ websiteCategory: "preroll-pack", packageLabel: "5pk" })]],
+      [
+        live({
+          source_item_id: "card-pr",
+          category: "preroll",
+          variants: [{ source_variant_id: "LOT-OLDPR-onboarded", medical: false }],
+        }),
+      ],
+    );
+    assert(p.newCards.length === 0, "pack-axis restock: no new card");
+    assert(p.mergedVariantCount === 1, "pack-axis restock: merged one variant");
+    const merged = p.mergesByCardKey.get("card-pr");
+    assert(
+      !!merged && merged[0].source_variant_id === "LOT-NEWPK-onboarded",
+      "pack-axis restock: variant keeps own lot key",
+    );
+    const mergedCats = p.mergeCategoriesByCardKey.get("card-pr") ?? [];
+    assert(mergedCats.includes("preroll-pack"),
+      "pack-axis restock: merged lot's pack category recorded for filter union");
+  }
+
+  // Other variant-bearing categories: topicals group on the noise-stripped
+  // name (sizes strip away, brand prefix strips).
+  {
+    const p = plan(
+      [
+        draft({ id: "t1", pos_product_key: "LOT-T1", name: "Healing Balm 100mg", strain_name: null, price_minor_units: 1800 }),
+        draft({ id: "t2", pos_product_key: "LOT-T2", name: "Fairwinds Healing Balm 300mg jar", strain_name: null, price_minor_units: 4200 }),
+      ],
+      [
+        ["t1", enrich({ websiteCategory: "topical", packageLabel: "100mg" })],
+        ["t2", enrich({ websiteCategory: "topical", packageLabel: "300mg" })],
+      ],
+    );
+    assert(p.newCards.length === 1, "topical: sizes roll up on the stripped name");
+    assert(p.newCards[0].variants.length === 2, "topical: two variants");
+  }
+
+  // RSO is strain-led: two syringe sizes of the same strain roll up.
+  {
+    const p = plan(
+      [
+        draft({ id: "r1", pos_product_key: "LOT-R1", name: "ACDC RSO 1g", strain_name: "ACDC", price_minor_units: 2500 }),
+        draft({ id: "r2", pos_product_key: "LOT-R2", name: "ACDC RSO Syringe 0.5g", strain_name: "ACDC", price_minor_units: 1500 }),
+      ],
+      [
+        ["r1", enrich({ websiteCategory: "rso", packageLabel: "1g" })],
+        ["r2", enrich({ websiteCategory: "rso", packageLabel: "0.5g" })],
+      ],
+    );
+    assert(p.newCards.length === 1, "rso: strain-led rollup");
+    assert(p.newCards[0].variants.length === 2, "rso: two variants");
   }
 
   return { passed };

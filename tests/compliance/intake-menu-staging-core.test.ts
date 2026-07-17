@@ -176,6 +176,53 @@ describe("intake-menu-staging-core: never guess", () => {
   });
 });
 
+describe("intake-menu-staging-core: pack-axis restock (composer filter union)", () => {
+  it("merges a 5-pack lot into the live single-preroll card and unions filter_categories", () => {
+    const plan = buildIntakeStagedVersionPlan({
+      publishedItems: [
+        published({
+          name: "Blue Dream",
+          category: "preroll",
+          filter_categories: ["preroll"],
+          variants: [
+            {
+              source_variant_id: "LOT-OLDPR-onboarded",
+              label: "1g",
+              price_minor_units: 800,
+              inventory_level: 6,
+              medical: false,
+            },
+          ],
+        }),
+      ],
+      approvedDrafts: [
+        draft({
+          pos_product_key: "LOT-NEWPK",
+          name: "Blue Dream Prerolls 5pk",
+          brand_name: "House",
+          strain_name: "Blue Dream",
+          price_minor_units: 3000,
+        }),
+      ],
+      enrichmentByDraftId: new Map([
+        ["d1", enrich({ websiteCategory: "preroll-pack", packageLabel: "5pk", onHandQty: 10 })],
+      ]),
+    });
+    expect(plan.items).toHaveLength(1);
+    expect(plan.addedCount).toBe(0);
+    expect(plan.mergedCount).toBe(1);
+    const card = plan.items[0];
+    expect(card.variants).toHaveLength(2);
+    // LOT ACCURACY: the pack variant keeps ITS OWN lot's identity.
+    expect(card.variants[1].source_variant_id).toBe("LOT-NEWPK-onboarded");
+    // The card's primary category is untouched; filter_categories now covers
+    // BOTH browse sections so the card stays reachable from each.
+    expect(card.category).toBe("preroll");
+    expect(card.filter_categories).toContain("preroll");
+    expect(card.filter_categories).toContain("preroll-pack");
+  });
+});
+
 describe("intake-menu-staging-core: embedded self-tests", () => {
   it("pass", () => {
     expect(__runIntakeMenuStagingCoreTests().passed).toBeGreaterThan(0);

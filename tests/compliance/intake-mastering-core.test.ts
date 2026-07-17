@@ -22,6 +22,7 @@ import {
   buildIntakeMasteringPlan,
   deriveFamily,
   familyFromName,
+  groupingCategoryAxis,
   __runIntakeMasteringCoreTests,
   type LiveCardCandidate,
 } from "@/lib/pos/intake-mastering-core";
@@ -233,6 +234,142 @@ describe("intake-mastering-core: family derivation", () => {
 
   it("refuses to guess when the name strips to nothing", () => {
     expect(familyFromName("Fairwinds 3.5g", "Fairwinds")).toBeNull();
+  });
+});
+
+describe("intake-mastering-core: pack-axis rollup (prerolls / infused prerolls / blunts)", () => {
+  it("folds pack categories onto their single-form axis for identity only", () => {
+    expect(groupingCategoryAxis("preroll-pack")).toBe("preroll");
+    expect(groupingCategoryAxis("infused-preroll-pack")).toBe("infused-preroll");
+    expect(groupingCategoryAxis("preroll")).toBe("preroll");
+    expect(groupingCategoryAxis("infused-preroll")).toBe("infused-preroll");
+    expect(groupingCategoryAxis("flower")).toBe("flower");
+  });
+
+  it("strips numbered pack tokens from family names", () => {
+    expect(familyFromName("Rainbow Chews 5pk", "")).toEqual("Rainbow Chews");
+    expect(familyFromName("Healing Balm 2-pack", "")).toEqual("Healing Balm");
+  });
+
+  it("rolls a single preroll and its 5-pack into ONE card reachable from both sections", () => {
+    const p = buildIntakeMasteringPlan({
+      drafts: [
+        draft({ id: "d1", pos_product_key: "LOT-S", name: "Blue Dream Preroll 1g", price_minor_units: 800 }),
+        draft({ id: "d2", pos_product_key: "LOT-P5", name: "Blue Dream Prerolls 5pk", price_minor_units: 3000 }),
+      ],
+      existingKeys: new Set(),
+      enrichmentByDraftId: new Map([
+        ["d1", enrich({ websiteCategory: "preroll", packageLabel: "1g" })],
+        ["d2", enrich({ websiteCategory: "preroll-pack", packageLabel: "5pk" })],
+      ]),
+      liveCards: [],
+    });
+    expect(p.newCards).toHaveLength(1);
+    expect(p.newCards[0].variants.map((v) => v.source_variant_id)).toEqual([
+      "LOT-S-onboarded",
+      "LOT-P5-onboarded",
+    ]);
+    expect(p.newCards[0].filter_categories).toContain("preroll");
+    expect(p.newCards[0].filter_categories).toContain("preroll-pack");
+  });
+
+  it("never folds infused onto non-infused", () => {
+    const p = buildIntakeMasteringPlan({
+      drafts: [
+        draft({ id: "i1", pos_product_key: "LOT-I1", name: "GG4 Infused Preroll", strain_name: "GG4", price_minor_units: 1500 }),
+        draft({ id: "i2", pos_product_key: "LOT-I2", name: "GG4 Infused Prerolls 2pk", strain_name: "GG4", price_minor_units: 2800 }),
+        draft({ id: "n1", pos_product_key: "LOT-N1", name: "GG4 Preroll", strain_name: "GG4", price_minor_units: 700 }),
+      ],
+      existingKeys: new Set(),
+      enrichmentByDraftId: new Map([
+        ["i1", enrich({ websiteCategory: "infused-preroll" })],
+        ["i2", enrich({ websiteCategory: "infused-preroll-pack", packageLabel: "2pk" })],
+        ["n1", enrich({ websiteCategory: "preroll" })],
+      ]),
+      liveCards: [],
+    });
+    expect(p.newCards).toHaveLength(2);
+    const infused = p.newCards.find((c) => c.variants.length === 2);
+    expect(infused?.variants.map((v) => v.source_variant_id)).toEqual([
+      "LOT-I1-onboarded",
+      "LOT-I2-onboarded",
+    ]);
+  });
+
+  it("rolls blunts up on the preroll axis (single blunt + 3-pack)", () => {
+    const p = buildIntakeMasteringPlan({
+      drafts: [
+        draft({ id: "b1", pos_product_key: "LOT-B1", name: "Grape Ape Blunt 1g", strain_name: "Grape Ape", price_minor_units: 900 }),
+        draft({ id: "b3", pos_product_key: "LOT-B3", name: "Grape Ape Blunts 3 pack", strain_name: "Grape Ape", price_minor_units: 2400 }),
+      ],
+      existingKeys: new Set(),
+      enrichmentByDraftId: new Map([
+        ["b1", enrich({ websiteCategory: "preroll" })],
+        ["b3", enrich({ websiteCategory: "preroll-pack", packageLabel: "3pk" })],
+      ]),
+      liveCards: [],
+    });
+    expect(p.newCards).toHaveLength(1);
+    expect(p.newCards[0].variants).toHaveLength(2);
+  });
+
+  it("merges a 5-pack restock into the live single-preroll card and records the pack category", () => {
+    const p = buildIntakeMasteringPlan({
+      drafts: [
+        draft({ id: "d1", pos_product_key: "LOT-NEWPK", name: "Blue Dream Prerolls 5pk", price_minor_units: 3000 }),
+      ],
+      existingKeys: new Set(),
+      enrichmentByDraftId: new Map([
+        ["d1", enrich({ websiteCategory: "preroll-pack", packageLabel: "5pk" })],
+      ]),
+      liveCards: [
+        live({
+          source_item_id: "card-pr",
+          category: "preroll",
+          variants: [{ source_variant_id: "LOT-OLDPR-onboarded", medical: false }],
+        }),
+      ],
+    });
+    expect(p.newCards).toHaveLength(0);
+    expect(p.mergedVariantCount).toBe(1);
+    expect(p.mergesByCardKey.get("card-pr")?.[0].source_variant_id).toBe("LOT-NEWPK-onboarded");
+    expect(p.mergeCategoriesByCardKey.get("card-pr")).toContain("preroll-pack");
+  });
+});
+
+describe("intake-mastering-core: other variant-bearing categories (topicals / RSO / liquids / tinctures)", () => {
+  it("groups topical sizes on the noise-stripped name", () => {
+    const p = buildIntakeMasteringPlan({
+      drafts: [
+        draft({ id: "t1", pos_product_key: "LOT-T1", name: "Healing Balm 100mg", strain_name: null, price_minor_units: 1800 }),
+        draft({ id: "t2", pos_product_key: "LOT-T2", name: "Fairwinds Healing Balm 300mg jar", strain_name: null, price_minor_units: 4200 }),
+      ],
+      existingKeys: new Set(),
+      enrichmentByDraftId: new Map([
+        ["t1", enrich({ websiteCategory: "topical", packageLabel: "100mg" })],
+        ["t2", enrich({ websiteCategory: "topical", packageLabel: "300mg" })],
+      ]),
+      liveCards: [],
+    });
+    expect(p.newCards).toHaveLength(1);
+    expect(p.newCards[0].variants).toHaveLength(2);
+  });
+
+  it("groups RSO sizes strain-led", () => {
+    const p = buildIntakeMasteringPlan({
+      drafts: [
+        draft({ id: "r1", pos_product_key: "LOT-R1", name: "ACDC RSO 1g", strain_name: "ACDC", price_minor_units: 2500 }),
+        draft({ id: "r2", pos_product_key: "LOT-R2", name: "ACDC RSO Syringe 0.5g", strain_name: "ACDC", price_minor_units: 1500 }),
+      ],
+      existingKeys: new Set(),
+      enrichmentByDraftId: new Map([
+        ["r1", enrich({ websiteCategory: "rso", packageLabel: "1g" })],
+        ["r2", enrich({ websiteCategory: "rso", packageLabel: "0.5g" })],
+      ]),
+      liveCards: [],
+    });
+    expect(p.newCards).toHaveLength(1);
+    expect(p.newCards[0].variants).toHaveLength(2);
   });
 });
 
