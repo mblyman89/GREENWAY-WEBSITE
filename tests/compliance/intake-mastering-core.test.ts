@@ -3,8 +3,10 @@
  *
  * Product mastering for intake (Option A Slice 2) — pins the grouping
  * contract:
- *   - SAME BRAND ONLY (owner rule): drafts roll up into one card only when
- *     brand + website category + product family all match; a blank brand or
+ *   - SAME VENDOR ONLY (owner rule, vendor axis): drafts roll up into one
+ *     card only when vendor + website category + product family all match —
+ *     WCIA manifests carry no per-line brand and the store's vendors are
+ *     licensed per-brand, so the vendor IS the brand axis; a blank vendor or
  *     an unconfident family is NEVER grouped (standalone card + warning);
  *   - LOT ACCURACY: every variant keeps ITS OWN lot's identity
  *     (`${lotKey}-onboarded`) so the variant-aware sale path (PR #552)
@@ -61,6 +63,7 @@ function live(over: Partial<LiveCardCandidate>): LiveCardCandidate {
     source_item_id: "card-1",
     name: "Blue Dream",
     brand_name: "Fairwinds",
+    vendor_name: "Fairwinds LLC",
     category: "flower",
     strain_name: "Blue Dream",
     hidden: false,
@@ -107,15 +110,15 @@ describe("intake-mastering-core: within-invoice rollup", () => {
     expect(p.diagnostics.some((d) => d.code === "intake_master_grouped")).toBe(true);
   });
 
-  it("never groups across brands (owner rule) or across strains", () => {
-    const brands = plan(
-      [draft({}), draft({ id: "d2", pos_product_key: "LOT-B", brand_name: "Other Farms" })],
+  it("never groups across vendors (owner rule) or across strains", () => {
+    const vendors = plan(
+      [draft({}), draft({ id: "d2", pos_product_key: "LOT-B", vendor_name: "Other Farms LLC" })],
       [
         ["d1", enrich({})],
         ["d2", enrich({})],
       ],
     );
-    expect(brands.newCards).toHaveLength(2);
+    expect(vendors.newCards).toHaveLength(2);
 
     const strains = plan(
       [draft({}), draft({ id: "d2", pos_product_key: "LOT-B", strain_name: "GG4", name: "GG4 1g" })],
@@ -125,6 +128,27 @@ describe("intake-mastering-core: within-invoice rollup", () => {
       ],
     );
     expect(strains.newCards).toHaveLength(2);
+  });
+
+  it("rolls up different brand labels under the SAME vendor (vendors are licensed per-brand)", () => {
+    const p = plan(
+      [
+        draft({}),
+        draft({
+          id: "d2",
+          pos_product_key: "LOT-B",
+          name: "Blue Dream 3.5g",
+          brand_name: "Other Label",
+          price_minor_units: 3500,
+        }),
+      ],
+      [
+        ["d1", enrich({})],
+        ["d2", enrich({ packageLabel: "3.5g" })],
+      ],
+    );
+    expect(p.newCards).toHaveLength(1);
+    expect(p.newCards[0].variants).toHaveLength(2);
   });
 });
 
@@ -179,10 +203,10 @@ describe("intake-mastering-core: restock merge into live cards", () => {
 });
 
 describe("intake-mastering-core: never guess", () => {
-  it("keeps blank-brand and ambiguous-name drafts as standalone cards with warnings", () => {
+  it("keeps blank-vendor and ambiguous-name drafts as standalone cards with warnings", () => {
     const p = plan(
       [
-        draft({ brand_name: null }),
+        draft({ vendor_name: null }),
         draft({ id: "d2", pos_product_key: "LOT-X", name: "Fairwinds 1g", strain_name: null }),
       ],
       [
@@ -191,7 +215,7 @@ describe("intake-mastering-core: never guess", () => {
       ],
     );
     expect(p.newCards).toHaveLength(2);
-    expect(p.diagnostics.some((d) => d.code === "intake_master_no_brand")).toBe(true);
+    expect(p.diagnostics.some((d) => d.code === "intake_master_no_vendor")).toBe(true);
     expect(p.diagnostics.some((d) => d.code === "intake_master_ambiguous_name")).toBe(true);
   });
 
@@ -220,11 +244,12 @@ describe("intake-mastering-core: never guess", () => {
 describe("intake-mastering-core: family derivation", () => {
   it("uses the strain for strain-led categories and the noise-stripped name otherwise", () => {
     expect(
-      deriveFamily({ category: "flower", brand: "X", name: "whatever", strainName: "Blue_Dream" }),
+      deriveFamily({ category: "flower", vendor: "X", name: "whatever", strainName: "Blue_Dream" }),
     ).toEqual({ family: "blue-dream", display: "Blue Dream" });
     expect(
       deriveFamily({
         category: "edible-solid",
+        vendor: "Fairwinds LLC",
         brand: "Fairwinds",
         name: "Fairwinds - Rainbow Chews 100mg pack",
         strainName: null,
@@ -234,6 +259,12 @@ describe("intake-mastering-core: family derivation", () => {
 
   it("refuses to guess when the name strips to nothing", () => {
     expect(familyFromName("Fairwinds 3.5g", "Fairwinds")).toBeNull();
+  });
+
+  it("strips vendor prefixes too (label-list form)", () => {
+    expect(familyFromName("Fairwinds LLC Healing Balm 300mg", ["", "Fairwinds LLC"])).toEqual(
+      "Healing Balm",
+    );
   });
 });
 

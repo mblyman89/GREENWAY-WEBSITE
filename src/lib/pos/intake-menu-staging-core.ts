@@ -35,7 +35,7 @@
  * product's price/data.
  *
  * PRODUCT MASTERING (Option A Slice 2): eligible intake items are then rolled
- * up by `buildIntakeMasteringPlan` — same brand + website category + product
+ * up by `buildIntakeMasteringPlan` — same vendor + website category + product
  * family become ONE card with one variant per lot/size, and a group matching
  * exactly one live card joins that card as new variants (restock) instead of
  * duplicating it. Every variant keeps ITS OWN lot's identity
@@ -292,7 +292,7 @@ export function buildIntakeStagedVersionPlan(inputs: IntakeStagingInputs): Intak
 
   // 2) Master the approved intake drafts. Eligibility (keyless / unpriced /
   //    unmapped / superseded-by-live) is decided inside via the draft planner;
-  //    eligible items are grouped (same brand + category + family), matched
+  //    eligible items are grouped (same vendor + category + family), matched
   //    against the carried live cards for restock merges, and rolled up.
   const mastering = buildIntakeMasteringPlan({
     drafts: inputs.approvedDrafts,
@@ -304,6 +304,7 @@ export function buildIntakeStagedVersionPlan(inputs: IntakeStagingInputs): Intak
         source_item_id: it.source_item_id,
         name: it.name,
         brand_name: it.brand_name,
+        vendor_name: it.vendor_name,
         category: it.category,
         strain_name: it.strain_name,
         hidden: it.hidden,
@@ -528,7 +529,7 @@ export function __runIntakeMenuStagingCoreTests(): { passed: number } {
     assert(plan.items[0].price_minor_units === 100, "dedupe: first live wins");
   }
 
-  // MASTERING — restock merge: a new lot of a live product (same brand +
+  // MASTERING — restock merge: a new lot of a live product (same vendor +
   // category + strain) joins the LIVE card as a new variant. No new card;
   // hasChanges is true on merges alone; the sold-out card wakes up.
   {
@@ -551,7 +552,7 @@ export function __runIntakeMenuStagingCoreTests(): { passed: number } {
         draft({
           pos_product_key: "LOT-RESTOCK",
           name: "Blue Dream 3.5g",
-          brand_name: "House",
+          vendor_name: "House LLC", // matches the live card's vendor (the axis)
           strain_name: "Blue Dream",
           price_minor_units: 3800, // deliberately different from the live card
         }),
@@ -578,7 +579,7 @@ export function __runIntakeMenuStagingCoreTests(): { passed: number } {
     );
   }
 
-  // MASTERING — within-invoice rollup: two lots of the same brand + strain +
+  // MASTERING — within-invoice rollup: two lots of the same vendor + strain +
   // category become ONE new card with one variant per lot.
   {
     const plan = buildIntakeStagedVersionPlan({
@@ -610,7 +611,7 @@ export function __runIntakeMenuStagingCoreTests(): { passed: number } {
       approvedDrafts: [
         draft({
           pos_product_key: "LOT-N",
-          brand_name: "House",
+          vendor_name: "House LLC", // matches BOTH live cards' vendor
           strain_name: "Blue Dream",
           name: "Blue Dream 1g",
         }),
@@ -626,7 +627,7 @@ export function __runIntakeMenuStagingCoreTests(): { passed: number } {
   }
 
   // MASTERING — PACK-AXIS restock: a 5-pack lot (preroll-pack) merges into
-  // the LIVE single-preroll card of the same brand + strain, and the card's
+  // the LIVE single-preroll card of the same vendor + strain, and the card's
   // filter_categories gains "preroll-pack" so it stays reachable from BOTH
   // browse sections.
   {
@@ -651,7 +652,7 @@ export function __runIntakeMenuStagingCoreTests(): { passed: number } {
         draft({
           pos_product_key: "LOT-NEWPK",
           name: "Blue Dream Prerolls 5pk",
-          brand_name: "House",
+          vendor_name: "House LLC", // matches the live card's vendor (the axis)
           strain_name: "Blue Dream",
           price_minor_units: 3000,
         }),
