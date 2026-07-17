@@ -25,24 +25,39 @@
  * Imports Publish button as the fallback) lives entirely in the server
  * executor — nothing in this planner touches publish state.
  *
- * NEVER GUESS: the approved-draft rows are turned into menu items by the
- * existing, verified pure planner `buildDraftInjectionPlan` — an approved draft
- * with no lot number / no resolvable website category / no approved price is
- * SKIPPED with a diagnostic, never invented. POS-key (= lot number) collisions
- * with a carried-forward item are treated as "already on the menu" (the live
- * row wins; the intake row is skipped with an info diagnostic) so accepting a
- * manifest never silently overwrites a live product's price/data.
+ * NEVER GUESS: approved-draft eligibility (no lot number / no resolvable
+ * website category / no approved price / superseded by a live POS key) is
+ * still decided by the verified pure planner `buildDraftInjectionPlan` —
+ * ineligible drafts are SKIPPED with a diagnostic, never invented. POS-key
+ * (= lot number) collisions with a carried-forward item are treated as
+ * "already on the menu" (the live row wins; the intake row is skipped with an
+ * info diagnostic) so accepting a manifest never silently overwrites a live
+ * product's price/data.
+ *
+ * PRODUCT MASTERING (Option A Slice 2): eligible intake items are then rolled
+ * up by `buildIntakeMasteringPlan` — same brand + website category + product
+ * family become ONE card with one variant per lot/size, and a group matching
+ * exactly one live card joins that card as new variants (restock) instead of
+ * duplicating it. Every variant keeps ITS OWN lot's identity
+ * (`${lotKey}-onboarded`), which the variant-aware sale path resolves for
+ * FIFO decrement / CCRS / costs / recalls. A restock-merged card's
+ * inventory_status is recomputed from its variants' summed on-hand — the POS
+ * menu HIDES "unavailable" cards, so a sold-out card MUST wake up when its
+ * restock lands (price/label are never touched on a live card).
  *
  * PURE: no I/O. The server module (intake-menu-staging.ts) gathers the DB rows
  * and enrichment, calls this, and writes the result.
  */
-import {
-  buildDraftInjectionPlan,
-  type ApprovedDraftForInjection,
-  type DraftEnrichment,
-  type InjectionDiagnostic,
-  type PlannedInjectedItem,
+import type {
+  ApprovedDraftForInjection,
+  DraftEnrichment,
+  InjectionDiagnostic,
 } from "@/lib/pos/draft-injection-core";
+import {
+  buildIntakeMasteringPlan,
+  type MasteredNewCard,
+  type MasteredVariant,
+} from "@/lib/pos/intake-mastering-core";
 
 /**
  * A currently-published menu item to carry forward verbatim into the new
@@ -132,17 +147,19 @@ export type IntakeStagingInputs = {
 export type IntakeStagingPlan = {
   /** The full item set for the new staged version (carried + intake). */
   items: StagedSnapshotItem[];
-  /** How many published items were carried forward unchanged. */
+  /** How many published items were carried forward. */
   carriedCount: number;
-  /** How many newly approved intake items were added. */
+  /** How many NEW intake cards were added. */
   addedCount: number;
-  /** True when there is at least one NEW intake item to stage. */
+  /** How many restock variants were merged into carried live cards. */
+  mergedCount: number;
+  /** True when there is at least one new card OR merged restock variant. */
   hasChanges: boolean;
   diagnostics: InjectionDiagnostic[];
 };
 
-/** Convert an injected-draft planner item into a staged snapshot item. */
-function injectedToSnapshot(it: PlannedInjectedItem, sortOrder: number): StagedSnapshotItem {
+/** Convert a mastered new card into a staged snapshot item. */
+function masteredToSnapshot(it: MasteredNewCard, sortOrder: number): StagedSnapshotItem {
   return {
     origin: "intake",
     source_item_id: it.source_item_id,
@@ -168,19 +185,43 @@ function injectedToSnapshot(it: PlannedInjectedItem, sortOrder: number): StagedS
     hidden: it.hidden,
     hidden_reason: it.hidden_reason,
     sort_order: sortOrder,
-    variants: it.variant
-      ? [
-          {
-            source_variant_id: it.variant.source_variant_id,
-            label: it.variant.label,
-            price_minor_units: it.variant.price_minor_units,
-            inventory_level: it.variant.inventory_level,
-            medical: it.variant.medical,
-            sort_order: it.variant.sort_order,
-          },
-        ]
-      : [],
+    variants: it.variants.map((v, i) => ({
+      source_variant_id: v.source_variant_id,
+      label: v.label,
+      price_minor_units: v.price_minor_units,
+      inventory_level: v.inventory_level,
+      medical: v.medical,
+      sort_order: i,
+    })),
   };
+}
+
+/**
+ * Append restock variants to a carried live card and recompute its
+ * inventory_status from the summed on-hand of ALL its variants (same
+ * thresholds as draft-injection-core statusForOnHand). The POS menu HIDES
+ * "unavailable" cards, so a sold-out card must wake up when its restock
+ * lands. Nothing else on the live card (price/label/name) is touched.
+ */
+function applyMergeToCarried(item: StagedSnapshotItem, merged: MasteredVariant[]): void {
+  // Defensive: never append a variant identity the card already has.
+  const seen = new Set(item.variants.map((v) => v.source_variant_id));
+  let sort = item.variants.length;
+  for (const v of merged) {
+    if (seen.has(v.source_variant_id)) continue;
+    seen.add(v.source_variant_id);
+    item.variants.push({
+      source_variant_id: v.source_variant_id,
+      label: v.label,
+      price_minor_units: v.price_minor_units,
+      inventory_level: v.inventory_level,
+      medical: v.medical,
+      sort_order: sort,
+    });
+    sort += 1;
+  }
+  const total = item.variants.reduce((s, v) => s + v.inventory_level, 0);
+  item.inventory_status = total <= 0 ? "unavailable" : total <= 3 ? "low-stock" : "in-stock";
 }
 
 /** Carry a published item forward verbatim into the new snapshot. */
@@ -223,9 +264,11 @@ function carryForward(item: CarryForwardItem, sortOrder: number): StagedSnapshot
 
 /**
  * Plan a full staged snapshot for an intake accept: carry every published item
- * forward first (their source keys become the "existing keys" so the draft
- * planner treats a live product as already on the menu), then append the newly
- * approved intake items. Deterministic + pure.
+ * forward first (their source keys become the "existing keys" so eligibility
+ * treats a live product as already on the menu), then MASTER the approved
+ * intake drafts — restock variants merge into the carried cards they match,
+ * and the remaining groups append as new (possibly multi-variant) cards.
+ * Deterministic + pure.
  */
 export function buildIntakeStagedVersionPlan(inputs: IntakeStagingInputs): IntakeStagingPlan {
   const items: StagedSnapshotItem[] = [];
@@ -244,28 +287,55 @@ export function buildIntakeStagedVersionPlan(inputs: IntakeStagingInputs): Intak
   }
   const carriedCount = items.length;
 
-  // 2) Plan the approved intake drafts. The draft planner skips any draft whose
-  //    key is already present (live product wins), whose category is unmapped,
-  //    whose price is missing, or which has no lot number — each with a
-  //    diagnostic. baseSortOrder appends intake items after the carried ones.
-  const injection = buildDraftInjectionPlan({
+  // 2) Master the approved intake drafts. Eligibility (keyless / unpriced /
+  //    unmapped / superseded-by-live) is decided inside via the draft planner;
+  //    eligible items are grouped (same brand + category + family), matched
+  //    against the carried live cards for restock merges, and rolled up.
+  const mastering = buildIntakeMasteringPlan({
     drafts: inputs.approvedDrafts,
     existingKeys,
     enrichmentByDraftId: inputs.enrichmentByDraftId,
-    baseSortOrder: carriedCount,
+    liveCards: items
+      .filter((it) => it.origin === "carried")
+      .map((it) => ({
+        source_item_id: it.source_item_id,
+        name: it.name,
+        brand_name: it.brand_name,
+        category: it.category,
+        strain_name: it.strain_name,
+        hidden: it.hidden,
+        variants: it.variants.map((v) => ({
+          source_variant_id: v.source_variant_id,
+          medical: v.medical,
+        })),
+      })),
   });
 
-  for (const it of injection.items) {
-    items.push(injectedToSnapshot(it, it.sort_order));
+  // 3) Apply restock merges to the carried cards (variants appended, status
+  //    recomputed so a sold-out card wakes up when its restock lands).
+  const carriedByKey = new Map(items.map((it) => [it.source_item_id, it]));
+  let mergedCount = 0;
+  for (const [cardKey, merged] of mastering.mergesByCardKey) {
+    const target = carriedByKey.get(cardKey);
+    if (!target) continue; // defensive: planner only merges into provided cards
+    applyMergeToCarried(target, merged);
+    mergedCount += merged.length;
   }
-  const addedCount = injection.items.length;
+
+  // 4) Append the new mastered cards after the carried ones.
+  for (const card of mastering.newCards) {
+    items.push(masteredToSnapshot(card, sort));
+    sort += 1;
+  }
+  const addedCount = mastering.newCards.length;
 
   return {
     items,
     carriedCount,
     addedCount,
-    hasChanges: addedCount > 0,
-    diagnostics: injection.diagnostics,
+    mergedCount,
+    hasChanges: addedCount > 0 || mergedCount > 0,
+    diagnostics: mastering.diagnostics,
   };
 }
 
@@ -438,6 +508,103 @@ export function __runIntakeMenuStagingCoreTests(): { passed: number } {
     });
     assert(plan.items.length === 1, "dedupe: duplicate live key collapsed");
     assert(plan.items[0].price_minor_units === 100, "dedupe: first live wins");
+  }
+
+  // MASTERING — restock merge: a new lot of a live product (same brand +
+  // category + strain) joins the LIVE card as a new variant. No new card;
+  // hasChanges is true on merges alone; the sold-out card wakes up.
+  {
+    const plan = buildIntakeStagedVersionPlan({
+      publishedItems: [
+        published({
+          inventory_status: "unavailable",
+          variants: [
+            {
+              source_variant_id: "LOT-OLD-onboarded",
+              label: "3.5g",
+              price_minor_units: 4000,
+              inventory_level: 0,
+              medical: false,
+            },
+          ],
+        }),
+      ],
+      approvedDrafts: [
+        draft({
+          pos_product_key: "LOT-RESTOCK",
+          name: "Blue Dream 3.5g",
+          brand_name: "House",
+          strain_name: "Blue Dream",
+          price_minor_units: 3800, // deliberately different from the live card
+        }),
+      ],
+      enrichmentByDraftId: new Map([
+        ["d1", enrich({ websiteCategory: "flower", packageLabel: "3.5g", onHandQty: 20 })],
+      ]),
+    });
+    assert(plan.items.length === 1, "restock: no duplicate card");
+    assert(plan.addedCount === 0 && plan.mergedCount === 1, "restock: merged not added");
+    assert(plan.hasChanges, "restock: merges alone count as changes");
+    const card = plan.items[0];
+    assert(card.variants.length === 2, "restock: variant appended to live card");
+    assert(
+      card.variants[1].source_variant_id === "LOT-RESTOCK-onboarded",
+      "restock: appended variant keeps its own lot key",
+    );
+    assert(card.inventory_status === "in-stock", "restock: sold-out card woke up");
+    assert(card.price_minor_units === 4000, "restock: live card price untouched by merge");
+    assert(card.variants[1].price_minor_units === 3800, "restock: new variant keeps its own price");
+    assert(
+      plan.diagnostics.some((d) => d.code === "intake_master_restock"),
+      "restock: diagnostic",
+    );
+  }
+
+  // MASTERING — within-invoice rollup: two lots of the same brand + strain +
+  // category become ONE new card with one variant per lot.
+  {
+    const plan = buildIntakeStagedVersionPlan({
+      publishedItems: [],
+      approvedDrafts: [
+        draft({ id: "a", pos_product_key: "LOT-A", name: "GG4 1g", price_minor_units: 1200 }),
+        draft({ id: "b", pos_product_key: "LOT-B", name: "GG4 3.5g", price_minor_units: 3500 }),
+      ],
+      enrichmentByDraftId: new Map([
+        ["a", enrich({ websiteCategory: "flower", packageLabel: "1g" })],
+        ["b", enrich({ websiteCategory: "flower", packageLabel: "3.5g" })],
+      ]),
+    });
+    assert(plan.items.length === 1, "rollup: one card for two lots");
+    assert(plan.addedCount === 1 && plan.mergedCount === 0, "rollup: one card added");
+    const card = plan.items[0];
+    assert(card.variants.length === 2, "rollup: two variants");
+    assert(card.variants[0].source_variant_id === "LOT-A-onboarded", "rollup: variant A own lot key");
+    assert(card.variants[1].source_variant_id === "LOT-B-onboarded", "rollup: variant B own lot key");
+    assert(card.variants[0].sort_order === 0 && card.variants[1].sort_order === 1, "rollup: variant sort orders");
+    assert(plan.diagnostics.some((d) => d.code === "intake_master_grouped"), "rollup: grouped diagnostic");
+  }
+
+  // MASTERING — never merge on a guess: two live cards share the identity →
+  // the intake group becomes a NEW card with a warning instead of merging.
+  {
+    const plan = buildIntakeStagedVersionPlan({
+      publishedItems: [published({}), published({ source_item_id: "LIVE-2" })],
+      approvedDrafts: [
+        draft({
+          pos_product_key: "LOT-N",
+          brand_name: "House",
+          strain_name: "Blue Dream",
+          name: "Blue Dream 1g",
+        }),
+      ],
+      enrichmentByDraftId: new Map([["d1", enrich({ websiteCategory: "flower" })]]),
+    });
+    assert(plan.items.length === 3, "ambiguous: new card appended, no merge");
+    assert(plan.mergedCount === 0 && plan.addedCount === 1, "ambiguous: added not merged");
+    assert(
+      plan.diagnostics.some((d) => d.code === "intake_master_merge_ambiguous" && d.severity === "warning"),
+      "ambiguous: warning diagnostic",
+    );
   }
 
   return { passed };

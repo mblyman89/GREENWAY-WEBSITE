@@ -878,12 +878,18 @@ export async function finalizeManifestDispositions(
     try {
       const carry = await stageIntakeMenuVersionForManifest(manifestId, actorId);
       if (carry.staged) {
+        const what = [
+          carry.added > 0 ? `${carry.added} new product card(s)` : "",
+          carry.merged > 0 ? `${carry.merged} restock/size option(s) merged into existing cards` : "",
+        ]
+          .filter(Boolean)
+          .join(" and ");
         await logManifestEvent(
           manifestId,
           "menu_auto_carry",
           carry.published
-            ? `Menu updated automatically: ${carry.added} new product(s) added on top of ${carry.carried} live item(s) — live on the website + sellable at the register.`
-            : `Staged a menu version for review: ${carry.added} new product(s) added on top of ${carry.carried} live item(s). Publish it on Admin → Menu Imports to make them sellable on the website + POS.`,
+            ? `Menu updated automatically: ${what} on top of ${carry.carried} live item(s) — live on the website + sellable at the register.`
+            : `Staged a menu version for review: ${what} on top of ${carry.carried} live item(s). Publish it on Admin → Menu Imports to make them sellable on the website + POS.`,
           actorId,
         );
       }
