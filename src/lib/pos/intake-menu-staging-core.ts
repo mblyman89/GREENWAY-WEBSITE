@@ -43,7 +43,10 @@
  * FIFO decrement / CCRS / costs / recalls. A restock-merged card's
  * inventory_status is recomputed from its variants' summed on-hand — the POS
  * menu HIDES "unavailable" cards, so a sold-out card MUST wake up when its
- * restock lands (price/label are never touched on a live card).
+ * restock lands (price/label are never touched on a live card). PACK AXIS:
+ * multi-pack prerolls / infused prerolls / blunts group with their single-form
+ * siblings, and a merged card's filter_categories is EXTENDED with the merged
+ * lots' categories so the card stays reachable from both browse sections.
  *
  * PURE: no I/O. The server module (intake-menu-staging.ts) gathers the DB rows
  * and enrichment, calls this, and writes the result.
@@ -319,6 +322,21 @@ export function buildIntakeStagedVersionPlan(inputs: IntakeStagingInputs): Intak
     const target = carriedByKey.get(cardKey);
     if (!target) continue; // defensive: planner only merges into provided cards
     applyMergeToCarried(target, merged);
+    // filter_categories only takes effect when NON-EMPTY (the menu falls back
+    // to [category] when it's empty), so before adding a genuinely new
+    // category (e.g. "preroll-pack" merging onto a single-preroll card) seed
+    // the list with the card's own category — otherwise the addition alone
+    // would DROP the card from its original section.
+    const mergedCats = mastering.mergeCategoriesByCardKey.get(cardKey) ?? [];
+    const newCats = mergedCats.filter(
+      (c) => c && c !== target.category && !target.filter_categories.includes(c),
+    );
+    if (newCats.length > 0) {
+      if (target.filter_categories.length === 0) {
+        target.filter_categories = [target.category];
+      }
+      target.filter_categories = [...target.filter_categories, ...newCats];
+    }
     mergedCount += merged.length;
   }
 
@@ -604,6 +622,56 @@ export function __runIntakeMenuStagingCoreTests(): { passed: number } {
     assert(
       plan.diagnostics.some((d) => d.code === "intake_master_merge_ambiguous" && d.severity === "warning"),
       "ambiguous: warning diagnostic",
+    );
+  }
+
+  // MASTERING — PACK-AXIS restock: a 5-pack lot (preroll-pack) merges into
+  // the LIVE single-preroll card of the same brand + strain, and the card's
+  // filter_categories gains "preroll-pack" so it stays reachable from BOTH
+  // browse sections.
+  {
+    const plan = buildIntakeStagedVersionPlan({
+      publishedItems: [
+        published({
+          name: "Blue Dream",
+          category: "preroll",
+          filter_categories: ["preroll"],
+          variants: [
+            {
+              source_variant_id: "LOT-OLDPR-onboarded",
+              label: "1g",
+              price_minor_units: 800,
+              inventory_level: 6,
+              medical: false,
+            },
+          ],
+        }),
+      ],
+      approvedDrafts: [
+        draft({
+          pos_product_key: "LOT-NEWPK",
+          name: "Blue Dream Prerolls 5pk",
+          brand_name: "House",
+          strain_name: "Blue Dream",
+          price_minor_units: 3000,
+        }),
+      ],
+      enrichmentByDraftId: new Map([
+        ["d1", enrich({ websiteCategory: "preroll-pack", packageLabel: "5pk", onHandQty: 10 })],
+      ]),
+    });
+    assert(plan.items.length === 1, "pack-axis restock: no duplicate card");
+    assert(plan.addedCount === 0 && plan.mergedCount === 1, "pack-axis restock: merged not added");
+    const card = plan.items[0];
+    assert(card.variants.length === 2, "pack-axis restock: pack variant appended");
+    assert(
+      card.variants[1].source_variant_id === "LOT-NEWPK-onboarded",
+      "pack-axis restock: pack variant keeps its own lot key",
+    );
+    assert(card.category === "preroll", "pack-axis restock: card category untouched");
+    assert(
+      card.filter_categories.includes("preroll") && card.filter_categories.includes("preroll-pack"),
+      "pack-axis restock: filter_categories covers both browse sections",
     );
   }
 

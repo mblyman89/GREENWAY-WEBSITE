@@ -60,6 +60,7 @@ import { __runPinThrottleCoreTests } from "../../src/lib/security/pin-throttle-c
 import { __runScanToCartCoreTests } from "../../src/lib/pos/scan-to-cart-core";
 import { __runVariantLotCoreTests } from "../../src/lib/pos/variant-lot-core";
 import { __runIntakeMasteringCoreTests } from "../../src/lib/pos/intake-mastering-core";
+import { __runIntakeMenuStagingCoreTests } from "../../src/lib/pos/intake-menu-staging-core";
 import { __runPriceOverrideCoreTests } from "../../src/lib/pos/price-override-core";
 import { __runDeviceSetupCoreTests } from "../../src/lib/pos/device-setup-core";
 import { __runVoidSaleCoreTests } from "../../src/lib/pos/void-sale-core";
@@ -147,6 +148,7 @@ async function main() {
   __runScanToCartCoreTests();
   __runVariantLotCoreTests();
   __runIntakeMasteringCoreTests();
+  __runIntakeMenuStagingCoreTests();
   __runPriceOverrideCoreTests();
   __runDeviceSetupCoreTests();
   __runVoidSaleCoreTests();
