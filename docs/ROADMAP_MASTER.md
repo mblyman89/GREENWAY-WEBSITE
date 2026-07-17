@@ -384,3 +384,22 @@ they are optional data loads, not schema, and each is idempotent (safe to run an
   single-lot cards encode the same key both ways. Readiness for Slice 2 (intake
   mastering: one card per brand+category+product family, one variant per size/lot).
   No migration. Suite 1,710/132.
+- **Product Mastering Slice 2 (intelligent intake mastering) — PR #554** — approved
+  onboarding drafts now roll up into proper product cards instead of one card per
+  received lot. New pure core `intake-mastering-core` (registered self-tests + vitest
+  mirror): within-invoice rollup groups drafts by brand + website category + product
+  family (owner rule: same brand only) into ONE card with one variant per lot/size;
+  restock merge appends a group matching exactly ONE live card to that card as new
+  variants and recomputes its inventory_status so a sold-out card wakes up (live
+  price/label/name never touched). Every variant keeps ITS OWN lot identity
+  (`${lotKey}-onboarded`) so the Slice 1 sale path decrements/CCRS-stamps/costs the
+  exact lot sold; a new card's `source_item_id` is the group's smallest lot key (same
+  namespace as before — no new key scheme). Family normalization mirrors transform.ts
+  (collapseKeyPart/titleCase/stripVariantNoise/strain-led categories) but identity
+  NEVER falls back to raw name/category. Never-guess: blank brand, unconfident family,
+  or >1 matching live card → standalone/new card + warning (never grouped/merged on a
+  guess); hidden + medical-only cards are never merge targets; eligibility diagnostics
+  unchanged (still `buildDraftInjectionPlan`). Staging planner composes merges into
+  carried cards + appends mastered cards; `merged` count flows through outcome,
+  summary_json, timeline notes, and the Menu Imports review/list surfaces. No
+  migration. Suite 1,720/133.
