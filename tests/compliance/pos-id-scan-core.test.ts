@@ -19,6 +19,10 @@ import {
   parseAamvaPdf417,
   evaluateScannedId,
   evaluateManualId,
+  OVER40_VISUAL_MIN_AGE,
+  OVER40_VISUAL_REASON,
+  maskDateDigitsMdy,
+  mdyToYmd,
   __runIdScanCoreTests,
   type ManualIdInput,
 } from "@/lib/pos/id-scan-core";
@@ -191,6 +195,75 @@ describe("manual verification gate (audited fallback)", () => {
   it("accepts Global Entry and Permanent Resident cards (eff. 11/8/2025)", () => {
     expect(evaluateManualId({ ...good, idType: "global_entry" }, TODAY).allowed).toBe(true);
     expect(evaluateManualId({ ...good, idType: "permanent_resident" }, TODAY).allowed).toBe(true);
+  });
+});
+
+describe("house policy: over-40 visual verification (DOB-only manual path)", () => {
+  const over40: ManualIdInput = {
+    idType: "drivers_license",
+    dateOfBirth: "1980-01-01",
+    expirationDate: "",
+    reason: OVER40_VISUAL_REASON,
+    photoMatchConfirmed: false,
+    visualOver40: true,
+  };
+  it("policy threshold is 40", () => {
+    expect(OVER40_VISUAL_MIN_AGE).toBe(40);
+  });
+  it("passes on DOB alone — no expiry, no photo-match checkbox", () => {
+    const v = evaluateManualId(over40, TODAY);
+    expect(v.allowed).toBe(true);
+    if (v.allowed) {
+      expect(v.method).toBe("manual");
+      expect(v.expirationDate).toBeNull();
+      expect(v.age).toBe(46);
+    }
+  });
+  it("40th birthday qualifies; 39 is refused and told to scan", () => {
+    expect(evaluateManualId({ ...over40, dateOfBirth: "1986-07-13" }, TODAY).allowed).toBe(true);
+    const v = evaluateManualId({ ...over40, dateOfBirth: "1987-01-01" }, TODAY);
+    expect(v.allowed).toBe(false);
+    if (!v.allowed) expect(v.reason).toContain("scan the ID");
+  });
+  it("under-21 is refused before the 40 check ever runs", () => {
+    expect(evaluateManualId({ ...over40, dateOfBirth: "2007-01-01" }, TODAY).allowed).toBe(false);
+  });
+  it("an expiry entered anyway is still graded; the audit reason is still required", () => {
+    expect(evaluateManualId({ ...over40, expirationDate: "2020-01-01" }, TODAY).allowed).toBe(false);
+    expect(evaluateManualId({ ...over40, reason: "x" }, TODAY).allowed).toBe(false);
+  });
+  it("the regular manual path is unchanged — expiry and photo match still required", () => {
+    const regular: ManualIdInput = {
+      idType: "passport",
+      dateOfBirth: "1990-07-13",
+      expirationDate: "",
+      reason: "Passport has no barcode.",
+      photoMatchConfirmed: true,
+    };
+    expect(evaluateManualId(regular, TODAY).allowed).toBe(false);
+    expect(evaluateManualId({ ...regular, expirationDate: "2030-01-01", photoMatchConfirmed: false }, TODAY).allowed).toBe(false);
+    expect(evaluateManualId({ ...regular, expirationDate: "2030-01-01" }, TODAY).allowed).toBe(true);
+  });
+});
+
+describe("digits-only MM/DD/YYYY date mask", () => {
+  it("masks progressively as digits arrive", () => {
+    expect(maskDateDigitsMdy("")).toBe("");
+    expect(maskDateDigitsMdy("0")).toBe("0");
+    expect(maskDateDigitsMdy("071")).toBe("07/1");
+    expect(maskDateDigitsMdy("0713")).toBe("07/13");
+    expect(maskDateDigitsMdy("07131")).toBe("07/13/1");
+    expect(maskDateDigitsMdy("07131990")).toBe("07/13/1990");
+  });
+  it("strips non-digits and caps at 8 digits (stable on re-mask)", () => {
+    expect(maskDateDigitsMdy("07/13/1990")).toBe("07/13/1990");
+    expect(maskDateDigitsMdy("07-13x1990!55")).toBe("07/13/1990");
+  });
+  it("mdyToYmd converts complete real dates and rejects the rest", () => {
+    expect(mdyToYmd("07/13/1990")).toBe("1990-07-13");
+    expect(mdyToYmd("02/30/1990")).toBeNull();
+    expect(mdyToYmd("07/13/199")).toBeNull();
+    expect(mdyToYmd("")).toBeNull();
   });
 });
 

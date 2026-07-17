@@ -48,6 +48,39 @@ export function isAcceptableIdType(v: unknown): v is AcceptableIdType {
 /** Statutory minimum age for recreational cannabis sales (RCW 69.50.357). */
 export const MINIMUM_AGE_YEARS = 21;
 
+/**
+ * HOUSE POLICY (owner): a customer who clearly looks 40 or older may be
+ * verified VISUALLY — check the document is real and valid, enter the DOB,
+ * done. No expiration-date entry, no photo-match checkbox. Everyone under 40
+ * is SCANNED, and a VERTICAL license is ALWAYS scanned, no exceptions. The
+ * DOB entered must prove 40+ or the visual path refuses (scan instead).
+ */
+export const OVER40_VISUAL_MIN_AGE = 40;
+
+/** Fixed audit reason the over-40 visual path records (WAC 314-55-150 trail). */
+export const OVER40_VISUAL_REASON =
+  "House policy: customer clearly 40+ — ID checked visually for validity; DOB entered from the document.";
+
+/**
+ * Digits-only date entry mask: strip everything but digits, cap at 8, and
+ * render progressively as MM/DD/YYYY. Pure — feed it the raw input value on
+ * every keystroke ("07131990" → "07/13/1990", "071" → "07/1").
+ */
+export function maskDateDigitsMdy(raw: string): string {
+  const d = (raw ?? "").replace(/\D/g, "").slice(0, 8);
+  if (d.length <= 2) return d;
+  if (d.length <= 4) return `${d.slice(0, 2)}/${d.slice(2)}`;
+  return `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4)}`;
+}
+
+/** Convert a complete masked MM/DD/YYYY string to YYYY-MM-DD (null if not a real date). */
+export function mdyToYmd(masked: string): string | null {
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec((masked ?? "").trim());
+  if (!m) return null;
+  const ymd = `${m[3]}-${m[1]}-${m[2]}`;
+  return isYmd(ymd) ? ymd : null;
+}
+
 // ---------------------------------------------------------------------------
 // Date helpers (pure; dates as YYYY-MM-DD wall-clock strings)
 // ---------------------------------------------------------------------------
@@ -265,6 +298,14 @@ export type ManualIdInput = {
   reason: string;
   /** Budtender confirms the photo matches the customer. */
   photoMatchConfirmed: boolean;
+  /**
+   * HOUSE POLICY over-40 visual verification: the customer clearly looks 40+,
+   * the budtender checked the document is real and valid, and only the DOB is
+   * entered. When true: no expirationDate is required ("" allowed), the
+   * photo-match checkbox is not required (the validity check covers it), and
+   * the DOB must prove age ≥ 40 — anyone younger MUST be scanned.
+   */
+  visualOver40?: boolean;
 };
 
 /**
@@ -285,7 +326,8 @@ export function evaluateManualId(
   if (reason.length < 3 || reason.length > 500) {
     return { allowed: false, method: "manual", reason: "Enter why the ID was verified manually (3–500 characters)." };
   }
-  if (!input.photoMatchConfirmed) {
+  const visual40 = input.visualOver40 === true;
+  if (!visual40 && !input.photoMatchConfirmed) {
     return { allowed: false, method: "manual", reason: "Confirm the photo matches the customer." };
   }
   if (!isYmd(input.dateOfBirth)) {
@@ -295,7 +337,18 @@ export function evaluateManualId(
   if (age === null || age < minimumAgeYears) {
     return { allowed: false, method: "manual", reason: `Customer is under ${minimumAgeYears} (age ${age ?? "unknown"}). Sale refused.` };
   }
+  if (visual40 && age < OVER40_VISUAL_MIN_AGE) {
+    return {
+      allowed: false,
+      method: "manual",
+      reason: `DOB says age ${age} — under ${OVER40_VISUAL_MIN_AGE}. House policy: scan the ID (the visual check is only for customers clearly 40+).`,
+    };
+  }
   const expiry = (input.expirationDate ?? "").trim();
+  if (visual40 && expiry === "") {
+    // Over-40 visual path: validity was checked in hand — no expiry entry.
+    return { allowed: true, method: "manual", age, dateOfBirth: input.dateOfBirth, expirationDate: null, idType: input.idType };
+  }
   if (!isYmd(expiry)) {
     return { allowed: false, method: "manual", reason: "Enter the document's expiration date." };
   }
@@ -419,6 +472,39 @@ export function __runIdScanCoreTests(): void {
   ok(!evaluateManualId({ ...manualGood, expirationDate: "" }, "2026-07-13").allowed, "manual missing expiry blocked");
   ok(evaluateManualId({ ...manualGood, idType: "global_entry" }, "2026-07-13").allowed, "Global Entry accepted (eff. 11/8/2025)");
   ok(evaluateManualId({ ...manualGood, idType: "permanent_resident" }, "2026-07-13").allowed, "Permanent Resident card accepted (eff. 11/8/2025)");
+
+  // House policy — over-40 visual verification (DOB only; no expiry, no photo box)
+  const over40: ManualIdInput = {
+    idType: "drivers_license",
+    dateOfBirth: "1980-01-01",
+    expirationDate: "",
+    reason: OVER40_VISUAL_REASON,
+    photoMatchConfirmed: false,
+    visualOver40: true,
+  };
+  {
+    const v = evaluateManualId(over40, "2026-07-13");
+    ok(v.allowed && v.method === "manual" && v.expirationDate === null, "over-40 visual: DOB-only verification passes with no expiry/photo box");
+  }
+  ok(evaluateManualId({ ...over40, dateOfBirth: "1986-07-13" }, "2026-07-13").allowed, "40th birthday qualifies for the visual path");
+  {
+    const v = evaluateManualId({ ...over40, dateOfBirth: "1987-01-01" }, "2026-07-13");
+    ok(!v.allowed && v.reason.includes("scan the ID"), "39-year-old refused on the visual path — must scan");
+  }
+  ok(!evaluateManualId({ ...over40, dateOfBirth: "2007-01-01" }, "2026-07-13").allowed, "under-21 refused before the 40 check even runs");
+  ok(!evaluateManualId({ ...over40, expirationDate: "2020-01-01" }, "2026-07-13").allowed, "over-40 visual: an expiry, when entered anyway, is still graded");
+  ok(!evaluateManualId({ ...manualGood, expirationDate: "" }, "2026-07-13").allowed, "regular manual path still requires the expiry");
+  ok(!evaluateManualId({ ...over40, reason: "x" }, "2026-07-13").allowed, "over-40 visual still requires the audit reason");
+
+  // Digits-only MM/DD/YYYY date mask
+  ok(maskDateDigitsMdy("07131990") === "07/13/1990", "8 digits mask to MM/DD/YYYY");
+  ok(maskDateDigitsMdy("071") === "07/1", "partial digits mask progressively");
+  ok(maskDateDigitsMdy("07/13/1990") === "07/13/1990", "already-masked input is stable");
+  ok(maskDateDigitsMdy("07-13x1990!55") === "07/13/1990", "non-digits stripped, extra digits dropped");
+  ok(maskDateDigitsMdy("") === "", "empty stays empty");
+  ok(mdyToYmd("07/13/1990") === "1990-07-13", "MM/DD/YYYY converts to YYYY-MM-DD");
+  ok(mdyToYmd("02/30/1990") === null, "impossible masked date rejected");
+  ok(mdyToYmd("07/13/199") === null, "incomplete masked date rejected");
 
   console.log(`pos/id-scan-core: ${pass} passed, ${fail} failed`);
   if (fail > 0) throw new Error(`${fail} pos/id-scan-core tests failed`);

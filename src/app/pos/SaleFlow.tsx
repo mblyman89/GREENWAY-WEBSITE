@@ -24,6 +24,10 @@ import {
   evaluateScannedId,
   evaluateManualId,
   ACCEPTABLE_ID_TYPES,
+  OVER40_VISUAL_MIN_AGE,
+  OVER40_VISUAL_REASON,
+  maskDateDigitsMdy,
+  mdyToYmd,
   type IdGateVerdict,
 } from "@/lib/pos/id-scan-core";
 import {
@@ -808,7 +812,7 @@ function IdGateScreen({
   onEnqueueManual: (payload: Record<string, unknown>) => string;
   onEnqueueCardCapture: (payload: Record<string, unknown>) => string;
 }) {
-  const [mode, setMode] = useState<"scan" | "manual">("scan");
+  const [mode, setMode] = useState<"scan" | "over40" | "manual">("scan");
   const [scanBuffer, setScanBuffer] = useState("");
   const [error, setError] = useState<string | null>(null);
   const scanRef = useRef<HTMLTextAreaElement | null>(null);
@@ -819,6 +823,11 @@ function IdGateScreen({
   const [expiry, setExpiry] = useState("");
   const [reason, setReason] = useState("");
   const [photoMatch, setPhotoMatch] = useState(false);
+
+  // HOUSE POLICY — over-40 visual verification: DOB only, typed as digits and
+  // masked to MM/DD/YYYY on every keystroke (no slashes to hunt for).
+  const [over40Dob, setOver40Dob] = useState("");
+  const [over40IdType, setOver40IdType] = useState<string>("drivers_license");
 
   // POS B9 — medical path: the recognition card is captured AT the gate,
   // because it changes the gate itself (18–20 patients may buy — RCW
@@ -888,8 +897,13 @@ function IdGateScreen({
     setError(null);
     const card = medical ? validateCard() : null;
     if (medical && !card) return;
+    // Inputs are digit-masked MM/DD/YYYY (house policy: numbers only) — the
+    // core still speaks YYYY-MM-DD; an incomplete mask converts to "" and the
+    // core's own error messages guide the fix.
+    const dobYmd = mdyToYmd(dob) ?? "";
+    const expYmd = mdyToYmd(expiry) ?? "";
     const v = evaluateManualId(
-      { idType, dateOfBirth: dob.trim(), expirationDate: expiry.trim(), reason, photoMatchConfirmed: photoMatch },
+      { idType, dateOfBirth: dobYmd, expirationDate: expYmd, reason, photoMatchConfirmed: photoMatch },
       todayYmd,
       card ? 18 : 21,
     );
@@ -906,16 +920,88 @@ function IdGateScreen({
     const cardUuid = card ? onEnqueueCardCapture(card as unknown as Record<string, unknown>) : null;
     const uuid = onEnqueueManual({
       idType,
-      dateOfBirth: dob.trim(),
-      expirationDate: expiry.trim(),
+      dateOfBirth: dobYmd,
+      expirationDate: expYmd,
       reason: reason.trim(),
     });
     // Manual path has no machine-read name — no auto-attach (lookup still works).
     onPassed(v, uuid, card, cardUuid, null);
   };
 
+  /**
+   * HOUSE POLICY — over-40 visual verification. The budtender judged the
+   * customer clearly 40+, checked the document is REAL and VALID in hand, and
+   * enters ONLY the DOB. No expiration entry, no photo-match checkbox — but
+   * the core still refuses if the DOB proves under 40 (scan instead), and the
+   * WAC 314-55-150 audit event is enqueued exactly like any manual verify.
+   */
+  const submitOver40 = () => {
+    setError(null);
+    const card = medical ? validateCard() : null;
+    if (medical && !card) return;
+    const dobYmd = mdyToYmd(over40Dob);
+    if (!dobYmd) {
+      setError("Enter the full date of birth — numbers only, MM/DD/YYYY.");
+      return;
+    }
+    const v = evaluateManualId(
+      {
+        idType: over40IdType,
+        dateOfBirth: dobYmd,
+        expirationDate: "",
+        reason: OVER40_VISUAL_REASON,
+        photoMatchConfirmed: false,
+        visualOver40: true,
+      },
+      todayYmd,
+      card ? 18 : 21,
+    );
+    if (!v.allowed) {
+      setError(v.reason);
+      return;
+    }
+    const ageCheck = medicalAgeAllowed(v.age, !!card);
+    if (!ageCheck.allowed) {
+      setError(ageCheck.reason ?? "Age check failed.");
+      return;
+    }
+    // Audit events FIRST (WAC 314-55-150 trail); the sale references both UUIDs.
+    const cardUuid = card ? onEnqueueCardCapture(card as unknown as Record<string, unknown>) : null;
+    const uuid = onEnqueueManual({
+      idType: over40IdType,
+      dateOfBirth: dobYmd,
+      expirationDate: "",
+      reason: OVER40_VISUAL_REASON,
+      visualOver40: true,
+    });
+    // Visual path has no machine-read name — no auto-attach (lookup still works).
+    onPassed(v, uuid, card, cardUuid, null);
+  };
+
   return (
     <Frame title="Check ID — required before anything enters the cart" onCancel={onCancel}>
+      {/* HOUSE POLICY — the owner's rule, on screen before every sale:
+          vertical ID always scans, under-40 always scans, clearly-40+ gets a
+          visual validity check + DOB entry. "This is how we do it here." */}
+      <div className="mb-4 w-full max-w-lg overflow-hidden rounded-2xl border-2 border-[var(--pos-accent-border)]">
+        <p className="bg-[var(--pos-accent)] px-4 py-3 text-center text-xl font-black uppercase tracking-wide text-[var(--pos-accent-ink)]">
+          ⚠ Vertical ID? It MUST be scanned.
+        </p>
+        <div className="grid grid-cols-2 divide-x divide-[var(--pos-border)] bg-[var(--pos-surface)] text-center">
+          <div className="px-3 py-2.5">
+            <p className="text-sm font-black uppercase">Under {OVER40_VISUAL_MIN_AGE}</p>
+            <p className="mt-0.5 text-xs text-[var(--pos-text-muted)]">SCAN the ID. Every time.</p>
+          </div>
+          <div className="px-3 py-2.5">
+            <p className="text-sm font-black uppercase">Clearly {OVER40_VISUAL_MIN_AGE}+</p>
+            <p className="mt-0.5 text-xs text-[var(--pos-text-muted)]">Check the ID is real & valid · enter DOB.</p>
+          </div>
+        </div>
+        <p className="border-t border-[var(--pos-border)] bg-[var(--pos-surface-2)] px-4 py-1.5 text-center text-[11px] font-bold uppercase tracking-wider text-[var(--pos-text-faint)]">
+          This is how we do it here — no exceptions
+        </p>
+      </div>
+
       {error ? (
         <p className="mb-4 w-full max-w-lg rounded-lg border border-[var(--pos-danger-border)] bg-[var(--pos-danger-soft)] px-4 py-3 text-sm text-[var(--pos-danger)]">{error}</p>
       ) : null}
@@ -1038,12 +1124,80 @@ function IdGateScreen({
             <button
               type="button"
               onClick={() => {
+                setMode("over40");
+                setError(null);
+              }}
+              className="pos-tile rounded-xl border border-[var(--pos-accent-border)] bg-[var(--pos-accent-soft)] px-6 py-3 font-semibold text-[var(--pos-accent)]"
+            >
+              Clearly {OVER40_VISUAL_MIN_AGE}+ — visual check
+            </button>
+            <button
+              type="button"
+              onClick={() => {
                 setMode("manual");
                 setError(null);
               }}
               className="pos-tile rounded-xl border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-6 py-3 font-semibold text-[var(--pos-text)]"
             >
-              Manual verification instead
+              Other ID / won’t scan
+            </button>
+          </div>
+        </div>
+      ) : mode === "over40" ? (
+        <div className="w-full max-w-lg space-y-4">
+          <p className="text-sm text-[var(--pos-text-muted)]">
+            Customer clearly looks {OVER40_VISUAL_MIN_AGE} or older. Hold the ID: real document, not
+            expired, photo is this person. Then enter the date of birth exactly as shown — that’s it.
+            (Audited; if the DOB says under {OVER40_VISUAL_MIN_AGE}, you’ll be sent back to scan.)
+          </p>
+          <div>
+            <label htmlFor="pos-over40-idtype" className="text-sm text-[var(--pos-text-muted)]">Document type (WAC 314-55-150)</label>
+            <select
+              id="pos-over40-idtype"
+              value={over40IdType}
+              onChange={(e) => setOver40IdType(e.target.value)}
+              className="mt-1 w-full rounded-xl border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] p-3 text-sm"
+            >
+              {ACCEPTABLE_ID_TYPES.map((t) => (
+                <option key={t.key} value={t.key}>{t.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="pos-over40-dob" className="text-sm text-[var(--pos-text-muted)]">
+              Date of birth — numbers only (MM/DD/YYYY)
+            </label>
+            <input
+              id="pos-over40-dob"
+              value={over40Dob}
+              onChange={(e) => setOver40Dob(maskDateDigitsMdy(e.target.value))}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") submitOver40();
+              }}
+              inputMode="numeric"
+              autoFocus
+              placeholder="MM/DD/YYYY"
+              className="mt-1 w-full rounded-xl border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] p-3 text-center text-2xl font-bold tracking-widest"
+            />
+          </div>
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={submitOver40}
+              disabled={mdyToYmd(over40Dob) === null}
+              className="pos-tile rounded-xl bg-[var(--pos-accent)] px-6 py-3 font-semibold text-[var(--pos-accent-ink)] disabled:opacity-40"
+            >
+              Verify — clearly {OVER40_VISUAL_MIN_AGE}+
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setMode("scan");
+                setError(null);
+              }}
+              className="pos-tile rounded-xl border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-6 py-3 font-semibold text-[var(--pos-text)]"
+            >
+              Back to scanning
             </button>
           </div>
         </div>
@@ -1051,7 +1205,8 @@ function IdGateScreen({
         <div className="w-full max-w-lg space-y-4">
           <p className="text-sm text-[var(--pos-warn)]">
             Manual verifications are audited. Only use when the barcode will not scan or the document
-            has no barcode (passport, tribal, armed forces…).
+            has no barcode (passport, tribal, armed forces…). Customer clearly {OVER40_VISUAL_MIN_AGE}+?
+            Use the visual check instead — DOB only.
           </p>
           <div>
             <label htmlFor="pos-idtype" className="text-sm text-[var(--pos-text-muted)]">Document type (WAC 314-55-150)</label>
@@ -1069,24 +1224,24 @@ function IdGateScreen({
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label htmlFor="pos-dob" className="text-sm text-[var(--pos-text-muted)]">Date of birth (YYYY-MM-DD)</label>
+              <label htmlFor="pos-dob" className="text-sm text-[var(--pos-text-muted)]">Date of birth — numbers only (MM/DD/YYYY)</label>
               <input
                 id="pos-dob"
                 value={dob}
-                onChange={(e) => setDob(e.target.value)}
+                onChange={(e) => setDob(maskDateDigitsMdy(e.target.value))}
                 inputMode="numeric"
-                placeholder="1990-07-13"
+                placeholder="MM/DD/YYYY"
                 className="mt-1 w-full rounded-xl border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] p-3 text-sm"
               />
             </div>
             <div>
-              <label htmlFor="pos-exp" className="text-sm text-[var(--pos-text-muted)]">Expiration date (YYYY-MM-DD)</label>
+              <label htmlFor="pos-exp" className="text-sm text-[var(--pos-text-muted)]">Expiration date — numbers only (MM/DD/YYYY)</label>
               <input
                 id="pos-exp"
                 value={expiry}
-                onChange={(e) => setExpiry(e.target.value)}
+                onChange={(e) => setExpiry(maskDateDigitsMdy(e.target.value))}
                 inputMode="numeric"
-                placeholder="2028-01-31"
+                placeholder="MM/DD/YYYY"
                 className="mt-1 w-full rounded-xl border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] p-3 text-sm"
               />
             </div>

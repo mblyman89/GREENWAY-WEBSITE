@@ -936,7 +936,7 @@ async function processManualId(
   // underage or expired-document verification into the audit trail. Sales
   // referencing an excepted verification are themselves refused below.
   const math = checkManualIdMathAtSync(
-    payload as Pick<ManualIdEventPayload, "dateOfBirth" | "expirationDate">,
+    payload as Pick<ManualIdEventPayload, "dateOfBirth" | "expirationDate" | "visualOver40">,
     envelope.occurredAt.slice(0, 10),
   );
   if (!math.ok) {
@@ -953,6 +953,9 @@ async function processManualId(
       dateOfBirth: payload.dateOfBirth,
       expirationDate: payload.expirationDate,
       reason: payload.reason,
+      // House policy: over-40 visual verifications are flagged in the audit
+      // trail (DOB-only entry; validity checked in hand, no expiry recorded).
+      visualOver40: payload.visualOver40 === true,
       employeeId: envelope.employeeId,
       clientUuid: envelope.clientUuid,
       occurredAt: envelope.occurredAt,
