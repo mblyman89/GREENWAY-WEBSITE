@@ -420,3 +420,21 @@ they are optional data loads, not schema, and each is idempotent (safe to run an
   covered by tests. `__runIntakeMenuStagingCoreTests` now registered in the pure
   runner. No retro-correction: existing live duplicates carry forward verbatim —
   mastering applies at new-intake staging only. No migration. Suite 1,729/133.
+
+- **POS age-gate house policy (PR #558).** The register's ID gate now shows the
+  owner's rule before every sale: a prominent banner — VERTICAL ID MUST BE
+  SCANNED; under 40 = scan every time; clearly 40+ = visual validity check +
+  DOB entry only ("this is how we do it here — no exceptions"). New over-40
+  visual gate mode: `ManualIdInput.visualOver40` (id-scan-core) waives the
+  expiration entry and photo-match checkbox but requires the entered DOB to
+  prove age ≥ 40 (`OVER40_VISUAL_MIN_AGE`) — younger is refused and told to
+  scan; under-21 refuses before the 40 check runs. Fixed audit reason
+  (`OVER40_VISUAL_REASON`) rides the WAC 314-55-150 `manual_id_verification`
+  event every time. Server side, `validateManualIdEventPayload` accepts an
+  empty expiry only when `visualOver40`, `checkManualIdMathAtSync` re-grades
+  the 40+ rule against the event's own date (an entered expiry is still
+  graded), and the audit record carries the flag. All manual date entry is now
+  digits-only with a live MM/DD/YYYY mask (`maskDateDigitsMdy`/`mdyToYmd`);
+  the cores still speak YYYY-MM-DD. Sale-screen customer attach verified
+  already shipped (CustomerBand/MemberPanel; AO-3 scan auto-attach unchanged).
+  No migration. Suite 1,740/133.
