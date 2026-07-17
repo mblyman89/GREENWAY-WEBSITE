@@ -403,3 +403,20 @@ they are optional data loads, not schema, and each is idempotent (safe to run an
   carried cards + appends mastered cards; `merged` count flows through outcome,
   summary_json, timeline notes, and the Menu Imports review/list surfaces. No
   migration. Suite 1,720/133.
+- **Pack-axis product mastering (hardening) — PR #556** — multi-pack prerolls /
+  infused prerolls / blunts now roll up with their single-form siblings from the
+  same brand: `groupingCategoryAxis` folds `preroll-pack`→`preroll` and
+  `infused-preroll-pack`→`infused-preroll` for IDENTITY ONLY (infused never folds
+  onto non-infused; blunts already reach the preroll axis via the inventory-type
+  catalog; the explicit `blunt`/`infused-blunt` browse-focus taxonomy values are
+  deliberately not folded). `familyFromName` strips numbered pack tokens
+  ("5pk"/"3 pack"/"2-pack") so a 5-pack lands on its single's family;
+  `STRAIN_LED_CATEGORIES` gains `blunt`/`infused-blunt`/`rso`. Merged and rolled-up
+  cards stay reachable from BOTH browse sections: new multi-lot cards union
+  `filter_categories` across group members, and restock merges extend the live
+  card's `filter_categories` via the new `mergeCategoriesByCardKey` plan field
+  (seeding the card's own category first when the list was empty, since the menu
+  falls back to `[category]` only on empty). Topicals and RSO variant grouping
+  covered by tests. `__runIntakeMenuStagingCoreTests` now registered in the pure
+  runner. No retro-correction: existing live duplicates carry forward verbatim —
+  mastering applies at new-intake staging only. No migration. Suite 1,729/133.
