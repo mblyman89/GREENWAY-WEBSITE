@@ -24,6 +24,12 @@ import {
   saveReorderSettingsAction,
 } from "../actions";
 import { BuilderTable, type SuggestionRow } from "./builder-table";
+import { getSnapshot, getSnapshotItems } from "@/lib/purchasing/cultivera-store";
+import {
+  parseMenuItemIds,
+  buildMenuPrefills,
+  menuPrefillBanner,
+} from "@/lib/purchasing/cultivera-po-core";
 import { PoMarketContextCard } from "../PoMarketContextCard";
 import type { PoLineLike } from "@/lib/purchasing/po-market-context-core";
 import { PoCockpitSection } from "@/app/admin/discovery/PoCockpitSection";
@@ -238,9 +244,31 @@ export default async function NewPurchaseOrderPage({
       }
     : undefined;
 
+  // CV-6 — Cultivera menu hand-off: `fromMenu=<snapshotId>` + ticked
+  // `item=<id>` params. The URL only carries IDS; every line is rebuilt from
+  // OUR OWN saved snapshot rows, and only ids that exist in that snapshot
+  // are honored (W11: never trust a raw URL param). The snapshot's vendor id
+  // is threaded only when it matches a real vendor record.
+  const fromMenu = one(sp, "fromMenu");
+  const menuItemIds = parseMenuItemIds(sp["item"]);
+  let menuPrefills: SuggestionRow[] = [];
+  let menuVendorLabel: string | null = null;
+  if (fromMenu && menuItemIds.length > 0) {
+    const menuSnap = await getSnapshot(fromMenu);
+    if (menuSnap) {
+      const menuItems = await getSnapshotItems(fromMenu);
+      const menuVendorId =
+        menuSnap.vendor_id && vendors.some((v) => v.id === menuSnap.vendor_id)
+          ? menuSnap.vendor_id
+          : null;
+      menuVendorLabel = menuSnap.seller_name ?? menuSnap.cultivera_market_slug ?? null;
+      menuPrefills = buildMenuPrefills(menuItems, menuItemIds, menuVendorId, menuVendorLabel);
+    }
+  }
+
   // Task I (I6): candidate rows in PoLineLike shape for the market check —
   // suggested qty as the order qty, real unit costs (wholesale, minor units).
-  const marketLines: PoLineLike[] = [...(prefill ? [prefill] : []), ...rows].map((r) => ({
+  const marketLines: PoLineLike[] = [...(prefill ? [prefill] : []), ...menuPrefills, ...rows].map((r) => ({
     product_name: r.productName,
     brand: r.brand,
     category: r.category,
@@ -313,6 +341,11 @@ export default async function NewPurchaseOrderPage({
             Started from a discovery lead:{" "}
             <span className="font-semibold text-[var(--admin-text)]">{prefill.productName}</span>. It&apos;s
             pre-added below as a draft line — confirm the quantity, cost, and vendor, then save.
+          </div>
+        ) : null}
+        {menuPrefills.length > 0 ? (
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-text)]">
+            {menuPrefillBanner(menuPrefills.length, menuVendorLabel)}
           </div>
         ) : null}
 
@@ -465,6 +498,7 @@ export default async function NewPurchaseOrderPage({
                 origin={origin}
                 planSummary={planSummary}
                 prefill={prefill}
+                menuPrefills={menuPrefills.length > 0 ? menuPrefills : undefined}
                 fromLeadId={fromLead}
                 leadTimeDays={leadTimeDays}
                 createAction={createPurchaseOrderAction}
