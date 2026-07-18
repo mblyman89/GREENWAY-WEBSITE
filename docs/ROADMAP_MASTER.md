@@ -587,3 +587,26 @@ they are optional data loads, not schema, and each is idempotent (safe to run an
   jump links to new anchor ids on the lines table, transport form, timeline,
   KB panel and finalize controls. 33 embedded self-tests + vitest mirror.
   No server-action or store changes. No migration. Suite 1,773/136.
+
+- **Instant hidden ID capture at the register (PR #571, AP).** The owner's
+  real WA driver's license failed the POS ID gate with "missing @/ANSI
+  header" even though the correct big PDF417 barcode was scanned, and the
+  payload crawled into the visible reader box for ~5 seconds. Root cause
+  (verified in code): AAMVA payloads begin `"@" + LF`, wedge scanners type
+  that LF as Enter, and the old textarea submitted on the FIRST Enter -- so
+  the parser saw the lone "@" and rejected it while the remaining ~600 chars
+  kept typing; the crawl was one React re-render per keystroke. Shipped:
+  (1) `parseAamvaPdf417` now requires only the `ANSI ` marker, not a leading
+  `@` (wedge scanners often strip control chars); age/expiry/DOB gates are
+  unchanged, and a self-test pins the exact reported no-@ payload. (2) New
+  pure core `id-capture-core.ts`: a keystroke accumulator where Enter/Tab
+  are DATA mid-burst (a leading Enter still activates buttons), modifiers
+  are ignored, and capture finalizes after 300ms idle with a 20-char
+  minimum (stray typing silently resets); buffering lives in a `useRef`,
+  so zero re-renders. 14 embedded self-tests incl. a full AAMVA payload
+  with embedded Enters captured intact. (3) The textarea + "Check scan"
+  button are gone -- a document-level keydown listener (scan mode only,
+  skips form fields) feeds the core, and an aria-live "Ready to scan" /
+  "Reading barcode..." pane shows status; the verdict lands ~300ms after
+  the scanner finishes. Over-40 visual and manual paths unchanged. No
+  migration. Suite 1,779/137.
