@@ -29,7 +29,11 @@ import {
   ccrsToParsedManifest,
   ccrsTransportToParsed,
 } from "@/lib/inventory/ccrs-manifest-csv-core";
-import { stageManifest, setManifestLifecycle } from "@/lib/inventory/intake-store";
+import {
+  stageManifest,
+  setManifestLifecycle,
+  backfillManifestTransport,
+} from "@/lib/inventory/intake-store";
 import type {
   NormalizedInboundEmail,
   NormalizedAttachment,
@@ -62,6 +66,7 @@ import {
   foldTransport,
   type TransportDonor,
 } from "@/lib/inventory/manifest-merge-core";
+import { extractCultiveraInvoiceTransport } from "@/lib/inventory/pdf-cultivera-invoice-core";
 import { archiveEmailedCoaForManifest } from "@/lib/inventory/coa-archive";
 
 export type InboundDisposition =
@@ -210,6 +215,12 @@ export type StageFromEmailResult = {
    * behavior, not an error worth alarming on.
    */
   duplicates: number;
+  /**
+   * H18: how many transport FIELDS were backfilled onto ALREADY-staged
+   * manifests because this email was a duplicate re-send carrying transport
+   * data the original staging missed (fill-only-empty; arrived_at never).
+   */
+  transportBackfills: number;
 };
 
 /**
@@ -225,6 +236,7 @@ export async function stageManifestsFromEmail(
     manifestIds: [],
     parseFailures: 0,
     duplicates: 0,
+    transportBackfills: 0,
   };
   const textCandidates = manifestCandidates(email);
   const pdfCands = pdfCandidates(email);
@@ -240,8 +252,12 @@ export async function stageManifestsFromEmail(
   // transport DONOR, and each JSON/CSV manifest folds the matching donor's
   // transport in BEFORE staging (fill-only-when-empty, arrived_at never
   // sourced from documents, manifest-number matched — chooseTransportDonor).
+  // H18: donors are now built whenever ANY PDF rides the email (not only when
+  // a textual manifest is also present) so the PDF-primary path below can fold
+  // a sibling document's transport too.
   const pdfDonors: TransportDonor[] = [];
-  if (textCandidates.length > 0 && pdfCands.length > 0) {
+  const invoiceDonors: TransportDonor[] = [];
+  if (pdfCands.length > 0) {
     for (const att of pdfCands) {
       if (classifyAttachmentRole(att) === "coa") continue; // COAs carry no transport
       const parsed = await parsePdfManifestFromBase64(att.base64 as string);
@@ -250,8 +266,21 @@ export async function stageManifestsFromEmail(
           manifest_number: parsed.manifest.manifest_number,
           transport: parsed.manifest.transport ?? null,
         });
+      } else if (parsed.text) {
+        // H18: a PDF that is NOT a manifest can still carry transport. The
+        // real Cultivera invoice (SPR ORD-24706, owner-verified) prints
+        // Driver / Plate / vehicle / Arrival date even though the manifest
+        // PDF is the primary source. The extractor is layout-gated and
+        // returns null unless the text really is this invoice AND at least
+        // one transport fact was found — never a donor full of nulls.
+        const inv = extractCultiveraInvoiceTransport(parsed.text);
+        if (inv) invoiceDonors.push(inv);
       }
     }
+    // Invoice donors go LAST so an exact manifest-number tie prefers the
+    // richer shipping document (VIN + transporter live only on the manifest
+    // PDF; chooseTransportDonor returns the FIRST exact match).
+    pdfDonors.push(...invoiceDonors);
   }
 
   // 1) Textual attachments (JSON / CCRS CSV). H15b strict gate: only
@@ -280,8 +309,19 @@ export async function stageManifestsFromEmail(
       result.manifestIds.push(staged.manifestId);
       await autoAdvanceInTransit(staged.manifestId, actorId);
     } else if (staged.duplicate) {
-      // Re-sent / duplicate manifest already live in intake: skip, don't alarm.
+      // Re-sent / duplicate manifest already live in intake: don't re-stage,
+      // but DO let the re-send REPAIR empty transport fields on the existing
+      // row (H18). This is how a manifest that originally seeded without the
+      // PDF's driver/vehicle/plate gets healed by forwarding the email again.
       result.duplicates += 1;
+      if (staged.existingManifestId) {
+        result.transportBackfills += await backfillManifestTransport(
+          staged.existingManifestId,
+          manifest.transport,
+          actorId,
+          "re-sent vendor email",
+        );
+      }
       console.warn("[inbound-email] duplicate manifest skipped:", staged.error);
     } else {
       result.parseFailures += 1;
@@ -368,6 +408,13 @@ export async function stageManifestsFromEmail(
         }
       }
 
+      // H18: fold any sibling document's transport (e.g. the Cultivera
+      // invoice's driver / plate / vehicle) onto the primary manifest too —
+      // fill-only-when-empty, arrived_at never doc-sourced, manifest-number
+      // matched (same conservative rules as the JSON path above).
+      const pdfDonor = chooseTransportDonor(merged.manifest_number, pdfDonors);
+      if (pdfDonor) merged = foldTransport(merged, pdfDonor);
+
       const staged = await stageManifest(merged, primary.text, actorId, { sourceUrl: null });
       if (staged.ok) {
         result.staged += 1;
@@ -383,8 +430,17 @@ export async function stageManifestsFromEmail(
         }
         await autoAdvanceInTransit(staged.manifestId, actorId);
       } else if (staged.duplicate) {
-        // Re-sent / duplicate manifest already live in intake: skip, don't alarm.
+        // Re-sent / duplicate manifest already live in intake: don't re-stage,
+        // but repair empty transport fields on the existing row (H18).
         result.duplicates += 1;
+        if (staged.existingManifestId) {
+          result.transportBackfills += await backfillManifestTransport(
+            staged.existingManifestId,
+            merged.transport,
+            actorId,
+            "re-sent vendor email (PDF)",
+          );
+        }
         console.warn("[inbound-email] duplicate manifest (pdf) skipped:", staged.error);
       } else {
         result.parseFailures += 1;

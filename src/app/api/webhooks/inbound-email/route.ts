@@ -226,14 +226,21 @@ async function finish(
 
   const dupSuffix =
     staged.duplicates > 0 ? ` (${staged.duplicates} duplicate manifest(s) already in intake \u2014 skipped)` : "";
+  // H18: a duplicate re-send can REPAIR empty transport fields on the existing
+  // manifest (fill-only-empty). Say so in the log note so the owner can see the
+  // re-forward actually did something.
+  const backfillSuffix =
+    staged.transportBackfills > 0
+      ? ` (${staged.transportBackfills} transport field(s) backfilled on the existing manifest)`
+      : "";
   const baseNote =
-    staged.staged > 0
+    (staged.staged > 0
       ? `staged ${staged.staged} draft manifest(s)${dupSuffix}`
       : staged.parseFailures > 0
         ? `${staged.parseFailures} attachment(s) failed to parse${dupSuffix}`
         : staged.duplicates > 0
           ? `${staged.duplicates} duplicate manifest(s) already in intake \u2014 skipped`
-          : "no manifest attachment found";
+          : "no manifest attachment found") + backfillSuffix;
 
   await logInboundEmail({
     email,

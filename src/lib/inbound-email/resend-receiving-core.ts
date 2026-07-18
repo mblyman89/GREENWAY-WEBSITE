@@ -37,6 +37,11 @@
  * The server-only fetcher (resend-receiving-fetch.ts) does the network I/O and
  * assembles a NormalizedInboundEmail from these pieces.
  */
+import {
+  classifyAttachmentRole,
+  isPdfAttachment,
+  type NormalizedAttachment,
+} from "@/lib/inbound-email/inbound-normalize-core";
 
 /** The WCIA Transfer Data Link + the invoice/manifest download links found in a body. */
 export type ExtractedTransferLinks = {
@@ -347,6 +352,58 @@ export function mapReceivingAttachments(apiListData: unknown): ReceivingAttachme
   return out;
 }
 
+/** One planned PDF-link fetch: which link to pull and what to NAME the bytes. */
+export type PlannedLinkPdfFetch = {
+  /** "manifest" | "invoice" — the role the fetched PDF should classify as. */
+  label: "manifest" | "invoice";
+  /** The raw link from the email body (caller cleans + fetches). */
+  url: string;
+  /**
+   * Filename to store the bytes under. ALWAYS role-classifying ("manifest.pdf"
+   * / "invoice.pdf") so classifyAttachmentRole downstream tags it correctly
+   * regardless of the signed-URL path (same trick as the COA fallback).
+   */
+  filename: string;
+};
+
+/**
+ * H18 — decide which body PDF links to fetch, PURELY, from what the email
+ * already carries.
+ *
+ * WHY (owner-verified production failure, SPR ORD-24706): the old fallback was
+ * gated on "no parseable attachment at all" — so once the WCIA transfer JSON
+ * was fetched from its link, the manifest PDF link was NEVER pulled. But that
+ * manifest PDF is the ONLY document carrying driver / vehicle / plate / VIN
+ * (the JSON's transporter fields are null), so the review form's transport
+ * section stayed empty while eta/departed/route (JSON-sourced) filled.
+ *
+ * New rule, mirroring the COA always-fetch pattern (H16b-3): each linked
+ * document is fetched when the email does not ALREADY carry a PDF attachment
+ * of that role —
+ *   - manifest link -> fetch unless a manifest-role PDF attachment exists;
+ *   - invoice  link -> fetch unless an invoice-role PDF attachment exists.
+ * A healthy direct send (real MIME PDFs attached) therefore fetches nothing,
+ * while the real Cultivera link-style email (JSON + links only) fetches both.
+ */
+export function planLinkPdfFetches(
+  attachments: readonly NormalizedAttachment[],
+  links: Pick<ExtractedTransferLinks, "manifestUrl" | "invoiceUrl">,
+): PlannedLinkPdfFetch[] {
+  const havePdfRole = (role: "manifest" | "invoice"): boolean =>
+    attachments.some(
+      (a) => isPdfAttachment(a) && !!a.base64 && classifyAttachmentRole(a) === role,
+    );
+
+  const plan: PlannedLinkPdfFetch[] = [];
+  if (links.manifestUrl && !havePdfRole("manifest")) {
+    plan.push({ label: "manifest", url: links.manifestUrl, filename: "manifest.pdf" });
+  }
+  if (links.invoiceUrl && !havePdfRole("invoice")) {
+    plan.push({ label: "invoice", url: links.invoiceUrl, filename: "invoice.pdf" });
+  }
+  return plan;
+}
+
 // ---------------------------------------------------------------------------
 // Self-tests (run via tsx). PURE — no I/O.
 // ---------------------------------------------------------------------------
@@ -565,6 +622,69 @@ export function __runResendReceivingTests(): { passed: number; failed: number } 
   ok(mapped.length === 2, "map skips entries without id");
   ok(mapped[0].downloadUrl?.includes("inbound-cdn") === true, "map keeps download_url");
   ok(mapped[1].contentType === "application/json", "map keeps content_type");
+
+  // planLinkPdfFetches (H18) — grounded in the REAL SPR production failure:
+  // the Cultivera email links (not attaches) everything; the fetched transfer
+  // JSON must NOT suppress fetching the transport-bearing manifest PDF link.
+  const jsonAtt: NormalizedAttachment = {
+    filename: "Cultivera_ORD-24706_413541.json",
+    contentType: "application/json",
+    text: '{"document_name":"WCIA Transfer Schema"}',
+    base64: "e30=",
+  };
+  const manifestPdfAtt: NormalizedAttachment = {
+    filename: "Manifest-OrderReport-25960.pdf",
+    contentType: "application/pdf",
+    text: null,
+    base64: "JVBERi0=",
+  };
+  const invoicePdfAtt: NormalizedAttachment = {
+    filename: "Invoice-OrderReport-25960.pdf",
+    contentType: "application/pdf",
+    text: null,
+    base64: "JVBERi0=",
+  };
+  const sprLinks = {
+    manifestUrl: "https://files.cultivera.com/dl/manifest/2796.pdf",
+    invoiceUrl: "https://files.cultivera.com/dl/invoice/2796.pdf",
+  };
+
+  // THE BUG: JSON already fetched -> old guard skipped both PDFs. New plan
+  // must still fetch BOTH (manifest first — it's the transport source).
+  const planAfterJson = planLinkPdfFetches([jsonAtt], sprLinks);
+  ok(planAfterJson.length === 2, "JSON attachment does NOT suppress PDF link fetches (the production bug)");
+  ok(planAfterJson[0]?.label === "manifest", "manifest PDF planned first");
+  ok(planAfterJson[0]?.filename === "manifest.pdf", "manifest gets role-classifying filename");
+  ok(planAfterJson[1]?.label === "invoice", "invoice PDF planned second");
+  ok(planAfterJson[1]?.filename === "invoice.pdf", "invoice gets role-classifying filename");
+
+  // Healthy direct send: both PDFs already attached -> plan nothing.
+  ok(
+    planLinkPdfFetches([jsonAtt, manifestPdfAtt, invoicePdfAtt], sprLinks).length === 0,
+    "healthy direct send (both PDFs attached) plans no fetches",
+  );
+
+  // Partial: manifest attached, invoice only linked -> fetch just the invoice.
+  const partial = planLinkPdfFetches([manifestPdfAtt], sprLinks);
+  ok(partial.length === 1 && partial[0].label === "invoice", "attached manifest suppresses only ITS link");
+
+  // A PDF attachment with no bytes (metadata-only) must not count as present.
+  const emptyPdf: NormalizedAttachment = {
+    filename: "Manifest.pdf",
+    contentType: "application/pdf",
+    text: null,
+    base64: null,
+  };
+  ok(
+    planLinkPdfFetches([emptyPdf], sprLinks).length === 2,
+    "byte-less PDF attachment doesn't suppress link fetches",
+  );
+
+  // No links -> nothing planned.
+  ok(
+    planLinkPdfFetches([jsonAtt], { manifestUrl: null, invoiceUrl: null }).length === 0,
+    "no links -> empty plan",
+  );
 
   if (failed === 0) console.log(`resend-receiving-core: all ${passed} tests passed`);
   return { passed, failed };
