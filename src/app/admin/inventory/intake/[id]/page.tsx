@@ -24,6 +24,9 @@ import {
   CONCIERGE_HINTS,
 } from "@/lib/inventory/guided-accept-core";
 import { GuidedAcceptRibbon } from "@/components/admin/inventory/GuidedAcceptRibbon";
+import { CatalogStageStrip } from "@/components/admin/catalog/CatalogStageStrip";
+import { IntakeChecklistPanel } from "@/components/admin/inventory/IntakeChecklistPanel";
+import { buildIntakeChecklist } from "@/lib/inventory/intake-checklist-core";
 import { menuStep } from "@/lib/inventory/menu-live-step-core";
 import { intakeMenuStepSnapshot } from "@/lib/pos/intake-menu-staging";
 import { getManifestPoLinkState } from "@/lib/inventory/po-link-store";
@@ -197,6 +200,16 @@ export default async function ManifestReviewPage({
       manifest.arrived_at,
   );
 
+  // Slice AO — the command-center checklist: every done/todo state derived
+  // from REAL recorded facts (status, lot dispositions, transport fields, the
+  // kb_writeback audit event). Logic lives in intake-checklist-core (tested).
+  const checklist = buildIntakeChecklist({
+    status: manifest.status,
+    lotDispositions: lots.map((l) => l.disposition),
+    hasTransport,
+    events,
+  });
+
   return (
     <div>
       <AdminPageHeader
@@ -216,6 +229,10 @@ export default async function ManifestReviewPage({
       />
 
       <div className="space-y-6 px-5 py-6 sm:px-8">
+        {/* W1 journey strip — where Receive sits in the pipeline, with the
+            next stage (Onboard) one click away after accepting. */}
+        <CatalogStageStrip current="intake" />
+
         {staged && (
           <div className="rounded-[var(--admin-radius)] border border-[var(--admin-gold)]/40 bg-[var(--admin-gold-soft)] px-4 py-2 text-sm text-[var(--admin-gold)]">
             Manifest staged as a draft. Review the lines below, then accept to activate the lots.
@@ -372,6 +389,10 @@ export default async function ManifestReviewPage({
           menuStep={menuStepView}
         />
 
+        {/* Slice AO — the command-center checklist: everything this page needs,
+            with honest done/todo/automatic states and jump links. */}
+        <IntakeChecklistPanel checklist={checklist} />
+
         {/* W5: which order is this delivery for? (suggest-and-confirm; hidden
             entirely until migration 0102 is applied) */}
         {poLink.available && <ManifestPoLinkPanel state={poLink} linkAction={poLinkAction} />}
@@ -421,7 +442,7 @@ export default async function ManifestReviewPage({
         )}
 
         {/* Parsed lines */}
-        <div className="overflow-hidden rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)]">
+        <div id="manifest-lines" className="scroll-mt-24 overflow-hidden rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)]">
           <table className="w-full text-sm">
             <thead className="bg-[var(--admin-surface-2)] text-left text-xs uppercase tracking-wide text-[var(--admin-text-faint)]">
               <tr>
@@ -619,7 +640,7 @@ export default async function ManifestReviewPage({
         )}
 
         {/* Transport / chain-of-custody (Slice 33, Feature L) */}
-        <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
+        <div id="manifest-transport" className="scroll-mt-24 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
           <div className="mb-1 flex items-start justify-between gap-3">
             <h2 className="text-sm font-bold text-[var(--admin-text)]">
               🚚 Transport &amp; chain of custody
@@ -774,7 +795,7 @@ export default async function ManifestReviewPage({
         </div>
 
         {/* Lifecycle timeline (Cultivera-style) */}
-        <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
+        <div id="manifest-timeline" className="scroll-mt-24 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
           <h2 className="mb-4 text-sm font-black uppercase tracking-[0.14em] text-[var(--admin-text-muted)]">
             Manifest status
           </h2>
@@ -797,7 +818,7 @@ export default async function ManifestReviewPage({
         </div>
 
         {/* Slice H11a — Manifest → KB bridge (drafts-only, idempotent) */}
-        <div className="flex flex-wrap items-center gap-3 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
+        <div id="manifest-kb" className="flex scroll-mt-24 flex-wrap items-center gap-3 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
           <div className="flex-1">
             <h2 className="text-sm font-bold text-[var(--admin-text)]">
               Promote to Knowledge Base{" "}
@@ -819,7 +840,7 @@ export default async function ManifestReviewPage({
 
         {/* Accept / reject controls */}
         {inProgress ? (
-          <div className="space-y-4">
+          <div id="manifest-finalize" className="scroll-mt-24 space-y-4">
             <HelpPanel
               id="ccrs-reject-guardrails"
               title="How rejecting product works (and stays compliant)"
