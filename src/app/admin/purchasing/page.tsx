@@ -78,9 +78,14 @@ export default async function PurchasingPage() {
           />
         }
         action={
-          <Link href="/admin/purchasing/new">
-            <Button variant="save" size="sm">+ New purchase order</Button>
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link href="/admin/purchasing/menus">
+              <Button variant="neutral" size="sm">Vendor menus</Button>
+            </Link>
+            <Link href="/admin/purchasing/new">
+              <Button variant="save" size="sm">+ New purchase order</Button>
+            </Link>
+          </div>
         }
       />
 
