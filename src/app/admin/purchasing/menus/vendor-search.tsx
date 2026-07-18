@@ -1,32 +1,48 @@
 "use client";
 
 /**
- * VendorSearch — client island for the Cultivera command center (CV-4).
+ * VendorSearch — client island for the UNIFIED vendor menus command center
+ * (GF-5, evolving the CV-4 Cultivera-only island).
  *
- * Search the marketplace's vendors, then pull ONE vendor's live menu with a
- * click. Talks to typed server actions (PoReviewPanel pattern: useTransition +
- * local state, submitting programmatically-built FormData). The actions map
- * every raw market record through the tolerant readers server-side, so this
- * island only ever sees safe strings (VendorHit) — no unpinned Cultivera
- * field names in the browser.
+ * ONE search box, BOTH marketplaces. The server action runs the smart
+ * sequential search: the vendor's remembered / preferred platform is queried
+ * FIRST, the other only when the first finds nothing. Every result carries a
+ * platform badge (Cultivera / GrowFlow) and the fetch button routes to the
+ * right per-platform menu action.
+ *
+ * Talks to typed server actions (PoReviewPanel pattern: useTransition + local
+ * state, programmatically-built FormData). The actions map every raw record
+ * through the tolerant readers server-side, so this island only ever sees
+ * safe strings (UnifiedVendorHit) — no unpinned marketplace field names in
+ * the browser.
  *
  * A successful fetch saves a snapshot and navigates straight to its browse
- * page (/admin/purchasing/menus/<id>).
+ * page (/admin/purchasing/menus/<id> or /admin/purchasing/menus/growflow/<id>).
  */
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Badge, Button, Input } from "@/components/admin/ui";
 import {
-  searchCultiveraVendorsAction,
+  platformLabel,
+  platformTone,
+} from "@/lib/purchasing/unified-menus-ui-core";
+import type { UnifiedVendorHit } from "@/lib/purchasing/unified-search-core";
+import {
+  unifiedVendorSearchAction,
   fetchCultiveraMenuAction,
-  type VendorHit,
+  fetchGrowflowMenuAction,
 } from "./actions";
+
+/** Stable per-row key for busy tracking (platform + ref/slug). */
+function hitKey(h: UnifiedVendorHit, i: number): string {
+  return `${h.platform}:${h.refId || h.slug || i}`;
+}
 
 export function VendorSearch() {
   const router = useRouter();
   const [query, setQuery] = useState("");
-  const [vendors, setVendors] = useState<VendorHit[] | null>(null);
+  const [hits, setHits] = useState<UnifiedVendorHit[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [fetchingKey, setFetchingKey] = useState<string | null>(null);
@@ -39,34 +55,47 @@ export function VendorSearch() {
     startSearch(async () => {
       const fd = new FormData();
       fd.set("query", query);
-      const res = await searchCultiveraVendorsAction(fd);
+      const res = await unifiedVendorSearchAction(fd);
       if (res.ok) {
-        setVendors(res.vendors);
-        if (res.vendors.length === 0) {
-          setNotice("No vendors matched. Try a shorter name, or leave the box empty to list everything.");
+        setHits(res.hits);
+        const where = res.searchedSecond
+          ? "both marketplaces"
+          : `${platformLabel(res.searchedFirst)} (remembered platform)`;
+        if (res.hits.length === 0) {
+          setNotice(`No vendors matched on ${where}. Try a shorter name, or leave the box empty to list everything.`);
+        } else if (res.notes.length > 0) {
+          setNotice(res.notes.join(" · "));
         }
       } else {
-        setVendors(null);
-        setError(res.error);
+        setHits(null);
+        setError(res.error || res.notes.join(" · ") || "Search failed.");
       }
     });
   }
 
-  function runFetch(v: VendorHit) {
-    const key = v.slug || v.id;
+  function runFetch(h: UnifiedVendorHit, key: string) {
     setError(null);
     setNotice(null);
     setFetchingKey(key);
     startFetch(async () => {
       const fd = new FormData();
-      fd.set("market_id", v.id);
-      fd.set("slug", v.slug);
-      fd.set("seller_name", v.name);
-      const res = await fetchCultiveraMenuAction(fd);
+      let res: { ok: boolean; snapshotId: string | null; itemCount: number; error: string };
+      if (h.platform === "growflow") {
+        fd.set("store_front_id", h.refId);
+        fd.set("store_name", h.name);
+        fd.set("license_number", h.license);
+        res = await fetchGrowflowMenuAction(fd);
+      } else {
+        fd.set("market_id", h.refId);
+        fd.set("slug", h.slug);
+        fd.set("seller_name", h.name);
+        res = await fetchCultiveraMenuAction(fd);
+      }
       setFetchingKey(null);
       if (res.ok && res.snapshotId) {
-        setNotice(`Saved ${res.itemCount} item${res.itemCount === 1 ? "" : "s"} from ${v.name}.`);
-        router.push(`/admin/purchasing/menus/${res.snapshotId}`);
+        setNotice(`Saved ${res.itemCount} item${res.itemCount === 1 ? "" : "s"} from ${h.name}.`);
+        const base = h.platform === "growflow" ? "/admin/purchasing/menus/growflow" : "/admin/purchasing/menus";
+        router.push(`${base}/${res.snapshotId}`);
       } else {
         setError(res.error || "Menu fetch failed.");
       }
@@ -85,7 +114,7 @@ export function VendorSearch() {
         <Input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Vendor name (leave empty to list all connected vendors)"
+          placeholder="Vendor name — searches Cultivera + GrowFlow (their platform is remembered)"
           aria-label="Vendor name"
           className="sm:max-w-md"
         />
@@ -105,33 +134,44 @@ export function VendorSearch() {
         </div>
       )}
 
-      {vendors && vendors.length > 0 && (
+      {hits && hits.length > 0 && (
         <div className="overflow-hidden rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)]">
           <table className="w-full text-sm">
             <thead className="bg-[var(--admin-surface-2)] text-left text-xs uppercase tracking-wide text-[var(--admin-text-faint)]">
               <tr>
                 <th className="px-4 py-3">Vendor</th>
-                <th className="px-4 py-3">Slug</th>
+                <th className="px-4 py-3">Platform</th>
+                <th className="px-4 py-3">License / City</th>
                 <th className="px-4 py-3 text-right">Live menu</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--admin-border)]">
-              {vendors.map((v, i) => {
-                const key = v.slug || v.id || String(i);
-                const busy = fetching && fetchingKey === (v.slug || v.id);
+              {hits.map((h, i) => {
+                const key = hitKey(h, i);
+                const busy = fetching && fetchingKey === key;
+                const detail = [h.license, h.city].filter(Boolean).join(" · ");
                 return (
                   <tr key={key} className="bg-[var(--admin-surface)] transition hover:bg-[var(--admin-surface-hover)]">
-                    <td className="px-4 py-3 font-medium text-[var(--admin-text)]">{v.name}</td>
-                    <td className="px-4 py-3 text-[var(--admin-text-muted)]">
-                      {v.slug ? <Badge tone="neutral">{v.slug}</Badge> : "—"}
+                    <td className="px-4 py-3 font-medium text-[var(--admin-text)]">
+                      {h.name}
+                      {h.slug && (
+                        <span className="ml-2 align-middle text-xs text-[var(--admin-text-faint)]">{h.slug}</span>
+                      )}
                     </td>
+                    <td className="px-4 py-3">
+                      <span className="inline-flex items-center gap-1.5">
+                        <Badge tone={platformTone(h.platform)}>{platformLabel(h.platform)}</Badge>
+                        {h.locked && <Badge tone="orange">locked</Badge>}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-[var(--admin-text-muted)]">{detail || "—"}</td>
                     <td className="px-4 py-3 text-right">
                       <Button
                         type="button"
                         variant="confirm"
                         size="sm"
-                        disabled={!v.fetchable || fetching}
-                        onClick={() => runFetch(v)}
+                        disabled={!h.fetchable || fetching}
+                        onClick={() => runFetch(h, key)}
                       >
                         {busy ? "Fetching…" : "Fetch menu"}
                       </Button>

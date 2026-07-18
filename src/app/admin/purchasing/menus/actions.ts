@@ -25,6 +25,15 @@ import {
   searchCultiveraMarkets,
   fetchCultiveraMenu,
 } from "@/lib/purchasing/cultivera-client";
+import { fetchGrowflowMenu } from "@/lib/purchasing/growflow-client";
+import { saveGrowflowSnapshot } from "@/lib/purchasing/growflow-store";
+import { unifiedVendorSearch } from "@/lib/purchasing/unified-search";
+import {
+  buildMemoryUpsert,
+  type UnifiedVendorHit,
+  type VendorPlatform,
+} from "@/lib/purchasing/unified-search-core";
+import { rememberPlatform } from "@/lib/purchasing/vendor-platform-store";
 import { saveSnapshot, getSnapshot, getSnapshotItems } from "@/lib/purchasing/cultivera-store";
 import {
   marketName,
@@ -168,6 +177,17 @@ export async function fetchCultiveraMenuAction(
     },
   });
 
+  // GF-5 smart memory: remember this vendor's menu came from Cultivera so
+  // the unified search hits Cultivera FIRST for this vendor next time.
+  const memory = buildMemoryUpsert({
+    vendorName: sellerName,
+    platform: "cultivera",
+    nowIso: new Date().toISOString(),
+    platformRef: marketIdIn || null,
+    platformSlug: slugIn || null,
+  });
+  if (memory) await rememberPlatform(memory);
+
   revalidatePath(BASE);
 
   return {
@@ -290,5 +310,141 @@ export async function saveAllSnapshotMediaAction(formData: FormData): Promise<Sa
   return {
     ok: failed === 0,
     message: bulkSaveSummary({ images, coas, deduped, failed, remaining }),
+  };
+}
+
+/* ------------------------------------------------------------------
+ * GF-5 — unified smart search + GrowFlow menu fetch
+ * ------------------------------------------------------------------ */
+
+/** What the unified search island receives — platform-tagged, safe strings. */
+export type UnifiedSearchActionResult = {
+  ok: boolean;
+  configured: boolean;
+  hits: UnifiedVendorHit[];
+  searchedFirst: VendorPlatform;
+  searchedSecond: boolean;
+  notes: string[];
+  error: string;
+};
+
+/**
+ * ONE search box, both marketplaces. Sequential: the vendor's remembered /
+ * preferred platform is searched FIRST; the other only when the first found
+ * nothing. Every hit carries its platform for the badge + fetch routing.
+ */
+export async function unifiedVendorSearchAction(
+  formData: FormData,
+): Promise<UnifiedSearchActionResult> {
+  await requirePermission("inventory.manage");
+
+  const query = str(formData, "query");
+  const res = await unifiedVendorSearch(query);
+  return {
+    ok: res.ok,
+    configured: res.configured,
+    hits: res.hits,
+    searchedFirst: res.searchedFirst,
+    searchedSecond: res.searchedSecond,
+    notes: res.notes,
+    error: res.error,
+  };
+}
+
+/**
+ * Fetch ONE GrowFlow storefront's LIVE menu via the worker, persist the RAW
+ * getStoreListing payload with growflow-store.saveGrowflowSnapshot() (GF-1
+ * normalizers; dollar floats → integer cents), remember the platform in the
+ * smart memory, audit it, and revalidate the menus page.
+ */
+export async function fetchGrowflowMenuAction(
+  formData: FormData,
+): Promise<FetchMenuResult> {
+  const session = await requirePermission("inventory.manage");
+
+  const storeFrontId = str(formData, "store_front_id");
+  const storeName = str(formData, "store_name");
+  const licenseNumber = str(formData, "license_number");
+
+  if (!storeFrontId) {
+    return {
+      ok: false,
+      configured: true,
+      snapshotId: null,
+      itemCount: 0,
+      error: "Pick a vendor first — a GrowFlow menu fetch needs the storefront id.",
+    };
+  }
+
+  const result = await fetchGrowflowMenu({ storeFrontId });
+
+  if (!result.configured) {
+    return { ok: false, configured: false, snapshotId: null, itemCount: 0, error: result.error };
+  }
+  if (!result.ok) {
+    return {
+      ok: false,
+      configured: true,
+      snapshotId: null,
+      itemCount: 0,
+      error: result.error || `GrowFlow answered ${result.status}.`,
+    };
+  }
+
+  const saved = await saveGrowflowSnapshot({
+    payload: result.raw,
+    storeId: storeFrontId,
+    storeName: storeName || null,
+    licenseNumber: licenseNumber || null,
+    fetchedBy: session.userId,
+  });
+
+  if (!saved.ok) {
+    return {
+      ok: false,
+      configured: true,
+      snapshotId: saved.snapshotId,
+      itemCount: saved.itemCount,
+      error:
+        saved.error === "supabase-not-configured"
+          ? `Fetched ${saved.itemCount} items, but Supabase isn't configured so the snapshot wasn't saved.`
+          : `Fetched the menu but saving failed: ${saved.error ?? "unknown error"}`,
+    };
+  }
+
+  // GF-5 smart memory: remember this vendor's menu came from GrowFlow so the
+  // unified search hits GrowFlow FIRST for this vendor next time.
+  const memory = buildMemoryUpsert({
+    vendorName: storeName,
+    platform: "growflow",
+    nowIso: new Date().toISOString(),
+    licenseNumber: licenseNumber || null,
+    platformRef: storeFrontId,
+  });
+  if (memory) await rememberPlatform(memory);
+
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "growflow.menu.fetched",
+    entityType: "growflow_menu_snapshot",
+    entityId: saved.snapshotId,
+    after: {
+      store_name: storeName || null,
+      store_front_id: storeFrontId,
+      license_number: licenseNumber || null,
+      item_count: saved.itemCount,
+      status: saved.status,
+    },
+  });
+
+  revalidatePath(BASE);
+
+  return {
+    ok: true,
+    configured: true,
+    snapshotId: saved.snapshotId,
+    itemCount: saved.itemCount,
+    error: "",
   };
 }

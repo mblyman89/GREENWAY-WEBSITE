@@ -88,6 +88,7 @@ import { __runIdCaptureCoreTests } from "../../src/lib/pos/id-capture-core";
 import { __runCultiveraMenuCoreTests } from "../../src/lib/purchasing/cultivera-menu-core";
 import { __runGrowflowMenuCoreTests } from "../../src/lib/purchasing/growflow-menu-core";
 import { __runUnifiedSearchCoreTests } from "../../src/lib/purchasing/unified-search-core";
+import { __runUnifiedMenusUiCoreTests } from "../../src/lib/purchasing/unified-menus-ui-core";
 import { __runCultiveraMenusUiCoreTests } from "../../src/lib/purchasing/cultivera-menus-ui-core";
 import { __runCultiveraMediaCoreTests } from "../../src/lib/purchasing/cultivera-media-core";
 import { __runCultiveraPoCoreTests } from "../../src/lib/purchasing/cultivera-po-core";
@@ -191,6 +192,7 @@ async function main() {
   __runCultiveraMenuCoreTests();
   __runGrowflowMenuCoreTests();
   __runUnifiedSearchCoreTests();
+  __runUnifiedMenusUiCoreTests();
   __runCultiveraMenusUiCoreTests();
   __runCultiveraMediaCoreTests();
   __runCultiveraPoCoreTests();
