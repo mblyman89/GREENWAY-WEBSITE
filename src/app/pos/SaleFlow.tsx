@@ -394,11 +394,36 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
 
   // Sales hours (WAC 314-55-147) checked on-device with the owner's window;
   // the server completion gate re-checks with ITS clock at sync time.
+  // AQ — the block screen used to be one bare red sentence, so at 12:22 AM it
+  // looked like the whole sale flow had been gutted. It now says plainly that
+  // the register is fine, and a minute tick re-checks the clock so the screen
+  // flips to the ID gate BY ITSELF when the window opens (before, it sat
+  // stuck until something else happened to re-render).
+  const [, setHoursTick] = useState(0);
   const hours = evaluateSalesHours(new Date(), bundle.hours);
-  if (!hours.allowed && step !== "done") {
+  const hoursBlocked = !hours.allowed && step !== "done";
+  useEffect(() => {
+    if (!hoursBlocked) return;
+    const t = setInterval(() => setHoursTick((n) => n + 1), 15_000);
+    return () => clearInterval(t);
+  }, [hoursBlocked]);
+  if (hoursBlocked) {
     return (
       <Frame title="Sales hours" onCancel={onCancel}>
-        <p className="max-w-md rounded-lg bg-[var(--pos-danger-soft)] px-4 py-3 text-sm text-[var(--pos-danger)]">{hours.reason}</p>
+        <div className="w-full max-w-lg rounded-2xl border-2 border-dashed border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] p-8 text-center">
+          <span className="text-5xl" aria-hidden>
+            {"\u{1F319}"}
+          </span>
+          <p className="mt-3 text-2xl font-extrabold tracking-tight">Sales are closed right now</p>
+          <p className="mt-4 rounded-lg border border-[var(--pos-danger-border)] bg-[var(--pos-danger-soft)] px-4 py-3 text-sm text-[var(--pos-danger)]">
+            {hours.reason}
+          </p>
+          <p className="mt-4 text-sm text-[var(--pos-text-muted)]">
+            Nothing is wrong with the register. The ID check, the house-policy banner and the whole
+            sale flow are right behind this clock — this screen re-checks the time every few seconds
+            and opens the ID check by itself the moment sales hours begin.
+          </p>
+        </div>
       </Frame>
     );
   }
