@@ -456,3 +456,56 @@ they are optional data loads, not schema, and each is idempotent (safe to run an
   brand labels under the SAME vendor roll up into one card. Everything else
   unchanged (eligibility delegation, `-onboarded` lot accuracy, never merge on
   a guess, pack-axis folding). No migration. Suite 1,742/133.
+
+- **Intake vendor/transport/type fixes (PR #562).** Grounded in the owner's real
+  Seattles Private Reserve bundle (ORD-24706 WCIA JSON + Cultivera shipping-
+  manifest PDF + invoice PDF), which staged with NO vendor, EMPTY shipping
+  details, and joints/blunts/5pk joint tins flattened to "flower". Four root
+  causes, all verified against the documents: (a) `stageManifestsFromEmail`
+  guarded the PDF branch with `if (!stagedFromJson)`, so when the WCIA JSON
+  staged, the bundled shipping PDF — the ONLY doc carrying driver/vehicle/
+  plate/VIN (the JSON's transporter fields are null) — was never parsed. Fixed
+  with `chooseTransportDonor` (pure, manifest-merge-core): bundled non-COA PDFs
+  become transport donors; exact manifest-number match wins (whitespace-
+  normalized), a single numberless candidate is accepted, disagreement or
+  ambiguity yields null; folded via `foldTransport` (fill-only-when-empty;
+  arrived_at never doc-sourced). (b) `resolveVendorId` was a bare
+  `ilike(display_name)` — replaced with the `resolveOrCreateVendor` ladder
+  (new pure vendor-resolve-core): license digits match → exact display_name →
+  vendor_aliases → normalized-name scan over display_name/dba/legal_name →
+  auto-create DRAFT vendor + alias; plus an accept-time repair in
+  `finalizeManifestDispositions` that patches vendor_id onto already-staged
+  manifests/lots and logs a `vendor_link` event. (c) "Usable Marijuana"/
+  "Usable Cannabis"/"Flower Lot"/"Mix Infused"/"Sample Jar" are MULTI-category
+  LCB types — `isMultiCategoryLcbType` now bypasses the flat inventory_types
+  map for them and `readUsableMarijuanaByName` reads the product NAME
+  (infused-flower → popcorn → preroll-pack → preroll → flower); `menu_items`
+  per-product precedence still wins. (d) Cultivera parser: case-insensitive
+  vehicle clump ("2021 WHITE Nissan NV200"), letter-required 17-char VIN
+  extraction (numeric lot ids can never match), and driver mirrored from
+  "Transporter Name:" only in the person layout (the Third Party COMPANY
+  layout keeps driver null — regression-tested). Real SPR manifest checked in
+  as a fixture with an embedded 16-assertion suite. No migration.
+  Suite 1,756/134.
+
+- **POS lock-screen update pump + force refresh (PR #563, AN-1).** The owner's
+  installed iPad register never picked up new deploys — restarting Safari/the
+  iPad, clearing cache, and rotating the device key all failed, because a
+  standalone PWA that never navigates may not re-check its service worker for
+  a very long time, and AN-0 only surfaced updates via the UNLOCKED home
+  banner. Now, while LOCKED (the safe moment — no cashier mid-sale; a held
+  sale survives reload in localStorage by design, B17), the register every
+  60s asks its SW registration to `update()` AND probes the new
+  unauthenticated `GET /api/pos/version` (force-static; returns the deploy's
+  short SHA — the same value in the SW cache names and footer; no auth on
+  purpose since a stale build may predate a key rotation). A parked waiting
+  worker is auto-applied on the lock screen via `shouldAutoApplyUpdate`
+  (sw-core pure, lock-screen-only by contract). The LockScreen shows the
+  running build version, an "Update available — tap to refresh" button when a
+  worker is parked or `isBuildStale` says the server moved ("dev" on either
+  side never reads stale — no refresh loops from local dev or failed probes),
+  and an always-available "Force refresh" escape hatch that unregisters the
+  /pos worker, deletes ONLY `gw-pos-*` caches (`isPosCacheName` — the admin
+  push worker is never touched), and reloads. Home-screen banner behavior
+  (AN-0) unchanged; updates still never apply mid-sale. No migration.
+  Suite 1,759/134.
