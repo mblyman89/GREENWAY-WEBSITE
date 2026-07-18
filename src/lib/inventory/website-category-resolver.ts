@@ -230,6 +230,55 @@ export function readFormByName(productName: string | null | undefined): string |
   return null;
 }
 
+/**
+ * H17 — resolve the coarse "Usable Marijuana" / "Usable Cannabis" / "Flower
+ * Lot" LCB bucket by READING THE PRODUCT NAME. Verified on the owner's real
+ * SPR manifest: joints, blunts, preroll packs AND jarred flower ALL arrive as
+ * inventory_type "Usable Marijuana" — the type alone cannot disambiguate, but
+ * the name always can ("SPR - Variety Pack - 5pk Joint Tin (5g) #1" is a
+ * preroll pack, not flower). NEVER returns null — a Usable line is
+ * definitively a flower-family product, so the default is flower.
+ *
+ * Order matters: infused-flower / popcorn keywords first (parity with the
+ * heuristic's strongest name signals), then pack-of-prerolls, then single
+ * preroll/joint/blunt, then flower.
+ */
+export function readUsableMarijuanaByName(productName: string | null | undefined): string {
+  const name = (productName ?? "").toLowerCase();
+  if (includesAny(name, INFUSED_FLOWER_KEYWORDS)) return "infused-flower";
+  if (includesAny(name, POPCORN_KEYWORDS)) return "popcorn-bud";
+  // A pack is only a PREROLL pack when the name also says joint/blunt/preroll
+  // ("5pk Joint Tin"); a numbered pack of jars stays flower.
+  if (PACK_NAME_RE.test(name) && PREROLL_NAME_RE.test(name)) return "preroll-pack";
+  if (PREROLL_NAME_RE.test(name)) return "preroll";
+  return "flower";
+}
+
+/**
+ * H17 — LCB types that are MULTI-category buckets: one raw type covers several
+ * of OUR website categories, so a single flat inventory_types mapping is
+ * definitionally wrong for them and the product NAME must be read instead.
+ * Used by resolveWebsiteCategory to bypass precedence (b) for these types
+ * (menu_items precedence (a) still wins — that's per-product, not per-type).
+ *
+ *  - "Usable Marijuana"/"Usable Cannabis"/"Flower Lot": flower, popcorn,
+ *    preroll, blunt, preroll pack (owner's real SPR manifest).
+ *  - "Cannabis/Marijuana Mix Infused": infused preroll / pack / flower
+ *    (H16b-9). "Mix Packaged" is NOT multi-category (always trim) — guarded.
+ *  - "Sample Jar": whatever FORM the name describes (H16b-9 owner E).
+ */
+export function isMultiCategoryLcbType(rawType: string | null | undefined): boolean {
+  const type = (rawType ?? "").toLowerCase();
+  if (!type) return false;
+  if (type.includes("mix infused") || (type.includes("mix") && type.includes("infused") && !type.includes("packaged"))) {
+    return true;
+  }
+  if (type.includes("usable")) return true;
+  if (type.includes("flower lot")) return true;
+  if (type.includes("sample jar")) return true;
+  return false;
+}
+
 export function readSampleJarByName(productName: string | null | undefined): SampleJarReading {
   const name = (productName ?? "").toLowerCase();
   const smellJar = SMELL_JAR_RE.test(name);
@@ -286,11 +335,11 @@ export function heuristicWebsiteCategory(
       return readSampleJarByName(productName).formCategory;
     }
     if (type.includes("flower") || type.includes("usable")) {
-      // "Usable Marijuana" / "Usable Cannabis" / "Flower Lot" → flower, unless the
-      // name already flagged infused/popcorn above.
-      if (includesAny(name, INFUSED_FLOWER_KEYWORDS)) return "infused-flower";
-      if (includesAny(name, POPCORN_KEYWORDS)) return "popcorn-bud";
-      return "flower";
+      // H17: "Usable Marijuana" is a MULTI-category bucket — joints, blunts,
+      // preroll packs and flower ALL arrive under it (owner's real SPR
+      // manifest), so READ THE NAME instead of flat-returning flower. The
+      // old flat return is the bug that showed "5pk Joint Tin" as FLOWER.
+      return readUsableMarijuanaByName(productName);
     }
     if (type.includes("pre-roll") || type.includes("preroll") || type.includes("pre roll")) {
       return type.includes("infused") ? "infused-preroll" : "preroll";
@@ -354,8 +403,15 @@ export function resolveWebsiteCategory(
     };
   }
 
+  // H17: MULTI-category LCB buckets ("Usable Marijuana", "Mix Infused",
+  // "Sample Jar") skip the flat (b) map — one raw type covers several of our
+  // categories, so any single mapping is wrong for part of the delivery; the
+  // heuristic (c) reads the product NAME instead. Precedence (a) above still
+  // wins because menu_items is per-product, not per-type.
+  const multiCategory = isMultiCategoryLcbType(raw);
+
   // (b) inventory_types map by raw inventory_type label.
-  if (raw) {
+  if (raw && !multiCategory) {
     const mapped = map.get(inventoryTypeKey(raw));
     if (mapped && VALID_CATEGORY.has(mapped)) {
       return {
@@ -559,6 +615,66 @@ export function __runWebsiteCategoryResolverTests(): void {
   eq(notSmell.formCategory, "concentrate", "H16b-9 non-smell sample jar form=concentrate");
   // Sample Jar with no name clue → flower (safe form default).
   eq(readSampleJarByName("").formCategory, "flower", "H16b-9 empty sample jar → flower");
+
+  // -------------------------------------------------------------------------
+  // H17: "Usable Marijuana" is MULTI-category — read the name. Product names
+  // below are VERBATIM from the owner's real SPR manifest (ORD-24706), where
+  // every one of these arrived as inventory_type "Usable Marijuana".
+  // -------------------------------------------------------------------------
+  const usable = (name: string) =>
+    resolveWebsiteCategory({ inventoryType: "Usable Marijuana", productName: name });
+  eq(usable("SPR - Sour Diesel - 3.5g").websiteCategory, "flower", "H17 usable flower stays flower");
+  eq(
+    usable("SPR - Variety Pack - 5pk Joint Tin (5g) #1").websiteCategory,
+    "preroll-pack",
+    "H17 usable 5pk Joint Tin → preroll-pack (the owner's screenshot bug)",
+  );
+  eq(usable("House Joint 1g").websiteCategory, "preroll", "H17 usable joint → preroll");
+  eq(usable("Classic Blunt 1.5g").websiteCategory, "preroll", "H17 usable blunt → preroll");
+  eq(usable("Gelato Pre-Roll 0.5g").websiteCategory, "preroll", "H17 usable pre-roll → preroll");
+  eq(usable("Popcorn Buds 7g").websiteCategory, "popcorn-bud", "H17 usable popcorn → popcorn-bud");
+  eq(usable("Moon Rocks 3.5g").websiteCategory, "infused-flower", "H17 usable moon rocks → infused-flower");
+  // A numbered pack WITHOUT a preroll word stays flower (pack of jars).
+  eq(usable("Fruity 2 Pack Jars 7g").websiteCategory, "flower", "H17 usable non-preroll pack stays flower");
+  eq(usable("SPR - Sour Diesel - 1g").source, "heuristic", "H17 usable resolves via heuristic (name-read)");
+  // "Usable Cannabis" (modern CCRS naming) reads the same way.
+  eq(
+    resolveWebsiteCategory({ inventoryType: "Usable Cannabis", productName: "5pk Joints Tin" }).websiteCategory,
+    "preroll-pack",
+    "H17 Usable Cannabis reads name too",
+  );
+  // Precedence (a) still beats the multi-category bypass — per-product truth.
+  eq(
+    resolveWebsiteCategory(
+      { inventoryType: "Usable Marijuana", productName: "5pk Joint Tin" },
+      { menuItemCategory: "preroll-pack" },
+    ).source,
+    "menu_item",
+    "H17 menu_item precedence intact over multi-category bypass",
+  );
+  // A flat DB mapping for a multi-category type must NOT flatten joints to
+  // flower: the bypass skips (b) for these types.
+  const usableOverlay = buildStaticInventoryTypeMap();
+  usableOverlay.set(inventoryTypeKey("Usable Marijuana"), "flower");
+  eq(
+    resolveWebsiteCategory(
+      { inventoryType: "Usable Marijuana", productName: "5pk Joint Tin" },
+      { inventoryTypeMap: usableOverlay },
+    ).websiteCategory,
+    "preroll-pack",
+    "H17 multi-category type bypasses a flat (b) mapping",
+  );
+  // isMultiCategoryLcbType classification.
+  ok(isMultiCategoryLcbType("Usable Marijuana"), "H17 usable is multi");
+  ok(isMultiCategoryLcbType("Cannabis Mix Infused"), "H17 mix infused is multi");
+  ok(isMultiCategoryLcbType("Sample Jar"), "H17 sample jar is multi");
+  ok(!isMultiCategoryLcbType("Cannabis Mix Packaged"), "H17 mix packaged NOT multi (always trim)");
+  ok(!isMultiCategoryLcbType("Concentrate For Inhalation"), "H17 concentrate not multi");
+  ok(!isMultiCategoryLcbType(null), "H17 null type not multi");
+  // readUsableMarijuanaByName direct units.
+  eq(readUsableMarijuanaByName("5pk Joint Tin"), "preroll-pack", "H17 reader pack");
+  eq(readUsableMarijuanaByName("Infused Blunt"), "preroll", "H17 reader blunt (no infused type context)");
+  eq(readUsableMarijuanaByName(""), "flower", "H17 reader empty → flower");
 
   // (d) unmapped: unknown gibberish, no name signal → unmapped, raw preserved.
   const d = resolveWebsiteCategory({ inventoryType: "Zorptonium Widget", productName: "Mystery Thing" });

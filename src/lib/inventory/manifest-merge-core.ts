@@ -237,6 +237,58 @@ export function foldTransport(
   return { ...manifest, transport, warnings };
 }
 
+/** A transport donor candidate: another parsed document from the same email. */
+export type TransportDonor = {
+  manifest_number: string | null;
+  transport: ParsedTransport | null;
+};
+
+/**
+ * H17 — pick which parsed PDF's transport may enrich a staged manifest.
+ *
+ * The real Cultivera bundle (owner-verified): the WCIA JSON stages the manifest
+ * but carries transporter_name/license as NULL; the Manifest PDF in the SAME
+ * email carries the driver/vehicle/plate/VIN. This helper decides, PURELY and
+ * conservatively, which donor (if any) belongs to a given staged manifest:
+ *
+ *  - only donors that actually carry transport data count;
+ *  - an EXACT manifest-number match always wins (the SPR bundle: JSON and PDF
+ *    both print 11804443981161219);
+ *  - with NO number on one side, a donor is used only when it is the SINGLE
+ *    candidate — one email, one shipping document — so a multi-vendor email
+ *    can never cross-pollinate transport between transfers;
+ *  - anything else: null (no guessing).
+ */
+export function chooseTransportDonor(
+  manifestNumber: string | null | undefined,
+  donors: readonly TransportDonor[],
+): ParsedTransport | null {
+  const withData = donors.filter((d) => transportHasData(d.transport));
+  if (withData.length === 0) return null;
+
+  const norm = (v: string | null | undefined): string | null => {
+    const t = (v ?? "").replace(/\s+/g, "").trim();
+    return t.length > 0 ? t : null;
+  };
+  const target = norm(manifestNumber);
+
+  // Exact manifest-number match wins.
+  if (target) {
+    const exact = withData.find((d) => norm(d.manifest_number) === target);
+    if (exact) return exact.transport;
+  }
+
+  // Single-candidate fallback — but only when numbers can't DISAGREE.
+  if (withData.length === 1) {
+    const only = withData[0];
+    const donorNum = norm(only.manifest_number);
+    if (donorNum == null || target == null || donorNum === target) {
+      return only.transport;
+    }
+  }
+  return null;
+}
+
 // ---------------------------------------------------------------------------
 // Embedded self-tests (run by the vitest harness).
 // ---------------------------------------------------------------------------
@@ -393,6 +445,53 @@ export function __runManifestMergeTests(): { passed: number; failed: number } {
   ok(folded.transport?.transporter_name === "Svin Garden", "foldTransport fills blank");
   ok(folded.transport?.driver_name === "David Sanchez", "foldTransport keeps primary");
   ok(folded.warnings.some((w) => w.includes("Transport conflict")), "foldTransport warns on conflict");
+
+  // chooseTransportDonor (H17) — grounded in the real SPR bundle shape.
+  const sprTransport: ParsedTransport = {
+    ...emptyTransport(),
+    transporter_name: "Kory T Anderson",
+    driver_name: "Kory T Anderson",
+    vehicle_description: "2021 WHITE Nissan NV200",
+    vehicle_plate: "D44636H",
+    vehicle_vin: "3N6CM0KN1MK695529",
+  };
+  ok(
+    chooseTransportDonor("11804443981161219", [
+      { manifest_number: "11804443981161219", transport: sprTransport },
+    ]) === sprTransport,
+    "donor: exact manifest-number match wins",
+  );
+  ok(
+    chooseTransportDonor("11804443981161219", [
+      { manifest_number: null, transport: sprTransport },
+    ]) === sprTransport,
+    "donor: single candidate with no number is accepted",
+  );
+  ok(
+    chooseTransportDonor("11804443981161219", [
+      { manifest_number: "99999999999999999", transport: sprTransport },
+    ]) === null,
+    "donor: number DISAGREEMENT refuses (no guessing)",
+  );
+  ok(
+    chooseTransportDonor("11804443981161219", [
+      { manifest_number: null, transport: sprTransport },
+      { manifest_number: null, transport: { ...emptyTransport(), driver_name: "Someone Else" } },
+    ]) === null,
+    "donor: two numberless candidates -> ambiguous -> null",
+  );
+  ok(
+    chooseTransportDonor("118 0444 3981161219", [
+      { manifest_number: "11804443981161219", transport: sprTransport },
+    ]) === sprTransport,
+    "donor: unpdf-spaced manifest number still matches",
+  );
+  ok(
+    chooseTransportDonor("11804443981161219", [
+      { manifest_number: "11804443981161219", transport: emptyTransport() },
+    ]) === null,
+    "donor: all-null transport never donates",
+  );
 
   if (failed === 0) console.log(`manifest-merge-core: all ${passed} tests passed`);
   return { passed, failed };

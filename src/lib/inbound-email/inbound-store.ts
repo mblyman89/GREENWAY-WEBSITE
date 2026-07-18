@@ -55,7 +55,13 @@ function pdfRoleRank(role: AttachmentRole): number {
   }
 }
 import { parsePdfManifestFromBase64, parseCoaFromBase64 } from "@/lib/inventory/pdf-extract";
-import { mergeInvoicePricesByLot, mergeCoaByLot } from "@/lib/inventory/manifest-merge-core";
+import {
+  mergeInvoicePricesByLot,
+  mergeCoaByLot,
+  chooseTransportDonor,
+  foldTransport,
+  type TransportDonor,
+} from "@/lib/inventory/manifest-merge-core";
 import { archiveEmailedCoaForManifest } from "@/lib/inventory/coa-archive";
 
 export type InboundDisposition =
@@ -224,6 +230,30 @@ export async function stageManifestsFromEmail(
   const pdfCands = pdfCandidates(email);
   if (textCandidates.length === 0 && pdfCands.length === 0) return result;
 
+  // H17 — PDF TRANSPORT DONORS. The real Cultivera bundle (owner-verified,
+  // SPR ORD-24706): the WCIA JSON is the richest LINE source and stages the
+  // manifest, but its transporter_name/transporter_license are NULL — the
+  // driver / vehicle / plate / VIN live in the Manifest PDF riding the SAME
+  // email. The old flow staged the JSON and then SKIPPED the PDF branch
+  // entirely (stagedFromJson), so the review form's transport section stayed
+  // empty. Now every manifest-capable PDF is parsed up front as a potential
+  // transport DONOR, and each JSON/CSV manifest folds the matching donor's
+  // transport in BEFORE staging (fill-only-when-empty, arrived_at never
+  // sourced from documents, manifest-number matched — chooseTransportDonor).
+  const pdfDonors: TransportDonor[] = [];
+  if (textCandidates.length > 0 && pdfCands.length > 0) {
+    for (const att of pdfCands) {
+      if (classifyAttachmentRole(att) === "coa") continue; // COAs carry no transport
+      const parsed = await parsePdfManifestFromBase64(att.base64 as string);
+      if (parsed.ok) {
+        pdfDonors.push({
+          manifest_number: parsed.manifest.manifest_number,
+          transport: parsed.manifest.transport ?? null,
+        });
+      }
+    }
+  }
+
   // 1) Textual attachments (JSON / CCRS CSV). H15b strict gate: only
   //    verifiable manifests stage; junk (tracking exports, receipts, random
   //    JSON) is skipped WITHOUT counting as a failure — it's logged on the
@@ -235,7 +265,10 @@ export async function stageManifestsFromEmail(
       result.parseFailures += 1;
       continue;
     }
-    const manifest = outcome.manifest;
+    let manifest = outcome.manifest;
+    // H17: enrich with the bundled shipping PDF's transport (fill-only-empty).
+    const donor = chooseTransportDonor(manifest.manifest_number, pdfDonors);
+    if (donor) manifest = foldTransport(manifest, donor);
     // Keep the original text as raw payload for provenance in the KB snapshot.
     const rawPayload =
       att.text && att.contentType && att.contentType.toLowerCase().includes("json")
