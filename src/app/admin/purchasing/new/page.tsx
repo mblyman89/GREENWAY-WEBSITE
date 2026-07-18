@@ -30,6 +30,11 @@ import {
   buildMenuPrefills,
   menuPrefillBanner,
 } from "@/lib/purchasing/cultivera-po-core";
+import {
+  getGrowflowSnapshot,
+  getGrowflowSnapshotItems,
+} from "@/lib/purchasing/growflow-store";
+import { growflowMenuPrefillBanner } from "@/lib/purchasing/growflow-media-core";
 import { PoMarketContextCard } from "../PoMarketContextCard";
 import type { PoLineLike } from "@/lib/purchasing/po-market-context-core";
 import { PoCockpitSection } from "@/app/admin/discovery/PoCockpitSection";
@@ -266,9 +271,28 @@ export default async function NewPurchaseOrderPage({
     }
   }
 
+  // GF-6 — GrowFlow menu hand-off: same W11-safe contract as fromMenu, but
+  // the ids resolve against OUR saved growflow_menu_* rows. The saved rows
+  // share the MenuPrefillItemLike columns, so buildMenuPrefills is reused.
+  const fromGrowflowMenu = one(sp, "fromGrowflowMenu");
+  let growflowPrefills: SuggestionRow[] = [];
+  let growflowVendorLabel: string | null = null;
+  if (fromGrowflowMenu && menuItemIds.length > 0) {
+    const gfSnap = await getGrowflowSnapshot(fromGrowflowMenu);
+    if (gfSnap) {
+      const gfItems = await getGrowflowSnapshotItems(fromGrowflowMenu);
+      const gfVendorId =
+        gfSnap.vendor_id && vendors.some((v) => v.id === gfSnap.vendor_id)
+          ? gfSnap.vendor_id
+          : null;
+      growflowVendorLabel = gfSnap.store_name ?? gfSnap.license_number ?? null;
+      growflowPrefills = buildMenuPrefills(gfItems, menuItemIds, gfVendorId, growflowVendorLabel);
+    }
+  }
+
   // Task I (I6): candidate rows in PoLineLike shape for the market check —
   // suggested qty as the order qty, real unit costs (wholesale, minor units).
-  const marketLines: PoLineLike[] = [...(prefill ? [prefill] : []), ...menuPrefills, ...rows].map((r) => ({
+  const marketLines: PoLineLike[] = [...(prefill ? [prefill] : []), ...menuPrefills, ...growflowPrefills, ...rows].map((r) => ({
     product_name: r.productName,
     brand: r.brand,
     category: r.category,
@@ -346,6 +370,11 @@ export default async function NewPurchaseOrderPage({
         {menuPrefills.length > 0 ? (
           <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-text)]">
             {menuPrefillBanner(menuPrefills.length, menuVendorLabel)}
+          </div>
+        ) : null}
+        {growflowPrefills.length > 0 ? (
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-text)]">
+            {growflowMenuPrefillBanner(growflowPrefills.length, growflowVendorLabel)}
           </div>
         ) : null}
 
@@ -498,7 +527,11 @@ export default async function NewPurchaseOrderPage({
                 origin={origin}
                 planSummary={planSummary}
                 prefill={prefill}
-                menuPrefills={menuPrefills.length > 0 ? menuPrefills : undefined}
+                menuPrefills={
+                  menuPrefills.length > 0 || growflowPrefills.length > 0
+                    ? [...menuPrefills, ...growflowPrefills]
+                    : undefined
+                }
                 fromLeadId={fromLead}
                 leadTimeDays={leadTimeDays}
                 createAction={createPurchaseOrderAction}
