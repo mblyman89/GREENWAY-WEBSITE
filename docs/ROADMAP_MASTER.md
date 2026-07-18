@@ -509,3 +509,38 @@ they are optional data loads, not schema, and each is idempotent (safe to run an
   push worker is never touched), and reloads. Home-screen banner behavior
   (AN-0) unchanged; updates still never apply mid-sale. No migration.
   Suite 1,759/134.
+
+- **Transport autofill hardening (PR #565, H18).** After PR #562 the owner's
+  SPR manifest STILL staged with an empty transport section (only arrival date
+  + directions filled). Root cause \u2014 verified against the real email, not the
+  form: `enrichResendInbound` skipped fetching the manifest/invoice PDF LINKS
+  once the WCIA transfer JSON was fetched (`haveParseableAttachment` \u2014 the
+  JSON counts as parseable), and Cultivera LINKS its documents rather than
+  attaching them \u2014 so the Manifest PDF, the ONLY source of driver/vehicle/
+  plate/VIN, never arrived; the JSON supplied only eta/departed/route. Form
+  field names match the DB columns exactly and were never the problem. Three
+  fixes: (1) pure `planLinkPdfFetches` (resend-receiving-core) plans manifest
+  and invoice link fetches PER ROLE \u2014 suppressed only when a same-role PDF
+  attachment with bytes already exists, never by the JSON \u2014 with forced
+  role-classifying filenames (mirrors the H16b-3 COA always-fetch pattern);
+  the fetch layer's old guard is deleted. (2) NEW pure
+  `pdf-cultivera-invoice-core`: the Cultivera invoice header prints Driver /
+  vehicle ("2021 WHITE Nissan NV200") / Plate / Arrival date keyed by the
+  printed Manifest #; when a bundled PDF fails the manifest parse, its text is
+  offered to this layout-gated extractor as a SECOND transport donor (never an
+  all-null donor; arrival is eta_date only \u2014 arrived_at is never doc-sourced;
+  VIN/transporter honestly null). Fixture is the owner's real SPR invoice
+  text. (3) duplicate re-sends now REPAIR: pure `planTransportBackfill`
+  (fill-only-when-empty, arrived_at never, null when nothing changes) +
+  `backfillManifestTransport` (intake-store) run on `staged.duplicate` in
+  BOTH inbound paths, so re-forwarding the vendor email heals EMPTY transport
+  fields on the already-staged manifest, logs a `transport` event naming the
+  filled fields, and surfaces "(N transport field(s) backfilled)" in the
+  webhook log note (`StageFromEmailResult.transportBackfills`). Also:
+  `pdfDonors` are now built whenever ANY PDF rides the email (previously only
+  JSON+PDF bundles) and fold onto the PDF-primary manifest before staging.
+  Other intake methods audited \u2014 no gaps: GrowFlow already extracts full
+  transport (VIN honestly null when the doc prints "n/a"); TransferLog's
+  layout has NO VIN field; OpenTHC's layout carries only Depart/Arrive; the
+  URL/batch-import transfer JSON has no PDF links to fetch (key-scanned). No
+  migration. Suite 1,764/135.
