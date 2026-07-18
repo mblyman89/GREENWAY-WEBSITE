@@ -610,3 +610,21 @@ they are optional data loads, not schema, and each is idempotent (safe to run an
   "Reading barcode..." pane shows status; the verdict lands ~300ms after
   the scanner finishes. Over-40 visual and manual paths unchanged. No
   migration. Suite 1,779/137.
+
+- **After-hours block screen clarity (PR #573, AQ).** Testing the new hidden
+  ID capture at 12:22 AM, the owner hit a nearly blank screen -- one bare red
+  WAC 314-55-147 sentence -- and reasonably concluded the ID gate, the
+  house-policy banner and the manual DOB paths had been deleted. Verified
+  facts: none of those were touched (banner L1036, medical panel L1072,
+  over-40 button L1175, manual button L1185 all on main; PR #571's only
+  SaleFlow deletions were the textarea + "Check scan" button); the
+  sales-hours gate pre-dates the ID work (B39/PR #506) and returns before
+  IdGateScreen renders, statutorily blocking midnight-8AM Pacific. Shipped
+  a presentational-only upgrade: the block screen now shows a moon glyph,
+  bold "Sales are closed right now", the statutory/window reason, and an
+  explicit reassurance that the register is fine and the full sale flow sits
+  right behind the clock; a 15-second tick (only while blocked) re-evaluates
+  the time so the screen flips to the ID gate BY ITSELF at 8:00 AM instead
+  of sitting stuck until an unrelated re-render. evaluateSalesHours, the
+  statute floor, the owner's window and the server completion re-check are
+  all unchanged. No migration. Suite 1,779/137.
