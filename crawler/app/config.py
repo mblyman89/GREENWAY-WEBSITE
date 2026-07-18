@@ -156,6 +156,39 @@ class Settings(BaseSettings):
     discovery_enabled: bool = Field(default=True, alias="DISCOVERY_ENABLED")
     discovery_max_results: int = Field(default=10, ge=1, le=50, alias="DISCOVERY_MAX_RESULTS")
 
+    # --- Cultivera Market (CV-2: authenticated vendor-menu fetch) -------------
+    # The owner is an authenticated Cultivera Market BUYER (their rep approved
+    # using the marketplace this way). The worker logs in ONCE with these
+    # credentials, caches the session (JWT access token + refresh token), reuses
+    # it, and re-logs on 401 — then calls Cultivera's JSON API politely (slow,
+    # human-paced) to fetch a vendor's live menu. These are the buyer's OWN
+    # marketplace credentials; leave empty to keep Cultivera features disabled.
+    #   Login page: https://wa.cultiveramarket.com/   API: (auto-detected below)
+    cultivera_email: str = Field(default="", alias="CULTIVERA_EMAIL")
+    cultivera_password: str = Field(default="", alias="CULTIVERA_PASSWORD")
+    # The marketplace SPA origin the buyer logs into (region-specific). The API
+    # base is discovered from the app at runtime (never hard-coded/guessed); this
+    # is only the human-facing site the browser navigates to.
+    cultivera_site_url: str = Field(
+        default="https://wa.cultiveramarket.com",
+        alias="CULTIVERA_SITE_URL",
+    )
+    # Optional explicit API base override. When empty, the auth step discovers it
+    # from the running app (the SPA reveals its own API origin). Setting this
+    # skips discovery. NO trailing slash.
+    cultivera_api_base: str = Field(default="", alias="CULTIVERA_API_BASE")
+    # Politeness for the authenticated JSON calls: a human-paced pause (seconds)
+    # is taken BEFORE each request, jittered up to +50%. The owner explicitly
+    # wants slow, respectful traffic (polite mode, not stealth).
+    cultivera_min_delay_seconds: float = Field(default=3.0, alias="CULTIVERA_MIN_DELAY_SECONDS")
+    # How long a cached session is trusted before a proactive re-login (seconds).
+    # A 401 always forces a re-login regardless; this just avoids using a token
+    # we already know is likely stale. Default 45 min (Cultivera tokens are JWTs
+    # whose real `exp` is honored when decodable — this is only the fallback).
+    cultivera_session_ttl_seconds: int = Field(default=2_700, alias="CULTIVERA_SESSION_TTL_SECONDS")
+    # Where the cached session JSON lives (relative to crawler/). Gitignored.
+    cultivera_session_file: str = Field(default=".cache/cultivera_session.json", alias="CULTIVERA_SESSION_FILE")
+
     # --- Service --------------------------------------------------------------
     crawler_port: int = Field(default=8200, alias="CRAWLER_PORT")
     crawl_cache_dir: str = Field(default=".cache", alias="CRAWL_CACHE_DIR")
@@ -174,6 +207,31 @@ class Settings(BaseSettings):
     def social_enabled(self) -> bool:
         """Sanctioned social features run only when a Meta Graph token is set."""
         return bool(self.meta_graph_token.strip())
+
+    @property
+    def cultivera_enabled(self) -> bool:
+        """Cultivera menu fetch runs only when the buyer's credentials are set."""
+        return bool(self.cultivera_email.strip() and self.cultivera_password.strip())
+
+    @property
+    def cultivera_site(self) -> str:
+        """The marketplace site origin, normalized (no trailing slash)."""
+        return self.cultivera_site_url.strip().rstrip("/")
+
+    @property
+    def cultivera_api(self) -> str:
+        """Explicit API base override (no trailing slash), or '' to auto-detect."""
+        return self.cultivera_api_base.strip().rstrip("/")
+
+    @property
+    def cultivera_session_path(self) -> Path:
+        """Absolute path to the cached session file (parent dir ensured)."""
+        raw = self.cultivera_session_file.strip() or ".cache/cultivera_session.json"
+        p = Path(raw)
+        if not p.is_absolute():
+            p = Path(__file__).resolve().parent.parent / p
+        p.parent.mkdir(parents=True, exist_ok=True)
+        return p
 
     @property
     def allow_domains(self) -> list[str]:

@@ -13,6 +13,9 @@ venv/
 !.env.example
 .cache/
 *.log
+# Cultivera cached session (holds a live JWT) — never commit, even if the
+# operator points CULTIVERA_SESSION_FILE outside .cache/.
+cultivera_session.json
 
 # PyCharm (keep shared run configs in .run/, ignore per-user state)
 .idea/
