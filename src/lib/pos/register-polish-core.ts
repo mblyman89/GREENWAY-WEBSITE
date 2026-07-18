@@ -190,6 +190,53 @@ export function ageLabel(fromIso: string, now: Date): string {
 }
 
 // ---------------------------------------------------------------------------
+// AN-2 — start-sale gate reason (why is the big green button disabled?)
+// ---------------------------------------------------------------------------
+
+/**
+ * AN-2 — the owner's real confusion: on the iPad the "Start sale — scan ID"
+ * button sat greyed-out with NO explanation, because the reason lived only in
+ * a `title` tooltip — and touch devices never show tooltips. He force-refreshed,
+ * deleted website data, and rotated the device key chasing a "broken front
+ * end" that was actually just this invisible gate (he wasn't clocked in).
+ *
+ * This pure helper names the FIRST blocking reason in gate order (drawer →
+ * clock-in → menu), or null when the sale can start. The shell renders the
+ * reason as a visible notice next to the disabled button, with a one-tap
+ * clock-in when that's the blocker.
+ */
+export type StartSaleBlock = {
+  reason: "drawer" | "clock_in" | "menu";
+  message: string;
+};
+
+export function startSaleBlockReason(
+  drawerOpen: boolean,
+  clockedIn: boolean,
+  menuReady: boolean,
+): StartSaleBlock | null {
+  if (!drawerOpen) {
+    return {
+      reason: "drawer",
+      message: "Count in your drawer first — sales stay locked until the starting float is counted.",
+    };
+  }
+  if (!clockedIn) {
+    return {
+      reason: "clock_in",
+      message: "You're not clocked in — every sale must be tied to an on-the-clock employee.",
+    };
+  }
+  if (!menuReady) {
+    return {
+      reason: "menu",
+      message: "The menu hasn't downloaded yet — connect to the internet once and it will load.",
+    };
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
 // Self-tests (registered in scripts/compliance/run-pure-selftests.ts)
 // ---------------------------------------------------------------------------
 
@@ -301,6 +348,24 @@ export function __runRegisterPolishCoreTests(): void {
   ok(ageLabel("2026-07-13T17:53:00.000Z", now) === "1h 12m ago", "hours + minutes label");
   ok(ageLabel("2026-07-13T18:05:00.000Z", now) === "1h ago", "exact hour label");
   ok(ageLabel("garbage", now) === "unknown", "bad date = unknown");
+
+  // -- start-sale gate reason (AN-2) ------------------------------------------
+  ok(startSaleBlockReason(true, true, true) === null, "all gates pass -> null (sale can start)");
+  ok(startSaleBlockReason(false, true, true)?.reason === "drawer", "no drawer -> drawer reason");
+  ok(startSaleBlockReason(true, false, true)?.reason === "clock_in", "not clocked in -> clock_in reason");
+  ok(startSaleBlockReason(true, true, false)?.reason === "menu", "menu missing -> menu reason");
+  // Gate ORDER matters: drawer outranks clock-in outranks menu (fix them in
+  // the order the morning actually happens).
+  ok(startSaleBlockReason(false, false, false)?.reason === "drawer", "drawer named first when all fail");
+  ok(startSaleBlockReason(true, false, false)?.reason === "clock_in", "clock-in named before menu");
+  ok(
+    (startSaleBlockReason(true, false, true)?.message ?? "").includes("clocked in"),
+    "clock-in message says clocked in",
+  );
+  ok(
+    (startSaleBlockReason(false, true, true)?.message ?? "").length > 10,
+    "drawer message is a real sentence",
+  );
 
   console.log(`pos/register-polish-core: ${pass} passed, ${fail} failed`);
   if (fail > 0) throw new Error(`${fail} pos/register-polish-core tests failed`);

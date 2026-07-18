@@ -64,6 +64,7 @@ import {
   rebuildHeldCart,
   serializeHeldSale,
   serializeLastReceipt,
+  startSaleBlockReason,
   type HeldSale,
 } from "@/lib/pos/register-polish-core";
 import { SaleFlow, type PosMemberHit } from "./SaleFlow";
@@ -1500,6 +1501,10 @@ function HomeScreen({
   onSyncNow: () => void;
   onPunch: () => void;
 }) {
+  // AN-2 — the FIRST blocking gate (drawer → clock-in → menu), or null when
+  // the sale can start. Pure + self-tested; drives BOTH disabled states and
+  // the visible notice below the hero button.
+  const saleBlock = startSaleBlockReason(!!drawer, employee.clockedIn, menuReady);
   const syncLabel = useMemo(() => {
     if (!lastSyncAt) return "never this session";
     return new Date(lastSyncAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
@@ -1747,21 +1752,31 @@ function HomeScreen({
             </p>
             <button
               type="button"
-              disabled={!drawer || !employee.clockedIn || !menuReady}
+              disabled={!!saleBlock}
               onClick={onStartSale}
-              title={
-                !drawer
-                  ? "Open a drawer first"
-                  : !employee.clockedIn
-                    ? "Clock in first"
-                    : !menuReady
-                      ? "Menu not downloaded yet — connect to the internet once"
-                      : undefined
-              }
+              title={saleBlock?.message}
               className="pos-tile mt-7 rounded-xl bg-[var(--pos-accent)] px-10 py-5 text-xl font-extrabold text-[var(--pos-accent-ink)] shadow-lg disabled:opacity-40"
             >
               Start sale — scan ID
             </button>
+            {/* AN-2 — the reason the button is disabled must be VISIBLE on a
+                touch screen (title tooltips never show on the iPad; the owner
+                chased a "broken front end" that was really this gate). When
+                the blocker is clock-in, offer the fix right here. */}
+            {saleBlock ? (
+              <div className="mt-4 flex max-w-md flex-col items-center gap-2 rounded-xl border border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] px-4 py-3">
+                <p className="text-sm font-semibold text-[var(--pos-warn)]">⚠️ {saleBlock.message}</p>
+                {saleBlock.reason === "clock_in" ? (
+                  <button
+                    type="button"
+                    onClick={onPunch}
+                    className="pos-tile rounded-lg bg-[var(--pos-warn-solid)] px-5 py-2.5 text-sm font-bold text-white"
+                  >
+                    ⏱️ Clock in now
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
             <p className="mt-3 text-xs text-[var(--pos-text-faint)]">
               ID check → cart → cash tender · manual verification available at the gate
             </p>
@@ -1782,7 +1797,7 @@ function HomeScreen({
                 <button
                   type="button"
                   onClick={onResumeHold}
-                  disabled={!onResumeHold || !drawer || !employee.clockedIn || !menuReady}
+                  disabled={!onResumeHold || !!saleBlock}
                   className="pos-tile rounded-lg bg-[var(--pos-warn-solid)] px-4 py-2 text-sm font-bold text-white disabled:opacity-40"
                 >
                   Load sale
