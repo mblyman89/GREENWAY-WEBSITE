@@ -26,6 +26,8 @@ from .harvest import (
     request_cancel,
     schedule_job,
 )
+from .cultivera_api import CultiveraApiError, CultiveraApiResult, CultiveraClient
+from .cultivera_auth import CultiveraAuthError
 from .discovery_search import discover_vendor_sites, format_discovery_draft
 from .kb_products import build_product_rows, slugify_dashed, write_product_drafts
 from .pipeline import ResearchResult, research_social, research_target, result_to_draft_rows
@@ -423,3 +425,105 @@ async def discover_endpoint(
         supabase_configured=configured,
         error=result.error,
     )
+
+
+# ---------------------------------------------------------------------------
+# Slice CV-3 — Cultivera vendor menus (authenticated, polite).
+# Two endpoints let the back office (1) search the marketplace's vendors and
+# (2) fetch ONE vendor's live menu. Same X-Crawler-Secret auth. These endpoints
+# return the RAW payload the marketplace gave us (plus a tolerant record list);
+# the Next app persists snapshots/items via cultivera-store.ts so we reuse the
+# shipped tolerant normalizers and keep Supabase writes in ONE place. We do NOT
+# hard-code Cultivera's response shape here — never guess.
+# ---------------------------------------------------------------------------
+
+class CultiveraMarketsRequest(BaseModel):
+    query: str = Field(default="", description="Optional vendor-name filter (substring).")
+
+
+class CultiveraMenuRequest(BaseModel):
+    market_id: str = Field(default="", description="Cultivera market id (if known).")
+    slug: str = Field(default="", description="Vendor slug (alternative to market_id).")
+
+
+class CultiveraApiOut(BaseModel):
+    ok: bool
+    url: str = ""
+    status: int = 0
+    # The raw payload the marketplace returned (untouched) so Next can normalize.
+    raw: object | None = None
+    # A tolerant list extraction for convenience/preview.
+    records: list[dict] = []
+    count: int = 0
+    error: str = ""
+
+
+def _cultivera_result_out(result: CultiveraApiResult) -> CultiveraApiOut:
+    records = result.records or []
+    return CultiveraApiOut(
+        ok=result.ok,
+        url=result.url,
+        status=result.status,
+        raw=result.raw,
+        records=records,
+        count=len(records),
+        error=result.error,
+    )
+
+
+@app.post("/cultivera/markets", response_model=CultiveraApiOut)
+async def cultivera_markets(
+    req: CultiveraMarketsRequest,
+    x_crawler_secret: str | None = Header(default=None),
+) -> CultiveraApiOut:
+    """List (optionally filter) the marketplace vendors the buyer can see.
+
+    Authenticated + polite: the client logs in once with the buyer's own
+    credentials, reuses the cached session, and paces its requests. Returns the
+    raw payload for the Next app to normalize/persist.
+    """
+    _require_secret(x_crawler_secret)
+    s = get_settings()
+    if not s.cultivera_enabled:
+        raise HTTPException(
+            status_code=503,
+            detail="Cultivera disabled (set CULTIVERA_EMAIL/CULTIVERA_PASSWORD).",
+        )
+    log.info("cultivera markets query=%r", req.query)
+    client = CultiveraClient(s)
+    try:
+        result = await client.search_markets(req.query)
+    except CultiveraAuthError as exc:
+        raise HTTPException(status_code=502, detail=f"Cultivera login failed: {exc}") from exc
+    return _cultivera_result_out(result)
+
+
+@app.post("/cultivera/menu", response_model=CultiveraApiOut)
+async def cultivera_menu(
+    req: CultiveraMenuRequest,
+    x_crawler_secret: str | None = Header(default=None),
+) -> CultiveraApiOut:
+    """Fetch ONE vendor's live menu (listings) by market id or slug.
+
+    Returns the raw payload so the Next app can persist it via
+    cultivera-store.saveSnapshot() using the shipped tolerant normalizers.
+    """
+    _require_secret(x_crawler_secret)
+    s = get_settings()
+    if not s.cultivera_enabled:
+        raise HTTPException(
+            status_code=503,
+            detail="Cultivera disabled (set CULTIVERA_EMAIL/CULTIVERA_PASSWORD).",
+        )
+    if not (req.market_id.strip() or req.slug.strip()):
+        raise HTTPException(status_code=422, detail="Provide market_id or slug.")
+    log.info("cultivera menu market_id=%r slug=%r", req.market_id, req.slug)
+    client = CultiveraClient(s)
+    try:
+        result = await client.fetch_menu(market_id=req.market_id, slug=req.slug)
+    except CultiveraApiError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except CultiveraAuthError as exc:
+        raise HTTPException(status_code=502, detail=f"Cultivera login failed: {exc}") from exc
+    return _cultivera_result_out(result)
+
