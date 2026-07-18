@@ -564,3 +564,26 @@ they are optional data loads, not schema, and each is idempotent (safe to run an
   same gate so the two disabled states can never drift. The gates themselves
   are unchanged — drawer, on-the-clock employee, and downloaded menu are
   still required; only the visibility changed. No migration. Suite 1,768/135.
+
+- **Manifest review command center (PR #569, AO).** The owner asked for the
+  same command-center treatment on the manifest review page (open manifest →
+  verify counts → accept) that every other intake page already has: the
+  journey progress strip, plus a checklist of everything the page needs done.
+  Shipped: (1) the canonical W1 stage strip (`CatalogStageStrip
+  current="intake"`) now tops the page, so after accepting a delivery the
+  next stage (Onboard) is one click away; (2) a new pure core
+  `intake-checklist-core.ts` derives a six-item checklist from REAL recorded
+  facts — manifest status, per-lot `inventory_lots.disposition`, the page's
+  6-field transport check, and the `kb_writeback` audit event that
+  manifest-kb-bridge stamps on every successful KB promotion. Items: mark
+  received; verify counts & accept each product (live decided-of-total, with
+  the undecided-lines-finalize-as-ACCEPTED warning); verify transport;
+  finalize; mark accepted (AUTOMATIC — finalize derives + stamps the status,
+  verified in `finalizeManifestDispositions`); promote to KB (AUTOMATIC at
+  finalize, shown done only when the audit trail proves it, and surfaced as
+  a real TODO pointing at the manual "⚡ Promote to KB drafts" button when a
+  finalized accept has no write-back on its timeline). (3) A zero-client-JS
+  `IntakeChecklistPanel` renders a progress meter, the ONE next action, and
+  jump links to new anchor ids on the lines table, transport form, timeline,
+  KB panel and finalize controls. 33 embedded self-tests + vitest mirror.
+  No server-action or store changes. No migration. Suite 1,773/136.
