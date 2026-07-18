@@ -41,6 +41,7 @@ import {
   extractAllTransferLinksFromBody,
   mapReceivingAttachments,
   decodeDataUriHtml,
+  planLinkPdfFetches,
   type ReceivingAttachmentMeta,
 } from "@/lib/inbound-email/resend-receiving-core";
 import { fetchTransferJson, fetchPdfBytes } from "@/lib/inventory/transfer-fetch";
@@ -276,38 +277,40 @@ export async function enrichResendInbound(
   if (links.invoiceUrl) notes.push(`invoice link: ${links.invoiceUrl}`);
   if (links.manifestUrl) notes.push(`manifest link: ${links.manifestUrl}`);
 
-  // 4) LINK-ONLY PDF FALLBACK (H16b-6). When the WCIA transfer JSON is dead or
-  //    absent AND the email carried no usable PDF/JSON attachment (Gmail
-  //    forwarding stripped the files but left the "download the invoice/manifest"
-  //    links), fetch those PDF links server-side and add them as attachments so
-  //    staging can parse + merge them exactly like a direct send. We only reach
-  //    for this fallback when we don't already have something parseable, to avoid
-  //    duplicate work on healthy direct-send emails.
-  const haveParseableAttachment = attachments.some((a) => {
-    const ct = (a.contentType ?? "").toLowerCase();
-    if (ct.includes("json") && a.text != null) return true;
-    if (ct.includes("pdf") && a.base64) return true;
-    return false;
-  });
-  if (!haveParseableAttachment) {
-    for (const [label, rawLink] of [
-      ["manifest", links.manifestUrl],
-      ["invoice", links.invoiceUrl],
-    ] as const) {
-      if (!rawLink) continue;
-      const cleanedLink = cleanUrl(rawLink) ?? rawLink;
-      const pdf = await fetchPdfBytes(cleanedLink);
-      if (pdf.ok) {
-        attachments.push({
-          filename: filenameFromUrl(cleanedLink) ?? `${label}.pdf`,
-          contentType: pdf.contentType || "application/pdf",
-          text: null,
-          base64: pdf.base64,
-        });
-        notes.push(`fetched ${label} PDF from link (${pdf.bytes} bytes)`);
-      } else {
-        notes.push(`${label} link found but PDF fetch failed (${pdf.error})`);
-      }
+  // 4) LINKED-PDF FETCH (H18, supersedes the H16b-6 "only when nothing
+  //    parseable" guard). THE PRODUCTION BUG: the real Cultivera email LINKS
+  //    (not attaches) everything, so once the WCIA transfer JSON was fetched
+  //    above, the old guard skipped the manifest PDF link — the ONLY document
+  //    carrying driver / vehicle / plate / VIN (the JSON's transporter fields
+  //    are null). Result: transport stayed empty on the review form while the
+  //    JSON's est-times/route filled. Now each linked document is fetched
+  //    INDEPENDENTLY whenever no PDF attachment of that ROLE exists yet
+  //    (mirroring the COA always-fetch pattern below), and the bytes are
+  //    stored under a role-classifying filename so staging can parse the
+  //    manifest PDF as a transport donor / the invoice PDF as a price+transport
+  //    donor. Healthy direct sends (real MIME PDFs) plan nothing — no dup work.
+  for (const planned of planLinkPdfFetches(attachments, links)) {
+    const cleanedLink = cleanUrl(planned.url) ?? planned.url;
+    const pdf = await fetchPdfBytes(cleanedLink);
+    if (pdf.ok) {
+      // Prefer the URL's own filename when it already classifies as the
+      // planned role; otherwise force the role-classifying name.
+      const urlName = filenameFromUrl(cleanedLink);
+      const filename =
+        urlName &&
+        classifyAttachmentRole({ filename: urlName, contentType: null, text: null, base64: null }) ===
+          planned.label
+          ? urlName
+          : planned.filename;
+      attachments.push({
+        filename,
+        contentType: pdf.contentType || "application/pdf",
+        text: null,
+        base64: pdf.base64,
+      });
+      notes.push(`fetched ${planned.label} PDF from link (${pdf.bytes} bytes)`);
+    } else {
+      notes.push(`${planned.label} link found but PDF fetch failed (${pdf.error})`);
     }
   }
 

@@ -289,6 +289,42 @@ export function chooseTransportDonor(
   return null;
 }
 
+/**
+ * H18 — plan a transport BACKFILL for an ALREADY-staged manifest.
+ *
+ * WHY: the H16b-7 dedupe correctly refuses to stage the same manifest twice —
+ * but that meant a re-forwarded vendor email (or one whose PDF only became
+ * fetchable later) could never repair a manifest whose transport seeded empty.
+ * This planner compares the EXISTING row's transport columns with newly parsed
+ * transport and returns a patch containing ONLY the fields that are currently
+ * empty and would gain a value. Rules (same as the staging-time merge):
+ *  - fill-only-when-empty: existing values are NEVER overwritten;
+ *  - arrived_at is a factual receipt stamp — never doc-sourced, never patched;
+ *  - returns null when nothing would change (caller skips the write + event).
+ * PURE — the store layer reads the row and applies the patch.
+ */
+export function planTransportBackfill(
+  existing: Partial<Record<keyof ParsedTransport, string | null>> | null | undefined,
+  incoming: ParsedTransport | null | undefined,
+): { patch: Partial<ParsedTransport>; filledFields: string[] } | null {
+  if (!transportHasData(incoming)) return null;
+  const patch: Partial<ParsedTransport> = {};
+  const filledFields: string[] = [];
+  const fields = Object.keys(emptyTransport()) as (keyof ParsedTransport)[];
+  for (const field of fields) {
+    if (field === "arrived_at") continue; // never doc-sourced
+    const cur = existing?.[field];
+    const inc = incoming[field];
+    const curEmpty = cur == null || String(cur).trim() === "";
+    const incEmpty = inc == null || String(inc).trim() === "";
+    if (curEmpty && !incEmpty) {
+      patch[field] = inc;
+      filledFields.push(String(field));
+    }
+  }
+  return filledFields.length > 0 ? { patch, filledFields } : null;
+}
+
 // ---------------------------------------------------------------------------
 // Embedded self-tests (run by the vitest harness).
 // ---------------------------------------------------------------------------
@@ -491,6 +527,50 @@ export function __runManifestMergeTests(): { passed: number; failed: number } {
       { manifest_number: "11804443981161219", transport: emptyTransport() },
     ]) === null,
     "donor: all-null transport never donates",
+  );
+
+  // planTransportBackfill (H18) — repair an already-staged manifest whose
+  // transport seeded empty (the SPR production case: JSON staged with only
+  // est-times/route; the PDF donor arrives on a re-forwarded email later).
+  const existingRow = {
+    ...emptyTransport(),
+    departed_at: "2026-07-15T08:00", // JSON-sourced values already on the row
+    eta_date: "2026-07-15",
+    route_notes: "Head north toward 59th Ave NE.",
+  };
+  const pdfTransport: ParsedTransport = {
+    ...emptyTransport(),
+    transporter_name: "Seattles Private Reserve",
+    driver_name: "Kory T Anderson",
+    vehicle_description: "2021 WHITE Nissan NV200",
+    vehicle_plate: "D44636H",
+    vehicle_vin: "3N6CM0KN1MK695529",
+    departed_at: "2026-07-15T08:00", // same value — not a fill
+    eta_date: "2026-07-16", // DIFFERS — must NOT overwrite
+    arrived_at: "2026-07-15T17:00", // never doc-sourced
+  };
+  const plan = planTransportBackfill(existingRow, pdfTransport);
+  ok(plan != null, "backfill: plan produced when empty fields gain values");
+  ok(plan?.patch.driver_name === "Kory T Anderson", "backfill fills empty driver");
+  ok(plan?.patch.vehicle_plate === "D44636H", "backfill fills empty plate");
+  ok(plan?.patch.vehicle_vin === "3N6CM0KN1MK695529", "backfill fills empty VIN");
+  ok(plan?.patch.eta_date === undefined, "backfill NEVER overwrites an existing value");
+  ok(plan?.patch.departed_at === undefined, "backfill skips already-equal values");
+  ok(plan?.patch.arrived_at === undefined, "backfill NEVER touches arrived_at");
+  ok(
+    plan?.filledFields.includes("driver_name") === true &&
+      plan?.filledFields.includes("eta_date") === false,
+    "filledFields reports exactly what was filled",
+  );
+  ok(
+    planTransportBackfill(pdfTransport, pdfTransport) === null,
+    "backfill: nothing to fill -> null (no write, no event)",
+  );
+  ok(planTransportBackfill(existingRow, emptyTransport()) === null, "backfill: empty incoming -> null");
+  ok(planTransportBackfill(existingRow, null) === null, "backfill: null incoming -> null");
+  ok(
+    planTransportBackfill(null, pdfTransport)?.patch.driver_name === "Kory T Anderson",
+    "backfill: missing existing row treated as all-empty",
   );
 
   if (failed === 0) console.log(`manifest-merge-core: all ${passed} tests passed`);

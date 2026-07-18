@@ -15,8 +15,9 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
-import type { ParsedManifest } from "@/lib/inventory/intake-parser";
+import type { ParsedManifest, ParsedTransport } from "@/lib/inventory/intake-parser";
 import { extractCoaLinks, transportHasData } from "@/lib/inventory/intake-parser";
+import { planTransportBackfill } from "@/lib/inventory/manifest-merge-core";
 import type { InboundManifest, ManifestTransportInput } from "@/lib/inventory/types";
 import { seedDraftsForManifest } from "@/lib/inventory/catalog-drafts";
 import { archiveCoasForManifest } from "@/lib/inventory/coa-archive";
@@ -1521,6 +1522,69 @@ export async function seedTransportFromParsed(
     );
   } catch {
     // best-effort: a transport-seed failure must never break staging
+  }
+}
+
+/**
+ * H18 — TRANSPORT BACKFILL for an ALREADY-staged manifest (fill-only-empty).
+ *
+ * WHY: the H16b-7 dedupe rightly refuses to stage the same manifest twice, but
+ * it used to discard the re-send entirely — so a manifest whose transport
+ * seeded empty (the SPR case: the enricher didn't fetch the manifest PDF the
+ * first time) could never be repaired by re-forwarding the vendor email. This
+ * reads the existing row's transport columns, lets the PURE
+ * planTransportBackfill decide which EMPTY fields the newly parsed document can
+ * fill (existing values are never overwritten; arrived_at never doc-sourced),
+ * and writes only when something would change. Logs a "transport" event naming
+ * the filled fields so the review screen's audit trail shows the repair.
+ * Best-effort: returns 0 on any failure, never throws.
+ */
+export async function backfillManifestTransport(
+  manifestId: string,
+  incoming: ParsedTransport | null | undefined,
+  actorId: string | null,
+  sourceLabel: string,
+): Promise<number> {
+  if (!isSupabaseServiceConfigured) return 0;
+  if (!transportHasData(incoming)) return 0;
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data } = await admin
+      .from("inbound_manifests")
+      .select(
+        "transporter_name, transporter_license, driver_name, driver_license_number, vehicle_description, vehicle_plate, vehicle_vin, departed_at, arrived_at, route_notes, eta_date",
+      )
+      .eq("id", manifestId)
+      .maybeSingle();
+    if (!data) return 0;
+    const existing = data as Partial<Record<keyof ParsedTransport, string | null>>;
+    const plan = planTransportBackfill(existing, incoming);
+    if (!plan) return 0;
+
+    const merged: ManifestTransportInput = {
+      transporter_name: existing.transporter_name ?? null,
+      transporter_license: existing.transporter_license ?? null,
+      driver_name: existing.driver_name ?? null,
+      driver_license_number: existing.driver_license_number ?? null,
+      vehicle_description: existing.vehicle_description ?? null,
+      vehicle_plate: existing.vehicle_plate ?? null,
+      vehicle_vin: existing.vehicle_vin ?? null,
+      departed_at: existing.departed_at ?? null,
+      arrived_at: existing.arrived_at ?? null,
+      route_notes: existing.route_notes ?? null,
+      eta_date: existing.eta_date ?? null,
+      ...plan.patch,
+    };
+    const res = await updateManifestTransport(
+      manifestId,
+      merged,
+      actorId,
+      `Transport details backfilled from ${sourceLabel}: ${plan.filledFields.join(", ")} (existing values kept; verify during review).`,
+    );
+    return res.ok ? plan.filledFields.length : 0;
+  } catch (err) {
+    console.error("[intake-store] transport backfill failed:", err);
+    return 0;
   }
 }
 
