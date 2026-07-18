@@ -189,6 +189,44 @@ class Settings(BaseSettings):
     # Where the cached session JSON lives (relative to crawler/). Gitignored.
     cultivera_session_file: str = Field(default=".cache/cultivera_session.json", alias="CULTIVERA_SESSION_FILE")
 
+    # --- GrowFlow (second wholesale marketplace) ------------------------------
+    # The owner is ALSO an authenticated GrowFlow BUYER (Greenway Marijuana,
+    # license 413541; their rep approved using the marketplace this way).
+    # GrowFlow (marketplace.growflow.com) uses an Auth0-hosted login and a
+    # GraphQL API. The worker logs in ONCE with these credentials via a real
+    # browser (Auth0 redirect), captures the Bearer token GrowFlow sends on its
+    # GraphQL calls, caches/reuses it, and re-logs on 401 — then calls GrowFlow's
+    # GraphQL API politely (slow, human-paced). These are the buyer's OWN
+    # marketplace credentials; leave empty to keep GrowFlow features disabled.
+    #   Login page: https://marketplace.growflow.com/   (Auth0: auth.growflow.com)
+    growflow_email: str = Field(default="", alias="GROWFLOW_EMAIL")
+    growflow_password: str = Field(default="", alias="GROWFLOW_PASSWORD")
+    # The marketplace SPA origin the buyer logs into. Only the human-facing site
+    # the browser navigates to; the GraphQL endpoint is discovered from the app.
+    growflow_site_url: str = Field(
+        default="https://marketplace.growflow.com",
+        alias="GROWFLOW_SITE_URL",
+    )
+    # Optional explicit GraphQL endpoint override. When empty, the auth step
+    # discovers it from the running app (the SPA reveals its own GraphQL origin).
+    growflow_graphql_url: str = Field(default="", alias="GROWFLOW_GRAPHQL_URL")
+    # The buyer's US state (GrowFlow scopes vendors/menus by state). WA for
+    # Greenway. Used as the `state` GraphQL variable.
+    growflow_state: str = Field(default="WA", alias="GROWFLOW_STATE")
+    # Optional explicit BuyerVendorId override. When empty, the auth/api step
+    # discovers it from getStoreFrontUserVendorsV2 (never guessed). For Greenway
+    # this is 2368; leave empty to auto-detect (recommended).
+    growflow_buyer_vendor_id: str = Field(default="", alias="GROWFLOW_BUYER_VENDOR_ID")
+    # Politeness for the authenticated GraphQL calls: a human-paced pause
+    # (seconds) taken BEFORE each request, jittered up to +50%. Polite, not stealth.
+    growflow_min_delay_seconds: float = Field(default=3.0, alias="GROWFLOW_MIN_DELAY_SECONDS")
+    # How long a cached session is trusted before a proactive re-login (seconds).
+    # A 401 always forces a re-login. Default 45 min; the real JWT `exp` is honored
+    # when decodable, this is only the fallback.
+    growflow_session_ttl_seconds: int = Field(default=2_700, alias="GROWFLOW_SESSION_TTL_SECONDS")
+    # Where the cached session JSON lives (relative to crawler/). Gitignored.
+    growflow_session_file: str = Field(default=".cache/growflow_session.json", alias="GROWFLOW_SESSION_FILE")
+
     # --- Service --------------------------------------------------------------
     crawler_port: int = Field(default=8200, alias="CRAWLER_PORT")
     crawl_cache_dir: str = Field(default=".cache", alias="CRAWL_CACHE_DIR")
@@ -227,6 +265,31 @@ class Settings(BaseSettings):
     def cultivera_session_path(self) -> Path:
         """Absolute path to the cached session file (parent dir ensured)."""
         raw = self.cultivera_session_file.strip() or ".cache/cultivera_session.json"
+        p = Path(raw)
+        if not p.is_absolute():
+            p = Path(__file__).resolve().parent.parent / p
+        p.parent.mkdir(parents=True, exist_ok=True)
+        return p
+
+    @property
+    def growflow_enabled(self) -> bool:
+        """GrowFlow menu fetch runs only when the buyer's credentials are set."""
+        return bool(self.growflow_email.strip() and self.growflow_password.strip())
+
+    @property
+    def growflow_site(self) -> str:
+        """The GrowFlow marketplace origin, normalized (no trailing slash)."""
+        return self.growflow_site_url.strip().rstrip("/")
+
+    @property
+    def growflow_graphql(self) -> str:
+        """Explicit GraphQL endpoint override, or '' to auto-detect from the app."""
+        return self.growflow_graphql_url.strip().rstrip("/")
+
+    @property
+    def growflow_session_path(self) -> Path:
+        """Absolute path to the cached GrowFlow session file (parent dir ensured)."""
+        raw = self.growflow_session_file.strip() or ".cache/growflow_session.json"
         p = Path(raw)
         if not p.is_absolute():
             p = Path(__file__).resolve().parent.parent / p
