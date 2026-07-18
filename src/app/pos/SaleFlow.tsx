@@ -45,6 +45,13 @@ import {
 import { resolveScan } from "@/lib/pos/scan-to-cart-core";
 import { emptyWedgeState, wedgeKey, type WedgeState } from "@/lib/pos/wedge-scan-core";
 import {
+  emptyIdCaptureState,
+  idCaptureKey,
+  finalizeIdCapture,
+  ID_CAPTURE_IDLE_MS,
+  type IdCaptureState,
+} from "@/lib/pos/id-capture-core";
+import {
   applyLoyaltyToPricedLines,
   maxRedeemablePoints,
   normalizeLoyaltyCodeInput,
@@ -813,9 +820,7 @@ function IdGateScreen({
   onEnqueueCardCapture: (payload: Record<string, unknown>) => string;
 }) {
   const [mode, setMode] = useState<"scan" | "over40" | "manual">("scan");
-  const [scanBuffer, setScanBuffer] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const scanRef = useRef<HTMLTextAreaElement | null>(null);
 
   // Manual form state
   const [idType, setIdType] = useState<string>("");
@@ -864,21 +869,19 @@ function IdGateScreen({
     return check.card;
   };
 
-  const submitScan = () => {
+  const submitScan = (raw: string) => {
     setError(null);
     const card = medical ? validateCard() : null;
     if (medical && !card) return;
-    const parsed = parseAamvaPdf417(scanBuffer);
+    const parsed = parseAamvaPdf417(raw);
     if (!parsed.ok) {
       setError(`${parsed.error} If the barcode won't read, use manual verification.`);
-      setScanBuffer("");
       return;
     }
     // Carded patients may be 18–20 (RCW 69.50.357(1)); recreational is 21+.
     const v = evaluateScannedId(parsed.license, todayYmd, card ? 18 : 21);
     if (!v.allowed) {
       setError(v.reason);
-      setScanBuffer("");
       return;
     }
     const ageCheck = medicalAgeAllowed(v.age, !!card);
@@ -892,6 +895,51 @@ function IdGateScreen({
     // AO-3 — hand the parsed name up so the sale can auto-attach the member.
     onPassed(v, null, card, cardUuid, { firstName: parsed.license.firstName, lastName: parsed.license.lastName });
   };
+
+  // AP — hidden instant capture (replaces the visible textarea). Root cause
+  // of the floor failure: an AAMVA payload BEGINS "@" + LF, and a wedge
+  // scanner types LF as Enter — the old box submitted on the FIRST Enter, so
+  // the parser saw "@" alone and failed with the @/ANSI header error while
+  // the rest of the barcode crawled into the box (one React re-render per
+  // keystroke ≈ the 5-second print). Now a document-level listener buffers
+  // the burst in a ref (zero re-renders → instant), treats Enter/Tab as
+  // payload newlines, and parses ID_CAPTURE_IDLE_MS after the last char.
+  // Keystrokes into form fields (medical card, manual entry) pass through.
+  const captureRef = useRef<IdCaptureState>(emptyIdCaptureState());
+  const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [receiving, setReceiving] = useState(false);
+  const submitScanRef = useRef<(raw: string) => void>(() => {});
+  useEffect(() => {
+    // Latest-ref pattern: the document listener always calls the freshest
+    // submitScan (which closes over medical-card state) without re-binding.
+    submitScanRef.current = submitScan;
+  });
+  useEffect(() => {
+    if (mode !== "scan") return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      const tag = t?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || t?.isContentEditable) return;
+      const r = idCaptureKey(captureRef.current, e.key, performance.now());
+      captureRef.current = r.state;
+      if (!r.consumed) return;
+      e.preventDefault();
+      setReceiving((prev) => prev || true);
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+      idleTimerRef.current = setTimeout(() => {
+        const fin = finalizeIdCapture(captureRef.current);
+        captureRef.current = fin.state;
+        setReceiving(false);
+        if (fin.payload) submitScanRef.current(fin.payload);
+      }, ID_CAPTURE_IDLE_MS);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+      captureRef.current = emptyIdCaptureState();
+    };
+  }, [mode]);
 
   const submitManual = () => {
     setError(null);
@@ -1092,35 +1140,30 @@ function IdGateScreen({
 
       {mode === "scan" ? (
         <div className="w-full max-w-lg">
-          <label htmlFor="pos-scan" className="text-sm text-[var(--pos-text-muted)]">
-            Scan the barcode on the back of the license/ID. The scanner types into the box below —
-            keep it focused. Scanner sends Enter when done.
-          </label>
-          <textarea
-            id="pos-scan"
-            ref={scanRef}
-            value={scanBuffer}
-            onChange={(e) => setScanBuffer(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && scanBuffer.trim().length > 0) {
-                e.preventDefault();
-                submitScan();
-              }
-            }}
-            autoFocus
-            rows={4}
-            className="mt-2 w-full rounded-xl border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] p-3 font-mono text-xs text-[var(--pos-text)]"
-            placeholder="@ … ANSI 636045 …"
-          />
+          {/* AP — no box, no typing, no waiting: the hidden capture reads the
+              scanner directly and the verdict lands ~a third of a second
+              after the beep. */}
+          <div
+            aria-live="polite"
+            className={`rounded-2xl border-2 p-8 text-center transition-colors ${
+              receiving
+                ? "border-[var(--pos-accent-border)] bg-[var(--pos-accent-soft)]"
+                : "border-dashed border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)]"
+            }`}
+          >
+            <span className="text-5xl" aria-hidden>
+              {receiving ? "⚡" : "🪪"}
+            </span>
+            <p className="mt-3 text-xl font-extrabold tracking-tight">
+              {receiving ? "Reading barcode…" : "Ready to scan"}
+            </p>
+            <p className="mt-1.5 text-sm text-[var(--pos-text-muted)]">
+              {receiving
+                ? "The verdict shows the instant the scan finishes."
+                : "Point the scanner at the BIG barcode on the back of the license and pull the trigger. Nothing to tap — age and expiry check automatically."}
+            </p>
+          </div>
           <div className="mt-3 flex gap-3">
-            <button
-              type="button"
-              onClick={submitScan}
-              disabled={scanBuffer.trim().length === 0}
-              className="pos-tile rounded-xl bg-[var(--pos-accent)] px-6 py-3 font-semibold text-[var(--pos-accent-ink)] disabled:opacity-40"
-            >
-              Check scan
-            </button>
             <button
               type="button"
               onClick={() => {

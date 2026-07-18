@@ -164,14 +164,20 @@ export type AamvaParseResult =
  * CR, then "ANSI " + IIN(6) + version(2) + ... and one or more subfiles.
  * We locate the DL or ID subfile and read LF-separated elements, each a
  * 3-letter ID followed by its value. Tolerant of CRLF variants produced by
- * real scanners in keyboard-wedge mode.
+ * real scanners in keyboard-wedge mode, and of a stripped "@" compliance
+ * indicator (AP): wedge configs can consume leading control characters, so
+ * "ANSI " + parseable elements is the format signature we require.
  */
 export function parseAamvaPdf417(raw: string): AamvaParseResult {
   const text = (raw ?? "").replace(/\r\n/g, "\n");
   if (!text.trim()) return { ok: false, error: "Empty scan." };
   const ansiAt = text.indexOf("ANSI ");
-  if (!text.startsWith("@") || ansiAt === -1) {
-    return { ok: false, error: "Not an AAMVA DL/ID barcode (missing @/ANSI header)." };
+  // AP: the "@" compliance indicator is OPTIONAL — keyboard-wedge scanners
+  // routinely consume/strip leading control characters (and the old submit
+  // flow could eat the "@" line). "ANSI " + parseable elements is the real
+  // format signature; the DOB/expiry gates below are unchanged.
+  if (ansiAt === -1) {
+    return { ok: false, error: "Not an AAMVA DL/ID barcode (no ANSI header found)." };
   }
 
   // Header: ANSI + IIN(6) + AAMVA version (2 digits).
@@ -420,6 +426,14 @@ export function __runIdScanCoreTests(): void {
   }
   ok(!parseAamvaPdf417("hello world").ok, "non-AAMVA text rejected");
   ok(!parseAamvaPdf417("").ok, "empty rejected");
+  // AP: wedge scanners can strip the "@" compliance indicator — the payload
+  // must still parse (real-floor failure mode behind the old header error).
+  {
+    const noAt = wa.slice(wa.indexOf("ANSI"));
+    const r = parseAamvaPdf417(noAt);
+    ok(r.ok, "payload without leading @ still parses (wedge strips control chars)");
+    if (r.ok) ok(r.license.dateOfBirth === "1990-07-13", "no-@ payload keeps DOB");
+  }
   {
     const noDob = "@\n\x1e\rANSI 636045080002DL00410278DLDAQX1\nDCSDOE\n";
     ok(!parseAamvaPdf417(noDob).ok, "missing DOB rejected (forces manual path)");

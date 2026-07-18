@@ -84,6 +84,7 @@ import { __runMenuLiveStepCoreTests } from "../../src/lib/inventory/menu-live-st
 import { __runVendorResolveCoreTests } from "../../src/lib/inventory/vendor-resolve-core";
 import { __runCultiveraInvoiceTests } from "../../src/lib/inventory/pdf-cultivera-invoice-core";
 import { __runIntakeChecklistCoreTests } from "../../src/lib/inventory/intake-checklist-core";
+import { __runIdCaptureCoreTests } from "../../src/lib/pos/id-capture-core";
 import { __runDraftSeedCoreTests } from "../../src/lib/inventory/draft-seed-core";
 import { __runWedgeScanCoreTests } from "../../src/lib/pos/wedge-scan-core";
 import { __runRegisterLoyaltyCoreTests } from "../../src/lib/pos/register-loyalty-core";
@@ -180,6 +181,7 @@ async function main() {
   __runVendorResolveCoreTests();
   __runCultiveraInvoiceTests();
   __runIntakeChecklistCoreTests();
+  __runIdCaptureCoreTests();
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
