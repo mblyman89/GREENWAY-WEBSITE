@@ -20,6 +20,7 @@ import {
   holdFromCart,
   rebuildHeldCart,
   ageLabel,
+  startSaleBlockReason,
   __runRegisterPolishCoreTests,
 } from "@/lib/pos/register-polish-core";
 import { buildNoSaleSlipHtml, type PosReceiptInput } from "@/lib/pos/receipt-core";
@@ -144,3 +145,33 @@ describe("embedded self-tests", () => {
     expect(() => __runRegisterPolishCoreTests()).not.toThrow();
   });
 });
+
+describe("startSaleBlockReason (AN-2 — visible start-sale gate)", () => {
+  it("returns null when every gate passes (sale can start)", () => {
+    expect(startSaleBlockReason(true, true, true)).toBeNull();
+  });
+
+  it("names each single blocker", () => {
+    expect(startSaleBlockReason(false, true, true)?.reason).toBe("drawer");
+    expect(startSaleBlockReason(true, false, true)?.reason).toBe("clock_in");
+    expect(startSaleBlockReason(true, true, false)?.reason).toBe("menu");
+  });
+
+  it("orders blockers drawer → clock-in → menu (the morning's real order)", () => {
+    expect(startSaleBlockReason(false, false, false)?.reason).toBe("drawer");
+    expect(startSaleBlockReason(true, false, false)?.reason).toBe("clock_in");
+  });
+
+  it("every message is a full sentence a budtender can act on", () => {
+    for (const block of [
+      startSaleBlockReason(false, true, true),
+      startSaleBlockReason(true, false, true),
+      startSaleBlockReason(true, true, false),
+    ]) {
+      expect(block).not.toBeNull();
+      expect((block?.message ?? "").length).toBeGreaterThan(20);
+    }
+    expect(startSaleBlockReason(true, false, true)?.message).toContain("clocked in");
+  });
+});
+
