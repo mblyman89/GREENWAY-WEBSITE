@@ -86,6 +86,7 @@ import { __runCultiveraInvoiceTests } from "../../src/lib/inventory/pdf-cultiver
 import { __runIntakeChecklistCoreTests } from "../../src/lib/inventory/intake-checklist-core";
 import { __runIdCaptureCoreTests } from "../../src/lib/pos/id-capture-core";
 import { __runCultiveraMenuCoreTests } from "../../src/lib/purchasing/cultivera-menu-core";
+import { __runGrowflowMenuCoreTests } from "../../src/lib/purchasing/growflow-menu-core";
 import { __runCultiveraMenusUiCoreTests } from "../../src/lib/purchasing/cultivera-menus-ui-core";
 import { __runCultiveraMediaCoreTests } from "../../src/lib/purchasing/cultivera-media-core";
 import { __runCultiveraPoCoreTests } from "../../src/lib/purchasing/cultivera-po-core";
@@ -187,6 +188,7 @@ async function main() {
   __runIntakeChecklistCoreTests();
   __runIdCaptureCoreTests();
   __runCultiveraMenuCoreTests();
+  __runGrowflowMenuCoreTests();
   __runCultiveraMenusUiCoreTests();
   __runCultiveraMediaCoreTests();
   __runCultiveraPoCoreTests();

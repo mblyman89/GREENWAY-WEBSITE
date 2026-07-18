@@ -210,13 +210,16 @@ export function normalizeMenuItem(raw: unknown, position: number): CultiveraMenu
       ? (raw as Record<string, unknown>)
       : {};
 
-  const sizeLabel = pickText(o, ["size", "sizeLabel", "size_label", "unitSize", "unit_size", "packageSize", "weight"]);
+  const sizeLabel = pickText(o, ["size", "sizeLabel", "size_label", "unitSize", "unit_size", "packageSize", "weight", "Size", "PackageSize"]);
   const unitCountRaw = pickRaw(o, ["unitCount", "unit_count", "units", "packSize", "pack_size", "quantityPerUnit"]);
   const unitCount = intOrNull(unitCountRaw) ?? packCountFromLabel(sizeLabel);
 
+  // Price keys include Cultivera's LIVE-probed `MinPrice` (dollar float on the
+  // POST /listings/market/{id} product list). See probe/CULTIVERA_PINNED.md.
   const priceRaw = pickRaw(o, [
     "wholesalePrice", "wholesale_price", "unitPrice", "unit_price",
     "price", "priceMinor", "price_minor", "cost",
+    "MinPrice", "Price", "UnitPrice",
   ]);
 
   const potencyRawVal = pickRaw(o, ["potency", "potencyRaw", "potency_raw", "cannabinoids", "labResults", "lab_results"]);
@@ -234,23 +237,25 @@ export function normalizeMenuItem(raw: unknown, position: number): CultiveraMenu
     pickRaw(potencyRaw, ["totalCannabinoids", "total_cannabinoids", "total", "totalActive"]);
 
   return {
-    cultiveraItemId: pickText(o, ["id", "listingId", "listing_id", "itemId", "item_id", "productId", "product_id", "sku"]),
-    name: pickText(o, ["name", "productName", "product_name", "title", "listingName", "listing_name"]),
-    brand: pickText(o, ["brand", "brandName", "brand_name", "producer", "vendor", "vendorName"]),
-    category: pickText(o, ["category", "categoryName", "category_name", "productType", "product_type", "type"]),
-    inventoryType: pickText(o, ["inventoryType", "inventory_type", "inventoryCategory", "unitOfMeasure", "uom"]),
+    // Key lists include Cultivera's LIVE-probed PascalCase fields (Id, Cid,
+    // Name, ImageUrl) from the real product list. See probe/CULTIVERA_PINNED.md.
+    cultiveraItemId: pickText(o, ["id", "listingId", "listing_id", "itemId", "item_id", "productId", "product_id", "sku", "Id", "Cid"]),
+    name: pickText(o, ["name", "productName", "product_name", "title", "listingName", "listing_name", "Name"]),
+    brand: pickText(o, ["brand", "brandName", "brand_name", "producer", "vendor", "vendorName", "Brand", "BrandName"]),
+    category: pickText(o, ["category", "categoryName", "category_name", "productType", "product_type", "type", "Category", "CategoryName"]),
+    inventoryType: pickText(o, ["inventoryType", "inventory_type", "inventoryCategory", "unitOfMeasure", "uom", "InventoryType"]),
     strainType: normalizeStrainType(pickRaw(o, ["strainType", "strain_type", "strain", "classification", "lineage"])),
     sizeLabel,
     unitCount,
     wholesalePriceMinor: moneyToMinor(priceRaw),
-    availableQty: numOrNull(pickRaw(o, ["availableQty", "available_qty", "quantity", "qty", "available", "inventoryCount", "stock"])),
+    availableQty: numOrNull(pickRaw(o, ["availableQty", "available_qty", "quantity", "qty", "available", "inventoryCount", "stock", "Available", "AvailableQty"])),
     thcPct: pctToNumber(thc),
     cbdPct: pctToNumber(cbd),
     totalCannabinoidsPct: pctToNumber(total),
     potencyRaw,
-    description: pickText(o, ["description", "productDescription", "product_description", "summary", "details", "longDescription"]),
-    imageUrl: pickText(o, ["imageUrl", "image_url", "image", "imageURL", "thumbnail", "thumbnailUrl", "photoUrl", "primaryImage"]),
-    coaUrl: pickText(o, ["coaUrl", "coa_url", "coa", "labResultUrl", "lab_result_url", "coaPdf", "coaDocument", "certificateUrl"]),
+    description: pickText(o, ["description", "productDescription", "product_description", "summary", "details", "longDescription", "Description"]),
+    imageUrl: pickText(o, ["imageUrl", "image_url", "image", "imageURL", "thumbnail", "thumbnailUrl", "photoUrl", "primaryImage", "ImageUrl", "Image", "ImageURL"]),
+    coaUrl: pickText(o, ["coaUrl", "coa_url", "coa", "labResultUrl", "lab_result_url", "coaPdf", "coaDocument", "certificateUrl", "CoaUrl", "COAUrl"]),
     raw: o,
     position,
   };
@@ -421,4 +426,24 @@ export function __runCultiveraMenuCoreTests(): void {
   // normalizeSnapshot — empty / junk
   const snap4 = normalizeSnapshot(null);
   assert(snap4.itemCount === 0 && snap4.items.length === 0, "snap null safe");
+
+  // LIVE-probed Cultivera product-list item (PascalCase, MinPrice dollars).
+  // Shape verified from POST /listings/market/174 — see probe/CULTIVERA_PINNED.md.
+  const live = normalizeMenuItem(
+    {
+      Id: 1357,
+      SellerId: 660,
+      Cid: "BC175678-645A-4DB3-9AF9-F051D51F64E7",
+      Name: "Get MotaVated",
+      ImageUrl: "https://files.cultivera.com/435553542D57533130393037/ProductImages/x.jpg",
+      MinPrice: 2.66,
+      IsSale: true,
+      IsDOHComplaint: false,
+    },
+    0,
+  );
+  assert(live.cultiveraItemId === "1357", "live Id parsed");
+  assert(live.name === "Get MotaVated", "live Name parsed");
+  assert(live.wholesalePriceMinor === 266, "live MinPrice 2.66 -> 266 cents");
+  assert(live.imageUrl?.includes("files.cultivera.com") === true, "live ImageUrl parsed");
 }
