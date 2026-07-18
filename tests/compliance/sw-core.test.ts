@@ -9,11 +9,15 @@
 import { describe, expect, it } from "vitest";
 import {
   DEV_SW_VERSION,
+  POS_CACHE_PREFIX,
   __runSwCoreTests,
   buildPosServiceWorkerSource,
+  isBuildStale,
+  isPosCacheName,
   posSwCacheNames,
   resolveBuildVersion,
   sanitizeSwVersion,
+  shouldAutoApplyUpdate,
 } from "../../src/lib/pos/sw-core";
 
 describe("sw-core (AN-0)", () => {
@@ -61,4 +65,39 @@ describe("sw-core (AN-0)", () => {
   it("produces byte-different workers per version (the browser's update signal)", () => {
     expect(buildPosServiceWorkerSource("abc1234")).not.toBe(buildPosServiceWorkerSource("def5678"));
   });
+
+  it("AN-1: isPosCacheName sweeps ONLY the register's own caches", () => {
+    expect(POS_CACHE_PREFIX).toBe("gw-pos-");
+    expect(isPosCacheName("gw-pos-shell-abc1234")).toBe(true);
+    expect(isPosCacheName("gw-pos-assets-dev")).toBe(true);
+    // The admin push worker + foreign caches must never be deleted.
+    expect(isPosCacheName("gw-push-v1")).toBe(false);
+    expect(isPosCacheName("workbox-precache")).toBe(false);
+    expect(isPosCacheName(null)).toBe(false);
+    expect(isPosCacheName(42)).toBe(false);
+  });
+
+  it("AN-1: isBuildStale compares deploy identities, never flags dev", () => {
+    expect(isBuildStale("abc1234", "def5678")).toBe(true);
+    expect(isBuildStale("abc1234", "abc1234")).toBe(false);
+    // Local dev / failed probes must never trigger refresh loops.
+    expect(isBuildStale("dev", "abc1234")).toBe(false);
+    expect(isBuildStale("abc1234", "dev")).toBe(false);
+    expect(isBuildStale(null, "abc1234")).toBe(false);
+    expect(isBuildStale("abc1234", "")).toBe(false);
+    // Sanitized before comparing (case never fakes staleness).
+    expect(isBuildStale("ABC1234", "abc1234")).toBe(false);
+    expect(isBuildStale("ABC1234", "def5678")).toBe(true);
+  });
+
+  it("AN-1: shouldAutoApplyUpdate only fires on the lock screen", () => {
+    expect(shouldAutoApplyUpdate("locked", true)).toBe(true);
+    expect(shouldAutoApplyUpdate("locked", false)).toBe(false);
+    // Home shows the banner; mid-sale/loading never auto-apply.
+    expect(shouldAutoApplyUpdate("home", true)).toBe(false);
+    expect(shouldAutoApplyUpdate("sale", true)).toBe(false);
+    expect(shouldAutoApplyUpdate("loading", true)).toBe(false);
+    expect(shouldAutoApplyUpdate(undefined, true)).toBe(false);
+  });
+
 });

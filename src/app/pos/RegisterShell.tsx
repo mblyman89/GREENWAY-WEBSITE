@@ -46,6 +46,7 @@ import { lowStockCount } from "@/lib/pos/low-stock-core";
 import { applyLocalStockFlag } from "@/lib/pos/stock-flag-core";
 import { THEME_KEY, parseTheme, themeToggleLabel, toggleTheme, type PosTheme } from "@/lib/pos/theme-core";
 import { checkSetupCredentials } from "@/lib/pos/device-setup-core";
+import { isBuildStale, isPosCacheName, shouldAutoApplyUpdate } from "@/lib/pos/sw-core";
 import { VOID_REASON_PRESETS } from "@/lib/pos/void-sale-core";
 import { CUSTOMER_RETURN_REASONS } from "@/lib/inventory/disposition-core";
 import type { PickupQueueEntry } from "@/lib/pos/pickup-core";
@@ -145,8 +146,13 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
   // the default; hydrated in the boot effect below.
   const [theme, setTheme] = useState<PosTheme>("dark");
   // AN-0 — a new build's service worker parked in the "waiting" state
-  // (null = up to date). Only surfaced on the home screen, never mid-sale.
+  // (null = up to date). Surfaced on the home screen; AN-1 additionally
+  // auto-applies it on the LOCK screen (no cashier mid-sale there).
   const [updateWaiting, setUpdateWaiting] = useState<ServiceWorker | null>(null);
+  // AN-1 — the server's CURRENT deploy version, polled while locked. Null
+  // until the first successful probe; compared to our baked-in buildVersion
+  // via isBuildStale (dev on either side never reads as stale).
+  const [serverVersion, setServerVersion] = useState<string | null>(null);
   const seqRef = useRef(0);
   const queueRef = useRef<QueuedPosEvent[]>([]);
   const flushingRef = useRef(false);
@@ -247,6 +253,82 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
       document.documentElement.removeAttribute("data-pos-theme");
     };
   }, [theme]);
+
+  // ── AN-1: lock-screen update pump ──
+  // The owner's real pain: an installed iPad register NEVER picked up a new
+  // deploy — restarting Safari/the iPad, clearing cache, rotating the key all
+  // failed, because a standalone PWA that never navigates may not re-check
+  // its service worker for a very long time. The lock screen is the safe
+  // moment to fix that (no cashier is mid-sale), so while LOCKED we:
+  //   1. ask the registration to check for a new worker (reg.update()), and
+  //   2. probe /api/pos/version (unauthenticated, no-store) so the register
+  //      KNOWS when its running build is stale even if the SW check stalls.
+  // Repeats every 60s while locked; stops the moment the register unlocks.
+  useEffect(() => {
+    if (screen !== "locked") return;
+    let cancelled = false;
+    const check = () => {
+      if ("serviceWorker" in navigator) {
+        navigator.serviceWorker
+          .getRegistration("/pos")
+          .then((reg) => reg?.update().catch(() => {}))
+          .catch(() => {});
+      }
+      fetch("/api/pos/version", { cache: "no-store" })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((body: { version?: unknown } | null) => {
+          if (!cancelled && body && typeof body.version === "string") {
+            setServerVersion(body.version);
+          }
+        })
+        .catch(() => {
+          // Offline / unreachable — staleness simply stays unknown.
+        });
+    };
+    check();
+    const timer = setInterval(check, 60_000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [screen]);
+
+  // AN-1 — auto-apply a parked worker while LOCKED. shouldAutoApplyUpdate is
+  // lock-screen-only by contract (sw-core self-tested): locked means no sale
+  // in progress, and a held sale survives the reload in localStorage (B17).
+  // The controllerchange listener registered at boot performs the one reload.
+  useEffect(() => {
+    if (updateWaiting && shouldAutoApplyUpdate(screen, true)) {
+      updateWaiting.postMessage({ type: "SKIP_WAITING" });
+    }
+  }, [screen, updateWaiting]);
+
+  // AN-1 — the escape hatch the owner asked for: one tap that GUARANTEES the
+  // next boot is the server's current build. Unregisters the /pos worker,
+  // deletes every gw-pos-* cache (isPosCacheName — the admin push worker is
+  // never touched), then reloads; the reload re-registers a fresh worker at
+  // boot. Best-effort at every step so a partial failure still reloads.
+  const forceRefresh = useCallback(() => {
+    void (async () => {
+      try {
+        if ("serviceWorker" in navigator) {
+          const reg = await navigator.serviceWorker.getRegistration("/pos");
+          if (reg) await reg.unregister();
+        }
+      } catch {
+        // Keep going — the cache sweep + reload still help.
+      }
+      try {
+        if (typeof caches !== "undefined") {
+          const names = await caches.keys();
+          await Promise.all(names.filter((n) => isPosCacheName(n)).map((n) => caches.delete(n)));
+        }
+      } catch {
+        // Best-effort.
+      }
+      window.location.reload();
+    })();
+  }, []);
 
   // ── persist queue on change (and mirror into the ref flush() reads) ──
   useEffect(() => {
@@ -491,6 +573,9 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
         online={online}
         pendingCount={pendingCount}
         banner={banner}
+        buildVersion={buildVersion ?? null}
+        updateReady={!!updateWaiting || isBuildStale(buildVersion, serverVersion)}
+        onForceRefresh={forceRefresh}
         onClearBanner={() => setBanner(null)}
         onUnlocked={(emp, drawerInfo, registerId) => {
           setEmployee(emp);
@@ -1163,6 +1248,9 @@ function LockScreen({
   online,
   pendingCount,
   banner,
+  buildVersion,
+  updateReady,
+  onForceRefresh,
   onClearBanner,
   onUnlocked,
   onPunch,
@@ -1171,6 +1259,9 @@ function LockScreen({
   online: boolean;
   pendingCount: number;
   banner: string | null;
+  buildVersion: string | null;
+  updateReady: boolean;
+  onForceRefresh: () => void;
   onClearBanner: () => void;
   onUnlocked: (emp: UnlockedEmployee, drawer: DrawerInfo, registerId: string) => void;
   onPunch: (emp: UnlockedEmployee) => void;
@@ -1287,6 +1378,31 @@ function LockScreen({
       >
         {mode === "unlock" ? "Clock in / out instead" : "Back to unlock"}
       </button>
+      {/* AN-1 — build identity + the update/force-refresh affordance. The
+          version here is the RUNNING build; when the server reports a newer
+          deploy (or a worker is parked) the button turns into an explicit
+          update prompt. Force refresh is always reachable as the last-resort
+          escape hatch the owner asked for. */}
+      <div className="mt-8 flex flex-col items-center gap-2">
+        {updateReady ? (
+          <button
+            type="button"
+            onClick={onForceRefresh}
+            className="rounded-lg bg-[var(--pos-accent)] px-4 py-2 text-sm font-semibold text-[var(--pos-accent-ink)]"
+          >
+            Update available — tap to refresh
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={onForceRefresh}
+            className="text-xs text-[var(--pos-text-muted)] underline"
+          >
+            Force refresh
+          </button>
+        )}
+        <span className="text-xs text-[var(--pos-text-muted)]">v{buildVersion ?? "dev"}</span>
+      </div>
     </main>
   );
 }
