@@ -155,7 +155,21 @@ export default async function CultiveraSnapshotPage({
               description="Try a shorter search or clear the category filter."
             />
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            /* CV-6: tick items → GET to the PO builder. The form only carries
+               row IDS (`fromMenu` + `item`); the builder reloads every name,
+               price, and vendor from OUR saved snapshot — never from the URL. */
+            <form method="get" action="/admin/purchasing/new">
+              <input type="hidden" name="fromMenu" value={id} />
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-4 py-2.5">
+                <p className="text-xs text-[var(--admin-text-muted)]">
+                  Tick items below, then start a purchase order — they&apos;re added as draft lines
+                  (qty 1 at the listed wholesale price) you confirm in the builder.
+                </p>
+                <Button type="submit" variant="save" size="sm">
+                  Add selected to purchase order →
+                </Button>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {visible.map((it) => {
                 const potency = potencyLabel(it);
                 return (
@@ -174,9 +188,19 @@ export default async function CultiveraSnapshotPage({
                       )}
                     </div>
                     <div className="flex flex-1 flex-col gap-1.5 p-3">
-                      <div className="text-sm font-semibold text-[var(--admin-text)]" title={it.name ?? undefined}>
-                        {it.name ?? "(unnamed item)"}
-                      </div>
+                      {/* CV-6: selection for the PO hand-off (label = big tap target). */}
+                      <label className="flex cursor-pointer items-start gap-2">
+                        <input
+                          type="checkbox"
+                          name="item"
+                          value={it.id}
+                          aria-label={`Select ${it.name ?? "menu item"} for purchase order`}
+                          className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--admin-accent)]"
+                        />
+                        <span className="text-sm font-semibold text-[var(--admin-text)]" title={it.name ?? undefined}>
+                          {it.name ?? "(unnamed item)"}
+                        </span>
+                      </label>
                       <div className="text-xs text-[var(--admin-text-muted)]">
                         {[it.brand, it.category, it.size_label].filter(Boolean).join(" · ") || "—"}
                       </div>
@@ -224,7 +248,8 @@ export default async function CultiveraSnapshotPage({
                   </div>
                 );
               })}
-            </div>
+              </div>
+            </form>
           )}
         </Section>
       </div>

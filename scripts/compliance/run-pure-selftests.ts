@@ -88,6 +88,7 @@ import { __runIdCaptureCoreTests } from "../../src/lib/pos/id-capture-core";
 import { __runCultiveraMenuCoreTests } from "../../src/lib/purchasing/cultivera-menu-core";
 import { __runCultiveraMenusUiCoreTests } from "../../src/lib/purchasing/cultivera-menus-ui-core";
 import { __runCultiveraMediaCoreTests } from "../../src/lib/purchasing/cultivera-media-core";
+import { __runCultiveraPoCoreTests } from "../../src/lib/purchasing/cultivera-po-core";
 import { __runDraftSeedCoreTests } from "../../src/lib/inventory/draft-seed-core";
 import { __runWedgeScanCoreTests } from "../../src/lib/pos/wedge-scan-core";
 import { __runRegisterLoyaltyCoreTests } from "../../src/lib/pos/register-loyalty-core";
@@ -188,6 +189,7 @@ async function main() {
   __runCultiveraMenuCoreTests();
   __runCultiveraMenusUiCoreTests();
   __runCultiveraMediaCoreTests();
+  __runCultiveraPoCoreTests();
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

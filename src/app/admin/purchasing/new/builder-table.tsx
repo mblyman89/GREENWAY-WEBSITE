@@ -85,6 +85,7 @@ export function BuilderTable({
   origin,
   planSummary,
   prefill,
+  menuPrefills,
   fromLeadId,
   leadTimeDays,
   createAction,
@@ -95,37 +96,52 @@ export function BuilderTable({
   origin: string;
   planSummary?: string;
   prefill?: SuggestionRow;
+  /** CV-6: draft lines handed off from a Cultivera vendor-menu snapshot. */
+  menuPrefills?: SuggestionRow[];
   fromLeadId?: string;
   /** The store's real lead-time setting (drives urgency classification). */
   leadTimeDays: number;
   createAction: (formData: FormData) => void | Promise<void>;
   sendAction: (formData: FormData) => void | Promise<void>;
 }) {
-  // When promoting a discovery lead, prepend its draft line so it's first and
-  // pre-selected. Memoized so the row list is stable across renders.
+  // When promoting a discovery lead or handing off Cultivera menu items,
+  // prepend those draft lines so they're first and pre-selected. Memoized so
+  // the row list is stable across renders.
+  const menuRows = useMemo(() => menuPrefills ?? [], [menuPrefills]);
   const rows = useMemo(
-    () => (prefill ? [prefill, ...rowsProp] : rowsProp),
-    [prefill, rowsProp],
+    () => [...(prefill ? [prefill] : []), ...menuRows, ...rowsProp],
+    [prefill, menuRows, rowsProp],
   );
 
   // Stable keys — the store dedupes on exactly this identity, so it's unique
-  // within one suggestion set. The prefill lead has no pos key; its name key
-  // is namespaced so it can never collide with a real suggestion.
+  // within one suggestion set. Prefill lines have no pos key; their name keys
+  // are namespaced (lead: / menu:<i>:) so they can never collide with a real
+  // suggestion or each other.
   const keyOf = useMemo(() => {
-    const prefillKey = prefill ? `lead:${builderRowKey(prefill)}` : null;
-    return (r: SuggestionRow) => (prefill && r === prefill ? (prefillKey as string) : builderRowKey(r));
-  }, [prefill]);
+    const special = new Map<SuggestionRow, string>();
+    if (prefill) special.set(prefill, `lead:${builderRowKey(prefill)}`);
+    menuRows.forEach((r, i) => special.set(r, `menu:${i}:${builderRowKey(r)}`));
+    return (r: SuggestionRow) => special.get(r) ?? builderRowKey(r);
+  }, [prefill, menuRows]);
+
+  // Fast membership check: is this row a pinned prefill (lead or menu)?
+  const isPrefillRow = useMemo(() => {
+    const set = new Set<SuggestionRow>(menuRows);
+    if (prefill) set.add(prefill);
+    return (r: SuggestionRow) => set.has(r);
+  }, [prefill, menuRows]);
 
   // Pre-select rows that need attention (below reorder with a suggested qty);
-  // a prefilled lead row is always pre-selected.
+  // prefilled lead/menu rows are always pre-selected.
   const initialSelected = useMemo(() => {
     const set = new Set<string>();
     rows.forEach((r) => {
       if (r.belowReorderPoint && r.suggestedQty > 0) set.add(keyOf(r));
     });
     if (prefill) set.add(keyOf(prefill));
+    menuRows.forEach((r) => set.add(keyOf(r)));
     return set;
-  }, [rows, prefill, keyOf]);
+  }, [rows, prefill, menuRows, keyOf]);
 
   const [selected, setSelected] = useState<Set<string>>(initialSelected);
   const [qtys, setQtys] = useState<Record<string, number>>(() => {
@@ -153,18 +169,25 @@ export function BuilderTable({
       );
       if (match) return match.id;
     }
+    // CV-6: a Cultivera menu hand-off threads ONE verified vendor id (the
+    // server only passes it when it matches a real vendor record).
+    const menuVendor = menuRows.find(
+      (r) => r.vendorId && vendors.some((v) => v.id === r.vendorId),
+    )?.vendorId;
+    if (menuVendor) return menuVendor;
     const first = rows.find((r) => r.vendorId)?.vendorId;
     return first ?? "";
   });
 
-  // Visible rows: search, then sort. The prefill lead (when present) is always
-  // pinned to the top so a promoted product can never be "lost" to a filter.
+  // Visible rows: search, then sort. Prefill lines (lead or menu hand-off)
+  // are always pinned to the top so a promoted product can never be "lost"
+  // to a filter.
   const visible = useMemo(() => {
-    const body = rows.filter((r) => !(prefill && r === prefill));
+    const body = rows.filter((r) => !isPrefillRow(r));
     const searched = filterRowsByQuery(body, query);
     const sorted = sortRows(searched, sortKey, leadTimeDays);
-    return prefill ? [prefill, ...sorted] : sorted;
-  }, [rows, prefill, query, sortKey, leadTimeDays]);
+    return [...(prefill ? [prefill] : []), ...menuRows, ...sorted];
+  }, [rows, prefill, menuRows, isPrefillRow, query, sortKey, leadTimeDays]);
 
   function toggle(key: string) {
     setSelected((prev) => {
@@ -176,14 +199,17 @@ export function BuilderTable({
   }
 
   // Presets act on the VISIBLE (searched) rows so "Stockouts" respects an
-  // active search; the prefill lead stays selected through every preset
-  // except an explicit "None".
+  // active search; prefill lines (lead or menu) stay selected through every
+  // preset except an explicit "None".
   function applyPreset(preset: SelectionPreset) {
-    const body = visible.filter((r) => !(prefill && r === prefill));
+    const body = visible.filter((r) => !isPrefillRow(r));
     const keys = new Set(
       presetRowKeys(body, preset, leadTimeDays).map((k) => k), // core keys == keyOf for body rows
     );
-    if (prefill && preset !== "none") keys.add(keyOf(prefill));
+    if (preset !== "none") {
+      if (prefill) keys.add(keyOf(prefill));
+      menuRows.forEach((r) => keys.add(keyOf(r)));
+    }
     setSelected(keys);
   }
 
@@ -317,6 +343,7 @@ export function BuilderTable({
                   const key = keyOf(r);
                   const isSel = selected.has(key);
                   const isLead = Boolean(prefill && r === prefill);
+                  const isMenu = !isLead && isPrefillRow(r);
                   const urgency = classifyUrgency(r, leadTimeDays);
                   const lineTotal = (qtys[key] ?? 0) * (costs[key] ?? 0);
                   return (
@@ -347,6 +374,8 @@ export function BuilderTable({
                       <td className="px-3 py-3">
                         {isLead ? (
                           <Badge tone="green">from lead</Badge>
+                        ) : isMenu ? (
+                          <Badge tone="green">from menu</Badge>
                         ) : urgency !== "healthy" ? (
                           <Badge tone={URGENCY_TONE[urgency]}>{URGENCY_LABEL[urgency]}</Badge>
                         ) : (
