@@ -544,3 +544,23 @@ they are optional data loads, not schema, and each is idempotent (safe to run an
   layout has NO VIN field; OpenTHC's layout carries only Depart/Arrive; the
   URL/batch-import transfer JSON has no PDF links to fetch (key-scanned). No
   migration. Suite 1,764/135.
+
+- **Visible start-sale gate + one-tap clock-in (PR #567, AN-2).** The owner
+  reported the "front end POS" still broken after force refresh, deleting
+  website data, and rotating the device key. His register screenshot proved
+  otherwise: the footer read v9751582 — the LATEST deploy — so the AN-1
+  update pump works. The real blocker was invisible: the header said "NOT
+  clocked in", and the "Start sale — scan ID" hero button was disabled by
+  `!drawer || !employee.clockedIn || !menuReady` with the reason expressed
+  ONLY via a `title` tooltip — which touch screens never show. A silently
+  greyed-out button reads as a broken app. Fix: new pure
+  `startSaleBlockReason(drawerOpen, clockedIn, menuReady)` in
+  register-polish-core names the FIRST blocking gate in morning order
+  (drawer → clock-in → menu) with an actionable sentence, or null when the
+  sale can start (8 new self-tests; 31 in the module). The HomeScreen hero
+  now shows that reason in a visible warn notice under the disabled button,
+  plus an inline "⏱️ Clock in now" button (the existing audited onPunch
+  flow) when clock-in is the blocker; the held-sale Load button reuses the
+  same gate so the two disabled states can never drift. The gates themselves
+  are unchanged — drawer, on-the-clock employee, and downloaded menu are
+  still required; only the visibility changed. No migration. Suite 1,768/135.
