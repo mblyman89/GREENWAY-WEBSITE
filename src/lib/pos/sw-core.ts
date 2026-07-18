@@ -53,6 +53,45 @@ export function posSwCacheNames(version: string): { shell: string; assets: strin
   return { shell: `gw-pos-shell-${v}`, assets: `gw-pos-assets-${v}` };
 }
 
+/** Every register cache this worker family owns starts with this prefix. */
+export const POS_CACHE_PREFIX = "gw-pos-";
+
+/**
+ * AN-1 — is this Cache Storage name one of ours? Used by the register's
+ * "Force refresh" to delete ONLY gw-pos-* caches (the admin push worker and
+ * anything else on the origin is never touched).
+ */
+export function isPosCacheName(name: unknown): boolean {
+  return typeof name === "string" && name.startsWith(POS_CACHE_PREFIX);
+}
+
+/**
+ * AN-1 — is the RUNNING register build stale relative to the server's current
+ * deploy? Compares sanitized versions; "dev" on EITHER side is never stale
+ * (local dev has no deploy identity, and a failed/garbage fetch must never
+ * trigger refresh loops).
+ */
+export function isBuildStale(
+  clientVersion: string | null | undefined,
+  serverVersion: string | null | undefined,
+): boolean {
+  const client = sanitizeSwVersion(clientVersion);
+  const server = sanitizeSwVersion(serverVersion);
+  if (client === DEV_SW_VERSION || server === DEV_SW_VERSION) return false;
+  return client !== server;
+}
+
+/**
+ * AN-1 — may a parked (waiting) worker be activated automatically right now?
+ * ONLY on the lock screen: locked means no cashier is mid-sale, so the reload
+ * that follows activation can never eat a cart. (A held sale is parked in
+ * localStorage and survives the reload by design — B17.) Every other screen
+ * keeps the AN-0 rule: activation only via the explicit home-screen banner.
+ */
+export function shouldAutoApplyUpdate(screen: unknown, hasWaitingWorker: boolean): boolean {
+  return hasWaitingWorker && screen === "locked";
+}
+
 /**
  * Build the full service-worker source for a given build version.
  *
@@ -210,6 +249,31 @@ export function __runSwCoreTests(): void {
   );
   // Garbage version degrades to the dev worker rather than throwing.
   ok(buildPosServiceWorkerSource("").includes('"gw-pos-shell-dev"'), "empty version builds the dev worker");
+
+  // AN-1 — isPosCacheName guards the force-refresh cache sweep.
+  ok(isPosCacheName("gw-pos-shell-abc1234"), "shell cache is ours");
+  ok(isPosCacheName("gw-pos-assets-dev"), "asset cache is ours");
+  ok(!isPosCacheName("gw-push-v1"), "push worker cache is NOT ours");
+  ok(!isPosCacheName("workbox-precache"), "foreign cache is NOT ours");
+  ok(!isPosCacheName(null), "non-string is NOT ours");
+
+  // AN-1 — isBuildStale: differing real versions are stale; dev never is.
+  ok(isBuildStale("abc1234", "def5678"), "differing deploy shas are stale");
+  ok(!isBuildStale("abc1234", "abc1234"), "same sha is fresh");
+  ok(!isBuildStale("dev", "abc1234"), "dev client never stale");
+  ok(!isBuildStale("abc1234", "dev"), "dev server answer never stale");
+  ok(!isBuildStale(null, "abc1234"), "missing client version never stale");
+  ok(!isBuildStale("abc1234", ""), "empty server answer never stale");
+  ok(isBuildStale("ABC1234", "def5678"), "versions sanitized before compare");
+  ok(!isBuildStale("ABC1234", "abc1234"), "case difference alone is fresh");
+
+  // AN-1 — shouldAutoApplyUpdate: lock screen only, and only with a waiting worker.
+  ok(shouldAutoApplyUpdate("locked", true), "locked + waiting -> auto-apply");
+  ok(!shouldAutoApplyUpdate("locked", false), "locked without waiting -> no");
+  ok(!shouldAutoApplyUpdate("home", true), "home screen -> banner only, never auto");
+  ok(!shouldAutoApplyUpdate("sale", true), "mid-sale -> never");
+  ok(!shouldAutoApplyUpdate("loading", true), "loading -> never");
+  ok(!shouldAutoApplyUpdate(undefined, true), "unknown screen -> never");
 
   if (failed > 0) {
     throw new Error(`sw-core self-tests FAILED (${failed}): ${failures.join("; ")}`);
