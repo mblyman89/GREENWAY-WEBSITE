@@ -247,18 +247,27 @@ export function parseShippingManifestText(text: string): ParsedManifest | null {
       const name = tm?.[1]?.trim() ?? null;
       transport.transporter_name =
         name && !/\d/.test(name) && !/date of birth/i.test(name) ? name : null;
+      // This label names the INDIVIDUAL carrying the delivery — the companion
+      // Cultivera invoice prints the same person as "Driver:" (verified on the
+      // real SPR bundle). Mirror into the driver draft field so the review
+      // form isn't blank. The (Third Party) layout above is NOT mirrored: its
+      // transporter is a COMPANY (e.g. "TERPENE TRANSIT"), never a person.
+      if (!transport.driver_name && transport.transporter_name) {
+        transport.driver_name = transport.transporter_name;
+      }
     }
 
     // Vehicle line: "<year> <color> <make> <model> <plate>" clumped after the
     // "Licensee Phone:" that precedes it in this layout, e.g.
-    //   "Licensee Phone: 360-451-7357 2006 blue subaru impreza chb65209".
-    // We require a plausible model YEAR (19xx/20xx) followed by a lowercase
-    // COLOR WORD then make/model then a plate — this deliberately EXCLUDES a
-    // street address like "4851 GEIGER RD SE" (4851 isn't a 19xx/20xx year and
-    // "GEIGER" is upper-case). The last token is the license plate.
+    //   "Licensee Phone: 360-451-7357 2006 blue subaru impreza chb65209"
+    //   "Licensee Phone: 3605720840 2021 WHITE Nissan NV200 D44636H"
+    // CASE-INSENSITIVE (the SPR sample prints "2021 WHITE Nissan NV200" in
+    // caps — the old lowercase-only match missed it entirely). A street
+    // address like "4851 GEIGER RD SE" still can't match: 4851 is not a
+    // plausible 19xx/20xx model year. The last token is the license plate.
     if (!transport.vehicle_description) {
       const vm = flat.match(
-        /\b((?:19|20)\d{2}\s+[a-z]{3,}\s+[a-z][a-z0-9]{2,}\s+[a-z][a-z0-9]{1,}\s+[a-z0-9]{5,8})\b/,
+        /\b((?:19|20)\d{2}\s+[a-z]{3,}\s+[a-z][a-z0-9]{2,}\s+[a-z][a-z0-9]{1,}\s+[a-z0-9]{5,8})\b/i,
       );
       if (vm) {
         const parts = vm[1].trim().split(/\s+/);
@@ -269,6 +278,18 @@ export function parseShippingManifestText(text: string): ParsedManifest | null {
         }
       }
     }
+
+    // Vehicle ID # (VIN). The label's value drifts in the unpdf blob, so we
+    // match any 17-char VIN-alphabet token (no I/O/Q per the VIN standard)
+    // that contains AT LEAST ONE LETTER — the letter requirement is what
+    // keeps 17-DIGIT Batch/Lot IDs and Manifest IDs from ever matching.
+    // Verified on the real docs: 3N6CM0KN1MK695529 (SPR sample) and
+    // JF1GH63638G828028 (Everigreene sample).
+    if (!transport.vehicle_vin) {
+      const vinM = flat.match(/\b(?=[0-9]*[A-HJ-NPR-Z])([A-HJ-NPR-Z0-9]{17})\b/);
+      if (vinM) transport.vehicle_vin = vinM[1].toUpperCase();
+    }
+
 
     if (!transport.route_notes) {
       const routeM = flat.match(
@@ -457,6 +478,14 @@ export function __runCultiveraManifestTests(sampleText: string): {
     `vehicle description (got ${m?.transport?.vehicle_description})`,
   );
   ok(m?.transport?.vehicle_plate === "CHB65209", `vehicle plate (got ${m?.transport?.vehicle_plate})`);
+  ok(
+    m?.transport?.vehicle_vin === "JF1GH63638G828028",
+    `vehicle VIN extracted, letter-required so 17-digit lot ids can't match (got ${m?.transport?.vehicle_vin})`,
+  );
+  ok(
+    m?.transport?.driver_name === "Tyler hart",
+    `driver mirrors the Cultivera Transporter Name (got ${m?.transport?.driver_name})`,
+  );
   ok(m?.transport?.departed_at === "2026-07-08T09:00", `departure datetime (got ${m?.transport?.departed_at})`);
   ok(m?.transport?.eta_date === "2026-07-08", `eta from arrival estimate (got ${m?.transport?.eta_date})`);
   ok(m?.transport?.arrived_at === null, "arrived_at NOT guessed");
@@ -466,5 +495,62 @@ export function __runCultiveraManifestTests(sampleText: string): {
   );
 
   if (failed === 0) console.log(`pdf-manifest-core (cultivera): all ${passed} tests passed`);
+  return { passed, failed };
+}
+
+// ---------------------------------------------------------------------------
+// Self-tests for the SPR "Internal Shipping Document" sample (the owner's real
+// Seattles Private Reserve manifest, unpdf text checked in as a fixture). This
+// is the document that exposed three gaps: UPPERCASE vehicle clump ("2021
+// WHITE Nissan NV200 D44636H"), no VIN extraction, and an empty driver field.
+// ---------------------------------------------------------------------------
+export function __runCultiveraSprManifestTests(sampleText: string): {
+  passed: number;
+  failed: number;
+} {
+  let passed = 0;
+  let failed = 0;
+  const ok = (cond: boolean, msg: string) => {
+    if (cond) passed += 1;
+    else {
+      failed += 1;
+      console.error("FAIL:", msg);
+    }
+  };
+
+  ok(looksLikeShippingManifest(sampleText) === true, "SPR sample recognized as manifest");
+
+  const m = parseShippingManifestText(sampleText);
+  ok(m !== null, "SPR sample parses");
+  ok(m?.manifest_number === "11804443981161219", `manifest id (got ${m?.manifest_number})`);
+  ok(m?.vendor_label === "Seattles Private Reserve", `vendor label (got ${m?.vendor_label})`);
+  ok(m?.vendor_license === "417068", `vendor license (got ${m?.vendor_license})`);
+  ok(m?.lines.length === 16, `all 16 lines parsed (got ${m?.lines.length})`);
+  ok(m?.lines[0].lot_code === "11804443972060487", `line 1 lot (got ${m?.lines[0].lot_code})`);
+  ok(
+    m?.lines[9].product_name === "SPR - Variety Pack - 5pk Joint Tin (5g) #1",
+    `line 10 name (got ${m?.lines[9].product_name})`,
+  );
+
+  // Transport — the exact fields the owner saw EMPTY on the review form.
+  ok(
+    m?.transport?.transporter_name === "Kory T Anderson",
+    `transporter name (got ${m?.transport?.transporter_name})`,
+  );
+  ok(
+    m?.transport?.driver_name === "Kory T Anderson",
+    `driver mirrors transporter (invoice labels the same person Driver) (got ${m?.transport?.driver_name})`,
+  );
+  ok(
+    m?.transport?.vehicle_description === "2021 WHITE Nissan NV200",
+    `UPPERCASE vehicle clump parsed (got ${m?.transport?.vehicle_description})`,
+  );
+  ok(m?.transport?.vehicle_plate === "D44636H", `plate (got ${m?.transport?.vehicle_plate})`);
+  ok(m?.transport?.vehicle_vin === "3N6CM0KN1MK695529", `VIN (got ${m?.transport?.vehicle_vin})`);
+  ok(m?.transport?.departed_at === "2026-07-15T08:00", `departure (got ${m?.transport?.departed_at})`);
+  ok(m?.transport?.eta_date === "2026-07-15", `eta from arrival estimate (got ${m?.transport?.eta_date})`);
+  ok(m?.transport?.arrived_at === null, "arrived_at NOT guessed");
+
+  if (failed === 0) console.log(`pdf-manifest-core (cultivera SPR): all ${passed} tests passed`);
   return { passed, failed };
 }

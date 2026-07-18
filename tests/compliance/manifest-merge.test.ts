@@ -17,6 +17,7 @@ import {
   mergeCoaByLot,
   mergeInvoicePricesByLot,
   foldTransport,
+  chooseTransportDonor,
   __runManifestMergeTests,
 } from "@/lib/inventory/manifest-merge-core";
 import { emptyTransport } from "@/lib/inventory/intake-parser";
@@ -160,6 +161,62 @@ describe("manifest-merge-core (H16b-5)", () => {
     expect(folded.transport?.transporter_name).toBe("Svin Garden");
     expect(folded.transport?.driver_name).toBe("David Sanchez");
     expect(folded.warnings.some((w) => w.includes("Transport conflict"))).toBe(true);
+  });
+
+  it("chooseTransportDonor picks the bundled shipping PDF's transport by manifest number (H17)", () => {
+    // Grounded in the real SPR bundle: the WCIA JSON's transporter fields are
+    // null while the bundled shipping-manifest PDF carries the driver/vehicle.
+    const sprTransport: ParsedTransport = {
+      ...emptyTransport(),
+      transporter_name: "Kory T Anderson",
+      driver_name: "Kory T Anderson",
+      vehicle_description: "2021 WHITE Nissan NV200",
+      vehicle_plate: "D44636H",
+      vehicle_vin: "3N6CM0KN1MK695529",
+    };
+
+    // Exact manifest-number match wins.
+    expect(
+      chooseTransportDonor("11804443981161219", [
+        { manifest_number: "11804443981161219", transport: sprTransport },
+      ]),
+    ).toBe(sprTransport);
+
+    // Single candidate with no number is accepted (numbers can't disagree).
+    expect(
+      chooseTransportDonor("11804443981161219", [
+        { manifest_number: null, transport: sprTransport },
+      ]),
+    ).toBe(sprTransport);
+
+    // Number DISAGREEMENT refuses — no guessing.
+    expect(
+      chooseTransportDonor("11804443981161219", [
+        { manifest_number: "99999999999999999", transport: sprTransport },
+      ]),
+    ).toBeNull();
+
+    // Two numberless candidates are ambiguous -> null.
+    expect(
+      chooseTransportDonor("11804443981161219", [
+        { manifest_number: null, transport: sprTransport },
+        { manifest_number: null, transport: { ...emptyTransport(), driver_name: "Someone Else" } },
+      ]),
+    ).toBeNull();
+
+    // unpdf whitespace inside numbers is normalized before comparing.
+    expect(
+      chooseTransportDonor("118 0444 3981161219", [
+        { manifest_number: "11804443981161219", transport: sprTransport },
+      ]),
+    ).toBe(sprTransport);
+
+    // All-null transport never donates.
+    expect(
+      chooseTransportDonor("11804443981161219", [
+        { manifest_number: "11804443981161219", transport: emptyTransport() },
+      ]),
+    ).toBeNull();
   });
 
   it("passes the embedded self-test suite", () => {

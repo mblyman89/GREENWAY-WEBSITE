@@ -22,6 +22,12 @@ import { seedDraftsForManifest } from "@/lib/inventory/catalog-drafts";
 import { archiveCoasForManifest } from "@/lib/inventory/coa-archive";
 import { promoteManifestToKb } from "@/lib/inventory/manifest-kb-bridge";
 import { deriveInventoryExternalId } from "@/lib/compliance/ccrs-identifiers";
+import {
+  normalizeLicense,
+  pickVendorByNormalizedName,
+  vendorSlugCandidate,
+  type VendorNameCandidate,
+} from "@/lib/inventory/vendor-resolve-core";
 import { quarterKeyFromYmd } from "@/lib/compliance/trade-samples-core";
 import { getSampleSettings, incomingUnitsForProcessor } from "@/lib/compliance/trade-samples";
 import { sampleProductTypeForLine } from "@/lib/compliance/sample-product-type-core";
@@ -84,19 +90,138 @@ export async function countManifestsByStatus(): Promise<StageCounts> {
   return countStages(rows.map((r) => r.status));
 }
 
-/** Try to match a free-text vendor label to an existing vendor row. */
-async function resolveVendorId(
+/**
+ * H17 — resolve the manifest's sender to a vendors row, CREATING a draft
+ * vendor when none exists. The old resolver was a bare
+ * `ilike(display_name, label)` — case-insensitive EQUALITY — so any spelling
+ * drift (or simply a vendor we hadn't added yet, like Seattles Private
+ * Reserve) silently left vendor_id NULL: lots and catalog drafts carried no
+ * vendor and vendor-axis product mastering had nothing to group on.
+ *
+ * Resolution ladder (most-authoritative first, all read-only until the last):
+ *   1. LICENSE NUMBER — the manifest's from_license_number vs
+ *      vendors.license_number (digits-only compare). The WA license is the
+ *      stable public id; names drift, licenses don't.
+ *   2. Exact ilike on display_name (the old behavior, kept).
+ *   3. vendor_aliases (source_name, any source_system) — the alias-merge tool
+ *      already maintains these.
+ *   4. Normalized-name scan of display_name/dba/legal_name
+ *      ("Seattle's Private-Reserve" === "seattles private reserve").
+ *   5. AUTO-CREATE a status='draft' vendors row from the manifest header
+ *      (display_name = label, license_number when present) + a vendor_aliases
+ *      row (source_system 'manifest') so the next delivery hits step 3.
+ *      Drafts-only rule respected: a draft vendor is back-office bookkeeping,
+ *      not a published website page — vendor surfaces filter by status.
+ *
+ * Best-effort: any step's failure degrades to the next; a total failure
+ * returns null exactly like before (staging never breaks on vendor lookup).
+ */
+async function resolveOrCreateVendor(
   admin: ReturnType<typeof createSupabaseAdminClient>,
   label: string | null,
+  license: string | null,
+  actorId: string | null,
 ): Promise<string | null> {
-  if (!label) return null;
-  const { data } = await admin
-    .from("vendors")
-    .select("id, display_name")
-    .ilike("display_name", label)
-    .limit(1);
-  const row = (data as { id: string }[] | null)?.[0];
-  return row?.id ?? null;
+  const cleanLabel = (label ?? "").trim();
+  const licenseKey = normalizeLicense(license);
+
+  // 1) License number — the stable identifier.
+  if (licenseKey) {
+    try {
+      const { data } = await admin
+        .from("vendors")
+        .select("id, license_number")
+        .not("license_number", "is", null)
+        .limit(2000);
+      const rows = (data as { id: string; license_number: string | null }[] | null) ?? [];
+      const hit = rows.find((r) => normalizeLicense(r.license_number) === licenseKey);
+      if (hit) return hit.id;
+    } catch (err) {
+      console.error("[intake-store] vendor license lookup failed:", err);
+    }
+  }
+
+  if (!cleanLabel) return null;
+
+  // 2) Exact ilike on display_name (previous behavior).
+  {
+    const { data } = await admin
+      .from("vendors")
+      .select("id, display_name")
+      .ilike("display_name", cleanLabel)
+      .limit(1);
+    const row = (data as { id: string }[] | null)?.[0];
+    if (row) return row.id;
+  }
+
+  // 3) vendor_aliases by source_name (case-insensitive equality).
+  try {
+    const { data } = await admin
+      .from("vendor_aliases")
+      .select("vendor_id, source_name")
+      .ilike("source_name", cleanLabel)
+      .limit(1);
+    const row = (data as { vendor_id: string }[] | null)?.[0];
+    if (row) return row.vendor_id;
+  } catch (err) {
+    console.error("[intake-store] vendor alias lookup failed:", err);
+  }
+
+  // 4) Normalized-name scan (pure core decides; we just fetch candidates).
+  try {
+    const { data } = await admin
+      .from("vendors")
+      .select("id, display_name, dba, legal_name")
+      .limit(2000);
+    const rows = ((data as VendorNameCandidate[] | null) ?? []).sort((a, b) =>
+      (a.display_name ?? "").localeCompare(b.display_name ?? ""),
+    );
+    const hit = pickVendorByNormalizedName(cleanLabel, rows);
+    if (hit) return hit.id;
+  } catch (err) {
+    console.error("[intake-store] vendor normalized scan failed:", err);
+  }
+
+  // 5) Auto-create a DRAFT vendor from the manifest header.
+  try {
+    const baseSlug = vendorSlugCandidate(cleanLabel) || "vendor";
+    let slug = baseSlug;
+    {
+      const { data } = await admin.from("vendors").select("id").eq("slug", slug).limit(1);
+      if (((data as { id: string }[] | null) ?? []).length > 0) {
+        slug = `${baseSlug}-${Date.now().toString(36).slice(-4)}`.slice(0, 80);
+      }
+    }
+    const { data: created, error } = await admin
+      .from("vendors")
+      .insert({
+        display_name: cleanLabel,
+        slug,
+        license_number: licenseKey,
+        status: "draft",
+        internal_notes:
+          "Auto-created from an inbound manifest header (intake vendor resolution). Verify details, then publish when ready.",
+        created_by: actorId,
+        updated_by: actorId,
+      })
+      .select("id")
+      .single();
+    if (error || !created) {
+      console.error("[intake-store] vendor auto-create failed:", error?.message);
+      return null;
+    }
+    const vendorId = (created as { id: string }).id;
+    // Alias so future manifests hit step 3 even if the display name is edited.
+    // Best-effort: a duplicate alias (unique source_system+source_name) just
+    // returns an error object — PostgREST never throws here.
+    await admin
+      .from("vendor_aliases")
+      .insert({ vendor_id: vendorId, source_name: cleanLabel, source_system: "manifest" });
+    return vendorId;
+  } catch (err) {
+    console.error("[intake-store] vendor auto-create threw:", err);
+    return null;
+  }
 }
 
 /** Try to match a brand label (optionally within a vendor). */
@@ -130,7 +255,12 @@ export async function stageManifest(
   }
   const admin = createSupabaseAdminClient();
 
-  const vendorId = await resolveVendorId(admin, parsed.vendor_label);
+  const vendorId = await resolveOrCreateVendor(
+    admin,
+    parsed.vendor_label,
+    parsed.vendor_license,
+    actorId,
+  );
 
   // H16b-7 DEDUPE: prevent the SAME manifest entering the table twice (owner:
   // "if for what ever reason the vendor sends us the email twice or something, I
@@ -636,6 +766,44 @@ export async function finalizeManifestDispositions(
   }
   const admin = createSupabaseAdminClient();
   const nowIso = new Date().toISOString();
+
+  // H17 — accept-time vendor repair. Manifests staged BEFORE the resolver
+  // upgrade (or while the vendors table was missing the sender) carry
+  // vendor_id NULL, so their lots → catalog drafts would get no vendor_name
+  // and vendor-axis mastering couldn't group them. Re-run the full resolution
+  // ladder now (license → name → alias → normalized → auto-create draft
+  // vendor) and back-fill the manifest + its lots. Best-effort — a lookup
+  // hiccup never blocks the finalize.
+  try {
+    const { data: mv } = await admin
+      .from("inbound_manifests")
+      .select("vendor_id, vendor_label")
+      .eq("id", manifestId)
+      .maybeSingle();
+    const mvRow = mv as { vendor_id: string | null; vendor_label: string | null } | null;
+    if (mvRow && !mvRow.vendor_id && (mvRow.vendor_label ?? "").trim()) {
+      const repairedId = await resolveOrCreateVendor(admin, mvRow.vendor_label, null, actorId);
+      if (repairedId) {
+        await admin
+          .from("inbound_manifests")
+          .update({ vendor_id: repairedId, updated_by: actorId })
+          .eq("id", manifestId);
+        await admin
+          .from("inventory_lots")
+          .update({ vendor_id: repairedId, updated_by: actorId })
+          .eq("manifest_id", manifestId)
+          .is("vendor_id", null);
+        await logManifestEvent(
+          manifestId,
+          "vendor_link",
+          `Vendor linked at accept time: "${mvRow.vendor_label}" → vendors row ${repairedId} (was unlinked at staging).`,
+          actorId,
+        );
+      }
+    }
+  } catch (err) {
+    console.error("[intake-store] accept-time vendor repair failed:", err);
+  }
 
   // H16b Samples Slice B: HARD-BLOCK the whole finalize BEFORE touching any lot
   // if accepting this manifest's sample lines would exceed the supplying

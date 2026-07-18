@@ -23,6 +23,8 @@ import {
   readMixInfusedByName,
   readSampleJarByName,
   readFormByName,
+  readUsableMarijuanaByName,
+  isMultiCategoryLcbType,
   __runWebsiteCategoryResolverTests,
 } from "@/lib/inventory/website-category-resolver";
 
@@ -143,5 +145,59 @@ describe("H16b-9 website-category-resolver", () => {
       expect(r.unmapped, `${type} / ${name} should be mapped`).toBe(false);
       expect(r.websiteCategory, `${type} / ${name} should have a category`).not.toBeNull();
     }
+  });
+
+  it("H17: 'Usable Marijuana' is multi-category — read the product NAME", () => {
+    // Names are VERBATIM from the owner's real SPR manifest (ORD-24706): every
+    // one of these arrived as inventory_type "Usable Marijuana" and the flat
+    // mapping wrongly flattened joints/blunts/packs to flower.
+    const usable = (name: string) =>
+      resolveWebsiteCategory({ inventoryType: "Usable Marijuana", productName: name });
+
+    expect(usable("SPR - Sour Diesel - 3.5g").websiteCategory).toBe("flower");
+    expect(usable("SPR - Variety Pack - 5pk Joint Tin (5g) #1").websiteCategory).toBe("preroll-pack");
+    expect(usable("House Joint 1g").websiteCategory).toBe("preroll");
+    expect(usable("Classic Blunt 1.5g").websiteCategory).toBe("preroll");
+    expect(usable("Gelato Pre-Roll 0.5g").websiteCategory).toBe("preroll");
+    expect(usable("Popcorn Buds 7g").websiteCategory).toBe("popcorn-bud");
+    expect(usable("Moon Rocks 3.5g").websiteCategory).toBe("infused-flower");
+    // A numbered pack WITHOUT a preroll word stays flower (pack of jars).
+    expect(usable("Fruity 2 Pack Jars 7g").websiteCategory).toBe("flower");
+    // Modern CCRS naming reads the same way.
+    expect(
+      resolveWebsiteCategory({ inventoryType: "Usable Cannabis", productName: "5pk Joints Tin" })
+        .websiteCategory,
+    ).toBe("preroll-pack");
+    // Precedence (a) menu_items still wins over the multi-category bypass.
+    expect(
+      resolveWebsiteCategory(
+        { inventoryType: "Usable Marijuana", productName: "5pk Joint Tin" },
+        { menuItemCategory: "preroll-pack" },
+      ).source,
+    ).toBe("menu_item");
+  });
+
+  it("H17: readUsableMarijuanaByName direct reads", () => {
+    expect(readUsableMarijuanaByName("SPR - Variety Pack - 5pk Joint Tin (5g) #1")).toBe("preroll-pack");
+    expect(readUsableMarijuanaByName("House Joint 1g")).toBe("preroll");
+    expect(readUsableMarijuanaByName("Classic Blunt 1.5g")).toBe("preroll");
+    expect(readUsableMarijuanaByName("Moon Rocks 3.5g")).toBe("infused-flower");
+    expect(readUsableMarijuanaByName("Popcorn Buds 7g")).toBe("popcorn-bud");
+    expect(readUsableMarijuanaByName("SPR - Sour Diesel - 3.5g")).toBe("flower");
+    expect(readUsableMarijuanaByName(null)).toBe("flower");
+  });
+
+  it("H17: isMultiCategoryLcbType flags the right raw types", () => {
+    expect(isMultiCategoryLcbType("Usable Marijuana")).toBe(true);
+    expect(isMultiCategoryLcbType("Usable Cannabis")).toBe(true);
+    expect(isMultiCategoryLcbType("Marijuana Mix Infused")).toBe(true);
+    expect(isMultiCategoryLcbType("Cannabis Mix Infused")).toBe(true);
+    expect(isMultiCategoryLcbType("Sample Jar")).toBe(true);
+    expect(isMultiCategoryLcbType("Flower Lot")).toBe(true);
+    // Single-category types keep using the flat inventory_types mapping.
+    expect(isMultiCategoryLcbType("Marijuana Mix Packaged")).toBe(false);
+    expect(isMultiCategoryLcbType("Solid Marijuana Infused Edible")).toBe(false);
+    expect(isMultiCategoryLcbType("Extract For Inhalation")).toBe(false);
+    expect(isMultiCategoryLcbType(null)).toBe(false);
   });
 });

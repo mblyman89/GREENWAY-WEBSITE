@@ -20,6 +20,7 @@ import {
   normalizePdfDate,
   __runPdfManifestTests,
   __runCultiveraManifestTests,
+  __runCultiveraSprManifestTests,
 } from "@/lib/inventory/pdf-manifest-core";
 import {
   normalizeResendInbound,
@@ -41,6 +42,11 @@ const sample = readFileSync(
 
 const cultiveraSample = readFileSync(
   join(__dirname, "fixtures", "pdf-manifest-cultivera-sample.txt"),
+  "utf8",
+);
+
+const sprSample = readFileSync(
+  join(__dirname, "fixtures", "pdf-manifest-cultivera-spr-sample.txt"),
   "utf8",
 );
 
@@ -151,6 +157,49 @@ describe("pdf-manifest-core (H16b-2 — Cultivera Internal Shipping Document)", 
 
   it("passes the embedded Cultivera self-test suite", () => {
     const r = __runCultiveraManifestTests(cultiveraSample);
+    expect(r.failed).toBe(0);
+  });
+});
+
+describe("pdf-manifest-core (H17 — Seattles Private Reserve shipping manifest)", () => {
+  // The owner's REAL SPR bundle: the WCIA JSON left transporter fields null,
+  // so intake must read driver/vehicle/VIN from this bundled shipping PDF.
+  it("recognizes the SPR PDF as a shipping manifest", () => {
+    expect(looksLikeShippingManifest(sprSample)).toBe(true);
+  });
+
+  it("parses header, all 16 lines, and the mixed-case vehicle description", () => {
+    const m = parseShippingManifestText(sprSample)!;
+    expect(m).not.toBeNull();
+    expect(m.manifest_number).toBe("11804443981161219");
+    expect(m.vendor_label).toBe("Seattles Private Reserve");
+    expect(m.vendor_license).toBe("417068");
+    expect(m.lines).toHaveLength(16);
+  });
+
+  it("extracts transporter, driver mirror, vehicle, plate, and VIN", () => {
+    const t = parseShippingManifestText(sprSample)!.transport!;
+    expect(t.transporter_name).toBe("Kory T Anderson");
+    // Cultivera's "Transporter Name" is the person driving -> mirrored to driver.
+    expect(t.driver_name).toBe("Kory T Anderson");
+    expect(t.vehicle_description).toBe("2021 WHITE Nissan NV200");
+    expect(t.vehicle_plate).toBe("D44636H");
+    expect(t.vehicle_vin).toBe("3N6CM0KN1MK695529");
+    expect(t.departed_at).toBe("2026-07-15T08:00");
+    expect(t.eta_date).toBe("2026-07-15");
+    // The manifest arrival is always an ESTIMATE — never arrived_at.
+    expect(t.arrived_at).toBeNull();
+  });
+
+  it("does NOT mirror the (Third Party) layout's transport COMPANY into driver", () => {
+    // TERPENE TRANSIT is a company, not a person; driver must stay null there.
+    const t = parseShippingManifestText(sample)!.transport!;
+    expect(t.transporter_name).toBe("TERPENE TRANSIT");
+    expect(t.driver_name).toBeNull();
+  });
+
+  it("passes the embedded SPR self-test suite", () => {
+    const r = __runCultiveraSprManifestTests(sprSample);
     expect(r.failed).toBe(0);
   });
 });
