@@ -28,6 +28,8 @@ from .harvest import (
 )
 from .cultivera_api import CultiveraApiError, CultiveraApiResult, CultiveraClient
 from .cultivera_auth import CultiveraAuthError
+from .growflow_api import GrowflowApiError, GrowflowApiResult, GrowflowClient
+from .growflow_auth import GrowflowAuthError
 from .discovery_search import discover_vendor_sites, format_discovery_draft
 from .kb_products import build_product_rows, slugify_dashed, write_product_drafts
 from .pipeline import ResearchResult, research_social, research_target, result_to_draft_rows
@@ -527,3 +529,90 @@ async def cultivera_menu(
         raise HTTPException(status_code=502, detail=f"Cultivera login failed: {exc}") from exc
     return _cultivera_result_out(result)
 
+
+# ---------------------------------------------------------------------------
+# Slice GF-3 GrowFlow vendor menus (authenticated, polite, GraphQL).
+# Mirrors the Cultivera pair: (1) list/search the marketplace storefronts the
+# buyer can see and (2) fetch ONE storefront's live menu. Same X-Crawler-Secret
+# auth. GrowFlow speaks a single GraphQL endpoint; the client captures the Auth0
+# Bearer from the SPA and re-logs in on 401. We return the RAW data node (never
+# a guessed shape) so the Next app normalizes/persists in ONE place.
+# ---------------------------------------------------------------------------
+
+class GrowflowStoresRequest(BaseModel):
+    query: str = Field(default="", description="Optional store-name/license filter (substring).")
+
+
+class GrowflowMenuRequest(BaseModel):
+    store_front_id: str = Field(default="", description="GrowFlow storefront id (integer).")
+
+
+class GrowflowApiOut(BaseModel):
+    ok: bool
+    url: str = ""
+    status: int = 0
+    raw: object | None = None
+    records: list[dict] = []
+    count: int = 0
+    error: str = ""
+
+
+def _growflow_result_out(result: GrowflowApiResult) -> GrowflowApiOut:
+    records = result.records or []
+    return GrowflowApiOut(
+        ok=result.ok,
+        url=result.url,
+        status=result.status,
+        raw=result.raw,
+        records=records,
+        count=len(records),
+        error=result.error,
+    )
+
+
+@app.post("/growflow/stores", response_model=GrowflowApiOut)
+async def growflow_stores(
+    req: GrowflowStoresRequest,
+    x_crawler_secret: str | None = Header(default=None),
+) -> GrowflowApiOut:
+    """List (optionally filter) the GrowFlow storefronts the buyer can see."""
+    _require_secret(x_crawler_secret)
+    s = get_settings()
+    if not s.growflow_enabled:
+        raise HTTPException(
+            status_code=503,
+            detail="GrowFlow disabled (set GROWFLOW_EMAIL/GROWFLOW_PASSWORD).",
+        )
+    log.info("growflow stores query=%r", req.query)
+    client = GrowflowClient(s)
+    try:
+        result = await client.search_stores(req.query)
+    except GrowflowAuthError as exc:
+        raise HTTPException(status_code=502, detail=f"GrowFlow login failed: {exc}") from exc
+    return _growflow_result_out(result)
+
+
+@app.post("/growflow/menu", response_model=GrowflowApiOut)
+async def growflow_menu(
+    req: GrowflowMenuRequest,
+    x_crawler_secret: str | None = Header(default=None),
+) -> GrowflowApiOut:
+    """Fetch ONE storefront's live menu (getStoreListing) by storefront id."""
+    _require_secret(x_crawler_secret)
+    s = get_settings()
+    if not s.growflow_enabled:
+        raise HTTPException(
+            status_code=503,
+            detail="GrowFlow disabled (set GROWFLOW_EMAIL/GROWFLOW_PASSWORD).",
+        )
+    if not req.store_front_id.strip():
+        raise HTTPException(status_code=422, detail="Provide store_front_id.")
+    log.info("growflow menu store_front_id=%r", req.store_front_id)
+    client = GrowflowClient(s)
+    try:
+        result = await client.fetch_menu(store_front_id=req.store_front_id)
+    except GrowflowApiError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except GrowflowAuthError as exc:
+        raise HTTPException(status_code=502, detail=f"GrowFlow login failed: {exc}") from exc
+    return _growflow_result_out(result)
