@@ -175,3 +175,86 @@ export async function importImageFromUrl(input: ImportImageInput): Promise<Impor
   });
   return { asset, deduped: false };
 }
+
+// ---------------------------------------------------------------------------
+// CV-5: document (PDF) harvesting — same safety rails as images, for COAs.
+// ---------------------------------------------------------------------------
+
+/** Document types we'll pull from a URL (COAs are PDFs). */
+const ALLOWED_DOC_MIME = new Set(["application/pdf"]);
+
+/** Matches the media library's manual-upload ceiling (media/actions.ts). */
+const MAX_DOC_BYTES = 10 * 1024 * 1024;
+
+/**
+ * Download a linked document (e.g. a Cultivera COA PDF) and store it as a
+ * Media Library DRAFT with provenance — the same http(s)-only + host-check +
+ * sha256-dedupe pipeline as importImageFromUrl, but for PDFs.
+ * Throws `HarvestImageError` with a human-readable message on any refusal.
+ */
+export async function importDocumentFromUrl(input: ImportImageInput): Promise<ImportImageResult> {
+  let parsed: URL;
+  try {
+    parsed = new URL(input.imageUrl);
+  } catch {
+    throw new HarvestImageError("That document URL isn't valid.");
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new HarvestImageError("Only http(s) document URLs can be imported.");
+  }
+  if (isForbiddenHost(parsed.hostname)) {
+    throw new HarvestImageError("That host can't be fetched.");
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch(parsed.toString(), {
+      signal: controller.signal,
+      redirect: "follow",
+      headers: { Accept: "application/pdf,*/*" },
+    });
+  } catch {
+    throw new HarvestImageError("Couldn't download the document (network error or timeout).");
+  } finally {
+    clearTimeout(timeout);
+  }
+  if (!res.ok) {
+    throw new HarvestImageError(`Couldn't download the document (HTTP ${res.status}).`);
+  }
+
+  const mime = (res.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
+  if (!ALLOWED_DOC_MIME.has(mime)) {
+    throw new HarvestImageError(`Not a supported document type (${mime || "unknown"}).`);
+  }
+
+  const raw = Buffer.from(await res.arrayBuffer());
+  if (raw.length === 0) throw new HarvestImageError("The document was empty.");
+  if (raw.length > MAX_DOC_BYTES) {
+    throw new HarvestImageError("Document exceeds the 10 MB import limit.");
+  }
+
+  const hash16 = crypto.createHash("sha256").update(raw).digest("hex").slice(0, 16);
+  const existing = await findExistingByHash(hash16);
+  if (existing) return { asset: existing, deduped: true };
+
+  const last = parsed.pathname.split("/").filter(Boolean).pop() ?? "";
+  const clean = last.replace(/[^a-zA-Z0-9._-]+/g, "-").slice(0, 60);
+  const filename = clean && /\.pdf$/i.test(clean) ? clean : (clean || "harvested-document") + ".pdf";
+
+  const asset = await uploadMedia({
+    buffer: raw,
+    filename,
+    mimeType: mime,
+    title: input.title,
+    altText: input.altText,
+    usageType: input.usageType,
+    tags: Array.from(new Set(["harvested", ...(input.tags ?? [])])),
+    uploadedBy: input.uploadedBy,
+    status: "draft",
+    source: `crawl:${parsed.toString()}`.slice(0, 500),
+    licenseStatus: "pending-review",
+  });
+  return { asset, deduped: false };
+}

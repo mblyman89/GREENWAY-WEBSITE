@@ -14,6 +14,8 @@ import {
   snapshotSummary,
   type SnapshotLike,
 } from "@/lib/purchasing/cultivera-menus-ui-core";
+import { remainingMediaCount, isHttpUrl } from "@/lib/purchasing/cultivera-media-core";
+import { SaveItemMediaButton, SaveAllMediaButton } from "./media-buttons";
 
 /** "Acme — 42 items · 3h ago" (repo pattern: Date.now() inside a helper). */
 function summaryNow(snap: SnapshotLike): string {
@@ -50,6 +52,7 @@ export default async function CultiveraSnapshotPage({
   const items = await getSnapshotItems(id);
   const categories = distinctCategories(items);
   const visible = filterByCategory(filterMenuItems(items, q), category);
+  const mediaRemaining = remainingMediaCount(items);
 
   const vendorLabel = snap.seller_name ?? snap.cultivera_market_slug ?? "Unknown vendor";
 
@@ -83,6 +86,19 @@ export default async function CultiveraSnapshotPage({
           <div className="rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/10 px-4 py-3 text-sm text-[var(--admin-danger)]">
             This snapshot hit an error while saving{snap.error_message ? `: ${snap.error_message}` : "."} Re-fetch the
             vendor from the Vendor Menus page.
+          </div>
+        )}
+
+        {/* CV-5: snapshot-wide media save. Chunked runs; button shows what's left. */}
+        {items.length > 0 && (
+          <div className="flex items-center justify-between rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-4 py-3">
+            <p className="text-sm text-[var(--admin-text-muted)]">
+              Save this menu&apos;s product photos and COAs into the{" "}
+              <Link href="/admin/media" className="text-[var(--admin-accent)] hover:underline">media library</Link>{" "}
+              — tagged <span className="font-semibold">cultivera</span> + vendor, stored as drafts with license
+              pending review.
+            </p>
+            <SaveAllMediaButton snapshotId={id} remaining={mediaRemaining} />
           </div>
         )}
 
@@ -191,6 +207,19 @@ export default async function CultiveraSnapshotPage({
                           View COA ↗
                         </a>
                       )}
+                      {/* CV-5: per-item saves. Linked assets show a badge instead. */}
+                      <div className="flex flex-wrap items-center gap-2 pt-1">
+                        {it.media_asset_id ? (
+                          <Badge tone="green">image in library</Badge>
+                        ) : isHttpUrl(it.image_url) ? (
+                          <SaveItemMediaButton snapshotId={id} itemId={it.id} kind="image" label="Save image" />
+                        ) : null}
+                        {it.coa_media_asset_id ? (
+                          <Badge tone="green">COA in library</Badge>
+                        ) : isHttpUrl(it.coa_url) ? (
+                          <SaveItemMediaButton snapshotId={id} itemId={it.id} kind="coa" label="Save COA" />
+                        ) : null}
+                      </div>
                     </div>
                   </div>
                 );

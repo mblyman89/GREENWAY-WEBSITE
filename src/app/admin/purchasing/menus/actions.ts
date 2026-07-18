@@ -25,13 +25,19 @@ import {
   searchCultiveraMarkets,
   fetchCultiveraMenu,
 } from "@/lib/purchasing/cultivera-client";
-import { saveSnapshot } from "@/lib/purchasing/cultivera-store";
+import { saveSnapshot, getSnapshot, getSnapshotItems } from "@/lib/purchasing/cultivera-store";
 import {
   marketName,
   marketSlug,
   marketId,
   isFetchableMarket,
 } from "@/lib/purchasing/cultivera-menus-ui-core";
+import {
+  planMediaSaves,
+  remainingMediaCount,
+  bulkSaveSummary,
+} from "@/lib/purchasing/cultivera-media-core";
+import { saveItemMedia } from "@/lib/purchasing/cultivera-media";
 
 const BASE = "/admin/purchasing/menus";
 
@@ -170,5 +176,119 @@ export async function fetchCultiveraMenuAction(
     snapshotId: saved.snapshotId,
     itemCount: saved.itemCount,
     error: "",
+  };
+}
+
+/* ------------------------------------------------------------------
+ * CV-5 — save menu media (product images + COA PDFs) to the library.
+ * ------------------------------------------------------------------ */
+
+/** One bulk run downloads at most this many files (keeps the action snappy). */
+const BULK_MEDIA_LIMIT = 20;
+
+export type SaveMediaResult = {
+  ok: boolean;
+  message: string;
+};
+
+/**
+ * Save ONE item's image or COA into the media library (drafts, tagged
+ * "cultivera" + vendor, provenance kept), link it back to the item.
+ */
+export async function saveItemMediaAction(formData: FormData): Promise<SaveMediaResult> {
+  const session = await requirePermission("inventory.manage");
+
+  const snapshotId = str(formData, "snapshot_id");
+  const itemId = str(formData, "item_id");
+  const kind = str(formData, "kind");
+  if (!snapshotId || !itemId || (kind !== "image" && kind !== "coa")) {
+    return { ok: false, message: "Missing snapshot, item, or media kind." };
+  }
+
+  const snap = await getSnapshot(snapshotId);
+  if (!snap) return { ok: false, message: "Snapshot not found." };
+  const items = await getSnapshotItems(snapshotId);
+  const item = items.find((it) => it.id === itemId);
+  if (!item) return { ok: false, message: "Menu item not found in this snapshot." };
+
+  const vendorLabel = (snap.seller_name ?? "").trim() || (snap.cultivera_market_slug ?? "").trim() || "";
+  const res = await saveItemMedia(item, kind, vendorLabel, session.userId);
+
+  if (!res.ok) return { ok: false, message: res.error ?? "Save failed." };
+
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "cultivera.media.saved",
+    entityType: "cultivera_menu_item",
+    entityId: itemId,
+    after: { kind, assetId: res.assetId, deduped: res.deduped, snapshotId },
+  });
+
+  revalidatePath(`${BASE}/${snapshotId}`);
+  return {
+    ok: true,
+    message: res.deduped
+      ? `Already in the library — reused the existing ${kind === "coa" ? "COA" : "image"}.`
+      : `${kind === "coa" ? "COA" : "Image"} saved to the media library (draft, license pending review).`,
+  };
+}
+
+/**
+ * Bulk-save every unsaved image + COA in a snapshot (chunked: up to
+ * BULK_MEDIA_LIMIT downloads per run; the summary says when to run again).
+ */
+export async function saveAllSnapshotMediaAction(formData: FormData): Promise<SaveMediaResult> {
+  const session = await requirePermission("inventory.manage");
+
+  const snapshotId = str(formData, "snapshot_id");
+  if (!snapshotId) return { ok: false, message: "Missing snapshot id." };
+
+  const snap = await getSnapshot(snapshotId);
+  if (!snap) return { ok: false, message: "Snapshot not found." };
+  const items = await getSnapshotItems(snapshotId);
+  const vendorLabel = (snap.seller_name ?? "").trim() || (snap.cultivera_market_slug ?? "").trim() || "";
+
+  const plan = planMediaSaves(items, BULK_MEDIA_LIMIT);
+  if (plan.length === 0) {
+    return { ok: true, message: "Everything on this menu is already saved to the library." };
+  }
+
+  const byId = new Map(items.map((it) => [it.id, it]));
+  let images = 0;
+  let coas = 0;
+  let deduped = 0;
+  let failed = 0;
+
+  for (const task of plan) {
+    const item = byId.get(task.itemId);
+    if (!item) continue;
+    const res = await saveItemMedia(item, task.kind, vendorLabel, session.userId);
+    if (!res.ok) {
+      failed += 1;
+      continue;
+    }
+    if (res.deduped) deduped += 1;
+    else if (task.kind === "image") images += 1;
+    else coas += 1;
+  }
+
+  // Remaining work AFTER this run: what the plan couldn't fit, plus failures.
+  const fresh = await getSnapshotItems(snapshotId);
+  const remaining = remainingMediaCount(fresh);
+
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "cultivera.media.bulk_saved",
+    entityType: "cultivera_menu_snapshot",
+    entityId: snapshotId,
+    after: { images, coas, deduped, failed, remaining },
+  });
+
+  revalidatePath(`${BASE}/${snapshotId}`);
+  return {
+    ok: failed === 0,
+    message: bulkSaveSummary({ images, coas, deduped, failed, remaining }),
   };
 }
