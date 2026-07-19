@@ -67,6 +67,31 @@ export const ID_CAPTURE_FALLBACK_IDLE_MS = 1200;
  */
 export const ID_CAPTURE_MIN_LENGTH = 20;
 
+/**
+ * POST-FINALIZE DRAIN window (Slice IDS-5). Content-driven completion (IDS-1)
+ * finalizes the INSTANT the buffer is gate-ready (ANSI header + DBB + DBA) —
+ * but the scanner is still streaming the REST of the PDF417 (weight DAW,
+ * eye/hair color, address, etc.) one keystroke at a time. Once the ID gate
+ * hands off to the sales screen, those trailing keystrokes (e.g. "DAW160") land
+ * in the product-search box — the "can't find DAW160" error + stray search the
+ * owner reported. After ANY finalize we therefore keep swallowing keystrokes
+ * for a quiet-period: every trailing key re-arms the window, so it ends only
+ * once the scanner burst genuinely stops. 700 ms comfortably covers the gap
+ * between the gate-ready fields and the tail of the payload without noticeably
+ * delaying legitimate typing on the next screen.
+ */
+export const ID_SCAN_DRAIN_MS = 700;
+
+/**
+ * True while we are still inside the post-finalize drain window and should
+ * swallow the trailing burst keystrokes. `lastFinalizeMs` is the timestamp of
+ * the last scan finalize (null = no scan finalized yet). Pure.
+ */
+export function shouldDrainKey(lastFinalizeMs: number | null, nowMs: number): boolean {
+  if (lastFinalizeMs === null) return false;
+  return nowMs - lastFinalizeMs < ID_SCAN_DRAIN_MS;
+}
+
 // ---------------------------------------------------------------------------
 // State machine
 // ---------------------------------------------------------------------------
@@ -296,6 +321,15 @@ export function __runIdCaptureCoreTests(): void {
     ok(!sawComplete, "stream missing DBA never reports content-complete");
   }
   ok(ID_CAPTURE_FALLBACK_IDLE_MS >= 1000 && ID_CAPTURE_FALLBACK_IDLE_MS > ID_CAPTURE_IDLE_MS, "fallback idle is long + exceeds the primary idle");
+
+  // IDS-5: post-finalize drain window swallows the scanner's trailing burst
+  // (e.g. "DAW160") so it never leaks into the sales-screen search box.
+  ok(!shouldDrainKey(null, 1000), "no drain before any scan finalized");
+  ok(shouldDrainKey(1000, 1000), "drain active at the instant of finalize");
+  ok(shouldDrainKey(1000, 1000 + ID_SCAN_DRAIN_MS - 1), "drain active just inside window");
+  ok(!shouldDrainKey(1000, 1000 + ID_SCAN_DRAIN_MS), "drain ends at window edge");
+  ok(!shouldDrainKey(1000, 1000 + ID_SCAN_DRAIN_MS + 500), "drain inactive well past window");
+  ok(ID_SCAN_DRAIN_MS >= 500, "drain window is long enough to cover the payload tail");
 
   console.log(`pos/id-capture-core: ${pass} passed, ${fail} failed`);
   if (fail > 0) throw new Error(`${fail} pos/id-capture-core tests failed`);
