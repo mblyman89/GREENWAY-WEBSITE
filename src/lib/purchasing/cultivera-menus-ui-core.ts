@@ -225,6 +225,43 @@ export function dohFlagFromRaw(raw: unknown): boolean {
   return false;
 }
 
+/**
+ * Reserved key under which a fetched product-DETAIL payload is stashed on the
+ * item row's `raw` jsonb (kept byte-identical to
+ * cultivera-menu-core.ITEM_DETAIL_RAW_KEY; duplicated here so this module stays
+ * import-free/pure). Used ONLY to count already-fetched sizes for the card
+ * affordance — never to render prices (that goes through the normalizer).
+ */
+const ITEM_DETAIL_RAW_KEY = "__cultivera_detail";
+
+/**
+ * How many per-size variants we have ALREADY fetched + saved for this item
+ * (0 when the buyer hasn't opened "Sizes & pricing" yet). Reads the stored
+ * detail envelope's `Products` array out of the item row's raw jsonb WITHOUT
+ * any network call — so the grid can show a "N sizes" pill for free.
+ */
+export function fetchedVariantCountFromRaw(raw: unknown): number {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return 0;
+  const detail = (raw as Record<string, unknown>)[ITEM_DETAIL_RAW_KEY];
+  if (!detail || typeof detail !== "object" || Array.isArray(detail)) return 0;
+  const d = detail as Record<string, unknown>;
+  for (const k of ["Products", "products", "Variants", "variants", "items"]) {
+    const arr = d[k];
+    if (Array.isArray(arr)) return arr.length;
+  }
+  return 0;
+}
+
+/**
+ * Short label for the per-size affordance on a product card. When we've already
+ * fetched the sizes we show the real count ("12 sizes"); otherwise a neutral
+ * call-to-action so the buyer knows the card opens a sizes/pricing table.
+ */
+export function sizesAffordanceLabel(fetchedCount: number): string {
+  if (fetchedCount > 0) return `${fetchedCount} size${fetchedCount === 1 ? "" : "s"}`;
+  return "View sizes & pricing";
+}
+
 /* ------------------------------------------------------------------
  * Self-tests (pure runner)
  * ------------------------------------------------------------------ */
@@ -350,5 +387,25 @@ export function __runCultiveraMenusUiCoreTests(): void {
   assert(dohFlagFromRaw({ IsDOHComplaint: false }) === false, "dohFlag false");
   assert(dohFlagFromRaw(null) === false, "dohFlag null safe");
 
-  console.log("cultivera-menus-ui-core: 54 self-tests passed");
+  // fetchedVariantCountFromRaw — counts stored detail Products, network-free
+  assert(fetchedVariantCountFromRaw(null) === 0, "variantCount null safe");
+  assert(fetchedVariantCountFromRaw({}) === 0, "variantCount none fetched");
+  assert(
+    fetchedVariantCountFromRaw({ __cultivera_detail: { Products: [{}, {}, {}] } }) === 3,
+    "variantCount from stored detail",
+  );
+  assert(
+    fetchedVariantCountFromRaw({ __cultivera_detail: { variants: [{}] } }) === 1,
+    "variantCount lowercase variants key",
+  );
+  assert(
+    fetchedVariantCountFromRaw({ __cultivera_detail: { Products: "nope" } }) === 0,
+    "variantCount bad Products safe",
+  );
+  // sizesAffordanceLabel — count when known, neutral CTA otherwise
+  assert(sizesAffordanceLabel(0) === "View sizes & pricing", "affordance zero -> CTA");
+  assert(sizesAffordanceLabel(1) === "1 size", "affordance singular");
+  assert(sizesAffordanceLabel(12) === "12 sizes", "affordance plural");
+
+  console.log("cultivera-menus-ui-core: 65 self-tests passed");
 }

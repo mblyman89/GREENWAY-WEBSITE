@@ -193,8 +193,17 @@ export default async function CultiveraItemDetailPage({
                               <span className="text-[var(--admin-text-faint)]">—</span>
                             )}
                           </td>
-                          <td className="whitespace-nowrap px-3 py-2.5 text-right font-semibold text-[var(--admin-text)]">
-                            {priceLabel(v.unitPriceMinor)}
+                          <td className="whitespace-nowrap px-3 py-2.5 text-right">
+                            <div className="flex flex-col items-end leading-tight">
+                              <span className="font-semibold text-[var(--admin-text)]">
+                                {priceLabel(v.unitPriceMinor)}
+                              </span>
+                              {v.onSale && v.wasPriceMinor != null && (
+                                <span className="text-[0.7rem] text-[var(--admin-text-faint)] line-through">
+                                  {priceLabel(v.wasPriceMinor)}
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="whitespace-nowrap px-3 py-2.5 text-right text-[var(--admin-text-muted)]">
                             {v.availableQty ?? "—"}
