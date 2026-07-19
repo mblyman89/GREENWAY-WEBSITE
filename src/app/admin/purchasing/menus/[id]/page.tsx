@@ -12,6 +12,8 @@ import {
   filterByCategory,
   distinctCategories,
   snapshotSummary,
+  saleFlagFromRaw,
+  dohFlagFromRaw,
   type SnapshotLike,
 } from "@/lib/purchasing/cultivera-menus-ui-core";
 import { remainingMediaCount, isHttpUrl } from "@/lib/purchasing/cultivera-media-core";
@@ -172,12 +174,14 @@ export default async function CultiveraSnapshotPage({
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {visible.map((it) => {
                 const potency = potencyLabel(it);
+                const onSale = saleFlagFromRaw(it.raw);
+                const dohOk = dohFlagFromRaw(it.raw);
                 return (
                   <div
                     key={it.id}
                     className="flex flex-col overflow-hidden rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)]"
                   >
-                    <div className="flex h-36 items-center justify-center bg-black/20">
+                    <div className="relative flex h-36 items-center justify-center bg-black/20">
                       {it.image_url ? (
                         // Remote Cultivera CDN images — next/image needs domain allow-listing we can't
                         // pin until live creds exist, so plain <img> like the media library detail page.
@@ -185,6 +189,17 @@ export default async function CultiveraSnapshotPage({
                         <img src={it.image_url} alt={it.name ?? ""} className="h-full w-full object-contain" />
                       ) : (
                         <span className="text-3xl opacity-40">🌿</span>
+                      )}
+                      {/* CH-3: mirror Cultivera's own storefront badges. */}
+                      {onSale && (
+                        <span className="absolute left-2 top-2">
+                          <Badge tone="danger">SALE</Badge>
+                        </span>
+                      )}
+                      {dohOk && (
+                        <span className="absolute right-2 top-2">
+                          <Badge tone="green">DOH COMPLIANT</Badge>
+                        </span>
                       )}
                     </div>
                     <div className="flex flex-1 flex-col gap-1.5 p-3">
@@ -215,12 +230,23 @@ export default async function CultiveraSnapshotPage({
                       )}
                       <div className="mt-auto flex items-center justify-between pt-2">
                         <span className="text-sm font-semibold text-[var(--admin-text)]">
-                          {priceLabel(it.wholesale_price_minor)}
+                          {/* Cultivera's list price is the line's MINIMUM across its
+                              sizes (live-probed MinPrice) — label it like they do. */}
+                          {it.wholesale_price_minor != null
+                            ? `From ${priceLabel(it.wholesale_price_minor)}`
+                            : priceLabel(it.wholesale_price_minor)}
                         </span>
                         <span className="text-xs text-[var(--admin-text-faint)]">
                           {it.available_qty != null ? `${it.available_qty} avail` : ""}
                         </span>
                       </div>
+                      {/* CH-3: the per-size shopping view (variants table). */}
+                      <Link
+                        href={`/admin/purchasing/menus/${id}/item/${it.id}`}
+                        className="text-xs font-semibold text-[var(--admin-accent)] hover:underline"
+                      >
+                        Sizes &amp; pricing →
+                      </Link>
                       {it.coa_url && (
                         <a
                           href={it.coa_url}

@@ -183,6 +183,45 @@ export function isFetchableMarket(rec: Record<string, unknown>): boolean {
 }
 
 /* ------------------------------------------------------------------
+ * CH-3 — badge flags read from a saved item row's raw jsonb.
+ *
+ * Cultivera's LIVE-probed menu list items carry `IsSale` and `IsDOHComplaint`
+ * booleans (see probe/CULTIVERA_PINNED.md); we preserved them untouched in the
+ * item row's raw column. These tolerant readers surface them for the grid's
+ * SALE / DOH COMPLIANT badges — mirroring Cultivera's own storefront.
+ * ------------------------------------------------------------------ */
+
+function truthyFlag(v: unknown): boolean {
+  if (typeof v === "boolean") return v;
+  if (typeof v === "number") return v === 1;
+  if (typeof v === "string") {
+    const t = v.trim().toLowerCase();
+    return t === "true" || t === "1";
+  }
+  return false;
+}
+
+/** True when the saved raw payload flags the listing as on sale. */
+export function saleFlagFromRaw(raw: unknown): boolean {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return false;
+  const o = raw as Record<string, unknown>;
+  for (const k of ["IsSale", "isSale", "is_sale", "onSale", "on_sale"]) {
+    if (k in o) return truthyFlag(o[k]);
+  }
+  return false;
+}
+
+/** True when the saved raw payload flags the listing as WA-DOH compliant. */
+export function dohFlagFromRaw(raw: unknown): boolean {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return false;
+  const o = raw as Record<string, unknown>;
+  for (const k of ["IsDOHComplaint", "IsDohCompliant", "isDohCompliant", "is_doh_compliant"]) {
+    if (k in o) return truthyFlag(o[k]);
+  }
+  return false;
+}
+
+/* ------------------------------------------------------------------
  * Self-tests (pure runner)
  * ------------------------------------------------------------------ */
 
@@ -287,5 +326,17 @@ export function __runCultiveraMenusUiCoreTests(): void {
   assert(isFetchableMarket({ id: "m1" }) === true, "fetchable via id");
   assert(isFetchableMarket({ name: "No handles" }) === false, "not fetchable");
 
-  console.log("cultivera-menus-ui-core: 44 self-tests passed");
+  // CH-3 — raw badge flags (live-probed IsSale / IsDOHComplaint)
+  assert(saleFlagFromRaw({ IsSale: true }) === true, "saleFlag true");
+  assert(saleFlagFromRaw({ IsSale: false }) === false, "saleFlag false");
+  assert(saleFlagFromRaw({ isSale: "true" }) === true, "saleFlag string");
+  assert(saleFlagFromRaw({}) === false, "saleFlag absent");
+  assert(saleFlagFromRaw(null) === false, "saleFlag null safe");
+  assert(saleFlagFromRaw([1]) === false, "saleFlag array safe");
+  assert(dohFlagFromRaw({ IsDOHComplaint: true }) === true, "dohFlag true");
+  assert(dohFlagFromRaw({ IsDOHComplaint: 1 }) === true, "dohFlag numeric");
+  assert(dohFlagFromRaw({ IsDOHComplaint: false }) === false, "dohFlag false");
+  assert(dohFlagFromRaw(null) === false, "dohFlag null safe");
+
+  console.log("cultivera-menus-ui-core: 54 self-tests passed");
 }

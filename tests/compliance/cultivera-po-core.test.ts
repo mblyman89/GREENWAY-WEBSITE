@@ -12,7 +12,13 @@ import {
   menuItemToPoPrefill,
   buildMenuPrefills,
   menuPrefillBanner,
+  parseVariantSelections,
+  clampVariantQty,
+  variantDisplayName,
+  buildVariantPrefills,
+  variantPrefillBanner,
   type MenuPrefillItemLike,
+  type VariantLike,
 } from "@/lib/purchasing/cultivera-po-core";
 
 function mkItem(over: Partial<MenuPrefillItemLike>): MenuPrefillItemLike {
@@ -134,5 +140,111 @@ describe("menuPrefillBanner", () => {
     expect(menuPrefillBanner(1, null)).toBe(
       "Started from a Cultivera menu: 1 item pre-added below as draft lines — confirm quantities, costs, and the vendor, then save.",
     );
+  });
+});
+
+/* ------------------------------------------------------------------
+ * CH-3 — per-variant hand-off (sizes table → PO builder)
+ * ------------------------------------------------------------------ */
+
+describe("parseVariantSelections", () => {
+  it("reads vq_<id> params with positive integer quantities", () => {
+    const sels = parseVariantSelections({ vq_447772: "3", vq_9: "1", other: "x" });
+    expect(sels).toEqual([
+      { variantId: "447772", qty: 3 },
+      { variantId: "9", qty: 1 },
+    ]);
+  });
+  it("drops zero/negative/junk/empty-id entries", () => {
+    expect(parseVariantSelections({ vq_1: "0" })).toHaveLength(0);
+    expect(parseVariantSelections({ vq_1: "-2" })).toHaveLength(0);
+    expect(parseVariantSelections({ vq_1: "junk" })).toHaveLength(0);
+    expect(parseVariantSelections({ vq_: "3" })).toHaveLength(0);
+  });
+  it("truncates fractions, takes the first of arrays, respects the cap", () => {
+    expect(parseVariantSelections({ vq_1: "2.9" })[0].qty).toBe(2);
+    expect(parseVariantSelections({ vq_1: ["4", "9"] })[0].qty).toBe(4);
+    expect(parseVariantSelections({ vq_1: "1", vq_2: "1", vq_3: "1" }, 2)).toHaveLength(2);
+    expect(parseVariantSelections({}, 0)).toHaveLength(0);
+  });
+});
+
+describe("clampVariantQty", () => {
+  it("clamps to MaxOrderLimit and availability (tightest wins)", () => {
+    expect(clampVariantQty(5, null, null)).toBe(5);
+    expect(clampVariantQty(100, 75, null)).toBe(75);
+    expect(clampVariantQty(100, null, 20)).toBe(20);
+    expect(clampVariantQty(100, 75, 20)).toBe(20);
+  });
+  it("never returns below 1 and ignores zero limits", () => {
+    expect(clampVariantQty(0, null, null)).toBe(1);
+    expect(clampVariantQty(Number.NaN, null, null)).toBe(1);
+    expect(clampVariantQty(5, 0, 0)).toBe(5);
+  });
+});
+
+describe("variantDisplayName", () => {
+  it("prefers the clean name, appending the size when missing", () => {
+    expect(variantDisplayName({ cleanName: "Luxor", name: "Luxor [1g]", sizeLabel: "1g" }, "Line")).toBe(
+      "Luxor — 1g",
+    );
+    expect(variantDisplayName({ cleanName: "Luxor 1g", name: null, sizeLabel: "1g" }, null)).toBe("Luxor 1g");
+  });
+  it("falls back to the product-line name, then a neutral label", () => {
+    expect(variantDisplayName({ cleanName: null, name: null, sizeLabel: "1g" }, "Signature Line")).toBe(
+      "Signature Line — 1g",
+    );
+    expect(variantDisplayName({ cleanName: null, name: null, sizeLabel: null }, null)).toBe("Cultivera variant");
+  });
+});
+
+describe("buildVariantPrefills", () => {
+  const vlist: VariantLike[] = [
+    { variantId: "1", cleanName: "Luxor", name: "Luxor [1g]", sizeLabel: "1g",
+      unitPriceMinor: 450, availableQty: 20, maxOrderLimit: null },
+    { variantId: "2", cleanName: "Wedding Cake", name: "Wedding Cake [3.5g]", sizeLabel: "3.5g",
+      unitPriceMinor: 1400, availableQty: 1471, maxOrderLimit: 75 },
+    { variantId: "3", cleanName: "Ghost", name: null, sizeLabel: null,
+      unitPriceMinor: null, availableQty: null, maxOrderLimit: null },
+  ];
+  it("keeps stored order, clamps quantities, threads the vendor", () => {
+    const vp = buildVariantPrefills(
+      vlist,
+      [{ variantId: "2", qty: 100 }, { variantId: "1", qty: 3 }],
+      "Signature Flower Line",
+      "v1",
+      "Lifted Cannabis",
+    );
+    expect(vp).toHaveLength(2);
+    expect(vp[0].productName).toBe("Luxor — 1g");
+    expect(vp[0].suggestedQty).toBe(3);
+    expect(vp[0].unitCostMinor).toBe(450);
+    expect(vp[1].suggestedQty).toBe(75); // clamped to MaxOrderLimit
+    expect(vp[1].vendorId).toBe("v1");
+    expect(vp[1].vendorName).toBe("Lifted Cannabis");
+  });
+  it("ignores unknown ids, empty selections, and applies the cap", () => {
+    expect(buildVariantPrefills(vlist, [{ variantId: "nope", qty: 1 }], null, null, null)).toHaveLength(0);
+    expect(buildVariantPrefills(vlist, [], null, null, null)).toHaveLength(0);
+    expect(
+      buildVariantPrefills(vlist, [{ variantId: "1", qty: 1 }, { variantId: "2", qty: 1 }], null, null, null, 1),
+    ).toHaveLength(1);
+  });
+  it("maps null prices to 0 cents and never floats", () => {
+    const vp = buildVariantPrefills(vlist, [{ variantId: "3", qty: 2 }], "Line", null, null);
+    expect(vp[0].unitCostMinor).toBe(0);
+    expect(vp[0].productName).toBe("Ghost");
+    expect(Number.isInteger(vp[0].unitCostMinor)).toBe(true);
+  });
+});
+
+describe("variantPrefillBanner", () => {
+  it("pluralizes sizes and includes the vendor when known", () => {
+    expect(variantPrefillBanner(2, "Lifted Cannabis").startsWith(
+      "Started from a Cultivera sizes table: 2 sizes from Lifted Cannabis",
+    )).toBe(true);
+    expect(variantPrefillBanner(1, null).startsWith(
+      "Started from a Cultivera sizes table: 1 size ",
+    )).toBe(true);
   });
 });
