@@ -348,7 +348,21 @@ export type CultiveraVariant = {
   maxOrderLimit: number | null;
   /** Lineage / cross text (Cultivera puts it in the variant Description). */
   description: string | null;
+  /** The variant's OWN image URL exactly as Cultivera sent it (often null). */
   imageUrl: string | null;
+  /**
+   * The image to actually DISPLAY for this variant: its own `imageUrl` when
+   * present, otherwise the product-line (card) image as a stand-in. May still
+   * be null if neither exists. Filled in by normalizeProductDetail (which is
+   * the only place that knows the line image). Consumers should render THIS.
+   */
+  effectiveImageUrl: string | null;
+  /**
+   * True when `effectiveImageUrl` came from the product-line fallback rather
+   * than the variant's own photo — a signal to the UI (and to a future
+   * "save to KB" step) that a more specific strain image should be sourced.
+   */
+  imageIsFallback: boolean;
   isDohCompliant: boolean;
   raw: Record<string, unknown>;
   position: number;
@@ -464,6 +478,12 @@ export function normalizeVariant(raw: unknown, position: number): CultiveraVaria
     maxOrderLimit: intOrNull(pickRaw(o, ["MaxOrderLimit", "maxOrderLimit", "max_order_limit"])),
     description: pickText(o, ["Description", "description"]),
     imageUrl: pickText(o, ["ImageUrl", "imageUrl", "image_url", "Image", "image"]),
+    // effective image + fallback flag are finalized in normalizeProductDetail,
+    // which is the only place that knows the product-line (card) image. Here we
+    // default to the variant's own image (no fallback) so normalizeVariant stays
+    // usable standalone.
+    effectiveImageUrl: pickText(o, ["ImageUrl", "imageUrl", "image_url", "Image", "image"]),
+    imageIsFallback: false,
     isDohCompliant: boolish(pickRaw(o, ["IsDOHComplaint", "IsDohCompliant", "isDohCompliant", "is_doh_compliant"])) || parts.dohTagged,
     raw: o,
     position,
@@ -483,13 +503,24 @@ export function normalizeProductDetail(input: unknown): CultiveraProductDetail {
 
   const variantsRaw = pickRaw(o, ["Products", "products", "variants", "Variants", "items"]);
   const arr = Array.isArray(variantsRaw) ? variantsRaw : [];
-  const variants = arr.map((v, i) => normalizeVariant(v, i));
+  const lineImageUrl = pickText(o, ["ImageUrl", "imageUrl", "image_url"]);
+  const variants = arr.map((v, i) => {
+    const nv = normalizeVariant(v, i);
+    // Fallback: many Cultivera variants have no photo of their own. Show the
+    // product-line (card) image as a stand-in and FLAG it so the buyer knows a
+    // more specific strain image should be sourced later.
+    if (!nv.imageUrl && lineImageUrl) {
+      nv.effectiveImageUrl = lineImageUrl;
+      nv.imageIsFallback = true;
+    }
+    return nv;
+  });
 
   return {
     productId: pickText(o, ["Id", "id", "productId", "product_id"]),
     name: pickText(o, ["Name", "name"]),
     description: pickText(o, ["Description", "description"]),
-    imageUrl: pickText(o, ["ImageUrl", "imageUrl", "image_url"]),
+    imageUrl: lineImageUrl,
     isDohCompliant: boolish(pickRaw(o, ["IsDOHComplaint", "IsDohCompliant", "isDohCompliant"])),
     variantCount: variants.length,
     variants,
@@ -793,6 +824,32 @@ export function __runCultiveraMenuCoreTests(): void {
   assert(detail.variants[1].position === 1, "detail v1 position");
   const detailEmpty = normalizeProductDetail(null);
   assert(detailEmpty.variantCount === 0 && detailEmpty.productId === null, "detail junk safe");
+
+  // IMAGE FALLBACK: many variants have no photo. The product-line (card) image
+  // stands in AND is flagged, so the buyer knows to source a strain-specific
+  // image later. A variant WITH its own photo keeps it and is NOT flagged.
+  const detailImg = normalizeProductDetail({
+    Id: 4899,
+    Name: "Flower",
+    ImageUrl: "https://files.cultivera.com/x/card.jpg",
+    Products: [
+      { Id: 1, Name: "Has Own [1g]", UnitPrice: 4, ImageUrl: "https://files.cultivera.com/x/own.jpg" },
+      { Id: 2, Name: "No Image [1g]", UnitPrice: 4 },
+    ],
+  });
+  assert(detailImg.imageUrl === "https://files.cultivera.com/x/card.jpg", "detail line image");
+  // variant 0 has its own image -> not a fallback
+  assert(detailImg.variants[0].imageUrl === "https://files.cultivera.com/x/own.jpg", "v0 own image");
+  assert(detailImg.variants[0].effectiveImageUrl === "https://files.cultivera.com/x/own.jpg", "v0 effective = own");
+  assert(detailImg.variants[0].imageIsFallback === false, "v0 not fallback");
+  // variant 1 has no image -> falls back to the line image and IS flagged
+  assert(detailImg.variants[1].imageUrl === null, "v1 no own image");
+  assert(detailImg.variants[1].effectiveImageUrl === "https://files.cultivera.com/x/card.jpg", "v1 effective = line fallback");
+  assert(detailImg.variants[1].imageIsFallback === true, "v1 is fallback flagged");
+  // when the line ALSO has no image, effective stays null and not flagged
+  const detailNoImg = normalizeProductDetail({ Id: 7, Name: "X", Products: [{ Id: 1, Name: "A [1g]", UnitPrice: 4 }] });
+  assert(detailNoImg.variants[0].effectiveImageUrl === null, "no-image line -> effective null");
+  assert(detailNoImg.variants[0].imageIsFallback === false, "no-image line -> not flagged");
 
   // detailFromItemRaw — round-trip through the reserved raw key
   const itemRaw = {
