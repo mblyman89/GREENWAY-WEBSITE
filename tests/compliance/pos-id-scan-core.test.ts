@@ -17,6 +17,7 @@ import {
   ageOn,
   isExpired,
   parseAamvaPdf417,
+  isCompleteAamvaPayload,
   evaluateScannedId,
   evaluateManualId,
   OVER40_VISUAL_MIN_AGE,
@@ -270,5 +271,23 @@ describe("digits-only MM/DD/YYYY date mask", () => {
 describe("embedded self-tests", () => {
   it("__runIdScanCoreTests passes", () => {
     expect(() => __runIdScanCoreTests()).not.toThrow();
+  });
+});
+
+describe("isCompleteAamvaPayload (IDS-1 content-driven completion)", () => {
+  it("is true for a full gate-ready payload (header + DBB + DBA)", () => {
+    expect(isCompleteAamvaPayload(WA_PAYLOAD)).toBe(true);
+  });
+  it("is false for a buffer truncated before DBA streams in", () => {
+    expect(isCompleteAamvaPayload(WA_PAYLOAD.slice(0, WA_PAYLOAD.indexOf("DBA")))).toBe(false);
+  });
+  it("is false for header-only, empty, and non-AAMVA input", () => {
+    expect(isCompleteAamvaPayload("@\n\x1e\rANSI 636045080002DL00410278DLDAQX\n")).toBe(false);
+    expect(isCompleteAamvaPayload("")).toBe(false);
+    expect(isCompleteAamvaPayload("hello world")).toBe(false);
+  });
+  it("is false when DBB is present but DBA is missing", () => {
+    const noDba = "@\n\x1e\rANSI 636045080002DL00410278DLDAQX1\nDCSDOE\nDACJANE\nDBB07131990\n";
+    expect(isCompleteAamvaPayload(noDba)).toBe(false);
   });
 });

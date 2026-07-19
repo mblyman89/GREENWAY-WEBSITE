@@ -13,7 +13,9 @@ import {
   idCaptureKey,
   finalizeIdCapture,
   ID_CAPTURE_IDLE_MS,
+  ID_CAPTURE_FALLBACK_IDLE_MS,
   ID_CAPTURE_MIN_LENGTH,
+  feedIdCaptureKey,
   __runIdCaptureCoreTests,
   type IdCaptureState,
 } from "@/lib/pos/id-capture-core";
@@ -76,5 +78,46 @@ describe("pos id-capture-core (AP — hidden instant ID scan)", () => {
     expect(ID_CAPTURE_IDLE_MS).toBeGreaterThanOrEqual(200);
     expect(ID_CAPTURE_IDLE_MS).toBeLessThanOrEqual(1000);
     expect(ID_CAPTURE_MIN_LENGTH).toBe(20);
+  });
+});
+
+describe("pos id-capture-core (IDS-1 — content-driven completion)", () => {
+  const full =
+    "@\n\x1e\rANSI 636045080002DL00410278DLDAQWDL123ABC456\n" +
+    "DCSPUBLIC\nDACJOHN\nDBB07131990\nDBA07132028\nDAJWA\nDCGUSA\n";
+
+  it("reports complete only once the whole gate-ready payload has streamed", () => {
+    let st = emptyIdCaptureState();
+    let firstCompleteAt = -1;
+    let t = 1000;
+    for (let i = 0; i < full.length; i++) {
+      const ch = full[i] === "\n" ? "Enter" : full[i];
+      const r = feedIdCaptureKey(st, ch, t);
+      st = r.state;
+      t += 20;
+      if (r.complete && firstCompleteAt === -1) firstCompleteAt = i;
+    }
+    expect(firstCompleteAt).toBeGreaterThanOrEqual(full.indexOf("DBA") + "DBA07132028".length - 1);
+    expect(finalizeIdCapture(st).payload).toBe(full);
+  });
+
+  it("never reports complete for a stream truncated before DBA (the old-floor failure)", () => {
+    const partial = full.slice(0, full.indexOf("DBA"));
+    let st = emptyIdCaptureState();
+    let sawComplete = false;
+    let t = 1000;
+    for (const chRaw of partial) {
+      const ch = chRaw === "\n" ? "Enter" : chRaw;
+      const r = feedIdCaptureKey(st, ch, t);
+      st = r.state;
+      t += 20;
+      if (r.complete) sawComplete = true;
+    }
+    expect(sawComplete).toBe(false);
+  });
+
+  it("fallback idle is a long, stall-proof safety net above the primary idle", () => {
+    expect(ID_CAPTURE_FALLBACK_IDLE_MS).toBeGreaterThan(ID_CAPTURE_IDLE_MS);
+    expect(ID_CAPTURE_FALLBACK_IDLE_MS).toBeGreaterThanOrEqual(1000);
   });
 });

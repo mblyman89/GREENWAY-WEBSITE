@@ -234,6 +234,37 @@ export function parseAamvaPdf417(raw: string): AamvaParseResult {
   return { ok: true, license };
 }
 
+/**
+ * CONTENT-DRIVEN COMPLETION signal for the live keystroke capture (Slice
+ * IDS-1). An AAMVA PDF417 payload is self-describing: it carries the "ANSI "
+ * header and MANDATORY data elements — of which date of birth (DBB) is one,
+ * and this store also requires a readable expiration date (DBA) to pass the
+ * gate. So the capture does NOT need to guess "the barcode is done" from a
+ * fragile idle timer (the old-floor failure: a Bluetooth stall mid-stream
+ * tripped a 300 ms timer, finalized a TRUNCATED buffer, and the parse failed
+ * while the rest of the barcode spilled in as garbage). Instead, the instant
+ * the accumulated buffer parses into a valid, gate-ready license — a real
+ * ANSI header, a normalized DBB, AND a normalized DBA — we KNOW the payload is
+ * complete and can finalize immediately (perceived-instant), with the idle
+ * timer kept only as a longer stall-proof fallback for odd/partial encodings.
+ *
+ * Returns true only when parseAamvaPdf417 succeeds AND both DBB and DBA are
+ * present and normalized. Requiring DBA (not just DBB) is deliberate: DBA
+ * typically streams AFTER the header/DBB, so waiting for it guarantees we have
+ * traversed well into the DL subfile — a truncated buffer that happens to
+ * contain DBB but not yet DBA will NOT prematurely finalize. Pure; no I/O.
+ */
+export function isCompleteAamvaPayload(raw: string): boolean {
+  const r = parseAamvaPdf417(raw);
+  if (!r.ok) return false;
+  return (
+    typeof r.license.dateOfBirth === "string" &&
+    isYmd(r.license.dateOfBirth) &&
+    typeof r.license.expirationDate === "string" &&
+    isYmd(r.license.expirationDate)
+  );
+}
+
 // ---------------------------------------------------------------------------
 // The ID gate verdict — one shape for both paths
 // ---------------------------------------------------------------------------
@@ -519,6 +550,26 @@ export function __runIdScanCoreTests(): void {
   ok(mdyToYmd("07/13/1990") === "1990-07-13", "MM/DD/YYYY converts to YYYY-MM-DD");
   ok(mdyToYmd("02/30/1990") === null, "impossible masked date rejected");
   ok(mdyToYmd("07/13/199") === null, "incomplete masked date rejected");
+
+  // Content-driven completion (IDS-1): the capture finalizes the instant the
+  // buffer is a valid gate-ready license (ANSI header + DBB + DBA), so a slow
+  // Bluetooth wedge stream never needs a fragile idle guess.
+  {
+    ok(isCompleteAamvaPayload(wa), "full WA payload is a complete AAMVA payload");
+    // A buffer truncated before DBA streams in must NOT read as complete
+    // (this is exactly the old truncation that failed on the floor).
+    const beforeDba = wa.slice(0, wa.indexOf("DBA"));
+    ok(!isCompleteAamvaPayload(beforeDba), "buffer cut off before DBA is NOT complete (no premature finalize)");
+    // Header alone (still streaming) is not complete.
+    ok(!isCompleteAamvaPayload("@\n\x1e\rANSI 636045080002DL00410278DLDAQWDL1\n"), "header-only stream is not complete");
+    // Garbage / empty are not complete.
+    ok(!isCompleteAamvaPayload(""), "empty is not complete");
+    ok(!isCompleteAamvaPayload("hello world"), "non-AAMVA is not complete");
+    // Payload with DBB but a MISSING DBA is not gate-ready — forces the
+    // longer fallback + manual path rather than a false "instant" finalize.
+    const noDba = "@\n\x1e\rANSI 636045080002DL00410278DLDAQX1\nDCSDOE\nDACJANE\nDBB07131990\n";
+    ok(!isCompleteAamvaPayload(noDba), "DBB-without-DBA is not complete");
+  }
 
   console.log(`pos/id-scan-core: ${pass} passed, ${fail} failed`);
   if (fail > 0) throw new Error(`${fail} pos/id-scan-core tests failed`);
