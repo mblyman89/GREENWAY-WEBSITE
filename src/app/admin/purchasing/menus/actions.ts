@@ -59,7 +59,7 @@ import {
   remainingMediaCount,
   bulkSaveSummary,
 } from "@/lib/purchasing/cultivera-media-core";
-import { saveItemMedia } from "@/lib/purchasing/cultivera-media";
+import { saveItemMedia, saveCultiveraItemToKb } from "@/lib/purchasing/cultivera-media";
 
 const BASE = "/admin/purchasing/menus";
 
@@ -416,6 +416,57 @@ export async function saveAllSnapshotMediaAction(formData: FormData): Promise<Sa
     ok: failed === 0,
     message: bulkSaveSummary({ images, coas, deduped, failed, remaining }),
   };
+}
+
+/* ------------------------------------------------------------------
+ * CV-7 — save a product's image to the KB backbone (detail page).
+ * ------------------------------------------------------------------ */
+
+/**
+ * Save ONE product's card image into the media library AND bind it to the
+ * durable KB product backbone (kb_products) at the strain/product level. This
+ * is the detail-page "Save image to KB" action: one image per strain, tagged
+ * "cultivera" + vendor, attached to the vendor and the KB product's natural
+ * identity so every size variant inherits it.
+ */
+export async function saveCultiveraItemToKbAction(formData: FormData): Promise<SaveMediaResult> {
+  const session = await requirePermission("inventory.manage");
+
+  const snapshotId = str(formData, "snapshot_id");
+  const itemId = str(formData, "item_id");
+  if (!snapshotId || !itemId) {
+    return { ok: false, message: "Missing snapshot or item id." };
+  }
+
+  const snap = await getSnapshot(snapshotId);
+  if (!snap) return { ok: false, message: "Snapshot not found." };
+  const item = await getSnapshotItem(snapshotId, itemId);
+  if (!item) return { ok: false, message: "Menu item not found in this snapshot." };
+
+  const vendorLabel = (snap.seller_name ?? "").trim() || (snap.cultivera_market_slug ?? "").trim() || "";
+  const res = await saveCultiveraItemToKb(item, vendorLabel, session.userId);
+
+  if (!res.ok) return { ok: false, message: res.error ?? "Save failed." };
+
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "cultivera.kb.image_saved",
+    entityType: "cultivera_menu_item",
+    entityId: itemId,
+    after: { assetId: res.assetId, deduped: res.deduped, boundToKb: res.boundToKb, snapshotId },
+  });
+
+  revalidatePath(`${BASE}/${snapshotId}`);
+  revalidatePath(`${BASE}/${snapshotId}/item/${itemId}`);
+
+  const savedPart = res.deduped
+    ? "Image already in the library"
+    : "Image saved to the media library (draft, license pending review)";
+  const kbPart = res.boundToKb
+    ? " and attached to the product in the Knowledge Base."
+    : " — but the Knowledge Base link could not be written (it stays available on the media library).";
+  return { ok: true, message: `${savedPart}${kbPart}` };
 }
 
 /* ------------------------------------------------------------------
