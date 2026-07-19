@@ -182,7 +182,7 @@ class _FakeAsyncClient:
     async def __aexit__(self, *exc):
         return False
 
-    async def get(self, url):
+    def _dispatch(self, url, method, body=None):
         # match by the trailing path so tests don't depend on the base host.
         # Ignore any query string so keys can be plain paths (the real search
         # endpoint appends ?CurrentPage=...&Search=...).
@@ -194,6 +194,8 @@ class _FakeAsyncClient:
                 break
         _FakeAsyncClient.calls.append({
             "url": url,
+            "method": method,
+            "body": body,
             "headers": dict(self._kwargs.get("headers") or {}),
         })
         if matched_key is None:
@@ -201,6 +203,12 @@ class _FakeAsyncClient:
         queue = _FakeAsyncClient.script[matched_key]
         # pop the next scripted response, or repeat the last one
         return queue.pop(0) if len(queue) > 1 else queue[0]
+
+    async def get(self, url):
+        return self._dispatch(url, "GET")
+
+    async def post(self, url, json=None):
+        return self._dispatch(url, "POST", body=json)
 
 
 def _install_fake_http(monkeypatch, script):
@@ -262,13 +270,40 @@ def test_search_markets_filters_client_side(monkeypatch):
     assert result.records == [{"Name": "Acme Farms", "UniqueSlug": "acme"}]
 
 
-def test_first_ok_falls_through_to_second_candidate(monkeypatch):
+def test_fetch_menu_posts_and_unwraps_data_envelope(monkeypatch):
+    # THE fix (live-probed): fetch_menu POSTs to /listings/market/<id> and the
+    # real response wraps the product lines under a PascalCase "Data" key.
     _stub_sessions(monkeypatch, CultiveraSessionData(access_token="T"))
-    # fetch_menu still uses candidate fallthrough (_first_ok): the pinned
-    # /product-lines path 404s here, so it falls through to the next candidate.
     _install_fake_http(monkeypatch, {
-        "listings/market/99/product-lines": [_FakeResp(404, {"e": 1})],
-        "listings/market/99": [_FakeResp(200, {"items": [{"Id": 1}]})],
+        "listings/market/99": [_FakeResp(200, {
+            "Data": [
+                {"Id": 4899, "Name": "Flower", "MinPrice": 4.0,
+                 "ImageUrl": "https://files.cultivera.com/x/Sunset-Runtz.jpg"},
+                {"Id": 4900, "Name": "Pre-Roll", "MinPrice": 6.0},
+            ],
+            "Count": 2, "TimeStamp": "2025-01-01",
+        })],
+    })
+    client = CultiveraClient(_settings())
+    result = asyncio.run(client.fetch_menu(market_id="99"))
+    assert result.ok is True
+    # extract_records unwraps the "Data" envelope (case-insensitive) -> 2 items
+    assert result.records is not None and len(result.records) == 2
+    assert result.records[0]["Name"] == "Flower"
+    # the request was a POST (not a GET) carrying a paging body
+    last = _FakeAsyncClient.calls[-1]
+    assert last["method"] == "POST"
+    assert last["body"] == {"CurrentPage": 1, "PageSize": 500}
+
+
+def test_fetch_menu_falls_back_to_get_when_post_fails(monkeypatch):
+    # If the POST truly fails (not just empty), the tolerant GET fallback runs.
+    _stub_sessions(monkeypatch, CultiveraSessionData(access_token="T"))
+    _install_fake_http(monkeypatch, {
+        # POST target fails outright...
+        "listings/market/99": [_FakeResp(500, {"e": "boom"})],
+        # ...so the legacy GET candidate answers instead.
+        "listings/market/99/product-lines": [_FakeResp(200, {"items": [{"Id": 1}]})],
     })
     client = CultiveraClient(_settings())
     result = asyncio.run(client.fetch_menu(market_id="99"))
@@ -280,11 +315,11 @@ def test_401_triggers_single_relogin_and_retry(monkeypatch):
     stale = CultiveraSessionData(access_token="STALE")
     fresh = CultiveraSessionData(access_token="FRESH")
     box = _stub_sessions(monkeypatch, stale, fresh)
-    # first call 401 (stale), retry after re-login 200
+    # first POST 401 (stale), retry after re-login 200 (Data envelope)
     _install_fake_http(monkeypatch, {
-        "listings/market/acme/product-lines": [
+        "listings/market/acme": [
             _FakeResp(401, {"e": "expired"}),
-            _FakeResp(200, {"listings": [{"id": "x"}]}),
+            _FakeResp(200, {"Data": [{"id": "x"}]}),
         ],
     })
     client = CultiveraClient(_settings())
@@ -297,8 +332,8 @@ def test_401_triggers_single_relogin_and_retry(monkeypatch):
 
 
 def test_persistent_401_does_not_loop_forever(monkeypatch):
-    # Every menu candidate path always 401s. The client must re-login at most
-    # ONCE per path (never spin), try all candidates, then give up with a 401.
+    # Every path always 401s: the POST re-logs in once, then the GET fallback
+    # candidates each re-login at most once. Bounded, no infinite spin.
     fresh = CultiveraSessionData(access_token="FRESH")
     box = _stub_sessions(
         monkeypatch,
@@ -314,8 +349,8 @@ def test_persistent_401_does_not_loop_forever(monkeypatch):
     result = asyncio.run(client.fetch_menu(slug="acme"))
     assert result.ok is False
     assert result.status == 401
-    # 4 candidate paths, at most one forced re-login each -> bounded, no loop.
-    assert box["force_calls"] <= 4
+    # 1 POST + 4 GET candidate paths, at most one forced re-login each -> bounded.
+    assert box["force_calls"] <= 5
 
 
 def test_fetch_menu_requires_identifier(monkeypatch):

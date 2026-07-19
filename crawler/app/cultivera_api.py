@@ -51,11 +51,20 @@ _MARKET_BY_SLUG_PATHS = (
     "markets/slug/{slug}",
     "public/markets/slug/{slug}",
 )
+# The REAL menu request (live-probed 2025 with scripts/probe_menu.py against
+# SUBX / market 99): it is a **POST** to /listings/market/<marketId> with a
+# JSON paging body, returning {"Data": [<product lines>], "Count", "TimeStamp"}.
+# A plain GET on that same route answers 405 (Method Not Allowed) and the
+# /product-lines suffix answers 405/404 -- which is exactly why the old
+# GET-only fetch returned zero items. We POST here.
+_MENU_POST_PATH = "listings/market/{market}"
+# Generous page size so one request returns the whole menu. An empty body also
+# works (probe-confirmed) but we send explicit paging to be safe & future-proof.
+_MENU_POST_PAGE_SIZE = 500
+
+# Legacy GET candidates -- kept ONLY as a tolerant fallback if the POST ever
+# fails outright (never as the primary path). Each 200s-with-records wins.
 _MENU_LISTINGS_PATHS = (
-    # PINNED from a live authenticated browser capture of Cultivera's own
-    # storefront (page /bm/market/<slug>/menu fires this): the menu lives at
-    # /listings/market/<marketId>/product-lines. Kept FIRST; older candidates
-    # remain as tolerant fallbacks in case the shape ever differs.
     "listings/market/{market}/product-lines",
     "listings/market/{market}",
     "public/listings/market/{market}",
@@ -309,6 +318,64 @@ class CultiveraClient:
 
         return CultiveraApiResult(ok=False, url=url, error="exhausted retries")
 
+    async def _post_json(
+        self, path: str, body: dict[str, Any] | None = None
+    ) -> CultiveraApiResult:
+        """POST one path with a JSON body (auth + politeness + one 401 retry).
+
+        Mirror of `_get_json` for routes that answer 405 to a GET (they exist
+        but want a POST + filter body -- e.g. the menu listings endpoint). The
+        raw JSON is returned untouched for the downstream normalizer to shape.
+        """
+        session = await self._ensure_session()
+        api_base = resolve_api_base(session, self._settings)
+        url = join_url(api_base, path)
+
+        for attempt in range(2):  # attempt 0 normal; attempt 1 after re-login
+            await self._sleep_polite()
+            headers = auth_headers(session)
+            try:
+                async with httpx.AsyncClient(
+                    timeout=_REQUEST_TIMEOUT_SECONDS,
+                    follow_redirects=True,
+                    headers=headers,
+                    **({"proxy": self._settings.proxy_url} if self._settings.proxy_url else {}),
+                ) as client:
+                    resp = await client.post(url, json=body or {})
+            except httpx.HTTPError as exc:
+                return CultiveraApiResult(ok=False, url=url, error=f"request failed: {exc}")
+
+            if resp.status_code == 401 and attempt == 0:
+                try:
+                    session = await self._ensure_session(force=True)
+                except CultiveraAuthError as exc:
+                    return CultiveraApiResult(
+                        ok=False, url=url, status=401, error=f"re-auth failed: {exc}"
+                    )
+                api_base = resolve_api_base(session, self._settings)
+                url = join_url(api_base, path)
+                continue
+
+            if resp.status_code >= 400:
+                return CultiveraApiResult(
+                    ok=False, url=url, status=resp.status_code,
+                    error=f"HTTP {resp.status_code}",
+                )
+
+            try:
+                payload = resp.json()
+            except (ValueError, TypeError) as exc:
+                return CultiveraApiResult(
+                    ok=False, url=url, status=resp.status_code,
+                    error=f"non-JSON response: {exc}",
+                )
+            return CultiveraApiResult(
+                ok=True, url=url, status=resp.status_code,
+                raw=payload, records=extract_records(payload),
+            )
+
+        return CultiveraApiResult(ok=False, url=url, error="exhausted retries")
+
     async def _first_ok(self, paths: tuple[str, ...]) -> CultiveraApiResult:
         """Try candidate paths in order; return the first JSON success.
 
@@ -356,13 +423,28 @@ class CultiveraClient:
         """Fetch ONE vendor's live listings (their menu).
 
         Accepts either a market id or a slug (whichever the caller resolved).
-        The raw JSON is returned for the downstream normalizeSnapshot to shape;
-        we never assume the item field names here.
+
+        PRIMARY (live-probed): a **POST** to /listings/market/<market> with a
+        paging body returns {"Data": [<product lines>], ...}. A GET on the same
+        route answers 405, which is why the old GET-only fetch found zero items.
+
+        FALLBACK: if the POST fails outright (not merely empty), we still try
+        the legacy GET candidates so nothing regresses. The raw JSON is returned
+        untouched for the downstream normalizeSnapshot to shape.
         """
         market = (market_id or slug).strip()
         if not market:
             raise CultiveraApiError("fetch_menu requires a market_id or slug")
         safe = quote(market, safe="")
+
+        # 1) The real request: POST with a generous paging body.
+        post_path = _MENU_POST_PATH.format(market=safe)
+        post_body = {"CurrentPage": 1, "PageSize": _MENU_POST_PAGE_SIZE}
+        result = await self._post_json(post_path, post_body)
+        if result.ok:
+            return result
+
+        # 2) Tolerant fallback (old behaviour) only if the POST truly failed.
         paths = tuple(p.format(market=safe) for p in _MENU_LISTINGS_PATHS)
         return await self._first_ok(paths)
 
