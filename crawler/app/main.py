@@ -448,6 +448,11 @@ class CultiveraMenuRequest(BaseModel):
     slug: str = Field(default="", description="Vendor slug (alternative to market_id).")
 
 
+class CultiveraProductRequest(BaseModel):
+    market_id: str = Field(default="", description="Cultivera market id (numeric).")
+    product_id: str = Field(default="", description="Cultivera product-line id (numeric).")
+
+
 class CultiveraApiOut(BaseModel):
     ok: bool
     url: str = ""
@@ -523,6 +528,41 @@ async def cultivera_menu(
     client = CultiveraClient(s)
     try:
         result = await client.fetch_menu(market_id=req.market_id, slug=req.slug)
+    except CultiveraApiError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except CultiveraAuthError as exc:
+        raise HTTPException(status_code=502, detail=f"Cultivera login failed: {exc}") from exc
+    return _cultivera_result_out(result)
+
+
+@app.post("/cultivera/product", response_model=CultiveraApiOut)
+async def cultivera_product(
+    req: CultiveraProductRequest,
+    x_crawler_secret: str | None = Header(default=None),
+) -> CultiveraApiOut:
+    """Fetch ONE product line's full per-variant DETAIL.
+
+    Pinned endpoint (live probe): GET /listings/{productId}/market/{marketId}.
+    Returns the raw product-line object (with its `Products` variant array) so
+    the Next app can normalize per-variant prices (dollars -> cents), available
+    quantities, sizes, strain types and order limits — the buyer's per-size
+    shopping view.
+    """
+    _require_secret(x_crawler_secret)
+    s = get_settings()
+    if not s.cultivera_enabled:
+        raise HTTPException(
+            status_code=503,
+            detail="Cultivera disabled (set CULTIVERA_EMAIL/CULTIVERA_PASSWORD).",
+        )
+    if not (req.market_id.strip() and req.product_id.strip()):
+        raise HTTPException(status_code=422, detail="Provide market_id and product_id.")
+    log.info("cultivera product market_id=%r product_id=%r", req.market_id, req.product_id)
+    client = CultiveraClient(s)
+    try:
+        result = await client.fetch_product_detail(
+            market_id=req.market_id, product_id=req.product_id
+        )
     except CultiveraApiError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except CultiveraAuthError as exc:

@@ -267,3 +267,63 @@ def test_fetch_menu_requires_identifier(monkeypatch):
     except api_mod.CultiveraApiError:
         raised = True
     assert raised is True
+
+
+# --- fetch_product_detail (pinned: GET /listings/{product}/market/{market}) --
+def test_fetch_product_detail_hits_pinned_path(monkeypatch):
+    _stub_sessions(monkeypatch, CultiveraSessionData(access_token="T"))
+    detail = {
+        "Id": 4462,
+        "Name": "Signature Flower Line",
+        "Products": [
+            {"Id": 447772, "Name": "Luxor [1g] [Sativa]", "UnitPrice": 4.5,
+             "AvailableQuantity": 20, "UnitSize": 1.0},
+        ],
+    }
+    _install_fake_http(monkeypatch, {
+        "listings/4462/market/85": [_FakeResp(200, detail)],
+    })
+    client = CultiveraClient(_settings())
+    result = asyncio.run(client.fetch_product_detail(market_id="85", product_id="4462"))
+    assert result.ok is True
+    assert result.url.endswith("listings/4462/market/85")
+    # RAW passthrough — the dollar float is NOT converted here (Next does cents).
+    assert result.raw == detail
+    # Lone-object tolerant extraction wraps the single record.
+    assert result.records == [detail]
+    # Auth header attached like every other call.
+    assert _FakeAsyncClient.calls[-1]["headers"]["Authorization"] == "Bearer T"
+
+
+def test_fetch_product_detail_requires_both_ids(monkeypatch):
+    _stub_sessions(monkeypatch, CultiveraSessionData(access_token="T"))
+    _install_fake_http(monkeypatch, {})
+    client = CultiveraClient(_settings())
+    for kwargs in (
+        {"market_id": "", "product_id": "4462"},
+        {"market_id": "85", "product_id": ""},
+        {"market_id": " ", "product_id": " "},
+    ):
+        try:
+            asyncio.run(client.fetch_product_detail(**kwargs))
+            raised = False
+        except api_mod.CultiveraApiError:
+            raised = True
+        assert raised is True
+
+
+def test_fetch_product_detail_401_relogin_retry(monkeypatch):
+    stale = CultiveraSessionData(access_token="STALE")
+    fresh = CultiveraSessionData(access_token="FRESH")
+    box = _stub_sessions(monkeypatch, stale, fresh)
+    _install_fake_http(monkeypatch, {
+        "listings/4462/market/85": [
+            _FakeResp(401, {"e": "expired"}),
+            _FakeResp(200, {"Id": 4462, "Products": []}),
+        ],
+    })
+    client = CultiveraClient(_settings())
+    result = asyncio.run(client.fetch_product_detail(market_id="85", product_id="4462"))
+    assert result.ok is True
+    assert box["force_calls"] == 1
+    assert _FakeAsyncClient.calls[-1]["headers"]["Authorization"] == "Bearer FRESH"
