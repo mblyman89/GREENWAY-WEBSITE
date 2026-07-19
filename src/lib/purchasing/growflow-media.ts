@@ -29,6 +29,8 @@ import {
   growflowMediaTitleForItem,
   growflowMediaAltForItem,
 } from "@/lib/purchasing/growflow-media-core";
+import { kbIdentityForItem } from "@/lib/purchasing/growflow-kb-link-core";
+import { writeBackProductFacts } from "@/lib/ai/kb/writeback";
 
 export type SaveGrowflowItemMediaResult = {
   ok: boolean;
@@ -84,6 +86,44 @@ export async function saveGrowflowItemMedia(
       kind === "image" ? { mediaAssetId: asset.id } : { coaMediaAssetId: asset.id },
     );
     await recordUsage(asset.id, "growflow_menu_item", item.id, kind);
+
+    // GF-7: bind a saved IMAGE (and the vendor's description) to the DURABLE
+    // product backbone (kb_products), keyed by the product's natural identity
+    // — so every time this product comes in, this image is picked FIRST and its
+    // description fills in. Best-effort + gap-fill: writeBackProductFacts only
+    // sets primary_media_id / description when the KB row hasn't already got one
+    // (a human's manual choice always wins), and never auto-publishes (drafts
+    // only). A failure here must not fail the media save, so it's swallowed.
+    if (kind === "image") {
+      try {
+        const identity = kbIdentityForItem(item);
+        // Pass the RAW name/brand + our normalized variant: writeBackProductFacts
+        // re-slugifies brandName/productName with the SAME rule kbIdentityForItem
+        // uses, so both agree on (brand_slug, product_slug, variant_label). The
+        // fallback sentinels ("unknown-brand"/"product") also match, so a nameless
+        // row still upserts onto the identity our recordUsage key points at.
+        await writeBackProductFacts(
+          {
+            posProductKey: identity.posProductKey,
+            // Raw name so writeback's slugifyDashed(...) || "product" reproduces
+            // our productSlug exactly (including the empty-name -> "product" case).
+            productName: item.name ?? "",
+            brandName: item.brand ?? null,
+            category: item.category ?? null,
+            variantLabel: identity.variantLabel,
+            description: item.description ?? null,
+            imageMediaIds: [asset.id],
+            primaryMediaId: asset.id,
+            source: `crawl:${url}`,
+            confidence: null,
+          },
+          uploadedBy,
+        );
+        await recordUsage(asset.id, "kb_product", identity.posProductKey, "primary_image");
+      } catch {
+        /* best-effort: KB association is non-fatal to the media save */
+      }
+    }
 
     return { ok: true, kind, assetId: asset.id, deduped, error: null };
   } catch (err) {
