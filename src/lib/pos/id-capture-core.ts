@@ -29,6 +29,8 @@
  *                                     typing) resets SILENTLY.
  */
 
+import { isCompleteAamvaPayload } from "./id-scan-core";
+
 // ---------------------------------------------------------------------------
 // Tuning constants
 // ---------------------------------------------------------------------------
@@ -40,6 +42,23 @@
  * flow's multi-second visible print.
  */
 export const ID_CAPTURE_IDLE_MS = 300;
+
+/**
+ * STALL-PROOF fallback idle (IDS-1). Content-driven completion
+ * (isCompleteAamvaPayload) is the PRIMARY finalize path and fires the instant
+ * the buffer is a gate-ready license — perceived-instant. This longer idle is
+ * ONLY the safety net for payloads that never satisfy the content check (a
+ * truncated read, an unusual jurisdiction encoding, or stray typing). Socket
+ * Mobile documents that Basic/HID mode is "much slower ... for barcode
+ * symbologies encoding a lot of data, such as many 2D barcodes"; a driver's
+ * license PDF417 is ~300–1100 bytes streamed one keystroke at a time over
+ * Bluetooth, and the burst can STALL well past 300 ms mid-stream. The old
+ * fixed 300 ms window fired during those stalls and finalized a truncated
+ * buffer (the "5–7 seconds then fails" bug). 1200 ms comfortably clears any
+ * realistic wedge stall so the fallback only ever fires when the stream has
+ * genuinely ended.
+ */
+export const ID_CAPTURE_FALLBACK_IDLE_MS = 1200;
 
 /**
  * Minimum buffered chars for finalize to emit a payload. A real AAMVA PDF417
@@ -91,6 +110,32 @@ export function idCaptureKey(state: IdCaptureState, key: string, nowMs: number):
     return { state, consumed: false };
   }
   return { state: { buffer: state.buffer + key, lastKeyMs: nowMs }, consumed: true };
+}
+
+/**
+ * Feed a key AND report whether the buffer is now a COMPLETE AAMVA payload
+ * (IDS-1 content-driven completion). This is the primary finalize trigger: the
+ * caller finalizes immediately when `complete` is true — perceived-instant,
+ * no timer wait — and otherwise (re)arms the longer stall-proof idle timer.
+ * `complete` is only ever true once the buffer parses to a gate-ready license
+ * (ANSI header + normalized DBB + DBA), so a partial mid-stream buffer can
+ * never trip it. Delegates keystroke handling to idCaptureKey (unchanged).
+ */
+export type IdCaptureFeedResult = {
+  state: IdCaptureState;
+  /** The key was captured into the buffer (caller should preventDefault). */
+  consumed: boolean;
+  /** The buffer is now a complete, gate-ready AAMVA payload — finalize now. */
+  complete: boolean;
+};
+
+export function feedIdCaptureKey(state: IdCaptureState, key: string, nowMs: number): IdCaptureFeedResult {
+  const r = idCaptureKey(state, key, nowMs);
+  const complete =
+    r.consumed &&
+    r.state.buffer.length >= ID_CAPTURE_MIN_LENGTH &&
+    isCompleteAamvaPayload(r.state.buffer);
+  return { state: r.state, consumed: r.consumed, complete };
 }
 
 export type IdCaptureFinalizeResult = {
@@ -206,6 +251,51 @@ export function __runIdCaptureCoreTests(): void {
   // wedge inter-key gap (~50 ms) by a wide margin.
   ok(ID_CAPTURE_IDLE_MS >= 200 && ID_CAPTURE_IDLE_MS <= 1000, "idle window sane (near-instant, scanner-safe)");
   ok(ID_CAPTURE_MIN_LENGTH === 20, "min length is 20");
+
+  // IDS-1 — content-driven completion via feedIdCaptureKey. The capture
+  // reports complete=true the instant the buffer is a gate-ready license, so
+  // the caller finalizes without waiting on any timer, and a truncated
+  // mid-stream buffer NEVER reports complete (the old-floor failure).
+  {
+    const full =
+      "@\n\x1e\rANSI 636045080002DL00410278DLDAQWDL123ABC456\n" +
+      "DCSPUBLIC\nDACJOHN\nDBB07131990\nDBA07132028\nDAJWA\nDCGUSA\n";
+    // Stream char-by-char; complete must flip true exactly once, at/after DBA,
+    // and the state buffer at that point must itself be a finalizable payload.
+    let st = emptyIdCaptureState();
+    let firstCompleteAt = -1;
+    let t = 1000;
+    for (let i = 0; i < full.length; i++) {
+      const ch = full[i] === "\n" ? "Enter" : full[i];
+      const r = feedIdCaptureKey(st, ch, t);
+      st = r.state;
+      t += 20;
+      if (r.complete && firstCompleteAt === -1) firstCompleteAt = i;
+    }
+    ok(firstCompleteAt !== -1, "feed reports complete once the whole payload has streamed");
+    // It should not have reported complete before DBA's value finished.
+    const dbaEnd = full.indexOf("DBA") + "DBA07132028".length;
+    ok(firstCompleteAt >= dbaEnd - 1, "complete only fires at/after DBA is fully present (no truncation)");
+    // The final buffer finalizes to the full payload.
+    ok(finalizeIdCapture(st).payload === full, "streamed buffer finalizes to the full payload");
+  }
+  // A partial stream that stalls before DBA must NOT report complete — the
+  // longer fallback idle (not a 300 ms guess) is what eventually fires.
+  {
+    const partial = "@\n\x1e\rANSI 636045080002DL00410278DLDAQWDL123ABC456\nDCSPUBLIC\nDACJOHN\nDBB07131990\n";
+    let st = emptyIdCaptureState();
+    let sawComplete = false;
+    let t = 1000;
+    for (const chRaw of partial) {
+      const ch = chRaw === "\n" ? "Enter" : chRaw;
+      const r = feedIdCaptureKey(st, ch, t);
+      st = r.state;
+      t += 20;
+      if (r.complete) sawComplete = true;
+    }
+    ok(!sawComplete, "stream missing DBA never reports content-complete");
+  }
+  ok(ID_CAPTURE_FALLBACK_IDLE_MS >= 1000 && ID_CAPTURE_FALLBACK_IDLE_MS > ID_CAPTURE_IDLE_MS, "fallback idle is long + exceeds the primary idle");
 
   console.log(`pos/id-capture-core: ${pass} passed, ${fail} failed`);
   if (fail > 0) throw new Error(`${fail} pos/id-capture-core tests failed`);
