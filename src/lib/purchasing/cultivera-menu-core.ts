@@ -274,11 +274,14 @@ export function normalizeSnapshot(input: unknown): CultiveraSnapshot {
     itemsRaw = input;
   } else if (input && typeof input === "object") {
     root = input as Record<string, unknown>;
-    itemsRaw = pickRaw(root, ["items", "listings", "products", "menu", "data", "results", "menuItems", "menu_items"]);
+    // Cultivera's LIVE-probed menu envelope is PascalCase: { Data: [...] }
+    // (POST /listings/market/<id> -> { Data, Count, TimeStamp }). Keep the
+    // lowercase variants too so older/other shapes still normalize.
+    itemsRaw = pickRaw(root, ["Data", "items", "listings", "products", "menu", "data", "results", "menuItems", "menu_items"]);
     // If the picked value is itself an envelope, unwrap one common level.
     if (itemsRaw && typeof itemsRaw === "object" && !Array.isArray(itemsRaw)) {
       const inner = itemsRaw as Record<string, unknown>;
-      const nested = pickRaw(inner, ["items", "listings", "products", "results", "data"]);
+      const nested = pickRaw(inner, ["Data", "items", "listings", "products", "results", "data"]);
       if (Array.isArray(nested)) itemsRaw = nested;
     }
   }
@@ -604,6 +607,22 @@ export function __runCultiveraMenuCoreTests(): void {
   const snap3 = normalizeSnapshot({ data: { items: [{ name: "Z" }] }, name: "Nested Co" });
   assert(snap3.itemCount === 1 && snap3.items[0].name === "Z", "snap nested unwrap");
   assert(snap3.sellerName === "Nested Co", "snap nested seller");
+
+  // normalizeSnapshot — LIVE Cultivera envelope: PascalCase { Data:[...] }
+  // (POST /listings/market/<id> -> { Data, Count, TimeStamp }). This is the
+  // real shape; without the "Data" key the menu normalized to zero items.
+  const snapData = normalizeSnapshot({
+    Data: [
+      { Id: 4899, Name: "Flower", MinPrice: 4.0, ImageUrl: "https://files.cultivera.com/x/Sunset-Runtz.jpg" },
+      { Id: 4900, Name: "Pre-Roll", MinPrice: 6.0 },
+    ],
+    Count: 2,
+    TimeStamp: "2025-01-01",
+  });
+  assert(snapData.itemCount === 2 && snapData.items.length === 2, "snap Data envelope count");
+  assert(snapData.items[0].name === "Flower", "snap Data item0 name");
+  assert(snapData.items[0].wholesalePriceMinor === 400, "snap Data item0 MinPrice dollars->cents");
+  assert(snapData.items[0].imageUrl === "https://files.cultivera.com/x/Sunset-Runtz.jpg", "snap Data item0 image");
 
   // normalizeSnapshot — empty / junk
   const snap4 = normalizeSnapshot(null);
