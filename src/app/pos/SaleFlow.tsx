@@ -186,6 +186,34 @@ export type SaleFlowProps = {
    */
   onHold?: (cart: PosCartEntry[]) => void;
   /**
+   * SESSION RESUME — when the idle auto-lock parks an in-progress sale that is
+   * already PAST the age gate, the shell re-mounts SaleFlow with the parked
+   * verdict so the budtender does NOT rescan the customer's ID. RE-VALIDATED
+   * by the shell (active-sale-resume-core) before it is passed in: age still
+   * >= 21, ID not expired, within TTL. When present, the flow starts at the
+   * cart step with this verdict already in hand.
+   */
+  initialVerdict?: Extract<IdGateVerdict, { allowed: true }>;
+  /**
+   * SESSION RESUME — the parked medical recognition card (if the resumed sale
+   * was medical), so the sale stays medical (pricing + 3x limits) without
+   * re-capturing the card. Re-validated (card not expired) by the shell.
+   */
+  initialMedicalCard?: PosCardCapture;
+  /**
+   * SESSION RESUME — report the CURRENT resumable sale state up to the shell
+   * (verdict + cart lines + medical card + member) whenever it changes, so the
+   * shell can persist a snapshot the instant an idle auto-lock fires. Called
+   * with null when the sale is not resumable (pre-gate or empty cart) so the
+   * shell can clear any stale snapshot.
+   */
+  onSnapshot?: (state: {
+    verdict: Extract<IdGateVerdict, { allowed: true }> | null;
+    cart: PosCartEntry[];
+    medicalCard: PosCardCapture | null;
+    member: PosMemberHit | null;
+  }) => void;
+  /**
    * B17 — the frozen receipt snapshot, fired the moment the sale is
    * enqueued. The shell persists it so "reprint last receipt" survives the
    * post-sale auto-lock.
@@ -326,8 +354,10 @@ function priceForBuyer(
   };
 }
 
-export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, initialCart, initialMember, onHold, onReceiptFrozen, onMemberLookup, onMemberMatch, onMemberHistory, onEmailReceipt, onApprove, onProductImage, onStockFlag, onLoyalty, onEnqueue, onComplete, onCancel }: SaleFlowProps) {
-  const [step, setStep] = useState<Step>("idgate");
+export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, initialCart, initialMember, initialVerdict, initialMedicalCard, onSnapshot, onHold, onReceiptFrozen, onMemberLookup, onMemberMatch, onMemberHistory, onEmailReceipt, onApprove, onProductImage, onStockFlag, onLoyalty, onEnqueue, onComplete, onCancel }: SaleFlowProps) {
+  // SESSION RESUME — a re-validated parked verdict starts the flow PAST the
+  // age gate (at the cart), so the customer's ID is not rescanned.
+  const [step, setStep] = useState<Step>(initialVerdict ? "cart" : "idgate");
   // IDS-5 \u2014 post-scan burst DRAIN. Content-driven completion finalizes the
   // scan the instant it is gate-ready, but the wedge scanner keeps streaming
   // the REST of the PDF417 (weight "DAW160", eye color, address\u2026). Once the ID
@@ -359,12 +389,12 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
     document.addEventListener("keydown", onKeyDownCapture, true);
     return () => document.removeEventListener("keydown", onKeyDownCapture, true);
   }, []);
-  const [verdict, setVerdict] = useState<Extract<IdGateVerdict, { allowed: true }> | null>(null);
+  const [verdict, setVerdict] = useState<Extract<IdGateVerdict, { allowed: true }> | null>(initialVerdict ?? null);
   const [manualEventUuid, setManualEventUuid] = useState<string | null>(null);
   // POS B9 — set ONLY by the ID gate's medical path (card captured + its
   // audit event enqueued). The card, not a toggle, is what makes the sale
   // medical: it drives pricing, the 3× limits, and the payload block.
-  const [medicalCard, setMedicalCard] = useState<PosCardCapture | null>(null);
+  const [medicalCard, setMedicalCard] = useState<PosCardCapture | null>(initialMedicalCard ?? null);
   const [cardEventUuid, setCardEventUuid] = useState<string | null>(null);
   // B17 — a resumed hold seeds the cart, but ONLY the cart: the ID gate,
   // medical path, and member attach all start fresh for the returning buyer.
@@ -372,6 +402,20 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
   // POS B14 — the loyalty member attached to this sale (server lookup only).
   // AM-D: a loaded website order pre-attaches its linked customer.
   const [member, setMember] = useState<PosMemberHit | null>(initialMember ?? null);
+  // SESSION RESUME — push the CURRENT resumable sale state up to the shell so
+  // it can persist a snapshot the instant an idle auto-lock fires. A
+  // latest-ref keeps the effect from re-subscribing on every parent render;
+  // the effect re-runs only when the resumable inputs (verdict, cart, medical
+  // card, member) actually change. Pre-gate (no verdict) reports the raw
+  // verdict=null and the shell clears any stale snapshot. Prices are NEVER
+  // sent — the shell re-prices the cart against the current bundle on resume.
+  const onSnapshotRef = useRef(onSnapshot);
+  useEffect(() => {
+    onSnapshotRef.current = onSnapshot;
+  });
+  useEffect(() => {
+    onSnapshotRef.current?.({ verdict, cart, medicalCard, member });
+  }, [verdict, cart, medicalCard, member]);
   // Task AM-B — the loyalty redemption applied to THIS sale (server-issued
   // code + per-variant spread). Dropped automatically the moment the priced
   // cart drifts from the fingerprint it was computed for.
