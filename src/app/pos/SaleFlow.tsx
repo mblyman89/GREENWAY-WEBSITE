@@ -49,6 +49,7 @@ import {
   feedIdCaptureKey,
   finalizeIdCapture,
   ID_CAPTURE_FALLBACK_IDLE_MS,
+  shouldDrainKey,
   type IdCaptureState,
 } from "@/lib/pos/id-capture-core";
 import {
@@ -327,6 +328,37 @@ function priceForBuyer(
 
 export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, initialCart, initialMember, onHold, onReceiptFrozen, onMemberLookup, onMemberMatch, onMemberHistory, onEmailReceipt, onApprove, onProductImage, onStockFlag, onLoyalty, onEnqueue, onComplete, onCancel }: SaleFlowProps) {
   const [step, setStep] = useState<Step>("idgate");
+  // IDS-5 \u2014 post-scan burst DRAIN. Content-driven completion finalizes the
+  // scan the instant it is gate-ready, but the wedge scanner keeps streaming
+  // the REST of the PDF417 (weight "DAW160", eye color, address\u2026). Once the ID
+  // gate hands off to the cart, those trailing keystrokes would land in the
+  // product-search box ("can't find DAW160" + a stray search). This ref holds
+  // the finalize timestamp; a document-level guard mounted for the WHOLE flow
+  // (so it survives the idgate\u2192cart transition) swallows every keystroke while
+  // inside the drain window \u2014 each trailing key re-arms it, so it ends only
+  // once the scanner burst genuinely stops.
+  const lastScanFinalizeRef = useRef<number | null>(null);
+  const noteScanFinalized = useCallback(() => {
+    lastScanFinalizeRef.current = performance.now();
+  }, []);
+  useEffect(() => {
+    const onKeyDownCapture = (e: KeyboardEvent) => {
+      const now = performance.now();
+      if (!shouldDrainKey(lastScanFinalizeRef.current, now)) return;
+      // Still draining the scanner's trailing burst: swallow the key so it
+      // never reaches the cart's search box, and re-arm the window.
+      lastScanFinalizeRef.current = now;
+      e.preventDefault();
+      e.stopPropagation();
+      // Kill the iOS Safari text-selection ("Select All") popup that the burst
+      // triggers by clearing any accidental selection during the drain.
+      const sel = typeof window !== "undefined" ? window.getSelection?.() : null;
+      if (sel && sel.rangeCount > 0) sel.removeAllRanges();
+    };
+    // Capture phase so we intercept BEFORE the focused input handles the key.
+    document.addEventListener("keydown", onKeyDownCapture, true);
+    return () => document.removeEventListener("keydown", onKeyDownCapture, true);
+  }, []);
   const [verdict, setVerdict] = useState<Extract<IdGateVerdict, { allowed: true }> | null>(null);
   const [manualEventUuid, setManualEventUuid] = useState<string | null>(null);
   // POS B9 — set ONLY by the ID gate's medical path (card captured + its
@@ -452,6 +484,7 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
         }}
         onEnqueueManual={(payload) => onEnqueue("manual_id_verification", payload)}
         onEnqueueCardCapture={(payload) => onEnqueue("medical_card_capture", payload)}
+        onScanFinalized={noteScanFinalized}
       />
     );
   }
@@ -825,6 +858,7 @@ function IdGateScreen({
   onCancel,
   onEnqueueManual,
   onEnqueueCardCapture,
+  onScanFinalized,
 }: {
   /** True when the menu bundle carries the DOH medical config (B8). */
   medicalAvailable: boolean;
@@ -843,6 +877,12 @@ function IdGateScreen({
   onCancel: () => void;
   onEnqueueManual: (payload: Record<string, unknown>) => string;
   onEnqueueCardCapture: (payload: Record<string, unknown>) => string;
+  /**
+   * IDS-5 \u2014 called the moment a scan finalizes (before the flow leaves the
+   * gate) so the parent can arm the burst-drain window that swallows the
+   * scanner's trailing keystrokes.
+   */
+  onScanFinalized: () => void;
 }) {
   const [mode, setMode] = useState<"scan" | "over40" | "manual">("scan");
   const [error, setError] = useState<string | null>(null);
@@ -945,10 +985,12 @@ function IdGateScreen({
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [receiving, setReceiving] = useState(false);
   const submitScanRef = useRef<(raw: string) => void>(() => {});
+  const onScanFinalizedRef = useRef<() => void>(() => {});
   useEffect(() => {
     // Latest-ref pattern: the document listener always calls the freshest
     // submitScan (which closes over medical-card state) without re-binding.
     submitScanRef.current = submitScan;
+    onScanFinalizedRef.current = onScanFinalized;
   });
   useEffect(() => {
     if (mode !== "scan") return;
@@ -960,7 +1002,13 @@ function IdGateScreen({
       const fin = finalizeIdCapture(captureRef.current);
       captureRef.current = fin.state;
       setReceiving(false);
-      if (fin.payload) submitScanRef.current(fin.payload);
+      if (fin.payload) {
+        // IDS-5 \u2014 arm the burst drain BEFORE we hand off, so the scanner's
+        // trailing keystrokes (weight/eye color/address after DBB+DBA) are
+        // swallowed by the parent guard instead of landing in the cart search.
+        onScanFinalizedRef.current();
+        submitScanRef.current(fin.payload);
+      }
     };
     const onKeyDown = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
@@ -1190,7 +1238,17 @@ function IdGateScreen({
       </div>
 
       {mode === "scan" ? (
-        <div className="w-full max-w-lg">
+        <div
+          className="w-full max-w-lg"
+          // IDS-5 \u2014 the ID gate has no text to select; suppressing selection +
+          // the iOS callout stops the "Select All" bubble that the wedge burst
+          // was triggering on Safari/iPad during a scan.
+          style={{
+            userSelect: "none",
+            WebkitUserSelect: "none",
+            WebkitTouchCallout: "none",
+          }}
+        >
           {/* AP — no box, no typing, no waiting: the hidden capture reads the
               scanner directly and the verdict lands ~a third of a second
               after the beep. */}
