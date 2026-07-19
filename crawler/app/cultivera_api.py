@@ -117,32 +117,53 @@ def extract_records(payload: Any) -> list[dict[str, Any]]:
         return [x for x in payload if isinstance(x, dict)]
     if not isinstance(payload, dict):
         return []
+    # Cultivera wraps its payload under a PascalCase "Data" key (live-probed),
+    # while other envelopes use lowercase "data"/"items"/etc. Match keys
+    # case-INSENSITIVELY so Data / DATA / data all unwrap the same way.
+    lowered = {k.lower(): v for k, v in payload.items() if isinstance(k, str)}
     for key in _LIST_ENVELOPE_KEYS:
-        val = payload.get(key)
+        val = lowered.get(key)
         if isinstance(val, list):
             return [x for x in val if isinstance(x, dict)]
         if isinstance(val, dict):
             # one level deeper (e.g. {"data": {"items": [...]}})
+            lowered2 = {k.lower(): v for k, v in val.items() if isinstance(k, str)}
             for k2 in _LIST_ENVELOPE_KEYS:
-                v2 = val.get(k2)
+                v2 = lowered2.get(k2)
                 if isinstance(v2, list):
                     return [x for x in v2 if isinstance(x, dict)]
     # A lone record object with no list wrapper.
     return [payload]
 
 
-def matches_query(record: dict[str, Any], query: str) -> bool:
-    """Case-insensitive substring match of `query` against a record's name-ish
-    fields. Used to filter a markets list client-side when the API has no search
-    param (tolerant fallback). Empty query matches everything.
+def normalize_for_match(text: str) -> str:
+    """Lowercase and strip every non-alphanumeric char for tolerant matching.
+
+    Marketplace vendor names are messy: extra spaces, underscores, punctuation,
+    and decorative symbols (live-probed: "ThunderChief" behind a wall of
+    underscores; "fire-bros."). Reducing both the query and the candidate to
+    just their lowercase letters+digits lets "thunder chief" match
+    "ThunderChief" and "fire bros" match "FIRE BROS.".
     """
-    q = (query or "").strip().lower()
+    return "".join(ch for ch in (text or "").lower() if ch.isalnum())
+
+
+def matches_query(record: dict[str, Any], query: str) -> bool:
+    """Space/punctuation-INSENSITIVE substring match of `query` against a
+    record's name-ish fields. Used to filter a markets list client-side when the
+    API has no search param (tolerant fallback). Empty query matches everything.
+
+    Field keys cover both lowercase spellings and Cultivera's live PascalCase
+    shape (Name, UniqueSlug).
+    """
+    q = normalize_for_match(query)
     if not q:
         return True
-    for key in ("name", "displayName", "display_name", "sellerName",
-                "seller_name", "businessName", "business_name", "slug", "title"):
+    for key in ("Name", "name", "UniqueSlug", "displayName", "display_name",
+                "sellerName", "seller_name", "businessName", "business_name",
+                "slug", "title"):
         val = record.get(key)
-        if isinstance(val, str) and q in val.lower():
+        if isinstance(val, str) and q in normalize_for_match(val):
             return True
     return False
 

@@ -205,18 +205,31 @@ def extract_stores(payload: Any) -> list[dict[str, Any]]:
     return []
 
 
+def normalize_for_match(text: str) -> str:
+    """Lowercase and strip every non-alphanumeric char for tolerant matching.
+
+    GrowFlow store names are messy (live-probed): decorative underscores,
+    symbols, and brand lists jammed together (e.g. a store literally named
+    "____...____ThunderChief"). Reducing both the query and the candidate to
+    just their lowercase letters+digits lets "thunder chief" match
+    "ThunderChief".
+    """
+    return "".join(ch for ch in (text or "").lower() if ch.isalnum())
+
+
 def matches_store(record: dict[str, Any], query: str) -> bool:
-    """Case-insensitive substring match of `query` against a store's name/license.
+    """Space/punctuation-INSENSITIVE substring match of `query` against a
+    store's name/license/city/brand.
 
     GrowFlow's own search is client-side over the returned store list, so we
     mirror that here. Empty query matches everything.
     """
-    q = (query or "").strip().lower()
+    q = normalize_for_match(query)
     if not q:
         return True
     for key in ("Name", "LicenseNumber", "City", "ProductBrandName"):
         val = record.get(key)
-        if isinstance(val, str) and q in val.lower():
+        if isinstance(val, str) and q in normalize_for_match(val):
             return True
     return False
 

@@ -22,6 +22,7 @@ from app.cultivera_api import (  # noqa: E402
     extract_records,
     join_url,
     matches_query,
+    normalize_for_match,
     polite_delay_seconds,
 )
 from app.cultivera_auth import CultiveraSessionData  # noqa: E402
@@ -95,6 +96,43 @@ def test_matches_query_across_name_fields():
     assert matches_query(rec, "zzz") is False
     assert matches_query(rec, "") is True         # empty matches everything
     assert matches_query({"other": "x"}, "acme") is False
+
+
+# --- Cultivera live-probed shapes (regression guards) -----------------------
+def test_extract_records_pascalcase_data_envelope():
+    """Cultivera wraps vendors under a capital-D `Data` array (live-probed)."""
+    payload = {
+        "Data": [
+            {"Id": 1, "Name": "FIRE BROS.", "UniqueSlug": "fire-bros."},
+            {"Id": 2, "Name": "Falcanna", "UniqueSlug": "falcanna"},
+        ],
+        "Count": 2,
+        "TimeStamp": "0001-01-01T00:00:00",
+    }
+    recs = extract_records(payload)
+    assert len(recs) == 2
+    assert recs[0]["Name"] == "FIRE BROS."
+
+
+def test_extract_records_envelope_key_case_insensitive():
+    assert extract_records({"DATA": [{"id": 1}]}) == [{"id": 1}]
+    assert extract_records({"Items": [{"id": 2}]}) == [{"id": 2}]
+
+
+def test_normalize_for_match_strips_space_and_punctuation():
+    assert normalize_for_match("Thunder Chief") == "thunderchief"
+    assert normalize_for_match("FIRE BROS.") == "firebros"
+    assert normalize_for_match("  ") == ""
+    assert normalize_for_match("") == ""
+
+
+def test_matches_query_pascalcase_and_space_insensitive():
+    rec = {"Name": "FIRE BROS.", "UniqueSlug": "fire-bros."}
+    assert matches_query(rec, "fire bros") is True       # space-insensitive
+    assert matches_query(rec, "FIREBROS") is True         # case-insensitive
+    assert matches_query(rec, "fire-bros") is True         # punctuation-insensitive
+    assert matches_query(rec, "falcanna") is False
+    assert matches_query(rec, "") is True
 
 
 # ---------------------------------------------------------------------------
@@ -289,8 +327,12 @@ def test_fetch_product_detail_hits_pinned_path(monkeypatch):
     assert result.url.endswith("listings/4462/market/85")
     # RAW passthrough — the dollar float is NOT converted here (Next does cents).
     assert result.raw == detail
-    # Lone-object tolerant extraction wraps the single record.
-    assert result.records == [detail]
+    # `records` is only a tolerant preview; the product-detail action reads
+    # `raw` (normalizeProductDetail), never `records`. Since extract_records now
+    # matches envelope keys case-insensitively, the PascalCase "Products"
+    # variants array is unwrapped as the preview. `raw` (the full product-line
+    # object) is preserved untouched for the real Next-side normalizer.
+    assert result.records == detail["Products"]
     # Auth header attached like every other call.
     assert _FakeAsyncClient.calls[-1]["headers"]["Authorization"] == "Bearer T"
 
