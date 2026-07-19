@@ -168,6 +168,37 @@ export type AamvaParseResult =
  * indicator (AP): wedge configs can consume leading control characters, so
  * "ANSI " + parseable elements is the format signature we require.
  */
+/**
+ * SEPARATOR-AGNOSTIC date extractor (Slice IDS-4). Verified root cause of the
+ * real-WA "missing a readable date of birth (DBB)" failure: in iOS Safari
+ * keyboard-wedge mode the AAMVA element separators (LF 0x0A / RS 0x1e / GS
+ * 0x1d) inside the PDF417 payload do NOT reliably arrive as keystrokes — iOS
+ * swallows/reinterprets the control characters (the same reason scanning a
+ * license into a text field "runs commands"). The payload then arrives as ONE
+ * concatenated blob with no separators, so the split-on-[\n\r\x1e] field
+ * reader sees a single giant field and never isolates DBB → the exact error
+ * the owner hit.
+ *
+ * The AAMVA DL/ID standard defines DBB (date of birth) and DBA (expiration) as
+ * element format "F8N" — FIXED length, exactly 8 NUMERIC characters. That makes
+ * "<ID><8 digits>" unambiguous even inside a concatenated blob, so we can
+ * recover the date by anchoring on the 3-letter element ID followed by exactly
+ * 8 digits. Used ONLY as a fallback when separator-delimited parsing fails to
+ * yield a valid date; separator-clean scans keep their existing behavior. Pure.
+ */
+export function extractAamvaDateSeparatorless(
+  raw: string,
+  elementId: "DBB" | "DBA" | "DBD",
+  country: "USA" | "CAN",
+): string | null {
+  const text = (raw ?? "").replace(/\r\n/g, "\n");
+  // Anchor on the element ID immediately followed by exactly 8 digits. The
+  // trailing (?!\d) guard ensures we don't grab the first 8 of a longer run.
+  const m = new RegExp(elementId + "(\\d{8})(?!\\d)").exec(text);
+  if (!m) return null;
+  return parseAamvaDate(m[1], country);
+}
+
 export function parseAamvaPdf417(raw: string): AamvaParseResult {
   const text = (raw ?? "").replace(/\r\n/g, "\n");
   if (!text.trim()) return { ok: false, error: "Empty scan." };
@@ -213,7 +244,10 @@ export function parseAamvaPdf417(raw: string): AamvaParseResult {
   }
   if (fields.size === 0) return { ok: false, error: "No DL/ID data elements found in scan." };
 
-  const countryRaw = (fields.get("DCG") ?? "USA").toUpperCase();
+  // Country drives date interpretation (US = MMDDCCYY, Canada = CCYYMMDD). When
+  // separators are stripped, DCG isn't isolated as a field either, so fall back
+  // to scanning the raw text for the DCG country code (IDS-4).
+  const countryRaw = (fields.get("DCG") ?? (/DCG(CAN|USA)/.exec(text)?.[1]) ?? "USA").toUpperCase();
   const country: "USA" | "CAN" = countryRaw === "CAN" ? "CAN" : "USA";
 
   const license: AamvaLicense = {
@@ -227,6 +261,20 @@ export function parseAamvaPdf417(raw: string): AamvaParseResult {
     country,
     aamvaVersion,
   };
+
+  // IDS-4: keyboard-wedge on iOS Safari can strip the element separators, so
+  // the split reader above may fail to isolate the fixed-length dates. Recover
+  // them directly from the raw text by anchoring on "<ID><8 digits>" before
+  // giving up — this is what makes real WA licenses read on the iPad.
+  if (!license.dateOfBirth) {
+    license.dateOfBirth = extractAamvaDateSeparatorless(text, "DBB", country);
+  }
+  if (!license.expirationDate) {
+    license.expirationDate = extractAamvaDateSeparatorless(text, "DBA", country);
+  }
+  if (!license.issueDate) {
+    license.issueDate = extractAamvaDateSeparatorless(text, "DBD", country);
+  }
 
   if (!license.dateOfBirth) {
     return { ok: false, error: "Scan is missing a readable date of birth (DBB) — use manual verification." };
@@ -468,6 +516,47 @@ export function __runIdScanCoreTests(): void {
   {
     const noDob = "@\n\x1e\rANSI 636045080002DL00410278DLDAQX1\nDCSDOE\n";
     ok(!parseAamvaPdf417(noDob).ok, "missing DOB rejected (forces manual path)");
+  }
+
+  // IDS-4: real-WA failure — iOS Safari wedge strips the element separators, so
+  // the whole payload arrives as ONE concatenated blob. This reproduces the
+  // owner's exact "missing a readable date of birth (DBB)" error and proves the
+  // separator-agnostic recovery fixes it. Header matches the owner's scan
+  // (IIN 636045, AAMVA v09).
+  {
+    const blob =
+      "@ANSI 636045090101DL00310282DLDCANONEDCBNONEDCDNONE" +
+      "DBA07132028DCSSAMPLEDACJANEDADNONEDBD07132023DBB07131990" +
+      "DBC1DAYBRODAU070 inDAJWADAQWDL1234567DCGUSA";
+    const r = parseAamvaPdf417(blob);
+    ok(r.ok, "separatorless (concatenated) WA payload now parses");
+    if (r.ok) {
+      ok(r.license.dateOfBirth === "1990-07-13", "separatorless DBB recovered");
+      ok(r.license.expirationDate === "2028-07-13", "separatorless DBA recovered");
+      ok(r.license.issueDate === "2023-07-13", "separatorless DBD recovered");
+    }
+  }
+  // The separator-agnostic extractor anchors on <ID> + EXACTLY 8 digits.
+  ok(
+    extractAamvaDateSeparatorless("xxDBB07131990DBC1yy", "DBB", "USA") === "1990-07-13",
+    "extractAamvaDateSeparatorless finds DBB in a blob",
+  );
+  ok(
+    extractAamvaDateSeparatorless("noDbbHere", "DBB", "USA") === null,
+    "extractAamvaDateSeparatorless returns null when absent",
+  );
+  ok(
+    // 9 trailing digits must NOT match (guards against grabbing part of a
+    // longer numeric run).
+    extractAamvaDateSeparatorless("DBB071319901", "DBB", "USA") === null,
+    "extractAamvaDateSeparatorless rejects >8 digit run",
+  );
+  {
+    // Canada separatorless: date is CCYYMMDD.
+    const canBlob = "@ANSI 636028100002DL00310200DLDCANONEDBB19980215DBA20290215DAJBCDCGCAN";
+    const r = parseAamvaPdf417(canBlob);
+    ok(r.ok, "separatorless CAN payload parses");
+    if (r.ok) ok(r.license.dateOfBirth === "1998-02-15", "separatorless CAN DBB (CCYYMMDD)");
   }
 
   // Scan gate
