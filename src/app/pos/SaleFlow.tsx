@@ -983,6 +983,17 @@ function IdGateScreen({
   // clears the buffer on a partial so no garbage carries into the next scan.
   const captureRef = useRef<IdCaptureState>(emptyIdCaptureState());
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // IDS-6 \u2014 dedicated hidden input SINK for the scanner keystrokes. Root cause
+  // of the iOS "Select All" bubble (verified against the WebKit team's own
+  // guidance, bug 231161: CSS -webkit-user-select / -webkit-touch-callout do
+  // NOT reliably suppress the callout): the old capture read keydown at the
+  // DOCUMENT level with NOTHING focused, so Safari treated the wedge burst as
+  // an attempt to select/edit page content and surfaced the editing callout.
+  // Giving the burst a real, focused (off-screen) editable target means iOS
+  // routes the keystrokes into a normal text field instead of the page body,
+  // so no page selection forms and no callout appears. We keep the field
+  // emptied every keystroke so it never actually accumulates or scrolls.
+  const scanSinkRef = useRef<HTMLInputElement | null>(null);
   const [receiving, setReceiving] = useState(false);
   const submitScanRef = useRef<(raw: string) => void>(() => {});
   const onScanFinalizedRef = useRef<() => void>(() => {});
@@ -1010,14 +1021,23 @@ function IdGateScreen({
         submitScanRef.current(fin.payload);
       }
     };
+    const sink = scanSinkRef.current;
     const onKeyDown = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
-      const tag = t?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || t?.isContentEditable) return;
+      // Keystrokes into a REAL form field (the manual DOB inputs, etc.) pass
+      // through untouched. The scan SINK is our own field \u2014 treat its keydowns
+      // as scanner input, not as user typing.
+      if (t !== sink) {
+        const tag = t?.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || t?.isContentEditable) return;
+      }
       const r = feedIdCaptureKey(captureRef.current, e.key, performance.now());
       captureRef.current = r.state;
       if (!r.consumed) return;
       e.preventDefault();
+      // Keep the sink emptied so it never accumulates, scrolls, or forms a
+      // selection (belt-and-suspenders with preventDefault).
+      if (sink) sink.value = "";
       setReceiving((prev) => prev || true);
       // PRIMARY: the payload is provably complete — finalize instantly.
       if (r.complete) {
@@ -1030,8 +1050,23 @@ function IdGateScreen({
       idleTimerRef.current = setTimeout(finalizeNow, ID_CAPTURE_FALLBACK_IDLE_MS);
     };
     document.addEventListener("keydown", onKeyDown);
+    // Focus the sink so the wedge burst has a real editable target (no
+    // document-level selection => no iOS "Select All" callout). Re-focus if
+    // the user taps elsewhere and comes back.
+    const focusSink = () => {
+      if (mode === "scan" && scanSinkRef.current && document.activeElement !== scanSinkRef.current) {
+        // Guard: never steal focus from the manual/over-40 form inputs.
+        const ae = document.activeElement as HTMLElement | null;
+        const aeTag = ae?.tagName;
+        if (aeTag === "INPUT" || aeTag === "TEXTAREA" || aeTag === "SELECT" || ae?.isContentEditable) return;
+        scanSinkRef.current.focus({ preventScroll: true });
+      }
+    };
+    focusSink();
+    const focusPoll = setInterval(focusSink, 400);
     return () => {
       document.removeEventListener("keydown", onKeyDown);
+      clearInterval(focusPoll);
       if (idleTimerRef.current) {
         clearTimeout(idleTimerRef.current);
         idleTimerRef.current = null;
@@ -1240,15 +1275,53 @@ function IdGateScreen({
       {mode === "scan" ? (
         <div
           className="w-full max-w-lg"
-          // IDS-5 \u2014 the ID gate has no text to select; suppressing selection +
-          // the iOS callout stops the "Select All" bubble that the wedge burst
-          // was triggering on Safari/iPad during a scan.
+          // IDS-5/6: suppressing selection + the iOS callout via CSS is a first
+          // layer, but the REAL fix for the "Select All" bubble is the focused
+          // hidden sink below (WebKit bug 231161: CSS alone does not reliably
+          // suppress the callout).
           style={{
             userSelect: "none",
             WebkitUserSelect: "none",
             WebkitTouchCallout: "none",
           }}
         >
+          {/* IDS-6: hidden, off-screen input SINK. The scanner burst is a rapid
+              stream of keystrokes; with no focused editable target iOS Safari
+              tries to select page content and shows the "Select All" callout.
+              Keeping this field focused gives the burst a real target so no
+              page selection forms. Kept empty on every keystroke. Off-screen
+              (not display:none, which can't hold focus). */}
+          <input
+            ref={scanSinkRef}
+            type="text"
+            inputMode="none"
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
+            aria-hidden="true"
+            tabIndex={-1}
+            onChange={(e) => { e.currentTarget.value = ""; }}
+            onSelect={(e) => {
+              const el = e.currentTarget;
+              try { el.setSelectionRange(0, 0); } catch { /* ignore */ }
+            }}
+            style={{
+              position: "absolute",
+              width: 1,
+              height: 1,
+              padding: 0,
+              margin: -1,
+              opacity: 0,
+              border: 0,
+              left: -9999,
+              top: 0,
+              userSelect: "none",
+              WebkitUserSelect: "none",
+              WebkitTouchCallout: "none",
+              caretColor: "transparent",
+            }}
+          />
           {/* AP — no box, no typing, no waiting: the hidden capture reads the
               scanner directly and the verdict lands ~a third of a second
               after the beep. */}
