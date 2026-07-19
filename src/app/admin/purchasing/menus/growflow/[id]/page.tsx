@@ -8,12 +8,17 @@ import { getGrowflowSnapshot, getGrowflowSnapshotItems } from "@/lib/purchasing/
 import {
   priceLabel,
   potencyLabel,
-  filterMenuItems,
   filterByCategory,
   distinctCategories,
   agoLabel,
 } from "@/lib/purchasing/cultivera-menus-ui-core";
 import { remainingMediaCount, isHttpUrl } from "@/lib/purchasing/cultivera-media-core";
+import {
+  sortGrowflowRows,
+  filterGrowflowRows,
+  growflowDisplayName,
+  growflowListingSubtitle,
+} from "@/lib/purchasing/growflow-menu-ui-core";
 import { SaveGrowflowItemMediaButton, SaveAllGrowflowMediaButton } from "./media-buttons";
 
 export const dynamic = "force-dynamic";
@@ -60,7 +65,9 @@ export default async function GrowflowSnapshotPage({
 
   const items = await getGrowflowSnapshotItems(id);
   const categories = distinctCategories(items);
-  const visible = filterByCategory(filterMenuItems(items, q), category);
+  // GF-8: search matches the real strain name too, then sort the grid
+  // alphabetically by strain/product name, then size ascending (1g→3.5g→7g).
+  const visible = sortGrowflowRows(filterByCategory(filterGrowflowRows(items, q), category));
   const mediaRemaining = remainingMediaCount(items);
 
   const vendorLabel = (snap.store_name ?? "").trim() || (snap.license_number ?? "").trim() || "Unknown vendor";
@@ -184,6 +191,11 @@ export default async function GrowflowSnapshotPage({
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {visible.map((it) => {
                 const potency = potencyLabel(it);
+                // GF-8: card title is the real strain name (raw.StrainName),
+                // falling back to the listing name; the package label shows as a
+                // secondary line so nothing is lost.
+                const displayName = growflowDisplayName(it);
+                const listingSubtitle = growflowListingSubtitle(it);
                 return (
                   <div
                     key={it.id}
@@ -194,7 +206,7 @@ export default async function GrowflowSnapshotPage({
                         // Remote GrowFlow Azure-blob images — next/image needs domain
                         // allow-listing, so plain <img> like the Cultivera browser.
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={it.image_url} alt={it.name ?? ""} className="h-full w-full object-contain" />
+                        <img src={it.image_url} alt={displayName} className="h-full w-full object-contain" />
                       ) : (
                         <span className="text-3xl opacity-40">🌿</span>
                       )}
@@ -206,13 +218,18 @@ export default async function GrowflowSnapshotPage({
                           type="checkbox"
                           name="item"
                           value={it.id}
-                          aria-label={`Select ${it.name ?? "menu item"} for purchase order`}
+                          aria-label={`Select ${displayName} for purchase order`}
                           className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--admin-accent)]"
                         />
-                        <span className="text-sm font-semibold text-[var(--admin-text)]" title={it.name ?? undefined}>
-                          {it.name ?? "(unnamed item)"}
+                        <span className="text-sm font-semibold text-[var(--admin-text)]" title={displayName}>
+                          {displayName}
                         </span>
                       </label>
+                      {listingSubtitle && (
+                        <div className="text-xs font-medium text-[var(--admin-text-muted)]" title={listingSubtitle}>
+                          {listingSubtitle}
+                        </div>
+                      )}
                       <div className="text-xs text-[var(--admin-text-muted)]">
                         {[it.brand, it.category, it.size_label].filter(Boolean).join(" · ") || "—"}
                       </div>
