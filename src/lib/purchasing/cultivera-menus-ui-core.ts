@@ -146,9 +146,13 @@ export function snapshotSummary(snap: SnapshotLike, nowMs: number): string {
  * authenticated probe once credentials exist.
  * ------------------------------------------------------------------ */
 
-const NAME_KEYS = ["displayName", "display_name", "name", "sellerName", "seller_name", "businessName", "business_name", "title"] as const;
-const SLUG_KEYS = ["slug", "marketSlug", "market_slug"] as const;
-const ID_KEYS = ["id", "marketId", "market_id", "uuid"] as const;
+// PascalCase keys (Name, UniqueSlug, Id) are PINNED from a live authenticated
+// probe of Cultivera's /markets/connected search: each vendor record is
+// { Id, Name, UniqueSlug, Logo, Status, ... }. They lead the lists; the
+// lowercase/camelCase variants remain as tolerant fallbacks.
+const NAME_KEYS = ["Name", "displayName", "display_name", "name", "sellerName", "seller_name", "businessName", "business_name", "title"] as const;
+const SLUG_KEYS = ["UniqueSlug", "slug", "marketSlug", "market_slug"] as const;
+const ID_KEYS = ["Id", "id", "marketId", "market_id", "uuid"] as const;
 
 function firstString(rec: Record<string, unknown>, keys: readonly string[]): string {
   for (const k of keys) {
@@ -325,6 +329,14 @@ export function __runCultiveraMenusUiCoreTests(): void {
   assert(isFetchableMarket({ slug: "acme" }) === true, "fetchable via slug");
   assert(isFetchableMarket({ id: "m1" }) === true, "fetchable via id");
   assert(isFetchableMarket({ name: "No handles" }) === false, "not fetchable");
+  // PascalCase shape pinned from the live Cultivera search probe.
+  assert(marketName({ Name: "SUBX" }) === "SUBX", "marketName PascalCase Name");
+  assert(marketSlug({ UniqueSlug: "subx" }) === "subx", "marketSlug UniqueSlug");
+  assert(marketId({ Id: 99 }) === "99", "marketId PascalCase Id numeric");
+  assert(
+    isFetchableMarket({ Id: 99, Name: "SUBX", UniqueSlug: "subx" }) === true,
+    "fetchable via UniqueSlug/Id (real Cultivera record)",
+  );
 
   // CH-3 — raw badge flags (live-probed IsSale / IsDOHComplaint)
   assert(saleFlagFromRaw({ IsSale: true }) === true, "saleFlag true");
