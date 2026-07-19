@@ -46,9 +46,9 @@ import { resolveScan } from "@/lib/pos/scan-to-cart-core";
 import { emptyWedgeState, wedgeKey, type WedgeState } from "@/lib/pos/wedge-scan-core";
 import {
   emptyIdCaptureState,
-  idCaptureKey,
+  feedIdCaptureKey,
   finalizeIdCapture,
-  ID_CAPTURE_IDLE_MS,
+  ID_CAPTURE_FALLBACK_IDLE_MS,
   type IdCaptureState,
 } from "@/lib/pos/id-capture-core";
 import {
@@ -927,9 +927,20 @@ function IdGateScreen({
   // the parser saw "@" alone and failed with the @/ANSI header error while
   // the rest of the barcode crawled into the box (one React re-render per
   // keystroke ≈ the 5-second print). Now a document-level listener buffers
-  // the burst in a ref (zero re-renders → instant), treats Enter/Tab as
-  // payload newlines, and parses ID_CAPTURE_IDLE_MS after the last char.
-  // Keystrokes into form fields (medical card, manual entry) pass through.
+  // the burst in a ref (zero re-renders → instant) and treats Enter/Tab as
+  // payload newlines. Keystrokes into form fields pass through.
+  //
+  // IDS-1/2 — CONTENT-DRIVEN completion. The DuraScan D760 in HID/keyboard
+  // mode streams the ~300–1100-char PDF417 one keystroke at a time over
+  // Bluetooth; the burst can STALL past a short idle window mid-stream. The
+  // old fixed 300 ms timer fired during those stalls and finalized a
+  // TRUNCATED buffer → parse failed while the rest of the barcode spilled in
+  // as garbage (the "5–7 s then fails" bug). Now: the instant the buffer is
+  // a gate-ready license (feedIdCaptureKey.complete — ANSI header + DBB +
+  // DBA), we finalize IMMEDIATELY (perceived-instant), so we never wait on a
+  // timer for a good scan. The idle timer is only a LONGER stall-proof
+  // fallback (ID_CAPTURE_FALLBACK_IDLE_MS) for odd/partial encodings, and it
+  // clears the buffer on a partial so no garbage carries into the next scan.
   const captureRef = useRef<IdCaptureState>(emptyIdCaptureState());
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [receiving, setReceiving] = useState(false);
@@ -941,27 +952,42 @@ function IdGateScreen({
   });
   useEffect(() => {
     if (mode !== "scan") return;
+    const finalizeNow = () => {
+      if (idleTimerRef.current) {
+        clearTimeout(idleTimerRef.current);
+        idleTimerRef.current = null;
+      }
+      const fin = finalizeIdCapture(captureRef.current);
+      captureRef.current = fin.state;
+      setReceiving(false);
+      if (fin.payload) submitScanRef.current(fin.payload);
+    };
     const onKeyDown = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
       const tag = t?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || t?.isContentEditable) return;
-      const r = idCaptureKey(captureRef.current, e.key, performance.now());
+      const r = feedIdCaptureKey(captureRef.current, e.key, performance.now());
       captureRef.current = r.state;
       if (!r.consumed) return;
       e.preventDefault();
       setReceiving((prev) => prev || true);
+      // PRIMARY: the payload is provably complete — finalize instantly.
+      if (r.complete) {
+        finalizeNow();
+        return;
+      }
+      // FALLBACK: (re)arm the long, stall-proof idle. It only fires when the
+      // stream has genuinely ended without ever becoming gate-ready.
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
-      idleTimerRef.current = setTimeout(() => {
-        const fin = finalizeIdCapture(captureRef.current);
-        captureRef.current = fin.state;
-        setReceiving(false);
-        if (fin.payload) submitScanRef.current(fin.payload);
-      }, ID_CAPTURE_IDLE_MS);
+      idleTimerRef.current = setTimeout(finalizeNow, ID_CAPTURE_FALLBACK_IDLE_MS);
     };
     document.addEventListener("keydown", onKeyDown);
     return () => {
       document.removeEventListener("keydown", onKeyDown);
-      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+      if (idleTimerRef.current) {
+        clearTimeout(idleTimerRef.current);
+        idleTimerRef.current = null;
+      }
       captureRef.current = emptyIdCaptureState();
     };
   }, [mode]);
