@@ -94,6 +94,7 @@ import { __runCultiveraMediaCoreTests } from "../../src/lib/purchasing/cultivera
 import { __runCultiveraPoCoreTests } from "../../src/lib/purchasing/cultivera-po-core";
 import { __runGrowflowMediaCoreTests } from "../../src/lib/purchasing/growflow-media-core";
 import { __runGrowflowKbLinkCoreTests } from "../../src/lib/purchasing/growflow-kb-link-core";
+import { __runCultiveraKbLinkCoreTests } from "../../src/lib/purchasing/cultivera-kb-link-core";
 import { __runDraftSeedCoreTests } from "../../src/lib/inventory/draft-seed-core";
 import { __runWedgeScanCoreTests } from "../../src/lib/pos/wedge-scan-core";
 import { __runRegisterLoyaltyCoreTests } from "../../src/lib/pos/register-loyalty-core";
@@ -202,6 +203,7 @@ async function main() {
   __runCultiveraPoCoreTests();
   __runGrowflowMediaCoreTests();
   __runGrowflowKbLinkCoreTests();
+  __runCultiveraKbLinkCoreTests();
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

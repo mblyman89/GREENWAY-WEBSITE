@@ -9,6 +9,7 @@ import { detailFromItemRaw } from "@/lib/purchasing/cultivera-menu-core";
 import { priceLabel } from "@/lib/purchasing/cultivera-menus-ui-core";
 import { VARIANT_QTY_PARAM_PREFIX } from "@/lib/purchasing/cultivera-po-core";
 import { FetchSizesButton } from "./fetch-sizes-button";
+import { SaveImageToKbButton } from "./save-to-kb-button";
 
 export const dynamic = "force-dynamic";
 
@@ -94,7 +95,7 @@ export default async function CultiveraItemDetailPage({
               here — browse and build orders without re-hitting the marketplace.
             </p>
           </div>
-          <div className="shrink-0">
+          <div className="flex shrink-0 flex-col items-end gap-2">
             {canFetch ? (
               <FetchSizesButton
                 snapshotId={id}
@@ -105,6 +106,18 @@ export default async function CultiveraItemDetailPage({
               <p className="max-w-[14rem] text-xs text-[var(--admin-text-faint)]">
                 This snapshot has no Cultivera market/product ids — re-fetch the vendor&apos;s menu to
                 enable per-size pricing.
+              </p>
+            )}
+            {/* CV-7: save THIS product's card image (one per strain) to the media
+                library and bind it to the durable KB product backbone. */}
+            <SaveImageToKbButton
+              snapshotId={id}
+              itemId={itemId}
+              disabled={!item.image_url}
+            />
+            {!item.image_url && (
+              <p className="max-w-[14rem] text-right text-[0.65rem] text-[var(--admin-text-faint)]">
+                No product image to save yet.
               </p>
             )}
           </div>
