@@ -24,6 +24,12 @@ import {
   packCountFromLabel,
   normalizeMenuItem,
   normalizeSnapshot,
+  parseVariantName,
+  sizeLabelFromGrams,
+  normalizeVariant,
+  normalizeProductDetail,
+  detailFromItemRaw,
+  ITEM_DETAIL_RAW_KEY,
 } from "@/lib/purchasing/cultivera-menu-core";
 
 describe("cultivera-menu-core embedded self-tests", () => {
@@ -207,5 +213,101 @@ describe("normalizeSnapshot", () => {
     const snap = normalizeSnapshot(null);
     expect(snap.itemCount).toBe(0);
     expect(snap.items).toEqual([]);
+  });
+});
+
+describe("CH-2 product-detail normalizers (pinned live shape)", () => {
+  it("parses bracketed variant names", () => {
+    const p = parseVariantName("Wedding Cake [3.5g] [Indica] [D.O.H. COMPLIANT]");
+    expect(p.cleanName).toBe("Wedding Cake");
+    expect(p.sizeLabel).toBe("3.5g");
+    expect(p.strainType).toBe("indica");
+    expect(p.dohTagged).toBe(true);
+  });
+
+  it("handles names without tags and empty names", () => {
+    expect(parseVariantName("Plain")).toEqual({
+      cleanName: "Plain",
+      sizeLabel: null,
+      strainType: "unknown",
+      dohTagged: false,
+    });
+    expect(parseVariantName("").cleanName).toBeNull();
+    expect(parseVariantName(null).cleanName).toBeNull();
+  });
+
+  it("derives size labels from grams", () => {
+    expect(sizeLabelFromGrams(1.0)).toBe("1g");
+    expect(sizeLabelFromGrams(3.5)).toBe("3.5g");
+    expect(sizeLabelFromGrams(0)).toBeNull();
+    expect(sizeLabelFromGrams("junk")).toBeNull();
+  });
+
+  it("normalizes a live-probed variant (dollars -> cents)", () => {
+    const v = normalizeVariant(
+      {
+        Id: 447772,
+        Name: "Luxor [1g] [Sativa] [D.O.H. COMPLIANT]",
+        Description: "Gorilla Butter F2 (Vegas Cut) x Alien Apple Kush",
+        UnitPrice: 4.5,
+        AvailableQuantity: 20,
+        UnitSize: 1.0,
+        MaxOrderLimit: null,
+        IsDOHComplaint: true,
+        ImageUrl: "https://cdn1.s2solutions.com/x/ProductImages/LUXOR.jpg",
+      },
+      6,
+    );
+    expect(v.variantId).toBe("447772");
+    expect(v.cleanName).toBe("Luxor");
+    expect(v.strainType).toBe("sativa");
+    expect(v.sizeLabel).toBe("1g");
+    expect(v.unitPriceMinor).toBe(450);
+    expect(v.availableQty).toBe(20);
+    expect(v.maxOrderLimit).toBeNull();
+    expect(v.isDohCompliant).toBe(true);
+    expect(v.position).toBe(6);
+  });
+
+  it("falls back to UnitSize grams when the name has no size tag", () => {
+    const v = normalizeVariant({ Name: "Loose Flower", UnitSize: 3.5, UnitPrice: 14 }, 0);
+    expect(v.sizeLabel).toBe("3.5g");
+    expect(v.unitPriceMinor).toBe(1400);
+  });
+
+  it("stays safe on junk variants", () => {
+    const v = normalizeVariant(null, 0);
+    expect(v.name).toBeNull();
+    expect(v.unitPriceMinor).toBeNull();
+    expect(v.strainType).toBe("unknown");
+  });
+
+  it("normalizes a whole detail payload", () => {
+    const d = normalizeProductDetail({
+      Id: 4462,
+      Name: "Signature Flower Line",
+      IsDOHComplaint: true,
+      Products: [
+        { Id: 1, Name: "A [1g] [Indica]", UnitPrice: 4.5, AvailableQuantity: 20 },
+        { Id: 2, Name: "B [3.5g] [Sativa]", UnitPrice: 14, AvailableQuantity: 1471, MaxOrderLimit: 75 },
+      ],
+    });
+    expect(d.productId).toBe("4462");
+    expect(d.variantCount).toBe(2);
+    expect(d.variants[0].unitPriceMinor).toBe(450);
+    expect(d.variants[1].maxOrderLimit).toBe(75);
+    expect(normalizeProductDetail(null).variantCount).toBe(0);
+  });
+
+  it("round-trips a stored detail through the reserved raw key", () => {
+    const stored = detailFromItemRaw({
+      Id: 4462,
+      [ITEM_DETAIL_RAW_KEY]: { Id: 4462, Products: [{ Id: 9, Name: "C [1g] [Hybrid]", UnitPrice: 5 }] },
+    });
+    expect(stored).not.toBeNull();
+    expect(stored?.variantCount).toBe(1);
+    expect(stored?.variants[0].unitPriceMinor).toBe(500);
+    expect(detailFromItemRaw({ Id: 1 })).toBeNull();
+    expect(detailFromItemRaw(null)).toBeNull();
   });
 });

@@ -10,6 +10,7 @@
  *
  *   POST /cultivera/markets  → search/list the marketplace's vendors
  *   POST /cultivera/menu     → fetch ONE vendor's LIVE menu (listings)
+ *   POST /cultivera/product  → fetch ONE product line's per-variant DETAIL
  *
  * The worker returns the RAW payload Cultivera gave it (plus a tolerant
  * `records` extraction). Persistence happens HERE on the Next side via
@@ -76,7 +77,7 @@ function notConfigured(detail: string): CultiveraWorkerResult {
 }
 
 async function cultiveraFetch(
-  path: "/cultivera/markets" | "/cultivera/menu",
+  path: "/cultivera/markets" | "/cultivera/menu" | "/cultivera/product",
   body: Record<string, string>,
   timeoutMs: number,
 ): Promise<CultiveraWorkerResult> {
@@ -173,6 +174,23 @@ export async function fetchCultiveraMenu(
   return cultiveraFetch(
     "/cultivera/menu",
     { market_id: input.marketId ?? "", slug: input.slug ?? "" },
+    timeoutMs,
+  );
+}
+
+/**
+ * Fetch ONE product line's full per-variant DETAIL (pinned endpoint:
+ * GET /listings/{productId}/market/{marketId} on the worker side). The caller
+ * persists the returned `raw` payload onto the item row via
+ * cultivera-store.saveItemDetail(); variants normalize on read.
+ */
+export async function fetchCultiveraProductDetail(
+  input: { marketId: string; productId: string },
+  timeoutMs = 90_000,
+): Promise<CultiveraWorkerResult> {
+  return cultiveraFetch(
+    "/cultivera/product",
+    { market_id: input.marketId, product_id: input.productId },
     timeoutMs,
   );
 }

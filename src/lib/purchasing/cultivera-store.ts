@@ -19,6 +19,8 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import {
   normalizeSnapshot,
+  ITEM_DETAIL_RAW_KEY,
+  ITEM_DETAIL_FETCHED_AT_KEY,
   type CultiveraSnapshot,
   type CultiveraMenuItem,
 } from "@/lib/purchasing/cultivera-menu-core";
@@ -222,6 +224,53 @@ export async function getSnapshotItems(snapshotId: string): Promise<CultiveraMen
     .order("position", { ascending: true });
   if (error || !data) return [];
   return data as CultiveraMenuItemRow[];
+}
+
+/** Fetch ONE item row by id within a snapshot (or null). Used in CH-2. */
+export async function getSnapshotItem(
+  snapshotId: string,
+  itemId: string,
+): Promise<CultiveraMenuItemRow | null> {
+  if (!isSupabaseServiceConfigured) return null;
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("cultivera_menu_items")
+    .select("*")
+    .eq("id", itemId)
+    .eq("snapshot_id", snapshotId)
+    .single();
+  if (error || !data) return null;
+  return data as CultiveraMenuItemRow;
+}
+
+/**
+ * Persist a fetched product-DETAIL payload (per-variant listing) onto its menu
+ * item row, under reserved keys inside the existing `raw` jsonb — no schema
+ * change (the owner has applied all migrations; 0124's raw column carries it).
+ * The stored payload is re-normalized on read via detailFromItemRaw, so parser
+ * revisions never require a re-fetch. Returns false when not configured/failed.
+ */
+export async function saveItemDetail(
+  itemId: string,
+  currentRaw: Record<string, unknown>,
+  detailPayload: unknown,
+  fetchedAtIso: string,
+): Promise<boolean> {
+  if (!isSupabaseServiceConfigured) return false;
+  if (!detailPayload || typeof detailPayload !== "object" || Array.isArray(detailPayload)) {
+    return false;
+  }
+  const admin = createSupabaseAdminClient();
+  const nextRaw: Record<string, unknown> = {
+    ...(currentRaw ?? {}),
+    [ITEM_DETAIL_RAW_KEY]: detailPayload,
+    [ITEM_DETAIL_FETCHED_AT_KEY]: fetchedAtIso,
+  };
+  const { error } = await admin
+    .from("cultivera_menu_items")
+    .update({ raw: nextRaw })
+    .eq("id", itemId);
+  return !error;
 }
 
 /** Link a saved media asset back to a menu item (image or COA). Used in CV-5. */
