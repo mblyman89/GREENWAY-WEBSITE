@@ -2,19 +2,22 @@
 crawler/scripts/probe_menu.py — ONE-OFF diagnostic (not wired into the API).
 
 Cultivera's GET /listings/market/{id}/product-lines returns an EMPTY list for
-some vendors (e.g. SUBX, market 99) even though the storefront clearly shows a
-menu. This probe reuses the crawler's OWN authenticated CultiveraClient session
-to try a list of candidate menu endpoints and reports, for each, the HTTP status,
-how many records came back, and the top-level JSON shape — so we can PIN the real
-endpoint empirically instead of guessing.
+SUBX (market 99) at HTTP 200 — the products are real (we see them in the
+storefront) so the request must be missing an identifier or parameter the site
+sends. The SUBX search record carries SEVERAL ids (Id, SellerBusinessId,
+CampaignId, ...); the menu call may key on a DIFFERENT one than the market Id.
 
-Run it from the crawler folder (same venv the crawler uses):
+This probe reuses the crawler's OWN authenticated CultiveraClient session to:
+  1) pull SUBX's full search record and print EVERY id-ish field (so we see the
+     real values), then
+  2) try the product-lines endpoint against EACH candidate id, plus a few id-in-
+     query variants, reporting status + record count + shape for each.
+
+Whichever line shows records > 0 is the real request. Nothing here changes the
+API contract or ships to production.
+
+Run from the crawler folder with the venv active:
     python -m scripts.probe_menu 99 subx
-or:
-    python scripts/probe_menu.py 99 subx
-
-It prints a compact table. Whichever path shows records > 0 is the real one.
-Nothing here changes the API contract or ships to production.
 """
 from __future__ import annotations
 
@@ -23,18 +26,14 @@ import json
 import sys
 from typing import Any
 
-# Import the crawler's real client + settings so we reuse the buyer's session.
 from app.cultivera_api import CultiveraClient, extract_records  # type: ignore
 from app.config import get_settings  # type: ignore
 
 
 def _shape(payload: Any) -> str:
-    """A short human description of the payload's top-level shape."""
     if isinstance(payload, list):
         first = payload[0] if payload else None
-        keys = (
-            ", ".join(list(first.keys())[:12]) if isinstance(first, dict) else "-"
-        )
+        keys = ", ".join(list(first.keys())[:12]) if isinstance(first, dict) else "-"
         return f"LIST(len={len(payload)}) first-item-keys=[{keys}]"
     if isinstance(payload, dict):
         keys = ", ".join(list(payload.keys())[:12])
@@ -42,53 +41,89 @@ def _shape(payload: Any) -> str:
     return f"{type(payload).__name__}"
 
 
+async def _try(client: CultiveraClient, path: str) -> None:
+    """GET one path, print a one-line summary (+first record if it has any)."""
+    try:
+        res = await client._get_json(path)  # noqa: SLF001 (diagnostic)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[EXC ] {path}\n        {exc}")
+        return
+    if not res.ok:
+        print(f"[{res.status or '---'}] {path}\n        error={res.error}")
+        return
+    recs = extract_records(res.raw)
+    n = len(recs)
+    flag = "   <<< HAS RECORDS" if n > 0 else ""
+    print(f"[200 ] {path}\n        records={n}  shape={_shape(res.raw)}{flag}")
+    if n > 0:
+        print("        FIRST RECORD (truncated 1800 chars):")
+        dump = json.dumps(recs[0], indent=2)[:1800]
+        print("        " + dump.replace("\n", "\n        "))
+
+
 async def _probe(market_id: str, slug: str) -> None:
     settings = get_settings()
     client = CultiveraClient(settings)
 
-    m = market_id
-    s = slug
-    # Candidate menu endpoints to try (path templates). Ordered from the current
-    # pinned one through plausible alternatives observed on Cultivera storefronts.
-    candidates = [
-        f"listings/market/{m}/product-lines",
-        f"listings/market/{m}",
-        f"listings/market/{m}/products",
-        f"listings/market/{m}/menu",
-        f"listings/market/{m}/product-lines?CurrentPage=1&PageSize=200",
-        f"listings/market/{m}/product-lines?PageSize=200&CurrentPage=1&Search=",
-        f"markets/{m}/listings",
-        f"markets/{m}/product-lines",
-        f"markets/{m}/products",
-        f"market/{m}/product-lines",
-        f"listings/market/slug/{s}/product-lines",
-        f"listings/market/{s}/product-lines",
-        f"bm/market/{s}/menu",
-        f"public/listings/market/{m}/product-lines",
-        f"listings/product-lines?marketId={m}",
-        f"listings/product-lines?MarketId={m}",
-        f"product-lines/market/{m}",
-    ]
+    # --- 1) Pull SUBX's full search record so we can read every id it carries.
+    print(f"\n=== SUBX search record (slug={slug!r}) ===")
+    search = await client.search_markets(slug)
+    rec: dict[str, Any] | None = None
+    if search.ok:
+        for r in extract_records(search.raw):
+            slug_val = str(r.get("UniqueSlug") or r.get("slug") or "").lower()
+            name_val = str(r.get("Name") or r.get("name") or "").lower()
+            if slug.lower() in slug_val or slug.lower() in name_val.replace(" ", ""):
+                rec = r
+                break
+        if rec is None and extract_records(search.raw):
+            rec = extract_records(search.raw)[0]
+    if rec is None:
+        print("  (could not find SUBX in search results — using market_id arg only)")
+    else:
+        print("  FULL RECORD:")
+        print("  " + json.dumps(rec, indent=2).replace("\n", "\n  "))
 
-    print(f"\nProbing menu endpoints for market_id={m!r} slug={s!r}\n" + "=" * 78)
-    for path in candidates:
-        try:
-            res = await client._get_json(path)  # noqa: SLF001 (diagnostic)
-        except Exception as exc:  # noqa: BLE001
-            print(f"[EXC ] {path}\n        {exc}")
-            continue
-        if not res.ok:
-            print(f"[{res.status or '---'}] {path}\n        error={res.error}")
-            continue
-        n = len(extract_records(res.raw))
-        flag = "  <<< HAS RECORDS" if n > 0 else ""
-        print(f"[200 ] {path}\n        records={n}  shape={_shape(res.raw)}{flag}")
-        # If we found products, also dump the first record so we can pin fields.
-        if n > 0:
-            first = extract_records(res.raw)[0]
-            print("        FIRST RECORD (truncated 1500 chars):")
-            print("        " + json.dumps(first, indent=2)[:1500].replace("\n", "\n        "))
-    print("=" * 78 + "\nDone. Any line marked '<<< HAS RECORDS' is the real endpoint.\n")
+    # Collect candidate ids from the record (dedupe, keep as strings).
+    id_fields = [
+        "Id", "SellerBusinessId", "CampaignId", "MarketId", "SellerId",
+        "BusinessId", "LocationId", "StoreId", "Uuid",
+    ]
+    ids: list[tuple[str, str]] = [("arg", market_id)]
+    if rec:
+        for f in id_fields:
+            v = rec.get(f)
+            if v is not None and str(v).strip() and (f, str(v)) not in ids:
+                ids.append((f, str(v)))
+
+    print("\n=== Trying product-lines against each candidate id ===")
+    seen: set[str] = set()
+    for label, idv in ids:
+        for tmpl in (
+            "listings/market/{id}/product-lines",
+            "listings/seller/{id}/product-lines",
+            "listings/business/{id}/product-lines",
+            "listings/market/{id}/product-lines?CurrentPage=1&PageSize=200&Search=&SortBy=&IncludeOutOfStock=true",
+        ):
+            path = tmpl.format(id=idv)
+            if path in seen:
+                continue
+            seen.add(path)
+            print(f"-- id[{label}]={idv}")
+            await _try(client, path)
+
+    # Also try the slug-based menu the storefront URL used.
+    print("\n=== Trying slug-based menu variants ===")
+    for path in (
+        f"listings/market/slug/{slug}/product-lines",
+        f"markets/{slug}/product-lines",
+        f"listings/market/{slug}/product-lines",
+    ):
+        await _try(client, path)
+
+    print("\n" + "=" * 78)
+    print("Any line marked '<<< HAS RECORDS' is the real request. Also send me the")
+    print("FULL RECORD block above so I can see SUBX's real id values.\n")
 
 
 def main() -> None:
