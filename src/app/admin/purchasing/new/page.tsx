@@ -24,11 +24,15 @@ import {
   saveReorderSettingsAction,
 } from "../actions";
 import { BuilderTable, type SuggestionRow } from "./builder-table";
-import { getSnapshot, getSnapshotItems } from "@/lib/purchasing/cultivera-store";
+import { getSnapshot, getSnapshotItems, getSnapshotItem } from "@/lib/purchasing/cultivera-store";
+import { detailFromItemRaw } from "@/lib/purchasing/cultivera-menu-core";
 import {
   parseMenuItemIds,
   buildMenuPrefills,
   menuPrefillBanner,
+  parseVariantSelections,
+  buildVariantPrefills,
+  variantPrefillBanner,
 } from "@/lib/purchasing/cultivera-po-core";
 import {
   getGrowflowSnapshot,
@@ -271,6 +275,39 @@ export default async function NewPurchaseOrderPage({
     }
   }
 
+  // CH-3 — per-VARIANT hand-off from a menu item's sizes table:
+  // `fromMenuDetail=<snapshotId>` + `detailItem=<itemRowId>` + one
+  // `vq_<variantId>=<qty>` per chosen size. W11: only OUR row ids plus the
+  // quantities ride in the URL; every name, price, and cap is rebuilt from
+  // the detail payload stored on OUR item row, and quantities are clamped to
+  // the vendor's MaxOrderLimit/availability.
+  const fromMenuDetail = one(sp, "fromMenuDetail");
+  const detailItemId = one(sp, "detailItem");
+  const variantSelections = parseVariantSelections(sp);
+  let variantPrefills: SuggestionRow[] = [];
+  let variantVendorLabel: string | null = null;
+  if (fromMenuDetail && detailItemId && variantSelections.length > 0) {
+    const detailSnap = await getSnapshot(fromMenuDetail);
+    if (detailSnap) {
+      const detailItem = await getSnapshotItem(fromMenuDetail, detailItemId);
+      const detail = detailItem ? detailFromItemRaw(detailItem.raw) : null;
+      if (detailItem && detail) {
+        const detailVendorId =
+          detailSnap.vendor_id && vendors.some((v) => v.id === detailSnap.vendor_id)
+            ? detailSnap.vendor_id
+            : null;
+        variantVendorLabel = detailSnap.seller_name ?? detailSnap.cultivera_market_slug ?? null;
+        variantPrefills = buildVariantPrefills(
+          detail.variants,
+          variantSelections,
+          detail.name ?? detailItem.name,
+          detailVendorId,
+          variantVendorLabel,
+        );
+      }
+    }
+  }
+
   // GF-6 — GrowFlow menu hand-off: same W11-safe contract as fromMenu, but
   // the ids resolve against OUR saved growflow_menu_* rows. The saved rows
   // share the MenuPrefillItemLike columns, so buildMenuPrefills is reused.
@@ -292,7 +329,7 @@ export default async function NewPurchaseOrderPage({
 
   // Task I (I6): candidate rows in PoLineLike shape for the market check —
   // suggested qty as the order qty, real unit costs (wholesale, minor units).
-  const marketLines: PoLineLike[] = [...(prefill ? [prefill] : []), ...menuPrefills, ...growflowPrefills, ...rows].map((r) => ({
+  const marketLines: PoLineLike[] = [...(prefill ? [prefill] : []), ...menuPrefills, ...variantPrefills, ...growflowPrefills, ...rows].map((r) => ({
     product_name: r.productName,
     brand: r.brand,
     category: r.category,
@@ -370,6 +407,11 @@ export default async function NewPurchaseOrderPage({
         {menuPrefills.length > 0 ? (
           <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-text)]">
             {menuPrefillBanner(menuPrefills.length, menuVendorLabel)}
+          </div>
+        ) : null}
+        {variantPrefills.length > 0 ? (
+          <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-text)]">
+            {variantPrefillBanner(variantPrefills.length, variantVendorLabel)}
           </div>
         ) : null}
         {growflowPrefills.length > 0 ? (
@@ -528,8 +570,8 @@ export default async function NewPurchaseOrderPage({
                 planSummary={planSummary}
                 prefill={prefill}
                 menuPrefills={
-                  menuPrefills.length > 0 || growflowPrefills.length > 0
-                    ? [...menuPrefills, ...growflowPrefills]
+                  menuPrefills.length > 0 || variantPrefills.length > 0 || growflowPrefills.length > 0
+                    ? [...menuPrefills, ...variantPrefills, ...growflowPrefills]
                     : undefined
                 }
                 fromLeadId={fromLead}

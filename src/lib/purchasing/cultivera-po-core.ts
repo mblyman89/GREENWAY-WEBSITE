@@ -159,6 +159,143 @@ export function menuPrefillBanner(count: number, vendorLabel: string | null): st
 }
 
 /* ------------------------------------------------------------------
+ * CH-3 — per-VARIANT hand-off (the sizes table on the item detail page).
+ *
+ * The detail page renders one qty <input name="vq_<variantId>"> per size in a
+ * GET form to /admin/purchasing/new, alongside `fromMenu=<snapshotId>` and
+ * `detailItem=<itemRowId>`. W11 holds: the URL carries only OUR row ids plus
+ * the buyer's chosen quantities; every name/price/limit is rebuilt from the
+ * detail payload stored on OUR item row (detailFromItemRaw), never the URL.
+ * ------------------------------------------------------------------ */
+
+/** Prefix for the per-variant quantity inputs on the detail page's form. */
+export const VARIANT_QTY_PARAM_PREFIX = "vq_";
+
+export type VariantSelection = { variantId: string; qty: number };
+
+/** The subset of a normalized CultiveraVariant the prefill mapper needs. */
+export type VariantLike = {
+  variantId: string | null;
+  cleanName: string | null;
+  name: string | null;
+  sizeLabel: string | null;
+  unitPriceMinor: number | null;
+  availableQty: number | null;
+  maxOrderLimit: number | null;
+};
+
+/**
+ * Read the buyer's variant quantities out of the search params: every
+ * `vq_<variantId>` key with a positive integer value becomes a selection.
+ * Junk/zero/negative quantities are dropped; order follows the param order;
+ * capped like the item hand-off.
+ */
+export function parseVariantSelections(
+  sp: Record<string, string | string[] | undefined>,
+  cap: number = MENU_PREFILL_CAP,
+): VariantSelection[] {
+  if (cap <= 0) return [];
+  const out: VariantSelection[] = [];
+  const seen = new Set<string>();
+  for (const [key, value] of Object.entries(sp)) {
+    if (!key.startsWith(VARIANT_QTY_PARAM_PREFIX)) continue;
+    const variantId = key.slice(VARIANT_QTY_PARAM_PREFIX.length).trim();
+    if (!variantId || seen.has(variantId)) continue;
+    const raw = Array.isArray(value) ? value[0] : value;
+    const n = Number((raw ?? "").trim());
+    if (!Number.isFinite(n)) continue;
+    const qty = Math.trunc(n);
+    if (qty <= 0) continue;
+    seen.add(variantId);
+    out.push({ variantId, qty });
+    if (out.length >= cap) break;
+  }
+  return out;
+}
+
+/**
+ * Clamp a requested quantity against the vendor's per-order cap and the live
+ * availability (both from OUR stored detail). Ignores null/zero limits.
+ * Always returns at least 1 for a positive request (a draft the buyer edits).
+ */
+export function clampVariantQty(
+  qty: number,
+  maxOrderLimit: number | null,
+  availableQty: number | null,
+): number {
+  let q = Math.max(1, Math.trunc(Number.isFinite(qty) ? qty : 1));
+  if (maxOrderLimit != null && Number.isFinite(maxOrderLimit) && maxOrderLimit > 0) {
+    q = Math.min(q, Math.trunc(maxOrderLimit));
+  }
+  if (availableQty != null && Number.isFinite(availableQty) && availableQty > 0) {
+    q = Math.min(q, Math.trunc(availableQty));
+  }
+  return Math.max(1, q);
+}
+
+/** Display name for a variant line: clean name + size, with safe fallbacks. */
+export function variantDisplayName(
+  v: Pick<VariantLike, "cleanName" | "name" | "sizeLabel">,
+  lineName: string | null,
+): string {
+  const base =
+    (v.cleanName ?? "").trim() || (v.name ?? "").trim() || (lineName ?? "").trim() ||
+    "Cultivera variant";
+  const size = (v.sizeLabel ?? "").trim();
+  if (!size) return base;
+  if (base.toLowerCase().includes(size.toLowerCase())) return base;
+  return `${base} — ${size}`;
+}
+
+/**
+ * Build builder prefill lines from the buyer's per-size selections. Only
+ * variant ids that exist in OUR stored detail are honored; quantities are
+ * clamped to MaxOrderLimit/availability; order follows the stored variants.
+ */
+export function buildVariantPrefills(
+  variants: VariantLike[],
+  selections: VariantSelection[],
+  lineName: string | null,
+  vendorId: string | null,
+  vendorName: string | null,
+  cap: number = MENU_PREFILL_CAP,
+): PoPrefillLine[] {
+  if (selections.length === 0 || cap <= 0) return [];
+  const wanted = new Map(selections.map((s) => [s.variantId, s.qty]));
+  const out: PoPrefillLine[] = [];
+  for (const v of variants) {
+    const id = (v.variantId ?? "").trim();
+    if (!id || !wanted.has(id)) continue;
+    const qty = clampVariantQty(wanted.get(id) ?? 1, v.maxOrderLimit, v.availableQty);
+    out.push({
+      posProductKey: null,
+      productName: variantDisplayName(v, lineName),
+      brand: null,
+      category: null,
+      vendorId,
+      vendorName,
+      onHand: 0,
+      unit: "each",
+      unitCostMinor: prefillCostMinor(v.unitPriceMinor),
+      avgDaily: 0,
+      reorderPoint: 0,
+      suggestedQty: qty,
+      belowReorderPoint: true,
+      daysOfSupplyLeft: 0,
+    });
+    if (out.length >= cap) break;
+  }
+  return out;
+}
+
+/** Banner copy for a per-variant hand-off. */
+export function variantPrefillBanner(count: number, vendorLabel: string | null): string {
+  const sizes = `${count} size${count === 1 ? "" : "s"}`;
+  const from = vendorLabel ? ` from ${vendorLabel}` : "";
+  return `Started from a Cultivera sizes table: ${sizes}${from} pre-added below with your chosen quantities — confirm costs and the vendor, then save.`;
+}
+
+/* ------------------------------------------------------------------
  * Embedded self-tests (run by scripts/compliance/run-pure-selftests.ts)
  * ------------------------------------------------------------------ */
 
@@ -266,6 +403,100 @@ export function __runCultiveraPoCoreTests(): void {
     menuPrefillBanner(1, null) ===
       "Started from a Cultivera menu: 1 item pre-added below as draft lines — confirm quantities, costs, and the vendor, then save.",
     "singular banner without vendor",
+  );
+
+  // ------------------------------------------------------------------
+  // CH-3 — per-variant hand-off helpers
+  // ------------------------------------------------------------------
+
+  // parseVariantSelections
+  const sels = parseVariantSelections({ vq_447772: "3", vq_9: "1", other: "x" });
+  ok(sels.length === 2, "selections count");
+  ok(sels[0].variantId === "447772" && sels[0].qty === 3, "selection parses id+qty");
+  ok(parseVariantSelections({ vq_1: "0" }).length === 0, "zero qty dropped");
+  ok(parseVariantSelections({ vq_1: "-2" }).length === 0, "negative qty dropped");
+  ok(parseVariantSelections({ vq_1: "junk" }).length === 0, "junk qty dropped");
+  ok(parseVariantSelections({ vq_1: "2.9" })[0].qty === 2, "fraction truncates");
+  ok(parseVariantSelections({ vq_1: ["4", "9"] })[0].qty === 4, "array takes first");
+  ok(parseVariantSelections({ vq_: "3" }).length === 0, "empty id dropped");
+  ok(parseVariantSelections({}, 0).length === 0, "cap 0 empty");
+  ok(
+    parseVariantSelections({ vq_1: "1", vq_2: "1", vq_3: "1" }, 2).length === 2,
+    "cap applies",
+  );
+
+  // clampVariantQty
+  ok(clampVariantQty(5, null, null) === 5, "no limits pass through");
+  ok(clampVariantQty(100, 75, null) === 75, "MaxOrderLimit caps");
+  ok(clampVariantQty(100, null, 20) === 20, "availability caps");
+  ok(clampVariantQty(100, 75, 20) === 20, "tightest cap wins");
+  ok(clampVariantQty(0, null, null) === 1, "min 1");
+  ok(clampVariantQty(Number.NaN, null, null) === 1, "NaN -> 1");
+  ok(clampVariantQty(5, 0, 0) === 5, "zero limits ignored");
+
+  // variantDisplayName
+  ok(
+    variantDisplayName({ cleanName: "Luxor", name: "Luxor [1g]", sizeLabel: "1g" }, "Line") ===
+      "Luxor — 1g",
+    "variant clean name + size",
+  );
+  ok(
+    variantDisplayName({ cleanName: null, name: null, sizeLabel: "1g" }, "Signature Line") ===
+      "Signature Line — 1g",
+    "falls back to line name",
+  );
+  ok(
+    variantDisplayName({ cleanName: null, name: null, sizeLabel: null }, null) ===
+      "Cultivera variant",
+    "total fallback",
+  );
+  ok(
+    variantDisplayName({ cleanName: "Luxor 1g", name: null, sizeLabel: "1g" }, null) ===
+      "Luxor 1g",
+    "size already in name unchanged",
+  );
+
+  // buildVariantPrefills
+  const vlist: VariantLike[] = [
+    { variantId: "1", cleanName: "Luxor", name: "Luxor [1g]", sizeLabel: "1g",
+      unitPriceMinor: 450, availableQty: 20, maxOrderLimit: null },
+    { variantId: "2", cleanName: "Wedding Cake", name: "Wedding Cake [3.5g]", sizeLabel: "3.5g",
+      unitPriceMinor: 1400, availableQty: 1471, maxOrderLimit: 75 },
+    { variantId: "3", cleanName: "Ghost", name: null, sizeLabel: null,
+      unitPriceMinor: null, availableQty: null, maxOrderLimit: null },
+  ];
+  const vp = buildVariantPrefills(
+    vlist,
+    [{ variantId: "2", qty: 100 }, { variantId: "1", qty: 3 }],
+    "Signature Flower Line",
+    "v1",
+    "Lifted Cannabis",
+  );
+  ok(vp.length === 2, "variant prefills count");
+  ok(vp[0].productName === "Luxor — 1g", "stored order kept (variant 1 first)");
+  ok(vp[0].suggestedQty === 3 && vp[0].unitCostMinor === 450, "variant qty + cents");
+  ok(vp[1].suggestedQty === 75, "qty clamped to MaxOrderLimit");
+  ok(vp[1].vendorId === "v1" && vp[1].vendorName === "Lifted Cannabis", "vendor threads");
+  ok(
+    buildVariantPrefills(vlist, [{ variantId: "nope", qty: 1 }], null, null, null).length === 0,
+    "unknown variant ids ignored",
+  );
+  ok(buildVariantPrefills(vlist, [], null, null, null).length === 0, "no selections");
+  ok(
+    buildVariantPrefills(vlist, [{ variantId: "1", qty: 1 }, { variantId: "2", qty: 1 }], null, null, null, 1).length === 1,
+    "variant cap applies",
+  );
+  const vpNull = buildVariantPrefills(vlist, [{ variantId: "3", qty: 2 }], "Line", null, null);
+  ok(vpNull[0].unitCostMinor === 0 && vpNull[0].productName === "Ghost", "null price -> 0 cents");
+
+  // variantPrefillBanner
+  ok(
+    variantPrefillBanner(2, "Lifted Cannabis").startsWith("Started from a Cultivera sizes table: 2 sizes from Lifted Cannabis"),
+    "variant banner plural",
+  );
+  ok(
+    variantPrefillBanner(1, null).startsWith("Started from a Cultivera sizes table: 1 size "),
+    "variant banner singular",
   );
 
   console.log(`cultivera-po-core: ${n} self-tests passed`);
