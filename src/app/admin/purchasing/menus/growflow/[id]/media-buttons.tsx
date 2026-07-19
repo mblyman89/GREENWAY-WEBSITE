@@ -2,19 +2,16 @@
 
 /**
  * GF-6 client islands for the GrowFlow snapshot browser: per-item "Save
- * image"/"Save COA" buttons and the snapshot-wide "Save all to library"
- * button. Mirrors the CV-5 islands — each calls a typed server action, shows
- * the returned message inline, and refreshes the server page so the "in
- * library" badges update.
+ * image"/"Save COA" buttons. Mirrors the CV-5 islands — each calls a typed
+ * server action, shows the returned message inline, and refreshes the server
+ * page so the "in library" badges update. The snapshot-wide "Save all" button
+ * now lives in ../../auto-save-all-button.tsx (MB-1: background auto-loop).
  */
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/admin/ui";
-import {
-  saveGrowflowItemMediaAction,
-  saveAllGrowflowSnapshotMediaAction,
-} from "../../actions";
+import { saveGrowflowItemMediaAction } from "../../actions";
 
 export function SaveGrowflowItemMediaButton({
   snapshotId,
@@ -60,45 +57,4 @@ export function SaveGrowflowItemMediaButton({
   );
 }
 
-export function SaveAllGrowflowMediaButton({
-  snapshotId,
-  remaining,
-}: {
-  snapshotId: string;
-  /** How many unsaved images/COAs the server counted at render time. */
-  remaining: number;
-}) {
-  const router = useRouter();
-  const [message, setMessage] = useState<string | null>(null);
-  const [failed, setFailed] = useState(false);
-  const [pending, startTransition] = useTransition();
 
-  function run() {
-    setMessage(null);
-    startTransition(async () => {
-      const fd = new FormData();
-      fd.set("snapshot_id", snapshotId);
-      const res = await saveAllGrowflowSnapshotMediaAction(fd);
-      setFailed(!res.ok);
-      setMessage(res.message);
-      router.refresh();
-    });
-  }
-
-  return (
-    <div className="flex flex-col items-end gap-1">
-      <Button type="button" variant="save" size="sm" disabled={pending || remaining === 0} onClick={run}>
-        {pending
-          ? "Saving to library…"
-          : remaining === 0
-            ? "All media saved"
-            : `Save all to library (${remaining})`}
-      </Button>
-      {message && (
-        <span className={`max-w-xs text-right text-[0.65rem] leading-snug ${failed ? "text-[var(--admin-danger)]" : "text-[var(--admin-text-muted)]"}`}>
-          {message}
-        </span>
-      )}
-    </div>
-  );
-}

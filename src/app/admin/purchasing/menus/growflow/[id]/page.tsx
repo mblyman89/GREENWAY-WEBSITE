@@ -19,7 +19,9 @@ import {
   growflowDisplayName,
   growflowListingSubtitle,
 } from "@/lib/purchasing/growflow-menu-ui-core";
-import { SaveGrowflowItemMediaButton, SaveAllGrowflowMediaButton } from "./media-buttons";
+import { SaveGrowflowItemMediaButton } from "./media-buttons";
+import { AutoSaveAllButton } from "../../auto-save-all-button";
+import { saveAllGrowflowSnapshotMediaAction } from "../../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -117,7 +119,11 @@ export default async function GrowflowSnapshotPage({
               — tagged <span className="font-semibold">growflow</span> + vendor, stored as drafts with license
               pending review.
             </p>
-            <SaveAllGrowflowMediaButton snapshotId={id} remaining={mediaRemaining} />
+            <AutoSaveAllButton
+              snapshotId={id}
+              remaining={mediaRemaining}
+              action={saveAllGrowflowSnapshotMediaAction}
+            />
           </div>
         )}
 
