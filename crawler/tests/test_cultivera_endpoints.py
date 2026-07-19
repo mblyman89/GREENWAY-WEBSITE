@@ -48,8 +48,10 @@ class _FakeClient:
 
     markets_result: CultiveraApiResult | None = None
     menu_result: CultiveraApiResult | None = None
+    product_result: CultiveraApiResult | None = None
     raise_on_markets: Exception | None = None
     raise_on_menu: Exception | None = None
+    raise_on_product: Exception | None = None
     calls: list[dict] = []
 
     def __init__(self, settings=None):
@@ -67,6 +69,14 @@ class _FakeClient:
             raise _FakeClient.raise_on_menu
         return _FakeClient.menu_result
 
+    async def fetch_product_detail(self, *, market_id: str, product_id: str):
+        _FakeClient.calls.append(
+            {"op": "product", "market_id": market_id, "product_id": product_id}
+        )
+        if _FakeClient.raise_on_product:
+            raise _FakeClient.raise_on_product
+        return _FakeClient.product_result
+
 
 @pytest.fixture()
 def client(tmp_path: Path, monkeypatch) -> TestClient:
@@ -74,6 +84,14 @@ def client(tmp_path: Path, monkeypatch) -> TestClient:
     _FakeClient.calls = []
     _FakeClient.raise_on_markets = None
     _FakeClient.raise_on_menu = None
+    _FakeClient.raise_on_product = None
+    _FakeClient.product_result = CultiveraApiResult(
+        ok=True, url="https://api/listings/4462/market/85", status=200,
+        raw={"Id": 4462, "Name": "Signature Flower Line",
+             "Products": [{"Id": 447772, "UnitPrice": 4.5, "AvailableQuantity": 20}]},
+        records=[{"Id": 4462, "Name": "Signature Flower Line",
+                  "Products": [{"Id": 447772, "UnitPrice": 4.5, "AvailableQuantity": 20}]}],
+    )
     _FakeClient.markets_result = CultiveraApiResult(
         ok=True, url="https://api/markets/available", status=200,
         raw={"data": [{"slug": "acme", "displayName": "Acme Farms"}]},
@@ -161,5 +179,50 @@ def test_menu_accepts_market_id(client):
 def test_markets_login_failure_is_502(client):
     _FakeClient.raise_on_markets = CultiveraAuthError("bad creds")
     r = client.post("/cultivera/markets", json={}, headers=_auth())
+    assert r.status_code == 502
+    assert "Cultivera login failed" in r.json()["detail"]
+
+
+# --- /cultivera/product (per-variant detail) --------------------------------
+def test_product_requires_secret(client):
+    r = client.post("/cultivera/product", json={"market_id": "85", "product_id": "4462"})
+    assert r.status_code == 401
+
+
+def test_product_disabled_without_creds(tmp_path, monkeypatch):
+    _route_settings(monkeypatch, _settings(tmp_path, creds=False))
+    monkeypatch.setattr(main_mod, "CultiveraClient", _FakeClient)
+    c = TestClient(app)
+    r = c.post("/cultivera/product",
+               json={"market_id": "85", "product_id": "4462"}, headers=_auth())
+    assert r.status_code == 503
+    assert "Cultivera disabled" in r.json()["detail"]
+
+
+def test_product_requires_both_ids(client):
+    for body in ({}, {"market_id": "85"}, {"product_id": "4462"},
+                 {"market_id": " ", "product_id": "4462"}):
+        r = client.post("/cultivera/product", json=body, headers=_auth())
+        assert r.status_code == 422
+        assert "market_id and product_id" in r.json()["detail"]
+
+
+def test_product_returns_raw_and_records(client):
+    r = client.post("/cultivera/product",
+                    json={"market_id": "85", "product_id": "4462"}, headers=_auth())
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ok"] is True
+    assert body["count"] == 1
+    # RAW passthrough: the dollar float survives untouched (Next converts to cents).
+    assert body["raw"]["Products"][0]["UnitPrice"] == 4.5
+    assert body["raw"]["Products"][0]["AvailableQuantity"] == 20
+    assert _FakeClient.calls[-1] == {"op": "product", "market_id": "85", "product_id": "4462"}
+
+
+def test_product_login_failure_is_502(client):
+    _FakeClient.raise_on_product = CultiveraAuthError("bad creds")
+    r = client.post("/cultivera/product",
+                    json={"market_id": "85", "product_id": "4462"}, headers=_auth())
     assert r.status_code == 502
     assert "Cultivera login failed" in r.json()["detail"]

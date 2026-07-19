@@ -57,6 +57,17 @@ _MENU_LISTINGS_PATHS = (
     "markets/{market}/listings",
 )
 
+# Product DETAIL (per-variant listing) — PINNED from a live authenticated probe
+# of Cultivera's own storefront (page bm/market/<slug>/product/<id> fires):
+#   GET /listings/{productId}/market/{marketId}
+# The response is ONE product-line object whose `Products` array holds the
+# per-size variants (UnitPrice DOLLAR floats, AvailableQuantity, UnitSize,
+# MaxOrderLimit, per-variant ImageUrl, strain embedded in Name brackets).
+# We return it RAW; the Next app's pure normalizers do dollars -> integer cents.
+_PRODUCT_DETAIL_PATHS = (
+    "listings/{product}/market/{market}",
+)
+
 # HTTP timeout (seconds) for a single JSON call. Generous but bounded — a menu
 # fetch can be a large payload. Matches the codebase style of a per-call literal
 # (fetcher.py uses 10.0/20.0; llm_extract.py 60.0) rather than a config field.
@@ -291,4 +302,28 @@ class CultiveraClient:
             raise CultiveraApiError("fetch_menu requires a market_id or slug")
         safe = quote(market, safe="")
         paths = tuple(p.format(market=safe) for p in _MENU_LISTINGS_PATHS)
+        return await self._first_ok(paths)
+
+    async def fetch_product_detail(
+        self, *, market_id: str, product_id: str
+    ) -> CultiveraApiResult:
+        """Fetch ONE product line's full per-variant DETAIL.
+
+        Pinned endpoint (live probe): GET /listings/{productId}/market/{marketId}.
+        Returns the raw JSON — one product-line object with a `Products` array of
+        per-size variants — for the Next app's pure normalizers to shape (dollar
+        floats become integer cents THERE, never here).
+        """
+        market = (market_id or "").strip()
+        product = (product_id or "").strip()
+        if not market or not product:
+            raise CultiveraApiError(
+                "fetch_product_detail requires both a market_id and a product_id"
+            )
+        safe_market = quote(market, safe="")
+        safe_product = quote(product, safe="")
+        paths = tuple(
+            p.format(market=safe_market, product=safe_product)
+            for p in _PRODUCT_DETAIL_PATHS
+        )
         return await self._first_ok(paths)
