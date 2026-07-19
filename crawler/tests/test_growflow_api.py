@@ -24,6 +24,7 @@ from app.growflow_api import (  # noqa: E402
     graphql_data_node,
     graphql_errors,
     matches_store,
+    normalize_for_match,
     polite_delay_seconds,
 )
 
@@ -180,6 +181,22 @@ def test_matches_store_empty_query_matches_all():
 def test_matches_store_no_match():
     store = {"Name": "Greenway", "LicenseNumber": "413541"}
     assert matches_store(store, "zzzz") is False
+
+
+def test_matches_store_space_and_punctuation_insensitive():
+    """Live-probed: the real store name is "ThunderChief" (no space) buried
+    behind decorative underscores; a search for "thunder chief" must match."""
+    store = {"Name": "_______________________ThunderChief"}
+    assert matches_store(store, "thunder chief") is True
+    assert matches_store(store, "ThunderChief") is True
+    assert matches_store(store, "thunderchief") is True
+    assert matches_store(store, "lifted") is False
+
+
+def test_growflow_normalize_for_match():
+    assert normalize_for_match("Thunder Chief") == "thunderchief"
+    assert normalize_for_match("!# DOH FREYA FARMS\"") == "dohfreyafarms"
+    assert normalize_for_match("") == ""
 
 
 # --- GrowflowApiResult ------------------------------------------------------
