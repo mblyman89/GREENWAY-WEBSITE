@@ -24,6 +24,7 @@ import { recordAudit } from "@/lib/auth/audit";
 import {
   searchCultiveraMarkets,
   fetchCultiveraMenu,
+  fetchCultiveraProductDetail,
 } from "@/lib/purchasing/cultivera-client";
 import { fetchGrowflowMenu } from "@/lib/purchasing/growflow-client";
 import {
@@ -39,13 +40,20 @@ import {
   type VendorPlatform,
 } from "@/lib/purchasing/unified-search-core";
 import { rememberPlatform } from "@/lib/purchasing/vendor-platform-store";
-import { saveSnapshot, getSnapshot, getSnapshotItems } from "@/lib/purchasing/cultivera-store";
+import {
+  saveSnapshot,
+  getSnapshot,
+  getSnapshotItems,
+  getSnapshotItem,
+  saveItemDetail,
+} from "@/lib/purchasing/cultivera-store";
 import {
   marketName,
   marketSlug,
   marketId,
   isFetchableMarket,
 } from "@/lib/purchasing/cultivera-menus-ui-core";
+import { normalizeProductDetail } from "@/lib/purchasing/cultivera-menu-core";
 import {
   planMediaSaves,
   remainingMediaCount,
@@ -202,6 +210,98 @@ export async function fetchCultiveraMenuAction(
     itemCount: saved.itemCount,
     error: "",
   };
+}
+
+/* ------------------------------------------------------------------
+ * CH-2 — fetch ONE product line's per-variant DETAIL and persist it
+ * onto the saved item row (inside raw jsonb — no schema change).
+ * ------------------------------------------------------------------ */
+
+export type FetchProductDetailResult = {
+  ok: boolean;
+  configured: boolean;
+  variantCount: number;
+  error: string;
+};
+
+/**
+ * Fetch the per-size variants of one saved menu item (its Cultivera product
+ * line) via the worker's pinned GET /listings/{productId}/market/{marketId},
+ * and stash the RAW payload on the item row. W11: the ids come from OUR OWN
+ * saved snapshot/item rows — never trusted from the URL.
+ */
+export async function fetchCultiveraProductDetailAction(
+  formData: FormData,
+): Promise<FetchProductDetailResult> {
+  const session = await requirePermission("inventory.manage");
+
+  const snapshotId = str(formData, "snapshot_id");
+  const itemId = str(formData, "item_id");
+  if (!snapshotId || !itemId) {
+    return { ok: false, configured: true, variantCount: 0, error: "Missing snapshot or item id." };
+  }
+
+  const snap = await getSnapshot(snapshotId);
+  if (!snap) return { ok: false, configured: true, variantCount: 0, error: "Snapshot not found." };
+  const item = await getSnapshotItem(snapshotId, itemId);
+  if (!item) {
+    return { ok: false, configured: true, variantCount: 0, error: "Menu item not found in this snapshot." };
+  }
+
+  const marketId = (snap.cultivera_market_id ?? "").trim();
+  const productId = (item.cultivera_item_id ?? "").trim();
+  if (!marketId || !productId) {
+    return {
+      ok: false,
+      configured: true,
+      variantCount: 0,
+      error:
+        "This snapshot is missing its Cultivera market id or the item's product id — re-fetch the vendor's menu first.",
+    };
+  }
+
+  const result = await fetchCultiveraProductDetail({ marketId, productId });
+  if (!result.configured) {
+    return { ok: false, configured: false, variantCount: 0, error: result.error };
+  }
+  if (!result.ok) {
+    return {
+      ok: false,
+      configured: true,
+      variantCount: 0,
+      error: result.error || `Cultivera answered ${result.status}.`,
+    };
+  }
+
+  const detail = normalizeProductDetail(result.raw);
+  const saved = await saveItemDetail(itemId, item.raw ?? {}, result.raw, new Date().toISOString());
+  if (!saved) {
+    return {
+      ok: false,
+      configured: true,
+      variantCount: detail.variantCount,
+      error: "Fetched the sizes but saving them failed — check Supabase configuration and try again.",
+    };
+  }
+
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "cultivera.product_detail.fetched",
+    entityType: "cultivera_menu_item",
+    entityId: itemId,
+    after: {
+      snapshot_id: snapshotId,
+      market_id: marketId,
+      product_id: productId,
+      variant_count: detail.variantCount,
+    },
+  });
+
+  revalidatePath(`${BASE}/${snapshotId}`);
+  revalidatePath(`${BASE}/${snapshotId}/item/${itemId}`);
+
+  return { ok: true, configured: true, variantCount: detail.variantCount, error: "" };
 }
 
 /* ------------------------------------------------------------------

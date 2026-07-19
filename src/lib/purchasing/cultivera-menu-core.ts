@@ -298,6 +298,188 @@ export function normalizeSnapshot(input: unknown): CultiveraSnapshot {
 }
 
 /* --------------------------------------------------------------------------
+ * Product DETAIL (per-variant) normalizers — CH-2.
+ *
+ * Pinned from a LIVE authenticated probe of Cultivera's own storefront (see
+ * probe/CULTIVERA_PINNED.md): GET /listings/{productId}/market/{marketId}
+ * returns ONE product-line object whose `Products` array holds the per-size
+ * variants. Verified variant keys: Id, Name, Description (lineage), Uom,
+ * UnitPrice (DOLLAR float), ImageUrl, AvailableQuantity, UnitSize (grams),
+ * MaxOrderLimit, MinOrderLimit, QuantityIncreament, SortOrder, IsDOHComplaint.
+ * Variant Name embeds size/strain/DOH in brackets, e.g.
+ * "Wedding Cake [3.5g] [Indica] [D.O.H. COMPLIANT]".
+ *
+ * Same tolerance rules as above: several key spellings per field, dollars ->
+ * integer cents via moneyToMinor, junk degrades to nulls, raw preserved.
+ * ------------------------------------------------------------------------ */
+
+export type CultiveraVariant = {
+  /** Cultivera's numeric variant id, as text (stable for re-fetch diffing). */
+  variantId: string | null;
+  /** Full name exactly as Cultivera sent it (brackets included). */
+  name: string | null;
+  /** Name with the bracketed size/strain/DOH tags stripped. */
+  cleanName: string | null;
+  strainType: StrainType;
+  /** "3.5g" — from the Name brackets, else derived from UnitSize grams. */
+  sizeLabel: string | null;
+  /** Unit weight in grams (Cultivera's UnitSize), when present. */
+  unitSizeGrams: number | null;
+  /** Wholesale price per unit in INTEGER MINOR UNITS (cents). Never a float. */
+  unitPriceMinor: number | null;
+  availableQty: number | null;
+  /** Vendor-imposed per-order cap (null = uncapped). */
+  maxOrderLimit: number | null;
+  /** Lineage / cross text (Cultivera puts it in the variant Description). */
+  description: string | null;
+  imageUrl: string | null;
+  isDohCompliant: boolean;
+  raw: Record<string, unknown>;
+  position: number;
+};
+
+export type CultiveraProductDetail = {
+  /** Cultivera's numeric product-line id, as text. */
+  productId: string | null;
+  name: string | null;
+  description: string | null;
+  imageUrl: string | null;
+  isDohCompliant: boolean;
+  variantCount: number;
+  variants: CultiveraVariant[];
+  raw: Record<string, unknown>;
+};
+
+/** Parsed bracket tags from a variant name like "X [3.5g] [Indica] [D.O.H. COMPLIANT]". */
+export type VariantNameParts = {
+  cleanName: string | null;
+  sizeLabel: string | null;
+  strainType: StrainType;
+  dohTagged: boolean;
+};
+
+const SIZE_TAG_RE = /^\d+(?:\.\d+)?\s*(?:g|mg|kg|oz|ml|l)$/i;
+
+/**
+ * Split a Cultivera variant Name into its bracketed tags. Unrecognized tags
+ * are simply dropped from the clean name but never break parsing.
+ */
+export function parseVariantName(v: unknown): VariantNameParts {
+  const t = asText(v);
+  if (!t) return { cleanName: null, sizeLabel: null, strainType: "unknown", dohTagged: false };
+  let sizeLabel: string | null = null;
+  let strainType: StrainType = "unknown";
+  let dohTagged = false;
+  const clean = t
+    .replace(/\[([^\]]*)\]/g, (_m, inner: string) => {
+      const tag = inner.trim();
+      if (!tag) return "";
+      if (SIZE_TAG_RE.test(tag)) {
+        if (sizeLabel === null) sizeLabel = tag.replace(/\s+/g, "").toLowerCase();
+      } else if (/d\.?\s*o\.?\s*h\.?/i.test(tag) || /\bdoh\b/i.test(tag)) {
+        dohTagged = true;
+      } else {
+        const s = normalizeStrainType(tag);
+        if (s !== "unknown" && strainType === "unknown") strainType = s;
+      }
+      return "";
+    })
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  return { cleanName: clean.length ? clean : null, sizeLabel, strainType, dohTagged };
+}
+
+/** "3.5" -> "3.5g", 1 -> "1g". Null when the grams value is missing/junk. */
+export function sizeLabelFromGrams(grams: unknown): string | null {
+  const n = numOrNull(grams);
+  if (n === null || n <= 0) return null;
+  // Trim trailing zeros ("1.0" -> "1", "3.50" -> "3.5") without float drift.
+  const s = String(n);
+  return `${s}g`;
+}
+
+/** Tolerant truthiness for Cultivera booleans (true, "true", 1). */
+export function boolish(v: unknown): boolean {
+  if (typeof v === "boolean") return v;
+  if (typeof v === "number") return v === 1;
+  if (typeof v === "string") return v.trim().toLowerCase() === "true" || v.trim() === "1";
+  return false;
+}
+
+/** Normalize one raw per-size variant (a `Products[]` entry) at `position`. */
+export function normalizeVariant(raw: unknown, position: number): CultiveraVariant {
+  const o: Record<string, unknown> =
+    raw && typeof raw === "object" && !Array.isArray(raw)
+      ? (raw as Record<string, unknown>)
+      : {};
+
+  const name = pickText(o, ["Name", "name", "productName", "product_name"]);
+  const parts = parseVariantName(name);
+  const unitSizeGrams = numOrNull(pickRaw(o, ["UnitSize", "unitSize", "unit_size"]));
+
+  return {
+    variantId: pickText(o, ["Id", "id", "variantId", "variant_id", "ExternalId"]),
+    name,
+    cleanName: parts.cleanName,
+    strainType: parts.strainType,
+    sizeLabel: parts.sizeLabel ?? sizeLabelFromGrams(unitSizeGrams),
+    unitSizeGrams,
+    unitPriceMinor: moneyToMinor(pickRaw(o, ["UnitPrice", "unitPrice", "unit_price", "price", "Price"])),
+    availableQty: intOrNull(pickRaw(o, ["AvailableQuantity", "availableQuantity", "available_quantity", "AvailableQty", "availableQty", "available_qty"])),
+    maxOrderLimit: intOrNull(pickRaw(o, ["MaxOrderLimit", "maxOrderLimit", "max_order_limit"])),
+    description: pickText(o, ["Description", "description"]),
+    imageUrl: pickText(o, ["ImageUrl", "imageUrl", "image_url", "Image", "image"]),
+    isDohCompliant: boolish(pickRaw(o, ["IsDOHComplaint", "IsDohCompliant", "isDohCompliant", "is_doh_compliant"])) || parts.dohTagged,
+    raw: o,
+    position,
+  };
+}
+
+/**
+ * Normalize a whole product-DETAIL payload (the raw response of
+ * GET /listings/{productId}/market/{marketId}). Tolerant of envelope drift;
+ * junk input yields an empty detail, never a throw.
+ */
+export function normalizeProductDetail(input: unknown): CultiveraProductDetail {
+  const o: Record<string, unknown> =
+    input && typeof input === "object" && !Array.isArray(input)
+      ? (input as Record<string, unknown>)
+      : {};
+
+  const variantsRaw = pickRaw(o, ["Products", "products", "variants", "Variants", "items"]);
+  const arr = Array.isArray(variantsRaw) ? variantsRaw : [];
+  const variants = arr.map((v, i) => normalizeVariant(v, i));
+
+  return {
+    productId: pickText(o, ["Id", "id", "productId", "product_id"]),
+    name: pickText(o, ["Name", "name"]),
+    description: pickText(o, ["Description", "description"]),
+    imageUrl: pickText(o, ["ImageUrl", "imageUrl", "image_url"]),
+    isDohCompliant: boolish(pickRaw(o, ["IsDOHComplaint", "IsDohCompliant", "isDohCompliant"])),
+    variantCount: variants.length,
+    variants,
+    raw: o,
+  };
+}
+
+/**
+ * Reserved key under which a fetched product-DETAIL payload is stored inside
+ * the item row's `raw` jsonb (no schema change — the owner has applied all
+ * migrations). cultivera-store.saveItemDetail writes it; readers use
+ * detailFromItemRaw to rebuild variants FROM OUR OWN DATABASE (W11).
+ */
+export const ITEM_DETAIL_RAW_KEY = "__cultivera_detail";
+export const ITEM_DETAIL_FETCHED_AT_KEY = "__cultivera_detail_fetched_at";
+
+/** Read + normalize a stored detail payload out of an item row's raw jsonb. */
+export function detailFromItemRaw(raw: unknown): CultiveraProductDetail | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const payload = (raw as Record<string, unknown>)[ITEM_DETAIL_RAW_KEY];
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+  return normalizeProductDetail(payload);
+}
+
+/* --------------------------------------------------------------------------
  * Self-tests (registered in scripts/compliance/run-pure-selftests.ts and
  * mirrored in tests/compliance/cultivera-menu-core.test.ts).
  * ------------------------------------------------------------------------ */
@@ -446,4 +628,99 @@ export function __runCultiveraMenuCoreTests(): void {
   assert(live.name === "Get MotaVated", "live Name parsed");
   assert(live.wholesalePriceMinor === 266, "live MinPrice 2.66 -> 266 cents");
   assert(live.imageUrl?.includes("files.cultivera.com") === true, "live ImageUrl parsed");
+
+  // ------------------------------------------------------------------
+  // CH-2 — product DETAIL (per-variant) normalizers.
+  // ------------------------------------------------------------------
+
+  // parseVariantName — live-probed bracket format
+  const vn = parseVariantName("Wedding Cake [3.5g] [Indica] [D.O.H. COMPLIANT]");
+  assert(vn.cleanName === "Wedding Cake", "variant clean name");
+  assert(vn.sizeLabel === "3.5g", "variant size tag");
+  assert(vn.strainType === "indica", "variant strain tag");
+  assert(vn.dohTagged === true, "variant DOH tag");
+  const vn2 = parseVariantName("Luxor [1g] [Sativa]");
+  assert(vn2.cleanName === "Luxor" && vn2.sizeLabel === "1g" && vn2.strainType === "sativa", "variant luxor");
+  assert(vn2.dohTagged === false, "variant no doh");
+  const vn3 = parseVariantName("Plain Name");
+  assert(vn3.cleanName === "Plain Name" && vn3.sizeLabel === null && vn3.strainType === "unknown", "variant no tags");
+  assert(parseVariantName("").cleanName === null, "variant empty name");
+
+  // sizeLabelFromGrams
+  assert(sizeLabelFromGrams(1.0) === "1g", "grams 1.0 -> 1g");
+  assert(sizeLabelFromGrams(3.5) === "3.5g", "grams 3.5 -> 3.5g");
+  assert(sizeLabelFromGrams(0) === null, "grams 0 -> null");
+  assert(sizeLabelFromGrams("junk") === null, "grams junk -> null");
+
+  // boolish
+  assert(boolish(true) === true && boolish("true") === true && boolish(1) === true, "boolish truthy");
+  assert(boolish(false) === false && boolish("no") === false && boolish(null) === false, "boolish falsy");
+
+  // normalizeVariant — LIVE-probed shape (see probe/CULTIVERA_PINNED.md)
+  const variant = normalizeVariant(
+    {
+      Id: 447772,
+      Name: "Luxor [1g] [Sativa] [D.O.H. COMPLIANT]",
+      Description: "Gorilla Butter F2 (Vegas Cut) x Alien Apple Kush",
+      Uom: 8,
+      UnitPrice: 4.5,
+      ImageUrl: "https://cdn1.s2solutions.com/x/ProductImages/LUXOR.jpg",
+      AvailableQuantity: 20,
+      UnitSize: 1.0,
+      MaxOrderLimit: null,
+      IsDOHComplaint: true,
+    },
+    6,
+  );
+  assert(variant.variantId === "447772", "variant id");
+  assert(variant.cleanName === "Luxor", "variant cleanName");
+  assert(variant.strainType === "sativa", "variant strain");
+  assert(variant.sizeLabel === "1g", "variant size label");
+  assert(variant.unitSizeGrams === 1, "variant grams");
+  assert(variant.unitPriceMinor === 450, "variant $4.50 -> 450 cents");
+  assert(variant.availableQty === 20, "variant qty");
+  assert(variant.maxOrderLimit === null, "variant no cap");
+  assert(variant.description === "Gorilla Butter F2 (Vegas Cut) x Alien Apple Kush", "variant lineage");
+  assert(variant.isDohCompliant === true, "variant doh");
+  assert(variant.position === 6, "variant position");
+  // size falls back to UnitSize grams when the name has no size bracket
+  const v2 = normalizeVariant({ Name: "Loose Flower", UnitSize: 3.5, UnitPrice: 14 }, 0);
+  assert(v2.sizeLabel === "3.5g", "variant size from grams fallback");
+  assert(v2.unitPriceMinor === 1400, "variant $14 -> 1400 cents");
+  const vEmpty = normalizeVariant(null, 0);
+  assert(vEmpty.name === null && vEmpty.unitPriceMinor === null && vEmpty.strainType === "unknown", "variant junk safe");
+
+  // normalizeProductDetail — live top-level shape
+  const detail = normalizeProductDetail({
+    Id: 4462,
+    Name: "Signature Flower Line",
+    Description: "Our signature line.",
+    ImageUrl: "https://files.cultivera.com/x/line.jpg",
+    IsDOHComplaint: true,
+    Products: [
+      { Id: 1, Name: "A [1g] [Indica]", UnitPrice: 4.5, AvailableQuantity: 20 },
+      { Id: 2, Name: "B [3.5g] [Sativa]", UnitPrice: 14, AvailableQuantity: 1471, MaxOrderLimit: 75 },
+    ],
+  });
+  assert(detail.productId === "4462", "detail id");
+  assert(detail.name === "Signature Flower Line", "detail name");
+  assert(detail.isDohCompliant === true, "detail doh");
+  assert(detail.variantCount === 2 && detail.variants.length === 2, "detail variant count");
+  assert(detail.variants[0].unitPriceMinor === 450, "detail v0 cents");
+  assert(detail.variants[1].maxOrderLimit === 75, "detail v1 cap");
+  assert(detail.variants[1].position === 1, "detail v1 position");
+  const detailEmpty = normalizeProductDetail(null);
+  assert(detailEmpty.variantCount === 0 && detailEmpty.productId === null, "detail junk safe");
+
+  // detailFromItemRaw — round-trip through the reserved raw key
+  const itemRaw = {
+    Id: 4462,
+    [ITEM_DETAIL_RAW_KEY]: { Id: 4462, Products: [{ Id: 9, Name: "C [1g] [Hybrid]", UnitPrice: 5 }] },
+  };
+  const stored = detailFromItemRaw(itemRaw);
+  assert(stored !== null && stored.variantCount === 1, "detailFromItemRaw reads");
+  assert(stored !== null && stored.variants[0].unitPriceMinor === 500, "detailFromItemRaw cents");
+  assert(detailFromItemRaw({ Id: 1 }) === null, "detailFromItemRaw absent -> null");
+  assert(detailFromItemRaw(null) === null, "detailFromItemRaw null safe");
+  assert(detailFromItemRaw([1, 2]) === null, "detailFromItemRaw array safe");
 }
