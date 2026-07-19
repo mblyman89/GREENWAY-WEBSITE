@@ -314,6 +314,14 @@ const BULK_MEDIA_LIMIT = 20;
 export type SaveMediaResult = {
   ok: boolean;
   message: string;
+  /**
+   * For bulk/background runs: how many images/COAs remain UNSAVED after this
+   * batch. The client auto-loop calls the action again while this is > 0.
+   * Undefined for single-item actions.
+   */
+  remaining?: number;
+  /** True when there is nothing left to save (remaining === 0). */
+  done?: boolean;
 };
 
 /**
@@ -376,7 +384,12 @@ export async function saveAllSnapshotMediaAction(formData: FormData): Promise<Sa
 
   const plan = planMediaSaves(items, BULK_MEDIA_LIMIT);
   if (plan.length === 0) {
-    return { ok: true, message: "Everything on this menu is already saved to the library." };
+    return {
+      ok: true,
+      message: "Everything on this menu is already saved to the library.",
+      remaining: 0,
+      done: true,
+    };
   }
 
   const byId = new Map(items.map((it) => [it.id, it]));
@@ -413,8 +426,12 @@ export async function saveAllSnapshotMediaAction(formData: FormData): Promise<Sa
 
   revalidatePath(`${BASE}/${snapshotId}`);
   return {
+    // A batch that only hit failures (no progress AND nothing left it can do)
+    // reports not-ok so the auto-loop stops instead of spinning forever.
     ok: failed === 0,
     message: bulkSaveSummary({ images, coas, deduped, failed, remaining }),
+    remaining,
+    done: remaining === 0,
   };
 }
 
@@ -674,7 +691,12 @@ export async function saveAllGrowflowSnapshotMediaAction(formData: FormData): Pr
 
   const plan = planMediaSaves(items, BULK_MEDIA_LIMIT);
   if (plan.length === 0) {
-    return { ok: true, message: "Everything on this menu is already saved to the library." };
+    return {
+      ok: true,
+      message: "Everything on this menu is already saved to the library.",
+      remaining: 0,
+      done: true,
+    };
   }
 
   const byId = new Map(items.map((it) => [it.id, it]));
@@ -713,5 +735,7 @@ export async function saveAllGrowflowSnapshotMediaAction(formData: FormData): Pr
   return {
     ok: failed === 0,
     message: bulkSaveSummary({ images, coas, deduped, failed, remaining }),
+    remaining,
+    done: remaining === 0,
   };
 }

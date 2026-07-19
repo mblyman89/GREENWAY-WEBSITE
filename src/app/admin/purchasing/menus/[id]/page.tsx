@@ -19,7 +19,9 @@ import {
   type SnapshotLike,
 } from "@/lib/purchasing/cultivera-menus-ui-core";
 import { remainingMediaCount, isHttpUrl } from "@/lib/purchasing/cultivera-media-core";
-import { SaveItemMediaButton, SaveAllMediaButton } from "./media-buttons";
+import { SaveItemMediaButton } from "./media-buttons";
+import { AutoSaveAllButton } from "../auto-save-all-button";
+import { saveAllSnapshotMediaAction } from "../actions";
 
 /** "Acme — 42 items · 3h ago" (repo pattern: Date.now() inside a helper). */
 function summaryNow(snap: SnapshotLike): string {
@@ -102,7 +104,11 @@ export default async function CultiveraSnapshotPage({
               — tagged <span className="font-semibold">cultivera</span> + vendor, stored as drafts with license
               pending review.
             </p>
-            <SaveAllMediaButton snapshotId={id} remaining={mediaRemaining} />
+            <AutoSaveAllButton
+              snapshotId={id}
+              remaining={mediaRemaining}
+              action={saveAllSnapshotMediaAction}
+            />
           </div>
         )}
 
