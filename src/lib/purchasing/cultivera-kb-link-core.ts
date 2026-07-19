@@ -108,6 +108,92 @@ export function kbIdentityForItem(item: CultiveraKbLinkItemLike): CultiveraKbPro
 }
 
 /* --------------------------------------------------------------------------
+ * CV-7b — group a detail's variants into ONE saveable image per DISTINCT strain
+ * ------------------------------------------------------------------------ */
+
+/** The subset of a normalized variant the strain-grouper reads (structural). */
+export type StrainVariantLike = {
+  cleanName?: string | null;
+  name?: string | null;
+  /** The variant's OWN image (real strain photo) — preferred when present. */
+  imageUrl?: string | null;
+  position?: number | null;
+};
+
+/** One distinct strain to save: its KB identity + the single best image. */
+export type StrainImageSaveItem = {
+  /** Display strain name (from the first variant's cleanName / name). */
+  strainName: string;
+  /** KB natural identity (brand + strain, variant_label ""). */
+  identity: CultiveraKbProductIdentity;
+  /** The image URL to save for this strain (own image when any variant had one). */
+  imageUrl: string;
+  /** True when we had to fall back to the product-line/card image (no own photo). */
+  imageIsFallback: boolean;
+};
+
+/**
+ * Normalize a strain name for de-duplication (trim + lowercase + collapse
+ * whitespace). Two variants with the same normalized name are the same strain.
+ */
+export function normalizeStrainKey(value: string | null | undefined): string {
+  return String(value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+/**
+ * Group a product-detail's variants into ONE saveable image per DISTINCT
+ * strain — the owner's rule: "one image for each strain/product, not each
+ * size variant." For each strain we pick the FIRST variant (menu order) that
+ * has its OWN image; if NONE of that strain's variants has a photo, we fall
+ * back to the product-line/card image and flag it. Strains whose only option
+ * would be a null image (no own photo AND no line image) are skipped — there
+ * is nothing to save. The product-line brand/name feed the KB identity.
+ *
+ * Deterministic: strains come back in first-seen (menu) order; a strain is
+ * keyed by its normalized cleanName (falling back to the raw variant name).
+ */
+export function strainImagesToSave(
+  variants: StrainVariantLike[],
+  line: { brand?: string | null; lineImageUrl?: string | null },
+): StrainImageSaveItem[] {
+  const lineImageUrl = (line.lineImageUrl ?? "").trim() || null;
+  const order: string[] = [];
+  const byKey = new Map<
+    string,
+    { strainName: string; ownImage: string | null }
+  >();
+
+  for (const v of variants) {
+    const rawName = (v.cleanName ?? v.name ?? "").trim();
+    const key = normalizeStrainKey(rawName) || "(unnamed strain)";
+    if (!byKey.has(key)) {
+      order.push(key);
+      byKey.set(key, { strainName: rawName || "(unnamed strain)", ownImage: null });
+    }
+    const entry = byKey.get(key)!;
+    // First own image wins (menu order preserved by iteration order).
+    if (!entry.ownImage) {
+      const own = (v.imageUrl ?? "").trim();
+      if (own) entry.ownImage = own;
+    }
+  }
+
+  const out: StrainImageSaveItem[] = [];
+  for (const key of order) {
+    const entry = byKey.get(key)!;
+    const imageUrl = entry.ownImage ?? lineImageUrl;
+    if (!imageUrl) continue; // nothing to save for this strain
+    out.push({
+      strainName: entry.strainName,
+      identity: kbIdentityForItem({ name: entry.strainName, brand: line.brand ?? null }),
+      imageUrl,
+      imageIsFallback: entry.ownImage == null,
+    });
+  }
+  return out;
+}
+
+/* --------------------------------------------------------------------------
  * Self-tests (pure runner)
  * ------------------------------------------------------------------------ */
 
@@ -162,6 +248,44 @@ export function __runCultiveraKbLinkCoreTests(): void {
     kbDisplayNameForItem({ name: "MAC", brand: "SubX" }) === "SubX — MAC",
     "display name brand + name",
   );
+
+  // normalizeStrainKey
+  ok(normalizeStrainKey("  Colorado   Nightshifter ") === "colorado nightshifter", "strain key normalizes");
+  ok(normalizeStrainKey("Super Zulu") === "super zulu", "strain key lowercases");
+  ok(normalizeStrainKey(null) === "", "strain key null -> empty");
+
+  // strainImagesToSave — one image per distinct strain, sizes collapsed.
+  const variants: StrainVariantLike[] = [
+    { cleanName: "Colorado Nightshifter", imageUrl: "https://c/cn.png", position: 0 },
+    { cleanName: "Colorado Nightshifter", imageUrl: null, position: 1 }, // 3.5g, no own image
+    { cleanName: "Colorado Nightshifter", imageUrl: "https://c/cn2.png", position: 2 }, // later image ignored
+    { cleanName: "Super Zulu", imageUrl: null, position: 3 }, // no own image at all
+    { cleanName: "Super Zulu", imageUrl: null, position: 4 },
+  ];
+  const saves = strainImagesToSave(variants, { brand: "SubX", lineImageUrl: "https://c/card.png" });
+  ok(saves.length === 2, `two distinct strains (got ${saves.length})`);
+  ok(saves[0].strainName === "Colorado Nightshifter", "first strain preserved (menu order)");
+  ok(saves[0].imageUrl === "https://c/cn.png", "uses first OWN image, not later ones");
+  ok(saves[0].imageIsFallback === false, "own image is not a fallback");
+  ok(saves[0].identity.posProductKey === "subx\u0000colorado-nightshifter\u0000", "strain KB identity");
+  ok(saves[1].strainName === "Super Zulu", "second strain");
+  ok(saves[1].imageUrl === "https://c/card.png", "no own image -> falls back to card image");
+  ok(saves[1].imageIsFallback === true, "fallback flagged");
+
+  // A strain with no own image AND no line image is skipped (nothing to save).
+  const noneToSave = strainImagesToSave(
+    [{ cleanName: "Ghost", imageUrl: null }],
+    { brand: "SubX", lineImageUrl: null },
+  );
+  ok(noneToSave.length === 0, "strain with no image anywhere is skipped");
+
+  // Blank strain name falls back to a sentinel key but still saves if an image exists.
+  const unnamed = strainImagesToSave(
+    [{ cleanName: "", name: "", imageUrl: "https://c/x.png" }],
+    { brand: null, lineImageUrl: null },
+  );
+  ok(unnamed.length === 1 && unnamed[0].strainName === "(unnamed strain)", "unnamed strain sentinel");
+  ok(unnamed[0].identity.brandSlug === "unknown-brand", "unnamed uses unknown-brand");
 
   console.log(`cultivera-kb-link-core: ${n} self-tests passed`);
 }
