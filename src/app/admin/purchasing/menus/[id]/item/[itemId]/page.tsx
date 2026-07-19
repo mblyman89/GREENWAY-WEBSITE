@@ -112,7 +112,10 @@ export default async function CultiveraItemDetailPage({
 
         <Section
           title={`Sizes & pricing (${variants.length})`}
-          description="Wholesale price per unit, live availability, and any per-order caps — exactly as the vendor lists them."
+          description={
+            'Wholesale price per unit, live availability, and any per-order caps — exactly as the vendor lists them. ' +
+            'A "placeholder image" tag means that size has no photo of its own, so the product-card image is shown as a stand-in — source a strain-specific image when you can.'
+          }
         >
           {variants.length === 0 ? (
             <EmptyState
@@ -162,10 +165,26 @@ export default async function CultiveraItemDetailPage({
                         >
                           <td className="px-3 py-2.5">
                             <div className="flex items-center gap-2.5">
-                              <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded bg-black/20">
-                                {v.imageUrl ? (
-                                  // eslint-disable-next-line @next/next/no-img-element
-                                  <img src={v.imageUrl} alt={v.cleanName ?? ""} className="h-full w-full object-contain" />
+                              <div className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded bg-black/20">
+                                {v.effectiveImageUrl ? (
+                                  <>
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img
+                                      src={v.effectiveImageUrl}
+                                      alt={v.cleanName ?? ""}
+                                      className="h-full w-full object-contain"
+                                    />
+                                    {v.imageIsFallback && (
+                                      // Stand-in (product-line) image — flag it so the buyer
+                                      // knows to source a strain-specific photo later.
+                                      <span
+                                        className="absolute bottom-0 right-0 rounded-tl bg-[var(--admin-gold,#b8860b)] px-1 text-[0.5rem] font-bold leading-tight text-black"
+                                        title="Placeholder: this size has no photo of its own, so the product-card image is shown. Source a strain-specific image when you can."
+                                      >
+                                        FB
+                                      </span>
+                                    )}
+                                  </>
                                 ) : (
                                   <span className="text-base opacity-40">🌿</span>
                                 )}
@@ -181,6 +200,11 @@ export default async function CultiveraItemDetailPage({
                                 )}
                               </div>
                               {v.isDohCompliant && <Badge tone="green">DOH</Badge>}
+                              {v.imageIsFallback && (
+                                <span title="This size has no photo of its own — showing the product-card image as a placeholder. Source a strain-specific image when available.">
+                                  <Badge tone="gold">placeholder image</Badge>
+                                </span>
+                              )}
                             </div>
                           </td>
                           <td className="whitespace-nowrap px-3 py-2.5 text-[var(--admin-text-muted)]">
