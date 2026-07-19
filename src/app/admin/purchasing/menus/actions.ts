@@ -26,7 +26,12 @@ import {
   fetchCultiveraMenu,
 } from "@/lib/purchasing/cultivera-client";
 import { fetchGrowflowMenu } from "@/lib/purchasing/growflow-client";
-import { saveGrowflowSnapshot } from "@/lib/purchasing/growflow-store";
+import {
+  saveGrowflowSnapshot,
+  getGrowflowSnapshot,
+  getGrowflowSnapshotItems,
+} from "@/lib/purchasing/growflow-store";
+import { saveGrowflowItemMedia } from "@/lib/purchasing/growflow-media";
 import { unifiedVendorSearch } from "@/lib/purchasing/unified-search";
 import {
   buildMemoryUpsert,
@@ -446,5 +451,116 @@ export async function fetchGrowflowMenuAction(
     snapshotId: saved.snapshotId,
     itemCount: saved.itemCount,
     error: "",
+  };
+}
+
+/* ------------------------------------------------------------------
+ * GF-6 — save GrowFlow menu media (product images + COA PDFs) to the library.
+ * Mirrors the CV-5 actions above; same permission, same chunked bulk runs.
+ * ------------------------------------------------------------------ */
+
+/** Vendor label for a GrowFlow snapshot: store name, falling back to license. */
+function growflowVendorLabelOf(snap: { store_name: string | null; license_number: string | null }): string {
+  return (snap.store_name ?? "").trim() || (snap.license_number ?? "").trim() || "";
+}
+
+/**
+ * Save ONE GrowFlow item's image or COA into the media library (drafts,
+ * tagged "growflow" + vendor, provenance kept), link it back to the item.
+ */
+export async function saveGrowflowItemMediaAction(formData: FormData): Promise<SaveMediaResult> {
+  const session = await requirePermission("inventory.manage");
+
+  const snapshotId = str(formData, "snapshot_id");
+  const itemId = str(formData, "item_id");
+  const kind = str(formData, "kind");
+  if (!snapshotId || !itemId || (kind !== "image" && kind !== "coa")) {
+    return { ok: false, message: "Missing snapshot, item, or media kind." };
+  }
+
+  const snap = await getGrowflowSnapshot(snapshotId);
+  if (!snap) return { ok: false, message: "Snapshot not found." };
+  const items = await getGrowflowSnapshotItems(snapshotId);
+  const item = items.find((it) => it.id === itemId);
+  if (!item) return { ok: false, message: "Menu item not found in this snapshot." };
+
+  const res = await saveGrowflowItemMedia(item, kind, growflowVendorLabelOf(snap), session.userId);
+
+  if (!res.ok) return { ok: false, message: res.error ?? "Save failed." };
+
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "growflow.media.saved",
+    entityType: "growflow_menu_item",
+    entityId: itemId,
+    after: { kind, assetId: res.assetId, deduped: res.deduped, snapshotId },
+  });
+
+  revalidatePath(`${BASE}/growflow/${snapshotId}`);
+  return {
+    ok: true,
+    message: res.deduped
+      ? `Already in the library — reused the existing ${kind === "coa" ? "COA" : "image"}.`
+      : `${kind === "coa" ? "COA" : "Image"} saved to the media library (draft, license pending review).`,
+  };
+}
+
+/**
+ * Bulk-save every unsaved image + COA in a GrowFlow snapshot (chunked: up to
+ * BULK_MEDIA_LIMIT downloads per run; the summary says when to run again).
+ */
+export async function saveAllGrowflowSnapshotMediaAction(formData: FormData): Promise<SaveMediaResult> {
+  const session = await requirePermission("inventory.manage");
+
+  const snapshotId = str(formData, "snapshot_id");
+  if (!snapshotId) return { ok: false, message: "Missing snapshot id." };
+
+  const snap = await getGrowflowSnapshot(snapshotId);
+  if (!snap) return { ok: false, message: "Snapshot not found." };
+  const items = await getGrowflowSnapshotItems(snapshotId);
+  const vendorLabel = growflowVendorLabelOf(snap);
+
+  const plan = planMediaSaves(items, BULK_MEDIA_LIMIT);
+  if (plan.length === 0) {
+    return { ok: true, message: "Everything on this menu is already saved to the library." };
+  }
+
+  const byId = new Map(items.map((it) => [it.id, it]));
+  let images = 0;
+  let coas = 0;
+  let deduped = 0;
+  let failed = 0;
+
+  for (const task of plan) {
+    const item = byId.get(task.itemId);
+    if (!item) continue;
+    const res = await saveGrowflowItemMedia(item, task.kind, vendorLabel, session.userId);
+    if (!res.ok) {
+      failed += 1;
+      continue;
+    }
+    if (res.deduped) deduped += 1;
+    else if (task.kind === "image") images += 1;
+    else coas += 1;
+  }
+
+  // Remaining work AFTER this run: what the plan couldn't fit, plus failures.
+  const fresh = await getGrowflowSnapshotItems(snapshotId);
+  const remaining = remainingMediaCount(fresh);
+
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "growflow.media.bulk_saved",
+    entityType: "growflow_menu_snapshot",
+    entityId: snapshotId,
+    after: { images, coas, deduped, failed, remaining },
+  });
+
+  revalidatePath(`${BASE}/growflow/${snapshotId}`);
+  return {
+    ok: failed === 0,
+    message: bulkSaveSummary({ images, coas, deduped, failed, remaining }),
   };
 }

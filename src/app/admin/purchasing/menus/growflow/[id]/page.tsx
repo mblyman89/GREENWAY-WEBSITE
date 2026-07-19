@@ -13,6 +13,8 @@ import {
   distinctCategories,
   agoLabel,
 } from "@/lib/purchasing/cultivera-menus-ui-core";
+import { remainingMediaCount, isHttpUrl } from "@/lib/purchasing/cultivera-media-core";
+import { SaveGrowflowItemMediaButton, SaveAllGrowflowMediaButton } from "./media-buttons";
 
 export const dynamic = "force-dynamic";
 
@@ -22,15 +24,23 @@ function fetchedAgoLabel(iso: string): string {
 }
 
 /**
- * GrowFlow snapshot browser (GF-5): one fetched GrowFlow menu, rendered with
- * the SAME product grid as the Cultivera browser — image, name, brand,
- * category, size, potency, wholesale price (integer cents, formatted), MSRP,
- * availability. The saved row shapes are structurally compatible, so the
- * pure cultivera-menus-ui-core display helpers are reused as-is.
+ * GrowFlow snapshot browser (GF-5, completed in GF-6): one fetched GrowFlow
+ * menu, rendered with the SAME product grid as the Cultivera browser — image,
+ * name, brand, category, size, potency, wholesale price (integer cents,
+ * formatted), MSRP, availability. The saved row shapes are structurally
+ * compatible, so the pure cultivera-menus-ui-core display helpers are reused
+ * as-is; the media planner (cultivera-media-core) is structural too.
+ *
+ * GF-6 adds full parity with the Cultivera browser:
+ *   • Save-to-media-library — per-item image/COA buttons plus a snapshot-wide
+ *     bulk button (chunked runs, "growflow" + vendor tags, drafts).
+ *   • PO hand-off — tick items → GET to /admin/purchasing/new with
+ *     `fromGrowflowMenu=<snapshotId>` + `item=<id>` params; the builder
+ *     reloads every line from OUR saved snapshot rows (W11: the URL only
+ *     carries ids, never names/prices).
  *
  * Filters (search text + category) ride in the URL via a GET form, so the
- * page stays a pure server component. Save-to-media-library and the PO
- * hand-off arrive in GF-6.
+ * page stays a pure server component.
  */
 export default async function GrowflowSnapshotPage({
   params,
@@ -51,6 +61,7 @@ export default async function GrowflowSnapshotPage({
   const items = await getGrowflowSnapshotItems(id);
   const categories = distinctCategories(items);
   const visible = filterByCategory(filterMenuItems(items, q), category);
+  const mediaRemaining = remainingMediaCount(items);
 
   const vendorLabel = (snap.store_name ?? "").trim() || (snap.license_number ?? "").trim() || "Unknown vendor";
   const fetchedAgo = fetchedAgoLabel(snap.fetched_at);
@@ -87,6 +98,19 @@ export default async function GrowflowSnapshotPage({
           <div className="rounded-[var(--admin-radius)] border border-[var(--admin-danger)]/40 bg-[var(--admin-danger)]/10 px-4 py-3 text-sm text-[var(--admin-danger)]">
             This snapshot hit an error while saving{snap.error_message ? `: ${snap.error_message}` : "."} Re-fetch the
             vendor from the Vendor Menus page.
+          </div>
+        )}
+
+        {/* GF-6: snapshot-wide media save. Chunked runs; button shows what's left. */}
+        {items.length > 0 && (
+          <div className="flex items-center justify-between rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-4 py-3">
+            <p className="text-sm text-[var(--admin-text-muted)]">
+              Save this menu&apos;s product photos and COAs into the{" "}
+              <Link href="/admin/media" className="text-[var(--admin-accent)] hover:underline">media library</Link>{" "}
+              — tagged <span className="font-semibold">growflow</span> + vendor, stored as drafts with license
+              pending review.
+            </p>
+            <SaveAllGrowflowMediaButton snapshotId={id} remaining={mediaRemaining} />
           </div>
         )}
 
@@ -143,7 +167,21 @@ export default async function GrowflowSnapshotPage({
               description="Try a shorter search or clear the category filter."
             />
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            /* GF-6: tick items → GET to the PO builder. The form only carries
+               row IDS (`fromGrowflowMenu` + `item`); the builder reloads every
+               name, price, and vendor from OUR saved snapshot — never the URL. */
+            <form method="get" action="/admin/purchasing/new">
+              <input type="hidden" name="fromGrowflowMenu" value={id} />
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-4 py-2.5">
+                <p className="text-xs text-[var(--admin-text-muted)]">
+                  Tick items below, then start a purchase order — they&apos;re added as draft lines
+                  (qty 1 at the listed wholesale price) you confirm in the builder.
+                </p>
+                <Button type="submit" variant="save" size="sm">
+                  Add selected to purchase order →
+                </Button>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {visible.map((it) => {
                 const potency = potencyLabel(it);
                 return (
@@ -162,9 +200,19 @@ export default async function GrowflowSnapshotPage({
                       )}
                     </div>
                     <div className="flex flex-1 flex-col gap-1.5 p-3">
-                      <span className="text-sm font-semibold text-[var(--admin-text)]" title={it.name ?? undefined}>
-                        {it.name ?? "(unnamed item)"}
-                      </span>
+                      {/* GF-6: selection for the PO hand-off (label = big tap target). */}
+                      <label className="flex cursor-pointer items-start gap-2">
+                        <input
+                          type="checkbox"
+                          name="item"
+                          value={it.id}
+                          aria-label={`Select ${it.name ?? "menu item"} for purchase order`}
+                          className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--admin-accent)]"
+                        />
+                        <span className="text-sm font-semibold text-[var(--admin-text)]" title={it.name ?? undefined}>
+                          {it.name ?? "(unnamed item)"}
+                        </span>
+                      </label>
                       <div className="text-xs text-[var(--admin-text-muted)]">
                         {[it.brand, it.category, it.size_label].filter(Boolean).join(" · ") || "—"}
                       </div>
@@ -200,11 +248,25 @@ export default async function GrowflowSnapshotPage({
                           View COA ↗
                         </a>
                       )}
+                      {/* GF-6: per-item saves. Linked assets show a badge instead. */}
+                      <div className="flex flex-wrap items-center gap-2 pt-1">
+                        {it.media_asset_id ? (
+                          <Badge tone="green">image in library</Badge>
+                        ) : isHttpUrl(it.image_url) ? (
+                          <SaveGrowflowItemMediaButton snapshotId={id} itemId={it.id} kind="image" label="Save image" />
+                        ) : null}
+                        {it.coa_media_asset_id ? (
+                          <Badge tone="green">COA in library</Badge>
+                        ) : isHttpUrl(it.coa_url) ? (
+                          <SaveGrowflowItemMediaButton snapshotId={id} itemId={it.id} kind="coa" label="Save COA" />
+                        ) : null}
+                      </div>
                     </div>
                   </div>
                 );
               })}
-            </div>
+              </div>
+            </form>
           )}
         </Section>
       </div>
