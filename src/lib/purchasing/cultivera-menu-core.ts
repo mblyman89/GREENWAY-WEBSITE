@@ -328,8 +328,21 @@ export type CultiveraVariant = {
   sizeLabel: string | null;
   /** Unit weight in grams (Cultivera's UnitSize), when present. */
   unitSizeGrams: number | null;
-  /** Wholesale price per unit in INTEGER MINOR UNITS (cents). Never a float. */
+  /**
+   * EFFECTIVE wholesale price per unit in INTEGER MINOR UNITS (cents) — i.e.
+   * what the buyer actually pays. When the vendor applies a discount this is
+   * the SALE price (Cultivera's `ProductDiscount.Price`); otherwise it is the
+   * list `UnitPrice`. Never a float. Downstream (PO builder) uses THIS.
+   */
   unitPriceMinor: number | null;
+  /**
+   * ORIGINAL / pre-discount price in cents (Cultivera's `UnitPrice`) — set
+   * ONLY when a discount is active, for the struck-through "was" display.
+   * Null when there is no discount (nothing to strike through).
+   */
+  wasPriceMinor: number | null;
+  /** True when a vendor discount is active (effective < original). */
+  onSale: boolean;
   availableQty: number | null;
   /** Vendor-imposed per-order cap (null = uncapped). */
   maxOrderLimit: number | null;
@@ -420,6 +433,23 @@ export function normalizeVariant(raw: unknown, position: number): CultiveraVaria
   const parts = parseVariantName(name);
   const unitSizeGrams = numOrNull(pickRaw(o, ["UnitSize", "unitSize", "unit_size"]));
 
+  // Pricing (LIVE-probed): Cultivera's `UnitPrice` is the ORIGINAL/list price;
+  // an active vendor discount carries the real SALE price under
+  // `ProductDiscount.Price`. The buyer pays the sale price when present, so the
+  // EFFECTIVE unitPriceMinor is the discount price if any, else the list price.
+  // We surface the original as wasPriceMinor for a struck-through display, but
+  // ONLY when it is genuinely higher than the effective price (a real discount).
+  const listPriceMinor = moneyToMinor(pickRaw(o, ["UnitPrice", "unitPrice", "unit_price", "price", "Price"]));
+  const discountRaw = pickRaw(o, ["ProductDiscount", "productDiscount", "product_discount", "Discount", "discount"]);
+  const discountObj: Record<string, unknown> =
+    discountRaw && typeof discountRaw === "object" && !Array.isArray(discountRaw)
+      ? (discountRaw as Record<string, unknown>)
+      : {};
+  const salePriceMinor = moneyToMinor(pickRaw(discountObj, ["Price", "price", "DiscountPrice", "discountPrice", "amount", "Amount"]));
+  const hasRealDiscount =
+    salePriceMinor != null && listPriceMinor != null && salePriceMinor < listPriceMinor;
+  const effectiveMinor = hasRealDiscount ? salePriceMinor : listPriceMinor;
+
   return {
     variantId: pickText(o, ["Id", "id", "variantId", "variant_id", "ExternalId"]),
     name,
@@ -427,7 +457,9 @@ export function normalizeVariant(raw: unknown, position: number): CultiveraVaria
     strainType: parts.strainType,
     sizeLabel: parts.sizeLabel ?? sizeLabelFromGrams(unitSizeGrams),
     unitSizeGrams,
-    unitPriceMinor: moneyToMinor(pickRaw(o, ["UnitPrice", "unitPrice", "unit_price", "price", "Price"])),
+    unitPriceMinor: effectiveMinor,
+    wasPriceMinor: hasRealDiscount ? listPriceMinor : null,
+    onSale: hasRealDiscount,
     availableQty: intOrNull(pickRaw(o, ["AvailableQuantity", "availableQuantity", "available_quantity", "AvailableQty", "availableQty", "available_qty"])),
     maxOrderLimit: intOrNull(pickRaw(o, ["MaxOrderLimit", "maxOrderLimit", "max_order_limit"])),
     description: pickText(o, ["Description", "description"]),
@@ -697,6 +729,9 @@ export function __runCultiveraMenuCoreTests(): void {
   assert(variant.sizeLabel === "1g", "variant size label");
   assert(variant.unitSizeGrams === 1, "variant grams");
   assert(variant.unitPriceMinor === 450, "variant $4.50 -> 450 cents");
+  // no ProductDiscount here -> not on sale, nothing to strike through
+  assert(variant.onSale === false, "variant not on sale");
+  assert(variant.wasPriceMinor === null, "variant no was-price");
   assert(variant.availableQty === 20, "variant qty");
   assert(variant.maxOrderLimit === null, "variant no cap");
   assert(variant.description === "Gorilla Butter F2 (Vegas Cut) x Alien Apple Kush", "variant lineage");
@@ -708,6 +743,34 @@ export function __runCultiveraMenuCoreTests(): void {
   assert(v2.unitPriceMinor === 1400, "variant $14 -> 1400 cents");
   const vEmpty = normalizeVariant(null, 0);
   assert(vEmpty.name === null && vEmpty.unitPriceMinor === null && vEmpty.strainType === "unknown", "variant junk safe");
+
+  // DISCOUNT pricing (LIVE-probed): UnitPrice is the ORIGINAL, and
+  // ProductDiscount.Price is the SALE price the buyer actually pays. The
+  // effective unitPriceMinor must be the SALE price, with the original exposed
+  // as a struck-through wasPriceMinor. Matches the screenshotted "$4.00 (was $5.00)".
+  const vSale = normalizeVariant(
+    {
+      Id: 418143,
+      Name: "*SUPREME - Colorado Nightshifter - 1g",
+      UnitPrice: 5.0,
+      UnitSize: 1.0,
+      AvailableQuantity: 2868,
+      ProductDiscount: { DiscountId: 418143, Price: 4.0 },
+      MaxOrderLimit: 20,
+      IsDOHComplaint: true,
+    },
+    0,
+  );
+  assert(vSale.unitPriceMinor === 400, "sale variant effective = $4.00 (discount price)");
+  assert(vSale.wasPriceMinor === 500, "sale variant was = $5.00 (original UnitPrice)");
+  assert(vSale.onSale === true, "sale variant onSale true");
+  // A discount whose price is NOT lower than list must NOT create a fake strike.
+  const vNoDrop = normalizeVariant(
+    { Id: 9, Name: "X [1g]", UnitPrice: 4.0, ProductDiscount: { Price: 4.0 } },
+    0,
+  );
+  assert(vNoDrop.unitPriceMinor === 400, "non-drop discount keeps list price");
+  assert(vNoDrop.onSale === false && vNoDrop.wasPriceMinor === null, "non-drop discount not on sale");
 
   // normalizeProductDetail — live top-level shape
   const detail = normalizeProductDetail({

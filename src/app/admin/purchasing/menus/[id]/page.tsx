@@ -14,6 +14,8 @@ import {
   snapshotSummary,
   saleFlagFromRaw,
   dohFlagFromRaw,
+  fetchedVariantCountFromRaw,
+  sizesAffordanceLabel,
   type SnapshotLike,
 } from "@/lib/purchasing/cultivera-menus-ui-core";
 import { remainingMediaCount, isHttpUrl } from "@/lib/purchasing/cultivera-media-core";
@@ -176,6 +178,8 @@ export default async function CultiveraSnapshotPage({
                 const potency = potencyLabel(it);
                 const onSale = saleFlagFromRaw(it.raw);
                 const dohOk = dohFlagFromRaw(it.raw);
+                const variantCount = fetchedVariantCountFromRaw(it.raw);
+                const sizesLabel = sizesAffordanceLabel(variantCount);
                 return (
                   <div
                     key={it.id}
@@ -201,6 +205,11 @@ export default async function CultiveraSnapshotPage({
                           <Badge tone="green">DOH COMPLIANT</Badge>
                         </span>
                       )}
+                      {/* CH-3: signal that this card opens a per-size table.
+                          Shows the real count once fetched, else a neutral hint. */}
+                      <span className="absolute bottom-2 left-2 inline-flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-[0.65rem] font-semibold text-white backdrop-blur">
+                        {variantCount > 0 ? `📐 ${sizesLabel}` : "📐 sizes & pricing"}
+                      </span>
                     </div>
                     <div className="flex flex-1 flex-col gap-1.5 p-3">
                       {/* CV-6: selection for the PO hand-off (label = big tap target). */}
@@ -240,12 +249,16 @@ export default async function CultiveraSnapshotPage({
                           {it.available_qty != null ? `${it.available_qty} avail` : ""}
                         </span>
                       </div>
-                      {/* CH-3: the per-size shopping view (variants table). */}
+                      {/* CH-3: the per-size shopping view (variants table).
+                          A prominent, full-width control so buyers know each
+                          card opens into weights/prices/availability. Shows the
+                          fetched size count once known. */}
                       <Link
                         href={`/admin/purchasing/menus/${id}/item/${it.id}`}
-                        className="text-xs font-semibold text-[var(--admin-accent)] hover:underline"
+                        className="mt-1 inline-flex w-full items-center justify-between gap-2 rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-3 py-2 text-xs font-semibold text-[var(--admin-accent)] transition-colors hover:bg-[var(--admin-accent)]/20"
                       >
-                        Sizes &amp; pricing →
+                        <span>{variantCount > 0 ? `View ${sizesLabel}` : sizesLabel}</span>
+                        <span aria-hidden>→</span>
                       </Link>
                       {it.coa_url && (
                         <a
