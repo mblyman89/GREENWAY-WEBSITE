@@ -6,6 +6,7 @@ import { Breadcrumbs, EmptyState } from "@/components/admin/ux";
 import { Badge, Button, Section } from "@/components/admin/ui";
 import { getSnapshot, getSnapshotItem } from "@/lib/purchasing/cultivera-store";
 import { detailFromItemRaw } from "@/lib/purchasing/cultivera-menu-core";
+import { strainImagesToSave } from "@/lib/purchasing/cultivera-kb-link-core";
 import { priceLabel } from "@/lib/purchasing/cultivera-menus-ui-core";
 import { VARIANT_QTY_PARAM_PREFIX } from "@/lib/purchasing/cultivera-po-core";
 import { FetchSizesButton } from "./fetch-sizes-button";
@@ -39,6 +40,13 @@ export default async function CultiveraItemDetailPage({
 
   const detail = detailFromItemRaw(item.raw);
   const variants = detail?.variants ?? [];
+  // CV-7b: distinct strains on THIS detail page that have a saveable image
+  // (own photo, else the product-card image as a flagged fallback). This is the
+  // exact set the "Save all strain images to KB" button will save.
+  const saveableStrains = strainImagesToSave(variants, {
+    brand: item.brand ?? null,
+    lineImageUrl: item.image_url ?? null,
+  });
   const vendorLabel = snap.seller_name ?? snap.cultivera_market_slug ?? "Unknown vendor";
   const itemLabel = item.name ?? detail?.name ?? "(unnamed item)";
   const canFetch = Boolean((snap.cultivera_market_id ?? "").trim() && (item.cultivera_item_id ?? "").trim());
@@ -108,16 +116,20 @@ export default async function CultiveraItemDetailPage({
                 enable per-size pricing.
               </p>
             )}
-            {/* CV-7: save THIS product's card image (one per strain) to the media
-                library and bind it to the durable KB product backbone. */}
+            {/* CV-7b: ONE button saves one image per DISTINCT strain on this
+                detail page to the media library and binds each to the durable
+                KB product backbone (every size variant inherits it). */}
             <SaveImageToKbButton
               snapshotId={id}
               itemId={itemId}
-              disabled={!item.image_url}
+              strainCount={saveableStrains.length}
+              disabled={saveableStrains.length === 0}
             />
-            {!item.image_url && (
+            {saveableStrains.length === 0 && (
               <p className="max-w-[14rem] text-right text-[0.65rem] text-[var(--admin-text-faint)]">
-                No product image to save yet.
+                {variants.length === 0
+                  ? "Fetch sizes first, then save strain images."
+                  : "No strain images to save yet."}
               </p>
             )}
           </div>

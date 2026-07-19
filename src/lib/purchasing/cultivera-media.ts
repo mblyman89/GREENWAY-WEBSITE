@@ -28,7 +28,11 @@ import {
   mediaAltForItem,
   type MediaSaveKind,
 } from "@/lib/purchasing/cultivera-media-core";
-import { kbIdentityForItem } from "@/lib/purchasing/cultivera-kb-link-core";
+import {
+  kbIdentityForItem,
+  strainImagesToSave,
+  type StrainVariantLike,
+} from "@/lib/purchasing/cultivera-kb-link-core";
 import { writeBackProductFacts } from "@/lib/ai/kb/writeback";
 
 export type SaveItemMediaResult = {
@@ -209,4 +213,111 @@ export async function saveCultiveraItemToKb(
       error: err instanceof Error ? err.message : "Unexpected error saving to the KB.",
     };
   }
+}
+
+/* ------------------------------------------------------------------
+ * CV-7b — save ONE image per DISTINCT strain on a product-detail page.
+ * ------------------------------------------------------------------ */
+
+export type SaveDetailStrainsResult = {
+  ok: boolean;
+  /** Distinct strains the detail contained (that had a saveable image). */
+  strains: number;
+  /** Newly imported images this run. */
+  saved: number;
+  /** Strains whose image was already in the library (dedupe). */
+  deduped: number;
+  /** Strains successfully bound to the KB backbone. */
+  boundToKb: number;
+  /** Strains that used the product-card image as a flagged fallback. */
+  fallbacks: number;
+  /** Strains that failed to save. */
+  failed: number;
+  error: string | null;
+};
+
+/**
+ * Save one image per DISTINCT strain found on a Cultivera product-detail page.
+ *
+ * The owner's rule: "one image for each strain/product, not each size variant."
+ * A single detail page (e.g. SUBX "Flower") contains many strains as variants;
+ * this collapses the sizes of each strain to ONE image (that strain's own photo
+ * when any size has one, else the product-card image, flagged), saves it to the
+ * media library (drafts, "cultivera" + vendor tags), and binds it to the
+ * durable kb_products backbone at the strain level so every size inherits it.
+ *
+ * Idempotent (content-hash dedupe + gap-fill KB write) and best-effort per
+ * strain — one bad image never aborts the rest. Returns per-strain counts so
+ * the UI can report "saved N strain images".
+ */
+export async function saveCultiveraDetailStrainsToKb(
+  variants: StrainVariantLike[],
+  line: { brand: string | null; lineImageUrl: string | null; category: string | null },
+  vendorLabel: string,
+  uploadedBy: string | null,
+): Promise<SaveDetailStrainsResult> {
+  const plan = strainImagesToSave(variants, { brand: line.brand, lineImageUrl: line.lineImageUrl });
+  const result: SaveDetailStrainsResult = {
+    ok: true,
+    strains: plan.length,
+    saved: 0,
+    deduped: 0,
+    boundToKb: 0,
+    fallbacks: 0,
+    failed: 0,
+    error: null,
+  };
+  if (plan.length === 0) {
+    result.error = "This product's sizes have no strain images to save.";
+    return result;
+  }
+
+  const tags = cultiveraMediaTags(vendorLabel, "image");
+
+  for (const strain of plan) {
+    if (strain.imageIsFallback) result.fallbacks += 1;
+    try {
+      const { asset, deduped } = await importImageFromUrl({
+        imageUrl: strain.imageUrl,
+        usageType: "product",
+        title: mediaTitleForItem({ name: strain.strainName, brand: line.brand }, "image"),
+        altText: mediaAltForItem({ name: strain.strainName, brand: line.brand }, vendorLabel),
+        uploadedBy,
+        tags,
+      });
+      if (deduped) result.deduped += 1;
+      else result.saved += 1;
+      await recordUsage(asset.id, "cultivera_strain", strain.identity.posProductKey, "image");
+
+      // Bind to the durable KB backbone at the strain level (gap-fill).
+      try {
+        await writeBackProductFacts(
+          {
+            posProductKey: strain.identity.posProductKey,
+            productName: strain.strainName,
+            brandName: line.brand,
+            category: line.category,
+            variantLabel: strain.identity.variantLabel,
+            imageMediaIds: [asset.id],
+            primaryMediaId: asset.id,
+            source: `crawl:${strain.imageUrl}`,
+            confidence: null,
+          },
+          uploadedBy,
+        );
+        await recordUsage(asset.id, "kb_product", strain.identity.posProductKey, "primary_image");
+        result.boundToKb += 1;
+      } catch {
+        /* best-effort: KB association is non-fatal to the media save */
+      }
+    } catch (err) {
+      result.failed += 1;
+      if (!result.error) {
+        result.error = err instanceof HarvestImageError ? err.message : "Some strain images could not be saved.";
+      }
+    }
+  }
+
+  result.ok = result.failed === 0;
+  return result;
 }

@@ -53,13 +53,17 @@ import {
   marketId,
   isFetchableMarket,
 } from "@/lib/purchasing/cultivera-menus-ui-core";
-import { normalizeProductDetail } from "@/lib/purchasing/cultivera-menu-core";
+import { normalizeProductDetail, detailFromItemRaw } from "@/lib/purchasing/cultivera-menu-core";
 import {
   planMediaSaves,
   remainingMediaCount,
   bulkSaveSummary,
 } from "@/lib/purchasing/cultivera-media-core";
-import { saveItemMedia, saveCultiveraItemToKb } from "@/lib/purchasing/cultivera-media";
+import {
+  saveItemMedia,
+  saveCultiveraItemToKb,
+  saveCultiveraDetailStrainsToKb,
+} from "@/lib/purchasing/cultivera-media";
 
 const BASE = "/admin/purchasing/menus";
 
@@ -484,6 +488,92 @@ export async function saveCultiveraItemToKbAction(formData: FormData): Promise<S
     ? " and attached to the product in the Knowledge Base."
     : " — but the Knowledge Base link could not be written (it stays available on the media library).";
   return { ok: true, message: `${savedPart}${kbPart}` };
+}
+
+/* ------------------------------------------------------------------
+ * CV-7b — save ONE image per DISTINCT strain on the detail page.
+ * ------------------------------------------------------------------ */
+
+/**
+ * Detail-page "Save all strain images to KB": a single Cultivera product LINE
+ * (e.g. SUBX "Flower") holds MANY strains as size variants. This collapses the
+ * sizes of each distinct strain to ONE image (its own photo when any size has
+ * one, else the product-card image as a flagged fallback), saves each to the
+ * media library, and binds it to the durable KB backbone at the strain level.
+ *
+ * One click saves every strain on the page. Idempotent + best-effort per
+ * strain, so re-running only fills gaps and one bad image never aborts the run.
+ */
+export async function saveCultiveraDetailStrainsToKbAction(
+  formData: FormData,
+): Promise<SaveMediaResult> {
+  const session = await requirePermission("inventory.manage");
+
+  const snapshotId = str(formData, "snapshot_id");
+  const itemId = str(formData, "item_id");
+  if (!snapshotId || !itemId) {
+    return { ok: false, message: "Missing snapshot or item id." };
+  }
+
+  const snap = await getSnapshot(snapshotId);
+  if (!snap) return { ok: false, message: "Snapshot not found." };
+  const item = await getSnapshotItem(snapshotId, itemId);
+  if (!item) return { ok: false, message: "Menu item not found in this snapshot." };
+
+  const detail = detailFromItemRaw(item.raw);
+  const variants = detail?.variants ?? [];
+  if (variants.length === 0) {
+    return { ok: false, message: "This product has no strain variants to save." };
+  }
+
+  const vendorLabel = (snap.seller_name ?? "").trim() || (snap.cultivera_market_slug ?? "").trim() || "";
+  const res = await saveCultiveraDetailStrainsToKb(
+    variants,
+    { brand: item.brand ?? null, lineImageUrl: item.image_url ?? null, category: item.category ?? null },
+    vendorLabel,
+    session.userId,
+  );
+
+  if (res.strains === 0) {
+    return { ok: false, message: res.error ?? "This product's sizes have no strain images to save." };
+  }
+
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "cultivera.kb.strains_saved",
+    entityType: "cultivera_menu_item",
+    entityId: itemId,
+    after: {
+      snapshotId,
+      strains: res.strains,
+      saved: res.saved,
+      deduped: res.deduped,
+      boundToKb: res.boundToKb,
+      fallbacks: res.fallbacks,
+      failed: res.failed,
+    },
+  });
+
+  revalidatePath(`${BASE}/${snapshotId}`);
+  revalidatePath(`${BASE}/${snapshotId}/item/${itemId}`);
+
+  // Human-friendly summary — plain, jargon-free.
+  const parts: string[] = [];
+  if (res.saved > 0) parts.push(`${res.saved} new image${res.saved === 1 ? "" : "s"} saved to the media library`);
+  if (res.deduped > 0) parts.push(`${res.deduped} already in the library`);
+  const kbPart = res.boundToKb > 0 ? `, and ${res.boundToKb} attached to the Knowledge Base` : "";
+  const fbPart = res.fallbacks > 0
+    ? ` ${res.fallbacks} strain${res.fallbacks === 1 ? "" : "s"} used the product-card image (no own photo yet).`
+    : "";
+  const failPart = res.failed > 0
+    ? ` ${res.failed} could not be saved — you can try again to fill the gaps.`
+    : "";
+  const lead = parts.length ? parts.join(", ") : `${res.strains} strain${res.strains === 1 ? "" : "s"} processed`;
+  return {
+    ok: res.ok,
+    message: `${lead}${kbPart}. Covered ${res.strains} distinct strain${res.strains === 1 ? "" : "s"}.${fbPart}${failPart}`,
+  };
 }
 
 /* ------------------------------------------------------------------
