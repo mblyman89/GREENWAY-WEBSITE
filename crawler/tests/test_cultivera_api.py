@@ -22,6 +22,7 @@ from app.cultivera_api import (  # noqa: E402
     extract_records,
     join_url,
     matches_query,
+    build_markets_search_path,
     normalize_for_match,
     polite_delay_seconds,
 )
@@ -135,6 +136,23 @@ def test_matches_query_pascalcase_and_space_insensitive():
     assert matches_query(rec, "") is True
 
 
+def test_build_markets_search_path_has_server_side_search():
+    """Pinned from live capture: full-marketplace search uses Search= param."""
+    path = build_markets_search_path("subx")
+    assert path.startswith("markets/connected?")
+    assert "Search=subx" in path
+    assert "ShowFavoriteOnly=false" in path
+    assert "CurrentPage=1" in path
+    assert "PageSize=" in path
+
+
+def test_build_markets_search_path_url_encodes_query():
+    path = build_markets_search_path("fire bros")
+    # space must be percent/plus-encoded, never a raw space
+    assert " " not in path
+    assert ("Search=fire+bros" in path) or ("Search=fire%20bros" in path)
+
+
 # ---------------------------------------------------------------------------
 # Client behaviour with a scripted fake httpx.AsyncClient (no real network)
 # ---------------------------------------------------------------------------
@@ -165,10 +183,13 @@ class _FakeAsyncClient:
         return False
 
     async def get(self, url):
-        # match by the trailing path so tests don't depend on the base host
+        # match by the trailing path so tests don't depend on the base host.
+        # Ignore any query string so keys can be plain paths (the real search
+        # endpoint appends ?CurrentPage=...&Search=...).
+        path_only = url.split("?", 1)[0]
         matched_key = None
         for key in _FakeAsyncClient.script:
-            if url.endswith(key):
+            if path_only.endswith(key) or url.endswith(key):
                 matched_key = key
                 break
         _FakeAsyncClient.calls.append({
@@ -212,9 +233,9 @@ def test_search_markets_attaches_auth_and_returns_records(monkeypatch):
     sess = CultiveraSessionData(access_token="TOKEN123", refresh_token="R1")
     _stub_sessions(monkeypatch, sess)
     _install_fake_http(monkeypatch, {
-        "markets/available": [_FakeResp(200, {"data": [
-            {"displayName": "Acme Farms", "slug": "acme"},
-            {"displayName": "Other Co", "slug": "other"},
+        "markets/connected": [_FakeResp(200, {"Data": [
+            {"Name": "Acme Farms", "UniqueSlug": "acme"},
+            {"Name": "Other Co", "UniqueSlug": "other"},
         ]})],
     })
 
@@ -230,28 +251,29 @@ def test_search_markets_attaches_auth_and_returns_records(monkeypatch):
 def test_search_markets_filters_client_side(monkeypatch):
     _stub_sessions(monkeypatch, CultiveraSessionData(access_token="T"))
     _install_fake_http(monkeypatch, {
-        "markets/available": [_FakeResp(200, {"data": [
-            {"displayName": "Acme Farms", "slug": "acme"},
-            {"displayName": "Other Co", "slug": "other"},
+        "markets/connected": [_FakeResp(200, {"Data": [
+            {"Name": "Acme Farms", "UniqueSlug": "acme"},
+            {"Name": "Other Co", "UniqueSlug": "other"},
         ]})],
     })
     client = CultiveraClient(_settings())
     result = asyncio.run(client.search_markets("acme"))
     assert result.ok is True
-    assert result.records == [{"displayName": "Acme Farms", "slug": "acme"}]
+    assert result.records == [{"Name": "Acme Farms", "UniqueSlug": "acme"}]
 
 
 def test_first_ok_falls_through_to_second_candidate(monkeypatch):
     _stub_sessions(monkeypatch, CultiveraSessionData(access_token="T"))
-    # first candidate 404s, second answers
+    # fetch_menu still uses candidate fallthrough (_first_ok): the pinned
+    # /product-lines path 404s here, so it falls through to the next candidate.
     _install_fake_http(monkeypatch, {
-        "markets/available": [_FakeResp(404, {"e": 1})],
-        "markets/connected": [_FakeResp(200, {"items": [{"slug": "acme"}]})],
+        "listings/market/99/product-lines": [_FakeResp(404, {"e": 1})],
+        "listings/market/99": [_FakeResp(200, {"items": [{"Id": 1}]})],
     })
     client = CultiveraClient(_settings())
-    result = asyncio.run(client.search_markets())
+    result = asyncio.run(client.fetch_menu(market_id="99"))
     assert result.ok is True
-    assert result.records == [{"slug": "acme"}]
+    assert result.records == [{"Id": 1}]
 
 
 def test_401_triggers_single_relogin_and_retry(monkeypatch):
@@ -260,7 +282,7 @@ def test_401_triggers_single_relogin_and_retry(monkeypatch):
     box = _stub_sessions(monkeypatch, stale, fresh)
     # first call 401 (stale), retry after re-login 200
     _install_fake_http(monkeypatch, {
-        "listings/market/acme": [
+        "listings/market/acme/product-lines": [
             _FakeResp(401, {"e": "expired"}),
             _FakeResp(200, {"listings": [{"id": "x"}]}),
         ],
@@ -283,6 +305,7 @@ def test_persistent_401_does_not_loop_forever(monkeypatch):
         CultiveraSessionData(access_token="STALE"), fresh,
     )
     _install_fake_http(monkeypatch, {
+        "listings/market/acme/product-lines": [_FakeResp(401, {"e": "nope"})],
         "listings/market/acme": [_FakeResp(401, {"e": "nope"})],
         "public/listings/market/acme": [_FakeResp(401, {"e": "nope"})],
         "markets/acme/listings": [_FakeResp(401, {"e": "nope"})],
@@ -291,8 +314,8 @@ def test_persistent_401_does_not_loop_forever(monkeypatch):
     result = asyncio.run(client.fetch_menu(slug="acme"))
     assert result.ok is False
     assert result.status == 401
-    # 3 candidate paths, at most one forced re-login each -> bounded, no loop.
-    assert box["force_calls"] <= 3
+    # 4 candidate paths, at most one forced re-login each -> bounded, no loop.
+    assert box["force_calls"] <= 4
 
 
 def test_fetch_menu_requires_identifier(monkeypatch):

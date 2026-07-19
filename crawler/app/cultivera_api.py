@@ -26,7 +26,7 @@ import asyncio
 import random
 from dataclasses import dataclass
 from typing import Any
-from urllib.parse import quote, urljoin
+from urllib.parse import quote, urlencode, urljoin
 
 import httpx
 
@@ -52,10 +52,23 @@ _MARKET_BY_SLUG_PATHS = (
     "public/markets/slug/{slug}",
 )
 _MENU_LISTINGS_PATHS = (
+    # PINNED from a live authenticated browser capture of Cultivera's own
+    # storefront (page /bm/market/<slug>/menu fires this): the menu lives at
+    # /listings/market/<marketId>/product-lines. Kept FIRST; older candidates
+    # remain as tolerant fallbacks in case the shape ever differs.
+    "listings/market/{market}/product-lines",
     "listings/market/{market}",
     "public/listings/market/{market}",
     "markets/{market}/listings",
 )
+
+# Full-marketplace vendor SEARCH (PINNED from live capture): the website calls
+# GET /markets/connected?CurrentPage=1&PageSize=N&Search=<q>&ShowFavoriteOnly=false&MarketSlug=
+# WITH a server-side Search param, which searches ALL vendors (hundreds) rather
+# than only the buyer's connected/favorite list. PageSize is generous so a
+# single page returns every match for a typical query.
+_MARKETS_SEARCH_BASE = "markets/connected"
+_MARKETS_SEARCH_PAGE_SIZE = 200
 
 # Product DETAIL (per-variant listing) — PINNED from a live authenticated probe
 # of Cultivera's own storefront (page bm/market/<slug>/product/<id> fires):
@@ -146,6 +159,26 @@ def normalize_for_match(text: str) -> str:
     "ThunderChief" and "fire bros" match "FIRE BROS.".
     """
     return "".join(ch for ch in (text or "").lower() if ch.isalnum())
+
+
+def build_markets_search_path(query: str, *, page: int = 1, page_size: int | None = None) -> str:
+    """Build the full-marketplace search path (PINNED from live capture).
+
+    GET markets/connected?CurrentPage=<page>&PageSize=<n>&Search=<query>
+        &ShowFavoriteOnly=false&MarketSlug=
+
+    An empty query returns the default (connected) list. A non-empty query is
+    passed to the server-side Search param, which searches ALL vendors.
+    """
+    size = _MARKETS_SEARCH_PAGE_SIZE if page_size is None else page_size
+    params = {
+        "CurrentPage": page,
+        "PageSize": size,
+        "Search": (query or "").strip(),
+        "ShowFavoriteOnly": "false",
+        "MarketSlug": "",
+    }
+    return f"{_MARKETS_SEARCH_BASE}?{urlencode(params)}"
 
 
 def matches_query(record: dict[str, Any], query: str) -> bool:
@@ -290,19 +323,27 @@ class CultiveraClient:
         return last or CultiveraApiResult(ok=False, error="no candidate paths")
 
     async def search_markets(self, query: str = "") -> CultiveraApiResult:
-        """List the marketplace's vendors, optionally filtered by `query`.
+        """Search the FULL marketplace's vendors by `query`.
 
-        We fetch the available/connected markets and filter client-side with
-        matches_query (tolerant — works whether or not the API supports a
-        server-side search param). Raw payload is preserved.
+        Uses the server-side Search param (PINNED from live capture):
+        GET markets/connected?...&Search=<query>&ShowFavoriteOnly=false...
+        which searches ALL vendors (hundreds), not just the buyer's connected
+        favorites. A tolerant client-side matches_query pass still runs as a
+        safety net so space/punctuation differences never hide a real hit.
+        Raw payload is preserved for the downstream normalizer.
         """
-        result = await self._first_ok(_MARKETS_SEARCH_PATHS)
+        path = build_markets_search_path(query)
+        result = await self._get_json(path)
         if result.ok and query.strip() and result.records is not None:
             filtered = [r for r in result.records if matches_query(r, query)]
-            result = CultiveraApiResult(
-                ok=True, url=result.url, status=result.status,
-                raw=result.raw, records=filtered,
-            )
+            # Only narrow when the client-side pass still found something; if the
+            # server already narrowed to exact hits whose fields we don't match
+            # on, keep the server's list rather than blanking it.
+            if filtered:
+                result = CultiveraApiResult(
+                    ok=True, url=result.url, status=result.status,
+                    raw=result.raw, records=filtered,
+                )
         return result
 
     async def fetch_market_by_slug(self, slug: str) -> CultiveraApiResult:
