@@ -98,6 +98,7 @@ import { __runWedgeScanCoreTests } from "../../src/lib/pos/wedge-scan-core";
 import { __runRegisterLoyaltyCoreTests } from "../../src/lib/pos/register-loyalty-core";
 import { __runOrderToCartCoreTests } from "../../src/lib/pos/order-to-cart-core";
 import { __runMemberMatchCoreTests } from "../../src/lib/pos/member-match-core";
+import { __runActiveSaleResumeCoreTests } from "../../src/lib/pos/active-sale-resume-core";
 
 async function main() {
   __runOrderPricingTests();
@@ -183,6 +184,7 @@ async function main() {
   __runRegisterLoyaltyCoreTests();
   __runOrderToCartCoreTests();
   __runMemberMatchCoreTests();
+  __runActiveSaleResumeCoreTests();
   __runSwCoreTests();
   __runVariantGramsCoreTests();
   __runMenuLiveStepCoreTests();

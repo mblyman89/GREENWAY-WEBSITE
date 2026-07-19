@@ -67,6 +67,17 @@ import {
   startSaleBlockReason,
   type HeldSale,
 } from "@/lib/pos/register-polish-core";
+import {
+  ACTIVE_SALE_KEY,
+  evaluateResume,
+  parseActiveSale,
+  serializeActiveSale,
+  snapshotFromSale,
+  type ActiveSaleSnapshot,
+  type ResumableVerdict,
+} from "@/lib/pos/active-sale-resume-core";
+import type { PosCardCapture } from "@/lib/pos/medical-pos-core";
+import { pacificDayKey } from "@/lib/reports/timezone";
 import { SaleFlow, type PosMemberHit } from "./SaleFlow";
 import { rebuildOrderCart, type LoadedOrderLine } from "@/lib/pos/order-to-cart-core";
 
@@ -128,6 +139,20 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
   // the parked hold, and a loaded order must never do that.
   const [loadedCart, setLoadedCart] = useState<PosCartEntry[] | null>(null);
   const [loadedMember, setLoadedMember] = useState<PosMemberHit | null>(null);
+  // SESSION RESUME — the re-validated parked sale to seed the NEXT SaleFlow
+  // mount PAST the age gate (verdict + cart lines + medical card + member).
+  // Set only on unlock when a stored snapshot passes re-validation; cleared
+  // once consumed (or on start-fresh / cancel / complete).
+  const [resumeSnapshot, setResumeSnapshot] = useState<ActiveSaleSnapshot | null>(null);
+  // SESSION RESUME — the LIVE resumable state reported up by SaleFlow's
+  // onSnapshot. A ref (not state) so reading it inside lock() never needs a
+  // re-render and never goes stale between renders.
+  const activeSaleRef = useRef<{
+    verdict: ResumableVerdict | null;
+    cart: PosCartEntry[];
+    medicalCard: PosCardCapture | null;
+    member: PosMemberHit | null;
+  } | null>(null);
   // B17 — no-sale modal visibility (manager PIN approval happens inside).
   const [noSaleOpen, setNoSaleOpen] = useState(false);
   // B21 — register-side till action in progress (count-in / drop / blind close).
@@ -158,6 +183,10 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
   const queueRef = useRef<QueuedPosEvent[]>([]);
   const flushingRef = useRef(false);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // SESSION RESUME — the unlocked employee's display name, mirrored to a ref so
+  // the stable lock() callback can stamp it onto a parked snapshot without a
+  // dependency on employee (which would re-arm the idle timer every render).
+  const employeeNameRef = useRef<string>("");
 
   // ── boot: restore creds + queue ──
   // Mount-time hydration from localStorage (an external store). The one-time
@@ -513,11 +542,44 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
     };
   }, [screen, creds, online]);
 
+  // Mirror the employee name to a ref for the stable lock() callback.
+  useEffect(() => {
+    employeeNameRef.current = employee?.fullName ?? "";
+  }, [employee]);
+
   // ── auto-lock on idle ──
   const lock = useCallback(() => {
+    // SESSION RESUME — before tearing the session down, PARK the in-progress
+    // sale if it is worth resuming (past the age gate + a non-empty cart).
+    // snapshotFromSale returns null for a pre-gate/empty sale, in which case
+    // we clear any stale snapshot instead. Prices are NEVER stored — only the
+    // re-validated verdict + variant ids + counts + medical card + member.
+    try {
+      const live = activeSaleRef.current;
+      const snap = live
+        ? snapshotFromSale({
+            verdict: live.verdict,
+            lines: live.cart.map((e) => ({ variantId: e.product.variantId, quantity: e.quantity })),
+            medicalCard: live.medicalCard,
+            member: live.member,
+            savedByName: employeeNameRef.current,
+            nowIso: new Date().toISOString(),
+          })
+        : null;
+      if (snap) {
+        window.localStorage.setItem(ACTIVE_SALE_KEY, serializeActiveSale(snap));
+      } else {
+        window.localStorage.removeItem(ACTIVE_SALE_KEY);
+      }
+    } catch {
+      // Storage full / unavailable — the sale simply won't resume; the ID gate
+      // re-runs on unlock, which is the safe default.
+    }
+    activeSaleRef.current = null;
     setEmployee(null);
     setSaleActive(false);
     setResumeCart(null);
+    setResumeSnapshot(null);
     setNoSaleOpen(false);
     setPickupOpen(false);
     setScreen("locked");
@@ -583,6 +645,33 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
           setDrawer(drawerInfo);
           setCreds((c) => (c && c.registerId !== registerId ? { ...c, registerId } : c));
           setScreen("home");
+          // SESSION RESUME — if the idle auto-lock parked an in-progress sale,
+          // RE-VALIDATE it (age still >= 21, ID not expired, within TTL, medical
+          // card still valid) against the store's Pacific clock. On success the
+          // sale resumes PAST the age gate with the same customer's cart; on any
+          // doubt the snapshot is cleared and the sale starts fresh at the ID
+          // gate (the safe default). The cart itself is re-priced against the
+          // CURRENT bundle by SaleFlow's initialCart path (rebuildHeldCart).
+          try {
+            const parked = parseActiveSale(window.localStorage.getItem(ACTIVE_SALE_KEY));
+            const decision = evaluateResume(parked, pacificDayKey(new Date()), Date.now());
+            if (decision.resume) {
+              setResumeSnapshot(decision.snapshot);
+              setResumeCart(null);
+              setLoadedCart(null);
+              setLoadedMember(null);
+              setSaleActive(true);
+            } else {
+              window.localStorage.removeItem(ACTIVE_SALE_KEY);
+              setResumeSnapshot(null);
+              if (parked) {
+                setBanner(decision.reason);
+              }
+            }
+          } catch {
+            // Unreadable storage — start fresh, no resume.
+            setResumeSnapshot(null);
+          }
         }}
         onPunch={(emp) => {
           const intent = emp.clockedIn ? "out" : "in";
@@ -595,14 +684,32 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
   }
 
   if (saleActive && employee && drawer && menuBundle) {
+    // SESSION RESUME — rebuild the parked cart against the CURRENT bundle
+    // (fresh prices; vanished/86'd lines dropped) exactly like a B17 hold, so
+    // a resumed sale can never ship a stale price. The verdict + medical card
+    // seed SaleFlow PAST the age gate.
+    const resumedCart = resumeSnapshot
+      ? rebuildHeldCart(
+          { heldAtIso: resumeSnapshot.savedAtIso, heldByName: resumeSnapshot.savedByName, lines: resumeSnapshot.lines },
+          menuBundle.products,
+        ).cart
+      : null;
     return (
       <SaleFlow
         bundle={menuBundle}
         drawerSessionId={drawer.sessionId}
         registerName={creds.name}
         employeeName={employee.fullName}
-        initialCart={resumeCart ?? loadedCart ?? undefined}
-        initialMember={loadedMember ?? undefined}
+        initialCart={resumedCart ?? resumeCart ?? loadedCart ?? undefined}
+        initialMember={resumeSnapshot?.member ?? loadedMember ?? undefined}
+        initialVerdict={resumeSnapshot?.verdict ?? undefined}
+        initialMedicalCard={resumeSnapshot?.medicalCard ?? undefined}
+        onSnapshot={(state) => {
+          // SESSION RESUME — mirror the live resumable state so lock() can park
+          // it. Kept in a ref (no re-render); prices are stripped to variant
+          // ids + counts when parked.
+          activeSaleRef.current = state;
+        }}
         onHold={
           // One parked sale at a time (unless THIS sale is the resumed one —
           // it may be re-parked, replacing its own snapshot).
@@ -616,6 +723,17 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
                 } catch {
                   // Storage full — the in-memory hold still works this session.
                 }
+                // SESSION RESUME — an explicit B17 hold supersedes the
+                // active-sale snapshot: the B17 hold always re-runs the ID gate
+                // on resume, so drop the past-gate snapshot to avoid two
+                // parked sales fighting.
+                activeSaleRef.current = null;
+                try {
+                  window.localStorage.removeItem(ACTIVE_SALE_KEY);
+                } catch {
+                  // Best-effort.
+                }
+                setResumeSnapshot(null);
                 setHeldSale(hold);
                 setResumeCart(null);
                 setSaleActive(false);
@@ -880,6 +998,15 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
           // Owner decision: the register locks after EVERY sale so the next
           // sale is PIN-attributed to whoever actually rings it.
           setBanner(null);
+          // SESSION RESUME — a COMPLETED sale must never be re-parked by lock();
+          // clear the live ref + stored snapshot first.
+          activeSaleRef.current = null;
+          try {
+            window.localStorage.removeItem(ACTIVE_SALE_KEY);
+          } catch {
+            // Best-effort.
+          }
+          setResumeSnapshot(null);
           lock();
           void flush();
         }}
@@ -887,6 +1014,15 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
           // A cancelled resume leaves the hold parked (nothing was sold).
           // A cancelled LOADED order stays superseded — reopen it from the
           // back office (reasoned reversal) if the customer changed their mind.
+          // SESSION RESUME — a cancelled sale is abandoned: drop any parked
+          // snapshot so an explicit cancel is never silently resumed.
+          activeSaleRef.current = null;
+          try {
+            window.localStorage.removeItem(ACTIVE_SALE_KEY);
+          } catch {
+            // Best-effort.
+          }
+          setResumeSnapshot(null);
           setResumeCart(null);
           setLoadedCart(null);
           setLoadedMember(null);
@@ -913,6 +1049,15 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
         lastReceipt={lastReceipt}
         heldSale={heldSale}
         onStartSale={() => {
+          // SESSION RESUME — a deliberate fresh start clears any parked sale so
+          // the ID gate runs for the new customer.
+          activeSaleRef.current = null;
+          try {
+            window.localStorage.removeItem(ACTIVE_SALE_KEY);
+          } catch {
+            // Best-effort.
+          }
+          setResumeSnapshot(null);
           setResumeCart(null);
           setLoadedCart(null);
           setLoadedMember(null);
@@ -937,6 +1082,16 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
                 if (rebuilt.dropped.length > 0) {
                   setBanner(`Restored the held cart, but dropped: ${rebuilt.dropped.join(", ")}.`);
                 }
+                // SESSION RESUME — a B17 hold resume is a DIFFERENT customer's
+                // parked cart and must re-run the ID gate: clear any past-gate
+                // snapshot so it can't leak the previous customer's verdict.
+                activeSaleRef.current = null;
+                try {
+                  window.localStorage.removeItem(ACTIVE_SALE_KEY);
+                } catch {
+                  // Best-effort.
+                }
+                setResumeSnapshot(null);
                 setResumeCart(rebuilt.cart);
                 setSaleActive(true);
               }
@@ -1095,6 +1250,16 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
             if (rebuilt.dropped.length > 0) parts.push(`Dropped: ${rebuilt.dropped.join(", ")}.`);
             if (loaded.customerNote) parts.push(`Customer note: ${loaded.customerNote}`);
             setBanner(parts.join(" "));
+            // SESSION RESUME — a loaded website order re-runs the ID gate; clear
+            // any past-gate snapshot so it can't skip verification for a
+            // different customer.
+            activeSaleRef.current = null;
+            try {
+              window.localStorage.removeItem(ACTIVE_SALE_KEY);
+            } catch {
+              // Best-effort.
+            }
+            setResumeSnapshot(null);
             setResumeCart(null);
             setLoadedCart(rebuilt.cart.length > 0 ? rebuilt.cart : null);
             setLoadedMember(loaded.member);
