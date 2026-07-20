@@ -173,6 +173,8 @@ export async function updateEmployeeAction(formData: FormData): Promise<void> {
     full_name: str(formData, "full_name"),
     job_role: str(formData, "job_role") || "sales",
     notes: str(formData, "notes") || null,
+    // Slice 6: SAW username ONLY (never a password). Blank clears it.
+    saw_username: str(formData, "saw_username") || null,
   };
   // Task S-b: `active` is driven by the lifecycle (activate/terminate) on the
   // employee file page. Only legacy forms that still render the checkbox may

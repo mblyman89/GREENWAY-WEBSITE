@@ -463,6 +463,17 @@ export default async function EmployeeFilePage({
                   </Select>
                 </Field>
                 <Field
+                  label="SAW username (for medical DOH check)"
+                  help="Their SecureAccess Washington username ONLY — never a password. Shown at the register's medical card-verification step so they know which login to use. Leave blank if they don't verify medical cards."
+                >
+                  <Input
+                    name="saw_username"
+                    defaultValue={employee.saw_username ?? ""}
+                    placeholder="e.g. jsmith (username only)"
+                    autoComplete="off"
+                  />
+                </Field>
+                <Field
                   label="New clock PIN"
                   help="4–6 digits. Leave blank to keep the current PIN."
                 >

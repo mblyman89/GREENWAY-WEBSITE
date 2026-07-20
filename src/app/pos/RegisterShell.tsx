@@ -106,7 +106,14 @@ const IDLE_LOCK_MS = 2 * 60 * 1000; // auto-lock after 2 minutes of inactivity
 
 type DeviceCreds = { deviceId: string; deviceKey: string; name: string; registerId: string | null };
 
-type UnlockedEmployee = { id: string; fullName: string; jobRole: string; clockedIn: boolean };
+type UnlockedEmployee = {
+  id: string;
+  fullName: string;
+  jobRole: string;
+  clockedIn: boolean;
+  /** Slice 6 — SAW username ONLY (shown at the medical-verify step). May be null. */
+  sawUsername?: string | null;
+};
 type DrawerInfo = { sessionId: string; openedAt: string | null; businessDay: string } | null;
 
 type Screen = "setup" | "locked" | "home";
@@ -793,6 +800,7 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
         drawerSessionId={drawer.sessionId}
         registerName={creds.name}
         employeeName={employee.fullName}
+        employeeSawUsername={employee.sawUsername ?? null}
         initialCart={resumedCart ?? resumeCart ?? loadedCart ?? undefined}
         initialMember={resumeSnapshot?.member ?? loadedMember ?? undefined}
         initialVerdict={resumeSnapshot?.verdict ?? undefined}

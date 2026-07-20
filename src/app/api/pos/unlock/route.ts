@@ -80,6 +80,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       fullName: employee.full_name,
       jobRole: employee.job_role,
       clockedIn: !!openPunch,
+      // Slice 6: username ONLY, so the register can show the right SAW login at
+      // the medical-verification step. Never a password.
+      sawUsername: employee.saw_username ?? null,
     },
     register: { id: auth.device.register_id },
     drawer: drawerSession

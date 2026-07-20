@@ -27,6 +27,13 @@ export type Employee = {
   job_role: "sales" | "manager" | "lead" | "other";
   active: boolean;
   notes: string | null;
+  /**
+   * Slice 6: the employee's SecureAccess Washington (SAW) username ONLY — shown
+   * back at the POS medical-verification step so the right budtender knows which
+   * login to use. NEVER a password (SAW's own MFA finishes authentication).
+   * Nullable; the column is added by migration 0126 (may be absent on older DBs).
+   */
+  saw_username: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -38,7 +45,7 @@ export type Employee = {
  * banking read below.
  */
 const EMPLOYEE_COLUMNS =
-  "id, full_name, staff_id, clock_pin, job_role, active, notes, created_at, updated_at";
+  "id, full_name, staff_id, clock_pin, job_role, active, notes, saw_username, created_at, updated_at";
 
 /** Per-employee direct-deposit banking — payroll/NACHA path ONLY. */
 export type EmployeeBanking = {
