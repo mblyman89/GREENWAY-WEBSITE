@@ -45,6 +45,15 @@ import { changeBreakdown, formatChangeBreakdown } from "@/lib/pos/change-calc-co
 import { lowStockCount } from "@/lib/pos/low-stock-core";
 import { applyLocalStockFlag } from "@/lib/pos/stock-flag-core";
 import { THEME_KEY, parseTheme, themeToggleLabel, toggleTheme, type PosTheme } from "@/lib/pos/theme-core";
+import {
+  MEDICAL_TESTMODE_KEY,
+  parseMedicalTestMode,
+  serializeMedicalTestMode,
+  toggleMedicalTestMode,
+  medicalTestModeToggleLabel,
+  applyMedicalTestMode,
+  medicalTestModeBannerActive,
+} from "@/lib/pos/medical-testmode-core";
 import { checkSetupCredentials } from "@/lib/pos/device-setup-core";
 import { isBuildStale, isPosCacheName, shouldAutoApplyUpdate } from "@/lib/pos/sw-core";
 import { VOID_REASON_PRESETS } from "@/lib/pos/void-sale-core";
@@ -175,6 +184,12 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
   // B44 — per-device display mode (localStorage, like favorites). Dark is
   // the default; hydrated in the boot effect below.
   const [theme, setTheme] = useState<PosTheme>("dark");
+  // Slice 5 — per-device MEDICAL TEST MODE (localStorage, like theme). When
+  // ON, the cached/loaded menu bundle's medical.endorsed is forced true so the
+  // owner can rehearse a tax-free medical sale before DOH actually endorses the
+  // store. Fully reversible, never touches the server/DB, defaults OFF, and a
+  // loud banner shows whenever it is active. Hydrated in the boot effect below.
+  const [medicalTestMode, setMedicalTestMode] = useState<boolean>(false);
   // AN-0 — a new build's service worker parked in the "waiting" state
   // (null = up to date). Surfaced on the home screen; AN-1 additionally
   // auto-applies it on the LOCK screen (no cashier mid-sale there).
@@ -262,6 +277,9 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
     setHeldSale(parseHeldSale(window.localStorage.getItem(HELD_SALE_KEY)));
     // B44 — per-device display mode (parseTheme degrades corruption to dark).
     setTheme(parseTheme(window.localStorage.getItem(THEME_KEY)));
+    // Slice 5 — per-device medical test mode (parseMedicalTestMode fails safe
+    // to OFF on any corruption, so a bad blob can never silently drop real tax).
+    setMedicalTestMode(parseMedicalTestMode(window.localStorage.getItem(MEDICAL_TESTMODE_KEY)));
     // Cached menu bundle (offline sales use the last download until refresh).
     try {
       const rawMenu = window.localStorage.getItem(LS_MENU);
@@ -290,6 +308,15 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
       document.documentElement.removeAttribute("data-pos-theme");
     };
   }, [theme]);
+
+  // ── Slice 5: persist the per-device medical test-mode flag ──
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(MEDICAL_TESTMODE_KEY, serializeMedicalTestMode(medicalTestMode));
+    } catch {
+      // Best-effort — a full disk just means the choice doesn't survive restart.
+    }
+  }, [medicalTestMode]);
 
   // ── AN-1: lock-screen update pump ──
   // The owner's real pain: an installed iPad register NEVER picked up a new
@@ -660,6 +687,13 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
   // ── screen renders ──
   const pendingCount = queue.length;
 
+  // Slice 5 — the bundle SaleFlow/rebuilds price against. When medical test
+  // mode is ON, force medical.endorsed=true so the owner can rehearse the
+  // tax-free flow; OFF (default) returns the real server bundle untouched. The
+  // override never fabricates a medical config that the server didn't ship.
+  const effectiveBundle = menuBundle ? applyMedicalTestMode(menuBundle, medicalTestMode) : null;
+  const medicalTestModeBanner = medicalTestModeBannerActive(menuBundle, medicalTestMode);
+
   if (screen === "loading") {
     return (
       <main className="pos-shell flex min-h-screen flex-col items-center justify-center gap-4">
@@ -742,7 +776,7 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
     );
   }
 
-  if (saleActive && employee && drawer && menuBundle) {
+  if (saleActive && employee && drawer && effectiveBundle) {
     // SESSION RESUME — rebuild the parked cart against the CURRENT bundle
     // (fresh prices; vanished/86'd lines dropped) exactly like a B17 hold, so
     // a resumed sale can never ship a stale price. The verdict + medical card
@@ -750,12 +784,12 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
     const resumedCart = resumeSnapshot
       ? rebuildHeldCart(
           { heldAtIso: resumeSnapshot.savedAtIso, heldByName: resumeSnapshot.savedByName, lines: resumeSnapshot.lines },
-          menuBundle.products,
+          effectiveBundle.products,
         ).cart
       : null;
     return (
       <SaleFlow
-        bundle={menuBundle}
+        bundle={effectiveBundle}
         drawerSessionId={drawer.sessionId}
         registerName={creds.name}
         employeeName={employee.fullName}
@@ -1134,11 +1168,11 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
           setSaleActive(true);
         }}
         onResumeHold={
-          heldSale && menuBundle
+          heldSale && effectiveBundle
             ? () => {
                 // Rebuild against the CURRENT bundle: fresh prices, and
                 // vanished/out-of-stock lines are dropped + reported.
-                const rebuilt = rebuildHeldCart(heldSale, menuBundle.products);
+                const rebuilt = rebuildHeldCart(heldSale, effectiveBundle.products);
                 if (rebuilt.cart.length === 0) {
                   try {
                     window.localStorage.removeItem(HELD_SALE_KEY);
@@ -1200,6 +1234,10 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
         onPickupQueue={online && drawer ? () => setPickupOpen(true) : undefined}
         themeLabel={themeToggleLabel(theme)}
         onToggleTheme={() => setTheme((t) => toggleTheme(t))}
+        medicalTestMode={medicalTestMode}
+        medicalTestModeLabel={medicalTestModeToggleLabel(medicalTestMode)}
+        medicalTestModeBanner={medicalTestModeBanner}
+        onToggleMedicalTestMode={() => setMedicalTestMode((m) => toggleMedicalTestMode(m))}
         buildVersion={buildVersion ?? null}
         onApplyUpdate={
           // AN-0 — offered ONLY here on the home screen (a sale in progress
@@ -1312,11 +1350,11 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
             // the linked customer pre-attached. The ID gate still runs first.
             setPickupOpen(false);
             setPickupCount((c) => (typeof c === "number" && c > 0 ? c - 1 : c));
-            if (!menuBundle) {
+            if (!effectiveBundle) {
               setBanner(`Order ${loaded.orderNumber} was loaded but the menu isn't ready — refresh the menu and ring the items manually.`);
               return;
             }
-            const rebuilt = rebuildOrderCart(loaded.lines, menuBundle.products);
+            const rebuilt = rebuildOrderCart(loaded.lines, effectiveBundle.products);
             const parts: string[] = [`Order ${loaded.orderNumber} (${loaded.customerLabel}) loaded into this sale.`];
             if (rebuilt.dropped.length > 0) parts.push(`Dropped: ${rebuilt.dropped.join(", ")}.`);
             if (loaded.customerNote) parts.push(`Customer note: ${loaded.customerNote}`);
@@ -1679,6 +1717,10 @@ function HomeScreen({
   onPickupQueue,
   themeLabel,
   onToggleTheme,
+  medicalTestMode,
+  medicalTestModeLabel,
+  medicalTestModeBanner,
+  onToggleMedicalTestMode,
   buildVersion,
   onApplyUpdate,
   onRefreshMenu,
@@ -1730,6 +1772,14 @@ function HomeScreen({
   themeLabel: string;
   /** B44 — flip this device's display mode (persists per device). */
   onToggleTheme: () => void;
+  /** Slice 5 — whether medical test mode is currently ON (per device). */
+  medicalTestMode: boolean;
+  /** Slice 5 — the action label the toggle would perform next. */
+  medicalTestModeLabel: string;
+  /** Slice 5 — whether the loud "TEST MODE" banner should show. */
+  medicalTestModeBanner: boolean;
+  /** Slice 5 — flip this device's medical test mode (persists per device). */
+  onToggleMedicalTestMode: () => void;
   /** AN-0 — the running build's version (short commit SHA; "dev" locally). */
   buildVersion: string | null;
   /** AN-0 — apply a parked update (undefined = up to date, or a sale is held). */
@@ -1894,6 +1944,18 @@ function HomeScreen({
                 >
                   {themeLabel === "Light mode" ? "☀️" : "🌙"} {themeLabel}
                 </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMoreOpen(false);
+                    onToggleMedicalTestMode();
+                  }}
+                  title="TEST ONLY — simulates a DOH medical endorsement on THIS device so you can rehearse a tax-free medical sale. Turn OFF for real sales until the store is actually endorsed."
+                  className="block w-full rounded-lg px-3 py-2.5 text-left text-sm font-semibold hover:bg-[var(--pos-surface-hover)]"
+                >
+                  {medicalTestMode ? "🧪 " : "⚕️ "}
+                  {medicalTestModeLabel}
+                </button>
                 <div className="my-1 border-t border-[var(--pos-border)]" />
                 <button
                   type="button"
@@ -1932,6 +1994,18 @@ function HomeScreen({
           </div>
         </div>
       </header>
+
+      {/* Slice 5 — loud, unmissable banner while MEDICAL TEST MODE is on, so a
+          simulated endorsement can never be mistaken for the real one. */}
+      {medicalTestModeBanner ? (
+        <div
+          role="status"
+          className="flex items-center justify-center gap-2 bg-[var(--pos-warn)] px-4 py-2 text-center text-sm font-extrabold uppercase tracking-wide text-[var(--pos-warn-ink,#3a2a00)]"
+          style={{ backgroundColor: "#b45309", color: "#fff" }}
+        >
+          🧪 Medical TEST MODE — endorsement is SIMULATED on this device. Turn it OFF (More ▸) before real sales.
+        </div>
+      ) : null}
 
       <div className="mx-auto grid w-full max-w-6xl flex-1 gap-6 p-6 lg:grid-cols-[1fr_330px]">
         <div className="flex flex-col">

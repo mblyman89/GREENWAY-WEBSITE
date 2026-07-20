@@ -101,6 +101,7 @@ import {
   validateCardCapture,
   medicalAgeAllowed,
   applyMedicalPricing,
+  medicalCardBadge,
   type PosCardCapture,
   type MedicalPricingResult,
 } from "@/lib/pos/medical-pos-core";
@@ -1266,6 +1267,26 @@ function IdGateScreen({
         ) : null}
         {medical ? (
           <div className="mt-3 space-y-3">
+            {/* Medical-sale checklist (DOH requires verifying the card in the
+                MCR on EVERY sale — it can be revoked). Kept brief; the register
+                only opens the medical path once the card facts are entered and
+                the MCR check is attested below. */}
+            <ol className="list-decimal space-y-1 rounded-xl border border-[var(--pos-border)] bg-[var(--pos-surface-2)] px-5 py-3 text-xs text-[var(--pos-text-muted)]">
+              <li>Confirm the recognition-card NAME matches the ID you just verified.</li>
+              <li>
+                Verify the card is ACTIVE in the DOH registry (
+                <a
+                  href="https://secureaccess.wa.gov/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-semibold text-[var(--pos-accent)] underline"
+                >
+                  open MCR ↗
+                </a>
+                ) — required every sale.
+              </li>
+              <li>Enter the card details below, then tick the verification box.</li>
+            </ol>
             <div>
               <label htmlFor="pos-upid" className="text-sm text-[var(--pos-text-muted)]">
                 Unique patient identifier (UPID) — exactly as printed on the card
@@ -3599,10 +3620,25 @@ function CustomerBand({
           <span className="rounded-full bg-[var(--pos-accent-soft)] px-2.5 py-0.5 text-xs font-bold text-[var(--pos-accent)]">
             ID ✓ {verdict.age}
           </span>
-          {carded ? (
-            <span className="rounded-full bg-[var(--pos-info-solid)] px-2.5 py-0.5 text-xs font-bold text-white">
-              MEDICAL · {medicalCard?.upid}
-            </span>
+          {carded && medicalCard ? (
+            (() => {
+              // Enriched, uncluttered badge next to the customer name: holder
+              // type + card expiry; turns red if the card is expired (an
+              // expired card grants no exemptions). Card number kept on hover.
+              const badge = medicalCardBadge(medicalCard, pacificDayKey(new Date()));
+              return (
+                <span
+                  title={`Recognition card ${medicalCard.upid}${badge.expired ? " — EXPIRED, no exemptions" : ""}`}
+                  className={
+                    badge.expired
+                      ? "rounded-full bg-[var(--pos-error-solid,#b91c1c)] px-2.5 py-0.5 text-xs font-bold text-white"
+                      : "rounded-full bg-[var(--pos-info-solid)] px-2.5 py-0.5 text-xs font-bold text-white"
+                  }
+                >
+                  {badge.text}
+                </span>
+              );
+            })()
           ) : null}
           {member ? (
             <span className="rounded-full border border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] px-2.5 py-0.5 text-xs font-bold text-[var(--pos-warn)]">

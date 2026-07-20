@@ -104,6 +104,7 @@ import { __runOrderToCartCoreTests } from "../../src/lib/pos/order-to-cart-core"
 import { __runMemberMatchCoreTests } from "../../src/lib/pos/member-match-core";
 import { __runActiveSaleResumeCoreTests } from "../../src/lib/pos/active-sale-resume-core";
 import { __runMenuNameDisplayCoreTests } from "../../src/lib/pos/menu-name-display-core";
+import { __runMedicalTestModeCoreTests } from "../../src/lib/pos/medical-testmode-core";
 
 async function main() {
   __runOrderPricingTests();
@@ -191,6 +192,7 @@ async function main() {
   __runMemberMatchCoreTests();
   __runActiveSaleResumeCoreTests();
   __runMenuNameDisplayCoreTests();
+  __runMedicalTestModeCoreTests();
   __runSwCoreTests();
   __runVariantGramsCoreTests();
   __runMenuLiveStepCoreTests();
