@@ -139,6 +139,10 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
   // the parked hold, and a loaded order must never do that.
   const [loadedCart, setLoadedCart] = useState<PosCartEntry[] | null>(null);
   const [loadedMember, setLoadedMember] = useState<PosMemberHit | null>(null);
+  // AM-D2 — when a sale was started by loading a website pickup order, the
+  // source order's id. Carried into the sale so the sync supersedes the
+  // website order ONLY on completion (never on load). Survives lock/resume.
+  const [loadedOrderId, setLoadedOrderId] = useState<string | null>(null);
   // SESSION RESUME — the re-validated parked sale to seed the NEXT SaleFlow
   // mount PAST the age gate (verdict + cart lines + medical card + member).
   // Set only on unlock when a stored snapshot passes re-validation; cleared
@@ -187,6 +191,9 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
   // the stable lock() callback can stamp it onto a parked snapshot without a
   // dependency on employee (which would re-arm the idle timer every render).
   const employeeNameRef = useRef<string>("");
+  // AM-D2 — mirror the loaded source order id to a ref so parkActiveSale can
+  // stamp it onto a parked snapshot without re-arming the idle timer.
+  const loadedOrderIdRef = useRef<string | null>(null);
 
   // ── boot: restore creds + queue ──
   // Mount-time hydration from localStorage (an external store). The one-time
@@ -547,6 +554,11 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
     employeeNameRef.current = employee?.fullName ?? "";
   }, [employee]);
 
+  // Mirror the loaded source order id to a ref for parkActiveSale.
+  useEffect(() => {
+    loadedOrderIdRef.current = loadedOrderId;
+  }, [loadedOrderId]);
+
   // ── park the in-progress sale to localStorage ──
   // SESSION RESUME — snapshot the live sale so it survives a lock, a lost tab,
   // or an iOS background/suspend/discard. snapshotFromSale keeps ANY sale that
@@ -568,6 +580,7 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
             member: live.member,
             savedByName: employeeNameRef.current,
             nowIso: new Date().toISOString(),
+            sourceOrderId: loadedOrderIdRef.current,
           })
         : null;
       if (snap) {
@@ -592,6 +605,10 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
     setSaleActive(false);
     setResumeCart(null);
     setResumeSnapshot(null);
+    // AM-D2 — the source order id was already captured into the parked
+    // snapshot by parkActiveSale; clear the live pointer with the session so
+    // it is restored ONLY when the parked sale is resumed.
+    setLoadedOrderId(null);
     setNoSaleOpen(false);
     setPickupOpen(false);
     setScreen("locked");
@@ -699,6 +716,9 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
               setResumeCart(null);
               setLoadedCart(null);
               setLoadedMember(null);
+              // AM-D2 — a resumed sale that was loaded from a website order must
+              // still finalize THAT order on completion, so restore its id.
+              setLoadedOrderId(decision.snapshot.sourceOrderId);
               setSaleActive(true);
             } else {
               window.localStorage.removeItem(ACTIVE_SALE_KEY);
@@ -743,6 +763,7 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
         initialMember={resumeSnapshot?.member ?? loadedMember ?? undefined}
         initialVerdict={resumeSnapshot?.verdict ?? undefined}
         initialMedicalCard={resumeSnapshot?.medicalCard ?? undefined}
+        initialSourceOrderId={loadedOrderId ?? undefined}
         onSnapshot={(state) => {
           // SESSION RESUME — mirror the live resumable state so lock() can park
           // it. Kept in a ref (no re-render); prices are stripped to variant
@@ -773,6 +794,10 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
                   // Best-effort.
                 }
                 setResumeSnapshot(null);
+                // AM-D2 — a B17 hold re-runs the ID gate on resume and is NOT
+                // tied to the source website order; drop the pointer so the
+                // held sale never supersedes it (the order stays live).
+                setLoadedOrderId(null);
                 setHeldSale(hold);
                 setResumeCart(null);
                 setSaleActive(false);
@@ -1046,13 +1071,18 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
             // Best-effort.
           }
           setResumeSnapshot(null);
+          // AM-D2 — the sale completed; its source order (if any) is superseded
+          // by the sync. Drop the local pointer so the next sale is clean.
+          setLoadedOrderId(null);
           lock();
           void flush();
         }}
         onCancel={() => {
           // A cancelled resume leaves the hold parked (nothing was sold).
-          // A cancelled LOADED order stays superseded — reopen it from the
-          // back office (reasoned reversal) if the customer changed their mind.
+          // AM-D2 — a cancelled LOADED sale never completed, so its source
+          // website order was NEVER superseded (that only happens on the sync's
+          // completion): the order simply stays live in the pickup queue,
+          // exactly what the owner wants (no lost order, no lost revenue).
           // SESSION RESUME — a cancelled sale is abandoned: drop any parked
           // snapshot so an explicit cancel is never silently resumed.
           activeSaleRef.current = null;
@@ -1065,6 +1095,7 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
           setResumeCart(null);
           setLoadedCart(null);
           setLoadedMember(null);
+          setLoadedOrderId(null);
           setSaleActive(false);
         }}
       />
@@ -1274,8 +1305,9 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
             window.location.href = buildPassPrntUrl(receiptHtml, { backUrl, openDrawer: true });
           }}
           onLoaded={(loaded) => {
-            // AM-D — the order is already superseded server-side. Rebuild its
-            // lines against the CURRENT bundle (fresh prices, live promos;
+            // AM-D2 — the order is NOT superseded on load; it stays active and
+            // is only cancelled when THIS sale completes (sync-store). Rebuild
+            // its lines against the CURRENT bundle (fresh prices, live promos;
             // vanished/out-of-stock dropped + reported) and open the sale with
             // the linked customer pre-attached. The ID gate still runs first.
             setPickupOpen(false);
@@ -1302,6 +1334,9 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
             setResumeCart(null);
             setLoadedCart(rebuilt.cart.length > 0 ? rebuilt.cart : null);
             setLoadedMember(loaded.member);
+            // AM-D2 — carry the source order id so the sync supersedes it only
+            // when THIS register sale completes (never on load).
+            setLoadedOrderId(loaded.orderId);
             setSaleActive(true);
           }}
         />
@@ -2915,11 +2950,13 @@ function PickupQueueModal({
   onClose: () => void;
   onCompleted: (receiptHtml: string, message: string) => void;
   /**
-   * AM-D — the order was SUPERSEDED server-side and its raw lines returned;
-   * the shell rebuilds them against the CURRENT bundle and opens a sale with
-   * the linked customer pre-attached.
+   * AM-D2 — the order stays ACTIVE on load (NOT superseded); its raw lines +
+   * source orderId are returned. The shell rebuilds the lines against the
+   * CURRENT bundle, opens a sale with the linked customer pre-attached, and
+   * carries orderId so the sync supersedes the order only on completion.
    */
   onLoaded: (loaded: {
+    orderId: string;
     orderNumber: string;
     customerLabel: string;
     customerNote: string | null;
@@ -2992,9 +3029,10 @@ function PickupQueueModal({
   const canComplete =
     !!detail && idConfirmed && tenderedMinor !== null && tenderedMinor >= detail.totalMinor && !busy;
 
-  // AM-D — load the order into a register sale: the server supersedes the
-  // order (cancels with a loud note — the register sale becomes the sale of
-  // record) and hands back the raw lines + the linked customer.
+  // AM-D2 — load the order into a register sale: the order stays ACTIVE (NOT
+  // superseded on load); the server hands back the raw lines + the source
+  // orderId + the linked customer. The sync supersedes the order only when
+  // this register sale completes.
   const loadIntoSale = async () => {
     if (!detail || busy) return;
     setBusy(true);
@@ -3008,6 +3046,7 @@ function PickupQueueModal({
       const body = (await res.json().catch(() => null)) as
         | {
             loaded?: {
+              orderId: string;
               orderNumber: string;
               customerLabel: string;
               customerNote: string | null;

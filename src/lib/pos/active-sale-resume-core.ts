@@ -76,6 +76,13 @@ export type ActiveSaleSnapshot = {
   medicalCard: PosCardCapture | null;
   /** Attached loyalty member, if any. */
   member: ActiveSaleMember | null;
+  /**
+   * Present when this sale was started from a website pickup order loaded into
+   * the register: the source order's UUID. Carried through a lock/resume so a
+   * loaded sale that is parked and later resumed still supersedes its source
+   * website order ON COMPLETION (never on load). Null for walk-in sales.
+   */
+  sourceOrderId: string | null;
 };
 
 type StoredActiveSale = { v: 1; snapshot: ActiveSaleSnapshot };
@@ -149,8 +156,10 @@ export function snapshotFromSale(args: {
   member: ActiveSaleMember | null;
   savedByName: string;
   nowIso: string;
+  /** Source website order id when this sale was loaded from one (else null). */
+  sourceOrderId?: string | null;
 }): ActiveSaleSnapshot | null {
-  const { verdict, lines, medicalCard, member, savedByName, nowIso } = args;
+  const { verdict, lines, medicalCard, member, savedByName, nowIso, sourceOrderId } = args;
   if (!verdict || !isResumableVerdict(verdict)) return null;
   const cleanLines = lines
     .filter((l) => isNonEmptyStr(l.variantId) && isInt(l.quantity) && l.quantity > 0)
@@ -162,6 +171,7 @@ export function snapshotFromSale(args: {
     lines: cleanLines,
     medicalCard: medicalCard && isMedicalCardShape(medicalCard) ? medicalCard : null,
     member: member && isMemberShape(member) ? member : null,
+    sourceOrderId: isNonEmptyStr(sourceOrderId) ? sourceOrderId : null,
   };
 }
 
@@ -196,6 +206,7 @@ export function parseActiveSale(raw: string | null | undefined): ActiveSaleSnaps
     // pricing + limits, so we refuse rather than resume a corrupted medical sale.
     if (s.medicalCard != null && medicalCard === null) return null;
     const member = s.member == null ? null : isMemberShape(s.member) ? s.member : null;
+    const sourceOrderId = isNonEmptyStr(s.sourceOrderId) ? s.sourceOrderId : null;
     return {
       savedAtIso: s.savedAtIso,
       savedByName: s.savedByName,
@@ -203,6 +214,7 @@ export function parseActiveSale(raw: string | null | undefined): ActiveSaleSnaps
       lines,
       medicalCard,
       member,
+      sourceOrderId,
     };
   } catch {
     return null;
@@ -365,6 +377,15 @@ export function __runActiveSaleResumeCoreTests(): void {
   // bad member is dropped to null but snapshot survives
   const okMemberDrop = parseActiveSale(JSON.stringify({ v: 1, snapshot: { ...snap, member: { customerId: "" } } }));
   ok(okMemberDrop !== null && okMemberDrop.member === null, "bad member is dropped, snapshot survives");
+
+  // sourceOrderId (loaded-from-website-order) round-trips; absent -> null
+  ok(snap!.sourceOrderId === null, "walk-in snapshot has null sourceOrderId");
+  const loadedSnap = snapshotFromSale({ verdict: goodVerdict, lines, medicalCard: null, member: null, savedByName: "Sam", nowIso: iso, sourceOrderId: "ord-uuid-123" });
+  ok(loadedSnap !== null && loadedSnap.sourceOrderId === "ord-uuid-123", "loaded snapshot keeps sourceOrderId");
+  const loadedBack = parseActiveSale(serializeActiveSale(loadedSnap!));
+  ok(loadedBack !== null && loadedBack.sourceOrderId === "ord-uuid-123", "sourceOrderId round-trips");
+  const emptySource = snapshotFromSale({ verdict: goodVerdict, lines, medicalCard: null, member: null, savedByName: "Sam", nowIso: iso, sourceOrderId: "" });
+  ok(emptySource !== null && emptySource.sourceOrderId === null, "empty sourceOrderId normalizes to null");
 
   // --- evaluateResume ---
   let d = evaluateResume(snap, today, nowMs);

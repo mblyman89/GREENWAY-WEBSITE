@@ -214,6 +214,18 @@ export type PosSalePayload = {
   changeMinor?: number;
   /** The drawer session this sale belongs to (open DrawerSession id). */
   drawerSessionId: string;
+  /**
+   * Present when this register sale was STARTED from a website pickup order
+   * loaded into the register ("the customer is here and wants to add items").
+   * It is the source order's UUID. The website order is NO LONGER superseded
+   * at load time (that lost the order + its revenue if the sale was abandoned
+   * or the screen locked). Instead the source order stays ACTIVE and is
+   * superseded (cancelled with the loud timeline note) EXACTLY when THIS
+   * register sale COMPLETES and materializes its own order at sync — so the
+   * two can never both fulfill, and an abandoned load simply leaves the
+   * website order untouched. Omitted for ordinary walk-in sales.
+   */
+  sourceOrderId?: string;
   /** How the customer's ID was verified before the cart was started. */
   idVerification: { method: "scan" | "manual"; manualEventUuid?: string };
   /**
@@ -404,6 +416,12 @@ export function validateSalePayload(p: Partial<PosSalePayload>): SalePayloadChec
     }
   }
   if (!isUuid(p.drawerSessionId)) errors.push("drawerSessionId must be a UUID (sale must belong to an open drawer).");
+  // Optional: when a sale was started from a loaded website order, its source
+  // order id must be a real UUID (omitted for walk-ins so pre-existing payload
+  // shapes stay byte-identical).
+  if (p.sourceOrderId !== undefined && !isUuid(p.sourceOrderId)) {
+    errors.push("sourceOrderId, when present, must be the source website order's UUID.");
+  }
   const idv = p.idVerification;
   if (!idv || (idv.method !== "scan" && idv.method !== "manual")) {
     errors.push('idVerification.method must be "scan" or "manual" — a sale cannot exist without an ID gate result.');
@@ -611,6 +629,10 @@ export function __runPosSaleEventTests(): void {
     idVerification: { method: "scan" },
   };
   ok(validateSalePayload(goodSale).ok, "good cash sale passes");
+  // Optional sourceOrderId (loaded-from-website-order): valid UUID passes,
+  // garbage refused, absent stays fine.
+  ok(validateSalePayload({ ...goodSale, sourceOrderId: U1 }).ok, "sale with valid sourceOrderId passes");
+  ok(!validateSalePayload({ ...goodSale, sourceOrderId: "not-a-uuid" }).ok, "sale with bad sourceOrderId refused");
   ok(!validateSalePayload({ ...goodSale, lines: [] }).ok, "empty lines refused");
   ok(!validateSalePayload({ ...goodSale, paymentMethod: "debit" as PosPaymentMethod }).ok, "debit sale blocked at launch");
   ok(!validateSalePayload({ ...goodSale, tenderedMinor: 2000 }).ok, "short cash refused");

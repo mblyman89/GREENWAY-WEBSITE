@@ -13,15 +13,17 @@
  *                              (inventory decrement + loyalty accrual fire
  *                              exactly like every other completion) → day
  *                              ledger row → printable receipt.
- *   POST { orderId, load: { employeeName } }   (Task AM-D)
+ *   POST { orderId, load: { employeeName } }   (Task AM-D / AM-D2)
  *                            → load the order INTO a register sale: the
- *                              order is SUPERSEDED (cancelled with a loud
- *                              timeline note — the register sale becomes
- *                              the sale of record, so nothing can double-
- *                              decrement or double-accrue) and the line
- *                              ids come back for the device to rebuild
- *                              against its CURRENT menu bundle, plus the
- *                              linked customer as a one-tap member attach.
+ *                              order stays ACTIVE (it is NOT superseded on
+ *                              load — that lost the order + revenue when the
+ *                              register sale was abandoned). The line ids +
+ *                              the source orderId come back so the device
+ *                              rebuilds against its CURRENT bundle and carries
+ *                              orderId into the sale; the SYNC supersedes the
+ *                              website order ONLY when that register sale
+ *                              COMPLETES. Also returns the linked customer as
+ *                              a one-tap member attach.
  *
  * Device-authenticated (x-pos-device-id/-key) like every register endpoint.
  * ONLINE-ONLY by design: the queue lives on the server and completion
@@ -96,6 +98,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     if (!loaded.ok) return NextResponse.json({ error: loaded.error }, { status: 422 });
     return NextResponse.json({
       loaded: {
+        // The source order's id — the register carries it into the sale it is
+        // building; the sync supersedes this order ONLY on completion (AM-D2).
+        orderId: loaded.orderId,
         orderNumber: loaded.orderNumber,
         customerLabel: loaded.customerLabel,
         customerNote: loaded.customerNote,
