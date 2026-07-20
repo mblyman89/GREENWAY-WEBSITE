@@ -131,9 +131,16 @@ function isMemberShape(m: unknown): m is ActiveSaleMember {
 // ---------------------------------------------------------------------------
 
 /**
- * Build a snapshot from the live sale state. Returns null when there is
- * nothing worth parking (no passing verdict, or an empty cart) — an empty or
- * pre-gate sale simply restarts at the ID gate, which is the same as today.
+ * Build a snapshot from the live sale state. Returns null ONLY when there is
+ * nothing worth parking — i.e. no passing ID gate verdict (a pre-gate sale
+ * simply restarts at the ID gate, which is the same as today).
+ *
+ * An EMPTY cart IS worth parking as long as a valid verdict exists: the real
+ * workflow is to check a customer in at the door (ID scanned/verified) and
+ * then browse the menu before anything is added to the cart. If the screen
+ * locks (or iOS backgrounds the tab) during that window, we must NOT force the
+ * budtender to rescan the customer. So a verified-customer-with-empty-cart is
+ * a legitimate, resumable state; the cart just resumes empty.
  */
 export function snapshotFromSale(args: {
   verdict: ResumableVerdict | null;
@@ -148,7 +155,6 @@ export function snapshotFromSale(args: {
   const cleanLines = lines
     .filter((l) => isNonEmptyStr(l.variantId) && isInt(l.quantity) && l.quantity > 0)
     .map((l) => ({ variantId: l.variantId, quantity: Math.floor(l.quantity) }));
-  if (cleanLines.length === 0) return null;
   return {
     savedAtIso: nowIso,
     savedByName,
@@ -175,7 +181,9 @@ export function parseActiveSale(raw: string | null | undefined): ActiveSaleSnaps
     if (!isNonEmptyStr(s.savedAtIso) || Number.isNaN(Date.parse(s.savedAtIso))) return null;
     if (typeof s.savedByName !== "string") return null;
     if (!isResumableVerdict(s.verdict)) return null;
-    if (!Array.isArray(s.lines) || s.lines.length === 0) return null;
+    // An empty cart is a valid parked state (verified customer, still browsing)
+    // — require lines to be an ARRAY, but allow it to be empty.
+    if (!Array.isArray(s.lines)) return null;
     const lines: ActiveSaleLine[] = [];
     for (const l of s.lines) {
       const line = l as Partial<ActiveSaleLine> | null;
@@ -315,11 +323,18 @@ export function __runActiveSaleResumeCoreTests(): void {
   });
   ok(snap !== null && snap.lines.length === 1 && snap.verdict.age === 34, "snapshotFromSale builds a snapshot");
   ok(snapshotFromSale({ verdict: null, lines, medicalCard: null, member: null, savedByName: "Sam", nowIso: iso }) === null, "no verdict -> no snapshot");
-  ok(snapshotFromSale({ verdict: goodVerdict, lines: [], medicalCard: null, member: null, savedByName: "Sam", nowIso: iso }) === null, "empty cart -> no snapshot");
-  ok(
-    snapshotFromSale({ verdict: goodVerdict, lines: [{ variantId: "v1", quantity: 0 }, { variantId: "", quantity: 3 }], medicalCard: null, member: null, savedByName: "Sam", nowIso: iso }) === null,
-    "cart with only invalid lines -> no snapshot",
-  );
+  // Verified-customer-with-EMPTY-cart IS resumable (check-in-at-door workflow):
+  // a valid verdict is enough to park; the cart simply resumes empty.
+  {
+    const emptySnap = snapshotFromSale({ verdict: goodVerdict, lines: [], medicalCard: null, member: null, savedByName: "Sam", nowIso: iso });
+    ok(emptySnap !== null && emptySnap.lines.length === 0 && emptySnap.verdict.age === 34, "empty cart with valid verdict -> snapshot (empty cart)");
+  }
+  // Lines that are all invalid collapse to an empty cart, but the valid verdict
+  // still yields a resumable snapshot (invalid lines are simply dropped).
+  {
+    const invalidLinesSnap = snapshotFromSale({ verdict: goodVerdict, lines: [{ variantId: "v1", quantity: 0 }, { variantId: "", quantity: 3 }], medicalCard: null, member: null, savedByName: "Sam", nowIso: iso });
+    ok(invalidLinesSnap !== null && invalidLinesSnap.lines.length === 0, "cart with only invalid lines -> snapshot with empty cart");
+  }
 
   // --- serialize / parse round-trip ---
   const raw = serializeActiveSale(snap!);
@@ -329,7 +344,14 @@ export function __runActiveSaleResumeCoreTests(): void {
   ok(parseActiveSale("{not json") === null, "garbage json -> null");
   ok(parseActiveSale(JSON.stringify({ v: 2, snapshot: snap })) === null, "wrong version -> null");
   ok(parseActiveSale(JSON.stringify({ v: 1, snapshot: { ...snap, verdict: { allowed: false } } })) === null, "refused verdict in blob -> null");
-  ok(parseActiveSale(JSON.stringify({ v: 1, snapshot: { ...snap, lines: [] } })) === null, "empty lines in blob -> null");
+  {
+    // Empty lines in a stored blob is now a VALID parked state (verified
+    // customer, empty cart) — it parses back with an empty cart, not null.
+    const emptyLinesBack = parseActiveSale(JSON.stringify({ v: 1, snapshot: { ...snap, lines: [] } }));
+    ok(emptyLinesBack !== null && emptyLinesBack.lines.length === 0, "empty lines in blob -> snapshot with empty cart");
+    // Non-array lines is still corruption -> null.
+    ok(parseActiveSale(JSON.stringify({ v: 1, snapshot: { ...snap, lines: "nope" } })) === null, "non-array lines in blob -> null");
+  }
   ok(parseActiveSale(JSON.stringify({ v: 1, snapshot: { ...snap, savedAtIso: "nope" } })) === null, "bad timestamp in blob -> null");
 
   // member + medical card round-trip

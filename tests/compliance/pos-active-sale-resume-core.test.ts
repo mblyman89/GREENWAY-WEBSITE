@@ -50,9 +50,21 @@ describe("snapshot build + round-trip", () => {
     expect(snap!.verdict.dateOfBirth).toBe("1992-01-15");
   });
 
-  it("refuses to snapshot a pre-gate or empty sale", () => {
+  it("refuses to snapshot a PRE-GATE sale (no verdict)", () => {
     expect(snapshotFromSale({ verdict: null, lines, medicalCard: null, member: null, savedByName: "Sam", nowIso: iso })).toBeNull();
-    expect(snapshotFromSale({ verdict, lines: [], medicalCard: null, member: null, savedByName: "Sam", nowIso: iso })).toBeNull();
+  });
+
+  it("DOES snapshot a verified customer with an EMPTY cart (check-in-at-door)", () => {
+    // A valid ID gate verdict is enough to park — a customer checked in at the
+    // door while still browsing must NOT have to rescan after a lock/background.
+    const snap = snapshotFromSale({ verdict, lines: [], medicalCard: null, member: null, savedByName: "Sam", nowIso: iso });
+    expect(snap).not.toBeNull();
+    expect(snap!.lines).toEqual([]);
+    expect(snap!.verdict.dateOfBirth).toBe("1992-01-15");
+    // The empty-cart snapshot round-trips too.
+    const back = parseActiveSale(serializeActiveSale(snap!));
+    expect(back).not.toBeNull();
+    expect(back!.lines).toEqual([]);
   });
 
   it("never stores a price — only variant ids + counts", () => {
