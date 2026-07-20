@@ -547,13 +547,17 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
     employeeNameRef.current = employee?.fullName ?? "";
   }, [employee]);
 
-  // ── auto-lock on idle ──
-  const lock = useCallback(() => {
-    // SESSION RESUME — before tearing the session down, PARK the in-progress
-    // sale if it is worth resuming (past the age gate + a non-empty cart).
-    // snapshotFromSale returns null for a pre-gate/empty sale, in which case
-    // we clear any stale snapshot instead. Prices are NEVER stored — only the
-    // re-validated verdict + variant ids + counts + medical card + member.
+  // ── park the in-progress sale to localStorage ──
+  // SESSION RESUME — snapshot the live sale so it survives a lock, a lost tab,
+  // or an iOS background/suspend/discard. snapshotFromSale keeps ANY sale that
+  // is past the age gate (a valid verdict) — INCLUDING a verified customer with
+  // an EMPTY cart (the check-in-at-the-door workflow: scan the ID, then browse;
+  // if the screen locks or iOS backgrounds the tab before anything is rung up,
+  // the customer must NOT have to rescan). Prices are NEVER stored — only the
+  // re-validated verdict + variant ids + counts + medical card + member.
+  // Returns true when a snapshot was written, false when nothing was worth
+  // parking (pre-gate sale) and any stale snapshot was cleared. Never throws.
+  const parkActiveSale = useCallback((): boolean => {
     try {
       const live = activeSaleRef.current;
       const snap = live
@@ -568,13 +572,21 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
         : null;
       if (snap) {
         window.localStorage.setItem(ACTIVE_SALE_KEY, serializeActiveSale(snap));
-      } else {
-        window.localStorage.removeItem(ACTIVE_SALE_KEY);
+        return true;
       }
+      window.localStorage.removeItem(ACTIVE_SALE_KEY);
+      return false;
     } catch {
       // Storage full / unavailable — the sale simply won't resume; the ID gate
       // re-runs on unlock, which is the safe default.
+      return false;
     }
+  }, []);
+
+  // ── auto-lock on idle ──
+  const lock = useCallback(() => {
+    // Park first (persist), THEN tear the session down and show the lock screen.
+    parkActiveSale();
     activeSaleRef.current = null;
     setEmployee(null);
     setSaleActive(false);
@@ -583,7 +595,7 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
     setNoSaleOpen(false);
     setPickupOpen(false);
     setScreen("locked");
-  }, []);
+  }, [parkActiveSale]);
 
   const touchIdle = useCallback(() => {
     if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
@@ -600,6 +612,33 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
     };
   }, [screen, touchIdle]);
+
+  // ── HARDEN: park on tab hide / page unload (iOS background/suspend/discard) ──
+  // The idle timer only fires while JS is running. When iOS backgrounds the PWA
+  // (home button, app switcher, screen lock) or discards the tab under memory
+  // pressure, the timer may never fire and a plain reload/pull-to-refresh tears
+  // the page down with no lock() call — so the live sale was lost. We PERSIST
+  // the snapshot the moment the page is hidden or being unloaded, WITHOUT
+  // tearing down the live session: if the tab merely came back it keeps running
+  // intact, and if it was discarded the fresh boot's unlock reads the snapshot
+  // and resumes. `pagehide` is the reliable "page is going away" signal on iOS
+  // Safari (where `beforeunload` is unreliable); `visibilitychange`→hidden
+  // covers the background/app-switch case that never unloads.
+  useEffect(() => {
+    if (screen !== "home") return;
+    const onHidden = () => {
+      if (document.visibilityState === "hidden") parkActiveSale();
+    };
+    const onPageHide = () => {
+      parkActiveSale();
+    };
+    document.addEventListener("visibilitychange", onHidden);
+    window.addEventListener("pagehide", onPageHide);
+    return () => {
+      document.removeEventListener("visibilitychange", onHidden);
+      window.removeEventListener("pagehide", onPageHide);
+    };
+  }, [screen, parkActiveSale]);
 
   // ── screen renders ──
   const pendingCount = queue.length;
