@@ -49,7 +49,7 @@ import { getPosReceiptConfig } from "@/lib/pos/receipt-config-store";
 import { normalizePosReceiptConfig, receiptAddressLines } from "@/lib/pos/receipt-config-core";
 import { buildPosReceiptHtml, receiptNumber } from "@/lib/pos/receipt-core";
 import { recordAudit } from "@/lib/auth/audit";
-import { supersedeNote, type LoadedOrderLine } from "@/lib/pos/order-to-cart-core";
+import { type LoadedOrderLine } from "@/lib/pos/order-to-cart-core";
 import { getAccountByCustomer, listTiers } from "@/lib/loyalty/loyalty-store";
 import { tierForPoints } from "@/lib/loyalty/engine";
 
@@ -318,6 +318,9 @@ export async function completePickupAtRegister(input: CompletePickupInput): Prom
 export type LoadOrderResult =
   | {
       ok: true;
+      /** The source website order's id — the register carries it and the sync
+       *  supersedes this order ONLY when the register sale COMPLETES. */
+      orderId: string;
       orderNumber: string;
       customerLabel: string;
       customerNote: string | null;
@@ -334,13 +337,15 @@ export type LoadOrderResult =
 
 /**
  * Load a website order INTO a register sale ("the customer is here and
- * wants to add items"). The order is SUPERSEDED — cancelled with a loud
- * timeline note — the moment it is loaded, because the register sale
- * materializes its OWN order at sync: if both stayed live, both could
- * complete (double inventory decrement, double loyalty accrual, two CCRS
- * sales). Cancelling first makes the failure mode safe: if the register
- * sale never happens, the order sits cancelled with a note saying exactly
- * why, and the back office can reopen it via the reasoned-reversal path.
+ * wants to add items"). The order is NOT superseded at load time (owner
+ * decision): loading is not selling, and cancelling on load LOST the order
+ * and its revenue whenever the register sale was abandoned or the screen
+ * locked before it was rung up. Instead the order stays ACTIVE and the
+ * register carries its id (sourceOrderId) into the sale it is building; the
+ * SYNC supersedes the website order (cancelled with the loud timeline note)
+ * EXACTLY when the register sale COMPLETES and materializes its own order —
+ * so the two can never both fulfill, and an abandoned load simply leaves the
+ * website order untouched in the queue.
  *
  * The device rebuilds the cart lines against its CURRENT menu bundle
  * (order-to-cart-core.rebuildOrderCart) — fresh prices, live promotions,
@@ -364,15 +369,10 @@ export async function loadOrderIntoRegister(input: {
     return { ok: false, error: `Order is ${order.status} — only an active website order can be loaded.` };
   }
 
-  // ── Supersede FIRST (see above): cancel with the loud note ───────────────
-  const cancelled = await setOrderStatus(order.id, "cancelled", {
-    actorLabel: `POS load · ${input.employeeName}`,
-    note: supersedeNote(input.deviceName, input.employeeName),
-  });
-  if (!cancelled.ok) {
-    return { ok: false, error: cancelled.refusal ?? "Could not supersede the order — load it again or use the pickup queue." };
-  }
-
+  // ── Do NOT supersede on load (owner decision): the order stays ACTIVE and
+  //    is only superseded when the register sale COMPLETES (sync-store), so a
+  //    loaded-but-abandoned order is never lost. Leave a quiet timeline note
+  //    that it was loaded so the timeline explains what happened next. ───────
   await recordAudit({
     actorId: null,
     actorEmail: `pos-load:${input.deviceName}`,
@@ -383,7 +383,8 @@ export async function loadOrderIntoRegister(input: {
       orderNumber: order.order_number,
       employeeName: input.employeeName,
       lineCount: order.lines.length,
-      superseded: true,
+      // The order is NOT superseded here; the register sale's completion does it.
+      superseded: false,
     },
   });
 
@@ -418,6 +419,7 @@ export async function loadOrderIntoRegister(input: {
 
   return {
     ok: true,
+    orderId: order.id,
     orderNumber: order.order_number,
     customerLabel: customerPickupLabel(order.customer_first_name, order.customer_last_name),
     customerNote: (order.customer_note ?? "").trim() || null,

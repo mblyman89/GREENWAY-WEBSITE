@@ -29,7 +29,8 @@ import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { verifyPin } from "@/lib/security/pin-hash";
 import { recordAudit } from "@/lib/auth/audit";
 import { runCompletionGate } from "@/lib/orders/completion-gate";
-import { setOrderStatus } from "@/lib/orders/orders-store";
+import { setOrderStatus, getOrder } from "@/lib/orders/orders-store";
+import { supersedeNote } from "@/lib/pos/order-to-cart-core";
 import { openWorkPunch, toggleClock } from "@/lib/staffing/store";
 import {
   validateSalePayload,
@@ -761,6 +762,45 @@ async function processSale(
       `Order passed the gate but the status write failed${completed.refusal ? `: ${completed.refusal}` : "."}`,
       { order_id: order.id },
     );
+  }
+
+  // AM-D2 — supersede the SOURCE website order NOW (on completion), not on
+  // load. When this register sale was started by loading a website pickup
+  // order, that order stayed ACTIVE while the budtender rang the sale — so an
+  // abandoned/locked-out load never lost the order. The register sale has now
+  // completed and materialized its OWN order (the sale of record), so we
+  // cancel the website order with the loud timeline note here: the two can
+  // never both fulfill, and this is the only moment the website order should
+  // disappear from the pickup queue. Best-effort by design: a completed,
+  // paid-for sale must never be undone by a supersede hiccup — if the cancel
+  // fails we leave a loud audit row so the manager can close the order by hand.
+  if (sale.sourceOrderId && sale.sourceOrderId !== order.id) {
+    try {
+      const source = await getOrder(sale.sourceOrderId);
+      const ACTIVE = new Set(["new", "acknowledged", "preparing", "ready"]);
+      if (source && ACTIVE.has(source.status)) {
+        const superseded = await setOrderStatus(source.id, "cancelled", {
+          actorLabel: `POS · ${employeeName}`,
+          note: supersedeNote(device.name, employeeName),
+        });
+        if (!superseded.ok) {
+          await recordAudit({
+            actorId: null,
+            actorEmail: `pos-device:${device.id}`,
+            action: "order.supersede_on_complete_failed",
+            entityType: "order",
+            entityId: source.id,
+            after: {
+              reason: superseded.refusal ?? "unknown",
+              registerOrderId: order.id,
+              clientUuid: envelope.clientUuid,
+            },
+          });
+        }
+      }
+    } catch {
+      // Never let a source-order lookup/cancel failure touch the completed sale.
+    }
   }
 
   // AN-5 — price-drift NOTICE (never blocks): compare the device's

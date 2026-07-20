@@ -201,6 +201,13 @@ export type SaleFlowProps = {
    */
   initialMedicalCard?: PosCardCapture;
   /**
+   * Present when this sale was started from a website pickup order loaded into
+   * the register: the source order's UUID. It is forwarded into the completed
+   * sale's payload so the sync supersedes the website order ONLY on completion
+   * (never on load). Omitted for walk-in sales.
+   */
+  initialSourceOrderId?: string;
+  /**
    * SESSION RESUME — report the CURRENT resumable sale state up to the shell
    * (verdict + cart lines + medical card + member) whenever it changes, so the
    * shell can persist a snapshot the instant an idle auto-lock fires. Called
@@ -354,7 +361,7 @@ function priceForBuyer(
   };
 }
 
-export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, initialCart, initialMember, initialVerdict, initialMedicalCard, onSnapshot, onHold, onReceiptFrozen, onMemberLookup, onMemberMatch, onMemberHistory, onEmailReceipt, onApprove, onProductImage, onStockFlag, onLoyalty, onEnqueue, onComplete, onCancel }: SaleFlowProps) {
+export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, initialCart, initialMember, initialVerdict, initialMedicalCard, initialSourceOrderId, onSnapshot, onHold, onReceiptFrozen, onMemberLookup, onMemberMatch, onMemberHistory, onEmailReceipt, onApprove, onProductImage, onStockFlag, onLoyalty, onEnqueue, onComplete, onCancel }: SaleFlowProps) {
   // SESSION RESUME — a re-validated parked verdict starts the flow PAST the
   // age gate (at the cart), so the customer's ID is not rescanned.
   const [step, setStep] = useState<Step>(initialVerdict ? "cart" : "idgate");
@@ -617,6 +624,9 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
               verdict.method === "manual" && manualEventUuid
                 ? { method: "manual", manualEventUuid }
                 : { method: "scan" },
+            // Carry the source website order id (when this sale was loaded from
+            // one) so the sync supersedes it ONLY on completion — never on load.
+            ...(initialSourceOrderId ? { sourceOrderId: initialSourceOrderId } : {}),
             ...(medicalCard && cardEventUuid
               ? {
                   medical: {

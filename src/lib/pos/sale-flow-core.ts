@@ -359,6 +359,13 @@ export type BuildSaleArgs = {
   totals: OrderTotals;
   tenderedMinor: number;
   drawerSessionId: string;
+  /**
+   * Present when this sale was started from a website pickup order loaded into
+   * the register: the source order's UUID. Forwarded verbatim into the payload
+   * so the sync supersedes the website order ONLY when this register sale
+   * completes (no supersede-on-load data loss). Omitted for walk-in sales.
+   */
+  sourceOrderId?: string;
   idVerification: { method: "scan" | "manual"; manualEventUuid?: string };
   /**
    * Present on MEDICAL sales (B9): the captured recognition card, the client
@@ -447,6 +454,9 @@ export function buildSalePayload(args: BuildSaleArgs): BuildSaleResult {
     changeMinor: tender.changeMinor,
     drawerSessionId: args.drawerSessionId,
     idVerification: args.idVerification,
+    // Carry the source website order id only when this sale was loaded from
+    // one (omitted for walk-ins so pre-existing payload shapes are unchanged).
+    ...(args.sourceOrderId ? { sourceOrderId: args.sourceOrderId } : {}),
     ...(args.medical ? { medical: args.medical } : {}),
     ...(args.loyalty ? { loyalty: args.loyalty } : {}),
     ...(args.loyaltyRedemption ? { loyaltyRedemption: args.loyaltyRedemption } : {}),
