@@ -94,9 +94,9 @@ Finding statuses: `OPEN` → `FIX-PLANNED` → `FIXED (PR #n, main <sha>)` or `A
 | Loyalty & members | `bible/06-loyalty.md` | 1,2,3,4,5 (first pass) | DRAFTED |
 | Menu pipeline (back office → register bundle) | `bible/07-menu-pipeline.md` | 1,2,3,4,5 (first pass) | DRAFTED |
 | Back office: staffing & time clock | `bible/08-staffing.md` | 1,2,3,4,5 (first pass) | DRAFTED |
-| Back office: inventory / catalog / purchasing | `bible/09-inventory.md` | — | QUEUED |
-| Back office: reports & day close | `bible/10-reports.md` | — | QUEUED |
-| Compliance: CCRS reporting & audit trails | `bible/11-ccrs-compliance.md` | — | QUEUED |
-| Website / checkout / orders → POS pickup | `bible/12-website-orders.md` | — | QUEUED |
-| Payroll & banking (S-10 walls) | `bible/13-payroll.md` | — | QUEUED |
-| Auth & admin permissions | `bible/14-auth-permissions.md` | — | QUEUED |
+| Back office: inventory / catalog / purchasing | `bible/09-inventory.md` | 1,2,3,4,5 (first pass) | DRAFTED |
+| Back office: reports & day close | `bible/10-reports.md` | 1,2,3,4,5 (first pass) | DRAFTED |
+| Compliance: CCRS reporting & audit trails | `bible/11-ccrs-compliance.md` | 1,2,3,4,5 (first pass) | DRAFTED |
+| Website / checkout / orders → POS pickup | `bible/12-website-orders.md` | 1,2,3,4,5 (first pass) | DRAFTED |
+| Payroll & banking (S-10 walls) | `bible/13-payroll.md` | 1,2,3,4,5 (first pass) | DRAFTED |
+| Auth & admin permissions | `bible/14-auth-permissions.md` | 1,2,3,4,5 (first pass) | DRAFTED |
