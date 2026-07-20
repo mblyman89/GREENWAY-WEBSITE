@@ -245,6 +245,42 @@ export function applyMedicalPricing(
 }
 
 // ---------------------------------------------------------------------------
+// On-screen recognition-card badge (display only — pure)
+// ---------------------------------------------------------------------------
+
+export type MedicalCardBadge = {
+  /** "Patient" | "Designated provider" — who is buying. */
+  holderLabel: string;
+  /** Card expiration date, echoed for the budtender to eyeball. */
+  expiresOn: string;
+  /**
+   * True when the card is expired as of `todayYmd`. An expired card grants NO
+   * exemptions and NO 18–20 allowance (validateCardCapture already blocks the
+   * capture, but the badge stays truthful if a card expires mid-session).
+   */
+  expired: boolean;
+  /**
+   * One-line status the badge renders next to the customer name, e.g.
+   * "MEDICAL · Patient · exp 2026-03-14" or "MEDICAL · EXPIRED 2025-01-02".
+   */
+  text: string;
+};
+
+/**
+ * Build the customer-band medical badge from a captured card + the store-local
+ * day. Display only — no pricing, no side effects. Kept pure + self-tested so
+ * the badge wording never drifts from the exemption rules.
+ */
+export function medicalCardBadge(card: PosCardCapture, todayYmd: string): MedicalCardBadge {
+  const holderLabel = card.holderType === "designated_provider" ? "Designated provider" : "Patient";
+  const expired = isYmd(card.expiresOn) && isYmd(todayYmd) ? todayYmd > card.expiresOn : false;
+  const text = expired
+    ? `MEDICAL · EXPIRED ${card.expiresOn}`
+    : `MEDICAL · ${holderLabel} · exp ${card.expiresOn}`;
+  return { holderLabel, expiresOn: card.expiresOn, expired, text };
+}
+
+// ---------------------------------------------------------------------------
 // Medical block on the sale payload (validated before enqueue, server re-checks)
 // ---------------------------------------------------------------------------
 
@@ -395,6 +431,22 @@ export function __runMedicalPosCoreTests(): void {
     !validateMedicalSaleBlock({ card: goodCard, cardEventUuid: U, medicalSavingsMinor: -1 }, TODAY).ok,
     "negative savings refused",
   );
+
+  // Badge (display only) — wording + expiry follow the exemption rules.
+  {
+    const b = medicalCardBadge(goodCard, TODAY);
+    ok(b.holderLabel === "Patient", "badge: patient holder label");
+    ok(b.expired === false, "badge: valid card not expired");
+    ok(b.text === "MEDICAL · Patient · exp 2026-12-31", "badge: valid patient text");
+    const dp = medicalCardBadge({ ...goodCard, holderType: "designated_provider" }, TODAY);
+    ok(dp.holderLabel === "Designated provider", "badge: DP holder label");
+    ok(dp.text.includes("Designated provider"), "badge: DP text names the role");
+    const exp = medicalCardBadge({ ...goodCard, expiresOn: "2026-07-14" }, TODAY);
+    ok(exp.expired === true, "badge: card expired yesterday flagged");
+    ok(exp.text === "MEDICAL · EXPIRED 2026-07-14", "badge: expired text");
+    const onExpiry = medicalCardBadge({ ...goodCard, expiresOn: TODAY }, TODAY);
+    ok(onExpiry.expired === false, "badge: valid through the expiry date itself");
+  }
 
   console.log(`pos/medical-pos-core: ${pass} passed, ${fail} failed`);
   if (fail > 0) throw new Error(`medical-pos-core self-tests failed: ${fail}`);
