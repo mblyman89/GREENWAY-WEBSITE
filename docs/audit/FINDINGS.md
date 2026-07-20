@@ -115,6 +115,36 @@
   alongside GW-001/GW-003 as one "safe localStorage writes" slice.
 - **Status:** OPEN
 
+### GW-009 — Medical card validity and exempt-sale dates use the UTC day, not the store's Pacific day
+- **Where:** `src/lib/medical/tax.ts:181` (`cardValidity` compares
+  `expirationDate < new Date().toISOString().slice(0, 10)`),
+  `src/lib/medical/store.ts:383` (`sale_date` stamped with the same UTC
+  `toISOString().slice(0, 10)` pattern), `src/lib/orders/completion-gate.ts:178`
+  (`saleDate` for the exemption plan built the same way), and
+  `supabase/migrations/0040_medical_doh.sql:89` (`sale_date date ... default
+  current_date`, which is the DB server's UTC day). All at `a61aa816`.
+- **What:** The store operates on America/Los_Angeles time, but these four
+  spots use the UTC calendar day. Between 4/5 PM Pacific and midnight Pacific,
+  UTC is already "tomorrow." Two effects: (a) a medical card expiring TODAY is
+  treated as already expired for evening sales (fail-safe: the patient loses
+  the exemption a few hours early, never keeps it too long); (b) exempt-sale
+  ledger rows for evening sales are stamped with tomorrow's date, so a sale
+  rung at 6 PM Pacific on the last day of the month lands in NEXT month's
+  medical ledger, LIQ-1295 excise return, and CCRS `RecreationalMedical`
+  period.
+- **Why it matters:** Severity stays Low because the drift direction is
+  fail-safe for card validity (never honors an expired card) and the ledger
+  drift is a boundary-day reporting-period wobble, not a money error — the
+  amounts are correct, just occasionally attributed to the adjacent day. The
+  returns/voids code already solved this exact problem with a Pacific-day
+  helper, so the fix is a known pattern, not new invention.
+- **Recommendation:** One small slice: introduce/reuse a `pacificDay()` helper
+  (the same `Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles" })`
+  pattern the returns/void windows use) at all four spots. No backfill needed —
+  historical rows are off by at most one day at period boundaries and the
+  owner has not yet cut over.
+- **Status:** OPEN
+
 ---
 
 ## 🔵 Hardening
