@@ -96,7 +96,7 @@ Finding statuses: `OPEN` → `FIX-PLANNED` → `FIXED (PR #n, main <sha>)` or `A
 | Back office: staffing & time clock | `bible/08-staffing.md` | 1,2,3,4,5 (first pass) | DRAFTED |
 | Back office: inventory / catalog / purchasing | `bible/09-inventory.md` | 1,2,3,4,5 (first pass) | DRAFTED |
 | Back office: reports & day close | `bible/10-reports.md` | 1,2,3,4,5 (first pass) | DRAFTED |
-| Compliance: CCRS reporting & audit trails | `bible/11-ccrs-compliance.md` | — | QUEUED |
+| Compliance: CCRS reporting & audit trails | `bible/11-ccrs-compliance.md` | 1,2,3,4,5 (first pass) | DRAFTED |
 | Website / checkout / orders → POS pickup | `bible/12-website-orders.md` | — | QUEUED |
 | Payroll & banking (S-10 walls) | `bible/13-payroll.md` | — | QUEUED |
 | Auth & admin permissions | `bible/14-auth-permissions.md` | — | QUEUED |
