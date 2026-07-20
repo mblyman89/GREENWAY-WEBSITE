@@ -30,6 +30,7 @@ import { getPosCashRoundingConfig } from "@/lib/pos/cash-rounding-store";
 import { getPosScanRequiredConfig } from "@/lib/pos/scan-required-store";
 import { trimDescription } from "@/lib/pos/product-info-core";
 import { gramsFromVariantLabel } from "@/lib/pos/variant-grams-core";
+import { cleanCardDisplayName } from "@/lib/pos/menu-name-display-core";
 import { getConfig as getLoyaltyConfig } from "@/lib/loyalty/loyalty-store";
 import { listMedicalRegistry } from "@/lib/medical/sale-store";
 import type { DohCategory } from "@/lib/medical/medical-sale-core";
@@ -131,7 +132,12 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       products.push({
         productId: item.id,
         variantId: variant.id,
-        name: item.name,
+        // Bug 2 — DISPLAY cleanup: strip a leftover baked-in package size from
+        // the rolled-up card name so the register shows "SPR - Sour Diesel"
+        // beside its real size chip ("3.5 g") instead of "SPR - Sour Diesel
+        // -7g · 3.5 g". Pure + reversible; stored data (back office + website)
+        // is untouched — only what the register displays changes.
+        name: cleanCardDisplayName(item.name, variant.label),
         brand: item.brand || null,
         category: String(item.category),
         categories,
