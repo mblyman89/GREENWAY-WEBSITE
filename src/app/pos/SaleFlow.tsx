@@ -108,6 +108,7 @@ import {
 import { computeOrderTotals, type OrderTotals } from "@/lib/orders/order-pricing-core";
 import { evaluateSalesHours } from "@/lib/compliance/sales-hours-core";
 import { pacificDayKey } from "@/lib/reports/timezone";
+import { SAW_LOGIN_URL, sanitizeSawUsername } from "@/lib/pos/saw-prefill-core";
 import {
   buildPosReceiptHtml,
   buildPassPrntUrl,
@@ -165,6 +166,13 @@ export type SaleFlowProps = {
   registerName?: string;
   /** Unlocked employee's display name — "Served by" line when enabled (B13). */
   employeeName?: string;
+  /**
+   * Slice 6 — the signed-in employee's SecureAccess Washington (SAW) username
+   * ONLY (never a password). Shown at the medical card-verification step so the
+   * budtender knows exactly which SAW login to use before opening the DOH
+   * registry. Null when not set on their employee file.
+   */
+  employeeSawUsername?: string | null;
   /**
    * B17 — resume a held sale: cart lines rebuilt by the SHELL against the
    * CURRENT bundle (fresh prices; vanished/out-of-stock lines already
@@ -362,7 +370,7 @@ function priceForBuyer(
   };
 }
 
-export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, initialCart, initialMember, initialVerdict, initialMedicalCard, initialSourceOrderId, onSnapshot, onHold, onReceiptFrozen, onMemberLookup, onMemberMatch, onMemberHistory, onEmailReceipt, onApprove, onProductImage, onStockFlag, onLoyalty, onEnqueue, onComplete, onCancel }: SaleFlowProps) {
+export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, employeeSawUsername, initialCart, initialMember, initialVerdict, initialMedicalCard, initialSourceOrderId, onSnapshot, onHold, onReceiptFrozen, onMemberLookup, onMemberMatch, onMemberHistory, onEmailReceipt, onApprove, onProductImage, onStockFlag, onLoyalty, onEnqueue, onComplete, onCancel }: SaleFlowProps) {
   // SESSION RESUME — a re-validated parked verdict starts the flow PAST the
   // age gate (at the cart), so the customer's ID is not rescanned.
   const [step, setStep] = useState<Step>(initialVerdict ? "cart" : "idgate");
@@ -516,6 +524,7 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
     return (
       <IdGateScreen
         medicalAvailable={!!bundle.medical}
+        employeeSawUsername={employeeSawUsername ?? null}
         onCancel={onCancel}
         onPassed={(v, manualUuid, card, cardUuid, scannedName) => {
           setVerdict(v);
@@ -909,6 +918,7 @@ function ReceiptButtons({ receipt }: { receipt: PosReceiptInput }) {
 
 function IdGateScreen({
   medicalAvailable,
+  employeeSawUsername,
   onPassed,
   onCancel,
   onEnqueueManual,
@@ -917,6 +927,11 @@ function IdGateScreen({
 }: {
   /** True when the menu bundle carries the DOH medical config (B8). */
   medicalAvailable: boolean;
+  /**
+   * Slice 6 — signed-in employee's SAW username ONLY (never a password). Shown
+   * at the medical-verify step so the budtender knows which SAW login to use.
+   */
+  employeeSawUsername: string | null;
   onPassed: (
     v: Extract<IdGateVerdict, { allowed: true }>,
     manualEventUuid: string | null,
@@ -1276,17 +1291,52 @@ function IdGateScreen({
               <li>
                 Verify the card is ACTIVE in the DOH registry (
                 <a
-                  href="https://secureaccess.wa.gov/"
+                  href={SAW_LOGIN_URL}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="font-semibold text-[var(--pos-accent)] underline"
                 >
-                  open MCR ↗
+                  open SAW ↗
                 </a>
                 ) — required every sale.
               </li>
               <li>Enter the card details below, then tick the verification box.</li>
             </ol>
+            {/* Slice 6 — show THIS budtender their own SAW login so there's no
+                "which login is this?" fumble on a rare medical sale. Username
+                ONLY (never a password); MFA finishes on their own phone. */}
+            {(() => {
+              const sawUser = sanitizeSawUsername(employeeSawUsername);
+              return (
+                <div className="flex flex-wrap items-center gap-2 rounded-xl border border-[var(--pos-border)] bg-[var(--pos-surface-2)] px-4 py-2 text-xs text-[var(--pos-text-muted)]">
+                  {sawUser ? (
+                    <>
+                      <span>
+                        Your SAW login:{" "}
+                        <span className="font-mono font-semibold text-[var(--pos-text)]">{sawUser}</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void navigator.clipboard?.writeText(sawUser).catch(() => {});
+                        }}
+                        className="rounded-lg border border-[var(--pos-border-strong)] px-2 py-1 font-semibold text-[var(--pos-accent)]"
+                      >
+                        Copy username
+                      </button>
+                      <span className="text-[var(--pos-text-faint)]">
+                        Finish with the code SAW texts your phone.
+                      </span>
+                    </>
+                  ) : (
+                    <span>
+                      Log in with <strong>your own</strong> SAW account. (Ask the owner to save your
+                      SAW username on your employee file to show it here.)
+                    </span>
+                  )}
+                </div>
+              );
+            })()}
             <div>
               <label htmlFor="pos-upid" className="text-sm text-[var(--pos-text-muted)]">
                 Unique patient identifier (UPID) — exactly as printed on the card
