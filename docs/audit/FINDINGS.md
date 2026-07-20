@@ -93,6 +93,28 @@
   per-employee identifier + PIN model.
 - **Status:** OPEN (accept as-is for current scale)
 
+### GW-008 — Favorites persist writes localStorage inside a state updater, unguarded
+- **Where:** `src/app/pos/SaleFlow.tsx:1899–1904` (`togglePin` in CartScreen), at `a61aa816`.
+- **What:** Pinning/unpinning a favorite calls
+  `window.localStorage.setItem(FAVORITES_KEY, …)` INSIDE the `setFavorites`
+  functional updater. Two issues: (a) the write is not wrapped in try/catch, so
+  a `QuotaExceededError` (or Safari private-mode write refusal) throws inside
+  React's render/update path and can crash the cart screen mid-sale; (b) React
+  updaters are expected to be pure — under StrictMode double-invocation the
+  side effect runs twice (harmless here since the write is idempotent, but the
+  same impure-updater pattern caused GW-003 in RegisterShell).
+- **Why it matters:** Severity is low because the payload is tiny (a short
+  array of variantIds), the write is idempotent, and a crash here loses no
+  money — the queue and active-sale snapshot live elsewhere. But a thrown
+  quota error during a sale would blank the register screen at the worst
+  moment (and localStorage quota pressure is exactly the failure mode GW-001
+  describes for the queue key on the same origin).
+- **Recommendation:** Move the `setItem` out of the updater (e.g. an effect on
+  `favorites`, or compute `next` before `setFavorites`) and wrap it in
+  try/catch that degrades to "pin didn't stick" instead of throwing. Fix
+  alongside GW-001/GW-003 as one "safe localStorage writes" slice.
+- **Status:** OPEN
+
 ---
 
 ## 🔵 Hardening
