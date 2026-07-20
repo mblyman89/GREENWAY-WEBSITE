@@ -89,7 +89,7 @@ Finding statuses: `OPEN` → `FIX-PLANNED` → `FIXED (PR #n, main <sha>)` or `A
 | POS register lifecycle (device, lock, unlock, drawer) | `bible/01-register-lifecycle.md` | 2,3,4,5 (first pass) | DRAFTED (findings GW-001…GW-007) |
 | POS sale flow (age gate → cart → tender → receipt) | `bible/02-sale-flow.md` | 1,2,3,4,5 (first pass) | DRAFTED (finding GW-008) |
 | POS medical sales | `bible/03-medical-sales.md` | 1,2,3,4,5 (first pass) | DRAFTED (finding GW-009) |
-| POS offline sync & event queue | `bible/04-offline-sync.md` | — | QUEUED |
+| POS offline sync & event queue | `bible/04-offline-sync.md` | 1,2,3,4,5 (first pass) | DRAFTED |
 | POS returns / voids / holds / pickups | `bible/05-returns-voids-holds.md` | 1,2,3,4,5 (first pass) | DRAFTED |
 | Loyalty & members | `bible/06-loyalty.md` | 1,2,3,4,5 (first pass) | DRAFTED |
 | Menu pipeline (back office → register bundle) | `bible/07-menu-pipeline.md` | — | QUEUED |
