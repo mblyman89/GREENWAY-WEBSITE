@@ -199,6 +199,70 @@ export function extractAamvaDateSeparatorless(
   return parseAamvaDate(m[1], country);
 }
 
+/**
+ * SEPARATOR-AGNOSTIC NAME extractor (Bug 3 — ID auto-attach).
+ *
+ * ROOT CAUSE (verified against the owner's real WA license): the NAME fields
+ * DCS (family name) and DAC (first name) are AAMVA "V" (VARIABLE length)
+ * elements — terminated by an element separator, not a fixed width. When iOS
+ * Safari keyboard-wedge swallows those separators (the SAME failure that made
+ * dates need extractAamvaDateSeparatorless), the whole payload arrives as ONE
+ * concatenated blob and the split-on-separators field reader never isolates
+ * DCS/DAC — so firstName/lastName come back null. The DOB still recovers (its
+ * fixed 8-digit fallback), so the AGE GATE PASSES but there is NO NAME, which
+ * is exactly why the customer clears the gate yet is never auto-attached.
+ *
+ * Recovery: anchor on the 3-letter element ID, then read the value up to the
+ * START of the NEXT AAMVA element. In a separatorless blob the boundary is the
+ * next "D<2 uppercase letters>" that begins a KNOWN element — restricting to a
+ * known set avoids stopping early on a name that happens to contain a "D?? "
+ * pattern. Names may contain spaces ("MICHAEL BRIAN") and hyphens/apostrophes,
+ * so the value class is permissive; we trim and collapse whitespace. Used ONLY
+ * as a fallback when the separator-delimited reader failed to yield the name.
+ * Pure; no I/O.
+ */
+
+// AAMVA element IDs that realistically FOLLOW the name block in a DL/ID
+// subfile (dates, physical description, address, license number, country,
+// restrictions/endorsements, truncation + document flags, and the OTHER name
+// fields so DCS→DAC→DAD boundaries resolve). This is the stop-set the
+// variable-length name reader scans for. Kept broad but explicit so a name is
+// never truncated at an accidental letter run.
+const AAMVA_NAME_BOUNDARY_IDS = [
+  "DAC", "DCS", "DAD", "DCT", "DBB", "DBA", "DBD", "DBC", "DAY", "DAU", "DAW",
+  "DAZ", "DAG", "DAH", "DAI", "DAJ", "DAK", "DAQ", "DCG", "DCB", "DCD", "DCF",
+  "DCK", "DDA", "DDB", "DDC", "DDD", "DDE", "DDF", "DDG", "DDH", "DDI", "DDJ",
+  "DDK", "DDL", "DCA", "DCU", "DCE", "DCL", "DCM", "DCN", "DCO", "DCP", "DCR",
+] as const;
+
+export function extractAamvaNameSeparatorless(
+  raw: string,
+  elementId: "DCS" | "DAC" | "DCT",
+): string | null {
+  const text = (raw ?? "").replace(/\r\n/g, "\n");
+  const at = text.indexOf(elementId);
+  if (at === -1) return null;
+  const start = at + elementId.length;
+  // Find the earliest position AFTER start where the NEXT known element begins.
+  let end = text.length;
+  for (const id of AAMVA_NAME_BOUNDARY_IDS) {
+    if (id === elementId) continue;
+    const idx = text.indexOf(id, start);
+    if (idx !== -1 && idx < end) end = idx;
+  }
+  // Also stop at any explicit separator that DID survive (LF/CR/RS/GS), which
+  // makes the reader correct on partially-stripped payloads too.
+  const sepIdx = text.slice(start, end).search(/[\n\r\x1e\x1d]/);
+  const raw2 = sepIdx === -1 ? text.slice(start, end) : text.slice(start, start + sepIdx);
+  const value = raw2
+    // keep letters, spaces, hyphen, apostrophe, period, comma (name-legal);
+    // drop stray control/format chars a wedge may have injected.
+    .replace(/[^A-Za-z ,.'\-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return value.length > 0 ? value : null;
+}
+
 export function parseAamvaPdf417(raw: string): AamvaParseResult {
   const text = (raw ?? "").replace(/\r\n/g, "\n");
   if (!text.trim()) return { ok: false, error: "Empty scan." };
@@ -274,6 +338,17 @@ export function parseAamvaPdf417(raw: string): AamvaParseResult {
   }
   if (!license.issueDate) {
     license.issueDate = extractAamvaDateSeparatorless(text, "DBD", country);
+  }
+
+  // Bug 3 — the SAME separator-stripping that hides the dates also hides the
+  // VARIABLE-length name fields (DCS/DAC), so recover them the same way before
+  // giving up. Without this the age gate passes (DOB recovered) but the name
+  // is null and the customer is never auto-attached — the exact owner symptom.
+  if (!license.lastName) {
+    license.lastName = extractAamvaNameSeparatorless(text, "DCS");
+  }
+  if (!license.firstName) {
+    license.firstName = extractAamvaNameSeparatorless(text, "DAC") ?? extractAamvaNameSeparatorless(text, "DCT");
   }
 
   if (!license.dateOfBirth) {
@@ -534,8 +609,54 @@ export function __runIdScanCoreTests(): void {
       ok(r.license.dateOfBirth === "1990-07-13", "separatorless DBB recovered");
       ok(r.license.expirationDate === "2028-07-13", "separatorless DBA recovered");
       ok(r.license.issueDate === "2023-07-13", "separatorless DBD recovered");
+      // Bug 3 core: the SAME blob must now also recover the VARIABLE-length
+      // NAME fields, otherwise the age gate passes but auto-attach never fires.
+      ok(r.license.lastName === "SAMPLE", "separatorless DCS (last name) recovered");
+      ok(r.license.firstName === "JANE", "separatorless DAC (first name) recovered");
     }
   }
+  // Bug 3 \u2014 the owner's EXACT case: DCS=LYMAN, DAC="MICHAEL BRIAN" (first name
+  // carries a middle name in the same field). The name must survive as-is so
+  // the member matcher's first-whitespace-token logic yields "MICHAEL" and
+  // matches the customer record (First=Michael, Last=Lyman). A middle name in
+  // the DAC field must NOT truncate the recovered value.
+  {
+    const ownerBlob =
+      "@ANSI 636045090101DL00310282DLDCANONEDCBNONEDCDNONE" +
+      "DBA10202029DCSLYMANDACMICHAEL BRIANDADNONEDBD10202024DBB10231989" +
+      "DBC1DAYBRODAU071 inDAJWADAQWDL9876543DCGUSA";
+    const r = parseAamvaPdf417(ownerBlob);
+    ok(r.ok, "owner separatorless payload parses");
+    if (r.ok) {
+      ok(r.license.lastName === "LYMAN", "owner DCS last name = LYMAN");
+      ok(r.license.firstName === "MICHAEL BRIAN", "owner DAC keeps middle name (MICHAEL BRIAN)");
+      ok(r.license.dateOfBirth === "1989-10-23", "owner DOB recovered (1989-10-23)");
+    }
+  }
+  // Unit tests for the separatorless NAME extractor directly.
+  ok(
+    extractAamvaNameSeparatorless("xxDCSLYMANDACMICHAELyy", "DCS") === "LYMAN",
+    "extractAamvaNameSeparatorless: DCS stops at next known element (DAC)",
+  );
+  ok(
+    extractAamvaNameSeparatorless("DCSLYMANDACMICHAEL BRIANDADNONE", "DAC") === "MICHAEL BRIAN",
+    "extractAamvaNameSeparatorless: DAC keeps internal space, stops at DAD",
+  );
+  ok(
+    extractAamvaNameSeparatorless("no name here", "DCS") === null,
+    "extractAamvaNameSeparatorless: returns null when element absent",
+  );
+  ok(
+    // A surviving separator must terminate the value even if boundary IDs are
+    // absent (partially-stripped payloads).
+    extractAamvaNameSeparatorless("DCSOCONNOR\nDBB07131990", "DCS") === "OCONNOR",
+    "extractAamvaNameSeparatorless: stops at surviving separator",
+  );
+  ok(
+    // Hyphenated / apostrophe names are name-legal and preserved.
+    extractAamvaNameSeparatorless("DCSSMITH-JONESDACANN", "DCS") === "SMITH-JONES",
+    "extractAamvaNameSeparatorless: preserves hyphenated last name",
+  );
   // The separator-agnostic extractor anchors on <ID> + EXACTLY 8 digits.
   ok(
     extractAamvaDateSeparatorless("xxDBB07131990DBC1yy", "DBB", "USA") === "1990-07-13",
