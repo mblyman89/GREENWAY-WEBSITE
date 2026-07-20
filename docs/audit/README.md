@@ -93,7 +93,7 @@ Finding statuses: `OPEN` → `FIX-PLANNED` → `FIXED (PR #n, main <sha>)` or `A
 | POS returns / voids / holds / pickups | `bible/05-returns-voids-holds.md` | 1,2,3,4,5 (first pass) | DRAFTED |
 | Loyalty & members | `bible/06-loyalty.md` | 1,2,3,4,5 (first pass) | DRAFTED |
 | Menu pipeline (back office → register bundle) | `bible/07-menu-pipeline.md` | 1,2,3,4,5 (first pass) | DRAFTED |
-| Back office: staffing & time clock | `bible/08-staffing.md` | — | QUEUED |
+| Back office: staffing & time clock | `bible/08-staffing.md` | 1,2,3,4,5 (first pass) | DRAFTED |
 | Back office: inventory / catalog / purchasing | `bible/09-inventory.md` | — | QUEUED |
 | Back office: reports & day close | `bible/10-reports.md` | — | QUEUED |
 | Compliance: CCRS reporting & audit trails | `bible/11-ccrs-compliance.md` | — | QUEUED |
