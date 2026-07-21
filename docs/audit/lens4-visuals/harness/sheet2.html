@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lens-4 sheet 2 — Realistic list page: current vs proposed</title>
+<style>
+:root {
+  --greenway:#7ed957; --gold:#ffd700; --orange:#ff7f00;
+  --admin-canvas:#060807; --admin-surface:#0c0e0d; --admin-surface-2:#121514;
+  --admin-surface-hover:#171b19;
+  --admin-border:rgba(255,255,255,.08); --admin-border-strong:rgba(255,255,255,.16);
+  --admin-text:#f5f7f5; --admin-text-muted:rgba(255,255,255,.62); --admin-text-faint:rgba(255,255,255,.4);
+  --admin-accent:var(--greenway); --admin-accent-soft:rgba(126,217,87,.14);
+  --admin-danger:#ff5a5a; --admin-purple:#c084fc;
+  --r:12px; --rlg:16px;
+}
+*{box-sizing:border-box} body{margin:0;background:var(--admin-canvas);color:var(--admin-text);font-family:Arial,Helvetica,sans-serif;padding:24px}
+h1{font-size:18px} h2{font-size:14px;margin:26px 0 8px}
+.panel{background:var(--admin-surface);border:1px solid var(--admin-border);border-radius:var(--rlg);padding:18px;margin-bottom:14px;max-width:1100px}
+.hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.hdr h3{margin:0;font-size:16px} .hdr p{margin:2px 0 0;font-size:12px;color:var(--admin-text-muted)}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}
+.chip{border-radius:9999px;border:1px solid var(--admin-border-strong);background:rgba(255,255,255,.05);color:var(--admin-text-muted);padding:6px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;cursor:pointer}
+.chip.cur{border-color:rgba(126,217,87,.6);background:var(--admin-accent-soft);color:var(--admin-accent)}
+.chip.pro{border-color:var(--admin-accent);background:var(--admin-accent);color:#000}
+table{width:100%;border-collapse:collapse;font-size:13px}
+thead th{background:var(--admin-surface-2);color:var(--admin-text-faint);font-size:11px;text-transform:uppercase;text-align:left;padding:10px 12px;letter-spacing:.05em}
+td{padding:10px 12px;border-top:1px solid var(--admin-border)}
+tr:hover td{background:var(--admin-surface-hover)}
+.btn{display:inline-flex;align-items:center;border-radius:9999px;font-weight:900;text-transform:uppercase;letter-spacing:.1em;border:none;cursor:pointer;padding:6px 14px;font-size:11px}
+.btn-neutral{background:var(--admin-surface-2);color:var(--admin-text)}
+.btn-neutral-v2{background:var(--admin-surface-2);color:var(--admin-text);border:1px solid var(--admin-border-strong)}
+.btn-confirm{background:var(--admin-accent);color:#000}
+.btn-primary{background:var(--orange);color:#000}
+.ghost{border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.05);padding:7px 13px;font-size:12px;font-weight:700;color:#fff;cursor:pointer}
+.badge{display:inline-block;border-radius:9999px;padding:3px 9px;font-size:10px;font-weight:800;text-transform:uppercase}
+.b-new{background:rgba(126,217,87,.15);color:var(--admin-accent);border:1px solid rgba(126,217,87,.4)}
+.b-ready{background:rgba(255,215,0,.12);color:var(--gold);border:1px solid rgba(255,215,0,.35)}
+.note{font-size:12px;color:var(--admin-text-muted);max-width:1000px}
+.crumb{font-size:11px;color:var(--admin-text-faint);margin-bottom:8px}
+.crumb b{color:var(--admin-accent)}
+.searchbar{display:flex;gap:8px;align-items:center;margin:8px 0}
+input[type=text]{background:var(--admin-surface-2);border:1px solid var(--admin-border);border-radius:10px;color:var(--admin-text);padding:8px 12px;font-size:13px;width:260px}
+.flowtag{display:inline-block;background:rgba(192,132,252,.15);border:1px solid rgba(192,132,252,.45);color:var(--admin-purple);border-radius:9999px;padding:3px 10px;font-size:10px;font-weight:800;text-transform:uppercase}
+</style>
+<script src="https://sites.super.myninja.ai/_assets/ninja-daytona-script.js"></script>
+</head>
+<body>
+<h1>Sheet 2 — “Orders” list page: CURRENT reality vs PROPOSED flow-preserving version</h1>
+
+<h2>CURRENT (verbatim structure of /admin/orders): grey chips, grey buttons, bare “Back” wipes filters</h2>
+<div class="panel">
+  <div class="crumb">Admin / Orders</div>
+  <div class="hdr">
+    <div><h3>Pickup orders</h3><p>Website orders land here for staff review and pickup handling.</p></div>
+    <button class="ghost">Export CSV</button>
+  </div>
+  <div class="chips">
+    <span class="chip">All</span><span class="chip cur">New</span><span class="chip">Acknowledged</span><span class="chip">Ready</span><span class="chip">Completed</span><span class="chip">Cancelled</span><span class="chip">No-show</span>
+  </div>
+  <div class="searchbar"><input type="text" placeholder="Search name, phone, order #" value="sarah"><button class="btn btn-neutral">Search</button></div>
+  <table>
+    <thead><tr><th>Order</th><th>Customer</th><th>Status</th><th>Total</th><th></th></tr></thead>
+    <tbody>
+      <tr><td>GW-1042</td><td>Sarah M.</td><td><span class="badge b-new">New</span></td><td>$54.50</td><td><button class="btn btn-neutral">View</button></td></tr>
+      <tr><td>GW-1038</td><td>Sarah K.</td><td><span class="badge b-ready">Ready</span></td><td>$23.00</td><td><button class="btn btn-neutral">View</button></td></tr>
+    </tbody>
+  </table>
+  <p class="note" style="color:var(--admin-danger)">⚠ Click “View”, then the detail page’s “Back to orders” link → href="/admin/orders" (no query) → the “New” filter AND “sarah” search are WIPED. Verified: all 33 back-links in the admin are bare; 0 carry state.</p>
+</div>
+
+<h2>PROPOSED: brand-active chip, colorful actions, and a Back link that carries the filters home</h2>
+<div class="panel">
+  <div class="crumb">Admin / <b>Orders</b> · filtered: New · “sarah” <span class="flowtag">state kept</span></div>
+  <div class="hdr">
+    <div><h3>Pickup orders</h3><p>Website orders land here for staff review and pickup handling.</p></div>
+    <div style="display:flex;gap:8px"><button class="btn btn-neutral-v2">Export CSV</button><button class="btn btn-primary">New manual order</button></div>
+  </div>
+  <div class="chips">
+    <span class="chip">All</span><span class="chip pro">New</span><span class="chip">Acknowledged</span><span class="chip">Ready</span><span class="chip">Completed</span><span class="chip">Cancelled</span><span class="chip">No-show</span>
+  </div>
+  <div class="searchbar"><input type="text" value="sarah"><button class="btn btn-confirm">Search</button></div>
+  <table>
+    <thead><tr><th>Order</th><th>Customer</th><th>Status</th><th>Total</th><th></th></tr></thead>
+    <tbody>
+      <tr><td>GW-1042</td><td>Sarah M.</td><td><span class="badge b-new">New</span></td><td>$54.50</td><td><button class="btn btn-confirm">View</button></td></tr>
+      <tr><td>GW-1038</td><td>Sarah K.</td><td><span class="badge b-ready">Ready</span></td><td>$23.00</td><td><button class="btn btn-confirm">View</button></td></tr>
+    </tbody>
+  </table>
+  <p class="note" style="color:var(--admin-accent)">✓ Row link becomes /admin/orders/GW-1042?<b>back=status%3Dnew%26q%3Dsarah</b>; the detail page’s Back button returns to /admin/orders?status=new&q=sarah. Filters survive. Same trick works browser-back (URL already holds state — it ALREADY does on these server pages; only the back LINKS discard it).</p>
+</div>
+</body>
+</html>

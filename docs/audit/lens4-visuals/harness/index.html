@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Greenway Lens-4 Visual Harness — Buttons: Current vs Proposed</title>
+<style>
+/* ============ REAL TOKENS copied verbatim from src/app/globals.css ============ */
+:root {
+  --greenway: #7ed957;
+  --gold: #ffd700;
+  --orange: #ff7f00;
+  --admin-canvas: #060807;
+  --admin-surface: #0c0e0d;
+  --admin-surface-2: #121514;
+  --admin-surface-hover: #171b19;
+  --admin-border: rgba(255, 255, 255, 0.08);
+  --admin-border-strong: rgba(255, 255, 255, 0.16);
+  --admin-text: #f5f7f5;
+  --admin-text-muted: rgba(255, 255, 255, 0.62);
+  --admin-text-faint: rgba(255, 255, 255, 0.4);
+  --admin-accent: var(--greenway);
+  --admin-accent-soft: rgba(126, 217, 87, 0.14);
+  --admin-gold: var(--gold);
+  --admin-orange: var(--orange);
+  --admin-danger: #ff5a5a;
+  --admin-radius-sm: 0.5rem;
+  --admin-radius: 0.75rem;
+  --admin-radius-lg: 1rem;
+  --admin-shadow-sm: 0 1px 2px rgba(0,0,0,0.4);
+  /* PROPOSED new token (candidate): purple accent for special/AI actions */
+  --admin-purple: #c084fc;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--admin-canvas); color: var(--admin-text);
+  font-family: Arial, Helvetica, sans-serif; padding: 28px; }
+h1 { font-size: 20px; } h2 { font-size: 15px; margin: 34px 0 6px; color: var(--admin-text); }
+p.note { color: var(--admin-text-muted); font-size: 12px; margin: 2px 0 14px; max-width: 900px;}
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+  background: var(--admin-surface); border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-lg); padding: 18px; margin-bottom: 10px; }
+.label { width: 100%; font-size: 11px; color: var(--admin-text-faint); text-transform: uppercase; letter-spacing: .1em; }
+
+/* ============ The canonical <Button> classes, faithfully reproduced ============ */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  white-space: nowrap; border-radius: 9999px; font-weight: 900; text-transform: uppercase;
+  letter-spacing: 0.1em; border: none; cursor: pointer; transition: filter .15s, background .15s;
+  padding: 10px 20px; font-size: 12px; box-shadow: var(--admin-shadow-sm); }
+.btn.sm { padding: 6px 14px; font-size: 11.2px; }
+.btn.lg { padding: 12px 28px; font-size: 14px; }
+.btn:hover { filter: brightness(1.1); }
+.btn-primary { background: var(--admin-orange); color: #000; }
+.btn-confirm { background: var(--admin-accent); color: #000; }
+.btn-save    { background: var(--admin-gold); color: #000; }
+.btn-danger  { background: var(--admin-danger); color: #000; }
+.btn-neutral { background: var(--admin-surface-2); color: var(--admin-text); }
+.btn-neutral:hover { background: var(--admin-surface-hover); filter: none; }
+
+/* ============ AD-HOC styles found in the wild (verbatim recreations) ============ */
+.adhoc-white-on-green { border-radius: var(--admin-radius); background: var(--admin-accent);
+  padding: 8px 16px; font-size: 13px; font-weight: 600; color: #fff; border: none; cursor: pointer; }
+.adhoc-outline-white { border-radius: 9999px; border: 1px solid rgba(255,255,255,.2);
+  background: transparent; padding: 8px 20px; font-size: 13px; font-weight: 700; color: #fff; cursor: pointer; }
+.adhoc-ghost-chip { border-radius: 8px; border: 1px solid rgba(255,255,255,.15);
+  background: rgba(255,255,255,.05); padding: 8px 14px; font-size: 13px; font-weight: 700; color: #fff; cursor: pointer; }
+.adhoc-sky { border-radius: 9999px; background: #38bdf8; padding: 8px 20px;
+  font-size: 13px; font-weight: 700; color: #000; border: none; cursor: pointer; }
+.adhoc-fuchsia { border-radius: 9999px; background: #e879f9; padding: 8px 20px;
+  font-size: 13px; font-weight: 700; color: #000; border: none; cursor: pointer; }
+.adhoc-red600-white { border-radius: 8px; background: #dc2626; padding: 8px 16px;
+  font-size: 13px; font-weight: 600; color: #fff; border: none; cursor: pointer; }
+.adhoc-lowercase-green { border-radius: 9999px; background: #7ed957; padding: 6px 12px;
+  font-size: 12px; font-weight: 600; color: #000; border: none; cursor: pointer; }
+
+/* ============ PROPOSED additions ============ */
+.btn-special { background: var(--admin-purple); color: #000; }      /* purple: AI/special */
+.btn-neutral-v2 { background: var(--admin-surface-2); color: var(--admin-text);
+  border: 1px solid var(--admin-border-strong); }                    /* neutral w/ visible edge */
+.btn-neutral-v2:hover { background: var(--admin-surface-hover); filter:none; }
+
+/* filter chips — current (grey) vs proposed (brand-active) */
+.chip { border-radius: 9999px; border: 1px solid var(--admin-border-strong);
+  background: rgba(255,255,255,.05); color: var(--admin-text-muted);
+  padding: 6px 12px; font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .08em; cursor: pointer; }
+.chip.active-current { border-color: rgba(126,217,87,.6); background: var(--admin-accent-soft); color: var(--admin-accent); }
+.chip.active-proposed { border-color: var(--admin-accent); background: var(--admin-accent); color: #000; }
+</style>
+<script src="https://sites.super.myninja.ai/_assets/ninja-daytona-script.js"></script>
+</head>
+<body>
+<h1>Lens-4 Visual Harness · sheet 1 — Button system: current reality vs proposal</h1>
+<p class="note">All colors/classes are verbatim from globals.css + Button.tsx and from ad-hoc classNames found in the audit sweep. Dark admin canvas.</p>
+
+<h2>A. The CANONICAL Button (Button.tsx) — this is already good</h2>
+<div class="row"><span class="label">variant: primary(orange) · confirm(green) · save(gold) · danger(red) · neutral(dark chip) — md size</span>
+  <button class="btn btn-primary">Create purchase order</button>
+  <button class="btn btn-confirm">Publish</button>
+  <button class="btn btn-save">Save draft</button>
+  <button class="btn btn-danger">Delete</button>
+  <button class="btn btn-neutral">Cancel</button>
+</div>
+<div class="row"><span class="label">sizes sm / md / lg (primary)</span>
+  <button class="btn sm btn-primary">Small</button>
+  <button class="btn btn-primary">Medium</button>
+  <button class="btn lg btn-primary">Large</button>
+</div>
+
+<h2>B. AD-HOC buttons found in the wild (the inconsistency the owner reported)</h2>
+<div class="row"><span class="label">1.76:1 CONTRAST FAIL — white text on solid brand green (12 sites, e.g. medical/page.tsx:67, faqs:93)</span>
+  <button class="adhoc-white-on-green">Print card</button>
+  <button class="adhoc-white-on-green">Add FAQ</button>
+  <span style="font-size:11px;color:var(--admin-danger)">← white-on-green: unreadable in bright light</span>
+</div>
+<div class="row"><span class="label">transparent/outline + grey ghost chips (39 outline + 71 grey chips) — the "not flashy" ones</span>
+  <button class="adhoc-outline-white">Unpublish</button>
+  <button class="adhoc-ghost-chip">Back to orders</button>
+  <button class="adhoc-ghost-chip">Export CSV</button>
+</div>
+<div class="row"><span class="label">off-palette colors — sky-blue &amp; fuchsia (vendors/[id]/page.tsx:223,:261,:543)</span>
+  <button class="adhoc-sky">Research with crawler</button>
+  <button class="adhoc-fuchsia">AI enrich</button>
+  <button class="adhoc-red600-white">Reset data</button>
+</div>
+<div class="row"><span class="label">rogue lowercase pill (products/[key]:164) vs canonical uppercase</span>
+  <button class="adhoc-lowercase-green">Accept</button>
+  <button class="btn sm btn-confirm">Accept</button>
+</div>
+
+<h2>C. PROPOSED — one system, brand-forward (for owner approval)</h2>
+<div class="row"><span class="label">full proposed set: orange=main action · green=go/approve · gold=save · red=destructive · purple=AI/special · neutral v2 (visible edge, for cancel/back only)</span>
+  <button class="btn btn-primary">Create order</button>
+  <button class="btn btn-confirm">Approve</button>
+  <button class="btn btn-save">Save</button>
+  <button class="btn btn-danger">Delete</button>
+  <button class="btn btn-special">Ask AI</button>
+  <button class="btn btn-neutral-v2">Cancel</button>
+</div>
+<div class="row"><span class="label">filter chips — CURRENT active (soft tint) vs PROPOSED active (solid brand, unmissable)</span>
+  <button class="chip">All</button>
+  <button class="chip active-current">New · current</button>
+  <button class="chip">Completed</button>
+  <span style="width:24px"></span>
+  <button class="chip">All</button>
+  <button class="chip active-proposed">New · proposed</button>
+  <button class="chip">Completed</button>
+</div>
+<div class="row"><span class="label">the same ad-hoc actions from section B, re-dressed in the canonical system</span>
+  <button class="btn btn-confirm">Print card</button>
+  <button class="btn btn-confirm">Add FAQ</button>
+  <button class="btn btn-special">Research with crawler</button>
+  <button class="btn btn-special">AI enrich</button>
+  <button class="btn btn-danger">Reset data</button>
+  <button class="btn btn-neutral-v2">Back to orders</button>
+</div>
+</body>
+</html>
