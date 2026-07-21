@@ -253,6 +253,153 @@
   helper.
 - **Status:** OPEN
 
+### GW-017 — Staff invites are broken end-to-end: no redirect target on the invite email, and NO set-password page exists anywhere in the app
+- **Where:** `src/app/admin/users/actions.ts:203`
+  (`admin.auth.admin.inviteUserByEmail(email)` — called with NO `redirectTo`
+  option; the option exists in the SDK,
+  `@supabase/auth-js@2.108.2` `GoTrueAdminApi.d.ts:131–136`), the SDK's own
+  warning that PKCE is NOT supported for invites (`GoTrueAdminApi.d.ts:78`),
+  `src/app/auth/callback/route.ts:65–70` (the only place a session can be
+  established from an email link — handles both `?code=` and
+  `?token_hash=&type=`), `src/components/admin/LoginForm.tsx:66–73` (the
+  magic-link path, which DOES pass
+  `emailRedirectTo: …/auth/callback?next=/admin` at `:71`), and the promises
+  in the UI: `src/app/admin/users/actions.ts:230` ("They'll get an email to
+  set a password") and `src/app/admin/users/page.tsx:89,120` ("they get an
+  email to set a password" / "They receive a secure email invite to set their
+  password"). Verified by exhaustive grep: `supabase.auth.updateUser` appears
+  ZERO times under `src/` — there is no page or action anywhere that can set
+  a password. All at `184f6fca`.
+- **What:** Two independent breaks. (1) **The email link lands in the wrong
+  place.** Because no `redirectTo` is passed, the invite email's link
+  redirects to whatever Site URL is configured in the Supabase dashboard —
+  NOT to `/auth/callback`. Invite links use the legacy token flow (the SDK
+  documents that PKCE is unsupported for invites), so the tokens arrive in
+  the URL fragment on whatever page the Site URL points at. The browser
+  Supabase client is configured for PKCE
+  (`@supabase/ssr` `createBrowserClient.js:40` sets `flowType: "pkce"`), and
+  GoTrueClient throws `"Not a valid PKCE flow url."` when it meets an
+  implicit-flow fragment (`GoTrueClient.js:3185`), so the invited person
+  lands on a page, nothing happens, and they are not signed in. This exactly
+  matches the owner's report ("when I add a new user and email them the
+  login setup, it fails — it happened to me too"). (2) **Even a perfect
+  redirect could not finish the job**, because the app has no set-password
+  screen: an invited user who does get a session has no way to choose a
+  password, despite three pieces of UI copy promising exactly that. The
+  historical "login loop" the owner hit himself was the same class of bug,
+  partially fixed by adding `/auth/callback` (PR #36) — but only the LOGIN
+  magic-link path was pointed at it, never the invite path.
+- **Why it matters:** The owner cannot onboard employees — his stated
+  immediate need. The workaround that exists today (and how the owner
+  "got around it" himself): the invite DOES create the account, so the
+  invited person can go to `/admin/login`, switch to "email me a sign-in
+  link", and that email goes through `/auth/callback` correctly. But they
+  will never have a password until a set-password page ships. This is a CODE
+  problem AND a dashboard-config dependency together; it will NOT fix itself
+  at deployment.
+- **Recommendation:** One small slice: (a) pass
+  `redirectTo: ${siteUrl}/auth/callback?next=/admin/account/set-password`
+  to `inviteUserByEmail`; (b) build that set-password page (a form calling
+  `supabase.auth.updateUser({ password })` for the already-authenticated
+  invitee); (c) owner dashboard actions (cannot be verified from the repo,
+  see LENS-02 doc §5): set Site URL to the production domain and add
+  `https://<domain>/auth/callback` to the Redirect URL allowlist; (d) keep
+  the UI copy honest with whatever ships.
+- **Status:** OPEN
+
+### GW-018 — The public login page can CREATE staff accounts: magic-link form omits `shouldCreateUser: false`, and a DB trigger auto-provisions every new auth user as an ACTIVE readonly staff profile
+- **Where:** `src/components/admin/LoginForm.tsx:66–73`
+  (`supabase.auth.signInWithOtp({ email, options: { emailRedirectTo … } })` —
+  no `shouldCreateUser: false`; verified by grep, `shouldCreateUser` appears
+  ZERO times under `src/`),
+  `supabase/migrations/0001_slice1_foundation.sql:147–159`
+  (`handle_new_auth_user` trigger inserts a `staff_profiles` row for every
+  new auth user) with defaults `role 'readonly'` (`0001:26`) and
+  `active true` (`0001:27`), and `src/lib/auth/roles.ts:70,91` (readonly
+  holds `dashboard.view` and `reports.view`). At `184f6fca`.
+- **What:** `signInWithOtp` defaults to creating a user when the email is
+  unknown. `/admin/login` is a public page. So — unless the Supabase project
+  has "allow new users to sign up" turned OFF (a dashboard setting that
+  CANNOT be verified from the repo; marked UNVERIFIED) — any stranger can
+  type their own email into the "email me a sign-in link" form, click the
+  link, and arrive as an ACTIVE `readonly` staff member with dashboard and
+  reports access. No admin approval step exists in this path; the
+  auto-created profile is born active.
+- **Why it matters:** `reports.view` exposes the store's sales, tax, and
+  export surfaces. If project signups are enabled, this is effectively an
+  open door to business data (it would be graded Critical); if signups are
+  disabled at the project level, the code is still one dashboard-toggle away
+  from that state, with nothing in the repo enforcing or even documenting
+  the dependency.
+- **Recommendation:** Belt and braces: (a) add
+  `shouldCreateUser: false` to the login form's `signInWithOtp` call —
+  invited/existing users still get their link, unknown emails get nothing;
+  (b) change the trigger default so auto-provisioned profiles are born
+  `active = false` (invites already set the intended role/active explicitly
+  via the upsert at `src/app/admin/users/actions.ts:216–218`, so onboarding
+  is unaffected); (c) owner: confirm "allow new users to sign up" is OFF in
+  the Supabase Auth settings (see LENS-02 doc §5).
+- **Status:** OPEN
+
+### GW-019 — Four tables have NO row-level security at all: `kb_product_categories`, `noncannabis_products`, `noncannabis_sku_sequences`, `noncannabis_adjustments`
+- **Where:** `supabase/migrations/0070_kb_product_categories.sql:19`,
+  `supabase/migrations/0076_noncannabis_products.sql:26,65`, and
+  `supabase/migrations/0111_noncannabis_inventory_ops.sql:52` create the
+  tables; no `enable row level security` (and no revoke/grant mitigation)
+  exists for them in any migration — verified by script across all
+  migrations: 159 tables created, 155 with RLS enabled, exactly these 4
+  without. At `184f6fca`.
+- **What:** In Supabase, a table without RLS is fully readable AND writable
+  through the auto-generated PostgREST API by anyone holding the public anon
+  key — which ships in the browser bundle by design
+  (`src/lib/supabase/env.ts:6`). The app itself always reaches these tables
+  through the service-role client (e.g. `src/lib/noncannabis/store.ts:87`),
+  so no app feature depends on the missing policies — the exposure is purely
+  the direct-API side door.
+- **Why it matters:** `noncannabis_products` carries wholesale COST
+  (`cost_minor_units`, `0076:43`) and pricing; `noncannabis_adjustments` is
+  an inventory audit trail; an anonymous caller could read margins or
+  corrupt glassware inventory counts and SKU sequences. Not a cannabis
+  compliance surface, but real business data with anonymous write access.
+- **Recommendation:** One migration: enable RLS on all four tables with the
+  same staff-read/staff-write policies the neighboring tables use (pattern
+  at `0040_medical_doh.sql:134–138`); the service-role client bypasses RLS,
+  so nothing in the app changes.
+- **Status:** OPEN
+
+### GW-020 — The `employees` table (hashed PINs, pay data, encrypted bank columns) is readable AND writable by EVERY active staff account, including readonly, via RLS
+- **Where:** `supabase/migrations/0037_staffing_timeclock.sql:144–149`
+  (`employees_staff_read … using (public.is_staff())` and
+  `employees_staff_write … for all using (public.is_staff())`), columns:
+  `clock_pin` (`0037:40`), `bank_routing`/`bank_account_number`/
+  `bank_account_type` added by `supabase/migrations/0057_payroll_ach.sql:28–31`.
+  Contrast: the payroll tables from the same migration are admin-only
+  (`0057:130–136`), and the app layer restricts staffing management to
+  owner/admin/manager (`src/lib/auth/roles.ts:94`). At `184f6fca`.
+- **What:** `is_staff()` is true for ANY active profile of ANY role
+  (`0001_slice1_foundation.sql:133–136`) — including `readonly` and the
+  auto-provisioned profiles from GW-018. Such an account can bypass the
+  admin UI entirely and hit PostgREST directly with its own session token to
+  SELECT every employee row (wage/pay fields, scrypt-hashed PINs, bank
+  columns) or UPDATE them (e.g. change a pay rate or null out a PIN hash).
+  Mitigations verified: PINs are scrypt-hashed (`src/lib/security/pin-hash.ts`)
+  and bank numbers are AES-256-GCM encrypted at rest when
+  `DATA_ENCRYPTION_KEY` is set (`src/lib/staffing/store.ts:166–168`) — but
+  encryption is OPT-IN (`src/lib/security/at-rest-crypto.ts:16`, plaintext
+  passthrough when the key is unset).
+- **Why it matters:** Workforce PII and payroll-adjacent data should not be
+  one curl command away from the lowest-privilege login. The write policy is
+  the sharper edge: a disgruntled `staff`-role user could silently edit
+  employee records without any admin UI audit event.
+- **Recommendation:** One migration: split the policies — reads for
+  staffing managers (`role in ('owner','admin','manager')`, mirroring
+  `roles.ts:94`) or at minimum drop the broad write policy to admin-only
+  like payroll; the app reaches this table through the service-role client
+  (staffing stores), so tightening RLS does not break the UI. Also fold
+  "confirm `DATA_ENCRYPTION_KEY` is set in production" into the Cutover
+  Checklist.
+- **Status:** OPEN
+
 ---
 
 ## 🟡 Low
@@ -369,6 +516,26 @@
   the owner prefers maximum conservatism, use 28 in the medical table too).
 - **Status:** OPEN
 
+### GW-021 — Two admin search boxes interpolate the raw search term into a PostgREST `or(…ilike…)` filter without escaping
+- **Where:** `src/lib/equipment/store.ts:138–139` (`const like = `%${opts.q}%``
+  into `query.or(...)`) and `src/lib/loyalty/signups-store.ts:166–175` (same
+  pattern across five columns). Contrast with the sites that DO sanitize:
+  `src/lib/vendors/store.ts:54` (escapes `%`, strips commas),
+  `src/lib/medical/sale-store.ts:59` (strips `%_,`), and
+  `src/lib/purchasing/vendor-platform-store.ts:67,122` (`escapeLike`). At
+  `184f6fca`.
+- **What:** The term is embedded in PostgREST filter SYNTAX, so a comma,
+  parenthesis, or `%` in the search box changes the filter grammar instead
+  of being searched for. This is NOT SQL injection (Supabase parameterizes
+  the SQL); the blast radius is a broken/over-broad filter or a
+  pattern-complexity slowdown, behind a staff login in both cases.
+- **Why it matters:** Searching equipment for `50%,off` or a loyalty signup
+  for a name containing a comma returns wrong results or an error — a
+  papercut, but the codebase already owns the fix.
+- **Recommendation:** Reuse the existing `escapeLike` helper (or hoist it to
+  a shared module) at both call sites.
+- **Status:** OPEN
+
 ---
 
 ## 🔵 Hardening
@@ -405,6 +572,24 @@
   keys if an iPad ever leaves the store's custody. Note for the Capacitor app:
   move the key into the iOS Keychain.
 - **Status:** OPEN (operational mitigation; revisit at Capacitor packaging)
+
+### GW-022 — CloudPRNT poll token is compared with plain `===`, not a constant-time compare
+- **Where:** `src/app/api/cloudprnt/route.ts:75` (`if (provided === expected)
+  return null;`). Contrast: every other secret comparison in the codebase
+  uses `timingSafeEqual` (`src/lib/security/pin-hash.ts:17,47`, webhook
+  verifiers). At `184f6fca`.
+- **What:** The printer-poll endpoint authenticates the Star printer by a
+  shared token; a plain string compare short-circuits on the first differing
+  character, which in theory leaks match-length via response timing. The
+  endpoint already fails closed in production when the token is unset (S-9),
+  so this is a polish item, not a hole — practical exploitation over the
+  open internet against a V8 string compare is largely theoretical.
+- **Why it matters:** Consistency: the codebase's own standard is
+  constant-time comparison for every bearer secret; this is the one
+  stray site.
+- **Recommendation:** Length-check then `timingSafeEqual` on the UTF-8
+  bytes, same as `verifyPin` does.
+- **Status:** OPEN
 
 ---
 
