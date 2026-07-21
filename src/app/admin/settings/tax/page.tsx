@@ -20,7 +20,7 @@ export default async function TaxSettingsPage() {
       stateSalesRateBps: 650,
       localSalesRateBps: 280,
       medicalEndorsement: false,
-      taxBaseMode: "pre_tax" as const,
+      taxBaseMode: "tax_inclusive" as const, // GW-010: matches DEFAULT_TAX_SETTINGS (line prices ARE inclusive)
     };
 
   return (

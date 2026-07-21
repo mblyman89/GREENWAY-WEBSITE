@@ -19,6 +19,13 @@ import {
   normalizeTaxableBase,
   type TaxSettings,
 } from "@/lib/reports/tax";
+import {
+  __runTaxBaseCoreTests,
+  backOutInclusiveMinor,
+  preTaxLineBaseMinor,
+  preTaxUnitMinor,
+  stillDueRateBps,
+} from "@/lib/reports/tax-base-core";
 
 const REC: TaxSettings = { ...DEFAULT_TAX_SETTINGS }; // no medical endorsement
 const MED: TaxSettings = { ...DEFAULT_TAX_SETTINGS, medicalEndorsement: true };
@@ -111,9 +118,13 @@ describe("effective rate & tax-inclusive back-out", () => {
 
 describe("normalizeTaxableBase — the single choke point", () => {
   it("pre_tax mode returns the stored base unchanged", () => {
-    expect(normalizeTaxableBase(3418, REC, { isCannabis: true })).toBe(3418);
+    const s: TaxSettings = { ...REC, taxBaseMode: "pre_tax" };
+    expect(normalizeTaxableBase(3418, s, { isCannabis: true })).toBe(3418);
   });
-  it("tax_inclusive mode backs the tax out", () => {
+  it("tax_inclusive mode backs the tax out (and is the DEFAULT — GW-010)", () => {
+    // GW-010: line prices ARE tax-inclusive by schema contract (migration
+    // 0007), so the default mode must be tax_inclusive.
+    expect(DEFAULT_TAX_SETTINGS.taxBaseMode).toBe("tax_inclusive");
     const s: TaxSettings = { ...REC, taxBaseMode: "tax_inclusive" };
     expect(normalizeTaxableBase(5000, s, { isCannabis: true })).toBe(3418);
   });
@@ -147,5 +158,41 @@ describe("applyBps rounding", () => {
     expect(applyBps(1, 3700) /* 0.37 cents */).toBe(0);
     expect(applyBps(2, 3700) /* 0.74 cents */).toBe(1);
     expect(applyBps(3, 3700) /* 1.11 cents */).toBe(1);
+  });
+});
+
+describe("tax-base-core — the GW-010 shared pre-tax line base (all compliance/accounting consumers)", () => {
+  it("embedded self-tests pass (worked example, divisor equivalence, Σ reconciliation)", () => {
+    expect(() => __runTaxBaseCoreTests()).not.toThrow();
+  });
+  it("$10.00 cannabis line → base $6.84, excise $2.53, sales tax $0.64 (finding's worked example)", () => {
+    const base = preTaxLineBaseMinor({
+      unitPriceMinorUnits: 1000,
+      quantity: 1,
+      isCannabis: true,
+      combinedSalesRateBps: 930,
+      exciseRateBps: 3700,
+    });
+    expect(base).toBe(684);
+    expect(applyBps(base, 3700)).toBe(253);
+    expect(applyBps(base, 930)).toBe(64);
+  });
+  it("back-out equals the cart's divisor math exactly (÷1.463 cannabis, ÷1.093 non-cannabis)", () => {
+    for (const n of [1, 999, 1000, 1463, 3418, 6836, 123456]) {
+      expect(backOutInclusiveMinor(n, 4630)).toBe(Math.round(n / 1.463));
+      expect(backOutInclusiveMinor(n, 930)).toBe(Math.round(n / 1.093));
+    }
+  });
+  it("still-due rate honors WAC 314-55-090(2) per-line exemptions", () => {
+    const R = { combinedSalesRateBps: 930, exciseRateBps: 3700 };
+    expect(stillDueRateBps({ isCannabis: true, ...R })).toBe(4630);
+    expect(stillDueRateBps({ isCannabis: false, ...R })).toBe(930);
+    expect(stillDueRateBps({ isCannabis: true, salesExempt: true, exciseExempt: true, ...R })).toBe(0);
+    expect(stillDueRateBps({ isCannabis: true, exciseExempt: true, ...R })).toBe(930);
+  });
+  it("pre-tax UnitPrice: $34.18 inclusive cannabis unit → $23.36 (golden fixture)", () => {
+    expect(
+      preTaxUnitMinor({ unitPriceMinorUnits: 3418, isCannabis: true, combinedSalesRateBps: 930, exciseRateBps: 3700 }),
+    ).toBe(2336);
   });
 });

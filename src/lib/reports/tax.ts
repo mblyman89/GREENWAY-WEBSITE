@@ -28,16 +28,24 @@ import {
 /**
  * How the stored line price relates to tax.
  *
- *  • "pre_tax"        — stored price is the pre-tax, post-discount base (today's
- *                       behavior). Tax is ADDED on top.
  *  • "tax_inclusive"  — stored price already INCLUDES sales (and, for cannabis,
- *                       excise) tax. We must BACK OUT the tax to recover the base.
- *  • "auto"           — detect per-order from the stored header figures
- *                       (subtotal vs total vs estimated_tax). Falls back to
- *                       "pre_tax" if it can't tell. This is the robustness the
- *                       owner asked for: if the website/POS ever starts storing
- *                       tax-inclusive prices, the reports self-correct instead
- *                       of silently double-counting or under-counting tax.
+ *                       excise) tax. THIS IS TODAY'S BEHAVIOR: card prices are
+ *                       tax-inclusive out-the-door prices (see
+ *                       src/lib/orders/order-pricing-core.ts and migration
+ *                       0007_slice7_orders.sql — "Authoritative
+ *                       engine-discounted unit price (tax-inclusive)"). We must
+ *                       BACK OUT the tax to recover the pre-tax base.
+ *  • "pre_tax"        — stored price is the pre-tax, post-discount base. Tax is
+ *                       ADDED on top. NOT how this POS stores prices; kept only
+ *                       so the setting can describe a hypothetical future
+ *                       pricing change.
+ *  • "auto"           — detect per-order from the stored header figures.
+ *                       CAUTION (GW-010): the header subtotal is ALREADY the
+ *                       backed-out pre-tax figure, so header-fit detection
+ *                       answers "pre-tax" even though LINE prices are
+ *                       inclusive. Compliance/accounting consumers therefore
+ *                       derive the per-line base from the schema contract via
+ *                       src/lib/reports/tax-base-core.ts instead of this mode.
  */
 export type TaxBaseMode = "pre_tax" | "tax_inclusive" | "auto";
 
@@ -57,7 +65,10 @@ export const DEFAULT_TAX_SETTINGS: TaxSettings = {
   stateSalesRateBps: STATE_SALES_TAX_BPS, // 650
   localSalesRateBps: LOCAL_CITY_SALES_TAX_BPS, // 280
   medicalEndorsement: false,
-  taxBaseMode: "pre_tax",
+  // GW-010: line prices ARE tax-inclusive (schema contract, migration 0007) —
+  // the old "pre_tax" default made reports tax the inclusive price when the
+  // tax_settings row/column was absent.
+  taxBaseMode: "tax_inclusive",
 };
 
 /** Combined sales-tax rate in basis points (state + local). */

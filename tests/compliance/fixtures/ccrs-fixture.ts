@@ -135,20 +135,30 @@ export const FIXTURE_ROWS: Record<CcrsRetailerFileType, string[][]> = {
     // SaleType, SaleDate, Quantity, UnitPrice, Discount, RetailSalesTax, CannabisExciseTax,
     // SaleExternalIdentifier, SaleDetailExternalIdentifier, CreatedBy, CreatedDate,
     // UpdatedBy, UpdatedDate, Operation
+    //
+    // GW-010: all money below is PRE-TAX, derived from the tax-INCLUSIVE card
+    // prices the way the (fixed) Sale.csv builder does it (tax-base-core.ts):
+    //   row 1 — cannabis, card $34.18 × 2: UnitPrice = round(3418/1.463) =
+    //           $23.36; base = round(6836/1.463) = 4673¢; SalesTax =
+    //           round(4673×0.093) = $4.35; excise = round(4673×0.37) = $17.29.
+    //   row 2 — medical, both taxes exempt (register charged the $23.36 base).
+    //   row 3 — cannabis, regular $12.00 sold $10.50: UnitPrice $8.20,
+    //           base = round(1050/1.463) = 718¢, Discount = 820−718 = $1.02,
+    //           SalesTax $0.67, excise $2.66.
     [
       FIXTURE_LICENSE, "", "INV-1", "", "RecreationalRetail", "06/15/2025",
-      "2", "34.18", "0.00", "6.36", "25.29",
+      "2", "23.36", "0.00", "4.35", "17.29",
       "ORD-1001", "ORD-1001-a1b2c3d4", "Jane Budtender", "06/15/2025", "", "", "Insert",
     ],
     [
       FIXTURE_LICENSE, "", "INV-1", "", "RecreationalMedical", "06/15/2025",
-      "1", "34.18", "0.00", "0.00", "0.00",
+      "1", "23.36", "0.00", "0.00", "0.00",
       "ORD-1002", "ORD-1002-e5f6a7b8", "Jane Budtender", "06/15/2025", "", "", "Insert",
     ],
     // A name containing a comma exercises the quoting rule of ccrsCell.
     [
       FIXTURE_LICENSE, "", "INV-1", "", "RecreationalRetail", "06/15/2025",
-      "1", "12.00", "1.50", "0.98", "3.89",
+      "1", "8.20", "1.02", "0.67", "2.66",
       "ORD-1003", "ORD-1003-c9d0e1f2", "Smith, Jane", "06/15/2025", "", "", "Insert",
     ],
   ],

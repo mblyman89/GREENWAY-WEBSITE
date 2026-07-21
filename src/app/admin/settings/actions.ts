@@ -71,9 +71,11 @@ export async function saveTaxSettingsAction(fd: FormData): Promise<ActionResult>
   const session = await requirePermission("settings.manage");
   const before = await getTaxSettings().catch(() => null);
 
-  const rawMode = String(fd.get("taxBaseMode") ?? "pre_tax");
+  // GW-010: default/fallback is tax_inclusive — that IS how this POS stores
+  // line prices (migration 0007 / order-pricing-core.ts).
+  const rawMode = String(fd.get("taxBaseMode") ?? "tax_inclusive");
   const taxBaseMode: TaxBaseMode =
-    rawMode === "tax_inclusive" || rawMode === "auto" ? (rawMode as TaxBaseMode) : "pre_tax";
+    rawMode === "pre_tax" || rawMode === "auto" ? (rawMode as TaxBaseMode) : "tax_inclusive";
 
   const next: TaxSettings = {
     exciseRateBps: pctToBps(fd, "excisePct", before?.exciseRateBps ?? 3700),

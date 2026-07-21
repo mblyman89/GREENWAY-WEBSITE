@@ -109,12 +109,12 @@ export function TaxSettingsForm({
             </Field>
             <Field
               label="How stored prices relate to tax"
-              help="Pre-tax: prices are before tax (WA standard). Tax-inclusive: tax is baked into the price."
+              help="This store's card prices are tax-INCLUSIVE (out-the-door) — keep Tax-inclusive unless the pricing model itself changes."
             >
               <Select name="taxBaseMode" defaultValue={settings.taxBaseMode}>
-                <option value="pre_tax">Pre-tax (recommended)</option>
-                <option value="tax_inclusive">Tax-inclusive</option>
-                <option value="auto">Auto-detect</option>
+                <option value="tax_inclusive">Tax-inclusive (this store&apos;s pricing)</option>
+                <option value="pre_tax">Pre-tax</option>
+                <option value="auto">Auto-detect (legacy)</option>
               </Select>
             </Field>
             <label className="flex items-center gap-2 text-sm text-[var(--admin-text)] sm:col-span-2">

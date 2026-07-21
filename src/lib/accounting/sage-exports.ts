@@ -20,6 +20,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { chunkedIn, pagedAll } from "@/lib/supabase/chunked-in";
 import { getTaxSettings, getCannabisCategorySet, isCannabisCategory, applyBps } from "@/lib/reports/tax";
+import { preTaxLineBaseMinor } from "@/lib/reports/tax-base-core";
 import { pacificDayKey } from "@/lib/reports/timezone";
 import {
   type SageBucket,
@@ -343,11 +344,9 @@ export async function buildSageReceiptsExport(fromISO: string, toISO: string): P
     if (!ymd) continue;
     const qty = l.quantity ?? 0;
     if (qty <= 0) continue;
-    const base = (l.price_minor_units ?? 0) * qty;
-    if (base <= 0) continue;
-    // Discount = (regular − discounted) × qty; regular_price is null/equal when no sale.
-    const regular = l.regular_price_minor_units ?? l.price_minor_units ?? 0;
-    const discount = Math.max(0, (regular - (l.price_minor_units ?? 0)) * qty);
+    const soldUnit = l.price_minor_units ?? 0; // tax-INCLUSIVE out-the-door unit
+    if (soldUnit * qty <= 0) continue;
+    const regular = l.regular_price_minor_units ?? soldUnit; // tax-INCLUSIVE
 
     const category = (l.product_id ? catLookup.get(l.product_id) : "") || "";
     const bucket = resolveBucket(category, categoryMap, cannabisSet, unmapped, knownBuckets);
@@ -355,6 +354,27 @@ export async function buildSageReceiptsExport(fromISO: string, toISO: string): P
 
     const acct = accounts[bucket];
     const isCannabis = acct ? acct.isCannabis : isCannabisCategory(category, cannabisSet);
+    // GW-010: stored prices are tax-inclusive (migration 0007 /
+    // order-pricing-core.ts) — receipts rows book the PRE-TAX base and taxes
+    // computed ON that base.
+    const combinedBps = tax.stateSalesRateBps + tax.localSalesRateBps;
+    const base = preTaxLineBaseMinor({
+      unitPriceMinorUnits: soldUnit,
+      quantity: qty,
+      isCannabis,
+      combinedSalesRateBps: combinedBps,
+      exciseRateBps: tax.exciseRateBps,
+    });
+    if (base <= 0) continue;
+    // Discount in pre-tax terms (regular pre-tax − sold pre-tax).
+    const regularBase = preTaxLineBaseMinor({
+      unitPriceMinorUnits: regular,
+      quantity: qty,
+      isCannabis,
+      combinedSalesRateBps: combinedBps,
+      exciseRateBps: tax.exciseRateBps,
+    });
+    const discount = Math.max(0, regularBase - base);
     const excise = isCannabis ? applyBps(base, tax.exciseRateBps) : 0;
     const stateTax = applyBps(base, tax.stateSalesRateBps);
     const localTax = applyBps(base, tax.localSalesRateBps);

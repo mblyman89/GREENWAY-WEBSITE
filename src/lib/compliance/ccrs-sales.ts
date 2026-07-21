@@ -28,6 +28,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { chunkedIn, pagedAll } from "@/lib/supabase/chunked-in";
 import { getTaxSettings, getCannabisCategorySet, isCannabisCategory, applyBps } from "@/lib/reports/tax";
+import { preTaxLineBaseMinor, preTaxUnitMinor } from "@/lib/reports/tax-base-core";
 import {
   deriveInventoryExternalId,
   resolveSaleInventoryExternalId,
@@ -332,19 +333,15 @@ export async function buildCcrsSaleCsv(fromISO: string, toISO: string): Promise<
       continue;
     }
 
-    // UnitPrice = price of ONE unit BEFORE discount/tax. We use the regular
-    // (pre-discount) unit price; the markdown goes in the Discount column.
-    const soldUnit = l.price_minor_units ?? 0; // post-discount, pre-tax unit
-    const regularUnit = l.regular_price_minor_units ?? soldUnit; // pre-discount unit
+    // Stored prices are TAX-INCLUSIVE out-the-door card prices (schema
+    // contract: migration 0007 / order-pricing-core.ts). GW-010: CCRS wants
+    // PRE-TAX money, so every figure below is backed out first.
+    const soldUnit = l.price_minor_units ?? 0; // post-discount unit (tax-INCLUSIVE)
+    const regularUnit = l.regular_price_minor_units ?? soldUnit; // pre-discount unit (tax-INCLUSIVE)
     if (regularUnit <= 0) {
       skipped++;
       continue;
     }
-
-    const unitPriceCents = regularUnit;
-    const lineDiscountCents = Math.max(0, (regularUnit - soldUnit) * qty); // whole line
-    // Taxable base = post-discount price × qty.
-    const baseCents = soldUnit * qty;
 
     // Category: menu catalog first (existing behavior), then the line's own
     // placement-time snapshot (migration 0096; POS B39 keypad lines carry a
@@ -357,8 +354,36 @@ export async function buildCcrsSaleCsv(fromISO: string, toISO: string): Promise<
     // S-8: a line covered by a WAC 314-55-090(2) exempt-sale record reports
     // its exempted tax as 0 (sales tax and/or excise "OtherTax"), so the CCRS
     // Sale.csv matches what was actually charged at the register and what the
-    // LIQ-1295 Box 2 deduction claims.
+    // LIQ-1295 Box 2 deduction claims. The exemption also changes the back-out
+    // rate: the register passed it through by REPRICING the line to
+    // base + still-due tax, so exempted tax was never inside the stored price.
     const exempt = l.product_id ? exemptByOrderSku.get(`${l.order_id}|${l.product_id}`) : undefined;
+
+    // UnitPrice = price of ONE unit BEFORE discount/tax
+    // (docs/CCRS_SELF_REPORTING_GUIDE.md): pre-tax regular unit. Regular shelf
+    // prices always carry the full rate for the line type — a medical
+    // exemption changes what the patient PAID, not the shelf price.
+    const unitPriceCents = preTaxUnitMinor({
+      unitPriceMinorUnits: regularUnit,
+      isCannabis,
+      combinedSalesRateBps: combinedSalesBps,
+      exciseRateBps: settings.exciseRateBps,
+    });
+    // Taxable base = pre-tax post-discount line total (exemption-aware).
+    const baseCents = preTaxLineBaseMinor({
+      unitPriceMinorUnits: soldUnit,
+      quantity: qty,
+      isCannabis,
+      salesExempt: exempt?.salesExempt,
+      exciseExempt: exempt?.exciseExempt,
+      combinedSalesRateBps: combinedSalesBps,
+      exciseRateBps: settings.exciseRateBps,
+    });
+    // Discount (whole line, pre-tax): regular pre-tax − sold pre-tax. Keeps
+    // the CCRS identity qty × UnitPrice − Discount ≈ pre-tax base, and an
+    // exemption is never misreported as a discount.
+    const lineDiscountCents = Math.max(0, unitPriceCents * qty - baseCents);
+
     const salesTaxCents = exempt?.salesExempt ? 0 : applyBps(baseCents, combinedSalesBps);
     const exciseCents =
       isCannabis && !exempt?.exciseExempt ? applyBps(baseCents, settings.exciseRateBps) : 0;

@@ -5,6 +5,7 @@
  * non-zero on any failure. Run with:  npx tsx scripts/compliance/run-pure-selftests.ts
  */
 import { __runOrderPricingTests } from "../../src/lib/orders/order-pricing-core";
+import { __runTaxBaseCoreTests } from "../../src/lib/reports/tax-base-core";
 import { __runDiscountEngineTests } from "../../src/lib/promotions/discount-engine-core";
 import { __runPromoGuardTests } from "../../src/lib/promotions/promo-guard-core";
 import { __runSalesLimitTests } from "../../src/lib/compliance/sales-limits-core";
@@ -109,6 +110,7 @@ import { __runSawPrefillCoreTests } from "../../src/lib/pos/saw-prefill-core";
 
 async function main() {
   __runOrderPricingTests();
+  __runTaxBaseCoreTests();
   __runDiscountEngineTests();
   __runPromoGuardTests();
   __runSalesLimitTests();
