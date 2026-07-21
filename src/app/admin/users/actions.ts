@@ -2,7 +2,9 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { requirePermission } from "@/lib/auth/session";
+import { resolveSiteBase } from "@/lib/auth/set-password-core";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { recordAudit } from "@/lib/auth/audit";
 import {
@@ -199,8 +201,25 @@ export async function inviteUser(formData: FormData): Promise<void> {
     bounce("error", grant.reason);
   }
 
+  // GW-017: point the invite email at the set-password page. Invite links use
+  // Supabase's legacy token flow (PKCE unsupported for invites), so the tokens
+  // arrive in the URL fragment — the set-password page is a client page that
+  // reads the fragment, establishes the session, and lets the invitee choose
+  // a password. Without redirectTo, the link lands on the dashboard Site URL
+  // where the PKCE-only browser client can't finish the sign-in.
+  const hdrs = await headers();
+  const siteBase = resolveSiteBase({
+    envSiteUrl: process.env.NEXT_PUBLIC_SITE_URL,
+    forwardedProto: hdrs.get("x-forwarded-proto"),
+    forwardedHost: hdrs.get("x-forwarded-host"),
+    host: hdrs.get("host"),
+  });
+
   const admin = createSupabaseAdminClient();
-  const { data, error } = await admin.auth.admin.inviteUserByEmail(email);
+  const { data, error } = await admin.auth.admin.inviteUserByEmail(
+    email,
+    siteBase ? { redirectTo: `${siteBase}/admin/account/set-password` } : {},
+  );
   if (error || !data?.user) {
     await recordAudit({
       actorId: session.userId,

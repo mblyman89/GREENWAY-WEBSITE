@@ -23,6 +23,7 @@ import { __runSignupCustomerTests } from "../../src/lib/loyalty/signup-customer-
 import { __runScheduleCoreTests } from "../../src/lib/staffing/schedule-core";
 import { __runEmployeeLifecycleTests } from "../../src/lib/staffing/employee-lifecycle-core";
 import { __runUserGuardTests } from "../../src/lib/auth/user-guards-core";
+import { __runSetPasswordCoreTests } from "../../src/lib/auth/set-password-core";
 import { __runCampaignRulesTests } from "../../src/lib/marketing/campaign-rules-core";
 import { __runCompetitivePlaybookTests } from "../../src/lib/marketing/competitive-playbook-core";
 import { __runMidjourneyCoreTests } from "../../src/lib/marketing/midjourney-core";
@@ -129,6 +130,7 @@ async function main() {
   __runScheduleCoreTests();
   __runEmployeeLifecycleTests();
   __runUserGuardTests();
+  __runSetPasswordCoreTests();
   __runCampaignRulesTests();
   __runCompetitivePlaybookTests();
   __runMidjourneyCoreTests();

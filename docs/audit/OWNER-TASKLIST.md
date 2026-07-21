@@ -63,9 +63,11 @@ Do these in your Supabase project dashboard (they cannot be set from code):
    `docs/BACK_OFFICE_SETUP.md` says to point things at `/admin` — that
    guidance is outdated; the app's real landing pad for email links is
    `/auth/callback` (see next item).
-2. **Authentication → URL Configuration → Redirect URLs:** add
-   `https://<your-domain>/auth/callback` (and your Vercel preview domain
-   if you use magic links from previews).
+2. **Authentication → URL Configuration → Redirect URLs:** add BOTH
+   `https://<your-domain>/auth/callback` (login magic links) and
+   `https://<your-domain>/admin/account/set-password` (staff invite emails —
+   the GW-017 fix points invites there). Add your Vercel preview domain
+   versions too if you test from previews.
 3. **Authentication → Sign In / Up → disable public sign-ups** (finding
    GW-018: until the code fix lands, the login page's magic-link form can
    create brand-new active read-only staff accounts for ANY email; turning
@@ -82,9 +84,10 @@ Do these in your Supabase project dashboard (they cannot be set from code):
    into Vercel (next section). The service-role key is server-only secret —
    never paste it anywhere public.
 
-Staff onboarding, until GW-017/GW-018 are fixed: invite the person from
-`/admin/users` (creates the account + role), tell them to IGNORE the invite
-email, then have them use "email me a sign-in link" on the login page.
+Staff onboarding: GW-017 is FIXED (PR #632) — invite the person from
+`/admin/users`; the email lands them on a set-password page and then in the
+back office. This needs items 1–2 above done first (Site URL + BOTH redirect
+URLs). Until GW-018's code fix lands, keep public sign-ups disabled (item 3).
 
 ---
 

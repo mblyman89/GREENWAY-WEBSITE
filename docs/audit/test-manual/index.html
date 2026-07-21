@@ -443,10 +443,17 @@ should. You'll act as several different people.</em></p>
 <ul>
 <li><strong>Do:</strong> Admin → Users → invite a real email address you control (a
   personal one). Open the invite email on another device and follow it.</li>
-<li><strong>Expect:</strong> the link takes you to a page where you can set a password /
-  complete sign-in, and you land in the admin with the role you assigned.</li>
-<li><strong>⚠️ KNOWN-BROKEN (GW-017):</strong> invites are currently broken end-to-end (no
-  set-password page exists). This test verifies the fix when it lands.</li>
+<li><strong>Expect:</strong> the link takes you to a "Welcome to the team — set your
+  password" page, you choose a password (8+ characters, typed twice), and
+  you land in the admin with the role you assigned. Later, sign in with
+  that email + password from the login page — it works.</li>
+<li><strong>✅ GW-017 FIXED:</strong> invites now point at <code>/admin/account/set-password</code>,
+  which finishes the sign-in and lets the invitee choose a password.
+  Requires the Supabase dashboard Redirect URLs to include
+  <code>https://&lt;your-domain&gt;/admin/account/set-password</code> — if the email link
+  still lands on the homepage, that allowlist entry is missing.</li>
+<li><strong>If broken, record:</strong> where the email link landed (exact URL) and any
+  error shown on the set-password page.</li>
 </ul>
 <h4 id="t-013-a-readonly-analyst-can-look-but-not-touch">T-013 — A readonly analyst can look but not touch</h4>
 <div class="tracker" data-test="T-013"></div>
