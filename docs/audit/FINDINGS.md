@@ -312,7 +312,21 @@
   see LENS-02 doc §5): set Site URL to the production domain and add
   `https://<domain>/auth/callback` to the Redirect URL allowlist; (d) keep
   the UI copy honest with whatever ships.
-- **Status:** OPEN
+- **Status:** FIXED (PR #632) — `inviteUserByEmail` now passes
+  `redirectTo: ${siteBase}/admin/account/set-password` (site base resolved
+  from `NEXT_PUBLIC_SITE_URL` with an `x-forwarded-host` fallback via the
+  pure `resolveSiteBase` in `src/lib/auth/set-password-core.ts`). Because
+  invite links use the legacy token flow, the tokens arrive in the URL
+  FRAGMENT — so the new `/admin/account/set-password` page is a client page
+  (`SetPasswordForm.tsx`) that reads the fragment BEFORE the PKCE-only
+  browser client can choke on it, establishes the session with
+  `setSession()`, then sets the password via
+  `supabase.auth.updateUser({ password })` and lands the invitee in /admin.
+  Expired/incomplete links get friendly errors pointing at the magic-link
+  fallback. The existing UI copy ("they get an email to set a password") is
+  now true. Dashboard half still owner-action: Site URL + Redirect URL
+  allowlist must include `https://<domain>/admin/account/set-password`
+  (OWNER-TASKLIST §2 / CUTOVER C-041). Verified by TEST-PLAN T-012.
 
 ### GW-018 — The public login page can CREATE staff accounts: magic-link form omits `shouldCreateUser: false`, and a DB trigger auto-provisions every new auth user as an ACTIVE readonly staff profile
 - **Where:** `src/components/admin/LoginForm.tsx:66–73`

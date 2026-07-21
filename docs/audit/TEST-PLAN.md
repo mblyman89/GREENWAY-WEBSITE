@@ -277,10 +277,17 @@ should. You'll act as several different people.*
 #### T-012 — Staff invite end-to-end
 - **Do:** Admin → Users → invite a real email address you control (a
   personal one). Open the invite email on another device and follow it.
-- **Expect:** the link takes you to a page where you can set a password /
-  complete sign-in, and you land in the admin with the role you assigned.
-- **⚠️ KNOWN-BROKEN (GW-017):** invites are currently broken end-to-end (no
-  set-password page exists). This test verifies the fix when it lands.
+- **Expect:** the link takes you to a "Welcome to the team — set your
+  password" page, you choose a password (8+ characters, typed twice), and
+  you land in the admin with the role you assigned. Later, sign in with
+  that email + password from the login page — it works.
+- **✅ GW-017 FIXED:** invites now point at `/admin/account/set-password`,
+  which finishes the sign-in and lets the invitee choose a password.
+  Requires the Supabase dashboard Redirect URLs to include
+  `https://<your-domain>/admin/account/set-password` — if the email link
+  still lands on the homepage, that allowlist entry is missing.
+- **If broken, record:** where the email link landed (exact URL) and any
+  error shown on the set-password page.
 
 #### T-013 — A readonly analyst can look but not touch
 - **Do:** set your test personal account (from T-012) to the

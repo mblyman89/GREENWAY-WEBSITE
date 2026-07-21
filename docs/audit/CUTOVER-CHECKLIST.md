@@ -177,7 +177,9 @@ Target: done by **Sunday, September 6, 2026**. Source of truth for every item:
   **0061** once (it was rewritten to an idempotent form; re-running is safe and
   takes seconds). 0038 needs nothing — 0077 already corrected the drawer float.
 - [ ] **C-041 👤 Supabase Auth URL configuration** (§2): Site URL = your real
-  production URL; Redirect URLs include `https://<your-domain>/auth/callback`.
+  production URL; Redirect URLs include BOTH `https://<your-domain>/auth/callback`
+  and `https://<your-domain>/admin/account/set-password` (staff invites land
+  there — GW-017 fix).
 - [ ] **C-042 👤 Disable public sign-ups** in Supabase Auth (§2 item 3) — this is
   the dashboard-side seal on GW-018 and stays off permanently even after the code
   fix lands.
