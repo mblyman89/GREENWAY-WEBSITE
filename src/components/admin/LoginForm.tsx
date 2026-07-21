@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { supportsPasskeys, authenticatePasskey } from "@/lib/auth/webauthn-client";
+import { classifyMagicLinkError } from "@/lib/auth/login-messages-core";
 
 type Mode = "password" | "magic";
 
@@ -69,12 +70,22 @@ export function LoginForm({ initialError }: { initialError?: string | null }) {
         // Send the email link through the callback route so the session is
         // actually established (PKCE code exchange) before landing on /admin.
         emailRedirectTo: `${window.location.origin}/auth/callback?next=/admin`,
+        // GW-018: this is a STAFF login on a public page — it must never
+        // create an account. Unknown emails get refused by the server; we
+        // show the same neutral "check your email" screen either way so the
+        // form can't be used to probe which emails have staff accounts.
+        shouldCreateUser: false,
       },
     });
     if (error) {
-      setError(error.message);
-      setStatus("idle");
-      return;
+      const outcome = classifyMagicLinkError(error.code, error.message);
+      if (outcome.kind === "error") {
+        setError(outcome.message);
+        setStatus("idle");
+        return;
+      }
+      // "neutral" — unknown email / signups off. Fall through to the same
+      // success screen a real staffer sees (anti-enumeration).
     }
     setStatus("sent");
   }
@@ -82,8 +93,8 @@ export function LoginForm({ initialError }: { initialError?: string | null }) {
   if (status === "sent") {
     return (
       <div className="rounded-lg border border-[#7ed957]/30 bg-[#7ed957]/10 p-4 text-center text-sm text-white/80">
-        Check <span className="font-medium text-[#7ed957]">{email}</span> for a
-        secure sign-in link.
+        If <span className="font-medium text-[#7ed957]">{email}</span> belongs to a staff
+        account, a secure sign-in link is on its way. Check your inbox.
       </div>
     );
   }

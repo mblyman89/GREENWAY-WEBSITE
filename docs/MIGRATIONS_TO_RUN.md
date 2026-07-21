@@ -181,3 +181,17 @@
   scheduling/completion and vendor returns use the legacy columns, the hold
   defaults to 72h, and customer returns tell you to apply 0115 first (any
   posted adjustment is called out for manual reversal).**
+
+## Fix slice — GW-018 (login page could create staff accounts)
+
+- [ ] **`supabase/migrations/0127_staff_profiles_inactive_by_default.sql`** —
+  GW-018 (database half): the `handle_new_auth_user` trigger now provisions
+  new auth users as **inactive** staff profiles, and the `staff_profiles.active`
+  column default flips to `false`. Invites are unaffected (the invite action
+  sets role + active=true explicitly), and so is the bootstrap-owner path.
+  Idempotent; no data backfill — existing rows are untouched. The file ends
+  with an optional read-only review query: run it once and confirm every
+  ACTIVE profile is someone you actually invited; deactivate strangers from
+  `/admin/users`. **Until this is run, the code half (`shouldCreateUser: false`
+  on the login form) already blocks the public door on its own — this
+  migration is the belt-and-braces layer underneath it.**
