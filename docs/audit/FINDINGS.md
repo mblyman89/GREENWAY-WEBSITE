@@ -64,7 +64,14 @@
   comment and the `DEFAULT_TAX_SETTINGS` default, and add pure self-tests
   asserting that Σ(Sale.csv line taxes) reconciles with the order header's
   `estimated_tax_minor_units` within rounding. No DB migration required.
-- **Status:** OPEN
+- **Status:** FIXED (PR #631) — shared pre-tax back-out in
+  `src/lib/reports/tax-base-core.ts` (exemption-aware still-due rate, proven
+  identical to the cart's category divisors by embedded self-test); routed
+  through it: `ccrs-sales.ts` (incl. pre-tax UnitPrice + pre-tax Discount),
+  `sage50.ts`, `sage-exports.ts`, `disposition.ts`, `wa-tax.ts` (header-fit
+  auto-detection no longer consulted). `DEFAULT_TAX_SETTINGS.taxBaseMode` now
+  `tax_inclusive`; doc comment fixed; golden Sale fixture regenerated with
+  hand-verified pre-tax figures. Verified by TEST-PLAN T-135/T-136.
 
 ---
 
