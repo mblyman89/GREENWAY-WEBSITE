@@ -266,13 +266,19 @@ should. You'll act as several different people.*
 #### T-011 — A wrong email gets nothing
 - **Do:** log out. Request a magic link for a made-up email like
   `nobody@example.com`.
-- **Expect:** the screen gives a neutral message; **no** staff account is
-  created for that address. Check Admin → Users afterwards from your owner
-  login: there must be NO new account.
-- **⚠️ KNOWN-BROKEN (GW-018):** until this finding's fix lands, the login
-  page CAN create an account for any email. This test verifies the fix.
-  If after the fix a new account still appears — that's a critical bug,
-  photograph the Users page.
+- **Expect:** the screen shows the SAME neutral "if this email belongs to a
+  staff account, a link is on its way" message you'd see for a real staff
+  email; **no** staff account is created for that address. Check Admin →
+  Users afterwards from your owner login: there must be NO new account.
+- **✅ GW-018 FIXED:** the login form now refuses to create accounts
+  (`shouldCreateUser: false`) and answers unknown emails with the same
+  neutral screen as known ones, so the form can't be used to probe which
+  emails have accounts. Migration **0127** additionally makes any
+  auto-created profile inactive by default (defense in depth).
+- **If broken, record:** if a new account appears in Users — that's a
+  critical bug, photograph the Users page. Also note if the screen wording
+  DIFFERS between a real staff email and a made-up one (that difference is
+  itself a leak).
 
 #### T-012 — Staff invite end-to-end
 - **Do:** Admin → Users → invite a real email address you control (a

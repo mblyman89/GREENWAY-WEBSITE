@@ -360,7 +360,22 @@
   via the upsert at `src/app/admin/users/actions.ts:216–218`, so onboarding
   is unaffected); (c) owner: confirm "allow new users to sign up" is OFF in
   the Supabase Auth settings (see LENS-02 doc §5).
-- **Status:** OPEN
+- **Status:** FIXED (PR #633) — (a) `LoginForm.tsx` magic-link path now
+  passes `shouldCreateUser: false`; the server's refusal for unknown emails
+  (`otp_disabled`, "Signups not allowed for otp" — verified in
+  supabase/auth `internal/api/otp.go`) is folded into the SAME neutral
+  "check your email" screen a real staffer sees via the new pure
+  `classifyMagicLinkError` (`src/lib/auth/login-messages-core.ts`), so the
+  public form can't be used to probe which emails have staff accounts
+  (anti-enumeration hardening on top of the fix; the leak is documented in
+  supabase/auth issue #1547). Rate limits and real errors stay visible.
+  (b) NEW migration `0127_staff_profiles_inactive_by_default.sql` (manual,
+  idempotent): `handle_new_auth_user` now provisions `active = false`, and
+  the column default flips to `false` — invites and the bootstrap-owner path
+  set role/active explicitly so both are unaffected; the file ends with a
+  read-only owner review query for existing active profiles. (c) remains an
+  owner dashboard action (signups OFF), now a checkbox in OWNER-TASKLIST §2.
+  Verified by TEST-PLAN T-011.
 
 ### GW-019 — Four tables have NO row-level security at all: `kb_product_categories`, `noncannabis_products`, `noncannabis_sku_sequences`, `noncannabis_adjustments`
 - **Where:** `supabase/migrations/0070_kb_product_categories.sql:19`,

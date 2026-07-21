@@ -430,13 +430,19 @@ should. You'll act as several different people.</em></p>
 <ul>
 <li><strong>Do:</strong> log out. Request a magic link for a made-up email like
   <code>nobody@example.com</code>.</li>
-<li><strong>Expect:</strong> the screen gives a neutral message; <strong>no</strong> staff account is
-  created for that address. Check Admin → Users afterwards from your owner
-  login: there must be NO new account.</li>
-<li><strong>⚠️ KNOWN-BROKEN (GW-018):</strong> until this finding's fix lands, the login
-  page CAN create an account for any email. This test verifies the fix.
-  If after the fix a new account still appears — that's a critical bug,
-  photograph the Users page.</li>
+<li><strong>Expect:</strong> the screen shows the SAME neutral "if this email belongs to a
+  staff account, a link is on its way" message you'd see for a real staff
+  email; <strong>no</strong> staff account is created for that address. Check Admin →
+  Users afterwards from your owner login: there must be NO new account.</li>
+<li><strong>✅ GW-018 FIXED:</strong> the login form now refuses to create accounts
+  (<code>shouldCreateUser: false</code>) and answers unknown emails with the same
+  neutral screen as known ones, so the form can't be used to probe which
+  emails have accounts. Migration <strong>0127</strong> additionally makes any
+  auto-created profile inactive by default (defense in depth).</li>
+<li><strong>If broken, record:</strong> if a new account appears in Users — that's a
+  critical bug, photograph the Users page. Also note if the screen wording
+  DIFFERS between a real staff email and a made-up one (that difference is
+  itself a leak).</li>
 </ul>
 <h4 id="t-012-staff-invite-end-to-end">T-012 — Staff invite end-to-end</h4>
 <div class="tracker" data-test="T-012"></div>

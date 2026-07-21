@@ -48,13 +48,35 @@ files, one by one**. Here is the honest, verified answer:
 
 Also: `docs/MIGRATIONS_TO_RUN.md` is your standing checklist of migrations
 from 0054 onward with a description of what breaks until each is run. If
-you haven't checked off through **0126** (the current last file), do that
+you haven't checked off through **0127** (the current last file — 0127 is the
+GW-018 fix: auto-created staff profiles are born inactive), do that
 sweep — in particular **0123 (pin_throttle)** matters for security (GW-005)
 and **0120–0122** are the POS foundation the registers depend on.
 
 ---
 
 ## 2. Supabase dashboard settings ✅ NOW
+
+> **☑️ QUICK CHECKLIST — the GW-017/GW-018 auth items (added at the owner's
+> request so they don't get forgotten). Tick these off as you do them:**
+>
+> - [ ] **Site URL** = your real production URL (Authentication → URL
+>   Configuration), e.g. `https://greenwaymarijuana.com` — not localhost.
+> - [ ] **Redirect URLs** include `https://<your-domain>/auth/callback`
+>   (login magic links).
+> - [ ] **Redirect URLs** include
+>   `https://<your-domain>/admin/account/set-password` (staff invite
+>   emails land here — required by the GW-017 fix, PR #632).
+> - [ ] **"Allow new users to sign up" is OFF** (Authentication → Sign In /
+>   Providers) — the dashboard half of GW-018.
+> - [ ] **Send yourself a test invite** from Admin → Users to a personal
+>   email and walk it through: click link → set password → land in admin
+>   (this is TEST-PLAN T-012).
+> - [ ] **Run migration `0127_staff_profiles_inactive_by_default.sql`** in
+>   the Supabase SQL editor (GW-018 database half — auto-created staff
+>   profiles are born inactive; idempotent, safe to re-run). Then run the
+>   read-only review query at the bottom of that file once and confirm every
+>   ACTIVE profile is someone you actually invited.
 
 Do these in your Supabase project dashboard (they cannot be set from code):
 
