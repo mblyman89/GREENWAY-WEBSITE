@@ -38,10 +38,9 @@ import {
   isCannabisCategory,
   computeLineTax,
   applyBps,
-  detectTaxInclusive,
-  normalizeTaxableBase,
   type TaxSettings,
 } from "@/lib/reports/tax";
+import { preTaxLineBaseMinor } from "@/lib/reports/tax-base-core";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -195,7 +194,7 @@ export async function getWaTaxReport(fromISO: string, toISO: string): Promise<Wa
     stateSalesRateBps: 650,
     localSalesRateBps: 280,
     medicalEndorsement: false,
-    taxBaseMode: "pre_tax" as const,
+    taxBaseMode: "tax_inclusive" as const, // GW-010: matches DEFAULT_TAX_SETTINGS (line prices ARE inclusive)
   };
   const combinedSalesRatePct =
     (resolvedSettings.stateSalesRateBps + resolvedSettings.localSalesRateBps) / 100;
@@ -273,18 +272,10 @@ export async function getWaTaxReport(fromISO: string, toISO: string): Promise<Wa
 
   // Month bucketing follows the same canonical basis: completed_at.
   const placedById = new Map(valid.map((o) => [o.id, o.completed_at ?? o.placed_at]));
-  // Per-order tax-inclusive resolution (only consulted in "auto" mode).
-  const inclusiveByOrder = new Map<string, boolean>();
-  if (resolvedSettings.taxBaseMode === "auto") {
-    for (const o of valid) {
-      const det = detectTaxInclusive({
-        subtotalMinor: o.subtotal_minor_units,
-        estimatedTaxMinor: o.estimated_tax_minor_units,
-        totalMinor: o.total_minor_units,
-      });
-      if (det != null) inclusiveByOrder.set(o.id, det);
-    }
-  }
+  // GW-010: the old per-order header-fit detection (detectTaxInclusive) is
+  // gone — the header subtotal is already backed out, so header detection
+  // always answered "pre-tax" even though LINE prices are tax-inclusive. The
+  // per-line base is now derived from the schema contract (tax-base-core.ts).
   const orderIds = valid.map((o) => o.id);
 
   // S-7: chunked + paginated — every line of every order in range, no caps.
@@ -356,30 +347,40 @@ export async function getWaTaxReport(fromISO: string, toISO: string): Promise<Wa
 
   for (const l of lines) {
     const qty = l.quantity ?? 0;
-    const storedBase = (l.price_minor_units ?? 0) * qty;
-    if (storedBase <= 0) continue;
+    if ((l.price_minor_units ?? 0) * qty <= 0) continue;
 
     const meta = l.product_id ? categoryLookup.get(l.product_id) : undefined;
     const category = meta?.category || "";
     const type = meta?.type || "Untyped";
     const isCannabis = isCannabisCategory(category, cannabisSet);
 
-    // Robustness: if prices are (or look) tax-inclusive, back the tax out so the
-    // reported BASE is always pre-tax — regardless of how the POS stores prices.
-    const base = normalizeTaxableBase(storedBase, resolvedSettings, {
-      isCannabis,
-      resolvedInclusive: inclusiveByOrder.get(l.order_id),
-    });
-
-    // Tax engine (recreational rates first).
-    const recTax = computeLineTax({ taxableBaseMinor: base, isCannabis }, resolvedSettings);
-    // S-8: apply the WAC 314-55-090(2) medical exemptions per line. The two
+    // S-8: the WAC 314-55-090(2) medical exemptions per line. The two
     // exemptions are independent (sales tax vs 37% excise): zero what was
     // exempted at the register and track it separately for the LIQ-1295.
+    // Resolved BEFORE the base back-out because an exempted tax was never
+    // inside the stored price (the register repriced the line).
     const exemptKey = l.product_id ? `${l.order_id}|${l.product_id}` : null;
     const exempt = exemptKey ? exemptByOrderSku.get(exemptKey) : undefined;
     const salesExempt = exempt?.salesExempt === true;
     const exciseExempt = exempt?.exciseExempt === true;
+
+    // GW-010: the stored line price is tax-INCLUSIVE by schema contract
+    // (migration 0007 / order-pricing-core.ts), so the pre-tax base is derived
+    // from LINE semantics — never from the header-fit heuristic (the header
+    // subtotal is already backed out, so header detection answers "pre-tax"
+    // and under-reports nothing while over-reporting every tax figure).
+    const base = preTaxLineBaseMinor({
+      unitPriceMinorUnits: l.price_minor_units ?? 0,
+      quantity: qty,
+      isCannabis,
+      salesExempt,
+      exciseExempt,
+      combinedSalesRateBps: stateBps + localBps,
+      exciseRateBps: resolvedSettings.exciseRateBps,
+    });
+
+    // Tax engine (recreational rates first).
+    const recTax = computeLineTax({ taxableBaseMinor: base, isCannabis }, resolvedSettings);
     if (exempt) {
       exempt.matched = true;
       medicalExemptLines += 1;

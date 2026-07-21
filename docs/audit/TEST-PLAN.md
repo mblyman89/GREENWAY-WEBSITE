@@ -1050,10 +1050,12 @@ the banner is missing while test mode is on, that itself is a bug.*
   block the file with named errors. Spot-check: row count matches the
   file's own header count; no negative money; every lot's CCRS
   identifier is the same one it had at intake.
-- **⚠️ MUST-FIX-FIRST (GW-010 — CRITICAL):** the current export
-  overstates tax on cannabis lines (~46%). DO NOT upload a real CCRS
-  file until this finding is marked FIXED. This is the #1 item in the
-  fix queue for exactly this reason.
+- **✅ GW-010 FIXED:** the export previously overstated tax on cannabis
+  lines (~46%) by taxing the tax-inclusive stored price. All compliance
+  and accounting consumers now derive the pre-tax line base through the
+  shared `tax-base-core.ts` back-out (verify: a $10.00 cannabis line
+  must report SalesTax $0.64 and OtherTax $2.53, and UnitPrice must be
+  the PRE-TAX shelf price). Safe to proceed to T-136.
 
 #### T-136 — The real CCRS round-trip (after GW-010 is fixed)
 - **Do:** exactly per `OWNER-TASKLIST.md` §7: ring a handful of tiny real

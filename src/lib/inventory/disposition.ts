@@ -31,6 +31,7 @@ import {
 } from "@/lib/inventory/disposition-core";
 import { pacificDayKey } from "@/lib/reports/timezone";
 import { getTaxSettings, getCannabisCategorySet, isCannabisCategory, applyBps } from "@/lib/reports/tax";
+import { preTaxLineBaseMinor, preTaxUnitMinor } from "@/lib/reports/tax-base-core";
 import {
   deriveInventoryExternalId,
   resolveSaleInventoryExternalId,
@@ -572,10 +573,8 @@ export async function createCustomerReturn(
   }).value;
 
   const qty = Number(l.quantity) || 0;
-  const soldUnit = l.price_minor_units ?? 0;
-  const regularUnit = l.regular_price_minor_units ?? soldUnit;
-  const baseCents = soldUnit * qty;
-  const discountCents = Math.max(0, (regularUnit - soldUnit) * qty);
+  const soldUnit = l.price_minor_units ?? 0; // tax-INCLUSIVE out-the-door unit
+  const regularUnit = l.regular_price_minor_units ?? soldUnit; // tax-INCLUSIVE
 
   // Medical + tax status mirror the Sale.csv builder (see ccrs-sales.ts).
   let isMedical = false;
@@ -612,9 +611,28 @@ export async function createCustomerReturn(
     category = ((mi as { category: string | null } | null)?.category ?? "").trim();
   }
   const isCannabis = isCannabisCategory(category, cannabisSet);
-  const salesTaxCents = salesExempt
-    ? 0
-    : applyBps(baseCents, taxSettings.stateSalesRateBps + taxSettings.localSalesRateBps);
+  // GW-010: mirror the (fixed) Sale.csv builder — stored prices are
+  // tax-INCLUSIVE, so the correction snapshot backs out the pre-tax figures
+  // the original Sale row reported (UnitPrice pre-tax, taxes on the pre-tax
+  // base, exemption-aware still-due rate).
+  const combinedBps = taxSettings.stateSalesRateBps + taxSettings.localSalesRateBps;
+  const preTaxRegularUnit = preTaxUnitMinor({
+    unitPriceMinorUnits: regularUnit,
+    isCannabis,
+    combinedSalesRateBps: combinedBps,
+    exciseRateBps: taxSettings.exciseRateBps,
+  });
+  const baseCents = preTaxLineBaseMinor({
+    unitPriceMinorUnits: soldUnit,
+    quantity: qty,
+    isCannabis,
+    salesExempt,
+    exciseExempt,
+    combinedSalesRateBps: combinedBps,
+    exciseRateBps: taxSettings.exciseRateBps,
+  });
+  const discountCents = Math.max(0, preTaxRegularUnit * qty - baseCents);
+  const salesTaxCents = salesExempt ? 0 : applyBps(baseCents, combinedBps);
   const exciseCents = isCannabis && !exciseExempt ? applyBps(baseCents, taxSettings.exciseRateBps) : 0;
 
   const saleExternalId = o.order_number || o.id;
@@ -662,7 +680,7 @@ export async function createCustomerReturn(
       inventory_external_id: inventoryExternalId || null,
       sale_type: isMedical ? "RecreationalMedical" : "RecreationalRetail",
       sale_date: saleDate,
-      unit_price_minor: regularUnit,
+      unit_price_minor: preTaxRegularUnit,
       discount_minor: discountCents,
       sales_tax_minor: salesTaxCents,
       excise_minor: exciseCents,
