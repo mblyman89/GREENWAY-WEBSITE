@@ -1,0 +1,1751 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Greenway POS — Owner's Testing Manual</title>
+<style>
+  :root {
+    --green: #7ed957; --gold: #ffd700; --orange: #ff7f00; --red: #ff5a5a;
+    --purple: #c084fc;
+    --canvas: #060807; --surface: #0c0e0d; --surface2: #121514;
+    --text: #f5f7f5; --muted: rgba(245,247,245,.62); --border: rgba(255,255,255,.09);
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--canvas); color: var(--text);
+    font: 16px/1.65 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  a { color: var(--green); }
+  .layout { display: flex; min-height: 100vh; }
+  /* ---------- sidebar ---------- */
+  nav {
+    width: 290px; flex: 0 0 290px; background: var(--surface);
+    border-right: 1px solid var(--border); padding: 18px 14px 40px;
+    position: sticky; top: 0; height: 100vh; overflow-y: auto;
+  }
+  nav h1 {
+    font-size: 15px; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--green); margin: 4px 6px 2px; font-weight: 900;
+  }
+  nav .sub { font-size: 11px; color: var(--muted); margin: 0 6px 14px; }
+  .nav-item {
+    display: flex; justify-content: space-between; align-items: center; gap: 8px;
+    padding: 8px 10px; margin: 2px 0; border-radius: 10px; text-decoration: none;
+    color: var(--text); font-size: 13px; font-weight: 600;
+  }
+  .nav-item:hover { background: var(--surface2); }
+  .nav-item.active { background: var(--green); color: #000; }
+  .nav-item.active .phase-progress { color: rgba(0,0,0,.7); }
+  .phase-progress { font-size: 11px; color: var(--muted); font-weight: 700; white-space: nowrap; }
+  .globalbar { margin: 12px 6px 16px; }
+  .globalbar .label { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+  .bar { height: 10px; border-radius: 999px; background: var(--surface2); overflow: hidden; }
+  .bar > div { height: 100%; background: linear-gradient(90deg, var(--green), var(--gold)); width: 0%; transition: width .3s; }
+  #search {
+    width: 100%; margin: 0 0 12px; padding: 9px 12px; border-radius: 10px;
+    border: 1px solid var(--border); background: var(--surface2); color: var(--text);
+    font-size: 13px; outline: none;
+  }
+  #search:focus { border-color: var(--green); }
+  .toolbtn {
+    display: block; width: 100%; margin: 6px 0; padding: 9px 12px; border-radius: 999px;
+    border: 0; font-weight: 900; font-size: 12px; letter-spacing: .08em;
+    text-transform: uppercase; cursor: pointer;
+  }
+  .toolbtn.export { background: var(--gold); color: #000; }
+  .toolbtn.reset { background: var(--surface2); color: var(--muted); }
+  /* ---------- main ---------- */
+  main { flex: 1; min-width: 0; padding: 30px clamp(18px, 5vw, 70px) 120px; max-width: 980px; }
+  main h1 { font-size: 30px; line-height: 1.2; }
+  main h2 {
+    font-size: 23px; margin-top: 56px; padding-top: 18px;
+    border-top: 2px solid var(--green); color: var(--green);
+  }
+  main h3 { font-size: 18px; margin-top: 34px; color: var(--gold); }
+  main h4 {
+    font-size: 16px; margin: 30px 0 6px; padding: 10px 14px; border-radius: 12px;
+    background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--orange);
+  }
+  main code { background: var(--surface2); padding: 2px 6px; border-radius: 6px; font-size: 13.5px; }
+  main pre { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; overflow-x: auto; font-size: 13px; }
+  main pre code { background: none; padding: 0; }
+  main blockquote {
+    margin: 14px 0; padding: 10px 18px; border-left: 4px solid var(--gold);
+    background: var(--surface); border-radius: 0 12px 12px 0; color: var(--muted);
+  }
+  main table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  main th, main td { border: 1px solid var(--border); padding: 7px 10px; text-align: left; }
+  main th { background: var(--surface2); }
+  main li { margin: 4px 0; }
+  main strong { color: #fff; }
+  .li-test { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  /* ---------- tracker widget ---------- */
+  .tracker { display: flex; gap: 6px; align-items: center; margin: 4px 0 10px; }
+  .tracker.inline { display: inline-flex; margin: 0; }
+  .tracker button {
+    border: 1px solid var(--border); background: var(--surface2); color: var(--muted);
+    font-size: 11px; font-weight: 900; letter-spacing: .06em; text-transform: uppercase;
+    border-radius: 999px; padding: 4px 12px; cursor: pointer;
+  }
+  .tracker button.on-pass { background: var(--green); color: #000; border-color: var(--green); }
+  .tracker button.on-fail { background: var(--red); color: #000; border-color: var(--red); }
+  .tracker button.on-blocked { background: var(--gold); color: #000; border-color: var(--gold); }
+  .tracker .bugcard-btn { background: var(--purple); color: #000; border-color: var(--purple); display: none; }
+  .tracker .bugcard-btn.show { display: inline-block; }
+  .hl-hit { outline: 2px solid var(--gold); border-radius: 8px; }
+  .hidden-by-search { display: none !important; }
+  /* ---------- bug card modal ---------- */
+  dialog {
+    background: var(--surface); color: var(--text); border: 1px solid var(--border);
+    border-radius: 16px; max-width: 640px; width: 92vw; padding: 22px;
+  }
+  dialog::backdrop { background: rgba(0,0,0,.7); }
+  dialog textarea {
+    width: 100%; height: 320px; background: var(--surface2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 10px; padding: 12px; font: 13px/1.5 monospace;
+  }
+  dialog .row { display: flex; gap: 10px; margin-top: 12px; justify-content: flex-end; }
+  dialog button {
+    border: 0; border-radius: 999px; padding: 9px 18px; font-weight: 900;
+    text-transform: uppercase; letter-spacing: .06em; font-size: 12px; cursor: pointer;
+  }
+  dialog .copy { background: var(--green); color: #000; }
+  dialog .close { background: var(--surface2); color: var(--muted); }
+  /* ---------- mobile ---------- */
+  #menu-toggle { display: none; }
+  @media (max-width: 860px) {
+    nav { position: fixed; z-index: 40; transform: translateX(-100%); transition: transform .25s; }
+    nav.open { transform: none; }
+    #menu-toggle {
+      display: block; position: fixed; z-index: 50; top: 12px; left: 12px;
+      background: var(--green); color: #000; border: 0; border-radius: 999px;
+      padding: 10px 16px; font-weight: 900; cursor: pointer;
+    }
+    main { padding-top: 64px; }
+  }
+  @media print {
+    nav, #menu-toggle, .tracker { display: none !important; }
+    body { background: #fff; color: #000; }
+    main h2 { color: #000; border-color: #000; }
+    main h4 { background: #f3f3f3; border-left-color: #888; }
+  }
+</style>
+</head>
+<body>
+<button id="menu-toggle">☰ Menu</button>
+<div class="layout">
+  <nav id="sidebar">
+    <h1>Greenway POS</h1>
+    <p class="sub">Owner's Testing Manual — interactive edition</p>
+    <div class="globalbar">
+      <div class="label"><span id="global-count">0 / 0</span> tests recorded</div>
+      <div class="bar"><div id="global-fill"></div></div>
+    </div>
+    <input id="search" type="search" placeholder="Search tests… (e.g. offline, void, T-060)">
+    <a class="nav-item" href="#part-a--read-me-first" data-phase="part-a--read-me-first">Part A — Read me first<span class="phase-progress" data-phase-progress="part-a--read-me-first"></span></a>
+<a class="nav-item" href="#phase-0" data-phase="phase-0">Phase 0 — Setup verification<span class="phase-progress" data-phase-progress="phase-0"></span></a>
+<a class="nav-item" href="#phase-1" data-phase="phase-1">Phase 1 — Logins &amp; roles<span class="phase-progress" data-phase-progress="phase-1"></span></a>
+<a class="nav-item" href="#phase-2" data-phase="phase-2">Phase 2 — The register<span class="phase-progress" data-phase-progress="phase-2"></span></a>
+<a class="nav-item" href="#phase-3" data-phase="phase-3">Phase 3 — Ringing a sale<span class="phase-progress" data-phase-progress="phase-3"></span></a>
+<a class="nav-item" href="#phase-4" data-phase="phase-4">Phase 4 — Offline &amp; sync<span class="phase-progress" data-phase-progress="phase-4"></span></a>
+<a class="nav-item" href="#phase-5" data-phase="phase-5">Phase 5 — Returns, voids, holds<span class="phase-progress" data-phase-progress="phase-5"></span></a>
+<a class="nav-item" href="#phase-6" data-phase="phase-6">Phase 6 — Medical<span class="phase-progress" data-phase-progress="phase-6"></span></a>
+<a class="nav-item" href="#phase-7" data-phase="phase-7">Phase 7 — Loyalty<span class="phase-progress" data-phase-progress="phase-7"></span></a>
+<a class="nav-item" href="#phase-8" data-phase="phase-8">Phase 8 — Menu &amp; website orders<span class="phase-progress" data-phase-progress="phase-8"></span></a>
+<a class="nav-item" href="#phase-9" data-phase="phase-9">Phase 9 — Inventory<span class="phase-progress" data-phase-progress="phase-9"></span></a>
+<a class="nav-item" href="#phase-10" data-phase="phase-10">Phase 10 — Staffing &amp; payroll<span class="phase-progress" data-phase-progress="phase-10"></span></a>
+<a class="nav-item" href="#phase-11" data-phase="phase-11">Phase 11 — Reports &amp; CCRS<span class="phase-progress" data-phase-progress="phase-11"></span></a>
+<a class="nav-item" href="#phase-12" data-phase="phase-12">Phase 12 — BREAK-IT DAY<span class="phase-progress" data-phase-progress="phase-12"></span></a>
+<a class="nav-item" href="#phase-13" data-phase="phase-13">Phase 13 — Dress rehearsal<span class="phase-progress" data-phase-progress="phase-13"></span></a>
+<a class="nav-item" href="#part-b--the-results-log" data-phase="part-b--the-results-log">Part B — Results log<span class="phase-progress" data-phase-progress="part-b--the-results-log"></span></a>
+    <button class="toolbtn export" id="export-log">Export results log</button>
+    <button class="toolbtn reset" id="reset-log">Reset all progress</button>
+  </nav>
+  <main id="content">
+<h1 id="greenway-pos-the-owners-testing-manual-test-planmd">Greenway POS — The Owner's Testing Manual (TEST-PLAN.md)</h1>
+<blockquote>
+<p><strong>Who this is for:</strong> the owner — an expert in cannabis retail and the LCB,
+and a self-described beginner at software. This manual assumes ZERO
+technical knowledge. Every test is spoon-fed: what to click, what you
+should see, what it means if you see something else, and exactly what to
+write down when it breaks.</p>
+<p><strong>Interactive version:</strong> open <code>docs/audit/test-manual/index.html</code> in any
+browser — same content, with a clickable sidebar, checkboxes that remember
+your progress, and a search box. Print it if you like paper.</p>
+<p><strong>Basis:</strong> every "Expected" in this plan comes from the System Behavior
+Bible (<code>docs/audit/bible/</code>), which was verified line-by-line against the
+code. Standing rule: NEVER GUESS — nothing here is invented. Each phase
+names its Bible chapter so a future auditor can trace any claim.</p>
+<p><strong>When to run this:</strong> AFTER the fix slices land. Tests marked
+<strong>⚠️ KNOWN-BROKEN (GW-###)</strong> describe behavior that is currently broken by
+an open finding — do not report those as new bugs; they are already in
+<code>FINDINGS.md</code> and will be fixed first. Once a finding is FIXED, its test
+becomes a normal test (and proves the fix).</p>
+</blockquote>
+<hr />
+<h2 id="table-of-contents">Table of contents</h2>
+<ul>
+<li><a href="#part-a--read-me-first">Part A — Read me first</a></li>
+<li><a href="#a1-the-golden-rules-of-testing">A1. The golden rules of testing</a></li>
+<li><a href="#a2-the-bug-card">A2. The Bug Card — what to write down when something breaks</a></li>
+<li><a href="#a3-your-testing-toolkit">A3. Your testing toolkit</a></li>
+<li><a href="#a4-test-data-vs-real-data">A4. Test data vs real data</a></li>
+<li><a href="#a5-how-the-phases-fit-together">A5. How the phases fit together</a></li>
+<li><a href="#phase-0">Phase 0 — Before you test anything (setup verification)</a></li>
+<li><a href="#phase-1">Phase 1 — Logging in, roles &amp; permissions</a> <em>(Bible ch. 14)</em></li>
+<li><a href="#phase-2">Phase 2 — The register itself: setup, lock, PIN, till</a> <em>(Bible ch. 01)</em></li>
+<li><a href="#phase-3">Phase 3 — Ringing a sale, start to finish</a> <em>(Bible ch. 02)</em></li>
+<li><a href="#phase-4">Phase 4 — Offline mode &amp; the sync queue</a> <em>(Bible ch. 04)</em></li>
+<li><a href="#phase-5">Phase 5 — Returns, voids, holds &amp; pickups</a> <em>(Bible ch. 05)</em></li>
+<li><a href="#phase-6">Phase 6 — Medical sales</a> <em>(Bible ch. 03)</em></li>
+<li><a href="#phase-7">Phase 7 — Loyalty</a> <em>(Bible ch. 06)</em></li>
+<li><a href="#phase-8">Phase 8 — The menu pipeline &amp; website orders</a> <em>(Bible ch. 07 &amp; 12)</em></li>
+<li><a href="#phase-9">Phase 9 — Inventory: intake, counts, dispositions</a> <em>(Bible ch. 09)</em></li>
+<li><a href="#phase-10">Phase 10 — Staffing &amp; payroll</a> <em>(Bible ch. 08 &amp; 13)</em></li>
+<li><a href="#phase-11">Phase 11 — Reports &amp; CCRS compliance</a> <em>(Bible ch. 10 &amp; 11)</em></li>
+<li><a href="#phase-12">Phase 12 — BREAK-IT DAY: stress, chaos &amp; edge cases</a></li>
+<li><a href="#phase-13">Phase 13 — The dress rehearsal: a full simulated store day</a></li>
+<li><a href="#part-b--the-results-log">Part B — The results log &amp; reporting back</a></li>
+</ul>
+<hr />
+<h2 id="part-a--read-me-first">Part A — Read me first</h2>
+<h3 id="a1-the-golden-rules-of-testing">A1. The golden rules of testing</h3>
+<ol>
+<li><strong>One test at a time.</strong> Finish a test completely — including writing down
+   the result — before starting the next. Mixing tests is how you end up
+   unable to say what caused what.</li>
+<li><strong>Write down EVERYTHING weird, even if it "worked."</strong> A button that took
+   8 seconds, a flash of wrong text, a number that looked off for a second —
+   all of it goes in the log. Small weirdness is how big bugs announce
+   themselves early.</li>
+<li><strong>Never assume you mis-clicked.</strong> If something surprising happened,
+   record it FIRST, then try again. If it happens twice, it's real. If it
+   doesn't, the first one still goes in the log with the note "could not
+   reproduce."</li>
+<li><strong>A test you skipped is a test that failed.</strong> If you can't run a test
+   (missing hardware, missing data), log it as BLOCKED with the reason —
+   don't quietly move on.</li>
+<li><strong>The Expected column is the law.</strong> These expectations were traced from
+   the code and the Bible. If reality differs from Expected — even in a way
+   that seems better — log it. "Better than expected" sometimes means a
+   safety check isn't running.</li>
+<li><strong>Time matters.</strong> Note the clock time of every failure. Many of the
+   trickiest bugs in this system involve time zones (Pacific vs UTC),
+   midnight boundaries, and expiry windows — the exact minute often tells
+   us which one bit you.</li>
+<li><strong>Don't fix, don't retry-until-it-works.</strong> Your job is to OBSERVE and
+   RECORD. Retrying five times until it goes through destroys the evidence.
+   One retry to confirm, then log and move on.</li>
+<li><strong>Test like a bored employee AND like a thief.</strong> Half these tests are
+   "does the happy path work"; the other half are "can I cheat it." Both
+   mindsets are required. When in doubt, try to break it — this manual will
+   tell you exactly how.</li>
+</ol>
+<h3 id="a2-the-bug-card">A2. The Bug Card</h3>
+<p>When ANYTHING doesn't match Expected, fill out one of these. Copy-paste the
+template into your results log (Part B) — or use the interactive manual,
+which generates one for you.</p>
+<pre><code>BUG CARD ————————————————————————————————————————
+Test ID:        (e.g. T-042)
+Date &amp; time:    (e.g. 2026-08-14, 3:22 PM)
+Where:          (register name / back-office page URL / website page)
+Who:            (which login / which employee PIN was in use)
+What I did:     (the exact steps, numbered — copy from the test, note
+                 where you deviated, if anywhere)
+What I expected:(copy the Expected line from the test)
+What happened:  (describe EXACTLY what you saw — quote on-screen text
+                 word for word; &quot;an error&quot; is not enough, &quot;a red banner
+                 saying 'Device key rejected'&quot; is perfect)
+Screen photo:   (take one with your phone if it's still on screen)
+Can I repeat it? (yes / no / sometimes — try exactly once more)
+Impact:         (blocked me / worked around it / cosmetic)
+—————————————————————————————————————————————————
+</code></pre>
+<p><strong>Why each line matters:</strong> the Test ID tells the AI exactly which code path
+was running; date &amp; time catches timezone bugs; the exact on-screen words
+usually identify the precise line of code that fired; "can I repeat it"
+separates hard bugs from flaky ones (both matter, they're fixed
+differently).</p>
+<h3 id="a3-your-testing-toolkit">A3. Your testing toolkit</h3>
+<p>Gather these before Phase 0:</p>
+<ul>
+<li><strong>An iPad</strong> (the register hardware) with Safari.</li>
+<li><strong>A laptop or desktop</strong> for the back office (any modern browser).</li>
+<li><strong>A phone</strong> — for taking photos of failures, and for testing the public
+  website like a customer would.</li>
+<li><strong>Your phone's camera</strong> aimed at anything weird. Screenshots on the iPad:
+  press Top Button + Volume Up together.</li>
+<li><strong>A paper notepad or the interactive manual</strong> for the results log.</li>
+<li><strong>The store's Wi-Fi details</strong> — and a way to turn Wi-Fi OFF on the iPad
+  (Settings → Wi-Fi) for the offline tests. Airplane Mode works too.</li>
+<li><strong>The receipt printer</strong> (Star CloudPRNT) — needed from Phase 3 onward;
+  earlier phases work without it.</li>
+<li><strong>A barcode scanner</strong> if you have one (wedge type) — optional; there is a
+  manual path for everything.</li>
+<li><strong>Two test "employees"</strong> created in Staffing with PINs you know — one
+  with a manager role, one budtender. You'll act as both.</li>
+<li><strong>Patience.</strong> Some tests deliberately make you wait (2-minute idle lock,
+  30-minute hold expiry). The manual tells you when to start a timer.</li>
+</ul>
+<h3 id="a4-test-data-vs-real-data">A4. Test data vs real data</h3>
+<ul>
+<li>The system has a <strong>"Clean Slate" reset</strong> (Admin → Settings → Reset) that
+  clears day-to-day TEST data while keeping settings and the knowledge
+  base. It requires typing a confirmation phrase and is recorded in the
+  audit log. Use it between major test rounds so old test junk doesn't
+  confuse new tests.</li>
+<li><strong>Medical has a dedicated TEST MODE</strong> (Bible ch. 03 §10) that shows a loud
+  banner and never touches the server — use it for all medical rehearsals
+  until you hold the DOH endorsement.</li>
+<li><strong>Before the store opens for real:</strong> run your tests freely. <strong>After</strong> the
+  store opens, never mix test sales into a live day — the reports and CCRS
+  exports would include them. If you must test on a live system, do it
+  after close, log every test sale's receipt number, and void them the same
+  day (voids are same-day only — Bible ch. 05).</li>
+<li><strong>CCRS testing uses REAL uploads</strong> — there is no LCB sandbox. Phase 11
+  walks you through the safe way (tiny file, checked in the portal's
+  Processing Status before anything bigger).</li>
+</ul>
+<h3 id="a5-how-the-phases-fit-together">A5. How the phases fit together</h3>
+<pre><code>Phase 0   Is the system even set up right?          (30 min, once)
+Phase 1   Can the right people get in — and ONLY    (45 min)
+          the right people?
+Phase 2   Does the register itself behave?          (1.5 hrs)
+Phase 3   Can I ring a legal sale?                  (2 hrs — the heart)
+Phase 4   Does it survive bad internet?             (1.5 hrs)
+Phase 5   Returns, voids, holds, pickups            (2 hrs)
+Phase 6   Medical                                   (1.5 hrs, test mode)
+Phase 7   Loyalty                                   (1 hr)
+Phase 8   Menu updates &amp; website orders             (1.5 hrs)
+Phase 9   Inventory                                 (2 hrs)
+Phase 10  Staffing &amp; payroll                        (1 hr)
+Phase 11  Reports &amp; CCRS                            (2 hrs + portal time)
+Phase 12  BREAK-IT DAY — you become the villain     (a full fun day)
+Phase 13  Dress rehearsal — a fake store day        (a full day, 2 people)
+</code></pre>
+<p>Run them <strong>in order</strong> the first time — later phases assume earlier ones
+passed. After fixes land, you only re-run the phases the fix touched
+(each fix PR will name them) plus Phase 12's relevant scenario.</p>
+<hr />
+<p><a id="phase-0"></a></p>
+<h2 id="phase-0-before-you-test-anything-setup-verification">Phase 0 — Before you test anything (setup verification)</h2>
+<p><em>Goal: prove the foundations are in place so later failures mean real bugs,
+not setup gaps. Reference: <code>docs/audit/OWNER-TASKLIST.md</code> §§1–4.</em></p>
+<h4 id="t-001-migrations-are-applied">T-001 — Migrations are applied</h4>
+<div class="tracker" data-test="T-001"></div>
+<ul>
+<li><strong>Do:</strong> Open your Supabase dashboard → SQL editor. The owner task list
+  (§1) says which migration files matter; you have been applying them
+  manually all along. Confirm your own checklist shows every migration file
+  number applied, especially <strong>0061</strong> (the one flagged for re-run), <strong>0117</strong>
+  (staffing lifecycle), <strong>0120</strong> (sale idempotency), and <strong>0123</strong> (PIN
+  throttle).</li>
+<li><strong>Expect:</strong> your checklist is complete; no migration file exists in the
+  repo's <code>supabase/migrations/</code> folder that you haven't run.</li>
+<li><strong>If not:</strong> STOP. Do not test further — half the tests below will fail in
+  confusing ways. Apply the missing ones first.</li>
+</ul>
+<h4 id="t-002-environment-variables-are-set">T-002 — Environment variables are set</h4>
+<div class="tracker" data-test="T-002"></div>
+<ul>
+<li><strong>Do:</strong> In Vercel → your project → Settings → Environment Variables,
+  compare against the inventory in <code>OWNER-TASKLIST.md</code> §3.</li>
+<li><strong>Expect:</strong> every required variable present; no obvious blanks.</li>
+<li><strong>If not:</strong> set them, redeploy, then start Phase 0 again.</li>
+</ul>
+<h4 id="t-003-the-public-website-loads">T-003 — The public website loads</h4>
+<div class="tracker" data-test="T-003"></div>
+<ul>
+<li><strong>Do:</strong> On your phone (not the store network — use cellular), open your
+  site's home page, then the Menu page.</li>
+<li><strong>Expect:</strong> pages load in a few seconds; menu shows products with prices;
+  no error screens.</li>
+<li><strong>If broken, record:</strong> which page, exact error text, phone vs laptop,
+  cellular vs Wi-Fi.</li>
+</ul>
+<h4 id="t-004-the-back-office-loads-and-requires-login">T-004 — The back office loads and requires login</h4>
+<div class="tracker" data-test="T-004"></div>
+<ul>
+<li><strong>Do:</strong> On the laptop, go to <code>/admin</code> while logged OUT (use a private/
+  incognito window to be sure).</li>
+<li><strong>Expect:</strong> you are sent to the login page — never straight into the
+  dashboard.</li>
+<li><strong>This must NEVER happen:</strong> seeing any admin data while logged out. That
+  would be a critical security failure — photograph it and stop testing.</li>
+</ul>
+<h4 id="t-005-the-register-page-loads-on-the-ipad">T-005 — The register page loads on the iPad</h4>
+<div class="tracker" data-test="T-005"></div>
+<ul>
+<li><strong>Do:</strong> On the iPad in Safari, go to <code>/pos</code>.</li>
+<li><strong>Expect:</strong> the register loads to its setup screen (first time) or lock
+  screen (already provisioned). No blank white page.</li>
+</ul>
+<h4 id="t-006-email-sending-works-resend">T-006 — Email sending works (Resend)</h4>
+<div class="tracker" data-test="T-006"></div>
+<ul>
+<li><strong>Do:</strong> trigger any email the system sends (easiest: place a tiny test
+  website order in Phase 8 — or just note this test and confirm it there).</li>
+<li><strong>Expect:</strong> the email arrives within ~2 minutes, from your store's
+  address, not spam-foldered.</li>
+<li><strong>⚠️ KNOWN-BROKEN (GW-025):</strong> currently the system doesn't check whether
+  the email provider accepted the send — so a silent non-delivery is a
+  known open finding. Log deliveries/non-deliveries either way; that data
+  helps verify the fix.</li>
+</ul>
+<h4 id="t-007-the-receipt-printer-answers">T-007 — The receipt printer answers</h4>
+<div class="tracker" data-test="T-007"></div>
+<ul>
+<li><strong>Do:</strong> power the Star printer, confirm it's on the store network per
+  <code>OWNER-TASKLIST.md</code> §6.</li>
+<li><strong>Expect:</strong> its status page/light shows connected. Real print tests come
+  in Phase 3.</li>
+</ul>
+<h4 id="t-008-two-test-employees-exist">T-008 — Two test employees exist</h4>
+<div class="tracker" data-test="T-008"></div>
+<ul>
+<li><strong>Do:</strong> Admin → Staffing → Employees. Create (or confirm) two ACTIVE test
+  employees: "Test Manager" (manager role, a 4+ digit PIN you know) and
+  "Test Budtender" (staff role, different PIN).</li>
+<li><strong>Expect:</strong> both save cleanly and appear in the roster with the right
+  roles.</li>
+<li><strong>Note their PINs</strong> in your log — you'll use them constantly.</li>
+</ul>
+<hr />
+<p><a id="phase-1"></a></p>
+<h2 id="phase-1-logging-in-roles-permissions-bible-ch-14">Phase 1 — Logging in, roles &amp; permissions <em>(Bible ch. 14)</em></h2>
+<p><em>Goal: only the right people get in, and each role sees only what it
+should. You'll act as several different people.</em></p>
+<h4 id="t-010-owner-login-works">T-010 — Owner login works</h4>
+<div class="tracker" data-test="T-010"></div>
+<ul>
+<li><strong>Do:</strong> log in with your owner account (magic link or passkey — whichever
+  you've set up).</li>
+<li><strong>Expect:</strong> you land on the admin dashboard; your name/role appears in
+  the top nav.</li>
+</ul>
+<h4 id="t-011-a-wrong-email-gets-nothing">T-011 — A wrong email gets nothing</h4>
+<div class="tracker" data-test="T-011"></div>
+<ul>
+<li><strong>Do:</strong> log out. Request a magic link for a made-up email like
+  <code>nobody@example.com</code>.</li>
+<li><strong>Expect:</strong> the screen gives a neutral message; <strong>no</strong> staff account is
+  created for that address. Check Admin → Users afterwards from your owner
+  login: there must be NO new account.</li>
+<li><strong>⚠️ KNOWN-BROKEN (GW-018):</strong> until this finding's fix lands, the login
+  page CAN create an account for any email. This test verifies the fix.
+  If after the fix a new account still appears — that's a critical bug,
+  photograph the Users page.</li>
+</ul>
+<h4 id="t-012-staff-invite-end-to-end">T-012 — Staff invite end-to-end</h4>
+<div class="tracker" data-test="T-012"></div>
+<ul>
+<li><strong>Do:</strong> Admin → Users → invite a real email address you control (a
+  personal one). Open the invite email on another device and follow it.</li>
+<li><strong>Expect:</strong> the link takes you to a page where you can set a password /
+  complete sign-in, and you land in the admin with the role you assigned.</li>
+<li><strong>⚠️ KNOWN-BROKEN (GW-017):</strong> invites are currently broken end-to-end (no
+  set-password page exists). This test verifies the fix when it lands.</li>
+</ul>
+<h4 id="t-013-a-readonly-analyst-can-look-but-not-touch">T-013 — A readonly analyst can look but not touch</h4>
+<div class="tracker" data-test="T-013"></div>
+<ul>
+<li><strong>Do:</strong> set your test personal account (from T-012) to the
+  <strong>Read-only / Analyst</strong> role. Log in as them. Try to: view Reports
+  (should work), then try to edit anything — a product price, an order
+  status, a promotion.</li>
+<li><strong>Expect:</strong> reports visible; every edit attempt is refused or the
+  controls simply aren't there. Trying to open a page above your rank
+  should bounce you back to the dashboard with a "denied" notice.</li>
+<li><strong>If broken, record:</strong> which page let readonly change what — exact URL
+  and field.</li>
+</ul>
+<h4 id="t-014-a-budtender-role-login-cant-see-money-settings">T-014 — A budtender-role login can't see money settings</h4>
+<div class="tracker" data-test="T-014"></div>
+<ul>
+<li><strong>Do:</strong> switch the test account to <strong>Budtender/Staff</strong> role. Log in.
+  Try to open: Settings, Users, Payroll, Vendor Payments, Reports →
+  Accounting.</li>
+<li><strong>Expect:</strong> all refused/bounced. Orders dashboard and loyalty review
+  ARE visible (that's the role's purpose).</li>
+</ul>
+<h4 id="t-015-nobody-can-promote-themselves">T-015 — Nobody can promote themselves</h4>
+<div class="tracker" data-test="T-015"></div>
+<ul>
+<li><strong>Do:</strong> as a test <strong>admin</strong>-role account, open Admin → Users and try to
+  change YOUR OWN role to owner, and try to create a new user with the
+  owner role.</li>
+<li><strong>Expect:</strong> both are refused with a clear message. The rule: you can't
+  change your own role, and you can't grant a role above your own.</li>
+</ul>
+<h4 id="t-016-deactivation-kills-access-immediately">T-016 — Deactivation kills access immediately</h4>
+<div class="tracker" data-test="T-016"></div>
+<ul>
+<li><strong>Do:</strong> as owner, deactivate the test account (Users → set inactive).
+  Then, as the test account (still logged in in its other browser
+  window!), click anything.</li>
+<li><strong>Expect:</strong> their very next action fails / they're logged out. A
+  deactivated person must not keep working just because their browser tab
+  was already open.</li>
+</ul>
+<h4 id="t-017-the-last-owner-is-protected">T-017 — The last owner is protected</h4>
+<div class="tracker" data-test="T-017"></div>
+<ul>
+<li><strong>Do:</strong> as owner, try to deactivate yourself / demote yourself (assuming
+  you are the only active owner).</li>
+<li><strong>Expect:</strong> refused with a clear explanation. The system must never let
+  the last active owner lock everyone out.</li>
+</ul>
+<h4 id="t-018-the-audit-trail-is-watching">T-018 — The audit trail is watching</h4>
+<div class="tracker" data-test="T-018"></div>
+<ul>
+<li><strong>Do:</strong> after T-013…T-017, open the admin audit/activity page. </li>
+<li><strong>Expect:</strong> rows for every role change, activation flip, and refused
+  attempt you just made — each naming who did what and when.</li>
+<li><strong>Why you care:</strong> the LCB and your accountant will one day ask "who
+  changed this?" — this page is your answer. If actions you just took are
+  missing here, that's a finding.</li>
+</ul>
+<hr />
+<p><a id="phase-2"></a></p>
+<h2 id="phase-2-the-register-itself-setup-lock-pin-till-bible-ch-01">Phase 2 — The register itself: setup, lock, PIN, till <em>(Bible ch. 01)</em></h2>
+<p><em>Goal: the iPad register boots, locks, unlocks, and handles cash-drawer
+bookkeeping exactly as designed — before a single sale is rung.</em></p>
+<h4 id="t-020-provision-a-register-the-one-time-setup">T-020 — Provision a register (the one-time setup)</h4>
+<div class="tracker" data-test="T-020"></div>
+<ul>
+<li><strong>Do:</strong> Back office → Admin → Registers → POS devices → provision a new
+  device. You'll be shown a <strong>Device ID</strong> and a <strong>Device Key</strong> — the key is
+  shown ONCE, copy both. On the iPad at <code>/pos</code>, paste them into the setup
+  screen.</li>
+<li><strong>Expect:</strong> setup succeeds; the screen tells you the device's name and
+  register; you land on the LOCK screen (PIN pad), never straight into an
+  unlocked register.</li>
+<li><strong>Nice detail to verify:</strong> paste the id and key into each other's fields
+  on purpose — the screen should detect the mix-up and swap them back for
+  you with a notice.</li>
+<li><strong>If broken, record:</strong> the exact error text. "Device key rejected" vs
+  "Could not reach the server" mean totally different problems.</li>
+</ul>
+<h4 id="t-021-setup-refuses-to-work-offline">T-021 — Setup refuses to work offline</h4>
+<div class="tracker" data-test="T-021"></div>
+<ul>
+<li><strong>Do:</strong> on a NOT-yet-provisioned iPad (or after T-029's revoke), turn off
+  Wi-Fi, try setup.</li>
+<li><strong>Expect:</strong> a clear "connect to the internet for first-time setup"
+  message. First-time setup is online-only by design.</li>
+</ul>
+<h4 id="t-022-pin-unlock-works-wrong-pin-doesnt">T-022 — PIN unlock works, wrong PIN doesn't</h4>
+<div class="tracker" data-test="T-022"></div>
+<ul>
+<li><strong>Do:</strong> at the lock screen, enter the Test Budtender PIN.</li>
+<li><strong>Expect:</strong> register unlocks showing that employee's name. Lock it again
+  (there's an explicit lock control). Now enter a WRONG pin.</li>
+<li><strong>Expect:</strong> refused, count shown or not — but definitely no unlock.</li>
+</ul>
+<h4 id="t-023-pin-guessing-gets-you-locked-out">T-023 — PIN guessing gets you locked out</h4>
+<div class="tracker" data-test="T-023"></div>
+<ul>
+<li><strong>Do:</strong> enter a wrong PIN <strong>5 times fast</strong> (within a minute).</li>
+<li><strong>Expect:</strong> the PIN pad locks for about <strong>60 seconds</strong> and says so.
+  During the lockout, even the CORRECT pin must be refused. After ~60s,
+  the correct PIN works again.</li>
+<li><strong>Why you care:</strong> this is the anti-thief throttle. If 5 fast wrong
+  guesses do NOT lock the pad, stop and photograph — that's a security
+  hole (the throttle depends on migration 0123 — see GW-005).</li>
+</ul>
+<h4 id="t-024-the-2-minute-idle-lock">T-024 — The 2-minute idle lock</h4>
+<div class="tracker" data-test="T-024"></div>
+<ul>
+<li><strong>Do:</strong> unlock the register. Don't touch it. Start a 2-minute timer.</li>
+<li><strong>Expect:</strong> at ~2 minutes untouched, the register locks itself back to
+  the PIN pad.</li>
+<li><strong>Then:</strong> unlock, tap around a little before 2 minutes — the timer should
+  reset with activity (it should NOT lock mid-use at exactly 2 minutes
+  from unlock).</li>
+</ul>
+<h4 id="t-025-a-restart-always-lands-on-the-lock-screen">T-025 — A restart always lands on the lock screen</h4>
+<div class="tracker" data-test="T-025"></div>
+<ul>
+<li><strong>Do:</strong> unlock the register, then kill the app/tab completely (swipe it
+  away) and reopen <code>/pos</code>.</li>
+<li><strong>Expect:</strong> LOCK screen. An employee session must never survive a
+  restart. <strong>This must NEVER happen:</strong> reopening straight into an unlocked
+  register.</li>
+</ul>
+<h4 id="t-026-clock-in-clock-out-from-the-lock-screen">T-026 — Clock in / clock out from the lock screen</h4>
+<div class="tracker" data-test="T-026"></div>
+<ul>
+<li><strong>Do:</strong> use the lock screen's clock-in with the Test Budtender PIN. Then
+  clock out.</li>
+<li><strong>Expect:</strong> both actions confirm on screen; back office → Staffing →
+  time clock shows the punch pair with correct times.</li>
+<li><strong>Edge to try:</strong> clock in twice in a row without clocking out — the
+  second attempt should toggle (clock you OUT), never create two open
+  punches.</li>
+</ul>
+<h4 id="t-027-till-count-in-safe-drop-blind-close">T-027 — Till: count-in, safe drop, blind close</h4>
+<div class="tracker" data-test="T-027"></div>
+<ul>
+<li><strong>Do:</strong> open a drawer session (count in a float, e.g. $200.00). Ring
+  nothing yet. Do a <strong>safe drop</strong> of $50 — it should demand a <strong>witness</strong>:
+  a SECOND employee's PIN (use Test Manager).</li>
+<li><strong>Expect:</strong> the drop records with both names. Try to witness a drop with
+  the SAME pin as the dropper — must be refused ("a drop cannot witness
+  itself").</li>
+<li><strong>Try:</strong> a $0 or negative drop — refused.</li>
+<li><strong>Then:</strong> blind-close the drawer: count the cash and enter your count.</li>
+<li><strong>Expect:</strong> the register accepts your count and says thanks — it must
+  NOT show you the expected total or the over/short. (That reveal happens
+  only in the back office, by a manager — that's what "blind" means.)</li>
+</ul>
+<h4 id="t-028-two-drawers-cant-be-open-at-once">T-028 — Two drawers can't be open at once</h4>
+<div class="tracker" data-test="T-028"></div>
+<ul>
+<li><strong>Do:</strong> with a drawer session open, try to open another one on the same
+  register.</li>
+<li><strong>Expect:</strong> refused.</li>
+</ul>
+<h4 id="t-029-revoking-a-device-cuts-it-off">T-029 — Revoking a device cuts it off</h4>
+<div class="tracker" data-test="T-029"></div>
+<ul>
+<li><strong>Do:</strong> back office → Registers → devices → revoke the test iPad. On the
+  iPad, try to unlock / do anything that talks to the server.</li>
+<li><strong>Expect:</strong> its next server call fails with an "unknown or revoked
+  device" style message. Re-provision it (new key) to continue testing.</li>
+<li><strong>Why you care:</strong> this is what you'll do if an iPad is ever stolen.</li>
+</ul>
+<h4 id="t-030-the-update-banner-never-interrupts-a-sale">T-030 — The update banner never interrupts a sale</h4>
+<div class="tracker" data-test="T-030"></div>
+<ul>
+<li><strong>Do:</strong> this one is opportunistic — when a new deploy ships mid-testing,
+  have a sale in progress on the register.</li>
+<li><strong>Expect:</strong> the update NEVER applies mid-sale. It waits and applies at
+  the lock screen, or offers a banner on the home screen. Record the
+  moment an update applied and what screen you were on.</li>
+</ul>
+<hr />
+<p><a id="phase-3"></a></p>
+<h2 id="phase-3-ringing-a-sale-start-to-finish-bible-ch-02">Phase 3 — Ringing a sale, start to finish <em>(Bible ch. 02)</em></h2>
+<p><em>Goal: the heart of the system. A sale has four steps — </em><em>ID check → cart
+→ cash tender → done</em><em> — wrapped by two gates (store hours, and the ID
+gate). You will walk the happy path first, then rattle every gate.</em></p>
+<h3 id="31-the-id-gate">3.1 The ID gate</h3>
+<h4 id="t-040-the-gate-comes-first-always">T-040 — The gate comes first, always</h4>
+<div class="tracker" data-test="T-040"></div>
+<ul>
+<li><strong>Do:</strong> unlock the register and start a sale.</li>
+<li><strong>Expect:</strong> the FIRST screen is the ID check. There is no way to reach
+  the cart without an ID verdict. Look for the house-policy banner
+  (vertical ID always scans; under-40 always scans; clearly-40+ gets a
+  visual check + DOB entry).</li>
+</ul>
+<h4 id="t-041-scan-a-valid-id-if-you-have-a-scanner">T-041 — Scan a valid ID (if you have a scanner)</h4>
+<div class="tracker" data-test="T-041"></div>
+<ul>
+<li><strong>Do:</strong> scan a real, unexpired WA license of someone 21+.</li>
+<li><strong>Expect:</strong> verdict allowed; you land in the cart; the person's age was
+  computed correctly.</li>
+</ul>
+<h4 id="t-042-an-expired-id-is-refused-every-path">T-042 — An expired ID is refused, every path</h4>
+<div class="tracker" data-test="T-042"></div>
+<ul>
+<li><strong>Do:</strong> scan (or manually enter) an ID with an expiration date in the
+  past.</li>
+<li><strong>Expect:</strong> refused with a clear reason. Per WAC 314-55-150 an expired
+  ID is not acceptable — the register must hold that line even if the
+  person is obviously 50.</li>
+</ul>
+<h4 id="t-043-underage-is-refused-both-thresholds">T-043 — Underage is refused, both thresholds</h4>
+<div class="tracker" data-test="T-043"></div>
+<ul>
+<li><strong>Do:</strong> manually enter a DOB that makes the person 20 (no medical card).
+  Then one that makes them 17.</li>
+<li><strong>Expect:</strong> both refused. 18–20 is ONLY allowed with a valid medical
+  card (Phase 6); under 18 is refused always — "no medical exception
+  exists at retail."</li>
+<li><strong>Sneaky check:</strong> try a DOB that makes them turn 21 TOMORROW. Refused —
+  age math must not round up.</li>
+</ul>
+<h4 id="t-044-the-over-40-visual-path-cant-be-abused">T-044 — The over-40 visual path can't be abused</h4>
+<div class="tracker" data-test="T-044"></div>
+<ul>
+<li><strong>Do:</strong> use the visual/over-40 path but enter a DOB that computes to 35.</li>
+<li><strong>Expect:</strong> refused — the visual path re-checks that the DOB actually
+  proves 40+, it is not an honor system.</li>
+</ul>
+<h4 id="t-045-manual-entry-is-audited">T-045 — Manual entry is audited</h4>
+<div class="tracker" data-test="T-045"></div>
+<ul>
+<li><strong>Do:</strong> complete a manual ID verification (passport-style path), finish
+  the sale (any item, cash).</li>
+<li><strong>Expect:</strong> the sale completes; later, in the back office, that sale's
+  record shows a manual-ID-verification audit event attached. A manual
+  verify with no audit trail is a compliance failure.</li>
+</ul>
+<h3 id="32-the-cart">3.2 The cart</h3>
+<h4 id="t-046-add-change-remove">T-046 — Add, change, remove</h4>
+<div class="tracker" data-test="T-046"></div>
+<ul>
+<li><strong>Do:</strong> add 3 different products; change a quantity; remove a line.</li>
+<li><strong>Expect:</strong> totals update instantly and correctly every time. Prices
+  shown match the menu.</li>
+</ul>
+<h4 id="t-047-the-statutory-limit-wall-the-big-one">T-047 — The statutory limit wall (the big one)</h4>
+<div class="tracker" data-test="T-047"></div>
+<ul>
+<li><strong>Background you already know:</strong> WA per-sale limits — 1 oz usable
+  flower (28 g), 16 oz solid edibles, 72 oz liquid, 7 g concentrates
+  (3× each for medical cardholders).</li>
+<li><strong>Do:</strong> add flower until the cart passes 28 g equivalent.</li>
+<li><strong>Expect:</strong> the register shows the limit violation clearly and the
+  <strong>Pay button refuses to enable</strong> while over. Reduce quantity → the
+  block clears.</li>
+<li><strong>Try each bucket:</strong> repeat with concentrates past 7 g, edibles past
+  16 oz.</li>
+<li><strong>Sneaky check:</strong> try mixing (e.g., 20 g flower + concentrates) — the
+  buckets are separate; one bucket at its cap must not block another
+  bucket that's under.</li>
+<li><strong>This must NEVER happen:</strong> completing an over-limit sale through ANY
+  path — there is no override for statutory limits at the register.</li>
+</ul>
+<h4 id="t-048-owner-limits-can-only-tighten">T-048 — Owner limits can only TIGHTEN</h4>
+<div class="tracker" data-test="T-048"></div>
+<ul>
+<li><strong>Do:</strong> in the back office (Settings → sales limits), set an owner limit
+  BELOW the statutory cap (e.g., 14 g flower). Ring a 20 g flower sale.</li>
+<li><strong>Expect:</strong> blocked at your 14 g. Now try to set an owner limit ABOVE
+  statutory (e.g., 56 g).</li>
+<li><strong>Expect:</strong> the statutory ceiling still wins — owner settings can
+  tighten, never loosen.</li>
+</ul>
+<h4 id="t-049-price-override-needs-a-manager-and-its-picky">T-049 — Price override needs a manager, and it's picky</h4>
+<div class="tracker" data-test="T-049"></div>
+<ul>
+<li><strong>Do:</strong> as budtender, attempt a price override on a line.</li>
+<li><strong>Expect:</strong> it demands a manager PIN (Test Manager). Approve it.</li>
+<li><strong>Sneaky check 1:</strong> try to override a cannabis item to $0.00 or a penny
+  below its cost. Refused — the statutory minimum (1¢ floor) and the
+  acquisition-cost floor bind EVERYONE, including managers.</li>
+<li><strong>Sneaky check 2 (the stale-approval trap):</strong> get a manager approval,
+  then change the cart (add an item) before applying. The approval must
+  drop as stale — an override may only apply at the exact price the
+  manager saw.</li>
+<li><strong>Sneaky check 3:</strong> turn Wi-Fi off and try an override. Refused —
+  approvals never work offline.</li>
+</ul>
+<h4 id="t-050-sales-hours-gate">T-050 — Sales hours gate</h4>
+<div class="tracker" data-test="T-050"></div>
+<ul>
+<li><strong>Do:</strong> in Settings → sales hours, set closing time to 5 minutes from
+  now. Wait for it to pass, then try to start a sale.</li>
+<li><strong>Expect:</strong> a friendly "sales are closed" screen that re-checks every 15
+  seconds. A sale mid-tender when hours close should still be able to
+  finish its receipt (the done step is deliberately not blocked).</li>
+<li><strong>Restore your real hours after.</strong></li>
+</ul>
+<h3 id="33-tender-done">3.3 Tender &amp; done</h3>
+<h4 id="t-051-cash-tender-math">T-051 — Cash tender math</h4>
+<div class="tracker" data-test="T-051"></div>
+<ul>
+<li><strong>Do:</strong> ring a $27.43 sale. Tender $40.</li>
+<li><strong>Expect:</strong> change $12.57, computed instantly. Try tendering LESS than
+  due — Pay must refuse.</li>
+<li><strong>If cash rounding is configured:</strong> verify the amount DUE follows your
+  rounding policy and the receipt matches the screen to the penny.</li>
+</ul>
+<h4 id="t-052-the-receipt-tells-the-truth">T-052 — The receipt tells the truth</h4>
+<div class="tracker" data-test="T-052"></div>
+<ul>
+<li><strong>Do:</strong> complete the sale, print the receipt.</li>
+<li><strong>Expect:</strong> every line, discount, tax figure, and total on the paper
+  matches the screen exactly. Cannabis tax handling should match your
+  configured display (tax-inclusive pricing).</li>
+<li><strong>Also check:</strong> printing a receipt must NOT pop the cash drawer a second
+  time.</li>
+</ul>
+<h4 id="t-053-the-sale-landed-in-the-back-office">T-053 — The sale landed in the back office</h4>
+<div class="tracker" data-test="T-053"></div>
+<ul>
+<li><strong>Do:</strong> on the laptop, find the sale you just rang (Orders / register
+  activity).</li>
+<li><strong>Expect:</strong> it appears within a minute or two with the same total, the
+  right register, the right employee, and inventory decremented by
+  exactly the units sold (spot-check one product's count before/after).</li>
+</ul>
+<h4 id="t-054-cancel-paths-are-clean">T-054 — Cancel paths are clean</h4>
+<div class="tracker" data-test="T-054"></div>
+<ul>
+<li><strong>Do:</strong> start a sale, pass the gate, add items — then cancel out
+  entirely.</li>
+<li><strong>Expect:</strong> no order appears anywhere, no inventory moves, and (if
+  loyalty was attached) any reserved points come back (Phase 7 re-checks
+  this properly).</li>
+</ul>
+<hr />
+<p><a id="phase-4"></a></p>
+<h2 id="phase-4-offline-mode-the-sync-queue-bible-ch-04">Phase 4 — Offline mode &amp; the sync queue <em>(Bible ch. 04)</em></h2>
+<p><em>Goal: the register's superpower — selling through an internet outage —
+and its most dangerous failure modes. You will deliberately cut the
+internet. That is the test.</em></p>
+<p><strong>How it works, in one paragraph:</strong> every sale/punch/audit event goes into
+a queue ON the iPad first, then syncs to the server when it can. Each
+event carries a unique fingerprint so the server can never double-count a
+retry. Rows leave the iPad's queue ONLY when the server durably confirms
+them.</p>
+<h4 id="t-060-sell-through-an-outage">T-060 — Sell through an outage</h4>
+<div class="tracker" data-test="T-060"></div>
+<ul>
+<li><strong>Do:</strong> unlock the register. Turn the iPad's Wi-Fi OFF. Ring TWO
+  complete cash sales (gate → cart → tender → done).</li>
+<li><strong>Expect:</strong> both sales complete normally — receipts print math on
+  screen even if the printer (network) can't print. A queue indicator
+  shows events waiting.</li>
+<li><strong>Then:</strong> Wi-Fi back ON. Within a minute or two, the queue drains.</li>
+<li><strong>Verify:</strong> BOTH sales appear in the back office exactly once each.</li>
+<li><strong>This must NEVER happen:</strong> a sale appearing twice, or not at all.
+  Count carefully — this is the single most important test in this manual.</li>
+</ul>
+<h4 id="t-061-the-register-boots-offline">T-061 — The register boots offline</h4>
+<div class="tracker" data-test="T-061"></div>
+<ul>
+<li><strong>Do:</strong> with Wi-Fi off, kill and reopen <code>/pos</code>.</li>
+<li><strong>Expect:</strong> the register loads (from its cached copy) to the lock
+  screen. Note the known limitation: <strong>unlocking needs the network</strong>
+  (GW-007, enhancement planned) — so pre-unlock before an expected
+  outage. Record what you see either way.</li>
+</ul>
+<h4 id="t-062-offline-menu-is-yesterdays-menu-never-a-blank-one">T-062 — Offline menu is yesterday's menu, never a blank one</h4>
+<div class="tracker" data-test="T-062"></div>
+<ul>
+<li><strong>Do:</strong> offline, browse the product grid.</li>
+<li><strong>Expect:</strong> the last cached menu with real prices. NEVER a $0 or empty
+  menu.</li>
+</ul>
+<h4 id="t-063-flaky-not-just-dead">T-063 — Flaky, not just dead</h4>
+<div class="tracker" data-test="T-063"></div>
+<ul>
+<li><strong>Do:</strong> ring a sale while toggling Wi-Fi off/on every ~10 seconds
+  (simulate the worst café Wi-Fi on earth).</li>
+<li><strong>Expect:</strong> the sale completes; the queue eventually drains; the back
+  office shows exactly one copy. Retries must be invisible to the
+  customer.</li>
+</ul>
+<h4 id="t-064-the-rejected-row-banner">T-064 — The rejected-row banner</h4>
+<div class="tracker" data-test="T-064"></div>
+<ul>
+<li><strong>Do:</strong> this is hard to trigger honestly — it happens when the server
+  refuses an event as invalid. If you ever see a red "rejected" banner
+  on the register during any test: STOP, photograph it, and log every
+  detail. Rejected rows are kept on the iPad for manager review.</li>
+<li><strong>⚠️ KNOWN-BROKEN (GW-027):</strong> the promised back-office review page for
+  rejected rows doesn't exist yet; the rows live only on that iPad. Until
+  the fix lands, treat the banner itself as the alarm.</li>
+</ul>
+<h4 id="t-065-clock-drift-protection">T-065 — Clock drift protection</h4>
+<div class="tracker" data-test="T-065"></div>
+<ul>
+<li><strong>Do:</strong> set the iPad's clock 10 minutes FAST (Settings → General → Date
+  &amp; Time, turn off auto). Ring a sale. Restore auto-time after.</li>
+<li><strong>Expect:</strong> the server flags future-timestamped events (≥5 min drift)
+  into its exception queue rather than processing them as normal. Check
+  Admin → Registers → exceptions for the flagged event.</li>
+<li><strong>Why you care:</strong> a wrong clock could otherwise file sales on the wrong
+  compliance day.</li>
+</ul>
+<h4 id="t-066-the-exception-queue-is-a-managers-inbox">T-066 — The exception queue is a manager's inbox</h4>
+<div class="tracker" data-test="T-066"></div>
+<ul>
+<li><strong>Do:</strong> with the T-065 exception (or any other) present, open Admin →
+  Registers → exceptions. Review/approve it with the manager flow.</li>
+<li><strong>Expect:</strong> clear explanation of why it was flagged; approving requires
+  a manager; the event then processes; the queue row resolves.</li>
+<li><strong>This must NEVER happen:</strong> an exception silently disappearing without
+  a manager decision.</li>
+</ul>
+<hr />
+<p><a id="phase-5"></a></p>
+<h2 id="phase-5-returns-voids-holds-pickups-bible-ch-05">Phase 5 — Returns, voids, holds &amp; pickups <em>(Bible ch. 05)</em></h2>
+<p><em>Store policy is deliberately STRICTER than the law here — the tests
+enforce your own rules.</em></p>
+<h4 id="t-070-a-clean-return">T-070 — A clean return</h4>
+<div class="tracker" data-test="T-070"></div>
+<ul>
+<li><strong>Do:</strong> ring a sale (Phase 3 style) and keep the receipt. Return one
+  item at the counter flow with the receipt number.</li>
+<li><strong>Expect:</strong> the refund equals EXACTLY what was paid for that line (it's
+  echoed from the stored sale — no manual typing of amounts, ever). The
+  two WAC 314-55-079(12) attestations (packaging intact, lot ID legible)
+  are required — try refusing one: the return must hard-stop.</li>
+</ul>
+<h4 id="t-071-no-receipt-no-return">T-071 — No receipt, no return</h4>
+<div class="tracker" data-test="T-071"></div>
+<ul>
+<li><strong>Do:</strong> attempt a return with a made-up receipt number (right length,
+  wrong number), then a malformed one.</li>
+<li><strong>Expect:</strong> both refused. The number must match exactly.</li>
+</ul>
+<h4 id="t-072-the-15-day-window-and-day-16">T-072 — The 15-day window, and day 16</h4>
+<div class="tracker" data-test="T-072"></div>
+<ul>
+<li><strong>Do:</strong> (long-game test — plant a sale now, return to it later.) A
+  return on day 15 works; day 16 is refused. Purchase day counts as day
+  0, in PACIFIC days.</li>
+<li><strong>Watch for:</strong> a purchase made late evening — it must not gain or lose
+  a day at midnight UTC (4/5 pm Pacific). If a day-15 return gets
+  refused, note the exact purchase time and return time — that's a
+  timezone bug pattern.</li>
+</ul>
+<h4 id="t-073-you-cant-return-the-same-thing-twice">T-073 — You can't return the same thing twice</h4>
+<div class="tracker" data-test="T-073"></div>
+<ul>
+<li><strong>Do:</strong> return 1 of 2 identical units on a receipt. Then try to return
+  2 more.</li>
+<li><strong>Expect:</strong> only 1 remains returnable; the attempt to exceed is capped.
+  Then void-after-return / repeat-return attempts must all be blocked.</li>
+</ul>
+<h4 id="t-074-voids-are-same-day-and-manager-only">T-074 — Voids are same-day and manager-only</h4>
+<div class="tracker" data-test="T-074"></div>
+<ul>
+<li><strong>Do:</strong> ring a small sale. As budtender, attempt a void — it must
+  demand a manager PIN and a reason (3+ characters). Complete it.</li>
+<li><strong>Expect:</strong> inventory restocks (check the count), loyalty claws back,
+  and the sale is marked voided — never deleted. Tomorrow, try to void
+  today's other sale: refused — the answer for yesterday is a RETURN.</li>
+</ul>
+<h4 id="t-075-holds-park-the-cart-not-the-rules">T-075 — Holds park the cart, not the rules</h4>
+<div class="tracker" data-test="T-075"></div>
+<ul>
+<li><strong>Do:</strong> build a cart, put it on hold. Resume it 5 minutes later.</li>
+<li><strong>Expect:</strong> the cart rebuilds at CURRENT prices (it stores what-and-how-
+  many, never prices), and the ID gate result carries over within the
+  window.</li>
+<li><strong>The 30-minute rule:</strong> park a sale and wait 31+ minutes (set a timer).</li>
+<li><strong>Expect:</strong> resume is refused / forces a fresh ID check. A parked sale
+  must never skip re-verification after the TTL.</li>
+</ul>
+<h4 id="t-076-pickups-website-order-register-handover">T-076 — Pickups: website order → register handover</h4>
+<div class="tracker" data-test="T-076"></div>
+<ul>
+<li><strong>Do:</strong> place a website pickup order (Phase 8 shows how). At the
+  register, load the pickup.</li>
+<li><strong>Expect:</strong> handover REQUIRES the explicit ID attestation checkbox —
+  there is no way around it. Complete the pickup; the order flips to
+  completed; the website order and the register sale must never BOTH
+  count (no double revenue, no double inventory decrement).</li>
+<li><strong>Sneaky check:</strong> load a pickup order, then abandon it (don't complete).
+  The order must NOT be cancelled or superseded just because it was
+  loaded.</li>
+</ul>
+<h4 id="t-077-recalled-product-stops-selling-now">T-077 — Recalled product stops selling NOW</h4>
+<div class="tracker" data-test="T-077"></div>
+<ul>
+<li><strong>Do:</strong> in the back office, place a recall hold on a test product's lot.
+  Try to sell it at the register; try to complete a website pickup
+  containing it.</li>
+<li><strong>Expect:</strong> every path refuses. Then release the hold — selling resumes.</li>
+<li><strong>This must NEVER happen:</strong> a recalled product completing through ANY
+  path. This is your product-safety kill switch; test it seriously.</li>
+</ul>
+<hr />
+<p><a id="phase-6"></a></p>
+<h2 id="phase-6-medical-sales-bible-ch-03">Phase 6 — Medical sales <em>(Bible ch. 03)</em></h2>
+<p><em>Run this whole phase in </em><em>TEST MODE</em><em> until your DOH endorsement is
+active. Test mode shows a loud banner and never touches the server — if
+the banner is missing while test mode is on, that itself is a bug.</em></p>
+<h4 id="t-080-no-endorsement-no-exemption">T-080 — No endorsement, no exemption</h4>
+<div class="tracker" data-test="T-080"></div>
+<ul>
+<li><strong>Do:</strong> with the endorsement flag OFF (your real current state), attach
+  a valid card to a sale outside test mode.</li>
+<li><strong>Expect:</strong> NO tax exemption applies. The endorsement is a hard AND —
+  a card alone changes nothing.</li>
+</ul>
+<h4 id="t-081-card-intake-issuing-a-recognition-card">T-081 — Card intake (issuing a recognition card)</h4>
+<div class="tracker" data-test="T-081"></div>
+<ul>
+<li><strong>Do:</strong> in test mode, run the guided intake wizard for a fake patient.
+  Try to finish with one of the DOH 608-048 checkboxes unchecked.</li>
+<li><strong>Expect:</strong> refused. Try an expiry beyond the statutory ceiling (+1 yr,
+  or +6 months for a minor): refused. Complete a valid intake: card
+  issued with correct dates.</li>
+</ul>
+<h4 id="t-082-the-1820-door-opens-only-with-a-card">T-082 — The 18–20 door opens ONLY with a card</h4>
+<div class="tracker" data-test="T-082"></div>
+<ul>
+<li><strong>Do:</strong> in test mode, at the ID gate: DOB age 19 + valid card.</li>
+<li><strong>Expect:</strong> allowed (medical). Same DOB, no card: refused. DOB age 17</li>
+<li>valid card: refused (under 18 is never allowed at retail).</li>
+</ul>
+<h4 id="t-083-exemption-requires-a-compliant-product">T-083 — Exemption requires a COMPLIANT product</h4>
+<div class="tracker" data-test="T-083"></div>
+<ul>
+<li><strong>Do:</strong> in test mode, ring a carded patient buying (a) a
+  DOH-compliant-registered product and (b) a regular product.</li>
+<li><strong>Expect:</strong> sales tax drops on (a) only. Compliance registry membership
+  is required per-product — a card is not a blanket discount.</li>
+</ul>
+<h4 id="t-084-card-validity-is-checked-on-the-day-of-completion">T-084 — Card validity is checked on the DAY of completion</h4>
+<div class="tracker" data-test="T-084"></div>
+<ul>
+<li><strong>Do:</strong> in test mode, attach a card that expires today/tomorrow if you
+  can craft one; otherwise verify the refusal text by attaching an
+  expired card.</li>
+<li><strong>Expect:</strong> expired, revoked, or not-in-registry cards refuse the
+  exempt sale with a clear explanation — never a silent downgrade to
+  taxed.</li>
+<li><strong>⚠️ KNOWN-EDGE (GW-009):</strong> validity currently uses the UTC day, so
+  between 4–5 pm Pacific and midnight, a card expiring "today" may be
+  treated as expired a few hours early (fail-SAFE direction). Note the
+  time if you see it.</li>
+</ul>
+<h4 id="t-085-the-medical-ledger">T-085 — The medical ledger</h4>
+<div class="tracker" data-test="T-085"></div>
+<ul>
+<li><strong>Do:</strong> complete a test-mode exempt sale preview; then (post-
+  endorsement, in production) re-run and check Admin → Medical ledger.</li>
+<li><strong>Expect:</strong> every real exempt sale writes a ledger row (date, UPID,
+  card dates, product, price). The rule is write-or-block: if the ledger
+  can't be written, the sale must refuse rather than complete
+  unrecorded. Voiding a medical sale must remove its ledger rows.</li>
+</ul>
+<h4 id="t-086-high-thc-products-are-card-only">T-086 — High-THC products are card-only</h4>
+<div class="tracker" data-test="T-086"></div>
+<ul>
+<li><strong>Do:</strong> try to sell a high-THC-flagged product to a recreational (no
+  card) customer — register, and website pickup.</li>
+<li><strong>Expect:</strong> refused on every path. There is NO manager override for
+  this.</li>
+</ul>
+<hr />
+<p><a id="phase-7"></a></p>
+<h2 id="phase-7-loyalty-bible-ch-06">Phase 7 — Loyalty <em>(Bible ch. 06)</em></h2>
+<h4 id="t-090-signup-and-points-earn">T-090 — Signup and points earn</h4>
+<div class="tracker" data-test="T-090"></div>
+<ul>
+<li><strong>Do:</strong> sign up a test member (website form or in-store). Ring a sale
+  attached to them.</li>
+<li><strong>Expect:</strong> points appear after completion — whole points only, earned
+  on the pre-tax amount (never on tax), exactly once per order.</li>
+</ul>
+<h4 id="t-091-redemption-at-the-register">T-091 — Redemption at the register</h4>
+<div class="tracker" data-test="T-091"></div>
+<ul>
+<li><strong>Do:</strong> attach the member, redeem points against a cart.</li>
+<li><strong>Expect:</strong> the discount applies; the member's balance drops by
+  exactly the redeemed amount. Cancel a redemption mid-sale: points come
+  back.</li>
+</ul>
+<h4 id="t-092-the-legal-floors-bind-loyalty-too">T-092 — The legal floors bind loyalty too</h4>
+<div class="tracker" data-test="T-092"></div>
+<ul>
+<li><strong>Do:</strong> build a cart of one cheap cannabis item and try to redeem
+  enough points to zero it out.</li>
+<li><strong>Expect:</strong> REFUSED (with the absorbable amount shown) — a loyalty
+  discount may never make cannabis free or below acquisition cost. It
+  refuses whole, never partially applies.</li>
+</ul>
+<h4 id="t-093-one-discount-per-order-best-deal-wins">T-093 — One discount per order, best-deal-wins</h4>
+<div class="tracker" data-test="T-093"></div>
+<ul>
+<li><strong>Do:</strong> attach a member with tier pricing to a cart that also has a
+  promotion running.</li>
+<li><strong>Expect:</strong> per line, the BETTER of tier vs promo price applies —
+  never both stacked.</li>
+</ul>
+<h4 id="t-094-a-code-cant-be-spent-twice">T-094 — A code can't be spent twice</h4>
+<div class="tracker" data-test="T-094"></div>
+<ul>
+<li><strong>Do:</strong> issue a redemption code; redeem it; try to redeem it again (at
+  the register, then in the back office).</li>
+<li><strong>Expect:</strong> the second attempt says it was just used. If you have two
+  registers, try both at the same moment — exactly one wins.</li>
+</ul>
+<h4 id="t-095-cart-drift-drops-the-discount">T-095 — Cart drift drops the discount</h4>
+<div class="tracker" data-test="T-095"></div>
+<ul>
+<li><strong>Do:</strong> apply a loyalty discount, then ADD an item before paying.</li>
+<li><strong>Expect:</strong> the discount drops (the cart no longer matches what was
+  priced) and any points-backed code releases its points back. Points
+  burned with no discount given is a must-never.</li>
+</ul>
+<h4 id="t-096-reversals-claw-back">T-096 — Reversals claw back</h4>
+<div class="tracker" data-test="T-096"></div>
+<ul>
+<li><strong>Do:</strong> void a loyalty sale (T-074 style); separately, return one line
+  of another loyalty sale.</li>
+<li><strong>Expect:</strong> the void claws back the FULL earn; the return claws back
+  proportionally. A member must never keep points from money you gave
+  back.</li>
+</ul>
+<h4 id="t-097-privacy-at-the-register">T-097 — Privacy at the register</h4>
+<div class="tracker" data-test="T-097"></div>
+<ul>
+<li><strong>Do:</strong> attach a member and look at everything the register shows.</li>
+<li><strong>Expect:</strong> label, points, tier — and nothing else. No DOB, no phone,
+  no email, no notes on the register, ever.</li>
+</ul>
+<h4 id="t-098-offline-degrades-gracefully">T-098 — Offline degrades gracefully</h4>
+<div class="tracker" data-test="T-098"></div>
+<ul>
+<li><strong>Do:</strong> Wi-Fi off; try to redeem points.</li>
+<li><strong>Expect:</strong> redemption refuses (it needs the live balance); the sale
+  can still be rung WITHOUT the discount. Loyalty never blocks a legal
+  sale.</li>
+</ul>
+<hr />
+<p><a id="phase-8"></a></p>
+<h2 id="phase-8-the-menu-pipeline-website-orders-bible-ch-07-12">Phase 8 — The menu pipeline &amp; website orders <em>(Bible ch. 07 &amp; 12)</em></h2>
+<h3 id="81-menu-updates">8.1 Menu updates</h3>
+<h4 id="t-100-publish-a-menu-version">T-100 — Publish a menu version</h4>
+<div class="tracker" data-test="T-100"></div>
+<ul>
+<li><strong>Do:</strong> Admin → Menu Imports. Stage a menu update (Cultivera export
+  upload while you still have it, or via intake auto-carry), review it,
+  publish.</li>
+<li><strong>Expect:</strong> exactly ONE published version at any moment. The website
+  menu and the register bundle both reflect the new version (the register
+  picks it up on its next poll — give it a couple of minutes).</li>
+<li><strong>This must NEVER happen:</strong> two live versions, or zero after a publish.</li>
+</ul>
+<h4 id="t-101-errors-block-publishing">T-101 — Errors block publishing</h4>
+<div class="tracker" data-test="T-101"></div>
+<ul>
+<li><strong>Do:</strong> if a staged version shows blocking transform errors, try to
+  publish it anyway.</li>
+<li><strong>Expect:</strong> refused server-side. Items with problems are HIDDEN with a
+  reason (e.g., "no inventory"), counted in the summary — never silently
+  dropped.</li>
+</ul>
+<h4 id="t-102-hidden-means-hidden-everywhere">T-102 — Hidden means hidden EVERYWHERE</h4>
+<div class="tracker" data-test="T-102"></div>
+<ul>
+<li><strong>Do:</strong> hide a product (or mark unavailable). Check the website menu
+  AND the register grid after the next bundle refresh.</li>
+<li><strong>Expect:</strong> gone from both. Then 86 an item from the register
+  (stock-flag): the flag is one-way from the register — bringing it back
+  is a back-office action only.</li>
+</ul>
+<h4 id="t-103-register-and-website-price-identically">T-103 — Register and website price identically</h4>
+<div class="tracker" data-test="T-103"></div>
+<ul>
+<li><strong>Do:</strong> with a promotion active, compare one product's price on the
+  website menu vs the register grid vs a rung sale.</li>
+<li><strong>Expect:</strong> identical to the penny — all three run the same pricing
+  engine.</li>
+</ul>
+<h3 id="82-website-orders">8.2 Website orders</h3>
+<h4 id="t-104-place-a-guest-pickup-order">T-104 — Place a guest pickup order</h4>
+<div class="tracker" data-test="T-104"></div>
+<ul>
+<li><strong>Do:</strong> on your phone (as a customer), add items and check out with
+  just a first name.</li>
+<li><strong>Expect:</strong> confirmation page with an order status link; a staff
+  notification email; the order appears in Admin → Orders as <strong>new</strong>.</li>
+<li><strong>Note:</strong> the customer's status link is private to that order — try
+  opening it in a different browser: it should show only that order's
+  customer-safe view.</li>
+</ul>
+<h4 id="t-105-the-status-flow-is-one-way-with-reasons">T-105 — The status flow is one-way with reasons</h4>
+<div class="tracker" data-test="T-105"></div>
+<ul>
+<li><strong>Do:</strong> walk the order forward: new → acknowledged → preparing → ready.
+  Then try to drag a COMPLETED order backward.</li>
+<li><strong>Expect:</strong> forward moves are one click; skipping ahead is allowed;
+  moving a completed/cancelled order requires a REVERSAL with a written
+  reason (5+ characters) and lands only on its designated target
+  (completed→ready, cancelled→new). The order's timeline must show the
+  reversal note honestly.</li>
+</ul>
+<h4 id="t-106-tampered-carts-bounce">T-106 — Tampered carts bounce</h4>
+<div class="tracker" data-test="T-106"></div>
+<ul>
+<li><strong>Do:</strong> (needs no hacking skill) leave a cart open in a tab overnight
+  while prices change (or change a price in the back office mid-cart),
+  then hit Place Order.</li>
+<li><strong>Expect:</strong> a polite refusal telling the cart to refresh — the server
+  reprices everything and never trusts the browser's totals.</li>
+</ul>
+<h4 id="t-107-over-limit-online-orders-get-flagged-not-blocked">T-107 — Over-limit online orders get flagged, not blocked</h4>
+<div class="tracker" data-test="T-107"></div>
+<ul>
+<li><strong>Do:</strong> as a website guest, order over a statutory limit (e.g., 2 oz
+  flower).</li>
+<li><strong>Expect:</strong> the order is ACCEPTED as a reservation with a polite
+  "we'll adjust at pickup" note, and it arrives in the back office
+  FLAGGED. At pickup/completion, the hard gate refuses until the
+  quantity is fixed. (Placement is soft; completion is hard — by
+  design.)</li>
+</ul>
+<h4 id="t-108-completion-is-gated-everywhere">T-108 — Completion is gated everywhere</h4>
+<div class="tracker" data-test="T-108"></div>
+<ul>
+<li><strong>Do:</strong> try to complete (in the back office) an order containing a
+  recalled item / outside sales hours / over-limit.</li>
+<li><strong>Expect:</strong> refused each time with the reason. The same gate runs for
+  admin completion, register pickup, and sync — there is no soft path.</li>
+<li><strong>⚠️ KNOWN-EDGE (GW-028):</strong> the 24-hour "reservation window" on orders
+  is currently written but nothing expires it — an abandoned order stays
+  active until staff closes it. Watch for stale orders piling up; the
+  fix will add expiry.</li>
+</ul>
+<h4 id="t-109-no-show-and-cancel-bookkeeping">T-109 — No-show and cancel bookkeeping</h4>
+<div class="tracker" data-test="T-109"></div>
+<ul>
+<li><strong>Do:</strong> mark one order no_show, cancel another (with reasons).</li>
+<li><strong>Expect:</strong> both close cleanly; loyalty points reserved by those orders
+  come back; neither appears in completed-sales reports.</li>
+<li><strong>⚠️ KNOWN-BROKEN (GW-015):</strong> some internal dashboards currently count
+  never-completed orders as revenue — that overstatement is a known open
+  finding being fixed; the LCB-facing exports are on the correct basis.</li>
+</ul>
+<hr />
+<p><a id="phase-9"></a></p>
+<h2 id="phase-9-inventory-intake-counts-dispositions-bible-ch-09">Phase 9 — Inventory: intake, counts, dispositions <em>(Bible ch. 09)</em></h2>
+<h4 id="t-110-intake-from-the-truck">T-110 — Intake from the truck</h4>
+<div class="tracker" data-test="T-110"></div>
+<ul>
+<li><strong>Do:</strong> Admin → Inventory → Intake. Stage a (test) vendor manifest;
+  walk a lot through receiving.</li>
+<li><strong>Expect:</strong> the lot sits in QUARANTINE until the activation gate passes
+  (COA attached and not failed, required fields present). Only then does
+  it go active/sellable.</li>
+<li><strong>This must NEVER happen:</strong> a failed-COA lot reaching the sales floor.</li>
+</ul>
+<h4 id="t-111-the-same-manifest-cant-intake-twice">T-111 — The same manifest can't intake twice</h4>
+<div class="tracker" data-test="T-111"></div>
+<ul>
+<li><strong>Do:</strong> try to accept the same manifest again.</li>
+<li><strong>Expect:</strong> deduped — refused or merged, never double stock.</li>
+</ul>
+<h4 id="t-112-price-floor-on-onboarding">T-112 — Price floor on onboarding</h4>
+<div class="tracker" data-test="T-112"></div>
+<ul>
+<li><strong>Do:</strong> in product onboarding/drafts, try to approve a draft priced
+  below the floor (≥ 2× cost is the owner setting).</li>
+<li><strong>Expect:</strong> refused with the floor named.</li>
+</ul>
+<h4 id="t-113-cycle-counts-are-blind-and-resume-safe">T-113 — Cycle counts are blind and resume-safe</h4>
+<div class="tracker" data-test="T-113"></div>
+<ul>
+<li><strong>Do:</strong> start a cycle count session; count a few products (enter
+  honest-but-wrong numbers for one).</li>
+<li><strong>Expect:</strong> the sheet never shows you the expected quantity while
+  counting (blind). Apply the count: stock corrects, each applied line
+  is latched — applying the session again must NOT double-apply.</li>
+</ul>
+<h4 id="t-114-every-adjustment-has-a-reason-and-a-name">T-114 — Every adjustment has a reason and a name</h4>
+<div class="tracker" data-test="T-114"></div>
+<ul>
+<li><strong>Do:</strong> make a manual adjustment (damage, sample, etc.). Then open the
+  product's ledger.</li>
+<li><strong>Expect:</strong> the adjustment row shows quantity, reason, and who. The
+  running math must reconcile: received + adjustments − sales = on hand.
+  Any unexplained gap is a finding.</li>
+</ul>
+<h4 id="t-115-sales-never-write-adjustments">T-115 — Sales never write "adjustments"</h4>
+<div class="tracker" data-test="T-115"></div>
+<ul>
+<li><strong>Do:</strong> after a test sale, check the adjustments ledger.</li>
+<li><strong>Expect:</strong> NO adjustment row for the sale — sales decrement through
+  their own path. A "sale" showing up as an adjustment means the
+  two-ledger design broke.</li>
+</ul>
+<h4 id="t-116-vendor-sample-caps">T-116 — Vendor-sample caps</h4>
+<div class="tracker" data-test="T-116"></div>
+<ul>
+<li><strong>Do:</strong> record vendor samples up to the cap for the quarter; try one
+  more.</li>
+<li><strong>Expect:</strong> hard-blocked before activation. (Sample acknowledgements
+  are owner-gated — a mere admin shouldn't be able to bypass.)</li>
+</ul>
+<h4 id="t-117-destruction-waiting-period">T-117 — Destruction waiting period</h4>
+<div class="tracker" data-test="T-117"></div>
+<ul>
+<li><strong>Do:</strong> schedule a destruction disposition.</li>
+<li><strong>Expect:</strong> it cannot COMPLETE before the required hold window passes
+  (the earliest-destroy date is enforced).</li>
+</ul>
+<hr />
+<p><a id="phase-10"></a></p>
+<h2 id="phase-10-staffing-payroll-bible-ch-08-13">Phase 10 — Staffing &amp; payroll <em>(Bible ch. 08 &amp; 13)</em></h2>
+<h4 id="t-120-hire-in-the-legal-order">T-120 — Hire in the legal order</h4>
+<div class="tracker" data-test="T-120"></div>
+<ul>
+<li><strong>Do:</strong> walk a fake hire through onboarding. Try to record the
+  background check BEFORE the conditional offer.</li>
+<li><strong>Expect:</strong> refused — RCW 49.94.010 ordering is enforced. Try to
+  activate with critical onboarding tasks unchecked: refused.</li>
+</ul>
+<h4 id="t-121-termination-is-total">T-121 — Termination is total</h4>
+<div class="tracker" data-test="T-121"></div>
+<ul>
+<li><strong>Do:</strong> terminate the fake employee.</li>
+<li><strong>Expect:</strong> they go inactive AND their PIN dies at the same moment —
+  the register must refuse their PIN immediately. If their PIN still
+  unlocks anything, photograph it: that's a security failure.</li>
+</ul>
+<h4 id="t-122-hour-adjustments-need-reasons">T-122 — Hour adjustments need reasons</h4>
+<div class="tracker" data-test="T-122"></div>
+<ul>
+<li><strong>Do:</strong> as manager, edit a time punch.</li>
+<li><strong>Expect:</strong> a reason (3+ chars) is mandatory; the punch's note keeps
+  the history; an audit event exists for the edit.</li>
+</ul>
+<h4 id="t-123-payroll-drafts-never-money">T-123 — Payroll drafts, never money</h4>
+<div class="tracker" data-test="T-123"></div>
+<ul>
+<li><strong>Do:</strong> run a payroll generation for a test period (with a source
+  document attached).</li>
+<li><strong>Expect:</strong> the output is a downloadable NACHA FILE only — the app
+  never transmits money. Try generating with NO source document:
+  hard-blocked, not overridable. Try paying the same employee twice in
+  14 days: blocked. Bank account numbers must appear MASKED everywhere
+  on screen.</li>
+</ul>
+<h4 id="t-124-who-can-see-banking">T-124 — Who can see banking</h4>
+<div class="tracker" data-test="T-124"></div>
+<ul>
+<li><strong>Do:</strong> as a manager (not admin/owner), try to reach employee banking
+  or payroll pages.</li>
+<li><strong>Expect:</strong> refused — payroll requires settings-level permission;
+  banking columns have exactly one read path.</li>
+</ul>
+<hr />
+<p><a id="phase-11"></a></p>
+<h2 id="phase-11-reports-ccrs-compliance-bible-ch-10-11">Phase 11 — Reports &amp; CCRS compliance <em>(Bible ch. 10 &amp; 11)</em></h2>
+<h4 id="t-130-the-day-report-xz-at-close">T-130 — The day report (X/Z) at close</h4>
+<div class="tracker" data-test="T-130"></div>
+<ul>
+<li><strong>Do:</strong> at day's end (after your test sales), run the register day
+  report with a manager PIN.</li>
+<li><strong>Expect:</strong> sales totals match what you rang, in Pacific time. Only
+  PROCESSED sales are summed as money (anything pending/exception is
+  counted separately, never added to cash). The slip must not pop the
+  drawer.</li>
+</ul>
+<h4 id="t-131-blind-close-reconciliation">T-131 — Blind close reconciliation</h4>
+<div class="tracker" data-test="T-131"></div>
+<ul>
+<li><strong>Do:</strong> in the back office, reconcile the drawer you blind-closed in
+  T-027/today.</li>
+<li><strong>Expect:</strong> over/short is revealed HERE, for the first time, to the
+  manager. The register never saw it.</li>
+</ul>
+<h4 id="t-132-screen-and-export-agree">T-132 — Screen and export agree</h4>
+<div class="tracker" data-test="T-132"></div>
+<ul>
+<li><strong>Do:</strong> open Reports → Sales for today. Export CSV/XLSX. Compare 5
+  numbers.</li>
+<li><strong>Expect:</strong> identical. An export that disagrees with its screen is a
+  finding.</li>
+</ul>
+<h4 id="t-133-midnight-is-pacific-midnight">T-133 — Midnight is Pacific midnight</h4>
+<div class="tracker" data-test="T-133"></div>
+<ul>
+<li><strong>Do:</strong> if any test sale happened after 4–5 pm Pacific, check it lands
+  on TODAY's report, not tomorrow's.</li>
+<li><strong>Expect:</strong> all day-bucketing is Pacific. (The UTC-vs-Pacific class of
+  bug is the most common in this system's history — evening sales are
+  where it shows.)</li>
+</ul>
+<h4 id="t-134-the-liq-1295-excise-return">T-134 — The LIQ-1295 excise return</h4>
+<div class="tracker" data-test="T-134"></div>
+<ul>
+<li><strong>Do:</strong> generate the excise return for a month with test data.</li>
+<li><strong>Expect:</strong> the math to review with your accountant.</li>
+<li><strong>⚠️ KNOWN-BROKEN (GW-013, GW-014):</strong> month bounds are currently UTC
+  (not Pacific), and Box 1 currently includes non-cannabis sales. Both
+  are open findings queued for fixing — verify the fix by re-running
+  this test after it lands.</li>
+</ul>
+<h4 id="t-135-ccrs-csv-generation">T-135 — CCRS CSV generation</h4>
+<div class="tracker" data-test="T-135"></div>
+<ul>
+<li><strong>Do:</strong> Admin → Compliance → CCRS. Generate the Sale CSV for your
+  test-sale date range.</li>
+<li><strong>Expect:</strong> the export gate validates BEFORE download — malformed rows
+  block the file with named errors. Spot-check: row count matches the
+  file's own header count; no negative money; every lot's CCRS
+  identifier is the same one it had at intake.</li>
+<li><strong>⚠️ MUST-FIX-FIRST (GW-010 — CRITICAL):</strong> the current export
+  overstates tax on cannabis lines (~46%). DO NOT upload a real CCRS
+  file until this finding is marked FIXED. This is the #1 item in the
+  fix queue for exactly this reason.</li>
+</ul>
+<h4 id="t-136-the-real-ccrs-round-trip-after-gw-010-is-fixed">T-136 — The real CCRS round-trip (after GW-010 is fixed)</h4>
+<div class="tracker" data-test="T-136"></div>
+<ul>
+<li><strong>Do:</strong> exactly per <code>OWNER-TASKLIST.md</code> §7: ring a handful of tiny real
+  sales → generate the Sale CSV → log into CCRS with your SAW account →
+  upload with a clear filename → watch the Processing Status (PST) for
+  that file.</li>
+<li><strong>Expect:</strong> the file processes clean. If rows reject, save the PST
+  error text word-for-word into a Bug Card — the row-level reasons tell
+  us exactly which column to fix.</li>
+</ul>
+<h4 id="t-137-the-weekly-cadence-never-slips">T-137 — The weekly cadence never slips</h4>
+<div class="tracker" data-test="T-137"></div>
+<ul>
+<li><strong>Do:</strong> check Admin → Compliance → calendar/weeks around a reporting
+  deadline.</li>
+<li><strong>Expect:</strong> completed weeks older than the lookback either show
+  submitted / nothing-to-report, or they NAG daily. A week must never
+  be resolvable while still in progress.</li>
+</ul>
+<h4 id="t-138-returns-file-corrections">T-138 — Returns file corrections</h4>
+<div class="tracker" data-test="T-138"></div>
+<ul>
+<li><strong>Do:</strong> after the T-070 return, check the CCRS corrections queue.</li>
+<li><strong>Expect:</strong> the return generated a pending correction row; a full-line
+  return files a Delete (not an Update); exporting it flips its status
+  so it can never export twice.</li>
+</ul>
+<hr />
+<p><a id="phase-12"></a></p>
+<h2 id="phase-12-break-it-day-stress-chaos-edge-cases">Phase 12 — BREAK-IT DAY: stress, chaos &amp; edge cases</h2>
+<p><em>Today you are the villain. Everything in this phase is an attempt to
+cheat, confuse, overload, or damage the system. Nothing here can hurt
+anything permanently (you're on test data) — be ruthless. Log every
+attempt, even the ones the system wins.</em></p>
+<h3 id="121-the-thief">12.1 The thief</h3>
+<ul>
+<li><strong>T-140:</strong><span class="tracker inline" data-test="T-140"></span>  try 5 fast wrong PINs → lockout (re-verify under pressure).
+  Then try the SAME wrong-PIN storm on the till screen and the manager-
+  approve screen — the throttle is shared per device; all surfaces must
+  lock together.</li>
+<li><strong>T-141:</strong><span class="tracker inline" data-test="T-141"></span>  grab the iPad mid-someone-else's-session (simulate): walk
+  away with it unlocked; confirm the 2-minute idle lock strands the
+  thief.</li>
+<li><strong>T-142:</strong><span class="tracker inline" data-test="T-142"></span>  as budtender, hunt for money: try every path to see
+  expected drawer cash before a blind close. You must never find it on
+  the register.</li>
+<li><strong>T-143:</strong><span class="tracker inline" data-test="T-143"></span>  try to sell to your 19-year-old test identity through every
+  door: scan path, manual path, over-40 path, website pickup, resumed
+  held sale. Every door must refuse.</li>
+<li><strong>T-144:</strong><span class="tracker inline" data-test="T-144"></span>  open the browser's address bar on the back office as
+  readonly/budtender and type URLs directly (<code>/admin/settings</code>,
+  <code>/admin/payroll</code>, <code>/admin/users</code>) — routes must bounce you, not just
+  hide their links.</li>
+</ul>
+<h3 id="122-the-clumsy-employee">12.2 The clumsy employee</h3>
+<ul>
+<li><strong>T-145 (double-tap everything):</strong><span class="tracker inline" data-test="T-145"></span>  on every confirm button you meet
+  today — Pay, Complete, Void, Apply count, Publish — tap TWICE, fast.
+  Nothing may happen twice: no double sale, no double refund, no double
+  count application, no two menu versions.</li>
+<li><strong>T-146 (mid-action abandonment):</strong><span class="tracker inline" data-test="T-146"></span>  start a sale to the tender screen
+  and just… walk away. Idle lock parks it. Resume: everything intact.
+  Then abandon a return halfway, an intake halfway, a cycle count
+  halfway — resume each; nothing should be half-applied.</li>
+<li><strong>T-147 (the fat-finger cart):</strong><span class="tracker inline" data-test="T-147"></span>  quantity 999 of something. The limit
+  wall must catch cannabis; for non-cannabis, totals must stay sane and
+  nothing overflows.</li>
+<li><strong>T-148 (paste garbage):</strong><span class="tracker inline" data-test="T-148"></span>  into every search box you meet: a very long
+  string (hold a key), emojis 🌿🔥, quotes <code>"';--</code>, angle brackets
+  <code>&lt;b&gt;hi&lt;/b&gt;</code>. Expect: sane behavior, no crash, no weird page
+  distortion, and definitely no error page with code in it.
+  (Two search boxes had an injection-shaped finding — GW-021 — verify
+  its fix here.)</li>
+</ul>
+<h3 id="123-the-awful-network">12.3 The awful network</h3>
+<ul>
+<li><strong>T-149 (the dead spot):</strong><span class="tracker inline" data-test="T-149"></span>  Wi-Fi off mid-TENDER (after Pay is
+  pressed). The sale must either complete into the queue or fail loudly
+  — never a mystery state. Check the back office later: exactly one or
+  exactly zero copies, matching what the register told you.</li>
+<li><strong>T-150 (the flap storm):</strong><span class="tracker inline" data-test="T-150"></span>  toggle Wi-Fi every 10 seconds for 5
+  straight minutes while ringing 3 sales. All 3 sync exactly once.</li>
+<li><strong>T-151 (the long outage):</strong><span class="tracker inline" data-test="T-151"></span>  Wi-Fi off; ring 10 sales over 30 minutes;
+  keep an eye on the queue counter growing; then reconnect. All 10
+  drain, exactly once each, in order.</li>
+<li><strong>T-152 (offline + restart):</strong><span class="tracker inline" data-test="T-152"></span>  Wi-Fi off, ring 2 sales, KILL the app,
+  reopen (still offline). The queue must survive the restart (it's
+  persisted). Reconnect: both sync.</li>
+<li><strong>T-153 (printer dead):</strong><span class="tracker inline" data-test="T-153"></span>  unplug the printer, complete a sale. The
+  sale must complete fine (printing is queued, never blocking). Plug
+  the printer back in: queued receipts print.
+  <strong>⚠️ KNOWN-EDGE (GW-026):</strong> a job that can NEVER print currently
+  retries forever — if the print queue looks stuck on one job, that's
+  the known finding.</li>
+</ul>
+<h3 id="124-the-time-traveler">12.4 The time traveler</h3>
+<ul>
+<li><strong>T-154:</strong><span class="tracker inline" data-test="T-154"></span>  iPad clock 10 minutes fast → sale → exception queue (rerun
+  of T-065, now under load with other events queued).</li>
+<li><strong>T-155:</strong><span class="tracker inline" data-test="T-155"></span>  ring a sale at 11:58 pm Pacific and another at 12:02 am
+  (or simulate near your configured closing time). Each must land on
+  its correct Pacific day and respect sales hours.</li>
+<li><strong>T-156:</strong><span class="tracker inline" data-test="T-156"></span>  park a sale at 11:50 pm, resume after midnight. The resumed
+  sale must re-validate against the NEW day (ID still valid today, card
+  still valid today).</li>
+</ul>
+<h3 id="125-the-volume-day-stress">12.5 The volume day (stress)</h3>
+<ul>
+<li><strong>T-157 (the rush):</strong><span class="tracker inline" data-test="T-157"></span>  with 2 people and 2 registers (or one register
+  and the back office completing pickups), run 20 sales in 30 minutes
+  mixed with 2 returns, 1 void, 2 pickups, 1 recall-hold flip. Then
+  reconcile: order count, inventory spot-checks on 3 products, drawer
+  math, loyalty balances. Everything must add up to the penny.</li>
+<li><strong>T-158 (the big lists):</strong><span class="tracker inline" data-test="T-158"></span>  seed enough test orders/customers to pass
+  200 orders and 500 customers.
+  <strong>⚠️ KNOWN-BROKEN (GW-033):</strong> lists currently truncate silently at
+  200–500 rows — until the fix lands, confirm the LIMITATION (oldest
+  rows missing with no notice); after the fix, confirm the "Showing X
+  of Y" line and pagination.</li>
+<li><strong>T-159 (the giant import):</strong><span class="tracker inline" data-test="T-159"></span>  import your largest realistic Cultivera
+  export / vendor menu. Time it. Note anything over ~60 seconds, any
+  timeout, any partial import (partials are worse than failures — count
+  the products).</li>
+</ul>
+<h3 id="126-the-auditor">12.6 The auditor</h3>
+<ul>
+<li><strong>T-160:</strong><span class="tracker inline" data-test="T-160"></span>  pick 3 random actions you took today (a void, a role
+  change, a price override) and find each in the audit/activity log
+  within 2 minutes. If you can't find one, that's a finding — the LCB
+  version of this test is not optional.</li>
+<li><strong>T-161:</strong><span class="tracker inline" data-test="T-161"></span>  pick one product and manually reconcile its whole day:
+  starting stock + received − sold − adjusted = ending stock. To the
+  unit.</li>
+<li><strong>T-162:</strong><span class="tracker inline" data-test="T-162"></span>  pick one register drawer and reconcile its whole day: float</li>
+<li>cash sales − drops − refunds = counted close. To the penny.</li>
+</ul>
+<hr />
+<p><a id="phase-13"></a></p>
+<h2 id="phase-13-the-dress-rehearsal-a-full-simulated-store-day">Phase 13 — The dress rehearsal: a full simulated store day</h2>
+<p><em>The final exam. Two people minimum (you + one trusted helper). Run a
+complete fictional business day at full speed, beginning to end, using
+ONLY the system — no side spreadsheets, no mental notes. The goal is not
+to find one bug; it's to feel whether the whole day FLOWS.</em></p>
+<p><strong>The script:</strong></p>
+<ol>
+<li><strong>8:45 am — open.</strong> Clock in both staff. Count in the drawer float.
+   Check the menu published last night is live.</li>
+<li><strong>9:00–11:00 — morning trade.</strong> 8 recreational sales (mix of scan and
+   manual ID), 1 loyalty signup, 2 loyalty redemptions, 1 website order
+   placed (by the helper's phone) and picked up.</li>
+<li><strong>11:00 — the incident.</strong> A customer returns yesterday's item
+   (receipt in hand). Mid-return, the internet "goes down" (Wi-Fi off).
+   Finish the return offline if it allows, or note the refusal; ring 2
+   more sales offline; internet returns 20 minutes later.</li>
+<li><strong>12:00 — lunch rush.</strong> 10 sales in 45 minutes, including: 1 price
+   override (manager), 1 attempted over-limit (refused, adjusted,
+   completed), 1 attempted underage (refused, logged).</li>
+<li><strong>2:00 — operations hour.</strong> A vendor manifest arrives: intake it,
+   quarantine, COA, activate. A recall notice arrives (fictional): place
+   the hold, verify the register refuses the product, release it.
+   Publish a small menu price change; verify it reaches the register.</li>
+<li><strong>4:00 — the mistake.</strong> A budtender rang the wrong item an hour ago:
+   manager void with reason, re-ring correctly.</li>
+<li><strong>5:00 — the safe drop.</strong> Drawer's heavy: witnessed drop.</li>
+<li><strong>7:55 pm — last call.</strong> One sale just inside closing; attempt one
+   just after (refused by hours gate).</li>
+<li><strong>8:05 — close.</strong> Blind-close the drawer. Clock out both staff. Run
+   the day report with a manager PIN.</li>
+<li><strong>8:15 — the desk.</strong> In the back office: reconcile the drawer
+    (over/short revealed here), review the day's report vs your paper
+    tally of every transaction (keep one all day!), check the audit log
+    tells today's story, check every website order reached a terminal
+    status, generate (don't upload) the CCRS Sale CSV for today and eye
+    it.</li>
+</ol>
+<p><strong>Scoring the rehearsal:</strong> for each numbered beat, grade A (smooth), B
+(worked but clunky — describe the clunk), C (needed a workaround), F
+(broken). Anything C or F gets a Bug Card. The "lazy river" goal: a full
+day of A's and B's, where every B has a note.</p>
+<hr />
+<p><a id="part-b--the-results-log"></a></p>
+<h2 id="part-b--the-results-log">Part B — The results log &amp; reporting back</h2>
+<h3 id="b1-the-log-format">B1. The log format</h3>
+<p>For every test, one line in this exact format (the interactive manual
+does this for you):</p>
+<pre><code>T-047 | 2026-08-14 15:22 | PASS
+T-049 | 2026-08-14 15:40 | FAIL — see Bug Card #3
+T-072 | 2026-08-14       | BLOCKED — need a 15-day-old sale, planted one today, retest 8/29
+</code></pre>
+<p>Three verdicts only: <strong>PASS</strong>, <strong>FAIL</strong> (with a Bug Card), <strong>BLOCKED</strong>
+(with a reason and a retest date). "Mostly worked" is a FAIL with a
+gentle Bug Card.</p>
+<h3 id="b2-what-to-send-back-to-the-ai">B2. What to send back to the AI</h3>
+<p>After each phase (don't save it all for the end), paste back:</p>
+<ol>
+<li>The phase's log lines (all of them, PASSes included — a PASS is
+   evidence too).</li>
+<li>Every Bug Card in full.</li>
+<li>Your gut, one paragraph: what felt slow, confusing, or fragile even
+   where nothing technically failed. (These paragraphs drive the
+   UX-fix priorities — your "this felt clunky" is data.)</li>
+</ol>
+<p>From that, you'll get back: which failures are new findings vs known
+ones, what got fixed, and exactly which tests to re-run to prove the
+fixes. Re-test ONLY what the fix notes name — plus T-060 (the offline
+double-count test) after ANY fix that touches the register, because it
+is the test that guards your money.</p>
+<h3 id="b3-the-finish-line">B3. The finish line</h3>
+<p>The system is cutover-ready when:</p>
+<ul>
+<li>Every phase's tests are PASS (or BLOCKED with an owner-accepted
+  reason recorded in <code>FINDINGS.md</code>).</li>
+<li>Every ⚠️ KNOWN-BROKEN test in this manual has flipped to PASS after
+  its fix.</li>
+<li>The Phase 13 dress rehearsal scores all A's and B's.</li>
+<li>The CCRS round-trip (T-136) has processed clean in the real portal.</li>
+<li><code>CUTOVER-CHECKLIST.md</code> (the companion document) is fully checked.</li>
+</ul>
+<hr />
+<p><em>Document status: v1, written against main <code>322f367b</code>, grounded in Bible
+chapters 01–14 and FINDINGS.md GW-001…GW-035. Test IDs are stable — never
+renumber; add new tests at the end of their phase. When a fix PR lands, it
+must name the test IDs that verify it.</em></p>
+  </main>
+</div>
+
+<dialog id="bugcard-modal">
+  <h3 style="margin-top:0">Bug Card — <span id="bc-test"></span></h3>
+  <p style="font-size:13px;color:var(--muted)">Fill in the blanks, then Copy. Paste it into your results log / back to the AI.</p>
+  <textarea id="bc-text" spellcheck="false"></textarea>
+  <div class="row">
+    <button class="close" onclick="document.getElementById('bugcard-modal').close()">Close</button>
+    <button class="copy" id="bc-copy">Copy to clipboard</button>
+  </div>
+</dialog>
+
+<script>
+const TEST_IDS = ["T-001", "T-002", "T-003", "T-004", "T-005", "T-006", "T-007", "T-008", "T-010", "T-011", "T-012", "T-013", "T-014", "T-015", "T-016", "T-017", "T-018", "T-020", "T-021", "T-022", "T-023", "T-024", "T-025", "T-026", "T-027", "T-028", "T-029", "T-030", "T-040", "T-041", "T-042", "T-043", "T-044", "T-045", "T-046", "T-047", "T-048", "T-049", "T-050", "T-051", "T-052", "T-053", "T-054", "T-060", "T-061", "T-062", "T-063", "T-064", "T-065", "T-066", "T-070", "T-071", "T-072", "T-073", "T-074", "T-075", "T-076", "T-077", "T-080", "T-081", "T-082", "T-083", "T-084", "T-085", "T-086", "T-090", "T-091", "T-092", "T-093", "T-094", "T-095", "T-096", "T-097", "T-098", "T-100", "T-101", "T-102", "T-103", "T-104", "T-105", "T-106", "T-107", "T-108", "T-109", "T-110", "T-111", "T-112", "T-113", "T-114", "T-115", "T-116", "T-117", "T-120", "T-121", "T-122", "T-123", "T-124", "T-130", "T-131", "T-132", "T-133", "T-134", "T-135", "T-136", "T-137", "T-138", "T-140", "T-141", "T-142", "T-143", "T-144", "T-145", "T-146", "T-147", "T-148", "T-149", "T-150", "T-151", "T-152", "T-153", "T-154", "T-155", "T-156", "T-157", "T-158", "T-159", "T-160", "T-161", "T-162"];
+const PHASE_OF = {"T-001": "phase-0", "T-002": "phase-0", "T-003": "phase-0", "T-004": "phase-0", "T-005": "phase-0", "T-006": "phase-0", "T-007": "phase-0", "T-008": "phase-0", "T-010": "phase-1", "T-011": "phase-1", "T-012": "phase-1", "T-013": "phase-1", "T-014": "phase-1", "T-015": "phase-1", "T-016": "phase-1", "T-017": "phase-1", "T-018": "phase-1", "T-020": "phase-2", "T-021": "phase-2", "T-022": "phase-2", "T-023": "phase-2", "T-024": "phase-2", "T-025": "phase-2", "T-026": "phase-2", "T-027": "phase-2", "T-028": "phase-2", "T-029": "phase-2", "T-030": "phase-2", "T-040": "phase-3", "T-041": "phase-3", "T-042": "phase-3", "T-043": "phase-3", "T-044": "phase-3", "T-045": "phase-3", "T-046": "phase-3", "T-047": "phase-3", "T-048": "phase-3", "T-049": "phase-3", "T-050": "phase-3", "T-051": "phase-3", "T-052": "phase-3", "T-053": "phase-3", "T-054": "phase-3", "T-060": "phase-4", "T-061": "phase-4", "T-062": "phase-4", "T-063": "phase-4", "T-064": "phase-4", "T-065": "phase-4", "T-066": "phase-4", "T-070": "phase-5", "T-071": "phase-5", "T-072": "phase-5", "T-073": "phase-5", "T-074": "phase-5", "T-075": "phase-5", "T-076": "phase-5", "T-077": "phase-5", "T-080": "phase-6", "T-081": "phase-6", "T-082": "phase-6", "T-083": "phase-6", "T-084": "phase-6", "T-085": "phase-6", "T-086": "phase-6", "T-090": "phase-7", "T-091": "phase-7", "T-092": "phase-7", "T-093": "phase-7", "T-094": "phase-7", "T-095": "phase-7", "T-096": "phase-7", "T-097": "phase-7", "T-098": "phase-7", "T-100": "phase-8", "T-101": "phase-8", "T-102": "phase-8", "T-103": "phase-8", "T-104": "phase-8", "T-105": "phase-8", "T-106": "phase-8", "T-107": "phase-8", "T-108": "phase-8", "T-109": "phase-8", "T-110": "phase-9", "T-111": "phase-9", "T-112": "phase-9", "T-113": "phase-9", "T-114": "phase-9", "T-115": "phase-9", "T-116": "phase-9", "T-117": "phase-9", "T-120": "phase-10", "T-121": "phase-10", "T-122": "phase-10", "T-123": "phase-10", "T-124": "phase-10", "T-130": "phase-11", "T-131": "phase-11", "T-132": "phase-11", "T-133": "phase-11", "T-134": "phase-11", "T-135": "phase-11", "T-136": "phase-11", "T-137": "phase-11", "T-138": "phase-11", "T-140": "phase-12", "T-141": "phase-12", "T-142": "phase-12", "T-143": "phase-12", "T-144": "phase-12", "T-145": "phase-12", "T-146": "phase-12", "T-147": "phase-12", "T-148": "phase-12", "T-149": "phase-12", "T-150": "phase-12", "T-151": "phase-12", "T-152": "phase-12", "T-153": "phase-12", "T-154": "phase-12", "T-155": "phase-12", "T-156": "phase-12", "T-157": "phase-12", "T-158": "phase-12", "T-159": "phase-12", "T-160": "phase-12", "T-161": "phase-12", "T-162": "phase-12"};
+const KEY = "gw-test-manual-v1";
+
+function loadState() {
+  try { return JSON.parse(localStorage.getItem(KEY) || "{}"); } catch (e) { return {}; }
+}
+function saveState(s) { localStorage.setItem(KEY, JSON.stringify(s)); }
+let state = loadState();
+
+// ---- build tracker widgets ----
+document.querySelectorAll(".tracker").forEach(el => {
+  const tid = el.dataset.test;
+  el.innerHTML = `
+    <button data-v="pass">Pass</button>
+    <button data-v="fail">Fail</button>
+    <button data-v="blocked">Blocked</button>
+    <button class="bugcard-btn" data-v="bug">Bug card</button>`;
+  el.querySelectorAll("button[data-v]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const v = btn.dataset.v;
+      if (v === "bug") return openBugCard(tid);
+      const cur = state[tid] && state[tid].verdict;
+      if (cur === v) { delete state[tid]; }
+      else { state[tid] = { verdict: v, at: new Date().toISOString().slice(0,16).replace("T"," ") }; }
+      saveState(state); render();
+    });
+  });
+});
+
+function render() {
+  let done = 0;
+  const perPhase = {};
+  TEST_IDS.forEach(tid => {
+    const ph = PHASE_OF[tid] || "part-a";
+    perPhase[ph] = perPhase[ph] || { total: 0, done: 0, fail: 0 };
+    perPhase[ph].total++;
+    const rec = state[tid];
+    if (rec) { done++; perPhase[ph].done++; if (rec.verdict === "fail") perPhase[ph].fail++; }
+  });
+  document.querySelectorAll(".tracker").forEach(el => {
+    const rec = state[el.dataset.test];
+    el.querySelectorAll("button[data-v]").forEach(btn => {
+      btn.classList.remove("on-pass","on-fail","on-blocked");
+      if (rec && btn.dataset.v === rec.verdict) btn.classList.add("on-" + rec.verdict);
+    });
+    el.querySelector(".bugcard-btn").classList.toggle("show", !!(rec && rec.verdict === "fail"));
+  });
+  document.getElementById("global-count").textContent = done + " / " + TEST_IDS.length;
+  document.getElementById("global-fill").style.width = (TEST_IDS.length ? (100*done/TEST_IDS.length) : 0) + "%";
+  document.querySelectorAll("[data-phase-progress]").forEach(el => {
+    const p = perPhase[el.dataset.phaseProgress];
+    el.textContent = p ? (p.done + "/" + p.total + (p.fail ? " ✗" + p.fail : "")) : "";
+  });
+}
+render();
+
+// ---- bug card ----
+function openBugCard(tid) {
+  const now = new Date();
+  const stamp = now.toISOString().slice(0,10) + ", " + now.toTimeString().slice(0,5);
+  document.getElementById("bc-test").textContent = tid;
+  document.getElementById("bc-text").value =
+`BUG CARD ————————————————————————————————————————
+Test ID:        ${tid}
+Date & time:    ${stamp}
+Where:          (register name / back-office page URL / website page)
+Who:            (which login / which employee PIN was in use)
+What I did:     (the exact steps, numbered)
+What I expected:(copy the Expected line from the test)
+What happened:  (EXACTLY what you saw — quote on-screen text word for word)
+Screen photo:   (taken? yes/no)
+Can I repeat it?(yes / no / sometimes — tried once more?)
+Impact:         (blocked me / worked around it / cosmetic)
+—————————————————————————————————————————————————`;
+  document.getElementById("bugcard-modal").showModal();
+}
+document.getElementById("bc-copy").addEventListener("click", () => {
+  navigator.clipboard.writeText(document.getElementById("bc-text").value);
+  document.getElementById("bc-copy").textContent = "Copied ✓";
+  setTimeout(() => document.getElementById("bc-copy").textContent = "Copy to clipboard", 1200);
+});
+
+// ---- export results log ----
+document.getElementById("export-log").addEventListener("click", () => {
+  const lines = TEST_IDS.map(tid => {
+    const rec = state[tid];
+    if (!rec) return tid + " | (not run)";
+    return tid + " | " + rec.at + " | " + rec.verdict.toUpperCase();
+  });
+  const blob = new Blob([lines.join("\n") + "\n"], { type: "text/plain" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "greenway-test-results-" + new Date().toISOString().slice(0,10) + ".txt";
+  a.click();
+});
+document.getElementById("reset-log").addEventListener("click", () => {
+  if (confirm("Erase ALL recorded test results on this device?")) {
+    state = {}; saveState(state); render();
+  }
+});
+
+// ---- search ----
+const searchBox = document.getElementById("search");
+searchBox.addEventListener("input", () => {
+  const q = searchBox.value.trim().toLowerCase();
+  document.querySelectorAll("main h4").forEach(h4 => {
+    // group = heading + following siblings until next h2/h3/h4
+    const group = [h4];
+    let n = h4.nextElementSibling;
+    while (n && !/^H[234]$/.test(n.tagName)) { group.push(n); n = n.nextElementSibling; }
+    const text = group.map(e => e.textContent).join(" ").toLowerCase();
+    const hide = q && !text.includes(q);
+    group.forEach(e => e.classList.toggle("hidden-by-search", hide));
+  });
+});
+
+// ---- active nav highlight ----
+const anchors = Array.from(document.querySelectorAll("a[id], h2[id]"));
+window.addEventListener("scroll", () => {
+  let current = null;
+  for (const a of anchors) {
+    if (a.getBoundingClientRect().top < 120) current = a.id;
+  }
+  document.querySelectorAll(".nav-item").forEach(item => {
+    item.classList.toggle("active", item.dataset.phase === current);
+  });
+}, { passive: true });
+
+// ---- mobile menu ----
+document.getElementById("menu-toggle").addEventListener("click", () =>
+  document.getElementById("sidebar").classList.toggle("open"));
+document.querySelectorAll(".nav-item").forEach(a =>
+  a.addEventListener("click", () => document.getElementById("sidebar").classList.remove("open")));
+</script>
+</body>
+</html>
