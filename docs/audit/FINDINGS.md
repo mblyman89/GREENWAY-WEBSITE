@@ -400,6 +400,65 @@
   Checklist.
 - **Status:** OPEN
 
+### GW-023 — A sale stranded mid-processing stays `pending` forever, the register's retry is told "duplicate" and deletes its copy, and no sweeper exists — silent sale loss on a serverless crash
+- **Where:** Insert-then-process: `src/lib/pos/sync-store.ts:196–209`
+  (ledger row inserted with default status `pending` per
+  `supabase/migrations/0120_pos_foundation.sql:65–66`) before `processSale`
+  (`sync-store.ts:315–835`, ~29 sequential awaits) runs; success is only
+  recorded at the END (`markProcessed`, `:834`). Duplicate mapping:
+  `:214–227` — a retried event whose existing row is still `pending` is acked
+  `"duplicate"`. The device treats `duplicate` as durable and DELETES its
+  queue copy (`src/lib/pos/sync-core.ts:310–312` `ackMeansDurablyAccepted`;
+  `register-client-core.ts:83–125` `applyAcks`). No reprocessor/sweeper for
+  stuck `pending` rows exists anywhere (verified by grep); the only reader is
+  the day report, which just counts them ("Still processing",
+  `day-report-core.ts:93–95,324`). The sync route sets no `maxDuration`
+  (`src/app/api/pos/sync/route.ts`). At `00ebb3dd`.
+- **What:** If the Vercel function dies between the ledger insert and
+  `markProcessed` — timeout on a slow cold start, deploy-time kill, OOM,
+  Supabase blip mid-chain — the row is stranded at `pending`. The register
+  retries the event on its next flush, the server sees the unique-violation,
+  reads the existing row, and answers `"duplicate"` (because only
+  `exception` is special-cased). The register then deletes the sale from its
+  offline queue. Result: cash was taken, the customer left, and the sale
+  never materialized an order — no inventory decrement, no X/Z presence, no
+  CCRS line — and nothing will ever retry it.
+- **Why it matters:** This is the one gap in an otherwise excellent
+  exactly-once design. Every OTHER failure mode was handled (exceptions never
+  drop, rejects stay on-device, idempotent replay), but a mid-processing crash
+  converts a real sale into a permanently invisible row. The day report's
+  "Still processing" count is the only breadcrumb, and it disappears from
+  attention after close.
+- **Recommendation:** Two small changes close it completely: (1) in the
+  duplicate path (`:214–227`), when the existing row is still `pending` and
+  older than a threshold (say 2 minutes), RE-RUN processing for it instead of
+  acking duplicate — the chain is already idempotent enough to resume (latches,
+  atomic claims); (2) add a sweeper (the existing daily cron can host it) that
+  finds `pending` rows older than N minutes and reprocesses or escalates them
+  to `exception` so they land in the manager queue. Also set an explicit
+  `maxDuration` on the sync route.
+- **Status:** OPEN
+
+### GW-024 — Order email + receipt-print queueing are fire-and-forget on a serverless runtime with no `waitUntil`: work can be silently dropped when the function freezes
+- **Where:** `src/app/api/orders/route.ts:175–181` (`notifyOrderPlaced(…)
+  .catch(() => {})`) and `:185–206` (`queueOrderReceipt(…).catch(() => {})`)
+  — the response returns immediately after; no `waitUntil` exists anywhere in
+  `src` except the service-worker (`sw-core.ts`). At `00ebb3dd`.
+- **What:** On Vercel, a function may be frozen as soon as the response is
+  sent. The un-awaited promises (Resend fetch; Supabase insert of the print
+  job) then may never complete. Some fraction of website orders would save
+  correctly but produce NO staff email, NO customer email, and NO queued
+  receipt — with `.catch(() => {})` guaranteeing no log either.
+- **Why it matters:** Staff email is how the store learns a pickup order came
+  in when nobody is watching the admin orders page. A silently-lost
+  notification is a customer standing at the counter with no order pulled.
+- **Recommendation:** Await both calls before responding (they are quick:
+  one HTTP call, one insert — worst case adds ~1s to order placement), or use
+  `waitUntil` from `next/server` (Vercel supports it via
+  `request.waitUntil`/`after()`) so the platform keeps the function alive.
+  Keep the `.catch` so failures still never block the customer, but log them.
+- **Status:** OPEN
+
 ---
 
 ## 🟡 Low
@@ -536,6 +595,46 @@
   a shared module) at both call sites.
 - **Status:** OPEN
 
+### GW-025 — Order notification email is sent blind: the Resend response status is never checked
+- **Where:** `src/lib/orders/notify.ts:39` (`await fetch(RESEND_ENDPOINT, …)`
+  with no `res.ok` check anywhere in the file), at `00ebb3dd`.
+- **What:** `sendEmail` awaits the fetch but ignores the response. A 401 (bad
+  key), 422 (unverified from-address), or 429 (rate limit) from Resend looks
+  exactly like success — no log line, no error, nothing. Contrast: the
+  newsletter/loyalty senders and the webhook ingest paths all inspect status.
+- **Why it matters:** When order emails stop arriving, there is no signal
+  anywhere to distinguish "env not configured" (deliberate silent skip) from
+  "Resend rejected every call" (misconfiguration). Combined with GW-024 the
+  whole notification path is a black box.
+- **Recommendation:** Check `res.ok`; on failure log status + response body
+  (Vercel logs) so misconfiguration is diagnosable. Optionally write a row to
+  `order_events` so it is visible in the back office.
+- **Status:** OPEN
+
+### GW-027 — The register promises "manager reviews in the back office" for REJECTED rows, but no back-office page shows them
+- **Where:** Register status bar copy `src/app/pos/RegisterShell.tsx:2225`
+  ("N rejected — manager reviews in the back office"); rejected rows are kept
+  only in THAT device's localStorage queue (`applyAcks` keeps non-durable acks,
+  `src/lib/pos/register-client-core.ts:83–125`); the admin exception queue
+  reads only server-side ledger rows with `status='exception'`
+  (`src/lib/pos/sync-store.ts:1087,1107,1130`;
+  `src/app/admin/registers/exceptions/page.tsx`). At `00ebb3dd`.
+- **What:** "Rejected" means the server refused the event BEFORE it entered
+  the ledger (bad envelope, unknown device, schema missing). Those rows never
+  exist server-side, so the back office cannot list them — the only place they
+  are visible is the register's own status bar and banner. The UI copy tells
+  staff a manager will see them in the back office, which is not true; a
+  manager must physically go to that iPad.
+- **Why it matters:** A persistent rejected row (e.g. after a device re-bind
+  problem, GW-002) can sit unnoticed on one device while everyone believes the
+  back office has it. The data itself is safe (kept on-device, GW-001 caveat
+  aside) but the review workflow the copy promises does not exist.
+- **Recommendation:** Either (a) soften the copy to "review on this register",
+  or better (b) have the register report its rejected-row count/summaries
+  through the existing heartbeat sync so the admin registers page can show
+  "Register 2 has 3 rejected rows on-device."
+- **Status:** OPEN
+
 ---
 
 ## 🔵 Hardening
@@ -589,6 +688,48 @@
   stray site.
 - **Recommendation:** Length-check then `timingSafeEqual` on the UTF-8
   bytes, same as `verifyPin` does.
+- **Status:** OPEN
+
+### GW-026 — A receipt print job that can never print retries forever every 2 minutes; `attempts` is counted but never capped, and the `failed` status exists but nothing ever sets it
+- **Where:** `src/lib/printing/printer-store.ts:186–196` (claimNextJob
+  re-claims any `printing` job stale >2 min), `:205` (`attempts:
+  job.attempts + 1` — incremented, never checked), `:27–33` (`"failed"` in
+  the status union), `:246` (cancelJob is the ONLY code that references
+  `failed`, and only to read it). At `00ebb3dd`.
+- **What:** The stale-reclaim is good design (a dropped confirmation doesn't
+  strand the queue), but there is no upper bound. A poison job — e.g. a
+  payload the printer rejects every time — is re-claimed every 2 minutes
+  forever, and because claimNextJob takes the OLDEST job first, it sits at
+  the head of the line blocking newer receipts behind it until someone
+  manually cancels it from the staff UI.
+- **Why it matters:** One bad job can quietly stall all receipt printing;
+  the schema already anticipated the fix (`attempts` column since 0047,
+  `failed` status in the type) — it's just never wired.
+- **Recommendation:** In claimNextJob, when `job.attempts` reaches a cap
+  (e.g. 5), set status `failed` instead of re-claiming, and surface failed
+  jobs on the equipment page (cancelJob already handles them).
+- **Status:** OPEN
+
+### GW-028 — The 24-hour order "reservation window" is written but never read: nothing expires an order or releases its hold
+- **Where:** `src/lib/orders/orders-store.ts:50` (24h
+  `reservationExpiresAt` computed), `:65` (written); the only other
+  reference in the entire codebase is the type declaration
+  (`src/lib/orders/types.ts:75`). No job, query, or UI reads it. At
+  `00ebb3dd`.
+- **What:** Every website order stores a reservation-expiry timestamp, but
+  no code ever consults it — orders never auto-expire, and marking a
+  customer a no-show is a purely manual action on the admin orders page.
+  The code comment honestly calls it a "soft reservation window: 24h
+  advisory hold," so this is working as designed — but the design leaves
+  stale `new` orders accumulating until staff clean them up.
+- **Why it matters:** GW-015 already showed never-completed orders leak
+  into internal revenue reports; stale unexpired orders are the feedstock
+  for that. An owner reading the schema would reasonably believe a 24-hour
+  auto-release exists when it does not.
+- **Recommendation:** Either enforce it (the daily cron can flip `new`
+  orders past `reservation_expires_at` to `no_show`/`expired` and note it in
+  `order_events`) or drop the column to stop implying behavior that doesn't
+  exist. Enforcing pairs naturally with the GW-015 fix.
 - **Status:** OPEN
 
 ---
