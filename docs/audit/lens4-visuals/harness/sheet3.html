@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lens-4 sheet 3 — Row-action density test + purple/palette fine-tuning</title>
+<style>
+:root {
+  --greenway:#7ed957; --gold:#ffd700; --orange:#ff7f00;
+  --admin-canvas:#060807; --admin-surface:#0c0e0d; --admin-surface-2:#121514;
+  --admin-surface-hover:#171b19;
+  --admin-border:rgba(255,255,255,.08); --admin-border-strong:rgba(255,255,255,.16);
+  --admin-text:#f5f7f5; --admin-text-muted:rgba(255,255,255,.62); --admin-text-faint:rgba(255,255,255,.4);
+  --admin-accent:var(--greenway); --admin-accent-soft:rgba(126,217,87,.14);
+  --admin-danger:#ff5a5a;
+  --purpleA:#c084fc; --purpleB:#a78bfa; --purpleC:#d8b4fe;
+}
+*{box-sizing:border-box} body{margin:0;background:var(--admin-canvas);color:var(--admin-text);font-family:Arial,Helvetica,sans-serif;padding:24px}
+h1{font-size:18px} h2{font-size:14px;margin:24px 0 8px} .half{display:flex;gap:16px;flex-wrap:wrap}
+.panel{background:var(--admin-surface);border:1px solid var(--admin-border);border-radius:16px;padding:16px;margin-bottom:12px;flex:1;min-width:480px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+thead th{background:var(--admin-surface-2);color:var(--admin-text-faint);font-size:11px;text-transform:uppercase;text-align:left;padding:9px 12px}
+td{padding:8px 12px;border-top:1px solid var(--admin-border)}
+tr:hover td{background:var(--admin-surface-hover)}
+.btn{display:inline-flex;align-items:center;border-radius:9999px;font-weight:900;text-transform:uppercase;letter-spacing:.1em;border:none;cursor:pointer;padding:5px 13px;font-size:10.5px}
+.btn-confirm{background:var(--admin-accent);color:#000}
+.btn-n2{background:var(--admin-surface-2);color:var(--admin-text);border:1px solid var(--admin-border-strong)}
+.btn-n3{background:var(--admin-surface-2);color:var(--admin-accent);border:1px solid rgba(126,217,87,.4)}
+.btn-primary{background:var(--orange);color:#000}
+.cap{font-size:11px;color:var(--admin-text-muted);margin:6px 0 10px}
+.sw{display:inline-flex;flex-direction:column;align-items:center;gap:4px;margin-right:14px;font-size:10px;color:var(--admin-text-muted)}
+.swatch{width:120px;height:44px;border-radius:9999px;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:11px;letter-spacing:.08em}
+</style>
+<script src="https://sites.super.myninja.ai/_assets/ninja-daytona-script.js"></script>
+</head>
+<body>
+<h1>Sheet 3 — density test: what should a 10-row table's per-row button look like?</h1>
+<div class="half">
+  <div class="panel">
+    <h2>Option 1 — solid green every row (loud)</h2>
+    <p class="cap">Does brand green scale to many rows?</p>
+    <table><thead><tr><th>Order</th><th>Customer</th><th></th></tr></thead><tbody>
+      <tr><td>GW-1042</td><td>Sarah M.</td><td><button class="btn btn-confirm">View</button></td></tr>
+      <tr><td>GW-1041</td><td>Mike T.</td><td><button class="btn btn-confirm">View</button></td></tr>
+      <tr><td>GW-1040</td><td>Dana R.</td><td><button class="btn btn-confirm">View</button></td></tr>
+      <tr><td>GW-1039</td><td>Alex P.</td><td><button class="btn btn-confirm">View</button></td></tr>
+      <tr><td>GW-1038</td><td>Sarah K.</td><td><button class="btn btn-confirm">View</button></td></tr>
+      <tr><td>GW-1037</td><td>Jo W.</td><td><button class="btn btn-confirm">View</button></td></tr>
+      <tr><td>GW-1036</td><td>Sam B.</td><td><button class="btn btn-confirm">View</button></td></tr>
+      <tr><td>GW-1035</td><td>Lee C.</td><td><button class="btn btn-confirm">View</button></td></tr>
+    </tbody></table>
+  </div>
+  <div class="panel">
+    <h2>Option 2 — green-TINTED chip rows + ONE orange page action (balanced)</h2>
+    <p class="cap">Rows whisper brand green; the page's real action shouts.</p>
+    <div style="text-align:right;margin-bottom:8px"><button class="btn btn-primary" style="padding:8px 18px;font-size:12px">New manual order</button></div>
+    <table><thead><tr><th>Order</th><th>Customer</th><th></th></tr></thead><tbody>
+      <tr><td>GW-1042</td><td>Sarah M.</td><td><button class="btn btn-n3">View</button></td></tr>
+      <tr><td>GW-1041</td><td>Mike T.</td><td><button class="btn btn-n3">View</button></td></tr>
+      <tr><td>GW-1040</td><td>Dana R.</td><td><button class="btn btn-n3">View</button></td></tr>
+      <tr><td>GW-1039</td><td>Alex P.</td><td><button class="btn btn-n3">View</button></td></tr>
+      <tr><td>GW-1038</td><td>Sarah K.</td><td><button class="btn btn-n3">View</button></td></tr>
+      <tr><td>GW-1037</td><td>Jo W.</td><td><button class="btn btn-n3">View</button></td></tr>
+      <tr><td>GW-1036</td><td>Sam B.</td><td><button class="btn btn-n3">View</button></td></tr>
+      <tr><td>GW-1035</td><td>Lee C.</td><td><button class="btn btn-n3">View</button></td></tr>
+    </tbody></table>
+  </div>
+</div>
+
+<h1 style="margin-top:26px">Purple candidates for the AI/special accent (black ink on all — matches system)</h1>
+<div class="panel" style="max-width:760px">
+  <span class="sw"><span class="swatch" style="background:var(--purpleA);color:#000">ASK AI</span>#c084fc · 7.95:1</span>
+  <span class="sw"><span class="swatch" style="background:var(--purpleB);color:#000">ASK AI</span>#a78bfa · 7.72:1</span>
+  <span class="sw"><span class="swatch" style="background:var(--purpleC);color:#000">ASK AI</span>#d8b4fe · 10.9:1</span>
+  <span class="sw"><span class="swatch" style="background:var(--greenway);color:#000">GO</span>green (ref)</span>
+  <span class="sw"><span class="swatch" style="background:var(--orange);color:#000">CTA</span>orange (ref)</span>
+  <span class="sw"><span class="swatch" style="background:var(--gold);color:#000">SAVE</span>gold (ref)</span>
+  <span class="sw"><span class="swatch" style="background:var(--admin-danger);color:#000">DELETE</span>red (ref)</span>
+</div>
+</body>
+</html>

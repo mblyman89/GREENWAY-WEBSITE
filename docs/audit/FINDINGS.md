@@ -459,6 +459,103 @@
   Keep the `.catch` so failures still never block the customer, but log them.
 - **Status:** OPEN
 
+### GW-029 — Every “Back to …” link in the back office is bare: all 33 of them wipe the filters/search you had on the list page
+- **Where:** Scripted sweep of every `href` whose text says “Back …” across
+  `src/app/admin`: **33 found, 0 carry a query string.** Representative:
+  `src/app/admin/orders/[id]/page.tsx:74` (`href="/admin/orders"`),
+  `src/app/admin/products/[key]/page.tsx:63`,
+  `src/app/admin/menu-imports/[id]/page.tsx:96`,
+  `src/app/admin/inventory/intake/page.tsx:171` — full list in
+  `LENS-04-UX-FLOW.md §2`. At `9f9880ba`.
+- **What:** The list pages themselves are built RIGHT — all 143 admin pages
+  are server components and 102 of them read filters from the URL
+  (`searchParams`), so the address bar already holds your filter state and
+  the browser Back button preserves it. But every in-app “Back to orders” /
+  “← All products” link is a hard link to the bare list route, and the
+  row-links INTO detail pages (`orders/page.tsx:182`) don’t pass the current
+  query along, so there is nothing for the detail page to send you back to.
+  Filter to “New”, search “sarah”, open an order, click “Back to orders” —
+  filter and search are gone; owner reports this “almost everywhere,” and
+  the sweep confirms it is literally everywhere.
+- **Why it matters:** This is the single biggest workflow tax in the back
+  office. Working a queue (orders, exceptions, intake, drafts) means
+  re-applying the same filter after EVERY item — the owner’s “combatant
+  bottleneck.” The industry-standard fix (state in the URL) is already 90%
+  built; only the links discard it.
+- **Recommendation:** One mechanical pattern, applied everywhere: (1) list
+  pages append their current query string to each row/detail link as
+  `?back=<urlencoded current qs>`; (2) a tiny shared `BackLink` component
+  reads `back` from `searchParams` and renders
+  `href={`/admin/orders?${back}`}` (falling back to the bare route);
+  (3) breadcrumb links to list pages do the same. Server-component friendly,
+  no client state, works with the existing URL-state architecture. Spec with
+  code-level detail in `DESIGN-SYSTEM-SPEC.md §5`.
+- **Status:** OPEN
+
+### GW-030 — The button system is fragmented: a canonical brand Button exists, but ~274 raw buttons bypass it — 92 white-text vs 85 black-text, 39 transparent/outline, 29 hard-coded off-palette colors
+- **Where:** Canonical component: `src/components/admin/ui/Button.tsx:45–55`
+  (5 solid variants, ALL black ink on brand fills, pill/uppercase — the
+  owner-approved system from `docs/TODO_BEAUTIFICATION.md`). Scripted sweep
+  of `src/app/admin` + `src/components/admin`: 274 raw `<button>` elements
+  plus ~91 button-styled links do NOT use it. Classifier results: **92
+  white-text vs 85 black-text** (the exact inconsistency the owner
+  reported), **39 transparent/outline** (the style the beautification round
+  supposedly killed), **29 hard-coded non-brand hex fills**, including
+  off-palette `bg-sky-400` and `bg-fuchsia-400`
+  (`src/app/admin/vendors/[id]/page.tsx:223,:261,:543`,
+  `:508` `bg-[#5ec1ff]`), a rogue lowercase pill
+  (`src/app/admin/products/[key]/page.tsx:164`), and `bg-red-600` instead of
+  the brand `--admin-danger` (`src/app/admin/settings/reset/page.tsx:142`).
+  89 files carry at least one flagged element. At `9f9880ba`.
+- **What:** The B1 “button unification” slice converted the shared component
+  and the worst pages, but the long tail of ad-hoc buttons was never swept.
+  Every ad-hoc button is a page that drifts from the brand: different
+  radius, different casing, different color meanings (green sometimes has
+  white text, sometimes black; blue and fuchsia mean nothing in the brand
+  vocabulary).
+- **Why it matters:** This IS the owner’s “some buttons are white-text,
+  some are less flashy” report, quantified. Consistent button grammar is
+  what makes an interface learnable — staff should know green=go,
+  orange=main action, gold=save, red=danger *without reading*.
+- **Recommendation:** A mechanical migration sweep, file-by-file, replacing
+  every ad-hoc button/link-button with `<Button>` (or its documented chip
+  classes for in-table density), using the mapping table in
+  `DESIGN-SYSTEM-SPEC.md §3` — including a new PURPLE `special` variant for
+  AI/crawler actions (due the sky/fuchsia buttons a home in the palette,
+  per the owner’s wish for a purple). Visual before/after:
+  `docs/audit/lens4-visuals/01…04.png`.
+- **Status:** OPEN
+
+### GW-031 — Twelve buttons put WHITE text on the solid brand green: 1.76:1 contrast — unreadable in bright light and a WCAG failure
+- **Where:** Scripted contrast sweep (WCAG 2.2 relative-luminance math):
+  `#ffffff` on `#7ed957` = **1.76:1** (AA requires 4.5:1 for text; even
+  large-text/UI needs 3:1). All 12 sites:
+  `src/app/admin/medical/page.tsx:67`,
+  `src/app/admin/integrations/page.tsx:113,:140`,
+  `src/app/admin/knowledge-base/faqs/page.tsx:93`,
+  `src/app/admin/knowledge-base/about/page.tsx:93`,
+  `src/app/admin/inventory/drafts/page.tsx:134`,
+  `src/app/admin/inventory/intake/page.tsx:405` (file-upload control),
+  `src/app/admin/vendors/[id]/page.tsx:155`,
+  `src/components/admin/medical/GuidedIntakeWizard.tsx:447`,
+  `src/components/admin/medical/MedicalPanel.tsx:107`,
+  `src/components/admin/medical/CardPrintButton.tsx:14`,
+  `src/components/admin/medical/DohProductRegistry.tsx:146`. At `9f9880ba`.
+  Contrast: the canonical Button already gets this right — black ink on
+  every brand fill (green 11.95:1, orange 8.29:1, gold 14.97:1, red 6.86:1
+  — all PASS).
+- **What:** These are exactly the “white text in buttons when all the other
+  buttons have black text” the owner flagged — and they’re not just
+  inconsistent, they’re objectively hard to read. Notably 5 of the 12 are
+  in the medical suite, where a bariatric-bright dispensary counter is the
+  worst place for low-contrast labels.
+- **Why it matters:** Readability failures cause mis-taps and slow staff
+  down; WCAG 1.4.3 is the codified floor for “can a human read this.”
+- **Recommendation:** `text-white` → `text-black` on all 12 (or migrate the
+  whole element to `<Button variant="confirm">`, which is the same fix with
+  consistency thrown in). One-line changes; zero logic risk.
+- **Status:** OPEN
+
 ---
 
 ## 🟡 Low
@@ -611,6 +708,48 @@
   `order_events` so it is visible in the back office.
 - **Status:** OPEN
 
+### GW-032 — Active filter chips are grey-on-grey whispers: the selected filter barely differs from the unselected ones
+- **Where:** The chip pattern repeats on at least 5 list pages:
+  `src/app/admin/orders/page.tsx:138–143` (active =
+  `bg-[var(--admin-accent-soft)]` — a 14%-alpha tint),
+  `src/app/admin/loyalty-signups/page.tsx:256`,
+  `src/app/admin/reports/page.tsx:88`,
+  `src/app/admin/reports/forecast/page.tsx:93,:137`,
+  `src/components/admin/reports/ReportTabs.tsx:46` (active tab =
+  `bg-[#7ed957]/15`). At `9f9880ba`.
+- **What:** The ACTIVE state is a soft green tint on a dark surface —
+  visible if you look for it, invisible at a glance. Owner asked for the
+  brand colors to be USED, prominently. A wrong mental model of “which
+  filter am I on” is also an error vector (staff acting on the wrong list).
+- **Why it matters:** Selected-state prominence is bread-and-butter visual
+  hierarchy: the current state of the screen should be its loudest fact.
+- **Recommendation:** Active chip = SOLID brand green with black ink
+  (`bg-[var(--admin-accent)] text-black`), inactive stays muted. Verified
+  visually in the harness (`lens4-visuals/03-….png`) — the solid chip is
+  unmissable without shouting. Same treatment for ReportTabs’ active tab.
+- **Status:** OPEN
+
+### GW-033 — List pages silently truncate at 200–500 rows with no count, no pagination, no “showing N of M”
+- **Where:** `src/lib/orders/orders-store.ts:194` (`limit(filter.limit ??
+  200)`), `src/lib/inventory/store.ts:48` (`limit(opts?.limit ?? 500)`),
+  `src/lib/customers/store.ts:28` (500) — and the orders, inventory, and
+  customers pages render whatever comes back with no total count or “more
+  exists” indicator. Contrast: products DOES say “Showing first 300 of N”
+  (`src/app/admin/products/page.tsx:426`) and vendors has real pagination
+  (`src/app/admin/vendors/page.tsx:246`). At `9f9880ba`.
+- **What:** Once the store passes ~200 orders or ~500 customers/lots, the
+  oldest rows just stop appearing, with nothing telling staff the list is
+  clipped. Search still works (it queries the DB), so the failure is subtle:
+  “scroll to find it” quietly becomes “it isn’t there.”
+- **Why it matters:** At real retail volume (hundreds of orders/week) this
+  bites within the first month of cutover. The two good patterns (products’
+  count line, vendors’ pager) already exist in-repo.
+- **Recommendation:** Every list query returns `{ rows, total }`; every list
+  page shows “Showing X of Y — refine or page” with URL-param pagination
+  (`?page=2` — consistent with the URL-state architecture and GW-029’s
+  back-links).
+- **Status:** OPEN
+
 ### GW-027 — The register promises "manager reviews in the back office" for REJECTED rows, but no back-office page shows them
 - **Where:** Register status bar copy `src/app/pos/RegisterShell.tsx:2225`
   ("N rejected — manager reviews in the back office"); rejected rows are kept
@@ -730,6 +869,48 @@
   orders past `reservation_expires_at` to `no_show`/`expired` and note it in
   `order_events`) or drop the column to stop implying behavior that doesn't
   exist. Enforcing pairs naturally with the GW-015 fix.
+- **Status:** OPEN
+
+### GW-034 — Brand colors are hard-coded as raw hex in ~82 class sites instead of the tokens, so a palette tune-up can’t happen in one place
+- **Where:** Scripted sweep: 82 button/chip class strings hard-code
+  `#7ed957`/`#ff7f00`/`#ffd700` instead of `var(--admin-accent)` /
+  `var(--admin-orange)` / `var(--admin-gold)`; e.g.
+  `src/app/admin/vendors/[id]/page.tsx:186,:393,:444`,
+  `src/app/admin/products/[key]/page.tsx:98,:164,:284`,
+  `src/components/admin/reports/ReportTabs.tsx:46`,
+  `src/app/admin/loyalty-signups/page.tsx:256`. The tokens exist precisely
+  so “change a value here, the whole product moves”
+  (`src/app/globals.css:36–44`). At `9f9880ba`.
+- **What:** Two sources of truth for the same green. If the owner ever
+  tunes the palette (the light POS theme did exactly this — a deeper green
+  `#178a5c` at `globals.css:169`), the 82 hard-coded sites won’t move.
+- **Why it matters:** Maintainability of the beauty the owner wants: one
+  knob, not eighty-three.
+- **Recommendation:** Fold into the GW-030 sweep (same files, same lines):
+  hex → token as each button is migrated.
+- **Status:** OPEN
+
+### GW-035 — The flow-keeping toolkit is built but barely wired: StickyActionBar used ZERO times, ConfirmDialog once, InfoHint once
+- **Where:** `src/components/admin/ux/` contains a genuinely excellent
+  toolkit: `ScrollKeeper.tsx` (scroll restore after server-action saves —
+  wired admin-wide via layout, works), `StickyActionBar.tsx` (**0
+  usages**), `ConfirmDialog.tsx` (**used in only ONE file** —
+  `ContentBulkBar.tsx`, two dialogs), `InfoHint.tsx` (**1
+  usage**) — against `HelpPanel` (84 usages — the hand-holding the owner
+  loves), `EmptyState` (44), and `Toast` (35), which ARE wired. At
+  `9f9880ba`.
+- **What:** Long editor pages (vendor 593 lines, intake review 909 lines)
+  scroll the primary Save/Finalize action off-screen — the exact problem
+  StickyActionBar was built to solve — and destructive actions mostly rely
+  on browser `confirm()` or nothing while a styled ConfirmDialog sits
+  unused. The right furniture was built and left in the box.
+- **Why it matters:** “Lazy-river” flow is mostly about never hunting for
+  the button you need (sticky bar), never fearing a mis-click (confirm
+  dialog), never losing your place (ScrollKeeper — already delivered).
+- **Recommendation:** Wire StickyActionBar into the 6 longest editor pages
+  (intake review 909 lines, purchasing/new 647, employee 603, vendor 593,
+  promotions, blog editor); route destructive buttons through ConfirmDialog
+  as part of the GW-030 sweep.
 - **Status:** OPEN
 
 ---
