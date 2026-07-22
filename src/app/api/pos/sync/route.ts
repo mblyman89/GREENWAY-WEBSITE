@@ -71,5 +71,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: 503 });
   }
-  return NextResponse.json({ acks: result.acks });
+  // GW-002 — every ack response also carries the device's CURRENT binding
+  // (same shape as the empty-batch heartbeat above), so the register can
+  // self-heal a stale stored registerId on any successful flush instead of
+  // waiting for the next unlock. The server is the source of truth for
+  // which register a device is bound to.
+  return NextResponse.json({
+    acks: result.acks,
+    device: { name: auth.device.name, registerId: auth.device.register_id },
+  });
 }

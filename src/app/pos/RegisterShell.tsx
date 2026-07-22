@@ -487,7 +487,19 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
         if (res.status === 401) setBanner(body?.error ?? "Device credentials rejected — see a manager.");
         return;
       }
-      const { acks } = (await res.json()) as { acks: PosSyncAck[] };
+      const { acks, device } = (await res.json()) as {
+        acks: PosSyncAck[];
+        device?: { name: string; registerId: string | null };
+      };
+      // GW-002 — self-heal the stored binding on every successful flush: if
+      // the server says this device now belongs to a different register,
+      // persist the correction immediately (guarded write) so a restart can
+      // never resurrect a stale registerId.
+      if (device && typeof device.registerId === "string" && device.registerId !== creds.registerId) {
+        const next = { ...creds, registerId: device.registerId, name: device.name || creds.name };
+        persistCreds(next);
+        setCreds(next);
+      }
       setQueue((q) => {
         const applied = applyAcks(q, acks);
         if (applied.rejected.length > 0) {
@@ -504,7 +516,7 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
     } finally {
       flushingRef.current = false;
     }
-  }, [creds]);
+  }, [creds, persistCreds]);
 
   // ── online/offline listeners (reconnect triggers an immediate flush) ──
   useEffect(() => {
@@ -780,7 +792,18 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
         onUnlocked={(emp, drawerInfo, registerId) => {
           setEmployee(emp);
           setDrawer(drawerInfo);
-          setCreds((c) => (c && c.registerId !== registerId ? { ...c, registerId } : c));
+          // GW-002 — the server is the source of truth for which register
+          // this device is bound to. When an unlock reveals a re-bind, the
+          // corrected creds must be PERSISTED (guarded write path), not just
+          // held in memory: otherwise the next restart boots the OLD register
+          // id, and lock-screen punches built before the next unlock carry a
+          // stale registerId the server rejects (checkEnvelopeForDevice) —
+          // an employee who "clocked in" is silently not clocked in.
+          if (creds && creds.registerId !== registerId) {
+            const next = { ...creds, registerId };
+            persistCreds(next);
+            setCreds(next);
+          }
           setScreen("home");
           // SESSION RESUME — if the idle auto-lock parked an in-progress sale,
           // RE-VALIDATE it (age still >= 21, ID not expired, within TTL, medical
