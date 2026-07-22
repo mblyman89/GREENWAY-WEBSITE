@@ -41,13 +41,21 @@ describe("statutory limit profiles are exact", () => {
 });
 
 describe("category → bucket mapping", () => {
-  it("flower family → usable", () => {
-    for (const c of ["flower", "popcorn-bud", "preroll", "infused-preroll", "blunt"]) {
+  it("flower family (non-infused only) → usable", () => {
+    for (const c of ["flower", "popcorn-bud", "preroll", "blunt", "preroll-pack", "trim"]) {
       expect(categoryToBucket(c)).toBe("usable");
     }
   });
   it("concentrates/cartridges → concentrate", () => {
     for (const c of ["concentrate", "cartridge", "disposable-cartridge", "rso"]) {
+      expect(categoryToBucket(c)).toBe("concentrate");
+    }
+  });
+  it("MIX-INFUSED RULE: infused flower/prerolls/blunts → concentrate (7 g), never usable", () => {
+    // WAC 314-55-010(8) (cannabis mix infused) + WAC 314-55-095(1)(d)(i)(C):
+    // infused products contain concentrate for inhalation, so they count
+    // against the 7 g concentrate bucket, not the 28 g flower bucket.
+    for (const c of ["infused-flower", "infused-preroll", "infused-blunt", "infused-preroll-pack"]) {
       expect(categoryToBucket(c)).toBe("concentrate");
     }
   });
@@ -97,6 +105,44 @@ describe("evaluateCart — recreational blocking per bucket", () => {
       { category: "flower", quantity: 8 },
       { category: "concentrate", quantity: 1 },
     ]);
+    expect(v.blocked).toBe(false);
+  });
+});
+
+describe("evaluateCart — MIX-INFUSED RULE (owner bug report: infused was sliding under the 28 g flower wall)", () => {
+  it("8 × 1 g infused prerolls trip the 7 g concentrate wall, contribute nothing to flower", () => {
+    const v = evaluateCart([{ category: "infused-preroll", quantity: 8 }]);
+    expect(v.blocked).toBe(true);
+    expect(v.buckets.find((b) => b.bucket === "concentrate")?.exceeded).toBe(true);
+    expect(v.buckets.find((b) => b.bucket === "usable")?.usedGrams).toBe(0);
+  });
+  it("7 × 1 g infused prerolls exactly at the 7 g limit passes", () => {
+    expect(evaluateCart([{ category: "infused-preroll", quantity: 7 }]).blocked).toBe(false);
+  });
+  it("5 × 1.5 g infused blunts (7.5 g) block", () => {
+    expect(evaluateCart([{ category: "infused-blunt", quantity: 5 }]).blocked).toBe(true);
+  });
+  it("infused products share the 7 g bucket with dabs/carts", () => {
+    const v = evaluateCart([
+      { category: "concentrate", quantity: 5 },
+      { category: "infused-preroll", quantity: 3 },
+    ]);
+    expect(v.blocked).toBe(true); // 5 + 3 = 8 g > 7 g
+  });
+  it("a full 28 g of flower PLUS 6 g of infused prerolls passes — infused no longer eats the flower allowance", () => {
+    const v = evaluateCart([
+      { category: "flower", quantity: 8 }, // 28 g usable, at limit
+      { category: "infused-preroll", quantity: 6 }, // 6 g concentrate, under 7
+    ]);
+    expect(v.blocked).toBe(false);
+  });
+  it("medical cardholders get the 21 g concentrate ceiling for infused too", () => {
+    expect(evaluateCart([{ category: "infused-preroll", quantity: 21 }], "medical").blocked).toBe(false);
+    expect(evaluateCart([{ category: "infused-preroll", quantity: 22 }], "medical").blocked).toBe(true);
+  });
+  it("AN-1: label weight rides along — one 2.5 g infused blunt counts 2.5 g of concentrate", () => {
+    const v = evaluateCart([{ category: "infused-blunt", quantity: 1, grams: 2.5 }]);
+    expect(v.buckets.find((b) => b.bucket === "concentrate")?.usedGrams).toBe(2.5);
     expect(v.blocked).toBe(false);
   });
 });

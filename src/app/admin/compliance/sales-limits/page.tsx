@@ -74,6 +74,7 @@ export default async function SalesLimitsPage({
           title="How sales limits work"
           steps={[
             "WA caps a single transaction: 1 oz flower, 7 g concentrate, 16 oz solid edible, 72 oz liquid (WAC 314-55-095).",
+            "Infused flower/prerolls/blunts contain concentrate, so they count toward the 7 g concentrate limit — not the flower limit.",
             "Each cart line is mapped to one of four buckets and converted to grams using a per-unit weight.",
             "At checkout the cart is summed per bucket and compared to these maximums.",
             "Turn enforcement on/off, choose warn-only vs hard block, and tune per-category grams per unit below.",
@@ -173,6 +174,13 @@ export default async function SalesLimitsPage({
               </table>
             </div>
             <p className="mt-4 text-xs text-[var(--admin-muted)]">
+              <strong className="text-[var(--admin-text)]">Infused products follow the concentrate limit:</strong>{" "}
+              infused flower, infused prerolls, infused blunts, and infused preroll
+              packs contain concentrate, so the state counts them against the 7 g
+              concentrate limit (21 g medical) — not the 1 oz flower limit
+              (WAC 314-55-095, WAC 314-55-010(8)).
+            </p>
+            <p className="mt-2 text-xs text-[var(--admin-muted)]">
               Accessories, Greenway merch, and paraphernalia are not cannabis and
               do not count toward any limit. At checkout, enforcement is currently{" "}
               <strong className="text-[var(--admin-text)]">{s.enforce ? "on" : "off"}</strong>{" "}

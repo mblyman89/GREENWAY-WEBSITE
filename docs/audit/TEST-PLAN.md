@@ -597,6 +597,25 @@ gate). You will walk the happy path first, then rattle every gate.*
   loyalty was attached) any reserved points come back (Phase 7 re-checks
   this properly).
 
+#### T-055 — Infused products obey the 7 g concentrate wall (added with the mix-infused fix)
+- **Background:** infused flower, infused prerolls, infused blunts, and
+  infused preroll packs are "cannabis mix infused" — flower combined with
+  concentrate (WAC 314-55-010(8)). They count against the **7 g
+  concentrate** limit (WAC 314-55-095), NOT the 28 g flower limit.
+- **Do:** add 8 × 1 g infused prerolls to a recreational cart.
+- **Expect:** the limit meter shows the CONCENTRATE bucket over (8 g > 7 g)
+  and Pay refuses — even though 8 g is far below the 28 g flower wall.
+- **Also try:** 5 infused blunts (1.5 g each = 7.5 g) → blocked. 7 × 1 g
+  infused prerolls → allowed (exactly at the limit).
+- **The share check:** 5 g of dabs/carts + 3 infused prerolls (3 g) →
+  blocked together — infused shares the same 7 g bucket as concentrates.
+- **The independence check:** a full 28 g of regular flower PLUS 6 g of
+  infused prerolls → allowed. Infused no longer eats the flower allowance.
+- **Medical:** a carded patient gets 21 g for the concentrate bucket —
+  21 infused prerolls pass, 22 block.
+- **This must NEVER happen:** an infused product sliding under the flower
+  limit — 10+ grams of infused prerolls completing as a recreational sale.
+
 ---
 
 <a id="phase-4"></a>
