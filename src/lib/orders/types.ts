@@ -191,4 +191,11 @@ export type PersistOrderInput = {
 export type PlacedOrderResult = {
   orderNumber: string;
   publicToken: string;
+  /**
+   * Internal orders.id (GW-024): lets the placement route link the receipt
+   * print job and write notification-failure notes onto the order's
+   * timeline. NEVER include this in the customer-facing response — the
+   * route strips it (publicToken is the only guest credential).
+   */
+  orderId: string;
 };

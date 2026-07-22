@@ -515,7 +515,17 @@
   `waitUntil` from `next/server` (Vercel supports it via
   `request.waitUntil`/`after()`) so the platform keeps the function alive.
   Keep the `.catch` so failures still never block the customer, but log them.
-- **Status:** OPEN
+- **Status:** FIXED (PR #635) — both post-order work blocks (notify emails +
+  receipt-print queue) now run inside `after()` from `next/server` (verified
+  exported by the installed Next 16.2.9): the platform keeps the function
+  alive until the work finishes, while the customer's 201 response still
+  returns immediately. Every branch logs: success logs one confirmation
+  line, failure logs the reason (`console.error` inside the `after` blocks —
+  no more `.catch(() => {})`). Bonus: `queueOrderReceipt` is now passed the
+  real internal `orderId` (previously always `null`), so receipt print jobs
+  are linked to their order; the internal id is threaded through
+  `PlacedOrderResult` and explicitly stripped from the customer-facing
+  response. Exercised by TEST-PLAN T-006 and T-104.
 
 ### GW-029 — Every “Back to …” link in the back office is bare: all 33 of them wipe the filters/search you had on the list page
 - **Where:** Scripted sweep of every `href` whose text says “Back …” across
@@ -764,7 +774,19 @@
 - **Recommendation:** Check `res.ok`; on failure log status + response body
   (Vercel logs) so misconfiguration is diagnosable. Optionally write a row to
   `order_events` so it is visible in the back office.
-- **Status:** OPEN
+- **Status:** FIXED (PR #635, same slice as GW-024) — `sendEmail` now checks
+  `res.ok` and returns a structured `EmailSendOutcome`
+  (sent/failed/skipped + a compact `HTTP <status> — <body snippet>` detail
+  via `describeSendFailure`, capped at 180 chars); it never rejects. The
+  pure `summarizeNotifyOutcomes` (`notify-outcome-core.ts`, 16 embedded
+  self-tests + vitest mirror) turns the outcomes into one diagnosable log
+  line AND — the recommendation's "optionally" made mandatory — a
+  plain-English warning written onto the order's back-office timeline
+  (`order_events`, actor "system · email monitor") whenever a send FAILS.
+  A failed STAFF alert gets the loudest note ("treat this page as the only
+  alert") because that is the customer-at-the-counter case; legitimate
+  skips (env not configured, guest without email) stay quiet. Exercised by
+  TEST-PLAN T-006.
 
 ### GW-032 — Active filter chips are grey-on-grey whispers: the selected filter barely differs from the unselected ones
 - **Where:** The chip pattern repeats on at least 5 list pages:
