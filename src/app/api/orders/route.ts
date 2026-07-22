@@ -17,9 +17,10 @@
  * NO online payment is captured — this is a pickup reservation; final
  * price/tax/limits are confirmed in store.
  */
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { createOrder } from "@/lib/orders/orders-store";
 import { notifyOrderPlaced } from "@/lib/orders/notify";
+import { recordOrderNotifyFailure } from "@/lib/orders/notify-event";
 import { queueOrderReceipt } from "@/lib/printing/printer-store";
 import { repriceOrderLines, clientTotalsMatch } from "@/lib/orders/order-pricing";
 import { evaluateCartWithSettings, logSalesLimitEvent } from "@/lib/compliance/sales-limits";
@@ -170,44 +171,76 @@ export async function POST(request: Request) {
   }
 
   const itemCount = input.lines.reduce((sum, l) => sum + l.quantity, 0);
+  const orderId = result.orderId;
 
-  // Best-effort notification; never blocks the customer response.
-  notifyOrderPlaced({
-    orderNumber: result.orderNumber,
-    customerFirstName: input.customerFirstName,
-    customerEmail: input.customerEmail ?? null,
-    itemCount,
-    totalMinorUnits: input.totalMinorUnits,
-  }).catch(() => {});
+  // GW-024: the notification + receipt work is scheduled with `after()`,
+  // which keeps the serverless function alive PAST the response instead of
+  // letting Vercel freeze it mid-fetch (the old fire-and-forget promises
+  // could simply never run — no staff email, no queued receipt, no log).
+  // The customer's response still returns immediately; failures still never
+  // block checkout — but now they are LOGGED (GW-025) and a failed send
+  // writes a visible warning onto the order's back-office timeline.
+  after(async () => {
+    try {
+      const summary = await notifyOrderPlaced({
+        orderNumber: result.orderNumber,
+        customerFirstName: input.customerFirstName,
+        customerEmail: input.customerEmail ?? null,
+        itemCount,
+        totalMinorUnits: input.totalMinorUnits,
+      });
+      if (summary.logLine) console.log(summary.logLine);
+      if (summary.orderEventNote) {
+        await recordOrderNotifyFailure(orderId, summary.orderEventNote);
+      }
+    } catch (err) {
+      console.error(`[orders/notify] ${result.orderNumber}: unexpected notify error`, err);
+    }
+  });
 
-  // Best-effort receipt print queue (Slice 37). Only queues if a printer is
-  // configured and auto-print is enabled; never blocks the customer response.
-  queueOrderReceipt({
+  // Receipt print queue (Slice 37). Only queues if a printer is configured
+  // and auto-print is enabled. Same `after()` treatment: the insert can no
+  // longer be dropped by a platform freeze, and a failure is logged.
+  after(async () => {
+    try {
+      const jobId = await queueOrderReceipt({
+        orderNumber: result.orderNumber,
+        orderId,
+        placedAt: new Date().toISOString(),
+        customerName: [input.customerFirstName, input.customerLastName ?? ""]
+          .join(" ")
+          .trim(),
+        customerPhone: input.customerPhone ?? null,
+        lines: input.lines.map((l) => ({
+          productName: l.productName,
+          brand: l.brand ?? null,
+          variantLabel: l.variantLabel ?? null,
+          quantity: l.quantity,
+          priceMinorUnits: l.priceMinorUnits,
+        })),
+        subtotalMinorUnits: input.subtotalMinorUnits,
+        savingsMinorUnits: input.savingsMinorUnits,
+        estimatedTaxMinorUnits: input.estimatedTaxMinorUnits,
+        totalMinorUnits: input.totalMinorUnits,
+        customerNote: input.customerNote ?? null,
+        itemCount,
+      });
+      if (jobId) console.log(`[orders/receipt] ${result.orderNumber}: print job ${jobId} queued`);
+    } catch (err) {
+      console.error(`[orders/receipt] ${result.orderNumber}: receipt queueing failed`, err);
+    }
+  });
+
+  // Allowlist the guest-facing fields — the internal orders.id stays server
+  // side; publicToken is the ONLY guest credential.
+  const publicResult = {
     orderNumber: result.orderNumber,
-    orderId: null,
-    placedAt: new Date().toISOString(),
-    customerName: [input.customerFirstName, input.customerLastName ?? ""]
-      .join(" ")
-      .trim(),
-    customerPhone: input.customerPhone ?? null,
-    lines: input.lines.map((l) => ({
-      productName: l.productName,
-      brand: l.brand ?? null,
-      variantLabel: l.variantLabel ?? null,
-      quantity: l.quantity,
-      priceMinorUnits: l.priceMinorUnits,
-    })),
-    subtotalMinorUnits: input.subtotalMinorUnits,
-    savingsMinorUnits: input.savingsMinorUnits,
-    estimatedTaxMinorUnits: input.estimatedTaxMinorUnits,
-    totalMinorUnits: input.totalMinorUnits,
-    customerNote: input.customerNote ?? null,
-    itemCount,
-  }).catch(() => {});
+    publicToken: result.publicToken,
+  };
 
   return NextResponse.json(
     {
-      ...result,
+      ...publicResult,
       // Surface the placement soft-check so the storefront can show the
       // polite "we'll adjust at pickup" note (S-1a).
       limitFlag,

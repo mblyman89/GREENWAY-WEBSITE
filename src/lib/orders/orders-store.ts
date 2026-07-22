@@ -126,7 +126,7 @@ export async function createOrder(input: PersistOrderInput): Promise<PlacedOrder
     note: "Order placed online.",
   });
 
-  return { orderNumber: order.order_number, publicToken: order.public_token };
+  return { orderNumber: order.order_number, publicToken: order.public_token, orderId: order.id };
 }
 
 // ---------------------------------------------------------------------------

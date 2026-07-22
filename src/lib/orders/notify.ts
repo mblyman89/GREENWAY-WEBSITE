@@ -14,6 +14,13 @@
  * package before the provider is wired up. SMS is intentionally deferred.
  */
 import "server-only";
+import {
+  describeSendFailure,
+  summarizeNotifyOutcomes,
+  type EmailAudience,
+  type EmailSendOutcome,
+  type NotifySummary,
+} from "./notify-outcome-core";
 
 const RESEND_ENDPOINT = "https://api.resend.com/emails";
 
@@ -29,42 +36,71 @@ export type OrderPlacedNotification = {
   totalMinorUnits: number;
 };
 
+/**
+ * GW-025: the Resend response is now CHECKED — a 401 (bad key), 422
+ * (unverified from-address), or 429 (rate limit) becomes a structured
+ * failure outcome instead of looking exactly like success. Throws are
+ * absorbed into the same outcome shape; this function never rejects.
+ */
 async function sendEmail(params: {
+  audience: EmailAudience;
   apiKey: string;
   from: string;
   to: string[];
   subject: string;
   html: string;
-}): Promise<void> {
-  await fetch(RESEND_ENDPOINT, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${params.apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      from: params.from,
-      to: params.to,
-      subject: params.subject,
-      html: params.html,
-    }),
-  });
+}): Promise<EmailSendOutcome> {
+  try {
+    const res = await fetch(RESEND_ENDPOINT, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${params.apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: params.from,
+        to: params.to,
+        subject: params.subject,
+        html: params.html,
+      }),
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      return { audience: params.audience, status: "failed", detail: describeSendFailure(res.status, body) };
+    }
+    return { audience: params.audience, status: "sent" };
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : "fetch failed";
+    return { audience: params.audience, status: "failed", detail };
+  }
 }
 
-export async function notifyOrderPlaced(n: OrderPlacedNotification): Promise<void> {
+/**
+ * Attempt the customer confirmation + staff alert and return a structured
+ * summary (GW-024/GW-025): the caller decides what to log and whether the
+ * order's timeline needs a visible warning. Never throws.
+ */
+export async function notifyOrderPlaced(n: OrderPlacedNotification): Promise<NotifySummary> {
   const apiKey = process.env.RESEND_API_KEY ?? "";
   const from = process.env.ORDER_EMAIL_FROM ?? "";
-  if (!apiKey || !from) return; // not configured — silent no-op
+  if (!apiKey || !from) {
+    // Not configured — a deliberate, quiet skip (rollout posture).
+    return summarizeNotifyOutcomes(n.orderNumber, [
+      { audience: "customer", status: "skipped" },
+      { audience: "staff", status: "skipped" },
+    ]);
+  }
 
   const total = formatCurrency(n.totalMinorUnits);
   const itemWord = n.itemCount === 1 ? "item" : "items";
 
-  const tasks: Promise<void>[] = [];
+  const tasks: Promise<EmailSendOutcome>[] = [];
 
   // Customer confirmation
   if (n.customerEmail) {
     tasks.push(
       sendEmail({
+        audience: "customer",
         apiKey,
         from,
         to: [n.customerEmail],
@@ -80,8 +116,10 @@ export async function notifyOrderPlaced(n: OrderPlacedNotification): Promise<voi
               bring a valid ID.
             </p>
           </div>`,
-      }).catch(() => {}),
+      }),
     );
+  } else {
+    tasks.push(Promise.resolve<EmailSendOutcome>({ audience: "customer", status: "skipped" }));
   }
 
   // Staff alert
@@ -92,6 +130,7 @@ export async function notifyOrderPlaced(n: OrderPlacedNotification): Promise<voi
   if (staffEmails.length) {
     tasks.push(
       sendEmail({
+        audience: "staff",
         apiKey,
         from,
         to: staffEmails,
@@ -103,9 +142,12 @@ export async function notifyOrderPlaced(n: OrderPlacedNotification): Promise<voi
             <p>${n.itemCount} ${itemWord} &middot; ${total}</p>
             <p>Open the order dashboard to acknowledge and prepare it.</p>
           </div>`,
-      }).catch(() => {}),
+      }),
     );
+  } else {
+    tasks.push(Promise.resolve<EmailSendOutcome>({ audience: "staff", status: "skipped" }));
   }
 
-  await Promise.allSettled(tasks);
+  const outcomes = await Promise.all(tasks); // sendEmail never rejects
+  return summarizeNotifyOutcomes(n.orderNumber, outcomes);
 }

@@ -230,10 +230,13 @@ not setup gaps. Reference: `docs/audit/OWNER-TASKLIST.md` §§1–4.*
   website order in Phase 8 — or just note this test and confirm it there).
 - **Expect:** the email arrives within ~2 minutes, from your store's
   address, not spam-foldered.
-- **⚠️ KNOWN-BROKEN (GW-025):** currently the system doesn't check whether
-  the email provider accepted the send — so a silent non-delivery is a
-  known open finding. Log deliveries/non-deliveries either way; that data
-  helps verify the fix.
+- **✅ FIXED (GW-024 + GW-025, PR #635):** the system now checks whether the
+  email provider accepted every send, and the post-order email work can no
+  longer be dropped when the serverless function freezes. If a send FAILS,
+  a plain-English warning is written onto that order's timeline in Admin →
+  Orders (from "system · email monitor") — so if a test email doesn't
+  arrive, open the order in the back office and look at its timeline: it
+  will tell you what went wrong.
 
 #### T-007 — The receipt printer answers
 - **Do:** power the Star printer, confirm it's on the store network per
@@ -906,6 +909,10 @@ the banner is missing while test mode is on, that itself is a bug.*
 - **Note:** the customer's status link is private to that order — try
   opening it in a different browser: it should show only that order's
   customer-safe view.
+- **Note (GW-024/GW-025 fix, PR #635):** if the staff notification email
+  does NOT arrive, open the order in Admin → Orders and check its timeline
+  — a failed send now leaves a visible warning note there instead of
+  vanishing silently.
 
 #### T-105 — The status flow is one-way with reasons
 - **Do:** walk the order forward: new → acknowledged → preparing → ready.

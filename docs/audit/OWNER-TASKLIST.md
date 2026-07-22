@@ -78,6 +78,15 @@ and **0120–0122** are the POS foundation the registers depend on.
 >   profiles are born inactive; idempotent, safe to re-run). Then run the
 >   read-only review query at the bottom of that file once and confirm every
 >   ACTIVE profile is someone you actually invited.
+> - [ ] **Run migration `0128_pos_pending_recovery.sql`** in the Supabase SQL
+>   editor (GW-023 database half — adds the `recovery_attempts` counter and
+>   the database-level guarantee that one register sale can never become two
+>   orders; idempotent, safe to re-run). Then run the two read-only **OWNER
+>   REVIEW QUERIES** at the bottom of that file once: the first lists any
+>   register events still stuck in `pending` (should be empty), the second
+>   surfaces any pre-existing duplicate orders the new unique rule couldn't
+>   backfill (also normally empty — if a row appears, review it in Admin →
+>   Orders and cancel the duplicate by hand).
 
 Do these in your Supabase project dashboard (they cannot be set from code):
 
