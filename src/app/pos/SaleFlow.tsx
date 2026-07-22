@@ -97,6 +97,10 @@ import {
 } from "@/lib/pos/change-calc-core";
 import { roundCashDue, normalizePosCashRoundingConfig } from "@/lib/pos/cash-rounding-core";
 import { stockSignal, cartStockWarnings } from "@/lib/pos/low-stock-core";
+// Saved-cart smart release — notice when the SAVED sale is sitting on units
+// this live cart needs, and offer to release it right at the conflict moment.
+import { heldStockConflicts, describeHeldLines } from "@/lib/pos/held-stock-core";
+import { ageLabel, type HeldSale } from "@/lib/pos/register-polish-core";
 import {
   validateCardCapture,
   medicalAgeAllowed,
@@ -194,6 +198,21 @@ export type SaleFlowProps = {
    * story simple.
    */
   onHold?: (cart: PosCartEntry[]) => void;
+  /**
+   * Saved-cart smart release — the device's CURRENT parked hold, so the live
+   * sale can notice when the saved cart is sitting on units this cart needs
+   * (the menu's count can't cover both). Pass null/undefined when no hold
+   * exists OR when THIS sale is the resumed hold — it must never conflict
+   * with itself. Advisory only; never blocks.
+   */
+  heldSale?: HeldSale | null;
+  /**
+   * Saved-cart smart release — delete the parked hold from the register (the
+   * same action as the home screen's Discard button), offered right at the
+   * conflict moment so the cashier can free the unit without hunting for the
+   * saved sale. Omitted when there is nothing to release.
+   */
+  onReleaseHold?: () => void;
   /**
    * SESSION RESUME — when the idle auto-lock parks an in-progress sale that is
    * already PAST the age gate, the shell re-mounts SaleFlow with the parked
@@ -370,7 +389,7 @@ function priceForBuyer(
   };
 }
 
-export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, employeeSawUsername, initialCart, initialMember, initialVerdict, initialMedicalCard, initialSourceOrderId, onSnapshot, onHold, onReceiptFrozen, onMemberLookup, onMemberMatch, onMemberHistory, onEmailReceipt, onApprove, onProductImage, onStockFlag, onLoyalty, onEnqueue, onComplete, onCancel }: SaleFlowProps) {
+export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, employeeSawUsername, initialCart, initialMember, initialVerdict, initialMedicalCard, initialSourceOrderId, onSnapshot, onHold, heldSale, onReleaseHold, onReceiptFrozen, onMemberLookup, onMemberMatch, onMemberHistory, onEmailReceipt, onApprove, onProductImage, onStockFlag, onLoyalty, onEnqueue, onComplete, onCancel }: SaleFlowProps) {
   // SESSION RESUME — a re-validated parked verdict starts the flow PAST the
   // age gate (at the cart), so the customer's ID is not rescanned.
   const [step, setStep] = useState<Step>(initialVerdict ? "cart" : "idgate");
@@ -588,6 +607,8 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
               }
             : undefined
         }
+        heldSale={heldSale}
+        onReleaseHold={onReleaseHold}
         onTender={(presetTenderedMinor) => {
           // AO-4 — a quick-tender chip carries the handed-over cash straight
           // into the tender screen; the plain button starts at $0.
@@ -1839,6 +1860,8 @@ function CartScreen({
   setOverrides,
   onCancel,
   onHold,
+  heldSale,
+  onReleaseHold,
   onTender,
 }: {
   bundle: PosMenuBundle;
@@ -1875,6 +1898,12 @@ function CartScreen({
   onCancel: () => void;
   /** B17 — park the cart (undefined = a hold already exists; button hidden). */
   onHold?: (cart: PosCartEntry[]) => void;
+  /** Saved-cart smart release — the device's parked hold (null when none, or
+      when THIS sale is the resumed hold — it never conflicts with itself). */
+  heldSale?: HeldSale | null;
+  /** Saved-cart smart release — delete the parked hold (home-screen Discard
+      semantics), offered right at the conflict moment. */
+  onReleaseHold?: () => void;
   /**
    * AO-4 — advance to the tender screen. A quick-tender chip passes the
    * cash amount the customer handed over so the tender screen opens with
@@ -2085,6 +2114,29 @@ function CartScreen({
         })),
       ),
     [cart],
+  );
+
+  // Saved-cart smart release — live-cart lines the SAVED sale is competing
+  // with (the menu's count can't cover both carts). The shell passes
+  // heldSale = null when THIS sale is the resumed hold, so a hold never
+  // conflicts with itself. Advisory + one-tap release; never blocks.
+  const heldConflicts = useMemo(
+    () =>
+      heldStockConflicts(
+        cart.map((e) => ({
+          variantId: e.product.variantId,
+          productName: e.product.name,
+          variantLabel: e.product.variantLabel,
+          quantity: e.quantity,
+          unitsLeft: e.product.unitsLeft,
+        })),
+        heldSale,
+      ),
+    [cart, heldSale],
+  );
+  const heldSummary = useMemo(
+    () => (heldSale ? describeHeldLines(heldSale, bundle.products) : ""),
+    [heldSale, bundle.products],
   );
 
   // High-THC statutory lock (chapter 246-70 WAC): applyMedicalPricing flags
@@ -2539,6 +2591,35 @@ function CartScreen({
                 <li key={i}>{w}</li>
               ))}
             </ul>
+          ) : null}
+
+          {/* Saved-cart smart release — the unit this cart needs is parked in
+              the SAVED sale (the Cultivera pain, solved): name the hold, what
+              it is sitting on, and offer the one-tap release right here. The
+              sale is never blocked either way — releasing just stops the two
+              carts from silently competing for the same physical unit. */}
+          {heldConflicts.length > 0 && heldSale ? (
+            <div className="mt-2 rounded-lg border border-[var(--pos-info-border)] bg-[var(--pos-info-soft)] px-3 py-2 text-xs text-[var(--pos-info)]">
+              <p className="font-semibold">
+                A saved sale is holding stock this cart needs — saved by {heldSale.heldByName}{" "}
+                {ageLabel(heldSale.heldAtIso, new Date())}
+                {heldSummary ? ` (${heldSummary})` : ""}.
+              </p>
+              <ul className="mt-1 space-y-0.5">
+                {heldConflicts.map((c) => (
+                  <li key={c.variantId}>{c.message}</li>
+                ))}
+              </ul>
+              {onReleaseHold ? (
+                <button
+                  type="button"
+                  onClick={onReleaseHold}
+                  className="pos-tile mt-2 rounded-lg bg-[var(--pos-info-solid)] px-3 py-1.5 text-xs font-bold text-white"
+                >
+                  Delete the saved sale — free its items for this customer
+                </button>
+              ) : null}
+            </div>
           ) : null}
 
           {/* AO-4 — the mockup's itemized ITEMS list: every line + its money
