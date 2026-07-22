@@ -213,3 +213,26 @@
   stranded sales on the register's next flush and via the daily sweeper —
   this migration adds the attempts cap and the absolute double-order
   guarantee underneath it.**
+
+## Fix slice — GW-011 + GW-012 (completion races and lost inventory updates)
+
+- [ ] **`supabase/migrations/0129_concurrency_guards.sql`** — GW-011 + GW-012
+  (database half): the concurrency guards under the code fix. (1) Partial
+  UNIQUE indexes so the "have I already run?" markers for the inventory
+  decrement, the void restock, and the loyalty EARN are enforced by the
+  database itself — two requests completing the same order at the same
+  instant can no longer decrement stock twice or pay points twice (any
+  pre-existing double markers/earns are deduped first, keeping the oldest,
+  and cached loyalty balances are recomputed from the ledger). (2) Two tiny
+  atomic-delta functions (`apply_lot_delta`, `apply_variant_delta`) so every
+  quantity change is computed BY the database under its own row lock —
+  two overlapping sales of the same product can no longer silently lose a
+  unit — plus a `check (on_hand_qty >= 0)` constraint so a lot can never go
+  negative. Idempotent; safe to re-run. The file ends with three read-only
+  review queries — run each once: (A) confirms both unique guards exist,
+  (B) confirms no order ever earned points twice (healthy = zero rows),
+  (C) confirms no lot is negative (healthy = zero rows). **Until this is
+  run, the code half already prevents the same-order race on its own (the
+  status flip is now compare-and-swap) and falls back to the old quantity
+  writes — this migration adds the database-enforced guarantees underneath
+  it.**

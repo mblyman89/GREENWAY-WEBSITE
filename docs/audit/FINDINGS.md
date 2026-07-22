@@ -180,7 +180,25 @@
   `loyalty_ledger (order_id, kind)` where kind='earn' — then INSERT the marker
   FIRST and treat a 23505 as "already done"; (3) leave the existing SELECT
   checks in place as fast paths. Requires one small owner-applied migration.
-- **Status:** OPEN
+- **Status:** FIXED (PR #636) — all three recommendations implemented plus a
+  claim-first hardening pass. (1) `setOrderStatus` now does a true
+  compare-and-swap: `.update(patch).eq("id", id).eq("status", fromStatus)`;
+  on a CAS miss it re-reads the row and classifies via the new pure helper
+  `classifyStatusCasMiss` — if the other actor made the SAME transition the
+  call converges (returns success, skips side effects); otherwise it refuses
+  in plain English naming the current status. (2) Migration
+  `0129_concurrency_guards.sql` adds the partial unique indexes
+  (`order_events (order_id, event_type)` for
+  'inventory_decremented'/'sale_void_restocked'; `loyalty_ledger (order_id)`
+  where kind='earn'), deduping any pre-existing double rows first and
+  recomputing loyalty caches from the ledger. (3) The inventory-decrement,
+  void-restock, and loyalty-earn markers are now INSERTED FIRST as claims;
+  a 23505 unique violation means "already done" and the work is skipped. If a
+  decrement fails partway AFTER claiming, the latch is deliberately KEPT
+  (releasing it could double-apply the already-written portions) and stamped
+  with a note directing staff to reconcile with a cycle count. Until 0129 is
+  run the code degrades gracefully: without the unique indexes the claims
+  still narrow the race window to pre-fix behavior, never worse.
 
 ### GW-012 — Inventory quantity updates are read-modify-write with no guard, so two overlapping sales/restocks can silently lose an update
 - **Where:** `src/lib/inventory/sale-decrement.ts:121` (variant
@@ -210,7 +228,23 @@
   constraint (or handle the conditional-update miss as an oversell exception).
   Same treatment for `menu_variants.inventory_level`. One migration + one
   code slice; fold into the GW-011 concurrency slice.
-- **Status:** OPEN
+- **Status:** FIXED (PR #636, same slice as GW-011) — migration
+  `0129_concurrency_guards.sql` adds two locked-row delta functions,
+  `apply_lot_delta(p_lot_id, p_delta, p_clamp, p_actor, p_auto_status)` and
+  `apply_variant_delta(p_variant_id, p_delta)`, which compute
+  `qty + delta` inside the database under the row lock so concurrent writers
+  combine instead of overwriting; it also floors any existing negative lots
+  at zero and adds the `check (on_hand_qty >= 0)` constraint. New server
+  helper `src/lib/inventory/atomic-quantity.ts` calls the RPCs and, if the
+  functions don't exist yet (migration not run), falls back to the legacy
+  absolute write — pre-fix behavior, never worse. Every read-modify-write
+  site named in this finding now goes through it: sale decrement (variant +
+  lot, clamped at 0 with automatic sold_out flip), void restock (flips
+  sold_out back to active), disposition posting (STRICT mode — a reduction
+  that would go negative is refused and its just-inserted adjustment row is
+  rolled back so the ledger never lies), plus a bonus site the finding
+  missed: cycle-count variance posting in
+  `src/lib/inventory/cycle-counts.ts`.
 
 ### GW-013 — LIQ-1295 excise return uses UTC month bounds while every other report buckets by Pacific time
 - **Where:** `src/lib/compliance/excise-return-core.ts:139–142` (`monthRange`

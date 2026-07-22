@@ -12,6 +12,8 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+// GW-012: atomic lot quantity writes.
+import { applyLotDelta } from "@/lib/inventory/atomic-quantity";
 import { resolveWebsiteCategories } from "@/lib/inventory/website-category-resolver-server";
 
 export type CycleCountStatus = "open" | "applied" | "cancelled";
@@ -470,10 +472,16 @@ export async function applyCycleCount(
     if (adjErr) return { ok: false, error: adjErr.message };
 
     const current = Number((lot as { on_hand_qty: number }).on_hand_qty) || 0;
-    await admin
-      .from("inventory_lots")
-      .update({ on_hand_qty: current + variance, updated_by: actorId })
-      .eq("id", line.lot_id);
+    // GW-012: atomic delta — a register sale landing between our read and
+    // this write can no longer be silently overwritten by the count.
+    await applyLotDelta(admin, {
+      lotId: line.lot_id,
+      delta: variance,
+      clamp: true,
+      actorId,
+      autoStatus: false, // counts adjust quantity only, never lifecycle
+      fallbackAbsolute: { onHandQty: current + variance, updatedBy: actorId },
+    });
 
     await admin.from("cycle_count_lines").update({ applied: true }).eq("id", line.id);
     applied += 1;

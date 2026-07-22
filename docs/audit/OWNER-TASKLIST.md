@@ -48,7 +48,8 @@ files, one by one**. Here is the honest, verified answer:
 
 Also: `docs/MIGRATIONS_TO_RUN.md` is your standing checklist of migrations
 from 0054 onward with a description of what breaks until each is run. If
-you haven't checked off through **0128** (the current last file — 0128 is the
+you haven't checked off through **0129** (the current last file — 0129 is the
+GW-011/GW-012 fix: concurrency guards for inventory and loyalty; 0128 is the
 GW-023 fix: stranded-sale recovery columns; 0127 is the GW-018 fix:
 auto-created staff profiles are born inactive), do that
 sweep — in particular **0123 (pin_throttle)** matters for security (GW-005)
@@ -87,6 +88,16 @@ and **0120–0122** are the POS foundation the registers depend on.
 >   surfaces any pre-existing duplicate orders the new unique rule couldn't
 >   backfill (also normally empty — if a row appears, review it in Admin →
 >   Orders and cancel the duplicate by hand).
+> - [ ] **Run migration `0129_concurrency_guards.sql`** in the Supabase SQL
+>   editor (GW-011 + GW-012 database half — makes the database itself refuse
+>   a double inventory decrement / double loyalty earn when two requests
+>   complete the same order at the same instant, and adds atomic quantity
+>   functions so two overlapping sales can never silently lose a unit of
+>   stock; idempotent, safe to re-run). Then run the three read-only **OWNER
+>   REVIEW QUERIES** at the bottom of that file once: (A) confirms the two
+>   unique guards exist, (B) confirms no order ever earned points twice
+>   (healthy = zero rows), (C) confirms no lot has negative stock (healthy =
+>   zero rows).
 
 Do these in your Supabase project dashboard (they cannot be set from code):
 
