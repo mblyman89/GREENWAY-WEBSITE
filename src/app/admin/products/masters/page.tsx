@@ -3,7 +3,8 @@ import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { SopSheetLink } from "@/components/admin/SopSheetLink";
-import { Breadcrumbs, HelpPanel, EmptyState } from "@/components/admin/ux";
+import { BackLink, Breadcrumbs, HelpPanel, EmptyState } from "@/components/admin/ux";
+import { withBackParam } from "@/lib/admin/back-link-core";
 import { StatCard } from "@/components/admin/StatCard";
 import { Input, Button, Badge } from "@/components/admin/ui";
 import {
@@ -32,6 +33,7 @@ export default async function MastersPage({
     clusters?: string;
     rejected?: string;
     deleted?: string;
+    back?: string;
   }>;
 }) {
   await requirePermission("inventory.manage");
@@ -94,12 +96,13 @@ export default async function MastersPage({
 
       <div className="space-y-6 px-5 py-6 sm:px-8">
         <div>
-          <Link
-            href="/admin/catalog"
+          <BackLink
+            fallback="/admin/catalog"
+            back={sp.back}
             className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--admin-text-muted)] hover:text-[var(--admin-accent)]"
           >
             ← Back to Product Intake Hub
-          </Link>
+          </BackLink>
         </div>
         {sp.error && (
           <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
@@ -131,7 +134,7 @@ export default async function MastersPage({
         </div>
 
         {tab === "masters" ? (
-          <MastersTab masters={masters} />
+          <MastersTab masters={masters} sp={sp} />
         ) : (
           <SuggestionsTab suggestions={suggestions} />
         )}
@@ -148,8 +151,10 @@ function tabCls(active: boolean) {
 
 function MastersTab({
   masters,
+  sp,
 }: {
   masters: Awaited<ReturnType<typeof listMasters>>;
+  sp: Record<string, string | string[] | undefined>;
 }) {
   return (
     <div className="space-y-6">
@@ -176,7 +181,7 @@ function MastersTab({
           {masters.map((m) => (
             <Link
               key={m.id}
-              href={`${BASE}/${m.id}`}
+              href={withBackParam(`${BASE}/${m.id}`, sp)}
               className="admin-card-interactive flex flex-col gap-2 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-4"
             >
               <div className="flex items-center gap-2">

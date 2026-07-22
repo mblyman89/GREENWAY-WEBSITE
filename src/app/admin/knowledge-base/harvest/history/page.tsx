@@ -12,13 +12,18 @@
  */
 import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { Breadcrumbs } from "@/components/admin/ux";
+import { BackLink, Breadcrumbs } from "@/components/admin/ux";
 import { HarvestJobsLive } from "@/components/admin/kb/HarvestJobsLive";
 import { cancelHarvestAction, resumeHarvestAction } from "../actions";
 
 export const dynamic = "force-dynamic";
 
-export default async function HarvestHistoryPage() {
+export default async function HarvestHistoryPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ back?: string }>;
+}) {
+  const { back } = await searchParams;
   await requirePermission("vendors.manage");
 
   return (
@@ -36,12 +41,13 @@ export default async function HarvestHistoryPage() {
           />
         }
         action={
-          <a
-            href="/admin/knowledge-base/harvest"
+          <BackLink
+            fallback="/admin/knowledge-base/harvest"
+            back={back}
             className="rounded-full border border-white/15 px-4 py-2 text-xs font-semibold text-white/70 transition hover:border-[#7ed957] hover:text-[#7ed957]"
           >
             ← Back to Harvest Console
-          </a>
+          </BackLink>
         }
       />
 

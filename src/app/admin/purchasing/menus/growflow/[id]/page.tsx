@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { Breadcrumbs, EmptyState } from "@/components/admin/ux";
+import { BackLink, Breadcrumbs, EmptyState } from "@/components/admin/ux";
 import { Badge, Button, Section } from "@/components/admin/ui";
 import { getGrowflowSnapshot, getGrowflowSnapshotItems } from "@/lib/purchasing/growflow-store";
 import {
@@ -54,7 +54,7 @@ export default async function GrowflowSnapshotPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ q?: string; category?: string }>;
+  searchParams: Promise<{ q?: string; category?: string; back?: string }>;
 }) {
   await requirePermission("inventory.manage");
   const { id } = await params;
@@ -93,12 +93,13 @@ export default async function GrowflowSnapshotPage({
 
       <div className="space-y-6 px-5 py-6 sm:px-8">
         <div className="flex items-center gap-3">
-          <Link
-            href="/admin/purchasing/menus"
+          <BackLink
+            fallback="/admin/purchasing/menus"
+            back={sp.back}
             className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--admin-text-muted)] hover:text-[var(--admin-accent)]"
           >
             ← Back to Vendor Menus
-          </Link>
+          </BackLink>
           <Badge tone="gold">GrowFlow</Badge>
           {snap.license_number && <Badge tone="neutral">license {snap.license_number}</Badge>}
         </div>

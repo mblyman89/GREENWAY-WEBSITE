@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { BackLink } from "@/components/admin/ux";
 import { notFound } from "next/navigation";
 import { requireStaff } from "@/lib/auth/session";
 import { findSopDoc, SOP_BASE_PATH, SOP_DOCS } from "@/lib/catalog/sop-core";
@@ -21,11 +21,14 @@ export const dynamic = "force-dynamic";
  */
 export default async function SopSheetPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ back?: string }>;
 }) {
   await requireStaff();
   const { slug } = await params;
+  const { back } = await searchParams;
 
   const doc = findSopDoc(slug);
   if (!doc) notFound();
@@ -45,9 +48,9 @@ export default async function SopSheetPage({
 
       {/* On-screen navigation — never printed. */}
       <div className="mb-4 flex items-center justify-between print:hidden">
-        <Link href={SOP_BASE_PATH} className="text-xs font-bold uppercase tracking-[0.1em] text-black/60 hover:text-black">
+        <BackLink fallback={SOP_BASE_PATH} back={back} className="text-xs font-bold uppercase tracking-[0.1em] text-black/60 hover:text-black">
           ← All SOPs
-        </Link>
+        </BackLink>
         <PrintButton />
       </div>
 

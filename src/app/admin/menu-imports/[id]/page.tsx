@@ -1,8 +1,8 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { can } from "@/lib/auth/roles";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { BackLink } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
 import {
   getImport,
@@ -29,7 +29,7 @@ export default async function ImportReviewPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; published?: string; staged?: string }>;
+  searchParams: Promise<{ error?: string; published?: string; staged?: string; back?: string }>;
 }) {
   const session = await requirePermission("menu.import");
   const { id } = await params;
@@ -93,12 +93,13 @@ export default async function ImportReviewPage({
         title="Import Review"
         subtitle={`Imported ${formatDateTime(imp.created_at)} · status ${imp.status}`}
         action={
-          <Link
-            href="/admin/menu-imports"
+          <BackLink
+            fallback="/admin/menu-imports"
+            back={sp.back}
             className="rounded-full border border-white/15 px-4 py-2 text-xs text-white/80 hover:border-[#7ed957] hover:text-white"
           >
             ← All imports
-          </Link>
+          </BackLink>
         }
       />
 

@@ -1,8 +1,8 @@
-import Link from "next/link";
+
 import { notFound } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { Breadcrumbs } from "@/components/admin/ux";
+import { BackLink, Breadcrumbs } from "@/components/admin/ux";
 import { Field, Input, Textarea, Button, Badge } from "@/components/admin/ui";
 import { getMaster } from "@/lib/products/masters-store";
 import {
@@ -21,7 +21,7 @@ export default async function MasterDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ saved?: string; created?: string; accepted?: string; error?: string }>;
+  searchParams: Promise<{ saved?: string; created?: string; accepted?: string; error?: string; back?: string }>;
 }) {
   await requirePermission("inventory.manage");
   const { id } = await params;
@@ -148,7 +148,7 @@ export default async function MasterDetailPage({
           </form>
         </div>
 
-        <Link href={BASE} className="inline-block text-sm text-white/50 hover:text-white/80">← Back to product mastering</Link>
+        <BackLink fallback={BASE} back={sp.back} className="inline-block text-sm text-white/50 hover:text-white/80">← Back to product mastering</BackLink>
       </div>
     </div>
   );

@@ -10,6 +10,7 @@ import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, EmptyState, HelpPanel } from "@/components/admin/ux";
+import { backHref } from "@/lib/admin/back-link-core";
 import { Badge, Button, Card, Select } from "@/components/admin/ui";
 import { listPosDevices } from "@/lib/pos/device-store";
 import { listRegisters } from "@/lib/registers/store";
@@ -18,7 +19,12 @@ import { bindDeviceAction, revokeDeviceAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
-export default async function PosDevicesPage() {
+export default async function PosDevicesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ back?: string }>;
+}) {
+  const { back } = await searchParams;
   await requirePermission("staffing.manage");
 
   if (!isSupabaseServiceConfigured) {
@@ -47,7 +53,7 @@ export default async function PosDevicesPage() {
           />
         }
         action={
-          <Button href="/admin/registers" variant="neutral" size="sm">
+          <Button href={backHref("/admin/registers", back)} variant="neutral" size="sm">
             Back to Register Activity
           </Button>
         }

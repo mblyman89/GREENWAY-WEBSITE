@@ -20,7 +20,7 @@
 import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { Breadcrumbs } from "@/components/admin/ux";
+import { BackLink, Breadcrumbs } from "@/components/admin/ux";
 import { HelpPanel } from "@/components/admin/ux/HelpPanel";
 import { AiProvenanceBadge } from "@/components/admin/ai/AiProvenanceBadge";
 import { AiComplianceFlags } from "@/components/admin/ai/AiComplianceFlags";
@@ -212,10 +212,10 @@ function VendorGroup({ group }: { group: InboxGroup }) {
 export default async function HarvestReviewPage({
   searchParams,
 }: {
-  searchParams: Promise<{ msg?: string; error?: string }>;
+  searchParams: Promise<{ msg?: string; error?: string; back?: string }>;
 }) {
   await requirePermission("vendors.manage");
-  const { msg, error } = await searchParams;
+  const { msg, error, back } = await searchParams;
 
   const inbox = await loadHarvestInbox();
   const totalActionable = inbox.totals.fast + inbox.totals.standard;
@@ -250,9 +250,9 @@ export default async function HarvestReviewPage({
           </HelpPanel>
         }
         action={
-          <Link href="/admin/knowledge-base/harvest" className="text-sm text-white/60 hover:text-white">
+          <BackLink fallback="/admin/knowledge-base/harvest" back={back} className="text-sm text-white/60 hover:text-white">
             ← Harvest Console
-          </Link>
+          </BackLink>
         }
       />
 
@@ -302,9 +302,9 @@ export default async function HarvestReviewPage({
           <div className="rounded-xl border border-white/10 bg-[#0a0a0a] p-8 text-center">
             <p className="text-sm text-white/60">
               No pending vendor or brand drafts. Start a harvest from the{" "}
-              <Link href="/admin/knowledge-base/harvest" className="text-[#5ec1ff] hover:underline">
+              <BackLink fallback="/admin/knowledge-base/harvest" back={back} className="text-[#5ec1ff] hover:underline">
                 Harvest Console
-              </Link>{" "}
+              </BackLink>{" "}
               to fill this inbox.
             </p>
           </div>

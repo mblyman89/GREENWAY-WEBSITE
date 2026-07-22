@@ -10,6 +10,7 @@ import { listImports, listVersions, getPublishedVersion, listIntakeStagedVersion
 import { countTestData } from "@/lib/pos/import-service";
 import { formatDateTime } from "@/lib/pos/format";
 import type { PosImportStatus, MenuVersionStatus } from "@/lib/pos/db-types";
+import { withBackParam } from "@/lib/admin/back-link-core";
 import { uploadAndStageImport, cleanSlateTestDataAction } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -200,7 +201,7 @@ export default async function MenuImportsPage({
                       )}
                     </div>
                     <Link
-                      href={`/admin/menu-imports/version/${v.id}`}
+                      href={withBackParam(`/admin/menu-imports/version/${v.id}`, params)}
                       className="admin-focus justify-self-end rounded-[var(--admin-radius-sm)] border border-[#7ed957]/50 bg-[#7ed957]/10 px-3 py-1.5 text-xs font-semibold text-[#7ed957] transition hover:bg-[#7ed957]/20"
                     >
                       Review &amp; publish
@@ -350,7 +351,7 @@ export default async function MenuImportsPage({
                     )}
                   </div>
                   <Link
-                    href={`/admin/menu-imports/${imp.id}`}
+                    href={withBackParam(`/admin/menu-imports/${imp.id}`, params)}
                     className="admin-focus justify-self-end rounded-[var(--admin-radius-sm)] border border-[var(--admin-border-strong)] px-3 py-1.5 text-xs text-[var(--admin-text-muted)] transition hover:border-[var(--admin-accent)] hover:text-[var(--admin-text)]"
                   >
                     Review

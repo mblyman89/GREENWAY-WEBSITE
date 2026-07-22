@@ -1,8 +1,7 @@
-import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { Breadcrumbs, HelpPanel, EmptyState } from "@/components/admin/ux";
+import { BackLink, Breadcrumbs, HelpPanel, EmptyState } from "@/components/admin/ux";
 import { listVendors } from "@/lib/vendors/store";
 import { findDuplicateGroups, type MergeCandidate } from "@/lib/vendors/merge-core";
 import { MergeGroupCard } from "@/components/admin/vendors/MergeGroupCard";
@@ -57,7 +56,7 @@ function toCandidate(v: MergeCandidate): MergeCandidate {
 export default async function VendorMergePage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; saved?: string; note?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; note?: string; back?: string }>;
 }) {
   await requirePermission("vendors.manage");
   const sp = await searchParams;
@@ -93,12 +92,13 @@ export default async function VendorMergePage({
           />
         }
         action={
-          <Link
-            href="/admin/vendors"
+          <BackLink
+            fallback="/admin/vendors"
+            back={sp.back}
             className="rounded-full border border-white/15 px-4 py-2 text-xs text-white/80 hover:border-[#7ed957] hover:text-white"
           >
             ← All vendors
-          </Link>
+          </BackLink>
         }
         help={
           <HelpPanel

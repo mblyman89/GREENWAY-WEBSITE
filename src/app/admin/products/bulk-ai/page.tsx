@@ -2,7 +2,7 @@ import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
+import { BackLink, Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { getPublishedVersion, getVersionItems } from "@/lib/pos/menu-version";
 import { getEnrichmentsForKeys, computeGaps } from "@/lib/enrichment/store";
 import { listPendingByType } from "@/lib/ai/suggestions";
@@ -19,10 +19,11 @@ export const dynamic = "force-dynamic";
 export default async function BulkAiPage({
   searchParams,
 }: {
-  searchParams: Promise<{ generated?: string; failed?: string; accepted?: string; error?: string }>;
+  searchParams: Promise<{ generated?: string; failed?: string; accepted?: string; error?: string; back?: string }>;
 }) {
   await requirePermission("products.enrich");
-  const { generated, failed, accepted, error } = await searchParams;
+  const sp = await searchParams;
+  const { generated, failed, accepted, error, back } = sp;
 
   if (!isSupabaseServiceConfigured) {
     return (
@@ -85,9 +86,9 @@ export default async function BulkAiPage({
           </HelpPanel>
         }
         action={
-          <Link href="/admin/products" className="text-sm text-white/60 hover:text-white">
+          <BackLink fallback="/admin/products" back={back} className="text-sm text-white/60 hover:text-white">
             ← Back to products
-          </Link>
+          </BackLink>
         }
       />
 

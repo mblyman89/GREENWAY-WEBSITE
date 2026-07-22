@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
@@ -6,10 +5,16 @@ import { Badge, Button, Card } from "@/components/admin/ui";
 import { getPublishedVersion, getVersionItems } from "@/lib/pos/menu-version";
 import { loadActiveRules, loadProductCosts } from "@/lib/promotions/discount-engine";
 import { SimulatorClient, type MenuPick } from "./simulator-client";
+import { backHref } from "@/lib/admin/back-link-core";
 
 export const dynamic = "force-dynamic";
 
-export default async function PromotionSimulatorPage() {
+export default async function PromotionSimulatorPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ back?: string }>;
+}) {
+  const { back } = await searchParams;
   await requirePermission("promotions.manage");
 
   const rules = await loadActiveRules();
@@ -43,9 +48,9 @@ export default async function PromotionSimulatorPage() {
           />
         }
         action={
-          <Link href="/admin/promotions">
-            <Button variant="neutral" size="sm">Back to promotions</Button>
-          </Link>
+          <Button href={backHref("/admin/promotions", back)} variant="neutral" size="sm">
+            Back to promotions
+          </Button>
         }
       />
 

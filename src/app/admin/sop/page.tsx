@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireStaff } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { HelpPanel } from "@/components/admin/ux";
+import { BackLink, HelpPanel } from "@/components/admin/ux";
 import {
   SOP_DOCS,
   TRUCK_DAY_SLUG,
@@ -20,7 +20,12 @@ export const dynamic = "force-dynamic";
  * verified workflows the on-page HelpPanels teach — paper and screen never
  * disagree.
  */
-export default async function SopPackPage() {
+export default async function SopPackPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ back?: string }>;
+}) {
+  const { back } = await searchParams;
   await requireStaff();
 
   const master = SOP_DOCS.find((d) => d.slug === TRUCK_DAY_SLUG)!;
@@ -32,9 +37,9 @@ export default async function SopPackPage() {
         title="Printable SOPs"
         subtitle="One-page standard operating procedures for every stage of the product journey — print them and put them on the wall."
         action={
-          <Link href="/admin" className="text-sm text-white/60 hover:text-white">
+          <BackLink fallback="/admin" back={back} className="text-sm text-white/60 hover:text-white">
             ← Dashboard
-          </Link>
+          </BackLink>
         }
       />
 

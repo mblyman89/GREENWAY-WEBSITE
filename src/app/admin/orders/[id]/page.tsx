@@ -4,6 +4,7 @@ import { requirePermission } from "@/lib/auth/session";
 import { can } from "@/lib/auth/roles";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { BackLink } from "@/components/admin/ux";
 import { OrderStatusFlow } from "@/components/admin/orders/OrderStatusFlow";
 import { CustomerLinkSection } from "@/components/admin/orders/CustomerLinkSection";
 import { MedicalSaleSection } from "@/components/admin/orders/MedicalSaleSection";
@@ -37,7 +38,7 @@ export default async function OrderDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ blocked?: string; medq?: string; loyq?: string; ok?: string }>;
+  searchParams?: Promise<{ blocked?: string; medq?: string; loyq?: string; ok?: string; back?: string }>;
 }) {
   const session = await requirePermission("orders.view");
   const { id } = await params;
@@ -70,12 +71,13 @@ export default async function OrderDetailPage({
             >
               Print pick-ticket
             </Link>
-            <Link
-              href="/admin/orders"
+            <BackLink
+              fallback="/admin/orders"
+              back={sp.back}
               className="rounded-lg border border-white/15 bg-white/5 px-3.5 py-2 text-xs font-bold text-white hover:bg-white/10"
             >
               Back to orders
-            </Link>
+            </BackLink>
           </div>
         }
       />

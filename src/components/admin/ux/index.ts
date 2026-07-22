@@ -25,3 +25,4 @@ export { ConfirmDialog } from "./ConfirmDialog";
 export { StickyActionBar } from "./StickyActionBar";
 export { ScrollKeeper } from "./ScrollKeeper";
 export { PendingKeeper } from "./PendingKeeper";
+export { BackLink } from "./BackLink";

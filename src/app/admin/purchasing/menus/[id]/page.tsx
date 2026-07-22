@@ -2,7 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { Breadcrumbs, EmptyState } from "@/components/admin/ux";
+import { BackLink, Breadcrumbs, EmptyState } from "@/components/admin/ux";
+import { withBackParam } from "@/lib/admin/back-link-core";
 import { Badge, Button, Section } from "@/components/admin/ui";
 import { getSnapshot, getSnapshotItems } from "@/lib/purchasing/cultivera-store";
 import {
@@ -44,7 +45,7 @@ export default async function CultiveraSnapshotPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ q?: string; category?: string }>;
+  searchParams: Promise<{ q?: string; category?: string; back?: string }>;
 }) {
   await requirePermission("inventory.manage");
   const { id } = await params;
@@ -80,12 +81,13 @@ export default async function CultiveraSnapshotPage({
 
       <div className="space-y-6 px-5 py-6 sm:px-8">
         <div>
-          <Link
-            href="/admin/purchasing/menus"
+          <BackLink
+            fallback="/admin/purchasing/menus"
+            back={sp.back}
             className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--admin-text-muted)] hover:text-[var(--admin-accent)]"
           >
             ← Back to Vendor Menus
-          </Link>
+          </BackLink>
         </div>
 
         {snap.status === "error" && (
@@ -260,7 +262,7 @@ export default async function CultiveraSnapshotPage({
                           card opens into weights/prices/availability. Shows the
                           fetched size count once known. */}
                       <Link
-                        href={`/admin/purchasing/menus/${id}/item/${it.id}`}
+                        href={withBackParam(`/admin/purchasing/menus/${id}/item/${it.id}`, sp)}
                         className="mt-1 inline-flex w-full items-center justify-between gap-2 rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-3 py-2 text-xs font-semibold text-[var(--admin-accent)] transition-colors hover:bg-[var(--admin-accent)]/20"
                       >
                         <span>{variantCount > 0 ? `View ${sizesLabel}` : sizesLabel}</span>

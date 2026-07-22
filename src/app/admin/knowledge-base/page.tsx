@@ -1,8 +1,8 @@
-import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { HelpPanel } from "@/components/admin/ux/HelpPanel";
 import { Breadcrumbs } from "@/components/admin/ux/Breadcrumbs";
+import { BackLink } from "@/components/admin/ux/BackLink";
 import { getKbCounts, countKbProductDrafts } from "@/lib/ai/kb/store";
 import { countBrands } from "@/lib/vendors/store";
 import { getKbHealth } from "@/lib/ai/kb/health";
@@ -24,10 +24,10 @@ export const dynamic = "force-dynamic";
 export default async function KnowledgeBasePage({
   searchParams,
 }: {
-  searchParams: Promise<{ msg?: string; error?: string }>;
+  searchParams: Promise<{ msg?: string; error?: string; back?: string }>;
 }) {
   await requirePermission("products.enrich");
-  const { msg, error } = await searchParams;
+  const { msg, error, back } = await searchParams;
 
   const [counts, draftReviews, health, brandCount] = await Promise.all([
     getKbCounts(),
@@ -68,12 +68,13 @@ export default async function KnowledgeBasePage({
 
       <div className="px-5 py-6 sm:px-8 space-y-6">
         <div>
-          <Link
-            href="/admin/catalog"
+          <BackLink
+            fallback="/admin/catalog"
+            back={back}
             className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--admin-text-muted)] hover:text-[var(--admin-accent)]"
           >
             ← Back to Product Intake Hub
-          </Link>
+          </BackLink>
         </div>
         <KbFlash msg={msg} error={error} />
 

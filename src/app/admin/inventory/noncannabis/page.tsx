@@ -39,6 +39,7 @@ import { NonCannabisIntakeForm } from "./NonCannabisIntakeForm";
 import { InvoiceBuilderForm, type InvoiceProductOption } from "./InvoiceBuilderForm";
 import { MerchCatalog, type CatalogRow } from "./MerchCatalog";
 import { activateNonCannabisAction, archiveNonCannabisAction } from "./actions";
+import { withBackParam } from "@/lib/admin/back-link-core";
 
 export const dynamic = "force-dynamic";
 
@@ -472,7 +473,7 @@ export default async function NonCannabisInventoryPage({
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-2">
                           <Link
-                            href={`/admin/inventory/noncannabis/${p.id}/label`}
+                            href={withBackParam(`/admin/inventory/noncannabis/${p.id}/label`, sp)}
                             className="text-xs text-[var(--admin-accent)] underline"
                           >
                             🖨 Print SKU

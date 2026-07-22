@@ -1,8 +1,8 @@
-import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { isAiConfigured } from "@/lib/ai/provider";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { BackLink } from "@/components/admin/ux";
 import { Button, Field, Input, Select, Textarea } from "@/components/admin/ui";
 import { BlogIdeaAssistant } from "@/components/admin/blog/BlogIdeaAssistant";
 import { BLOG_CATEGORIES } from "@/lib/cms/types";
@@ -10,8 +10,13 @@ import { createPostAction } from "../actions";
 
 export const dynamic = "force-dynamic";
 
-export default async function NewBlogPostPage() {
+export default async function NewBlogPostPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ back?: string }>;
+}) {
   await requirePermission("blog.manage");
+  const sp = searchParams ? await searchParams : {};
 
   if (!isSupabaseServiceConfigured) {
     return (
@@ -31,12 +36,13 @@ export default async function NewBlogPostPage() {
         title="New post"
         subtitle="Get an idea from the assistant, then create a draft. You can add the body, hero image, SEO, and AI assist on the next screen."
         action={
-          <Link
-            href="/admin/blog"
+          <BackLink
+            fallback="/admin/blog"
+            back={sp.back}
             className="text-sm text-[var(--admin-text-muted)] hover:text-[var(--admin-text)]"
           >
             ← Back to posts
-          </Link>
+          </BackLink>
         }
       />
 

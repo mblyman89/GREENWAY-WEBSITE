@@ -48,7 +48,14 @@ function GapBadge({ ok, label }: { ok: boolean; label: string }) {
   );
 }
 
-export function ProductGrid({ cards }: { cards: ProductGridCard[] }) {
+export function ProductGrid({
+  cards,
+  hrefFor,
+}: {
+  cards: ProductGridCard[];
+  /** GW-029: page supplies a state-carrying href builder (falls back to the bare editor route). */
+  hrefFor?: (posKey: string) => string;
+}) {
   if (cards.length === 0) {
     return <p className="text-sm text-white/50">No products match your filter.</p>;
   }
@@ -57,7 +64,7 @@ export function ProductGrid({ cards }: { cards: ProductGridCard[] }) {
       {cards.map((c) => (
         <Link
           key={c.posKey}
-          href={`/admin/products/${encodeURIComponent(c.posKey)}`}
+          href={hrefFor ? hrefFor(c.posKey) : `/admin/products/${encodeURIComponent(c.posKey)}`}
           className="group flex flex-col overflow-hidden rounded-xl border border-white/10 bg-[#0a0a0a] transition hover:border-[#7ed957]/50 hover:bg-white/[0.03]"
         >
           <div className="relative aspect-square overflow-hidden bg-zinc-900">

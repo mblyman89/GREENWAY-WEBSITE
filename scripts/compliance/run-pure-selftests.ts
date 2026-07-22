@@ -116,6 +116,7 @@ import { __runActiveSaleResumeCoreTests } from "../../src/lib/pos/active-sale-re
 import { __runMenuNameDisplayCoreTests } from "../../src/lib/pos/menu-name-display-core";
 import { __runMedicalTestModeCoreTests } from "../../src/lib/pos/medical-testmode-core";
 import { __runSawPrefillCoreTests } from "../../src/lib/pos/saw-prefill-core";
+import { __runBackLinkTests } from "../../src/lib/admin/back-link-core";
 
 async function main() {
   __runOrderPricingTests();
@@ -215,6 +216,7 @@ async function main() {
   __runMenuNameDisplayCoreTests();
   __runMedicalTestModeCoreTests();
   __runSawPrefillCoreTests();
+  __runBackLinkTests();
   __runSwCoreTests();
   __runVariantGramsCoreTests();
   __runMenuLiveStepCoreTests();

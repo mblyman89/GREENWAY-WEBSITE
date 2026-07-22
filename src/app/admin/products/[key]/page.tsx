@@ -1,7 +1,7 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { BackLink } from "@/components/admin/ux";
 import { getPublishedVersion, getItemBySourceKey } from "@/lib/pos/menu-version";
 import { getEnrichment, mediaUrlsForIds } from "@/lib/enrichment/store";
 import { listAllBrands } from "@/lib/vendors/store";
@@ -27,12 +27,12 @@ export default async function ProductEditorPage({
   searchParams,
 }: {
   params: Promise<{ key: string }>;
-  searchParams: Promise<{ saved?: string; error?: string; ai?: string }>;
+  searchParams: Promise<{ saved?: string; error?: string; ai?: string; back?: string }>;
 }) {
   const session = await requirePermission("products.enrich");
   const { key: rawKey } = await params;
   const key = decodeURIComponent(rawKey);
-  const { saved, error, ai } = await searchParams;
+  const { saved, error, ai, back } = await searchParams;
 
   const published = await getPublishedVersion();
   if (!published) notFound();
@@ -60,9 +60,9 @@ export default async function ProductEditorPage({
         title={enrichment?.display_name || item.name}
         subtitle={`${item.brand_name || "—"} · ${item.category} · ${item.price_label} (POS-controlled)`}
         action={
-          <Link href="/admin/products" className="rounded-full border border-white/15 px-4 py-2 text-sm text-white/80 hover:border-[#7ed957] hover:text-white">
+          <BackLink fallback="/admin/products" back={back} className="rounded-full border border-white/15 px-4 py-2 text-sm text-white/80 hover:border-[#7ed957] hover:text-white">
             ← All products
-          </Link>
+          </BackLink>
         }
       />
 
