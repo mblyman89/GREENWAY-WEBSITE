@@ -97,7 +97,17 @@
   persistent banner ("Register storage is full — call a manager; do NOT keep
   ringing sales offline") and keep the in-memory queue serving. Consider a
   queue-length watermark banner (e.g. >200 pending) as an early warning.
-- **Status:** OPEN
+- **Status:** FIXED (PR #639) — all three unguarded writes are wrapped:
+  the queue/sequence persist effect and the provisioning write (now routed
+  through one guarded `persistCreds` path). On failure the in-memory queue
+  keeps serving and a PERSISTENT storage alert (separate state from the
+  routine banner, so a sync message can never dismiss it) tells the human
+  exactly what is at risk; it self-clears only when a write succeeds again.
+  The recommended early-warning watermark also shipped:
+  `queueDepthWarning` (pure, `register-client-core.ts`) fires a loud
+  call-a-manager line at ≥200 pending events, well before quota is a real
+  risk. Alert precedence: storage failure > depth warning > routine banner.
+  Verified by TEST-PLAN T-151/T-152 (long outage / offline restart).
 
 ### GW-002 — A register re-bind is never persisted; after a restart, lock-screen punches carry the stale register id and are rejected
 - **Where:** `src/app/pos/RegisterShell.tsx:757` (`onUnlocked` updates `creds`

@@ -153,6 +153,49 @@ export function highestSequence(queue: QueuedPosEvent[], fallback = 0): number {
 }
 
 // ---------------------------------------------------------------------------
+// Storage-pressure guardrails (GW-001)
+// ---------------------------------------------------------------------------
+//
+// localStorage.setItem THROWS when the origin's quota is exhausted (long
+// offline stretch growing the queue, iOS storage pressure, Safari private
+// mode). An uncaught throw inside the persist effect unmounts the React tree
+// and white-screens the register EVERY time the queue changes. The shell wraps
+// those writes in try/catch and uses these PURE helpers to decide what the
+// human sees; the in-memory queue keeps serving either way.
+
+/** Early-warning watermark: a queue this deep means sync has been failing for
+ * a long time and storage exhaustion is approaching. 200 events \u2248 a very busy
+ * multi-hour offline stretch — loud, but well before quota is a real risk. */
+export const QUEUE_DEPTH_WARNING_THRESHOLD = 200;
+
+/**
+ * Persistent early-warning line for a queue that keeps growing (sync down /
+ * rejected credentials). Null while the depth is healthy.
+ */
+export function queueDepthWarning(
+  pendingCount: number,
+  threshold = QUEUE_DEPTH_WARNING_THRESHOLD,
+): string | null {
+  if (!Number.isFinite(pendingCount) || pendingCount < threshold) return null;
+  return `${Math.floor(pendingCount)} sales/events are waiting to sync — the register has been offline or rejected for a long time. Call a manager and check the connection before ringing more sales.`;
+}
+
+/** What failed to persist — the message tells the human what is at risk. */
+export type StorageFailureKind = "queue" | "device";
+
+/**
+ * Persistent alert for a FAILED localStorage write. The register keeps
+ * working from memory, but a restart would lose whatever could not be saved
+ * — so the human must not shrug this off.
+ */
+export function storageFailureAlert(kind: StorageFailureKind): string {
+  if (kind === "device") {
+    return "Register storage is full — the device pairing could not be saved and will NOT survive a restart. Call a manager; do not restart this device until this clears.";
+  }
+  return "Register storage is full — offline sales can NOT be saved to disk and would be lost if this device restarts. Call a manager and get back online now; do NOT keep ringing sales offline.";
+}
+
+// ---------------------------------------------------------------------------
 // Self-tests
 // ---------------------------------------------------------------------------
 
@@ -222,6 +265,22 @@ export function __runRegisterClientCoreTests(): void {
 
   ok(highestSequence(queue) === 2, "highestSequence finds resume point");
   ok(highestSequence([], 5) === 5, "highestSequence honors fallback");
+
+  // GW-001 — storage-pressure guardrails
+  {
+    ok(queueDepthWarning(0) === null, "empty queue → no depth warning");
+    ok(queueDepthWarning(199) === null, "199 pending → below watermark, quiet");
+    const warn = queueDepthWarning(200);
+    ok(!!warn && warn.includes("200") && warn.includes("manager"), "200 pending → loud early warning naming the count");
+    ok(queueDepthWarning(350)!.includes("350"), "warning carries the live count");
+    ok(queueDepthWarning(5, 5) !== null, "threshold is configurable");
+    ok(queueDepthWarning(Number.NaN) === null, "NaN count → no warning (never crash)");
+    const q = storageFailureAlert("queue");
+    ok(q.includes("full") && q.includes("offline sales") && q.includes("manager"), "queue write failure names the risk (lost offline sales)");
+    const d = storageFailureAlert("device");
+    ok(d.includes("pairing") && d.includes("restart"), "device write failure warns pairing won't survive a restart");
+    ok(q !== d, "queue and device alerts are distinct messages");
+  }
 
   console.log(`pos/register-client-core: ${pass} passed, ${fail} failed`);
   if (fail > 0) throw new Error(`${fail} pos/register-client-core tests failed`);

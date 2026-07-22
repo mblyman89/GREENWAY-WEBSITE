@@ -15,6 +15,9 @@ import {
   serializeQueue,
   parseQueue,
   highestSequence,
+  queueDepthWarning,
+  storageFailureAlert,
+  QUEUE_DEPTH_WARNING_THRESHOLD,
   __runRegisterClientCoreTests,
   type QueuedPosEvent,
 } from "@/lib/pos/register-client-core";
@@ -197,6 +200,48 @@ describe("highestSequence", () => {
     expect(highestSequence([], 12)).toBe(12);
     expect(highestSequence([mkRow(3)], 12)).toBe(12);
     expect(highestSequence([], -4)).toBe(0);
+  });
+});
+
+// GW-001 — storage-pressure guardrails: the register must WARN before quota
+// exhaustion (queue depth watermark) and must tell the human exactly what is
+// at risk when a persist write actually fails.
+describe("queueDepthWarning (GW-001)", () => {
+  it("stays quiet below the watermark", () => {
+    expect(queueDepthWarning(0)).toBeNull();
+    expect(queueDepthWarning(QUEUE_DEPTH_WARNING_THRESHOLD - 1)).toBeNull();
+  });
+
+  it("fires at the watermark and carries the live count", () => {
+    const warn = queueDepthWarning(QUEUE_DEPTH_WARNING_THRESHOLD);
+    expect(warn).toContain(String(QUEUE_DEPTH_WARNING_THRESHOLD));
+    expect(warn).toContain("manager");
+    expect(queueDepthWarning(345)).toContain("345");
+  });
+
+  it("supports a custom threshold and never crashes on bad input", () => {
+    expect(queueDepthWarning(3, 3)).not.toBeNull();
+    expect(queueDepthWarning(2, 3)).toBeNull();
+    expect(queueDepthWarning(Number.NaN)).toBeNull();
+  });
+});
+
+describe("storageFailureAlert (GW-001)", () => {
+  it("names the risk for a failed queue write (lost offline sales)", () => {
+    const msg = storageFailureAlert("queue");
+    expect(msg).toContain("full");
+    expect(msg).toContain("offline sales");
+    expect(msg).toContain("manager");
+  });
+
+  it("names the risk for a failed device-pairing write (won't survive restart)", () => {
+    const msg = storageFailureAlert("device");
+    expect(msg).toContain("pairing");
+    expect(msg).toContain("restart");
+  });
+
+  it("keeps the two alerts distinct", () => {
+    expect(storageFailureAlert("queue")).not.toBe(storageFailureAlert("device"));
   });
 });
 
