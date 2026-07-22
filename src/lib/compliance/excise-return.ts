@@ -20,11 +20,16 @@ import ExcelJS from "exceljs";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import {
+  aggregateBox1Lines,
   computeExciseReturn,
   exciseDueDate,
   monthRange,
+  type Box1Line,
   type ExciseReturnBoxes,
 } from "@/lib/compliance/excise-return-core";
+import { chunkedIn, pagedAll } from "@/lib/supabase/chunked-in";
+import { getTaxSettings, getCannabisCategorySet, isCannabisCategory } from "@/lib/reports/tax";
+import { buildCategoryLookup } from "@/lib/reports/wa-tax";
 
 const TEMPLATE_PATH = path.join(
   process.cwd(),
@@ -52,6 +57,12 @@ export type ExciseReturnData = {
   orderCount: number;
   /** Number of exempt medical sale records aggregated. */
   exemptRecordCount: number;
+  /**
+   * Pre-tax non-cannabis (merch/accessory) sales EXCLUDED from Box 1 (GW-014),
+   * minor units. Informational — shown so the owner can reconcile Box 1
+   * against the wa-tax report's cannabis-only base.
+   */
+  nonCannabisExcludedMinor: number;
   warnings: string[];
   /** LIQ-1295 Yes/No flags (default all false). */
   flags?: { isRevised: boolean; isNoSales: boolean; isFinal: boolean };
@@ -108,32 +119,143 @@ export async function computeExciseReturnForMonth(
   if (!identity.licenseNumber) warnings.push("License number is not set — fill it in on the Compliance/Accounting settings.");
 
   let cannabisSalesMinor = 0;
+  let nonCannabisExcludedMinor = 0;
   let exemptMedicalSalesMinor = 0;
   let orderCount = 0;
   let exemptRecordCount = 0;
 
   if (isSupabaseServiceConfigured) {
     const admin = createSupabaseAdminClient();
+    // GW-013: [from, to) are the UTC instants of PACIFIC month boundaries —
+    // the same period basis as the wa-tax report and CCRS Sale.csv
+    // (docs/PERIOD_BASIS.md), so the three filings reconcile at month edges.
     const { fromISO, toISO } = monthRange(month, year);
 
-    // Box 1 — completed orders' pretax subtotal in the month.
-    const { data: orders, error: ordErr } = await admin
-      .from("orders")
-      .select("subtotal_minor_units, completed_at, status")
-      .eq("status", "completed")
-      .gte("completed_at", fromISO)
-      .lt("completed_at", toISO);
-    if (ordErr) {
-      warnings.push(`Could not load orders: ${ordErr.message}`);
-    } else {
-      const rows = (orders as { subtotal_minor_units: number | null }[] | null) ?? [];
-      orderCount = rows.length;
-      cannabisSalesMinor = rows.reduce((a, r) => a + (r.subtotal_minor_units ?? 0), 0);
-    }
+    // Box 1 — Σ pre-tax CANNABIS line bases over the month's completed orders
+    // (GW-014). The order-header subtotal sums EVERY line (merch and
+    // accessories included), which would put non-cannabis revenue under the
+    // 37% excise — so Box 1 is built from ORDER LINES, classified with the
+    // same category rules and backed out with the same shared GW-010 divisor
+    // the wa-tax report uses.
+    type OrderRow = { id: string; completed_at: string | null; placed_at: string };
+    const orders = await pagedAll<OrderRow>(async (from, to) => {
+      const { data, error } = await admin
+        .from("orders")
+        .select("id, completed_at, placed_at, status")
+        .eq("status", "completed")
+        // completed_at basis with a placed_at fallback for legacy completed
+        // orders that predate the completed_at column (docs/PERIOD_BASIS.md).
+        .or(
+          `and(completed_at.gte.${fromISO},completed_at.lt.${toISO}),and(completed_at.is.null,placed_at.gte.${fromISO},placed_at.lt.${toISO})`,
+        )
+        .order("id", { ascending: true })
+        .range(from, to);
+      if (error) throw new Error(error.message);
+      return (data as OrderRow[] | null) ?? [];
+    }).catch((e: Error) => {
+      warnings.push(`Could not load orders: ${e.message}`);
+      return null;
+    });
 
-    // Box 2 — exempt medical sales in the month (by sale_date, YYYY-MM-DD).
+    // Box 2 — exempt medical sales in the month (by sale_date, a Pacific
+    // calendar date — the Pacific-anchored instants slice to the right labels).
     const fromDate = fromISO.slice(0, 10);
     const toDate = toISO.slice(0, 10); // exclusive upper bound (1st of next month)
+
+    if (orders && orders.length > 0) {
+      orderCount = orders.length;
+      const orderIds = orders.map((o) => o.id);
+
+      const [taxSettings, cannabisSet, categoryLookup] = await Promise.all([
+        getTaxSettings().catch(() => null),
+        getCannabisCategorySet(),
+        buildCategoryLookup(admin),
+      ]);
+      const exciseRateBps = taxSettings?.exciseRateBps ?? 3700;
+      const combinedSalesRateBps =
+        (taxSettings?.stateSalesRateBps ?? 650) + (taxSettings?.localSalesRateBps ?? 280);
+
+      // Per-line WAC 314-55-090(2) exemptions — they change the back-out rate
+      // (an exempted tax was never inside the stored price). Same
+      // (order_id, product_sku) join as wa-tax / ccrs-sales.
+      const exemptByOrderSku = new Map<string, { salesExempt: boolean; exciseExempt: boolean }>();
+      {
+        type ExemptRow = {
+          order_id: string | null;
+          product_sku: string | null;
+          sales_tax_exempt: boolean | null;
+          excise_tax_exempt: boolean | null;
+        };
+        const exemptRows = await pagedAll<ExemptRow>(async (from, to) => {
+          const { data } = await admin
+            .from("medical_exempt_sales")
+            .select("order_id, product_sku, sales_tax_exempt, excise_tax_exempt, sale_date, id")
+            .gte("sale_date", fromDate)
+            .lt("sale_date", toDate)
+            .order("id", { ascending: true })
+            .range(from, to);
+          return (data as ExemptRow[] | null) ?? [];
+        }).catch(() => []);
+        for (const r of exemptRows) {
+          if (!r.order_id || !r.product_sku) continue;
+          const key = `${r.order_id}|${r.product_sku}`;
+          const prev = exemptByOrderSku.get(key);
+          exemptByOrderSku.set(key, {
+            salesExempt: (prev?.salesExempt ?? false) || r.sales_tax_exempt === true,
+            exciseExempt: (prev?.exciseExempt ?? false) || r.excise_tax_exempt === true,
+          });
+        }
+      }
+
+      // S-7: chunked + paginated — every line of every order, no row caps.
+      type LineRow = {
+        order_id: string;
+        product_id: string | null;
+        quantity: number;
+        price_minor_units: number;
+        category: string | null;
+      };
+      const lines = await chunkedIn<string, LineRow>(orderIds, async (chunk, from, to) => {
+        const { data, error } = await admin
+          .from("order_lines")
+          .select("order_id, product_id, quantity, price_minor_units, category")
+          .in("order_id", chunk)
+          .order("id", { ascending: true })
+          .range(from, to);
+        if (error) throw new Error(error.message);
+        return (data as LineRow[] | null) ?? [];
+      }).catch((e: Error) => {
+        warnings.push(`Could not load order lines: ${e.message}`);
+        return null;
+      });
+
+      if (lines) {
+        const box1Lines: Box1Line[] = lines.map((l) => {
+          // Category: menu snapshot first, then the line's own placement-time
+          // snapshot (covers keypad/custom lines) — the ccrs-sales fallback
+          // order. An unknown category is conservatively CANNABIS (excise
+          // charged / reported), matching isCannabisCategory's own default.
+          const category =
+            (l.product_id ? categoryLookup.get(l.product_id)?.category : "") || l.category?.trim() || "";
+          const exempt = l.product_id ? exemptByOrderSku.get(`${l.order_id}|${l.product_id}`) : undefined;
+          return {
+            unitPriceMinorUnits: l.price_minor_units ?? 0,
+            quantity: l.quantity ?? 0,
+            isCannabis: isCannabisCategory(category, cannabisSet),
+            salesExempt: exempt?.salesExempt === true,
+            exciseExempt: exempt?.exciseExempt === true,
+          };
+        });
+        const agg = aggregateBox1Lines(box1Lines, { combinedSalesRateBps, exciseRateBps });
+        cannabisSalesMinor = agg.cannabisSalesMinor;
+        nonCannabisExcludedMinor = agg.nonCannabisSalesMinor;
+        if (agg.nonCannabisSalesMinor > 0) {
+          warnings.push(
+            `Non-cannabis (merch/accessory) sales of $${(agg.nonCannabisSalesMinor / 100).toFixed(2)} were excluded from Box 1 — the 37% excise applies to cannabis products only.`,
+          );
+        }
+      }
+    }
     const { data: exempt, error: exErr } = await admin
       .from("medical_exempt_sales")
       .select("sales_price_minor, sale_date")
@@ -183,6 +305,7 @@ export async function computeExciseReturnForMonth(
     dueDate: exciseDueDate(month, year),
     orderCount,
     exemptRecordCount,
+    nonCannabisExcludedMinor,
     warnings,
   };
 }

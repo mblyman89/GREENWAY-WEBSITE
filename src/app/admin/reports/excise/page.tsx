@@ -20,6 +20,7 @@ import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { StatCard } from "@/components/admin/StatCard";
 import { resolveExciseReturn } from "@/lib/compliance/excise-draft";
 import { listExciseReturnBatches } from "@/lib/compliance/excise-return";
+import { pacificParts } from "@/lib/reports/timezone";
 import {
   buildPayStationLink,
   buildCcrsAchChecklist,
@@ -93,10 +94,12 @@ export default async function ExcisePage({
   const canEdit = can(session.profile.role, "settings.manage");
   const sp = await searchParams;
 
-  // Default to the previous month (the one you'd be filing for).
-  const now = new Date();
-  const defMonth = now.getUTCMonth() === 0 ? 12 : now.getUTCMonth(); // prev month (1-12)
-  const defYear = now.getUTCMonth() === 0 ? now.getUTCFullYear() - 1 : now.getUTCFullYear();
+  // Default to the previous month (the one you'd be filing for). Anchored to
+  // the STORE's calendar (Pacific), not UTC — after 4/5 PM Pacific on a
+  // month's last day, UTC has already rolled into the next month (GW-013).
+  const nowPT = pacificParts(new Date());
+  const defMonth = nowPT.month === 1 ? 12 : nowPT.month - 1; // prev month (1-12)
+  const defYear = nowPT.month === 1 ? nowPT.year - 1 : nowPT.year;
   const month = Number(sp.month) >= 1 && Number(sp.month) <= 12 ? Number(sp.month) : defMonth;
   const year = Number(sp.year) >= 2014 ? Number(sp.year) : defYear;
 
@@ -184,6 +187,9 @@ export default async function ExcisePage({
           <p className="mt-3 text-xs text-white/40">
             Due date for {MONTHS[month - 1]} {year}: <span className="font-bold text-white/70">{data.dueDate}</span> &middot;{" "}
             {data.orderCount} completed orders &middot; {data.exemptRecordCount} exempt medical sales aggregated
+            {data.nonCannabisExcludedMinor > 0
+              ? ` · $${(data.nonCannabisExcludedMinor / 100).toFixed(2)} non-cannabis sales excluded from Box 1`
+              : ""}
             {draft?.updated_at ? ` · draft last saved ${new Date(draft.updated_at).toLocaleString()}` : ""}.
           </p>
         ) : null}

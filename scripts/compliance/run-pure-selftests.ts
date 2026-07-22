@@ -6,6 +6,7 @@
  */
 import { __runOrderPricingTests } from "../../src/lib/orders/order-pricing-core";
 import { __runTaxBaseCoreTests } from "../../src/lib/reports/tax-base-core";
+import { __runExciseReturnTests } from "../../src/lib/compliance/excise-return-core";
 import { __runDiscountEngineTests } from "../../src/lib/promotions/discount-engine-core";
 import { __runPromoGuardTests } from "../../src/lib/promotions/promo-guard-core";
 import { __runSalesLimitTests } from "../../src/lib/compliance/sales-limits-core";
@@ -165,6 +166,7 @@ async function main() {
   __runNotifyOutcomeCoreTests();
   __runStatusCasCoreTests();
   __runRpcFallbackCoreTests();
+  __runExciseReturnTests();
   __runRegisterClientCoreTests();
   __runRegisterPolishCoreTests();
   __runSaleFlowCoreTests();
