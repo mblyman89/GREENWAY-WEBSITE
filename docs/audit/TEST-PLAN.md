@@ -1116,14 +1116,25 @@ the banner is missing while test mode is on, that itself is a bug.*
 - **Expect:** all day-bucketing is Pacific. (The UTC-vs-Pacific class of
   bug is the most common in this system's history — evening sales are
   where it shows.)
+- **Note (GW-013 fix, PR #637):** the LIQ-1295 excise return's month
+  window — the last UTC holdout among the filing artifacts — now uses
+  Pacific month bounds too, and the excise page's "previous month"
+  default follows the store's clock instead of UTC.
 
 #### T-134 — The LIQ-1295 excise return
 - **Do:** generate the excise return for a month with test data.
 - **Expect:** the math to review with your accountant.
-- **⚠️ KNOWN-BROKEN (GW-013, GW-014):** month bounds are currently UTC
-  (not Pacific), and Box 1 currently includes non-cannabis sales. Both
-  are open findings queued for fixing — verify the fix by re-running
-  this test after it lands.
+- **✅ GW-013 + GW-014 FIXED (PR #637):** the month window is now the
+  PACIFIC calendar month (a sale rung at 9 PM on the month's last day
+  stays in that month's return — previously it slid into the next one),
+  and Box 1 now sums ONLY cannabis lines at their pre-tax value (a
+  t-shirt or lighter on a receipt no longer inflates the 37% excise).
+  Verify: ring a mixed sale (one cannabis item + one merch item),
+  generate the return, and confirm (a) Box 1 shows only the cannabis
+  item's pre-tax amount, (b) the page notes the excluded non-cannabis
+  dollars, and (c) Box 1 matches the WA tax report's "cannabis base"
+  for the same month to the cent — that's the cross-check an auditor
+  runs.
 
 #### T-135 — CCRS CSV generation
 - **Do:** Admin → Compliance → CCRS. Generate the Sale CSV for your

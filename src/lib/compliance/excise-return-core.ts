@@ -26,6 +26,8 @@
  * All monetary INPUTS to this module are in MINOR UNITS (cents); the LIQ-1295
  * expects DOLLARS, so the box values are returned in dollars (number, 2dp).
  */
+import { pacificWallTimeToUtcISO } from "@/lib/reports/timezone";
+import { preTaxLineBaseMinor } from "@/lib/reports/tax-base-core";
 
 export type ExciseReturnInput = {
   /** Reporting month 1-12. */
@@ -72,6 +74,79 @@ export type ExciseReturnBoxes = {
 };
 
 export const EXCISE_RATE = 0.37;
+
+// ---------------------------------------------------------------------------
+// Box 1 line aggregation (GW-014)
+// ---------------------------------------------------------------------------
+
+/**
+ * One sold order line as Box 1 sees it. `isCannabis` and the exemption flags
+ * are resolved by the caller (category rules + medical_exempt_sales join —
+ * the same resolution wa-tax.ts uses), keeping this module PURE.
+ */
+export type Box1Line = {
+  /** Stored tax-INCLUSIVE per-unit price, minor units. */
+  unitPriceMinorUnits: number;
+  quantity: number;
+  isCannabis: boolean;
+  /** WAC 314-55-090(2) exemptions passed through at pricing (affect the back-out rate). */
+  salesExempt?: boolean;
+  exciseExempt?: boolean;
+};
+
+export type Box1Aggregate = {
+  /** Σ pre-tax base of CANNABIS lines only, minor units — the true Box 1. */
+  cannabisSalesMinor: number;
+  /** Σ pre-tax base of non-cannabis (merch/accessory) lines, minor units — excluded from Box 1. */
+  nonCannabisSalesMinor: number;
+  cannabisLineCount: number;
+  nonCannabisLineCount: number;
+};
+
+/**
+ * Aggregate LIQ-1295 Box 1 from ORDER LINES (GW-014). Box 1 is "Total sales
+ * of cannabis products" — merch/accessory lines must NOT contribute, or the
+ * 37% excise in Box 5 is computed on non-cannabis revenue (overpayment).
+ * Each line's pre-tax base is derived through the shared GW-010 back-out
+ * (tax-base-core.preTaxLineBaseMinor), the SAME per-line base the wa-tax
+ * report and CCRS Sale.csv use — so the three filings reconcile to the cent.
+ */
+export function aggregateBox1Lines(
+  lines: readonly Box1Line[],
+  rates: { combinedSalesRateBps: number; exciseRateBps: number },
+): Box1Aggregate {
+  let cannabis = 0;
+  let nonCannabis = 0;
+  let cannabisLines = 0;
+  let nonCannabisLines = 0;
+  for (const l of lines) {
+    const qty = Math.max(0, Math.round(l.quantity ?? 0));
+    const unit = Math.max(0, Math.round(l.unitPriceMinorUnits ?? 0));
+    if (qty <= 0 || unit <= 0) continue;
+    const base = preTaxLineBaseMinor({
+      unitPriceMinorUnits: unit,
+      quantity: qty,
+      isCannabis: l.isCannabis,
+      salesExempt: l.salesExempt === true,
+      exciseExempt: l.exciseExempt === true,
+      combinedSalesRateBps: rates.combinedSalesRateBps,
+      exciseRateBps: rates.exciseRateBps,
+    });
+    if (l.isCannabis) {
+      cannabis += base;
+      cannabisLines += 1;
+    } else {
+      nonCannabis += base;
+      nonCannabisLines += 1;
+    }
+  }
+  return {
+    cannabisSalesMinor: cannabis,
+    nonCannabisSalesMinor: nonCannabis,
+    cannabisLineCount: cannabisLines,
+    nonCannabisLineCount: nonCannabisLines,
+  };
+}
 
 /** Minor units → dollars rounded to 2dp. */
 export function toDollars(minor: number): number {
@@ -135,11 +210,27 @@ export function exciseDueDate(month: number, year: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-/** Reporting-period UTC bounds [from, to) for a month. */
+/**
+ * Reporting-period bounds [from, to) for a month, anchored to the PACIFIC
+ * calendar (GW-013). The store operates in Port Orchard, WA, and every other
+ * filing artifact (wa-tax report, CCRS Sale.csv) buckets by Pacific time
+ * (docs/PERIOD_BASIS.md) — so the LIQ-1295 must too, or a sale completed
+ * between 4/5 PM and midnight Pacific on the last day of a month lands in the
+ * NEXT month's return while the other reports put it in the CURRENT month.
+ *
+ * fromISO = the UTC instant of Pacific midnight on the 1st of the month;
+ * toISO   = the UTC instant of Pacific midnight on the 1st of the NEXT month.
+ * DST is handled by pacificWallTimeToUtcISO (Intl-based, not fixed offsets).
+ */
 export function monthRange(month: number, year: number): { fromISO: string; toISO: string } {
-  const from = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0));
-  const to = new Date(Date.UTC(month === 12 ? year + 1 : year, month === 12 ? 0 : month, 1, 0, 0, 0));
-  return { fromISO: from.toISOString(), toISO: to.toISOString() };
+  const mm = String(month).padStart(2, "0");
+  const nextMonth = month === 12 ? 1 : month + 1;
+  const nextYear = month === 12 ? year + 1 : year;
+  const nmm = String(nextMonth).padStart(2, "0");
+  return {
+    fromISO: pacificWallTimeToUtcISO(`${year}-${mm}-01`, "start"),
+    toISO: pacificWallTimeToUtcISO(`${nextYear}-${nmm}-01`, "start"),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -213,12 +304,110 @@ export function __runExciseReturnTests(): void {
   // Jun 2024 → Jul 20 2024 is a Saturday → Jul 22.
   eq(exciseDueDate(6, 2024), "2024-07-22", "Jul 20 2024 Sat → Jul 22");
 
-  // month range
+  // month range — PACIFIC calendar bounds (GW-013), expressed as UTC instants.
+  // Winter (PST = UTC−8): Pacific midnight is 08:00Z.
   const mr = monthRange(2, 2025);
-  eq(mr.fromISO.slice(0, 10), "2025-02-01", "feb from");
-  eq(mr.toISO.slice(0, 10), "2025-03-01", "feb to");
+  eq(mr.fromISO, "2025-02-01T08:00:00.000Z", "feb from = Pacific midnight (PST)");
+  eq(mr.toISO, "2025-03-01T08:00:00.000Z", "feb to = Mar 1 Pacific midnight (PST)");
   const mrDec = monthRange(12, 2025);
-  eq(mrDec.toISO.slice(0, 10), "2026-01-01", "dec to next year");
+  eq(mrDec.fromISO, "2025-12-01T08:00:00.000Z", "dec from (PST)");
+  eq(mrDec.toISO, "2026-01-01T08:00:00.000Z", "dec to next year Jan 1 (PST)");
+  // DST spring-forward: March 2025 starts in PST (08:00Z) but ends in PDT (07:00Z).
+  const mrMar = monthRange(3, 2025);
+  eq(mrMar.fromISO, "2025-03-01T08:00:00.000Z", "mar from (PST)");
+  eq(mrMar.toISO, "2025-04-01T07:00:00.000Z", "mar to (PDT after spring-forward)");
+  // DST fall-back: November 2025 starts in PDT (07:00Z) and ends in PST (08:00Z).
+  const mrNov = monthRange(11, 2025);
+  eq(mrNov.fromISO, "2025-11-01T07:00:00.000Z", "nov from (PDT)");
+  eq(mrNov.toISO, "2025-12-01T08:00:00.000Z", "nov to (PST after fall-back)");
+  // The GW-013 scenario itself: a sale completed 2025-05-31 at 9:00 PM Pacific
+  // (= 2025-06-01T04:00:00Z, ALREADY June in UTC) must fall INSIDE May's
+  // [from, to) window — the old Date.UTC bounds pushed it into June.
+  const mrMay = monthRange(5, 2025);
+  const eveningSale = "2025-06-01T04:00:00.000Z"; // 9 PM May 31 Pacific
+  ok(eveningSale >= mrMay.fromISO && eveningSale < mrMay.toISO, "9 PM month-end sale stays in May (GW-013)");
+  const mrJun = monthRange(6, 2025);
+  ok(!(eveningSale >= mrJun.fromISO && eveningSale < mrJun.toISO), "…and is NOT in June");
+
+  // -------------------------------------------------------------------------
+  // aggregateBox1Lines (GW-014): only CANNABIS lines feed Box 1, each backed
+  // out to its pre-tax base through the shared GW-010 divisor.
+  // -------------------------------------------------------------------------
+  const RATES = { combinedSalesRateBps: 930, exciseRateBps: 3700 };
+
+  // GW-010's worked example: $10.00 cannabis line → pre-tax base $6.84.
+  const a1 = aggregateBox1Lines(
+    [{ unitPriceMinorUnits: 1000, quantity: 1, isCannabis: true }],
+    RATES,
+  );
+  eq(a1.cannabisSalesMinor, 684, "cannabis $10 line → base 684");
+  eq(a1.nonCannabisSalesMinor, 0, "no non-cannabis");
+  eq(a1.cannabisLineCount, 1, "one cannabis line");
+
+  // The GW-014 scenario: cannabis flower + a $15 t-shirt + a $5 lighter.
+  // Box 1 must contain ONLY the flower's base; merch is reported separately.
+  const a2 = aggregateBox1Lines(
+    [
+      { unitPriceMinorUnits: 3500, quantity: 2, isCannabis: true }, // $70 flower
+      { unitPriceMinorUnits: 1500, quantity: 1, isCannabis: false }, // t-shirt
+      { unitPriceMinorUnits: 500, quantity: 1, isCannabis: false }, // lighter
+    ],
+    RATES,
+  );
+  // flower: round(7000 × 10000/14630) = 4785; shirt: round(1500/1.093) = 1372; lighter: round(500/1.093) = 457
+  eq(a2.cannabisSalesMinor, 4785, "Box 1 = flower base only (4785)");
+  eq(a2.nonCannabisSalesMinor, 1372 + 457, "merch tracked separately (1829)");
+  eq(a2.cannabisLineCount, 1, "one cannabis line");
+  eq(a2.nonCannabisLineCount, 2, "two merch lines");
+
+  // Exemptions change the back-out rate: an excise-exempt cannabis line only
+  // has the 9.3% sales tax inside its stored price.
+  const a3 = aggregateBox1Lines(
+    [{ unitPriceMinorUnits: 1093, quantity: 1, isCannabis: true, exciseExempt: true }],
+    RATES,
+  );
+  eq(a3.cannabisSalesMinor, 1000, "excise-exempt back-out uses 9.3% only");
+  // Fully exempt: the stored price IS the base.
+  const a4 = aggregateBox1Lines(
+    [{ unitPriceMinorUnits: 800, quantity: 1, isCannabis: true, salesExempt: true, exciseExempt: true }],
+    RATES,
+  );
+  eq(a4.cannabisSalesMinor, 800, "fully exempt line: stored price is the base");
+
+  // Garbage in, zero out: zero/negative qty or price never contributes.
+  const a5 = aggregateBox1Lines(
+    [
+      { unitPriceMinorUnits: 1000, quantity: 0, isCannabis: true },
+      { unitPriceMinorUnits: -500, quantity: 2, isCannabis: true },
+      { unitPriceMinorUnits: 0, quantity: 3, isCannabis: false },
+    ],
+    RATES,
+  );
+  eq(a5.cannabisSalesMinor, 0, "zero-qty and negative-price lines ignored");
+  eq(a5.cannabisLineCount + a5.nonCannabisLineCount, 0, "nothing counted");
+
+  // Reconciliation identity (what an auditor cross-checks): Box 1 must equal
+  // the wa-tax report's cannabisBaseMinor for the same lines. Both call
+  // preTaxLineBaseMinor line-by-line with identical inputs, so equality is
+  // structural — assert it anyway on a mixed basket.
+  const basket: Box1Line[] = [
+    { unitPriceMinorUnits: 4500, quantity: 1, isCannabis: true },
+    { unitPriceMinorUnits: 1200, quantity: 3, isCannabis: true },
+    { unitPriceMinorUnits: 2500, quantity: 1, isCannabis: false },
+  ];
+  const agg = aggregateBox1Lines(basket, RATES);
+  let mirror = 0;
+  for (const l of basket) {
+    if (!l.isCannabis) continue;
+    mirror += preTaxLineBaseMinor({
+      unitPriceMinorUnits: l.unitPriceMinorUnits,
+      quantity: l.quantity,
+      isCannabis: true,
+      combinedSalesRateBps: RATES.combinedSalesRateBps,
+      exciseRateBps: RATES.exciseRateBps,
+    });
+  }
+  eq(agg.cannabisSalesMinor, mirror, "Box 1 ≡ Σ per-line wa-tax bases (reconciliation identity)");
 
   console.log(`excise-return-core: ${pass} assertions passed`);
 }

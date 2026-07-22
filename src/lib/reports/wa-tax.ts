@@ -147,10 +147,16 @@ function monthLabel(key: string): string {
   return `${MONTH_LABELS[idx] ?? m} ${y}`;
 }
 
-type ProductTaxMeta = { category: string; type: string };
-type ProductLookup = Map<string, ProductTaxMeta>; // source_item_id -> {category, type}
+export type ProductTaxMeta = { category: string; type: string };
+export type ProductLookup = Map<string, ProductTaxMeta>; // source_item_id -> {category, type}
 
-async function buildCategoryLookup(
+/**
+ * Category/type snapshot lookup for sold lines (source_item_id → meta).
+ * Exported for the LIQ-1295 builder (GW-014) so the excise return classifies
+ * cannabis vs non-cannabis lines with EXACTLY the same rules as this report —
+ * the two filings must reconcile line-for-line.
+ */
+export async function buildCategoryLookup(
   admin: ReturnType<typeof createSupabaseAdminClient>,
 ): Promise<ProductLookup> {
   const lookup: ProductLookup = new Map();

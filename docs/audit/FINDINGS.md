@@ -269,7 +269,18 @@
   instants) instead of `Date.UTC`, mirroring `pacificMonthKey`. Also note Box 2
   already selects by `sale_date` (a DATE), which GW-009 covers — fix both in
   one "Pacific period basis" slice.
-- **Status:** OPEN
+- **Status:** FIXED (PR #637) — `monthRange` now derives the `[from, to)`
+  instants from the PACIFIC calendar via the repo's existing
+  `pacificWallTimeToUtcISO` helper (Intl-based; DST-correct — the self-tests
+  pin PST 08:00Z vs PDT 07:00Z bounds and both transition months), matching
+  the wa-tax report and CCRS Sale.csv period basis exactly. The finding's
+  scenario is now a pinned test: a 9 PM Pacific sale on the last day of May
+  stays in May's return. Bonus (same family): the excise page's
+  default-to-previous-month and the export route's fallback month/year were
+  ALSO computed from the UTC clock — after 4/5 PM Pacific on a month's last
+  day they pointed at the wrong period; both now use `pacificParts`. Box 2's
+  `sale_date` window slices the Pacific-anchored instants, so its calendar
+  labels stay correct. No migration needed.
 
 ### GW-014 — LIQ-1295 Box 1 sums the WHOLE-order subtotal, so non-cannabis (merch/accessory) sales inflate reported cannabis sales
 - **Where:** `src/lib/compliance/excise-return.ts:119–131` — Box 1 =
@@ -292,7 +303,21 @@
   standardizes), not the order header. Fold into the GW-010 tax-base slice so
   Sale.csv, wa-tax, and LIQ-1295 all derive from one shared per-line base
   helper.
-- **Status:** OPEN
+- **Status:** FIXED (PR #637, same slice as GW-013) — Box 1 is now built from
+  ORDER LINES exactly as recommended: new pure `aggregateBox1Lines` in
+  `excise-return-core.ts` sums ONLY cannabis-classified lines, each backed
+  out to its pre-tax base through the shared GW-010 helper
+  (`tax-base-core.preTaxLineBaseMinor`) with per-line WAC 314-55-090(2)
+  exemption rates honored. Classification uses the SAME
+  `isCannabisCategory` + category rules + menu-snapshot lookup (with the
+  ccrs-sales line-snapshot fallback for keypad/custom lines) as the wa-tax
+  report — the self-tests pin the reconciliation identity Box 1 ≡ Σ per-line
+  wa-tax cannabis bases. Non-cannabis (merch/accessory) dollars excluded
+  from Box 1 are now surfaced on the excise page and as a warning so the
+  owner can see exactly what was kept out of the 37% excise. Line fetches
+  are chunked+paginated (S-7) so busy months never truncate. Order counting
+  gained the standard legacy `placed_at` fallback (docs/PERIOD_BASIS.md)
+  the old header query lacked. No migration needed.
 
 ### GW-017 — Staff invites are broken end-to-end: no redirect target on the invite email, and NO set-password page exists anywhere in the app
 - **Where:** `src/app/admin/users/actions.ts:203`

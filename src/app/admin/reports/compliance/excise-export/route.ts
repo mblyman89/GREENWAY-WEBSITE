@@ -12,6 +12,7 @@ import {
   logExciseReturnBatch,
 } from "@/lib/compliance/excise-return";
 import { resolveExciseReturn } from "@/lib/compliance/excise-draft";
+import { pacificParts } from "@/lib/reports/timezone";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -19,9 +20,11 @@ export const runtime = "nodejs";
 export async function GET(request: Request) {
   const session = await requirePermission("settings.manage");
   const url = new URL(request.url);
-  const now = new Date();
-  const month = Number(url.searchParams.get("month")) || now.getUTCMonth() + 1;
-  const year = Number(url.searchParams.get("year")) || now.getUTCFullYear();
+  // GW-013 family: defaults follow the STORE's calendar (Pacific), not UTC —
+  // after 4/5 PM Pacific on a month's last day, UTC is already in next month.
+  const nowPT = pacificParts(new Date());
+  const month = Number(url.searchParams.get("month")) || nowPT.month;
+  const year = Number(url.searchParams.get("year")) || nowPT.year;
 
   // The download reflects the employee's saved draft (header/flags/box overrides
   // + payment reconciliation), merged over the live computed figures.
