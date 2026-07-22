@@ -460,7 +460,24 @@
   same staff-read/staff-write policies the neighboring tables use (pattern
   at `0040_medical_doh.sql:134–138`); the service-role client bypasses RLS,
   so nothing in the app changes.
-- **Status:** OPEN
+- **Status:** FIXED (PR #638) — NEW migration
+  `0130_security_rls_hardening.sql` (manual, idempotent) enables RLS on all
+  four tables with LEAST-PRIVILEGE policies (stricter than the recommended
+  staff-read/staff-write): `kb_product_categories` staff-read /
+  service-role-write; `noncannabis_products` and `noncannabis_adjustments`
+  manager+-read (cost/margin + ledger data, mirroring `roles.ts`
+  `inventory.manage`) / service-role-write; `noncannabis_sku_sequences` no
+  policies at all (service-role-only). The `kb_noncannabis_catalog` view
+  (0076) is flipped to `security_invoker = on` so it can no longer bypass
+  the table's new RLS. Every claim proven against a real Postgres 15 with
+  Supabase-like roles (anon/authenticated/service_role + auth.uid()):
+  before-fix exploits reproduced, after-fix denials + service-role
+  passthrough all green, applied twice for idempotency. REGRESSION GUARD:
+  new pure module `src/lib/security/rls-coverage-core.ts` parses every
+  migration (static + dynamic `foreach` RLS forms, comment-aware) and
+  `tests/compliance/rls-coverage.test.ts` fails CI if ANY table is ever
+  created without RLS again — the auditor's one-time script is now a
+  permanent tripwire. Verified by TEST-PLAN T-124.
 
 ### GW-020 — The `employees` table (hashed PINs, pay data, encrypted bank columns) is readable AND writable by EVERY active staff account, including readonly, via RLS
 - **Where:** `supabase/migrations/0037_staffing_timeclock.sql:144–149`
@@ -493,7 +510,33 @@
   (staffing stores), so tightening RLS does not break the UI. Also fold
   "confirm `DATA_ENCRYPTION_KEY` is set in production" into the Cutover
   Checklist.
-- **Status:** OPEN
+- **Status:** FIXED (PR #638, same migration as GW-019) —
+  `0130_security_rls_hardening.sql` goes past the recommendation in four
+  layers (defense in depth): (1) `employees` read tightens to a new
+  `is_manager()` helper (owner/admin/manager, mirroring `roles.ts:94`) and
+  the write policy is REMOVED entirely — all writes go through the app's
+  service-role actions, which check `staffing.manage` and record audit
+  events; even an owner session token can no longer edit the roster via the
+  API. (2) COLUMN-LEVEL privileges: table SELECT is revoked from
+  anon/authenticated and granted back on every column EXCEPT `clock_pin` and
+  the three `bank_*` columns — so "banking columns have exactly one read
+  path" (T-124) is enforced by the database itself, and any FUTURE column is
+  born unreadable until explicitly granted (fail-closed). (3) A
+  database-level audit trigger (`trg_employees_audit`) records every
+  insert/update/delete on `employees` into `audit_logs` with
+  REDACTED snapshots — sensitive values never enter the log, only a
+  `_sensitive_changed` list naming which protected columns changed; no code
+  path can skip it. (4) `audit_logs` itself becomes need-to-know
+  (admin-read, matching the audit page's `users.manage` gate) and
+  append-only — UPDATE/DELETE revoked even from `service_role`, so history
+  cannot be rewritten with a leaked key. The sibling workforce tables come
+  along: `shifts`/`time_punches` lose their broad write policies (a punch
+  can no longer be forged with a session token; staff read stays for the
+  time clock), and the 0117 HR-file tables tighten to manager+ read. All 49
+  live-Postgres proofs pass (before-exploits reproduced, after-denials,
+  service-role passthrough, audit redaction, idempotent double-apply).
+  `DATA_ENCRYPTION_KEY` was already CUTOVER-CHECKLIST C-051. Verified by
+  TEST-PLAN T-124.
 
 ### GW-023 — A sale stranded mid-processing stays `pending` forever, the register's retry is told "duplicate" and deletes its copy, and no sweeper exists — silent sale loss on a serverless crash
 - **Where:** Insert-then-process: `src/lib/pos/sync-store.ts:196–209`

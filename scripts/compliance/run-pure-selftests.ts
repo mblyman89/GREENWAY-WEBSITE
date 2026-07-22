@@ -17,6 +17,7 @@ import { __runSalesHoursCoreTests } from "../../src/lib/compliance/sales-hours-c
 import { __runReceiptCoreTests } from "../../src/lib/printing/receipt-core";
 import { __runPinHashTests } from "../../src/lib/security/pin-hash";
 import { __runAtRestCryptoTests } from "../../src/lib/security/at-rest-crypto";
+import { __runRlsCoverageTests } from "../../src/lib/security/rls-coverage-core";
 import { __runEngineTests } from "../../src/lib/loyalty/engine";
 import { __runLoyaltyConfigTests } from "../../src/lib/loyalty/loyalty-config-core";
 import { __runLoyaltySaleTests } from "../../src/lib/loyalty/loyalty-sale-core";
@@ -129,6 +130,7 @@ async function main() {
   __runReceiptCoreTests();
   __runPinHashTests();
   __runAtRestCryptoTests();
+  __runRlsCoverageTests();
   __runEngineTests();
   __runLoyaltyConfigTests();
   __runLoyaltySaleTests();

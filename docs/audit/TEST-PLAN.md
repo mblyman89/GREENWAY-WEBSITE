@@ -1084,6 +1084,21 @@ the banner is missing while test mode is on, that itself is a bug.*
   or payroll pages.
 - **Expect:** refused — payroll requires settings-level permission;
   banking columns have exactly one read path.
+- **✅ GW-019 + GW-020 FIXED (PR #638):** "one read path" is now enforced
+  by the DATABASE, not just the app. Migration `0130` (run it, then run
+  its five review queries A–E — all must come back healthy) makes the
+  roster manager+-read with NO direct write path, hides the PIN hash and
+  all three bank columns from every login's API token (column privileges),
+  arms a database-level audit trigger on the roster (redacted snapshots —
+  values never logged, changed sensitive column NAMES are), makes
+  `audit_logs` admin-read and append-only even against the service key,
+  and closes the four RLS-less tables GW-019 found (glassware costs,
+  inventory counts, SKU counters). A CI tripwire
+  (`tests/compliance/rls-coverage.test.ts`) now fails any future PR that
+  creates a table without RLS.
+- **Also:** after running migration 0130, sign in as a low-privilege test
+  account and confirm the staffing pages still load through the app while
+  the account can no longer see other employees' data anywhere.
 
 ---
 
