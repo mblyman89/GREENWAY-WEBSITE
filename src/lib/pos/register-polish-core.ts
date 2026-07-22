@@ -236,6 +236,28 @@ export function startSaleBlockReason(
   return null;
 }
 
+/**
+ * Why the no-sale drawer open is unavailable right now — or null when it can
+ * proceed. The register shows this REASON next to the button instead of a
+ * silently-disabled control (title tooltips never show on the iPad — the
+ * same lesson as startSaleBlockReason above). Two gates, in the order the
+ * cashier can actually fix them:
+ *   1. a drawer session must be open (the no-sale event is recorded against
+ *      the drawer session, so without one there is nothing to audit it to),
+ *   2. the register must be online (the manager's approval PIN is verified
+ *      server-side by /api/pos/approve — an offline "approval" would be
+ *      theater, so the button says exactly that up front).
+ */
+export function noSaleBlockReason(drawerOpen: boolean, online: boolean): string | null {
+  if (!drawerOpen) {
+    return "Count in a drawer first — every no-sale open is recorded against the drawer session.";
+  }
+  if (!online) {
+    return "Offline — manager approval needs a connection to verify the PIN.";
+  }
+  return null;
+}
+
 // ---------------------------------------------------------------------------
 // Self-tests (registered in scripts/compliance/run-pure-selftests.ts)
 // ---------------------------------------------------------------------------
@@ -366,6 +388,15 @@ export function __runRegisterPolishCoreTests(): void {
     (startSaleBlockReason(false, true, true)?.message ?? "").length > 10,
     "drawer message is a real sentence",
   );
+
+  // -- no-sale gate reason (cash-drawer feature) -------------------------------
+  ok(noSaleBlockReason(true, true) === null, "drawer open + online -> no-sale allowed");
+  ok((noSaleBlockReason(false, true) ?? "").includes("drawer"), "no drawer -> drawer-first message");
+  ok((noSaleBlockReason(true, false) ?? "").includes("Offline"), "offline -> offline message");
+  // Gate ORDER: drawer outranks online (you can't fix connectivity by
+  // counting in a drawer, but the drawer is the first morning step).
+  ok((noSaleBlockReason(false, false) ?? "").includes("drawer"), "both fail -> drawer named first");
+  ok((noSaleBlockReason(true, false) ?? "").includes("PIN"), "offline message says why (PIN verify)");
 
   console.log(`pos/register-polish-core: ${pass} passed, ${fail} failed`);
   if (fail > 0) throw new Error(`${fail} pos/register-polish-core tests failed`);

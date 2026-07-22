@@ -444,6 +444,20 @@ bookkeeping exactly as designed — before a single sale is rung.*
   the lock screen, or offers a banner on the home screen. Record the
   moment an update applied and what screen you were on.
 
+#### T-031 — Open drawer from the home screen (audited no-sale)
+- **Do:** with a drawer counted in and the register online, tap the
+  **💵 Open drawer** button in the home screen's Cash drawer panel (next
+  to Cash drop / Close).
+- **Expect:** the SAME no-sale modal as MORE ▾ → "No sale — open drawer":
+  reason (preset or typed), then a manager/lead PIN. On approval a NO SALE
+  slip prints and the drawer pops AFTER the print. Back office audit shows
+  `register.no_sale` with both employee ids.
+- **Edge to try:** turn Wi-Fi off — both open-drawer buttons must disable
+  and show the offline reason next to them ("manager approval needs a
+  connection"). Close the drawer session — both buttons must disable with
+  the count-in-a-drawer-first reason. **This must NEVER happen:** the
+  drawer opening without a reason + manager PIN + printed slip.
+
 ---
 
 <a id="phase-3"></a>

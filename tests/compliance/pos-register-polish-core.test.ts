@@ -21,6 +21,7 @@ import {
   rebuildHeldCart,
   ageLabel,
   startSaleBlockReason,
+  noSaleBlockReason,
   __runRegisterPolishCoreTests,
 } from "@/lib/pos/register-polish-core";
 import { buildNoSaleSlipHtml, type PosReceiptInput } from "@/lib/pos/receipt-core";
@@ -172,6 +173,29 @@ describe("startSaleBlockReason (AN-2 — visible start-sale gate)", () => {
       expect((block?.message ?? "").length).toBeGreaterThan(20);
     }
     expect(startSaleBlockReason(true, false, true)?.message).toContain("clocked in");
+  });
+});
+
+describe("noSaleBlockReason (cash-drawer feature — visible open-drawer gate)", () => {
+  it("returns null when a drawer is open and the register is online", () => {
+    expect(noSaleBlockReason(true, true)).toBeNull();
+  });
+
+  it("names the drawer gate first (nothing to audit the open against)", () => {
+    expect(noSaleBlockReason(false, true)).toContain("drawer");
+    expect(noSaleBlockReason(false, false)).toContain("drawer");
+  });
+
+  it("explains the offline block in terms of the PIN verification", () => {
+    const msg = noSaleBlockReason(true, false);
+    expect(msg).toContain("Offline");
+    expect(msg).toContain("PIN");
+  });
+
+  it("every message is a full sentence a budtender can act on", () => {
+    for (const msg of [noSaleBlockReason(false, true), noSaleBlockReason(true, false)]) {
+      expect((msg ?? "").length).toBeGreaterThan(20);
+    }
   });
 });
 
