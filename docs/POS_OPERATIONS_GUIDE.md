@@ -131,7 +131,11 @@ print. Reprints **never** open the drawer.
 
 ### 2.5 No sale — opening the drawer without a sale (B17)
 
-Home screen → **No sale — open drawer**. Two humans go on the hook:
+Two ways in, same audited flow: the **💵 Open drawer** button in the home
+screen's Cash drawer panel (next to Cash drop / Close), or MORE ▾ →
+**No sale — open drawer**. When the button is unavailable the register says
+why right next to it (no drawer counted in, or offline — the manager PIN is
+verified server-side). Two humans go on the hook:
 
 1. The session owner picks a reason (presets: change for a large bill,
    change-fund swap, stuck bill, drawer count check) or types one

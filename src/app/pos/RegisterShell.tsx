@@ -70,6 +70,7 @@ import {
   HELD_SALE_KEY,
   ageLabel,
   holdFromCart,
+  noSaleBlockReason,
   parseHeldSale,
   parseLastReceipt,
   rebuildHeldCart,
@@ -1878,6 +1879,13 @@ function HomeScreen({
   // the sale can start. Pure + self-tested; drives BOTH disabled states and
   // the visible notice below the hero button.
   const saleBlock = startSaleBlockReason(!!drawer, employee.clockedIn, menuReady);
+
+  // Cash-drawer feature — the audited no-sale drawer open is gated on a
+  // drawer session (nothing to record it against) and connectivity (the
+  // manager PIN is verified server-side). The REASON renders visibly next
+  // to both open-drawer affordances; a title tooltip alone never shows on
+  // the iPad's touch screen.
+  const noSaleBlock = noSaleBlockReason(!!drawer, online);
   const syncLabel = useMemo(() => {
     if (!lastSyncAt) return "never this session";
     return new Date(lastSyncAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
@@ -1942,11 +1950,13 @@ function HomeScreen({
                     setMoreOpen(false);
                     onNoSale();
                   }}
-                  disabled={!drawer}
+                  disabled={!!noSaleBlock}
                   className="block w-full rounded-lg px-3 py-2.5 text-left text-sm font-semibold hover:bg-[var(--pos-surface-hover)] disabled:opacity-40"
                 >
                   💵 No sale — open drawer
-                  <span className="block text-xs font-normal text-[var(--pos-text-faint)]">Reason + manager PIN; prints an audit slip</span>
+                  <span className="block text-xs font-normal text-[var(--pos-text-faint)]">
+                    {noSaleBlock ?? "Reason + manager PIN; prints an audit slip"}
+                  </span>
                 </button>
                 <button
                   type="button"
@@ -2252,6 +2262,15 @@ function HomeScreen({
               <div className="mt-3 flex flex-wrap gap-2">
                 <button
                   type="button"
+                  onClick={onNoSale}
+                  disabled={!!noSaleBlock}
+                  title={noSaleBlock ?? undefined}
+                  className="pos-tile rounded-lg border border-[var(--pos-border)] bg-[var(--pos-surface-2)] px-3 py-2 text-sm font-semibold disabled:opacity-40"
+                >
+                  💵 Open drawer
+                </button>
+                <button
+                  type="button"
                   onClick={() => onTill("drop")}
                   className="pos-tile rounded-lg border border-[var(--pos-border)] bg-[var(--pos-surface-2)] px-3 py-2 text-sm font-semibold"
                 >
@@ -2265,6 +2284,16 @@ function HomeScreen({
                   Close (blind count)
                 </button>
               </div>
+              {/* The reason a disabled button is disabled must be VISIBLE on a
+                  touch screen — title tooltips never show on the iPad. With a
+                  drawer open the only possible block here is being offline. */}
+              {noSaleBlock ? (
+                <p className="mt-2 text-xs text-[var(--pos-text-faint)]">{noSaleBlock}</p>
+              ) : (
+                <p className="mt-2 text-xs text-[var(--pos-text-faint)]">
+                  Open drawer = audited no-sale: reason + manager PIN, prints a slip.
+                </p>
+              )}
             </div>
           ) : null}
         </aside>
