@@ -46,6 +46,7 @@ import { __runSyndicationPlaybookTests } from "../../src/lib/integrations/syndic
 import { __runPosSaleEventTests } from "../../src/lib/pos/sale-event-core";
 import { __runIdScanCoreTests } from "../../src/lib/pos/id-scan-core";
 import { __runPosSyncCoreTests } from "../../src/lib/pos/sync-core";
+import { __runPendingRecoveryCoreTests } from "../../src/lib/pos/pending-recovery-core";
 import { __runRegisterClientCoreTests } from "../../src/lib/pos/register-client-core";
 import { __runRegisterPolishCoreTests } from "../../src/lib/pos/register-polish-core";
 import { __runSaleFlowCoreTests } from "../../src/lib/pos/sale-flow-core";
@@ -157,6 +158,7 @@ async function main() {
   __runPosSaleEventTests();
   __runIdScanCoreTests();
   __runPosSyncCoreTests();
+  __runPendingRecoveryCoreTests();
   __runRegisterClientCoreTests();
   __runRegisterPolishCoreTests();
   __runSaleFlowCoreTests();

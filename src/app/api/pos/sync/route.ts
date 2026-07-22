@@ -27,6 +27,12 @@ import type { PosEventEnvelope } from "@/lib/pos/sale-event-core";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+// GW-023: a batch of sales runs a long processing chain per event (order
+// materialization + the full completion gate). Give the function explicit
+// room instead of relying on the platform default, so a slow cold start or a
+// briefly slow database doesn't kill an ingest mid-chain and strand rows at
+// `pending` (the recovery paths heal those, but prevention beats recovery).
+export const maxDuration = 60;
 
 const MAX_BATCH = 50;
 
