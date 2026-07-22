@@ -56,6 +56,13 @@ import {
 } from "./sync-core";
 import { validateCardCapture, type PosCardCapture } from "./medical-pos-core";
 import {
+  classifyPendingRetry,
+  buildOrderExistsReason,
+  DUPLICATE_RETRY_STALE_MS,
+  SWEEP_STALE_MS,
+  SWEEP_BATCH_LIMIT,
+} from "./pending-recovery-core";
+import {
   buildMenuPriceIndex,
   checkPriceDrift,
   summarizePriceDrift,
@@ -145,6 +152,12 @@ type LedgerRow = {
   exception_reason: string | null;
 };
 
+/** LedgerRow + the fields the GW-023 recovery decision needs. */
+type LedgerRetryRow = LedgerRow & {
+  received_at: string | null;
+  recovery_attempts: number;
+};
+
 /**
  * Ingest a batch of envelopes from an authenticated device. Returns one ACK
  * per envelope (by clientUuid). Envelopes are replayed in true offline order
@@ -174,7 +187,11 @@ export async function ingestPosEvents(
   }
 
   for (const envelope of sortEventsForReplay(valid)) {
-    acks.push(await ingestOne(admin, device, envelope));
+    const ack = await ingestOne(admin, device, envelope);
+    // null = "wait": the event's earlier copy is still mid-processing on
+    // another invocation. No ack ⇒ the device keeps the row queued and
+    // retries next flush (applyAcks leaves un-acked rows in `remaining`).
+    if (ack) acks.push(ack);
   }
 
   // Best-effort sync stamp.
@@ -187,11 +204,49 @@ export async function ingestPosEvents(
   return { ok: true, acks };
 }
 
+/** Load the ledger row a retried clientUuid points at, tolerating pre-0128
+ * databases (recovery_attempts column missing ⇒ retry the select without it,
+ * defaulting attempts to 0 — recovery still works, only the cap is unenforced
+ * until the owner runs the migration). */
+async function loadLedgerRetryRow(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  clientUuid: string,
+): Promise<LedgerRetryRow | null> {
+  const { data, error } = await admin
+    .from("pos_sale_events")
+    .select("id, status, order_id, exception_reason, received_at, recovery_attempts")
+    .eq("client_uuid", clientUuid)
+    .maybeSingle<LedgerRetryRow>();
+  if (!error && data) return { ...data, recovery_attempts: data.recovery_attempts ?? 0 };
+  if (error && (error.code === "42703" || /recovery_attempts/i.test(error.message ?? ""))) {
+    const { data: legacy } = await admin
+      .from("pos_sale_events")
+      .select("id, status, order_id, exception_reason, received_at")
+      .eq("client_uuid", clientUuid)
+      .maybeSingle<Omit<LedgerRetryRow, "recovery_attempts">>();
+    return legacy ? { ...legacy, recovery_attempts: 0 } : null;
+  }
+  return null;
+}
+
+/** Best-effort attempt-counter bump; pre-0128 databases no-op silently. */
+async function bumpRecoveryAttempts(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  ledgerId: string,
+  current: number,
+): Promise<void> {
+  await admin
+    .from("pos_sale_events")
+    .update({ recovery_attempts: current + 1 })
+    .eq("id", ledgerId)
+    .then(() => {}, () => {});
+}
+
 async function ingestOne(
   admin: ReturnType<typeof createSupabaseAdminClient>,
   device: PosDevice,
   envelope: PosEventEnvelope,
-): Promise<PosSyncAck> {
+): Promise<PosSyncAck | null> {
   // ── 1. Insert-once into the ledger (client_uuid UNIQUE = idempotency) ──
   const { data: inserted, error: insertError } = await admin
     .from("pos_sale_events")
@@ -212,18 +267,58 @@ async function ingestOne(
     // Unique violation ⇒ this exact event was accepted before: return its
     // recorded outcome so a retried flush converges without double-posting.
     if (insertError.code === "23505") {
-      const { data: existing } = await admin
-        .from("pos_sale_events")
-        .select("id, status, order_id, exception_reason")
-        .eq("client_uuid", envelope.clientUuid)
-        .maybeSingle<LedgerRow>();
+      const existing = await loadLedgerRetryRow(admin, envelope.clientUuid);
       if (existing) {
-        return {
-          clientUuid: envelope.clientUuid,
-          status: existing.status === "exception" ? "exception" : "duplicate",
-          reason: existing.exception_reason ?? undefined,
-          orderId: existing.order_id ?? undefined,
-        };
+        if (existing.status === "exception") {
+          return {
+            clientUuid: envelope.clientUuid,
+            status: "exception",
+            reason: existing.exception_reason ?? undefined,
+            orderId: existing.order_id ?? undefined,
+          };
+        }
+        if (existing.status === "processed") {
+          return {
+            clientUuid: envelope.clientUuid,
+            status: "duplicate",
+            orderId: existing.order_id ?? undefined,
+          };
+        }
+        // GW-023 — the row is still `pending`: a previous invocation died
+        // mid-processing. This used to be acked "duplicate" (durable!), so
+        // the register deleted its ONLY copy of an unfinished sale. Now:
+        //   wait      → return NO ack (the device keeps the row queued and
+        //               simply retries next flush — applyAcks semantics),
+        //   escalate  → manager exception (order already exists / attempts
+        //               exhausted — never a blind re-run, never silent),
+        //   reprocess → re-run the chain on the EXISTING ledger row.
+        const decision = classifyPendingRetry({
+          receivedAtIso: existing.received_at,
+          nowMs: Date.now(),
+          staleAfterMs: DUPLICATE_RETRY_STALE_MS,
+          recoveryAttempts: existing.recovery_attempts,
+          orderId: existing.order_id,
+        });
+        if (decision.action === "wait") return null;
+        if (decision.action === "escalate") {
+          return markException(admin, existing.id, envelope.clientUuid, decision.reason);
+        }
+        await bumpRecoveryAttempts(admin, existing.id, existing.recovery_attempts);
+        await recordAudit({
+          actorId: null,
+          actorEmail: `pos-device:${device.id}`,
+          action: "register.sync_recovery",
+          entityType: "register",
+          entityId: envelope.registerId,
+          after: {
+            clientUuid: envelope.clientUuid,
+            eventType: envelope.eventType,
+            trigger: "device_retry",
+            attempt: existing.recovery_attempts + 1,
+            receivedAt: existing.received_at,
+          },
+        });
+        return processEnvelope(admin, device, envelope, existing.id);
       }
     }
     if (isMissingSchemaError(insertError)) {
@@ -247,35 +342,51 @@ async function ingestOne(
     return { clientUuid: envelope.clientUuid, status: "rejected", reason: "Ledger insert returned no row." };
   }
 
-  // ── 2. AN-3(d): device clock drift ──
+  return processEnvelope(admin, device, envelope, inserted.id);
+}
+
+/**
+ * The drift check + per-type processing chain, shared by the fresh-insert
+ * path, the duplicate-retry recovery path, and the sweeper (GW-023). Always
+ * runs against an EXISTING ledger row and always ends in a durable outcome
+ * (processed / exception) unless the invocation itself dies — in which case
+ * the recovery paths pick the row up again.
+ */
+async function processEnvelope(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  device: PosDevice,
+  envelope: PosEventEnvelope,
+  ledgerId: string,
+): Promise<PosSyncAck> {
+  // AN-3(d): device clock drift.
   // A FUTURE occurredAt (beyond tolerance) poisons the sales-hours gate and
   // the business-day ledger, so the event is preserved as an EXCEPTION for
   // manager review instead of being processed as if the clock were right.
   // Lateness is never drift — offline queues legitimately flush days later.
   const drift = checkClockDrift(envelope.occurredAt, Date.now());
   if (drift.drifted) {
-    return await markException(admin, inserted.id, envelope.clientUuid, drift.reason);
+    return await markException(admin, ledgerId, envelope.clientUuid, drift.reason);
   }
 
-  // ── 3. Process by type ──
+  // Process by type.
   try {
     switch (envelope.eventType) {
       case "sale":
-        return await processSale(admin, device, envelope, inserted.id);
+        return await processSale(admin, device, envelope, ledgerId);
       case "punch":
-        return await processPunch(admin, envelope, inserted.id);
+        return await processPunch(admin, envelope, ledgerId);
       case "no_sale":
-        return await processNoSale(admin, envelope, inserted.id);
+        return await processNoSale(admin, envelope, ledgerId);
       case "manual_id_verification":
-        return await processManualId(admin, envelope, inserted.id);
+        return await processManualId(admin, envelope, ledgerId);
       case "medical_card_capture":
-        return await processCardCapture(admin, envelope, inserted.id);
+        return await processCardCapture(admin, envelope, ledgerId);
       default:
-        return await markException(admin, inserted.id, envelope.clientUuid, "Unknown event type.");
+        return await markException(admin, ledgerId, envelope.clientUuid, "Unknown event type.");
     }
   } catch (err) {
     const reason = err instanceof Error ? err.message : "Unexpected processing error.";
-    return await markException(admin, inserted.id, envelope.clientUuid, reason);
+    return await markException(admin, ledgerId, envelope.clientUuid, reason);
   }
 }
 
@@ -518,24 +629,62 @@ async function processSale(
   const employeeName = emp?.full_name ?? "Register";
 
   // Materialize the order (walk-in snapshot; money in minor units).
-  const { data: order, error: orderError } = await admin
+  // GW-023: pos_client_uuid (migration 0128) is the DB-enforced guarantee
+  // that ONE register event can never materialize TWO orders — a recovery
+  // re-run racing a not-quite-dead original, or a crash that left the ledger
+  // row unstamped, hits the unique index instead of double-selling. Pre-0128
+  // databases retry without the column (same behavior as before this fix).
+  const orderInsertRow = (withClientUuid: boolean) => ({
+    status: "ready", // in-store sale: picked, bagged, paid — gate decides "completed"
+    customer_first_name: "Walk-in",
+    customer_last_name: null,
+    subtotal_minor_units: sale.subtotalMinor,
+    estimated_tax_minor_units: sale.taxMinor,
+    savings_minor_units: Math.max(
+      0,
+      sale.lines.reduce((s, l) => s + (l.regularPriceMinor - l.unitPriceMinor) * l.quantity, 0),
+    ),
+    total_minor_units: sale.totalMinor,
+    item_count: sale.lines.reduce((s, l) => s + l.quantity, 0),
+    staff_note: `POS sale — ${device.name} — rung by ${employeeName}. Event ${envelope.clientUuid}.`,
+    ...(withClientUuid ? { pos_client_uuid: envelope.clientUuid } : {}),
+  });
+  let { data: order, error: orderError } = await admin
     .from("orders")
-    .insert({
-      status: "ready", // in-store sale: picked, bagged, paid — gate decides "completed"
-      customer_first_name: "Walk-in",
-      customer_last_name: null,
-      subtotal_minor_units: sale.subtotalMinor,
-      estimated_tax_minor_units: sale.taxMinor,
-      savings_minor_units: Math.max(
-        0,
-        sale.lines.reduce((s, l) => s + (l.regularPriceMinor - l.unitPriceMinor) * l.quantity, 0),
-      ),
-      total_minor_units: sale.totalMinor,
-      item_count: sale.lines.reduce((s, l) => s + l.quantity, 0),
-      staff_note: `POS sale — ${device.name} — rung by ${employeeName}. Event ${envelope.clientUuid}.`,
-    })
+    .insert(orderInsertRow(true))
     .select("id, order_number")
     .single<{ id: string; order_number: string }>();
+  if (
+    orderError &&
+    (orderError.code === "PGRST204" ||
+      orderError.code === "42703" ||
+      /pos_client_uuid/i.test(orderError.message ?? "")) &&
+    orderError.code !== "23505"
+  ) {
+    // Migration 0128 not applied yet — insert without the guarantee column.
+    ({ data: order, error: orderError } = await admin
+      .from("orders")
+      .insert(orderInsertRow(false))
+      .select("id, order_number")
+      .single<{ id: string; order_number: string }>());
+  }
+  if (orderError?.code === "23505" && /pos_client_uuid/i.test(orderError.message ?? "")) {
+    // An order for this exact register event ALREADY exists (a previous
+    // attempt crashed after materializing it). Never build a second one —
+    // stamp the ledger row with the existing order and hand it to a manager.
+    const { data: existingOrder } = await admin
+      .from("orders")
+      .select("id, order_number")
+      .eq("pos_client_uuid", envelope.clientUuid)
+      .maybeSingle<{ id: string; order_number: string }>();
+    return markException(
+      admin,
+      ledgerId,
+      envelope.clientUuid,
+      buildOrderExistsReason(existingOrder?.id ?? envelope.clientUuid, existingOrder?.order_number ?? null),
+      existingOrder ? { order_id: existingOrder.id } : {},
+    );
+  }
   if (orderError || !order) {
     return markException(
       admin,
@@ -544,6 +693,17 @@ async function processSale(
       `Order insert failed: ${orderError?.message ?? "no row returned"}.`,
     );
   }
+
+  // GW-023: stamp the ledger row with the order IMMEDIATELY, not only at the
+  // end. If the function dies anywhere in the rest of this chain, the
+  // breadcrumb makes the recovery classifier escalate ("order exists — human
+  // eyes") instead of ever re-running over a half-built order. Best-effort:
+  // a failed stamp just means the 0128 unique index is the (absolute) net.
+  await admin
+    .from("pos_sale_events")
+    .update({ order_id: order.id })
+    .eq("id", ledgerId)
+    .then(() => {}, () => {});
 
   const buildLineRows = (withUnitGrams: boolean) =>
     sale.lines.map((l) => ({
@@ -1047,6 +1207,141 @@ async function processCardCapture(
   });
   await markProcessed(admin, ledgerId);
   return { clientUuid: envelope.clientUuid, status: "processed" };
+}
+
+// ---------------------------------------------------------------------------
+// GW-023 sweeper — the safety net for stranded `pending` rows
+// ---------------------------------------------------------------------------
+
+type SweepRow = {
+  id: string;
+  client_uuid: string;
+  device_id: string;
+  register_id: string;
+  employee_id: string;
+  sequence: number;
+  occurred_at: string;
+  received_at: string | null;
+  event_type: string;
+  payload: Record<string, unknown>;
+  order_id: string | null;
+  recovery_attempts: number | null;
+};
+
+export type SweepResult = {
+  scanned: number;
+  reprocessed: number;
+  escalated: number;
+  /** Outcomes per row, for the cron's JSON response / logs. */
+  details: { clientUuid: string; outcome: string }[];
+};
+
+/**
+ * Find `pending` ledger rows older than SWEEP_STALE_MS and heal them: re-run
+ * processing when it is provably safe (no order materialized, attempts
+ * remain), escalate to the manager exception queue otherwise. Runs from the
+ * daily cron — the register's own retry path usually beats it, so this is
+ * the net under the net (a register that never comes back online, a deleted
+ * queue, an iPad in a drawer).
+ *
+ * Tolerates pre-0128 databases (recovery_attempts missing) and never throws:
+ * a sweep failure must not break the cron's reminder work.
+ */
+export async function sweepStalePendingEvents(): Promise<SweepResult> {
+  const result: SweepResult = { scanned: 0, reprocessed: 0, escalated: 0, details: [] };
+  if (!isSupabaseServiceConfigured) return result;
+  try {
+    const admin = createSupabaseAdminClient();
+    const cutoffIso = new Date(Date.now() - SWEEP_STALE_MS).toISOString();
+    const selectWith = (withAttempts: boolean) =>
+      admin
+        .from("pos_sale_events")
+        .select(
+          "id, client_uuid, device_id, register_id, employee_id, sequence, occurred_at, received_at, event_type, payload, order_id" +
+            (withAttempts ? ", recovery_attempts" : ""),
+        )
+        .eq("status", "pending")
+        .lt("received_at", cutoffIso)
+        .order("received_at", { ascending: true })
+        .limit(SWEEP_BATCH_LIMIT);
+    let { data: rows, error } = await selectWith(true);
+    if (error && (error.code === "42703" || /recovery_attempts/i.test(error.message ?? ""))) {
+      ({ data: rows, error } = await selectWith(false));
+    }
+    if (error || !rows) return result;
+
+    for (const raw of rows as unknown as SweepRow[]) {
+      result.scanned += 1;
+      const attempts = raw.recovery_attempts ?? 0;
+      const decision = classifyPendingRetry({
+        receivedAtIso: raw.received_at,
+        nowMs: Date.now(),
+        staleAfterMs: SWEEP_STALE_MS,
+        recoveryAttempts: attempts,
+        orderId: raw.order_id,
+      });
+      if (decision.action === "wait") {
+        // Can't happen (the query itself filtered on staleness) — skip safely.
+        result.details.push({ clientUuid: raw.client_uuid, outcome: "wait" });
+        continue;
+      }
+      if (decision.action === "escalate") {
+        await markException(admin, raw.id, raw.client_uuid, decision.reason);
+        result.escalated += 1;
+        result.details.push({ clientUuid: raw.client_uuid, outcome: `escalated:${decision.kind}` });
+        continue;
+      }
+      // Reprocess: rebuild the envelope and run the exact same chain the
+      // sync route runs. The device row is needed for processSale's
+      // staff-note snapshot; a revoked/deleted device does not erase the
+      // FACT of the sale — recovery proceeds with a placeholder name.
+      const { data: deviceRow } = await admin
+        .from("pos_devices")
+        .select("id, name, register_id, status, provision_hash")
+        .eq("id", raw.device_id)
+        .maybeSingle<PosDevice>();
+      const device: PosDevice =
+        deviceRow ?? {
+          id: raw.device_id,
+          name: "(retired device)",
+          register_id: raw.register_id,
+          status: "active",
+          provision_hash: null,
+        };
+      const envelope: PosEventEnvelope = {
+        clientUuid: raw.client_uuid,
+        deviceId: raw.device_id,
+        registerId: raw.register_id,
+        employeeId: raw.employee_id,
+        sequence: raw.sequence,
+        occurredAt: raw.occurred_at,
+        eventType: raw.event_type as PosEventEnvelope["eventType"],
+        payload: raw.payload ?? {},
+      };
+      await bumpRecoveryAttempts(admin, raw.id, attempts);
+      await recordAudit({
+        actorId: null,
+        actorEmail: "cron:pos-sweeper",
+        action: "register.sync_recovery",
+        entityType: "register",
+        entityId: raw.register_id,
+        after: {
+          clientUuid: raw.client_uuid,
+          eventType: raw.event_type,
+          trigger: "sweeper",
+          attempt: attempts + 1,
+          receivedAt: raw.received_at,
+        },
+      });
+      const ack = await processEnvelope(admin, device, envelope, raw.id);
+      if (ack.status === "processed") result.reprocessed += 1;
+      else result.escalated += 1;
+      result.details.push({ clientUuid: raw.client_uuid, outcome: ack.status });
+    }
+    return result;
+  } catch {
+    return result;
+  }
 }
 
 // ---------------------------------------------------------------------------

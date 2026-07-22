@@ -23,6 +23,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { shouldRefuseWhenSecretMissing } from "@/lib/security/fail-closed";
 import { getStaffSession } from "@/lib/auth/session";
 import { runComplianceReminders } from "@/lib/notifications/compliance-reminders";
+import { sweepStalePendingEvents } from "@/lib/pos/sync-store";
 
 export const dynamic = "force-dynamic";
 // Sends a handful of emails/pushes sequentially; give it room beyond the
@@ -62,7 +63,15 @@ export async function GET(req: NextRequest) {
   if (refusal) return refusal;
 
   const result = await runComplianceReminders();
-  return NextResponse.json(result, { headers: { "Cache-Control": "no-store" } });
+
+  // GW-023 — piggyback the stranded-sale sweeper on the daily cron (Vercel
+  // Hobby allows one daily cron; this reuses it). Finds pos_sale_events rows
+  // stuck at `pending` for 10+ minutes and re-processes or escalates them to
+  // the manager exception queue. Never throws; a sweep hiccup must not
+  // break the reminders.
+  const posSweep = await sweepStalePendingEvents();
+
+  return NextResponse.json({ ...result, posSweep }, { headers: { "Cache-Control": "no-store" } });
 }
 
 export async function POST(req: NextRequest) {

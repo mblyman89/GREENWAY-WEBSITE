@@ -473,7 +473,29 @@
   finds `pending` rows older than N minutes and reprocesses or escalates them
   to `exception` so they land in the manager queue. Also set an explicit
   `maxDuration` on the sync route.
-- **Status:** OPEN
+- **Status:** FIXED (PR #634) — belt, braces, and a steel net. (1) Duplicate
+  path: a retried event whose row is still `pending` is now classified by the
+  pure `classifyPendingRetry` (`pending-recovery-core.ts`): younger than
+  2 minutes → NO ack (the register keeps the row and retries — `applyAcks`
+  leaves un-acked rows queued, so no device change was needed); stale with no
+  order and attempts remaining → the full processing chain RE-RUNS on the
+  existing ledger row; stale with an order already materialized, or after 3
+  recovery attempts → escalates to the manager exception queue with a written
+  reason — never silent, never a blind re-run over a half-built order.
+  (2) Sweeper: `sweepStalePendingEvents()` piggybacks on the existing daily
+  cron (`/api/cron/compliance-reminders` — Vercel Hobby allows one daily
+  cron), healing rows stuck ≥10 minutes even if that register never flushes
+  again; every recovery is audited (`register.sync_recovery`). (3) Migration
+  **0128**: `pos_sale_events.recovery_attempts` (the poison-event cap) and
+  `orders.pos_client_uuid` + UNIQUE index — the DATABASE now refuses a second
+  order for the same register event no matter how the code crashes (existing
+  POS orders backfilled from the staff-note breadcrumb; the code also stamps
+  `order_id` onto the ledger row immediately after the order insert, so a
+  crash later in the chain leaves a breadcrumb the classifier trusts).
+  (4) The sync route sets `maxDuration = 60` so slow cold starts stop
+  causing the strand in the first place. Verified by TEST-PLAN T-060/T-063
+  (exactly-once under outage/flake) and the new T-067 (stranded-sale
+  recovery drill).
 
 ### GW-024 — Order email + receipt-print queueing are fire-and-forget on a serverless runtime with no `waitUntil`: work can be silently dropped when the function freezes
 - **Where:** `src/app/api/orders/route.ts:175–181` (`notifyOrderPlaced(…)

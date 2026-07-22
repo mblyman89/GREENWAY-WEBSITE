@@ -195,3 +195,21 @@
   `/admin/users`. **Until this is run, the code half (`shouldCreateUser: false`
   on the login form) already blocks the public door on its own — this
   migration is the belt-and-braces layer underneath it.**
+
+## Fix slice — GW-023 (a crashed sync could silently lose a sale)
+
+- [ ] **`supabase/migrations/0128_pos_pending_recovery.sql`** — GW-023
+  (database half): two columns that make the stranded-sale recovery loop safe.
+  (1) `pos_sale_events.recovery_attempts` — counts automatic recovery re-runs
+  so a poison event escalates to the manager exception queue after 3 tries
+  instead of retrying forever. (2) `orders.pos_client_uuid` + a UNIQUE index —
+  the database itself now refuses to create TWO orders for the same register
+  event, no matter how the code crashes; existing POS orders are backfilled
+  from the breadcrumb in their staff note. Idempotent; safe to re-run. The
+  file ends with two read-only review queries — run each once: (a) lists any
+  register events currently stranded mid-processing (healthy = zero rows),
+  (b) checks whether any PAST crash already double-created an order
+  (healthy = zero rows). **Until this is run, the code half already recovers
+  stranded sales on the register's next flush and via the daily sweeper —
+  this migration adds the attempts cap and the absolute double-order
+  guarantee underneath it.**

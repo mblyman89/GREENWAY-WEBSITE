@@ -646,6 +646,30 @@ them.
 - **This must NEVER happen:** an exception silently disappearing without
   a manager decision.
 
+#### T-067 — A sale stranded mid-sync heals itself (GW-023 recovery)
+- **✅ GW-023 FIXED (PR #634):** a server crash mid-processing used to
+  strand the sale as "pending" forever while telling the register
+  "duplicate" — the register then deleted its only copy. Now a stale
+  pending sale is automatically re-processed on the register's next
+  flush, swept by the daily cron if the register never returns, and
+  escalated to the exception queue (with a written reason) whenever a
+  blind re-run wouldn't be provably safe.
+- **Do:** this is hard to trigger honestly. The observable proxy: after
+  any heavy offline session (T-060/T-063), open the day report and check
+  the "Still processing" line. If it shows a count, wait 2+ minutes and
+  sync the register again (or wait for the daily cron), then re-check.
+- **Expect:** "Still processing" returns to zero — every event ends as
+  either a completed sale or a written-up exception in Admin →
+  Registers → exceptions. Migration `0128` must be applied for the full
+  protection (attempts cap + the database-level double-order guarantee).
+- **This must NEVER happen:** a sale that was rung on the register but
+  appears NOWHERE in the back office (no order, no exception) — that is
+  the exact silent-loss bug this fix closed. If you ever see money in
+  the drawer with no matching order or exception, stop and investigate.
+- **If broken, record:** the register's queue banner, the day report's
+  "Still processing" count over time, and the
+  `select * from pos_sale_events where status = 'pending'` result.
+
 ---
 
 <a id="phase-5"></a>
