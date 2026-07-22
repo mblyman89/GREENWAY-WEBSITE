@@ -129,7 +129,16 @@
 - **Recommendation:** Persist the corrected creds inside `onUnlocked` (same
   swap-safe write as provisioning), and/or have the empty-batch heartbeat
   refresh the stored `registerId`.
-- **Status:** OPEN
+- **Status:** FIXED (PR #640) — BOTH recommendations shipped. (1)
+  `onUnlocked` now persists the corrected creds through the guarded
+  `persistCreds` path (GW-001) the moment a re-bind is revealed. (2) The
+  sync route's ACK response now carries the device's CURRENT binding (same
+  shape as the empty-batch heartbeat), and `flush()` self-heals the stored
+  `registerId` on every successful flush — so even a device that is never
+  unlocked (lock-screen punches only) converges to the correct register
+  within one sync cycle, and a restart can never resurrect a stale id.
+  Verified by TEST-PLAN T-026 (lock-screen punches) after a re-bind +
+  restart.
 
 ### GW-003 — Side effects inside a React state updater can duplicate rejected-row records
 - **Where:** `src/app/pos/RegisterShell.tsx:457–466` (`flush()` ACK handling), at `a61aa816`.
