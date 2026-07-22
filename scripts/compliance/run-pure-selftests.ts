@@ -54,6 +54,7 @@ import { __runStatusCasCoreTests } from "../../src/lib/orders/status-cas-core";
 import { __runRpcFallbackCoreTests } from "../../src/lib/db/rpc-fallback-core";
 import { __runRegisterClientCoreTests } from "../../src/lib/pos/register-client-core";
 import { __runRegisterPolishCoreTests } from "../../src/lib/pos/register-polish-core";
+import { __runHeldStockCoreTests } from "../../src/lib/pos/held-stock-core";
 import { __runSaleFlowCoreTests } from "../../src/lib/pos/sale-flow-core";
 import { __runMedicalPosCoreTests } from "../../src/lib/pos/medical-pos-core";
 import { __runPosReceiptCoreTests } from "../../src/lib/pos/receipt-core";
@@ -171,6 +172,7 @@ async function main() {
   __runExciseReturnTests();
   __runRegisterClientCoreTests();
   __runRegisterPolishCoreTests();
+  __runHeldStockCoreTests();
   __runSaleFlowCoreTests();
   __runMedicalPosCoreTests();
   __runPosReceiptCoreTests();

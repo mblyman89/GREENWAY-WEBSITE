@@ -766,6 +766,29 @@ enforce your own rules.*
 - **This must NEVER happen:** a recalled product completing through ANY
   path. This is your product-safety kill switch; test it seriously.
 
+#### T-078 — A saved sale never blocks selling the same product
+- **Why you care:** this is the Cultivera pain the system was built to
+  kill — a saved cart must NEVER take a unit out of sellable inventory.
+- **Do:** pick a product the menu shows exactly 1 left of. Build a cart
+  with it and **Hold** the sale. Start a NEW sale and scan/add the same
+  product.
+- **Expect:** it adds normally — no "zero quantity" refusal. An info
+  panel appears in the cart rail: "A saved sale is holding stock this
+  cart needs", naming who saved it, when, its contents, and per-line
+  facts ("menu shows 1 left and the saved sale is holding 1 — not
+  enough for both carts"), plus a **"Delete the saved sale — free its
+  items for this customer"** button.
+- **Then:** tap the release button — the saved sale clears (gone from
+  the home screen too) and the panel disappears. Complete the sale
+  normally.
+- **Also check:** resume a held sale and confirm NO conflict panel shows
+  against its own held items (a hold must never conflict with itself).
+  And with plenty of stock (held 1, menu shows 5), no panel — it only
+  speaks when the count can't cover both carts.
+- **This must NEVER happen:** a sale BLOCKED because the unit sits in a
+  saved cart, or the panel deleting the hold without the cashier tapping
+  the release button.
+
 ---
 
 <a id="phase-6"></a>

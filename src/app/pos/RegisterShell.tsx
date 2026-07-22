@@ -883,6 +883,27 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
         initialVerdict={resumeSnapshot?.verdict ?? undefined}
         initialMedicalCard={resumeSnapshot?.medicalCard ?? undefined}
         initialSourceOrderId={loadedOrderId ?? undefined}
+        heldSale={
+          // Saved-cart smart release — let the live sale notice when the
+          // SAVED sale is sitting on units it needs. null when THIS sale is
+          // the resumed hold (resumeCart set): it never conflicts with itself.
+          resumeCart ? null : heldSale
+        }
+        onReleaseHold={
+          heldSale && !resumeCart
+            ? () => {
+                // Same action as the home screen's Discard button, offered at
+                // the conflict moment. Local hold only — inventory was never
+                // reserved (holds store variant ids + counts, nothing more).
+                try {
+                  window.localStorage.removeItem(HELD_SALE_KEY);
+                } catch {
+                  // Best-effort.
+                }
+                setHeldSale(null);
+              }
+            : undefined
+        }
         onSnapshot={(state) => {
           // SESSION RESUME — mirror the live resumable state so lock() can park
           // it. Kept in a ref (no re-render); prices are stripped to variant

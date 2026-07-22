@@ -122,6 +122,16 @@ resume**; a held cart never inherits the previous customer's age
 verification, medical card, or member. Completing the resumed sale consumes
 the hold; cancelling leaves it parked; Discard clears it.
 
+**Holds never reserve inventory** (unlike Cultivera): stock only moves when
+a sale COMPLETES, so a unit parked in a saved cart stays sellable to anyone.
+And when the store's last units of something ARE parked in the saved sale,
+the live cart notices: an info panel names who saved it, when, what it is
+sitting on, and offers **"Delete the saved sale — free its items for this
+customer"** — one tap, no hunting for where the saved item lives. Advisory
+only; the sale is never blocked either way (the cached count can lag the
+shelf; the server decrement at completion stays the authority). A resumed
+hold never conflicts with itself.
+
 ### 2.4 Reprint last receipt (B17)
 
 The home screen's **Reprint last receipt** card survives the post-sale
