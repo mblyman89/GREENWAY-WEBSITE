@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
+import { Breadcrumbs, HelpPanel, BackLink as SharedBackLink } from "@/components/admin/ux";
 import { Button, Card, CardHeader, Section, Field, Textarea } from "@/components/admin/ui";
 import { getDiscoverySnapshot, listSources } from "@/lib/discovery/store";
 import { setDiscoveryEnabledAction, importLeadsAction } from "../actions";
@@ -46,7 +46,7 @@ export default async function DiscoveryImportPage({ searchParams }: { searchPara
           }
         />
         <div className="space-y-6 px-5 py-6 sm:px-8">
-          <BackLink />
+          <BackLink back={one(sp, "back")} />
           {!snap.configured ? (
             <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] p-5 text-sm text-[var(--admin-gold)]">
               The database isn&apos;t fully set up yet. Once the discovery tables migration is
@@ -109,7 +109,7 @@ export default async function DiscoveryImportPage({ searchParams }: { searchPara
       />
 
       <div className="space-y-6 px-5 py-6 sm:px-8">
-        <BackLink />
+        <BackLink back={one(sp, "back")} />
 
         {imported ? (
           <div className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-4 py-2 text-sm text-[var(--admin-text)]">
@@ -201,13 +201,14 @@ export default async function DiscoveryImportPage({ searchParams }: { searchPara
   );
 }
 
-function BackLink() {
+function BackLink({ back }: { back?: string }) {
   return (
-    <Link
-      href="/admin/discovery"
+    <SharedBackLink
+      fallback="/admin/discovery"
+      back={back}
       className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--admin-text-muted)] hover:text-[var(--admin-accent)]"
     >
       ← Back to Product Discovery
-    </Link>
+    </SharedBackLink>
   );
 }

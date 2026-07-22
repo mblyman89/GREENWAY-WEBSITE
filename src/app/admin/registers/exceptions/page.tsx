@@ -12,6 +12,7 @@ import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, EmptyState, HelpPanel } from "@/components/admin/ux";
+import { backHref } from "@/lib/admin/back-link-core";
 import { Badge, Button, Card } from "@/components/admin/ui";
 import {
   listPosExceptions,
@@ -47,7 +48,7 @@ function eventBadge(eventType: string) {
 export default async function PosExceptionsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; resolved?: string }>;
+  searchParams: Promise<{ error?: string; resolved?: string; back?: string }>;
 }) {
   await requirePermission("staffing.manage");
   const sp = await searchParams;
@@ -89,7 +90,7 @@ export default async function PosExceptionsPage({
           />
         }
         action={
-          <Button href="/admin/registers" variant="neutral" size="sm">
+          <Button href={backHref("/admin/registers", sp.back)} variant="neutral" size="sm">
             Back to Register Activity
           </Button>
         }

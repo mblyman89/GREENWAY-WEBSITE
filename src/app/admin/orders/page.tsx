@@ -17,6 +17,7 @@ import {
 import { setOrderStatusAction } from "./actions";
 import { OrderStatusFlow } from "@/components/admin/orders/OrderStatusFlow";
 import { NewOrderAlert } from "@/components/admin/orders/NewOrderAlert";
+import { withBackParam } from "@/lib/admin/back-link-core";
 
 export const dynamic = "force-dynamic";
 
@@ -66,6 +67,9 @@ export default async function OrdersAdminPage({
   const sp = await searchParams;
   const status = (sp.status as OrderStatus | "active" | "all" | undefined) ?? "active";
   const search = sp.q ?? "";
+  // GW-029: carry the current filters/search into detail links so BackLink
+  // can restore this exact view.
+  const detailHref = (id: string) => withBackParam(`/admin/orders/${id}`, sp);
 
   if (!isSupabaseServiceConfigured) {
     return (
@@ -179,7 +183,7 @@ export default async function OrdersAdminPage({
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
                         <Link
-                          href={`/admin/orders/${order.id}`}
+                          href={detailHref(order.id)}
                           className="text-lg font-black text-[var(--admin-text)] hover:text-[var(--admin-accent)]"
                         >
                           #{order.order_number}
@@ -214,7 +218,7 @@ export default async function OrdersAdminPage({
                           </Button>
                         </form>
                       ) : null}
-                      <Button href={`/admin/orders/${order.id}`} variant="neutral" size="sm">
+                      <Button href={detailHref(order.id)} variant="neutral" size="sm">
                         Details
                       </Button>
                     </div>

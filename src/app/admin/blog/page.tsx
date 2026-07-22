@@ -8,6 +8,7 @@ import { listPosts } from "@/lib/cms/blog-store";
 import { isAiConfigured } from "@/lib/ai/provider";
 import { Button } from "@/components/admin/ui/Button";
 import { StatusPill, EmptyState } from "@/components/admin/ux";
+import { withBackParam } from "@/lib/admin/back-link-core";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +18,10 @@ export default async function BlogAdminPage({
   searchParams: Promise<{ status?: string; category?: string }>;
 }) {
   await requirePermission("blog.manage");
-  const { status, category } = await searchParams;
+  const sp = await searchParams;
+  const { status, category } = sp;
+  // GW-029: carry the current filters into editor links for BackLink restore.
+  const editorHref = (id: string) => withBackParam(`/admin/blog/${id}`, sp);
 
   if (!isSupabaseServiceConfigured) {
     return (
@@ -68,7 +72,7 @@ export default async function BlogAdminPage({
           </HelpPanel>
         }
         action={
-          <Button href="/admin/blog/new" variant="primary">
+          <Button href={withBackParam("/admin/blog/new", sp)} variant="primary">
             + New post
           </Button>
         }
@@ -88,7 +92,7 @@ export default async function BlogAdminPage({
             title="No posts yet"
             description="The public blog is showing the built-in starter posts. Create your first database-backed post to take over."
             action={
-              <Button href="/admin/blog/new" variant="primary">
+              <Button href={withBackParam("/admin/blog/new", sp)} variant="primary">
                 + New post
               </Button>
             }
@@ -109,7 +113,7 @@ export default async function BlogAdminPage({
                 {posts.map((p) => (
                   <tr key={p.id} className="transition hover:bg-[var(--admin-surface-hover)]">
                     <td className="px-4 py-3">
-                      <Link href={`/admin/blog/${p.id}`} className="font-semibold text-[var(--admin-text)] hover:text-[var(--admin-accent)]">
+                      <Link href={editorHref(p.id)} className="font-semibold text-[var(--admin-text)] hover:text-[var(--admin-accent)]">
                         {p.title}
                       </Link>
                       <div className="text-xs text-[var(--admin-text-faint)]">/{p.slug}</div>

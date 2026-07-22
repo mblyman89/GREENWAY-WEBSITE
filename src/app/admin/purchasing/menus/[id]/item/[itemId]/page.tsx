@@ -1,8 +1,7 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { Breadcrumbs, EmptyState } from "@/components/admin/ux";
+import { BackLink, Breadcrumbs, EmptyState } from "@/components/admin/ux";
 import { Badge, Button, Section } from "@/components/admin/ui";
 import { getSnapshot, getSnapshotItem } from "@/lib/purchasing/cultivera-store";
 import { detailFromItemRaw } from "@/lib/purchasing/cultivera-menu-core";
@@ -27,11 +26,14 @@ export const dynamic = "force-dynamic";
  */
 export default async function CultiveraItemDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string; itemId: string }>;
+  searchParams?: Promise<{ back?: string }>;
 }) {
   await requirePermission("inventory.manage");
   const { id, itemId } = await params;
+  const sp = searchParams ? await searchParams : {};
 
   const snap = await getSnapshot(id);
   if (!snap) notFound();
@@ -71,12 +73,13 @@ export default async function CultiveraItemDetailPage({
 
       <div className="space-y-6 px-5 py-6 sm:px-8">
         <div>
-          <Link
-            href={`/admin/purchasing/menus/${id}`}
+          <BackLink
+            fallback={`/admin/purchasing/menus/${id}`}
+            back={sp.back}
             className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--admin-text-muted)] hover:text-[var(--admin-accent)]"
           >
             ← Back to {vendorLabel}
-          </Link>
+          </BackLink>
         </div>
 
         {/* Product-line header card: image + description + fetch/refresh. */}

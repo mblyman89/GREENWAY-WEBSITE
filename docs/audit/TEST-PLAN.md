@@ -1355,6 +1355,20 @@ attempt, even the ones the system wins.*
 - **T-162:** pick one register drawer and reconcile its whole day: float
   + cash sales − drops − refunds = counted close. To the penny.
 
+### 12.7 The queue worker (added with the GW-029 back-link fix)
+
+- **T-163 (filters survive the round trip):** in the back office, go to
+  Orders and set a status filter plus a search term (e.g. status "New",
+  search "sarah"). Open any order from the filtered list, then click
+  "Back to orders". **Expect:** the list comes back with your filter AND
+  search still applied — the address bar shows them. Repeat the same
+  round trip on Products (pick a category filter), Vendors (any filter →
+  "Combine duplicates" → "← All vendors"), Menu imports (open a version →
+  back), and Product Discovery (set a category → "Import leads (CSV)" →
+  back). **Also expect:** after an action that shows a green "Saved." or
+  similar banner, going back must NOT re-show the stale banner. If any
+  page loses your filters or resurrects an old banner, that's a finding.
+
 ---
 
 <a id="phase-13"></a>

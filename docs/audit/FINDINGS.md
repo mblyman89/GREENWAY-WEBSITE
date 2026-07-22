@@ -718,7 +718,19 @@
   (3) breadcrumb links to list pages do the same. Server-component friendly,
   no client state, works with the existing URL-state architecture. Spec with
   code-level detail in `DESIGN-SYSTEM-SPEC.md §5`.
-- **Status:** OPEN
+- **Status:** FIXED (PR #645) — exactly the recommended pattern, applied
+  everywhere. New pure core `src/lib/admin/back-link-core.ts`
+  (`withBackParam` / `backHref` / `currentQueryString`, 28 embedded
+  self-tests + vitest mirror) and shared server component
+  `src/components/admin/ux/BackLink.tsx`. Safety rails beyond spec: `back`
+  only ever restores a QUERY STRING onto the caller's own fallback route
+  (path/protocol/host injection rejected), and one-shot flash params
+  (`saved`, `error`, `created`, `resolved`, …35 keys) are stripped so stale
+  banners never resurrect. 40 pages wired (every back-style link found by
+  scripted sweep — the audit's 33 plus drift), and 9 list pages with real
+  filter state thread `withBackParam` into their row/detail links,
+  including multi-level chains (purchasing menus → item). Manual test:
+  T-163.
 
 ### GW-030 — The button system is fragmented: a canonical brand Button exists, but ~274 raw buttons bypass it — 92 white-text vs 85 black-text, 39 transparent/outline, 29 hard-coded off-palette colors
 - **Where:** Canonical component: `src/components/admin/ui/Button.tsx:45–55`

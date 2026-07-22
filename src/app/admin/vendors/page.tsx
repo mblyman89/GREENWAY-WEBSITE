@@ -11,6 +11,7 @@ import { CompletenessMeter } from "@/components/admin/vendors/CompletenessMeter"
 import { computeVendorStats, vendorGapInsights } from "@/lib/insight/vendors";
 import { MissingInsight } from "@/components/admin/insight/MissingInsight";
 import { pickVendorListParams, vendorDetailHref } from "@/lib/vendors/list-state-core";
+import { withBackParam } from "@/lib/admin/back-link-core";
 
 export const dynamic = "force-dynamic";
 
@@ -142,13 +143,13 @@ export default async function VendorsPage({
             {/* Task F: combine producer-processor cards that exist 2–3× because
                 the same business holds multiple LCB licenses. */}
             <Link
-              href="/admin/vendors/merge"
+              href={withBackParam("/admin/vendors/merge", sp)}
               className="inline-flex items-center gap-2 rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-4 py-2 text-sm font-semibold text-white shadow-[var(--admin-shadow-sm)] hover:bg-[var(--admin-surface-hover)]"
             >
               <span aria-hidden>🔀</span> Combine duplicates
             </Link>
             <Link
-              href="/admin/vendors/import"
+              href={withBackParam("/admin/vendors/import", sp)}
               className="inline-flex items-center gap-2 rounded-[var(--admin-radius)] bg-[var(--admin-orange)] px-4 py-2 text-sm font-semibold text-black shadow-[var(--admin-shadow-sm)] hover:brightness-110"
             >
               <span aria-hidden>⬆️</span> Import vendors &amp; brands

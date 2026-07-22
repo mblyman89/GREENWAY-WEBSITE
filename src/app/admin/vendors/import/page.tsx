@@ -1,7 +1,7 @@
 import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
+import { BackLink, Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { Field, Textarea, Button } from "@/components/admin/ui";
 import { countVendors } from "@/lib/vendors/store";
 import { StatCard } from "@/components/admin/StatCard";
@@ -18,10 +18,11 @@ export default async function VendorBrandImportPage({
     inserted?: string;
     updated?: string;
     skipped?: string;
+    back?: string;
   }>;
 }) {
   await requirePermission("vendors.manage");
-  const { error, entity, inserted, updated, skipped } = await searchParams;
+  const { error, entity, inserted, updated, skipped, back } = await searchParams;
 
   if (!isSupabaseServiceConfigured) {
     return (
@@ -119,9 +120,13 @@ export default async function VendorBrandImportPage({
           </Field>
           <div className="flex items-center gap-3">
             <Button type="submit" variant="primary">Import</Button>
-            <a href="/admin/vendors" className="text-sm text-[var(--admin-text-faint)] hover:text-white">
+            <BackLink
+              fallback="/admin/vendors"
+              back={back}
+              className="text-sm text-[var(--admin-text-faint)] hover:text-white"
+            >
               Back to vendors
-            </a>
+            </BackLink>
           </div>
         </form>
       </div>

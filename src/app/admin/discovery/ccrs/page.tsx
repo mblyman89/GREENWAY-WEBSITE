@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
+import { Breadcrumbs, HelpPanel, BackLink as SharedBackLink } from "@/components/admin/ux";
 import { Button, Card, CardHeader, Section, Field, Input } from "@/components/admin/ui";
 import { getDiscoverySnapshot } from "@/lib/discovery/store";
 import { listDatasets } from "@/lib/discovery/ingest";
@@ -78,7 +78,7 @@ export default async function CcrsPage({ searchParams }: { searchParams: Promise
           }
         />
         <div className="space-y-6 px-5 py-6 sm:px-8">
-          <BackLink />
+          <BackLink back={one(sp, "back")} />
           {!snap.configured ? (
             <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] p-5 text-sm text-[var(--admin-gold)]">
               The database isn&apos;t fully set up yet. Apply migration <code>0079_discovery_ccrs.sql</code>{" "}
@@ -159,7 +159,7 @@ export default async function CcrsPage({ searchParams }: { searchParams: Promise
       />
 
       <div className="space-y-6 px-5 py-6 sm:px-8">
-        <BackLink />
+        <BackLink back={one(sp, "back")} />
 
         {/* Flash messages */}
         {uploaded ? (
@@ -447,13 +447,14 @@ function Flash({ tone, children }: { tone: "ok" | "err"; children: React.ReactNo
   );
 }
 
-function BackLink() {
+function BackLink({ back }: { back?: string }) {
   return (
-    <Link
-      href="/admin/discovery"
+    <SharedBackLink
+      fallback="/admin/discovery"
+      back={back}
       className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--admin-text-muted)] hover:text-[var(--admin-accent)]"
     >
       ← Back to Product Discovery
-    </Link>
+    </SharedBackLink>
   );
 }

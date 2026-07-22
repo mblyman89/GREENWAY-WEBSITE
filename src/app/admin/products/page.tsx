@@ -3,7 +3,7 @@ import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { SopSheetLink } from "@/components/admin/SopSheetLink";
-import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
+import { BackLink, Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { CatalogStageStrip } from "@/components/admin/catalog/CatalogStageStrip";
 import { StatCard } from "@/components/admin/StatCard";
 import { getPublishedVersion, getVersionItems } from "@/lib/pos/menu-version";
@@ -16,6 +16,7 @@ import { Input, Select } from "@/components/admin/ui/Field";
 import { StatusPill, EmptyState } from "@/components/admin/ux";
 import { computeProductStats, productGapInsights } from "@/lib/insight/products";
 import { MissingInsight } from "@/components/admin/insight/MissingInsight";
+import { withBackParam } from "@/lib/admin/back-link-core";
 import { DistributionBars } from "@/components/admin/insight/DistributionBars";
 
 function fmtMoney(minor: number | null): string {
@@ -28,11 +29,15 @@ export const dynamic = "force-dynamic";
 export default async function ProductsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; gap?: string; category?: string; view?: string }>;
+  searchParams: Promise<{ q?: string; gap?: string; category?: string; view?: string; back?: string }>;
 }) {
   await requirePermission("products.enrich");
-  const { q, gap, category, view } = await searchParams;
+  const sp = await searchParams;
+  const { q, gap, category, view } = sp;
   const isTable = view === "table";
+  // GW-029: carry the current filters into detail links for BackLink restore.
+  const detailHref = (posKey: string) =>
+    withBackParam(`/admin/products/${encodeURIComponent(posKey)}`, sp);
 
   if (!isSupabaseServiceConfigured) {
     return (
@@ -44,12 +49,13 @@ export default async function ProductsPage({
         />
         <div className="space-y-6 px-5 py-6 sm:px-8">
           <div>
-            <Link
-              href="/admin/catalog"
+            <BackLink
+              fallback="/admin/catalog"
+              back={sp.back}
               className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--admin-text-muted)] hover:text-[var(--admin-accent)]"
             >
               ← Back to Product Intake Hub
-            </Link>
+            </BackLink>
           </div>
           <CatalogStageStrip current="enrichment" />
           <HelpPanel
@@ -90,12 +96,13 @@ export default async function ProductsPage({
         />
         <div className="space-y-6 px-5 py-6 sm:px-8">
           <div>
-            <Link
-              href="/admin/catalog"
+            <BackLink
+              fallback="/admin/catalog"
+              back={sp.back}
               className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--admin-text-muted)] hover:text-[var(--admin-accent)]"
             >
               ← Back to Product Intake Hub
-            </Link>
+            </BackLink>
           </div>
           <CatalogStageStrip current="enrichment" />
           <HelpPanel
@@ -279,12 +286,13 @@ export default async function ProductsPage({
         </section>
 
         <div>
-          <Link
-            href="/admin/catalog"
+          <BackLink
+            fallback="/admin/catalog"
+            back={sp.back}
             className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--admin-text-muted)] hover:text-[var(--admin-accent)]"
           >
             ← Back to Product Intake Hub
-          </Link>
+          </BackLink>
         </div>
         <CatalogStageStrip current="enrichment" />
 
@@ -381,7 +389,7 @@ export default async function ProductsPage({
         )}
 
         {/* Visual grid (default) */}
-        {!isTable && <ProductGrid cards={gridCards} />}
+        {!isTable && <ProductGrid cards={gridCards} hrefFor={detailHref} />}
 
         {/* Table (power-user view) */}
         {isTable && (
@@ -402,7 +410,7 @@ export default async function ProductsPage({
               {filtered.slice(0, 300).map((g) => (
                 <tr key={g.posKey} className="bg-[var(--admin-surface)] transition hover:bg-[var(--admin-surface-hover)]">
                   <td className="px-4 py-3">
-                    <Link href={`/admin/products/${encodeURIComponent(g.posKey)}`} className="font-medium text-[var(--admin-text)] hover:text-[var(--admin-accent)]">
+                    <Link href={detailHref(g.posKey)} className="font-medium text-[var(--admin-text)] hover:text-[var(--admin-accent)]">
                       {g.name}
                     </Link>
                   </td>

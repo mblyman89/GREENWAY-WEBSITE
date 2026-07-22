@@ -7,6 +7,7 @@ import { Button } from "@/components/admin/ui";
 import { listEmployees, listPunchesForDayAll } from "@/lib/staffing/store";
 import { pacificParts, pacificToday, addPacificDays } from "@/lib/reports/timezone";
 import { can } from "@/lib/auth/roles";
+import { backHref } from "@/lib/admin/back-link-core";
 import {
   HoursManager,
   type HoursPunchRow,
@@ -34,7 +35,7 @@ function dayLabel(ymd: string): string {
 export default async function HoursPage({
   searchParams,
 }: {
-  searchParams: Promise<{ day?: string }>;
+  searchParams: Promise<{ day?: string; back?: string }>;
 }) {
   const session = await requirePermission("staffing.manage");
   can(session.profile.role, "staffing.manage");
@@ -92,9 +93,9 @@ export default async function HoursPage({
           </HelpPanel>
         }
         action={
-          <Link href={BASE}>
-            <Button variant="neutral">Back to time clock</Button>
-          </Link>
+          <Button href={backHref(BASE, sp.back)} variant="neutral">
+            Back to time clock
+          </Button>
         }
       />
 

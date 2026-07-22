@@ -1,14 +1,19 @@
-import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { Button } from "@/components/admin/ui";
 import { HANDBOOK_SECTIONS, HANDBOOK_VERSION } from "@/lib/staffing/handbook-content";
 import { PrintHandbookButton } from "./PrintHandbookButton";
+import { backHref } from "@/lib/admin/back-link-core";
 
 export const dynamic = "force-dynamic";
 
-export default async function HandbookPage() {
+export default async function HandbookPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ back?: string }>;
+}) {
+  const { back } = await searchParams;
   await requirePermission("staffing.manage");
 
   return (
@@ -29,9 +34,9 @@ export default async function HandbookPage() {
           action={
             <div className="flex gap-2">
               <PrintHandbookButton />
-              <Link href="/admin/staffing/employees">
-                <Button variant="neutral" size="sm">← Back to roster</Button>
-              </Link>
+              <Button href={backHref("/admin/staffing/employees", back)} variant="neutral" size="sm">
+                ← Back to roster
+              </Button>
             </div>
           }
           help={

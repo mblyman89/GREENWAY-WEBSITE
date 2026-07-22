@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
@@ -7,6 +6,7 @@ import { StatCard } from "@/components/admin/StatCard";
 import { Button, Badge } from "@/components/admin/ui";
 import { recentSessions } from "@/lib/registers/store";
 import { formatCents, overShortLabel } from "@/lib/registers/cash";
+import { backHref } from "@/lib/admin/back-link-core";
 
 export const dynamic = "force-dynamic";
 
@@ -41,7 +41,12 @@ function fmtTime(iso: string | null): string {
   }
 }
 
-export default async function RegisterHistoryPage() {
+export default async function RegisterHistoryPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ back?: string }>;
+}) {
+  const { back } = await searchParams;
   await requirePermission("inventory.manage");
 
   if (!isSupabaseServiceConfigured) {
@@ -69,9 +74,9 @@ export default async function RegisterHistoryPage() {
         title="Cash drawer reports"
         subtitle="Closed, reconciled, and verified drawer sessions across all registers."
         action={
-          <Link href={BASE}>
-            <Button variant="neutral">Back to Register Activity</Button>
-          </Link>
+          <Button href={backHref(BASE, back)} variant="neutral">
+            Back to Register Activity
+          </Button>
         }
         help={
           <HelpPanel id="registers-history" title="About cash drawer reports">

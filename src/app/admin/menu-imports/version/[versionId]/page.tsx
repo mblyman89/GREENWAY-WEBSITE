@@ -1,8 +1,8 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { can } from "@/lib/auth/roles";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { BackLink } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
 import { getVersion, getPublishedVersion, diffVersions, getVersionItems } from "@/lib/pos/menu-version";
 import { formatDateTime, formatMoney } from "@/lib/pos/format";
@@ -31,7 +31,7 @@ export default async function IntakeVersionReviewPage({
   searchParams,
 }: {
   params: Promise<{ versionId: string }>;
-  searchParams: Promise<{ error?: string; published?: string }>;
+  searchParams: Promise<{ error?: string; published?: string; back?: string }>;
 }) {
   const session = await requirePermission("menu.import");
   const { versionId } = await params;
@@ -69,12 +69,13 @@ export default async function IntakeVersionReviewPage({
         title="Menu draft from receiving"
         subtitle={`Auto-carried ${formatDateTime(version.created_at)} \u00b7 ${summary.added ?? 0} new card(s)${(summary.merged ?? 0) > 0 ? ` + ${summary.merged} restock option(s)` : ""} on top of ${summary.carried ?? 0} live item(s)`}
         action={
-          <Link
-            href="/admin/menu-imports"
+          <BackLink
+            fallback="/admin/menu-imports"
+            back={sp.back}
             className="rounded-full border border-white/15 px-4 py-2 text-xs text-white/80 hover:border-[#7ed957] hover:text-white"
           >
             &larr; All menu updates
-          </Link>
+          </BackLink>
         }
       />
 

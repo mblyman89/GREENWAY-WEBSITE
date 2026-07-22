@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
+import { Breadcrumbs, HelpPanel, BackLink as SharedBackLink } from "@/components/admin/ux";
+import { withBackParam } from "@/lib/admin/back-link-core";
 import { Button, Card, CardHeader, Section, Field, Input, Select, Textarea } from "@/components/admin/ui";
 import { StatCard } from "@/components/admin/StatCard";
 import { SopSheetLink } from "@/components/admin/SopSheetLink";
@@ -57,7 +58,7 @@ export default async function DiscoveryPage({ searchParams }: { searchParams: Pr
           breadcrumbs={<Breadcrumbs items={[{ label: "Product Intake", href: "/admin/catalog" }, { label: "Product Discovery" }]} />}
         />
         <div className="space-y-6 px-5 py-6 sm:px-8">
-          <BackLink />
+          <BackLink back={one(sp, "back")} />
           <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-gold)]/30 bg-[var(--admin-gold-soft)] p-5 text-sm text-[var(--admin-gold)]">
             The database isn&apos;t fully set up yet. Once the discovery tables migration
             is applied, your leads will appear here.
@@ -77,7 +78,7 @@ export default async function DiscoveryPage({ searchParams }: { searchParams: Pr
           breadcrumbs={<Breadcrumbs items={[{ label: "Product Intake", href: "/admin/catalog" }, { label: "Product Discovery" }]} />}
         />
         <div className="space-y-6 px-5 py-6 sm:px-8">
-          <BackLink />
+          <BackLink back={one(sp, "back")} />
           <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-6 text-sm text-[var(--admin-text-muted)]">
             Product Discovery is currently <strong className="text-[var(--admin-text)]">turned off</strong>.
             An owner/admin can turn it back on below.
@@ -145,9 +146,9 @@ export default async function DiscoveryPage({ searchParams }: { searchParams: Pr
 
       <div className="space-y-6 px-5 py-6 sm:px-8">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <BackLink />
+          <BackLink back={one(sp, "back")} />
           <div className="flex flex-wrap items-center gap-2">
-            <Link href="/admin/discovery/import">
+            <Link href={withBackParam("/admin/discovery/import", sp)}>
               <Button variant="neutral" size="sm">Import leads (CSV)</Button>
             </Link>
           </div>
@@ -218,7 +219,7 @@ export default async function DiscoveryPage({ searchParams }: { searchParams: Pr
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Link href="/admin/discovery/ccrs">
+                <Link href={withBackParam("/admin/discovery/ccrs", sp)}>
                   <Button variant="confirm" size="sm">Request &amp; upload data</Button>
                 </Link>
                 <Link href="/admin/reports/benchmarks">
@@ -377,13 +378,14 @@ export default async function DiscoveryPage({ searchParams }: { searchParams: Pr
   );
 }
 
-function BackLink() {
+function BackLink({ back }: { back?: string }) {
   return (
-    <Link
-      href="/admin/catalog"
+    <SharedBackLink
+      fallback="/admin/catalog"
+      back={back}
       className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--admin-text-muted)] hover:text-[var(--admin-accent)]"
     >
       ← Back to Product Intake Hub
-    </Link>
+    </SharedBackLink>
   );
 }

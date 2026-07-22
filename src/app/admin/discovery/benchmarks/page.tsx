@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
+import { Breadcrumbs, HelpPanel, BackLink as SharedBackLink } from "@/components/admin/ux";
 import { Button, Card, CardHeader, Section, Badge } from "@/components/admin/ui";
 import { StatCard } from "@/components/admin/StatCard";
 import { getDiscoverySnapshot } from "@/lib/discovery/store";
@@ -149,7 +149,7 @@ export default async function BenchmarksPage({ searchParams }: { searchParams: P
           }
         />
         <div className="space-y-6 px-5 py-6 sm:px-8">
-          <BackLink />
+          <BackLink back={one(sp, "back")} />
           <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-6 text-sm text-[var(--admin-text-muted)]">
             {!snap.configured
               ? "The database isn't fully set up yet. Apply the discovery CCRS migration first."
@@ -188,7 +188,7 @@ export default async function BenchmarksPage({ searchParams }: { searchParams: P
           }
         />
         <div className="space-y-6 px-5 py-6 sm:px-8">
-          <BackLink />
+          <BackLink back={one(sp, "back")} />
           <Card padding="md">
             <p className="text-sm text-[var(--admin-text-muted)]">
               No datasets yet. Head to{" "}
@@ -245,7 +245,7 @@ export default async function BenchmarksPage({ searchParams }: { searchParams: P
           }
         />
         <div className="space-y-6 px-5 py-6 sm:px-8">
-          <BackLink />
+          <BackLink back={one(sp, "back")} />
           <DatasetSelector datasets={datasets} activeId={active.id} />
           {/* Task I (I7): free-text Q&A over this drop's persisted rollups. */}
           <AskAnalystPanel datasetId={active.id} aiEnabled={isAiConfigured} surface="statewide" />
@@ -315,7 +315,7 @@ export default async function BenchmarksPage({ searchParams }: { searchParams: P
       />
 
       <div className="space-y-6 px-5 py-6 sm:px-8">
-        <BackLink />
+        <BackLink back={one(sp, "back")} />
 
         {/* Dataset selector */}
         <DatasetSelector datasets={datasets} activeId={active.id} />
@@ -578,13 +578,14 @@ function FlagBadge({ flag }: { flag: CompareFlag }) {
   );
 }
 
-function BackLink() {
+function BackLink({ back }: { back?: string }) {
   return (
-    <Link
-      href="/admin/discovery"
+    <SharedBackLink
+      fallback="/admin/discovery"
+      back={back}
       className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--admin-text-muted)] hover:text-[var(--admin-accent)]"
     >
       ← Back to Product Discovery
-    </Link>
+    </SharedBackLink>
   );
 }

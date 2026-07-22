@@ -3,7 +3,7 @@ import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { SopSheetLink } from "@/components/admin/SopSheetLink";
-import { Breadcrumbs, HelpPanel, EmptyState } from "@/components/admin/ux";
+import { BackLink, Breadcrumbs, HelpPanel, EmptyState } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
 import { Button, Input } from "@/components/admin/ui";
 import { CatalogStageStrip } from "@/components/admin/catalog/CatalogStageStrip";
@@ -27,10 +27,10 @@ function fmtMoney(minor: number | null | undefined): string {
 export default async function CatalogDraftsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; approved?: string; dismissed?: string; restored?: string; error?: string; msg?: string }>;
+  searchParams: Promise<{ status?: string; approved?: string; dismissed?: string; restored?: string; error?: string; msg?: string; back?: string }>;
 }) {
   await requirePermission("inventory.manage");
-  const { status, approved, dismissed, restored, error, msg } = await searchParams;
+  const { status, approved, dismissed, restored, error, msg, back } = await searchParams;
   const view = status === "approved" || status === "dismissed" ? status : "draft";
 
   if (!isSupabaseServiceConfigured) {
@@ -93,12 +93,13 @@ export default async function CatalogDraftsPage({
 
       <div className="space-y-6 px-5 py-6 sm:px-8">
         <div>
-          <Link
-            href="/admin/catalog"
+          <BackLink
+            fallback="/admin/catalog"
+            back={back}
             className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--admin-text-muted)] hover:text-[var(--admin-accent)]"
           >
             ← Back to Product Intake Hub
-          </Link>
+          </BackLink>
         </div>
         <CatalogStageStrip current="onboarding" />
 

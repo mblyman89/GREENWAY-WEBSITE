@@ -31,6 +31,7 @@ import {
   setStatusAction,
 } from "./actions";
 import { updateEmployeeAction } from "../../actions";
+import { backHref } from "@/lib/admin/back-link-core";
 
 export const dynamic = "force-dynamic";
 
@@ -48,7 +49,7 @@ export default async function EmployeeFilePage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; ok?: string }>;
+  searchParams: Promise<{ error?: string; ok?: string; back?: string }>;
 }) {
   await requirePermission("staffing.manage");
   const { id } = await params;
@@ -95,9 +96,9 @@ export default async function EmployeeFilePage({
           />
         }
         action={
-          <Link href={BASE}>
-            <Button variant="neutral">← Back to roster</Button>
-          </Link>
+          <Button href={backHref(BASE, sp.back)} variant="neutral">
+            ← Back to roster
+          </Button>
         }
         help={
           <HelpPanel

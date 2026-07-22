@@ -3,7 +3,7 @@ import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { SopSheetLink } from "@/components/admin/SopSheetLink";
-import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
+import { BackLink, Breadcrumbs, HelpPanel } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
 import { getAchCompanySettings } from "@/lib/payroll/payroll-store";
 import { Card, CardHeader, Section } from "@/components/admin/ui";
@@ -12,7 +12,12 @@ import { ManualPaymentForm } from "./ManualPaymentForm";
 
 export const dynamic = "force-dynamic";
 
-export default async function VendorPaymentsPage() {
+export default async function VendorPaymentsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ back?: string }>;
+}) {
+  const { back } = await searchParams;
   await requirePermission("payables.manage");
 
   if (!isSupabaseServiceConfigured) {
@@ -75,12 +80,13 @@ export default async function VendorPaymentsPage() {
 
       <div className="space-y-6 px-5 py-6 sm:px-8">
         <div>
-          <Link
-            href="/admin/catalog"
+          <BackLink
+            fallback="/admin/catalog"
+            back={back}
             className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--admin-text-muted)] hover:text-[var(--admin-accent)]"
           >
             ← Back to Product Intake Hub
-          </Link>
+          </BackLink>
         </div>
 
         {/* Readiness at a glance — real state, no fabricated payables ledger. */}

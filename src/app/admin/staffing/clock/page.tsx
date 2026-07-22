@@ -1,10 +1,10 @@
-import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { onTheClock } from "@/lib/staffing/store";
 import { formatMinutes, punchMinutes } from "@/lib/staffing/time";
 import { pacificParts } from "@/lib/reports/timezone";
 import { PhonePinPad } from "@/components/admin/staffing/PhonePinPad";
+import { BackLink } from "@/components/admin/ux";
 import { clockByPinPhoneAction } from "../actions";
 
 export const dynamic = "force-dynamic";
@@ -27,7 +27,7 @@ function fmtTime(iso: string | null): string {
 export default async function PhoneClockPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; clocked?: string; who?: string }>;
+  searchParams: Promise<{ error?: string; clocked?: string; who?: string; back?: string }>;
 }) {
   // Any active staff session may reach this page; the PIN identifies the person.
   await requirePermission("timeclock.use");
@@ -81,9 +81,9 @@ export default async function PhoneClockPage({
       )}
 
       <div className="mt-auto pt-8 text-center">
-        <Link href="/admin/staffing" className="text-xs text-white/40 underline">
+        <BackLink fallback="/admin/staffing" back={sp.back} className="text-xs text-white/40 underline">
           Back to the full time clock
-        </Link>
+        </BackLink>
       </div>
     </div>
   );

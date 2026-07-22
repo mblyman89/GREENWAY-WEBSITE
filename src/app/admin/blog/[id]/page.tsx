@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { BackLink } from "@/components/admin/ux";
 import { getPostById, getNewsletterAsset, resolveHeroSrc } from "@/lib/cms/blog-store";
 import { listBlogSuggestions } from "@/lib/cms/ai-blog";
 import { isAiConfigured } from "@/lib/ai/provider";
@@ -35,11 +36,11 @@ export default async function BlogEditorPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ saved?: string; ai?: string; topic?: string; error?: string }>;
+  searchParams: Promise<{ saved?: string; ai?: string; topic?: string; error?: string; back?: string }>;
 }) {
   await requirePermission("blog.manage");
   const { id } = await params;
-  const { saved, ai, topic, error } = await searchParams;
+  const { saved, ai, topic, error, back } = await searchParams;
   const topicSeed = (topic ?? "").slice(0, 300);
 
   if (!isSupabaseServiceConfigured) notFound();
@@ -90,9 +91,9 @@ export default async function BlogEditorPage({
                 View on site ↗
               </Link>
             )}
-            <Link href="/admin/blog" className="text-sm text-[var(--admin-text-muted)] hover:text-[var(--admin-text)]">
+            <BackLink fallback="/admin/blog" back={back} className="text-sm text-[var(--admin-text-muted)] hover:text-[var(--admin-text)]">
               ← Back to posts
-            </Link>
+            </BackLink>
           </div>
         }
       />

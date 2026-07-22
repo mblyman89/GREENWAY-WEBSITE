@@ -7,6 +7,7 @@ import { listSeoEntries } from "@/lib/cms/content-store";
 import { isAiConfigured } from "@/lib/cms/ai-seo";
 import { SeoEntryEditor } from "@/components/admin/SeoEntryEditor";
 import { saveSeoEntryAction } from "../actions";
+import { backHref } from "@/lib/admin/back-link-core";
 
 export const dynamic = "force-dynamic";
 
@@ -27,10 +28,10 @@ const KNOWN_PATHS = [
 export default async function SeoEditorPage({
   searchParams,
 }: {
-  searchParams: Promise<{ saved?: string; error?: string }>;
+  searchParams: Promise<{ saved?: string; error?: string; back?: string }>;
 }) {
   await requirePermission("content.edit");
-  const { saved, error } = await searchParams;
+  const { saved, error, back } = await searchParams;
 
   if (!isSupabaseServiceConfigured) {
     return (
@@ -50,7 +51,7 @@ export default async function SeoEditorPage({
         title="SEO Editor"
         subtitle="Control how each page looks on Google and when shared on social media — title, description, and more — with a live Google-style preview."
         action={
-          <Button href="/admin/content" variant="neutral">← Site content</Button>
+          <Button href={backHref("/admin/content", back)} variant="neutral">← Site content</Button>
         }
         help={
           <HelpPanel

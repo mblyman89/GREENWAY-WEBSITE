@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
@@ -8,6 +7,7 @@ import { listEmployees, listScheduledShiftsForWeek } from "@/lib/staffing/store"
 import { mondayOf, weekDays, addDaysYmd } from "@/lib/staffing/schedule-core";
 import { pacificParts, pacificDayKey } from "@/lib/reports/timezone";
 import { ScheduleBuilder } from "@/components/admin/staffing/ScheduleBuilder";
+import { backHref } from "@/lib/admin/back-link-core";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +20,7 @@ function hmFromISO(iso: string | null): { h: number; m: number } | null {
 export default async function SchedulePage({
   searchParams,
 }: {
-  searchParams: Promise<{ week?: string }>;
+  searchParams: Promise<{ week?: string; back?: string }>;
 }) {
   await requirePermission("staffing.manage");
   const sp = await searchParams;
@@ -86,9 +86,9 @@ export default async function SchedulePage({
           </HelpPanel>
         }
         action={
-          <Link href="/admin/staffing">
-            <Button variant="neutral">Back to time clock</Button>
-          </Link>
+          <Button href={backHref("/admin/staffing", sp.back)} variant="neutral">
+            Back to time clock
+          </Button>
         }
       />
 

@@ -8,8 +8,8 @@
  * price/SKU label so staff can scan them at the register.
  */
 import { notFound } from "next/navigation";
-import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
+import { BackLink } from "@/components/admin/ux";
 import { getNonCannabisProduct } from "@/lib/noncannabis/store";
 import { getStoreProfile } from "@/lib/admin/store-profile-store";
 import { code128Svg } from "@/lib/printing/code128-core";
@@ -20,11 +20,14 @@ export const dynamic = "force-dynamic";
 
 export default async function NonCannabisLabelPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ back?: string }>;
 }) {
   await requirePermission("inventory.manage");
   const { id } = await params;
+  const { back } = await searchParams;
   const [product, profile] = await Promise.all([
     getNonCannabisProduct(id),
     getStoreProfile(),
@@ -57,12 +60,13 @@ export default async function NonCannabisLabelPage({
         <p className="mt-3 text-xs text-[var(--admin-text-faint)]">
           2.25in × 1.25in SKU label. Press Print and choose your label printer.
         </p>
-        <Link
-          href="/admin/inventory/noncannabis"
+        <BackLink
+          fallback="/admin/inventory/noncannabis"
+          back={back}
           className="mt-2 inline-block text-xs text-[var(--admin-accent)] underline"
         >
           ← Back to non-cannabis inventory
-        </Link>
+        </BackLink>
       </div>
 
       <div
