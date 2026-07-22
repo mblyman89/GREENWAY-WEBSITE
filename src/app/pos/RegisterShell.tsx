@@ -26,6 +26,8 @@ import {
   serializeQueue,
   parseQueue,
   highestSequence,
+  queueDepthWarning,
+  storageFailureAlert,
   type QueuedPosEvent,
 } from "@/lib/pos/register-client-core";
 import type { PosSyncAck } from "@/lib/pos/sync-core";
@@ -140,6 +142,10 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
   const [online, setOnline] = useState(true);
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
+  // GW-001 — persistent storage-failure alert. Separate from `banner` so a
+  // routine sync message can never overwrite/dismiss a "storage is full"
+  // warning; it clears itself only when a persist write SUCCEEDS again.
+  const [storageAlert, setStorageAlert] = useState<string | null>(null);
   const [saleActive, setSaleActive] = useState(false);
   const [menuBundle, setMenuBundle] = useState<PosMenuBundle | null>(null);
   const [menuLoading, setMenuLoading] = useState(false);
@@ -402,12 +408,40 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
   }, []);
 
   // ── persist queue on change (and mirror into the ref flush() reads) ──
+  // GW-001 — setItem THROWS on quota exhaustion (long offline stretch, iOS
+  // storage pressure, Safari private mode); an uncaught throw here unmounts
+  // the React tree and white-screens the register on EVERY queue change. The
+  // in-memory queue must keep serving; the human gets a persistent alert
+  // because a restart would lose whatever could not be saved.
   useEffect(() => {
     queueRef.current = queue;
     if (screen === "loading") return;
-    window.localStorage.setItem(LS_QUEUE, serializeQueue([...queue, ...rejected]));
-    window.localStorage.setItem(LS_SEQ, String(seqRef.current));
+    try {
+      window.localStorage.setItem(LS_QUEUE, serializeQueue([...queue, ...rejected]));
+      window.localStorage.setItem(LS_SEQ, String(seqRef.current));
+      // Synchronizing FROM an external system (localStorage write outcome)
+      // INTO React state — the allowed direction; the functional form makes
+      // the success path a no-op render unless an alert is actually cleared.
+      /* eslint-disable-next-line react-hooks/set-state-in-effect */
+      setStorageAlert((prev) => (prev === storageFailureAlert("queue") ? null : prev));
+    } catch {
+      setStorageAlert(storageFailureAlert("queue"));
+    }
   }, [queue, rejected, screen]);
+
+  // ── persist device credentials (GW-001) ──
+  // ONE guarded write path for the device pairing. GW-001: the provisioning
+  // write was the third unguarded setItem in this file — quota exhaustion
+  // must never unmount the shell; the alert warns the pairing won't survive
+  // a restart.
+  const persistCreds = useCallback((c: DeviceCreds) => {
+    try {
+      window.localStorage.setItem(LS_DEVICE, JSON.stringify(c));
+      setStorageAlert((prev) => (prev === storageFailureAlert("device") ? null : prev));
+    } catch {
+      setStorageAlert(storageFailureAlert("device"));
+    }
+  }, []);
 
   // ── enqueue + flush ──
   const enqueue = useCallback(
@@ -693,6 +727,12 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
 
   // ── screen renders ──
   const pendingCount = queue.length;
+  // GW-001 — the message shown on lock/home screens. Priority: a storage
+  // FAILURE (data at risk NOW) beats the depth early-warning, which beats the
+  // routine banner. Alerts are computed, not stored in `banner`, so a sync
+  // message can never dismiss them; they clear only when the condition does.
+  const persistentAlert = storageAlert ?? queueDepthWarning(pendingCount);
+  const shownBanner = persistentAlert ?? banner;
 
   // Slice 5 — the bundle SaleFlow/rebuilds price against. When medical test
   // mode is ON, force medical.endorsed=true so the owner can rehearse the
@@ -718,7 +758,7 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
     return (
       <SetupScreen
         onProvisioned={(c) => {
-          window.localStorage.setItem(LS_DEVICE, JSON.stringify(c));
+          persistCreds(c);
           setCreds(c);
           setScreen("locked");
         }}
@@ -732,7 +772,7 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
         creds={creds}
         online={online}
         pendingCount={pendingCount}
-        banner={banner}
+        banner={shownBanner}
         buildVersion={buildVersion ?? null}
         updateReady={!!updateWaiting || isBuildStale(buildVersion, serverVersion)}
         onForceRefresh={forceRefresh}
@@ -1154,7 +1194,7 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
         pendingCount={pendingCount}
         rejectedCount={rejected.length}
         lastSyncAt={lastSyncAt}
-        banner={banner}
+        banner={shownBanner}
         menuReady={!!menuBundle}
         menuFetchedAt={menuBundle?.fetchedAt ?? null}
         lowStock={menuBundle ? lowStockCount(menuBundle.products) : 0}
