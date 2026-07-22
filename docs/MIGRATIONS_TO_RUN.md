@@ -236,3 +236,25 @@
   status flip is now compare-and-swap) and falls back to the old quantity
   writes — this migration adds the database-enforced guarantees underneath
   it.**
+
+## Fix slice — GW-019 + GW-020 (security / insider-threat hardening)
+
+- [ ] **`supabase/migrations/0130_security_rls_hardening.sql`** — GW-019 +
+  GW-020: makes the database itself the last line of defense against anyone
+  holding the public browser key or a staff login token. (1) The four tables
+  that had NO row-level security (glassware products with wholesale costs,
+  their adjustment ledger, the SKU counters, the KB category taxonomy) are
+  locked down — anonymous read/write dies, managers keep read where they
+  need it, all writes go through the app. (2) The employee roster tightens
+  to manager+ read with NO direct write path, and the PIN hash + bank
+  account columns become unreadable to every login token — only the app's
+  own payroll path can reach them. (3) Every change to the roster is now
+  recorded by the database itself (values redacted) so no code path can
+  skip the audit trail, and the audit log becomes append-only — history
+  cannot be rewritten even with the server's own key. Idempotent; safe to
+  re-run. The file ends with five read-only review queries — run each once:
+  (A) zero tables without RLS, (B) the roster's only policy is manager
+  read, (C) zero sensitive-column grants, (D) the audit trigger is armed,
+  (E) the audit log is append-only. **Until this is run, the app works
+  normally but the database-level protections are not active — the old
+  broad policies remain in force.**

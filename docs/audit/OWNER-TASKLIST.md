@@ -48,7 +48,8 @@ files, one by one**. Here is the honest, verified answer:
 
 Also: `docs/MIGRATIONS_TO_RUN.md` is your standing checklist of migrations
 from 0054 onward with a description of what breaks until each is run. If
-you haven't checked off through **0129** (the current last file — 0129 is the
+you haven't checked off through **0130** (the current last file — 0130 is the
+GW-019/GW-020 fix: row-level security and insider-threat hardening; 0129 is the
 GW-011/GW-012 fix: concurrency guards for inventory and loyalty; 0128 is the
 GW-023 fix: stranded-sale recovery columns; 0127 is the GW-018 fix:
 auto-created staff profiles are born inactive), do that
@@ -98,6 +99,20 @@ and **0120–0122** are the POS foundation the registers depend on.
 >   unique guards exist, (B) confirms no order ever earned points twice
 >   (healthy = zero rows), (C) confirms no lot has negative stock (healthy =
 >   zero rows).
+> - [ ] **Run migration `0130_security_rls_hardening.sql`** in the Supabase
+>   SQL editor (GW-019 + GW-020 — locks the four unprotected tables, makes
+>   the employee roster manager-read-only with the PIN hash and bank columns
+>   hidden from every login token, arms a database-level audit trail on the
+>   roster, and makes the audit log append-only; idempotent, safe to
+>   re-run). Then run the five read-only **OWNER REVIEW QUERIES** at the
+>   bottom of that file once: (A) zero tables without row-level security,
+>   (B) the roster's only policy is the manager read, (C) zero
+>   sensitive-column grants, (D) the audit trigger is armed, (E) nobody —
+>   not even the server key — can edit or delete audit history.
+> - [ ] **Confirm `DATA_ENCRYPTION_KEY` is set in production** (Vercel env) —
+>   it encrypts employee bank numbers at rest; without it they are stored as
+>   plain text. This is also CUTOVER-CHECKLIST C-051 — checking it now closes
+>   the GW-020 encryption caveat early.
 
 Do these in your Supabase project dashboard (they cannot be set from code):
 
