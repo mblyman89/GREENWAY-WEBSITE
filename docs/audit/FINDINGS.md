@@ -154,7 +154,15 @@
   waiting on a re-invocation.
 - **Recommendation:** Compute `applyAcks` from `queueRef.current` BEFORE calling
   setState, then issue three sibling setState calls with plain values.
-- **Status:** OPEN
+- **Status:** FIXED (PR #641) — rejected rows are computed ONCE outside any
+  updater from `queueRef.current` (exact: a rejected ack can only match a
+  row from `toSend`, which was read from the same ref at flush start, and
+  `flushingRef` bars concurrent flushes). `setRejected`/`setBanner` are now
+  sibling calls with plain values. `setQueue` keeps a functional updater so
+  a sale enqueued during the fetch await survives, but the updater is now
+  PURE (`applyAcks` is deterministic — re-invocation is idempotent, no side
+  effects). GW-008 (the same impure-updater family in SaleFlow's favorites
+  `togglePin`) was fixed in the same slice. Verified by TEST-PLAN T-064.
 
 ### GW-011 — Completion side effects race: no compare-and-swap on status, and the inventory/loyalty idempotency latches are check-then-insert with no unique index
 - **Where:** `src/lib/orders/orders-store.ts:287–291` (status read) and
@@ -782,7 +790,12 @@
   `favorites`, or compute `next` before `setFavorites`) and wrap it in
   try/catch that degrades to "pin didn't stick" instead of throwing. Fix
   alongside GW-001/GW-003 as one "safe localStorage writes" slice.
-- **Status:** OPEN
+- **Status:** FIXED (PR #641, same slice as GW-003) — exactly the
+  recommended shape: `toggleFavorite` computes `next` BEFORE setState (pure
+  updater gone), and the `setItem` is wrapped in try/catch that degrades to
+  "the pin doesn't survive a restart" while the session keeps the pin from
+  state. Completes the safe-localStorage-writes family (GW-001 PR #639,
+  GW-003 this PR).
 
 ### GW-009 — Medical card validity and exempt-sale dates use the UTC day, not the store's Pacific day
 - **Where:** `src/lib/medical/tax.ts:181` (`cardValidity` compares

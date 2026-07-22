@@ -500,16 +500,29 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
         persistCreds(next);
         setCreds(next);
       }
-      setQueue((q) => {
-        const applied = applyAcks(q, acks);
-        if (applied.rejected.length > 0) {
-          setRejected((r) => [...r, ...applied.rejected]);
-          setBanner(
-            `${applied.rejected.length} event(s) were rejected by the server and kept for review: ${applied.rejected[0].rejectedReason ?? ""}`,
-          );
-        }
-        return applied.remaining;
-      });
+      // GW-003 — React updaters must be PURE (React may invoke an updater
+      // more than once, and does deliberately in dev Strict Mode); the old
+      // code called setRejected/setBanner INSIDE setQueue's updater, so a
+      // double-invocation appended the same rejected rows twice — and the
+      // persist effect then wrote the duplicates to gw-pos-queue. Fix:
+      //  * rejected rows are computed ONCE, outside any updater, from
+      //    queueRef.current — exact, because a rejected ack can only match a
+      //    row from toSend, which was read from queueRef at flush start, and
+      //    nothing else removes rows mid-flight (flushingRef bars concurrent
+      //    flushes; enqueues only APPEND);
+      //  * setQueue keeps a FUNCTIONAL updater over the freshest state (a
+      //    sale enqueued during the fetch await must survive), but the
+      //    updater is now PURE — applyAcks is deterministic, so React
+      //    re-invoking it is idempotent and there is no side effect to run
+      //    twice.
+      const rejectedNow = applyAcks(queueRef.current, acks).rejected;
+      setQueue((q) => applyAcks(q, acks).remaining);
+      if (rejectedNow.length > 0) {
+        setRejected((r) => [...r, ...rejectedNow]);
+        setBanner(
+          `${rejectedNow.length} event(s) were rejected by the server and kept for review: ${rejectedNow[0].rejectedReason ?? ""}`,
+        );
+      }
       setLastSyncAt(new Date().toISOString());
     } catch {
       // Network hiccup — queue stays; the interval retries.

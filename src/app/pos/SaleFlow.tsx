@@ -374,14 +374,14 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
   // SESSION RESUME — a re-validated parked verdict starts the flow PAST the
   // age gate (at the cart), so the customer's ID is not rescanned.
   const [step, setStep] = useState<Step>(initialVerdict ? "cart" : "idgate");
-  // IDS-5 \u2014 post-scan burst DRAIN. Content-driven completion finalizes the
+  // IDS-5 — post-scan burst DRAIN. Content-driven completion finalizes the
   // scan the instant it is gate-ready, but the wedge scanner keeps streaming
   // the REST of the PDF417 (weight "DAW160", eye color, address\u2026). Once the ID
   // gate hands off to the cart, those trailing keystrokes would land in the
   // product-search box ("can't find DAW160" + a stray search). This ref holds
   // the finalize timestamp; a document-level guard mounted for the WHOLE flow
-  // (so it survives the idgate\u2192cart transition) swallows every keystroke while
-  // inside the drain window \u2014 each trailing key re-arms it, so it ends only
+  // (so it survives the idgate→cart transition) swallows every keystroke while
+  // inside the drain window — each trailing key re-arms it, so it ends only
   // once the scanner burst genuinely stops.
   const lastScanFinalizeRef = useRef<number | null>(null);
   const noteScanFinalized = useCallback(() => {
@@ -948,7 +948,7 @@ function IdGateScreen({
   onEnqueueManual: (payload: Record<string, unknown>) => string;
   onEnqueueCardCapture: (payload: Record<string, unknown>) => string;
   /**
-   * IDS-5 \u2014 called the moment a scan finalizes (before the flow leaves the
+   * IDS-5 — called the moment a scan finalizes (before the flow leaves the
    * gate) so the parent can arm the burst-drain window that swallows the
    * scanner's trailing keystrokes.
    */
@@ -1053,7 +1053,7 @@ function IdGateScreen({
   // clears the buffer on a partial so no garbage carries into the next scan.
   const captureRef = useRef<IdCaptureState>(emptyIdCaptureState());
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // IDS-6 \u2014 dedicated hidden input SINK for the scanner keystrokes. Root cause
+  // IDS-6 — dedicated hidden input SINK for the scanner keystrokes. Root cause
   // of the iOS "Select All" bubble (verified against the WebKit team's own
   // guidance, bug 231161: CSS -webkit-user-select / -webkit-touch-callout do
   // NOT reliably suppress the callout): the old capture read keydown at the
@@ -1084,7 +1084,7 @@ function IdGateScreen({
       captureRef.current = fin.state;
       setReceiving(false);
       if (fin.payload) {
-        // IDS-5 \u2014 arm the burst drain BEFORE we hand off, so the scanner's
+        // IDS-5 — arm the burst drain BEFORE we hand off, so the scanner's
         // trailing keystrokes (weight/eye color/address after DBB+DBA) are
         // swallowed by the parent guard instead of landing in the cart search.
         onScanFinalizedRef.current();
@@ -1095,7 +1095,7 @@ function IdGateScreen({
     const onKeyDown = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
       // Keystrokes into a REAL form field (the manual DOB inputs, etc.) pass
-      // through untouched. The scan SINK is our own field \u2014 treat its keydowns
+      // through untouched. The scan SINK is our own field — treat its keydowns
       // as scanner input, not as user typing.
       if (t !== sink) {
         const tag = t?.tagName;
@@ -1897,11 +1897,17 @@ function CartScreen({
   /* eslint-disable-next-line react-hooks/set-state-in-effect */
   useEffect(() => setFavorites(parseFavorites(window.localStorage.getItem(FAVORITES_KEY))), []);
   const togglePin = (variantId: string) => {
-    setFavorites((prev) => {
-      const next = toggleFavorite(prev, variantId);
+    // GW-008 (same family as GW-003/GW-001) — compute the next value BEFORE
+    // setState so the updater stays PURE (React may re-invoke updaters), and
+    // guard the write: a quota/private-mode throw must degrade to "the pin
+    // didn't stick past a restart", never crash the cart screen mid-sale.
+    const next = toggleFavorite(favorites, variantId);
+    try {
       window.localStorage.setItem(FAVORITES_KEY, serializeFavorites(next));
-      return next;
-    });
+    } catch {
+      // Best-effort — the pin still works for this session from state.
+    }
+    setFavorites(next);
   };
   // B40 — pins resolve against the LIVE bundle every render: prices/stock are
   // always current and a delisted product never shows a tile.
