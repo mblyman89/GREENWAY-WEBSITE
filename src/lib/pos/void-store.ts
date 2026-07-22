@@ -41,6 +41,9 @@ import { setOrderStatus } from "@/lib/orders/orders-store";
 import { getAccountByCustomer, adjustPoints } from "@/lib/loyalty/loyalty-store";
 import { getPublishedVersion } from "@/lib/pos/menu-version";
 import { statusForLevelTotal } from "@/lib/inventory/sale-decrement-core";
+// GW-011/GW-012: DB-latched restock marker + atomic quantity deltas.
+import { isUniqueViolation } from "@/lib/db/rpc-fallback-core";
+import { applyLotDelta, applyVariantDelta } from "@/lib/inventory/atomic-quantity";
 // Mastering Slice 1: restock lands on the variant's own lot (variant-first key).
 import { lotKeyForSaleLine } from "@/lib/pos/variant-lot-core";
 import { receiptLookupSuffix, clientUuidMatchesReceipt } from "@/lib/pos/returns-core";
@@ -190,7 +193,7 @@ async function restockInventoryForVoid(
   orderId: string,
   lines: VoidableSale["lines"],
 ): Promise<string> {
-  // Idempotency latch (mirrors decrementInventoryForOrder's marker).
+  // Idempotency fast path (mirrors decrementInventoryForOrder's marker).
   const { data: marker } = await admin
     .from("order_events")
     .select("id")
@@ -198,6 +201,26 @@ async function restockInventoryForVoid(
     .eq("event_type", RESTOCK_MARKER)
     .limit(1);
   if (marker && marker.length > 0) return "already restocked";
+
+  // GW-011: CLAIM the marker FIRST — migration 0129's partial unique index
+  // on (order_id, event_type) makes this insert the real latch. Two
+  // concurrent void attempts can both pass the SELECT above, but only ONE
+  // can own this row; the loser sees 23505 and never restocks a second time.
+  const { data: claim, error: claimError } = await admin
+    .from("order_events")
+    .insert({
+      order_id: orderId,
+      event_type: RESTOCK_MARKER,
+      note: "Void restock in progress…",
+      actor_label: "system",
+    })
+    .select("id")
+    .single();
+  if (claimError) {
+    if (isUniqueViolation(claimError)) return "already restocked";
+    throw new Error(`Could not claim the restock marker: ${claimError.message}`);
+  }
+  const claimId = (claim as { id: string }).id;
 
   const notes: string[] = [];
   const productKeys = [...new Set(lines.map((l) => l.productId).filter((k): k is string => !!k))];
@@ -225,9 +248,17 @@ async function restockInventoryForVoid(
       // same preference order the decrement plan used.
       const target = variants.find((v) => v.source_variant_id === line.variantId) ?? variants[0];
       const newLevel = (Number(target.inventory_level) || 0) + line.quantity;
-      await admin.from("menu_variants").update({ inventory_level: newLevel }).eq("id", target.id);
+      // GW-012: atomic DB delta (falls back to the absolute pre-0129). The
+      // RPC returns the REAL post-write level so the status recompute below
+      // sees the truth even when another writer landed in between.
+      const written = await applyVariantDelta(admin, {
+        variantRowId: target.id,
+        delta: line.quantity,
+        fallbackAbsoluteLevel: newLevel,
+      });
+      const effectiveLevel = written.newQty ?? newLevel;
       const total = variants.reduce(
-        (s, v) => s + (v.id === target.id ? newLevel : Number(v.inventory_level) || 0),
+        (s, v) => s + (v.id === target.id ? effectiveLevel : Number(v.inventory_level) || 0),
         0,
       );
       await admin.from("menu_items").update({ inventory_status: statusForLevelTotal(total) }).eq("id", item.id);
@@ -255,20 +286,24 @@ async function restockInventoryForVoid(
       continue;
     }
     const newOnHand = (Number(lot.on_hand_qty) || 0) + line.quantity;
-    await admin
-      .from("inventory_lots")
-      .update(lot.status === "sold_out" ? { on_hand_qty: newOnHand, status: "active" } : { on_hand_qty: newOnHand })
-      .eq("id", lot.id);
+    // GW-012: atomic DB delta; the RPC flips sold_out→active itself when the
+    // quantity rises above 0. Falls back to the absolute + status pre-0129.
+    await applyLotDelta(admin, {
+      lotId: lot.id,
+      delta: line.quantity,
+      clamp: true,
+      fallbackAbsolute:
+        lot.status === "sold_out" ? { onHandQty: newOnHand, status: "active" } : { onHandQty: newOnHand },
+    });
     notes.push(`lot ${line.productName} +${line.quantity}`);
   }
 
   const summary = `Void restock: ${notes.join("; ") || "nothing to restock"}`;
-  await admin.from("order_events").insert({
-    order_id: orderId,
-    event_type: RESTOCK_MARKER,
-    note: summary.slice(0, 2000),
-    actor_label: "system",
-  });
+  // Stamp the claimed latch row with the real summary (claimed FIRST above).
+  await admin
+    .from("order_events")
+    .update({ note: summary.slice(0, 2000) })
+    .eq("id", claimId);
   return summary;
 }
 

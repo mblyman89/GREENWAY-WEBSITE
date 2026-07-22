@@ -39,6 +39,9 @@ import {
 } from "@/lib/inventory/sale-decrement-core";
 import { deriveInventoryExternalId } from "@/lib/compliance/ccrs-identifiers";
 import { isCustomLineProductId } from "@/lib/pos/custom-sale-core";
+// GW-011/GW-012: DB-latched idempotency marker + atomic quantity deltas.
+import { isUniqueViolation } from "@/lib/db/rpc-fallback-core";
+import { applyLotDelta, applyVariantDelta } from "@/lib/inventory/atomic-quantity";
 // Product Mastering Slice 1: sold lines resolve the VARIANT's own lot key
 // (mastered cards carry one lot per size) before the product_id fallback.
 import { lotKeyForSaleLine, lotKeysForLines } from "@/lib/pos/variant-lot-core";
@@ -49,8 +52,14 @@ export async function decrementInventoryForOrder(orderId: string): Promise<void>
   if (!isSupabaseServiceConfigured) return;
   const admin = createSupabaseAdminClient();
 
+  // Hoisted so the catch block can RELEASE a claimed-but-unfinished marker —
+  // otherwise a mid-work crash would leave the latch held and a retry would
+  // skip the decrement forever.
+  let claimId: string | null = null;
+
   try {
     // ── Idempotency: one decrement per order, ever ─────────────────────────
+    // Fast path: a SELECT spares the common re-complete the insert below.
     const { data: marker } = await admin
       .from("order_events")
       .select("id")
@@ -58,6 +67,27 @@ export async function decrementInventoryForOrder(orderId: string): Promise<void>
       .eq("event_type", EVENT_TYPE)
       .limit(1);
     if (marker && marker.length > 0) return;
+
+    // GW-011: CLAIM the marker FIRST. Migration 0129's partial unique index
+    // on (order_id, event_type) makes this insert the real latch — two
+    // concurrent completions can both pass the SELECT above, but only ONE
+    // can own this row; the loser sees 23505 and walks away without touching
+    // stock. The plain-English summary is stamped onto this row at the end.
+    const { data: claim, error: claimError } = await admin
+      .from("order_events")
+      .insert({
+        order_id: orderId,
+        event_type: EVENT_TYPE,
+        note: "Inventory decrement in progress…",
+        actor_label: "system",
+      })
+      .select("id")
+      .single();
+    if (claimError) {
+      if (isUniqueViolation(claimError)) return; // another runner owns it
+      throw new Error(`Could not claim the decrement marker: ${claimError.message}`);
+    }
+    claimId = (claim as { id: string }).id;
 
     const { data: lineRows } = await admin
       .from("order_lines")
@@ -83,7 +113,13 @@ export async function decrementInventoryForOrder(orderId: string): Promise<void>
         productName: r.product_name,
         quantity: r.quantity,
       }));
-    if (lines.length === 0) return;
+    if (lines.length === 0) {
+      await admin
+        .from("order_events")
+        .update({ note: "Inventory decrement: no stock-tracked lines on this order." })
+        .eq("id", claimId);
+      return;
+    }
 
     const productKeys = [...new Set(lines.map((l) => l.productId).filter((k): k is string => !!k))];
 
@@ -118,7 +154,14 @@ export async function decrementInventoryForOrder(orderId: string): Promise<void>
     }
     const variantPlan = buildVariantDecrementPlan(lines, items, variants);
     for (const u of variantPlan.variantUpdates) {
-      await admin.from("menu_variants").update({ inventory_level: u.newLevel }).eq("id", u.rowId);
+      // GW-012: atomic DB delta (deltas combine under concurrency; the old
+      // absolute write let two overlapping sales overwrite each other).
+      // Falls back to the plan's absolute pre-0129.
+      await applyVariantDelta(admin, {
+        variantRowId: u.rowId,
+        delta: u.delta,
+        fallbackAbsoluteLevel: u.newLevel,
+      });
     }
     for (const u of variantPlan.itemStatusUpdates) {
       await admin.from("menu_items").update({ inventory_status: u.newStatus }).eq("id", u.rowId);
@@ -164,10 +207,16 @@ export async function decrementInventoryForOrder(orderId: string): Promise<void>
     }
     const lotPlan = buildLotDecrementPlan(lines, lots);
     for (const u of lotPlan.lotUpdates) {
-      await admin
-        .from("inventory_lots")
-        .update(u.soldOut ? { on_hand_qty: u.newOnHand, status: "sold_out" } : { on_hand_qty: u.newOnHand })
-        .eq("id", u.id);
+      // GW-012: atomic clamped delta; the DB flips active→sold_out at 0
+      // itself. Falls back to the plan's absolute + status pre-0129.
+      await applyLotDelta(admin, {
+        lotId: u.id,
+        delta: u.delta,
+        clamp: true,
+        fallbackAbsolute: u.soldOut
+          ? { onHandQty: u.newOnHand, status: "sold_out" }
+          : { onHandQty: u.newOnHand },
+      });
     }
 
     // ── POS B20: stamp each line's CCRS InventoryExternalIdentifier ───────
@@ -187,22 +236,35 @@ export async function decrementInventoryForOrder(orderId: string): Promise<void>
         .is("ccrs_inventory_external_id", null);
     }
 
-    // ── Marker + human trail (this is also the idempotency latch) ─────────
-    await admin.from("order_events").insert({
-      order_id: orderId,
-      event_type: EVENT_TYPE,
-      note: summarizeDecrement({ variantPlan, lotPlan, lineCount: lines.length }).slice(0, 2000),
-      actor_label: "system",
-    });
+    // ── Human trail: stamp the claimed marker with the real summary ───────
+    // (The latch row itself was inserted FIRST — see the claim above.)
+    await admin
+      .from("order_events")
+      .update({ note: summarizeDecrement({ variantPlan, lotPlan, lineCount: lines.length }).slice(0, 2000) })
+      .eq("id", claimId);
   } catch (err) {
     // Never block or throw past completion — leave a visible failure note.
+    const reason = err instanceof Error ? err.message : String(err);
     try {
-      await admin.from("order_events").insert({
-        order_id: orderId,
-        event_type: "note",
-        note: `Inventory decrement FAILED (stock not reduced — run a cycle count or retry): ${err instanceof Error ? err.message : String(err)}`.slice(0, 2000),
-        actor_label: "system",
-      });
+      if (claimId) {
+        // The latch was claimed and SOME quantities may already be written.
+        // Keep the latch held (releasing it would let a retry decrement the
+        // already-applied part AGAIN) and stamp it with the failure so the
+        // timeline tells staff exactly what to do.
+        await admin
+          .from("order_events")
+          .update({
+            note: `Inventory decrement FAILED partway (${reason}). The latch is kept so a retry cannot double-decrement — reconcile this order's stock with a cycle count.`.slice(0, 2000),
+          })
+          .eq("id", claimId);
+      } else {
+        await admin.from("order_events").insert({
+          order_id: orderId,
+          event_type: "note",
+          note: `Inventory decrement FAILED (stock not reduced — run a cycle count or retry): ${reason}`.slice(0, 2000),
+          actor_label: "system",
+        });
+      }
     } catch {
       // Swallow — completion must survive even a note failure.
     }

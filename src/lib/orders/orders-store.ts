@@ -19,6 +19,7 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import { classifyStatusCasMiss } from "@/lib/orders/status-cas-core";
 import type {
   OrderRow,
   OrderLineRow,
@@ -328,13 +329,35 @@ export async function setOrderStatus(
     if (toStatus === "new") patch.acknowledged_at = null;
   }
 
+  // ── GW-011: TRUE compare-and-swap. The update only lands if the status is
+  //    still the one we read a moment ago — two actors completing the same
+  //    order in the same instant can no longer BOTH win and BOTH run the
+  //    side effects (double inventory decrement, double loyalty earn).
   const { data: updated } = await admin
     .from("orders")
     .update(patch)
     .eq("id", id)
+    .eq("status", fromStatus)
     .select("*")
     .maybeSingle<OrderRow>();
-  if (!updated) return { ok: false, refusal: null };
+  if (!updated) {
+    // CAS miss: somebody changed the order between our read and our write.
+    const { data: after } = await admin
+      .from("orders")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle<OrderRow>();
+    const verdict = classifyStatusCasMiss(toStatus, after?.status ?? null);
+    if (verdict.kind === "converged" && after) {
+      // The other actor made the SAME transition and already ran the side
+      // effects (which are DB-latched anyway) — converge quietly.
+      return { ok: true, order: after };
+    }
+    return {
+      ok: false,
+      refusal: verdict.kind === "conflict" ? verdict.refusal : null,
+    };
+  }
 
   const reversalNote =
     verdict.kind === "reversal"

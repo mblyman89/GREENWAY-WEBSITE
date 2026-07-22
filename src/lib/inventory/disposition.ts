@@ -15,6 +15,8 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+// GW-012: atomic lot quantity writes (strict for reductions).
+import { applyLotDelta } from "@/lib/inventory/atomic-quantity";
 import {
   DEFAULT_SAMPLE_SETTINGS,
   type SampleSettings,
@@ -253,11 +255,22 @@ async function postReduction(
     .single();
   if (insErr || !adj) return { ok: false, error: insErr?.message ?? "Could not post adjustment." };
 
-  const { error: updErr } = await admin
-    .from("inventory_lots")
-    .update({ on_hand_qty: onHand - Math.abs(qtyMagnitude), updated_by: actorId })
-    .eq("id", lotId);
-  if (updErr) return { ok: false, error: updErr.message };
+  // GW-012: atomic STRICT delta — the database refuses the write when it
+  // would take the lot below zero (e.g. a sale consumed the stock between
+  // our on-hand check above and this write). On refusal the adjustment row
+  // is removed so the ledger never describes a removal that didn't happen.
+  const written = await applyLotDelta(admin, {
+    lotId,
+    delta: -Math.abs(qtyMagnitude),
+    clamp: false,
+    actorId,
+    autoStatus: false, // dispositions manage lot status themselves
+    fallbackAbsolute: { onHandQty: onHand - Math.abs(qtyMagnitude), updatedBy: actorId },
+  });
+  if (!written.ok) {
+    await admin.from("inventory_adjustments").delete().eq("id", (adj as { id: string }).id);
+    return { ok: false, error: written.error ?? "Could not update the lot." };
+  }
 
   return { ok: true, adjustmentId: (adj as { id: string }).id };
 }
@@ -289,11 +302,20 @@ async function postAddition(
     .single();
   if (insErr || !adj) return { ok: false, error: insErr?.message ?? "Could not post adjustment." };
 
-  const { error: updErr } = await admin
-    .from("inventory_lots")
-    .update({ on_hand_qty: onHand + Math.abs(qtyMagnitude), updated_by: actorId })
-    .eq("id", lotId);
-  if (updErr) return { ok: false, error: updErr.message };
+  // GW-012: atomic delta — additions can never lose a concurrent writer's
+  // units the way the old absolute write could.
+  const written = await applyLotDelta(admin, {
+    lotId,
+    delta: Math.abs(qtyMagnitude),
+    clamp: true,
+    actorId,
+    autoStatus: false, // dispositions manage lot status themselves
+    fallbackAbsolute: { onHandQty: onHand + Math.abs(qtyMagnitude), updatedBy: actorId },
+  });
+  if (!written.ok) {
+    await admin.from("inventory_adjustments").delete().eq("id", (adj as { id: string }).id);
+    return { ok: false, error: written.error ?? "Could not update the lot." };
+  }
 
   return { ok: true, adjustmentId: (adj as { id: string }).id };
 }

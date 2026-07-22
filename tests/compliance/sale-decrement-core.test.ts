@@ -40,7 +40,8 @@ describe("inventory/sale-decrement-core — variant plan (POS B19)", () => {
       items,
       variants,
     );
-    expect(plan.variantUpdates).toEqual([{ rowId: "v-1", newLevel: 1 }]);
+    // GW-012: delta is the RAW units sold (negative) for the atomic DB write.
+    expect(plan.variantUpdates).toEqual([{ rowId: "v-1", newLevel: 1, delta: -4 }]);
     expect(plan.itemStatusUpdates).toEqual([{ rowId: "item-row-1", newStatus: "low-stock" }]);
     expect(plan.oversold).toHaveLength(0);
   });
@@ -51,7 +52,7 @@ describe("inventory/sale-decrement-core — variant plan (POS B19)", () => {
       items,
       variants,
     );
-    expect(plan.variantUpdates).toEqual([{ rowId: "v-2", newLevel: 0 }]);
+    expect(plan.variantUpdates).toEqual([{ rowId: "v-2", newLevel: 0, delta: -2 }]);
   });
 
   it("clamps oversell at 0, reports it, and flips a tracked item to unavailable", () => {
@@ -94,9 +95,11 @@ describe("inventory/sale-decrement-core — lot plan (POS B19)", () => {
       [{ lineId: "l1", productId: "prod-1", variantId: null, productName: "BD", quantity: 3 }],
       lots,
     );
+    // GW-012: delta = units consumed from THAT lot (negative), for the
+    // atomic DB write.
     expect(plan.lotUpdates).toEqual([
-      { id: "lot-a", posProductKey: "prod-1", newOnHand: 0, soldOut: true },
-      { id: "lot-b", posProductKey: "prod-1", newOnHand: 4, soldOut: false },
+      { id: "lot-a", posProductKey: "prod-1", newOnHand: 0, soldOut: true, delta: -2 },
+      { id: "lot-b", posProductKey: "prod-1", newOnHand: 4, soldOut: false, delta: -1 },
     ]);
     expect(plan.shortfalls).toHaveLength(0);
   });

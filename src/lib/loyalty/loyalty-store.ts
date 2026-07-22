@@ -9,6 +9,7 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import { isUniqueViolation } from "@/lib/db/rpc-fallback-core";
 import { pacificParts } from "@/lib/reports/timezone";
 import {
   type LoyaltyConfig,
@@ -196,9 +197,9 @@ async function applyLedger(opts: {
   redemptionId?: string | null;
   note?: string | null;
   actorId?: string | null;
-}): Promise<void> {
+}): Promise<{ ok: boolean; duplicate: boolean }> {
   const admin = createSupabaseAdminClient();
-  await admin.from("loyalty_ledger").insert({
+  const { error } = await admin.from("loyalty_ledger").insert({
     account_id: opts.accountId,
     kind: opts.kind,
     points: opts.points,
@@ -209,6 +210,15 @@ async function applyLedger(opts: {
     note: opts.note ?? null,
     created_by: opts.actorId ?? null,
   });
+  if (error) {
+    // GW-011: migration 0129's partial unique index (one EARN per order)
+    // makes the INSERT itself the idempotency latch — a concurrent double
+    // completion loses here instead of double-paying points. The caches are
+    // still recomputed below (harmless, self-healing) so the winner's row is
+    // reflected regardless of who recomputes last.
+    if (!isUniqueViolation(error)) return { ok: false, duplicate: false };
+    return { ok: true, duplicate: true };
+  }
 
   // S-20 race fix: the cached balance/lifetime were previously incremented
   // from a value read moments earlier (read-modify-write), so two concurrent
@@ -229,6 +239,7 @@ async function applyLedger(opts: {
     .from("loyalty_accounts")
     .update({ balance_points: newBalance, lifetime_points: newLifetime, tier_id: tier?.id ?? null })
     .eq("id", opts.accountId);
+  return { ok: true, duplicate: false };
 }
 
 export async function recentLedger(accountId: string, limit = 50): Promise<LedgerRow[]> {
@@ -257,7 +268,10 @@ export async function accrueForOrder(opts: {
   if (!isSupabaseServiceConfigured) return { ok: false, points: 0 };
   const admin = createSupabaseAdminClient();
 
-  // idempotency: already accrued for this order?
+  // Idempotency fast path: already accrued for this order? (The REAL latch
+  // is migration 0129's unique index — the insert below refuses a duplicate
+  // even when two completions race past this SELECT together; see
+  // applyLedger.)
   const { data: existing } = await admin
     .from("loyalty_ledger")
     .select("id")
@@ -278,7 +292,7 @@ export async function accrueForOrder(opts: {
   const { points, promotionId } = earnedPoints(base, promos, when, hour);
   if (points <= 0) return { ok: true, points: 0 };
 
-  await applyLedger({
+  const applied = await applyLedger({
     accountId: enrolled.account.id,
     kind: "earn",
     points,
@@ -288,7 +302,10 @@ export async function accrueForOrder(opts: {
     note: `Earned on $${(opts.subtotalMinor / 100).toFixed(2)} pretax`,
     actorId: opts.actorId ?? null,
   });
-  return { ok: true, points };
+  // A duplicate means a concurrent completion already paid these points —
+  // report 0 so no caller double-announces the earn.
+  if (applied.duplicate) return { ok: true, points: 0 };
+  return { ok: applied.ok, points: applied.ok ? points : 0 };
 }
 
 /**

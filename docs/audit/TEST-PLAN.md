@@ -570,6 +570,11 @@ gate). You will walk the happy path first, then rattle every gate.*
 - **Expect:** it appears within a minute or two with the same total, the
   right register, the right employee, and inventory decremented by
   exactly the units sold (spot-check one product's count before/after).
+- **✅ GW-011/GW-012 FIXED (PR #636):** "exactly once" is now enforced by
+  the database itself — the decrement claims a unique latch row first
+  (migration 0129), and quantity changes are applied as locked atomic
+  deltas, so two overlapping completions can no longer decrement twice
+  or overwrite each other's counts. See T-118 for the concurrency drill.
 
 #### T-054 — Cancel paths are clean
 - **Do:** start a sale, pass the gate, add items — then cancel out
@@ -715,6 +720,9 @@ enforce your own rules.*
 - **Expect:** inventory restocks (check the count), loyalty claws back,
   and the sale is marked voided — never deleted. Tomorrow, try to void
   today's other sale: refused — the answer for yesterday is a RETURN.
+- **Note (GW-011/GW-012 fix, PR #636):** the restock is now latched by a
+  unique claim row (migration 0129) and applied as an atomic delta, so a
+  double-submitted void can never restock the same sale twice.
 
 #### T-075 — Holds park the cart, not the rules
 - **Do:** build a cart, put it on hold. Resume it 5 minutes later.
@@ -813,6 +821,10 @@ the banner is missing while test mode is on, that itself is a bug.*
   attached to them.
 - **Expect:** points appear after completion — whole points only, earned
   on the pre-tax amount (never on tax), exactly once per order.
+- **✅ GW-011 FIXED (PR #636):** "exactly once per order" is now a
+  database guarantee — migration 0129 adds a unique index so a second
+  earn row for the same order is physically impossible, and the code
+  treats that refusal as "already earned" (no error, no double points).
 
 #### T-091 — Redemption at the register
 - **Do:** attach the member, redeem points against a cart.
@@ -985,6 +997,9 @@ the banner is missing while test mode is on, that itself is a bug.*
 - **Expect:** the sheet never shows you the expected quantity while
   counting (blind). Apply the count: stock corrects, each applied line
   is latched — applying the session again must NOT double-apply.
+- **Note (GW-012 fix, PR #636):** the variance posting now applies as an
+  atomic delta, so a count landing at the same instant as a sale can no
+  longer overwrite the sale's decrement (or vice versa).
 
 #### T-114 — Every adjustment has a reason and a name
 - **Do:** make a manual adjustment (damage, sample, etc.). Then open the
@@ -1009,6 +1024,29 @@ the banner is missing while test mode is on, that itself is a bug.*
 - **Do:** schedule a destruction disposition.
 - **Expect:** it cannot COMPLETE before the required hold window passes
   (the earliest-destroy date is enforced).
+
+#### T-118 — Two hands on the same order (concurrency guards)
+- **Why this exists:** GW-011/GW-012 (fixed in PR #636) found that two
+  people completing the SAME order at the same instant could decrement
+  inventory twice and pay loyalty points twice, and that two overlapping
+  sales of the same product could silently lose a quantity update.
+- **Do (needs two devices):** bring one order to "ready". On the laptop
+  AND a second device, open it and click Complete as close to
+  simultaneously as you can manage. Repeat a few times if the timing
+  feels off.
+- **Expect:** the order completes exactly ONCE. One click wins; the
+  other either quietly agrees ("already completed") or refuses naming
+  the current status — never an error page, never a second completion.
+  Inventory moves by exactly the units sold (check the count) and the
+  member earns points exactly once.
+- **Also (after running migration 0129):** run the three review queries
+  at the bottom of `supabase/migrations/0129_concurrency_guards.sql` in
+  the Supabase SQL editor — A confirms the safety indexes exist, B must
+  return zero double-earn rows, C must return zero negative lots.
+- **Also:** try a manual stock reduction (disposition) LARGER than what's
+  on hand — it must be refused naming the shortfall, and no adjustment
+  row may be left behind. Stock can never go negative; the database now
+  refuses it outright.
 
 ---
 

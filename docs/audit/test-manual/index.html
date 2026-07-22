@@ -789,6 +789,11 @@ gate). You will walk the happy path first, then rattle every gate.</em></p>
 <li><strong>Expect:</strong> it appears within a minute or two with the same total, the
   right register, the right employee, and inventory decremented by
   exactly the units sold (spot-check one product's count before/after).</li>
+<li><strong>✅ GW-011/GW-012 FIXED (PR #636):</strong> "exactly once" is now enforced by
+  the database itself — the decrement claims a unique latch row first
+  (migration 0129), and quantity changes are applied as locked atomic
+  deltas, so two overlapping completions can no longer decrement twice
+  or overwrite each other's counts. See T-118 for the concurrency drill.</li>
 </ul>
 <h4 id="t-054-cancel-paths-are-clean">T-054 — Cancel paths are clean</h4>
 <div class="tracker" data-test="T-054"></div>
@@ -955,6 +960,9 @@ enforce your own rules.</em></p>
 <li><strong>Expect:</strong> inventory restocks (check the count), loyalty claws back,
   and the sale is marked voided — never deleted. Tomorrow, try to void
   today's other sale: refused — the answer for yesterday is a RETURN.</li>
+<li><strong>Note (GW-011/GW-012 fix, PR #636):</strong> the restock is now latched by a
+  unique claim row (migration 0129) and applied as an atomic delta, so a
+  double-submitted void can never restock the same sale twice.</li>
 </ul>
 <h4 id="t-075-holds-park-the-cart-not-the-rules">T-075 — Holds park the cart, not the rules</h4>
 <div class="tracker" data-test="T-075"></div>
@@ -1070,6 +1078,10 @@ the banner is missing while test mode is on, that itself is a bug.</em></p>
   attached to them.</li>
 <li><strong>Expect:</strong> points appear after completion — whole points only, earned
   on the pre-tax amount (never on tax), exactly once per order.</li>
+<li><strong>✅ GW-011 FIXED (PR #636):</strong> "exactly once per order" is now a
+  database guarantee — migration 0129 adds a unique index so a second
+  earn row for the same order is physically impossible, and the code
+  treats that refusal as "already earned" (no error, no double points).</li>
 </ul>
 <h4 id="t-091-redemption-at-the-register">T-091 — Redemption at the register</h4>
 <div class="tracker" data-test="T-091"></div>
@@ -1280,6 +1292,9 @@ the banner is missing while test mode is on, that itself is a bug.</em></p>
 <li><strong>Expect:</strong> the sheet never shows you the expected quantity while
   counting (blind). Apply the count: stock corrects, each applied line
   is latched — applying the session again must NOT double-apply.</li>
+<li><strong>Note (GW-012 fix, PR #636):</strong> the variance posting now applies as an
+  atomic delta, so a count landing at the same instant as a sale can no
+  longer overwrite the sale's decrement (or vice versa).</li>
 </ul>
 <h4 id="t-114-every-adjustment-has-a-reason-and-a-name">T-114 — Every adjustment has a reason and a name</h4>
 <div class="tracker" data-test="T-114"></div>
@@ -1312,6 +1327,31 @@ the banner is missing while test mode is on, that itself is a bug.</em></p>
 <li><strong>Do:</strong> schedule a destruction disposition.</li>
 <li><strong>Expect:</strong> it cannot COMPLETE before the required hold window passes
   (the earliest-destroy date is enforced).</li>
+</ul>
+<h4 id="t-118-two-hands-on-the-same-order-concurrency-guards">T-118 — Two hands on the same order (concurrency guards)</h4>
+<div class="tracker" data-test="T-118"></div>
+<ul>
+<li><strong>Why this exists:</strong> GW-011/GW-012 (fixed in PR #636) found that two
+  people completing the SAME order at the same instant could decrement
+  inventory twice and pay loyalty points twice, and that two overlapping
+  sales of the same product could silently lose a quantity update.</li>
+<li><strong>Do (needs two devices):</strong> bring one order to "ready". On the laptop
+  AND a second device, open it and click Complete as close to
+  simultaneously as you can manage. Repeat a few times if the timing
+  feels off.</li>
+<li><strong>Expect:</strong> the order completes exactly ONCE. One click wins; the
+  other either quietly agrees ("already completed") or refuses naming
+  the current status — never an error page, never a second completion.
+  Inventory moves by exactly the units sold (check the count) and the
+  member earns points exactly once.</li>
+<li><strong>Also (after running migration 0129):</strong> run the three review queries
+  at the bottom of <code>supabase/migrations/0129_concurrency_guards.sql</code> in
+  the Supabase SQL editor — A confirms the safety indexes exist, B must
+  return zero double-earn rows, C must return zero negative lots.</li>
+<li><strong>Also:</strong> try a manual stock reduction (disposition) LARGER than what's
+  on hand — it must be refused naming the shortfall, and no adjustment
+  row may be left behind. Stock can never go negative; the database now
+  refuses it outright.</li>
 </ul>
 <hr />
 <p><a id="phase-10"></a></p>
@@ -1660,8 +1700,8 @@ must name the test IDs that verify it.</em></p>
 </dialog>
 
 <script>
-const TEST_IDS = ["T-001", "T-002", "T-003", "T-004", "T-005", "T-006", "T-007", "T-008", "T-010", "T-011", "T-012", "T-013", "T-014", "T-015", "T-016", "T-017", "T-018", "T-020", "T-021", "T-022", "T-023", "T-024", "T-025", "T-026", "T-027", "T-028", "T-029", "T-030", "T-040", "T-041", "T-042", "T-043", "T-044", "T-045", "T-046", "T-047", "T-048", "T-049", "T-050", "T-051", "T-052", "T-053", "T-054", "T-060", "T-061", "T-062", "T-063", "T-064", "T-065", "T-066", "T-067", "T-070", "T-071", "T-072", "T-073", "T-074", "T-075", "T-076", "T-077", "T-080", "T-081", "T-082", "T-083", "T-084", "T-085", "T-086", "T-090", "T-091", "T-092", "T-093", "T-094", "T-095", "T-096", "T-097", "T-098", "T-100", "T-101", "T-102", "T-103", "T-104", "T-105", "T-106", "T-107", "T-108", "T-109", "T-110", "T-111", "T-112", "T-113", "T-114", "T-115", "T-116", "T-117", "T-120", "T-121", "T-122", "T-123", "T-124", "T-130", "T-131", "T-132", "T-133", "T-134", "T-135", "T-136", "T-137", "T-138", "T-140", "T-141", "T-142", "T-143", "T-144", "T-145", "T-146", "T-147", "T-148", "T-149", "T-150", "T-151", "T-152", "T-153", "T-154", "T-155", "T-156", "T-157", "T-158", "T-159", "T-160", "T-161", "T-162"];
-const PHASE_OF = {"T-001": "phase-0", "T-002": "phase-0", "T-003": "phase-0", "T-004": "phase-0", "T-005": "phase-0", "T-006": "phase-0", "T-007": "phase-0", "T-008": "phase-0", "T-010": "phase-1", "T-011": "phase-1", "T-012": "phase-1", "T-013": "phase-1", "T-014": "phase-1", "T-015": "phase-1", "T-016": "phase-1", "T-017": "phase-1", "T-018": "phase-1", "T-020": "phase-2", "T-021": "phase-2", "T-022": "phase-2", "T-023": "phase-2", "T-024": "phase-2", "T-025": "phase-2", "T-026": "phase-2", "T-027": "phase-2", "T-028": "phase-2", "T-029": "phase-2", "T-030": "phase-2", "T-040": "phase-3", "T-041": "phase-3", "T-042": "phase-3", "T-043": "phase-3", "T-044": "phase-3", "T-045": "phase-3", "T-046": "phase-3", "T-047": "phase-3", "T-048": "phase-3", "T-049": "phase-3", "T-050": "phase-3", "T-051": "phase-3", "T-052": "phase-3", "T-053": "phase-3", "T-054": "phase-3", "T-060": "phase-4", "T-061": "phase-4", "T-062": "phase-4", "T-063": "phase-4", "T-064": "phase-4", "T-065": "phase-4", "T-066": "phase-4", "T-067": "phase-4", "T-070": "phase-5", "T-071": "phase-5", "T-072": "phase-5", "T-073": "phase-5", "T-074": "phase-5", "T-075": "phase-5", "T-076": "phase-5", "T-077": "phase-5", "T-080": "phase-6", "T-081": "phase-6", "T-082": "phase-6", "T-083": "phase-6", "T-084": "phase-6", "T-085": "phase-6", "T-086": "phase-6", "T-090": "phase-7", "T-091": "phase-7", "T-092": "phase-7", "T-093": "phase-7", "T-094": "phase-7", "T-095": "phase-7", "T-096": "phase-7", "T-097": "phase-7", "T-098": "phase-7", "T-100": "phase-8", "T-101": "phase-8", "T-102": "phase-8", "T-103": "phase-8", "T-104": "phase-8", "T-105": "phase-8", "T-106": "phase-8", "T-107": "phase-8", "T-108": "phase-8", "T-109": "phase-8", "T-110": "phase-9", "T-111": "phase-9", "T-112": "phase-9", "T-113": "phase-9", "T-114": "phase-9", "T-115": "phase-9", "T-116": "phase-9", "T-117": "phase-9", "T-120": "phase-10", "T-121": "phase-10", "T-122": "phase-10", "T-123": "phase-10", "T-124": "phase-10", "T-130": "phase-11", "T-131": "phase-11", "T-132": "phase-11", "T-133": "phase-11", "T-134": "phase-11", "T-135": "phase-11", "T-136": "phase-11", "T-137": "phase-11", "T-138": "phase-11", "T-140": "phase-12", "T-141": "phase-12", "T-142": "phase-12", "T-143": "phase-12", "T-144": "phase-12", "T-145": "phase-12", "T-146": "phase-12", "T-147": "phase-12", "T-148": "phase-12", "T-149": "phase-12", "T-150": "phase-12", "T-151": "phase-12", "T-152": "phase-12", "T-153": "phase-12", "T-154": "phase-12", "T-155": "phase-12", "T-156": "phase-12", "T-157": "phase-12", "T-158": "phase-12", "T-159": "phase-12", "T-160": "phase-12", "T-161": "phase-12", "T-162": "phase-12"};
+const TEST_IDS = ["T-001", "T-002", "T-003", "T-004", "T-005", "T-006", "T-007", "T-008", "T-010", "T-011", "T-012", "T-013", "T-014", "T-015", "T-016", "T-017", "T-018", "T-020", "T-021", "T-022", "T-023", "T-024", "T-025", "T-026", "T-027", "T-028", "T-029", "T-030", "T-040", "T-041", "T-042", "T-043", "T-044", "T-045", "T-046", "T-047", "T-048", "T-049", "T-050", "T-051", "T-052", "T-053", "T-054", "T-060", "T-061", "T-062", "T-063", "T-064", "T-065", "T-066", "T-067", "T-070", "T-071", "T-072", "T-073", "T-074", "T-075", "T-076", "T-077", "T-080", "T-081", "T-082", "T-083", "T-084", "T-085", "T-086", "T-090", "T-091", "T-092", "T-093", "T-094", "T-095", "T-096", "T-097", "T-098", "T-100", "T-101", "T-102", "T-103", "T-104", "T-105", "T-106", "T-107", "T-108", "T-109", "T-110", "T-111", "T-112", "T-113", "T-114", "T-115", "T-116", "T-117", "T-118", "T-120", "T-121", "T-122", "T-123", "T-124", "T-130", "T-131", "T-132", "T-133", "T-134", "T-135", "T-136", "T-137", "T-138", "T-140", "T-141", "T-142", "T-143", "T-144", "T-145", "T-146", "T-147", "T-148", "T-149", "T-150", "T-151", "T-152", "T-153", "T-154", "T-155", "T-156", "T-157", "T-158", "T-159", "T-160", "T-161", "T-162"];
+const PHASE_OF = {"T-001": "phase-0", "T-002": "phase-0", "T-003": "phase-0", "T-004": "phase-0", "T-005": "phase-0", "T-006": "phase-0", "T-007": "phase-0", "T-008": "phase-0", "T-010": "phase-1", "T-011": "phase-1", "T-012": "phase-1", "T-013": "phase-1", "T-014": "phase-1", "T-015": "phase-1", "T-016": "phase-1", "T-017": "phase-1", "T-018": "phase-1", "T-020": "phase-2", "T-021": "phase-2", "T-022": "phase-2", "T-023": "phase-2", "T-024": "phase-2", "T-025": "phase-2", "T-026": "phase-2", "T-027": "phase-2", "T-028": "phase-2", "T-029": "phase-2", "T-030": "phase-2", "T-040": "phase-3", "T-041": "phase-3", "T-042": "phase-3", "T-043": "phase-3", "T-044": "phase-3", "T-045": "phase-3", "T-046": "phase-3", "T-047": "phase-3", "T-048": "phase-3", "T-049": "phase-3", "T-050": "phase-3", "T-051": "phase-3", "T-052": "phase-3", "T-053": "phase-3", "T-054": "phase-3", "T-060": "phase-4", "T-061": "phase-4", "T-062": "phase-4", "T-063": "phase-4", "T-064": "phase-4", "T-065": "phase-4", "T-066": "phase-4", "T-067": "phase-4", "T-070": "phase-5", "T-071": "phase-5", "T-072": "phase-5", "T-073": "phase-5", "T-074": "phase-5", "T-075": "phase-5", "T-076": "phase-5", "T-077": "phase-5", "T-080": "phase-6", "T-081": "phase-6", "T-082": "phase-6", "T-083": "phase-6", "T-084": "phase-6", "T-085": "phase-6", "T-086": "phase-6", "T-090": "phase-7", "T-091": "phase-7", "T-092": "phase-7", "T-093": "phase-7", "T-094": "phase-7", "T-095": "phase-7", "T-096": "phase-7", "T-097": "phase-7", "T-098": "phase-7", "T-100": "phase-8", "T-101": "phase-8", "T-102": "phase-8", "T-103": "phase-8", "T-104": "phase-8", "T-105": "phase-8", "T-106": "phase-8", "T-107": "phase-8", "T-108": "phase-8", "T-109": "phase-8", "T-110": "phase-9", "T-111": "phase-9", "T-112": "phase-9", "T-113": "phase-9", "T-114": "phase-9", "T-115": "phase-9", "T-116": "phase-9", "T-117": "phase-9", "T-118": "phase-9", "T-120": "phase-10", "T-121": "phase-10", "T-122": "phase-10", "T-123": "phase-10", "T-124": "phase-10", "T-130": "phase-11", "T-131": "phase-11", "T-132": "phase-11", "T-133": "phase-11", "T-134": "phase-11", "T-135": "phase-11", "T-136": "phase-11", "T-137": "phase-11", "T-138": "phase-11", "T-140": "phase-12", "T-141": "phase-12", "T-142": "phase-12", "T-143": "phase-12", "T-144": "phase-12", "T-145": "phase-12", "T-146": "phase-12", "T-147": "phase-12", "T-148": "phase-12", "T-149": "phase-12", "T-150": "phase-12", "T-151": "phase-12", "T-152": "phase-12", "T-153": "phase-12", "T-154": "phase-12", "T-155": "phase-12", "T-156": "phase-12", "T-157": "phase-12", "T-158": "phase-12", "T-159": "phase-12", "T-160": "phase-12", "T-161": "phase-12", "T-162": "phase-12"};
 const KEY = "gw-test-manual-v1";
 
 function loadState() {

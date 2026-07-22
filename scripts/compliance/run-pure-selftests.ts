@@ -48,6 +48,8 @@ import { __runIdScanCoreTests } from "../../src/lib/pos/id-scan-core";
 import { __runPosSyncCoreTests } from "../../src/lib/pos/sync-core";
 import { __runPendingRecoveryCoreTests } from "../../src/lib/pos/pending-recovery-core";
 import { __runNotifyOutcomeCoreTests } from "../../src/lib/orders/notify-outcome-core";
+import { __runStatusCasCoreTests } from "../../src/lib/orders/status-cas-core";
+import { __runRpcFallbackCoreTests } from "../../src/lib/db/rpc-fallback-core";
 import { __runRegisterClientCoreTests } from "../../src/lib/pos/register-client-core";
 import { __runRegisterPolishCoreTests } from "../../src/lib/pos/register-polish-core";
 import { __runSaleFlowCoreTests } from "../../src/lib/pos/sale-flow-core";
@@ -161,6 +163,8 @@ async function main() {
   __runPosSyncCoreTests();
   __runPendingRecoveryCoreTests();
   __runNotifyOutcomeCoreTests();
+  __runStatusCasCoreTests();
+  __runRpcFallbackCoreTests();
   __runRegisterClientCoreTests();
   __runRegisterPolishCoreTests();
   __runSaleFlowCoreTests();

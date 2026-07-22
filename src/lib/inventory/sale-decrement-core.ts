@@ -85,7 +85,13 @@ export type ItemForDecrement = {
 };
 
 export type VariantDecrementPlan = {
-  variantUpdates: { rowId: string; newLevel: number }[];
+  /**
+   * newLevel = the plan's clamped absolute (legacy/pre-0129 fallback write);
+   * delta    = the RAW units sold (negative), for the atomic DB delta —
+   *            under concurrency deltas COMBINE where absolutes overwrite
+   *            (GW-012).
+   */
+  variantUpdates: { rowId: string; newLevel: number; delta: number }[];
   itemStatusUpdates: { rowId: string; newStatus: InventoryStatusSlug }[];
   /** Human notes: lines that sold more than the tracked level (clamped to 0). */
   oversold: string[];
@@ -109,7 +115,9 @@ export type LotForDecrement = {
 };
 
 export type LotDecrementPlan = {
-  lotUpdates: { id: string; posProductKey: string; newOnHand: number; soldOut: boolean }[];
+  /** newOnHand = legacy absolute; delta = raw units consumed (negative) for
+   *  the atomic DB write (GW-012 — deltas combine, absolutes overwrite). */
+  lotUpdates: { id: string; posProductKey: string; newOnHand: number; soldOut: boolean; delta: number }[];
   /**
    * POS B20: product key → the CCRS external id of the FIRST (oldest) lot the
    * sale consumed. Used to stamp order_lines.ccrs_inventory_external_id so the
@@ -164,6 +172,9 @@ export function buildVariantDecrementPlan(
   const workingLevel = new Map<string, number>(
     variants.map((v) => [v.rowId, Math.trunc(Number(v.inventoryLevel) || 0)]),
   );
+  // GW-012: raw units sold per variant — the atomic-delta path sends THIS to
+  // the database (deltas combine under concurrency; absolutes overwrite).
+  const soldByVariant = new Map<string, number>();
   const touchedVariantRows = new Set<string>();
   const touchedItemRows = new Set<string>();
   const oversold: string[] = [];
@@ -204,6 +215,7 @@ export function buildVariantDecrementPlan(
       );
     }
     workingLevel.set(variant.rowId, Math.max(0, after));
+    soldByVariant.set(variant.rowId, (soldByVariant.get(variant.rowId) ?? 0) + qty);
     touchedVariantRows.add(variant.rowId);
     touchedItemRows.add(item.rowId);
   }
@@ -211,6 +223,7 @@ export function buildVariantDecrementPlan(
   const variantUpdates = [...touchedVariantRows].map((rowId) => ({
     rowId,
     newLevel: workingLevel.get(rowId) ?? 0,
+    delta: -(soldByVariant.get(rowId) ?? 0),
   }));
 
   // Item status recompute — guarded to items that TRACKED stock pre-sale.
@@ -251,7 +264,7 @@ export function buildLotDecrementPlan(
     demand.set(key, (demand.get(key) ?? 0) + qty);
   }
 
-  const lotUpdates: { id: string; posProductKey: string; newOnHand: number; soldOut: boolean }[] = [];
+  const lotUpdates: { id: string; posProductKey: string; newOnHand: number; soldOut: boolean; delta: number }[] = [];
   const lineExternalIds = new Map<string, string>();
   const shortfalls: string[] = [];
 
@@ -265,7 +278,7 @@ export function buildLotDecrementPlan(
       const take = Math.min(onHand, remaining);
       remaining -= take;
       const newOnHand = onHand - take;
-      lotUpdates.push({ id: lot.id, posProductKey: key, newOnHand, soldOut: newOnHand === 0 });
+      lotUpdates.push({ id: lot.id, posProductKey: key, newOnHand, soldOut: newOnHand === 0, delta: -take });
       // POS B20: the FIRST (oldest) consumed lot's canonical CCRS id stamps
       // the sale lines for this product key — matching the FIFO consumption.
       const extId = (lot.ccrsExternalId ?? "").trim();
@@ -348,6 +361,7 @@ export function __runSaleDecrementCoreTests(): void {
     variants,
   );
   ok(p1.variantUpdates.length === 1 && p1.variantUpdates[0].rowId === "v-1" && p1.variantUpdates[0].newLevel === 1, "explicit variant decremented 5→1");
+  ok(p1.variantUpdates[0].delta === -4, "GW-012: raw delta carried for the atomic DB write");
   ok(p1.itemStatusUpdates.length === 1 && p1.itemStatusUpdates[0].newStatus === "low-stock", "item recomputed to low-stock (1+2=3)");
   ok(p1.oversold.length === 0 && p1.unmatched.length === 0, "clean plan has no notes");
 
@@ -370,6 +384,7 @@ export function __runSaleDecrementCoreTests(): void {
     variants,
   );
   ok(p3.variantUpdates[0]?.newLevel === 0, "oversell clamped at 0");
+  ok(p3.variantUpdates[0]?.delta === -3, "GW-012: oversell delta stays RAW (DB clamps, absolutes don't combine)");
   ok(p3.oversold.length === 1, "oversell reported");
   ok(p3.itemStatusUpdates[0]?.newStatus === "unavailable", "tracked item flips to unavailable");
 
@@ -415,6 +430,7 @@ export function __runSaleDecrementCoreTests(): void {
   ok(lp1.lotUpdates.length === 2, "FIFO spans two lots");
   ok(lp1.lotUpdates[0].id === "lot-a" && lp1.lotUpdates[0].newOnHand === 0 && lp1.lotUpdates[0].soldOut, "oldest lot drained first and marked sold out");
   ok(lp1.lotUpdates[1].id === "lot-b" && lp1.lotUpdates[1].newOnHand === 4 && !lp1.lotUpdates[1].soldOut, "second lot partially consumed");
+  ok(lp1.lotUpdates[0].delta === -2 && lp1.lotUpdates[1].delta === -1, "GW-012: per-lot deltas match the FIFO takes");
   ok(lp1.shortfalls.length === 0, "no shortfall when lots cover demand");
   ok(lp1.lineExternalIds.get("prod-1") === "LOT-A-CCRS", "B20: FIRST consumed lot's CCRS id stamps the key");
 
