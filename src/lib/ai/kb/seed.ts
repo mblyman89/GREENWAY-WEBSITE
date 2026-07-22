@@ -661,7 +661,8 @@ export const SEED_PRODUCT_FORMATS: SeedProductFormat[] = [
     potency_note: "Runs noticeably HIGHER THC than the base flower thanks to the added concentrate (WSLCB).",
     house_note:
       "The pre-roll's turbo cousin. When a regular joint feels a little too polite, this is the one. " +
-      "One for seasoned heads — it earns its keep.",
+      "One for seasoned heads — it earns its keep. Heads up: because it contains concentrate, it " +
+      "counts toward the 7-gram concentrate purchase limit, not the 1-ounce flower limit.",
     aliases: ["infused pre-roll", "infused joint", "infused preroll", "diamond-infused", "kief-coated"],
     sources: [WSLCB_PRODUCTS],
     confidence: 0.94,
@@ -906,7 +907,8 @@ export const SEED_COMPLIANCE_RULES: SeedComplianceRule[] = [
     house_note:
       "Think of it as a per-visit basket limit set by the state. Our register keeps the math honest so " +
       "you never have to — if a cart runs over, we'll help you adjust. Registered medical patients get " +
-      "higher limits.",
+      "higher limits. Heads up: infused pre-rolls, infused blunts, and infused flower count toward the " +
+      "concentrate limit, not the flower limit.",
     severity: "important",
     citation: "WAC 314-55-095",
     sources: [WSLCB_USING],

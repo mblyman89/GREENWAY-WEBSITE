@@ -23,6 +23,14 @@
  * NOTE: This is an in-transaction limit (per RCW 69.50.360), which CCRS / LCB
  * enforce per sale. We deliberately do not invent a rolling "daily" window the
  * statute doesn't define; the configurable settings let the owner tighten it.
+ *
+ * MIX-INFUSED RULE (owner-directed compliance fix, verified against the WAC):
+ * Infused flower, infused prerolls, infused blunts, and infused preroll packs
+ * are "cannabis mix infused" (WAC 314-55-010(8)) — flower combined with
+ * concentrate for inhalation. They count against the 7 g CONCENTRATE bucket
+ * (WAC 314-55-095(1)(d)(i)(C)), NOT the 28 g flower bucket. The whole unit
+ * weight counts (conservative; labels don't state the flower/concentrate
+ * split and under-counting concentrate is the enforcement risk).
  */
 
 export const GRAMS_PER_OUNCE = 28; // WA statute treats 1 oz useable = 28 g.
@@ -40,7 +48,7 @@ export const LIMIT_BUCKETS: readonly LimitBucket[] = [
 export const LIMIT_BUCKET_LABELS: Record<LimitBucket, string> = {
   usable: "Useable cannabis (flower-equivalent)",
   solid_edible: "Solid infused edibles",
-  concentrate: "Concentrate / extract for inhalation",
+  concentrate: "Concentrate / extract (incl. infused prerolls & flower)",
   liquid_edible: "Liquid infused products",
 };
 
@@ -75,23 +83,28 @@ export const MEDICAL_LIMITS: LimitProfile = {
 export function categoryToBucket(category: string | null | undefined): LimitBucket | null {
   const c = (category ?? "").trim().toLowerCase();
   switch (c) {
-    // Flower / useable cannabis
+    // Flower / useable cannabis — WAC 314-55-095(1)(d)(i)(A): 1 oz.
     case "flower":
     case "popcorn-bud":
-    case "infused-flower":
     case "trim":
     case "preroll":
     case "blunt":
     case "preroll-pack":
+      return "usable";
+    // Concentrate / extract for inhalation — WAC 314-55-095(1)(d)(i)(C): 7 g.
+    // INFUSED flower/prerolls/blunts are "cannabis mix infused" products
+    // (WAC 314-55-010(8): cannabis mix combined with other intermediate
+    // products, i.e., concentrate) intended for inhalation. The conservative
+    // reading — and the store's policy — counts the WHOLE unit against the
+    // 7 g concentrate limit, never the 28 g flower limit.
+    case "infused-flower":
     case "infused-preroll":
     case "infused-blunt":
     case "infused-preroll-pack":
-      return "usable";
-    // Concentrate / extract for inhalation
     case "cartridge":
     case "disposable-cartridge":
     case "concentrate":
-    case "rso":
+    case "rso": // RSO is an extract; 7 g bucket is the tighter, safer read.
       return "concentrate";
     // Solid edibles
     case "edible-solid":
@@ -160,6 +173,14 @@ export function bucketCategories(): Record<LimitBucket, string[]> {
  * Default grams-equivalent contributed by ONE unit of a given category. These
  * are conservative defaults the owner can override per-category in settings.
  * For useable: a typical retail unit is 3.5 g; prerolls ~1 g; packs larger.
+ *
+ * INFUSED (mix-infused) categories count their WHOLE unit weight against the
+ * 7 g concentrate bucket (see categoryToBucket) — deliberately conservative:
+ * we never try to split a mix-infused unit into "flower grams" vs
+ * "concentrate grams", because the label doesn't state the split and
+ * under-counting the concentrate portion is the compliance risk. AN-1: when
+ * the variant's true per-unit weight is parsed from the label, that weight
+ * rides along on the cart line and overrides these defaults.
  */
 export const DEFAULT_UNIT_GRAMS: Record<string, number> = {
   flower: 3.5,
@@ -361,8 +382,23 @@ export function __runSalesLimitTests(): void {
   // Bucket mapping
   ok(categoryToBucket("flower") === "usable", "flower→usable");
   ok(categoryToBucket("preroll") === "usable", "preroll→usable");
+  ok(categoryToBucket("popcorn-bud") === "usable", "popcorn-bud→usable");
+  ok(categoryToBucket("trim") === "usable", "trim→usable");
+  ok(categoryToBucket("blunt") === "usable", "blunt→usable");
+  ok(categoryToBucket("preroll-pack") === "usable", "preroll-pack→usable");
   ok(categoryToBucket("concentrate") === "concentrate", "concentrate→concentrate");
   ok(categoryToBucket("cartridge") === "concentrate", "cartridge→concentrate");
+  ok(categoryToBucket("disposable-cartridge") === "concentrate", "disposable-cartridge→concentrate");
+  ok(categoryToBucket("rso") === "concentrate", "rso→concentrate");
+  // MIX-INFUSED RULE — WAC 314-55-010(8) + 314-55-095(1)(d)(i)(C): infused
+  // flower/prerolls/blunts count against the 7 g concentrate bucket.
+  ok(categoryToBucket("infused-flower") === "concentrate", "infused-flower→concentrate (7g rule)");
+  ok(categoryToBucket("infused-preroll") === "concentrate", "infused-preroll→concentrate (7g rule)");
+  ok(categoryToBucket("infused-blunt") === "concentrate", "infused-blunt→concentrate (7g rule)");
+  ok(
+    categoryToBucket("infused-preroll-pack") === "concentrate",
+    "infused-preroll-pack→concentrate (7g rule)",
+  );
   ok(categoryToBucket("edible-solid") === "solid_edible", "edible-solid→solid_edible");
   ok(categoryToBucket("edible-liquid") === "liquid_edible", "edible-liquid→liquid_edible");
   ok(categoryToBucket("tincture") === "liquid_edible", "tincture→liquid_edible");
@@ -464,6 +500,53 @@ export function __runSalesLimitTests(): void {
   const exact = evaluateCart([{ category: "concentrate", quantity: 7 }]);
   ok(exact.blocked === false, "exactly at limit ok");
 
+  // MIX-INFUSED RULE scenarios — the owner's exact bug report:
+  // 8 × 1 g infused prerolls = 8 g must trip the 7 g concentrate wall,
+  // NOT slide under the 28 g flower wall.
+  const infusedOver = evaluateCart([{ category: "infused-preroll", quantity: 8 }]);
+  ok(infusedOver.blocked === true, "8x1g infused prerolls blocked at 7g");
+  ok(
+    infusedOver.buckets.find((b) => b.bucket === "concentrate")!.exceeded === true,
+    "infused prerolls trip the CONCENTRATE bucket",
+  );
+  ok(
+    infusedOver.buckets.find((b) => b.bucket === "usable")!.usedGrams === 0,
+    "infused prerolls add NOTHING to the flower bucket",
+  );
+  // 5 × 1.5 g infused blunts = 7.5 g > 7 g → blocked.
+  const bluntsOver = evaluateCart([{ category: "infused-blunt", quantity: 5 }]);
+  ok(bluntsOver.blocked === true, "5x1.5g infused blunts blocked (7.5g > 7g)");
+  // 7 × 1 g infused prerolls = exactly 7 g → allowed.
+  ok(
+    evaluateCart([{ category: "infused-preroll", quantity: 7 }]).blocked === false,
+    "7x1g infused prerolls exactly at limit ok",
+  );
+  // Infused products SHARE the bucket with carts/dabs: 5 g concentrate +
+  // 3 × 1 g infused prerolls = 8 g → blocked together.
+  ok(
+    evaluateCart([
+      { category: "concentrate", quantity: 5 },
+      { category: "infused-preroll", quantity: 3 },
+    ]).blocked === true,
+    "concentrate + infused prerolls share the 7g bucket",
+  );
+  // Buckets stay independent: a FULL 28 g of flower plus 6 g of infused
+  // prerolls passes — infused no longer eats the flower allowance.
+  const fullFlowerPlusInfused = evaluateCart([
+    { category: "flower", quantity: 8 }, // 8 × 3.5 = 28 g usable (at limit)
+    { category: "infused-preroll", quantity: 6 }, // 6 g concentrate (under 7)
+  ]);
+  ok(fullFlowerPlusInfused.blocked === false, "28g flower + 6g infused passes");
+  // Medical: 21 g concentrate ceiling applies to infused too.
+  ok(
+    evaluateCart([{ category: "infused-preroll", quantity: 21 }], "medical").blocked === false,
+    "medical 21x1g infused prerolls ok",
+  );
+  ok(
+    evaluateCart([{ category: "infused-preroll", quantity: 22 }], "medical").blocked === true,
+    "medical 22x1g infused prerolls blocked",
+  );
+
   // over usable: 10x flower * 3.5 = 35g > 28g
   const overUsable = evaluateCart([{ category: "flower", quantity: 10 }]);
   ok(overUsable.blocked === true, "over usable blocked");
@@ -485,7 +568,18 @@ export function __runSalesLimitTests(): void {
   // groupings match categoryToBucket.
   const bc = bucketCategories();
   ok(bc.usable.includes("flower") && bc.usable.includes("preroll"), "usable has flower+preroll");
+  ok(
+    !bc.usable.some((s) => s.startsWith("infused-")),
+    "usable bucket contains NO infused categories",
+  );
   ok(bc.concentrate.includes("cartridge") && bc.concentrate.includes("rso"), "concentrate has cartridge+rso");
+  ok(
+    bc.concentrate.includes("infused-flower") &&
+      bc.concentrate.includes("infused-preroll") &&
+      bc.concentrate.includes("infused-blunt") &&
+      bc.concentrate.includes("infused-preroll-pack"),
+    "concentrate has all four infused categories",
+  );
   ok(bc.solid_edible.length === 1 && bc.solid_edible[0] === "edible-solid", "solid = edible-solid only");
   ok(
     bc.liquid_edible.includes("edible-liquid") &&

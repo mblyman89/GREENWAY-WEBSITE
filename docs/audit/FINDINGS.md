@@ -75,6 +75,37 @@
 
 ---
 
+### GW-036 — Infused prerolls/blunts/flower counted against the 28 g FLOWER limit instead of the 7 g CONCENTRATE limit
+- **Where:** `src/lib/compliance/sales-limits-core.ts` (`categoryToBucket`):
+  the four infused website categories (`infused-flower`, `infused-preroll`,
+  `infused-blunt`, `infused-preroll-pack`) all returned `"usable"` — the
+  1 oz (28 g) flower bucket. Found by the owner while testing the register.
+- **What:** Infused products are "cannabis mix infused" under
+  WAC 314-55-010(8) — flower combined with concentrate for inhalation. The
+  applicable single-transaction cap is the 7 g concentrate limit of
+  WAC 314-55-095(1)(d)(i)(C) (21 g medical), not the 28 g useable-cannabis
+  limit. With the wrong bucket, the register would happily complete a
+  recreational sale of, say, 20 one-gram infused prerolls (20 g "flower",
+  under 28 g) — nearly 3× the lawful concentrate maximum.
+- **Why it matters:** Selling over the statutory limit is an LCB violation
+  with license consequences. This is the exact class of error the limit
+  engine exists to prevent, and it silently under-enforced on a whole
+  product family the store carries.
+- **Fix shipped in the same slice:** the four infused categories now map to
+  the CONCENTRATE bucket (whole unit weight counts — conservative, since
+  labels don't state the flower/concentrate split and under-counting
+  concentrate is the enforcement risk). Every other category mapping was
+  re-audited against the WAC text scraped from apps.leg.wa.gov: flower
+  family → usable ✓, carts/dabs/RSO → concentrate ✓, solid edibles →
+  16 oz ✓, liquids/tinctures/topicals → 72 oz ✓, accessories/merch/
+  paraphernalia → not limited ✓. Staff-facing copy updated everywhere the
+  buckets are explained (admin sales-limits page, register meter label, AI
+  budtender knowledge base).
+- **Status:** FIXED (PR #644) — verified by TEST-PLAN T-055 (new) and
+  T-047; pinned by 18 new self-tests + vitest mirrors.
+
+---
+
 ## 🟠 Moderate
 
 ### GW-001 — Offline-queue persistence writes are unprotected; a full localStorage crashes the register loop
