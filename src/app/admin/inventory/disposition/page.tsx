@@ -149,16 +149,16 @@ export default async function DispositionPage({
       </div>
 
       {summary.correctionsPending > 0 ? (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#ffd700]/30 bg-[#ffd700]/[0.06] px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--admin-gold)]/30 bg-[var(--admin-gold)]/[0.06] px-4 py-3">
           <p className="text-sm text-white/80">
-            <span className="font-semibold text-[#ffd700]">{summary.correctionsPending}</span> customer-return Sale
+            <span className="font-semibold text-[var(--admin-gold)]">{summary.correctionsPending}</span> customer-return Sale
             correction{summary.correctionsPending === 1 ? "" : "s"} pending — include this file in your next CCRS
             upload so the returned sale{summary.correctionsPending === 1 ? " is" : "s are"} deleted/updated in CCRS.
           </p>
           <Link
             href="/admin/inventory/disposition/sale-correction-export"
             prefetch={false}
-            className="rounded-lg bg-[#ffd700] px-4 py-2 text-sm font-bold text-black transition hover:bg-[#e6c200]"
+            className="rounded-lg bg-[var(--admin-gold)] px-4 py-2 text-sm font-bold text-black transition hover:brightness-110"
           >
             Download Sale correction CSV
           </Link>
@@ -286,7 +286,7 @@ export default async function DispositionPage({
               <Field label="Detail">
                 <Textarea name="detail" rows={2} placeholder="What & why…" />
               </Field>
-              <p className="text-xs text-[#ffd700]/80">
+              <p className="text-xs text-[var(--admin-gold)]/80">
                 Recall product? Do NOT destroy before notifying the LCB and coordinating with your enforcement
                 officer (WAC 314-55-225).
               </p>

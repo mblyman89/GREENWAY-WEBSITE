@@ -44,7 +44,7 @@ export function PermissionMatrix() {
                 {ALL_ROLES.map((r) => (
                   <td key={r} className="px-2 py-2 text-center">
                     {granted.has(r) ? (
-                      <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#7ed957]/20 text-xs text-[#7ed957]">
+                      <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-[var(--admin-accent)]/20 text-xs text-[var(--admin-accent)]">
                         ✓
                       </span>
                     ) : (
@@ -58,7 +58,7 @@ export function PermissionMatrix() {
         </tbody>
       </table>
       <p className="mt-3 text-xs text-white/40">
-        <span className="text-[#7ed957]">✓</span> = this role can do it. A dim dot means it can&apos;t.
+        <span className="text-[var(--admin-accent)]">✓</span> = this role can do it. A dim dot means it can&apos;t.
         Pick the lowest role that still lets someone do their job.
       </p>
     </div>

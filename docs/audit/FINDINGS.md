@@ -1276,7 +1276,16 @@
   knob, not eighty-three.
 - **Recommendation:** Fold into the GW-030 sweep (same files, same lines):
   hex → token as each button is migrated.
-- **Status:** OPEN
+- **Status:** FIXED (PR #657) — scripted repo-wide sweep: all 306 remaining
+  raw-hex class sites across 54 admin files now use the tokens
+  (`var(--admin-accent)` / `var(--admin-gold)` / `var(--admin-orange)`); the
+  two ad-hoc hover shades (`#94e570`, `#e6c200`) became `hover:brightness-110`
+  (the Button primitive's own idiom). The ONE deliberate exception is
+  `charts/theme.ts` — SVG fill/stroke attributes can't consume CSS `var()`,
+  so every chart reads that single documented object (Charts.tsx's private
+  hex copies now import from it too). A negative regression check in the
+  lens-4 verifier fails the build if a raw brand hex ever reappears outside
+  the chart island. One knob, as recommended. Manual test T-177.
 
 ### GW-035 — The flow-keeping toolkit is built but barely wired: StickyActionBar used ZERO times, ConfirmDialog once, InfoHint once
 - **Where:** `src/components/admin/ux/` contains a genuinely excellent

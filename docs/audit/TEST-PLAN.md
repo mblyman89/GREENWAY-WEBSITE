@@ -1518,6 +1518,17 @@ attempt, even the ones the system wins.*
   solid on hover — nothing looks like a flat grey patch of the page.
   **Red flag:** an active filter you have to squint at to find, or a
   button you only discover by mousing over it.
+- **T-177 (one color knob moves the whole back office):** this is a
+  spot-check that the brand colors live in ONE place. In the deployed
+  app, open Admin → Reports, Vendors, Staffing, Promotions, and the
+  error screen (visit a bogus admin URL) — every green/gold/orange
+  accent should look identical across pages. For the strong version of
+  the test (a developer drill): change `--greenway` in `globals.css`
+  `:root` to a test color, rebuild, and confirm buttons, chips, meters,
+  and badges ALL move together — only the report charts keep their own
+  matched copy (documented in `charts/theme.ts`). Revert afterwards.
+  **Red flag:** any button or badge that keeps the OLD green after the
+  knob turns — that means a hard-coded hex crept back in.
 
 ---
 

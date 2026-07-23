@@ -13,17 +13,17 @@
 import type { CompletenessResult } from "@/lib/vendors/completeness";
 
 const LEVEL_BAR: Record<CompletenessResult["level"], string> = {
-  complete: "bg-[#7ed957]",
-  good: "bg-[#7ed957]",
-  started: "bg-[#ffd700]",
-  empty: "bg-[#ff7f00]",
+  complete: "bg-[var(--admin-accent)]",
+  good: "bg-[var(--admin-accent)]",
+  started: "bg-[var(--admin-gold)]",
+  empty: "bg-[var(--admin-orange)]",
 };
 
 const LEVEL_TEXT: Record<CompletenessResult["level"], string> = {
-  complete: "text-[#7ed957]",
-  good: "text-[#7ed957]",
-  started: "text-[#ffd700]",
-  empty: "text-[#ff7f00]",
+  complete: "text-[var(--admin-accent)]",
+  good: "text-[var(--admin-accent)]",
+  started: "text-[var(--admin-gold)]",
+  empty: "text-[var(--admin-orange)]",
 };
 
 export function CompletenessMeter({
@@ -65,7 +65,7 @@ export function CompletenessMeter({
           <span className={textColor}>{result.nextUp.label.toLowerCase()}</span>.
         </p>
       ) : (
-        <p className="mt-3 text-xs text-[#7ed957]">All set — this profile is complete. 🎉</p>
+        <p className="mt-3 text-xs text-[var(--admin-accent)]">All set — this profile is complete. 🎉</p>
       )}
 
       <ul className="mt-3 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
@@ -73,7 +73,7 @@ export function CompletenessMeter({
           <li key={item.key} className="flex items-center gap-2 text-xs">
             <span
               className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px] ${
-                item.done ? "bg-[#7ed957]/20 text-[#7ed957]" : "bg-white/10 text-white/40"
+                item.done ? "bg-[var(--admin-accent)]/20 text-[var(--admin-accent)]" : "bg-white/10 text-white/40"
               }`}
             >
               {item.done ? "✓" : "○"}

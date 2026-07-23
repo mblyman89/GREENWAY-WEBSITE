@@ -1,6 +1,12 @@
 /**
  * Shared chart theme — brand tokens so every chart looks like Greenway and the
  * app never imports recharts colors directly. Used by the chart wrappers.
+ *
+ * NOTE (GW-034): charts are the ONE deliberate hex island. SVG fill/stroke
+ * attributes can't consume CSS var() reliably across renderers, so this file
+ * mirrors the canonical values in globals.css :root (--greenway/--gold/
+ * --orange). If the palette is ever tuned there, tune it HERE too — every
+ * chart in the product reads from this single object.
  */
 export const CHART_COLORS = {
   green: "#7ed957",

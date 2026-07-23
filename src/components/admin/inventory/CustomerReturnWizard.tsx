@@ -112,7 +112,7 @@ export function CustomerReturnWizard() {
                     disabled={rem <= 0}
                     className={`w-full rounded-xl border px-4 py-3 text-left text-sm transition ${
                       isSel
-                        ? "border-[#7ed957]/60 bg-[#7ed957]/[0.08]"
+                        ? "border-[var(--admin-accent)]/60 bg-[var(--admin-accent)]/[0.08]"
                         : "border-white/10 bg-white/[0.02] hover:border-white/25"
                     } ${rem <= 0 ? "opacity-40" : ""}`}
                   >
@@ -143,8 +143,8 @@ export function CustomerReturnWizard() {
           <input type="hidden" name="order_id" value={selected.order_id} />
           <input type="hidden" name="order_line_id" value={selected.line_id} />
 
-          <div className="rounded-lg border border-[#ffd700]/25 bg-[#ffd700]/[0.05] px-3 py-2.5 text-xs text-white/75">
-            <p className="font-semibold text-[#ffd700]">Check the physical product first (WAC 314-55-079(12)):</p>
+          <div className="rounded-lg border border-[var(--admin-gold)]/25 bg-[var(--admin-gold)]/[0.05] px-3 py-2.5 text-xs text-white/75">
+            <p className="font-semibold text-[var(--admin-gold)]">Check the physical product first (WAC 314-55-079(12)):</p>
             <label className="mt-2 flex items-start gap-2">
               <input type="checkbox" name="original_packaging" className="mt-0.5" required />
               <span>The product is in its <strong>original packaging</strong>.</span>

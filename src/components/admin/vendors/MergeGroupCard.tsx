@@ -89,7 +89,7 @@ export function MergeGroupCard({
               key={v.id}
               className={`flex flex-wrap items-center gap-3 rounded-[var(--admin-radius)] border p-3 ${
                 isSurvivor
-                  ? "border-[#7ed957]/50 bg-[#7ed957]/5"
+                  ? "border-[var(--admin-accent)]/50 bg-[var(--admin-accent)]/5"
                   : isSelected
                     ? "border-[var(--admin-gold)]/40 bg-[var(--admin-gold-soft)]"
                     : "border-white/10"
@@ -100,7 +100,7 @@ export function MergeGroupCard({
                   type="radio"
                   checked={isSurvivor}
                   onChange={() => pickSurvivor(v.id)}
-                  className="h-4 w-4 accent-[#7ed957]"
+                  className="h-4 w-4 accent-[var(--admin-accent)]"
                 />
                 Keep
               </label>
@@ -118,7 +118,7 @@ export function MergeGroupCard({
                 <Link
                   href={`/admin/vendors/${v.id}`}
                   target="_blank"
-                  className="truncate text-sm font-semibold text-white underline-offset-2 hover:text-[#7ed957] hover:underline"
+                  className="truncate text-sm font-semibold text-white underline-offset-2 hover:text-[var(--admin-accent)] hover:underline"
                 >
                   {v.display_name}
                 </Link>
@@ -131,7 +131,7 @@ export function MergeGroupCard({
                 </p>
               </div>
               {isSurvivor && (
-                <span className="rounded bg-[#7ed957]/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-[#7ed957]">
+                <span className="rounded bg-[var(--admin-accent)]/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-[var(--admin-accent)]">
                   Survives
                 </span>
               )}

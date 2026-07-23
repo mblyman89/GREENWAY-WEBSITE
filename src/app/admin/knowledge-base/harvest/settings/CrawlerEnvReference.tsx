@@ -209,7 +209,7 @@ function LiveDot({ on, label }: { on: boolean | undefined; label: string }) {
     <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-black/40 px-2.5 py-1 text-[10px] text-white/70">
       <span
         className={`inline-block h-1.5 w-1.5 rounded-full ${
-          on === undefined ? "bg-white/25" : on ? "bg-[#7ed957]" : "bg-white/30"
+          on === undefined ? "bg-white/25" : on ? "bg-[var(--admin-accent)]" : "bg-white/30"
         }`}
       />
       {label}: {on === undefined ? "unknown" : on ? "on" : "off"}
@@ -243,8 +243,8 @@ export function CrawlerEnvReference({ health }: { health: CrawlerHealth }) {
           <span
             className={`rounded-full border px-3 py-1 text-[10px] font-semibold ${
               health.ok
-                ? "border-[#7ed957]/40 text-[#7ed957]"
-                : "border-[#ffd700]/40 text-[#ffd700]"
+                ? "border-[var(--admin-accent)]/40 text-[var(--admin-accent)]"
+                : "border-[var(--admin-gold)]/40 text-[var(--admin-gold)]"
             }`}
           >
             {health.ok
@@ -266,7 +266,7 @@ export function CrawlerEnvReference({ health }: { health: CrawlerHealth }) {
               {health.allowDomains && health.allowDomains.length > 0 ? (
                 <span className="font-mono text-white/70">{health.allowDomains.join(", ")}</span>
               ) : (
-                <span className="text-[#ffd700]/80">
+                <span className="text-[var(--admin-gold)]/80">
                   empty — any submitted host is allowed (development mode). Production requires an
                   explicit list.
                 </span>
@@ -291,7 +291,7 @@ export function CrawlerEnvReference({ health }: { health: CrawlerHealth }) {
               {group.vars.map((v) => (
                 <div key={v.name} className="border-b border-white/5 pb-3 last:border-0 last:pb-0">
                   <div className="mb-1 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                    <span className="font-mono text-[11px] font-semibold text-[#7ed957]/90">
+                    <span className="font-mono text-[11px] font-semibold text-[var(--admin-accent)]/90">
                       {v.secret ? "🔑 " : ""}
                       {v.name}
                     </span>
@@ -311,8 +311,8 @@ export function CrawlerEnvReference({ health }: { health: CrawlerHealth }) {
       </div>
 
       {/* Key-rotation runbooks */}
-      <div className="rounded-xl border border-[#ffd700]/20 bg-[#ffd700]/[0.03] p-5">
-        <h3 className="mb-2 text-sm font-bold text-[#ffd700]">
+      <div className="rounded-xl border border-[var(--admin-gold)]/20 bg-[var(--admin-gold)]/[0.03] p-5">
+        <h3 className="mb-2 text-sm font-bold text-[var(--admin-gold)]">
           🔑 Rotating a key — the exact order matters
         </h3>
         <p className="mb-3 max-w-3xl text-[11px] leading-relaxed text-white/55">

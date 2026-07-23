@@ -51,9 +51,9 @@ export function SaleBadgePreview({
       <p className="mt-1 text-xs text-white/40">How this deal shows on a product card.</p>
 
       <div className="mt-3 flex justify-center">
-        <div className="relative w-44 overflow-hidden rounded-xl border border-[#7ed957]/25 bg-gradient-to-b from-[#12351f]/30 to-black">
+        <div className="relative w-44 overflow-hidden rounded-xl border border-[var(--admin-accent)]/25 bg-gradient-to-b from-[#12351f]/30 to-black">
           {/* Sale flag */}
-          <div className="absolute left-0 top-2 rounded-r-full bg-[#ff7f00] px-2.5 py-1 text-[10px] font-bold text-black shadow">
+          <div className="absolute left-0 top-2 rounded-r-full bg-[var(--admin-orange)] px-2.5 py-1 text-[10px] font-bold text-black shadow">
             {d.badge}
           </div>
 
@@ -73,19 +73,19 @@ export function SaleBadgePreview({
 
             {d.showsPrice ? (
               <div className="flex items-baseline gap-2">
-                <span className="text-sm font-bold text-[#7ed957]">{formatMinorCurrency(d.saleMinorUnits)}</span>
+                <span className="text-sm font-bold text-[var(--admin-accent)]">{formatMinorCurrency(d.saleMinorUnits)}</span>
                 <span className="text-xs text-white/30 line-through">{formatMinorCurrency(samplePriceMinorUnits)}</span>
               </div>
             ) : (
               <div className="flex items-baseline gap-2">
                 <span className="text-sm font-bold text-white">{formatMinorCurrency(samplePriceMinorUnits)}</span>
-                <span className="rounded bg-[#7ed957]/15 px-1.5 py-0.5 text-[9px] font-semibold text-[#7ed957]">
+                <span className="rounded bg-[var(--admin-accent)]/15 px-1.5 py-0.5 text-[9px] font-semibold text-[var(--admin-accent)]">
                   deal applies in cart
                 </span>
               </div>
             )}
 
-            {bonusNote && <p className="text-[10px] text-[#ffd700]">{bonusNote}</p>}
+            {bonusNote && <p className="text-[10px] text-[var(--admin-gold)]">{bonusNote}</p>}
           </div>
         </div>
       </div>

@@ -97,12 +97,12 @@ export default async function StaffingPage({
           <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">{decodeURIComponent(sp.error)}</div>
         )}
         {sp.clocked && (
-          <div className="rounded-lg border border-[#7ed957]/40 bg-[#7ed957]/10 px-4 py-3 text-sm text-[#7ed957]">
+          <div className="rounded-lg border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-4 py-3 text-sm text-[var(--admin-accent)]">
             {sp.who ? `${decodeURIComponent(sp.who)} ` : ""}clocked {sp.clocked === "in" ? "IN" : "OUT"}.
           </div>
         )}
         {sp.saved && (
-          <div className="rounded-lg border border-[#7ed957]/40 bg-[#7ed957]/10 px-4 py-3 text-sm text-[#7ed957]">Saved.</div>
+          <div className="rounded-lg border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-4 py-3 text-sm text-[var(--admin-accent)]">Saved.</div>
         )}
 
         <div className="grid gap-4 sm:grid-cols-3">
@@ -113,8 +113,8 @@ export default async function StaffingPage({
 
         {/* Currently on the clock */}
         {clockedIn.length > 0 && (
-          <div className="rounded-[var(--admin-radius-lg)] border border-[#7ed957]/30 bg-[#7ed957]/5 p-5">
-            <h3 className="mb-3 text-sm font-semibold text-[#7ed957]">On the clock now</h3>
+          <div className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-accent)]/30 bg-[var(--admin-accent)]/5 p-5">
+            <h3 className="mb-3 text-sm font-semibold text-[var(--admin-accent)]">On the clock now</h3>
             <ul className="space-y-2">
               {clockedIn.map(({ employee, punch }) => (
                 <li key={punch.id} className="flex items-center gap-3 text-sm">
@@ -139,7 +139,7 @@ export default async function StaffingPage({
           </form>
           <p className="mt-3 text-xs text-white/40">
             On your phone?{" "}
-            <Link href={`${BASE}/clock`} className="text-[#7ed957] underline">
+            <Link href={`${BASE}/clock`} className="text-[var(--admin-accent)] underline">
               Open the phone clock-in page
             </Link>{" "}
             — big keypad, bookmark it to your home screen.
@@ -162,7 +162,7 @@ export default async function StaffingPage({
                       type="submit"
                       className={`admin-card-interactive flex w-full items-center justify-between rounded-[var(--admin-radius-lg)] border px-4 py-3 text-left ${
                         isIn
-                          ? "border-[#7ed957]/40 bg-[#7ed957]/10"
+                          ? "border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10"
                           : "border-[var(--admin-border)] bg-[var(--admin-surface)]"
                       }`}
                     >
@@ -170,7 +170,7 @@ export default async function StaffingPage({
                         <span className="block text-sm font-semibold text-white">{e.full_name}</span>
                         <span className="text-xs text-white/40">{e.job_role}</span>
                       </span>
-                      <span className={`text-xs font-semibold ${isIn ? "text-[#7ed957]" : "text-white/50"}`}>
+                      <span className={`text-xs font-semibold ${isIn ? "text-[var(--admin-accent)]" : "text-white/50"}`}>
                         {isIn ? "Clock OUT" : "Clock IN"}
                       </span>
                     </button>

@@ -88,7 +88,7 @@ export function ContentImageField({
             <button
               type="button"
               onClick={() => setPicking((p) => !p)}
-              className="rounded-lg border border-[#7ed957]/40 bg-[#7ed957]/10 px-3 py-1.5 text-xs font-bold text-[#7ed957] transition hover:bg-[#7ed957]/20"
+              className="rounded-lg border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-3 py-1.5 text-xs font-bold text-[var(--admin-accent)] transition hover:bg-[var(--admin-accent)]/20"
             >
               🖼 Choose from Media Library
             </button>
@@ -113,7 +113,7 @@ export function ContentImageField({
               onChange(e.target.value);
             }}
             placeholder="/home/hero-banner.webp  or  https://…"
-            className="w-full rounded-lg border border-white/15 bg-black px-3 py-1.5 text-xs text-white outline-none focus:border-[#7ed957]"
+            className="w-full rounded-lg border border-white/15 bg-black px-3 py-1.5 text-xs text-white outline-none focus:border-[var(--admin-accent)]"
           />
         </div>
       </div>
@@ -130,7 +130,7 @@ export function ContentImageField({
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
               placeholder="Filter images…"
-              className="w-full max-w-xs rounded-lg border border-white/15 bg-black px-3 py-1.5 text-xs text-white outline-none focus:border-[#7ed957]"
+              className="w-full max-w-xs rounded-lg border border-white/15 bg-black px-3 py-1.5 text-xs text-white outline-none focus:border-[var(--admin-accent)]"
             />
             <a
               href="/admin/media"
@@ -159,7 +159,7 @@ export function ContentImageField({
                     title={m.title}
                     className={`group relative overflow-hidden rounded-lg border text-left transition ${
                       selected
-                        ? "border-[#7ed957] ring-2 ring-[#7ed957]"
+                        ? "border-[var(--admin-accent)] ring-2 ring-[var(--admin-accent)]"
                         : "border-white/10 hover:border-white/30"
                     }`}
                   >
@@ -176,7 +176,7 @@ export function ContentImageField({
                       {m.title}
                     </div>
                     {selected && (
-                      <span className="absolute right-1 top-1 rounded-full bg-[#7ed957] px-1.5 text-[0.6rem] font-bold text-black">
+                      <span className="absolute right-1 top-1 rounded-full bg-[var(--admin-accent)] px-1.5 text-[0.6rem] font-bold text-black">
                         ✓
                       </span>
                     )}

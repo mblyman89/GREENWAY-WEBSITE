@@ -23,8 +23,8 @@ export type ScheduleItem = {
 const DAYS: Weekday[] = [0, 1, 2, 3, 4, 5, 6];
 
 const STATUS_DOT: Record<PostStatus, string> = {
-  published: "bg-[#7ed957]",
-  scheduled: "bg-[#ffd700]",
+  published: "bg-[var(--admin-accent)]",
+  scheduled: "bg-[var(--admin-gold)]",
   draft: "bg-white/30",
   archived: "bg-white/15",
 };
@@ -56,10 +56,10 @@ export function WeeklyScheduleStrip({
             <div
               key={day}
               className={`min-h-24 rounded-lg border p-2 ${
-                isToday ? "border-[#7ed957]/50 bg-[#7ed957]/5" : "border-white/10 bg-black/30"
+                isToday ? "border-[var(--admin-accent)]/50 bg-[var(--admin-accent)]/5" : "border-white/10 bg-black/30"
               }`}
             >
-              <p className={`text-center text-[10px] font-semibold uppercase ${isToday ? "text-[#7ed957]" : "text-white/40"}`}>
+              <p className={`text-center text-[10px] font-semibold uppercase ${isToday ? "text-[var(--admin-accent)]" : "text-white/40"}`}>
                 {WEEKDAY_LABELS[day].slice(0, 3)}
               </p>
               <div className="mt-1.5 space-y-1">
@@ -89,7 +89,7 @@ export function WeeklyScheduleStrip({
               <Link
                 key={it.id}
                 href={`/admin/promotions/${it.id}`}
-                className="flex items-center gap-1 rounded-full border border-white/10 px-2 py-0.5 text-[10px] text-white/70 transition hover:border-[#7ed957]/40"
+                className="flex items-center gap-1 rounded-full border border-white/10 px-2 py-0.5 text-[10px] text-white/70 transition hover:border-[var(--admin-accent)]/40"
                 title={`${it.title} (${it.status})`}
               >
                 <span className={`h-1.5 w-1.5 rounded-full ${STATUS_DOT[it.status]}`} />
@@ -102,8 +102,8 @@ export function WeeklyScheduleStrip({
 
       {/* Legend */}
       <div className="mt-3 flex flex-wrap gap-3 border-t border-white/5 pt-3 text-[10px] text-white/40">
-        <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-[#7ed957]" /> Live</span>
-        <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-[#ffd700]" /> Scheduled</span>
+        <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-[var(--admin-accent)]" /> Live</span>
+        <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-[var(--admin-gold)]" /> Scheduled</span>
         <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-white/30" /> Draft</span>
       </div>
     </div>

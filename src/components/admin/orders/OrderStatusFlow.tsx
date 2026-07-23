@@ -51,20 +51,20 @@ export function OrderStatusFlow({
               <span
                 className={`flex items-center justify-center rounded-full font-bold ${dot} ${
                   done
-                    ? "bg-[#7ed957] text-black"
+                    ? "bg-[var(--admin-accent)] text-black"
                     : current
-                      ? "bg-[#7ed957]/20 text-[#7ed957] ring-2 ring-[#7ed957] animate-pulse"
+                      ? "bg-[var(--admin-accent)]/20 text-[var(--admin-accent)] ring-2 ring-[var(--admin-accent)] animate-pulse"
                       : "bg-white/10 text-white/30"
                 }`}
               >
                 {done ? "✓" : i + 1}
               </span>
-              <span className={`${labelCls} ${current ? "font-bold text-[#7ed957]" : done ? "text-white/60" : "text-white/30"}`}>
+              <span className={`${labelCls} ${current ? "font-bold text-[var(--admin-accent)]" : done ? "text-white/60" : "text-white/30"}`}>
                 {step.label}
               </span>
             </div>
             {i < FLOW.length - 1 && (
-              <span className={`mx-1 h-0.5 w-4 sm:w-6 ${i < currentIdx ? "bg-[#7ed957]" : "bg-white/10"}`} />
+              <span className={`mx-1 h-0.5 w-4 sm:w-6 ${i < currentIdx ? "bg-[var(--admin-accent)]" : "bg-white/10"}`} />
             )}
           </div>
         );

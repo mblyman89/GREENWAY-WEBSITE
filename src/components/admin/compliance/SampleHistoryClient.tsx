@@ -56,7 +56,7 @@ function toneForRatio(used: number, cap: number): "green" | "orange" | "danger" 
 function CapBar({ used, cap }: { used: number; cap: number }) {
   const pct = cap > 0 ? Math.min(100, Math.round((used / cap) * 100)) : 0;
   const tone = toneForRatio(used, cap);
-  const color = tone === "danger" ? "#ef4444" : tone === "orange" ? "#f59e0b" : "#7ed957";
+  const color = tone === "danger" ? "#ef4444" : tone === "orange" ? "#f59e0b" : "var(--admin-accent)";
   return (
     <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
       <div className="h-full rounded-full" style={{ width: `${pct}%`, background: color }} />

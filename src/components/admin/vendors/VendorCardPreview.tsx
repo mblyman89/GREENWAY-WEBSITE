@@ -41,7 +41,7 @@ export function VendorCardPreview({
 
         {/* The card itself, styled like a premium public storefront card */}
         <div className="p-5">
-          <div className="mx-auto max-w-sm overflow-hidden rounded-2xl border border-[#7ed957]/20 bg-gradient-to-b from-[#12351f]/40 to-black shadow-lg">
+          <div className="mx-auto max-w-sm overflow-hidden rounded-2xl border border-[var(--admin-accent)]/20 bg-gradient-to-b from-[#12351f]/40 to-black shadow-lg">
             <div className="flex items-center justify-center bg-black/40 p-6">
               <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-black">
                 {logoUrl ? (
@@ -55,7 +55,7 @@ export function VendorCardPreview({
             <div className="space-y-2 p-5 text-center">
               <h3 className="text-lg font-bold text-white">{vendor.display_name || "Vendor name"}</h3>
               {tagline ? (
-                <p className="text-sm font-medium text-[#7ed957]">{tagline}</p>
+                <p className="text-sm font-medium text-[var(--admin-accent)]">{tagline}</p>
               ) : (
                 <p className="text-sm italic text-white/25">Add a mission statement…</p>
               )}
@@ -70,7 +70,7 @@ export function VendorCardPreview({
                 <span>{vendor.product_count} products</span>
               </div>
               {vendor.website?.trim() && (
-                <span className="mt-2 inline-block rounded-full border border-[#7ed957]/40 px-4 py-1.5 text-xs font-semibold text-[#7ed957]">
+                <span className="mt-2 inline-block rounded-full border border-[var(--admin-accent)]/40 px-4 py-1.5 text-xs font-semibold text-[var(--admin-accent)]">
                   Visit website →
                 </span>
               )}
@@ -78,7 +78,7 @@ export function VendorCardPreview({
           </div>
 
           {vendor.status !== "published" && (
-            <p className="mt-4 text-center text-xs text-[#ff7f00]">
+            <p className="mt-4 text-center text-xs text-[var(--admin-orange)]">
               This is a preview. This vendor is a <strong>draft</strong> — publish it to show this card on your site.
             </p>
           )}

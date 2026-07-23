@@ -82,7 +82,7 @@ export default async function AiUsagePage() {
         </HelpPanel>
 
         {!isAiConfigured && (
-          <div className="mt-4 rounded-lg border border-[#ffd700]/30 bg-[#ffd700]/[0.06] px-4 py-3 text-sm text-[#ffd700]">
+          <div className="mt-4 rounded-lg border border-[var(--admin-gold)]/30 bg-[var(--admin-gold)]/[0.06] px-4 py-3 text-sm text-[var(--admin-gold)]">
             AI isn&apos;t set up yet. Add an <code className="rounded bg-black/40 px-1">AI_API_KEY</code> to
             start drafting — usage will appear here automatically.
           </div>
@@ -176,7 +176,7 @@ export default async function AiUsagePage() {
                       <tr key={f.feature} className="border-b border-white/5">
                         <td className="py-2 pr-4 text-white/80">{featureLabel(f.feature)}</td>
                         <td className="py-2 pr-4 text-right text-white/60">{fmt(f.calls)}</td>
-                        <td className="py-2 text-right font-semibold text-[#7ed957]">{fmt(f.tokens)}</td>
+                        <td className="py-2 text-right font-semibold text-[var(--admin-accent)]">{fmt(f.tokens)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -194,7 +194,7 @@ export default async function AiUsagePage() {
                     className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-black/40 px-3 py-1.5 text-xs"
                   >
                     <span className="flex items-center gap-2">
-                      <span className={r.ok ? "text-[#7ed957]" : "text-red-400"}>{r.ok ? "✓" : "✕"}</span>
+                      <span className={r.ok ? "text-[var(--admin-accent)]" : "text-red-400"}>{r.ok ? "✓" : "✕"}</span>
                       <span className="font-semibold text-white/80">{featureLabel(r.feature)}</span>
                       {r.actor_email && <span className="text-white/40">· {r.actor_email}</span>}
                     </span>

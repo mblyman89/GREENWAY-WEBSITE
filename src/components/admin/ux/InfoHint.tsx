@@ -26,7 +26,7 @@ export function InfoHint({
         tabIndex={0}
         role="button"
         aria-label="More information"
-        className="ml-1 inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-white/25 text-[10px] font-bold leading-none text-white/50 transition hover:border-[#7ed957] hover:text-[#7ed957] focus:border-[#7ed957] focus:text-[#7ed957] focus:outline-none"
+        className="ml-1 inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-white/25 text-[10px] font-bold leading-none text-white/50 transition hover:border-[var(--admin-accent)] hover:text-[var(--admin-accent)] focus:border-[var(--admin-accent)] focus:text-[var(--admin-accent)] focus:outline-none"
       >
         ?
       </span>

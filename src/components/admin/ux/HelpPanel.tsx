@@ -55,20 +55,20 @@ export function HelpPanel({
   }
 
   return (
-    <div className="rounded-xl border border-[#7ed957]/20 bg-[#7ed957]/[0.04]">
+    <div className="rounded-xl border border-[var(--admin-accent)]/20 bg-[var(--admin-accent)]/[0.04]">
       <button
         type="button"
         onClick={toggle}
         aria-expanded={open}
         className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
       >
-        <span className="flex items-center gap-2 text-sm font-semibold text-[#7ed957]">
-          <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-[#7ed957]/40 text-xs">
+        <span className="flex items-center gap-2 text-sm font-semibold text-[var(--admin-accent)]">
+          <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-[var(--admin-accent)]/40 text-xs">
             i
           </span>
           {title}
         </span>
-        <span className="text-xs text-[#7ed957]/70">{open ? "Hide" : "Show"}</span>
+        <span className="text-xs text-[var(--admin-accent)]/70">{open ? "Hide" : "Show"}</span>
       </button>
       {open && (
         <div className="space-y-3 px-4 pb-4 text-sm leading-relaxed text-white/70">
@@ -77,7 +77,7 @@ export function HelpPanel({
             <ol className="space-y-2">
               {steps.map((step, i) => (
                 <li key={i} className="flex gap-3">
-                  <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#7ed957]/15 text-xs font-bold text-[#7ed957]">
+                  <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--admin-accent)]/15 text-xs font-bold text-[var(--admin-accent)]">
                     {i + 1}
                   </span>
                   <span>{step}</span>

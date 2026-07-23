@@ -7,7 +7,7 @@
  * shared chart kit. Receives already-aggregated, serializable data from the
  * server page.
  */
-import { AreaChart, DonutChart, type DonutDatum, paletteAt } from "@/components/admin/charts";
+import { AreaChart, CHART_COLORS, DonutChart, type DonutDatum, paletteAt } from "@/components/admin/charts";
 
 function shortDay(iso: string): string {
   const d = new Date(iso + "T00:00:00");
@@ -23,7 +23,7 @@ export function AiTokensTrend({
   return (
     <AreaChart
       data={data}
-      areas={[{ key: "Tokens", label: "Tokens", color: "#7ed957" }]}
+      areas={[{ key: "Tokens", label: "Tokens", color: CHART_COLORS.green }]}
       xKey="name"
       title="Tokens used per day"
       subtitle="Estimated unless your provider reports exact usage"

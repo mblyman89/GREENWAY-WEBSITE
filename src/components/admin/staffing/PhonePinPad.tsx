@@ -36,7 +36,7 @@ export function PhonePinPad({ action }: { action: (formData: FormData) => void |
           <span
             key={i}
             className={`h-4 w-4 rounded-full border transition ${
-              i < pin.length ? "border-[#7ed957] bg-[#7ed957]" : "border-white/25 bg-transparent"
+              i < pin.length ? "border-[var(--admin-accent)] bg-[var(--admin-accent)]" : "border-white/25 bg-transparent"
             }`}
           />
         ))}
@@ -83,7 +83,7 @@ export function PhonePinPad({ action }: { action: (formData: FormData) => void |
         disabled={!ready}
         className={`mt-6 w-full rounded-2xl py-4 text-lg font-bold transition ${
           ready
-            ? "bg-[#7ed957] text-black active:scale-[0.98]"
+            ? "bg-[var(--admin-accent)] text-black active:scale-[0.98]"
             : "cursor-not-allowed bg-white/10 text-white/40"
         }`}
       >
