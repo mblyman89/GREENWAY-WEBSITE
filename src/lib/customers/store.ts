@@ -45,6 +45,42 @@ export async function listCustomers(opts?: { q?: string; limit?: number }): Prom
 }
 
 /**
+ * GW-033 — paged variant of listCustomers for the admin customers list.
+ * Returns the requested window plus the exact filtered total so the page can
+ * render a real pager ("Showing 101–200 of 431 customers") instead of a
+ * silently truncated 500-row list. Same search semantics as listCustomers
+ * (name/email ilike + digits-only phone); other callers keep the small-limit
+ * listCustomers.
+ */
+export async function listCustomersPaged(opts: {
+  q?: string;
+  from: number;
+  to: number;
+}): Promise<{ rows: Customer[]; total: number }> {
+  if (!isSupabaseServiceConfigured) return { rows: [], total: 0 };
+  const admin = createSupabaseAdminClient();
+  let query = admin
+    .from("customers")
+    .select("*", { count: "exact" })
+    .order("last_visit_at", { ascending: false, nullsFirst: false })
+    .order("created_at", { ascending: false });
+
+  if (opts.q && opts.q.trim().length > 0) {
+    const digits = normalizePhone(opts.q.trim());
+    // GW-021: escape LIKE wildcards + .or() grammar so the term matches literally.
+    const like = ilikeContains(opts.q);
+    const ors = like
+      ? [`first_name.ilike.${like}`, `last_name.ilike.${like}`, `email.ilike.${like}`]
+      : [];
+    if (digits) ors.push(`phone_normalized.ilike.%${digits}%`);
+    if (ors.length > 0) query = query.or(ors.join(","));
+  }
+
+  const { data, count } = await query.range(opts.from, opts.to);
+  return { rows: (data as Customer[] | null) ?? [], total: count ?? 0 };
+}
+
+/**
  * Task AO-3 — candidate pool for the register's scan-to-member match: every
  * customer whose birthdate equals the scanned DOB (yyyy-mm-dd). DOB is the
  * strictest single filter available (a store has few customers per exact

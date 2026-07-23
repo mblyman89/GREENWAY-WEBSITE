@@ -1091,7 +1091,17 @@
   page shows “Showing X of Y — refine or page” with URL-param pagination
   (`?page=2` — consistent with the URL-state architecture and GW-029’s
   back-links).
-- **Status:** OPEN
+- **Status:** FIXED (PR #658). Server-side pagination on all three cited
+  lists: new pure module `src/lib/admin/list-window-core.ts` (page clamping,
+  0-based inclusive `.range()` windows, "Showing X–Y of Z" labels; 24
+  embedded self-tests wired into the pure runner + a vitest mirror) and a
+  shared `ListPager` server component in the ux kit. `listOrdersPaged` /
+  `listLotsPaged` / `listCustomersPaged` return `{ rows, total }` via
+  `count: "exact"` + `.range()`, and the orders, inventory, and customers
+  pages fetch the requested `?page=` window, clamp-and-refetch stale
+  past-the-end pages, and render an exact count line plus Prev/Next pagers
+  (top and, when multi-page, bottom). Filter/search params are preserved in
+  page links; changing a filter resets to page 1.
 
 ### GW-027 — The register promises "manager reviews in the back office" for REJECTED rows, but no back-office page shows them
 - **Where:** Register status bar copy `src/app/pos/RegisterShell.tsx:2225`

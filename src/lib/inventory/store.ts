@@ -38,6 +38,43 @@ function isoDaysFromNow(days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+/**
+ * GW-033: paged inventory read. Returns the page's hydrated lots AND the
+ * exact total so the inventory page can show "Showing X–Y of Z" with a real
+ * pager instead of silently clipping at 500 rows.
+ */
+export async function listLotsPaged(
+  opts: Omit<LotFilter, "limit"> & { from: number; to: number },
+): Promise<{ rows: LotWithDetail[]; total: number }> {
+  if (!isSupabaseServiceConfigured) return { rows: [], total: 0 };
+  const admin = createSupabaseAdminClient();
+
+  let query = admin
+    .from("inventory_lots")
+    .select("*", { count: "exact" })
+    .order("created_at", { ascending: false });
+
+  if (opts.status && opts.status !== "all") {
+    query = query.eq("status", opts.status);
+  }
+  const like = opts.q ? ilikeContains(opts.q) : null;
+  if (like) {
+    query = query.or(
+      [
+        `product_name.ilike.${like}`,
+        `lot_code.ilike.${like}`,
+        `pos_product_key.ilike.${like}`,
+      ].join(","),
+    );
+  }
+
+  const { data, count } = await query.range(opts.from, opts.to);
+  const lots = (data as InventoryLot[] | null) ?? [];
+  const total = count ?? 0;
+  if (lots.length === 0) return { rows: [], total };
+  return { rows: await hydrateLots(admin, lots), total };
+}
+
 export async function listLots(opts?: LotFilter): Promise<LotWithDetail[]> {
   if (!isSupabaseServiceConfigured) return [];
   const admin = createSupabaseAdminClient();

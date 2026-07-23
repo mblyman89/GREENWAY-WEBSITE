@@ -8,7 +8,9 @@ import { StatCard } from "@/components/admin/StatCard";
 import { Input, Button } from "@/components/admin/ui";
 import { MissingInsight } from "@/components/admin/insight/MissingInsight";
 import { CatalogStageStrip } from "@/components/admin/catalog/CatalogStageStrip";
-import { listLots, computeInventoryStats, EXPIRING_SOON_DAYS } from "@/lib/inventory/store";
+import { listLotsPaged, computeInventoryStats, EXPIRING_SOON_DAYS } from "@/lib/inventory/store";
+import { listWindow, parsePageParam, DEFAULT_PAGE_SIZE } from "@/lib/admin/list-window-core";
+import { ListPager } from "@/components/admin/ux/ListPager";
 import { inventoryGapInsights } from "@/lib/insight/inventory";
 import { getInventoryCommandCenter } from "@/lib/inventory/inventory-intel";
 import { InventoryIntelPanel } from "@/components/admin/inventory/InventoryIntelPanel";
@@ -52,11 +54,12 @@ function StatusBadge({ status }: { status: string }) {
 export default async function InventoryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; status?: string; back?: string }>;
+  searchParams: Promise<{ q?: string; status?: string; back?: string; page?: string }>;
 }) {
   await requirePermission("inventory.manage");
-  const { q, status, back } = await searchParams;
+  const { q, status, back, page } = await searchParams;
   const activeStatus = status ?? "all";
+  const rawPage = parsePageParam(page);
 
   if (!isSupabaseServiceConfigured) {
     return (
@@ -72,11 +75,33 @@ export default async function InventoryPage({
     );
   }
 
-  const [lots, stats, intel] = await Promise.all([
-    listLots({ q, status: activeStatus }),
+  // GW-033: fetch the requested page window plus the exact total. If the
+  // requested page is past the end (stale link), clamp and refetch the real
+  // last page so the screen is never empty while rows exist.
+  const firstWin = listWindow(Number.MAX_SAFE_INTEGER, rawPage, DEFAULT_PAGE_SIZE);
+  const [firstPage, stats, intel] = await Promise.all([
+    listLotsPaged({ q, status: activeStatus, from: firstWin.from, to: firstWin.to }),
     computeInventoryStats(),
     getInventoryCommandCenter(),
   ]);
+  let { rows: lots, total } = firstPage;
+  const win = listWindow(total, rawPage, DEFAULT_PAGE_SIZE);
+  if (win.page !== rawPage && total > 0) {
+    ({ rows: lots, total } = await listLotsPaged({
+      q,
+      status: activeStatus,
+      from: win.from,
+      to: win.to,
+    }));
+  }
+  const pageHref = (p: number) => {
+    const params = new URLSearchParams();
+    if (activeStatus !== "all") params.set("status", activeStatus);
+    if (q) params.set("q", q);
+    if (p > 1) params.set("page", String(p));
+    const qs = params.toString();
+    return `/admin/inventory${qs ? `?${qs}` : ""}`;
+  };
   const gaps = inventoryGapInsights(stats);
 
   const today = new Date().toISOString().slice(0, 10);
@@ -198,6 +223,9 @@ export default async function InventoryPage({
           </Button>
         </form>
 
+        {/* GW-033: exact result count + pager (server-side pagination). */}
+        <ListPager window={win} total={total} noun="lot" makeHref={pageHref} />
+
         {stats.total === 0 && (
           <EmptyState
             icon="📦"
@@ -281,6 +309,9 @@ export default async function InventoryPage({
               </tbody>
             </table>
           </div>
+        )}
+        {win.totalPages > 1 && (
+          <ListPager window={win} total={total} noun="lot" makeHref={pageHref} />
         )}
         {lots.length === 0 && stats.total > 0 && (
           <p className="text-sm text-white/50">No lots match your filter.</p>
