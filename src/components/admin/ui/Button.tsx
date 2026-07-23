@@ -9,9 +9,9 @@ import type { ComponentPropsWithoutRef, ReactNode } from "react";
  *   - Pill shape (rounded-full), UPPERCASE, bold — mirrors the public site's
  *     signature CTA (`rounded-full bg-[var(--orange)] text-black font-black
  *     uppercase tracking-[0.14em]`).
- *   - Only the four brand colors carry meaning; a neutral SOLID dark chip is
- *     used for plain secondary/navigation actions (never white, never
- *     transparent).
+ *   - Only the brand colors carry meaning; the neutral variant is a SOFT
+ *     ORANGE tint for plain secondary/navigation actions (never white, never
+ *     transparent, never invisible-grey).
  *
  * COLOR MAPPING (binding — see docs/TODO_BEAUTIFICATION.md):
  *   primary  → ORANGE : the main call-to-action (the thing you came to do).
@@ -20,7 +20,11 @@ import type { ComponentPropsWithoutRef, ReactNode } from "react";
  *   danger   → RED    : destructive (delete, reject, discard).
  *   special  → PURPLE : "the machine does something for you" — AI enrich,
  *              crawler runs, bulk-AI, image studio, GrowFlow sync.
- *   neutral  → solid dark chip : secondary / cancel / back navigation.
+ *   neutral  → soft ORANGE tint : secondary / cancel / back navigation.
+ *              (Owner feedback: the old solid dark chip "looked like part of
+ *              the page, not a button to click" — the orange tint + ring keeps
+ *              it quieter than the solid orange primary but unmistakably
+ *              clickable, and leans into the brand orange the owner loves.)
  *
  * Renders as a <button> by default, or an <a>/<Link> when `href` is passed.
  * Server-component friendly (no client hooks).
@@ -56,7 +60,7 @@ const VARIANTS: Record<ButtonVariant, string> = {
   special:
     "bg-[var(--admin-purple)] text-black shadow-[var(--admin-shadow-sm)] hover:brightness-110 active:brightness-95",
   neutral:
-    "bg-[var(--admin-surface-2)] text-[var(--admin-text)] shadow-[var(--admin-shadow-sm)] hover:bg-[var(--admin-surface-hover)] active:brightness-95",
+    "bg-[var(--admin-orange-soft)] text-[var(--admin-orange)] ring-1 ring-[var(--admin-orange)]/40 shadow-[var(--admin-shadow-sm)] hover:bg-[var(--admin-orange)] hover:text-black active:brightness-95",
 };
 
 type CommonProps = {
@@ -93,7 +97,7 @@ export const CHIP_ACTION =
   "admin-focus inline-flex items-center rounded-full bg-[var(--admin-accent-soft)] px-3 py-1 text-[0.7rem] font-bold uppercase tracking-[0.08em] text-[var(--admin-accent)] ring-1 ring-[var(--admin-accent)]/40 hover:bg-[var(--admin-accent)] hover:text-black transition";
 
 export const CHIP_NEUTRAL =
-  "admin-focus inline-flex items-center rounded-full bg-[var(--admin-surface-2)] px-3 py-1 text-[0.7rem] font-bold uppercase tracking-[0.08em] text-[var(--admin-text)] ring-1 ring-[var(--admin-border)] hover:bg-[var(--admin-surface-hover)] transition";
+  "admin-focus inline-flex items-center rounded-full bg-[var(--admin-gold-soft)] px-3 py-1 text-[0.7rem] font-bold uppercase tracking-[0.08em] text-[var(--admin-gold)] ring-1 ring-[var(--admin-gold)]/40 hover:bg-[var(--admin-gold)] hover:text-black transition";
 
 function classes(p: CommonProps) {
   return [

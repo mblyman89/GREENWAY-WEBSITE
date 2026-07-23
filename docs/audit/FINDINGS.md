@@ -1062,7 +1062,15 @@
   (`bg-[var(--admin-accent)] text-black`), inactive stays muted. Verified
   visually in the harness (`lens4-visuals/03-….png`) — the solid chip is
   unmissable without shouting. Same treatment for ReportTabs’ active tab.
-- **Status:** OPEN
+- **Status:** FIXED (PR #656) — the recommendation implemented exactly: on
+  every cited site the ACTIVE chip/tab is now a SOLID brand fill with black
+  ink (`bg-[var(--admin-accent)] text-black`; the forecast horizon chips use
+  the solid gold they already leaned on), inactive stays muted. Bonus, from
+  the same owner feedback (“dark grey buttons look like part of the page”):
+  the shared Button `neutral` variant traded its invisible dark chip for a
+  soft ORANGE tint with an orange ring (solid orange on hover), and the
+  in-table `CHIP_NEUTRAL` recipe now wears the brand gold tint — secondary
+  actions read as buttons at a glance. Manual test T-176.
 
 ### GW-033 — List pages silently truncate at 200–500 rows with no count, no pagination, no “showing N of M”
 - **Where:** `src/lib/orders/orders-store.ts:194` (`limit(filter.limit ??

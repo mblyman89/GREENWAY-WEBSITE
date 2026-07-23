@@ -92,7 +92,7 @@ export default async function ForecastPage({
               href={`/admin/reports/forecast?horizon=${h.days}`}
               className={`rounded-full border px-3 py-1.5 text-xs font-bold uppercase tracking-[0.08em] transition ${
                 horizon === h.days
-                  ? "border-[#ffd700]/60 bg-[#ffd700]/15 text-[#ffd700]"
+                  ? "border-[var(--admin-gold)] bg-[var(--admin-gold)] text-black"
                   : "border-white/15 bg-white/5 text-white/60 hover:text-white"
               }`}
             >
@@ -136,7 +136,7 @@ export default async function ForecastPage({
               href={`/admin/reports/forecast?horizon=${h.days}`}
               className={`rounded-full border px-3 py-1.5 text-xs font-bold uppercase tracking-[0.08em] transition ${
                 horizon === h.days
-                  ? "border-[#ffd700]/60 bg-[#ffd700]/15 text-[#ffd700]"
+                  ? "border-[var(--admin-gold)] bg-[var(--admin-gold)] text-black"
                   : "border-white/15 bg-white/5 text-white/60 hover:text-white"
               }`}
             >
