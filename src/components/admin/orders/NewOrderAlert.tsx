@@ -58,11 +58,21 @@ export function NewOrderAlert({ initialNew }: { initialNew: number }) {
   // the chime play. We show a one-time hint until they do.
   const [armed, setArmed] = useState(true);
 
+  // Hydrate saved sound preferences. Deferred to a microtask so the effect
+  // body never sets state synchronously (react-hooks/set-state-in-effect) —
+  // same pattern as CartProvider hydration.
   useEffect(() => {
-    setMuted(localStorage.getItem(MUTE_KEY) === "1");
-    const v = Number(localStorage.getItem(VOL_KEY));
-    if (!Number.isNaN(v) && v > 0) setVolume(v);
-    setArmed(localStorage.getItem(ARMED_KEY) === "1");
+    let cancelled = false;
+    Promise.resolve().then(() => {
+      if (cancelled) return;
+      setMuted(localStorage.getItem(MUTE_KEY) === "1");
+      const v = Number(localStorage.getItem(VOL_KEY));
+      if (!Number.isNaN(v) && v > 0) setVolume(v);
+      setArmed(localStorage.getItem(ARMED_KEY) === "1");
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {

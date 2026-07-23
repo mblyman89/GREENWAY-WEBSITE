@@ -75,16 +75,25 @@ export function ConfirmDialog({
   const confirmRef = useRef<HTMLButtonElement>(null);
 
   // Reset typed text + focus the safest action whenever the dialog opens.
+  // Deferred to a microtask so the effect body never sets state synchronously
+  // (react-hooks/set-state-in-effect) — same pattern as CartProvider hydration.
   useEffect(() => {
-    if (open) {
+    if (!open) return;
+    let cancelled = false;
+    let t: ReturnType<typeof setTimeout> | undefined;
+    Promise.resolve().then(() => {
+      if (cancelled) return;
       setTyped("");
       setBusy(false);
       // Focus confirm only if no typed gate; otherwise let the input get focus.
       if (!requireTextToConfirm) {
-        const t = setTimeout(() => confirmRef.current?.focus(), 30);
-        return () => clearTimeout(t);
+        t = setTimeout(() => confirmRef.current?.focus(), 30);
       }
-    }
+    });
+    return () => {
+      cancelled = true;
+      if (t) clearTimeout(t);
+    };
   }, [open, requireTextToConfirm]);
 
   // Close on Escape.
