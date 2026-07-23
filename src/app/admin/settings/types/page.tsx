@@ -112,7 +112,7 @@ export default async function TypesPage({
           <div
             className={`rounded-lg px-4 py-3 text-sm ${
               flash.tone === "ok"
-                ? "border border-[#7ed957]/40 bg-[#7ed957]/10 text-[#7ed957]"
+                ? "border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 text-[var(--admin-accent)]"
                 : "border border-[var(--admin-gold)]/40 bg-[var(--admin-gold-soft)] text-[var(--admin-gold)]"
             }`}
           >
@@ -133,7 +133,7 @@ export default async function TypesPage({
             href={`${BASE}?tab=website`}
             className={`px-4 py-2 text-sm font-semibold ${
               tab === "website"
-                ? "border-b-2 border-[#7ed957] text-white"
+                ? "border-b-2 border-[var(--admin-accent)] text-white"
                 : "text-white/50 hover:text-white/80"
             }`}
           >
@@ -143,7 +143,7 @@ export default async function TypesPage({
             href={`${BASE}?tab=inventory`}
             className={`px-4 py-2 text-sm font-semibold ${
               tab === "inventory"
-                ? "border-b-2 border-[#7ed957] text-white"
+                ? "border-b-2 border-[var(--admin-accent)] text-white"
                 : "text-white/50 hover:text-white/80"
             }`}
           >

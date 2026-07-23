@@ -1,8 +1,8 @@
 export function AdminSetupNotice() {
   return (
     <div className="mx-auto flex min-h-screen max-w-2xl flex-col justify-center px-6 py-16">
-      <span className="font-[cursive] text-3xl text-[#7ed957]">Greenway</span>
-      <h1 className="mt-2 text-2xl font-bold text-[#ffd700]">
+      <span className="font-[cursive] text-3xl text-[var(--admin-accent)]">Greenway</span>
+      <h1 className="mt-2 text-2xl font-bold text-[var(--admin-gold)]">
         Back Office — setup required
       </h1>
       <p className="mt-4 text-white/70">

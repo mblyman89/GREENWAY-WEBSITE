@@ -15,8 +15,8 @@ export default async function AdminLoginPage({
     <div className="flex min-h-screen items-center justify-center px-6 py-16">
       <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#0a0a0a] p-8 shadow-2xl">
         <div className="mb-6 text-center">
-          <span className="font-[cursive] text-3xl text-[#7ed957]">Greenway</span>
-          <h1 className="mt-1 text-lg font-semibold uppercase tracking-[0.2em] text-[#ffd700]">
+          <span className="font-[cursive] text-3xl text-[var(--admin-accent)]">Greenway</span>
+          <h1 className="mt-1 text-lg font-semibold uppercase tracking-[0.2em] text-[var(--admin-gold)]">
             Back Office
           </h1>
           <p className="mt-2 text-sm text-white/50">

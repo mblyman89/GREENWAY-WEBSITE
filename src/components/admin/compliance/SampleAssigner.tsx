@@ -187,7 +187,7 @@ export function SampleAssigner({
                       key={r.lotId}
                       onClick={() => setSelectedLotId(r.lotId)}
                       className={`cursor-pointer border-t border-[var(--admin-border)] transition-colors ${
-                        isSel ? "bg-[#7ed957]/10" : "hover:bg-white/[0.04]"
+                        isSel ? "bg-[var(--admin-accent)]/10" : "hover:bg-white/[0.04]"
                       }`}
                     >
                       <td className="px-3 py-2">
@@ -225,7 +225,7 @@ export function SampleAssigner({
       {rows.length > 0 && (
         <div className="mt-4 space-y-4">
           {selected ? (
-            <div className="rounded-lg border border-[#7ed957]/40 bg-[#7ed957]/10 px-4 py-3 text-sm text-[#7ed957]">
+            <div className="rounded-lg border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-4 py-3 text-sm text-[var(--admin-accent)]">
               Selected: <strong>{selected.productName}</strong>
               {selected.lotCode ? ` (lot ${selected.lotCode})` : ""} — {selected.onHandQty} unit(s) on hand.
             </div>

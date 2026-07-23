@@ -128,7 +128,7 @@ export default async function EmployeeFilePage({
           </div>
         )}
         {sp.ok && (
-          <div className="rounded-lg border border-[#7ed957]/40 bg-[#7ed957]/10 px-4 py-3 text-sm text-[#7ed957]">
+          <div className="rounded-lg border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-4 py-3 text-sm text-[var(--admin-accent)]">
             {decodeURIComponent(sp.ok)}
           </div>
         )}
@@ -234,10 +234,10 @@ export default async function EmployeeFilePage({
                                   aria-label={done ? `Uncheck ${t.label}` : `Check ${t.label}`}
                                   className={`flex h-5 w-5 items-center justify-center rounded border text-xs font-bold ${
                                     done
-                                      ? "border-[#7ed957] bg-[#7ed957]/20 text-[#7ed957]"
+                                      ? "border-[var(--admin-accent)] bg-[var(--admin-accent)]/20 text-[var(--admin-accent)]"
                                       : blocked
                                         ? "border-white/15 text-white/20"
-                                        : "border-white/30 text-transparent hover:border-[#7ed957]"
+                                        : "border-white/30 text-transparent hover:border-[var(--admin-accent)]"
                                   }`}
                                 >
                                   ✓
@@ -295,8 +295,8 @@ export default async function EmployeeFilePage({
                             aria-label={done ? `Uncheck ${t.label}` : `Check ${t.label}`}
                             className={`flex h-5 w-5 items-center justify-center rounded border text-xs font-bold ${
                               done
-                                ? "border-[#7ed957] bg-[#7ed957]/20 text-[#7ed957]"
-                                : "border-white/30 text-transparent hover:border-[#7ed957]"
+                                ? "border-[var(--admin-accent)] bg-[var(--admin-accent)]/20 text-[var(--admin-accent)]"
+                                : "border-white/30 text-transparent hover:border-[var(--admin-accent)]"
                             }`}
                           >
                             ✓

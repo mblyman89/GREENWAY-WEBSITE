@@ -271,7 +271,7 @@ export default async function CompliancePage({
                 </ul>
               </div>
             ) : (
-              <div className="mb-3 rounded-xl border border-[#7ed957]/25 bg-[#7ed957]/[0.05] p-3 text-xs text-[#9be870]">
+              <div className="mb-3 rounded-xl border border-[var(--admin-accent)]/25 bg-[var(--admin-accent)]/[0.05] p-3 text-xs text-[#9be870]">
                 ✓ No blocking sync issues detected — every file’s dependencies resolve.
               </div>
             )}

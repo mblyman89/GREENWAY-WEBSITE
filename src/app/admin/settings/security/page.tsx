@@ -32,7 +32,7 @@ export default async function SecuritySettingsPage() {
         <h2 className="mb-1 text-sm font-semibold text-white">Biometric sign-in</h2>
         <p className="mb-4 text-sm text-white/50">
           A passkey is tied to this device&apos;s biometrics. Registering one lets you tap{" "}
-          <span className="text-[#7ed957]">Sign in with Face ID / Touch ID</span> on the login
+          <span className="text-[var(--admin-accent)]">Sign in with Face ID / Touch ID</span> on the login
           screen. Your email &amp; password keep working as a backup, and passkeys never leave the
           device (only a public key is stored on the server).
         </p>

@@ -58,9 +58,9 @@ export default async function SopPackPage({
         {/* Master SOP — the day-one sheet, visually promoted. */}
         <Link
           href={sopHref(master.slug)}
-          className="block rounded-xl border border-[#7ed957]/40 bg-[#7ed957]/[0.06] p-5 transition hover:border-[#7ed957]/70"
+          className="block rounded-xl border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/[0.06] p-5 transition hover:border-[var(--admin-accent)]/70"
         >
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#7ed957]">
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-[var(--admin-accent)]">
             Master SOP · give this to every new hire
           </p>
           <p className="mt-1 text-lg font-semibold text-white">{master.title}</p>
@@ -73,7 +73,7 @@ export default async function SopPackPage({
             <Link
               key={doc.slug}
               href={sopHref(doc.slug)}
-              className="block rounded-xl border border-white/10 bg-white/[0.03] p-4 transition hover:border-[#7ed957]/50"
+              className="block rounded-xl border border-white/10 bg-white/[0.03] p-4 transition hover:border-[var(--admin-accent)]/50"
             >
               <p className="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-white/40">
                 Stage {i + 1} of {stageDocs.length}

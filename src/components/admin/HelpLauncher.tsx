@@ -44,7 +44,7 @@ export function HelpLauncher() {
         type="button"
         onClick={() => setOpen(true)}
         aria-label="Open help"
-        className="fixed bottom-4 left-4 z-40 flex h-11 w-11 items-center justify-center rounded-full border border-[#7ed957]/40 bg-[#0a0a0a] text-lg font-bold text-[#7ed957] shadow-lg shadow-black/50 transition hover:bg-[#7ed957]/10"
+        className="fixed bottom-4 left-4 z-40 flex h-11 w-11 items-center justify-center rounded-full border border-[var(--admin-accent)]/40 bg-[#0a0a0a] text-lg font-bold text-[var(--admin-accent)] shadow-lg shadow-black/50 transition hover:bg-[var(--admin-accent)]/10"
       >
         ?
       </button>
@@ -77,7 +77,7 @@ export function HelpLauncher() {
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="Search help…"
-                  className="w-full rounded-lg border border-white/15 bg-[#0d0d0d] px-3 py-2 pl-9 text-sm text-white outline-none placeholder:text-white/35 focus:border-[#7ed957]/60"
+                  className="w-full rounded-lg border border-white/15 bg-[#0d0d0d] px-3 py-2 pl-9 text-sm text-white outline-none placeholder:text-white/35 focus:border-[var(--admin-accent)]/60"
                 />
                 <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-white/40">
                   🔍
@@ -105,7 +105,7 @@ export function HelpLauncher() {
                         <Link
                           href={item.href}
                           onClick={() => setOpen(false)}
-                          className="mt-1.5 inline-block text-xs font-medium text-[#7ed957] hover:underline"
+                          className="mt-1.5 inline-block text-xs font-medium text-[var(--admin-accent)] hover:underline"
                         >
                           Go there →
                         </Link>
@@ -120,7 +120,7 @@ export function HelpLauncher() {
               <Link
                 href="/admin/help"
                 onClick={() => setOpen(false)}
-                className="block rounded-lg bg-[#7ed957] px-4 py-2 text-center text-sm font-semibold text-black transition hover:bg-[#94e570]"
+                className="block rounded-lg bg-[var(--admin-accent)] px-4 py-2 text-center text-sm font-semibold text-black transition hover:brightness-110"
               >
                 Open full Help & FAQ
               </Link>

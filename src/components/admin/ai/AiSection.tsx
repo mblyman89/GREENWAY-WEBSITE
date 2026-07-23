@@ -28,13 +28,13 @@ export function AiSection({
   return (
     <section
       id={id}
-      className="space-y-4 rounded-xl border border-[#7ed957]/20 bg-[#7ed957]/[0.03] p-5"
+      className="space-y-4 rounded-xl border border-[var(--admin-accent)]/20 bg-[var(--admin-accent)]/[0.03] p-5"
     >
       <div>
         <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
           <span>{title}</span>
           {!configured && (
-            <span className="rounded-full border border-[#ffd700]/40 bg-[#ffd700]/10 px-2 py-0.5 text-[10px] font-semibold text-[#ffd700]">
+            <span className="rounded-full border border-[var(--admin-gold)]/40 bg-[var(--admin-gold)]/10 px-2 py-0.5 text-[10px] font-semibold text-[var(--admin-gold)]">
               Not set up
             </span>
           )}
@@ -45,7 +45,7 @@ export function AiSection({
       {configured ? (
         children
       ) : (
-        <p className="rounded-lg border border-[#ffd700]/20 bg-[#ffd700]/5 px-3 py-2 text-xs text-[#ffd700]">
+        <p className="rounded-lg border border-[var(--admin-gold)]/20 bg-[var(--admin-gold)]/5 px-3 py-2 text-xs text-[var(--admin-gold)]">
           {notConfiguredHint}
         </p>
       )}

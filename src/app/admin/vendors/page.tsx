@@ -287,7 +287,7 @@ export default async function VendorsPage({
                     )}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-white group-hover:text-[#7ed957]">{v.display_name}</p>
+                    <p className="truncate text-sm font-semibold text-white group-hover:text-[var(--admin-accent)]">{v.display_name}</p>
                     <p className="truncate text-xs text-white/40">
                       {v.license_number ? `Lic ${v.license_number} · ` : ""}
                       {v.brand_count} brand{v.brand_count === 1 ? "" : "s"} · {v.product_count} products
@@ -295,9 +295,9 @@ export default async function VendorsPage({
                   </div>
                   <span className="flex flex-col items-end gap-1">
                     {mine && (
-                      <span className="rounded bg-[#7ed957]/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-[#7ed957]">Mine</span>
+                      <span className="rounded bg-[var(--admin-accent)]/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-[var(--admin-accent)]">Mine</span>
                     )}
-                    <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${v.status === "published" ? "bg-[#7ed957]/15 text-[#7ed957]" : "bg-white/10 text-white/50"}`}>
+                    <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${v.status === "published" ? "bg-[var(--admin-accent)]/15 text-[var(--admin-accent)]" : "bg-white/10 text-white/50"}`}>
                       {v.status}
                     </span>
                   </span>

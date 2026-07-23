@@ -50,7 +50,7 @@ function toneBadge(used: number, cap: number) {
 function bar(used: number, cap: number) {
   const pct = cap > 0 ? Math.min(100, Math.round((used / cap) * 100)) : 0;
   const t = capTone(used, cap);
-  const color = t === "red" ? "#ef4444" : t === "amber" ? "#f59e0b" : "#7ed957";
+  const color = t === "red" ? "#ef4444" : t === "amber" ? "#f59e0b" : "var(--admin-accent)";
   return (
     <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
       <div className="h-full rounded-full" style={{ width: `${pct}%`, background: color }} />
@@ -132,7 +132,7 @@ export default async function SamplesPage({
 
       <div className="space-y-6 px-5 py-6 sm:px-8">
         {ok && (
-          <div className="rounded-lg border border-[#7ed957]/40 bg-[#7ed957]/10 px-4 py-3 text-sm text-[#7ed957]">Saved.</div>
+          <div className="rounded-lg border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-4 py-3 text-sm text-[var(--admin-accent)]">Saved.</div>
         )}
         {error && (
           <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">{decodeURIComponent(error)}</div>
@@ -171,7 +171,7 @@ export default async function SamplesPage({
             </h3>
             <Link
               href="/admin/compliance/samples/history"
-              className="text-xs font-semibold text-[#7ed957] hover:underline"
+              className="text-xs font-semibold text-[var(--admin-accent)] hover:underline"
             >
               Full sample history →
             </Link>
@@ -203,7 +203,7 @@ export default async function SamplesPage({
           </h3>
           <p className="mb-3 text-xs text-white/40">
             Tracked automatically when you accept a manifest with sample lines in{" "}
-            <Link href="/admin/inventory/intake" className="text-[#7ed957] hover:underline">
+            <Link href="/admin/inventory/intake" className="text-[var(--admin-accent)] hover:underline">
               Receiving
             </Link>{" "}
             — deliveries that would exceed a processor&apos;s quarterly cap are blocked there. Nothing to record here.

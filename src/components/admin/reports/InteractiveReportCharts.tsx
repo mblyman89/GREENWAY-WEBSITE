@@ -12,7 +12,7 @@
  * Client component (Recharts needs the browser). Data is passed in pre-computed
  * from the server page — no fetching here.
  */
-import { AreaChart, DonutChart, type DonutDatum } from "@/components/admin/charts";
+import { AreaChart, CHART_COLORS, DonutChart, type DonutDatum } from "@/components/admin/charts";
 
 type DayPoint = { date: string; value: number };
 
@@ -38,14 +38,14 @@ export function OrdersTrendChart({
         title="Orders per day"
         subtitle="Hover any point for the exact count"
         data={orderData}
-        areas={[{ key: "Orders", label: "Orders", color: "#7ed957" }]}
+        areas={[{ key: "Orders", label: "Orders", color: CHART_COLORS.green }]}
         height={220}
       />
       <AreaChart
         title="Revenue per day ($)"
         subtitle="Gross revenue, completed orders"
         data={revData}
-        areas={[{ key: "Revenue", label: "Revenue ($)", color: "#ffd700" }]}
+        areas={[{ key: "Revenue", label: "Revenue ($)", color: CHART_COLORS.gold }]}
         height={220}
       />
     </div>
@@ -58,7 +58,7 @@ export function LoyaltyTrendChart({ signupsByDay }: { signupsByDay: DayPoint[] }
     <AreaChart
       title="Signups per day"
       data={data}
-      areas={[{ key: "Signups", label: "Signups", color: "#7ed957" }]}
+      areas={[{ key: "Signups", label: "Signups", color: CHART_COLORS.green }]}
       height={200}
     />
   );

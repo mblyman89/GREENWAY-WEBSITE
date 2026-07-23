@@ -110,7 +110,7 @@ export default async function EmployeesPage({
           </div>
         )}
         {sp.saved && (
-          <div className="rounded-lg border border-[#7ed957]/40 bg-[#7ed957]/10 px-4 py-3 text-sm text-[#7ed957]">
+          <div className="rounded-lg border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-4 py-3 text-sm text-[var(--admin-accent)]">
             Saved.
           </div>
         )}

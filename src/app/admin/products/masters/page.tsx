@@ -110,7 +110,7 @@ export default async function MastersPage({
           </div>
         )}
         {sp.generated !== undefined && (
-          <div className="rounded-lg border border-[#7ed957]/40 bg-[#7ed957]/10 px-4 py-3 text-sm text-[#7ed957]">
+          <div className="rounded-lg border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-4 py-3 text-sm text-[var(--admin-accent)]">
             Created {sp.generated} new suggestion(s) from {sp.clusters ?? 0} candidate group(s).
             {!isAiConfigured && " (AI not configured — exact-name matches only.)"}
           </div>
@@ -145,7 +145,7 @@ export default async function MastersPage({
 
 function tabCls(active: boolean) {
   return `px-4 py-2 text-sm font-semibold ${
-    active ? "border-b-2 border-[#7ed957] text-white" : "text-white/50 hover:text-white/80"
+    active ? "border-b-2 border-[var(--admin-accent)] text-white" : "text-white/50 hover:text-white/80"
   }`;
 }
 

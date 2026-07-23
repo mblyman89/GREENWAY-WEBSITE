@@ -96,7 +96,7 @@ export default async function MarketingPage() {
                           {play.tool && (
                             <Link
                               href={play.tool.href}
-                              className="rounded-full bg-[#7ed957]/10 px-2.5 py-0.5 text-[11px] font-semibold text-[#7ed957] hover:bg-[#7ed957]/20"
+                              className="rounded-full bg-[var(--admin-accent)]/10 px-2.5 py-0.5 text-[11px] font-semibold text-[var(--admin-accent)] hover:bg-[var(--admin-accent)]/20"
                             >
                               {play.tool.label} →
                             </Link>
@@ -164,7 +164,7 @@ export default async function MarketingPage() {
                   </span>
                 </summary>
                 <div className="border-t border-white/5 px-5 py-4">
-                  <p className="text-xs leading-relaxed text-[#7ed957]/90">{rule.edge}</p>
+                  <p className="text-xs leading-relaxed text-[var(--admin-accent)]/90">{rule.edge}</p>
                   <div className="mt-3 grid gap-4 lg:grid-cols-2">
                     <div>
                       <h4 className="text-[11px] font-semibold uppercase tracking-wide text-white/50">
@@ -173,7 +173,7 @@ export default async function MarketingPage() {
                       <ul className="mt-1.5 space-y-1.5 text-xs leading-relaxed text-white/70">
                         {campaignChecklist(rule.channel).map((item, i) => (
                           <li key={i} className="flex gap-2">
-                            <span className="text-[#7ed957]">☐</span>
+                            <span className="text-[var(--admin-accent)]">☐</span>
                             {item}
                           </li>
                         ))}

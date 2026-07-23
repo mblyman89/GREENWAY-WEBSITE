@@ -57,7 +57,7 @@ export default async function PhoneClockPage({
         </div>
       )}
       {sp.clocked && (
-        <div className="mb-5 rounded-xl border border-[#7ed957]/40 bg-[#7ed957]/10 px-4 py-4 text-center text-base font-semibold text-[#7ed957]">
+        <div className="mb-5 rounded-xl border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-4 py-4 text-center text-base font-semibold text-[var(--admin-accent)]">
           {sp.who ? `${decodeURIComponent(sp.who)} — ` : ""}Clocked {sp.clocked === "in" ? "IN" : "OUT"} ✓
         </div>
       )}
@@ -65,8 +65,8 @@ export default async function PhoneClockPage({
       <PhonePinPad action={clockByPinPhoneAction} />
 
       {clockedIn.length > 0 && (
-        <div className="mt-8 rounded-xl border border-[#7ed957]/25 bg-[#7ed957]/5 p-4">
-          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#7ed957]">On the clock now</h2>
+        <div className="mt-8 rounded-xl border border-[var(--admin-accent)]/25 bg-[var(--admin-accent)]/5 p-4">
+          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--admin-accent)]">On the clock now</h2>
           <ul className="space-y-1.5">
             {clockedIn.map(({ employee, punch }) => (
               <li key={punch.id} className="flex items-center justify-between text-sm">

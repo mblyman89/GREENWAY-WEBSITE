@@ -157,7 +157,7 @@ export default async function ReportsOverviewPage({
       <Section
         title="Loyalty signups"
         action={
-          <Link href="/admin/loyalty-signups" className="text-xs font-bold text-[#7ed957] hover:underline">
+          <Link href="/admin/loyalty-signups" className="text-xs font-bold text-[var(--admin-accent)] hover:underline">
             Open queue →
           </Link>
         }
@@ -184,7 +184,7 @@ export default async function ReportsOverviewPage({
       <Section
         title="Inventory health (published menu)"
         action={
-          <Link href="/admin/menu-imports" className="text-xs font-bold text-[#7ed957] hover:underline">
+          <Link href="/admin/menu-imports" className="text-xs font-bold text-[var(--admin-accent)] hover:underline">
             Menu imports →
           </Link>
         }
@@ -223,7 +223,7 @@ export default async function ReportsOverviewPage({
       <Section
         title="Promotions"
         action={
-          <Link href="/admin/promotions" className="text-xs font-bold text-[#7ed957] hover:underline">
+          <Link href="/admin/promotions" className="text-xs font-bold text-[var(--admin-accent)] hover:underline">
             Manage →
           </Link>
         }
@@ -243,11 +243,11 @@ function Mini({ label, value, warn = false }: { label: string; value: number; wa
   return (
     <div
       className={`rounded-xl border p-3 ${
-        warn ? "border-[#ff7f00]/40 bg-[#ff7f00]/5" : "border-white/10 bg-black/30"
+        warn ? "border-[var(--admin-orange)]/40 bg-[var(--admin-orange)]/5" : "border-white/10 bg-black/30"
       }`}
     >
       <p className="text-[0.62rem] font-bold uppercase tracking-[0.1em] text-white/40">{label}</p>
-      <p className={`mt-1 text-2xl font-black ${warn ? "text-[#ff7f00]" : "text-white"}`}>{value}</p>
+      <p className={`mt-1 text-2xl font-black ${warn ? "text-[var(--admin-orange)]" : "text-white"}`}>{value}</p>
     </div>
   );
 }

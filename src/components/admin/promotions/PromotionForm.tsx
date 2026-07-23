@@ -90,7 +90,7 @@ export function PromotionForm({ action, promotion, brands, submitLabel, aiEnable
   const basketMode = Object.keys(basketTopItem).length > 0 ? "top_item" : "n_for_m";
 
   const inputCls =
-    "w-full rounded-lg border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#7ed957]";
+    "w-full rounded-lg border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[var(--admin-accent)]";
   const tierRow = (prefix: string, atLabel: string, tiers: { at: number; percent: number }[]) =>
     [0, 1, 2].map((i) => (
       <div key={`${prefix}-${i}`} className="grid grid-cols-2 gap-2">
@@ -119,7 +119,7 @@ export function PromotionForm({ action, promotion, brands, submitLabel, aiEnable
               name="title"
               defaultValue={promotion?.title ?? ""}
               required
-              className="w-full rounded-lg border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#7ed957]"
+              className="w-full rounded-lg border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[var(--admin-accent)]"
               placeholder="e.g. Munchie Monday"
             />
           </label>
@@ -128,7 +128,7 @@ export function PromotionForm({ action, promotion, brands, submitLabel, aiEnable
             <input
               name="promo_key"
               defaultValue={promotion?.promo_key ?? ""}
-              className="w-full rounded-lg border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#7ed957]"
+              className="w-full rounded-lg border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[var(--admin-accent)]"
               placeholder="e.g. daily.monday"
             />
           </label>
@@ -139,7 +139,7 @@ export function PromotionForm({ action, promotion, brands, submitLabel, aiEnable
             name="description"
             defaultValue={promotion?.description ?? ""}
             rows={2}
-            className="w-full rounded-lg border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#7ed957]"
+            className="w-full rounded-lg border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[var(--admin-accent)]"
           />
         </label>
         <label className="block">
@@ -147,7 +147,7 @@ export function PromotionForm({ action, promotion, brands, submitLabel, aiEnable
           <input
             name="bonus_note"
             defaultValue={promotion?.bonus_note ?? ""}
-            className="w-full rounded-lg border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#7ed957]"
+            className="w-full rounded-lg border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[var(--admin-accent)]"
             placeholder='e.g. "buy 2+ to save"'
           />
         </label>
@@ -164,7 +164,7 @@ export function PromotionForm({ action, promotion, brands, submitLabel, aiEnable
             <select
               name="discount_type"
               defaultValue={promotion?.discount_type ?? "percent"}
-              className="w-full rounded-lg border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#7ed957]"
+              className="w-full rounded-lg border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[var(--admin-accent)]"
             >
               {DISCOUNT_TYPES.map((t) => (
                 <option key={t} value={t}>
@@ -182,7 +182,7 @@ export function PromotionForm({ action, promotion, brands, submitLabel, aiEnable
               max={100}
               step="0.01"
               defaultValue={promotion?.discount_percent ?? 0}
-              className="w-full rounded-lg border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#7ed957]"
+              className="w-full rounded-lg border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[var(--admin-accent)]"
             />
           </label>
           <label className="block">
@@ -193,7 +193,7 @@ export function PromotionForm({ action, promotion, brands, submitLabel, aiEnable
               min={0}
               step="1"
               defaultValue={promotion?.discount_fixed ?? 0}
-              className="w-full rounded-lg border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#7ed957]"
+              className="w-full rounded-lg border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[var(--admin-accent)]"
             />
           </label>
         </div>
@@ -207,7 +207,7 @@ export function PromotionForm({ action, promotion, brands, submitLabel, aiEnable
               max={100}
               step="0.01"
               defaultValue={promotion?.multi_item_percent ?? ""}
-              className="w-full rounded-lg border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#7ed957]"
+              className="w-full rounded-lg border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[var(--admin-accent)]"
             />
           </label>
           <label className="flex items-center gap-3 pt-6">
@@ -215,7 +215,7 @@ export function PromotionForm({ action, promotion, brands, submitLabel, aiEnable
               type="checkbox"
               name="per_item_sale"
               defaultChecked={promotion?.per_item_sale ?? true}
-              className="h-4 w-4 accent-[#7ed957]"
+              className="h-4 w-4 accent-[var(--admin-accent)]"
             />
             <span className="text-sm text-white/70">
               Show honest struck per-item price on cards
@@ -324,7 +324,7 @@ export function PromotionForm({ action, promotion, brands, submitLabel, aiEnable
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <label className="flex items-center gap-2 text-xs text-white/60">
-                  <input type="radio" name="cfg_basket_mode" value="n_for_m" defaultChecked={basketMode === "n_for_m"} className="h-3.5 w-3.5 accent-[#7ed957]" />
+                  <input type="radio" name="cfg_basket_mode" value="n_for_m" defaultChecked={basketMode === "n_for_m"} className="h-3.5 w-3.5 accent-[var(--admin-accent)]" />
                   Buy N for the price of M (mix &amp; match — cheapest units set the savings, spread
                   across the basket like Ice Cream Sunday)
                 </label>
@@ -341,7 +341,7 @@ export function PromotionForm({ action, promotion, brands, submitLabel, aiEnable
               </div>
               <div className="space-y-2">
                 <label className="flex items-center gap-2 text-xs text-white/60">
-                  <input type="radio" name="cfg_basket_mode" value="top_item" defaultChecked={basketMode === "top_item"} className="h-3.5 w-3.5 accent-[#7ed957]" />
+                  <input type="radio" name="cfg_basket_mode" value="top_item" defaultChecked={basketMode === "top_item"} className="h-3.5 w-3.5 accent-[var(--admin-accent)]" />
                   Top item % + rest % (Super Saturday style)
                 </label>
                 <div className="grid grid-cols-2 gap-2">
@@ -373,7 +373,7 @@ export function PromotionForm({ action, promotion, brands, submitLabel, aiEnable
             <select
               name="weekday"
               defaultValue={promotion?.weekday ?? ""}
-              className="w-full rounded-lg border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#7ed957]"
+              className="w-full rounded-lg border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[var(--admin-accent)]"
             >
               <option value="">— none (use date window) —</option>
               {([0, 1, 2, 3, 4, 5, 6] as Weekday[]).map((d) => (
@@ -389,7 +389,7 @@ export function PromotionForm({ action, promotion, brands, submitLabel, aiEnable
               name="starts_at"
               type="datetime-local"
               defaultValue={promotion?.starts_at?.slice(0, 16) ?? ""}
-              className="w-full rounded-lg border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#7ed957]"
+              className="w-full rounded-lg border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[var(--admin-accent)]"
             />
           </label>
           <label className="block">
@@ -398,7 +398,7 @@ export function PromotionForm({ action, promotion, brands, submitLabel, aiEnable
               name="ends_at"
               type="datetime-local"
               defaultValue={promotion?.ends_at?.slice(0, 16) ?? ""}
-              className="w-full rounded-lg border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#7ed957]"
+              className="w-full rounded-lg border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[var(--admin-accent)]"
             />
           </label>
         </div>
@@ -409,7 +409,7 @@ export function PromotionForm({ action, promotion, brands, submitLabel, aiEnable
             type="number"
             step="1"
             defaultValue={promotion?.priority ?? 0}
-            className="w-full rounded-lg border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#7ed957]"
+            className="w-full rounded-lg border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[var(--admin-accent)]"
           />
         </label>
       </section>
@@ -424,7 +424,7 @@ export function PromotionForm({ action, promotion, brands, submitLabel, aiEnable
             name="target_scope"
             value="all"
             defaultChecked={storewide}
-            className="h-4 w-4 accent-[#7ed957]"
+            className="h-4 w-4 accent-[var(--admin-accent)]"
           />
           <span className="text-sm text-white/70">
             Storewide (applies to everything — e.g. Super Saturday / clearance event)
@@ -445,7 +445,7 @@ export function PromotionForm({ action, promotion, brands, submitLabel, aiEnable
                   name="target_category"
                   value={cat}
                   defaultChecked={selectedCategories.has(cat)}
-                  className="h-3.5 w-3.5 accent-[#7ed957]"
+                  className="h-3.5 w-3.5 accent-[var(--admin-accent)]"
                 />
                 {cat}
               </label>
@@ -479,7 +479,7 @@ export function PromotionForm({ action, promotion, brands, submitLabel, aiEnable
                     name="target_brand"
                     value={brand}
                     defaultChecked={selectedBrands.has(brand)}
-                    className="h-3.5 w-3.5 accent-[#ffd700]"
+                    className="h-3.5 w-3.5 accent-[var(--admin-gold)]"
                   />
                   {brand}
                 </label>
@@ -504,7 +504,7 @@ export function PromotionForm({ action, promotion, brands, submitLabel, aiEnable
                 name="exclude_category"
                 value={cat}
                 defaultChecked={excludedCategories.has(cat)}
-                className="h-3.5 w-3.5 accent-[#ff7f00]"
+                className="h-3.5 w-3.5 accent-[var(--admin-orange)]"
               />
               {cat}
             </label>

@@ -66,7 +66,7 @@ export default async function MasterDetailPage({
           <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">{decodeURIComponent(sp.error)}</div>
         )}
         {(sp.saved || sp.created || sp.accepted) && (
-          <div className="rounded-lg border border-[#7ed957]/40 bg-[#7ed957]/10 px-4 py-3 text-sm text-[#7ed957]">
+          <div className="rounded-lg border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-4 py-3 text-sm text-[var(--admin-accent)]">
             {sp.accepted ? "Suggestion accepted — draft created. Review and publish below." : "Saved."}
           </div>
         )}

@@ -41,7 +41,7 @@ export function HelpSearch() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search help… (e.g. “upload menu”, “drawer”, “excise”, “api key”)"
-          className="w-full rounded-xl border border-white/15 bg-[#0d0d0d] px-4 py-3 pl-10 text-sm text-white outline-none placeholder:text-white/35 focus:border-[#7ed957]/60"
+          className="w-full rounded-xl border border-white/15 bg-[#0d0d0d] px-4 py-3 pl-10 text-sm text-white outline-none placeholder:text-white/35 focus:border-[var(--admin-accent)]/60"
         />
         <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/40">
           🔍
@@ -87,7 +87,7 @@ export function HelpSearch() {
                 <a
                   key={g.category}
                   href={`#${slugCategory(g.category)}`}
-                  className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70 hover:border-[#7ed957]/50 hover:text-white"
+                  className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70 hover:border-[var(--admin-accent)]/50 hover:text-white"
                 >
                   {g.category}
                 </a>
@@ -100,7 +100,7 @@ export function HelpSearch() {
             {groups.map((g) => (
               <div key={g.category} id={slugCategory(g.category)} className="scroll-mt-24">
                 <div className="mb-1 border-b border-white/10 pb-2">
-                  <h2 className="text-lg font-bold text-[#7ed957]">{g.category}</h2>
+                  <h2 className="text-lg font-bold text-[var(--admin-accent)]">{g.category}</h2>
                   <p className="text-sm text-white/45">{g.blurb}</p>
                 </div>
                 <div className="mt-5 space-y-8">
@@ -155,7 +155,7 @@ function QA({
       {href && (
         <Link
           href={href}
-          className="mt-2 inline-block text-sm font-medium text-[#7ed957] hover:underline"
+          className="mt-2 inline-block text-sm font-medium text-[var(--admin-accent)] hover:underline"
         >
           Go there →
         </Link>

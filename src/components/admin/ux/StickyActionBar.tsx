@@ -29,15 +29,15 @@ type StatusTone = "neutral" | "success" | "warning" | "error";
 
 const STATUS_DOT: Record<StatusTone, string> = {
   neutral: "bg-white/40",
-  success: "bg-[#7ed957]",
-  warning: "bg-[#ffd700]",
+  success: "bg-[var(--admin-accent)]",
+  warning: "bg-[var(--admin-gold)]",
   error: "bg-red-500",
 };
 
 const STATUS_TEXT: Record<StatusTone, string> = {
   neutral: "text-white/60",
-  success: "text-[#7ed957]",
-  warning: "text-[#ffd700]",
+  success: "text-[var(--admin-accent)]",
+  warning: "text-[var(--admin-gold)]",
   error: "text-red-300",
 };
 

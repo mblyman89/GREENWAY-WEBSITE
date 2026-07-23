@@ -188,7 +188,7 @@ export default async function ForecastPage({
                 return (
                   <div key={i} className="flex flex-1 flex-col items-center gap-1">
                     <div
-                      className="w-full rounded-t bg-[#ffd700]/50"
+                      className="w-full rounded-t bg-[var(--admin-gold)]/50"
                       style={{ height: `${h}px` }}
                       title={`${DOW_FULL[i]}: ${(idx * 100).toFixed(0)}% of average`}
                     />

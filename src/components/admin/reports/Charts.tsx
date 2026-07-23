@@ -4,10 +4,13 @@
  * brand-token colors.
  */
 import type { DayPoint, LabeledCount } from "@/lib/reports/analytics";
+import { CHART_COLORS } from "@/components/admin/charts/theme";
 
-const GREEN = "#7ed957";
-const GOLD = "#ffd700";
-const ORANGE = "#ff7f00";
+// SVG fill/stroke attributes can't use CSS var() reliably, so charts read the
+// ONE shared hex source (charts/theme.ts) instead of hard-coding their own.
+const GREEN = CHART_COLORS.green;
+const GOLD = CHART_COLORS.gold;
+const ORANGE = CHART_COLORS.orange;
 
 /** Horizontal bar list — good for top products/brands/categories. */
 export function BarList({

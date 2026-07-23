@@ -145,8 +145,8 @@ export function CounterReturnDesk() {
   if (done) {
     return (
       <div className="space-y-4">
-        <div className="rounded-xl border border-[#7ed957]/40 bg-[#7ed957]/[0.07] p-4">
-          <p className="text-sm font-semibold text-[#7ed957]">Return logged — hand the customer their refund.</p>
+        <div className="rounded-xl border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/[0.07] p-4">
+          <p className="text-sm font-semibold text-[var(--admin-accent)]">Return logged — hand the customer their refund.</p>
           <ul className="mt-2 space-y-1 text-sm text-white/80">
             <li>
               Cash to refund: <strong>{money(done.refundMinor)}</strong>
@@ -257,7 +257,7 @@ export function CounterReturnDesk() {
                       }}
                       className={`w-full rounded-xl border px-4 py-3 text-left text-sm transition ${
                         isSel
-                          ? "border-[#7ed957]/60 bg-[#7ed957]/[0.08]"
+                          ? "border-[var(--admin-accent)]/60 bg-[var(--admin-accent)]/[0.08]"
                           : "border-white/10 bg-white/[0.02] hover:border-white/25"
                       } ${out ? "opacity-40" : ""}`}
                     >
@@ -284,8 +284,8 @@ export function CounterReturnDesk() {
                 Step 3 · Check the product, then log the return
               </p>
 
-              <div className="rounded-lg border border-[#ffd700]/25 bg-[#ffd700]/[0.05] px-3 py-2.5 text-xs text-white/75">
-                <p className="font-semibold text-[#ffd700]">Check the physical product first (WAC 314-55-079(12)):</p>
+              <div className="rounded-lg border border-[var(--admin-gold)]/25 bg-[var(--admin-gold)]/[0.05] px-3 py-2.5 text-xs text-white/75">
+                <p className="font-semibold text-[var(--admin-gold)]">Check the physical product first (WAC 314-55-079(12)):</p>
                 <label className="mt-2 flex items-start gap-2">
                   <input
                     type="checkbox"

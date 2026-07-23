@@ -197,7 +197,7 @@ export default async function MedicalReportPage({
         subtitle="Excise-exempt sales where the recognition card had expired on the sale date — review these for WAC 314-55-090 compliance"
       >
         {issueRows.length === 0 ? (
-          <div className="rounded-xl border border-[#7ed957]/20 bg-[#7ed957]/[0.04] p-6 text-center text-sm text-[#9be870]">
+          <div className="rounded-xl border border-[var(--admin-accent)]/20 bg-[var(--admin-accent)]/[0.04] p-6 text-center text-sm text-[#9be870]">
             ✓ No expired-card exempt sales in this window.
           </div>
         ) : (

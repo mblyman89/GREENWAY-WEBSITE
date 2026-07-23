@@ -176,7 +176,7 @@ function TopProductsBlocks({ competitors }: { competitors: LocalCompetitorStat[]
                   </td>
                   <td className="px-2 py-1.5 text-right text-white/55">{num(p.units)}</td>
                   <td className="px-2 py-1.5 text-right text-white/80">{money(p.revenueMinor)}</td>
-                  <td className="py-1.5 pl-2 text-right font-semibold text-[#7ed957]">{money(p.medianUnitPriceMinor)}</td>
+                  <td className="py-1.5 pl-2 text-right font-semibold text-[var(--admin-accent)]">{money(p.medianUnitPriceMinor)}</td>
                 </tr>
               ))}
             </tbody>
@@ -225,7 +225,7 @@ function SupplierBlocks({ competitors }: { competitors: LocalCompetitorStat[] })
                     ) : null}
                   </td>
                   <td className="px-2 py-1.5 text-right text-white/55">{num(s.lineCount)}</td>
-                  <td className="py-1.5 pl-2 text-right font-semibold text-[#7ed957]">{money(s.spendMinor)}</td>
+                  <td className="py-1.5 pl-2 text-right font-semibold text-[var(--admin-accent)]">{money(s.spendMinor)}</td>
                 </tr>
               ))}
             </tbody>
@@ -292,7 +292,7 @@ function SwitchCompetitorBlocks({ reports }: { reports: CompetitorSwitchReport[]
             <tbody>
               {r.entered.map((c) => (
                 <tr key={`in-${c.supplierKey}`} className="border-b border-white/5">
-                  <td className="py-1.5 pr-2 font-semibold text-[#7ed957]">Entered</td>
+                  <td className="py-1.5 pr-2 font-semibold text-[var(--admin-accent)]">Entered</td>
                   <td className="max-w-[14rem] truncate px-2 py-1.5 text-white/80" title={c.displayName}>
                     {c.displayName}
                     {c.licenseNumber ? <span className="ml-1 text-[10px] text-white/30">{c.licenseNumber}</span> : null}
@@ -348,7 +348,7 @@ function SupplierMomentumTable({ momentum }: { momentum: SupplierMomentum[] }) {
       align: "right",
       emphasis: true,
       render: (r) => (
-        <span className={r.buyerDelta > 0 ? "text-[#7ed957]" : "text-amber-400/90"}>
+        <span className={r.buyerDelta > 0 ? "text-[var(--admin-accent)]" : "text-amber-400/90"}>
           {r.prevBuyerCount} → {r.currBuyerCount} ({r.buyerDelta > 0 ? "+" : ""}
           {r.buyerDelta})
         </span>
@@ -408,7 +408,7 @@ function StatewideSupplierTable({ suppliers }: { suppliers: DiscoverySupplierSta
       align: "right",
       render: (r) =>
         r.tracked_buyers > 0 ? (
-          <span className="font-semibold text-[#7ed957]">{num(r.tracked_buyers)}</span>
+          <span className="font-semibold text-[var(--admin-accent)]">{num(r.tracked_buyers)}</span>
         ) : (
           "—"
         ),
@@ -432,7 +432,7 @@ function StatewideSupplierTable({ suppliers }: { suppliers: DiscoverySupplierSta
 function GapStatusBadge({ status, brandItemCount }: { status: AssortmentGapStatus; brandItemCount: number }) {
   if (status === "carried") {
     return (
-      <span className="rounded-full border border-[#7ed957]/40 bg-[#7ed957]/10 px-2 py-0.5 text-xs font-semibold text-[#7ed957]">
+      <span className="rounded-full border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-2 py-0.5 text-xs font-semibold text-[var(--admin-accent)]">
         Carried
       </span>
     );
@@ -539,7 +539,7 @@ function NewSupplierTable({ rows }: { rows: NewSupplierRow[] }) {
       align: "right",
       render: (r) =>
         r.trackedBuyers > 0 ? (
-          <span className="font-semibold text-[#7ed957]">{num(r.trackedBuyers)}</span>
+          <span className="font-semibold text-[var(--admin-accent)]">{num(r.trackedBuyers)}</span>
         ) : (
           "—"
         ),

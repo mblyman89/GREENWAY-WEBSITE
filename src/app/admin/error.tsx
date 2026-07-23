@@ -89,8 +89,8 @@ export default function AdminError({
   if (autoRecovering) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center p-6">
-        <div className="w-full max-w-md rounded-2xl border border-[#7ed957]/30 bg-[#7ed957]/[0.05] p-8 text-center">
-          <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-[#7ed957]/30 border-t-[#7ed957]" />
+        <div className="w-full max-w-md rounded-2xl border border-[var(--admin-accent)]/30 bg-[var(--admin-accent)]/[0.05] p-8 text-center">
+          <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-[var(--admin-accent)]/30 border-t-[var(--admin-accent)]" />
           <h1 className="mt-5 text-lg font-semibold text-white">
             Refreshing the editor…
           </h1>
@@ -107,8 +107,8 @@ export default function AdminError({
 
   return (
     <div className="flex min-h-[60vh] items-center justify-center p-6">
-      <div className="w-full max-w-lg rounded-2xl border border-[#ffd700]/30 bg-[#ffd700]/[0.04] p-8 text-center">
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-[#ffd700]/40 bg-[#ffd700]/10 text-2xl">
+      <div className="w-full max-w-lg rounded-2xl border border-[var(--admin-gold)]/30 bg-[var(--admin-gold)]/[0.04] p-8 text-center">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-[var(--admin-gold)]/40 bg-[var(--admin-gold)]/10 text-2xl">
           ℹ️
         </div>
         <h1 className="mt-5 text-xl font-semibold text-white">
@@ -142,7 +142,7 @@ export default function AdminError({
                 reset();
               }
             }}
-            className="rounded-lg bg-[#7ed957] px-5 py-2.5 text-sm font-semibold text-black transition hover:bg-[#94e570]"
+            className="rounded-lg bg-[var(--admin-accent)] px-5 py-2.5 text-sm font-semibold text-black transition hover:brightness-110"
           >
             {staleHint ? "Reload page" : "Try again"}
           </button>

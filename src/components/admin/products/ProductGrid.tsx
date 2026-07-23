@@ -23,8 +23,8 @@ export type ProductGridCard = {
 
 function StatusPill({ status }: { status: string | null }) {
   const map: Record<string, string> = {
-    published: "bg-[#7ed957]/15 text-[#7ed957] border-[#7ed957]/30",
-    draft: "bg-[#ff7f00]/15 text-[#ff7f00] border-[#ff7f00]/30",
+    published: "bg-[var(--admin-accent)]/15 text-[var(--admin-accent)] border-[var(--admin-accent)]/30",
+    draft: "bg-[var(--admin-orange)]/15 text-[var(--admin-orange)] border-[var(--admin-orange)]/30",
     archived: "bg-white/10 text-white/40 border-white/15",
   };
   const cls = (status && map[status]) || "bg-white/10 text-white/45 border-white/15";
@@ -39,7 +39,7 @@ function GapBadge({ ok, label }: { ok: boolean; label: string }) {
   return (
     <span
       className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.6rem] font-semibold ${
-        ok ? "bg-[#7ed957]/10 text-[#7ed957]/80" : "bg-[#ff7f00]/15 text-[#ff7f00]"
+        ok ? "bg-[var(--admin-accent)]/10 text-[var(--admin-accent)]/80" : "bg-[var(--admin-orange)]/15 text-[var(--admin-orange)]"
       }`}
       title={ok ? `${label}: done` : `${label}: missing`}
     >
@@ -65,7 +65,7 @@ export function ProductGrid({
         <Link
           key={c.posKey}
           href={hrefFor ? hrefFor(c.posKey) : `/admin/products/${encodeURIComponent(c.posKey)}`}
-          className="group flex flex-col overflow-hidden rounded-xl border border-white/10 bg-[#0a0a0a] transition hover:border-[#7ed957]/50 hover:bg-white/[0.03]"
+          className="group flex flex-col overflow-hidden rounded-xl border border-white/10 bg-[#0a0a0a] transition hover:border-[var(--admin-accent)]/50 hover:bg-white/[0.03]"
         >
           <div className="relative aspect-square overflow-hidden bg-zinc-900">
             {c.thumbnailUrl ? (
@@ -78,7 +78,7 @@ export function ProductGrid({
             ) : (
               <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-white/25">
                 <span className="text-2xl">🌿</span>
-                <span className="text-[0.65rem] uppercase tracking-wide text-[#ff7f00]">No photo</span>
+                <span className="text-[0.65rem] uppercase tracking-wide text-[var(--admin-orange)]">No photo</span>
               </div>
             )}
             <div className="absolute right-2 top-2">
@@ -87,7 +87,7 @@ export function ProductGrid({
           </div>
           <div className="flex flex-1 flex-col gap-2 p-3">
             <div>
-              <p className="line-clamp-2 text-sm font-semibold leading-tight text-white group-hover:text-[#7ed957]">
+              <p className="line-clamp-2 text-sm font-semibold leading-tight text-white group-hover:text-[var(--admin-accent)]">
                 {c.name}
               </p>
               <p className="mt-0.5 text-[0.7rem] text-white/45">

@@ -30,7 +30,7 @@ export function ErrorState({
   const palette =
     tone === "error"
       ? "border-red-500/30 bg-red-500/[0.06] text-red-300"
-      : "border-[#ffd700]/30 bg-[#ffd700]/[0.05] text-[#ffd700]";
+      : "border-[var(--admin-gold)]/30 bg-[var(--admin-gold)]/[0.05] text-[var(--admin-gold)]";
 
   return (
     <div className={`rounded-xl border p-5 ${palette}`}>

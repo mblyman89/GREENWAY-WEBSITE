@@ -25,7 +25,7 @@ export function ExportButtons({ baseHref, className = "" }: { baseHref: string; 
       </Link>
       <Link
         href={withFormat(baseHref, "xlsx")}
-        className="rounded-lg border border-[#7ed957]/30 px-2.5 py-1.5 text-xs font-bold text-[#7ed957] transition hover:border-[#7ed957]/60 hover:text-[#9be870]"
+        className="rounded-lg border border-[var(--admin-accent)]/30 px-2.5 py-1.5 text-xs font-bold text-[var(--admin-accent)] transition hover:border-[var(--admin-accent)]/60 hover:text-[#9be870]"
         title="Download Excel (.xlsx)"
       >
         ⬇ Excel

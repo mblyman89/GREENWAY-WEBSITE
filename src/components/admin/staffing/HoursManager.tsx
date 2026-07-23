@@ -102,7 +102,7 @@ export function HoursManager({
                 <span className="min-w-[9rem] flex-1 font-semibold text-white">{p.employeeName}</span>
                 <Badge tone="outline">{p.jobRole}</Badge>
                 <span className="text-white/70">
-                  {fmtLocalTime(p.inLocal)} → {p.outLocal ? fmtLocalTime(p.outLocal) : <span className="text-[#7ed957]">still in</span>}
+                  {fmtLocalTime(p.inLocal)} → {p.outLocal ? fmtLocalTime(p.outLocal) : <span className="text-[var(--admin-accent)]">still in</span>}
                 </span>
                 <span className="text-white/40">{fmtMinutes(p.minutes)}</span>
                 {p.source === "manager_edit" && <Badge tone="gold">edited</Badge>}
@@ -147,7 +147,7 @@ function EditPunchForm({ row, onDone }: { row: HoursPunchRow; onDone: () => void
   }
 
   return (
-    <div className="rounded-lg border border-[#7ed957]/30 bg-[#7ed957]/5 px-4 py-4">
+    <div className="rounded-lg border border-[var(--admin-accent)]/30 bg-[var(--admin-accent)]/5 px-4 py-4">
       <p className="mb-3 text-sm font-semibold text-white">Adjust hours — {row.employeeName}</p>
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Clock in (Pacific)">

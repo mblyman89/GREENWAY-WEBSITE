@@ -85,7 +85,7 @@ function href(sp: Params, patch: Partial<Params>): string {
 
 function chip(active: boolean): string {
   return active
-    ? "rounded-full bg-[#7ed957] px-3 py-1 text-xs font-semibold text-black"
+    ? "rounded-full bg-[var(--admin-accent)] px-3 py-1 text-xs font-semibold text-black"
     : "rounded-full border border-[var(--admin-border)] px-3 py-1 text-xs text-[var(--admin-text-muted)] transition hover:bg-[var(--admin-surface-hover)]";
 }
 
@@ -192,7 +192,7 @@ export default async function PromotionsAdminPage({
             </Link>
             <Link
               href="/admin/promotions/new"
-              className="rounded-lg bg-[#7ed957] px-4 py-2 text-sm font-semibold text-black transition hover:bg-[#6bc945]"
+              className="rounded-lg bg-[var(--admin-accent)] px-4 py-2 text-sm font-semibold text-black transition hover:bg-[#6bc945]"
             >
               + New promotion
             </Link>
@@ -260,7 +260,7 @@ export default async function PromotionsAdminPage({
                       </li>
                     )}
                     {e.regularBelowCost.slice(0, 3).map((f) => (
-                      <li key={`rb-${f.key}`} className="text-xs text-[#ffd700]/90">
+                      <li key={`rb-${f.key}`} className="text-xs text-[var(--admin-gold)]/90">
                         <span className="font-medium text-white/80">{f.name}</span> — regular price{" "}
                         {formatMoneyMinor(f.priceMinorUnits)} already sits at/below its{" "}
                         {formatMoneyMinor(f.floorMinorUnits)} cost floor. No discount can apply;
@@ -268,7 +268,7 @@ export default async function PromotionsAdminPage({
                       </li>
                     ))}
                     {e.regularBelowCost.length > 3 && (
-                      <li className="text-xs text-[#ffd700]/60">
+                      <li className="text-xs text-[var(--admin-gold)]/60">
                         …and {e.regularBelowCost.length - 3} more priced at/below cost.
                       </li>
                     )}
@@ -278,8 +278,8 @@ export default async function PromotionsAdminPage({
             </div>
           </div>
         ) : (
-          <div className="rounded-xl border border-[#7ed957]/25 bg-[#7ed957]/[0.06] p-4 text-sm">
-            <p className="font-semibold text-[#7ed957]">
+          <div className="rounded-xl border border-[var(--admin-accent)]/25 bg-[var(--admin-accent)]/[0.06] p-4 text-sm">
+            <p className="font-semibold text-[var(--admin-accent)]">
               🛡 CCRS cost-floor audit — all published deals clear
             </p>
             <p className="mt-1 text-white/60">
@@ -289,7 +289,7 @@ export default async function PromotionsAdminPage({
               {costUnknownTotal > 0 && (
                 <>
                   {" "}
-                  <span className="text-[#ffd700]">
+                  <span className="text-[var(--admin-gold)]">
                     {costUnknownTotal} product{costUnknownTotal === 1 ? "" : "s"} in scope have no
                     cost on file yet
                   </span>{" "}
@@ -301,8 +301,8 @@ export default async function PromotionsAdminPage({
         )}
 
         {conflicts.length > 0 && (
-          <div className="rounded-xl border border-[#ff7f00]/40 bg-[#ff7f00]/10 p-4 text-sm text-[#ffb066]">
-            <p className="font-semibold text-[#ff7f00]">
+          <div className="rounded-xl border border-[var(--admin-orange)]/40 bg-[var(--admin-orange)]/10 p-4 text-sm text-[#ffb066]">
+            <p className="font-semibold text-[var(--admin-orange)]">
               ⚠ {conflicts.length} product{conflicts.length === 1 ? "" : "s"} fall under more than
               one published promotion
             </p>
@@ -385,7 +385,7 @@ export default async function PromotionsAdminPage({
                 name="q"
                 defaultValue={sp.q ?? ""}
                 placeholder="Search title, key, description…"
-                className="w-64 rounded-lg border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-3 py-1.5 text-sm text-[var(--admin-text)] outline-none focus:border-[#7ed957]"
+                className="w-64 rounded-lg border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-3 py-1.5 text-sm text-[var(--admin-text)] outline-none focus:border-[var(--admin-accent)]"
               />
               <button
                 type="submit"

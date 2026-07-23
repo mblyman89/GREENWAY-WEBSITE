@@ -21,6 +21,7 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
+import { CHART_COLORS } from "@/components/admin/charts";
 
 export type ForecastChartRow = {
   date: string; // YYYY-MM-DD
@@ -80,8 +81,8 @@ export function ForecastChart({
             {forecastStartDate && (
               <ReferenceLine x={shortDay(forecastStartDate)} stroke="rgba(255,255,255,0.25)" strokeDasharray="3 3" />
             )}
-            <Line dataKey="actual" name="Actual" stroke="#7ed957" strokeWidth={2} dot={false} connectNulls isAnimationActive={false} />
-            <Line dataKey="forecast" name="Forecast" stroke="#ffd700" strokeWidth={2} strokeDasharray="5 4" dot={false} connectNulls isAnimationActive={false} />
+            <Line dataKey="actual" name="Actual" stroke={CHART_COLORS.green} strokeWidth={2} dot={false} connectNulls isAnimationActive={false} />
+            <Line dataKey="forecast" name="Forecast" stroke={CHART_COLORS.gold} strokeWidth={2} strokeDasharray="5 4" dot={false} connectNulls isAnimationActive={false} />
           </ComposedChart>
         </ResponsiveContainer>
       </div>

@@ -240,7 +240,7 @@ function DatasetSwitcher({ datasets, activeId }: { datasets: DiscoveryDataset[];
           href={`/admin/reports/benchmarks?dataset=${d.id}`}
           className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${
             d.id === activeId
-              ? "bg-[#7ed957]/15 text-[#7ed957] ring-1 ring-[#7ed957]/40"
+              ? "bg-[var(--admin-accent)]/15 text-[var(--admin-accent)] ring-1 ring-[var(--admin-accent)]/40"
               : "text-white/55 hover:bg-white/5 hover:text-white"
           }`}
         >
@@ -253,8 +253,8 @@ function DatasetSwitcher({ datasets, activeId }: { datasets: DiscoveryDataset[];
 
 function Intro({ rosterCount, datasetLabel }: { rosterCount: number; datasetLabel?: string }) {
   return (
-    <section className="rounded-2xl border border-[#7ed957]/20 bg-[#7ed957]/[0.04] p-5">
-      <h2 className="text-sm font-black uppercase tracking-[0.14em] text-[#7ed957]">
+    <section className="rounded-2xl border border-[var(--admin-accent)]/20 bg-[var(--admin-accent)]/[0.04] p-5">
+      <h2 className="text-sm font-black uppercase tracking-[0.14em] text-[var(--admin-accent)]">
         Local competitor & area benchmarks
       </h2>
       <p className="mt-2 max-w-3xl text-sm text-white/70">
@@ -266,7 +266,7 @@ function Intro({ rosterCount, datasetLabel }: { rosterCount: number; datasetLabe
       </p>
       <p className="mt-3 text-xs text-white/40">
         Upload / refresh the CCRS dataset in{" "}
-        <Link href="/admin/discovery/ccrs" className="text-[#7ed957] underline underline-offset-2">
+        <Link href="/admin/discovery/ccrs" className="text-[var(--admin-accent)] underline underline-offset-2">
           Product Discovery → CCRS data intake
         </Link>
         . The statewide potency/velocity deep-dive lives under Product Discovery for staff with intake
@@ -362,7 +362,7 @@ function RosterCard({ rosterByArea }: { rosterByArea: Map<string, { license_numb
             <ul className="space-y-1 text-sm">
               {rosterByArea.get(a)!.map((s) => (
                 <li key={s.license_number} className="flex items-center justify-between gap-2">
-                  <span className={s.is_self ? "font-bold text-[#7ed957]" : "text-white/80"}>
+                  <span className={s.is_self ? "font-bold text-[var(--admin-accent)]" : "text-white/80"}>
                     {s.is_self ? "⭐ " : ""}
                     {s.tradename}
                   </span>
