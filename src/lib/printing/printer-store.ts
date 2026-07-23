@@ -21,6 +21,11 @@ import {
   receiptTitle,
   type ReceiptInput,
 } from "@/lib/printing/receipt-core";
+import {
+  MAX_FAILS_PER_CLAIM,
+  hasExhaustedPrintAttempts,
+  retryCapNote,
+} from "@/lib/printing/print-retry-core";
 
 export * from "@/lib/printing/receipt-core";
 
@@ -178,37 +183,59 @@ export async function queueOrderReceipt(input: ReceiptInput & {
  *
  * Also re-claims a stale `printing` job (claimed > 2 min ago, no confirmation)
  * so a dropped confirmation doesn't strand the queue.
+ *
+ * GW-026 retry cap: a job that has already been claimed MAX_PRINT_ATTEMPTS
+ * times without ever confirming is marked `failed` (with a human error_note)
+ * instead of being re-claimed forever, so one poison job can no longer sit at
+ * the head of the queue blocking every receipt behind it. Failed jobs surface
+ * on the Equipment page (diagnostics + queue list) where staff can cancel
+ * them. The fail-sweep is bounded per poll by MAX_FAILS_PER_CLAIM.
  */
 export async function claimNextJob(): Promise<ReceiptJob | null> {
   if (!isSupabaseServiceConfigured) return null;
   const admin = createSupabaseAdminClient();
 
-  // Look for the oldest queued job, or a stale printing job to retry.
-  const staleCutoff = new Date(Date.now() - 2 * 60 * 1000).toISOString();
-  const { data: candidates } = await admin
-    .from("receipt_print_jobs")
-    .select("*")
-    .or(`status.eq.queued,and(status.eq.printing,claimed_at.lt.${staleCutoff})`)
-    .order("queued_at", { ascending: true })
-    .limit(1);
+  // Look for the oldest queued job, or a stale printing job to retry. A job
+  // over the attempts cap is failed and skipped; loop to the next candidate.
+  for (let sweep = 0; sweep <= MAX_FAILS_PER_CLAIM; sweep += 1) {
+    const staleCutoff = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+    const { data: candidates } = await admin
+      .from("receipt_print_jobs")
+      .select("*")
+      .or(`status.eq.queued,and(status.eq.printing,claimed_at.lt.${staleCutoff})`)
+      .order("queued_at", { ascending: true })
+      .limit(1);
 
-  const job = (candidates?.[0] as ReceiptJob | undefined) ?? null;
-  if (!job) return null;
+    const job = (candidates?.[0] as ReceiptJob | undefined) ?? null;
+    if (!job) return null;
 
-  const token = job.job_token ?? `job-${job.id}`;
-  const { data, error } = await admin
-    .from("receipt_print_jobs")
-    .update({
-      status: "printing",
-      job_token: token,
-      claimed_at: new Date().toISOString(),
-      attempts: job.attempts + 1,
-    })
-    .eq("id", job.id)
-    .select("*")
-    .maybeSingle();
-  if (error || !data) return null;
-  return data as ReceiptJob;
+    if (hasExhaustedPrintAttempts(job.attempts)) {
+      // Out of tries: fail it (status-guarded so a concurrent confirm wins)
+      // and move on to the next candidate instead of returning it.
+      await admin
+        .from("receipt_print_jobs")
+        .update({ status: "failed", error_note: retryCapNote(job.attempts) })
+        .eq("id", job.id)
+        .in("status", ["queued", "printing"]);
+      continue;
+    }
+
+    const token = job.job_token ?? `job-${job.id}`;
+    const { data, error } = await admin
+      .from("receipt_print_jobs")
+      .update({
+        status: "printing",
+        job_token: token,
+        claimed_at: new Date().toISOString(),
+        attempts: job.attempts + 1,
+      })
+      .eq("id", job.id)
+      .select("*")
+      .maybeSingle();
+    if (error || !data) return null;
+    return data as ReceiptJob;
+  }
+  return null;
 }
 
 /** Fetch a printing job by its token (for the GET job-data request). */
@@ -244,6 +271,27 @@ export async function cancelJob(id: string): Promise<void> {
     .update({ status: "cancelled" })
     .eq("id", id)
     .in("status", ["queued", "failed"]);
+}
+
+/**
+ * Re-queue a failed job from the staff UI (GW-026): fresh attempt counter,
+ * cleared error note and token, back of the normal retry flow. Status-guarded
+ * to `failed` only, so it can't resurrect printed/cancelled jobs.
+ */
+export async function requeueJob(id: string): Promise<void> {
+  if (!isSupabaseServiceConfigured) return;
+  const admin = createSupabaseAdminClient();
+  await admin
+    .from("receipt_print_jobs")
+    .update({
+      status: "queued",
+      attempts: 0,
+      error_note: null,
+      job_token: null,
+      claimed_at: null,
+    })
+    .eq("id", id)
+    .eq("status", "failed");
 }
 
 /** Record a printer heartbeat (poll) — last seen + decoded status code. */

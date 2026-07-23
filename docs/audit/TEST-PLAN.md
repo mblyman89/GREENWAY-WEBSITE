@@ -1440,6 +1440,24 @@ attempt, even the ones the system wins.*
   gram over still refuses. **Red flag:** any limit number changed —
   this update only NAMED the conversion constants, it must not have
   changed a single enforced or displayed value.
+- **T-170 (the poison receipt gives up instead of jamming the queue):**
+  with the printer set up (T-007), unplug its Ethernet cable, then queue a
+  test print AND place one online order (so two jobs stack up). Plug the
+  printer back in but immediately open its lid so every print attempt
+  errors. Wait ~10–12 minutes (the queue retries a stuck job every 2
+  minutes, up to 5 tries). **Expect:** Equipment \u2192 Receipt Printer shows
+  the stuck job flip to a red **failed** badge with a plain-English note
+  ("Gave up after 5 print attempts\u2026"), the **Failed** stat card lights
+  up, Live diagnostics flags it — and the NEXT job behind it prints once
+  you close the lid. **Red flag:** the same job retrying forever while
+  everything behind it waits.
+- **T-171 (a failed receipt can be revived):** continuing from T-170, fix
+  the printer (lid closed, paper in), then press **Re-queue** on the
+  failed job. **Expect:** it flips back to queued with a fresh attempt
+  counter and prints within a few polls; the audit log records who
+  re-queued it. Press **Cancel** on a different failed job and confirm it
+  flips to cancelled instead. **Red flag:** Re-queue does nothing, or it
+  resurrects a job that had already printed or been cancelled.
 
 ---
 

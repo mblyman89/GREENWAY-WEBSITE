@@ -1178,7 +1178,17 @@
 - **Recommendation:** In claimNextJob, when `job.attempts` reaches a cap
   (e.g. 5), set status `failed` instead of re-claiming, and surface failed
   jobs on the equipment page (cancelJob already handles them).
-- **Status:** OPEN
+- **Status:** FIXED (PR #651). New PURE policy module
+  `src/lib/printing/print-retry-core.ts` (MAX_PRINT_ATTEMPTS = 5,
+  MAX_FAILS_PER_CLAIM = 10 per poll, `hasExhaustedPrintAttempts`,
+  human-readable `retryCapNote`; 16 embedded self-tests + vitest mirror).
+  `claimNextJob` now fails an over-cap candidate (status-guarded update to
+  `failed` with the error note) and loops to the next candidate — bounded
+  per poll — so a poison job can no longer block the queue. The Equipment
+  printer tab surfaces failures: new "Failed" stat card, error note shown
+  in the queue row, and a new audited `requeueJobAction` / `requeueJob`
+  (failed → queued with attempts reset) alongside the existing cancel.
+  Diagnostics copy updated to mention re-queue. Manual tests T-170/T-171.
 
 ### GW-028 — The 24-hour order "reservation window" is written but never read: nothing expires an order or releases its hold
 - **Where:** `src/lib/orders/orders-store.ts:50` (24h

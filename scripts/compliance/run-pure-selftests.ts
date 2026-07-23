@@ -118,6 +118,7 @@ import { __runMedicalTestModeCoreTests } from "../../src/lib/pos/medical-testmod
 import { __runSawPrefillCoreTests } from "../../src/lib/pos/saw-prefill-core";
 import { __runBackLinkTests } from "../../src/lib/admin/back-link-core";
 import { __runPostgrestEscapeTests } from "../../src/lib/supabase/postgrest-escape";
+import { __runPrintRetryCoreTests } from "../../src/lib/printing/print-retry-core";
 import { __runConstantTimeTests } from "../../src/lib/security/constant-time";
 import { __runGramsPerOunceTests } from "../../src/lib/compliance/grams-per-ounce";
 
@@ -242,6 +243,7 @@ async function main() {
   __runPostgrestEscapeTests();
   __runConstantTimeTests();
   __runGramsPerOunceTests();
+  __runPrintRetryCoreTests();
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
