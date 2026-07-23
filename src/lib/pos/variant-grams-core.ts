@@ -26,8 +26,8 @@
  * scripts/compliance/run-pure-selftests.ts) and mirrored in vitest.
  */
 
-/** Statute equivalence used by the transform and sales-limits-core alike. */
-const GRAMS_PER_OUNCE = 28;
+/** Statute equivalence used by the transform and sales-limits-core alike (GW-016: shared module). */
+import { STATUTORY_GRAMS_PER_OUNCE as GRAMS_PER_OUNCE } from "@/lib/compliance/grams-per-ounce";
 
 function round3(n: number): number {
   return Math.round(n * 1000) / 1000;

@@ -18,6 +18,8 @@
  *
  * All money in MINOR UNITS (cents); rates in basis points (3700 = 37%).
  */
+import { METRIC_GRAMS_PER_OUNCE } from "@/lib/compliance/grams-per-ounce";
+import { pacificDayKey } from "@/lib/reports/timezone";
 
 export type MedTaxSettings = {
   exciseRateBps: number; // 3700 = 37%
@@ -178,7 +180,10 @@ export function cardValidity(card: RecognitionCard, onDate: Date = new Date()): 
   if (card.status !== "active") return { valid: false, reason: `Card status is ${card.status}` };
   if (!card.inDohDatabase) return { valid: false, reason: "Not in the DOH database (MCR)" };
   if (!card.uniquePatientIdentifier) return { valid: false, reason: "Missing unique patient identifier" };
-  const day = onDate.toISOString().slice(0, 10);
+  // GW-009: compare against the store's PACIFIC calendar day, not the UTC day.
+  // Between 4/5 PM Pacific and midnight, UTC is already "tomorrow", which
+  // treated a card expiring TODAY as already expired for evening sales.
+  const day = pacificDayKey(onDate);
   if (card.effectiveOn && day < card.effectiveOn) return { valid: false, reason: "Card not yet effective" };
   if (card.expiresOn && day > card.expiresOn) return { valid: false, reason: "Card expired" };
   return { valid: true, reason: null };
@@ -202,17 +207,21 @@ export function canIssueCard(c: FormChecklist): boolean {
 // ---------------------------------------------------------------------------
 // Elevated purchase limits (carded patient in MCR). Units kept verbatim.
 // ---------------------------------------------------------------------------
+// GW-016: 28.35 is the DOH medical-allowance CONVENTION (named + documented in
+// the shared grams-per-ounce module), deliberately different from the
+// statutory 28 g/oz the sales-limit ENGINE enforces — the stricter statutory
+// cap always wins at the register. Do not "unify" these two constants.
 export const MEDICAL_PURCHASE_LIMITS = {
-  usableGrams: 3 * 28.35, // 3 oz usable cannabis
-  solidGrams: 48 * 28.35, // 48 oz product eaten/swallowed (solid)
-  liquidGrams: 216 * 28.35, // 216 oz infused liquid
+  usableGrams: 3 * METRIC_GRAMS_PER_OUNCE, // 3 oz usable cannabis
+  solidGrams: 48 * METRIC_GRAMS_PER_OUNCE, // 48 oz product eaten/swallowed (solid)
+  liquidGrams: 216 * METRIC_GRAMS_PER_OUNCE, // 216 oz infused liquid
   concentrateGrams: 21, // 21 g concentrate
 } as const;
 
 export const RECREATIONAL_PURCHASE_LIMITS = {
-  usableGrams: 1 * 28.35, // 1 oz usable
-  solidGrams: 16 * 28.35, // 16 oz solid
-  liquidGrams: 72 * 28.35, // 72 oz liquid
+  usableGrams: 1 * METRIC_GRAMS_PER_OUNCE, // 1 oz usable
+  solidGrams: 16 * METRIC_GRAMS_PER_OUNCE, // 16 oz solid
+  liquidGrams: 72 * METRIC_GRAMS_PER_OUNCE, // 72 oz liquid
   concentrateGrams: 7, // 7 g concentrate
 } as const;
 
@@ -307,6 +316,23 @@ export function __runMedTaxTests(): void {
   };
   ok(cardValidity(validCard, new Date("2026-06-30")).valid, "valid card");
   ok(!cardValidity({ ...validCard, expiresOn: "2024-01-01" }, new Date("2026-06-30")).valid, "expired");
+  // GW-009 pinned scenario: 2026-07-01T02:00Z is 7 PM PACIFIC on June 30.
+  // A card expiring June 30 must still be VALID for that evening sale (the
+  // old UTC-day compare said "July 1 > June 30 -> expired" a few hours early)…
+  ok(
+    cardValidity({ ...validCard, expiresOn: "2026-06-30" }, new Date("2026-07-01T02:00:00Z")).valid,
+    "GW-009: card expiring today honored through the Pacific evening",
+  );
+  // …and once it IS the next Pacific day (July 1, 8 AM Pacific), it's expired.
+  ok(
+    !cardValidity({ ...validCard, expiresOn: "2026-06-30" }, new Date("2026-07-01T15:00:00Z")).valid,
+    "GW-009: card expired on the next Pacific day",
+  );
+  // Effective-date side: a card effective June 30 works at 7 PM Pacific June 30.
+  ok(
+    cardValidity({ ...validCard, effectiveOn: "2026-06-30" }, new Date("2026-07-01T02:00:00Z")).valid,
+    "GW-009: card effective today usable in the Pacific evening",
+  );
   ok(!cardValidity({ ...validCard, inDohDatabase: false }).valid, "not in db");
   ok(!cardValidity({ ...validCard, status: "revoked" }).valid, "revoked");
   ok(!cardValidity({ ...validCard, uniquePatientIdentifier: null }).valid, "no upid");

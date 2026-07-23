@@ -52,6 +52,7 @@ import {
   TAX_INCLUSIVE_DIVISOR,
   NON_CANNABIS_TAX_INCLUSIVE_DIVISOR,
 } from "@/lib/orders/order-pricing-core";
+import { STATUTORY_GRAMS_PER_OUNCE } from "@/lib/compliance/grams-per-ounce";
 
 export type DiscountType =
   | "percent"
@@ -195,7 +196,7 @@ export function gramsForLabel(label?: string | null): number {
   if (!label) return 0;
   const s = label.trim().toLowerCase();
   const oz = s.match(/([\d.]+)\s*(oz|ounce)/);
-  if (oz) return parseFloat(oz[1]) * 28;
+  if (oz) return parseFloat(oz[1]) * STATUTORY_GRAMS_PER_OUNCE; // GW-016: shared statutory equivalence
   const g = s.match(/([\d.]+)\s*g\b/);
   if (g) return parseFloat(g[1]);
   return 0;

@@ -9,8 +9,9 @@
  * never advertise limits that differ from what the store enforces.
  */
 import { MEDICAL_PURCHASE_LIMITS, RECREATIONAL_PURCHASE_LIMITS } from "@/lib/medical/tax";
-
-const GRAMS_PER_OUNCE = 28.35;
+// GW-016: divide by the SAME DOH convention (28.35) the limit table multiplies
+// by, so the displayed ounce figures round-trip exactly.
+import { METRIC_GRAMS_PER_OUNCE as GRAMS_PER_OUNCE } from "@/lib/compliance/grams-per-ounce";
 
 function ounces(grams: number): number {
   return Math.round(grams / GRAMS_PER_OUNCE);

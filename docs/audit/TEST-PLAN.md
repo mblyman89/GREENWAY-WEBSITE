@@ -1422,6 +1422,24 @@ attempt, even the ones the system wins.*
   address with no token: **expect** an "unauthorized" answer, not a
   receipt payload. **Red flag:** printing stopped working after this
   update, or the endpoint answers without a valid token.
+- **T-168 (the evening medical sale stays on today's ledger):** this one
+  matters most in the evening — any time after 5 PM works. Ring a
+  test-mode exempt medical sale (T-084 style) after 5 PM, then check the
+  medical ledger (Admin → Medical). **Expect:** the ledger row is stamped
+  with TODAY'S date, not tomorrow's. Also check a card that expires
+  today: it must still be honored for the whole business evening, and
+  refused starting tomorrow morning. **Red flag:** an evening sale dated
+  tomorrow, or a card expiring today refused at 6 PM. (Migration `0131`
+  is the database-side backstop for this — run it if you haven't.)
+- **T-169 (the purchase-limit numbers didn't move):** in the back office
+  open the purchase-limits display (and the public limits page if you
+  use it). **Expect:** the same numbers as before this update —
+  recreational 1 oz / 28 g usable, 7 g concentrate; medical 3 oz usable
+  (displayed as 3 oz), 21 g concentrate. Then at a register, confirm a
+  cart at exactly the recreational flower limit still completes and one
+  gram over still refuses. **Red flag:** any limit number changed —
+  this update only NAMED the conversion constants, it must not have
+  changed a single enforced or displayed value.
 
 ---
 

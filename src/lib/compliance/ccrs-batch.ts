@@ -17,6 +17,7 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import { AVOIRDUPOIS_GRAMS_PER_OUNCE } from "@/lib/compliance/grams-per-ounce";
 import {
   assembleCcrsFile,
   ccrsDate,
@@ -119,7 +120,7 @@ type LotRow = {
 function toGrams(weight: number | null, uom: string | null): string {
   if (weight == null || !Number.isFinite(weight)) return "";
   const u = (uom ?? "g").toLowerCase();
-  const g = u === "mg" ? weight / 1000 : u === "oz" ? weight * 28.3495 : weight;
+  const g = u === "mg" ? weight / 1000 : u === "oz" ? weight * AVOIRDUPOIS_GRAMS_PER_OUNCE : weight;
   return (Math.round(g * 1000) / 1000).toString();
 }
 

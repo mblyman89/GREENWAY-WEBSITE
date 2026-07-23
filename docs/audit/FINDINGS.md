@@ -892,7 +892,22 @@
   pattern the returns/void windows use) at all four spots. No backfill needed —
   historical rows are off by at most one day at period boundaries and the
   owner has not yet cut over.
-- **Status:** OPEN
+- **Status:** FIXED (PR #650) — all four spots now use the store's Pacific
+  calendar day via the repo's existing Intl-based helpers
+  (`pacificDayKey`/`pacificToday` in `src/lib/reports/timezone.ts`):
+  `cardValidity` compares against the Pacific day (pinned self-tests: a card
+  expiring June 30 is honored at 7 PM Pacific June 30 — 02:00Z July 1 — and
+  refused the next Pacific morning), `recordExemptSale` both validates AND
+  now writes `sale_date` explicitly as the Pacific day (no longer relying on
+  the DB default), and the completion gate's exemption plan uses
+  `pacificToday()`. The 0040 `default current_date` is re-pointed at the
+  Pacific calendar day by migration
+  `0131_pacific_sale_date_default.sql` (idempotent; proved against a live
+  Postgres 15; owner runs manually — belt-and-suspenders only, since the
+  app now writes the date explicitly). Value-add (same family): the
+  card-issuance validator and days-until-expiry math in
+  `medical-authorization-core.ts` used the same UTC-day pattern and now use
+  the Pacific day too. Exercised by TEST-PLAN T-168.
 
 ### GW-015 — Internal Sales/COGS/Customers/Analytics revenue uses "non-cancelled" orders, so never-completed and no-show orders count as revenue
 - **Where:** `src/lib/reports/sales.ts:243`, `src/lib/reports/cogs.ts:341`,
@@ -939,7 +954,20 @@
   shared module with a comment explaining which law uses which, and import
   from there everywhere. Pure refactor, no behavior change required (or, if
   the owner prefers maximum conservatism, use 28 in the medical table too).
-- **Status:** OPEN
+- **Status:** FIXED (PR #650) — exactly the recommendation: new shared PURE
+  module `src/lib/compliance/grams-per-ounce.ts` naming all THREE values
+  (`STATUTORY_GRAMS_PER_OUNCE = 28` for WAC 314-55-095 limit enforcement,
+  `METRIC_GRAMS_PER_OUNCE = 28.35` for the DOH medical-allowance table +
+  display, `AVOIRDUPOIS_GRAMS_PER_OUNCE = 28.3495` for real measured
+  weights) with a which-law-uses-which doc block, 9 embedded self-tests
+  (pinning the exact values, the 84 g vs 85.05 g consequences, and the
+  strictest-wins ordering) + vitest mirror. All five cited sites import
+  from it, plus — sweep value-add — the four other hard-coded conversions
+  the audit didn't list: `pos/transform.ts` (×2, feeds the limit engine),
+  `specials/cart-discount.ts`, `promotions/discount-engine-core.ts` (all
+  statutory 28), `compliance/ccrs-batch.ts` and `menu/card-cannabinoids.ts`
+  (avoirdupois). Zero behavior change — pure naming refactor, verified by
+  the untouched test suites. Exercised by TEST-PLAN T-169.
 
 ### GW-021 — Two admin search boxes interpolate the raw search term into a PostgREST `or(…ilike…)` filter without escaping
 - **Where:** `src/lib/equipment/store.ts:138–139` (`const like = `%${opts.q}%``

@@ -32,6 +32,7 @@
  */
 
 import { cannabinoidTag, type Cannabinoid } from "@/lib/naming/convention-core";
+import { AVOIRDUPOIS_GRAMS_PER_OUNCE } from "@/lib/compliance/grams-per-ounce";
 import type { GreenwayCannabinoid, GreenwayMenuItem } from "@/lib/leafly/types";
 
 /* ------------------------------------------------------------------ *
@@ -194,7 +195,8 @@ export function deriveTotalHeadlines(
  *  Net weight / volume in oz + g  (edibles/drinks)
  * ------------------------------------------------------------------ */
 
-const GRAMS_PER_OZ = 28.3495;
+// GW-016: real measured weights use the true avoirdupois conversion (shared module).
+const GRAMS_PER_OZ = AVOIRDUPOIS_GRAMS_PER_OUNCE;
 
 /**
  * Parse a variant/package label (e.g. "3.5g", "1oz", "10ml", "2fl oz", "100mg",

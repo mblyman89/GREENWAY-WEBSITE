@@ -48,6 +48,7 @@ import {
 } from "@/lib/medical/medical-sale-core";
 import { findHeldLines, recallHoldRefusal } from "@/lib/pos/recall-hold-core";
 import { recalledProductKeys } from "@/lib/pos/recall-hold-store";
+import { pacificToday } from "@/lib/reports/timezone";
 
 export type CompletionGateOptions = {
   orderId: string;
@@ -175,7 +176,8 @@ export async function runCompletionGate(opts: CompletionGateOptions): Promise<st
     registry,
     cardedValid,
     endorsed: medSettings.medicallyEndorsed,
-    saleDate: new Date().toISOString().slice(0, 10),
+    // GW-009: the exemption plan's sale date is the store's PACIFIC day.
+    saleDate: pacificToday(),
     exciseExemptionUntil: endorsement?.exciseExemptionUntil ?? "2029-06-30",
   });
 

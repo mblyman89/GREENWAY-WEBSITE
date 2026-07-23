@@ -75,7 +75,8 @@ export type SkippedSampleLot = {
   reason: string;
 };
 
-const GRAMS_PER_OUNCE = 28.3495;
+// GW-016: real measured weights use the true avoirdupois conversion (shared module).
+import { AVOIRDUPOIS_GRAMS_PER_OUNCE as GRAMS_PER_OUNCE } from "@/lib/compliance/grams-per-ounce";
 
 /** Derive per-unit grams from a lot's unit weight (g | mg | oz). Null if unknown. */
 export function unitWeightToGrams(weight: number | null | undefined, uom: string | null | undefined): number | null {

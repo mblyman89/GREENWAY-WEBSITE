@@ -32,8 +32,12 @@
  * weight counts (conservative; labels don't state the flower/concentrate
  * split and under-counting concentrate is the enforcement risk).
  */
+import { STATUTORY_GRAMS_PER_OUNCE } from "@/lib/compliance/grams-per-ounce";
 
-export const GRAMS_PER_OUNCE = 28; // WA statute treats 1 oz useable = 28 g.
+// GW-016: the statutory equivalence now lives (named + documented + self-tested)
+// in the shared grams-per-ounce module; re-exported here so existing consumers
+// keep working. WA statute treats 1 oz useable = 28 g for limit ENFORCEMENT.
+export const GRAMS_PER_OUNCE = STATUTORY_GRAMS_PER_OUNCE;
 
 /** The four statutory limit buckets. */
 export type LimitBucket = "usable" | "solid_edible" | "concentrate" | "liquid_edible";
