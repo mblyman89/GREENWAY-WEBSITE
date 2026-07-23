@@ -115,7 +115,7 @@ export function diagnose(s: PrinterDiagnosticSnapshot): DiagnosticFinding[] {
       severity: "warning",
       title: `${s.failedJobs} failed job(s)`,
       detail:
-        "One or more receipts failed. Clear any error at the printer (paper, lid, cutter), then send a test print to confirm recovery. Failed jobs can be cancelled from the Recent print jobs list.",
+        "One or more receipts gave up after repeated print attempts. Clear any error at the printer (paper, lid, cutter), then send a test print to confirm recovery. Failed jobs can be re-queued or cancelled from the Recent print jobs list.",
     });
   }
 

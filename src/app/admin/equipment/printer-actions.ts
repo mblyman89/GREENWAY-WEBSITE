@@ -18,6 +18,7 @@ import {
   updatePrinterSettings,
   queueJob,
   cancelJob,
+  requeueJob,
   formatReceipt,
 } from "@/lib/printing/printer-store";
 
@@ -131,6 +132,24 @@ export async function cancelJobAction(formData: FormData): Promise<void> {
       actorId: session.userId,
       actorEmail: session.email,
       action: "receipt_printer.cancel_job",
+      entityType: "receipt_print_jobs",
+      entityId: id,
+    });
+  }
+  revalidatePath(REVALIDATE);
+  redirect(BASE);
+}
+
+/** Re-queue a failed job (GW-026): fresh attempts, back into the print queue. */
+export async function requeueJobAction(formData: FormData): Promise<void> {
+  const session = await requirePermission("settings.manage");
+  const id = str(formData, "job_id");
+  if (id) {
+    await requeueJob(id);
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "receipt_printer.requeue_job",
       entityType: "receipt_print_jobs",
       entityId: id,
     });

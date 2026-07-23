@@ -13,6 +13,7 @@ import {
   rotatePollTokenAction,
   testPrintAction,
   cancelJobAction,
+  requeueJobAction,
 } from "@/app/admin/equipment/printer-actions";
 import { getPrinterDiagnostics } from "@/lib/printing/printer-assistant";
 import { isAiConfigured } from "@/lib/ai/provider";
@@ -82,6 +83,7 @@ export async function ReceiptPrinterPanel({ banners }: { banners: PrinterPanelBa
   const pollUrl = siteUrl ? `${siteUrl}/api/cloudprnt` : "/api/cloudprnt";
 
   const queuedCount = jobs.filter((j) => j.status === "queued").length;
+  const failedCount = jobs.filter((j) => j.status === "failed").length;
   const printedToday = jobs.filter(
     (j) =>
       j.status === "printed" &&
@@ -132,7 +134,7 @@ export async function ReceiptPrinterPanel({ banners }: { banners: PrinterPanelBa
         ]}
       />
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-4">
         <StatCard
           label="Printer status"
           value={online ? "Online" : "Not seen"}
@@ -140,6 +142,12 @@ export async function ReceiptPrinterPanel({ banners }: { banners: PrinterPanelBa
           accent={online ? "green" : "muted"}
         />
         <StatCard label="Queued now" value={String(queuedCount)} accent={queuedCount > 0 ? "gold" : "muted"} />
+        <StatCard
+          label="Failed"
+          value={String(failedCount)}
+          hint={failedCount > 0 ? "Gave up after repeated attempts — see the queue below" : undefined}
+          accent={failedCount > 0 ? "orange" : "muted"}
+        />
         <StatCard label="Printed today" value={String(printedToday)} accent="green" />
       </div>
 
@@ -323,17 +331,30 @@ export async function ReceiptPrinterPanel({ banners }: { banners: PrinterPanelBa
               <tbody className="divide-y divide-[var(--admin-border)]">
                 {jobs.map((j) => (
                   <tr key={j.id}>
-                    <td className="px-2 py-2 text-[var(--admin-text)]">{j.title ?? j.order_number ?? "Receipt"}</td>
+                    <td className="px-2 py-2 text-[var(--admin-text)]">
+                      {j.title ?? j.order_number ?? "Receipt"}
+                      {j.status === "failed" && j.error_note && (
+                        <div className="mt-0.5 text-xs text-[var(--admin-orange)]">{j.error_note}</div>
+                      )}
+                    </td>
                     <td className="px-2 py-2"><Badge tone={jobTone(j.status)}>{j.status}</Badge></td>
                     <td className="px-2 py-2 text-[var(--admin-text-muted)]">{formatReceiptTimestamp(j.queued_at)}</td>
                     <td className="px-2 py-2 text-[var(--admin-text-muted)]">{j.printed_at ? formatReceiptTimestamp(j.printed_at) : "\u2014"}</td>
                     <td className="px-2 py-2 text-right">
-                      {(j.status === "queued" || j.status === "failed") && (
-                        <form action={cancelJobAction}>
-                          <input type="hidden" name="job_id" value={j.id} />
-                          <Button type="submit" variant="neutral" size="sm">Cancel</Button>
-                        </form>
-                      )}
+                      <div className="flex items-center justify-end gap-2">
+                        {j.status === "failed" && (
+                          <form action={requeueJobAction}>
+                            <input type="hidden" name="job_id" value={j.id} />
+                            <Button type="submit" variant="save" size="sm">Re-queue</Button>
+                          </form>
+                        )}
+                        {(j.status === "queued" || j.status === "failed") && (
+                          <form action={cancelJobAction}>
+                            <input type="hidden" name="job_id" value={j.id} />
+                            <Button type="submit" variant="neutral" size="sm">Cancel</Button>
+                          </form>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
