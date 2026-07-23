@@ -1013,10 +1013,9 @@ the banner is missing while test mode is on, that itself is a bug.*
   recalled item / outside sales hours / over-limit.
 - **Expect:** refused each time with the reason. The same gate runs for
   admin completion, register pickup, and sync — there is no soft path.
-- **⚠️ KNOWN-EDGE (GW-028):** the 24-hour "reservation window" on orders
-  is currently written but nothing expires it — an abandoned order stays
-  active until staff closes it. Watch for stale orders piling up; the
-  fix will add expiry.
+- **FIXED (GW-028):** the 24-hour "reservation window" is now enforced —
+  the daily cron auto-closes never-acknowledged orders as no-show with a
+  timeline note. See T-174 for the full drill.
 
 #### T-109 — No-show and cancel bookkeeping
 - **Do:** mark one order no_show, cancel another (with reasons).
@@ -1481,6 +1480,22 @@ attempt, even the ones the system wins.*
   then confirm the card disappears after the next sync. **Red flag:** the
   register claims the back office was notified but no card ever appears,
   or a stale card lingers after the device reports zero.
+- **T-174 (an abandoned website order closes itself after 24 hours):**
+  place a website test order and do NOT touch it in the back office (it
+  must stay at "new" — do not acknowledge it). To avoid waiting a day,
+  shrink its window in the Supabase SQL editor:
+  `update orders set reservation_expires_at = now() - interval '1 minute'
+  where order_number = 'GWY-...';` then trigger the daily cron (Admin →
+  Command Center "run reminders now", or wait for the 8–9am Pacific run).
+  **Expect:** the order flips to **No-show** by itself; its timeline shows
+  a status change by "system — reservation window sweep" with a note
+  naming the 24-hour window; any loyalty code it consumed is returned;
+  revenue reports ignore it (T-172). Now acknowledge a DIFFERENT test
+  order, shrink its window the same way, run the cron again, and confirm
+  it is NOT touched — the sweep only closes orders nobody has claimed.
+  **Red flag:** an acknowledged/preparing/ready order auto-closing, stock
+  levels changing when the sweep runs, or the no-show missing its
+  plain-English timeline note.
 
 ---
 

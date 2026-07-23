@@ -148,6 +148,7 @@ export function OrderConfirmation() {
           <p className="mx-auto mt-6 max-w-md text-[0.72rem] leading-5 text-zinc-500">
             Bring a valid government-issued photo ID showing you are 21 or older. Pickup at {greenwayBusiness.address.full}.
             Final pricing, taxes, and purchase limits are confirmed in store, and no payment is collected online — pay when you pick up.
+            We hold pickup orders for 24 hours — after that the order closes automatically, but we can reopen it if you come in.
           </p>
 
           <Link

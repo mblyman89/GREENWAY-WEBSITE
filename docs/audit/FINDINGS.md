@@ -1236,7 +1236,20 @@
   orders past `reservation_expires_at` to `no_show`/`expired` and note it in
   `order_events`) or drop the column to stop implying behavior that doesn't
   exist. Enforcing pairs naturally with the GW-015 fix.
-- **Status:** OPEN
+- **Status:** FIXED (PR #654) — enforced. A pure policy module
+  (`src/lib/orders/reservation-expiry-core.ts`, self-tested + vitest
+  mirror) pins the rule: only orders still at `new` (never acknowledged)
+  auto-expire; a broken/missing timestamp NEVER expires (fail-safe); the
+  window stays 24h. `expireStaleReservations()` in orders-store runs on
+  the existing daily cron (piggybacked like the GW-023 sweep) and closes
+  qualifying orders as `no_show` through the full `setOrderStatus` path —
+  lifecycle gate, GW-011 CAS (an order staff grab mid-sweep is skipped),
+  a plain-English `order_events` note naming the machine actor, and the
+  Task S-a loyalty-code release. Inventory is untouched by design (stock
+  only decrements at completion, so an expired order holds nothing).
+  Because no-shows are excluded from revenue since GW-015, expired orders
+  can never pollute the money reports. The checkout confirmation now
+  tells customers about the 24-hour hold. Verified by T-174.
 
 ### GW-034 — Brand colors are hard-coded as raw hex in ~82 class sites instead of the tokens, so a palette tune-up can’t happen in one place
 - **Where:** Scripted sweep: 82 button/chip class strings hard-code
