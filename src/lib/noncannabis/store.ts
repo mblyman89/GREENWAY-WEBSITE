@@ -10,6 +10,7 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import { escapeLikeWildcards } from "@/lib/supabase/postgrest-escape";
 import {
   buildNonCannabisName,
   buildSku,
@@ -93,7 +94,8 @@ export async function listNonCannabisProducts(opts?: {
     .limit(2000);
   if (opts?.status) query = query.eq("status", opts.status);
   if (opts?.type) query = query.eq("type", opts.type);
-  if (opts?.q) query = query.ilike("name", `%${opts.q}%`);
+  // GW-021: escape LIKE wildcards so the term matches literally.
+  if (opts?.q) query = query.ilike("name", `%${escapeLikeWildcards(opts.q)}%`);
   const { data } = await query;
   return (data as NonCannabisProduct[] | null) ?? [];
 }

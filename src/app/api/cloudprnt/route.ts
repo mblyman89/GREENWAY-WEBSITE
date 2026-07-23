@@ -21,6 +21,7 @@
  */
 import { NextResponse, type NextRequest } from "next/server";
 import { shouldRefuseWhenSecretMissing } from "@/lib/security/fail-closed";
+import { timingSafeEqualStr } from "@/lib/security/constant-time";
 import {
   getPrinterSettings,
   claimNextJob,
@@ -72,7 +73,8 @@ async function authFail(req: NextRequest): Promise<NextResponse | null> {
     return null; // dev only: no token configured yet — allow (initial setup)
   }
   const provided = extractToken(req);
-  if (provided === expected) return null;
+  // GW-022: constant-time compare so response timing can't leak token prefixes.
+  if (timingSafeEqualStr(provided, expected)) return null;
   return NextResponse.json(
     { error: "unauthorized" },
     { status: 401, headers: { "WWW-Authenticate": 'Basic realm="cloudprnt"' } },

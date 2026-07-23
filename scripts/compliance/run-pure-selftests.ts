@@ -117,6 +117,8 @@ import { __runMenuNameDisplayCoreTests } from "../../src/lib/pos/menu-name-displ
 import { __runMedicalTestModeCoreTests } from "../../src/lib/pos/medical-testmode-core";
 import { __runSawPrefillCoreTests } from "../../src/lib/pos/saw-prefill-core";
 import { __runBackLinkTests } from "../../src/lib/admin/back-link-core";
+import { __runPostgrestEscapeTests } from "../../src/lib/supabase/postgrest-escape";
+import { __runConstantTimeTests } from "../../src/lib/security/constant-time";
 
 async function main() {
   __runOrderPricingTests();
@@ -236,6 +238,8 @@ async function main() {
   __runCultiveraKbLinkCoreTests();
   __runGrowflowMenuUiCoreTests();
   __runMediaAutosaveCoreTests();
+  __runPostgrestEscapeTests();
+  __runConstantTimeTests();
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

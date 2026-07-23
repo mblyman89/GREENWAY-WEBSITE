@@ -14,6 +14,7 @@ import "server-only";
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import { escapeLikeWildcards } from "@/lib/supabase/postgrest-escape";
 import {
   normalizeVendorKey,
   type PlatformMemoryUpsert,
@@ -64,7 +65,7 @@ export async function findMemories(query: string, limit = 10): Promise<VendorPla
   const { data, error } = await admin
     .from("vendor_platform_map")
     .select("*")
-    .ilike("vendor_key", `%${escapeLike(key)}%`)
+    .ilike("vendor_key", `%${escapeLikeWildcards(key)}%`)
     .order("last_seen_at", { ascending: false })
     .limit(limit);
   if (error || !data) return [];
@@ -118,7 +119,3 @@ export async function rememberPlatform(upsert: PlatformMemoryUpsert): Promise<bo
   return !error;
 }
 
-/** Escape %/_ so a user query can't act as a wildcard in ilike. */
-function escapeLike(s: string): string {
-  return s.replace(/[%_]/g, (m) => `\\${m}`);
-}

@@ -7,6 +7,7 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured, supabaseUrl } from "@/lib/supabase/env";
+import { ilikeContains } from "@/lib/supabase/postgrest-escape";
 import type { Brand, Vendor, VendorWithBrands } from "@/lib/vendors/types";
 
 /** Build a public URL for a media asset stored in the `media` bucket. */
@@ -51,8 +52,9 @@ export async function listVendors(opts?: ListVendorsOpts): Promise<Vendor[]> {
     if (opts?.hasLicense === true) q = q.not("license_number", "is", null);
     if (opts?.hasLicense === false) q = q.is("license_number", null);
     if (opts?.q) {
-      const term = opts.q.replaceAll("%", "\\%").replaceAll(",", " ").trim();
-      if (term) q = q.or(`display_name.ilike.%${term}%,dba.ilike.%${term}%,license_number.ilike.%${term}%`);
+      // GW-021: shared escaping (wildcards + .or() grammar) instead of a local one-off.
+      const like = ilikeContains(opts.q);
+      if (like) q = q.or(`display_name.ilike.${like},dba.ilike.${like},license_number.ilike.${like}`);
     }
     const { data, error } = await q;
     if (error || !data) break;

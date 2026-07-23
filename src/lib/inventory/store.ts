@@ -8,6 +8,7 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import { ilikeContains } from "@/lib/supabase/postgrest-escape";
 import type {
   InboundManifest,
   InventoryAdjustment,
@@ -50,13 +51,14 @@ export async function listLots(opts?: LotFilter): Promise<LotWithDetail[]> {
   if (opts?.status && opts.status !== "all") {
     query = query.eq("status", opts.status);
   }
-  if (opts?.q && opts.q.trim().length > 0) {
-    const term = opts.q.trim();
+  // GW-021: escape LIKE wildcards + .or() grammar so the term matches literally.
+  const like = opts?.q ? ilikeContains(opts.q) : null;
+  if (like) {
     query = query.or(
       [
-        `product_name.ilike.%${term}%`,
-        `lot_code.ilike.%${term}%`,
-        `pos_product_key.ilike.%${term}%`,
+        `product_name.ilike.${like}`,
+        `lot_code.ilike.${like}`,
+        `pos_product_key.ilike.${like}`,
       ].join(","),
     );
   }

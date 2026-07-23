@@ -7,6 +7,7 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import { ilikeContains } from "@/lib/supabase/postgrest-escape";
 
 export const EQUIPMENT_CATEGORIES = [
   "pos_terminal",
@@ -135,8 +136,11 @@ export async function listEquipmentAssets(opts?: {
   if (opts?.status) query = query.eq("status", opts.status);
   if (opts?.category) query = query.eq("category", opts.category);
   if (opts?.q) {
-    const like = `%${opts.q}%`;
-    query = query.or(`name.ilike.${like},asset_tag.ilike.${like},serial_number.ilike.${like}`);
+    // GW-021: escape LIKE wildcards + .or() grammar so the term matches literally.
+    const like = ilikeContains(opts.q);
+    if (like) {
+      query = query.or(`name.ilike.${like},asset_tag.ilike.${like},serial_number.ilike.${like}`);
+    }
   }
   const { data } = await query;
   const assets = (data as EquipmentAsset[] | null) ?? [];
