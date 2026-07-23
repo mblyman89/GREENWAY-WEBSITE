@@ -110,7 +110,7 @@ function buildDigest(input: InsightsInput): string {
       `Orders: ${orders.totalOrders} total, ${orders.completedOrders} completed, ${orders.cancelledOrders} cancelled, ${orders.noShowOrders} no-show.`,
     );
     lines.push(
-      `Revenue (non-cancelled): ${money(orders.grossMinorUnits)}; average order ${money(orders.avgOrderMinorUnits)}; avg items/order ${orders.avgItemsPerOrder.toFixed(1)}.`,
+      `Revenue (completed orders): ${money(orders.grossMinorUnits)}; average order ${money(orders.avgOrderMinorUnits)}; avg items/order ${orders.avgItemsPerOrder.toFixed(1)}.`,
     );
     if (orders.topProducts.length) {
       lines.push(

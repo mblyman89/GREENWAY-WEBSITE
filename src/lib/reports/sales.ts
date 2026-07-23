@@ -19,15 +19,18 @@ import "server-only";
  *                        resolve to a category/vendor.
  *
  * Money is always in MINOR UNITS (cents). We report GROSS retail revenue as the
- * sum of (unit price × quantity) for NON-cancelled orders, matching the existing
- * dashboard's "gross" definition (line price is tax-inclusive at order time, but
- * we surface pre-tax later in the dedicated tax tab).
+ * sum of (unit price × quantity) for COMPLETED orders only (GW-015 — see
+ * src/lib/reports/revenue-basis.ts: no online payment is captured, so an order
+ * that never completed never collected a cent). Day bucketing stays on
+ * placed_at — operational, not filing-grade (line price is tax-inclusive at
+ * order time, but we surface pre-tax later in the dedicated tax tab).
  */
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { chunkedIn, pagedAll } from "@/lib/supabase/chunked-in";
 import { pacificDayKey, pacificHour, addPacificDays, formatHourLabel } from "@/lib/reports/timezone";
+import { isRevenueOrder } from "@/lib/reports/revenue-basis";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -58,7 +61,7 @@ export type CustomerTypeRow = {
 };
 
 export type SalesReport = {
-  /** True when at least one non-cancelled order existed in range. */
+  /** True when at least one completed order existed in range. */
   hasData: boolean;
   totalRevenueMinorUnits: number;
   totalUnits: number;
@@ -226,7 +229,7 @@ export async function getSalesReport(fromISO: string, toISO: string): Promise<Sa
 
   const admin = createSupabaseAdminClient();
 
-  // 1) Orders in range (exclude cancelled from revenue). S-7: paged past the
+  // 1) Orders in range (completed only — revenue-basis). S-7: paged past the
   // PostgREST per-response row cap so busy ranges are complete.
   type ReportOrderRow = { id: string; status: string; customer_email: string | null; placed_at: string };
   const orders = await pagedAll<ReportOrderRow>(async (from, to) => {
@@ -240,7 +243,7 @@ export async function getSalesReport(fromISO: string, toISO: string): Promise<Sa
     return (data as ReportOrderRow[] | null) ?? [];
   });
 
-  const validOrders = orders.filter((o) => o.status !== "cancelled");
+  const validOrders = orders.filter((o) => isRevenueOrder(o.status));
   if (validOrders.length === 0) return { ...EMPTY_SALES_REPORT };
 
   const orderById = new Map(validOrders.map((o) => [o.id, o]));

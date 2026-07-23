@@ -43,7 +43,7 @@ export function OrdersTrendChart({
       />
       <AreaChart
         title="Revenue per day ($)"
-        subtitle="Gross revenue, non-cancelled orders"
+        subtitle="Gross revenue, completed orders"
         data={revData}
         areas={[{ key: "Revenue", label: "Revenue ($)", color: "#ffd700" }]}
         height={220}

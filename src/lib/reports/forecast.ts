@@ -14,6 +14,7 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { pacificDayKey } from "@/lib/reports/timezone";
+import { isRevenueOrder } from "@/lib/reports/revenue-basis";
 import {
   forecastDaily,
   buildContiguousSeries,
@@ -44,8 +45,8 @@ const DOW_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 export const DOW_FULL = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 /**
- * Build daily revenue/orders/units series from non-cancelled orders over the
- * lookback window, bucketed by Pacific calendar day.
+ * Build daily revenue/orders/units series from COMPLETED orders (revenue-basis,
+ * GW-015) over the lookback window, bucketed by Pacific calendar day.
  */
 async function loadDailySeries(
   lookbackDays: number,
@@ -73,7 +74,7 @@ async function loadDailySeries(
         }[]
       | null) ?? [];
 
-  const valid = rows.filter((o) => o.status !== "cancelled");
+  const valid = rows.filter((o) => isRevenueOrder(o.status));
 
   const rev = new Map<string, number>();
   const ord = new Map<string, number>();

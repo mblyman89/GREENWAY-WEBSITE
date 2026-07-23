@@ -19,8 +19,10 @@
 Reporting is split into three families that deliberately do NOT share one
 definition of "a sale," because they answer different questions. **Dashboards**
 (`src/lib/reports/sales.ts`, `cogs.ts`, `analytics.ts`, `operations.ts`) answer
-"how is the business doing" — gross revenue over non-cancelled orders by
-`placed_at`, grouped every way the owner asked for. **Filings**
+"how is the business doing" — gross revenue over COMPLETED orders by
+`placed_at` (status basis unified with filings by GW-015 via
+`src/lib/reports/revenue-basis.ts`; day bucketing stays `placed_at`), grouped
+every way the owner asked for. **Filings**
 (`src/lib/reports/wa-tax.ts`, `src/lib/compliance/excise-return*.ts`,
 `ccrs-sales.ts`) answer "what do we owe the state" — COMPLETED orders bucketed
 by `completed_at` on Pacific time, the canonical basis written down in
@@ -62,11 +64,12 @@ must reconcile: LIQ-1295 (excise-return.ts), CCRS Sale.csv (ccrs-sales.ts),
 WA tax report (wa-tax.ts). `wa-tax.ts:241–260` shows the basis in code:
 `.eq("status", "completed")` with completed_at bucketing.
 
-**Deliberate asymmetry to know:** the DASHBOARD sales report
-(`sales.ts:224–243`) still uses non-cancelled orders by `placed_at` — its
-header (`:21–24`) says so explicitly ("matching the existing dashboard's
-'gross' definition"). Dashboards measure demand; filings measure completed
-taxable sales. Different questions, different bases, both documented.
+**Remaining (deliberate) asymmetry:** since GW-015 the dashboard reports
+count COMPLETED orders only (same status basis as filings —
+`src/lib/reports/revenue-basis.ts`), but they still bucket days by
+`placed_at` while filings bucket by `completed_at`. Dashboards measure the
+shop's day; filings measure the taxable period. One axis differs, documented
+here and in `docs/PERIOD_BASIS.md`.
 
 ---
 
@@ -96,7 +99,7 @@ All report pages sit behind the `reports.view` permission — enforced once in
 the layout (`src/app/admin/reports/layout.tsx:16`).
 
 - **Sales** (`sales.ts`, Slice 14): gross = Σ(unit price × qty) on
-  non-cancelled orders; groupings by category/vendor/brand/product/hour/
+  completed orders (revenue-basis, GW-015); groupings by category/vendor/brand/product/hour/
   customer-type; discounts = regular − sold. Category and vendor labels come
   from the `menu_items` snapshot keyed by `source_item_id` =
   `order_lines.product_id` (header `:15–19`) so historical products still

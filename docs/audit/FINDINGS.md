@@ -929,7 +929,19 @@
 - **Recommendation:** Either switch these reports to completed-only (matching
   `docs/PERIOD_BASIS.md`) or clearly label the basis on each tab and exclude
   `no_show`. Decide once, apply to all four.
-- **Status:** OPEN
+- **Status:** FIXED (PR #652). Decided ONCE in a new pure module
+  `src/lib/reports/revenue-basis.ts` (`isRevenueOrder` = completed-only;
+  12 embedded self-tests + vitest mirror) and applied to all FOUR cited
+  sites — sales.ts, cogs.ts, customers.ts (window filter AND the
+  new-vs-returning history lookback), analytics.ts — PLUS forecast.ts,
+  which the audit missed but had the identical pattern (full-repo sweep).
+  Rationale: no online payment is captured, so a never-completed order
+  never collected a cent. Day bucketing intentionally stays `placed_at`
+  (operational basis) — only the STATUS filter changed; the dashboards'
+  gross now ties to the tax report's completed basis on the status axis.
+  UI labels updated ("Gross (completed orders)", chart subtitle, AI
+  insights line); `docs/PERIOD_BASIS.md` + `docs/audit/bible/10-reports.md`
+  rewritten to match. Manual test T-172.
 
 ### GW-016 — Two different grams-per-ounce constants live in the codebase (28 statutory vs 28.35 metric)
 - **Where:** `src/lib/compliance/sales-limits-core.ts:28`

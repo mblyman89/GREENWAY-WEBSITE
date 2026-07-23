@@ -47,9 +47,13 @@ and buckets by `completed_at ?? placed_at`.
 ## Scope
 
 Applies to filing-grade artifacts: wa-tax, CCRS Sale.csv, LIQ-1295 (already).
-Operational analytics (sales/analytics/customers reports) intentionally keep
-`placed_at` over non-cancelled orders — they answer "what happened in the shop
-that day", not "what do we owe the state" — and are labelled as such in the UI.
+Operational analytics (sales/analytics/customers/COGS/forecast reports)
+intentionally keep `placed_at` day-bucketing — they answer "what happened in
+the shop that day", not "what do we owe the state". Since GW-015 their STATUS
+filter is completed-only too (`src/lib/reports/revenue-basis.ts`): no online
+payment is captured in this store, so an order that never completed never
+collected a cent and must not count as revenue. The UI labels gross as
+"completed orders".
 
 ## Medical exemption cross-wiring (S-8)
 

@@ -103,7 +103,7 @@ export default async function ReportsOverviewPage({
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="Orders" value={orders.totalOrders} hint={`Last ${days} days`} />
         <StatCard
-          label="Gross (non-cancelled)"
+          label="Gross (completed orders)"
           value={formatMinorCurrency(orders.grossMinorUnits)}
           accent="green"
         />
