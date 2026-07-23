@@ -124,6 +124,7 @@ import { __runRejectedReportTests } from "../../src/lib/pos/rejected-report-core
 import { __runReservationExpiryTests } from "../../src/lib/orders/reservation-expiry-core";
 import { __runListWindowTests } from "../../src/lib/admin/list-window-core";
 import { __runListFilterTests } from "../../src/lib/admin/list-filter-core";
+import { __runSpecialDiscountTests } from "../../src/lib/discounts/special-discount-core";
 import { __runConstantTimeTests } from "../../src/lib/security/constant-time";
 import { __runGramsPerOunceTests } from "../../src/lib/compliance/grams-per-ounce";
 
@@ -254,6 +255,7 @@ async function main() {
   __runReservationExpiryTests();
   __runListWindowTests();
   __runListFilterTests();
+  __runSpecialDiscountTests();
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
