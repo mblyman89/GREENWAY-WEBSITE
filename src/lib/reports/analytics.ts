@@ -15,6 +15,7 @@ import { chunkedIn, pagedAll } from "@/lib/supabase/chunked-in";
 import { getPublishedVersion, getVersionItems } from "@/lib/pos/menu-version";
 import type { OrderStatus } from "@/lib/orders/types";
 import { pacificDayKey, pacificToday, addPacificDays, pacificWallTimeToUtcISO } from "@/lib/reports/timezone";
+import { isRevenueOrder } from "@/lib/reports/revenue-basis";
 
 export type DayPoint = { date: string; value: number };
 export type LabeledCount = { label: string; value: number };
@@ -54,8 +55,8 @@ export type OrdersReport = {
   completedOrders: number;
   cancelledOrders: number;
   noShowOrders: number;
-  grossMinorUnits: number; // sum of totals across non-cancelled orders
-  avgOrderMinorUnits: number; // AOV across non-cancelled orders
+  grossMinorUnits: number; // sum of totals across COMPLETED orders (revenue-basis)
+  avgOrderMinorUnits: number; // AOV across completed orders
   avgItemsPerOrder: number;
   statusCounts: Record<OrderStatus, number>;
   ordersByDay: DayPoint[];
@@ -119,7 +120,7 @@ export async function getOrdersReport(days = 30): Promise<OrdersReport> {
   const dayIndex = new Map(ordersByDay.map((p, i) => [p.date, i]));
 
   let gross = 0;
-  let nonCancelledCount = 0;
+  let revenueOrderCount = 0;
   let itemsTotal = 0;
   const orderIds: string[] = [];
 
@@ -134,9 +135,9 @@ export async function getOrdersReport(days = 30): Promise<OrdersReport> {
     const idx = dayIndex.get(k);
     if (idx != null) ordersByDay[idx].value += 1;
 
-    if (o.status !== "cancelled") {
+    if (isRevenueOrder(o.status)) {
       gross += o.total_minor_units;
-      nonCancelledCount += 1;
+      revenueOrderCount += 1;
       itemsTotal += o.item_count;
       if (idx != null) revenueByDay[idx].value += o.total_minor_units;
       orderIds.push(o.id);
@@ -144,14 +145,14 @@ export async function getOrdersReport(days = 30): Promise<OrdersReport> {
   }
 
   base.grossMinorUnits = gross;
-  base.avgOrderMinorUnits = nonCancelledCount ? Math.round(gross / nonCancelledCount) : 0;
-  base.avgItemsPerOrder = nonCancelledCount
-    ? Math.round((itemsTotal / nonCancelledCount) * 10) / 10
+  base.avgOrderMinorUnits = revenueOrderCount ? Math.round(gross / revenueOrderCount) : 0;
+  base.avgItemsPerOrder = revenueOrderCount
+    ? Math.round((itemsTotal / revenueOrderCount) * 10) / 10
     : 0;
   base.ordersByDay = ordersByDay;
   base.revenueByDay = revenueByDay;
 
-  // Top products / brands from the non-cancelled orders' lines.
+  // Top products / brands from the completed orders' lines.
   if (orderIds.length) {
     // S-7: chunked + paginated — top products/brands see every line.
     type AnalyticsLineRow = {

@@ -19,9 +19,10 @@ import "server-only";
  *
  * Definitions
  * -----------
- *  • Revenue = sum(line price × qty) on non-cancelled orders (matches Sales tab;
- *    line price is tax-inclusive at order time — we surface pre-tax separately in
- *    the dedicated Tax tab).
+ *  • Revenue = sum(line price × qty) on COMPLETED orders only (matches Sales
+ *    tab; GW-015 — src/lib/reports/revenue-basis.ts; line price is
+ *    tax-inclusive at order time — we surface pre-tax separately in the
+ *    dedicated Tax tab).
  *  • COGS = sum(avgUnitCost × qty).
  *  • Gross profit = Revenue − COGS. Margin = profit / revenue.
  *
@@ -31,6 +32,7 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { chunkedIn, pagedAll } from "@/lib/supabase/chunked-in";
+import { isRevenueOrder } from "@/lib/reports/revenue-basis";
 // Mastering Slice 1: sold lines resolve the variant's own lot key first.
 import { lotKeyForSaleLine } from "@/lib/pos/variant-lot-core";
 
@@ -326,7 +328,7 @@ export async function getCogsReport(fromISO: string, toISO: string): Promise<Cog
   // Diagnostics for $0-COGS lines.
   const missingMap = new Map<string, { name: string; units: number; revenue: number; reason: string }>();
 
-  // Orders in range (non-cancelled). S-7: paged for complete busy ranges.
+  // Orders in range (completed only — revenue-basis). S-7: paged for complete busy ranges.
   type CogsOrderRow = { id: string; status: string; placed_at: string };
   const orders = await pagedAll<CogsOrderRow>(async (from, to) => {
     const { data } = await admin
@@ -338,7 +340,7 @@ export async function getCogsReport(fromISO: string, toISO: string): Promise<Cog
       .range(from, to);
     return (data as CogsOrderRow[] | null) ?? [];
   });
-  const validOrderIds = orders.filter((o) => o.status !== "cancelled").map((o) => o.id);
+  const validOrderIds = orders.filter((o) => isRevenueOrder(o.status)).map((o) => o.id);
 
   const byCategory = new Map<string, Acc>();
   const byType = new Map<string, Acc>();

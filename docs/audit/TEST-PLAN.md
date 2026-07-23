@@ -1458,6 +1458,16 @@ attempt, even the ones the system wins.*
   re-queued it. Press **Cancel** on a different failed job and confirm it
   flips to cancelled instead. **Red flag:** Re-queue does nothing, or it
   resurrects a job that had already printed or been cancelled.
+- **T-172 (a no-show never counts as money):** place a website test order,
+  let it sit (or mark it **No-show** from Admin → Orders), then open the
+  Reports overview, Sales, COGS, and Customers tabs for today.
+  **Expect:** that order appears in the order-status counts (it happened)
+  but contributes $0 to gross revenue, AOV, COGS revenue, and customer
+  spend — the gross tile now reads "Gross (completed orders)". Complete a
+  different test order and confirm THAT one shows up in revenue
+  immediately. **Red flag:** the no-show's total included in any revenue
+  figure, or the dashboard gross disagreeing with the Tax tab's completed
+  basis by more than the day-boundary difference.
 
 ---
 

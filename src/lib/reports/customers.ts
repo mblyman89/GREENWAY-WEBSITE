@@ -22,7 +22,7 @@ import "server-only";
  *
  * New vs returning
  * ----------------
- * An order is "returning" if that email placed an EARLIER non-cancelled order
+ * An order is "returning" if that email placed an EARLIER completed order
  * (at any time, not just in-window). We look back across all history for the
  * matched emails so the classification is stable regardless of the window.
  *
@@ -38,6 +38,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { chunkedIn, pagedAll } from "@/lib/supabase/chunked-in";
 import { pacificDayKey } from "@/lib/reports/timezone";
+import { isRevenueOrder } from "@/lib/reports/revenue-basis";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -170,7 +171,7 @@ export async function getCustomersReport(fromISO: string, toISO: string): Promis
   if (!isSupabaseServiceConfigured) return { ...EMPTY_CUSTOMERS_REPORT };
   const admin = createSupabaseAdminClient();
 
-  // Orders in window (exclude cancelled from revenue + classification).
+  // Orders in window (completed only — revenue-basis, GW-015).
   // S-7: paged past the PostgREST per-response row cap.
   const windowRows = await pagedAll<OrderRow>(async (from, to) => {
     const { data } = await admin
@@ -185,7 +186,7 @@ export async function getCustomersReport(fromISO: string, toISO: string): Promis
     return (data as OrderRow[] | null) ?? [];
   });
 
-  const windowOrders = windowRows.filter((o) => o.status !== "cancelled");
+  const windowOrders = windowRows.filter((o) => isRevenueOrder(o.status));
   if (windowOrders.length === 0) return { ...EMPTY_CUSTOMERS_REPORT };
 
   // Distinct emails in window — used to look back across ALL history to decide
@@ -209,7 +210,7 @@ export async function getCustomersReport(fromISO: string, toISO: string): Promis
       return (data as HistRow[] | null) ?? [];
     });
     for (const h of hist) {
-      if (h.status === "cancelled") continue;
+      if (!isRevenueOrder(h.status)) continue;
       const k = emailKey(h.customer_email);
       if (!k) continue;
       const prev = firstOrderByEmail.get(k);
