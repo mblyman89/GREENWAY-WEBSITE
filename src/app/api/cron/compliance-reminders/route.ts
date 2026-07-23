@@ -24,6 +24,7 @@ import { shouldRefuseWhenSecretMissing } from "@/lib/security/fail-closed";
 import { getStaffSession } from "@/lib/auth/session";
 import { runComplianceReminders } from "@/lib/notifications/compliance-reminders";
 import { sweepStalePendingEvents } from "@/lib/pos/sync-store";
+import { expireStaleReservations } from "@/lib/orders/orders-store";
 
 export const dynamic = "force-dynamic";
 // Sends a handful of emails/pushes sequentially; give it room beyond the
@@ -71,7 +72,19 @@ export async function GET(req: NextRequest) {
   // break the reminders.
   const posSweep = await sweepStalePendingEvents();
 
-  return NextResponse.json({ ...result, posSweep }, { headers: { "Cache-Control": "no-store" } });
+  // GW-028 — enforce the 24h order reservation window on the same daily
+  // cron: website orders still sitting at `new` past their window are
+  // closed as no_show through the full setOrderStatus path (lifecycle
+  // gate, CAS, order_events note, loyalty release). Never throws; a sweep
+  // hiccup must not break the reminders.
+  const reservationSweep = await expireStaleReservations().catch(
+    (e: unknown) => ({ ok: false, expired: 0, skipped: 0, error: e instanceof Error ? e.message : String(e) }),
+  );
+
+  return NextResponse.json(
+    { ...result, posSweep, reservationSweep },
+    { headers: { "Cache-Control": "no-store" } },
+  );
 }
 
 export async function POST(req: NextRequest) {

@@ -121,6 +121,7 @@ import { __runPostgrestEscapeTests } from "../../src/lib/supabase/postgrest-esca
 import { __runPrintRetryCoreTests } from "../../src/lib/printing/print-retry-core";
 import { __runRevenueBasisTests } from "../../src/lib/reports/revenue-basis";
 import { __runRejectedReportTests } from "../../src/lib/pos/rejected-report-core";
+import { __runReservationExpiryTests } from "../../src/lib/orders/reservation-expiry-core";
 import { __runConstantTimeTests } from "../../src/lib/security/constant-time";
 import { __runGramsPerOunceTests } from "../../src/lib/compliance/grams-per-ounce";
 
@@ -248,6 +249,7 @@ async function main() {
   __runPrintRetryCoreTests();
   __runRevenueBasisTests();
   __runRejectedReportTests();
+  __runReservationExpiryTests();
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

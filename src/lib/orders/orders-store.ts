@@ -30,6 +30,13 @@ import type {
   PlacedOrderResult,
 } from "./types";
 import { evaluateOrderTransition } from "./order-lifecycle-core";
+import {
+  EXPIRABLE_STATUS,
+  RESERVATION_SWEEP_ACTOR,
+  computeReservationExpiresAt,
+  reservationExpiryNote,
+  shouldExpireOrder,
+} from "./reservation-expiry-core";
 
 // ---------------------------------------------------------------------------
 // Placement (guest, no auth) — input is SERVER-PRICED (see order-pricing.ts)
@@ -47,8 +54,11 @@ export async function createOrder(input: PersistOrderInput): Promise<PlacedOrder
 
   const admin = createSupabaseAdminClient();
 
-  // Soft reservation window: 24h advisory hold (POS/cart engine remain truth).
-  const reservationExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+  // Soft reservation window: 24h advisory hold (POS/cart engine remain
+  // truth). GW-028: the window is now ENFORCED — the daily cron closes
+  // never-acknowledged orders as no_show once it passes (see
+  // expireStaleReservations below + reservation-expiry-core.ts).
+  const reservationExpiresAt = computeReservationExpiresAt(Date.now());
 
   const baseOrderRow = {
     status: "new",
@@ -421,6 +431,75 @@ export async function setOrderStatus(
   }
 
   return { ok: true, order: updated };
+}
+
+// ---------------------------------------------------------------------------
+// GW-028 — reservation-window enforcement (daily cron sweep)
+// ---------------------------------------------------------------------------
+
+export type ReservationSweepResult = {
+  ok: boolean;
+  /** Orders closed as no_show this run. */
+  expired: number;
+  /** Candidates that could not be closed (CAS miss / lifecycle refusal). */
+  skipped: number;
+  error?: string;
+};
+
+/** Bounded batch per run — the daily cron drains any backlog across days. */
+const RESERVATION_SWEEP_MAX = 200;
+
+/**
+ * Close website orders whose 24h reservation window has passed while still
+ * sitting at `new` (never acknowledged by staff). They become `no_show` —
+ * the same terminal status a manual no-show uses — via the full
+ * setOrderStatus path, so the lifecycle gate, CAS guard, order_events
+ * trail, and loyalty-code release all apply exactly as they would for a
+ * human action. If the customer shows up later, staff reopen the order
+ * (no_show → new reversal) like any other no-show.
+ *
+ * Safe by construction:
+ *  - Only `new` orders qualify (a status the sweep re-checks via the pure
+ *    policy AND setOrderStatus re-reads under CAS — an order acknowledged
+ *    mid-sweep is skipped, never closed).
+ *  - Inventory is untouched: stock only decrements at COMPLETION, so an
+ *    expired order releases nothing — it just stops cluttering the queue.
+ *  - Never throws; the cron reports the outcome and moves on.
+ */
+export async function expireStaleReservations(now = new Date()): Promise<ReservationSweepResult> {
+  if (!isSupabaseServiceConfigured) {
+    return { ok: false, expired: 0, skipped: 0, error: "Database not configured." };
+  }
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("orders")
+    .select("id, status, reservation_expires_at")
+    .eq("status", EXPIRABLE_STATUS)
+    .lt("reservation_expires_at", now.toISOString())
+    .order("reservation_expires_at", { ascending: true })
+    .limit(RESERVATION_SWEEP_MAX);
+  if (error) {
+    return { ok: false, expired: 0, skipped: 0, error: error.message };
+  }
+
+  let expired = 0;
+  let skipped = 0;
+  for (const row of (data ?? []) as { id: string; status: string; reservation_expires_at: string | null }[]) {
+    // Belt-and-suspenders: re-check via the pure policy (the SQL filter and
+    // the policy must agree; if they ever drift, the policy wins and the
+    // order is left for a human).
+    if (!shouldExpireOrder(row, now.getTime())) {
+      skipped += 1;
+      continue;
+    }
+    const result = await setOrderStatus(row.id, "no_show", {
+      note: reservationExpiryNote(row.reservation_expires_at),
+      actorLabel: RESERVATION_SWEEP_ACTOR,
+    });
+    if (result.ok) expired += 1;
+    else skipped += 1; // CAS miss (staff grabbed it mid-sweep) or refusal — leave it.
+  }
+  return { ok: true, expired, skipped };
 }
 
 export async function updateStaffNote(
