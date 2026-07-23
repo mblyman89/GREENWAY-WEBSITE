@@ -29,6 +29,7 @@
 
 import type { GreenwayCategory } from "@/lib/leafly/types";
 import type { StoreWeekday } from "@/lib/specials/daily-deals";
+import { STATUTORY_GRAMS_PER_OUNCE } from "@/lib/compliance/grams-per-ounce";
 import {
   munchieMondayCategories,
   ounceFridayCategories,
@@ -93,9 +94,9 @@ export type CartDiscountResult = {
 export function gramsForLabel(label?: string): number {
   if (!label) return 0;
   const normalized = label.trim().toLowerCase();
-  // Ounce tokens (oz / ounce). 1oz == 28g (industry standard cannabis ounce).
+  // Ounce tokens (oz / ounce). 1oz == 28g (WA statutory equivalence, GW-016).
   const ozMatch = normalized.match(/([\d.]+)\s*(oz|ounce)/);
-  if (ozMatch) return parseFloat(ozMatch[1]) * 28;
+  if (ozMatch) return parseFloat(ozMatch[1]) * STATUTORY_GRAMS_PER_OUNCE;
   // Gram tokens.
   const gMatch = normalized.match(/([\d.]+)\s*g\b/);
   if (gMatch) return parseFloat(gMatch[1]);

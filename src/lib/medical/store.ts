@@ -16,6 +16,7 @@ import {
 } from "@/lib/medical/tax";
 import { validateAuthorizationIssuance } from "@/lib/medical/medical-authorization-core";
 import { verifyExemptSaleRecord } from "@/lib/medical/exempt-sale-record-core";
+import { pacificToday } from "@/lib/reports/timezone";
 
 // ---------------------------------------------------------------------------
 // Row types
@@ -380,7 +381,9 @@ export async function recordExemptSale(
   // before we persist it (it must survive a 5-yr audit). Sales-tax-only exempt
   // rows (exciseTaxExempt === false) are not held to this ledger standard.
   const completeness = verifyExemptSaleRecord({
-    saleDate: new Date().toISOString().slice(0, 10),
+    // GW-009: stamp the store's PACIFIC calendar day, not the UTC day, so an
+    // evening sale on the last day of the month stays in THIS month's ledger.
+    saleDate: pacificToday(),
     uniquePatientIdentifier: input.uniquePatientIdentifier,
     cardEffectiveOn: input.cardEffectiveOn ?? null,
     cardExpiresOn: input.cardExpiresOn ?? null,
@@ -400,6 +403,12 @@ export async function recordExemptSale(
     order_id: input.orderId ?? null,
     customer_id: input.customerId ?? null,
     authorization_id: input.authorizationId ?? null,
+    // GW-009: write the Pacific day EXPLICITLY. The column's old default was
+    // the DB server's `current_date` (UTC) — the row silently got tomorrow's
+    // date for evening sales even though the completeness check above had
+    // already validated the correct Pacific day. Migration 0131 fixes the
+    // default too (belt and suspenders for any future insert path).
+    sale_date: pacificToday(),
     unique_patient_identifier: input.uniquePatientIdentifier,
     card_effective_on: input.cardEffectiveOn ?? null,
     card_expires_on: input.cardExpiresOn ?? null,

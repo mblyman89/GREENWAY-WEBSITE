@@ -119,6 +119,7 @@ import { __runSawPrefillCoreTests } from "../../src/lib/pos/saw-prefill-core";
 import { __runBackLinkTests } from "../../src/lib/admin/back-link-core";
 import { __runPostgrestEscapeTests } from "../../src/lib/supabase/postgrest-escape";
 import { __runConstantTimeTests } from "../../src/lib/security/constant-time";
+import { __runGramsPerOunceTests } from "../../src/lib/compliance/grams-per-ounce";
 
 async function main() {
   __runOrderPricingTests();
@@ -240,6 +241,7 @@ async function main() {
   __runMediaAutosaveCoreTests();
   __runPostgrestEscapeTests();
   __runConstantTimeTests();
+  __runGramsPerOunceTests();
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

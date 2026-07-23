@@ -20,6 +20,7 @@
  */
 import crypto from "node:crypto";
 import * as XLSX from "xlsx";
+import { STATUTORY_GRAMS_PER_OUNCE } from "@/lib/compliance/grams-per-ounce";
 
 type GreenwayCategory =
   | "flower" | "popcorn-bud" | "infused-flower" | "blunt" | "infused-blunt" | "tincture" | "rso" | "paraphernalia" | "preroll-pack" | "cartridge" | "disposable-cartridge"
@@ -435,7 +436,7 @@ function parsePackageSize(rawPackage: string, fallbackSize?: string, fallbackUni
     .replace(/ounces?/, "oz")
     .replace(/each|units?/, "ea");
   if (!unit) unit = "ea";
-  const gramsEquivalent = unit === "g" ? quantity : unit === "oz" ? quantity * 28 : undefined;
+  const gramsEquivalent = unit === "g" ? quantity : unit === "oz" ? quantity * STATUTORY_GRAMS_PER_OUNCE : undefined;
   let label: string;
   if (unit === "g") {
     if (Math.abs(quantity - 28) < 0.01) label = "1oz";
@@ -462,7 +463,7 @@ function packageFromParts(quantity: number, unit: string, raw: string): ParsedPa
     .replace(/packs?|pk/, "pk");
   const safeQuantity = Number.isFinite(quantity) && quantity > 0 ? quantity : 1;
   const label = normalizedUnit === "pk" ? `${formatNumber(safeQuantity)}pk` : `${formatNumber(safeQuantity)}${normalizedUnit}`;
-  const gramsEquivalent = normalizedUnit === "g" ? safeQuantity : normalizedUnit === "oz" ? safeQuantity * 28 : undefined;
+  const gramsEquivalent = normalizedUnit === "g" ? safeQuantity : normalizedUnit === "oz" ? safeQuantity * STATUTORY_GRAMS_PER_OUNCE : undefined;
   const sortUnitWeight = normalizedUnit === "mg" ? 0.001 : normalizedUnit === "g" ? 1 : normalizedUnit === "oz" ? 28 : normalizedUnit === "ml" ? 0.01 : normalizedUnit === "pk" ? 100 : 10000;
   return { quantity: safeQuantity, unit: normalizedUnit, gramsEquivalent, label, sortValue: safeQuantity * sortUnitWeight, raw };
 }

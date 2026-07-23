@@ -258,3 +258,20 @@
   (E) the audit log is append-only. **Until this is run, the app works
   normally but the database-level protections are not active — the old
   broad policies remain in force.**
+
+## Fix slice — GW-009 (Pacific-day medical dates)
+
+- [ ] **`supabase/migrations/0131_pacific_sale_date_default.sql`** — GW-009:
+  the medical exempt-sale ledger's `sale_date` column defaulted to the
+  DATABASE server's calendar day, which on Supabase is UTC — so an evening
+  exempt sale (after 4/5 PM Pacific) on the last day of the month was
+  stamped with NEXT month's date in the WAC 314-55-090(2) ledger, the
+  LIQ-1295 excise return, and the CCRS RecreationalMedical period. The app
+  code now writes the store's Pacific day explicitly on every insert; this
+  migration also re-points the column default at the Pacific calendar day
+  (`now() at time zone 'America/Los_Angeles'`) so any future insert path
+  that forgets the column still gets the correct store-local date.
+  DST-aware; idempotent; safe to re-run. No backfill needed. The file ends
+  with one read-only review query — run it and expect the default to show
+  `America/Los_Angeles`. **Until this is run, the app still stamps the
+  correct Pacific date itself — the database default is just the backstop.**

@@ -29,6 +29,7 @@ import {
   type FormChecklist,
   type RecognitionCard,
 } from "@/lib/medical/tax";
+import { pacificDayKey } from "@/lib/reports/timezone";
 
 // ── Slice 100: issuance ─────────────────────────────────────────────────────
 
@@ -49,9 +50,9 @@ export type IssuanceValidation = {
 const HOLDER_TYPES = new Set(["patient", "designated_provider"]);
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-/** Today's Pacific-agnostic ISO day; overridable for tests. */
+/** The store's PACIFIC calendar day for the given instant (GW-009); overridable for tests. */
 function todayIso(now: Date): string {
-  return now.toISOString().slice(0, 10);
+  return pacificDayKey(now);
 }
 
 /**
@@ -130,7 +131,8 @@ export function authorizationValidityAt(
 
   let daysUntilExpiry: number | null = null;
   if (card.expiresOn && ISO_DATE.test(card.expiresOn)) {
-    const day = onDate.toISOString().slice(0, 10);
+    // GW-009: day math anchored to the store's Pacific calendar day.
+    const day = todayIso(onDate);
     const expMs = Date.parse(`${card.expiresOn}T00:00:00Z`);
     const dayMs = Date.parse(`${day}T00:00:00Z`);
     daysUntilExpiry = Math.round((expMs - dayMs) / 86_400_000);
