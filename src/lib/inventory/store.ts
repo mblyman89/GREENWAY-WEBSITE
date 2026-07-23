@@ -9,6 +9,7 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { ilikeContains } from "@/lib/supabase/postgrest-escape";
+import type { SortColumn } from "@/lib/admin/list-filter-core";
 import type {
   InboundManifest,
   InventoryAdjustment,
@@ -42,17 +43,29 @@ function isoDaysFromNow(days: number): string {
  * GW-033: paged inventory read. Returns the page's hydrated lots AND the
  * exact total so the inventory page can show "Showing X–Y of Z" with a real
  * pager instead of silently clipping at 500 rows.
+ *
+ * SLICE 26: accepts whitelisted sort columns (list-filter-core.LOT_SORTS)
+ * plus COA/sample/medical tri-state flags and an expiring-within-days
+ * window — every knob validated upstream by the pure grammar.
  */
 export async function listLotsPaged(
-  opts: Omit<LotFilter, "limit"> & { from: number; to: number },
+  opts: Omit<LotFilter, "limit"> & {
+    from: number;
+    to: number;
+    sort?: SortColumn[];
+    /** true = has COA, false = missing COA, undefined = off. */
+    hasCoa?: boolean;
+    /** Tri-state sample / medical flags (undefined = off). */
+    isSample?: boolean;
+    isMedical?: boolean;
+    /** Only lots expiring on/before today+N days (still in date). */
+    expiringWithinDays?: number;
+  },
 ): Promise<{ rows: LotWithDetail[]; total: number }> {
   if (!isSupabaseServiceConfigured) return { rows: [], total: 0 };
   const admin = createSupabaseAdminClient();
 
-  let query = admin
-    .from("inventory_lots")
-    .select("*", { count: "exact" })
-    .order("created_at", { ascending: false });
+  let query = admin.from("inventory_lots").select("*", { count: "exact" });
 
   if (opts.status && opts.status !== "all") {
     query = query.eq("status", opts.status);
@@ -66,6 +79,24 @@ export async function listLotsPaged(
         `pos_product_key.ilike.${like}`,
       ].join(","),
     );
+  }
+  if (opts.hasCoa === true) query = query.not("lab_result_id", "is", null);
+  if (opts.hasCoa === false) query = query.is("lab_result_id", null);
+  if (opts.isSample !== undefined) query = query.eq("is_sample", opts.isSample);
+  if (opts.isMedical !== undefined) query = query.eq("is_medical", opts.isMedical);
+  if (opts.expiringWithinDays != null) {
+    const horizon = new Date(Date.now() + opts.expiringWithinDays * 86_400_000)
+      .toISOString()
+      .slice(0, 10);
+    query = query.not("expires_on", "is", null).lte("expires_on", horizon);
+  }
+
+  const sort: SortColumn[] = opts.sort ?? [{ column: "created_at", ascending: false }];
+  for (const s of sort) {
+    query = query.order(s.column, {
+      ascending: s.ascending,
+      ...(s.nullsFirst !== undefined ? { nullsFirst: s.nullsFirst } : {}),
+    });
   }
 
   const { data, count } = await query.range(opts.from, opts.to);

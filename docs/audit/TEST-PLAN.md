@@ -1544,6 +1544,24 @@ attempt, even the ones the system wins.*
   always tells the truth. **Red flag:** a list that ends at a few
   hundred rows with no count and no pager — records past the cutoff
   would be invisible, which is the exact bug this test guards against.
+- **T-179 (filters combine and the URL tells the truth):** open Admin →
+  Orders. Set a date range, a total range (e.g. min 20, max 100), pick a
+  sort like "Total: high → low", click a status chip, and hit Apply —
+  ALL filters must apply together (an order outside any one of them
+  disappears), the sort order must visibly change, and clicking a status
+  chip must KEEP your date/total/sort choices. Copy the URL into a new
+  tab: the exact same filtered view must load. Repeat on Inventory (COA
+  / sample / medical dropdowns, expiry window, sort by expiring soonest)
+  and Customers (medical / consent / do-not-contact dropdowns, sort by
+  lifetime spend). Then try to break it: type garbage in a date box,
+  paste `?sort=DROP%20TABLE` into the URL — the page must load normally
+  with that knob simply off, never an error screen. Finally, click Clear
+  — everything resets, and the pager still works on the filtered view
+  (filter first, then page; the count line reflects the FILTERED total).
+  **Expect:** total control — every knob combinable, shareable by URL,
+  and impossible to crash. **Red flag:** a filter that quietly ignores
+  another filter, a chip click that drops your date range, or garbage
+  input producing an error page.
 
 ---
 
