@@ -142,7 +142,7 @@ export default async function OrdersAdminPage({
                 href={`/admin/orders?status=${f.key}${search ? `&q=${encodeURIComponent(search)}` : ""}`}
                 className={`admin-focus rounded-full border px-3 py-1.5 text-xs font-bold uppercase tracking-[0.08em] transition ${
                   status === f.key
-                    ? "border-[var(--admin-accent)]/60 bg-[var(--admin-accent-soft)] text-[var(--admin-accent)]"
+                    ? "border-[var(--admin-accent)] bg-[var(--admin-accent)] text-black"
                     : "border-[var(--admin-border-strong)] bg-white/5 text-[var(--admin-text-muted)] hover:text-[var(--admin-text)]"
                 }`}
               >

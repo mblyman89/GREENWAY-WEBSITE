@@ -255,7 +255,7 @@ export default async function LoyaltySignupReviewPage({
                 href={`/admin/loyalty-signups?status=${f.key}${search ? `&q=${encodeURIComponent(search)}` : ""}`}
                 className={`rounded-full border px-3 py-1.5 text-xs font-bold uppercase tracking-[0.08em] transition ${
                   status === f.key
-                    ? "border-[var(--admin-accent)]/60 bg-[var(--admin-accent)]/15 text-[var(--admin-accent)]"
+                    ? "border-[var(--admin-accent)] bg-[var(--admin-accent)] text-black"
                     : "border-white/15 bg-white/5 text-white/60 hover:text-white"
                 }`}
               >

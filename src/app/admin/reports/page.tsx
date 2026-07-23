@@ -85,7 +85,7 @@ export default async function ReportsOverviewPage({
               href={`/admin/reports?range=${r.days}`}
               className={`rounded-full border px-3 py-1.5 text-xs font-bold uppercase tracking-[0.08em] transition ${
                 days === r.days
-                  ? "border-[#7ed957]/60 bg-[#7ed957]/15 text-[#7ed957]"
+                  ? "border-[var(--admin-accent)] bg-[var(--admin-accent)] text-black"
                   : "border-white/15 bg-white/5 text-white/60 hover:text-white"
               }`}
             >

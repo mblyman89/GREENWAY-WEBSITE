@@ -1507,6 +1507,17 @@ attempt, even the ones the system wins.*
   **Red flag:** a white popup where the rows only become readable when
   the mouse highlights them blue — that is the exact bug this test
   guards against.
+- **T-176 (the selected filter is unmissable and secondary buttons look
+  clickable):** open Admin → Orders, Loyalty Signups, Reports, and
+  Reports → Forecast. Click through the filter chips (status, range,
+  horizon) and the report tabs. **Expect:** the ACTIVE chip/tab is a
+  solid green (gold on Forecast) pill with black text — readable from
+  across the room; inactive chips stay muted. Then look at any
+  secondary/back/cancel button and the small row-action chips in tables:
+  they carry a soft orange or gold tint with a colored ring, and turn
+  solid on hover — nothing looks like a flat grey patch of the page.
+  **Red flag:** an active filter you have to squint at to find, or a
+  button you only discover by mousing over it.
 
 ---
 

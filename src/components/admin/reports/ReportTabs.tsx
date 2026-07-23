@@ -43,7 +43,7 @@ export function ReportTabs() {
             href={tab.href}
             className={`rounded-lg px-3.5 py-2 text-xs font-bold transition ${
               active
-                ? "bg-[#7ed957]/15 text-[#7ed957] ring-1 ring-[#7ed957]/40"
+                ? "bg-[var(--admin-accent)] text-black"
                 : "text-white/55 hover:bg-white/5 hover:text-white"
             }`}
           >
