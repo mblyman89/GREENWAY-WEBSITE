@@ -1562,6 +1562,23 @@ attempt, even the ones the system wins.*
   and impossible to crash. **Red flag:** a filter that quietly ignores
   another filter, a chip click that drops your date range, or garbage
   input producing an error page.
+- **T-180 (special discounts — admin-only dials, and the rules hold):**
+  sign in as ADMIN and open Admin → Settings → Special discounts (the
+  card sits in the Store group; it must NOT appear anywhere on the
+  Promotions page — these are person-based courtesy discounts, not
+  promotions). You should see three programs with your starting rates:
+  Employee 35% on, Veterans 15% on, Industry off at 0%. Change the
+  veteran rate to 12.5 and Save — the green banner must echo "12.5%"
+  and the card badge must update. Now try to break it: enter 101, then
+  -5, then "abc" as a percent — each must be politely refused with a
+  plain-English error and NOTHING saved (reload to confirm the old rate
+  survives). Sign in as a MANAGER (not admin) and paste the page URL —
+  you must be turned away, not shown the dials. **Expect:** only
+  owner/admin can see or change the rates, every save lands in the audit
+  log, and a discount can never make cannabis free (at least 1¢ always
+  remains). **Red flag:** a special-discount control visible on the
+  Promotions page, a manager reaching the dials, or a garbage percent
+  slipping through.
 
 ---
 

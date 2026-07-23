@@ -292,3 +292,21 @@
   the report (best-effort write). Once run, Admin → Register Activity and
   the POS devices page start showing "N rejected events held on this
   device" automatically.**
+
+## Feature slice — special discounts (employee / industry / veteran)
+
+- [ ] **`supabase/migrations/0133_special_discounts.sql`** — the three special
+  discount programs, kept deliberately OUT of the promotions engine. Creates
+  `special_discount_settings` (one row per program, percent in basis points)
+  seeded with your rates — employee 35% on, veteran 15% on, industry off at
+  0% until you pick a rate — and `special_discount_uses`, the tracking ledger
+  that records every single use: which cashier gave it, on which register,
+  which employee bought (plus the OTHER employee who approved by PIN), the
+  visitor's company name for industry, the military-ID-checked confirmation
+  for veterans, and the exact cents saved. Row-level security matches 0130:
+  managers can read, and only the app's server code can write. Idempotent
+  (`create table if not exists`, seed via `on conflict do nothing` so it
+  never overwrites rates you've changed); safe to re-run. **Until this is
+  run, the new Admin → Settings → Special Discounts page shows the built-in
+  defaults and saving is politely refused with a note to run this migration
+  — nothing else in the app is affected.**

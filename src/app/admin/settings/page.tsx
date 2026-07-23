@@ -63,6 +63,13 @@ export default async function SettingsHomePage() {
           icon: "💲",
           status: pricingStatus,
         },
+        {
+          href: "/admin/settings/special-discounts",
+          title: "Special discounts",
+          description:
+            "Employee, industry, and veterans discounts — admin-only rates, tracked on every use.",
+          icon: "🎖",
+        },
       ],
     },
     {
