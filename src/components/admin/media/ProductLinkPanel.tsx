@@ -14,6 +14,7 @@
  */
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import { Button } from "@/components/admin/ui";
 import type { ProductLinkResult } from "@/app/admin/media/actions";
 
 export type PendingLink = {
@@ -69,38 +70,30 @@ export function ProductLinkPanel({
           {isLogo ? "Logo validation" : "Link to a product"}
         </p>
         {isProduct ? (
-          <button
-            type="button"
-            onClick={runSuggest}
-            disabled={busy}
-            className="rounded-full border border-[#7ed957]/40 px-3 py-1.5 text-xs font-semibold text-[#7ed957] hover:bg-[#7ed957]/10 disabled:opacity-50"
-          >
+          <Button type="button" onClick={runSuggest} disabled={busy} variant="special" size="sm">
             {busy ? "Matching…" : "✨ Find matching products"}
-          </button>
+          </Button>
         ) : null}
       </div>
 
       {isLogo ? (
         hasLogoReviewTag ? (
-          <p className="mt-3 rounded-lg border border-[#ffd700]/25 bg-[#ffd700]/5 px-3 py-2 text-xs text-[#ffd700]">
+          <p className="mt-3 rounded-lg border border-[var(--admin-gold)]/25 bg-[var(--admin-gold)]/5 px-3 py-2 text-xs text-[var(--admin-gold)]">
             Flagged for logo validation — find it in the library by the{" "}
             <span className="font-mono">needs-logo-review</span> tag.
           </p>
         ) : (
           <form action={routeLogoAction} className="mt-3">
             <input type="hidden" name="id" value={mediaId} />
-            <button
-              type="submit"
-              className="rounded-full border border-[#ffd700]/40 px-3 py-1.5 text-xs font-semibold text-[#ffd700] hover:bg-[#ffd700]/10"
-            >
+            <Button type="submit" variant="save" size="sm">
               Send to logo validation
-            </button>
+            </Button>
           </form>
         )
       ) : null}
 
       {note ? (
-        <p className="mt-3 rounded-lg border border-[#7ed957]/30 bg-[#7ed957]/10 px-3 py-2 text-xs text-[#7ed957]">{note}</p>
+        <p className="mt-3 rounded-lg border border-[var(--admin-accent)]/30 bg-[var(--admin-accent)]/10 px-3 py-2 text-xs text-[var(--admin-accent)]">{note}</p>
       ) : null}
 
       {pending.length > 0 ? (
@@ -118,22 +111,16 @@ export function ProductLinkPanel({
                   <form action={acceptAction}>
                     <input type="hidden" name="suggestionId" value={p.suggestionId} />
                     <input type="hidden" name="mediaId" value={mediaId} />
-                    <button
-                      type="submit"
-                      className="rounded-full bg-[#7ed957] px-3 py-1.5 text-xs font-semibold text-black hover:bg-[#6cc746]"
-                    >
+                    <Button type="submit" variant="confirm" size="sm">
                       Accept & attach
-                    </button>
+                    </Button>
                   </form>
                   <form action={rejectAction}>
                     <input type="hidden" name="suggestionId" value={p.suggestionId} />
                     <input type="hidden" name="mediaId" value={mediaId} />
-                    <button
-                      type="submit"
-                      className="rounded-full border border-white/20 px-3 py-1.5 text-xs font-semibold text-white/70 hover:border-white/40"
-                    >
+                    <Button type="submit" variant="neutral" size="sm">
                       Reject
-                    </button>
+                    </Button>
                   </form>
                 </div>
               </div>

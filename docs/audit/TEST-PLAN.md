@@ -1369,6 +1369,29 @@ attempt, even the ones the system wins.*
   similar banner, going back must NOT re-show the stale banner. If any
   page loses your filters or resurrects an old banner, that's a finding.
 
+### 12.8 The brand inspector (added with the GW-030 button sweep)
+
+- **T-164 (every button speaks the brand language):** walk five back-office
+  pages of your choice — a good spread is Orders (open one order), a product
+  detail page, a vendor detail page, Users & roles, and the Knowledge Base
+  harvest settings page. On each page look at every button and check it
+  against the button grammar: real action buttons are **pill-shaped** with
+  **bold uppercase-style labels** and **black ink on a solid brand color**
+  (orange = the page's main action, green = confirm/publish, gold = save
+  a draft, red = destructive, **purple = the machine does something for
+  you** — AI drafts, the crawler, GrowFlow sync, "Ask/Analyze/Suggest/
+  Generate" buttons), while quiet secondary actions are subtle outlined
+  chips. Small in-row/in-table actions (like "★ Set as logo" or a row's
+  "Save") may be compact chips instead of full pills — that's correct.
+  **Red flags to report:** a button with white text sitting on solid green
+  or gold (unreadable in bright light), a sky-blue or pink button (retired
+  colors), an AI/automation button that is NOT purple, two buttons on the
+  same page doing the same kind of job but dressed differently, or a raw
+  square-cornered button that clearly ignores the house style. **Exempt:**
+  the top navigation bar's chips (nav chrome, not actions), text-only
+  links, pin pads, calendar cells, and on/off toggles. If every page
+  passes, this test passes; any red flag is a finding with a screenshot.
+
 ---
 
 <a id="phase-13"></a>

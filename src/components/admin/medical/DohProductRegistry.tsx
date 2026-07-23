@@ -10,6 +10,7 @@
  * re-imports. Search the live menu (?prodq=…), pick a product, pick the
  * category, save. Existing entries can be re-verified (upsert) or removed.
  */
+import { Button, CHIP_ACTION, CHIP_NEUTRAL } from "@/components/admin/ui";
 import { listMedicalRegistry } from "@/lib/medical/sale-store";
 import {
   DOH_CATEGORIES,
@@ -84,12 +85,9 @@ export async function DohProductRegistry({
             placeholder="Search the live menu by product, brand, or key…"
             className="min-w-0 flex-1 rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-canvas)] px-3 py-2 text-sm text-[var(--admin-text)] placeholder:text-[var(--admin-text-faint)] focus:border-[var(--admin-accent)] focus:outline-none"
           />
-          <button
-            type="submit"
-            className="shrink-0 rounded-[var(--admin-radius)] border border-[var(--admin-border)] px-3 py-2 text-sm font-medium text-[var(--admin-text)] transition hover:border-[var(--admin-accent)]"
-          >
+          <Button type="submit" variant="neutral" size="sm" className="shrink-0">
             Search
-          </button>
+          </Button>
         </form>
 
         {productQuery.trim() ? (
@@ -141,10 +139,7 @@ export async function DohProductRegistry({
                         placeholder="Note (optional)"
                         className="min-w-0 flex-1 rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-canvas)] px-2.5 py-1.5 text-xs text-[var(--admin-text)] placeholder:text-[var(--admin-text-faint)]"
                       />
-                      <button
-                        type="submit"
-                        className="shrink-0 rounded-[var(--admin-radius)] bg-[var(--admin-accent)] px-3 py-1.5 text-xs font-semibold text-white transition hover:opacity-90"
-                      >
+                      <button type="submit" className={`shrink-0 ${CHIP_ACTION}`}>
                         {already ? "Re-verify" : "Register"}
                       </button>
                     </form>
@@ -198,10 +193,7 @@ export async function DohProductRegistry({
                   <td className="px-3 py-2 text-right">
                     <form action={removeDohProductAction}>
                       <input type="hidden" name="registry_id" value={r.id} />
-                      <button
-                        type="submit"
-                        className="text-xs font-medium text-red-300/80 underline-offset-2 hover:text-red-300 hover:underline"
-                      >
+                      <button type="submit" className={CHIP_NEUTRAL}>
                         Remove
                       </button>
                     </form>

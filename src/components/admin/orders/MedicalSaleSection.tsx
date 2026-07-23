@@ -13,6 +13,7 @@
  * Reads degrade gracefully before migration 0113 (no registry / no attach
  * column → plan shows no compliant products and attach explains the gap).
  */
+import { Button, CHIP_ACTION } from "@/components/admin/ui";
 import { authorizationValidityAt } from "@/lib/medical/medical-authorization-core";
 import { toRecognitionCard, getMedTaxSettings, getEndorsementConfig } from "@/lib/medical/store";
 import { getOrderMedicalContext, getMedicalRegistryForKeys } from "@/lib/medical/sale-store";
@@ -93,7 +94,7 @@ export async function MedicalSaleSection({
         </h2>
         {medCtx ? (
           cardedValid ? (
-            <span className="rounded-full border border-[#7ed957]/50 bg-[#7ed957]/10 px-2.5 py-0.5 text-[0.65rem] font-black uppercase tracking-[0.1em] text-[#7ed957]">
+            <span className="rounded-full border border-[var(--admin-accent)]/50 bg-[var(--admin-accent)]/10 px-2.5 py-0.5 text-[0.65rem] font-black uppercase tracking-[0.1em] text-[var(--admin-accent)]">
               Card attached
             </span>
           ) : (
@@ -123,7 +124,7 @@ export async function MedicalSaleSection({
       ) : null}
 
       {!medSettings.medicallyEndorsed ? (
-        <p className="mt-3 rounded-lg border border-[#ffd700]/40 bg-[#ffd700]/10 p-3 text-xs leading-5 text-[#ffd700]">
+        <p className="mt-3 rounded-lg border border-[var(--admin-gold)]/40 bg-[var(--admin-gold)]/10 p-3 text-xs leading-5 text-[var(--admin-gold)]">
           The store&apos;s medical endorsement is switched OFF — no tax exemptions will be claimed.
         </p>
       ) : null}
@@ -148,7 +149,7 @@ export async function MedicalSaleSection({
               </p>
             ) : null}
             {validity?.valid && validity.expiringSoon ? (
-              <p className="mt-2 rounded border border-[#ffd700]/40 bg-[#ffd700]/10 p-2 text-xs text-[#ffd700]">
+              <p className="mt-2 rounded border border-[var(--admin-gold)]/40 bg-[var(--admin-gold)]/10 p-2 text-xs text-[var(--admin-gold)]">
                 Card expires in {validity.daysUntilExpiry} day{validity.daysUntilExpiry === 1 ? "" : "s"} — remind
                 the patient to renew their authorization.
               </p>
@@ -177,10 +178,10 @@ export async function MedicalSaleSection({
                     {l.salesExempt || l.exciseExempt ? (
                       <>
                         {l.exciseExempt ? (
-                          <p className="font-bold text-[#7ed957]">−{money(l.exciseExemptedMinor)} excise</p>
+                          <p className="font-bold text-[var(--admin-accent)]">−{money(l.exciseExemptedMinor)} excise</p>
                         ) : null}
                         {l.salesExempt ? (
-                          <p className="font-bold text-[#7ed957]">−{money(l.salesTaxExemptedMinor)} sales tax</p>
+                          <p className="font-bold text-[var(--admin-accent)]">−{money(l.salesTaxExemptedMinor)} sales tax</p>
                         ) : null}
                       </>
                     ) : (
@@ -193,7 +194,7 @@ export async function MedicalSaleSection({
             {plan.claimedLineCount > 0 ? (
               <p className="mt-2 border-t border-white/10 pt-2 text-xs text-white/50">
                 {plan.claimedLineCount} line{plan.claimedLineCount === 1 ? "" : "s"} will claim exemptions totaling{" "}
-                <span className="font-bold text-[#7ed957]">
+                <span className="font-bold text-[var(--admin-accent)]">
                   {money(plan.exciseExemptedMinor + plan.salesTaxExemptedMinor)}
                 </span>
                 . The WAC 314-55-090(2) records (UPID, card dates, SKU, price) are written automatically at
@@ -210,12 +211,9 @@ export async function MedicalSaleSection({
           {!isClosed ? (
             <form action={detachMedicalCardAction}>
               <input type="hidden" name="id" value={order.id} />
-              <button
-                type="submit"
-                className="rounded-lg border border-white/15 bg-white/5 px-3.5 py-2 text-xs font-bold text-white/70 hover:bg-white/10"
-              >
+              <Button type="submit" variant="neutral" size="sm">
                 Detach card (complete as recreational)
-              </button>
+              </Button>
             </form>
           ) : null}
         </div>
@@ -231,14 +229,11 @@ export async function MedicalSaleSection({
               name="medq"
               defaultValue={searchQuery}
               placeholder="Search patient name, email, or phone…"
-              className="min-w-0 flex-1 rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white placeholder:text-white/30 focus:border-[#7ed957]/50 focus:outline-none"
+              className="min-w-0 flex-1 rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white placeholder:text-white/30 focus:border-[var(--admin-accent)]/50 focus:outline-none"
             />
-            <button
-              type="submit"
-              className="shrink-0 rounded-lg border border-white/15 bg-white/5 px-3.5 py-2 text-xs font-bold text-white hover:bg-white/10"
-            >
+            <Button type="submit" variant="neutral" size="sm" className="shrink-0">
               Search
-            </button>
+            </Button>
           </form>
           {searchQuery.trim() ? (
             results.length === 0 ? (
@@ -260,10 +255,7 @@ export async function MedicalSaleSection({
                       <form action={attachMedicalCardAction}>
                         <input type="hidden" name="id" value={order.id} />
                         <input type="hidden" name="customerId" value={r.id} />
-                        <button
-                          type="submit"
-                          className="shrink-0 rounded-lg bg-[#7ed957] px-3 py-1.5 text-xs font-black uppercase tracking-[0.06em] text-black hover:brightness-110"
-                        >
+                        <button type="submit" className={`shrink-0 ${CHIP_ACTION}`}>
                           Attach card
                         </button>
                       </form>

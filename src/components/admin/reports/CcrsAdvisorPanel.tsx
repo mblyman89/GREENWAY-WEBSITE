@@ -7,6 +7,7 @@
  * blocks the upload, and the exact order of steps. Read-only / advisory.
  */
 import { useState, useTransition } from "react";
+import { Button } from "@/components/admin/ui";
 import { useToast } from "@/components/admin/ux";
 import {
   generateCcrsAdviceAction,
@@ -29,8 +30,8 @@ function BulletList({
   tone: "good" | "warn" | "action";
 }) {
   if (items.length === 0) return null;
-  const color = tone === "good" ? "text-[#7ed957]" : tone === "warn" ? "text-[#ff6b6b]" : "text-white";
-  const dot = tone === "good" ? "bg-[#7ed957]" : tone === "warn" ? "bg-[#ff6b6b]" : "bg-[#8ab4f8]";
+  const color = tone === "good" ? "text-[var(--admin-accent)]" : tone === "warn" ? "text-[#ff6b6b]" : "text-white";
+  const dot = tone === "good" ? "bg-[var(--admin-accent)]" : tone === "warn" ? "bg-[#ff6b6b]" : "bg-[#8ab4f8]";
   return (
     <div>
       <div className={`text-xs font-semibold uppercase tracking-wide ${color}`}>{title}</div>
@@ -65,7 +66,7 @@ export function CcrsAdvisorPanel({ aiEnabled, sp }: Props) {
   }
 
   return (
-    <section className="rounded-2xl border border-[#7ed957]/25 bg-[#7ed957]/[0.04] p-5">
+    <section className="rounded-2xl border border-[var(--admin-accent)]/25 bg-[var(--admin-accent)]/[0.04] p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="flex items-center gap-2 text-base font-semibold text-white">
@@ -77,19 +78,14 @@ export function CcrsAdvisorPanel({ aiEnabled, sp }: Props) {
           </p>
         </div>
         {aiEnabled && (
-          <button
-            type="button"
-            onClick={run}
-            disabled={pending}
-            className="rounded-lg bg-[#7ed957] px-4 py-2 text-sm font-bold text-black transition hover:bg-[#6bc746] disabled:opacity-50"
-          >
+          <Button type="button" onClick={run} disabled={pending} variant="special" size="sm">
             {pending ? "Reviewing…" : advice ? "Re-review" : "Ask the CCRS advisor"}
-          </button>
+          </Button>
         )}
       </div>
 
       {!aiEnabled ? (
-        <p className="mt-3 text-xs text-[#ffd700]">
+        <p className="mt-3 text-xs text-[var(--admin-gold)]">
           The advisor turns on once an <code className="font-mono">AI_API_KEY</code> is set. The batch, files, and sync
           report above work without it.
         </p>

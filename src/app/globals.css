@@ -42,6 +42,8 @@
   --admin-orange-soft: rgba(255, 127, 0, 0.14);
   --admin-danger: #ff5a5a;
   --admin-danger-soft: rgba(255, 90, 90, 0.14);
+  --admin-purple: #c084fc;          /* AI / automation actions — black ink, 7.95:1 */
+  --admin-purple-soft: rgba(192, 132, 252, 0.14);
 
   /* Radius scale. */
   --admin-radius-sm: 0.5rem;   /* pills, small controls */

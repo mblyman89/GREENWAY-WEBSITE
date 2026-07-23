@@ -16,6 +16,7 @@
  * leaves the page.
  */
 import { useMemo, useState } from "react";
+import { Button } from "@/components/admin/ui";
 
 export type AuditEntry = {
   id: string | number;
@@ -55,7 +56,7 @@ function dayKey(iso: string): string {
 }
 
 const selectClass =
-  "rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white/80 outline-none focus:border-[#7ed957]";
+  "rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white/80 outline-none focus:border-[var(--admin-accent)]";
 
 export function AuditTimeline({ entries }: Props) {
   const [q, setQ] = useState("");
@@ -152,7 +153,7 @@ export function AuditTimeline({ entries }: Props) {
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Search who, what, or which item…"
-            className="min-w-[14rem] flex-1 rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#7ed957]"
+            className="min-w-[14rem] flex-1 rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[var(--admin-accent)]"
           />
           <select value={actor} onChange={(e) => setActor(e.target.value)} className={selectClass}>
             <option value="all">Everyone</option>
@@ -205,7 +206,7 @@ export function AuditTimeline({ entries }: Props) {
               type="date"
               value={from}
               onChange={(e) => setFrom(e.target.value)}
-              className="rounded-lg border border-white/15 bg-black px-2 py-1.5 text-xs text-white/80 outline-none focus:border-[#7ed957]"
+              className="rounded-lg border border-white/15 bg-black px-2 py-1.5 text-xs text-white/80 outline-none focus:border-[var(--admin-accent)]"
             />
           </label>
           <label className="flex items-center gap-1.5 text-xs text-white/50">
@@ -214,7 +215,7 @@ export function AuditTimeline({ entries }: Props) {
               type="date"
               value={to}
               onChange={(e) => setTo(e.target.value)}
-              className="rounded-lg border border-white/15 bg-black px-2 py-1.5 text-xs text-white/80 outline-none focus:border-[#7ed957]"
+              className="rounded-lg border border-white/15 bg-black px-2 py-1.5 text-xs text-white/80 outline-none focus:border-[var(--admin-accent)]"
             />
           </label>
           <label className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-white/15 px-3 py-2 text-xs text-white/60 hover:bg-white/5">
@@ -222,18 +223,14 @@ export function AuditTimeline({ entries }: Props) {
               type="checkbox"
               checked={sensitiveOnly}
               onChange={(e) => setSensitiveOnly(e.target.checked)}
-              className="accent-[#7ed957]"
+              className="accent-[var(--admin-accent)]"
             />
             <span>Sensitive only</span>
           </label>
           {hasFilters && (
-            <button
-              type="button"
-              onClick={clearAll}
-              className="rounded-lg border border-white/15 px-3 py-2 text-xs font-semibold text-white/60 hover:bg-white/10"
-            >
+            <Button type="button" onClick={clearAll} variant="neutral" size="sm">
               Clear
-            </button>
+            </Button>
           )}
           <span className="ml-auto text-xs text-white/40">
             {filtered.length} of {entries.length}
@@ -259,7 +256,7 @@ export function AuditTimeline({ entries }: Props) {
                       {log.icon}
                     </span>
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-white/10 bg-[#0a0a0a] px-3 py-2">
-                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#7ed957]/15 text-[10px] font-bold text-[#7ed957]">
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--admin-accent)]/15 text-[10px] font-bold text-[var(--admin-accent)]">
                         {initials(log.actorEmail)}
                       </span>
                       <span className="text-sm text-white/85">

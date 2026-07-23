@@ -9,6 +9,7 @@
  * changes the program.
  */
 import { useState, useTransition } from "react";
+import { Button } from "@/components/admin/ui";
 import { useToast } from "@/components/admin/ux";
 import {
   generateLoyaltyAdviceAction,
@@ -28,19 +29,19 @@ function BulletList({
   if (items.length === 0) return null;
   const color =
     tone === "good"
-      ? "text-[#7ed957]"
+      ? "text-[var(--admin-accent)]"
       : tone === "warn"
         ? "text-[#ff6b6b]"
         : tone === "idea"
-          ? "text-[#ffd700]"
+          ? "text-[var(--admin-gold)]"
           : "text-white";
   const dot =
     tone === "good"
-      ? "bg-[#7ed957]"
+      ? "bg-[var(--admin-accent)]"
       : tone === "warn"
         ? "bg-[#ff6b6b]"
         : tone === "idea"
-          ? "bg-[#ffd700]"
+          ? "bg-[var(--admin-gold)]"
           : "bg-[#8ab4f8]";
   return (
     <div>
@@ -79,7 +80,7 @@ export function LoyaltyAdvisorPanel({ aiEnabled }: { aiEnabled: boolean }) {
   }
 
   return (
-    <section className="rounded-2xl border border-[#7ed957]/25 bg-[#7ed957]/[0.04] p-5">
+    <section className="rounded-2xl border border-[var(--admin-accent)]/25 bg-[var(--admin-accent)]/[0.04] p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="flex items-center gap-2 text-base font-semibold text-white">
@@ -93,14 +94,9 @@ export function LoyaltyAdvisorPanel({ aiEnabled }: { aiEnabled: boolean }) {
           </p>
         </div>
         {aiEnabled && (
-          <button
-            type="button"
-            onClick={run}
-            disabled={pending}
-            className="rounded-lg bg-[#7ed957] px-4 py-2 text-sm font-bold text-black transition hover:bg-[#6bc746] disabled:opacity-50"
-          >
+          <Button type="button" onClick={run} disabled={pending} variant="special" size="sm">
             {pending ? "Reviewing…" : advice ? "Re-review" : "Ask the advisor"}
-          </button>
+          </Button>
         )}
       </div>
 
@@ -116,13 +112,13 @@ export function LoyaltyAdvisorPanel({ aiEnabled }: { aiEnabled: boolean }) {
               }
             }}
             placeholder='Optional question — e.g. "Are members redeeming fast enough, or is liability piling up?"'
-            className="w-full rounded-lg border border-white/15 bg-black/30 px-3 py-2 text-sm text-white/85 placeholder:text-white/30 focus:border-[#7ed957]/50 focus:outline-none"
+            className="w-full rounded-lg border border-white/15 bg-black/30 px-3 py-2 text-sm text-white/85 placeholder:text-white/30 focus:border-[var(--admin-accent)]/50 focus:outline-none"
           />
         </div>
       )}
 
       {!aiEnabled ? (
-        <p className="mt-3 text-xs text-[#ffd700]">
+        <p className="mt-3 text-xs text-[var(--admin-gold)]">
           The advisor turns on once an <code className="font-mono">AI_API_KEY</code> is set.
           Everything else on this page works without it.
         </p>

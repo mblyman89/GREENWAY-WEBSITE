@@ -3,6 +3,7 @@ import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { BackLink, Breadcrumbs, HelpPanel } from "@/components/admin/ux";
+import { Button, CHIP_ACTION, CHIP_NEUTRAL } from "@/components/admin/ui";
 import { getPublishedVersion, getVersionItems } from "@/lib/pos/menu-version";
 import { getEnrichmentsForKeys, computeGaps } from "@/lib/enrichment/store";
 import { listPendingByType } from "@/lib/ai/suggestions";
@@ -43,7 +44,7 @@ export default async function BulkAiPage({
       <div>
         <AdminPageHeader title="Bulk AI review" subtitle="Draft product descriptions in bulk." />
         <div className="px-5 py-6 sm:px-8">
-          <div className="rounded-xl border border-[#ffd700]/30 bg-[#ffd700]/5 p-5 text-sm text-[#ffd700]">
+          <div className="rounded-xl border border-[var(--admin-gold)]/30 bg-[var(--admin-gold)]/5 p-5 text-sm text-[var(--admin-gold)]">
             AI is not enabled. Add an <code className="rounded bg-black/40 px-1">AI_API_KEY</code> to turn on
             bulk drafting.
           </div>
@@ -99,13 +100,13 @@ export default async function BulkAiPage({
           </div>
         )}
         {generated != null && (
-          <div className="rounded-lg border border-[#7ed957]/40 bg-[#7ed957]/10 px-4 py-2 text-sm text-[#7ed957]">
+          <div className="rounded-lg border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-4 py-2 text-sm text-[var(--admin-accent)]">
             Drafted {generated} description{generated === "1" ? "" : "s"}
             {failed && failed !== "0" ? ` (${failed} failed)` : ""}. Review them below.
           </div>
         )}
         {accepted && (
-          <div className="rounded-lg border border-[#7ed957]/40 bg-[#7ed957]/10 px-4 py-2 text-sm text-[#7ed957]">
+          <div className="rounded-lg border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-4 py-2 text-sm text-[var(--admin-accent)]">
             Saved to the product. Publish the product to make it live.
           </div>
         )}
@@ -117,12 +118,9 @@ export default async function BulkAiPage({
               Products missing descriptions{" "}
               <span className="text-white/40">({missingDesc.length} shown)</span>
             </h2>
-            <button
-              type="submit"
-              className="rounded-lg bg-[#ffd700] px-4 py-2 text-xs font-bold text-black hover:bg-[#e6c200]"
-            >
+            <Button type="submit" variant="special" size="sm">
               ✨ Draft selected (up to 25)
-            </button>
+            </Button>
           </div>
           {missingDesc.length === 0 ? (
             <p className="text-sm text-white/50">
@@ -133,7 +131,7 @@ export default async function BulkAiPage({
               {missingDesc.map((g) => (
                 <label
                   key={g.posKey}
-                  className="flex items-center gap-2 rounded-lg border border-white/10 bg-black px-3 py-2 text-sm text-white/80 hover:border-[#7ed957]/40"
+                  className="flex items-center gap-2 rounded-lg border border-white/10 bg-black px-3 py-2 text-sm text-white/80 hover:border-[var(--admin-accent)]/40"
                 >
                   <input type="checkbox" name="keys" value={g.posKey} defaultChecked className="h-4 w-4" />
                   <span className="truncate">
@@ -182,7 +180,7 @@ export default async function BulkAiPage({
                           ⚠ {flags.length} flag{flags.length > 1 ? "s" : ""}
                         </span>
                       ) : (
-                        <span className="rounded-full border border-[#7ed957]/30 bg-[#7ed957]/10 px-2 py-0.5 text-[0.6rem] font-semibold text-[#7ed957]">
+                        <span className="rounded-full border border-[var(--admin-accent)]/30 bg-[var(--admin-accent)]/10 px-2 py-0.5 text-[0.6rem] font-semibold text-[var(--admin-accent)]">
                           ✓ clean
                         </span>
                       )}
@@ -201,19 +199,13 @@ export default async function BulkAiPage({
                       <form action={bulkAcceptSuggestionAction}>
                         <input type="hidden" name="id" value={s.id} />
                         <input type="hidden" name="key" value={s.entity_id} />
-                        <button
-                          type="submit"
-                          className="rounded-lg bg-[#7ed957] px-3 py-1.5 text-xs font-bold text-black hover:bg-[#6bc746]"
-                        >
+                        <button type="submit" className={CHIP_ACTION}>
                           Accept
                         </button>
                       </form>
                       <form action={bulkRejectSuggestionAction}>
                         <input type="hidden" name="id" value={s.id} />
-                        <button
-                          type="submit"
-                          className="rounded-lg border border-white/15 px-3 py-1.5 text-xs font-bold text-white/70 hover:bg-white/10"
-                        >
+                        <button type="submit" className={CHIP_NEUTRAL}>
                           Reject
                         </button>
                       </form>

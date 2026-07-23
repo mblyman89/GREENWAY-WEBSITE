@@ -13,6 +13,7 @@
  * when no AI key is configured.
  */
 import { useState, useTransition } from "react";
+import { Button } from "@/components/admin/ui";
 import { reviewPurchaseOrderAction, type PoReviewResult } from "../actions";
 import type { PoReview, PoLineReview, PoLineVerdict } from "@/lib/purchasing/po-review-ai";
 
@@ -96,14 +97,9 @@ export function PoReviewPanel({ poId, aiEnabled }: Props) {
           </p>
         </div>
         {aiEnabled && (
-          <button
-            type="button"
-            onClick={run}
-            disabled={pending}
-            className="rounded-lg bg-[var(--admin-accent)] px-4 py-2 text-sm font-bold text-black transition hover:opacity-90 disabled:opacity-50"
-          >
+          <Button type="button" onClick={run} disabled={pending} variant="special" size="sm">
             {pending ? "Reviewing…" : review ? "Re-review" : "Review this PO"}
-          </button>
+          </Button>
         )}
       </div>
 

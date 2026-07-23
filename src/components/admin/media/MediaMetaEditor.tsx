@@ -10,6 +10,7 @@
  * props from the server page (they call the server actions).
  */
 import { useState, useTransition } from "react";
+import { Button } from "@/components/admin/ui";
 import {
   MEDIA_PURPOSES,
   PLACEMENT_SUGGESTIONS,
@@ -23,7 +24,7 @@ import type { MediaAltResult, MediaMetaResult, MediaSuggestAllResult } from "@/a
 // (formAction/suggestAlt/suggestMeta) cross the boundary at runtime.
 
 const field =
-  "w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#7ed957]";
+  "w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[var(--admin-accent)]";
 const label = "mb-1 block text-xs font-medium text-white/50";
 
 export function MediaMetaEditor({
@@ -140,30 +141,20 @@ export function MediaMetaEditor({
         <p className="text-sm font-semibold text-white">Smart metadata</p>
         <div className="flex flex-wrap gap-2">
           {aiEnabled && suggestAll ? (
-            <button
-              type="button"
-              onClick={runAll}
-              disabled={pending}
-              className="rounded-full bg-[#7ed957] px-3 py-1.5 text-xs font-semibold text-black hover:bg-[#6cc746] disabled:opacity-50"
-            >
+            <Button type="button" onClick={runAll} disabled={pending} variant="special" size="sm">
               {pending ? "Thinking…" : "✨ Suggest ALL fields"}
-            </button>
+            </Button>
           ) : null}
           {aiEnabled ? (
-            <button
-              type="button"
-              onClick={runMeta}
-              disabled={pending}
-              className="rounded-full border border-[#7ed957]/40 px-3 py-1.5 text-xs font-semibold text-[#7ed957] hover:bg-[#7ed957]/10 disabled:opacity-50"
-            >
+            <Button type="button" onClick={runMeta} disabled={pending} variant="special" size="sm">
               {pending ? "Thinking…" : "✨ Title & description"}
-            </button>
+            </Button>
           ) : null}
         </div>
       </div>
 
       {note ? (
-        <p className="rounded-lg border border-[#7ed957]/30 bg-[#7ed957]/10 px-3 py-2 text-xs text-[#7ed957]">{note}</p>
+        <p className="rounded-lg border border-[var(--admin-accent)]/30 bg-[var(--admin-accent)]/10 px-3 py-2 text-xs text-[var(--admin-accent)]">{note}</p>
       ) : null}
 
       {aiReasons.length > 0 ? (
@@ -204,7 +195,7 @@ export function MediaMetaEditor({
               type="button"
               onClick={runAlt}
               disabled={pending}
-              className="text-[10px] font-semibold text-[#7ed957] hover:underline disabled:opacity-50"
+              className="admin-focus text-[10px] font-semibold text-[var(--admin-purple)] hover:underline disabled:opacity-50"
             >
               ✨ Suggest
             </button>
@@ -257,21 +248,18 @@ export function MediaMetaEditor({
 
       {/* Guardrails (advisory) */}
       {warnings.length > 0 ? (
-        <ul className="space-y-1 rounded-lg border border-[#ffd700]/25 bg-[#ffd700]/5 p-3 text-[11px] text-[#ffd700]">
+        <ul className="space-y-1 rounded-lg border border-[var(--admin-gold)]/25 bg-[var(--admin-gold)]/5 p-3 text-[11px] text-[var(--admin-gold)]">
           {warnings.map((w, i) => (
             <li key={i}>• {w.text}</li>
           ))}
         </ul>
       ) : (
-        <p className="text-[11px] text-[#7ed957]/80">✓ Looks good — all best-practice checks pass.</p>
+        <p className="text-[11px] text-[var(--admin-accent)]/80">✓ Looks good — all best-practice checks pass.</p>
       )}
 
-      <button
-        type="submit"
-        className="rounded-full bg-[#7ed957] px-5 py-2 text-sm font-semibold text-black hover:bg-[#6cc746]"
-      >
+      <Button type="submit" variant="confirm">
         Save metadata
-      </button>
+      </Button>
     </form>
   );
 }

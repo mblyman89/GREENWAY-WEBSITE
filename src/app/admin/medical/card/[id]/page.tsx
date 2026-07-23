@@ -5,6 +5,7 @@ import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { getCustomerById } from "@/lib/customers/store";
 import { getEndorsementConfig, type AuthorizationRow } from "@/lib/medical/store";
 import { markCardPrintedAction } from "@/app/admin/medical/actions";
+import { Button } from "@/components/admin/ui";
 import { CardPrintButton } from "@/components/admin/medical/CardPrintButton";
 
 export const dynamic = "force-dynamic";
@@ -76,12 +77,9 @@ export default async function PrintCardPage({ params }: { params: Promise<{ id: 
         {!card.card_printed_at && (
           <form action={markCardPrintedAction}>
             <input type="hidden" name="authorization_row_id" value={card.id} />
-            <button
-              type="submit"
-              className="rounded-[var(--admin-radius)] border border-[var(--admin-border)] px-4 py-2 text-sm font-medium text-[var(--admin-text)] transition hover:border-[var(--admin-accent)]"
-            >
+            <Button type="submit" variant="neutral" size="sm">
               Mark printed &amp; laminated
-            </button>
+            </Button>
           </form>
         )}
         <p className="text-xs text-[var(--admin-text-faint)]">

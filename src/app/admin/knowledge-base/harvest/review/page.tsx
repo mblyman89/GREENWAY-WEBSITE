@@ -21,6 +21,7 @@ import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { BackLink, Breadcrumbs } from "@/components/admin/ux";
+import { Button, CHIP_NEUTRAL } from "@/components/admin/ui";
 import { HelpPanel } from "@/components/admin/ux/HelpPanel";
 import { AiProvenanceBadge } from "@/components/admin/ai/AiProvenanceBadge";
 import { AiComplianceFlags } from "@/components/admin/ai/AiComplianceFlags";
@@ -56,7 +57,7 @@ function DraftRow({ draft, entityNote }: { draft: InboxDraft; entityNote: string
   return (
     <div className="rounded-lg border border-white/10 bg-black/40 p-3">
       <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
-        <span className="text-xs font-semibold text-[#7ed957]">
+        <span className="text-xs font-semibold text-[var(--admin-accent)]">
           {fieldLabel(draft.field_key)}
           <span className="ml-2 font-normal text-white/40">{entityNote}</span>
         </span>
@@ -72,12 +73,9 @@ function DraftRow({ draft, entityNote }: { draft: InboxDraft; entityNote: string
         {draft.blockingFlags.length === 0 ? (
           <form action={acceptDraftAction}>
             <input type="hidden" name="suggestionId" value={draft.id} />
-            <button
-              type="submit"
-              className="rounded-full bg-[#7ed957] px-4 py-1.5 text-xs font-bold text-black transition hover:brightness-110"
-            >
+            <Button type="submit" variant="confirm" size="sm">
               ✓ Accept & save
-            </button>
+            </Button>
           </form>
         ) : (
           <span className="rounded-full border border-red-400/40 bg-red-400/10 px-3 py-1.5 text-[10px] font-semibold text-red-300">
@@ -86,12 +84,9 @@ function DraftRow({ draft, entityNote }: { draft: InboxDraft; entityNote: string
         )}
         <form action={rejectDraftAction}>
           <input type="hidden" name="suggestionId" value={draft.id} />
-          <button
-            type="submit"
-            className="rounded-full border border-white/20 px-4 py-1.5 text-xs font-semibold text-white/70 transition hover:border-red-400 hover:text-red-300"
-          >
+          <Button type="submit" variant="neutral" size="sm">
             ✕ Reject
-          </button>
+          </Button>
         </form>
       </div>
     </div>
@@ -114,7 +109,7 @@ function VendorGroup({ group }: { group: InboxGroup }) {
           </span>
         </div>
         {group.href && (
-          <Link href={group.href} className="text-xs text-[#5ec1ff] hover:underline">
+          <Link href={group.href} className="text-xs text-[var(--admin-purple)] hover:underline">
             {group.isProspect ? "Open discovery →" : "Open vendor page →"}
           </Link>
         )}
@@ -122,9 +117,9 @@ function VendorGroup({ group }: { group: InboxGroup }) {
 
       {/* FAST lane — per-vendor batch accept */}
       {group.fast.length > 0 && (
-        <div className="mb-3 rounded-lg border border-[#7ed957]/30 bg-[#7ed957]/5 p-3">
+        <div className="mb-3 rounded-lg border border-[var(--admin-accent)]/30 bg-[var(--admin-accent)]/5 p-3">
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-            <span className="text-xs font-bold text-[#7ed957]">
+            <span className="text-xs font-bold text-[var(--admin-accent)]">
               ⚡ Fast lane — {group.fast.length} clean draft{group.fast.length === 1 ? "" : "s"}
             </span>
             <form action={batchAcceptVendorAction}>
@@ -132,12 +127,9 @@ function VendorGroup({ group }: { group: InboxGroup }) {
               {group.fast.map((d) => (
                 <input key={d.id} type="hidden" name="suggestionIds" value={d.id} />
               ))}
-              <button
-                type="submit"
-                className="rounded-full bg-[#7ed957] px-4 py-1.5 text-xs font-bold text-black transition hover:brightness-110"
-              >
+              <Button type="submit" variant="confirm" size="sm">
                 ✓ Accept all {group.fast.length}
-              </button>
+              </Button>
             </form>
           </div>
           <ul className="space-y-2">
@@ -152,11 +144,7 @@ function VendorGroup({ group }: { group: InboxGroup }) {
                     <AiProvenanceBadge source={d.source} confidence={d.confidence} />
                     <form action={rejectDraftAction}>
                       <input type="hidden" name="suggestionId" value={d.id} />
-                      <button
-                        type="submit"
-                        className="text-[10px] text-white/40 transition hover:text-red-300"
-                        title="Reject just this draft"
-                      >
+                      <button type="submit" className={CHIP_NEUTRAL} title="Reject just this draft">
                         ✕
                       </button>
                     </form>
@@ -172,7 +160,7 @@ function VendorGroup({ group }: { group: InboxGroup }) {
       {/* STANDARD lane — one-by-one */}
       {group.standard.length > 0 && (
         <div className="mb-3 space-y-2">
-          <span className="text-xs font-semibold text-[#ffd700]">
+          <span className="text-xs font-semibold text-[var(--admin-gold)]">
             🔍 Needs a closer look ({group.standard.length})
           </span>
           {group.standard.map((d) => (
@@ -190,7 +178,7 @@ function VendorGroup({ group }: { group: InboxGroup }) {
               {group.href && !group.isProspect ? (
                 <>
                   {" — review on the "}
-                  <Link href={`${group.href}#ai-drafts`} className="text-[#5ec1ff] hover:underline">
+                  <Link href={`${group.href}#ai-drafts`} className="text-[var(--admin-purple)] hover:underline">
                     vendor page
                   </Link>
                 </>
@@ -261,12 +249,12 @@ export default async function HarvestReviewPage({
 
         {/* Totals strip */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <div className="rounded-lg border border-[#7ed957]/30 bg-[#7ed957]/5 p-3">
-            <p className="text-2xl font-bold text-[#7ed957]">{inbox.totals.fast}</p>
+          <div className="rounded-lg border border-[var(--admin-accent)]/30 bg-[var(--admin-accent)]/5 p-3">
+            <p className="text-2xl font-bold text-[var(--admin-accent)]">{inbox.totals.fast}</p>
             <p className="text-[10px] uppercase tracking-wide text-white/50">Fast lane</p>
           </div>
-          <div className="rounded-lg border border-[#ffd700]/30 bg-[#ffd700]/5 p-3">
-            <p className="text-2xl font-bold text-[#ffd700]">{inbox.totals.standard}</p>
+          <div className="rounded-lg border border-[var(--admin-gold)]/30 bg-[var(--admin-gold)]/5 p-3">
+            <p className="text-2xl font-bold text-[var(--admin-gold)]">{inbox.totals.standard}</p>
             <p className="text-[10px] uppercase tracking-wide text-white/50">Closer look</p>
           </div>
           <div className="rounded-lg border border-white/15 bg-white/5 p-3">
@@ -287,12 +275,9 @@ export default async function HarvestReviewPage({
               by a newer re-harvest of the same field.
             </p>
             <form action={closeSupersededAction}>
-              <button
-                type="submit"
-                className="rounded-full border border-white/20 px-4 py-1.5 text-xs font-semibold text-white/70 transition hover:border-white/50 hover:text-white"
-              >
+              <Button type="submit" variant="neutral" size="sm">
                 🧹 Close duplicates
-              </button>
+              </Button>
             </form>
           </div>
         )}
@@ -302,7 +287,7 @@ export default async function HarvestReviewPage({
           <div className="rounded-xl border border-white/10 bg-[#0a0a0a] p-8 text-center">
             <p className="text-sm text-white/60">
               No pending vendor or brand drafts. Start a harvest from the{" "}
-              <BackLink fallback="/admin/knowledge-base/harvest" back={back} className="text-[#5ec1ff] hover:underline">
+              <BackLink fallback="/admin/knowledge-base/harvest" back={back} className="text-[var(--admin-purple)] hover:underline">
                 Harvest Console
               </BackLink>{" "}
               to fill this inbox.

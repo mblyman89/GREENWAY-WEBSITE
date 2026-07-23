@@ -28,13 +28,14 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { Button } from "@/components/admin/ui";
 
 type Tone = "danger" | "warning" | "primary";
 
 const TONE_BUTTON: Record<Tone, string> = {
-  danger: "bg-red-500/90 text-white hover:bg-red-500",
-  warning: "bg-[#ffd700] text-black hover:bg-[#ffe23f]",
-  primary: "bg-[#7ed957] text-black hover:bg-[#94e570]",
+  danger: "bg-[var(--admin-danger)] text-black hover:brightness-110",
+  warning: "bg-[var(--admin-gold)] text-black hover:brightness-110",
+  primary: "bg-[var(--admin-accent)] text-black hover:brightness-110",
 };
 
 const TONE_ICON: Record<Tone, string> = {
@@ -164,21 +165,16 @@ export function ConfirmDialog({
               onKeyDown={(e) => {
                 if (e.key === "Enter" && gateOk) handleConfirm();
               }}
-              className="mt-1 w-full rounded-lg border border-white/15 bg-[#161616] px-3 py-2 text-sm text-white outline-none focus:border-[#7ed957]/60"
+              className="mt-1 w-full rounded-lg border border-white/15 bg-[#161616] px-3 py-2 text-sm text-white outline-none focus:border-[var(--admin-accent)]/60"
               placeholder={requireTextToConfirm}
             />
           </label>
         )}
 
         <div className="mt-6 flex items-center justify-end gap-3">
-          <button
-            type="button"
-            onClick={onCancel}
-            disabled={busy}
-            className="rounded-lg border border-white/15 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/5 disabled:opacity-50"
-          >
+          <Button type="button" onClick={onCancel} disabled={busy} variant="neutral" size="sm">
             {cancelLabel}
-          </button>
+          </Button>
           <button
             ref={confirmRef}
             type="button"

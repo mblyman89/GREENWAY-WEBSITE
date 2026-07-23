@@ -6,6 +6,7 @@ import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { ExportButtons } from "@/components/admin/reports/ExportButtons";
 import { StatCard } from "@/components/admin/StatCard";
 import { Breadcrumbs, HelpPanel, EmptyState } from "@/components/admin/ux";
+import { Button, CHIP_ACTION, CHIP_NEUTRAL } from "@/components/admin/ui";
 import { readLoyaltySignups } from "@/lib/loyalty/store";
 import {
   listLoyaltySignups,
@@ -25,9 +26,9 @@ import {
 export const dynamic = "force-dynamic";
 
 const STATUS_STYLES: Record<LoyaltyStatus, string> = {
-  new: "border-[#ffd700]/40 bg-[#ffd700]/10 text-[#ffd700]",
-  entered: "border-[#7ed957]/50 bg-[#7ed957]/15 text-[#7ed957]",
-  duplicate: "border-[#ff7f00]/40 bg-[#ff7f00]/10 text-[#ff7f00]",
+  new: "border-[var(--admin-gold)]/40 bg-[var(--admin-gold)]/10 text-[var(--admin-gold)]",
+  entered: "border-[var(--admin-accent)]/50 bg-[var(--admin-accent)]/15 text-[var(--admin-accent)]",
+  duplicate: "border-[var(--admin-orange)]/40 bg-[var(--admin-orange)]/10 text-[var(--admin-orange)]",
   archived: "border-white/15 bg-white/5 text-white/40",
 };
 
@@ -93,7 +94,7 @@ export default async function LoyaltySignupReviewPage({
           title="Loyalty Signups"
           subtitle="Review new loyalty signups before they become customer records."
           action={
-            <span className="rounded-full bg-[#ffd700]/15 px-4 py-2 text-sm font-semibold text-[#ffd700]">
+            <span className="rounded-full bg-[var(--admin-gold)]/15 px-4 py-2 text-sm font-semibold text-[var(--admin-gold)]">
               {legacy.length} total
             </span>
           }
@@ -189,13 +190,14 @@ export default async function LoyaltySignupReviewPage({
             <ExportButtons baseHref={`/admin/loyalty-signups/export?${exportQs}`} />
             {canManage ? (
               <form action={importLegacyLoyaltyAction}>
-                <button
+                <Button
                   type="submit"
-                  className="rounded-lg border border-[#ffd700]/40 bg-[#ffd700]/10 px-3.5 py-2 text-xs font-bold text-[#ffd700] hover:bg-[#ffd700]/20"
+                  variant="save"
+                  size="sm"
                   title="Import any remaining rows from storage/loyalty-signups.jsonl"
                 >
                   Import legacy file
-                </button>
+                </Button>
               </form>
             ) : null}
           </div>
@@ -208,7 +210,7 @@ export default async function LoyaltySignupReviewPage({
             className={`mb-4 rounded-lg border px-4 py-3 text-sm ${
               foundCount === 0
                 ? "border-white/15 bg-white/5 text-white/70"
-                : "border-[#7ed957]/40 bg-[#7ed957]/10 text-[#7ed957]"
+                : "border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 text-[var(--admin-accent)]"
             }`}
           >
             {foundCount === 0
@@ -219,7 +221,7 @@ export default async function LoyaltySignupReviewPage({
           </div>
         )}
         {connected && connectedCustomerId && (
-          <div className="mb-4 rounded-lg border border-[#7ed957]/40 bg-[#7ed957]/10 px-4 py-3 text-sm text-[#7ed957]">
+          <div className="mb-4 rounded-lg border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-4 py-3 text-sm text-[var(--admin-accent)]">
             {connected === "created"
               ? `Customer record created for ${connectedCustomerName ?? "this signup"}`
               : connected === "linked"
@@ -253,7 +255,7 @@ export default async function LoyaltySignupReviewPage({
                 href={`/admin/loyalty-signups?status=${f.key}${search ? `&q=${encodeURIComponent(search)}` : ""}`}
                 className={`rounded-full border px-3 py-1.5 text-xs font-bold uppercase tracking-[0.08em] transition ${
                   status === f.key
-                    ? "border-[#7ed957]/60 bg-[#7ed957]/15 text-[#7ed957]"
+                    ? "border-[var(--admin-accent)]/60 bg-[var(--admin-accent)]/15 text-[var(--admin-accent)]"
                     : "border-white/15 bg-white/5 text-white/60 hover:text-white"
                 }`}
               >
@@ -267,14 +269,11 @@ export default async function LoyaltySignupReviewPage({
               name="q"
               defaultValue={search}
               placeholder="Search name, email, phone"
-              className="w-56 rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white placeholder:text-white/30 focus:border-[#7ed957]/50 focus:outline-none"
+              className="w-56 rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white placeholder:text-white/30 focus:border-[var(--admin-accent)]/50 focus:outline-none"
             />
-            <button
-              type="submit"
-              className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm font-bold text-white hover:bg-white/10"
-            >
+            <Button type="submit" variant="neutral" size="sm">
               Search
-            </button>
+            </Button>
           </div>
         </form>
 
@@ -288,7 +287,7 @@ export default async function LoyaltySignupReviewPage({
                 action={
                   <Link
                     href="/loyalty"
-                    className="rounded-lg bg-[#7ed957] px-4 py-2 text-sm font-bold text-black transition hover:brightness-110"
+                    className="rounded-lg bg-[var(--admin-accent)] px-4 py-2 text-sm font-bold text-black transition hover:brightness-110"
                   >
                     See the signup form
                   </Link>
@@ -322,7 +321,7 @@ export default async function LoyaltySignupReviewPage({
                       {linkedCustomers.has(s.id) ? (
                         <Link
                           href={`/admin/customers/${linkedCustomers.get(s.id)!.customerId}`}
-                          className="rounded-full border border-[#7ed957]/40 bg-[#7ed957]/10 px-2.5 py-0.5 text-[0.62rem] font-black uppercase tracking-[0.1em] text-[#7ed957] transition hover:bg-[#7ed957]/20"
+                          className="rounded-full border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-2.5 py-0.5 text-[0.62rem] font-black uppercase tracking-[0.1em] text-[var(--admin-accent)] transition hover:bg-[var(--admin-accent)]/20"
                           title={`Open ${linkedCustomers.get(s.id)!.name}'s customer profile`}
                         >
                           ↗ Customer: {linkedCustomers.get(s.id)!.name}
@@ -330,7 +329,7 @@ export default async function LoyaltySignupReviewPage({
                       ) : null}
                       {s.dedupe_of ? (
                         <span
-                          className="rounded-full border border-[#ff7f00]/40 bg-[#ff7f00]/10 px-2.5 py-0.5 text-[0.62rem] font-black uppercase tracking-[0.1em] text-[#ff7f00]"
+                          className="rounded-full border border-[var(--admin-orange)]/40 bg-[var(--admin-orange)]/10 px-2.5 py-0.5 text-[0.62rem] font-black uppercase tracking-[0.1em] text-[var(--admin-orange)]"
                           title={
                             dedupeOriginals.get(s.id)
                               ? `Matches ${dedupeOriginals.get(s.id)!.name}, submitted ${formatDate(dedupeOriginals.get(s.id)!.submitted_at)}`
@@ -342,7 +341,7 @@ export default async function LoyaltySignupReviewPage({
                       ) : null}
                     </div>
                     {s.dedupe_of && dedupeOriginals.get(s.id) ? (
-                      <p className="mt-1 text-[0.7rem] text-[#ff7f00]/80">
+                      <p className="mt-1 text-[0.7rem] text-[var(--admin-orange)]/80">
                         Same phone/email as <strong>{dedupeOriginals.get(s.id)!.name}</strong>{" "}
                         (submitted {formatDate(dedupeOriginals.get(s.id)!.submitted_at)}). Verify before entering to
                         avoid a double POS entry.
@@ -375,7 +374,7 @@ export default async function LoyaltySignupReviewPage({
                           <input type="hidden" name="id" value={s.id} />
                           <button
                             type="submit"
-                            className="rounded-lg border border-[#7ed957]/50 bg-[#7ed957]/10 px-3.5 py-2 text-xs font-black uppercase tracking-[0.08em] text-[#7ed957] transition hover:bg-[#7ed957]/20"
+                            className={CHIP_ACTION}
                             title="Create (or link to) the customer record for this signup"
                           >
                             Add to customers
@@ -402,12 +401,9 @@ export default async function LoyaltySignupReviewPage({
                       name="note"
                       defaultValue={s.staff_note ?? ""}
                       placeholder="Internal note…"
-                      className="flex-1 rounded-lg border border-white/15 bg-black/40 px-3 py-1.5 text-xs text-white placeholder:text-white/30 focus:border-[#7ed957]/50 focus:outline-none"
+                      className="flex-1 rounded-lg border border-white/15 bg-black/40 px-3 py-1.5 text-xs text-white placeholder:text-white/30 focus:border-[var(--admin-accent)]/50 focus:outline-none"
                     />
-                    <button
-                      type="submit"
-                      className="rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-bold text-white hover:bg-white/10"
-                    >
+                    <button type="submit" className={CHIP_NEUTRAL}>
                       Save note
                     </button>
                   </form>
@@ -443,14 +439,7 @@ function StatusButton({
       <input type="hidden" name="status" value={status} />
       {view ? <input type="hidden" name="view" value={view} /> : null}
       {viewQ ? <input type="hidden" name="view_q" value={viewQ} /> : null}
-      <button
-        type="submit"
-        className={
-          primary
-            ? "rounded-lg bg-[#7ed957] px-3.5 py-2 text-xs font-black uppercase tracking-[0.08em] text-black transition hover:brightness-110"
-            : "rounded-lg border border-white/15 bg-white/5 px-3.5 py-2 text-xs font-bold text-white hover:bg-white/10"
-        }
-      >
+      <button type="submit" className={primary ? CHIP_ACTION : CHIP_NEUTRAL}>
         {label}
       </button>
     </form>

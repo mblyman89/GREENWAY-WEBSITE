@@ -3,6 +3,7 @@ import { requirePermission } from "@/lib/auth/session";
 import { can } from "@/lib/auth/roles";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { BackLink } from "@/components/admin/ux";
+import { Button } from "@/components/admin/ui";
 import { StatCard } from "@/components/admin/StatCard";
 import { getVersion, getPublishedVersion, diffVersions, getVersionItems } from "@/lib/pos/menu-version";
 import { formatDateTime, formatMoney } from "@/lib/pos/format";
@@ -72,7 +73,7 @@ export default async function IntakeVersionReviewPage({
           <BackLink
             fallback="/admin/menu-imports"
             back={sp.back}
-            className="rounded-full border border-white/15 px-4 py-2 text-xs text-white/80 hover:border-[#7ed957] hover:text-white"
+            className="rounded-full border border-white/15 px-4 py-2 text-xs text-white/80 hover:border-[var(--admin-accent)] hover:text-white"
           >
             &larr; All menu updates
           </BackLink>
@@ -86,12 +87,12 @@ export default async function IntakeVersionReviewPage({
           </div>
         )}
         {sp.published && (
-          <div className="rounded-lg border border-[#7ed957]/40 bg-[#7ed957]/10 px-4 py-3 text-sm text-[#7ed957]">
+          <div className="rounded-lg border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-4 py-3 text-sm text-[var(--admin-accent)]">
             Published. The public menu now reflects this version and these products are sellable in the POS.
           </div>
         )}
 
-        <div className="rounded-xl border border-[#7ed957]/25 bg-[#7ed957]/5 p-4 text-sm text-white/70">
+        <div className="rounded-xl border border-[var(--admin-accent)]/25 bg-[var(--admin-accent)]/5 p-4 text-sm text-white/70">
           These products came in through <strong>receiving</strong> and were approved with a price.
           They&apos;ve been carried onto a copy of your current live menu so you can review and publish
           them &mdash; <strong>no Menu Imports upload needed</strong>. Publishing makes them show on the
@@ -122,15 +123,15 @@ export default async function IntakeVersionReviewPage({
               )}
             </h2>
             <div className="mt-3 grid gap-4 sm:grid-cols-4">
-              <DiffStat label="New products" value={diff.added.length} accent="text-[#7ed957]" />
-              <DiffStat label="Price changes" value={diff.priceChanged.length} accent="text-[#ffd700]" />
+              <DiffStat label="New products" value={diff.added.length} accent="text-[var(--admin-accent)]" />
+              <DiffStat label="Price changes" value={diff.priceChanged.length} accent="text-[var(--admin-gold)]" />
               <DiffStat label="Removed" value={diff.removed.length} accent="text-red-400" />
               <DiffStat label="Unchanged" value={diff.unchangedCount} accent="text-white/50" />
             </div>
 
             {diff.added.length > 0 && (
               <details className="mt-4" open>
-                <summary className="cursor-pointer text-xs font-semibold text-[#7ed957]">
+                <summary className="cursor-pointer text-xs font-semibold text-[var(--admin-accent)]">
                   New products from receiving ({diff.added.length})
                 </summary>
                 <div className="mt-2 max-h-72 overflow-auto rounded-lg border border-white/10">
@@ -145,7 +146,7 @@ export default async function IntakeVersionReviewPage({
             )}
             {diff.priceChanged.length > 0 && (
               <details className="mt-3">
-                <summary className="cursor-pointer text-xs font-semibold text-[#ffd700]">
+                <summary className="cursor-pointer text-xs font-semibold text-[var(--admin-gold)]">
                   Price changes ({diff.priceChanged.length})
                 </summary>
                 <div className="mt-2 max-h-72 overflow-auto rounded-lg border border-white/10">
@@ -175,7 +176,7 @@ export default async function IntakeVersionReviewPage({
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold text-white">What happened when we carried these over</h2>
               <div className="flex gap-3 text-xs">
-                <span className="text-[#ffd700]">{warnings.length} to fix</span>
+                <span className="text-[var(--admin-gold)]">{warnings.length} to fix</span>
                 <span className="text-white/50">{info.length} info</span>
               </div>
             </div>
@@ -183,7 +184,7 @@ export default async function IntakeVersionReviewPage({
               {warnings.slice(0, 100).map((d, i) => (
                 <div
                   key={`w-${i}`}
-                  className="rounded-lg border border-[#ffd700]/30 bg-[#ffd700]/5 px-3 py-2 text-xs text-[#ffd700]"
+                  className="rounded-lg border border-[var(--admin-gold)]/30 bg-[var(--admin-gold)]/5 px-3 py-2 text-xs text-[var(--admin-gold)]"
                 >
                   {d.message}
                 </div>
@@ -225,7 +226,7 @@ export default async function IntakeVersionReviewPage({
         <section className="rounded-xl border border-white/10 bg-[#0a0a0a] p-5">
           <h2 className="text-sm font-semibold text-white">Publish</h2>
           {isPublished ? (
-            <p className="mt-2 text-sm text-[#7ed957]">
+            <p className="mt-2 text-sm text-[var(--admin-accent)]">
               This version is live (published {formatDateTime(version.published_at)}).
             </p>
           ) : !canPublish ? (
@@ -239,12 +240,9 @@ export default async function IntakeVersionReviewPage({
                 Publishing replaces the current live menu with this version and refreshes the public
                 site. The previous version is archived (not deleted).
               </p>
-              <button
-                type="submit"
-                className="rounded-full bg-[#7ed957] px-6 py-2.5 text-sm font-bold text-black transition hover:brightness-110"
-              >
+              <Button type="submit" variant="confirm">
                 Publish this menu live
-              </button>
+              </Button>
             </form>
           )}
         </section>

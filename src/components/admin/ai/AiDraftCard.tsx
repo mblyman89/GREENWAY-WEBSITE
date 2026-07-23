@@ -11,6 +11,7 @@
  * included in BOTH forms so the action gets all the ids it needs.
  */
 import type { ReactNode } from "react";
+import { Button } from "@/components/admin/ui";
 import { AiComplianceFlags } from "./AiComplianceFlags";
 import { AiProvenanceBadge } from "./AiProvenanceBadge";
 
@@ -56,7 +57,7 @@ export function AiDraftCard({
   return (
     <div className="rounded-lg border border-white/10 bg-black/40 p-4">
       <div className="mb-2 flex items-center justify-between gap-2">
-        <span className="text-xs font-semibold text-[#7ed957]">{fieldLabel}</span>
+        <span className="text-xs font-semibold text-[var(--admin-accent)]">{fieldLabel}</span>
         <span className="text-[10px] text-white/30">{model ?? "ai"}</span>
       </div>
       <div className="mb-2">
@@ -76,24 +77,18 @@ export function AiDraftCard({
             {hidden.map(([k, v]) => (
               <input key={k} type="hidden" name={k} value={v} />
             ))}
-            <button
-              type="submit"
-              className="rounded-full bg-[#7ed957] px-4 py-1.5 text-xs font-bold text-black transition hover:brightness-110"
-            >
+            <Button type="submit" variant="confirm" size="sm">
               {acceptLabel}
-            </button>
+            </Button>
           </form>
         )}
         <form action={rejectAction}>
           {hidden.map(([k, v]) => (
             <input key={k} type="hidden" name={k} value={v} />
           ))}
-          <button
-            type="submit"
-            className="rounded-full border border-white/20 px-4 py-1.5 text-xs font-semibold text-white/70 transition hover:border-red-400 hover:text-red-300"
-          >
+          <Button type="submit" variant="neutral" size="sm">
             {referenceOnly ? "✕ Dismiss" : rejectLabel}
-          </button>
+          </Button>
         </form>
       </div>
 

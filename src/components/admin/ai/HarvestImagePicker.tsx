@@ -14,6 +14,8 @@
  * fetched by our servers until the human clicks Save.
  */
 
+import { CHIP_ACTION, CHIP_NEUTRAL } from "@/components/admin/ui";
+
 export type HarvestImageItem = {
   url: string;
   /** Alt text / logo-detector context shown under the thumbnail. */
@@ -94,7 +96,7 @@ export function HarvestImagePicker({
                 <input type="hidden" name="caption" value={item.caption} />
                 <button
                   type="submit"
-                  className="rounded-full border border-white/20 px-2.5 py-1 text-[10px] font-semibold text-white/80 transition hover:border-[#7ed957] hover:text-white"
+                  className={CHIP_NEUTRAL}
                   title="Download into the Media Library as a draft (license: pending review)"
                 >
                   💾 Save
@@ -110,7 +112,7 @@ export function HarvestImagePicker({
                   <input type="hidden" name="assign" value="logo" />
                   <button
                     type="submit"
-                    className="rounded-full bg-[#7ed957] px-2.5 py-1 text-[10px] font-bold text-black transition hover:brightness-110"
+                    className={CHIP_ACTION}
                     title="Save AND assign as the logo (publishes the asset)"
                   >
                     ★ Set as logo

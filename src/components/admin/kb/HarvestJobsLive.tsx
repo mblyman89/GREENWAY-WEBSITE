@@ -13,6 +13,7 @@
  */
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { CHIP_ACTION, CHIP_NEUTRAL } from "@/components/admin/ui";
 
 /**
  * A completed target is "jumpable" when it maps to a real vendor page — i.e. an
@@ -61,9 +62,9 @@ const ACTIVE_POLL_MS = 5_000;
 const IDLE_POLL_MS = 30_000;
 
 const STATUS_STYLE: Record<Job["status"], string> = {
-  queued: "border-[#ffd700]/40 bg-[#ffd700]/10 text-[#ffd700]",
-  running: "border-[#5ec1ff]/40 bg-[#5ec1ff]/10 text-[#5ec1ff]",
-  completed: "border-[#7ed957]/40 bg-[#7ed957]/10 text-[#7ed957]",
+  queued: "border-[var(--admin-gold)]/40 bg-[var(--admin-gold)]/10 text-[var(--admin-gold)]",
+  running: "border-[var(--admin-purple)]/40 bg-[var(--admin-purple)]/10 text-[var(--admin-purple)]",
+  completed: "border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 text-[var(--admin-accent)]",
   cancelled: "border-white/20 bg-white/5 text-white/60",
   failed: "border-red-400/40 bg-red-400/10 text-red-300",
 };
@@ -155,7 +156,7 @@ export function HarvestJobsLive({
   return (
     <div className="space-y-3">
       {stale && (
-        <p className="text-[10px] text-[#ffd700]">Live updates paused (worker unreachable) — showing the last known state.</p>
+        <p className="text-[10px] text-[var(--admin-gold)]">Live updates paused (worker unreachable) — showing the last known state.</p>
       )}
       {visible.map((job) => {
         const finished = job.counts.done + job.counts.failed;
@@ -178,7 +179,7 @@ export function HarvestJobsLive({
 
             <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
               <div
-                className={`h-full rounded-full transition-all ${job.counts.failed > 0 ? "bg-[#ffd700]" : "bg-[#7ed957]"}`}
+                className={`h-full rounded-full transition-all ${job.counts.failed > 0 ? "bg-[var(--admin-gold)]" : "bg-[var(--admin-accent)]"}`}
                 style={{ width: `${pct}%` }}
               />
             </div>
@@ -186,16 +187,16 @@ export function HarvestJobsLive({
               <span>
                 {finished}/{job.total_targets} sites · {job.counts.done} ok
                 {job.counts.failed > 0 ? ` · ${job.counts.failed} failed` : ""} ·{" "}
-                <strong className="text-[#7ed957]">{job.total_drafts_written} drafts</strong> written
+                <strong className="text-[var(--admin-accent)]">{job.total_drafts_written} drafts</strong> written
                 {(job.total_products_written ?? 0) > 0 ? (
                   <>
                     {" · "}
-                    <strong className="text-[#5ec1ff]">{job.total_products_written} products</strong> staged
+                    <strong className="text-[var(--admin-purple)]">{job.total_products_written} products</strong> staged
                   </>
                 ) : null}
               </span>
               {running && (
-                <span className="truncate text-[#5ec1ff]" title={running.url}>
+                <span className="truncate text-[var(--admin-purple)]" title={running.url}>
                   ⛏ {running.display_name || running.url}
                 </span>
               )}
@@ -209,7 +210,7 @@ export function HarvestJobsLive({
                 <summary className="cursor-pointer text-[10px] text-white/40 hover:text-white/70">
                   Incomplete sites (budget reached with pages still queued)
                 </summary>
-                <ul className="mt-1 space-y-0.5 text-[10px] text-[#ffd700]/80">
+                <ul className="mt-1 space-y-0.5 text-[10px] text-[var(--admin-gold)]/80">
                   {job.targets
                     .filter((t) => t.status === "done" && (t.pages_leftover ?? 0) > 0)
                     .slice(0, 20)
@@ -259,7 +260,7 @@ export function HarvestJobsLive({
                       <Link
                         key={id}
                         href={`/admin/vendors/${id}`}
-                        className="max-w-[220px] truncate rounded-full border border-[#7ed957]/40 px-3 py-1 text-[10px] font-semibold text-[#7ed957] transition hover:bg-[#7ed957]/10"
+                        className="max-w-[220px] truncate rounded-full border border-[var(--admin-accent)]/40 px-3 py-1 text-[10px] font-semibold text-[var(--admin-accent)] transition hover:bg-[var(--admin-accent)]/10"
                         title={`Open ${t.display_name || t.url}`}
                       >
                         → {t.display_name || t.url}
@@ -277,10 +278,7 @@ export function HarvestJobsLive({
               {active && !job.cancel_requested && (
                 <form action={cancelAction}>
                   <input type="hidden" name="jobId" value={job.id} />
-                  <button
-                    type="submit"
-                    className="rounded-full border border-white/20 px-3 py-1 text-[10px] font-semibold text-white/70 transition hover:border-red-400 hover:text-red-300"
-                  >
+                  <button type="submit" className={CHIP_NEUTRAL}>
                     ⏹ Stop after current site
                   </button>
                 </form>
@@ -289,10 +287,7 @@ export function HarvestJobsLive({
                 job.counts.pending + job.counts.running > 0 && (
                   <form action={resumeAction}>
                     <input type="hidden" name="jobId" value={job.id} />
-                    <button
-                      type="submit"
-                      className="rounded-full border border-[#5ec1ff]/40 px-3 py-1 text-[10px] font-semibold text-[#5ec1ff] transition hover:brightness-125"
-                    >
+                    <button type="submit" className={CHIP_ACTION}>
                       ▶ Resume unfinished sites
                     </button>
                   </form>

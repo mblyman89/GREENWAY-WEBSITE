@@ -14,6 +14,7 @@
  * Drafts-only: nothing is saved until the staffer reviews and submits the form.
  */
 import { useRef, useState, useTransition } from "react";
+import { Button } from "@/components/admin/ui";
 import { useToast } from "@/components/admin/ux";
 import {
   suggestPromotionCopyAction,
@@ -132,28 +133,24 @@ export function PromotionAiCopy({ aiEnabled }: Props) {
   }
 
   return (
-    <div ref={rootRef} className="rounded-xl border border-[#7ed957]/25 bg-[#7ed957]/[0.04] p-4">
+    <div ref={rootRef} className="rounded-xl border border-[var(--admin-accent)]/25 bg-[var(--admin-accent)]/[0.04] p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <div className="text-sm font-semibold text-[#7ed957]">✨ Write the copy with AI</div>
+          <div className="text-sm font-semibold text-[var(--admin-accent)]">✨ Write the copy with AI</div>
           <p className="text-xs text-white/45">
             Set the discount + schedule + what it applies to first, then let AI draft the name,
             announcement, and badge.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setOpen((o) => !o)}
-          className="rounded-lg border border-[#7ed957]/40 bg-[#7ed957]/10 px-3 py-1.5 text-xs font-bold text-[#7ed957] transition hover:bg-[#7ed957]/20"
-        >
+        <Button type="button" onClick={() => setOpen((o) => !o)} variant="special" size="sm">
           {open ? "Hide" : "Open"}
-        </button>
+        </Button>
       </div>
 
       {open && (
         <div className="mt-3">
           {!aiEnabled ? (
-            <p className="text-xs text-[#ffd700]">
+            <p className="text-xs text-[var(--admin-gold)]">
               AI isn&apos;t set up yet. Add an <code className="font-mono">AI_API_KEY</code> to
               enable this. You can still write the copy by hand.
             </p>
@@ -168,16 +165,11 @@ export function PromotionAiCopy({ aiEnabled }: Props) {
                   value={instruction}
                   onChange={(e) => setInstruction(e.target.value)}
                   placeholder="e.g. playful, alliterative, mention curbside pickup"
-                  className="min-w-[12rem] flex-1 rounded-lg border border-white/15 bg-black px-3 py-1.5 text-xs text-white outline-none focus:border-[#7ed957]"
+                  className="min-w-[12rem] flex-1 rounded-lg border border-white/15 bg-black px-3 py-1.5 text-xs text-white outline-none focus:border-[var(--admin-accent)]"
                 />
-                <button
-                  type="button"
-                  onClick={runAi}
-                  disabled={pending}
-                  className="rounded-lg bg-[#7ed957] px-3 py-1.5 text-xs font-bold text-black transition hover:bg-[#6bc746] disabled:opacity-50"
-                >
+                <Button type="button" onClick={runAi} disabled={pending} variant="special" size="sm">
                   {pending ? "Writing…" : "Generate"}
-                </button>
+                </Button>
               </div>
 
               {suggestion && (
@@ -191,7 +183,7 @@ export function PromotionAiCopy({ aiEnabled }: Props) {
                         ⚠ {suggestion.flags.join(", ")}
                       </span>
                     ) : (
-                      <span className="rounded-full border border-[#7ed957]/40 bg-[#7ed957]/10 px-2 py-0.5 text-[0.6rem] font-semibold text-[#7ed957]">
+                      <span className="rounded-full border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-2 py-0.5 text-[0.6rem] font-semibold text-[var(--admin-accent)]">
                         ✓ no compliance flags
                       </span>
                     )}
@@ -208,28 +200,15 @@ export function PromotionAiCopy({ aiEnabled }: Props) {
                     </div>
                   </div>
                   <div className="mt-2 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={useSuggestion}
-                      className="rounded-lg bg-[#7ed957] px-3 py-1.5 text-xs font-bold text-black hover:bg-[#6bc746]"
-                    >
+                    <Button type="button" onClick={useSuggestion} variant="confirm" size="sm">
                       Use it
-                    </button>
-                    <button
-                      type="button"
-                      onClick={runAi}
-                      disabled={pending}
-                      className="rounded-lg border border-white/15 px-3 py-1.5 text-xs font-bold text-white/80 hover:bg-white/10 disabled:opacity-50"
-                    >
+                    </Button>
+                    <Button type="button" onClick={runAi} disabled={pending} variant="neutral" size="sm">
                       Try again
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSuggestion(null)}
-                      className="rounded-lg border border-white/15 px-3 py-1.5 text-xs font-bold text-white/60 hover:bg-white/10"
-                    >
+                    </Button>
+                    <Button type="button" onClick={() => setSuggestion(null)} variant="neutral" size="sm">
                       Discard
-                    </button>
+                    </Button>
                   </div>
                   <p className="mt-2 text-[0.65rem] text-white/35">
                     AI fills the form fields only — nothing changes on your site until you submit and

@@ -14,6 +14,7 @@
  * server action passed in as a prop.
  */
 import { useMemo, useState } from "react";
+import { CHIP_ACTION } from "@/components/admin/ui";
 import { diffWords } from "@/lib/cms/diff";
 
 export type RevisionItem = {
@@ -61,7 +62,7 @@ function DiffView({ before, after }: { before: string; after: string }) {
           return (
             <span
               key={idx}
-              className="rounded bg-[#7ed957]/20 text-[#7ed957] underline decoration-[#7ed957]/40"
+              className="rounded bg-[var(--admin-accent)]/20 text-[var(--admin-accent)] underline decoration-[var(--admin-accent)]/40"
             >
               {op.text}
             </span>
@@ -106,7 +107,7 @@ export function ContentRevisionHistory({
           </span>
         )}
         {dirty && (
-          <span className="rounded-full border border-[#ff7f00]/40 bg-[#ff7f00]/10 px-1.5 py-0.5 text-[0.6rem] text-[#ff7f00]">
+          <span className="rounded-full border border-[var(--admin-orange)]/40 bg-[var(--admin-orange)]/10 px-1.5 py-0.5 text-[0.6rem] text-[var(--admin-orange)]">
             unpublished change
           </span>
         )}
@@ -155,7 +156,7 @@ export function ContentRevisionHistory({
                         <input type="hidden" name="revision_id" value={rev.id} />
                         <button
                           type="submit"
-                          className="rounded-lg border border-[#7ed957]/40 bg-[#7ed957]/10 px-2.5 py-1 text-[0.7rem] font-bold text-[#7ed957] transition hover:bg-[#7ed957]/20"
+                          className={CHIP_ACTION}
                           title="Load this version back into the draft to review, then publish"
                         >
                           ↺ Restore to draft

@@ -17,6 +17,7 @@
 import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs } from "@/components/admin/ux";
+import { Button } from "@/components/admin/ui";
 import { HelpPanel } from "@/components/admin/ux/HelpPanel";
 import { KbFlash } from "../KbFlash";
 import { listVendors } from "@/lib/vendors/store";
@@ -37,9 +38,9 @@ import { loadHarvestSettings } from "@/lib/kb/harvest-settings";
 export const dynamic = "force-dynamic";
 
 function heatColor(v: number): string {
-  if (v >= 0.999) return "bg-[#7ed957]/80";
-  if (v >= 0.5) return "bg-[#7ed957]/35";
-  if (v > 0) return "bg-[#ffd700]/30";
+  if (v >= 0.999) return "bg-[var(--admin-accent)]/80";
+  if (v >= 0.5) return "bg-[var(--admin-accent)]/35";
+  if (v > 0) return "bg-[var(--admin-gold)]/30";
   return "bg-red-500/25";
 }
 
@@ -111,7 +112,7 @@ export default async function HarvestConsolePage({
         action={
           <a
             href="/admin/knowledge-base/harvest/settings"
-            className="rounded-full border border-white/15 px-4 py-2 text-xs font-semibold text-white/70 transition hover:border-[#7ed957] hover:text-[#7ed957]"
+            className="rounded-full border border-white/15 px-4 py-2 text-xs font-semibold text-white/70 transition hover:border-[var(--admin-accent)] hover:text-[var(--admin-accent)]"
           >
             ⚙ Harvest Tuning
           </a>
@@ -125,8 +126,8 @@ export default async function HarvestConsolePage({
         <div
           className={`rounded-lg border px-4 py-3 text-sm ${
             health.ok
-              ? "border-[#7ed957]/40 bg-[#7ed957]/5 text-[#7ed957]"
-              : "border-[#ffd700]/40 bg-[#ffd700]/5 text-[#ffd700]"
+              ? "border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/5 text-[var(--admin-accent)]"
+              : "border-[var(--admin-gold)]/40 bg-[var(--admin-gold)]/5 text-[var(--admin-gold)]"
           }`}
         >
           {health.ok
@@ -143,7 +144,7 @@ export default async function HarvestConsolePage({
             <h2 className="text-xs font-semibold uppercase tracking-wide text-white/40">Active jobs</h2>
             <a
               href="/admin/knowledge-base/harvest/history"
-              className="rounded-full border border-white/15 px-3 py-1 text-[11px] font-semibold text-white/70 transition hover:border-[#7ed957] hover:text-[#7ed957]"
+              className="rounded-full border border-white/15 px-3 py-1 text-[11px] font-semibold text-white/70 transition hover:border-[var(--admin-accent)] hover:text-[var(--admin-accent)]"
             >
               🕘 Past crawls
             </a>
@@ -173,13 +174,9 @@ export default async function HarvestConsolePage({
                   : `${vendorFresh.due} vendor site${vendorFresh.due === 1 ? "" : "s"} due — ${vendorFresh.never} never harvested, ${vendorFresh.stale} older than ${STALE_AFTER_DAYS} days (${vendorFresh.fresh} fresh).`}
               </p>
               <form action={startRefreshAction}>
-                <button
-                  type="submit"
-                  disabled={!crawlerOn || vendorFresh.due === 0}
-                  className="rounded-full bg-[#7ed957] px-5 py-2 text-xs font-bold text-black transition hover:brightness-110 disabled:opacity-40"
-                >
+                <Button type="submit" disabled={!crawlerOn || vendorFresh.due === 0} variant="special" size="sm">
                   ⛏ Refresh next {Math.min(vendorFresh.due, tuning.refreshBatch) || tuning.refreshBatch} due vendors
-                </button>
+                </Button>
               </form>
             </div>
 
@@ -197,13 +194,9 @@ export default async function HarvestConsolePage({
                   : `${leadFresh.due} lead site${leadFresh.due === 1 ? "" : "s"} due — ${leadFresh.never} never harvested, ${leadFresh.stale} stale (${leadFresh.fresh} fresh). Repeated clicks walk the whole market; drafts stay dark until a lead is promoted.`}
               </p>
               <form action={startTrickleAction}>
-                <button
-                  type="submit"
-                  disabled={!crawlerOn || leadFresh.due === 0}
-                  className="rounded-full bg-[#5ec1ff] px-5 py-2 text-xs font-bold text-black transition hover:brightness-110 disabled:opacity-40"
-                >
+                <Button type="submit" disabled={!crawlerOn || leadFresh.due === 0} variant="special" size="sm">
                   🌊 Trickle next {Math.min(leadFresh.due, tuning.trickleBatch) || tuning.trickleBatch} due leads
-                </button>
+                </Button>
               </form>
             </div>
           </div>
@@ -226,7 +219,7 @@ export default async function HarvestConsolePage({
                 id="tier"
                 name="tier"
                 defaultValue="1"
-                className="rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#7ed957]"
+                className="rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[var(--admin-accent)]"
               >
                 <option value="1">Tier 1 — deep (~{tuning.tier1MaxPages} pages/site) · current vendors</option>
                 <option value="2">Tier 2 — medium (~{tuning.tier2MaxPages} pages/site) · prospects</option>
@@ -235,13 +228,9 @@ export default async function HarvestConsolePage({
                   between sites)
                 </option>
               </select>
-              <button
-                type="submit"
-                className="ml-auto rounded-full bg-[#7ed957] px-5 py-2 text-xs font-bold text-black transition hover:brightness-110 disabled:opacity-40"
-                disabled={!crawlerOn}
-              >
+              <Button type="submit" disabled={!crawlerOn} variant="special" size="sm" className="ml-auto">
                 ⛏ Start harvest
-              </button>
+              </Button>
             </div>
 
             <div className="grid gap-5 lg:grid-cols-2">
@@ -265,7 +254,7 @@ export default async function HarvestConsolePage({
                         type="checkbox"
                         name="target"
                         value={`vendor|${v.id}|${v.website}|${v.display_name}`}
-                        className="accent-[#7ed957]"
+                        className="accent-[var(--admin-accent)]"
                       />
                       <span className="flex-1 truncate">{v.display_name}</span>
                       <span className="text-[10px] tabular-nums text-white/40">
@@ -296,7 +285,7 @@ export default async function HarvestConsolePage({
                         type="checkbox"
                         name="target"
                         value={`vendor|lead:${l.id}|${l.website}|${l.display_name}`}
-                        className="accent-[#5ec1ff]"
+                        className="accent-[var(--admin-purple)]"
                       />
                       <span className="flex-1 truncate">{l.display_name}</span>
                       <span className="text-[10px] text-white/40">{l.city ?? ""}</span>
@@ -334,7 +323,7 @@ export default async function HarvestConsolePage({
                 {coverage.slice(0, 100).map((row) => (
                   <tr key={row.vendorId} className="border-b border-white/5">
                     <td className="max-w-[220px] truncate px-3 py-1.5 text-white/85" title={row.displayName}>
-                      <a href={`/admin/vendors/${row.vendorId}`} className="hover:text-[#7ed957]">
+                      <a href={`/admin/vendors/${row.vendorId}`} className="hover:text-[var(--admin-accent)]">
                         {row.displayName}
                       </a>
                     </td>

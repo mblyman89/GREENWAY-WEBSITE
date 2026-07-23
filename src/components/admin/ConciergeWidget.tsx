@@ -11,6 +11,7 @@
  * persist across reloads (intentionally lightweight).
  */
 import { useEffect, useRef, useState } from "react";
+import { Button } from "@/components/admin/ui";
 import { askConciergeAction } from "@/app/admin/concierge-actions";
 import type { ConciergeTurn } from "@/lib/admin/concierge-assistant";
 
@@ -57,7 +58,7 @@ export function ConciergeWidget() {
         onClick={() => setOpen((v) => !v)}
         aria-label="Open AI assistant"
         title="Ask the AI assistant"
-        className="fixed bottom-4 right-4 z-[95] flex h-12 w-12 items-center justify-center rounded-full border border-[#7ed957]/40 bg-[#0a0a0a] text-xl shadow-lg shadow-black/50 transition hover:bg-[#7ed957]/10"
+        className="fixed bottom-4 right-4 z-[95] flex h-12 w-12 items-center justify-center rounded-full border border-[var(--admin-accent)]/40 bg-[#0a0a0a] text-xl shadow-lg shadow-black/50 transition hover:bg-[var(--admin-accent)]/10"
       >
         <span aria-hidden>{open ? "✕" : "🤖"}</span>
       </button>
@@ -83,7 +84,7 @@ export function ConciergeWidget() {
                       key={s}
                       type="button"
                       onClick={() => void send(s)}
-                      className="rounded-full border border-white/15 px-3 py-1 text-xs text-white/70 transition hover:border-[#7ed957]/50 hover:text-white"
+                      className="rounded-full border border-white/15 px-3 py-1 text-xs text-white/70 transition hover:border-[var(--admin-accent)]/50 hover:text-white"
                     >
                       {s}
                     </button>
@@ -96,7 +97,7 @@ export function ConciergeWidget() {
                   key={i}
                   className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${
                     t.role === "user"
-                      ? "ml-auto bg-[#7ed957]/15 text-white"
+                      ? "ml-auto bg-[var(--admin-accent)]/15 text-white"
                       : "mr-auto whitespace-pre-wrap bg-white/5 text-white/85"
                   }`}
                 >
@@ -122,15 +123,11 @@ export function ConciergeWidget() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Ask a question…"
-              className="flex-1 rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-[#7ed957]/50 focus:outline-none"
+              className="flex-1 rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white placeholder-white/40 focus:border-[var(--admin-accent)]/50 focus:outline-none"
             />
-            <button
-              type="submit"
-              disabled={pending || !input.trim()}
-              className="rounded-lg bg-[#7ed957] px-3 py-2 text-sm font-semibold text-black transition disabled:opacity-40"
-            >
+            <Button type="submit" disabled={pending || !input.trim()} variant="special" size="sm">
               Send
-            </button>
+            </Button>
           </form>
         </div>
       ) : null}

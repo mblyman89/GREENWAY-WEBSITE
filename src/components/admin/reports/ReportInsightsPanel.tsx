@@ -9,6 +9,7 @@
  * Read-only / advisory. Gated on the AI key being present (graceful no-op).
  */
 import { useState, useTransition } from "react";
+import { Button } from "@/components/admin/ui";
 import { useToast } from "@/components/admin/ux";
 import {
   generateReportInsightsAction,
@@ -29,9 +30,9 @@ function BulletList({
 }) {
   if (items.length === 0) return null;
   const color =
-    tone === "good" ? "text-[#7ed957]" : tone === "warn" ? "text-[#ffd700]" : "text-white";
+    tone === "good" ? "text-[var(--admin-accent)]" : tone === "warn" ? "text-[var(--admin-gold)]" : "text-white";
   const dot =
-    tone === "good" ? "bg-[#7ed957]" : tone === "warn" ? "bg-[#ffd700]" : "bg-[#8ab4f8]";
+    tone === "good" ? "bg-[var(--admin-accent)]" : tone === "warn" ? "bg-[var(--admin-gold)]" : "bg-[#8ab4f8]";
   return (
     <div>
       <div className={`text-xs font-semibold uppercase tracking-wide ${color}`}>{title}</div>
@@ -66,7 +67,7 @@ export function ReportInsightsPanel({ days, aiEnabled }: Props) {
   }
 
   return (
-    <section className="rounded-2xl border border-[#7ed957]/25 bg-[#7ed957]/[0.04] p-5">
+    <section className="rounded-2xl border border-[var(--admin-accent)]/25 bg-[var(--admin-accent)]/[0.04] p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="flex items-center gap-2 text-base font-semibold text-white">
@@ -79,19 +80,14 @@ export function ReportInsightsPanel({ days, aiEnabled }: Props) {
           </p>
         </div>
         {aiEnabled && (
-          <button
-            type="button"
-            onClick={run}
-            disabled={pending}
-            className="rounded-lg bg-[#7ed957] px-4 py-2 text-sm font-bold text-black transition hover:bg-[#6bc746] disabled:opacity-50"
-          >
+          <Button type="button" onClick={run} disabled={pending} variant="special" size="sm">
             {pending ? "Analyzing…" : insights ? "Regenerate" : "Generate insights"}
-          </button>
+          </Button>
         )}
       </div>
 
       {!aiEnabled ? (
-        <p className="mt-3 text-xs text-[#ffd700]">
+        <p className="mt-3 text-xs text-[var(--admin-gold)]">
           AI insights turn on once an <code className="font-mono">AI_API_KEY</code> is set. The
           charts and tables on this page work without it.
         </p>

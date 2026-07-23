@@ -14,6 +14,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Button } from "@/components/admin/ui";
 
 const POLL_MS = 15000;
 const MUTE_KEY = "gw_orders_muted";
@@ -114,15 +115,12 @@ export function NewOrderAlert({ initialNew }: { initialNew: number }) {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           {extra > 0 ? (
-            <button
-              onClick={() => router.refresh()}
-              className="inline-flex animate-pulse items-center gap-2 rounded-full border border-[#ff7f00]/60 bg-[#ff7f00]/15 px-4 py-2 text-sm font-bold text-[#ff7f00] transition hover:bg-[#ff7f00]/25"
-            >
+            <Button type="button" onClick={() => router.refresh()} variant="primary" className="animate-pulse gap-2">
               🔔 {extra} new order{extra === 1 ? "" : "s"} — tap to refresh
-            </button>
+            </Button>
           ) : (
             <span className="inline-flex items-center gap-2 text-xs text-white/40">
-              <span className="h-2 w-2 animate-pulse rounded-full bg-[#7ed957]" />
+              <span className="h-2 w-2 animate-pulse rounded-full bg-[var(--admin-accent)]" />
               Watching for new orders…
             </span>
           )}
@@ -140,31 +138,35 @@ export function NewOrderAlert({ initialNew }: { initialNew: number }) {
                 step={0.05}
                 value={volume}
                 onChange={(e) => changeVolume(Number(e.target.value))}
-                className="h-1 w-20 cursor-pointer accent-[#7ed957]"
+                className="h-1 w-20 cursor-pointer accent-[var(--admin-accent)]"
                 aria-label="New-order chime volume"
               />
             </label>
           )}
-          <button
+          <Button
+            type="button"
             onClick={testSound}
-            className="rounded-full border border-white/15 px-3 py-1.5 text-xs text-white/60 transition hover:border-[#7ed957] hover:text-white"
+            variant="neutral"
+            size="sm"
             title="Play a test chime (also enables sound for this browser)"
           >
             ▶ Test sound
-          </button>
-          <button
+          </Button>
+          <Button
+            type="button"
             onClick={toggleMute}
-            className="rounded-full border border-white/15 px-3 py-1.5 text-xs text-white/60 transition hover:border-white/30 hover:text-white"
+            variant="neutral"
+            size="sm"
             title={muted ? "Sound off — click to enable the new-order chime" : "Sound on — click to mute"}
           >
             {muted ? "🔇 Sound off" : "🔔 Sound on"}
-          </button>
+          </Button>
         </div>
       </div>
 
       {/* One-time hint: browsers block audio until the page is interacted with. */}
       {!muted && !armed && (
-        <p className="rounded-lg border border-[#ffd700]/20 bg-[#ffd700]/5 px-3 py-1.5 text-[11px] text-[#ffd700]">
+        <p className="rounded-lg border border-[var(--admin-gold)]/20 bg-[var(--admin-gold)]/5 px-3 py-1.5 text-[11px] text-[var(--admin-gold)]">
           Tip: click <strong>▶ Test sound</strong> once so your browser allows the new-order chime to
           play automatically while you work.
         </p>

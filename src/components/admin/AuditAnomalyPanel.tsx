@@ -10,9 +10,10 @@
  * buildAnomalySystemPrompt in audit-anomaly-core.ts. Advisory / drafts-only.
  *
  * Matches the Activity Log page's dark theme (black surfaces, white/opacity
- * text, #7ed957 accent) rather than the stone theme used elsewhere.
+ * text, var(--admin-accent) accent) rather than the stone theme used elsewhere.
  */
 import { useEffect, useRef, useState, useTransition } from "react";
+import { Button } from "@/components/admin/ui";
 import { useToast } from "@/components/admin/ux";
 import { askAuditAssistantAction } from "@/app/admin/audit/anomaly-actions";
 
@@ -136,7 +137,7 @@ export function AuditAnomalyPanel({
       {/* Deterministic findings */}
       <div className="px-4 py-4">
         {anomalies.length === 0 ? (
-          <div className="flex items-center gap-3 rounded-lg border border-[#7ed957]/25 bg-[#7ed957]/[0.06] px-4 py-3 text-sm text-white/80">
+          <div className="flex items-center gap-3 rounded-lg border border-[var(--admin-accent)]/25 bg-[var(--admin-accent)]/[0.06] px-4 py-3 text-sm text-white/80">
             <span className="text-lg">✅</span>
             <span>
               No anomalies were detected in the recent window. Nothing looks out of the ordinary —
@@ -226,7 +227,7 @@ export function AuditAnomalyPanel({
                     <div
                       className={
                         m.role === "user"
-                          ? "max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-sm bg-[#7ed957]/20 px-3 py-2 text-sm text-white"
+                          ? "max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-sm bg-[var(--admin-accent)]/20 px-3 py-2 text-sm text-white"
                           : "max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-bl-sm border border-white/10 bg-[#0a0a0a] px-3 py-2 text-sm text-white/85"
                       }
                     >
@@ -280,16 +281,12 @@ export function AuditAnomalyPanel({
                   }}
                   rows={2}
                   placeholder="Ask about the recent activity…"
-                  className="flex-1 resize-none rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white placeholder:text-white/40 focus:border-[#7ed957] focus:outline-none"
+                  className="flex-1 resize-none rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white placeholder:text-white/40 focus:border-[var(--admin-accent)] focus:outline-none"
                   disabled={pending}
                 />
-                <button
-                  type="submit"
-                  disabled={pending || !input.trim()}
-                  className="rounded-lg bg-[#7ed957] px-4 py-2 text-sm font-bold text-black transition hover:opacity-90 disabled:opacity-40"
-                >
+                <Button type="submit" disabled={pending || !input.trim()} variant="special" size="sm">
                   Send
-                </button>
+                </Button>
               </form>
             ) : (
               <p className="text-xs text-white/45">

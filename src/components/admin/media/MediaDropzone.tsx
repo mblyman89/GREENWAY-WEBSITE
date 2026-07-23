@@ -8,6 +8,7 @@
  * endpoint — same action, nicer experience.
  */
 import { useRef, useState } from "react";
+import { Button } from "@/components/admin/ui";
 import { MEDIA_PURPOSES, PLACEMENT_SUGGESTIONS } from "@/lib/media/taxonomy";
 import { imageSpecCheatSheet } from "@/lib/cms/image-spec-core";
 
@@ -65,13 +66,13 @@ export function MediaDropzone({
         }}
         className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 py-10 text-center transition ${
           dragging
-            ? "border-[#7ed957] bg-[#7ed957]/10"
-            : "border-white/20 bg-black hover:border-[#7ed957]/50 hover:bg-white/[0.02]"
+            ? "border-[var(--admin-accent)] bg-[var(--admin-accent)]/10"
+            : "border-white/20 bg-black hover:border-[var(--admin-accent)]/50 hover:bg-white/[0.02]"
         }`}
       >
         <span className="text-3xl">⬆️</span>
         <p className="text-sm font-semibold text-white">
-          Drag &amp; drop images here, or <span className="text-[#7ed957]">click to browse</span>
+          Drag &amp; drop images here, or <span className="text-[var(--admin-accent)]">click to browse</span>
         </p>
         <p className="text-xs text-white/40">PNG, JPG, WEBP, GIF, SVG, or PDF · up to 10 MB each</p>
         <input
@@ -119,7 +120,7 @@ export function MediaDropzone({
           <input
             name="title"
             placeholder="e.g. Spring Sale Hero, Sticky Lemon Brand Logo"
-            className="w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#7ed957]"
+            className="w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[var(--admin-accent)]"
           />
         </label>
         <label className="block">
@@ -128,7 +129,7 @@ export function MediaDropzone({
           </span>
           <select
             name="usage_type"
-            className="w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#7ed957]"
+            className="w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[var(--admin-accent)]"
           >
             <option value="">— choose a purpose —</option>
             {MEDIA_PURPOSES.map((p) => (
@@ -143,7 +144,7 @@ export function MediaDropzone({
           <select
             name="status"
             defaultValue="draft"
-            className="w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#7ed957]"
+            className="w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[var(--admin-accent)]"
           >
             <option value="draft">Draft (staff only)</option>
             <option value="published">Published (public)</option>
@@ -157,7 +158,7 @@ export function MediaDropzone({
             name="tags"
             list="placement-suggestions"
             placeholder="home-hero, menu-banner"
-            className="w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#7ed957]"
+            className="w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[var(--admin-accent)]"
           />
           <datalist id="placement-suggestions">
             {PLACEMENT_SUGGESTIONS.map((p) => (
@@ -172,20 +173,17 @@ export function MediaDropzone({
           <input
             name="alt_text"
             placeholder="Describe what's in the image"
-            className="w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#7ed957]"
+            className="w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[var(--admin-accent)]"
           />
         </label>
       </div>
-      <button
-        type="submit"
-        className="rounded-full bg-[#7ed957] px-5 py-2 text-sm font-semibold text-black hover:bg-[#6cc746]"
-      >
+      <Button type="submit" variant="confirm">
         Upload
-      </button>
+      </Button>
 
       {/* Canva size cheat-sheet — create art at the right size the first time. */}
       <details className="rounded-xl border border-white/10 bg-black/40 p-4 text-xs text-white/70">
-        <summary className="cursor-pointer select-none font-semibold text-[#7ed957]">
+        <summary className="cursor-pointer select-none font-semibold text-[var(--admin-accent)]">
           🎨 Canva size cheat-sheet — build art at the right size
         </summary>
         <p className="mt-2 text-white/45">

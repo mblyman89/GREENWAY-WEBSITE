@@ -16,6 +16,7 @@
  * Soft-disables when no AI key is configured.
  */
 import { useState, useTransition } from "react";
+import { Button } from "@/components/admin/ui";
 import {
   askStatewideAnalystAction,
   askLocalAnalystAction,
@@ -139,13 +140,14 @@ export function AskAnalystPanel({ datasetId, aiEnabled, surface, examples }: Pro
               maxLength={500}
               className="admin-focus flex-1 rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-surface-2)] px-3 py-2 text-sm text-[var(--admin-text)] placeholder:text-[var(--admin-text-faint)]"
             />
-            <button
+            <Button
               type="submit"
               disabled={pending || question.trim().length === 0}
-              className="rounded-lg bg-[var(--admin-accent)] px-4 py-2 text-sm font-bold text-black transition hover:opacity-90 disabled:opacity-50"
+              variant="special"
+              size="sm"
             >
               {pending ? "Analyzing…" : "Ask"}
-            </button>
+            </Button>
           </form>
 
           <div className="mt-2 flex flex-wrap gap-2">

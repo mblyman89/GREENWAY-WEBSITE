@@ -14,6 +14,7 @@
  * VAPID keys each show a plain-language explanation instead of a dead button.
  */
 import { useCallback, useEffect, useState } from "react";
+import { Button } from "@/components/admin/ui";
 
 type PushState =
   | "loading"
@@ -153,26 +154,18 @@ export function PushRemindersPanel() {
           </span>
         )}
         {state === "off" && (
-          <button
-            type="button"
-            onClick={enable}
-            className="rounded-lg bg-[var(--admin-accent)] px-4 py-2 text-sm font-bold text-black transition hover:opacity-90"
-          >
+          <Button type="button" onClick={enable} variant="confirm">
             Enable on this device
-          </button>
+          </Button>
         )}
         {state === "on" && (
           <div className="flex items-center gap-3">
             <span className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 text-xs font-semibold text-emerald-300">
               ✓ Enabled on this device
             </span>
-            <button
-              type="button"
-              onClick={disable}
-              className="rounded-lg border border-white/15 px-3 py-2 text-xs font-semibold text-white/70 transition hover:bg-white/5"
-            >
+            <Button type="button" onClick={disable} variant="neutral" size="sm">
               Turn off
-            </button>
+            </Button>
           </div>
         )}
       </div>

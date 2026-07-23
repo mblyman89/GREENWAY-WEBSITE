@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { BackLink } from "@/components/admin/ux";
+import { Button } from "@/components/admin/ui";
 import { getPublishedVersion, getItemBySourceKey } from "@/lib/pos/menu-version";
 import { getEnrichment, mediaUrlsForIds } from "@/lib/enrichment/store";
 import { listAllBrands } from "@/lib/vendors/store";
@@ -17,7 +18,7 @@ import {
 
 export const dynamic = "force-dynamic";
 
-const field = "w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#7ed957]";
+const field = "w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[var(--admin-accent)]";
 const label = "mb-1 block text-xs font-medium text-white/50";
 
 const TAG_OPTIONS = ["new-arrival", "best-seller", "staff-pick", "local", "high-cbd", "high-thc", "value", "limited"];
@@ -60,16 +61,16 @@ export default async function ProductEditorPage({
         title={enrichment?.display_name || item.name}
         subtitle={`${item.brand_name || "—"} · ${item.category} · ${item.price_label} (POS-controlled)`}
         action={
-          <BackLink fallback="/admin/products" back={back} className="rounded-full border border-white/15 px-4 py-2 text-sm text-white/80 hover:border-[#7ed957] hover:text-white">
+          <BackLink fallback="/admin/products" back={back} className="rounded-full border border-white/15 px-4 py-2 text-sm text-white/80 hover:border-[var(--admin-accent)] hover:text-white">
             ← All products
           </BackLink>
         }
       />
 
       <div className="space-y-6 px-5 py-6 sm:px-8">
-        {saved && <div className="rounded-lg border border-[#7ed957]/40 bg-[#7ed957]/10 px-4 py-2 text-sm text-[#7ed957]">Saved.</div>}
-        {ai && <div className="rounded-lg border border-[#ffd700]/40 bg-[#ffd700]/10 px-4 py-2 text-sm text-[#ffd700]">AI draft generated — review it below.</div>}
-        {error && <div className="rounded-lg border border-[#ff7f00]/40 bg-[#ff7f00]/10 px-4 py-2 text-sm text-[#ff7f00]">{error}</div>}
+        {saved && <div className="rounded-lg border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-4 py-2 text-sm text-[var(--admin-accent)]">Saved.</div>}
+        {ai && <div className="rounded-lg border border-[var(--admin-gold)]/40 bg-[var(--admin-gold)]/10 px-4 py-2 text-sm text-[var(--admin-gold)]">AI draft generated — review it below.</div>}
+        {error && <div className="rounded-lg border border-[var(--admin-orange)]/40 bg-[var(--admin-orange)]/10 px-4 py-2 text-sm text-[var(--admin-orange)]">{error}</div>}
 
         {/* POS facts (read-only) */}
         <div className="rounded-xl border border-white/10 bg-[#0a0a0a] p-4 text-xs text-white/55">
@@ -80,9 +81,9 @@ export default async function ProductEditorPage({
         </div>
 
         {/* AI panel */}
-        <div id="ai" className="rounded-xl border border-[#ffd700]/20 bg-[#ffd700]/5 p-5">
+        <div id="ai" className="rounded-xl border border-[var(--admin-gold)]/20 bg-[var(--admin-gold)]/5 p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm font-semibold text-[#ffd700]">AI assist {isAiConfigured ? "" : "(disabled)"}</p>
+            <p className="text-sm font-semibold text-[var(--admin-gold)]">AI assist {isAiConfigured ? "" : "(disabled)"}</p>
             {isAiConfigured && (
               <div className="flex gap-2">
                 <form action={generateProductAi}>
@@ -95,9 +96,9 @@ export default async function ProductEditorPage({
                   <input type="hidden" name="posStrainName" value={item.strain_name ?? ""} />
                   <input type="hidden" name="posThc" value={item.thc ?? ""} />
                   <input type="hidden" name="posCbd" value={item.cbd ?? ""} />
-                  <button className="rounded-full bg-[#ffd700] px-3 py-1.5 text-xs font-semibold text-black hover:bg-[#e6c200]">
+                  <Button type="submit" variant="save" size="sm">
                     Draft description
-                  </button>
+                  </Button>
                 </form>
                 <form action={generateProductAi}>
                   <input type="hidden" name="key" value={key} />
@@ -106,9 +107,9 @@ export default async function ProductEditorPage({
                   <input type="hidden" name="posCategory" value={item.category} />
                   <input type="hidden" name="posThc" value={item.thc ?? ""} />
                   <input type="hidden" name="posCbd" value={item.cbd ?? ""} />
-                  <button className="rounded-full border border-[#ffd700]/50 px-3 py-1.5 text-xs font-semibold text-[#ffd700] hover:bg-[#ffd700]/10">
+                  <Button type="submit" variant="neutral" size="sm">
                     Suggest tags
-                  </button>
+                  </Button>
                 </form>
                 <form action={generateProductAi}>
                   <input type="hidden" name="key" value={key} />
@@ -120,9 +121,9 @@ export default async function ProductEditorPage({
                   <input type="hidden" name="posStrainName" value={item.strain_name ?? ""} />
                   <input type="hidden" name="posThc" value={item.thc ?? ""} />
                   <input type="hidden" name="posCbd" value={item.cbd ?? ""} />
-                  <button className="rounded-full border border-[#ffd700]/50 px-3 py-1.5 text-xs font-semibold text-[#ffd700] hover:bg-[#ffd700]/10">
+                  <Button type="submit" variant="neutral" size="sm">
                     Draft aroma &amp; flavor
-                  </button>
+                  </Button>
                 </form>
               </div>
             )}
@@ -153,7 +154,7 @@ export default async function ProductEditorPage({
                     </div>
                     <p className="text-sm text-white/85 whitespace-pre-wrap">{s.suggested_value}</p>
                     {flags.length > 0 && (
-                      <p className="mt-2 rounded bg-[#ff7f00]/10 px-2 py-1 text-[11px] text-[#ff7f00]">
+                      <p className="mt-2 rounded bg-[var(--admin-orange)]/10 px-2 py-1 text-[11px] text-[var(--admin-orange)]">
                         ⚠ Compliance check flagged: {flags.join(", ")}. Review carefully before accepting.
                       </p>
                     )}
@@ -161,12 +162,12 @@ export default async function ProductEditorPage({
                       <form action={acceptSuggestion}>
                         <input type="hidden" name="id" value={s.id} />
                         <input type="hidden" name="key" value={key} />
-                        <button className="rounded-full bg-[#7ed957] px-3 py-1 text-xs font-semibold text-black hover:bg-[#6cc746]">Accept</button>
+                        <Button type="submit" variant="confirm" size="sm">Accept</Button>
                       </form>
                       <form action={rejectSuggestion}>
                         <input type="hidden" name="id" value={s.id} />
                         <input type="hidden" name="key" value={key} />
-                        <button className="rounded-full border border-white/20 px-3 py-1 text-xs font-semibold text-white/70 hover:border-white/40">Reject</button>
+                        <Button type="submit" variant="neutral" size="sm">Reject</Button>
                       </form>
                     </div>
                   </li>
@@ -209,7 +210,7 @@ export default async function ProductEditorPage({
               <span className={label}>Tags</span>
               <div className="flex flex-wrap gap-2">
                 {TAG_OPTIONS.map((t) => (
-                  <label key={t} className={`cursor-pointer rounded-full border px-3 py-1 text-xs ${currentTags.has(t) ? "border-[#7ed957] bg-[#7ed957]/10 text-[#7ed957]" : "border-white/15 text-white/60"}`}>
+                  <label key={t} className={`cursor-pointer rounded-full border px-3 py-1 text-xs ${currentTags.has(t) ? "border-[var(--admin-accent)] bg-[var(--admin-accent)]/10 text-[var(--admin-accent)]" : "border-white/15 text-white/60"}`}>
                     <input type="checkbox" name="tags" value={t} defaultChecked={currentTags.has(t)} className="mr-1 align-middle" />
                     {t}
                   </label>
@@ -254,7 +255,7 @@ export default async function ProductEditorPage({
               )}
               <label className="block">
                 <span className={label}>Add image</span>
-                <input type="file" name="image" accept="image/png,image/jpeg,image/webp,image/gif" className="block w-full text-xs text-white/70 file:mr-2 file:rounded file:border-0 file:bg-[#7ed957] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-black" />
+                <input type="file" name="image" accept="image/png,image/jpeg,image/webp,image/gif" className="block w-full text-xs text-white/70 file:mr-2 file:rounded file:border-0 file:bg-[var(--admin-accent)] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-black" />
               </label>
             </div>
 
@@ -281,9 +282,9 @@ export default async function ProductEditorPage({
               <input name="hidden_reason" defaultValue={enrichment?.hidden_reason ?? ""} placeholder="Reason if hidden" className={field} />
             </div>
 
-            <button type="submit" className="w-full rounded-full bg-[#7ed957] px-5 py-2.5 text-sm font-semibold text-black hover:bg-[#6cc746]">
+            <Button type="submit" variant="confirm" fullWidth>
               Save enrichment
-            </button>
+            </Button>
           </div>
         </form>
 
@@ -294,8 +295,8 @@ export default async function ProductEditorPage({
             Enrichment status: <span className="font-semibold text-white/80">{enrichment?.status ?? "none"}</span> · controlled by {session.profile.full_name}
           </span>
           <div className="ml-auto flex gap-2">
-            <button name="status" value="published" className="rounded-full bg-[#7ed957] px-4 py-1.5 text-xs font-semibold text-black hover:bg-[#6cc746]">Publish to site</button>
-            <button name="status" value="draft" className="rounded-full border border-white/20 px-4 py-1.5 text-xs font-semibold text-white/80 hover:border-white/40">Unpublish (draft)</button>
+            <Button type="submit" name="status" value="published" variant="confirm" size="sm">Publish to site</Button>
+            <Button type="submit" name="status" value="draft" variant="neutral" size="sm">Unpublish (draft)</Button>
           </div>
         </form>
       </div>

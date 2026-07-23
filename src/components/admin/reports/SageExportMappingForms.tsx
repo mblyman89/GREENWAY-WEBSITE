@@ -9,6 +9,7 @@
  */
 
 import { useState, useTransition } from "react";
+import { Button, CHIP_NEUTRAL } from "@/components/admin/ui";
 import {
   saveSageExportSettingsAction,
   saveSageCategoryAccountAction,
@@ -22,9 +23,6 @@ import { SAGE_BUCKETS } from "@/lib/accounting/sage-exports-core";
 
 const inputCls =
   "w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none transition focus:border-white/30 disabled:opacity-50";
-const btnCls =
-  "rounded-lg bg-[var(--admin-accent)] px-4 py-2 text-sm font-bold text-black transition hover:opacity-90 disabled:opacity-50";
-
 function StatusMsg({ msg }: { msg: { ok: boolean; text: string } | null }) {
   if (!msg) return null;
   return (
@@ -70,9 +68,9 @@ export function SageExportSettingsForm({ settings, canEdit }: { settings: SageEx
       </div>
       {canEdit ? (
         <div className="flex items-center gap-3">
-          <button type="submit" disabled={pending} className={btnCls}>
+          <Button type="submit" disabled={pending} variant="confirm">
             {pending ? "Saving…" : "Save export settings"}
-          </button>
+          </Button>
           <StatusMsg msg={msg} />
         </div>
       ) : (
@@ -125,9 +123,9 @@ function BucketRow({ acct, canEdit }: { acct: SageCategoryAccount; canEdit: bool
       ))}
       <div className="flex items-center gap-2">
         {canEdit ? (
-          <button type="submit" disabled={pending} className={`${btnCls} px-3 py-1.5 text-xs`}>
+          <Button type="submit" disabled={pending} variant="confirm" size="sm">
             {pending ? "…" : "Save"}
-          </button>
+          </Button>
         ) : null}
         <StatusMsg msg={msg} />
       </div>
@@ -206,9 +204,9 @@ function AddBucketForm() {
         </label>
       ))}
       <div className="flex items-center gap-2">
-        <button type="submit" disabled={pending} className={`${btnCls} px-3 py-1.5 text-xs`}>
+        <Button type="submit" disabled={pending} variant="confirm" size="sm">
           {pending ? "…" : "Add"}
-        </button>
+        </Button>
         <StatusMsg msg={msg} />
       </div>
       <p className="text-[0.65rem] text-white/35 sm:col-span-2 lg:col-span-8">
@@ -275,7 +273,7 @@ export function SageCategoryMapForm({
               {canEdit ? (
                 <form action={onDelete}>
                   <input type="hidden" name="source_category" value={e.source} />
-                  <button type="submit" disabled={pending} className="rounded border border-white/10 px-2 py-0.5 text-xs text-white/50 hover:bg-white/[0.06] hover:text-white/80">
+                  <button type="submit" disabled={pending} className={`${CHIP_NEUTRAL} disabled:opacity-40`}>
                     Remove
                   </button>
                 </form>
@@ -308,9 +306,9 @@ export function SageCategoryMapForm({
               ))}
             </select>
           </label>
-          <button type="submit" disabled={pending} className={btnCls}>
+          <Button type="submit" disabled={pending} variant="confirm">
             {pending ? "Saving…" : "Map category"}
-          </button>
+          </Button>
           <StatusMsg msg={msg} />
         </form>
       ) : null}

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { supportsPasskeys, authenticatePasskey } from "@/lib/auth/webauthn-client";
 import { classifyMagicLinkError } from "@/lib/auth/login-messages-core";
+import { Button } from "@/components/admin/ui";
 
 type Mode = "password" | "magic";
 
@@ -92,8 +93,8 @@ export function LoginForm({ initialError }: { initialError?: string | null }) {
 
   if (status === "sent") {
     return (
-      <div className="rounded-lg border border-[#7ed957]/30 bg-[#7ed957]/10 p-4 text-center text-sm text-white/80">
-        If <span className="font-medium text-[#7ed957]">{email}</span> belongs to a staff
+      <div className="rounded-lg border border-[var(--admin-accent)]/30 bg-[var(--admin-accent)]/10 p-4 text-center text-sm text-white/80">
+        If <span className="font-medium text-[var(--admin-accent)]">{email}</span> belongs to a staff
         account, a secure sign-in link is on its way. Check your inbox.
       </div>
     );
@@ -114,7 +115,7 @@ export function LoginForm({ initialError }: { initialError?: string | null }) {
           autoComplete="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="w-full rounded-lg border border-white/15 bg-black px-3 py-2.5 text-sm text-white outline-none focus:border-[#7ed957]"
+          className="w-full rounded-lg border border-white/15 bg-black px-3 py-2.5 text-sm text-white outline-none focus:border-[var(--admin-accent)]"
           placeholder="you@greenwaymarijuana.com"
         />
       </div>
@@ -130,25 +131,21 @@ export function LoginForm({ initialError }: { initialError?: string | null }) {
             autoComplete="current-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-lg border border-white/15 bg-black px-3 py-2.5 text-sm text-white outline-none focus:border-[#7ed957]"
+            className="w-full rounded-lg border border-white/15 bg-black px-3 py-2.5 text-sm text-white outline-none focus:border-[var(--admin-accent)]"
             placeholder="••••••••"
           />
         </div>
       )}
 
-      {error && <p className="text-sm text-[#ff7f00]">{error}</p>}
+      {error && <p className="text-sm text-[var(--admin-orange)]">{error}</p>}
 
-      <button
-        type="submit"
-        disabled={status === "loading"}
-        className="w-full rounded-full bg-[#ff7f00] px-4 py-3 text-sm font-bold uppercase tracking-wide text-black transition hover:brightness-110 disabled:opacity-60"
-      >
+      <Button type="submit" disabled={status === "loading"} variant="primary" size="lg" fullWidth>
         {status === "loading"
           ? "Please wait…"
           : mode === "password"
             ? "Sign in"
             : "Email me a sign-in link"}
-      </button>
+      </Button>
 
       {canBiometric && mode === "password" && (
         <>
@@ -157,15 +154,18 @@ export function LoginForm({ initialError }: { initialError?: string | null }) {
             <span className="text-[0.65rem] uppercase tracking-wide text-white/30">or</span>
             <span className="h-px flex-1 bg-white/10" />
           </div>
-          <button
+          <Button
             type="button"
             onClick={handleBiometric}
             disabled={bioBusy || status === "loading"}
-            className="flex w-full items-center justify-center gap-2 rounded-full border border-[#7ed957]/40 bg-[#7ed957]/10 px-4 py-3 text-sm font-bold uppercase tracking-wide text-[#7ed957] transition hover:bg-[#7ed957]/20 disabled:opacity-60"
+            variant="confirm"
+            size="lg"
+            fullWidth
+            className="gap-2"
           >
             <span aria-hidden>👤</span>
             {bioBusy ? "Waiting for Face ID / Touch ID…" : "Sign in with Face ID / Touch ID"}
-          </button>
+          </Button>
           <p className="text-center text-[0.65rem] text-white/35">
             Enter your email above, then use the passkey saved on this device.
           </p>

@@ -15,6 +15,7 @@
 import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs } from "@/components/admin/ux";
+import { Button } from "@/components/admin/ui";
 import { HelpPanel } from "@/components/admin/ux/HelpPanel";
 import { KbFlash } from "../../KbFlash";
 import {
@@ -266,7 +267,7 @@ export default async function HarvestTuningPage({
           className={`flex flex-wrap items-center justify-between gap-2 rounded-lg border px-4 py-3 text-xs ${
             settings.persisted
               ? "border-white/10 bg-[#0a0a0a] text-white/60"
-              : "border-[#ffd700]/40 bg-[#ffd700]/5 text-[#ffd700]"
+              : "border-[var(--admin-gold)]/40 bg-[var(--admin-gold)]/5 text-[var(--admin-gold)]"
           }`}
         >
           <span>
@@ -277,8 +278,8 @@ export default async function HarvestTuningPage({
           <span
             className={`rounded-full border px-3 py-1 text-[10px] font-semibold ${
               allDefaults
-                ? "border-[#7ed957]/40 text-[#7ed957]"
-                : "border-[#5ec1ff]/40 text-[#5ec1ff]"
+                ? "border-[var(--admin-accent)]/40 text-[var(--admin-accent)]"
+                : "border-[var(--admin-purple)]/40 text-[var(--admin-purple)]"
             }`}
           >
             {allDefaults ? "All knobs at vetted defaults" : "Custom tuning active"}
@@ -312,8 +313,8 @@ export default async function HarvestTuningPage({
                         <span
                           className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
                             isDefault
-                              ? "border-[#7ed957]/30 text-[#7ed957]/80"
-                              : "border-[#5ec1ff]/40 text-[#5ec1ff]"
+                              ? "border-[var(--admin-accent)]/30 text-[var(--admin-accent)]/80"
+                              : "border-[var(--admin-purple)]/40 text-[var(--admin-purple)]"
                           }`}
                         >
                           {isDefault ? "default" : `default: ${dflt}`}
@@ -330,7 +331,7 @@ export default async function HarvestTuningPage({
                           min={clamp.min}
                           max={clamp.max}
                           step={knob.step}
-                          className="w-32 rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#7ed957]"
+                          className="w-32 rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[var(--admin-accent)]"
                         />
                         <span className="text-[11px] text-white/40">
                           {knob.unit} · allowed {clamp.min}–{clamp.max}
@@ -338,15 +339,15 @@ export default async function HarvestTuningPage({
                       </div>
                       <div className="space-y-1.5 border-t border-white/5 pt-3 text-[11px] leading-relaxed">
                         <p className="text-white/55">
-                          <span className="font-semibold text-[#7ed957]/90">Raise it:</span>{" "}
+                          <span className="font-semibold text-[var(--admin-accent)]/90">Raise it:</span>{" "}
                           {knob.raise}
                         </p>
                         <p className="text-white/55">
-                          <span className="font-semibold text-[#5ec1ff]/90">Lower it:</span>{" "}
+                          <span className="font-semibold text-[var(--admin-purple)]/90">Lower it:</span>{" "}
                           {knob.lower}
                         </p>
                         <p className="text-white/45">
-                          <span className="font-semibold text-[#ffd700]/90">Watch out:</span>{" "}
+                          <span className="font-semibold text-[var(--admin-gold)]/90">Watch out:</span>{" "}
                           {knob.risk}
                         </p>
                       </div>
@@ -358,12 +359,9 @@ export default async function HarvestTuningPage({
           ))}
 
           <div className="flex flex-wrap items-center gap-3 rounded-xl border border-white/10 bg-[#0a0a0a] p-5">
-            <button
-              type="submit"
-              className="rounded-full bg-[#7ed957] px-6 py-2.5 text-xs font-bold text-black transition hover:brightness-110"
-            >
+            <Button type="submit" variant="confirm">
               💾 Save all settings
-            </button>
+            </Button>
             <p className="text-[11px] text-white/40">
               Values outside the allowed range are clamped to it on save; blank fields keep their
               current value. Changes apply to the NEXT job, review load, or cadence click — running
@@ -375,14 +373,11 @@ export default async function HarvestTuningPage({
         {/* Reset — its own form so it can't be triggered accidentally by Enter in an input. */}
         <form
           action={resetHarvestSettingsAction}
-          className="flex flex-wrap items-center gap-3 rounded-xl border border-[#ffd700]/20 bg-[#ffd700]/[0.03] p-5"
+          className="flex flex-wrap items-center gap-3 rounded-xl border border-[var(--admin-gold)]/20 bg-[var(--admin-gold)]/[0.03] p-5"
         >
-          <button
-            type="submit"
-            className="rounded-full border border-[#ffd700]/50 px-6 py-2.5 text-xs font-bold text-[#ffd700] transition hover:bg-[#ffd700]/10"
-          >
+          <Button type="submit" variant="save">
             ↩ Reset everything to defaults
-          </button>
+          </Button>
           <p className="text-[11px] text-white/40">
             One click back to the vetted numbers ({HARVEST_DEFAULTS.fastLaneMinConfidence} confidence
             · {HARVEST_DEFAULTS.fastLaneMinChars} chars · {HARVEST_DEFAULTS.staleAfterDays} days ·

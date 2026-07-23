@@ -10,6 +10,7 @@
  * one-click "copy Canva size" button, and a to-scale aspect preview.
  */
 import { useState } from "react";
+import { Button } from "@/components/admin/ui";
 import type { ImageSpec } from "@/lib/cms/image-spec-core";
 import { canvaLine } from "@/lib/cms/image-spec-core";
 
@@ -32,11 +33,11 @@ export function ImageSpecHelper({ spec }: { spec: ImageSpec }) {
   }
 
   return (
-    <div className="mt-2 rounded-lg border border-[#7ed957]/25 bg-[#7ed957]/[0.06] p-3 text-xs text-white/80">
+    <div className="mt-2 rounded-lg border border-[var(--admin-accent)]/25 bg-[var(--admin-accent)]/[0.06] p-3 text-xs text-white/80">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <div className="flex items-center gap-2">
           <span aria-hidden>🎨</span>
-          <span className="font-bold text-[#7ed957]">Canva size</span>
+          <span className="font-bold text-[var(--admin-accent)]">Canva size</span>
         </div>
 
         <div className="flex flex-col gap-0.5">
@@ -50,19 +51,15 @@ export function ImageSpecHelper({ spec }: { spec: ImageSpec }) {
 
         {/* To-scale preview of the slot's shape */}
         <div
-          className="shrink-0 rounded border border-white/25 bg-gradient-to-br from-[#7ed957]/25 to-white/5"
+          className="shrink-0 rounded border border-white/25 bg-gradient-to-br from-[var(--admin-accent)]/25 to-white/5"
           style={{ width: previewW, height: previewH }}
           aria-hidden
           title={`${spec.aspectLabel} shape`}
         />
 
-        <button
-          type="button"
-          onClick={copy}
-          className="ml-auto rounded-lg border border-white/20 px-2.5 py-1 text-[0.7rem] font-bold text-white/80 transition hover:bg-white/10"
-        >
+        <Button type="button" onClick={copy} variant="neutral" size="sm" className="ml-auto">
           {copied ? "✓ Copied" : "Copy size"}
-        </button>
+        </Button>
       </div>
 
       {/* Extra presets (e.g. desktop + mobile / extra-wide) */}
