@@ -4,9 +4,10 @@ import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel, EmptyState } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
-import { Input, Button } from "@/components/admin/ui";
+import { Input, Select, Button } from "@/components/admin/ui";
 import { listCustomersPaged, countCustomers } from "@/lib/customers/store";
 import { listWindow, parsePageParam, DEFAULT_PAGE_SIZE } from "@/lib/admin/list-window-core";
+import { CUSTOMER_SORTS, parseYesNo, resolveSort } from "@/lib/admin/list-filter-core";
 import { ListPager } from "@/components/admin/ux/ListPager";
 
 export const dynamic = "force-dynamic";
@@ -18,11 +19,25 @@ function fmtMoney(minor: number): string {
 export default async function CustomersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; page?: string }>;
+  searchParams: Promise<{
+    q?: string;
+    page?: string;
+    sort?: string;
+    medical?: string;
+    consent?: string;
+    dnc?: string;
+  }>;
 }) {
   await requirePermission("customers.manage");
-  const { q, page } = await searchParams;
+  const sp = await searchParams;
+  const { q, page } = sp;
   const rawPage = parsePageParam(page);
+  // SLICE 26: every filter knob validated by the pure grammar — garbage
+  // params silently mean "filter off", never an exception.
+  const sort = resolveSort(sp.sort, CUSTOMER_SORTS);
+  const isMedical = parseYesNo(sp.medical);
+  const marketingConsent = parseYesNo(sp.consent);
+  const doNotContact = parseYesNo(sp.dnc);
 
   if (!isSupabaseServiceConfigured) {
     return (
@@ -41,23 +56,38 @@ export default async function CustomersPage({
   // GW-033: fetch the requested page window plus the exact total. If the
   // requested page is past the end (stale link), clamp and refetch the real
   // last page so the screen is never empty while rows exist.
+  const queryFilter = { q, sort: sort.columns, isMedical, marketingConsent, doNotContact };
   const firstWin = listWindow(Number.MAX_SAFE_INTEGER, rawPage, DEFAULT_PAGE_SIZE);
   const [firstPage, counts] = await Promise.all([
-    listCustomersPaged({ q, from: firstWin.from, to: firstWin.to }),
+    listCustomersPaged({ ...queryFilter, from: firstWin.from, to: firstWin.to }),
     countCustomers(),
   ]);
   let { rows: customers, total } = firstPage;
   const win = listWindow(total, rawPage, DEFAULT_PAGE_SIZE);
   if (win.page !== rawPage && total > 0) {
-    ({ rows: customers, total } = await listCustomersPaged({ q, from: win.from, to: win.to }));
+    ({ rows: customers, total } = await listCustomersPaged({
+      ...queryFilter,
+      from: win.from,
+      to: win.to,
+    }));
   }
   const pageHref = (p: number) => {
     const params = new URLSearchParams();
     if (q) params.set("q", q);
+    if (sort.key !== CUSTOMER_SORTS[0].key) params.set("sort", sort.key);
+    if (sp.medical === "yes" || sp.medical === "no") params.set("medical", sp.medical);
+    if (sp.consent === "yes" || sp.consent === "no") params.set("consent", sp.consent);
+    if (sp.dnc === "yes" || sp.dnc === "no") params.set("dnc", sp.dnc);
     if (p > 1) params.set("page", String(p));
     const qs = params.toString();
     return `/admin/customers${qs ? `?${qs}` : ""}`;
   };
+  const hasExtraFilters = Boolean(
+    isMedical !== undefined ||
+      marketingConsent !== undefined ||
+      doNotContact !== undefined ||
+      sort.key !== CUSTOMER_SORTS[0].key,
+  );
 
   return (
     <div>
@@ -101,13 +131,68 @@ export default async function CustomersPage({
           <StatCard label="Marketing consent" value={counts.consented} accent="gold" />
         </div>
 
-        <form className="flex flex-wrap items-center gap-3" method="get">
-          <div className="min-w-48 flex-1">
-            <Input name="q" defaultValue={q ?? ""} placeholder="Search name, email, or phone…" />
+        {/* SLICE 26: full control — search, medical / consent / do-not-contact
+            tri-states, and sort, all URL-driven and combinable. */}
+        <form className="flex flex-wrap items-end gap-3" method="get">
+          <div className="min-w-52 flex-1">
+            <label className="mb-1 block text-[0.65rem] font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
+              Search
+            </label>
+            <Input name="q" defaultValue={q ?? ""} placeholder="Name, email, or phone…" />
+          </div>
+          <div>
+            <label className="mb-1 block text-[0.65rem] font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
+              Medical
+            </label>
+            <Select name="medical" defaultValue={sp.medical === "yes" || sp.medical === "no" ? sp.medical : ""} aria-label="Medical filter">
+              <option value="">Any</option>
+              <option value="yes">Medical patients</option>
+              <option value="no">Non-medical</option>
+            </Select>
+          </div>
+          <div>
+            <label className="mb-1 block text-[0.65rem] font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
+              Marketing consent
+            </label>
+            <Select name="consent" defaultValue={sp.consent === "yes" || sp.consent === "no" ? sp.consent : ""} aria-label="Marketing consent filter">
+              <option value="">Any</option>
+              <option value="yes">Consented</option>
+              <option value="no">No consent</option>
+            </Select>
+          </div>
+          <div>
+            <label className="mb-1 block text-[0.65rem] font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
+              Do not contact
+            </label>
+            <Select name="dnc" defaultValue={sp.dnc === "yes" || sp.dnc === "no" ? sp.dnc : ""} aria-label="Do-not-contact filter">
+              <option value="">Any</option>
+              <option value="yes">Flagged only</option>
+              <option value="no">Not flagged</option>
+            </Select>
+          </div>
+          <div>
+            <label className="mb-1 block text-[0.65rem] font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
+              Sort by
+            </label>
+            <Select name="sort" defaultValue={sort.key} aria-label="Sort customers">
+              {CUSTOMER_SORTS.map((o) => (
+                <option key={o.key} value={o.key}>
+                  {o.label}
+                </option>
+              ))}
+            </Select>
           </div>
           <Button type="submit" variant="neutral">
-            Search
+            Apply
           </Button>
+          {(q || hasExtraFilters) && (
+            <Link
+              href="/admin/customers"
+              className="pb-2 text-xs text-[var(--admin-text-faint)] underline-offset-2 hover:text-[var(--admin-text)] hover:underline"
+            >
+              Clear
+            </Link>
+          )}
         </form>
 
         {/* GW-033: exact result count + pager (server-side pagination). */}

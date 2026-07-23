@@ -20,6 +20,7 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { classifyStatusCasMiss } from "@/lib/orders/status-cas-core";
+import type { SortColumn } from "@/lib/admin/list-filter-core";
 import type {
   OrderRow,
   OrderLineRow,
@@ -178,9 +179,24 @@ export type ListOrdersFilter = {
  * GW-033: paged staff read. Returns the page's rows AND the exact total so
  * the orders page can show "Showing X–Y of Z" with a real pager instead of
  * silently clipping at 200 rows.
+ *
+ * SLICE 26: accepts whitelisted sort columns (list-filter-core.ORDER_SORTS)
+ * plus placed-date and total ranges — every knob validated upstream by the
+ * pure grammar before it reaches this query.
  */
 export async function listOrdersPaged(
-  filter: ListOrdersFilter & { from: number; to: number },
+  filter: ListOrdersFilter & {
+    from: number;
+    to: number;
+    sort?: SortColumn[];
+    /** Inclusive placed_at lower bound (ISO date, validated upstream). */
+    placedFrom?: string;
+    /** Inclusive placed_at upper bound (ISO timestamp — end of day). */
+    placedTo?: string;
+    /** Inclusive order-total bounds in minor units (cents). */
+    totalMin?: number;
+    totalMax?: number;
+  },
 ): Promise<{ rows: OrderRow[]; total: number }> {
   if (!isSupabaseServiceConfigured) return { rows: [], total: 0 };
   const admin = createSupabaseAdminClient();
@@ -208,9 +224,20 @@ export async function listOrdersPaged(
     );
   }
 
-  const { data, count } = await query
-    .order("placed_at", { ascending: false })
-    .range(filter.from, filter.to);
+  if (filter.placedFrom) query = query.gte("placed_at", filter.placedFrom);
+  if (filter.placedTo) query = query.lte("placed_at", filter.placedTo);
+  if (filter.totalMin != null) query = query.gte("total_minor_units", filter.totalMin);
+  if (filter.totalMax != null) query = query.lte("total_minor_units", filter.totalMax);
+
+  const sort: SortColumn[] = filter.sort ?? [{ column: "placed_at", ascending: false }];
+  for (const s of sort) {
+    query = query.order(s.column, {
+      ascending: s.ascending,
+      ...(s.nullsFirst !== undefined ? { nullsFirst: s.nullsFirst } : {}),
+    });
+  }
+
+  const { data, count } = await query.range(filter.from, filter.to);
   return { rows: (data as OrderRow[]) ?? [], total: count ?? 0 };
 }
 

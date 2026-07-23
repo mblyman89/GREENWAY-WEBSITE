@@ -10,6 +10,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { ilikeContains } from "@/lib/supabase/postgrest-escape";
 import type { Customer, CustomerInput, PatientAuthorization } from "@/lib/customers/types";
+import type { SortColumn } from "@/lib/admin/list-filter-core";
 
 /** Digits-only phone for dedupe/search (mirrors loyalty normalization). */
 export function normalizePhone(phone: string | null | undefined): string | null {
@@ -56,14 +57,32 @@ export async function listCustomersPaged(opts: {
   q?: string;
   from: number;
   to: number;
+  /** SLICE 26: whitelisted sort columns (list-filter-core.CUSTOMER_SORTS). */
+  sort?: SortColumn[];
+  /** Tri-state flags (undefined = filter off). */
+  isMedical?: boolean;
+  marketingConsent?: boolean;
+  doNotContact?: boolean;
 }): Promise<{ rows: Customer[]; total: number }> {
   if (!isSupabaseServiceConfigured) return { rows: [], total: 0 };
   const admin = createSupabaseAdminClient();
-  let query = admin
-    .from("customers")
-    .select("*", { count: "exact" })
-    .order("last_visit_at", { ascending: false, nullsFirst: false })
-    .order("created_at", { ascending: false });
+  let query = admin.from("customers").select("*", { count: "exact" });
+
+  if (opts.isMedical !== undefined) query = query.eq("is_medical_patient", opts.isMedical);
+  if (opts.marketingConsent !== undefined)
+    query = query.eq("marketing_consent", opts.marketingConsent);
+  if (opts.doNotContact !== undefined) query = query.eq("do_not_contact", opts.doNotContact);
+
+  const sort: SortColumn[] = opts.sort ?? [
+    { column: "last_visit_at", ascending: false, nullsFirst: false },
+    { column: "created_at", ascending: false },
+  ];
+  for (const s of sort) {
+    query = query.order(s.column, {
+      ascending: s.ascending,
+      ...(s.nullsFirst !== undefined ? { nullsFirst: s.nullsFirst } : {}),
+    });
+  }
 
   if (opts.q && opts.q.trim().length > 0) {
     const digits = normalizePhone(opts.q.trim());

@@ -6,10 +6,17 @@ import { Breadcrumbs, HelpPanel, EmptyState } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
 import { Card } from "@/components/admin/ui/Card";
 import { Button } from "@/components/admin/ui/Button";
-import { Input } from "@/components/admin/ui/Field";
+import { Input, Select } from "@/components/admin/ui/Field";
 import { formatMinorCurrency } from "@/lib/leafly/format";
 import { listOrdersPaged, getOrderStatusCounts } from "@/lib/orders/orders-store";
 import { listWindow, parsePageParam, DEFAULT_PAGE_SIZE } from "@/lib/admin/list-window-core";
+import {
+  ORDER_SORTS,
+  endOfDayIso,
+  parseDollarsToMinor,
+  parseIsoDate,
+  resolveSort,
+} from "@/lib/admin/list-filter-core";
 import { ListPager } from "@/components/admin/ux/ListPager";
 import {
   ORDER_STATUS_LABELS,
@@ -63,13 +70,30 @@ function timeAgo(iso: string): string {
 export default async function OrdersAdminPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; q?: string; page?: string }>;
+  searchParams: Promise<{
+    status?: string;
+    q?: string;
+    page?: string;
+    sort?: string;
+    from?: string;
+    to?: string;
+    min?: string;
+    max?: string;
+  }>;
 }) {
   await requirePermission("orders.view");
   const sp = await searchParams;
   const status = (sp.status as OrderStatus | "active" | "all" | undefined) ?? "active";
   const search = sp.q ?? "";
   const rawPage = parsePageParam(sp.page);
+  // SLICE 26: every filter knob validated by the pure grammar — garbage
+  // params silently mean "filter off", never an exception.
+  const sort = resolveSort(sp.sort, ORDER_SORTS);
+  const placedFrom = parseIsoDate(sp.from);
+  const placedToDate = parseIsoDate(sp.to);
+  const placedTo = placedToDate ? endOfDayIso(placedToDate) : undefined;
+  const totalMin = parseDollarsToMinor(sp.min);
+  const totalMax = parseDollarsToMinor(sp.max);
   // GW-029: carry the current filters/search into detail links so BackLink
   // can restore this exact view.
   const detailHref = (id: string) => withBackParam(`/admin/orders/${id}`, sp);
@@ -95,29 +119,58 @@ export default async function OrdersAdminPage({
   // GW-033: fetch the requested page window plus the exact total. If the
   // requested page is past the end (stale link), clamp and refetch the real
   // last page so the screen is never empty while rows exist.
+  const queryFilter = {
+    status,
+    search,
+    sort: sort.columns,
+    placedFrom,
+    placedTo,
+    totalMin,
+    totalMax,
+  };
   const firstWin = listWindow(Number.MAX_SAFE_INTEGER, rawPage, DEFAULT_PAGE_SIZE);
   const [firstPage, counts] = await Promise.all([
-    listOrdersPaged({ status, search, from: firstWin.from, to: firstWin.to }),
+    listOrdersPaged({ ...queryFilter, from: firstWin.from, to: firstWin.to }),
     getOrderStatusCounts(),
   ]);
   let { rows: orders, total } = firstPage;
   const win = listWindow(total, rawPage, DEFAULT_PAGE_SIZE);
   if (win.page !== rawPage && total > 0) {
     ({ rows: orders, total } = await listOrdersPaged({
-      status,
-      search,
+      ...queryFilter,
       from: win.from,
       to: win.to,
     }));
   }
-  const pageHref = (p: number) => {
+  /** Current filter state as URL params (page excluded — added per link). */
+  const filterParams = () => {
     const params = new URLSearchParams();
     if (status !== "active") params.set("status", status);
     if (search) params.set("q", search);
+    if (sort.key !== ORDER_SORTS[0].key) params.set("sort", sort.key);
+    if (placedFrom) params.set("from", placedFrom);
+    if (placedToDate) params.set("to", placedToDate);
+    if (totalMin != null && sp.min) params.set("min", sp.min);
+    if (totalMax != null && sp.max) params.set("max", sp.max);
+    return params;
+  };
+  const pageHref = (p: number) => {
+    const params = filterParams();
     if (p > 1) params.set("page", String(p));
     const qs = params.toString();
     return `/admin/orders${qs ? `?${qs}` : ""}`;
   };
+  /** Status-chip links carry every OTHER filter and reset to page 1. */
+  const statusHref = (key: string) => {
+    const params = filterParams();
+    params.delete("status");
+    if (key !== "active") params.set("status", key);
+    const qs = params.toString();
+    return `/admin/orders${qs ? `?${qs}` : ""}`;
+  };
+  const hasExtraFilters = Boolean(
+    placedFrom || placedToDate || totalMin != null || totalMax != null || sort.key !== ORDER_SORTS[0].key,
+  );
 
   const activeCount = counts.new + counts.acknowledged + counts.preparing + counts.ready;
 
@@ -158,13 +211,14 @@ export default async function OrdersAdminPage({
           <StatCard label="Active total" value={activeCount} icon="🧾" />
         </div>
 
-        {/* Filters + search */}
-        <form method="get" className="mt-6 flex flex-wrap items-center gap-2">
+        {/* Filters + search (SLICE 26: full control — status, search, date
+            range, total range, and sort, all URL-driven and combinable). */}
+        <form method="get" className="mt-6 space-y-3">
           <div className="flex flex-wrap gap-1.5">
             {FILTERS.map((f) => (
               <Link
                 key={f.key}
-                href={`/admin/orders?status=${f.key}${search ? `&q=${encodeURIComponent(search)}` : ""}`}
+                href={statusHref(f.key)}
                 className={`admin-focus rounded-full border px-3 py-1.5 text-xs font-bold uppercase tracking-[0.08em] transition ${
                   status === f.key
                     ? "border-[var(--admin-accent)] bg-[var(--admin-accent)] text-black"
@@ -175,17 +229,61 @@ export default async function OrdersAdminPage({
               </Link>
             ))}
           </div>
-          <div className="ml-auto flex items-center gap-2">
+          <div className="flex flex-wrap items-end gap-3">
             <input type="hidden" name="status" value={status} />
-            <Input
-              name="q"
-              defaultValue={search}
-              placeholder="Search name, phone, order #"
-              className="w-56"
-            />
+            <div className="min-w-52 flex-1">
+              <label className="mb-1 block text-[0.65rem] font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
+                Search
+              </label>
+              <Input name="q" defaultValue={search} placeholder="Name, phone, order #" />
+            </div>
+            <div>
+              <label className="mb-1 block text-[0.65rem] font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
+                Placed from
+              </label>
+              <Input type="date" name="from" defaultValue={placedFrom ?? ""} className="w-40" />
+            </div>
+            <div>
+              <label className="mb-1 block text-[0.65rem] font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
+                Placed to
+              </label>
+              <Input type="date" name="to" defaultValue={placedToDate ?? ""} className="w-40" />
+            </div>
+            <div>
+              <label className="mb-1 block text-[0.65rem] font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
+                Total min $
+              </label>
+              <Input name="min" defaultValue={sp.min ?? ""} placeholder="0.00" inputMode="decimal" className="w-24" />
+            </div>
+            <div>
+              <label className="mb-1 block text-[0.65rem] font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
+                Total max $
+              </label>
+              <Input name="max" defaultValue={sp.max ?? ""} placeholder="0.00" inputMode="decimal" className="w-24" />
+            </div>
+            <div>
+              <label className="mb-1 block text-[0.65rem] font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
+                Sort by
+              </label>
+              <Select name="sort" defaultValue={sort.key} aria-label="Sort orders">
+                {ORDER_SORTS.map((o) => (
+                  <option key={o.key} value={o.key}>
+                    {o.label}
+                  </option>
+                ))}
+              </Select>
+            </div>
             <Button type="submit" variant="neutral">
-              Search
+              Apply
             </Button>
+            {(search || hasExtraFilters) && (
+              <Link
+                href={status !== "active" ? `/admin/orders?status=${status}` : "/admin/orders"}
+                className="pb-2 text-xs text-[var(--admin-text-faint)] underline-offset-2 hover:text-[var(--admin-text)] hover:underline"
+              >
+                Clear
+              </Link>
+            )}
           </div>
         </form>
 

@@ -5,11 +5,12 @@ import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { SopSheetLink } from "@/components/admin/SopSheetLink";
 import { BackLink, Breadcrumbs, HelpPanel, EmptyState } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
-import { Input, Button } from "@/components/admin/ui";
+import { Input, Select, Button } from "@/components/admin/ui";
 import { MissingInsight } from "@/components/admin/insight/MissingInsight";
 import { CatalogStageStrip } from "@/components/admin/catalog/CatalogStageStrip";
 import { listLotsPaged, computeInventoryStats, EXPIRING_SOON_DAYS } from "@/lib/inventory/store";
 import { listWindow, parsePageParam, DEFAULT_PAGE_SIZE } from "@/lib/admin/list-window-core";
+import { LOT_SORTS, parseYesNo, resolveSort } from "@/lib/admin/list-filter-core";
 import { ListPager } from "@/components/admin/ux/ListPager";
 import { inventoryGapInsights } from "@/lib/insight/inventory";
 import { getInventoryCommandCenter } from "@/lib/inventory/inventory-intel";
@@ -54,12 +55,31 @@ function StatusBadge({ status }: { status: string }) {
 export default async function InventoryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; status?: string; back?: string; page?: string }>;
+  searchParams: Promise<{
+    q?: string;
+    status?: string;
+    back?: string;
+    page?: string;
+    sort?: string;
+    coa?: string;
+    sample?: string;
+    medical?: string;
+    expiring?: string;
+  }>;
 }) {
   await requirePermission("inventory.manage");
-  const { q, status, back, page } = await searchParams;
+  const sp = await searchParams;
+  const { q, status, back, page } = sp;
   const activeStatus = status ?? "all";
   const rawPage = parsePageParam(page);
+  // SLICE 26: every filter knob validated by the pure grammar — garbage
+  // params silently mean "filter off", never an exception.
+  const sort = resolveSort(sp.sort, LOT_SORTS);
+  const hasCoa = parseYesNo(sp.coa);
+  const isSample = parseYesNo(sp.sample);
+  const isMedical = parseYesNo(sp.medical);
+  const expiringWithinDays =
+    sp.expiring && /^\d{1,3}$/.test(sp.expiring) ? Number(sp.expiring) : undefined;
 
   if (!isSupabaseServiceConfigured) {
     return (
@@ -78,9 +98,18 @@ export default async function InventoryPage({
   // GW-033: fetch the requested page window plus the exact total. If the
   // requested page is past the end (stale link), clamp and refetch the real
   // last page so the screen is never empty while rows exist.
+  const queryFilter = {
+    q,
+    status: activeStatus,
+    sort: sort.columns,
+    hasCoa,
+    isSample,
+    isMedical,
+    expiringWithinDays,
+  };
   const firstWin = listWindow(Number.MAX_SAFE_INTEGER, rawPage, DEFAULT_PAGE_SIZE);
   const [firstPage, stats, intel] = await Promise.all([
-    listLotsPaged({ q, status: activeStatus, from: firstWin.from, to: firstWin.to }),
+    listLotsPaged({ ...queryFilter, from: firstWin.from, to: firstWin.to }),
     computeInventoryStats(),
     getInventoryCommandCenter(),
   ]);
@@ -88,20 +117,44 @@ export default async function InventoryPage({
   const win = listWindow(total, rawPage, DEFAULT_PAGE_SIZE);
   if (win.page !== rawPage && total > 0) {
     ({ rows: lots, total } = await listLotsPaged({
-      q,
-      status: activeStatus,
+      ...queryFilter,
       from: win.from,
       to: win.to,
     }));
   }
-  const pageHref = (p: number) => {
+  /** Current filter state as URL params (page excluded — added per link). */
+  const filterParams = () => {
     const params = new URLSearchParams();
     if (activeStatus !== "all") params.set("status", activeStatus);
     if (q) params.set("q", q);
+    if (sort.key !== LOT_SORTS[0].key) params.set("sort", sort.key);
+    if (sp.coa === "yes" || sp.coa === "no") params.set("coa", sp.coa);
+    if (sp.sample === "yes" || sp.sample === "no") params.set("sample", sp.sample);
+    if (sp.medical === "yes" || sp.medical === "no") params.set("medical", sp.medical);
+    if (expiringWithinDays != null) params.set("expiring", String(expiringWithinDays));
+    return params;
+  };
+  const pageHref = (p: number) => {
+    const params = filterParams();
     if (p > 1) params.set("page", String(p));
     const qs = params.toString();
     return `/admin/inventory${qs ? `?${qs}` : ""}`;
   };
+  /** Status-tab links carry every OTHER filter and reset to page 1. */
+  const statusHref = (key: string) => {
+    const params = filterParams();
+    params.delete("status");
+    if (key !== "all") params.set("status", key);
+    const qs = params.toString();
+    return `/admin/inventory${qs ? `?${qs}` : ""}`;
+  };
+  const hasExtraFilters = Boolean(
+    hasCoa !== undefined ||
+      isSample !== undefined ||
+      isMedical !== undefined ||
+      expiringWithinDays != null ||
+      sort.key !== LOT_SORTS[0].key,
+  );
   const gaps = inventoryGapInsights(stats);
 
   const today = new Date().toISOString().slice(0, 10);
@@ -189,18 +242,16 @@ export default async function InventoryPage({
             months-of-supply vs the WAC 4-month ceiling, shrink telemetry). */}
         <InventoryIntelPanel center={intel.center} sellFirst={intel.sellFirst} />
 
-        {/* Filters */}
+        {/* Filters (SLICE 26: full control — status tabs, search, COA /
+            sample / medical tri-states, expiry window, and sort, all
+            URL-driven and combinable). */}
         <div className="flex flex-wrap items-center gap-2">
           {STATUS_TABS.map((t) => {
-            const href =
-              t.key === "all"
-                ? "/admin/inventory"
-                : `/admin/inventory?status=${t.key}`;
             const isActive = activeStatus === t.key;
             return (
               <Link
                 key={t.key}
-                href={href}
+                href={statusHref(t.key)}
                 className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
                   isActive
                     ? "bg-[var(--admin-accent)] text-black"
@@ -213,14 +264,80 @@ export default async function InventoryPage({
           })}
         </div>
 
-        <form className="flex flex-wrap items-center gap-3" method="get">
+        <form className="flex flex-wrap items-end gap-3" method="get">
           {activeStatus !== "all" && <input type="hidden" name="status" value={activeStatus} />}
-          <div className="min-w-48 flex-1">
-            <Input name="q" defaultValue={q ?? ""} placeholder="Search product, lot code, or POS key…" />
+          <div className="min-w-52 flex-1">
+            <label className="mb-1 block text-[0.65rem] font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
+              Search
+            </label>
+            <Input name="q" defaultValue={q ?? ""} placeholder="Product, lot code, or POS key…" />
+          </div>
+          <div>
+            <label className="mb-1 block text-[0.65rem] font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
+              COA
+            </label>
+            <Select name="coa" defaultValue={sp.coa === "yes" || sp.coa === "no" ? sp.coa : ""} aria-label="COA filter">
+              <option value="">Any</option>
+              <option value="yes">Has COA</option>
+              <option value="no">Missing COA</option>
+            </Select>
+          </div>
+          <div>
+            <label className="mb-1 block text-[0.65rem] font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
+              Sample
+            </label>
+            <Select name="sample" defaultValue={sp.sample === "yes" || sp.sample === "no" ? sp.sample : ""} aria-label="Sample filter">
+              <option value="">Any</option>
+              <option value="yes">Samples only</option>
+              <option value="no">Exclude samples</option>
+            </Select>
+          </div>
+          <div>
+            <label className="mb-1 block text-[0.65rem] font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
+              Medical
+            </label>
+            <Select name="medical" defaultValue={sp.medical === "yes" || sp.medical === "no" ? sp.medical : ""} aria-label="Medical filter">
+              <option value="">Any</option>
+              <option value="yes">Medical only</option>
+              <option value="no">Non-medical</option>
+            </Select>
+          </div>
+          <div>
+            <label className="mb-1 block text-[0.65rem] font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
+              Expiring
+            </label>
+            <Select name="expiring" defaultValue={expiringWithinDays != null ? String(expiringWithinDays) : ""} aria-label="Expiry window">
+              <option value="">Any date</option>
+              <option value="7">Within 7 days</option>
+              <option value="14">Within 14 days</option>
+              <option value="30">Within 30 days</option>
+              <option value="60">Within 60 days</option>
+              <option value="90">Within 90 days</option>
+            </Select>
+          </div>
+          <div>
+            <label className="mb-1 block text-[0.65rem] font-semibold uppercase tracking-wide text-[var(--admin-text-faint)]">
+              Sort by
+            </label>
+            <Select name="sort" defaultValue={sort.key} aria-label="Sort lots">
+              {LOT_SORTS.map((o) => (
+                <option key={o.key} value={o.key}>
+                  {o.label}
+                </option>
+              ))}
+            </Select>
           </div>
           <Button type="submit" variant="neutral">
-            Search
+            Apply
           </Button>
+          {(q || hasExtraFilters) && (
+            <Link
+              href={activeStatus !== "all" ? `/admin/inventory?status=${activeStatus}` : "/admin/inventory"}
+              className="pb-2 text-xs text-[var(--admin-text-faint)] underline-offset-2 hover:text-[var(--admin-text)] hover:underline"
+            >
+              Clear
+            </Link>
+          )}
         </form>
 
         {/* GW-033: exact result count + pager (server-side pagination). */}
