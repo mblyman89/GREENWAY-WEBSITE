@@ -58,6 +58,7 @@ import {
 } from "@/lib/pos/medical-testmode-core";
 import { checkSetupCredentials } from "@/lib/pos/device-setup-core";
 import { isBuildStale, isPosCacheName, shouldAutoApplyUpdate } from "@/lib/pos/sw-core";
+import { buildRejectedReport } from "@/lib/pos/rejected-report-core";
 import { VOID_REASON_PRESETS } from "@/lib/pos/void-sale-core";
 import { CUSTOMER_RETURN_REASONS } from "@/lib/inventory/disposition-core";
 import type { PickupQueueEntry } from "@/lib/pos/pickup-core";
@@ -214,6 +215,12 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
   const [serverVersion, setServerVersion] = useState<string | null>(null);
   const seqRef = useRef(0);
   const queueRef = useRef<QueuedPosEvent[]>([]);
+  // GW-027 — mirror of the rejected list for flush() (same pattern as
+  // queueRef), plus the last count actually REPORTED to the server so a
+  // change (new rejection, or rows restored from storage on boot) triggers
+  // a report even when the outgoing queue is empty.
+  const rejectedRef = useRef<QueuedPosEvent[]>([]);
+  const lastReportedRejectedRef = useRef<number | null>(null);
   const flushingRef = useRef(false);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // SESSION RESUME — the unlocked employee's display name, mirrored to a ref so
@@ -416,6 +423,7 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
   // because a restart would lose whatever could not be saved.
   useEffect(() => {
     queueRef.current = queue;
+    rejectedRef.current = rejected;
     if (screen === "loading") return;
     try {
       window.localStorage.setItem(LS_QUEUE, serializeQueue([...queue, ...rejected]));
@@ -473,7 +481,14 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
       // queueRef mirrors the queue state (kept in sync by the persist effect),
       // so flush() always reads the freshest rows without impure setState tricks.
       const toSend = nextFlushBatch(queueRef.current);
-      if (toSend.length === 0) return;
+      // GW-027 — every flush also reports the on-device REJECTED rows
+      // ({ count, note }) so the back office can see "N rejected rows held on
+      // this register" without the rows ever existing server-side. When the
+      // queue is empty we still send an empty-batch heartbeat IF the count
+      // changed since the last successful report (new rejection, or rows
+      // restored from storage on boot) — otherwise skip as before.
+      const rejectedReport = buildRejectedReport(rejectedRef.current);
+      if (toSend.length === 0 && rejectedReport.count === (lastReportedRejectedRef.current ?? 0)) return;
       const res = await fetch("/api/pos/sync", {
         method: "POST",
         headers: {
@@ -481,7 +496,7 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
           "x-pos-device-id": creds.deviceId,
           "x-pos-device-key": creds.deviceKey,
         },
-        body: JSON.stringify({ events: toSend }),
+        body: JSON.stringify({ events: toSend, rejectedReport }),
       });
       if (!res.ok) {
         const body = (await res.json().catch(() => null)) as { error?: string } | null;
@@ -524,6 +539,9 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
           `${rejectedNow.length} event(s) were rejected by the server and kept for review: ${rejectedNow[0].rejectedReason ?? ""}`,
         );
       }
+      // GW-027 — the server accepted this flush, so the rejected count we
+      // sent is now on record; only re-report when it changes again.
+      lastReportedRejectedRef.current = rejectedReport.count;
       setLastSyncAt(new Date().toISOString());
     } catch {
       // Network hiccup — queue stays; the interval retries.
@@ -2348,7 +2366,7 @@ function HomeScreen({
             <span className={`h-2 w-2 rounded-full ${rejectedCount > 0 ? "bg-[var(--pos-danger-solid)]" : "bg-[var(--pos-accent)]"}`} aria-hidden />
             QUEUE:{" "}
             <b className={`font-semibold ${rejectedCount > 0 ? "text-[var(--pos-danger)]" : "text-[var(--pos-text)]"}`}>
-              {rejectedCount > 0 ? `${rejectedCount} rejected — manager reviews in the back office` : "all clear"}
+              {rejectedCount > 0 ? `${rejectedCount} rejected — kept on this register; back office has been notified` : "all clear"}
             </b>
           </span>
         </div>

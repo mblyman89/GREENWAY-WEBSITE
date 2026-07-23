@@ -43,6 +43,7 @@ import {
   type PosPunchPayload,
   type PosNoSalePayload,
 } from "./sale-event-core";
+import type { RejectedReport } from "./rejected-report-core";
 import {
   checkClockDrift,
   checkDrawerSessionForSale,
@@ -139,6 +140,30 @@ export async function authenticateDevice(deviceId: string, deviceKey: string): P
     .eq("id", data.id)
     .then(() => {}, () => {});
   return { ok: true, device: data };
+}
+
+/**
+ * GW-027 — persist the device's self-reported rejected-row summary onto its
+ * pos_devices row so the back office can see "N rejected rows on-device".
+ * Best-effort by design: rejected rows never enter the ledger, so this
+ * visibility write must NEVER block or fail a flush (and it tolerates
+ * migration 0132 being unapplied — the missing-column error is swallowed).
+ */
+export async function recordDeviceRejectedReport(
+  deviceId: string,
+  report: RejectedReport,
+): Promise<void> {
+  if (!isSupabaseServiceConfigured) return;
+  const admin = createSupabaseAdminClient();
+  await admin
+    .from("pos_devices")
+    .update({
+      rejected_count: report.count,
+      rejected_note: report.note,
+      rejected_reported_at: new Date().toISOString(),
+    })
+    .eq("id", deviceId)
+    .then(() => {}, () => {});
 }
 
 // ---------------------------------------------------------------------------

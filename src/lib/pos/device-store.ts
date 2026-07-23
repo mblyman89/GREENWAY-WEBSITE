@@ -36,29 +36,51 @@ export type PosDeviceRow = {
   last_synced_at: string | null;
   notes: string | null;
   created_at: string;
+  /** GW-027 (migration 0132): rejected rows the device reported holding on-device. */
+  rejected_count: number;
+  rejected_note: string | null;
+  rejected_reported_at: string | null;
 };
 
 export type DeviceListResult =
   | { ok: true; devices: PosDeviceRow[] }
   | { ok: false; error: string; migrationMissing: boolean };
 
+const DEVICE_COLUMNS_BASE = "id, name, register_id, status, last_seen_at, last_synced_at, notes, created_at";
+// GW-027 columns land with migration 0132; select them when present, fall
+// back to the base shape when the owner has not applied it yet.
+const DEVICE_COLUMNS_FULL = `${DEVICE_COLUMNS_BASE}, rejected_count, rejected_note, rejected_reported_at`;
+
 export async function listPosDevices(): Promise<DeviceListResult> {
   if (!isSupabaseServiceConfigured) {
     return { ok: false, error: "Database not configured.", migrationMissing: false };
   }
   const admin = createSupabaseAdminClient();
-  const { data, error } = await admin
+  let { data, error }: { data: unknown; error: { code?: string; message?: string } | null } = await admin
     .from("pos_devices")
-    .select("id, name, register_id, status, last_seen_at, last_synced_at, notes, created_at")
+    .select(DEVICE_COLUMNS_FULL)
     .order("created_at", { ascending: true });
+  if (error && isMissingSchemaError(error)) {
+    // Migration 0132 unapplied — retry without the GW-027 columns.
+    ({ data, error } = await admin
+      .from("pos_devices")
+      .select(DEVICE_COLUMNS_BASE)
+      .order("created_at", { ascending: true }));
+  }
   if (error) {
     return {
       ok: false,
-      error: isMissingSchemaError(error) ? MIGRATION_HINT : error.message,
+      error: isMissingSchemaError(error) ? MIGRATION_HINT : error.message ?? "Device list failed.",
       migrationMissing: isMissingSchemaError(error),
     };
   }
-  return { ok: true, devices: (data as PosDeviceRow[] | null) ?? [] };
+  const rows = ((data as Partial<PosDeviceRow>[] | null) ?? []).map((d) => ({
+    ...(d as PosDeviceRow),
+    rejected_count: typeof d.rejected_count === "number" ? d.rejected_count : 0,
+    rejected_note: d.rejected_note ?? null,
+    rejected_reported_at: d.rejected_reported_at ?? null,
+  }));
+  return { ok: true, devices: rows };
 }
 
 export type ProvisionResult =

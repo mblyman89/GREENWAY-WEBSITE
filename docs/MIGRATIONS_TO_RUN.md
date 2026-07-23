@@ -275,3 +275,20 @@
   with one read-only review query — run it and expect the default to show
   `America/Los_Angeles`. **Until this is run, the app still stamps the
   correct Pacific date itself — the database default is just the backstop.**
+
+## Fix slice — GW-027 (rejected rows visible to the back office)
+
+- [ ] **`supabase/migrations/0132_pos_device_rejected_report.sql`** — GW-027:
+  when the server REJECTS a register event (refused before it ever enters
+  the ledger — malformed envelope, foreign device), that row lives only on
+  the register iPad itself. The old register copy claimed a manager would
+  see those rows in the back office, which was not true. The registers now
+  report their rejected-row count and a short summary with every sync, and
+  this migration adds the three columns that store the report on each
+  device row (`rejected_count`, `rejected_note`, `rejected_reported_at`).
+  Idempotent (`add column if not exists`); safe to re-run; no backfill
+  needed. **Until this is run, the app works normally — the register keeps
+  and shows its rejected rows locally, and the server simply skips storing
+  the report (best-effort write). Once run, Admin → Register Activity and
+  the POS devices page start showing "N rejected events held on this
+  device" automatically.**
