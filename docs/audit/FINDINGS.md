@@ -808,7 +808,17 @@
 - **Recommendation:** `text-white` → `text-black` on all 12 (or migrate the
   whole element to `<Button variant="confirm">`, which is the same fix with
   consistency thrown in). One-line changes; zero logic risk.
-- **Status:** OPEN
+- **Status:** FIXED (PR #647; 6 of 12 already fixed by the GW-030 sweep in
+  PR #646). Every site now shows BLACK ink on brand fills: the medical hub
+  and customer medical-panel intake CTAs, plus the Leafly/WeedMaps
+  integration links, migrated to `<Button variant="confirm">` (black ink
+  by construction); the drafts status pill and the intake PDF file-picker
+  flipped `text-white` → `text-black` in place. Contrast recomputed by
+  script (verify_fix_gw031.py, WCAG 2.2 math): white-on-green 1.76:1 FAIL
+  → black-on-green 11.95:1 PASS. A repo-wide guard in the same script
+  asserts NO solid green/gold fill under src/app/admin or
+  src/components/admin pairs with solid white ink. Exercised by T-165
+  (TEST-PLAN §12.8, the bright-light readability check).
 
 ---
 

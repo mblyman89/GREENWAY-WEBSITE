@@ -2,7 +2,7 @@ import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
-import { Badge, Card } from "@/components/admin/ui";
+import { Badge, Button, Card } from "@/components/admin/ui";
 import { describeLeaflyRuntimeAsync } from "@/lib/leafly/client";
 import { describeWeedmapsRuntimeAsync } from "@/lib/weedmaps/client";
 import { getAccountingSettings, missingGlAccounts } from "@/lib/accounting/sage50";
@@ -108,12 +108,9 @@ export default async function IntegrationsPage() {
               API v2.0 payload from the published menu. Preview (dry-run) is always safe; live
               pushes require credentials and explicit confirmation.
             </p>
-            <a
-              href="/admin/integrations/leafly"
-              className="mt-3 inline-block rounded-md bg-[var(--admin-accent)] px-3 py-1.5 text-xs font-semibold text-white"
-            >
+            <Button href="/admin/integrations/leafly" variant="confirm" size="sm" className="mt-3">
               Open Leafly push &amp; preview →
-            </a>
+            </Button>
             {guideById("leafly") ? <IntegrationGuidePanel guide={guideById("leafly")!} /> : null}
           </Card>
 
@@ -135,12 +132,9 @@ export default async function IntegrationsPage() {
               from the published menu. Preview (dry-run) is always safe; live pushes require
               credentials and explicit confirmation.
             </p>
-            <a
-              href="/admin/integrations/weedmaps"
-              className="mt-3 inline-block rounded-md bg-[var(--admin-accent)] px-3 py-1.5 text-xs font-semibold text-white"
-            >
+            <Button href="/admin/integrations/weedmaps" variant="confirm" size="sm" className="mt-3">
               Open WeedMaps push &amp; preview →
-            </a>
+            </Button>
             {guideById("weedmaps") ? <IntegrationGuidePanel guide={guideById("weedmaps")!} /> : null}
           </Card>
 

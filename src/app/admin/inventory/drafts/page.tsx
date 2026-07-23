@@ -132,7 +132,7 @@ export default async function CatalogDraftsPage({
               href={`/admin/inventory/drafts?status=${s}`}
               className={`rounded-full px-3 py-1 font-medium capitalize ${
                 view === s
-                  ? "bg-[var(--admin-accent)] text-white"
+                  ? "bg-[var(--admin-accent)] text-black"
                   : "bg-[var(--admin-surface-2)] text-[var(--admin-text-muted)] hover:text-[var(--admin-text)]"
               }`}
             >
