@@ -18,6 +18,7 @@ import { requirePermission } from "@/lib/auth/session";
 import { can } from "@/lib/auth/roles";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { StatCard } from "@/components/admin/StatCard";
+import { Button } from "@/components/admin/ui";
 import { resolveExciseReturn } from "@/lib/compliance/excise-draft";
 import { listExciseReturnBatches } from "@/lib/compliance/excise-return";
 import { pacificParts } from "@/lib/reports/timezone";
@@ -176,12 +177,9 @@ export default async function ExcisePage({
               ))}
             </select>
           </label>
-          <button
-            type="submit"
-            className="rounded-lg border border-white/15 bg-white/[0.04] px-4 py-2 text-sm font-bold text-white/80 hover:bg-white/[0.08]"
-          >
+          <Button type="submit" variant="neutral">
             Load period
-          </button>
+          </Button>
         </form>
         {data ? (
           <p className="mt-3 text-xs text-white/40">
@@ -376,12 +374,9 @@ export default async function ExcisePage({
 
           {canEdit ? (
             <div className="flex flex-wrap items-center gap-3">
-              <button
-                type="submit"
-                className="rounded-lg bg-[var(--admin-accent)] px-5 py-2 text-sm font-bold text-black transition hover:opacity-90"
-              >
+              <Button type="submit" variant="confirm">
                 Save draft
-              </button>
+              </Button>
               <span className="text-xs text-white/40">Saving updates the boxes above and the downloaded form.</span>
             </div>
           ) : (

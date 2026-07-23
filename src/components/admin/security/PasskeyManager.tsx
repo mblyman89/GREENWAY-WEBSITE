@@ -6,6 +6,7 @@
 // the server component so the new passkey appears in the list.
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Button, CHIP_ACTION, CHIP_NEUTRAL } from "@/components/admin/ui";
 import { supportsPasskeys, registerPasskey } from "@/lib/auth/webauthn-client";
 import { renamePasskeyAction, deletePasskeyAction } from "@/app/admin/settings/security/actions";
 
@@ -66,25 +67,26 @@ export function PasskeyManager({ passkeys }: { passkeys: PasskeyItem[] }) {
       )}
 
       {msg && (
-        <div className="rounded-lg border border-[#7ed957]/30 bg-[#7ed957]/10 p-3 text-sm text-white/80">
+        <div className="rounded-lg border border-[var(--admin-accent)]/30 bg-[var(--admin-accent)]/10 p-3 text-sm text-white/80">
           {msg}
         </div>
       )}
       {error && (
-        <div className="rounded-lg border border-[#ff7f00]/40 bg-[#ff7f00]/10 p-3 text-sm text-[#ff7f00]">
+        <div className="rounded-lg border border-[var(--admin-orange)]/40 bg-[var(--admin-orange)]/10 p-3 text-sm text-[var(--admin-orange)]">
           {error}
         </div>
       )}
 
-      <button
+      <Button
         type="button"
         onClick={addPasskey}
         disabled={!supported || busy}
-        className="flex items-center gap-2 rounded-full bg-[#7ed957] px-5 py-2.5 text-sm font-bold text-black transition hover:brightness-110 disabled:opacity-60"
+        variant="confirm"
+        className="flex items-center gap-2"
       >
         <span aria-hidden>➕</span>
         {busy ? "Follow the prompt on your device…" : "Add Face ID / Touch ID on this device"}
-      </button>
+      </Button>
 
       {passkeys.length === 0 ? (
         <p className="text-sm text-white/45">
@@ -106,12 +108,9 @@ export function PasskeyManager({ passkeys }: { passkeys: PasskeyItem[] }) {
                   <input
                     name="label"
                     defaultValue={pk.label ?? "Passkey"}
-                    className="w-full max-w-xs rounded-lg border border-white/15 bg-black px-2 py-1 text-sm text-white outline-none focus:border-[#7ed957]"
+                    className="w-full max-w-xs rounded-lg border border-white/15 bg-black px-2 py-1 text-sm text-white outline-none focus:border-[var(--admin-accent)]"
                   />
-                  <button
-                    type="submit"
-                    className="rounded-lg border border-white/15 px-2.5 py-1 text-xs font-semibold text-white/70 hover:bg-white/10"
-                  >
+                  <button type="submit" className={CHIP_NEUTRAL}>
                     Save
                   </button>
                 </form>
@@ -122,10 +121,7 @@ export function PasskeyManager({ passkeys }: { passkeys: PasskeyItem[] }) {
               </div>
               <form action={deletePasskeyAction}>
                 <input type="hidden" name="id" value={pk.id} />
-                <button
-                  type="submit"
-                  className="rounded-lg border border-[#ff7f00]/40 px-3 py-1.5 text-xs font-bold text-[#ff7f00] hover:bg-[#ff7f00]/10"
-                >
+                <button type="submit" className={CHIP_ACTION}>
                   Remove
                 </button>
               </form>

@@ -17,6 +17,7 @@
  * holds the editable fields in local state purely to drive the live preview.
  */
 import { useMemo, useRef, useState, useTransition } from "react";
+import { Button } from "@/components/admin/ui";
 import { useToast } from "@/components/admin/ux";
 import { suggestHeroAltAction } from "@/app/admin/blog/actions";
 import { FONT_OPTIONS } from "@/lib/cms/fonts";
@@ -264,14 +265,9 @@ export function BlogEditorClient({ initial, categories, aiEnabled, updateAction 
             <div className="flex items-center justify-between">
               <label className={labelCls}>Hero image alt text</label>
               {aiEnabled && (
-                <button
-                  type="button"
-                  onClick={onSuggestAlt}
-                  disabled={aiPending}
-                  className="rounded-full bg-[var(--admin-gold)] px-3 py-0.5 text-[0.7rem] font-black uppercase tracking-[0.1em] text-black transition hover:brightness-110 disabled:opacity-50"
-                >
+                <Button type="button" onClick={onSuggestAlt} disabled={aiPending} variant="special" size="sm">
                   {aiPending ? "…thinking" : "✨ Suggest alt text"}
-                </button>
+                </Button>
               )}
             </div>
             <input
@@ -363,13 +359,9 @@ export function BlogEditorClient({ initial, categories, aiEnabled, updateAction 
                   aria-label="Title color"
                 />
                 {titleColor ? (
-                  <button
-                    type="button"
-                    onClick={() => setTitleColor("")}
-                    className="rounded-full bg-[var(--admin-surface-2)] px-3 py-1.5 text-xs font-semibold text-[var(--admin-text-muted)] hover:bg-[var(--admin-surface-hover)]"
-                  >
+                  <Button type="button" onClick={() => setTitleColor("")} variant="neutral" size="sm">
                     Reset
-                  </button>
+                  </Button>
                 ) : (
                   <span className="text-[0.65rem] text-[var(--admin-text-faint)]">Default (white)</span>
                 )}
@@ -462,7 +454,7 @@ export function BlogEditorClient({ initial, categories, aiEnabled, updateAction 
             <div className="rounded-lg border border-white/10 bg-black p-3">
               <div className="text-xs text-[var(--admin-text-faint)]">Search preview</div>
               <div className="mt-1 text-sm text-[#8ab4f8]">{seoTitle || title}</div>
-              <div className="text-xs text-[#7ed957]/80">greenwaymarijuana.com/blog/{initial.slug}</div>
+              <div className="text-xs text-[var(--admin-accent)]/80">greenwaymarijuana.com/blog/{initial.slug}</div>
               <div className="mt-0.5 text-xs text-white/55">
                 {seoDescription || excerpt || "Add an SEO description to control this snippet."}
               </div>
@@ -470,12 +462,9 @@ export function BlogEditorClient({ initial, categories, aiEnabled, updateAction 
           </div>
         </div>
 
-        <button
-          type="submit"
-          className="rounded-full bg-[var(--admin-accent)] px-5 py-2.5 text-xs font-black uppercase tracking-[0.1em] text-black transition hover:brightness-110"
-        >
+        <Button type="submit" variant="confirm">
           Save changes
-        </button>
+        </Button>
       </form>
 
       {/* ---------------- RIGHT: live preview ---------------- */}
@@ -490,7 +479,7 @@ export function BlogEditorClient({ initial, categories, aiEnabled, updateAction 
         <div className="overflow-hidden rounded-2xl border border-white/10 bg-zinc-950 shadow-2xl shadow-black/40">
           {kind === "newsletter" ? (
             <div className="space-y-3 p-6">
-              <p className="text-xs font-black uppercase tracking-[0.18em] text-[#ff7f00]">
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-[var(--admin-orange)]">
                 Newsletter
               </p>
               <h1 className="text-2xl font-black leading-tight text-white">{title || "Untitled"}</h1>
@@ -511,7 +500,7 @@ export function BlogEditorClient({ initial, categories, aiEnabled, updateAction 
                 )}
                 <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-black/10" />
                 <div className="absolute bottom-0 left-0 right-0 p-5">
-                  <p className="text-[0.7rem] font-black uppercase tracking-[0.18em] text-[#ff7f00]">
+                  <p className="text-[0.7rem] font-black uppercase tracking-[0.18em] text-[var(--admin-orange)]">
                     {previewDate}
                   </p>
                   <h1 className="mt-2 text-2xl font-black leading-tight tracking-tight text-white md:text-3xl">
@@ -519,8 +508,8 @@ export function BlogEditorClient({ initial, categories, aiEnabled, updateAction 
                   </h1>
                   <div className="mt-3 flex flex-wrap items-center gap-2 text-[0.7rem] font-black uppercase tracking-[0.14em] text-zinc-300">
                     <span>{author || "Greenway Team"}</span>
-                    <span className="h-1.5 w-1.5 rounded-full bg-[#7ed957]" aria-hidden />
-                    <span className="rounded-full bg-[#ff7f00] px-2 py-0.5 text-black">{category}</span>
+                    <span className="h-1.5 w-1.5 rounded-full bg-[var(--admin-accent)]" aria-hidden />
+                    <span className="rounded-full bg-[var(--admin-orange)] px-2 py-0.5 text-black">{category}</span>
                   </div>
                 </div>
               </div>

@@ -8,7 +8,7 @@
  * office stays visually consistent. For status pills, empty/error/loading
  * states, toasts, tooltips, etc. see the companion kit @/components/admin/ux.
  */
-export { Button, type ButtonProps, type ButtonVariant, type ButtonSize } from "./Button";
+export { Button, CHIP_ACTION, CHIP_NEUTRAL, type ButtonProps, type ButtonVariant, type ButtonSize } from "./Button";
 export { Card, CardHeader, type CardPadding } from "./Card";
 export {
   Field,

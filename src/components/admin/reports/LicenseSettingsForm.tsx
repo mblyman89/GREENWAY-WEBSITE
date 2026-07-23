@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { Button } from "@/components/admin/ui";
 import { saveLicenseSettingsAction } from "@/app/admin/reports/compliance/actions";
 
 export function LicenseSettingsForm({
@@ -70,13 +71,9 @@ export function LicenseSettingsForm({
       </div>
       {canEdit ? (
         <div className="flex items-center gap-3">
-          <button
-            type="submit"
-            disabled={pending}
-            className="rounded-lg bg-[var(--admin-accent)] px-4 py-2 text-sm font-bold text-black transition hover:opacity-90 disabled:opacity-50"
-          >
+          <Button type="submit" disabled={pending} variant="confirm">
             {pending ? "Saving…" : "Save license settings"}
-          </button>
+          </Button>
           {msg ? (
             <span className={`text-xs font-bold ${msg.ok ? "text-[var(--admin-accent)]" : "text-orange-400"}`}>
               {msg.text}

@@ -25,6 +25,7 @@ import { can } from "@/lib/auth/roles";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { StatCard } from "@/components/admin/StatCard";
+import { Button } from "@/components/admin/ui";
 import { pacificToday } from "@/lib/reports/timezone";
 import { resolveRange } from "@/lib/reports/range";
 import { buildCcrsBatch } from "@/lib/compliance/ccrs-batch";
@@ -409,16 +410,16 @@ export default async function CcrsCommandCenterPage({
                         className="mt-1 block w-64 rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-xs text-white/80"
                       />
                     </label>
-                    <button className="rounded-lg border border-white/15 px-3 py-1.5 text-xs font-semibold text-white/70 transition hover:bg-white/5">
+                    <Button type="submit" variant="neutral" size="sm">
                       Save error status
-                    </button>
+                    </Button>
                   </form>
                 ) : null}
                 <form action={unresolveWeekAction}>
                   <input type="hidden" name="week_key" value={week.key} />
-                  <button className="rounded-lg border border-red-400/25 px-3 py-1.5 text-xs font-semibold text-red-300/80 transition hover:bg-red-400/10">
+                  <Button type="submit" variant="danger" size="sm">
                     Undo (recorded by mistake)
-                  </button>
+                  </Button>
                 </form>
               </div>
             ) : null}
@@ -442,12 +443,9 @@ export default async function CcrsCommandCenterPage({
                 placeholder="Optional note (e.g. re-uploaded Sale.csv after fix)"
                 className="mt-2 w-full rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-xs text-white/80"
               />
-              <button
-                className="mt-3 rounded-lg bg-[var(--admin-accent)] px-4 py-2 text-xs font-bold text-black transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
-                disabled={!submittable || nothingToReport}
-              >
+              <Button type="submit" variant="confirm" size="sm" className="mt-3" disabled={!submittable || nothingToReport}>
                 Record as SUBMITTED
-              </button>
+              </Button>
               {!submittable ? (
                 <p className="mt-2 text-[11px] text-red-300/80">
                   Blocked: fix the validation errors above first — you shouldn&apos;t have been able
@@ -474,12 +472,9 @@ export default async function CcrsCommandCenterPage({
                 placeholder="Optional note (e.g. store closed, no deliveries)"
                 className="mt-2 w-full rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-xs text-white/80"
               />
-              <button
-                className="mt-3 rounded-lg border border-white/20 px-4 py-2 text-xs font-bold text-white/80 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40"
-                disabled={totalRecords > 0}
-              >
+              <Button type="submit" variant="neutral" size="sm" className="mt-3" disabled={totalRecords > 0}>
                 Record as NOTHING TO REPORT
-              </button>
+              </Button>
               {totalRecords > 0 ? (
                 <p className="mt-2 text-[11px] text-amber-300/80">
                   Blocked: this week has {totalRecords.toLocaleString()} record(s) — it must be

@@ -13,6 +13,7 @@
  * the acquisition-cost floor (WAC 314-55-155(5)(g)) — enforced server-side by
  * the pure loyalty-sale-core. Degrades gracefully before migration 0116.
  */
+import { Button, CHIP_ACTION } from "@/components/admin/ui";
 import { getOrderLoyaltyContext, previewTierSavings } from "@/lib/loyalty/loyalty-sale-store";
 import { listCustomers } from "@/lib/customers/store";
 import { getAccountByCustomer } from "@/lib/loyalty/loyalty-store";
@@ -74,11 +75,11 @@ export async function LoyaltySaleSection({
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-sm font-black uppercase tracking-[0.14em] text-white/70">Loyalty</h2>
         {ctx.kind === "code" ? (
-          <span className="rounded-full border border-[#ffd700]/50 bg-[#ffd700]/10 px-2.5 py-0.5 text-[0.65rem] font-black uppercase tracking-[0.1em] text-[#ffd700]">
+          <span className="rounded-full border border-[var(--admin-gold)]/50 bg-[var(--admin-gold)]/10 px-2.5 py-0.5 text-[0.65rem] font-black uppercase tracking-[0.1em] text-[var(--admin-gold)]">
             Code applied
           </span>
         ) : ctx.kind === "tier" ? (
-          <span className="rounded-full border border-[#7ed957]/50 bg-[#7ed957]/10 px-2.5 py-0.5 text-[0.65rem] font-black uppercase tracking-[0.1em] text-[#7ed957]">
+          <span className="rounded-full border border-[var(--admin-accent)]/50 bg-[var(--admin-accent)]/10 px-2.5 py-0.5 text-[0.65rem] font-black uppercase tracking-[0.1em] text-[var(--admin-accent)]">
             Member pricing
           </span>
         ) : (
@@ -89,7 +90,7 @@ export async function LoyaltySaleSection({
       </div>
 
       {!ctx.migrationApplied ? (
-        <p className="mt-3 rounded-lg border border-[#ffd700]/40 bg-[#ffd700]/10 p-3 text-xs leading-5 text-[#ffd700]">
+        <p className="mt-3 rounded-lg border border-[var(--admin-gold)]/40 bg-[var(--admin-gold)]/10 p-3 text-xs leading-5 text-[var(--admin-gold)]">
           Migration 0116 (loyalty at sale) has not been applied yet — run it in the Supabase SQL
           editor to enable loyalty at the register.
         </p>
@@ -126,12 +127,9 @@ export async function LoyaltySaleSection({
           {!isClosed ? (
             <form action={removeLoyaltyAction}>
               <input type="hidden" name="id" value={order.id} />
-              <button
-                type="submit"
-                className="rounded-lg border border-white/15 bg-white/5 px-3.5 py-2 text-xs font-bold text-white hover:bg-white/10"
-              >
+              <Button type="submit" variant="neutral" size="sm">
                 Remove loyalty discount
-              </button>
+              </Button>
               <p className="mt-1.5 text-[0.68rem] leading-4 text-white/35">
                 Prices are restored{ctx.kind === "code" ? " and the code goes back to the customer" : ""}.
               </p>
@@ -153,14 +151,11 @@ export async function LoyaltySaleSection({
                 name="code"
                 placeholder="GW-XXXX-XXXX"
                 autoComplete="off"
-                className="w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 font-mono text-sm text-white placeholder-white/25 focus:border-[#7ed957]/60 focus:outline-none"
+                className="w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 font-mono text-sm text-white placeholder-white/25 focus:border-[var(--admin-accent)]/60 focus:outline-none"
               />
-              <button
-                type="submit"
-                className="shrink-0 rounded-lg border border-[#7ed957]/50 bg-[#7ed957]/10 px-3.5 py-2 text-xs font-bold text-[#7ed957] hover:bg-[#7ed957]/20"
-              >
+              <Button type="submit" variant="confirm" size="sm" className="shrink-0">
                 Apply code
-              </button>
+              </Button>
             </div>
             <p className="text-[0.68rem] leading-4 text-white/35">
               The code&apos;s full value comes off this order (spread across items, never below the
@@ -181,12 +176,9 @@ export async function LoyaltySaleSection({
                 <form action={applyLoyaltyTierAction} className="mt-2">
                   <input type="hidden" name="id" value={order.id} />
                   <input type="hidden" name="customerId" value={ctx.member.customerId} />
-                  <button
-                    type="submit"
-                    className="rounded-lg border border-[#7ed957]/50 bg-[#7ed957]/10 px-3.5 py-2 text-xs font-bold text-[#7ed957] hover:bg-[#7ed957]/20"
-                  >
+                  <Button type="submit" variant="confirm" size="sm">
                     Apply {memberPreview.tierName} pricing (−{money(memberPreview.additionalSavingsMinorUnits)})
-                  </button>
+                  </Button>
                 </form>
               ) : ctx.member.tierDiscountBps > 0 ? (
                 <p className="mt-2 text-xs text-white/40">
@@ -206,14 +198,11 @@ export async function LoyaltySaleSection({
                   defaultValue={searchQuery}
                   placeholder="Name, phone, or email…"
                   autoComplete="off"
-                  className="w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white placeholder-white/25 focus:border-[#7ed957]/60 focus:outline-none"
+                  className="w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white placeholder-white/25 focus:border-[var(--admin-accent)]/60 focus:outline-none"
                 />
-                <button
-                  type="submit"
-                  className="shrink-0 rounded-lg border border-white/15 bg-white/5 px-3.5 py-2 text-xs font-bold text-white hover:bg-white/10"
-                >
+                <Button type="submit" variant="neutral" size="sm" className="shrink-0">
                   Search
-                </button>
+                </Button>
               </form>
               {searchQuery.trim() ? (
                 results.length === 0 ? (
@@ -236,10 +225,7 @@ export async function LoyaltySaleSection({
                           <form action={applyLoyaltyTierAction}>
                             <input type="hidden" name="id" value={order.id} />
                             <input type="hidden" name="customerId" value={r.id} />
-                            <button
-                              type="submit"
-                              className="shrink-0 rounded-lg border border-[#7ed957]/50 bg-[#7ed957]/10 px-3 py-1.5 text-xs font-bold text-[#7ed957] hover:bg-[#7ed957]/20"
-                            >
+                            <button type="submit" className={`shrink-0 ${CHIP_ACTION}`}>
                               Apply member pricing
                             </button>
                           </form>

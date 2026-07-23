@@ -19,6 +19,7 @@ import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs } from "@/components/admin/ux";
+import { Button, CHIP_ACTION } from "@/components/admin/ui";
 import { listKbFaqsFull, type KbFaqRow } from "@/lib/ai/kb/store";
 import { KbFlash } from "../KbFlash";
 import { upsertKbFaqAction, toggleKbFaqAction } from "../actions";
@@ -88,12 +89,9 @@ function FaqForm({ faq }: { faq?: KbFaqRow }) {
           <input name="sources" defaultValue={faq?.sources?.join(", ") ?? ""} placeholder="owner-confirmed" className={inputClass} />
         </div>
       </div>
-      <button
-        type="submit"
-        className="rounded-[var(--admin-radius)] bg-[var(--admin-accent)] px-4 py-2 text-sm font-semibold text-white"
-      >
+      <Button type="submit" variant="confirm" size="sm">
         {isEdit ? "Save changes" : "Add FAQ"}
-      </button>
+      </Button>
     </form>
   );
 }
@@ -170,7 +168,7 @@ export default async function KbFaqsPage({
                   <form action={toggleKbFaqAction}>
                     <input type="hidden" name="slug" value={q.slug} />
                     <input type="hidden" name="active" value={(!q.active).toString()} />
-                    <button type="submit" className="text-xs font-semibold text-[var(--admin-accent)] underline">
+                    <button type="submit" className={CHIP_ACTION}>
                       {q.active ? "Hide" : "Show"}
                     </button>
                   </form>

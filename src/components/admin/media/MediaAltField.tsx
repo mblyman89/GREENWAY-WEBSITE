@@ -7,6 +7,7 @@
  * updateMediaMetaAction form this field lives inside.
  */
 import { useState, useTransition } from "react";
+import { Button } from "@/components/admin/ui";
 import { useToast } from "@/components/admin/ux";
 import { suggestMediaAltAction } from "@/app/admin/media/actions";
 
@@ -51,14 +52,9 @@ export function MediaAltField({
       <span className="flex items-center justify-between">
         <span className={labelClassName}>Alt text (for accessibility &amp; SEO)</span>
         {aiEnabled && (
-          <button
-            type="button"
-            onClick={onSuggest}
-            disabled={pending}
-            className="rounded-md border border-[#ffd700]/40 px-2 py-0.5 text-[0.7rem] font-bold text-[#ffd700] transition hover:bg-[#ffd700]/10 disabled:opacity-50"
-          >
+          <Button type="button" onClick={onSuggest} disabled={pending} variant="special" size="sm">
             {pending ? "…thinking" : "✨ Suggest alt text"}
-          </button>
+          </Button>
         )}
       </span>
       <input

@@ -5,6 +5,7 @@ import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { ALL_ROLES, ROLE_LABELS, ROLE_DESCRIPTIONS, ROLE_RANK } from "@/lib/auth/roles";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
+import { Button, CHIP_NEUTRAL } from "@/components/admin/ui";
 import { PermissionMatrix } from "@/components/admin/users/PermissionMatrix";
 import type { StaffProfile, StaffRole } from "@/lib/supabase/types";
 import { updateUserRole, setUserActive, inviteUser } from "./actions";
@@ -56,7 +57,7 @@ const ACCESS_LOG_LABELS: Record<string, { label: string; tone: "green" | "orange
 };
 
 const TONE_CLASS: Record<"green" | "orange" | "red", string> = {
-  green: "bg-[#7ed957]/10 text-[#7ed957]",
+  green: "bg-[var(--admin-accent)]/10 text-[var(--admin-accent)]",
   orange: "bg-[var(--admin-orange)]/10 text-[var(--admin-orange)]",
   red: "bg-red-500/10 text-red-300",
 };
@@ -108,7 +109,7 @@ export default async function UsersPage({
           </div>
         )}
         {sp.ok && (
-          <div className="rounded-lg border border-[#7ed957]/40 bg-[#7ed957]/10 px-4 py-3 text-sm text-[#7ed957]">
+          <div className="rounded-lg border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-4 py-3 text-sm text-[var(--admin-accent)]">
             {decodeURIComponent(sp.ok)}
           </div>
         )}
@@ -126,12 +127,12 @@ export default async function UsersPage({
               type="email"
               required
               placeholder="employee@greenwaymarijuana.com"
-              className="flex-1 rounded-lg border border-white/15 bg-black px-3 py-2.5 text-sm text-white outline-none focus:border-[#7ed957]"
+              className="flex-1 rounded-lg border border-white/15 bg-black px-3 py-2.5 text-sm text-white outline-none focus:border-[var(--admin-accent)]"
             />
             <select
               name="role"
               defaultValue="staff"
-              className="rounded-lg border border-white/15 bg-black px-3 py-2.5 text-sm text-white outline-none focus:border-[#7ed957]"
+              className="rounded-lg border border-white/15 bg-black px-3 py-2.5 text-sm text-white outline-none focus:border-[var(--admin-accent)]"
             >
               {ALL_ROLES.filter((r) => ROLE_RANK[r] <= myRank).map((r) => (
                 <option key={r} value={r}>
@@ -139,12 +140,9 @@ export default async function UsersPage({
                 </option>
               ))}
             </select>
-            <button
-              type="submit"
-              className="rounded-full bg-[#ff7f00] px-5 py-2.5 text-sm font-bold text-black transition hover:brightness-110"
-            >
+            <Button type="submit" variant="primary">
               Send invite
-            </button>
+            </Button>
           </form>
         </section>
 
@@ -179,11 +177,11 @@ export default async function UsersPage({
                     <p className="font-medium text-white">
                       {u.full_name || u.email}
                       {isSelf && (
-                        <span className="ml-2 text-xs text-[#7ed957]">(you)</span>
+                        <span className="ml-2 text-xs text-[var(--admin-accent)]">(you)</span>
                       )}
                       {isLastOwner && (
                         <span
-                          className="ml-2 rounded bg-[#7ed957]/10 px-1.5 py-0.5 text-[10px] uppercase text-[#7ed957]"
+                          className="ml-2 rounded bg-[var(--admin-accent)]/10 px-1.5 py-0.5 text-[10px] uppercase text-[var(--admin-accent)]"
                           title="The last active owner can never be demoted or deactivated."
                         >
                           Protected
@@ -219,7 +217,7 @@ export default async function UsersPage({
                       type="submit"
                       disabled={roleLocked}
                       title={roleLocked ? lockReason : undefined}
-                      className="admin-focus rounded-[var(--admin-radius-sm)] border border-[var(--admin-border-strong)] px-3 py-1.5 text-xs text-[var(--admin-text-muted)] transition hover:border-[var(--admin-accent)] hover:text-[var(--admin-text)] disabled:opacity-40"
+                      className={`${CHIP_NEUTRAL} disabled:opacity-40`}
                     >
                       Save
                     </button>
@@ -232,7 +230,7 @@ export default async function UsersPage({
                       type="submit"
                       disabled={activeLocked}
                       title={activeLocked ? lockReason : undefined}
-                      className="rounded-[var(--admin-radius-sm)] px-3 py-1.5 text-xs text-[var(--admin-orange)] hover:underline disabled:opacity-40"
+                      className={`${CHIP_NEUTRAL} disabled:opacity-40`}
                     >
                       {u.active ? "Deactivate" : "Reactivate"}
                     </button>
@@ -260,7 +258,7 @@ export default async function UsersPage({
             </li>
             <li>
               <strong className="text-white/80">Close out employment there:</strong> open{" "}
-              <Link href="/admin/staffing/employees" className="text-[#7ed957] underline">
+              <Link href="/admin/staffing/employees" className="text-[var(--admin-accent)] underline">
                 their employee file
               </Link>{" "}
               and run the termination + offboarding checklist — it clears their time-clock PIN,
@@ -274,7 +272,7 @@ export default async function UsersPage({
         <section className="rounded-xl border border-white/10 bg-[#0a0a0a] p-5">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-sm font-semibold text-white">Recent access changes</h2>
-            <Link href="/admin/audit" className="text-xs text-[#7ed957] underline">
+            <Link href="/admin/audit" className="text-xs text-[var(--admin-accent)] underline">
               Full audit log →
             </Link>
           </div>
@@ -335,7 +333,7 @@ export default async function UsersPage({
               .sort((a, b) => ROLE_RANK[b] - ROLE_RANK[a])
               .map((r) => (
                 <div key={r} className="flex items-start gap-3 rounded-lg border border-white/10 p-3">
-                  <span className="mt-0.5 inline-flex h-6 shrink-0 items-center rounded-full bg-[#7ed957]/10 px-2 text-[10px] font-bold uppercase tracking-wide text-[#7ed957]">
+                  <span className="mt-0.5 inline-flex h-6 shrink-0 items-center rounded-full bg-[var(--admin-accent)]/10 px-2 text-[10px] font-bold uppercase tracking-wide text-[var(--admin-accent)]">
                     {ROLE_LABELS[r]}
                   </span>
                   <p className="text-xs leading-relaxed text-white/55">{ROLE_DESCRIPTIONS[r]}</p>

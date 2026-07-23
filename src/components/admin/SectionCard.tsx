@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Button } from "@/components/admin/ui";
 import { ContentImageField, type MediaChoice } from "./ContentImageField";
 import { SECTION_BANNER_SPEC } from "@/lib/cms/image-spec-core";
 import { controlClassName, labelClassName } from "./ui";
@@ -138,7 +139,7 @@ export function SectionCard({
       {/* Header */}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#7ed957]/15 text-sm font-bold text-[#7ed957]">
+          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--admin-accent)]/15 text-sm font-bold text-[var(--admin-accent)]">
             {index + 1}
           </span>
           <span className="text-sm font-semibold text-white">
@@ -149,15 +150,15 @@ export function SectionCard({
               🔒 locked
             </span>
           ) : unsaved ? (
-            <span className="rounded-full bg-[#ffd700]/15 px-2 py-0.5 text-[0.65rem] font-semibold text-[#ffd700]">
+            <span className="rounded-full bg-[var(--admin-gold)]/15 px-2 py-0.5 text-[0.65rem] font-semibold text-[var(--admin-gold)]">
               ● unsaved edits
             </span>
           ) : section.dirty ? (
-            <span className="rounded-full bg-[#ff7f00]/15 px-2 py-0.5 text-[0.65rem] font-semibold text-[#ff7f00]">
+            <span className="rounded-full bg-[var(--admin-orange)]/15 px-2 py-0.5 text-[0.65rem] font-semibold text-[var(--admin-orange)]">
               unpublished draft
             </span>
           ) : (
-            <span className="rounded-full bg-[#7ed957]/12 px-2 py-0.5 text-[0.65rem] font-semibold text-[#7ed957]">
+            <span className="rounded-full bg-[var(--admin-accent)]/12 px-2 py-0.5 text-[0.65rem] font-semibold text-[var(--admin-accent)]">
               live
             </span>
           )}
@@ -174,27 +175,17 @@ export function SectionCard({
               <input type="hidden" name="page_slug" value={pageSlug} />
               <input type="hidden" name="section_id" value={section.id} />
               <input type="hidden" name="direction" value="up" />
-              <button
-                type="submit"
-                disabled={index === 0}
-                aria-label="Move up"
-                className="rounded-md border border-white/15 px-2 py-1 text-xs text-white/70 transition hover:bg-white/5 disabled:opacity-30"
-              >
+              <Button type="submit" disabled={index === 0} aria-label="Move up" variant="neutral" size="sm">
                 ↑
-              </button>
+              </Button>
             </form>
             <form action={moveAction}>
               <input type="hidden" name="page_slug" value={pageSlug} />
               <input type="hidden" name="section_id" value={section.id} />
               <input type="hidden" name="direction" value="down" />
-              <button
-                type="submit"
-                disabled={index === total - 1}
-                aria-label="Move down"
-                className="rounded-md border border-white/15 px-2 py-1 text-xs text-white/70 transition hover:bg-white/5 disabled:opacity-30"
-              >
+              <Button type="submit" disabled={index === total - 1} aria-label="Move down" variant="neutral" size="sm">
                 ↓
-              </button>
+              </Button>
             </form>
             <form
               action={deleteAction}
@@ -210,12 +201,9 @@ export function SectionCard({
             >
               <input type="hidden" name="page_slug" value={pageSlug} />
               <input type="hidden" name="section_id" value={section.id} />
-              <button
-                type="submit"
-                className="rounded-md border border-red-500/30 px-2 py-1 text-xs font-medium text-red-300 transition hover:bg-red-500/10"
-              >
+              <Button type="submit" variant="danger" size="sm">
                 Delete
-              </button>
+              </Button>
             </form>
           </div>
         ) : null}
@@ -346,14 +334,9 @@ export function SectionCard({
                 <span className="text-[0.7rem] font-semibold uppercase tracking-wide text-white/60">
                   Buttons ({buttons.length}/{MAX_BUTTONS})
                 </span>
-                <button
-                  type="button"
-                  onClick={addButton}
-                  disabled={buttons.length >= MAX_BUTTONS}
-                  className="rounded-md border border-[#7ed957]/40 px-2.5 py-1 text-xs font-semibold text-[#7ed957] transition hover:bg-[#7ed957]/10 disabled:cursor-not-allowed disabled:opacity-40"
-                >
+                <Button type="button" onClick={addButton} disabled={buttons.length >= MAX_BUTTONS} variant="confirm" size="sm">
                   + Add button
-                </button>
+                </Button>
               </div>
               {buttons.length === 0 ? (
                 <p className="text-xs text-white/40">
@@ -403,18 +386,13 @@ export function SectionCard({
                           onChange={(e) =>
                             patchButton(b._id, { enabled: e.target.checked })
                           }
-                          className="h-4 w-4 accent-[#7ed957]"
+                          className="h-4 w-4 accent-[var(--admin-accent)]"
                         />
                         Show
                       </label>
-                      <button
-                        type="button"
-                        onClick={() => removeButton(b._id)}
-                        aria-label="Remove button"
-                        className="rounded-md border border-red-500/30 px-2 py-1 text-xs font-medium text-red-300 transition hover:bg-red-500/10"
-                      >
+                      <Button type="button" onClick={() => removeButton(b._id)} aria-label="Remove button" variant="danger" size="sm">
                         ✕
-                      </button>
+                      </Button>
                     </div>
                   ))}
                 </div>
@@ -429,20 +407,13 @@ export function SectionCard({
                   name="draft_enabled"
                   checked={enabled}
                   onChange={(e) => setEnabled(e.target.checked)}
-                  className="h-4 w-4 accent-[#7ed957]"
+                  className="h-4 w-4 accent-[var(--admin-accent)]"
                 />
                 Show this section on the page
               </label>
-              <button
-                type="submit"
-                className={
-                  unsaved
-                    ? "rounded-lg bg-[#ffd700] px-4 py-2 text-sm font-semibold text-black transition hover:bg-[#ffe34d]"
-                    : "rounded-lg border border-white/15 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/5"
-                }
-              >
+              <Button type="submit" variant={unsaved ? "save" : "neutral"}>
                 {unsaved ? "Save draft ●" : "Save draft"}
-              </button>
+              </Button>
             </div>
           </form>
 
@@ -458,13 +429,9 @@ export function SectionCard({
                     ? "This section has changes that aren't live yet."
                     : "This section is live and matches what visitors see."}
               </p>
-              <button
-                type="submit"
-                disabled={unsaved}
-                className="rounded-lg bg-[#7ed957] px-4 py-2 text-sm font-semibold text-black transition hover:bg-[#94e570] disabled:cursor-not-allowed disabled:opacity-40"
-              >
+              <Button type="submit" disabled={unsaved} variant="confirm">
                 Publish to page
-              </button>
+              </Button>
             </div>
           </form>
         </>

@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { Button } from "@/components/admin/ui";
 import { PromotionForm } from "@/components/admin/promotions/PromotionForm";
 import {
   getPromotion,
@@ -22,11 +23,15 @@ import { formatMoneyMinor } from "@/lib/promotions/discount-engine-core";
 
 export const dynamic = "force-dynamic";
 
-const NEXT_STATUS: { label: string; value: PostStatus; style: string }[] = [
-  { label: "Save as draft", value: "draft", style: "border-white/20 text-white/70" },
-  { label: "Schedule", value: "scheduled", style: "border-[#ffd700]/40 text-[#ffd700]" },
-  { label: "Publish (go live)", value: "published", style: "border-[#7ed957]/50 text-[#7ed957]" },
-  { label: "Archive", value: "archived", style: "border-white/10 text-white/40" },
+const NEXT_STATUS: {
+  label: string;
+  value: PostStatus;
+  variant: "neutral" | "save" | "confirm";
+}[] = [
+  { label: "Save as draft", value: "draft", variant: "neutral" },
+  { label: "Schedule", value: "scheduled", variant: "save" },
+  { label: "Publish (go live)", value: "published", variant: "confirm" },
+  { label: "Archive", value: "archived", variant: "neutral" },
 ];
 
 export default async function EditPromotionPage({
@@ -69,12 +74,12 @@ export default async function EditPromotionPage({
           </div>
         )}
         {saved && (
-          <div className="mb-4 rounded-lg border border-[#7ed957]/40 bg-[#7ed957]/10 px-4 py-2 text-sm text-[#7ed957]">
+          <div className="mb-4 rounded-lg border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-4 py-2 text-sm text-[var(--admin-accent)]">
             Saved.
           </div>
         )}
         {status && (
-          <div className="mb-4 rounded-lg border border-[#7ed957]/40 bg-[#7ed957]/10 px-4 py-2 text-sm text-[#7ed957]">
+          <div className="mb-4 rounded-lg border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-4 py-2 text-sm text-[var(--admin-accent)]">
             Status set to {status}.
           </div>
         )}
@@ -101,14 +106,16 @@ export default async function EditPromotionPage({
                   <form key={s.value} action={setPromotionStatusAction}>
                     <input type="hidden" name="id" value={promotion.id} />
                     <input type="hidden" name="status" value={s.value} />
-                    <button
+                    <Button
                       type="submit"
                       disabled={promotion.status === s.value}
-                      className={`w-full rounded-lg border px-3 py-2 text-sm font-medium transition hover:bg-white/5 disabled:opacity-40 ${s.style}`}
+                      variant={s.variant}
+                      size="sm"
+                      fullWidth
                     >
                       {s.label}
                       {promotion.status === s.value ? " (current)" : ""}
-                    </button>
+                    </Button>
                   </form>
                 ))}
               </div>
@@ -124,12 +131,12 @@ export default async function EditPromotionPage({
               className={`rounded-xl border p-4 ${
                 guard.blocked
                   ? "border-[#ff6b6b]/40 bg-[#ff6b6b]/10"
-                  : "border-[#7ed957]/25 bg-[#7ed957]/[0.05]"
+                  : "border-[var(--admin-accent)]/25 bg-[var(--admin-accent)]/[0.05]"
               }`}
             >
               <h3
                 className={`text-sm font-semibold uppercase tracking-wide ${
-                  guard.blocked ? "text-[#ff6b6b]" : "text-[#7ed957]"
+                  guard.blocked ? "text-[#ff6b6b]" : "text-[var(--admin-accent)]"
                 }`}
               >
                 🛡 CCRS cost-floor check
@@ -165,7 +172,7 @@ export default async function EditPromotionPage({
                 </p>
               )}
               {(guardCostUnknown.length > 0 || guardRegularBelow.length > 0) && (
-                <p className="mt-2 text-xs text-[#ffd700]/90">
+                <p className="mt-2 text-xs text-[var(--admin-gold)]/90">
                   {guardCostUnknown.length > 0 && (
                     <>
                       {guardCostUnknown.length} product
@@ -240,7 +247,7 @@ export default async function EditPromotionPage({
                       <span className="flex shrink-0 items-baseline gap-1.5">
                         {d.showsPrice ? (
                           <>
-                            <span className="text-[#7ed957]">{formatMinorCurrency(d.saleMinorUnits)}</span>
+                            <span className="text-[var(--admin-accent)]">{formatMinorCurrency(d.saleMinorUnits)}</span>
                             <span className="text-white/30 line-through">{formatMinorCurrency(p.priceMinorUnits)}</span>
                           </>
                         ) : (
@@ -262,12 +269,9 @@ export default async function EditPromotionPage({
               </h3>
               <form action={deletePromotionAction} className="mt-2">
                 <input type="hidden" name="id" value={promotion.id} />
-                <button
-                  type="submit"
-                  className="w-full rounded-lg border border-red-500/40 px-3 py-2 text-sm text-red-300 transition hover:bg-red-500/10"
-                >
+                <Button type="submit" variant="danger" size="sm" fullWidth>
                   Delete promotion
-                </button>
+                </Button>
               </form>
             </div>
           </aside>

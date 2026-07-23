@@ -7,6 +7,7 @@
  * the back office. Read-only / advisory.
  */
 import { useState, useTransition } from "react";
+import { Button } from "@/components/admin/ui";
 import { useToast } from "@/components/admin/ux";
 import {
   generateMissingCostInsightsAction,
@@ -44,7 +45,7 @@ export function MissingCostInsightsPanel({
   }
 
   return (
-    <div className="mt-4 rounded-xl border border-[#ffd700]/25 bg-[#ffd700]/[0.04] p-4">
+    <div className="mt-4 rounded-xl border border-[var(--admin-gold)]/25 bg-[var(--admin-gold)]/[0.04] p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h3 className="flex items-center gap-2 text-sm font-semibold text-white">
@@ -56,14 +57,16 @@ export function MissingCostInsightsPanel({
               : "No products are missing cost in this window."}
           </p>
         </div>
-        <button
+        <Button
           type="button"
           onClick={run}
           disabled={!aiEnabled || pending || count === 0}
-          className="shrink-0 rounded-lg border border-[#ffd700]/40 bg-[#ffd700]/10 px-3.5 py-2 text-xs font-bold text-[#ffd700] transition hover:bg-[#ffd700]/20 disabled:cursor-not-allowed disabled:opacity-40"
+          variant="special"
+          size="sm"
+          className="shrink-0"
         >
           {pending ? "Diagnosing…" : "Diagnose"}
-        </button>
+        </Button>
       </div>
 
       {!aiEnabled ? (
@@ -84,8 +87,8 @@ export function MissingCostInsightsPanel({
                   <div className="text-sm font-semibold text-white">{c.cause}</div>
                   {c.impact ? <div className="mt-1 text-xs text-white/55">{c.impact}</div> : null}
                   {c.fix ? (
-                    <div className="mt-1.5 flex gap-2 text-sm text-[#7ed957]">
-                      <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-[#7ed957]" />
+                    <div className="mt-1.5 flex gap-2 text-sm text-[var(--admin-accent)]">
+                      <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--admin-accent)]" />
                       <span>{c.fix}</span>
                     </div>
                   ) : null}
@@ -100,7 +103,7 @@ export function MissingCostInsightsPanel({
               <ol className="mt-1.5 space-y-1.5">
                 {insights.steps.map((s, i) => (
                   <li key={i} className="flex gap-2 text-sm text-white/80">
-                    <span className="font-bold text-[#7ed957]">{i + 1}.</span>
+                    <span className="font-bold text-[var(--admin-accent)]">{i + 1}.</span>
                     <span>{s}</span>
                   </li>
                 ))}

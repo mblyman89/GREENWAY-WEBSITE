@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs } from "@/components/admin/ux";
+import { Button } from "@/components/admin/ui";
 import { getMedia, whereUsed, publicUrlForKey } from "@/lib/media/store";
 import { isAiConfigured } from "@/lib/ai/provider";
 import { MediaMetaEditor } from "@/components/admin/media/MediaMetaEditor";
@@ -90,7 +91,7 @@ export default async function MediaDetailPage({
         action={
           <Link
             href={backHref}
-            className="rounded-full border border-white/15 px-4 py-2 text-sm text-white/80 hover:border-[#7ed957] hover:text-white"
+            className="rounded-full border border-white/15 px-4 py-2 text-sm text-white/80 hover:border-[var(--admin-accent)] hover:text-white"
           >
             ← Back to library
           </Link>
@@ -99,10 +100,10 @@ export default async function MediaDetailPage({
 
       <div className="space-y-6 px-5 py-6 sm:px-8">
         {saved && (
-          <div className="rounded-lg border border-[#7ed957]/40 bg-[#7ed957]/10 px-4 py-2 text-sm text-[#7ed957]">{note || "Saved."}</div>
+          <div className="rounded-lg border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-4 py-2 text-sm text-[var(--admin-accent)]">{note || "Saved."}</div>
         )}
         {error && (
-          <div className="rounded-lg border border-[#ff7f00]/40 bg-[#ff7f00]/10 px-4 py-2 text-sm text-[#ff7f00]">{error}</div>
+          <div className="rounded-lg border border-[var(--admin-orange)]/40 bg-[var(--admin-orange)]/10 px-4 py-2 text-sm text-[var(--admin-orange)]">{error}</div>
         )}
 
         <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
@@ -127,7 +128,7 @@ export default async function MediaDetailPage({
               <div className="flex justify-between"><dt>Status</dt><dd className="font-semibold text-white/80">{asset.status}</dd></div>
               {url && (
                 <div className="pt-2">
-                  <a href={url} target="_blank" rel="noreferrer" className="text-[#7ed957] hover:underline">Open public URL ↗</a>
+                  <a href={url} target="_blank" rel="noreferrer" className="text-[var(--admin-accent)] hover:underline">Open public URL ↗</a>
                 </div>
               )}
             </dl>
@@ -137,9 +138,9 @@ export default async function MediaDetailPage({
               <input type="hidden" name="id" value={asset.id} />
               <input type="hidden" name="returnTo" value={selfHref} />
               <span className="w-full text-xs font-medium text-white/50">Visibility</span>
-              <button name="status" value="published" className="rounded-full bg-[#7ed957] px-3 py-1.5 text-xs font-semibold text-black hover:bg-[#6cc746]">Publish</button>
-              <button name="status" value="draft" className="rounded-full border border-white/20 px-3 py-1.5 text-xs font-semibold text-white/80 hover:border-white/40">Draft</button>
-              <button name="status" value="archived" className="rounded-full border border-white/20 px-3 py-1.5 text-xs font-semibold text-white/50 hover:border-white/40">Archive</button>
+              <Button type="submit" name="status" value="published" variant="confirm" size="sm">Publish</Button>
+              <Button type="submit" name="status" value="draft" variant="neutral" size="sm">Draft</Button>
+              <Button type="submit" name="status" value="archived" variant="neutral" size="sm">Archive</Button>
             </form>
           </div>
 
@@ -185,7 +186,7 @@ export default async function MediaDetailPage({
                       <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] uppercase text-white/60">{u.entity_type}</span>
                       <span className="text-white/50">{u.field_key ?? "—"}</span>
                       {u.entity_type === "vendor" && (
-                        <Link href={`/admin/vendors/${u.entity_id}`} className="text-[#7ed957] hover:underline">view vendor →</Link>
+                        <Link href={`/admin/vendors/${u.entity_id}`} className="text-[var(--admin-accent)] hover:underline">view vendor →</Link>
                       )}
                     </li>
                   ))}
@@ -196,22 +197,18 @@ export default async function MediaDetailPage({
             </div>
 
             {/* Delete */}
-            <form action={deleteMediaAction} className="rounded-xl border border-[#ff7f00]/20 bg-[#ff7f00]/5 p-5">
+            <form action={deleteMediaAction} className="rounded-xl border border-[var(--admin-orange)]/20 bg-[var(--admin-orange)]/5 p-5">
               <input type="hidden" name="id" value={asset.id} />
               <input type="hidden" name="returnTo" value={backHref} />
-              <p className="text-sm font-semibold text-[#ff7f00]">Danger zone</p>
+              <p className="text-sm font-semibold text-[var(--admin-orange)]">Danger zone</p>
               <p className="mt-1 text-xs text-white/50">
                 {inUse
                   ? "This asset is in use and cannot be deleted. Replace it on the linked entity first."
                   : "Permanently remove this asset and its file. This cannot be undone."}
               </p>
-              <button
-                type="submit"
-                disabled={inUse}
-                className="mt-3 rounded-full border border-[#ff7f00]/50 px-4 py-2 text-sm font-semibold text-[#ff7f00] hover:bg-[#ff7f00]/10 disabled:cursor-not-allowed disabled:opacity-40"
-              >
+              <Button type="submit" disabled={inUse} variant="danger" className="mt-3">
                 Delete asset
-              </button>
+              </Button>
             </form>
           </div>
         </div>

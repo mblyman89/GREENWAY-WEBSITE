@@ -6,14 +6,12 @@
  * component, and the previous inline <script> approach required rendering a
  * nested <html> document which crashed the page (the "blank print page" bug).
  */
+import { Button } from "@/components/admin/ui";
+
 export function CardPrintButton() {
   return (
-    <button
-      type="button"
-      onClick={() => window.print()}
-      className="rounded-[var(--admin-radius)] bg-[var(--admin-accent)] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
-    >
+    <Button type="button" onClick={() => window.print()} variant="confirm" size="sm">
       🖨 Print this card
-    </button>
+    </Button>
   );
 }

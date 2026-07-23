@@ -7,6 +7,7 @@
  * steps (staffing/ordering/promotions). Read-only / advisory.
  */
 import { useState, useTransition } from "react";
+import { Button } from "@/components/admin/ui";
 import { useToast } from "@/components/admin/ux";
 import {
   generateForecastInsightsAction,
@@ -16,8 +17,8 @@ import type { ForecastInsights } from "@/lib/reports/forecast-ai";
 
 function BulletList({ title, items, tone }: { title: string; items: string[]; tone: "good" | "warn" | "action" }) {
   if (items.length === 0) return null;
-  const color = tone === "good" ? "text-[#7ed957]" : tone === "warn" ? "text-[#ffd700]" : "text-white";
-  const dot = tone === "good" ? "bg-[#7ed957]" : tone === "warn" ? "bg-[#ffd700]" : "bg-[#8ab4f8]";
+  const color = tone === "good" ? "text-[var(--admin-accent)]" : tone === "warn" ? "text-[var(--admin-gold)]" : "text-white";
+  const dot = tone === "good" ? "bg-[var(--admin-accent)]" : tone === "warn" ? "bg-[var(--admin-gold)]" : "bg-[#8ab4f8]";
   return (
     <div>
       <div className={`text-xs font-semibold uppercase tracking-wide ${color}`}>{title}</div>
@@ -52,7 +53,7 @@ export function ForecastInsightsPanel({ horizon, aiEnabled }: { horizon: number;
   }
 
   return (
-    <section className="rounded-2xl border border-[#ffd700]/25 bg-[#ffd700]/[0.04] p-5">
+    <section className="rounded-2xl border border-[var(--admin-gold)]/25 bg-[var(--admin-gold)]/[0.04] p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="flex items-center gap-2 text-base font-semibold text-white">
@@ -64,19 +65,14 @@ export function ForecastInsightsPanel({ horizon, aiEnabled }: { horizon: number;
           </p>
         </div>
         {aiEnabled && (
-          <button
-            type="button"
-            onClick={run}
-            disabled={pending}
-            className="rounded-lg bg-[#ffd700] px-4 py-2 text-sm font-bold text-black transition hover:bg-[#e6c200] disabled:opacity-50"
-          >
+          <Button type="button" onClick={run} disabled={pending} variant="special" size="sm">
             {pending ? "Analyzing…" : insights ? "Regenerate" : "Generate outlook"}
-          </button>
+          </Button>
         )}
       </div>
 
       {!aiEnabled ? (
-        <p className="mt-3 text-xs text-[#ffd700]">
+        <p className="mt-3 text-xs text-[var(--admin-gold)]">
           The AI outlook turns on once an <code className="font-mono">AI_API_KEY</code> is set. The
           forecast charts and accuracy grade work without it.
         </p>

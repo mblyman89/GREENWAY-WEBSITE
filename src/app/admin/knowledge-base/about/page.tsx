@@ -20,6 +20,7 @@ import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs } from "@/components/admin/ux";
+import { Button, CHIP_ACTION } from "@/components/admin/ui";
 import { listKbStoreFactsFull, type KbStoreFactRow } from "@/lib/ai/kb/store";
 import { KbFlash } from "../KbFlash";
 import { upsertKbStoreFactAction, toggleKbStoreFactAction } from "../actions";
@@ -88,12 +89,9 @@ function FactForm({ fact }: { fact?: KbStoreFactRow }) {
           <input name="sources" defaultValue={fact?.sources?.join(", ") ?? ""} placeholder="owner-confirmed" className={inputClass} />
         </div>
       </div>
-      <button
-        type="submit"
-        className="rounded-[var(--admin-radius)] bg-[var(--admin-accent)] px-4 py-2 text-sm font-semibold text-white"
-      >
+      <Button type="submit" variant="confirm" size="sm">
         {isEdit ? "Save changes" : "Add fact"}
-      </button>
+      </Button>
     </form>
   );
 }
@@ -170,7 +168,7 @@ export default async function KbAboutPage({
                   <form action={toggleKbStoreFactAction}>
                     <input type="hidden" name="key" value={f.key} />
                     <input type="hidden" name="active" value={(!f.active).toString()} />
-                    <button type="submit" className="text-xs font-semibold text-[var(--admin-accent)] underline">
+                    <button type="submit" className={CHIP_ACTION}>
                       {f.active ? "Hide" : "Show"}
                     </button>
                   </form>

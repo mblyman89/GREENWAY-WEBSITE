@@ -6,6 +6,7 @@ import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { SopSheetLink } from "@/components/admin/SopSheetLink";
 import { StatCard } from "@/components/admin/StatCard";
 import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
+import { Button } from "@/components/admin/ui";
 import { listImports, listVersions, getPublishedVersion, listIntakeStagedVersions } from "@/lib/pos/menu-version";
 import { countTestData } from "@/lib/pos/import-service";
 import { formatDateTime } from "@/lib/pos/format";
@@ -17,15 +18,15 @@ export const dynamic = "force-dynamic";
 
 const IMPORT_STATUS_STYLE: Record<PosImportStatus, string> = {
   uploaded: "bg-white/10 text-white/70",
-  processing: "bg-[#ffd700]/15 text-[#ffd700]",
-  staged: "bg-[#ff7f00]/15 text-[#ff7f00]",
-  published: "bg-[#7ed957]/15 text-[#7ed957]",
+  processing: "bg-[var(--admin-gold)]/15 text-[var(--admin-gold)]",
+  staged: "bg-[var(--admin-orange)]/15 text-[var(--admin-orange)]",
+  published: "bg-[var(--admin-accent)]/15 text-[var(--admin-accent)]",
   failed: "bg-red-500/15 text-red-400",
 };
 
 const VERSION_STATUS_STYLE: Record<MenuVersionStatus, string> = {
-  staged: "bg-[#ff7f00]/15 text-[#ff7f00]",
-  published: "bg-[#7ed957]/15 text-[#7ed957]",
+  staged: "bg-[var(--admin-orange)]/15 text-[var(--admin-orange)]",
+  published: "bg-[var(--admin-accent)]/15 text-[var(--admin-accent)]",
   archived: "bg-white/10 text-white/50",
 };
 
@@ -43,7 +44,7 @@ export default async function MenuImportsPage({
       <div>
         <AdminPageHeader title="Menu Imports" subtitle="Upload POS exports and publish the live menu." />
         <div className="px-5 py-6 sm:px-8">
-          <div className="rounded-xl border border-[#ffd700]/30 bg-[#ffd700]/5 p-5 text-sm text-[#ffd700]">
+          <div className="rounded-xl border border-[var(--admin-gold)]/30 bg-[var(--admin-gold)]/5 p-5 text-sm text-[var(--admin-gold)]">
             Supabase service-role key is not configured yet. Add the env vars from
             <code className="mx-1 rounded bg-black/40 px-1">docs/BACK_OFFICE_SETUP.md</code>
             to enable menu imports.
@@ -106,9 +107,9 @@ export default async function MenuImportsPage({
 
       <div className="space-y-8 px-5 py-6 sm:px-8">
         {loadError && (
-          <div className="rounded-xl border border-[#ffd700]/30 bg-[#ffd700]/5 p-5 text-sm text-[#ffd700]">
+          <div className="rounded-xl border border-[var(--admin-gold)]/30 bg-[var(--admin-gold)]/5 p-5 text-sm text-[var(--admin-gold)]">
             <p className="font-semibold">We couldn&apos;t load your existing menu history just now.</p>
-            <p className="mt-1 text-[#ffd700]/80">
+            <p className="mt-1 text-[var(--admin-gold)]/80">
               This is usually a brief connection hiccup — your data is safe. You can still upload below,
               or reload the page in a moment. (Technical detail: {loadError})
             </p>
@@ -120,17 +121,17 @@ export default async function MenuImportsPage({
           </div>
         )}
         {params.published && (
-          <div className="rounded-lg border border-[#7ed957]/40 bg-[#7ed957]/10 px-4 py-3 text-sm text-[#7ed957]">
+          <div className="rounded-lg border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-4 py-3 text-sm text-[var(--admin-accent)]">
             Menu published. The public site now reflects this version.
           </div>
         )}
         {params.staged && (
-          <div className="rounded-lg border border-[#ff7f00]/40 bg-[#ff7f00]/10 px-4 py-3 text-sm text-[#ff7f00]">
+          <div className="rounded-lg border border-[var(--admin-orange)]/40 bg-[var(--admin-orange)]/10 px-4 py-3 text-sm text-[var(--admin-orange)]">
             Import staged for review. Check the diagnostics and diff below, then publish.
           </div>
         )}
         {params.cleaned && (
-          <div className="rounded-lg border border-[#7ed957]/40 bg-[#7ed957]/10 px-4 py-3 text-sm text-[#7ed957]">
+          <div className="rounded-lg border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-4 py-3 text-sm text-[var(--admin-accent)]">
             Clean Slate complete — {decodeURIComponent(params.cleaned)} Real data and your knowledge base were untouched.
           </div>
         )}
@@ -158,7 +159,7 @@ export default async function MenuImportsPage({
         </div>
 
         {/* Menu drafts auto-carried from receiving (intake-origin, no POS upload) */}
-        <section className="rounded-xl border border-[#7ed957]/25 bg-[#7ed957]/5 p-5">
+        <section className="rounded-xl border border-[var(--admin-accent)]/25 bg-[var(--admin-accent)]/5 p-5">
           <h2 className="text-sm font-semibold text-white">Menu drafts from receiving</h2>
           <p className="mt-1 text-xs text-white/50">
             When you approve a received product with a price, it&apos;s published to the live menu
@@ -192,17 +193,17 @@ export default async function MenuImportsPage({
                       </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 text-xs text-white/60">
-                      <span className="rounded bg-[#ff7f00]/15 px-2 py-0.5 text-[10px] font-semibold uppercase text-[#ff7f00]">
+                      <span className="rounded bg-[var(--admin-orange)]/15 px-2 py-0.5 text-[10px] font-semibold uppercase text-[var(--admin-orange)]">
                         staged
                       </span>
                       {v.item_count} items &middot; {v.variant_count} variants
                       {v.warning_count > 0 && (
-                        <span className="text-[#ffd700]">{v.warning_count} to fix</span>
+                        <span className="text-[var(--admin-gold)]">{v.warning_count} to fix</span>
                       )}
                     </div>
                     <Link
                       href={withBackParam(`/admin/menu-imports/version/${v.id}`, params)}
-                      className="admin-focus justify-self-end rounded-[var(--admin-radius-sm)] border border-[#7ed957]/50 bg-[#7ed957]/10 px-3 py-1.5 text-xs font-semibold text-[#7ed957] transition hover:bg-[#7ed957]/20"
+                      className="admin-focus justify-self-end rounded-[var(--admin-radius-sm)] border border-[var(--admin-accent)]/50 bg-[var(--admin-accent)]/10 px-3 py-1.5 text-xs font-semibold text-[var(--admin-accent)] transition hover:bg-[var(--admin-accent)]/20"
                     >
                       Review &amp; publish
                     </Link>
@@ -228,7 +229,7 @@ export default async function MenuImportsPage({
                 type="file"
                 accept=".xlsx,.xls"
                 required
-                className="rounded-lg border border-white/15 bg-black px-3 py-2.5 text-sm text-white/80 file:mr-3 file:rounded file:border-0 file:bg-[#7ed957] file:px-3 file:py-1.5 file:text-xs file:font-bold file:text-black"
+                className="rounded-lg border border-white/15 bg-black px-3 py-2.5 text-sm text-white/80 file:mr-3 file:rounded file:border-0 file:bg-[var(--admin-accent)] file:px-3 file:py-1.5 file:text-xs file:font-bold file:text-black"
               />
             </label>
             <label className="flex flex-col gap-1.5">
@@ -238,7 +239,7 @@ export default async function MenuImportsPage({
                 type="file"
                 accept=".xlsx,.xls"
                 required
-                className="rounded-lg border border-white/15 bg-black px-3 py-2.5 text-sm text-white/80 file:mr-3 file:rounded file:border-0 file:bg-[#7ed957] file:px-3 file:py-1.5 file:text-xs file:font-bold file:text-black"
+                className="rounded-lg border border-white/15 bg-black px-3 py-2.5 text-sm text-white/80 file:mr-3 file:rounded file:border-0 file:bg-[var(--admin-accent)] file:px-3 file:py-1.5 file:text-xs file:font-bold file:text-black"
               />
             </label>
             <div className="sm:col-span-2">
@@ -251,12 +252,9 @@ export default async function MenuImportsPage({
               </label>
             </div>
             <div className="sm:col-span-2">
-              <button
-                type="submit"
-                className="rounded-full bg-[#ff7f00] px-6 py-2.5 text-sm font-bold text-black transition hover:brightness-110"
-              >
+              <Button type="submit" variant="primary">
                 Upload &amp; stage for review
-              </button>
+              </Button>
             </div>
           </form>
         </section>
@@ -288,12 +286,9 @@ export default async function MenuImportsPage({
                     className="w-64 rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white/80"
                   />
                 </label>
-                <button
-                  type="submit"
-                  className="rounded-full border border-red-500/50 bg-red-500/10 px-5 py-2 text-sm font-bold text-red-300 transition hover:bg-red-500/20"
-                >
+                <Button type="submit" variant="danger">
                   Wipe test data
-                </button>
+                </Button>
               </form>
             )}
           </section>
@@ -341,7 +336,7 @@ export default async function MenuImportsPage({
                           <span className="ml-2 text-red-400">{version.error_count} err</span>
                         )}
                         {version.warning_count > 0 && (
-                          <span className="ml-2 text-[#ffd700]">{version.warning_count} warn</span>
+                          <span className="ml-2 text-[var(--admin-gold)]">{version.warning_count} warn</span>
                         )}
                       </>
                     ) : imp.error_message ? (

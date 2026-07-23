@@ -21,6 +21,7 @@
  * accept; compliance flags stay visible on every AI suggestion.
  */
 import { useEffect, useRef, useState, useTransition } from "react";
+import { Button } from "@/components/admin/ui";
 import { useToast } from "@/components/admin/ux";
 import { suggestContentAction, type AiSuggestResult } from "@/app/admin/content/actions";
 import {
@@ -288,13 +289,9 @@ export function ContentBlockEditor({
                     </span>
                   )}
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setAiPanelOpen((o) => !o)}
-                  className="rounded-[var(--admin-radius)] border border-[var(--admin-accent)]/40 bg-[var(--admin-accent-soft)] px-3 py-1.5 text-xs font-bold text-[var(--admin-accent)] transition hover:brightness-110"
-                >
+                <Button type="button" onClick={() => setAiPanelOpen((o) => !o)} variant="special" size="sm">
                   ✨ Write with AI
-                </button>
+                </Button>
               </div>
             )}
 
@@ -319,14 +316,9 @@ export function ContentBlockEditor({
                         placeholder="e.g. friendlier, shorter, mention fast pickup"
                         className="admin-focus min-w-[12rem] flex-1 rounded-[var(--admin-radius)] border border-[var(--admin-border-strong)] bg-[var(--admin-surface-2)] px-3 py-1.5 text-xs text-[var(--admin-text)] outline-none transition focus:border-[var(--admin-accent)]"
                       />
-                      <button
-                        type="button"
-                        onClick={runAi}
-                        disabled={pending}
-                        className="rounded-[var(--admin-radius)] bg-[var(--admin-accent)] px-3 py-1.5 text-xs font-bold text-black transition hover:brightness-110 disabled:opacity-50"
-                      >
+                      <Button type="button" onClick={runAi} disabled={pending} variant="special" size="sm">
                         {pending ? "Writing…" : "Generate draft"}
-                      </button>
+                      </Button>
                     </div>
 
                     {suggestion && (
@@ -347,28 +339,15 @@ export function ContentBlockEditor({
                         </div>
                         <p className="whitespace-pre-wrap text-sm text-[var(--admin-text)]">{suggestion.value}</p>
                         <div className="mt-2 flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            onClick={acceptSuggestion}
-                            className="rounded-[var(--admin-radius)] bg-[var(--admin-accent)] px-3 py-1.5 text-xs font-bold text-black hover:brightness-110"
-                          >
+                          <Button type="button" onClick={acceptSuggestion} variant="confirm" size="sm">
                             Use it
-                          </button>
-                          <button
-                            type="button"
-                            onClick={runAi}
-                            disabled={pending}
-                            className="rounded-[var(--admin-radius)] border border-[var(--admin-border-strong)] px-3 py-1.5 text-xs font-bold text-[var(--admin-text-muted)] hover:bg-[var(--admin-surface-hover)] disabled:opacity-50"
-                          >
+                          </Button>
+                          <Button type="button" onClick={runAi} disabled={pending} variant="neutral" size="sm">
                             Try again
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setSuggestion(null)}
-                            className="rounded-[var(--admin-radius)] border border-[var(--admin-border-strong)] px-3 py-1.5 text-xs font-bold text-[var(--admin-text-faint)] hover:bg-[var(--admin-surface-hover)]"
-                          >
+                          </Button>
+                          <Button type="button" onClick={() => setSuggestion(null)} variant="neutral" size="sm">
                             Discard
-                          </button>
+                          </Button>
                         </div>
                         <p className="mt-2 text-[0.65rem] text-[var(--admin-text-faint)]">
                           AI writes a draft only — nothing changes on your site until you Save the
@@ -383,17 +362,9 @@ export function ContentBlockEditor({
 
             {/* Actions */}
             <div className="flex flex-wrap items-center gap-2 pt-1">
-              <button
-                type="submit"
-                onClick={() => setSavedValue(value)}
-                className={`rounded-[var(--admin-radius)] px-3 py-1.5 text-xs font-bold transition ${
-                  unsaved
-                    ? "bg-[var(--admin-gold)] text-black hover:brightness-110"
-                    : "border border-[var(--admin-border-strong)] text-[var(--admin-text-muted)] hover:bg-[var(--admin-surface-hover)]"
-                }`}
-              >
+              <Button type="submit" onClick={() => setSavedValue(value)} variant={unsaved ? "save" : "neutral"} size="sm">
                 {unsaved ? "Save draft ●" : "Save draft"}
-              </button>
+              </Button>
               {publicPath && (
                 <a
                   href={publicPath}
@@ -409,12 +380,9 @@ export function ContentBlockEditor({
 
           <form action={publishAction} className="mt-2">
             <input type="hidden" name="block_key" value={block.block_key} />
-            <button
-              type="submit"
-              className="rounded-[var(--admin-radius)] bg-[var(--admin-accent)] px-3 py-1.5 text-xs font-bold text-black hover:brightness-110"
-            >
+            <Button type="submit" variant="confirm" size="sm">
               Publish live
-            </button>
+            </Button>
           </form>
 
           {block.published_value != null && (

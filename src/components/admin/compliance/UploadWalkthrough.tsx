@@ -16,6 +16,7 @@
  * stays a server action.
  */
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { Button } from "@/components/admin/ui";
 
 type FileSummary = { type: string; fileName: string; recordCount: number; empty: boolean };
 
@@ -271,13 +272,9 @@ export function UploadWalkthrough({ weekKey, files, batchZipHref, submittable }:
           <span className="text-xs font-bold text-white/60">
             {doneCount}/{steps.length} done
           </span>
-          <button
-            type="button"
-            onClick={reset}
-            className="rounded-lg border border-white/15 px-2.5 py-1 text-[11px] font-semibold text-white/50 transition hover:bg-white/5"
-          >
+          <Button type="button" onClick={reset} variant="neutral" size="sm">
             Reset
-          </button>
+          </Button>
         </div>
       </div>
 

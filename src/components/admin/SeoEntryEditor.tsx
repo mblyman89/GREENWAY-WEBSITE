@@ -14,6 +14,7 @@
  * accept. This component only improves the editing experience.
  */
 import { useState, useTransition } from "react";
+import { Button } from "@/components/admin/ui";
 import { useToast } from "@/components/admin/ux";
 import { suggestSeoAction, type AiSeoSuggestResult } from "@/app/admin/content/actions";
 
@@ -39,7 +40,7 @@ const DESC_MAX = 160;
 function counterTone(len: number, max: number): string {
   const near = Math.round(max * 0.85);
   if (len > max) return "text-red-400";
-  if (len >= near) return "text-[#7ed957]";
+  if (len >= near) return "text-[var(--admin-accent)]";
   return "text-white/35";
 }
 
@@ -101,21 +102,17 @@ export function SeoEntryEditor({ entry, aiEnabled, saveAction }: Props) {
             sitemap: {entry.sitemap_include ? "included" : "excluded"}
             {entry.noindex ? " · noindex" : ""}
           </span>
-          <button
-            type="button"
-            onClick={() => setAiOpen((o) => !o)}
-            className="rounded-lg border border-[#7ed957]/40 bg-[#7ed957]/10 px-3 py-1 text-xs font-bold text-[#7ed957] transition hover:bg-[#7ed957]/20"
-          >
+          <Button type="button" onClick={() => setAiOpen((o) => !o)} variant="special" size="sm">
             ✨ Generate with AI
-          </button>
+          </Button>
         </div>
       </div>
 
       {/* AI panel */}
       {aiOpen && (
-        <div className="mt-3 rounded-lg border border-[#7ed957]/25 bg-[#7ed957]/[0.04] p-3">
+        <div className="mt-3 rounded-lg border border-[var(--admin-accent)]/25 bg-[var(--admin-accent)]/[0.04] p-3">
           {!aiEnabled ? (
-            <p className="text-xs text-[#ffd700]">
+            <p className="text-xs text-[var(--admin-gold)]">
               AI isn&apos;t set up yet. Add an <code className="font-mono">AI_API_KEY</code> to
               enable “Generate with AI.” You can still edit by hand.
             </p>
@@ -130,16 +127,11 @@ export function SeoEntryEditor({ entry, aiEnabled, saveAction }: Props) {
                   value={instruction}
                   onChange={(e) => setInstruction(e.target.value)}
                   placeholder="e.g. mention fast curbside pickup, daily deals"
-                  className="min-w-[12rem] flex-1 rounded-lg border border-white/15 bg-black px-3 py-1.5 text-xs text-white outline-none focus:border-[#7ed957]"
+                  className="min-w-[12rem] flex-1 rounded-lg border border-white/15 bg-black px-3 py-1.5 text-xs text-white outline-none focus:border-[var(--admin-accent)]"
                 />
-                <button
-                  type="button"
-                  onClick={runAi}
-                  disabled={pending}
-                  className="rounded-lg bg-[#7ed957] px-3 py-1.5 text-xs font-bold text-black transition hover:bg-[#6bc746] disabled:opacity-50"
-                >
+                <Button type="button" onClick={runAi} disabled={pending} variant="special" size="sm">
                   {pending ? "Writing…" : "Generate"}
-                </button>
+                </Button>
               </div>
 
               {suggestion && (
@@ -153,7 +145,7 @@ export function SeoEntryEditor({ entry, aiEnabled, saveAction }: Props) {
                         ⚠ {suggestion.flags.join(", ")}
                       </span>
                     ) : (
-                      <span className="rounded-full border border-[#7ed957]/40 bg-[#7ed957]/10 px-2 py-0.5 text-[0.6rem] font-semibold text-[#7ed957]">
+                      <span className="rounded-full border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-2 py-0.5 text-[0.6rem] font-semibold text-[var(--admin-accent)]">
                         ✓ no compliance flags
                       </span>
                     )}
@@ -165,28 +157,15 @@ export function SeoEntryEditor({ entry, aiEnabled, saveAction }: Props) {
                     <span className="text-white/45">Description:</span> {suggestion.description}
                   </div>
                   <div className="mt-2 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={useSuggestion}
-                      className="rounded-lg bg-[#7ed957] px-3 py-1.5 text-xs font-bold text-black hover:bg-[#6bc746]"
-                    >
+                    <Button type="button" onClick={useSuggestion} variant="confirm" size="sm">
                       Use it
-                    </button>
-                    <button
-                      type="button"
-                      onClick={runAi}
-                      disabled={pending}
-                      className="rounded-lg border border-white/15 px-3 py-1.5 text-xs font-bold text-white/80 hover:bg-white/10 disabled:opacity-50"
-                    >
+                    </Button>
+                    <Button type="button" onClick={runAi} disabled={pending} variant="neutral" size="sm">
                       Try again
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSuggestion(null)}
-                      className="rounded-lg border border-white/15 px-3 py-1.5 text-xs font-bold text-white/60 hover:bg-white/10"
-                    >
+                    </Button>
+                    <Button type="button" onClick={() => setSuggestion(null)} variant="neutral" size="sm">
                       Discard
-                    </button>
+                    </Button>
                   </div>
                   <p className="mt-2 text-[0.65rem] text-white/35">
                     AI writes a draft only — nothing changes until you Use it and then Save.
@@ -210,7 +189,7 @@ export function SeoEntryEditor({ entry, aiEnabled, saveAction }: Props) {
             name="seo_title"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#7ed957]"
+            className="w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[var(--admin-accent)]"
           />
         </div>
         <div>
@@ -225,7 +204,7 @@ export function SeoEntryEditor({ entry, aiEnabled, saveAction }: Props) {
             rows={2}
             value={desc}
             onChange={(e) => setDesc(e.target.value)}
-            className="w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#7ed957]"
+            className="w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[var(--admin-accent)]"
           />
         </div>
         <div className="grid gap-4 sm:grid-cols-3">
@@ -234,7 +213,7 @@ export function SeoEntryEditor({ entry, aiEnabled, saveAction }: Props) {
             <input
               name="canonical"
               defaultValue={entry.canonical}
-              className="w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#7ed957]"
+              className="w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[var(--admin-accent)]"
             />
           </div>
           <label className="flex items-center gap-2 self-end pb-2 text-sm text-white/70">
@@ -256,7 +235,7 @@ export function SeoEntryEditor({ entry, aiEnabled, saveAction }: Props) {
         <div className="rounded-lg border border-white/10 bg-black p-3">
           <div className="text-xs text-white/40">Search preview</div>
           <div className="mt-1 text-sm text-[#8ab4f8]">{title || `Greenway Marijuana · ${path}`}</div>
-          <div className="text-xs text-[#7ed957]/80">
+          <div className="text-xs text-[var(--admin-accent)]/80">
             greenwaymarijuana.com{path === "/" ? "" : path}
           </div>
           <div className="mt-0.5 text-xs text-white/55">
@@ -264,12 +243,9 @@ export function SeoEntryEditor({ entry, aiEnabled, saveAction }: Props) {
           </div>
         </div>
 
-        <button
-          type="submit"
-          className="rounded-lg bg-[#7ed957] px-4 py-2 text-sm font-bold text-black hover:bg-[#6bc746]"
-        >
+        <Button type="submit" variant="confirm">
           Save SEO for {path}
-        </button>
+        </Button>
       </div>
     </form>
   );

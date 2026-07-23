@@ -12,6 +12,7 @@
  * (router-controlled). Soft-disables when no AI key is configured.
  */
 import { useState, useTransition } from "react";
+import { Button } from "@/components/admin/ui";
 import { useToast } from "@/components/admin/ux";
 import { analyzeLeadsAction, type LeadsAdviceResult } from "./actions";
 import type { LeadsAdvice, LeadAssessment, LeadVerdict } from "@/lib/discovery/leads-ai";
@@ -106,14 +107,9 @@ export function LeadsAssistantPanel({ aiEnabled }: Props) {
           </p>
         </div>
         {aiEnabled && (
-          <button
-            type="button"
-            onClick={run}
-            disabled={pending}
-            className="rounded-lg bg-[var(--admin-accent)] px-4 py-2 text-sm font-bold text-black transition hover:opacity-90 disabled:opacity-50"
-          >
+          <Button type="button" onClick={run} disabled={pending} variant="special" size="sm">
             {pending ? "Analyzing…" : advice ? "Re-analyze" : "Analyze my leads"}
-          </button>
+          </Button>
         )}
       </div>
 

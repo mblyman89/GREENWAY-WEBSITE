@@ -18,6 +18,8 @@ import type { ComponentPropsWithoutRef, ReactNode } from "react";
  *   confirm  → GREEN  : positive / publish / approve / go / start.
  *   save     → GOLD   : save draft / save settings (persist without publishing).
  *   danger   → RED    : destructive (delete, reject, discard).
+ *   special  → PURPLE : "the machine does something for you" — AI enrich,
+ *              crawler runs, bulk-AI, image studio, GrowFlow sync.
  *   neutral  → solid dark chip : secondary / cancel / back navigation.
  *
  * Renders as a <button> by default, or an <a>/<Link> when `href` is passed.
@@ -29,6 +31,7 @@ export type ButtonVariant =
   | "confirm" // green — publish / approve / go
   | "save" // gold — save draft / settings
   | "danger" // red — destructive
+  | "special" // purple — AI / crawler / automation actions
   | "neutral"; // solid dark chip — secondary / cancel / back
 
 export type ButtonSize = "sm" | "md" | "lg";
@@ -50,6 +53,8 @@ const VARIANTS: Record<ButtonVariant, string> = {
   save: "bg-[var(--admin-gold)] text-black shadow-[var(--admin-shadow-sm)] hover:brightness-110 active:brightness-95",
   danger:
     "bg-[var(--admin-danger)] text-black shadow-[var(--admin-shadow-sm)] hover:brightness-110 active:brightness-95",
+  special:
+    "bg-[var(--admin-purple)] text-black shadow-[var(--admin-shadow-sm)] hover:brightness-110 active:brightness-95",
   neutral:
     "bg-[var(--admin-surface-2)] text-[var(--admin-text)] shadow-[var(--admin-shadow-sm)] hover:bg-[var(--admin-surface-hover)] active:brightness-95",
 };
@@ -77,6 +82,18 @@ type ButtonAsLink = CommonProps &
   };
 
 export type ButtonProps = ButtonAsButton | ButtonAsLink;
+
+/**
+ * In-table chip recipes (DESIGN-SYSTEM-SPEC §2.2) — density-safe row
+ * actions. Solid md Buttons in every table row are too loud; rows use
+ * these tinted chips instead. Rule of thumb: many tinted chips per
+ * screen, at most ONE solid orange `primary` per page region.
+ */
+export const CHIP_ACTION =
+  "admin-focus inline-flex items-center rounded-full bg-[var(--admin-accent-soft)] px-3 py-1 text-[0.7rem] font-bold uppercase tracking-[0.08em] text-[var(--admin-accent)] ring-1 ring-[var(--admin-accent)]/40 hover:bg-[var(--admin-accent)] hover:text-black transition";
+
+export const CHIP_NEUTRAL =
+  "admin-focus inline-flex items-center rounded-full bg-[var(--admin-surface-2)] px-3 py-1 text-[0.7rem] font-bold uppercase tracking-[0.08em] text-[var(--admin-text)] ring-1 ring-[var(--admin-border)] hover:bg-[var(--admin-surface-hover)] transition";
 
 function classes(p: CommonProps) {
   return [

@@ -7,6 +7,7 @@
  * are ranked by EXACT normalized phone/email match (customer-link-core), but
  * the link itself is always a human click — never automatic.
  */
+import { Button, CHIP_ACTION } from "@/components/admin/ui";
 import { findLinkCandidates, getLinkedCustomer } from "@/lib/orders/customer-link-store";
 import { linkOrderCustomerAction, unlinkOrderCustomerAction } from "@/app/admin/orders/actions";
 import type { OrderWithLines } from "@/lib/orders/types";
@@ -27,11 +28,11 @@ export async function CustomerLinkSection({ order }: { order: OrderWithLines }) 
           Member link
         </h2>
         {linked ? (
-          <span className="rounded-full border border-[#7ed957]/50 bg-[#7ed957]/10 px-2.5 py-0.5 text-[0.65rem] font-black uppercase tracking-[0.1em] text-[#7ed957]">
+          <span className="rounded-full border border-[var(--admin-accent)]/50 bg-[var(--admin-accent)]/10 px-2.5 py-0.5 text-[0.65rem] font-black uppercase tracking-[0.1em] text-[var(--admin-accent)]">
             Linked
           </span>
         ) : (
-          <span className="rounded-full border border-[#ff7f00]/50 bg-[#ff7f00]/10 px-2.5 py-0.5 text-[0.65rem] font-black uppercase tracking-[0.1em] text-[#ff7f00]">
+          <span className="rounded-full border border-[var(--admin-orange)]/50 bg-[var(--admin-orange)]/10 px-2.5 py-0.5 text-[0.65rem] font-black uppercase tracking-[0.1em] text-[var(--admin-orange)]">
             Possible match
           </span>
         )}
@@ -48,12 +49,9 @@ export async function CustomerLinkSection({ order }: { order: OrderWithLines }) 
           {!isClosed ? (
             <form action={unlinkOrderCustomerAction}>
               <input type="hidden" name="id" value={order.id} />
-              <button
-                type="submit"
-                className="rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-bold text-white/70 hover:bg-white/10"
-              >
+              <Button type="submit" variant="neutral" size="sm">
                 Remove link
-              </button>
+              </Button>
             </form>
           ) : null}
         </div>
@@ -71,17 +69,14 @@ export async function CustomerLinkSection({ order }: { order: OrderWithLines }) 
               >
                 <div className="min-w-0">
                   <p className="truncate text-sm font-bold text-white/85">{m.name}</p>
-                  <p className="text-[0.66rem] font-black uppercase tracking-[0.1em] text-[#7ed957]">
+                  <p className="text-[0.66rem] font-black uppercase tracking-[0.1em] text-[var(--admin-accent)]">
                     {m.basisLabel}
                   </p>
                 </div>
                 <form action={linkOrderCustomerAction}>
                   <input type="hidden" name="id" value={order.id} />
                   <input type="hidden" name="customerId" value={m.customerId} />
-                  <button
-                    type="submit"
-                    className="rounded-lg border border-[#7ed957]/40 bg-[#7ed957]/10 px-3 py-1.5 text-xs font-bold text-[#7ed957] hover:bg-[#7ed957]/20"
-                  >
+                  <button type="submit" className={CHIP_ACTION}>
                     Link
                   </button>
                 </form>

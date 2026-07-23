@@ -11,6 +11,7 @@
  * THEME: dark admin tokens only (no light stone/white surfaces).
  */
 import { useState, useRef, useEffect, useTransition } from "react";
+import { Button } from "@/components/admin/ui";
 import { useToast } from "@/components/admin/ux";
 import { askPrinterAssistantAction } from "@/app/admin/equipment/printer-assistant-actions";
 
@@ -127,13 +128,9 @@ export function PrinterDiagnosticChat({ aiEnabled }: { aiEnabled: boolean }) {
               className="admin-focus flex-1 resize-none rounded-[var(--admin-radius)] border border-[var(--admin-border-strong)] bg-[var(--admin-surface-2)] px-3 py-2 text-sm text-[var(--admin-text)] placeholder:text-[var(--admin-text-faint)] outline-none transition focus:border-[var(--admin-accent)]"
               disabled={pending}
             />
-            <button
-              type="submit"
-              disabled={pending || !input.trim()}
-              className="rounded-full bg-[var(--admin-accent)] px-5 py-2.5 text-xs font-black uppercase tracking-[0.1em] text-black shadow-[var(--admin-shadow-sm)] transition hover:brightness-110 disabled:opacity-40"
-            >
+            <Button type="submit" disabled={pending || !input.trim()} variant="special" size="sm">
               Send
-            </button>
+            </Button>
           </form>
         ) : (
           <p className="text-xs text-[var(--admin-text-muted)]">

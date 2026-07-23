@@ -9,6 +9,7 @@
  * disabled with a clear note.
  */
 import { useState, useRef, useEffect, useTransition } from "react";
+import { Button } from "@/components/admin/ui";
 import { useToast } from "@/components/admin/ux";
 import { askSageAssistantAction } from "@/app/admin/reports/accounting/sage-actions";
 import type { SageChatMessage } from "@/lib/accounting/sage-helper";
@@ -132,13 +133,9 @@ export function SageAssistantChat({
               className="flex-1 resize-none rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white placeholder:text-white/30 focus:border-[var(--admin-accent)] focus:outline-none"
               disabled={pending}
             />
-            <button
-              type="submit"
-              disabled={pending || !input.trim()}
-              className="rounded-lg bg-[var(--admin-accent)] px-4 py-2 text-sm font-bold text-black transition hover:opacity-90 disabled:opacity-40"
-            >
+            <Button type="submit" disabled={pending || !input.trim()} variant="special" size="sm">
               Send
-            </button>
+            </Button>
           </form>
         ) : (
           <p className="text-xs text-white/40">

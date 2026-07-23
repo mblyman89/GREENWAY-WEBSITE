@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Button } from "@/components/admin/ui";
 import { ContentImageField, type MediaChoice } from "./ContentImageField";
 import { CAROUSEL_SLIDE_SPEC } from "@/lib/cms/image-spec-core";
 import type { SlideAdminVM, SlideCta } from "@/lib/cms/carousel-types";
@@ -92,7 +93,7 @@ export function CarouselSlideCard({
   }, [unsaved]);
 
   const inputCls =
-    "w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white placeholder-white/30 outline-none focus:border-[#7ed957]/60";
+    "w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white placeholder-white/30 outline-none focus:border-[var(--admin-accent)]/60";
   const labelCls =
     "mb-1 block text-[0.7rem] font-semibold uppercase tracking-wide text-white/60";
 
@@ -104,22 +105,22 @@ export function CarouselSlideCard({
       {/* Header */}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#7ed957]/15 text-sm font-bold text-[#7ed957]">
+          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--admin-accent)]/15 text-sm font-bold text-[var(--admin-accent)]">
             {index + 1}
           </span>
           <span className="text-sm font-semibold text-white">
             {title || slide.title || "Untitled slide"}
           </span>
           {unsaved ? (
-            <span className="rounded-full bg-[#ffd700]/15 px-2 py-0.5 text-[0.65rem] font-semibold text-[#ffd700]">
+            <span className="rounded-full bg-[var(--admin-gold)]/15 px-2 py-0.5 text-[0.65rem] font-semibold text-[var(--admin-gold)]">
               ● unsaved edits
             </span>
           ) : slide.dirty ? (
-            <span className="rounded-full bg-[#ff7f00]/15 px-2 py-0.5 text-[0.65rem] font-semibold text-[#ff7f00]">
+            <span className="rounded-full bg-[var(--admin-orange)]/15 px-2 py-0.5 text-[0.65rem] font-semibold text-[var(--admin-orange)]">
               unpublished draft
             </span>
           ) : (
-            <span className="rounded-full bg-[#7ed957]/12 px-2 py-0.5 text-[0.65rem] font-semibold text-[#7ed957]">
+            <span className="rounded-full bg-[var(--admin-accent)]/12 px-2 py-0.5 text-[0.65rem] font-semibold text-[var(--admin-accent)]">
               live
             </span>
           )}
@@ -135,26 +136,16 @@ export function CarouselSlideCard({
           <form action={moveAction}>
             <input type="hidden" name="slide_id" value={slide.id} />
             <input type="hidden" name="direction" value="up" />
-            <button
-              type="submit"
-              disabled={index === 0}
-              aria-label="Move up"
-              className="rounded-md border border-white/15 px-2 py-1 text-xs text-white/70 transition hover:bg-white/5 disabled:opacity-30"
-            >
+            <Button type="submit" disabled={index === 0} aria-label="Move up" variant="neutral" size="sm">
               ↑
-            </button>
+            </Button>
           </form>
           <form action={moveAction}>
             <input type="hidden" name="slide_id" value={slide.id} />
             <input type="hidden" name="direction" value="down" />
-            <button
-              type="submit"
-              disabled={index === total - 1}
-              aria-label="Move down"
-              className="rounded-md border border-white/15 px-2 py-1 text-xs text-white/70 transition hover:bg-white/5 disabled:opacity-30"
-            >
+            <Button type="submit" disabled={index === total - 1} aria-label="Move down" variant="neutral" size="sm">
               ↓
-            </button>
+            </Button>
           </form>
           <form
             action={deleteAction}
@@ -169,12 +160,9 @@ export function CarouselSlideCard({
             }}
           >
             <input type="hidden" name="slide_id" value={slide.id} />
-            <button
-              type="submit"
-              className="rounded-md border border-red-500/30 px-2 py-1 text-xs font-medium text-red-300 transition hover:bg-red-500/10"
-            >
+            <Button type="submit" variant="danger" size="sm">
               Delete
-            </button>
+            </Button>
           </form>
         </div>
       </div>
@@ -346,21 +334,14 @@ export function CarouselSlideCard({
               name="draft_enabled"
               checked={enabled}
               onChange={(e) => setEnabled(e.target.checked)}
-              className="h-4 w-4 accent-[#7ed957]"
+              className="h-4 w-4 accent-[var(--admin-accent)]"
             />
             Show this slide on the homepage
           </label>
           <div className="flex items-center gap-2">
-            <button
-              type="submit"
-              className={
-                unsaved
-                  ? "rounded-lg bg-[#ffd700] px-4 py-2 text-sm font-semibold text-black transition hover:bg-[#ffe34d]"
-                  : "rounded-lg border border-white/15 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/5"
-              }
-            >
+            <Button type="submit" variant={unsaved ? "save" : "neutral"}>
               {unsaved ? "Save draft ●" : "Save draft"}
-            </button>
+            </Button>
           </div>
         </div>
       </form>
@@ -376,13 +357,9 @@ export function CarouselSlideCard({
                 ? "This slide has changes that aren't live yet."
                 : "This slide is live and matches what visitors see."}
           </p>
-          <button
-            type="submit"
-            disabled={unsaved}
-            className="rounded-lg bg-[#7ed957] px-4 py-2 text-sm font-semibold text-black transition hover:bg-[#94e570] disabled:cursor-not-allowed disabled:opacity-40"
-          >
+          <Button type="submit" disabled={unsaved} variant="confirm">
             Publish to homepage
-          </button>
+          </Button>
         </div>
       </form>
     </div>

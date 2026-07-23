@@ -5,6 +5,7 @@ import { can } from "@/lib/auth/roles";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { BackLink } from "@/components/admin/ux";
+import { Button } from "@/components/admin/ui";
 import { OrderStatusFlow } from "@/components/admin/orders/OrderStatusFlow";
 import { CustomerLinkSection } from "@/components/admin/orders/CustomerLinkSection";
 import { MedicalSaleSection } from "@/components/admin/orders/MedicalSaleSection";
@@ -24,10 +25,10 @@ import { setOrderStatusAction, updateOrderNoteAction } from "../actions";
 export const dynamic = "force-dynamic";
 
 const STATUS_STYLES: Record<OrderStatus, string> = {
-  new: "border-[#ff7f00]/50 bg-[#ff7f00]/10 text-[#ff7f00]",
-  acknowledged: "border-[#ffd700]/40 bg-[#ffd700]/10 text-[#ffd700]",
-  preparing: "border-[#7ed957]/40 bg-[#7ed957]/10 text-[#7ed957]",
-  ready: "border-[#7ed957]/60 bg-[#7ed957]/20 text-[#7ed957]",
+  new: "border-[var(--admin-orange)]/50 bg-[var(--admin-orange)]/10 text-[var(--admin-orange)]",
+  acknowledged: "border-[var(--admin-gold)]/40 bg-[var(--admin-gold)]/10 text-[var(--admin-gold)]",
+  preparing: "border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 text-[var(--admin-accent)]",
+  ready: "border-[var(--admin-accent)]/60 bg-[var(--admin-accent)]/20 text-[var(--admin-accent)]",
   completed: "border-white/15 bg-white/5 text-white/60",
   cancelled: "border-red-500/40 bg-red-500/10 text-red-300",
   no_show: "border-red-500/30 bg-red-500/5 text-red-300/80",
@@ -92,16 +93,16 @@ export default async function OrderDetailPage({
           </div>
         ) : null}
         {okMessage ? (
-          <div className="mb-5 rounded-2xl border border-[#7ed957]/40 bg-[#7ed957]/10 p-5">
-            <p className="text-sm leading-6 text-[#7ed957]">{okMessage}</p>
+          <div className="mb-5 rounded-2xl border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 p-5">
+            <p className="text-sm leading-6 text-[var(--admin-accent)]">{okMessage}</p>
           </div>
         ) : null}
         {limitFlagged && !isClosed ? (
-          <div className="mb-5 rounded-2xl border border-[#ffd700]/40 bg-[#ffd700]/10 p-5">
-            <p className="text-xs font-black uppercase tracking-[0.14em] text-[#ffd700]">
+          <div className="mb-5 rounded-2xl border border-[var(--admin-gold)]/40 bg-[var(--admin-gold)]/10 p-5">
+            <p className="text-xs font-black uppercase tracking-[0.14em] text-[var(--admin-gold)]">
               Placed over the WAC 314-55-095 sales limit
             </p>
-            <ul className="mt-2 space-y-1 text-sm leading-6 text-[#ffd700]/90">
+            <ul className="mt-2 space-y-1 text-sm leading-6 text-[var(--admin-gold)]/90">
               {limitReasons.length > 0 ? (
                 limitReasons.map((reason, i) => <li key={i}>{reason}</li>)
               ) : (
@@ -170,12 +171,9 @@ export default async function OrderDetailPage({
                   <form action={setOrderStatusAction}>
                     <input type="hidden" name="id" value={order.id} />
                     <input type="hidden" name="status" value={next} />
-                    <button
-                      type="submit"
-                      className="rounded-lg bg-[#7ed957] px-4 py-2.5 text-sm font-black uppercase tracking-[0.08em] text-black transition hover:brightness-110"
-                    >
+                    <Button type="submit" variant="confirm">
                       Mark {ORDER_STATUS_LABELS[next]}
-                    </button>
+                    </Button>
                   </form>
                 ) : null}
                 {next === "completed" && limitFlagged && canOverrideLimit ? (
@@ -189,35 +187,26 @@ export default async function OrderDetailPage({
                       required
                       minLength={5}
                       placeholder="Manager override reason (logged for audit)"
-                      className="min-w-0 flex-1 rounded-lg border border-[#ffd700]/40 bg-black/40 px-3 py-2.5 text-sm text-white placeholder:text-white/30"
+                      className="min-w-0 flex-1 rounded-lg border border-[var(--admin-gold)]/40 bg-black/40 px-3 py-2.5 text-sm text-white placeholder:text-white/30"
                     />
-                    <button
-                      type="submit"
-                      className="rounded-lg border border-[#ffd700]/50 bg-[#ffd700]/15 px-4 py-2.5 text-sm font-black uppercase tracking-[0.08em] text-[#ffd700] transition hover:bg-[#ffd700]/25"
-                    >
+                    <Button type="submit" variant="save">
                       Complete with logged override
-                    </button>
+                    </Button>
                   </form>
                 ) : null}
                 <form action={setOrderStatusAction}>
                   <input type="hidden" name="id" value={order.id} />
                   <input type="hidden" name="status" value="cancelled" />
-                  <button
-                    type="submit"
-                    className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-2.5 text-sm font-bold text-red-300 transition hover:bg-red-500/20"
-                  >
+                  <Button type="submit" variant="danger">
                     Cancel
-                  </button>
+                  </Button>
                 </form>
                 <form action={setOrderStatusAction}>
                   <input type="hidden" name="id" value={order.id} />
                   <input type="hidden" name="status" value="no_show" />
-                  <button
-                    type="submit"
-                    className="rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-2.5 text-sm font-bold text-red-300/80 transition hover:bg-red-500/15"
-                  >
+                  <Button type="submit" variant="danger">
                     No-show
-                  </button>
+                  </Button>
                 </form>
               </div>
             </div>
@@ -246,12 +235,9 @@ export default async function OrderDetailPage({
                   placeholder="Reason for reopening (logged for audit)"
                   className="min-w-0 flex-1 rounded-lg border border-white/15 bg-black/40 px-3 py-2.5 text-sm text-white placeholder:text-white/30"
                 />
-                <button
-                  type="submit"
-                  className="rounded-lg border border-white/20 bg-white/5 px-4 py-2.5 text-sm font-black uppercase tracking-[0.08em] text-white/80 transition hover:bg-white/10"
-                >
+                <Button type="submit" variant="neutral">
                   Reopen as {ORDER_STATUS_LABELS[ORDER_REVERSAL_TARGETS[order.status] ?? "new"]}
-                </button>
+                </Button>
               </form>
             </div>
           )}
@@ -263,7 +249,7 @@ export default async function OrderDetailPage({
               <ol className="mt-4 space-y-3">
                 {order.events.map((ev) => (
                   <li key={ev.id} className="flex items-start gap-3 text-sm">
-                    <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-[#7ed957]" />
+                    <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-[var(--admin-accent)]" />
                     <div>
                       <p className="text-white/80">
                         {ev.event_type === "status_changed"
@@ -332,14 +318,11 @@ export default async function OrderDetailPage({
                 defaultValue={order.staff_note ?? ""}
                 rows={4}
                 placeholder="Internal note (not shown to the customer)…"
-                className="w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white placeholder:text-white/30 focus:border-[#7ed957]/50 focus:outline-none"
+                className="w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white placeholder:text-white/30 focus:border-[var(--admin-accent)]/50 focus:outline-none"
               />
-              <button
-                type="submit"
-                className="rounded-lg border border-white/15 bg-white/5 px-3.5 py-2 text-xs font-bold text-white hover:bg-white/10"
-              >
+              <Button type="submit" variant="neutral" size="sm">
                 Save note
-              </button>
+              </Button>
             </form>
           </div>
         </div>

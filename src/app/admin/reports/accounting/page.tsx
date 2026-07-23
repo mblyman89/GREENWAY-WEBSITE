@@ -8,6 +8,7 @@
 import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { can } from "@/lib/auth/roles";
+import { Button, CHIP_NEUTRAL } from "@/components/admin/ui";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { StatCard } from "@/components/admin/StatCard";
 import { formatMinorCurrency } from "@/lib/leafly/format";
@@ -287,12 +288,9 @@ export default async function AccountingPage({
               className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white placeholder:text-white/30"
             />
           </label>
-          <button
-            type="submit"
-            className="rounded-lg bg-[var(--admin-accent)] px-4 py-2 text-sm font-bold text-black transition hover:opacity-90"
-          >
+          <Button type="submit" variant="confirm">
             Upload
-          </button>
+          </Button>
         </form>
 
         {uploads.length > 0 ? (
@@ -341,10 +339,7 @@ export default async function AccountingPage({
                 </div>
                 <form action={deleteSageReportAction}>
                   <input type="hidden" name="id" value={u.id} />
-                  <button
-                    type="submit"
-                    className="rounded border border-white/10 px-2 py-1 text-xs text-white/50 hover:bg-white/[0.06] hover:text-white/80"
-                  >
+                  <button type="submit" className={CHIP_NEUTRAL}>
                     Delete
                   </button>
                 </form>
@@ -363,12 +358,9 @@ export default async function AccountingPage({
         <SageAssistantChat aiEnabled={isAiConfigured} initialMessages={chatHistory} />
         {chatHistory.length > 0 ? (
           <form action={clearSageChatAction} className="mt-3">
-            <button
-              type="submit"
-              className="rounded border border-white/10 px-3 py-1 text-xs text-white/50 hover:bg-white/[0.06] hover:text-white/80"
-            >
+            <Button type="submit" variant="neutral" size="sm">
               Clear conversation
-            </button>
+            </Button>
           </form>
         ) : null}
       </Section>

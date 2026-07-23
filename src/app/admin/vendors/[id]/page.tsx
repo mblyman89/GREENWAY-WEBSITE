@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs } from "@/components/admin/ux";
+import { Button } from "@/components/admin/ui";
 import { vendorListBackHref } from "@/lib/vendors/list-state-core";
 import { getVendorById, listBrandsForVendor, publicMediaUrl } from "@/lib/vendors/store";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -39,7 +40,7 @@ export const dynamic = "force-dynamic";
 // from this page inherit this budget on Vercel.
 export const maxDuration = 300;
 
-const field = "rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[#7ed957]";
+const field = "rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[var(--admin-accent)]";
 const label = "text-xs font-medium text-white/60";
 
 const FIELD_LABELS: Record<string, string> = {
@@ -124,7 +125,7 @@ export default async function VendorEditPage({
           />
         }
         action={
-          <Link href={backHref} className="rounded-full border border-white/15 px-4 py-2 text-xs text-white/80 hover:border-[#7ed957] hover:text-white">
+          <Link href={backHref} className="rounded-full border border-white/15 px-4 py-2 text-xs text-white/80 hover:border-[var(--admin-accent)] hover:text-white">
             ← All vendors
           </Link>
         }
@@ -135,7 +136,7 @@ export default async function VendorEditPage({
           <div className="mb-6 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">{decodeURIComponent(sp.error)}</div>
         )}
         {sp.saved && (
-          <div className="mb-6 rounded-lg border border-[#7ed957]/40 bg-[#7ed957]/10 px-4 py-3 text-sm text-[#7ed957]">
+          <div className="mb-6 rounded-lg border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-4 py-3 text-sm text-[var(--admin-accent)]">
             {sp.note ? decodeURIComponent(sp.note) : "Saved."}
           </div>
         )}
@@ -146,25 +147,25 @@ export default async function VendorEditPage({
             {/* Publish toggle */}
             <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#0a0a0a] p-5">
               <div>
-                <h2 className="text-sm font-semibold text-white">Status: <span className={vendor.status === "published" ? "text-[#7ed957]" : "text-[#ff7f00]"}>{vendor.status}</span></h2>
+                <h2 className="text-sm font-semibold text-white">Status: <span className={vendor.status === "published" ? "text-[var(--admin-accent)]" : "text-[var(--admin-orange)]"}>{vendor.status}</span></h2>
                 <p className="text-xs text-white/40">Published vendors appear on the public vendors page.</p>
               </div>
               <form action={setVendorStatus}>
                 <input type="hidden" name="id" value={vendor.id} />
                 <input type="hidden" name="status" value={vendor.status === "published" ? "draft" : "published"} />
-                <button type="submit" className={`rounded-full px-5 py-2 text-sm font-bold transition hover:brightness-110 ${vendor.status === "published" ? "border border-white/20 text-white" : "bg-[#7ed957] text-black"}`}>
+                <Button type="submit" variant={vendor.status === "published" ? "neutral" : "confirm"}>
                   {vendor.status === "published" ? "Unpublish" : "Publish vendor"}
-                </button>
+                </Button>
               </form>
             </section>
 
             {/* Research with AI */}
-            <section id="ai-drafts" className="space-y-4 rounded-xl border border-[#7ed957]/20 bg-[#7ed957]/[0.03] p-5">
+            <section id="ai-drafts" className="space-y-4 rounded-xl border border-[var(--admin-accent)]/20 bg-[var(--admin-accent)]/[0.03] p-5">
               <div>
                 <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
                   <span>✨ Research with AI</span>
                   {!isAiConfigured && (
-                    <span className="rounded-full border border-[#ffd700]/40 bg-[#ffd700]/10 px-2 py-0.5 text-[10px] font-semibold text-[#ffd700]">
+                    <span className="rounded-full border border-[var(--admin-gold)]/40 bg-[var(--admin-gold)]/10 px-2 py-0.5 text-[10px] font-semibold text-[var(--admin-gold)]">
                       Not set up
                     </span>
                   )}
@@ -183,22 +184,22 @@ export default async function VendorEditPage({
                     <span className={label}>Optional hint (e.g. &quot;family-owned Spokane farm, organic flower&quot;)</span>
                     <input name="instruction" placeholder="Anything you know about them…" className={field} />
                   </label>
-                  <button type="submit" className="rounded-full bg-[#7ed957] px-5 py-2 text-sm font-bold text-black transition hover:brightness-110">
+                  <Button type="submit" variant="special">
                     ✨ Draft profile with AI
-                  </button>
+                  </Button>
                 </form>
               ) : (
-                <p className="rounded-lg border border-[#ffd700]/20 bg-[#ffd700]/5 px-3 py-2 text-xs text-[#ffd700]">
+                <p className="rounded-lg border border-[var(--admin-gold)]/20 bg-[var(--admin-gold)]/5 px-3 py-2 text-xs text-[var(--admin-gold)]">
                   Add an <code className="rounded bg-black/40 px-1">AI_API_KEY</code> to enable AI drafting (see the email/AI setup docs).
                 </p>
               )}
 
               {/* Research with the crawler (DF-6): grounded drafts from a real page */}
-              <div className="rounded-lg border border-sky-400/25 bg-sky-400/[0.04] p-4">
-                <h3 className="flex items-center gap-2 text-xs font-semibold text-sky-200">
+              <div className="rounded-lg border border-[var(--admin-purple)]/25 bg-[var(--admin-purple)]/[0.04] p-4">
+                <h3 className="flex items-center gap-2 text-xs font-semibold text-[var(--admin-purple)]">
                   <span>🔎 Research with the crawler</span>
                   {!crawlerOn && (
-                    <span className="rounded-full border border-[#ffd700]/40 bg-[#ffd700]/10 px-2 py-0.5 text-[10px] font-semibold text-[#ffd700]">
+                    <span className="rounded-full border border-[var(--admin-gold)]/40 bg-[var(--admin-gold)]/10 px-2 py-0.5 text-[10px] font-semibold text-[var(--admin-gold)]">
                       Not set up
                     </span>
                   )}
@@ -220,12 +221,12 @@ export default async function VendorEditPage({
                       className={`${field} flex-1`}
                       defaultValue={vendor.website ?? ""}
                     />
-                    <button type="submit" className="shrink-0 rounded-full bg-sky-400 px-5 py-2 text-sm font-bold text-black transition hover:brightness-110">
+                    <Button type="submit" variant="special" className="shrink-0">
                       🔎 Research
-                    </button>
+                    </Button>
                   </form>
                 ) : (
-                  <p className="mt-2 rounded-lg border border-[#ffd700]/20 bg-[#ffd700]/5 px-3 py-2 text-[11px] text-[#ffd700]">
+                  <p className="mt-2 rounded-lg border border-[var(--admin-gold)]/20 bg-[var(--admin-gold)]/5 px-3 py-2 text-[11px] text-[var(--admin-gold)]">
                     Set <code className="rounded bg-black/40 px-1">CRAWLER_BASE_URL</code> and{" "}
                     <code className="rounded bg-black/40 px-1">CRAWLER_SHARED_SECRET</code> to enable web research
                     (see <code className="rounded bg-black/40 px-1">crawler/docs/RUNBOOK.md</code>).
@@ -234,11 +235,11 @@ export default async function VendorEditPage({
               </div>
 
               {/* Pull from social (DF-9): sanctioned Instagram Business Discovery */}
-              <div className="rounded-lg border border-fuchsia-400/25 bg-fuchsia-400/[0.04] p-4">
-                <h3 className="flex items-center gap-2 text-xs font-semibold text-fuchsia-200">
+              <div className="rounded-lg border border-[var(--admin-purple)]/25 bg-[var(--admin-purple)]/[0.04] p-4">
+                <h3 className="flex items-center gap-2 text-xs font-semibold text-[var(--admin-purple)]">
                   <span>📸 Pull from Instagram</span>
                   {!socialOn && (
-                    <span className="rounded-full border border-[#ffd700]/40 bg-[#ffd700]/10 px-2 py-0.5 text-[10px] font-semibold text-[#ffd700]">
+                    <span className="rounded-full border border-[var(--admin-gold)]/40 bg-[var(--admin-gold)]/10 px-2 py-0.5 text-[10px] font-semibold text-[var(--admin-gold)]">
                       Not set up
                     </span>
                   )}
@@ -258,12 +259,12 @@ export default async function VendorEditPage({
                       placeholder="@vendor_handle"
                       className={`${field} flex-1`}
                     />
-                    <button type="submit" className="shrink-0 rounded-full bg-fuchsia-400 px-5 py-2 text-sm font-bold text-black transition hover:brightness-110">
+                    <Button type="submit" variant="special" className="shrink-0">
                       📸 Pull
-                    </button>
+                    </Button>
                   </form>
                 ) : (
-                  <p className="mt-2 rounded-lg border border-[#ffd700]/20 bg-[#ffd700]/5 px-3 py-2 text-[11px] text-[#ffd700]">
+                  <p className="mt-2 rounded-lg border border-[var(--admin-gold)]/20 bg-[var(--admin-gold)]/5 px-3 py-2 text-[11px] text-[var(--admin-gold)]">
                     Set up a Greenway Instagram <strong>Business</strong> account + Meta token to enable
                     (see <code className="rounded bg-black/40 px-1">crawler/docs/SOCIAL_SETUP.md</code>).
                   </p>
@@ -322,7 +323,7 @@ export default async function VendorEditPage({
                 </div>
                 <label className="flex flex-col gap-1">
                   <span className={label}>Logo (PNG/JPG/WEBP/SVG, max 5MB)</span>
-                  <input name="logo" type="file" accept="image/*" className={`${field} file:mr-2 file:rounded file:border-0 file:bg-[#7ed957] file:px-2 file:py-1 file:text-xs file:font-bold file:text-black`} />
+                  <input name="logo" type="file" accept="image/*" className={`${field} file:mr-2 file:rounded file:border-0 file:bg-[var(--admin-accent)] file:px-2 file:py-1 file:text-xs file:font-bold file:text-black`} />
                 </label>
               </div>
 
@@ -380,7 +381,7 @@ export default async function VendorEditPage({
               {/* Ops facts (read-only, from the POS export) */}
               {(vendor.is_active !== null || vendor.total_accepted_ytd_cents !== null || vendor.last_accepted_at) ? (
                 <div className="flex flex-wrap gap-x-6 gap-y-1 rounded-lg border border-white/10 p-4 text-xs text-white/60">
-                  {vendor.is_active !== null ? <span>Status: <span className={vendor.is_active ? "text-[#7ed957]" : "text-white/40"}>{vendor.is_active ? "Active" : "Inactive"}</span></span> : null}
+                  {vendor.is_active !== null ? <span>Status: <span className={vendor.is_active ? "text-[var(--admin-accent)]" : "text-white/40"}>{vendor.is_active ? "Active" : "Inactive"}</span></span> : null}
                   {vendor.total_accepted_ytd_cents !== null ? <span>Accepted YTD: <span className="text-white">${(vendor.total_accepted_ytd_cents / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></span> : null}
                   {vendor.last_accepted_at ? <span>Last accepted: <span className="text-white">{new Date(vendor.last_accepted_at).toLocaleDateString()}</span></span> : null}
                 </div>
@@ -390,7 +391,7 @@ export default async function VendorEditPage({
               <label className="flex flex-col gap-1"><span className={label}>Vendor-day notes (internal)</span><input name="vendor_day_notes" defaultValue={vendor.vendor_day_notes ?? ""} className={field} /></label>
               <label className="flex flex-col gap-1"><span className={label}>Internal notes (never public)</span><textarea name="internal_notes" defaultValue={vendor.internal_notes ?? ""} rows={2} className={field} /></label>
 
-              <button type="submit" className="rounded-full bg-[#ff7f00] px-6 py-2.5 text-sm font-bold text-black transition hover:brightness-110">Save profile</button>
+              <Button type="submit" variant="primary">Save profile</Button>
             </form>
 
             {/* Brands */}
@@ -419,19 +420,19 @@ export default async function VendorEditPage({
                   </div>
                   <div className="grid gap-4 sm:grid-cols-2">
                     <label className="flex flex-col gap-1"><span className={label}>Website</span><input name="website" defaultValue={b.website ?? ""} className={field} /></label>
-                    <label className="flex flex-col gap-1"><span className={label}>Brand logo</span><input name="logo" type="file" accept="image/*" className={`${field} file:mr-2 file:rounded file:border-0 file:bg-[#7ed957] file:px-2 file:py-1 file:text-xs file:font-bold file:text-black`} /></label>
+                    <label className="flex flex-col gap-1"><span className={label}>Brand logo</span><input name="logo" type="file" accept="image/*" className={`${field} file:mr-2 file:rounded file:border-0 file:bg-[var(--admin-accent)] file:px-2 file:py-1 file:text-xs file:font-bold file:text-black`} /></label>
                   </div>
                   <label className="flex flex-col gap-1"><span className={label}>Mission statement</span><textarea name="mission_statement" defaultValue={b.mission_statement ?? ""} rows={2} className={field} /></label>
                   <label className="flex flex-col gap-1"><span className={label}>About</span><textarea name="about" defaultValue={b.about ?? ""} rows={2} className={field} /></label>
                   <label className="flex flex-col gap-1"><span className={label}>Product philosophy</span><textarea name="product_philosophy" defaultValue={b.product_philosophy ?? ""} rows={2} className={field} /></label>
-                  <button type="submit" className="rounded-full border border-white/20 px-5 py-2 text-sm font-bold text-white transition hover:border-[#7ed957]">Save brand</button>
+                  <Button type="submit" variant="neutral">Save brand</Button>
 
                   {/* Brand-level Research with AI */}
-                  <div className="mt-2 space-y-3 rounded-lg border border-[#7ed957]/20 bg-[#7ed957]/[0.03] p-4">
+                  <div className="mt-2 space-y-3 rounded-lg border border-[var(--admin-accent)]/20 bg-[var(--admin-accent)]/[0.03] p-4">
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-semibold text-white">✨ Research this brand with AI</span>
                       {!isAiConfigured && (
-                        <span className="rounded-full border border-[#ffd700]/40 bg-[#ffd700]/10 px-2 py-0.5 text-[10px] font-semibold text-[#ffd700]">Not set up</span>
+                        <span className="rounded-full border border-[var(--admin-gold)]/40 bg-[var(--admin-gold)]/10 px-2 py-0.5 text-[10px] font-semibold text-[var(--admin-gold)]">Not set up</span>
                       )}
                     </div>
                     <p className="text-[11px] text-white/45">
@@ -441,9 +442,9 @@ export default async function VendorEditPage({
                     {isAiConfigured && (
                       <div className="flex flex-wrap items-end gap-2">
                         <input form={`brand-ai-${b.id}`} name="instruction" placeholder="Optional hint (e.g. organic outdoor flower)" className={`${field} min-w-[14rem] flex-1`} />
-                        <button form={`brand-ai-${b.id}`} type="submit" className="rounded-full bg-[#7ed957] px-4 py-2 text-xs font-bold text-black transition hover:brightness-110">
+                        <Button form={`brand-ai-${b.id}`} type="submit" variant="special" size="sm">
                           ✨ Draft brand profile
-                        </button>
+                        </Button>
                       </div>
                     )}
                     {(brandSuggestions.get(b.id)?.length ?? 0) > 0 && (
@@ -482,11 +483,11 @@ export default async function VendorEditPage({
                   </div>
 
                   {/* Brand-level Research with the crawler (DF-6): grounded drafts from a real page */}
-                  <div className="mt-2 space-y-3 rounded-lg border border-[#5ec1ff]/20 bg-[#5ec1ff]/[0.03] p-4">
+                  <div className="mt-2 space-y-3 rounded-lg border border-[var(--admin-purple)]/20 bg-[var(--admin-purple)]/[0.03] p-4">
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-semibold text-white">🔎 Research this brand with the crawler</span>
                       {!crawlerOn && (
-                        <span className="rounded-full border border-[#ffd700]/40 bg-[#ffd700]/10 px-2 py-0.5 text-[10px] font-semibold text-[#ffd700]">Not set up</span>
+                        <span className="rounded-full border border-[var(--admin-gold)]/40 bg-[var(--admin-gold)]/10 px-2 py-0.5 text-[10px] font-semibold text-[var(--admin-gold)]">Not set up</span>
                       )}
                     </div>
                     <p className="text-[11px] text-white/45">
@@ -505,9 +506,9 @@ export default async function VendorEditPage({
                           placeholder="https://brand-official-site.com"
                           className={`${field} min-w-[16rem] flex-1`}
                         />
-                        <button form={`brand-crawl-${b.id}`} type="submit" className="rounded-full bg-[#5ec1ff] px-4 py-2 text-xs font-bold text-black transition hover:brightness-110">
+                        <Button form={`brand-crawl-${b.id}`} type="submit" variant="special" size="sm">
                           🔎 Research
-                        </button>
+                        </Button>
                       </div>
                     ) : (
                       <p className="text-[11px] text-white/40">
@@ -519,11 +520,11 @@ export default async function VendorEditPage({
                   </div>
 
                   {/* Brand-level Pull from Instagram (DF-9): sanctioned Business Discovery */}
-                  <div className="mt-2 space-y-3 rounded-lg border border-fuchsia-400/20 bg-fuchsia-400/[0.03] p-4">
+                  <div className="mt-2 space-y-3 rounded-lg border border-[var(--admin-purple)]/20 bg-[var(--admin-purple)]/[0.03] p-4">
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-semibold text-white">📸 Pull this brand from Instagram</span>
                       {!socialOn && (
-                        <span className="rounded-full border border-[#ffd700]/40 bg-[#ffd700]/10 px-2 py-0.5 text-[10px] font-semibold text-[#ffd700]">Not set up</span>
+                        <span className="rounded-full border border-[var(--admin-gold)]/40 bg-[var(--admin-gold)]/10 px-2 py-0.5 text-[10px] font-semibold text-[var(--admin-gold)]">Not set up</span>
                       )}
                     </div>
                     <p className="text-[11px] text-white/45">
@@ -540,9 +541,9 @@ export default async function VendorEditPage({
                           placeholder="@brand_handle"
                           className={`${field} min-w-[14rem] flex-1`}
                         />
-                        <button form={`brand-social-${b.id}`} type="submit" className="rounded-full bg-fuchsia-400 px-4 py-2 text-xs font-bold text-black transition hover:brightness-110">
+                        <Button form={`brand-social-${b.id}`} type="submit" variant="special" size="sm">
                           📸 Pull
-                        </button>
+                        </Button>
                       </div>
                     ) : (
                       <p className="text-[11px] text-white/40">

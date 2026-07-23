@@ -21,7 +21,7 @@
  * server-side (the UI hints are never the enforcement layer).
  */
 import Link from "next/link";
-import { Badge } from "@/components/admin/ui";
+import { Badge, Button } from "@/components/admin/ui";
 import { listCustomers, getCustomerById } from "@/lib/customers/store";
 import { getActiveCard, toRecognitionCard } from "@/lib/medical/store";
 import { authorizationValidityAt } from "@/lib/medical/medical-authorization-core";
@@ -152,12 +152,9 @@ export async function GuidedIntakeWizard({
                 placeholder="Search name, email, or phone…"
                 className="w-full rounded-[var(--admin-radius)] border border-[var(--admin-border)] bg-[var(--admin-canvas)] px-3 py-2 text-sm text-[var(--admin-text)] placeholder:text-[var(--admin-text-faint)] focus:border-[var(--admin-accent)] focus:outline-none"
               />
-              <button
-                type="submit"
-                className="shrink-0 rounded-[var(--admin-radius)] border border-[var(--admin-border)] px-3 py-2 text-sm font-medium text-[var(--admin-text)] transition hover:border-[var(--admin-accent)]"
-              >
+              <Button type="submit" variant="neutral" size="sm" className="shrink-0">
                 Search
-              </button>
+              </Button>
             </form>
             {patientQuery &&
               (results.length === 0 ? (
@@ -442,12 +439,9 @@ export async function GuidedIntakeWizard({
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            <button
-              type="submit"
-              className="rounded-[var(--admin-radius)] bg-[var(--admin-accent)] px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
-            >
+            <Button type="submit" variant="confirm">
               Issue recognition card →
-            </button>
+            </Button>
             <span className="text-xs text-[var(--admin-text-faint)]">
               Step 5 appears after issuing: print the companion card &amp; laminate it (Scotch
               Thermal Laminator).

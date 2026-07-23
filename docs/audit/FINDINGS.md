@@ -764,7 +764,21 @@
   AI/crawler actions (due the sky/fuchsia buttons a home in the palette,
   per the owner’s wish for a purple). Visual before/after:
   `docs/audit/lens4-visuals/01…04.png`.
-- **Status:** OPEN
+- **Status:** FIXED (PR #646) — full mechanical sweep landed. Every flagged
+  raw button in the back office now goes through the canonical `<Button>`
+  (or the exported `CHIP_ACTION` / `CHIP_NEUTRAL` classes for compact
+  in-row/in-table actions). The `special` PURPLE variant
+  (`--admin-purple: #c084fc`, black ink at 7.95:1) was added for
+  "the machine does something for you" actions — every AI advisor,
+  crawler, GrowFlow-sync, Ask/Analyze/Suggest/Generate button is now
+  purple; the off-palette sky/fuchsia/`#5ec1ff` buttons are gone.
+  `bg-red-600` now uses the brand `danger` variant, the rogue lowercase
+  pill uses `<Button size="sm">`, and per mapping rule 13 every raw brand
+  hex touched in the sweep was converted to its `var(--admin-*)` token in
+  the same commit. The only intentional exemption is `AdminTopNav`'s two
+  ghost chips (nav chrome, mapping rule 11). Guarded by
+  `scripts/audit/button-sweep-inventory.py` (repo) and exercised by
+  T-164 (TEST-PLAN §12.8).
 
 ### GW-031 — Twelve buttons put WHITE text on the solid brand green: 1.76:1 contrast — unreadable in bright light and a WCAG failure
 - **Where:** Scripted contrast sweep (WCAG 2.2 relative-luminance math):

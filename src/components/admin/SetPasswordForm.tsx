@@ -24,6 +24,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Button } from "@/components/admin/ui";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   parseAuthFragment,
@@ -126,17 +127,14 @@ export function SetPasswordForm() {
   if (stage === "link-error" || stage === "no-session") {
     return (
       <div className="space-y-4">
-        <div className="rounded-lg border border-[#ff7f00]/40 bg-[#ff7f00]/10 p-4 text-sm text-white/80">
+        <div className="rounded-lg border border-[var(--admin-orange)]/40 bg-[var(--admin-orange)]/10 p-4 text-sm text-white/80">
           {stage === "link-error"
             ? error
             : "This page needs a sign-in link to work. Open the invite email on this device, or sign in first."}
         </div>
-        <a
-          href="/admin/login"
-          className="block w-full rounded-full bg-[#ff7f00] px-4 py-3 text-center text-sm font-bold uppercase tracking-wide text-black transition hover:brightness-110"
-        >
+        <Button href="/admin/login" variant="primary" size="lg" fullWidth>
           Go to sign-in
-        </a>
+        </Button>
         <p className="text-center text-xs text-white/40">
           Tip: on the sign-in page you can use &ldquo;email me a sign-in link&rdquo; — that link
           brings you back here signed in.
@@ -147,7 +145,7 @@ export function SetPasswordForm() {
 
   if (stage === "done") {
     return (
-      <div className="rounded-lg border border-[#7ed957]/30 bg-[#7ed957]/10 p-4 text-center text-sm text-white/80">
+      <div className="rounded-lg border border-[var(--admin-accent)]/30 bg-[var(--admin-accent)]/10 p-4 text-center text-sm text-white/80">
         Password saved. Taking you to the back office&hellip;
       </div>
     );
@@ -157,7 +155,7 @@ export function SetPasswordForm() {
     <form onSubmit={handleSubmit} className="space-y-4">
       {email && (
         <p className="text-center text-sm text-white/60">
-          Choose a password for <span className="font-medium text-[#7ed957]">{email}</span>
+          Choose a password for <span className="font-medium text-[var(--admin-accent)]">{email}</span>
         </p>
       )}
       <div>
@@ -171,7 +169,7 @@ export function SetPasswordForm() {
           minLength={PASSWORD_MIN_LENGTH}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="w-full rounded-lg border border-white/15 bg-black px-3 py-2.5 text-sm text-white outline-none focus:border-[#7ed957]"
+          className="w-full rounded-lg border border-white/15 bg-black px-3 py-2.5 text-sm text-white outline-none focus:border-[var(--admin-accent)]"
           placeholder="At least 8 characters"
         />
       </div>
@@ -186,20 +184,22 @@ export function SetPasswordForm() {
           minLength={PASSWORD_MIN_LENGTH}
           value={confirm}
           onChange={(e) => setConfirm(e.target.value)}
-          className="w-full rounded-lg border border-white/15 bg-black px-3 py-2.5 text-sm text-white outline-none focus:border-[#7ed957]"
+          className="w-full rounded-lg border border-white/15 bg-black px-3 py-2.5 text-sm text-white outline-none focus:border-[var(--admin-accent)]"
           placeholder="Type it again"
         />
       </div>
 
-      {error && <p className="text-sm text-[#ff7f00]">{error}</p>}
+      {error && <p className="text-sm text-[var(--admin-orange)]">{error}</p>}
 
-      <button
+      <Button
         type="submit"
         disabled={stage === "saving"}
-        className="w-full rounded-full bg-[#ff7f00] px-4 py-3 text-sm font-bold uppercase tracking-wide text-black transition hover:brightness-110 disabled:opacity-60"
+        variant="primary"
+        size="lg"
+        fullWidth
       >
         {stage === "saving" ? "Saving…" : "Save password & enter"}
-      </button>
+      </Button>
     </form>
   );
 }

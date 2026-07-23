@@ -10,6 +10,7 @@
  * do?"). Advisory only — it never changes records.
  */
 import { useState, useTransition } from "react";
+import { Button } from "@/components/admin/ui";
 import { useToast } from "@/components/admin/ux";
 import {
   generateHrAdviceAction,
@@ -28,8 +29,8 @@ function BulletList({
 }) {
   if (items.length === 0) return null;
   const color =
-    tone === "warn" ? "text-[#ff6b6b]" : tone === "action" ? "text-[#7ed957]" : "text-[#ffd700]";
-  const dot = tone === "warn" ? "bg-[#ff6b6b]" : tone === "action" ? "bg-[#7ed957]" : "bg-[#ffd700]";
+    tone === "warn" ? "text-[#ff6b6b]" : tone === "action" ? "text-[var(--admin-accent)]" : "text-[var(--admin-gold)]";
+  const dot = tone === "warn" ? "bg-[#ff6b6b]" : tone === "action" ? "bg-[var(--admin-accent)]" : "bg-[var(--admin-gold)]";
   return (
     <div>
       <div className={`text-xs font-semibold uppercase tracking-wide ${color}`}>{title}</div>
@@ -74,14 +75,9 @@ export function HrAdvisorPanel({ aiEnabled }: { aiEnabled: boolean }) {
             advises; it never changes records.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={run}
-          disabled={!aiEnabled || pending}
-          className="rounded-lg bg-[var(--admin-accent)] px-4 py-2 text-sm font-semibold text-black disabled:opacity-40"
-        >
+        <Button type="button" onClick={run} disabled={!aiEnabled || pending} variant="special" size="sm">
           {pending ? "Thinking…" : "Run the HR helper"}
-        </button>
+        </Button>
       </div>
 
       <div className="mt-3">

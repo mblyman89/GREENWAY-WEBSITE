@@ -12,6 +12,7 @@
  * it never guesses account existence.
  */
 import { useState, useTransition } from "react";
+import { Button } from "@/components/admin/ui";
 import { validateChartOfAccountsAction } from "@/app/admin/reports/accounting/sage-actions";
 import type { ChartValidationOutcome } from "@/lib/accounting/sage-helper";
 
@@ -29,14 +30,9 @@ export function ChartOfAccountsValidator({ uploadId }: { uploadId: string }) {
 
   return (
     <div className="mt-1">
-      <button
-        type="button"
-        onClick={run}
-        disabled={pending}
-        className="rounded border border-[var(--admin-accent)]/40 bg-[var(--admin-accent)]/10 px-2 py-1 text-[11px] font-semibold text-[var(--admin-accent)] hover:bg-[var(--admin-accent)]/20 disabled:opacity-50"
-      >
+      <Button type="button" onClick={run} disabled={pending} variant="special" size="sm">
         {pending ? "Checking…" : "Validate GL mappings against this CoA"}
-      </button>
+      </Button>
 
       {result && !result.ok && (
         <p className="mt-2 text-[11px] text-[var(--admin-orange)]">{result.error}</p>
