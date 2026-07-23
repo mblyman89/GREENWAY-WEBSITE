@@ -4,7 +4,7 @@ import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel, EmptyState } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
-import { Badge } from "@/components/admin/ui";
+import { Badge, Button } from "@/components/admin/ui";
 import { getEndorsementConfig, medicalSummary, listExemptSales, listRecentAuthorizations } from "@/lib/medical/store";
 import { DohProductRegistry } from "@/components/admin/medical/DohProductRegistry";
 import { GuidedIntakeWizard } from "@/components/admin/medical/GuidedIntakeWizard";
@@ -62,12 +62,9 @@ export default async function MedicalOverviewPage({
         title="Medical cannabis"
         subtitle="Recognition cards, DOH database (MCR) status, and excise-exempt sale records."
         action={
-          <Link
-            href="#intake"
-            className="inline-flex items-center gap-2 rounded-[var(--admin-radius)] bg-[var(--admin-accent)] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
-          >
+          <Button href="#intake" variant="confirm" className="gap-2">
             📇 Start guided intake
-          </Link>
+          </Button>
         }
         help={
           <HelpPanel

@@ -102,12 +102,13 @@ export async function MedicalPanel({
       )}
 
       {canManage && (
-        <Link
+        <Button
           href={`/admin/medical?patient=${customerId}`}
-          className="inline-flex items-center gap-2 rounded-[var(--admin-radius)] bg-[var(--admin-accent)] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+          variant="confirm"
+          className="gap-2"
         >
           📇 Start guided intake for this patient →
-        </Link>
+        </Button>
       )}
     </div>
   );

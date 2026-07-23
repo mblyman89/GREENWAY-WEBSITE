@@ -404,7 +404,7 @@ export default async function IntakePage({
                 type="file"
                 accept="application/pdf,.pdf"
                 required
-                className="block w-full text-sm text-[var(--admin-text)] file:mr-3 file:rounded-[var(--admin-radius)] file:border-0 file:bg-[var(--admin-accent)] file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:opacity-90"
+                className="block w-full text-sm text-[var(--admin-text)] file:mr-3 file:rounded-[var(--admin-radius)] file:border-0 file:bg-[var(--admin-accent)] file:px-3 file:py-2 file:text-sm file:font-semibold file:text-black hover:file:opacity-90"
               />
             </Field>
             <Button type="submit" variant="save" size="sm">

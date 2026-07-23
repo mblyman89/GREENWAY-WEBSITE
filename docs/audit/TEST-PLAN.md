@@ -1391,6 +1391,18 @@ attempt, even the ones the system wins.*
   the top navigation bar's chips (nav chrome, not actions), text-only
   links, pin pads, calendar cells, and on/off toggles. If every page
   passes, this test passes; any red flag is a finding with a screenshot.
+- **T-165 (the bright-light readability check):** do this one in the worst
+  lighting you have — the front counter at midday, or turn your screen
+  brightness to max. Visit the Medical hub, the Integrations page, a
+  customer's medical panel, Inventory → Drafts (click a status pill), and
+  Inventory → Intake (look at the PDF file-picker button). **Expect:**
+  every green (and gold) button or pill shows BLACK text you can read at
+  arm's length without squinting. **Red flag:** any white text sitting on
+  a solid green or gold fill — that combination measures 1.76:1 contrast,
+  far below the 4.5:1 a human needs, and it is exactly the "washed out in
+  bright light" problem this test exists to catch. Also spot-check any
+  page you use daily: if a button label disappears when the sun hits your
+  screen, report the page and button as a finding with a photo.
 
 ---
 
