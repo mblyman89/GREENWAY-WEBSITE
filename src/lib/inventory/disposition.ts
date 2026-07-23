@@ -15,6 +15,7 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import { ilikeContains } from "@/lib/supabase/postgrest-escape";
 // GW-012: atomic lot quantity writes (strict for reductions).
 import { applyLotDelta } from "@/lib/inventory/atomic-quantity";
 import {
@@ -347,11 +348,10 @@ export type ReturnableOrderLine = {
  */
 export async function findReturnableOrderLines(search: string, limit = 8): Promise<ReturnableOrderLine[]> {
   if (!isSupabaseServiceConfigured) return [];
-  const q = search.trim();
-  if (!q) return [];
+  // GW-021: escape LIKE wildcards + .or() grammar so the term matches literally.
+  const like = ilikeContains(search);
+  if (!like) return [];
   const admin = createSupabaseAdminClient();
-
-  const like = `%${q}%`;
   const { data: orders } = await admin
     .from("orders")
     .select("id, order_number, status, placed_at, completed_at, customer_first_name, customer_last_name")

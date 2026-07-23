@@ -20,6 +20,7 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import { escapeIlikeOrTerm } from "@/lib/supabase/postgrest-escape";
 import { enrollCustomer } from "@/lib/loyalty/loyalty-store";
 import {
   mapSignupToCustomerFields,
@@ -118,7 +119,10 @@ export async function connectSignupToCustomer(
     if (phone) ors.push(`phone_normalized.eq.${phone}`);
     if (email) {
       ors.push(`email_normalized.eq.${email}`);
-      ors.push(`email.ilike.${email}`);
+      // GW-021: `_` is legal in emails but is a LIKE wildcard; escape so the
+      // case-insensitive match stays exact (and `.or()` grammar stays intact).
+      const emailLike = escapeIlikeOrTerm(email);
+      if (emailLike) ors.push(`email.ilike.${emailLike}`);
     }
     const { data } = await admin
       .from("customers")

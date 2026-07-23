@@ -8,6 +8,7 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import { ilikeContains } from "@/lib/supabase/postgrest-escape";
 import type { Customer, CustomerInput, PatientAuthorization } from "@/lib/customers/types";
 
 /** Digits-only phone for dedupe/search (mirrors loyalty normalization). */
@@ -28,16 +29,15 @@ export async function listCustomers(opts?: { q?: string; limit?: number }): Prom
     .limit(opts?.limit ?? 500);
 
   if (opts?.q && opts.q.trim().length > 0) {
-    const term = opts.q.trim();
-    const digits = normalizePhone(term);
+    const digits = normalizePhone(opts.q.trim());
+    // GW-021: escape LIKE wildcards + .or() grammar so the term matches literally.
+    const like = ilikeContains(opts.q);
     // Match on name, email, or normalized phone.
-    const ors = [
-      `first_name.ilike.%${term}%`,
-      `last_name.ilike.%${term}%`,
-      `email.ilike.%${term}%`,
-    ];
+    const ors = like
+      ? [`first_name.ilike.${like}`, `last_name.ilike.${like}`, `email.ilike.${like}`]
+      : [];
     if (digits) ors.push(`phone_normalized.ilike.%${digits}%`);
-    query = query.or(ors.join(","));
+    if (ors.length > 0) query = query.or(ors.join(","));
   }
 
   const { data } = await query;

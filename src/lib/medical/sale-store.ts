@@ -19,6 +19,7 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { chunkedIn } from "@/lib/supabase/chunked-in";
+import { ilikeContains } from "@/lib/supabase/postgrest-escape";
 import { isDohCategory, type DohCategory } from "@/lib/medical/medical-sale-core";
 import { recordExemptSale, type AuthorizationRow } from "@/lib/medical/store";
 import type { ExemptSaleDraft } from "@/lib/medical/medical-sale-core";
@@ -54,10 +55,10 @@ export async function listMedicalRegistry(opts?: { q?: string; limit?: number })
   if (!isSupabaseServiceConfigured) return [];
   const admin = createSupabaseAdminClient();
   let q = admin.from("medical_product_registry").select("*").order("updated_at", { ascending: false });
-  const needle = opts?.q?.trim();
-  if (needle) {
-    const safe = needle.replace(/[%_,]/g, " ");
-    q = q.or(`product_name.ilike.%${safe}%,pos_product_key.ilike.%${safe}%`);
+  // GW-021: shared escaping (wildcards + .or() grammar) instead of a local one-off.
+  const like = opts?.q ? ilikeContains(opts.q) : null;
+  if (like) {
+    q = q.or(`product_name.ilike.${like},pos_product_key.ilike.${like}`);
   }
   q = q.limit(opts?.limit ?? 200);
   const { data, error } = await q;

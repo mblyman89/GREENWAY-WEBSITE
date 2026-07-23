@@ -16,6 +16,7 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
+import { ilikeContains } from "@/lib/supabase/postgrest-escape";
 import type { TableColumn, TableRow, WorkbookSpec } from "@/lib/reports/workbook";
 
 export type LoyaltyStatus = "new" | "entered" | "duplicate" | "archived";
@@ -161,9 +162,9 @@ export async function listLoyaltySignups(
     query = query.eq("status", filter.status);
   }
 
-  const search = filter.search?.trim();
-  if (search) {
-    const like = `%${search}%`;
+  // GW-021: escape LIKE wildcards + .or() grammar so the term matches literally.
+  const like = filter.search ? ilikeContains(filter.search) : null;
+  if (like) {
     query = query.or(
       [
         `first_name.ilike.${like}`,

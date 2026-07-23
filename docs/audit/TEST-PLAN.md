@@ -1403,6 +1403,25 @@ attempt, even the ones the system wins.*
   bright light" problem this test exists to catch. Also spot-check any
   page you use daily: if a button label disappears when the sun hits your
   screen, report the page and button as a finding with a photo.
+- **T-166 (weird characters in every search box):** type `50%,off` into
+  each of these back-office search boxes: Equipment, Loyalty signups,
+  Customers, Inventory lots, Non-cannabis products, Vendors, the Medical
+  product registry, and the Returns "find the original sale" lookup.
+  **Expect:** every one calmly returns "no results" (or only items whose
+  name literally contains that text) — no error message, no page crash,
+  and definitely not a list that suddenly shows EVERYTHING. Then search
+  Customers for a real name that contains an apostrophe (like O'Neil) and
+  confirm it still finds them. **Red flag:** any search box that errors,
+  or that treats `%` or `_` as a "match anything" wildcard instead of the
+  literal character you typed.
+- **T-167 (printer token still guards the door):** with your receipt
+  printer working normally, go to Admin → Equipment → Receipt printer and
+  confirm the poll token is set. Print a test receipt — it should print
+  exactly as before (the security change is invisible when the token
+  matches). Then, from a browser, visit your site's `/api/cloudprnt`
+  address with no token: **expect** an "unauthorized" answer, not a
+  receipt payload. **Red flag:** printing stopped working after this
+  update, or the endpoint answers without a valid token.
 
 ---
 

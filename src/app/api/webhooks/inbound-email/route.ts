@@ -32,6 +32,7 @@
 import { NextResponse } from "next/server";
 import { verifyResendSignature } from "@/lib/cms/email-events/verify-core";
 import { shouldRefuseWhenSecretMissing } from "@/lib/security/fail-closed";
+import { timingSafeEqualStr } from "@/lib/security/constant-time";
 import {
   normalizeInboundEmail,
   isForIntakeMailbox,
@@ -145,7 +146,8 @@ async function handleSendgrid(request: Request) {
   if (token) {
     const url = new URL(request.url);
     const provided = url.searchParams.get("token") ?? request.headers.get("x-inbound-token");
-    signatureOk = provided === token;
+    // GW-022: constant-time compare so response timing can't leak token prefixes.
+    signatureOk = timingSafeEqualStr(provided, token);
     if (!signatureOk) {
       return NextResponse.json({ ok: false, error: "invalid token" }, { status: 401 });
     }

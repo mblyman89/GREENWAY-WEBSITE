@@ -959,7 +959,21 @@
   papercut, but the codebase already owns the fix.
 - **Recommendation:** Reuse the existing `escapeLike` helper (or hoist it to
   a shared module) at both call sites.
-- **Status:** OPEN
+- **Status:** FIXED (PR #649) — hoisted to ONE shared, self-tested module,
+  `src/lib/supabase/postgrest-escape.ts` (`escapeLikeWildcards` /
+  `escapeIlikeOrTerm` / `ilikeContains`; 18 embedded self-tests in the pure
+  runner + vitest mirror `tests/compliance/postgrest-escape.test.ts`).
+  Fixed the two cited sites (equipment assets, loyalty-signups queue) AND —
+  a full-repo sweep found more — the same fix applied to customers search
+  (`customers/store.ts`), returns order-lookup
+  (`inventory/disposition.ts`), inventory-lots search
+  (`inventory/store.ts`), non-cannabis products search
+  (`noncannabis/store.ts`, `.ilike()` wildcards), and the loyalty
+  email-match `.or()` (`signup-customer-store.ts`, `_` in an email is a
+  LIKE wildcard). The three pre-existing local one-offs (vendors,
+  medical sale registry, vendor-platform memory) were migrated onto the
+  shared module so every search box now behaves identically. Exercised by
+  TEST-PLAN T-166.
 
 ### GW-025 — Order notification email is sent blind: the Resend response status is never checked
 - **Where:** `src/lib/orders/notify.ts:39` (`await fetch(RESEND_ENDPOINT, …)`
@@ -1108,7 +1122,15 @@
   stray site.
 - **Recommendation:** Length-check then `timingSafeEqual` on the UTF-8
   bytes, same as `verifyPin` does.
-- **Status:** OPEN
+- **Status:** FIXED (PR #649) — new shared helper `timingSafeEqualStr` in
+  `src/lib/security/constant-time.ts` (length-check then
+  `crypto.timingSafeEqual` over UTF-8 bytes, exactly the `verifyPin`
+  pattern; empty/missing values never match; 14 embedded self-tests in the
+  pure runner + vitest mirror `tests/compliance/constant-time.test.ts`).
+  Applied at the cited CloudPRNT site AND at the one other stray `===`
+  secret compare the sweep found: the inbound-email webhook token check
+  (`src/app/api/webhooks/inbound-email/route.ts`). Exercised by TEST-PLAN
+  T-167.
 
 ### GW-026 — A receipt print job that can never print retries forever every 2 minutes; `attempts` is counted but never capped, and the `failed` status exists but nothing ever sets it
 - **Where:** `src/lib/printing/printer-store.ts:186–196` (claimNextJob
