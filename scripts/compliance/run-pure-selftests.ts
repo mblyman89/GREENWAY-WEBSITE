@@ -120,6 +120,7 @@ import { __runBackLinkTests } from "../../src/lib/admin/back-link-core";
 import { __runPostgrestEscapeTests } from "../../src/lib/supabase/postgrest-escape";
 import { __runPrintRetryCoreTests } from "../../src/lib/printing/print-retry-core";
 import { __runRevenueBasisTests } from "../../src/lib/reports/revenue-basis";
+import { __runRejectedReportTests } from "../../src/lib/pos/rejected-report-core";
 import { __runConstantTimeTests } from "../../src/lib/security/constant-time";
 import { __runGramsPerOunceTests } from "../../src/lib/compliance/grams-per-ounce";
 
@@ -246,6 +247,7 @@ async function main() {
   __runGramsPerOunceTests();
   __runPrintRetryCoreTests();
   __runRevenueBasisTests();
+  __runRejectedReportTests();
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

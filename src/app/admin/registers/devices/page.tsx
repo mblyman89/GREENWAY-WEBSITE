@@ -111,6 +111,23 @@ export default async function PosDevicesPage({
                         </div>
                         <Badge tone={d.status === "active" ? "green" : "danger"}>{d.status}</Badge>
                       </div>
+                      {/* GW-027 — rejected rows live ONLY on the device; this is
+                          the device's self-reported summary from its last sync. */}
+                      {d.rejected_count > 0 ? (
+                        <div className="mt-3 rounded-lg border border-red-500/40 bg-red-500/10 p-3">
+                          <p className="text-sm font-semibold text-red-300">
+                            {d.rejected_count} rejected event{d.rejected_count === 1 ? "" : "s"} held on this device
+                          </p>
+                          <p className="mt-1 text-xs text-[var(--admin-text-dim)]">
+                            {d.rejected_note ? `${d.rejected_note} · ` : ""}
+                            These rows were refused before entering the ledger and exist only on the register —
+                            review them at the device itself.
+                            {d.rejected_reported_at
+                              ? ` Reported ${new Date(d.rejected_reported_at).toLocaleString("en-US")}.`
+                              : ""}
+                          </p>
+                        </div>
+                      ) : null}
                       {d.status === "active" ? (
                         <div className="mt-3 flex flex-wrap items-end gap-3">
                           <form action={bindDeviceAction} className="flex items-end gap-2">

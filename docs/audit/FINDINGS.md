@@ -1107,7 +1107,21 @@
   or better (b) have the register report its rejected-row count/summaries
   through the existing heartbeat sync so the admin registers page can show
   "Register 2 has 3 rejected rows on-device."
-- **Status:** OPEN
+- **Status:** FIXED (PR #653) — recommendation (b) implemented end-to-end,
+  plus the copy fix from (a). A pure policy module
+  (`src/lib/pos/rejected-report-core.ts`, 15 self-tests + vitest mirror)
+  defines the report: `{ count, note }` where the note names the OLDEST
+  rejected row's event type + reason (clamped to 300 chars). The register
+  sends it with EVERY sync flush — including an empty-batch heartbeat when
+  the count changes with nothing queued — and the sync route sanitizes it
+  (bounded count, hostile input refused) and stamps it onto the device row
+  (`pos_devices.rejected_count/rejected_note/rejected_reported_at`,
+  migration 0132; the write is best-effort and tolerates the migration
+  being unapplied). Admin → Register Activity now shows a "Rejected events
+  on registers" section and the POS devices page shows a red panel per
+  affected device. The register status bar now tells the truth:
+  "N rejected — kept on this register; back office has been notified."
+  Verified by T-173.
 
 ---
 

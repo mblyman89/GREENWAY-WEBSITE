@@ -666,9 +666,10 @@ them.
   refuses an event as invalid. If you ever see a red "rejected" banner
   on the register during any test: STOP, photograph it, and log every
   detail. Rejected rows are kept on the iPad for manager review.
-- **⚠️ KNOWN-BROKEN (GW-027):** the promised back-office review page for
-  rejected rows doesn't exist yet; the rows live only on that iPad. Until
-  the fix lands, treat the banner itself as the alarm.
+- **FIXED (GW-027):** the register now reports its rejected-row count and a
+  short summary with every sync, and the back office shows it (Register
+  Activity page + POS devices page). The rows themselves still live only on
+  that iPad — see T-173 for the full check.
 
 #### T-065 — Clock drift protection
 - **Do:** set the iPad's clock 10 minutes FAST (Settings → General → Date
@@ -1468,6 +1469,18 @@ attempt, even the ones the system wins.*
   immediately. **Red flag:** the no-show's total included in any revenue
   figure, or the dashboard gross disagreeing with the Tax tab's completed
   basis by more than the day-boundary difference.
+- **T-173 (the back office knows about rejected rows):** rejected rows are
+  hard to trigger honestly (see T-064) — so test the plumbing with the
+  status copy and the admin panels. On the register, the queue line in the
+  status bar must read "N rejected — kept on this register; back office has
+  been notified" whenever the red banner is up. Within about 15 seconds of
+  the next sync, open Admin → Register Activity: a "Rejected events on
+  registers" card must appear naming the device, the count, and a short
+  note about the oldest row; the POS devices page must show the same
+  red panel on that device. Review and clear the rows at the register,
+  then confirm the card disappears after the next sync. **Red flag:** the
+  register claims the back office was notified but no card ever appears,
+  or a stale card lingers after the device reports zero.
 
 ---
 

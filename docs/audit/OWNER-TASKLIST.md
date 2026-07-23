@@ -48,7 +48,9 @@ files, one by one**. Here is the honest, verified answer:
 
 Also: `docs/MIGRATIONS_TO_RUN.md` is your standing checklist of migrations
 from 0054 onward with a description of what breaks until each is run. If
-you haven't checked off through **0131** (the current last file — 0131 is the
+you haven't checked off through **0132** (the current last file — 0132 is the
+GW-027 fix: the registers report their on-device rejected-row counts so the
+back office can see them; 0131 is the
 GW-009 fix: the medical exempt-sale ledger date defaults to the store's
 Pacific calendar day instead of the UTC day; 0130 is the
 GW-019/GW-020 fix: row-level security and insider-threat hardening; 0129 is the

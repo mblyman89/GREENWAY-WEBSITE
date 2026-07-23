@@ -8,6 +8,7 @@ import { Input, Button, Badge, Card, Section } from "@/components/admin/ui";
 import { RegisterControls } from "@/components/admin/registers/RegisterControls";
 import { getRegisterActivity, type ActivityKind } from "@/lib/registers/oversight";
 import { listPosExceptions } from "@/lib/pos/sync-store";
+import { listPosDevices } from "@/lib/pos/device-store";
 import { formatCents, overShortLabel } from "@/lib/registers/cash";
 import { reconcileDrawerAction, verifyTillAction } from "./actions";
 
@@ -45,8 +46,17 @@ export default async function RegisterActivityPage({
     );
   }
 
-  const [data, openExceptions] = await Promise.all([getRegisterActivity(), listPosExceptions(200)]);
+  const [data, openExceptions, devicesResult] = await Promise.all([
+    getRegisterActivity(),
+    listPosExceptions(200),
+    listPosDevices(),
+  ]);
   const { kpis, onClock, registers, attention, feed, employees } = data;
+  // GW-027 — devices holding server-REJECTED rows (which exist ONLY on the
+  // device). Surface them loudly here so a manager knows to walk over.
+  const rejectedDevices = devicesResult.ok
+    ? devicesResult.devices.filter((d) => d.status === "active" && d.rejected_count > 0)
+    : [];
 
   return (
     <div>
@@ -136,6 +146,35 @@ export default async function RegisterActivityPage({
             accent={kpis.netOverShortTodayMinor === 0 ? "muted" : "orange"}
           />
         </div>
+
+        {/* GW-027 — rejected rows held ON a register device (they never
+            entered the ledger, so this self-reported summary is the only
+            back-office visibility; the rows must be reviewed at the device) */}
+        {rejectedDevices.length > 0 && (
+          <Section
+            title="Rejected events on registers"
+            description="These events were refused by the server before entering the ledger and are held on the register itself — review them at the device."
+          >
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+              {rejectedDevices.map((d) => (
+                <Card key={d.id} padding="md" accent="orange">
+                  <div className="mb-1 flex items-center justify-between">
+                    <span className="text-sm font-semibold text-[var(--admin-text)]">{d.name}</span>
+                    <Badge tone="danger">
+                      {d.rejected_count} rejected
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-[var(--admin-text-muted)]">
+                    {d.rejected_note ? `${d.rejected_note} · ` : ""}
+                    {d.rejected_reported_at
+                      ? `Reported ${new Date(d.rejected_reported_at).toLocaleString("en-US")}.`
+                      : "Reported at last sync."}
+                  </p>
+                </Card>
+              ))}
+            </div>
+          </Section>
+        )}
 
         {/* Needs attention — only when there is something to do */}
         {attention.length > 0 && (

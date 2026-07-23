@@ -22,7 +22,8 @@
  * a loop until its queue is empty.
  */
 import { NextResponse, type NextRequest } from "next/server";
-import { authenticateDevice, ingestPosEvents } from "@/lib/pos/sync-store";
+import { authenticateDevice, ingestPosEvents, recordDeviceRejectedReport } from "@/lib/pos/sync-store";
+import { sanitizeRejectedReport } from "@/lib/pos/rejected-report-core";
 import type { PosEventEnvelope } from "@/lib/pos/sale-event-core";
 
 export const runtime = "nodejs";
@@ -55,8 +56,15 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   if (!Array.isArray(events)) {
     return NextResponse.json({ error: "Body must be { events: [...] }." }, { status: 400 });
   }
+  // GW-027 — the register self-reports how many server-REJECTED rows it is
+  // holding on-device ({ count, note }). Those rows never enter the ledger,
+  // so this summary is the ONLY way the back office can know they exist.
+  // Sanitized (bounded count, clamped note) and persisted best-effort — a
+  // malformed or missing report never affects the flush itself.
+  const rejectedReport = sanitizeRejectedReport((body as { rejectedReport?: unknown })?.rejectedReport);
+  if (rejectedReport) await recordDeviceRejectedReport(auth.device.id, rejectedReport);
   // Empty batch = credential heartbeat (device setup screens verify their
-  // key without submitting a fact).
+  // key without submitting a fact; GW-027 reports also ride empty batches).
   if (events.length === 0) {
     return NextResponse.json({ acks: [], device: { name: auth.device.name, registerId: auth.device.register_id } });
   }
