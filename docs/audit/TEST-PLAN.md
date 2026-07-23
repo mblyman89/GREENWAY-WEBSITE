@@ -1529,6 +1529,21 @@ attempt, even the ones the system wins.*
   matched copy (documented in `charts/theme.ts`). Revert afterwards.
   **Red flag:** any button or badge that keeps the OLD green after the
   knob turns — that means a hard-coded hex crept back in.
+- **T-178 (long lists page instead of silently clipping):** open Admin →
+  Orders, Inventory, and Customers. Under the filters on each page you
+  should see an exact count line — "Showing 1–100 of N orders" (or
+  "Showing all N" when everything fits on one page). If the store has
+  more than 100 rows, Prev/Next pager buttons appear (top and bottom);
+  click Next and confirm the URL gains `?page=2`, the count line updates
+  to "Showing 101–200 of N", and the browser Back button returns to page
+  1. Change a status filter or run a search while on page 2 — the list
+  must reset to page 1 of the new results, never a blank screen. Then
+  hand-edit the URL to an absurd page (`?page=999`) — the page must show
+  the real last page of rows, not an empty table. **Expect:** you can
+  reach EVERY order, lot, and customer by paging, and the count line
+  always tells the truth. **Red flag:** a list that ends at a few
+  hundred rows with no count and no pager — records past the cutoff
+  would be invisible, which is the exact bug this test guards against.
 
 ---
 

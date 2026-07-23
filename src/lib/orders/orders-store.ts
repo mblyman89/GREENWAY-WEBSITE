@@ -174,6 +174,46 @@ export type ListOrdersFilter = {
   limit?: number;
 };
 
+/**
+ * GW-033: paged staff read. Returns the page's rows AND the exact total so
+ * the orders page can show "Showing X–Y of Z" with a real pager instead of
+ * silently clipping at 200 rows.
+ */
+export async function listOrdersPaged(
+  filter: ListOrdersFilter & { from: number; to: number },
+): Promise<{ rows: OrderRow[]; total: number }> {
+  if (!isSupabaseServiceConfigured) return { rows: [], total: 0 };
+  const admin = createSupabaseAdminClient();
+
+  let query = admin.from("orders").select("*", { count: "exact" });
+
+  if (filter.status && filter.status !== "all") {
+    if (filter.status === "active") {
+      query = query.in("status", ["new", "acknowledged", "preparing", "ready"]);
+    } else {
+      query = query.eq("status", filter.status);
+    }
+  }
+
+  const search = filter.search?.trim();
+  if (search) {
+    const like = `%${search}%`;
+    query = query.or(
+      [
+        `order_number.ilike.${like}`,
+        `customer_first_name.ilike.${like}`,
+        `customer_last_name.ilike.${like}`,
+        `customer_phone.ilike.${like}`,
+      ].join(","),
+    );
+  }
+
+  const { data, count } = await query
+    .order("placed_at", { ascending: false })
+    .range(filter.from, filter.to);
+  return { rows: (data as OrderRow[]) ?? [], total: count ?? 0 };
+}
+
 export async function listOrders(filter: ListOrdersFilter = {}): Promise<OrderRow[]> {
   if (!isSupabaseServiceConfigured) return [];
   const admin = createSupabaseAdminClient();

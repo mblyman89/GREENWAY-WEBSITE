@@ -5,7 +5,9 @@ import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel, EmptyState } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
 import { Input, Button } from "@/components/admin/ui";
-import { listCustomers, countCustomers } from "@/lib/customers/store";
+import { listCustomersPaged, countCustomers } from "@/lib/customers/store";
+import { listWindow, parsePageParam, DEFAULT_PAGE_SIZE } from "@/lib/admin/list-window-core";
+import { ListPager } from "@/components/admin/ux/ListPager";
 
 export const dynamic = "force-dynamic";
 
@@ -16,10 +18,11 @@ function fmtMoney(minor: number): string {
 export default async function CustomersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string; page?: string }>;
 }) {
   await requirePermission("customers.manage");
-  const { q } = await searchParams;
+  const { q, page } = await searchParams;
+  const rawPage = parsePageParam(page);
 
   if (!isSupabaseServiceConfigured) {
     return (
@@ -35,7 +38,26 @@ export default async function CustomersPage({
     );
   }
 
-  const [customers, counts] = await Promise.all([listCustomers({ q }), countCustomers()]);
+  // GW-033: fetch the requested page window plus the exact total. If the
+  // requested page is past the end (stale link), clamp and refetch the real
+  // last page so the screen is never empty while rows exist.
+  const firstWin = listWindow(Number.MAX_SAFE_INTEGER, rawPage, DEFAULT_PAGE_SIZE);
+  const [firstPage, counts] = await Promise.all([
+    listCustomersPaged({ q, from: firstWin.from, to: firstWin.to }),
+    countCustomers(),
+  ]);
+  let { rows: customers, total } = firstPage;
+  const win = listWindow(total, rawPage, DEFAULT_PAGE_SIZE);
+  if (win.page !== rawPage && total > 0) {
+    ({ rows: customers, total } = await listCustomersPaged({ q, from: win.from, to: win.to }));
+  }
+  const pageHref = (p: number) => {
+    const params = new URLSearchParams();
+    if (q) params.set("q", q);
+    if (p > 1) params.set("page", String(p));
+    const qs = params.toString();
+    return `/admin/customers${qs ? `?${qs}` : ""}`;
+  };
 
   return (
     <div>
@@ -88,6 +110,9 @@ export default async function CustomersPage({
           </Button>
         </form>
 
+        {/* GW-033: exact result count + pager (server-side pagination). */}
+        <ListPager window={win} total={total} noun="customer" makeHref={pageHref} />
+
         {counts.total === 0 && (
           <EmptyState
             icon="👤"
@@ -137,6 +162,9 @@ export default async function CustomersPage({
               </tbody>
             </table>
           </div>
+        )}
+        {win.totalPages > 1 && (
+          <ListPager window={win} total={total} noun="customer" makeHref={pageHref} />
         )}
         {customers.length === 0 && counts.total > 0 && (
           <p className="text-sm text-white/50">No customers match your search.</p>

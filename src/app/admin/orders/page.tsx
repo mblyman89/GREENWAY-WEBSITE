@@ -8,7 +8,9 @@ import { Card } from "@/components/admin/ui/Card";
 import { Button } from "@/components/admin/ui/Button";
 import { Input } from "@/components/admin/ui/Field";
 import { formatMinorCurrency } from "@/lib/leafly/format";
-import { listOrders, getOrderStatusCounts } from "@/lib/orders/orders-store";
+import { listOrdersPaged, getOrderStatusCounts } from "@/lib/orders/orders-store";
+import { listWindow, parsePageParam, DEFAULT_PAGE_SIZE } from "@/lib/admin/list-window-core";
+import { ListPager } from "@/components/admin/ux/ListPager";
 import {
   ORDER_STATUS_LABELS,
   ORDER_FORWARD_TRANSITIONS,
@@ -61,12 +63,13 @@ function timeAgo(iso: string): string {
 export default async function OrdersAdminPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; q?: string }>;
+  searchParams: Promise<{ status?: string; q?: string; page?: string }>;
 }) {
   await requirePermission("orders.view");
   const sp = await searchParams;
   const status = (sp.status as OrderStatus | "active" | "all" | undefined) ?? "active";
   const search = sp.q ?? "";
+  const rawPage = parsePageParam(sp.page);
   // GW-029: carry the current filters/search into detail links so BackLink
   // can restore this exact view.
   const detailHref = (id: string) => withBackParam(`/admin/orders/${id}`, sp);
@@ -89,10 +92,32 @@ export default async function OrdersAdminPage({
     );
   }
 
-  const [orders, counts] = await Promise.all([
-    listOrders({ status, search }),
+  // GW-033: fetch the requested page window plus the exact total. If the
+  // requested page is past the end (stale link), clamp and refetch the real
+  // last page so the screen is never empty while rows exist.
+  const firstWin = listWindow(Number.MAX_SAFE_INTEGER, rawPage, DEFAULT_PAGE_SIZE);
+  const [firstPage, counts] = await Promise.all([
+    listOrdersPaged({ status, search, from: firstWin.from, to: firstWin.to }),
     getOrderStatusCounts(),
   ]);
+  let { rows: orders, total } = firstPage;
+  const win = listWindow(total, rawPage, DEFAULT_PAGE_SIZE);
+  if (win.page !== rawPage && total > 0) {
+    ({ rows: orders, total } = await listOrdersPaged({
+      status,
+      search,
+      from: win.from,
+      to: win.to,
+    }));
+  }
+  const pageHref = (p: number) => {
+    const params = new URLSearchParams();
+    if (status !== "active") params.set("status", status);
+    if (search) params.set("q", search);
+    if (p > 1) params.set("page", String(p));
+    const qs = params.toString();
+    return `/admin/orders${qs ? `?${qs}` : ""}`;
+  };
 
   const activeCount = counts.new + counts.acknowledged + counts.preparing + counts.ready;
 
@@ -164,6 +189,11 @@ export default async function OrdersAdminPage({
           </div>
         </form>
 
+        {/* GW-033: exact count + pager — a clipped list is never silent. */}
+        <div className="mt-4">
+          <ListPager window={win} total={total} noun="order" makeHref={pageHref} />
+        </div>
+
         {/* Order cards */}
         {orders.length === 0 ? (
           <div className="mt-8">
@@ -226,6 +256,13 @@ export default async function OrdersAdminPage({
                 </Card>
               );
             })}
+          </div>
+        )}
+
+        {/* Bottom pager (long lists — save the scroll back up). */}
+        {win.totalPages > 1 && (
+          <div className="mt-5">
+            <ListPager window={win} total={total} noun="order" makeHref={pageHref} />
           </div>
         )}
       </div>

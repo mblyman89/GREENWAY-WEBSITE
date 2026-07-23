@@ -11,6 +11,7 @@ export { Tooltip } from "./Tooltip";
 export { InfoHint } from "./InfoHint";
 export { HelpPanel } from "./HelpPanel";
 export { EmptyState } from "./EmptyState";
+export { ListPager } from "./ListPager";
 export { ErrorState } from "./ErrorState";
 export { StatusPill } from "./StatusPill";
 export {

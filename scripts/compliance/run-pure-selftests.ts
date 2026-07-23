@@ -122,6 +122,7 @@ import { __runPrintRetryCoreTests } from "../../src/lib/printing/print-retry-cor
 import { __runRevenueBasisTests } from "../../src/lib/reports/revenue-basis";
 import { __runRejectedReportTests } from "../../src/lib/pos/rejected-report-core";
 import { __runReservationExpiryTests } from "../../src/lib/orders/reservation-expiry-core";
+import { __runListWindowTests } from "../../src/lib/admin/list-window-core";
 import { __runConstantTimeTests } from "../../src/lib/security/constant-time";
 import { __runGramsPerOunceTests } from "../../src/lib/compliance/grams-per-ounce";
 
@@ -250,6 +251,7 @@ async function main() {
   __runRevenueBasisTests();
   __runRejectedReportTests();
   __runReservationExpiryTests();
+  __runListWindowTests();
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
