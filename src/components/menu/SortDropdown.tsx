@@ -31,8 +31,11 @@ export function SortDropdown({ value, onChange }: SortDropdownProps) {
         className="h-11 w-full cursor-pointer appearance-none rounded-full border border-white/10 bg-zinc-950 pl-4 pr-10 text-sm font-black uppercase tracking-[0.12em] text-transparent outline-none transition hover:border-[var(--greenway)]/45 focus:border-[var(--greenway)] focus:ring-2 focus:ring-[var(--greenway)]/20"
         aria-label="Sort products"
       >
+        {/* Explicit dark bg + light ink on every option: the popup list must
+            never fall back to the browser's white sheet with white text
+            (invisible rows). */}
         {sortOptions.map((option) => (
-          <option key={option.value} value={option.value} className="text-white">
+          <option key={option.value} value={option.value} className="bg-zinc-950 text-white">
             {option.label}
           </option>
         ))}

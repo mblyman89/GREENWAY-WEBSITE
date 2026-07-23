@@ -45,6 +45,16 @@
   --admin-purple: #c084fc;          /* AI / automation actions — black ink, 7.95:1 */
   --admin-purple-soft: rgba(192, 132, 252, 0.14);
 
+  /* Legacy alias tokens. A scripted audit found these FOUR names used across
+     ~60 admin files but never defined — var() resolved to NOTHING, leaving
+     transparent select/input backgrounds (whose popups then fell back to the
+     browser's white) and invisible text tints. Aliased to the real tokens so
+     every historical usage instantly picks up the design system. */
+  --admin-bg: var(--admin-surface-2);
+  --admin-green: var(--admin-accent);
+  --admin-muted: var(--admin-text-muted);
+  --admin-text-dim: var(--admin-text-muted);
+
   /* Radius scale. */
   --admin-radius-sm: 0.5rem;   /* pills, small controls */
   --admin-radius: 0.75rem;     /* inputs, buttons */
@@ -234,9 +244,43 @@ body {
     radial-gradient(circle at top right, rgba(255, 127, 0, 0.16), transparent 28rem),
     #000000;
   color: var(--foreground);
+  /* The whole product is dark (black public site, dark back office, dark
+     registers), so native form controls follow suit. Without this the PUBLIC
+     site's select popups render on the browser-default WHITE — and the menu
+     sort dropdown's white option text disappears into it. The light POS theme
+     re-overrides inside .pos-shell. */
+  color-scheme: dark;
   /* --font-body is set on <html> from the staff-chosen font (Admin → Site
      Content). Falls back to the system stack when unset. */
   font-family: var(--font-body, Arial, Helvetica, sans-serif);
+}
+
+/* ---------------------------------------------------------------------------
+ * Dropdown popups (<option> lists) must NEVER render white-on-white.
+ * color-scheme (above / per-shell) makes the popup chrome dark; these explicit
+ * colors cover the browsers that paint option rows from CSS (Chromium and
+ * Firefox on desktop). Base rule matches the public site; the shells re-tint
+ * to their own surface tokens; the light POS theme flips to white-on-dark-ink.
+ * ------------------------------------------------------------------------- */
+option,
+optgroup {
+  background-color: #0c0f0d;
+  color: #f5f7f5;
+}
+.admin-shell option,
+.admin-shell optgroup {
+  background-color: var(--admin-surface-2);
+  color: var(--admin-text);
+}
+.pos-shell option,
+.pos-shell optgroup {
+  background-color: var(--pos-surface-2);
+  color: var(--pos-text);
+}
+html[data-pos-theme="light"] .pos-shell option,
+html[data-pos-theme="light"] .pos-shell optgroup {
+  background-color: #ffffff;
+  color: var(--pos-text);
 }
 
 /* Headings use the staff-chosen heading font site-wide. Falls back to the body

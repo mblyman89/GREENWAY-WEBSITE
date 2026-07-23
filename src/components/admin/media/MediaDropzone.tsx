@@ -120,7 +120,7 @@ export function MediaDropzone({
           <input
             name="title"
             placeholder="e.g. Spring Sale Hero, Sticky Lemon Brand Logo"
-            className="w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[var(--admin-accent)]"
+            className="w-full rounded-[var(--admin-radius)] border border-[var(--admin-border-strong)] bg-[var(--admin-surface-2)] px-3 py-2 text-sm text-[var(--admin-text)] outline-none focus:border-[var(--admin-accent)]"
           />
         </label>
         <label className="block">
@@ -129,7 +129,7 @@ export function MediaDropzone({
           </span>
           <select
             name="usage_type"
-            className="w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[var(--admin-accent)]"
+            className="w-full rounded-[var(--admin-radius)] border border-[var(--admin-border-strong)] bg-[var(--admin-surface-2)] px-3 py-2 text-sm text-[var(--admin-text)] outline-none focus:border-[var(--admin-accent)]"
           >
             <option value="">— choose a purpose —</option>
             {MEDIA_PURPOSES.map((p) => (
@@ -144,7 +144,7 @@ export function MediaDropzone({
           <select
             name="status"
             defaultValue="draft"
-            className="w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[var(--admin-accent)]"
+            className="w-full rounded-[var(--admin-radius)] border border-[var(--admin-border-strong)] bg-[var(--admin-surface-2)] px-3 py-2 text-sm text-[var(--admin-text)] outline-none focus:border-[var(--admin-accent)]"
           >
             <option value="draft">Draft (staff only)</option>
             <option value="published">Published (public)</option>
@@ -158,7 +158,7 @@ export function MediaDropzone({
             name="tags"
             list="placement-suggestions"
             placeholder="home-hero, menu-banner"
-            className="w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[var(--admin-accent)]"
+            className="w-full rounded-[var(--admin-radius)] border border-[var(--admin-border-strong)] bg-[var(--admin-surface-2)] px-3 py-2 text-sm text-[var(--admin-text)] outline-none focus:border-[var(--admin-accent)]"
           />
           <datalist id="placement-suggestions">
             {PLACEMENT_SUGGESTIONS.map((p) => (
@@ -173,7 +173,7 @@ export function MediaDropzone({
           <input
             name="alt_text"
             placeholder="Describe what's in the image"
-            className="w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-[var(--admin-accent)]"
+            className="w-full rounded-[var(--admin-radius)] border border-[var(--admin-border-strong)] bg-[var(--admin-surface-2)] px-3 py-2 text-sm text-[var(--admin-text)] outline-none focus:border-[var(--admin-accent)]"
           />
         </label>
       </div>

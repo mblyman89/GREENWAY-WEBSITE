@@ -1496,6 +1496,17 @@ attempt, even the ones the system wins.*
   **Red flag:** an acknowledged/preparing/ready order auto-closing, stock
   levels changing when the sweep runs, or the no-show missing its
   plain-English timeline note.
+- **T-175 (no dropdown list is ever white-on-white):** open each of these
+  and pop the dropdown open — the option list must show dark rows with
+  readable light text (or, on the light register theme, white rows with
+  dark text). Check: the public menu’s SORT BY control, Admin → Media
+  upload “Why / purpose”, Admin → Knowledge Base → FAQs category, Admin
+  → Reports → Excise month/year, Admin → Payroll account type, and the
+  register’s ID-type list on Start Sale (both dark and light themes).
+  **Expect:** every option row is readable at a glance without hovering.
+  **Red flag:** a white popup where the rows only become readable when
+  the mouse highlights them blue — that is the exact bug this test
+  guards against.
 
 ---
 
