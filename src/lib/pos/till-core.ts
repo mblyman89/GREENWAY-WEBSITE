@@ -48,6 +48,13 @@ export type TillCloseRequest = {
   action: "close";
   pin: string;
   denoms: DenomCounts;
+  /**
+   * Tips counted out of the tip jar at close, MINOR units (cents).
+   * OMITTED = not recorded (drawer_sessions.tips_minor stays NULL);
+   * 0 = the cashier explicitly counted a zero jar. Tips are the
+   * employee's money and NEVER enter expected-close / over-short math.
+   */
+  tipsMinor?: number;
 };
 
 export type TillRequest = TillOpenRequest | TillDropRequest | TillCloseRequest;
@@ -66,6 +73,9 @@ export const MAX_DROP_MINOR = 5_000_000;
 
 export const MAX_NOTES_LEN = 500;
 
+/** Single-shift tips cap: $10,000 in cents. Nothing above this is a typo-free count. */
+export const MAX_TIPS_MINOR = 1_000_000;
+
 const DROP_WINDOWS = new Set(["afternoon", "night", "other"]);
 
 // ---------------------------------------------------------------------------
@@ -83,6 +93,23 @@ export function dollarsToMinor(raw: string): number | null {
   if (!/^\d+(\.\d{1,2})?$/.test(cleaned)) return null;
   const n = Number(cleaned);
   if (!Number.isFinite(n) || n <= 0) return null;
+  return Math.round(n * 100);
+}
+
+/**
+ * Parse a cashier-typed tips dollar string into MINOR units. Unlike
+ * dollarsToMinor (where a $0 drop is meaningless), "0" here is a REAL
+ * answer — the cashier counted an empty tip jar — so zero parses to 0.
+ * Blank also returns 0 (treat an untouched field as "no tips").
+ * Garbage, negatives, and sub-cent precision return null so the UI can
+ * block submit instead of silently recording a wrong number.
+ */
+export function tipsToMinor(raw: string): number | null {
+  const cleaned = String(raw ?? "").replace(/[$,\s]/g, "");
+  if (!cleaned) return 0;
+  if (!/^\d+(\.\d{1,2})?$/.test(cleaned)) return null;
+  const n = Number(cleaned);
+  if (!Number.isFinite(n) || n < 0) return null;
   return Math.round(n * 100);
 }
 
@@ -124,6 +151,16 @@ export function validateTillRequest(body: unknown): TillValidation {
     }
     // A blind close of a genuinely empty drawer is legitimate (all cash was
     // dropped) — no minimum on close.
+    if (action === "close" && b.tipsMinor !== undefined) {
+      const tipsMinor = Number(b.tipsMinor);
+      if (!Number.isInteger(tipsMinor) || tipsMinor < 0) {
+        return { ok: false, error: "Tips must be zero or a positive whole number of cents." };
+      }
+      if (tipsMinor > MAX_TIPS_MINOR) {
+        return { ok: false, error: "Tips amount is implausibly large — check the number." };
+      }
+      return { ok: true, req: { action, pin, denoms, tipsMinor } };
+    }
     return { ok: true, req: { action, pin, denoms } };
   }
 
@@ -220,6 +257,34 @@ export function __runTillCoreTests(): void {
   const close1 = validateTillRequest({ action: "close", pin: "1234", denoms: {} });
   ok(close1.ok && close1.req.action === "close" && denomTotalMinor(close1.req.denoms) === 0,
     "close: zero-count blind close accepted (all cash was dropped)");
+  ok(close1.ok && close1.req.action === "close" && close1.req.tipsMinor === undefined,
+    "close: tips omitted stays omitted (tips_minor stays NULL — not recorded)");
+
+  // tipsToMinor — "0" and blank are REAL answers (counted-zero / not recorded)
+  ok(tipsToMinor("42.50") === 4250, "tipsToMinor: dollars and cents parse");
+  ok(tipsToMinor("$1,250.50") === 125050, "tipsToMinor: strips $ and commas");
+  ok(tipsToMinor("0") === 0, "tipsToMinor: zero is a real answer (empty jar counted)");
+  ok(tipsToMinor("") === 0, "tipsToMinor: blank means no tips (0), never blocks close");
+  ok(tipsToMinor("-5") === null, "tipsToMinor: negatives rejected");
+  ok(tipsToMinor("12.345") === null, "tipsToMinor: sub-cent precision rejected");
+  ok(tipsToMinor("abc") === null, "tipsToMinor: garbage rejected");
+
+  // validateTillRequest — close with tips (employee money, separate from drawer)
+  const closeTips = validateTillRequest({ action: "close", pin: "1234", denoms: { twenties: 2 }, tipsMinor: 4250 });
+  ok(closeTips.ok && closeTips.req.action === "close" && closeTips.req.tipsMinor === 4250,
+    "close: $42.50 tips carried through validation");
+  const closeTips0 = validateTillRequest({ action: "close", pin: "1234", denoms: {}, tipsMinor: 0 });
+  ok(closeTips0.ok && closeTips0.req.action === "close" && closeTips0.req.tipsMinor === 0,
+    "close: explicit zero tips preserved (counted-zero, distinct from omitted)");
+  ok(!validateTillRequest({ action: "close", pin: "1234", denoms: {}, tipsMinor: -1 }).ok,
+    "close: negative tips rejected");
+  ok(!validateTillRequest({ action: "close", pin: "1234", denoms: {}, tipsMinor: 10.5 }).ok,
+    "close: non-integer tips cents rejected");
+  ok(!validateTillRequest({ action: "close", pin: "1234", denoms: {}, tipsMinor: MAX_TIPS_MINOR + 1 }).ok,
+    "close: implausibly large tips rejected");
+  const openNoTips = validateTillRequest({ action: "open", pin: "1234", denoms: { ones: 1 }, tipsMinor: 500 });
+  ok(openNoTips.ok && openNoTips.req.action === "open" && !("tipsMinor" in openNoTips.req),
+    "open: stray tipsMinor ignored (tips only exist at close)");
 
   // shape guards
   ok(!validateTillRequest(null).ok, "null body rejected");

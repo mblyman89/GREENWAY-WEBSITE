@@ -175,6 +175,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     sessionId: session.id,
     employeeId: employee.id,
     denoms: till.denoms,
+    // Tips are the employee's money — recorded alongside the close but kept
+    // OUT of the drawer math (migration 0134; best-effort if unapplied).
+    ...(till.tipsMinor !== undefined ? { tipsMinor: till.tipsMinor } : {}),
   });
   if (!result.ok) return NextResponse.json({ error: result.error ?? "Close failed." }, { status: 409 });
 
@@ -184,7 +187,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     action: "drawer.closed_blind",
     entityType: "drawer_session",
     entityId: session.id,
-    after: { via: "register", deviceId: auth.device.id, employeeId: employee.id },
+    after: {
+      via: "register",
+      deviceId: auth.device.id,
+      employeeId: employee.id,
+      // Tips are NOT blind (they're the cashier's own money) — auditable here.
+      ...(till.tipsMinor !== undefined ? { tipsMinor: till.tipsMinor } : {}),
+    },
   });
 
   // BLIND: no expected, no variance, no counted total echoed back beyond ok.

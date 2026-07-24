@@ -124,6 +124,11 @@ export type AttentionItem = {
    * refunds paid from this drawer, or blind counts show false shortages.
    */
   dayRefundTotalMinor: number;
+  /**
+   * Tips counted at close (cents, migration 0134). null = not recorded.
+   * Employee money — shown for context only; NEVER part of expected/over-short.
+   */
+  tipsMinor: number | null;
 };
 
 export type ActivityKind =
@@ -358,6 +363,7 @@ export async function getRegisterActivity(): Promise<RegisterActivitySnapshot> {
         expectedCloseMinor: s.expected_close_minor,
         closingCountMinor: s.closing_count_minor,
         dayRefundTotalMinor: refundsByDay.get(s.business_day) ?? 0,
+        tipsMinor: s.tips_minor ?? null,
       });
     } else if (s.status === "reconciled") {
       attention.push({
@@ -368,6 +374,7 @@ export async function getRegisterActivity(): Promise<RegisterActivitySnapshot> {
         expectedCloseMinor: s.expected_close_minor,
         closingCountMinor: s.closing_count_minor,
         dayRefundTotalMinor: refundsByDay.get(s.business_day) ?? 0,
+        tipsMinor: s.tips_minor ?? null,
       });
     }
   }

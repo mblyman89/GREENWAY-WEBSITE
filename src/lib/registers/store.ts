@@ -33,6 +33,12 @@ export type DrawerSession = {
   closing_count_minor: number | null;
   expected_close_minor: number | null;
   over_short_minor: number | null;
+  /**
+   * Tips counted at close, cents (migration 0134). NULL = not recorded;
+   * 0 = counted-zero jar. Employee money — never part of expected/over-short.
+   * Optional so the type stays truthful before 0134 is applied.
+   */
+  tips_minor?: number | null;
   opened_at: string | null;
   closed_at: string | null;
   reconciled_at: string | null;
@@ -193,6 +199,13 @@ export async function closeDrawerBlind(opts: {
   sessionId: string;
   employeeId: string | null;
   denoms: DenomCounts;
+  /**
+   * Tips counted at close (cents). undefined = not recorded (column stays
+   * NULL); 0 = counted-zero jar. Written BEST-EFFORT in a separate update
+   * (0120 device_id pattern) so a close never fails if migration 0134 is
+   * unapplied. Tips never touch the drawer's expected/over-short math.
+   */
+  tipsMinor?: number;
 }): Promise<{ ok: boolean; error?: string }> {
   if (!isSupabaseServiceConfigured) return { ok: false, error: "Database not configured." };
   const admin = createSupabaseAdminClient();
@@ -213,6 +226,21 @@ export async function closeDrawerBlind(opts: {
     })
     .eq("id", opts.sessionId);
   if (error) return { ok: false, error: error.message };
+
+  // Best-effort tips stamp (drawer_sessions.tips_minor, migration 0134).
+  // Separate update so an unapplied migration can never block the close —
+  // the blind count itself is already durable above.
+  if (opts.tipsMinor !== undefined) {
+    try {
+      await admin
+        .from("drawer_sessions")
+        .update({ tips_minor: opts.tipsMinor })
+        .eq("id", opts.sessionId);
+    } catch {
+      // Column may not exist yet if 0134 is unapplied — the tip figure is
+      // skipped, nothing else.
+    }
+  }
 
   await admin.from("drawer_counts").insert({
     session_id: opts.sessionId,
