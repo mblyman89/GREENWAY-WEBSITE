@@ -32,6 +32,9 @@ import { trimDescription } from "@/lib/pos/product-info-core";
 import { gramsFromVariantLabel } from "@/lib/pos/variant-grams-core";
 import { cleanCardDisplayName } from "@/lib/pos/menu-name-display-core";
 import { getConfig as getLoyaltyConfig } from "@/lib/loyalty/loyalty-store";
+// SLICE 28 — the owner's employee/industry/veteran discount settings ride the
+// bundle so the register offers the programs OFFLINE with the saved rates.
+import { getSpecialDiscountSettings } from "@/lib/discounts/special-discount-store";
 import { listMedicalRegistry } from "@/lib/medical/sale-store";
 import type { DohCategory } from "@/lib/medical/medical-sale-core";
 import type { PosMedicalConfig } from "@/lib/pos/medical-pos-core";
@@ -71,6 +74,11 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       getPosScanRequiredConfig(),
     ]);
   const loyaltyCfg = await getLoyaltyConfig();
+  // SLICE 28 — ship ALL three program rows (enabled or not); the device
+  // filters with availableSpecialDiscounts, and the sync re-verifies the
+  // program is enabled + the rate matches at completion time, so a stale
+  // cached bundle can never make an off-book discount stick.
+  const specialDiscounts = await getSpecialDiscountSettings();
 
   // AN-7 — recall hold: products with ANY lot in `recalled` status are
   // EXCLUDED from the register bundle so they can't even be rung up. This is
@@ -240,6 +248,9 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     // POS B41 — scan-required mode rides the bundle so OFFLINE registers
     // keep enforcing the cached policy.
     scanRequired,
+    // SLICE 28 — special-discount program settings (employee/industry/
+    // veteran rates + switches) so the register offers them OFFLINE.
+    specialDiscounts,
     fetchedAt: new Date().toISOString(),
   };
 

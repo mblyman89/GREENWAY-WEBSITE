@@ -193,6 +193,16 @@ export type PosSaleLine = {
    */
   loyaltyDiscountMinor?: number;
   /**
+   * Per-UNIT reduction taken by a SPECIAL discount program (SLICE 28 —
+   * employee / industry / veteran, migration 0133). OPTIONAL so previously
+   * queued sales still validate. `unitPriceMinor` above IS the reduced
+   * (charged) price; this records the program's per-unit cut, computed
+   * on-device by applySpecialDiscountToLines with the SAME legal floors
+   * loyalty uses. Only valid when the payload carries a `specialDiscount`
+   * block (orphaned reductions are refused).
+   */
+  specialDiscountMinor?: number;
+  /**
    * AN-1 — grams ONE unit of the sold variant weighs, from the menu bundle
    * (parsed server-side from the package label: "3.5g" → 3.5, "1oz" → 28).
    * OPTIONAL so pre-AN-1 queued sales still validate; absent/null = unknown
@@ -282,6 +292,33 @@ export type PosSalePayload = {
     appliedMinor: number;
   };
   /**
+   * Present when a SPECIAL discount program was applied at the register
+   * (SLICE 28 — employee / industry / veteran, migration 0133). ONE special
+   * discount per sale; the reduced prices already live in the lines (each
+   * reduced line carries specialDiscountMinor). The employee program's
+   * approver was verified ONLINE by /api/pos/witness (scrypt PIN, ANY active
+   * employee, must differ from the buyer) moments before enqueue — the PIN
+   * itself never rides in any queue payload. At sync the server re-validates
+   * the program rules (validateSpecialDiscountUse), records the use in
+   * special_discount_uses (unique client_uuid = a retry can never
+   * double-record), and audits it.
+   */
+  specialDiscount?: {
+    kind: "employee" | "industry" | "veteran";
+    /** The program rate the device applied, basis points (3500 = 35%). */
+    percentBps: number;
+    /** Σ per-line specialDiscountMinor × quantity (server re-sums and must match). */
+    appliedMinor: number;
+    /** employee program: which staff member is buying (employees.id). */
+    beneficiaryEmployeeId?: string;
+    /** employee program: the OTHER employee who approved by PIN (employees.id). */
+    approvedByEmployeeId?: string;
+    /** industry program: the visitor's company (2–120 chars, trackable). */
+    companyName?: string;
+    /** veteran program: cashier confirmed a physical military ID. */
+    militaryIdChecked?: boolean;
+  };
+  /**
    * Present when CASH ROUNDING adjusted the amount due (POS B33). WA DOR
    * interim guidance: tax is computed on the PRE-ROUNDED price, so
    * totalMinor/subtotalMinor/taxMinor above stay exactly as priced and the
@@ -336,6 +373,14 @@ export function validateSalePayload(p: Partial<PosSalePayload>): SalePayloadChec
       if (l.loyaltyDiscountMinor !== undefined) {
         if (!Number.isInteger(l.loyaltyDiscountMinor) || l.loyaltyDiscountMinor <= 0) {
           errors.push(`Line ${i + 1}: loyaltyDiscountMinor, when present, must be a positive integer (cents).`);
+        }
+      }
+      // SLICE 28: optional per-UNIT special-discount reduction — same
+      // discipline as the loyalty reduction (positive whole cents; the
+      // block/line coherence check runs below).
+      if (l.specialDiscountMinor !== undefined) {
+        if (!Number.isInteger(l.specialDiscountMinor) || l.specialDiscountMinor <= 0) {
+          errors.push(`Line ${i + 1}: specialDiscountMinor, when present, must be a positive integer (cents).`);
         }
       }
       // POS B24: the manager price-override block is OPTIONAL, but when
@@ -514,6 +559,69 @@ export function validateSalePayload(p: Partial<PosSalePayload>): SalePayloadChec
   } else if (lineLoyaltySum > 0) {
     errors.push(
       "Lines carry loyaltyDiscountMinor but the payload has no loyaltyRedemption block — orphaned discount refused.",
+    );
+  }
+  // SLICE 28 — optional special-discount block (employee/industry/veteran).
+  // Same coherence discipline as loyalty: appliedMinor must equal the sum of
+  // per-line reductions × quantity; per-line reductions without the block are
+  // orphaned corruption. Program facts are checked structurally here (the
+  // sync re-validates the full rules with validateSpecialDiscountUse).
+  const lineSpecialSum = Array.isArray(p.lines)
+    ? p.lines.reduce(
+        (s, l) =>
+          s +
+          (l && Number.isInteger(l.specialDiscountMinor) && Number.isInteger(l.quantity)
+            ? (l.specialDiscountMinor as number) * (l.quantity as number)
+            : 0),
+        0,
+      )
+    : 0;
+  if (p.specialDiscount !== undefined) {
+    const sd = p.specialDiscount;
+    if (sd == null || typeof sd !== "object") {
+      errors.push("specialDiscount must be an object when present.");
+    } else {
+      if (sd.kind !== "employee" && sd.kind !== "industry" && sd.kind !== "veteran") {
+        errors.push('specialDiscount.kind must be "employee", "industry", or "veteran".');
+      }
+      if (!Number.isInteger(sd.percentBps) || sd.percentBps <= 0 || sd.percentBps > 10_000) {
+        errors.push("specialDiscount.percentBps must be an integer between 1 and 10000 (basis points).");
+      }
+      if (!Number.isInteger(sd.appliedMinor) || sd.appliedMinor <= 0) {
+        errors.push("specialDiscount.appliedMinor must be a positive integer (cents).");
+      } else if (sd.appliedMinor !== lineSpecialSum) {
+        errors.push(
+          "specialDiscount.appliedMinor must equal the sum of per-line specialDiscountMinor × quantity.",
+        );
+      }
+      if (sd.kind === "employee") {
+        if (!isUuid(sd.beneficiaryEmployeeId)) {
+          errors.push("Employee discount must record which employee is buying (beneficiaryEmployeeId).");
+        }
+        if (!isUuid(sd.approvedByEmployeeId)) {
+          errors.push("Employee discount must record the approving employee (approvedByEmployeeId).");
+        }
+        if (
+          isUuid(sd.beneficiaryEmployeeId) &&
+          isUuid(sd.approvedByEmployeeId) &&
+          sd.beneficiaryEmployeeId === sd.approvedByEmployeeId
+        ) {
+          errors.push("Employee discount: the approving employee must be someone OTHER than the buyer.");
+        }
+      }
+      if (sd.kind === "industry") {
+        const company = typeof sd.companyName === "string" ? sd.companyName.trim() : "";
+        if (company.length < 2 || company.length > 120) {
+          errors.push("Industry discount must record the visitor's company name (2–120 characters).");
+        }
+      }
+      if (sd.kind === "veteran" && sd.militaryIdChecked !== true) {
+        errors.push("Veteran discount requires the military-ID-checked confirmation.");
+      }
+    }
+  } else if (lineSpecialSum > 0) {
+    errors.push(
+      "Lines carry specialDiscountMinor but the payload has no specialDiscount block — orphaned discount refused.",
     );
   }
   return errors.length ? { ok: false, errors } : { ok: true };
@@ -870,6 +978,102 @@ export function __runPosSaleEventTests(): void {
       loyaltyRedemption: { redemptionId: U4, code: "", appliedMinor: 200 },
     }).ok,
     "blank redemption code refused",
+  );
+
+  // SLICE 28 — special discount block + per-line reductions (employee /
+  // industry / veteran). Same coherence discipline as loyalty.
+  const veteranSale: PosSalePayload = {
+    ...goodSale,
+    lines: [
+      {
+        productId: "prod-1", productName: "Blue Dream 3.5g", category: "flower",
+        quantity: 2, unitPriceMinor: 1244, regularPriceMinor: 1463, specialDiscountMinor: 219,
+      },
+    ],
+    totalMinor: 2488, subtotalMinor: 1701, taxMinor: 787,
+    tenderedMinor: 3000, changeMinor: 512,
+    specialDiscount: { kind: "veteran", percentBps: 1500, appliedMinor: 438, militaryIdChecked: true },
+  };
+  ok(validateSalePayload(veteranSale).ok, "veteran special-discount sale passes");
+  ok(
+    !validateSalePayload({
+      ...veteranSale,
+      specialDiscount: { kind: "veteran", percentBps: 1500, appliedMinor: 438, militaryIdChecked: false },
+    }).ok,
+    "veteran without the ID-checked confirmation refused",
+  );
+  ok(
+    !validateSalePayload({
+      ...veteranSale,
+      specialDiscount: { kind: "veteran", percentBps: 1500, appliedMinor: 400, militaryIdChecked: true },
+    }).ok,
+    "special appliedMinor mismatching the per-line sum refused",
+  );
+  ok(
+    !validateSalePayload({ ...veteranSale, specialDiscount: undefined }).ok,
+    "orphaned per-line special reductions (no block) refused",
+  );
+  ok(
+    !validateSalePayload({
+      ...veteranSale,
+      specialDiscount: { kind: "birthday" as "veteran", percentBps: 1500, appliedMinor: 438, militaryIdChecked: true },
+    }).ok,
+    "unknown special-discount kind refused",
+  );
+  ok(
+    !validateSalePayload({
+      ...veteranSale,
+      specialDiscount: { kind: "veteran", percentBps: 10_001, appliedMinor: 438, militaryIdChecked: true },
+    }).ok,
+    "special percent over 100% refused",
+  );
+  ok(
+    validateSalePayload({
+      ...veteranSale,
+      specialDiscount: {
+        kind: "employee", percentBps: 3500, appliedMinor: 438,
+        beneficiaryEmployeeId: U1, approvedByEmployeeId: U2,
+      },
+    }).ok,
+    "employee special discount with buyer + distinct approver passes",
+  );
+  ok(
+    !validateSalePayload({
+      ...veteranSale,
+      specialDiscount: {
+        kind: "employee", percentBps: 3500, appliedMinor: 438,
+        beneficiaryEmployeeId: U1, approvedByEmployeeId: U1,
+      },
+    }).ok,
+    "employee self-approval refused at the payload gate",
+  );
+  ok(
+    !validateSalePayload({
+      ...veteranSale,
+      specialDiscount: { kind: "employee", percentBps: 3500, appliedMinor: 438, beneficiaryEmployeeId: U1 },
+    }).ok,
+    "employee without an approver refused",
+  );
+  ok(
+    validateSalePayload({
+      ...veteranSale,
+      specialDiscount: { kind: "industry", percentBps: 1000, appliedMinor: 438, companyName: "Green Vendor LLC" },
+    }).ok,
+    "industry special discount with company passes",
+  );
+  ok(
+    !validateSalePayload({
+      ...veteranSale,
+      specialDiscount: { kind: "industry", percentBps: 1000, appliedMinor: 438, companyName: " " },
+    }).ok,
+    "industry without a company refused",
+  );
+  ok(
+    !validateSalePayload({
+      ...veteranSale,
+      lines: [{ ...veteranSale.lines[0], specialDiscountMinor: -5 }],
+    }).ok,
+    "negative per-line special reduction refused",
   );
 
   // Punch payload
