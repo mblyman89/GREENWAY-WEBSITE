@@ -83,6 +83,9 @@ export default async function RegisterActivityPage({
             <Button href={`${BASE}/returns`} variant="neutral" size="sm">
               Returns desk
             </Button>
+            <Button href={`${BASE}/safe`} variant="neutral" size="sm">
+              Safe
+            </Button>
             <Button href={`${BASE}/exceptions`} variant="neutral" size="sm">
               Exceptions{openExceptions.length > 0 ? ` (${openExceptions.length})` : ""}
             </Button>

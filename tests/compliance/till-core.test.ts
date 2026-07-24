@@ -112,4 +112,28 @@ describe("till-core (POS B21)", () => {
     expect(validateTillRequest(null).ok).toBe(false);
     expect(validateTillRequest({ action: "reconcile", pin: "1234" }).ok).toBe(false);
   });
+
+  it("swap: value-neutral change trade needs an approver PIN and a plausible amount (slice 31)", () => {
+    const swap = validateTillRequest({ action: "swap", pin: "1234", amountMinor: 10000, approverPin: "5678" });
+    expect(swap.ok).toBe(true);
+    if (swap.ok && swap.req.action === "swap") {
+      expect(swap.req.amountMinor).toBe(10000);
+      expect(swap.req.approverPin).toBe("5678");
+    }
+
+    const noted = validateTillRequest({
+      action: "swap", pin: "1234", amountMinor: 2000, approverPin: "5678", notes: "  needed quarters  ",
+    });
+    expect(noted.ok).toBe(true);
+    if (noted.ok && noted.req.action === "swap") expect(noted.req.notes).toBe("needed quarters");
+
+    // Every safe trip needs a manager/lead approval PIN.
+    expect(validateTillRequest({ action: "swap", pin: "1234", amountMinor: 10000 }).ok).toBe(false);
+    expect(validateTillRequest({ action: "swap", pin: "1234", amountMinor: 0, approverPin: "5678" }).ok).toBe(false);
+    expect(validateTillRequest({ action: "swap", pin: "1234", amountMinor: 200_001, approverPin: "5678" }).ok).toBe(false);
+    expect(validateTillRequest({ action: "swap", pin: "1234", amountMinor: 100.5, approverPin: "5678" }).ok).toBe(false);
+    expect(
+      validateTillRequest({ action: "swap", pin: "1234", amountMinor: 500, approverPin: "5678", notes: "x".repeat(501) }).ok,
+    ).toBe(false);
+  });
 });

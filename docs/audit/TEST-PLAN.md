@@ -1654,6 +1654,33 @@ attempt, even the ones the system wins.*
   and “blank” collapsing into the same thing, or the close screen
   revealing expected cash.
 
+- **T-184 (the store safe — $1,000 target, twice-daily counts, change swaps):**
+  first make sure migration `0135_safe_counts_swaps.sql` has been run. In
+  the back office, open Register Activity and click the new Safe
+  button. The safe page must show the $1,000.00 target, AM and PM
+  “Today's count” cards, an open counting grid whose variance against
+  the target updates live as you type, and tables of recent counts and
+  recent change swaps. Count exactly $1,000.00 as the AM window — the
+  banner must say balanced and the AM card must flip to Done. Count
+  $980.00 as the PM window — the banner must say short by $20.00 and
+  the table row must show the variance in red. Now the register side:
+  on the iPad with a drawer open, choose Change swap (it appears in
+  both the More menu and the drawer panel), enter $100.00, your PIN,
+  and a manager or lead's PIN in the approval box — the confirmation
+  must say the swap was recorded, and the swap must appear on the safe
+  page with both names. The drawer's expected close must NOT move — a
+  swap is the same value both ways. Now the refusals: try approving a
+  swap with a plain cashier's PIN (rejected — not a manager or lead),
+  try using your own PIN as the approval (rejected — no self-approval),
+  try $0 and garbage amounts (button stays off), and if migration 0135
+  has not been run, the swap must refuse loudly with a message naming
+  the migration — never silently skip. **Expect:** every trip into the
+  safe leaves a PIN-attributed, manager-approved record, and the twice-
+  daily counts keep the $1,000 fund honest. **Red flag:** a swap
+  changing drawer expected cash, a cashier approving their own swap, a
+  swap recording without the safe tables, or the safe count hiding the
+  live variance (safe counts are open, not blind).
+
 ---
 
 <a id="phase-13"></a>
