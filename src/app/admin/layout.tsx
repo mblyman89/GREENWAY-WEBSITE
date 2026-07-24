@@ -13,6 +13,8 @@ import { adminNav } from "@/components/admin/admin-nav-data";
 import { can, type Permission } from "@/lib/auth/roles";
 import { posExceptionSnapshot } from "@/lib/pos/sync-store";
 import { formatBadgeCount } from "@/lib/pos/exception-reminder-core";
+import { backOfficeGateForStaff } from "@/lib/staffing/handbook-ack-store";
+import { HandbookGateScreen } from "@/components/admin/HandbookGateScreen";
 
 // Admin must never be indexed.
 export const metadata: Metadata = {
@@ -41,6 +43,22 @@ export default async function AdminLayout({
   // shell. The login route renders its own centered card.
   if (!session) {
     return <div className="admin-shell min-h-screen">{children}</div>;
+  }
+
+  // SLICE 36 handbook gate: staff who have not acknowledged the CURRENT
+  // handbook version see the handbook + acknowledgment screen instead of any
+  // admin page (owners are exempt; the gate stays OPEN before migration 0136
+  // so a missing table can never lock the whole staff out).
+  const handbookGate = await backOfficeGateForStaff({
+    staffId: session.userId,
+    role: session.profile.role,
+  });
+  if (!handbookGate.ok) {
+    return (
+      <div className="admin-shell min-h-screen">
+        <HandbookGateScreen fullName={session.profile.full_name ?? ""} />
+      </div>
+    );
   }
 
   // Build the command-palette targets, filtered by what this role can open.

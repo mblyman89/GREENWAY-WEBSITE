@@ -6,6 +6,8 @@ import { Breadcrumbs, EmptyState, HelpPanel } from "@/components/admin/ux";
 import { Field, Input, Select, Button, Badge } from "@/components/admin/ui";
 import { StatCard } from "@/components/admin/StatCard";
 import { listEmployeeFiles, rosterOverview } from "@/lib/staffing/employee-lifecycle-store";
+import { currentVersionAckMap } from "@/lib/staffing/handbook-ack-store";
+import { HANDBOOK_VERSION } from "@/lib/staffing/handbook-content";
 import {
   STATUS_LABELS,
   type EmploymentStatus,
@@ -48,9 +50,10 @@ export default async function EmployeesPage({
     );
   }
 
-  const [{ rows: employees, migrationApplied }, overview] = await Promise.all([
+  const [{ rows: employees, migrationApplied }, overview, handbookAcks] = await Promise.all([
     listEmployeeFiles(),
     rosterOverview(),
+    currentVersionAckMap(),
   ]);
 
   const working = employees.filter(
@@ -119,6 +122,14 @@ export default async function EmployeesPage({
             Migration 0117 hasn&apos;t been applied yet — apply{" "}
             <code>0117_employee_command_center.sql</code> in the Supabase SQL editor to unlock
             onboarding checklists, document tracking, and the training log.
+          </div>
+        )}
+        {!handbookAcks.migrationApplied && employees.length > 0 && (
+          <div className="rounded-lg border border-[var(--admin-gold)]/40 bg-[var(--admin-gold-soft)] px-4 py-3 text-sm text-[var(--admin-gold)]">
+            Migration 0136 hasn&apos;t been applied yet — apply{" "}
+            <code>0136_handbook_acknowledgments.sql</code> in the Supabase SQL editor to turn on the
+            digital handbook acknowledgment gate (until then, the back office and registers stay
+            open to everyone on the roster).
           </div>
         )}
 
@@ -217,6 +228,13 @@ export default async function EmployeesPage({
                   <Badge tone="outline">{e.job_role}</Badge>
                   {e.hire_date && <span className="hidden text-xs text-white/40 sm:inline">hired {e.hire_date}</span>}
                   {e.staff_id && <Badge tone="neutral">login</Badge>}
+                  {e.staff_id &&
+                    handbookAcks.migrationApplied &&
+                    (handbookAcks.ackedAtByStaffId.has(e.staff_id) ? (
+                      <Badge tone="green">handbook v{HANDBOOK_VERSION} ✓</Badge>
+                    ) : (
+                      <Badge tone="gold">handbook pending</Badge>
+                    ))}
                   {e.clock_pin && <Badge tone="neutral">PIN set</Badge>}
                   <Badge tone={STATUS_TONE[status]}>{STATUS_LABELS[status]}</Badge>
                   <span className="text-white/30">→</span>

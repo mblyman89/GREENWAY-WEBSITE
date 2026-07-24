@@ -1804,6 +1804,8 @@ attempt, even the ones the system wins.*
   the biggest percent, combined loyalty-plus-deal savings exceeding
   the better of the two, or any unit priced below its cost floor.
 
+- **T-190 (employee handbook — read it and check the box before any access):** sign in to the back office as a NON-owner staff account that has not yet acknowledged handbook version 2.0. **Expect:** every admin page is replaced by the full handbook with an acknowledgment form at the bottom — you cannot reach the dashboard, products, or any other page until you type your full name, check the “I have read … and agree” box, and submit; after submitting, the back office opens normally and the roster (Employees → Roster) shows a green “handbook v2.0 ✓” badge on your row. At the register, try a PIN unlock for an employee who has NOT acknowledged (no digital acknowledgment and the paper handbook not marked “signed” in their employee file): the unlock must be refused with a message explaining the handbook requirement. Mark their paper handbook “Read & signed” in the employee file and try again — the unlock now succeeds. Sign in as the OWNER with no acknowledgment recorded: the owner is never blocked. **Red flag:** any admin page reachable before the box is checked, a register unlocking for an unacknowledged employee, the checkbox recording without a typed name, or the owner getting locked out.
+
 ---
 
 <a id="phase-13"></a>

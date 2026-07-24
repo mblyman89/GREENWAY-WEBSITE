@@ -20,6 +20,7 @@ import { getEmployeeByPin, openWorkPunch } from "@/lib/staffing/store";
 import { openSessionForRegister } from "@/lib/registers/store";
 import { isValidPin } from "@/lib/staffing/time";
 import { pinPadBlocked, notePinFailure, notePinSuccess, deviceThrottleScope } from "@/lib/security/pin-throttle-store";
+import { registerGateForEmployee } from "@/lib/staffing/handbook-ack-store";
 import { recordAudit } from "@/lib/auth/audit";
 
 export const runtime = "nodejs";
@@ -59,6 +60,26 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "No active employee for that PIN." }, { status: 401 });
   }
   await notePinSuccess(throttleScope);
+
+  // SLICE 36 handbook gate: the register stays locked until this employee has
+  // acknowledged the CURRENT handbook version — digitally via their linked
+  // staff login, or via the signed paper copy marked in their employee file.
+  // (Owners exempt; gate OPEN before migration 0136 — see handbook-ack-core.)
+  const handbookGate = await registerGateForEmployee({
+    employeeId: employee.id,
+    staffId: employee.staff_id ?? null,
+  });
+  if (!handbookGate.ok) {
+    await recordAudit({
+      actorId: employee.staff_id,
+      actorEmail: employee.full_name,
+      action: "register.unlock_blocked_handbook",
+      entityType: "register",
+      entityId: auth.device.register_id,
+      after: { employeeId: employee.id, deviceId: auth.device.id },
+    });
+    return NextResponse.json({ error: handbookGate.reason }, { status: 403 });
+  }
 
   const [openPunch, drawerSession] = await Promise.all([
     openWorkPunch(employee.id),

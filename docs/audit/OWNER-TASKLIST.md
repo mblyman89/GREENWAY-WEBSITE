@@ -48,7 +48,9 @@ files, one by one**. Here is the honest, verified answer:
 
 Also: `docs/MIGRATIONS_TO_RUN.md` is your standing checklist of migrations
 from 0054 onward with a description of what breaks until each is run. If
-you haven't checked off through **0135** (the current last file — 0135 adds
+you haven't checked off through **0136** (the current last file — 0136 adds
+the handbook-acknowledgment table: staff must read the employee handbook and
+check the box before the back office or a register lets them in; 0135 adds
 the store-safe tables (twice-daily manager counts + register change swaps), 0134 adds
 tips-at-close to drawer sessions (employee money, kept out of the drawer
 over/short math), 0133 adds
