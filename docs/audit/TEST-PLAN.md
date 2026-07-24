@@ -1709,6 +1709,35 @@ attempt, even the ones the system wins.*
   unreconciled session, tips mixed into drawer math, admin chrome on
   the printed page, or an open drawer being reported as FINAL.
 
+- **T-186 (receipt customization — one design, every print path):**
+  in the back office open Admin → Registers → Receipt design. Change
+  the header to a test name, put three lines in the address block
+  (street, phone, license number), add a recognizable word to the end
+  of the footer AFTER the intoxicating-effects warning, and watch the
+  live preview update as you type — the preview runs the identical
+  receipt builder the register hands to the Star printer, so what you
+  see is what prints. Save, then flip each of the three toggles off
+  one at a time and confirm the preview drops exactly that line: the
+  Served-by line, the You-saved line, and the loyalty points block.
+  Turn them back on and save. On a register, refresh the menu (or
+  just wait for the next automatic refresh) and ring a small sale
+  with a discounted item and a loyalty member attached — the paper
+  receipt must show your new header, all three address lines, your
+  footer word, Served by, You saved, and the points block. Now
+  verify the design travels EVERYWHERE: print a refund receipt, a
+  no-sale slip, and an X day report — each must carry the same
+  header and address block. Ask for an email receipt — same design
+  in the inbox. Finally try to save an empty header and an empty
+  footer: both must quietly come back as the safe defaults (the
+  store name and the compliance warning) — the warning text can
+  never be blanked away. **Expect:** one owner-designed receipt that
+  shows up identically on the preview, the paper sale receipt, the
+  refund receipt, the no-sale slip, the day-report slip, and the
+  email copy — with the compliance footer impossible to remove.
+  **Red flag:** preview and paper differing, a toggle that does
+  nothing, a print path still showing the old design after a menu
+  refresh, or a blank footer saving without the warning.
+
 ---
 
 <a id="phase-13"></a>
