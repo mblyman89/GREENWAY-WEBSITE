@@ -11,6 +11,7 @@
 import { useState, useTransition } from "react";
 import { updateIdeaAction, deleteIdeaAction } from "@/app/admin/marketing/actions";
 import { Badge, Button, Select, type BadgeTone } from "@/components/admin/ui";
+import { ConfirmDialog } from "@/components/admin/ux";
 import type { MarketingIdea, MarketingIdeaStatus } from "@/lib/marketing/ideas-store";
 
 const STATUS_OPTIONS: { value: MarketingIdeaStatus; label: string; tone: BadgeTone }[] = [
@@ -56,8 +57,15 @@ function IdeaRow({ idea }: { idea: MarketingIdea }) {
     });
   }
 
+  // GW-035: friendly confirm dialog instead of the browser's confirm().
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
   function remove() {
-    if (!confirm("Delete this idea from the notebook?")) return;
+    setConfirmDelete(true);
+  }
+
+  function removeNow() {
+    setConfirmDelete(false);
     const fd = new FormData();
     fd.set("id", idea.id);
     startTransition(() => {
@@ -104,6 +112,15 @@ function IdeaRow({ idea }: { idea: MarketingIdea }) {
           {idea.body || <span className="text-[var(--admin-text-faint)]">(empty)</span>}
         </div>
       ) : null}
+      <ConfirmDialog
+        open={confirmDelete}
+        title="Delete this idea from the notebook?"
+        description="This removes the idea and its notes. It can't be undone."
+        confirmLabel="Delete idea"
+        tone="danger"
+        onConfirm={removeNow}
+        onCancel={() => setConfirmDelete(false)}
+      />
     </div>
   );
 }

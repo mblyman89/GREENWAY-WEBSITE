@@ -1318,7 +1318,17 @@
   (intake review 909 lines, purchasing/new 647, employee 603, vendor 593,
   promotions, blog editor); route destructive buttons through ConfirmDialog
   as part of the GW-030 sweep.
-- **Status:** OPEN
+- **Status:** FIXED (SLICE 34A). StickyActionBar wired into the intake
+  review (pinned Finalize), vendor profile (Save profile), employee file
+  (Save basics), promotion editor (Cancel/Save), and blog editor (Save
+  changes); purchasing/new verified as already shipping its own native
+  sticky order bar (builder-table.tsx) carrying the create actions. All 7
+  bare `window.confirm`/`confirm()` sites replaced with ConfirmDialog:
+  SectionCard, CarouselSlideCard, FaqItemCard (delete section/slide/Q&A),
+  LoyaltyCustomizer (retire tier), ScheduleBuilder (remove shift),
+  IdeaNotebook (delete idea), and TaxSettingsForm — where the S-19 excise
+  deviation now requires typing CONFIRM (an upgrade over the old browser
+  popup; the server still enforces its own guard). Manual test T-187.
 
 ---
 

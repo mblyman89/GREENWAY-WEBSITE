@@ -10,7 +10,7 @@
  */
 import { useMemo, useState, useTransition } from "react";
 import { Button, Card, Badge, controlClassName } from "@/components/admin/ui";
-import { useToast } from "@/components/admin/ux";
+import { ConfirmDialog, useToast } from "@/components/admin/ux";
 import {
   weekDays,
   shortDayLabel,
@@ -214,12 +214,18 @@ function ShiftChip({
   pending: boolean;
 }) {
   const [editing, setEditing] = useState(false);
+  // GW-035: friendly confirm dialog instead of the browser's window.confirm.
+  const [confirmRemove, setConfirmRemove] = useState(false);
   const isScheduled = shift.status === "scheduled";
   const label =
     shift.start_hm && shift.end_hm ? `${formatHm(shift.start_hm)}–${formatHm(shift.end_hm)}` : shift.status;
 
   function onDelete() {
-    if (!window.confirm("Remove this scheduled shift?")) return;
+    setConfirmRemove(true);
+  }
+
+  function removeNow() {
+    setConfirmRemove(false);
     const fd = new FormData();
     fd.set("id", shift.id);
     startTransition(async () => {
@@ -259,6 +265,15 @@ function ShiftChip({
       ) : (
         <span className="text-[10px] uppercase text-white/30">{shift.status}</span>
       )}
+      <ConfirmDialog
+        open={confirmRemove}
+        title="Remove this scheduled shift?"
+        description={`${shift.shift_role} · ${label}. The employee will no longer see it on the schedule.`}
+        confirmLabel="Remove shift"
+        tone="danger"
+        onConfirm={removeNow}
+        onCancel={() => setConfirmRemove(false)}
+      />
     </div>
   );
 }

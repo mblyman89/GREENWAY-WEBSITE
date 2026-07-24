@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { Breadcrumbs } from "@/components/admin/ux";
+import { Breadcrumbs, StickyActionBar } from "@/components/admin/ux";
 import { Button } from "@/components/admin/ui";
 import { vendorListBackHref } from "@/lib/vendors/list-state-core";
 import { getVendorById, listBrandsForVendor, publicMediaUrl } from "@/lib/vendors/store";
@@ -391,7 +391,11 @@ export default async function VendorEditPage({
               <label className="flex flex-col gap-1"><span className={label}>Vendor-day notes (internal)</span><input name="vendor_day_notes" defaultValue={vendor.vendor_day_notes ?? ""} className={field} /></label>
               <label className="flex flex-col gap-1"><span className={label}>Internal notes (never public)</span><textarea name="internal_notes" defaultValue={vendor.internal_notes ?? ""} rows={2} className={field} /></label>
 
-              <Button type="submit" variant="primary">Save profile</Button>
+              {/* GW-035: pinned save — on this long profile form the button
+                  stays reachable without scrolling back down. */}
+              <StickyActionBar status="Edits are not saved until you press Save profile" statusTone="warning">
+                <Button type="submit" variant="primary">Save profile</Button>
+              </StickyActionBar>
             </form>
 
             {/* Brands */}

@@ -1738,6 +1738,31 @@ attempt, even the ones the system wins.*
   nothing, a print path still showing the old design after a menu
   refresh, or a blank footer saving without the warning.
 
+- **T-187 (flow furniture — pinned save bars and friendly confirms):**
+  open a long editor and scroll: the vendor profile, an employee
+  file, a promotion, a blog post, and an intake review. On each, the
+  main action (Save profile / Save basics / the promotion save /
+  Save changes / Finalize intake) must ride along in a pinned bar at
+  the bottom of the screen with a small status note — you should
+  never have to scroll to find the button. The purchase-order
+  builder already has its own pinned order bar with the running
+  total — confirm it still works. Then the confirms: try deleting
+  a homepage section, a carousel slide, and an FAQ Q&A; retiring a
+  loyalty tier; removing a scheduled shift; and deleting a
+  marketing idea. Every one must open a styled in-app dialog that
+  explains the consequence in plain language with an obvious Cancel
+  — never the browser's grey popup. Cancel each one first and
+  confirm nothing happened, then confirm one for real and check it
+  worked. Finally the big one: in Settings, set the cannabis excise
+  to anything other than 37% and save — the dialog must warn you
+  about RCW 69.50.535 and refuse until you type CONFIRM.
+  **Expect:** save buttons always in reach on long forms, and every
+  destructive click challenged by a friendly dialog — with a typed
+  gate on the excise-rate deviation. **Red flag:** a browser-native
+  confirm popup anywhere in the admin, a long form whose save
+  button scrolls away, or the excise deviation saving without the
+  typed CONFIRM.
+
 ---
 
 <a id="phase-13"></a>

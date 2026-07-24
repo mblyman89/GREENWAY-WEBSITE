@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/admin/ui";
+import { ConfirmDialog } from "@/components/admin/ux";
 import { ContentImageField, type MediaChoice } from "./ContentImageField";
 import { CAROUSEL_SLIDE_SPEC } from "@/lib/cms/image-spec-core";
 import type { SlideAdminVM, SlideCta } from "@/lib/cms/carousel-types";
@@ -49,6 +50,9 @@ export function CarouselSlideCard({
   };
 
   const [image, setImage] = useState(d.image);
+  // GW-035: friendly confirm dialog instead of the browser's window.confirm.
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const deleteFormRef = useRef<HTMLFormElement>(null);
   const [imageAlt, setImageAlt] = useState(d.image_alt);
   const [imageFocus, setImageFocus] = useState(d.image_focus);
   const [textAlign, setTextAlign] = useState(d.text_align);
@@ -147,23 +151,24 @@ export function CarouselSlideCard({
               ↓
             </Button>
           </form>
-          <form
-            action={deleteAction}
-            onSubmit={(e) => {
-              if (
-                !window.confirm(
-                  "Delete this slide? This removes it from the homepage and can't be undone.",
-                )
-              ) {
-                e.preventDefault();
-              }
-            }}
-          >
+          <form ref={deleteFormRef} action={deleteAction}>
             <input type="hidden" name="slide_id" value={slide.id} />
-            <Button type="submit" variant="danger" size="sm">
+            <Button type="button" variant="danger" size="sm" onClick={() => setConfirmDelete(true)}>
               Delete
             </Button>
           </form>
+          <ConfirmDialog
+            open={confirmDelete}
+            title="Delete this slide?"
+            description="This removes it from the homepage and can't be undone."
+            confirmLabel="Delete slide"
+            tone="danger"
+            onConfirm={() => {
+              setConfirmDelete(false);
+              deleteFormRef.current?.requestSubmit();
+            }}
+            onCancel={() => setConfirmDelete(false)}
+          />
         </div>
       </div>
 

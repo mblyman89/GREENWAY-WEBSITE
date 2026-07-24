@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
+import { Breadcrumbs, HelpPanel, StickyActionBar } from "@/components/admin/ux";
 import { StatCard } from "@/components/admin/StatCard";
 import { Button, Field, Input, Textarea, Select } from "@/components/admin/ui";
 import { getManifestById } from "@/lib/inventory/store";
@@ -859,17 +859,20 @@ export default async function ManifestReviewPage({
               </p>
             </HelpPanel>
 
-            <div className="flex flex-wrap items-center gap-3 rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)] p-5">
-              <p className="flex-1 text-sm text-[var(--admin-text-muted)]">
-                Decide each line above, then <strong>Finalize intake</strong> to activate the
-                accepted lots. Lines left undecided are accepted by default.
-              </p>
+            {/* GW-035: pinned finalize — this is the longest page in the
+                admin; the deciding action stays reachable while reviewing
+                every line. */}
+            <StickyActionBar
+              status="Decide each line above, then finalize — undecided lines are accepted"
+              statusTone="warning"
+              align="between"
+            >
               <form action={finalizeAction} title={CONCIERGE_HINTS.finalize}>
                 <Button type="submit" variant="save" size="sm">
                   ✓ Finalize intake
                 </Button>
               </form>
-            </div>
+            </StickyActionBar>
 
             {/* Whole-manifest reject (reason required) */}
             <details className="rounded-[var(--admin-radius-lg)] border border-[var(--admin-danger)]/30 bg-[var(--admin-surface)] p-5">
