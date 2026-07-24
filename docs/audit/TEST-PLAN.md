@@ -1762,6 +1762,27 @@ attempt, even the ones the system wins.*
   confirm popup anywhere in the admin, a long form whose save
   button scrolls away, or the excise deviation saving without the
   typed CONFIRM.
+- **T-188 (your own visual walk — does it all LOOK right?):** with real
+  data loaded, walk the whole system with your eyes only — no clicking
+  through tasks, just looking. Public site first on a laptop: home,
+  menu, specials, about, locations, loyalty, medical, blog, FAQ,
+  vendor page, checkout, and the three policy pages. Then the back
+  office: the dashboard, one list page and one editor from each area
+  you use daily (catalog, inventory, purchasing, promotions, staffing,
+  reports, settings), and finally the register. On every screen ask
+  three questions: is anything unreadable (light text on light, dark
+  on dark, text overflowing its box)? is anything misaligned or
+  overlapping (buttons off the edge, cards of wildly different
+  heights, a table spilling out of its card)? and does it still look
+  like YOUR store (black canvas, Greenway green, gold and orange —
+  nothing suddenly white or off-brand)? A companion automated pass of
+  every public page plus a token-accurate sheet of all the admin
+  furniture is recorded in `docs/audit/VISUAL-SIGNOFF.md` — your walk
+  covers the data-filled admin screens that pass could not reach.
+  **Expect:** every screen readable, aligned, and on-brand; the
+  sign-off doc matches what you see. **Red flag:** unreadable text
+  anywhere, overlapping or clipped controls, a native-white control
+  breaking the dark theme, or any screen that makes you squint.
 
 ---
 

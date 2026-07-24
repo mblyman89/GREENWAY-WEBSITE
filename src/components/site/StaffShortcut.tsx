@@ -14,11 +14,16 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { isSupabaseConfigured } from "@/lib/supabase/env";
 
 export function StaffShortcut() {
   const [signedIn, setSignedIn] = useState(false);
 
   useEffect(() => {
+    // Without Supabase env vars, creating a browser client throws — which
+    // would crash the entire home page via the route error boundary. The
+    // shortcut is staff-only sugar, so silently skip it when unconfigured.
+    if (!isSupabaseConfigured) return;
     let active = true;
     const supabase = createSupabaseBrowserClient();
     supabase.auth.getSession().then(({ data }) => {

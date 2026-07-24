@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Greenway Visual Sign-off Harness — Sheet 4: shipped SLICE 24-34 furniture</title>
+<style>
+/* ============ REAL TOKENS copied verbatim from src/app/globals.css ============ */
+:root {
+  --greenway: #7ed957;
+  --gold: #ffd700;
+  --orange: #ff7f00;
+  --admin-canvas: #060807;
+  --admin-surface: #0c0e0d;
+  --admin-surface-2: #121514;
+  --admin-surface-hover: #171b19;
+  --admin-border: rgba(255, 255, 255, 0.08);
+  --admin-border-strong: rgba(255, 255, 255, 0.16);
+  --admin-text: #f5f7f5;
+  --admin-text-muted: rgba(255, 255, 255, 0.62);
+  --admin-text-faint: rgba(255, 255, 255, 0.4);
+  --admin-accent: var(--greenway);
+  --admin-accent-soft: rgba(126, 217, 87, 0.14);
+  --admin-gold: var(--gold);
+  --admin-gold-soft: rgba(255, 215, 0, 0.14);
+  --admin-orange: var(--orange);
+  --admin-orange-soft: rgba(255, 127, 0, 0.14);
+  --admin-danger: #ff5a5a;
+  --admin-danger-soft: rgba(255, 90, 90, 0.14);
+  --admin-purple: #c084fc;
+  --admin-purple-soft: rgba(192, 132, 252, 0.14);
+  --admin-radius-sm: 0.5rem;
+  --admin-radius: 0.75rem;
+  --admin-radius-lg: 1rem;
+  --admin-radius-xl: 1.25rem;
+  --admin-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --admin-shadow: 0 8px 24px -12px rgba(0, 0, 0, 0.7);
+  --admin-shadow-lg: 0 24px 60px -24px rgba(0, 0, 0, 0.8);
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--admin-canvas); color: var(--admin-text);
+  font-family: Arial, Helvetica, sans-serif; padding: 28px; padding-bottom: 120px; }
+h1 { font-size: 20px; }
+h2 { font-size: 15px; margin: 34px 0 6px; }
+p.note { color: var(--admin-text-muted); font-size: 12px; margin: 2px 0 14px; max-width: 900px; }
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+  background: var(--admin-surface); border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-lg); padding: 18px; margin-bottom: 10px; }
+.label { width: 100%; font-size: 11px; color: var(--admin-text-faint);
+  text-transform: uppercase; letter-spacing: .1em; }
+
+/* ============ <Button> — verbatim from src/components/admin/ui/Button.tsx ============ */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  white-space: nowrap; border-radius: 9999px; font-weight: 900; text-transform: uppercase;
+  letter-spacing: 0.1em; border: none; cursor: pointer;
+  transition: filter .15s, background .15s, color .15s;
+  padding: 10px 20px; font-size: 12px; box-shadow: var(--admin-shadow-sm); }
+.btn.sm { padding: 6px 14px; font-size: 11.2px; }
+.btn.lg { padding: 12px 28px; font-size: 14px; }
+.btn:hover { filter: brightness(1.1); }
+.btn:disabled { cursor: not-allowed; opacity: 0.4; }
+.btn-primary { background: var(--admin-orange); color: #000; }
+.btn-confirm { background: var(--admin-accent); color: #000; }
+.btn-save    { background: var(--admin-gold); color: #000; }
+.btn-danger  { background: var(--admin-danger); color: #000; }
+.btn-special { background: var(--admin-purple); color: #000; }
+.btn-neutral { background: var(--admin-orange-soft); color: var(--admin-orange);
+  box-shadow: var(--admin-shadow-sm), inset 0 0 0 1px rgba(255, 127, 0, 0.4); }
+.btn-neutral:hover { background: var(--admin-orange); color: #000; filter: none; }
+
+/* ============ CHIP_ACTION / CHIP_NEUTRAL — verbatim recipes from Button.tsx ============ */
+.chip-action { display: inline-flex; align-items: center; border-radius: 9999px;
+  background: var(--admin-accent-soft); padding: 4px 12px; font-size: 11.2px;
+  font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--admin-accent); box-shadow: inset 0 0 0 1px rgba(126, 217, 87, 0.4);
+  cursor: pointer; border: none; transition: background .15s, color .15s; }
+.chip-action:hover { background: var(--admin-accent); color: #000; }
+.chip-neutral { display: inline-flex; align-items: center; border-radius: 9999px;
+  background: var(--admin-gold-soft); padding: 4px 12px; font-size: 11.2px;
+  font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--admin-gold); box-shadow: inset 0 0 0 1px rgba(255, 215, 0, 0.4);
+  cursor: pointer; border: none; transition: background .15s, color .15s; }
+.chip-neutral:hover { background: var(--admin-gold); color: #000; }
+
+/* ============ <Badge> tones — verbatim from src/components/admin/ui/Badge.tsx ============ */
+.badge { display: inline-flex; align-items: center; gap: 4px;
+  border-radius: var(--admin-radius-sm); padding: 2px 8px; font-size: 10.4px;
+  font-weight: 600; text-transform: uppercase; letter-spacing: 0.025em; }
+.badge-neutral { background: var(--admin-surface-2); color: var(--admin-text-muted); }
+.badge-green   { background: var(--admin-accent-soft); color: var(--admin-accent); }
+.badge-gold    { background: var(--admin-gold-soft); color: var(--admin-gold); }
+.badge-orange  { background: var(--admin-orange-soft); color: var(--admin-orange); }
+.badge-danger  { background: var(--admin-danger-soft); color: var(--admin-danger); }
+.badge-outline { background: var(--admin-surface-2); color: var(--admin-text-muted); }
+
+/* ============ StatusPill tones — verbatim from ux/StatusPill.tsx ============ */
+.pill { display: inline-flex; align-items: center; gap: 6px; border-radius: 9999px;
+  padding: 2px 10px; font-size: 10.4px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.06em; }
+.pill-draft     { background: var(--admin-orange-soft); color: var(--admin-orange); }
+.pill-published { background: var(--admin-accent-soft); color: var(--admin-accent); }
+.pill-archived  { background: rgba(255,255,255,0.1); color: var(--admin-text-faint); }
+.pill-error     { background: var(--admin-danger-soft); color: var(--admin-danger); }
+.pill-warning   { background: var(--admin-gold-soft); color: var(--admin-gold); }
+.pill-info      { background: rgba(255,255,255,0.1); color: var(--admin-text-muted); }
+
+/* ============ StatCard — verbatim from admin/StatCard.tsx ============ */
+.statgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.statcard { border-radius: var(--admin-radius-lg); border: 1px solid var(--admin-border);
+  background: var(--admin-surface); padding: 20px; }
+.statcard .k { font-size: 11.2px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.025em; color: var(--admin-text-faint); margin: 0; }
+.statcard .v { margin: 12px 0 0; font-size: 30px; font-weight: 700; letter-spacing: -0.025em; }
+.statcard .h { margin: 4px 0 0; font-size: 12px; color: var(--admin-text-faint); }
+.statcard .icon { float: right; display: flex; height: 32px; width: 32px; align-items: center;
+  justify-content: center; border-radius: var(--admin-radius); font-size: 14px; }
+.v.green  { color: var(--admin-accent); }  .icon.green  { background: var(--admin-accent-soft); color: var(--admin-accent); }
+.v.gold   { color: var(--admin-gold); }    .icon.gold   { background: var(--admin-gold-soft); color: var(--admin-gold); }
+.v.orange { color: var(--admin-orange); }  .icon.orange { background: var(--admin-orange-soft); color: var(--admin-orange); }
+.v.muted  { color: var(--admin-text); }    .icon.muted  { background: rgba(255,255,255,0.1); color: var(--admin-text-muted); }
+
+/* ============ Table pattern — verbatim from admin list pages ============ */
+.tablewrap { border: 1px solid var(--admin-border); border-radius: var(--admin-radius-lg);
+  overflow: hidden; }
+table { width: 100%; font-size: 14px; border-collapse: collapse; }
+thead { background: var(--admin-surface-2); text-align: left; font-size: 12px;
+  text-transform: uppercase; letter-spacing: 0.025em; color: var(--admin-text-faint); }
+th, td { padding: 12px 16px; }
+tbody tr { background: var(--admin-surface); border-top: 1px solid var(--admin-border); }
+tbody tr:hover { background: var(--admin-surface-hover); }
+
+/* ============ Select / option dark styling — verbatim from globals.css ============ */
+select { background-color: var(--admin-surface-2); color: var(--admin-text);
+  border: 1px solid var(--admin-border-strong); border-radius: var(--admin-radius);
+  padding: 8px 12px; font-size: 14px; }
+option, optgroup { background-color: var(--admin-surface-2); color: var(--admin-text); }
+input[type="text"] { background-color: #161616; color: #fff;
+  border: 1px solid rgba(255,255,255,0.15); border-radius: 0.5rem;
+  padding: 8px 12px; font-size: 14px; outline: none; width: 100%; }
+input[type="text"]:focus { border-color: rgba(126, 217, 87, 0.6); }
+
+/* ============ StickyActionBar — verbatim from ux/StickyActionBar.tsx ============ */
+.stickybar { position: sticky; bottom: 0; left: 0; right: 0; z-index: 40; margin-top: 32px;
+  border-top: 1px solid var(--admin-border); background: rgba(12, 14, 13, 0.95);
+  padding: 12px 24px; backdrop-filter: blur(8px);
+  display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.stickybar .status { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.stickybar .dot { display: inline-block; height: 8px; width: 8px; border-radius: 9999px; }
+.dot-warning { background: var(--admin-gold); }  .txt-warning { color: var(--admin-gold); }
+.dot-success { background: var(--admin-accent); } .txt-success { color: var(--admin-accent); }
+.stickybar .actions { display: flex; flex: 1; flex-wrap: wrap; align-items: center;
+  gap: 12px; justify-content: flex-end; }
+
+/* ============ ConfirmDialog — verbatim from ux/ConfirmDialog.tsx (rendered inline) ============ */
+.dialog-stage { position: relative; height: 360px; border-radius: var(--admin-radius-lg);
+  overflow: hidden; border: 1px solid var(--admin-border); background: var(--admin-surface-2); }
+.dialog-scrim { position: absolute; inset: 0; background: rgba(0,0,0,0.7);
+  backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center;
+  padding: 16px; }
+.dialog { position: relative; width: 100%; max-width: 448px;
+  border-radius: var(--admin-radius-xl); border: 1px solid var(--admin-border);
+  background: var(--admin-surface); padding: 24px; box-shadow: var(--admin-shadow-lg); }
+.dialog .head { display: flex; align-items: flex-start; gap: 12px; }
+.dialog .emoji { font-size: 24px; line-height: 1; }
+.dialog h3 { margin: 0; font-size: 18px; font-weight: 600; color: #fff; }
+.dialog .desc { margin: 8px 0 0; font-size: 14px; line-height: 1.6; color: rgba(255,255,255,0.7); }
+.dialog .confirm-word { margin-top: 16px; display: block; }
+.dialog .confirm-word .hint { font-size: 12px; color: rgba(255,255,255,0.6); }
+.dialog .confirm-word .word { font-family: ui-monospace, monospace; font-weight: 600; color: #fff; }
+.dialog .confirm-word input { margin-top: 4px; }
+.dialog .foot { margin-top: 24px; display: flex; align-items: center;
+  justify-content: flex-end; gap: 12px; }
+.dlg-btn { border-radius: 0.5rem; padding: 8px 16px; font-size: 14px; font-weight: 600;
+  border: none; cursor: pointer; transition: filter .15s; }
+.dlg-cancel { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.8); }
+.dlg-danger  { background: var(--admin-danger); color: #000; }
+.dlg-warning { background: var(--admin-gold); color: #000; }
+.dlg-primary { background: var(--admin-accent); color: #000; }
+.dlg-btn.disabled { cursor: not-allowed; opacity: 0.5; }
+</style>
+<script src="https://sites.super.myninja.ai/_assets/ninja-daytona-script.js"></script>
+</head>
+<body>
+<h1>Sheet 4 — shipped furniture sign-off (SLICE 24-34)</h1>
+<p class="note">Every rule on this sheet is a verbatim recreation of the SHIPPED classes in
+Button.tsx, Badge.tsx, StatusPill.tsx, StatCard.tsx, StickyActionBar.tsx, ConfirmDialog.tsx,
+the admin table pattern, and the globals.css select/option rules — rendered against the real
+tokens so the whole system can be inspected on one page.</p>
+
+<h2>1. Button — all 6 variants × 3 sizes (+ disabled)</h2>
+<div class="row">
+  <span class="label">md (default)</span>
+  <button class="btn btn-primary">Primary</button>
+  <button class="btn btn-confirm">Confirm</button>
+  <button class="btn btn-save">Save</button>
+  <button class="btn btn-danger">Danger</button>
+  <button class="btn btn-special">Special</button>
+  <button class="btn btn-neutral">Neutral</button>
+</div>
+<div class="row">
+  <span class="label">sm</span>
+  <button class="btn sm btn-primary">Primary</button>
+  <button class="btn sm btn-confirm">Confirm</button>
+  <button class="btn sm btn-save">Save</button>
+  <button class="btn sm btn-danger">Danger</button>
+  <button class="btn sm btn-special">Special</button>
+  <button class="btn sm btn-neutral">Neutral</button>
+</div>
+<div class="row">
+  <span class="label">lg + disabled</span>
+  <button class="btn lg btn-primary">Primary lg</button>
+  <button class="btn lg btn-confirm">Confirm lg</button>
+  <button class="btn btn-primary" disabled>Disabled</button>
+  <button class="btn btn-danger" disabled>Disabled</button>
+</div>
+
+<h2>2. In-table chips (CHIP_ACTION / CHIP_NEUTRAL)</h2>
+<div class="row">
+  <span class="label">row-density actions</span>
+  <button class="chip-action">Edit</button>
+  <button class="chip-action">Receive</button>
+  <button class="chip-neutral">Preview</button>
+  <button class="chip-neutral">Duplicate</button>
+</div>
+
+<h2>3. Badge tones + StatusPill tones</h2>
+<div class="row">
+  <span class="label">Badge</span>
+  <span class="badge badge-neutral">neutral</span>
+  <span class="badge badge-green">green</span>
+  <span class="badge badge-gold">gold</span>
+  <span class="badge badge-orange">orange</span>
+  <span class="badge badge-danger">danger</span>
+  <span class="badge badge-outline">outline</span>
+</div>
+<div class="row">
+  <span class="label">StatusPill</span>
+  <span class="pill pill-draft">draft</span>
+  <span class="pill pill-published">published</span>
+  <span class="pill pill-archived">archived</span>
+  <span class="pill pill-error">failed</span>
+  <span class="pill pill-warning">warning</span>
+  <span class="pill pill-info">reviewed</span>
+</div>
+
+<h2>4. StatCard (4 accents)</h2>
+<div class="statgrid">
+  <div class="statcard"><span class="icon green">$</span><p class="k">Net sales today</p><p class="v green">$4,812.55</p><p class="h">142 sales</p></div>
+  <div class="statcard"><span class="icon gold">&#9733;</span><p class="k">Loyalty signups</p><p class="v gold">37</p><p class="h">this week</p></div>
+  <div class="statcard"><span class="icon orange">&#9888;</span><p class="k">Low stock</p><p class="v orange">12</p><p class="h">below reorder point</p></div>
+  <div class="statcard"><span class="icon muted">&#8635;</span><p class="k">Open POs</p><p class="v muted">5</p><p class="h">2 awaiting intake</p></div>
+</div>
+
+<h2>5. Table pattern + dark select / input</h2>
+<div class="row" style="gap:16px">
+  <select><option>All vendors</option><option>Fairwinds</option><option>Phat Panda</option></select>
+  <span style="max-width:260px; flex:1"><input type="text" placeholder="Search products…"></span>
+</div>
+<div class="tablewrap">
+  <table>
+    <thead><tr><th>Vendor</th><th>Status</th><th>Items</th><th style="text-align:right">Actions</th></tr></thead>
+    <tbody>
+      <tr><td>Fairwinds Manufacturing</td><td><span class="pill pill-published">active</span></td><td>214</td>
+        <td style="text-align:right"><button class="chip-action">Edit</button> <button class="chip-neutral">Preview</button></td></tr>
+      <tr><td>Phat Panda</td><td><span class="pill pill-draft">draft</span></td><td>96</td>
+        <td style="text-align:right"><button class="chip-action">Edit</button> <button class="chip-neutral">Preview</button></td></tr>
+      <tr><td>Artizen Cannabis</td><td><span class="pill pill-error">failed</span></td><td>0</td>
+        <td style="text-align:right"><button class="chip-action">Retry</button> <button class="chip-neutral">Log</button></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<h2>6. ConfirmDialog — danger tone with type-to-confirm (rendered in place)</h2>
+<div class="dialog-stage">
+  <div class="dialog-scrim">
+    <div class="dialog">
+      <div class="head">
+        <span class="emoji">&#128465;&#65039;</span>
+        <div>
+          <h3>Reset all tax settings?</h3>
+          <p class="desc">This wipes every custom tax rate and restores the WA I-502 defaults.
+          Completed sales keep the tax that was charged at the time.</p>
+        </div>
+      </div>
+      <label class="confirm-word">
+        <span class="hint">Type <span class="word">CONFIRM</span> to continue</span>
+        <input type="text" placeholder="CONFIRM">
+      </label>
+      <div class="foot">
+        <button class="dlg-btn dlg-cancel">Cancel</button>
+        <button class="dlg-btn dlg-danger disabled">Reset settings</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2>7. ConfirmDialog — warning + primary tones (footer buttons only)</h2>
+<div class="row">
+  <span class="label">tone buttons</span>
+  <button class="dlg-btn dlg-cancel">Cancel</button>
+  <button class="dlg-btn dlg-danger">Delete draft</button>
+  <button class="dlg-btn dlg-warning">Archive</button>
+  <button class="dlg-btn dlg-primary">Publish</button>
+</div>
+
+<h2>8. StickyActionBar — both status tones (pinned below)</h2>
+<p class="note">The bar below is position:sticky bottom:0 exactly as shipped — scroll to see it pin.</p>
+<div class="stickybar" style="position:static; border-radius: var(--admin-radius-lg); border:1px solid var(--admin-border);">
+  <span class="status"><span class="dot dot-success"></span><span class="txt-success">All changes saved</span></span>
+  <span class="actions">
+    <button class="btn sm btn-neutral">Cancel</button>
+    <button class="btn sm btn-save">Save draft</button>
+    <button class="btn sm btn-confirm">Publish</button>
+  </span>
+</div>
+<div class="stickybar">
+  <span class="status"><span class="dot dot-warning"></span><span class="txt-warning">Unsaved changes</span></span>
+  <span class="actions">
+    <button class="btn sm btn-neutral">Cancel</button>
+    <button class="btn sm btn-save">Save draft</button>
+    <button class="btn sm btn-confirm">Publish</button>
+  </span>
+</div>
+</body>
+</html>
