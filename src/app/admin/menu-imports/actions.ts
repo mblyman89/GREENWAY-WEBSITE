@@ -116,9 +116,11 @@ export async function publishVersion(formData: FormData): Promise<void> {
   }
 
   // Refresh public menu surfaces so they read the new published snapshot.
+  // SLICE 39 connectivity audit: "/shop" was never a route in this app —
+  // the menu-derived public surfaces are /menu and /specials.
   revalidatePath("/admin/menu-imports");
   revalidatePath("/menu");
-  revalidatePath("/shop");
+  revalidatePath("/specials");
   revalidatePath("/");
 
   const dest = importId ? `/admin/menu-imports/${importId}` : "/admin/menu-imports";

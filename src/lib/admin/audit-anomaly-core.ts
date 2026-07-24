@@ -496,10 +496,14 @@ export function __runAuditAnomalyTests(): { passed: number } {
   ok(!isSensitive("media.uploaded"), "media not sensitive");
 
   // Build a synthetic window.
-  const base = new Date("2025-01-15T14:00:00"); // 2pm local (in hours)
+  // SLICE 39: production hourOf() uses the STORE's Pacific wall clock (S-12),
+  // so the fixture must be anchored to Pacific hours — not the machine's local
+  // timezone. Jan 15 is PST (UTC-8): 22:00Z = 2pm Pacific, and an override of
+  // hour H (Pacific) is H+8 UTC. This keeps the test deterministic everywhere.
+  const base = new Date("2025-01-15T22:00:00Z"); // 2pm Pacific (PST)
   const iso = (minsFromBase: number, hourOverride?: number) => {
     const d = new Date(base.getTime() + minsFromBase * 60_000);
-    if (hourOverride !== undefined) d.setHours(hourOverride);
+    if (hourOverride !== undefined) d.setUTCHours((hourOverride + 8) % 24);
     return d.toISOString();
   };
   let idc = 1;

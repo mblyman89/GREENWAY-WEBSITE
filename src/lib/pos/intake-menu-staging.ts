@@ -353,9 +353,11 @@ async function autoPublishIntakeVersion(
   // Refresh the public menu surfaces + the Menu Imports admin list (same set
   // the manual publish action revalidates).
   try {
+    // SLICE 39 connectivity audit: "/shop" was never a route — /specials is
+    // the other menu-derived public surface.
     revalidatePath("/admin/menu-imports");
     revalidatePath("/menu");
-    revalidatePath("/shop");
+    revalidatePath("/specials");
     revalidatePath("/");
   } catch (err) {
     console.error("[intake-menu-staging] revalidate failed:", err);

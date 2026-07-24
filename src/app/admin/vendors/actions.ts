@@ -163,7 +163,8 @@ export async function setVendorStatus(formData: FormData): Promise<void> {
 
   revalidatePath("/admin/vendors");
   revalidatePath(`/admin/vendors/${id}`);
-  revalidatePath("/vendors");
+  // SLICE 39 connectivity audit: /vendor-delivery is the real public route.
+  revalidatePath("/vendor-delivery");
   redirect(`/admin/vendors/${id}?saved=1`);
 }
 
@@ -1014,7 +1015,8 @@ export async function mergeVendorsAction(formData: FormData): Promise<void> {
   revalidatePath("/admin/vendors");
   revalidatePath(`/admin/vendors/${survivorId}`);
   revalidatePath(back);
-  revalidatePath("/vendors");
+  // SLICE 39 connectivity audit: /vendor-delivery is the real public route.
+  revalidatePath("/vendor-delivery");
 
   const cards = summary.duplicateIds.length + 1;
   const note = `Combined ${cards} cards into “${survivor!.display_name}”. ${summary.totalRowsRepointed} linked record${summary.totalRowsRepointed === 1 ? "" : "s"} moved over; the duplicate card${summary.duplicateIds.length === 1 ? " was" : "s were"} archived (nothing deleted).`;

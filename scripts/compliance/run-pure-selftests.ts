@@ -135,6 +135,57 @@ import { __runEodCoreTests } from "../../src/lib/registers/eod-core";
 import { __runConstantTimeTests } from "../../src/lib/security/constant-time";
 import { __runGramsPerOunceTests } from "../../src/lib/compliance/grams-per-ounce";
 import { __runEnrichmentMatchCoreTests } from "../../src/lib/enrichment/match-core";
+// SLICE 39 connectivity audit: the 41 suites below existed but ran nowhere.
+import { __runAdminNavTests } from "../../src/components/admin/admin-nav-core";
+import { __runSageExportsCoreTests } from "../../src/lib/accounting/sage-exports-core";
+import { __runSageHelperCoreTests } from "../../src/lib/accounting/sage-helper-core";
+import { __runSage50CoreTests } from "../../src/lib/accounting/sage50-core";
+import { __runAuditAnomalyTests } from "../../src/lib/admin/audit-anomaly-core";
+import { __runCockpitTests } from "../../src/lib/admin/cockpit-core";
+import { __runMobileCoreTests } from "../../src/lib/admin/mobile-core";
+import { __runStoreProfileTests } from "../../src/lib/admin/store-profile-core";
+import { __runKbNotesTests } from "../../src/lib/ai/kb/kb-notes-core";
+import { __runWebauthnCoreTests } from "../../src/lib/auth/webauthn-core";
+import { __runNormalizeTests } from "../../src/lib/cms/email-events/normalize-core";
+import { __runVerifyTests } from "../../src/lib/cms/email-events/verify-core";
+import { __runImageSpecTests } from "../../src/lib/cms/image-spec-core";
+import { __runCcrsIdentifierTests } from "../../src/lib/compliance/ccrs-identifiers";
+import { __runCcrsAdjustmentTests } from "../../src/lib/compliance/ccrs-inventory-adjustment-core";
+import { __runCcrsSubmitGateTests } from "../../src/lib/compliance/ccrs-submit-gate-core";
+import { __runComplianceHealthTests } from "../../src/lib/compliance/compliance-health-core";
+import { __runExcisePaymentCoreTests } from "../../src/lib/compliance/excise-payment-core";
+import { __runCcrsManifestCsvTests } from "../../src/lib/inventory/ccrs-manifest-csv-core";
+import { __runScanCoreTests } from "../../src/lib/inventory/cycle-count-scan-core";
+import { __runDispositionTests } from "../../src/lib/inventory/intake-disposition-core";
+import { __runIntakeReviewTests } from "../../src/lib/inventory/intake-review-core";
+import { __runIntakeReviewAdapterTests } from "../../src/lib/inventory/intake-review-adapter";
+import { __runLotActivationGateTests } from "../../src/lib/inventory/lot-activation-gate-core";
+import { __runManifestPipelineTests } from "../../src/lib/inventory/manifest-pipeline-core";
+import { __runSampleGuardrailTests } from "../../src/lib/inventory/sample-guardrails";
+import { __runCardCannabinoidTests } from "../../src/lib/menu/card-cannabinoids";
+import { __runStrainTerpeneTests } from "../../src/lib/menu/strain-terpenes";
+import { __runNonCannabisTests } from "../../src/lib/naming/noncannabis-core";
+import { __runNachaCoreTests } from "../../src/lib/payments/nacha-core";
+import { __runVendorAchTests } from "../../src/lib/payments/vendor-ach-core";
+import { __runPayrollCoreTests } from "../../src/lib/payroll/payroll-core";
+import { __runPayrollGuardrailsCoreTests } from "../../src/lib/payroll/payroll-guardrails-core";
+import { __runInventoryCatalogTests } from "../../src/lib/pos/inventory-type-catalog";
+import { __runCode128Tests } from "../../src/lib/printing/code128-core";
+import { __runPrinterDiagnosticsTests } from "../../src/lib/printing/printer-diagnostics-core";
+import { __runPoCoreTests } from "../../src/lib/purchasing/po-core";
+import { __runForecastTests } from "../../src/lib/reports/forecast-core";
+import { __runNewsletterStatsTests } from "../../src/lib/reports/newsletter-stats-core";
+import { __runRangeTests } from "../../src/lib/reports/range";
+import { __runZipTests } from "../../src/lib/reports/zip";
+import { __runTimeclockCoreTests } from "../../src/lib/staffing/timeclock-core";
+
+// Helper for suites that return { passed, failed } without throwing on
+// failure: the runner must assert failed === 0 itself.
+function assertNoFailures(name: string, result: { passed: number; failed: number }): void {
+  if (result.failed > 0) {
+    throw new Error(`${name} self-tests failed: ${result.failed} (passed: ${result.passed})`);
+  }
+}
 
 async function main() {
   __runOrderPricingTests();
@@ -272,6 +323,51 @@ async function main() {
   __runSafeCoreTests();
   __runEodCoreTests();
   __runEnrichmentMatchCoreTests();
+  // SLICE 39 connectivity audit: previously-dark suites. Suites that throw
+  // internally on assertion failure are bare calls; suites that only return
+  // { passed, failed } are wrapped so a failure still fails this runner.
+  __runAdminNavTests();
+  __runSageExportsCoreTests();
+  __runSageHelperCoreTests();
+  __runSage50CoreTests();
+  __runAuditAnomalyTests();
+  __runCockpitTests();
+  __runMobileCoreTests();
+  __runStoreProfileTests();
+  assertNoFailures("kb-notes-core", __runKbNotesTests());
+  assertNoFailures("webauthn-core", __runWebauthnCoreTests());
+  __runNormalizeTests();
+  __runVerifyTests();
+  assertNoFailures("image-spec-core", __runImageSpecTests());
+  assertNoFailures("ccrs-identifiers", __runCcrsIdentifierTests());
+  __runCcrsAdjustmentTests();
+  assertNoFailures("ccrs-submit-gate-core", __runCcrsSubmitGateTests());
+  assertNoFailures("compliance-health-core", __runComplianceHealthTests());
+  __runExcisePaymentCoreTests();
+  assertNoFailures("ccrs-manifest-csv-core", __runCcrsManifestCsvTests());
+  __runScanCoreTests();
+  assertNoFailures("intake-disposition-core", __runDispositionTests());
+  assertNoFailures("intake-review-core", __runIntakeReviewTests());
+  assertNoFailures("intake-review-adapter", __runIntakeReviewAdapterTests());
+  assertNoFailures("lot-activation-gate-core", __runLotActivationGateTests());
+  assertNoFailures("manifest-pipeline-core", __runManifestPipelineTests());
+  __runSampleGuardrailTests();
+  __runCardCannabinoidTests();
+  assertNoFailures("strain-terpenes", __runStrainTerpeneTests());
+  __runNonCannabisTests();
+  assertNoFailures("nacha-core", __runNachaCoreTests());
+  assertNoFailures("vendor-ach-core", __runVendorAchTests());
+  assertNoFailures("payroll-core", __runPayrollCoreTests());
+  assertNoFailures("payroll-guardrails-core", __runPayrollGuardrailsCoreTests());
+  __runInventoryCatalogTests();
+  assertNoFailures("code128-core", __runCode128Tests());
+  __runPrinterDiagnosticsTests();
+  __runPoCoreTests();
+  assertNoFailures("forecast-core", __runForecastTests());
+  __runNewsletterStatsTests();
+  assertNoFailures("range", __runRangeTests());
+  __runZipTests();
+  __runTimeclockCoreTests();
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

@@ -29,6 +29,7 @@ import {
   vendorSlugCandidate,
   type VendorNameCandidate,
 } from "@/lib/inventory/vendor-resolve-core";
+import { chunkedIn } from "@/lib/supabase/chunked-in";
 import { quarterKeyFromYmd } from "@/lib/compliance/trade-samples-core";
 import { getSampleSettings, incomingUnitsForProcessor } from "@/lib/compliance/trade-samples";
 import { sampleProductTypeForLine } from "@/lib/compliance/sample-product-type-core";
@@ -1246,7 +1247,9 @@ export async function listManifestLots(manifestId: string) {
   const { data } = await admin
     .from("inventory_lots")
     .select(
-      "id, product_name, lot_code, received_qty, unit, pos_product_key, lab_result_id, status, expires_on, is_sample, strain_name, category, inventory_type, disposition, reject_reason, reject_reason_code",
+      // SLICE 39: + unit_cost_minor_units for the intake review summary
+      // (honest "confirm pricing" flags instead of a hardcoded null).
+      "id, product_name, lot_code, received_qty, unit, pos_product_key, lab_result_id, status, expires_on, is_sample, strain_name, category, inventory_type, disposition, reject_reason, reject_reason_code, unit_cost_minor_units",
     )
     .eq("manifest_id", manifestId)
     .order("product_name", { ascending: true });
@@ -1270,9 +1273,77 @@ export async function listManifestLots(manifestId: string) {
           disposition: string | null;
           reject_reason: string | null;
           reject_reason_code: string | null;
+          unit_cost_minor_units: number | null;
         }[]
       | null) ?? []
   );
+}
+
+/**
+ * SLICE 39: lab facts for the manifest review page's intake-review summary
+ * (COA / failed-lab detection per staged lot). Only the columns the pure
+ * adapter (intake-review-adapter.ts) needs. Read-only.
+ */
+export async function listLabFactsByIds(
+  labIds: readonly string[],
+): Promise<
+  Map<
+    string,
+    {
+      id: string;
+      labtest_external_identifier: string | null;
+      coa_url: string | null;
+      thc_pct: number | null;
+      total_thc_pct: number | null;
+      cbd_pct: number | null;
+      total_cbd_pct: number | null;
+      potency_json: Record<string, number> | null;
+      passed: boolean | null;
+    }
+  >
+> {
+  const out = new Map<
+    string,
+    {
+      id: string;
+      labtest_external_identifier: string | null;
+      coa_url: string | null;
+      thc_pct: number | null;
+      total_thc_pct: number | null;
+      cbd_pct: number | null;
+      total_cbd_pct: number | null;
+      potency_json: Record<string, number> | null;
+      passed: boolean | null;
+    }
+  >();
+  if (!isSupabaseServiceConfigured || labIds.length === 0) return out;
+  const admin = createSupabaseAdminClient();
+  const rows = await chunkedIn(labIds, async (chunk, from, to) => {
+    const { data } = await admin
+      .from("lab_results")
+      .select(
+        "id, labtest_external_identifier, coa_url, thc_pct, total_thc_pct, cbd_pct, total_cbd_pct, potency_json, passed",
+      )
+      .in("id", chunk as string[])
+      .range(from, to);
+    return (
+      (data as
+        | {
+            id: string;
+            labtest_external_identifier: string | null;
+            coa_url: string | null;
+            thc_pct: number | null;
+            total_thc_pct: number | null;
+            cbd_pct: number | null;
+            total_cbd_pct: number | null;
+            potency_json: Record<string, number> | null;
+            passed: boolean | null;
+          }[]
+        | null) ?? []
+    );
+  });
+  for (const r of rows) out.set(r.id, r);
+  return out;
 }
 
 /**

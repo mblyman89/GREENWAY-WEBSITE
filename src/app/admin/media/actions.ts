@@ -783,6 +783,9 @@ export async function suggestProductLinksAction(id: string): Promise<ProductLink
 export async function pendingProductLinks(id: string): Promise<
   { suggestion: AiSuggestion; productId: string; productName: string; brandSlug: string; score: number; reasons: string[] }[]
 > {
+  // SLICE 39 connectivity audit: this file is "use server", so every export is
+  // a callable endpoint — gate reads the same as the page that renders them.
+  await requirePermission("media.manage");
   const rows = await listSuggestions("media_asset", id, "pending");
   const out = [];
   for (const s of rows) {
