@@ -343,11 +343,11 @@ export function PromotionForm({ action, promotion, brands, submitLabel, aiEnable
               <div className="space-y-2">
                 <label className="flex items-center gap-2 text-xs text-white/60">
                   <input type="radio" name="cfg_basket_mode" value="top_item" defaultChecked={basketMode === "top_item"} className="h-3.5 w-3.5 accent-[var(--admin-accent)]" />
-                  Top item % + rest % (Super Saturday style)
+                  Headline % on one item + rest % (Super Saturday style — headline lands on the lowest-priced item)
                 </label>
                 <div className="grid grid-cols-2 gap-2">
                   <label className="block">
-                    <span className="mb-1 block text-xs text-white/50">Top item %</span>
+                    <span className="mb-1 block text-xs text-white/50">Headline % (one item)</span>
                     <input name="cfg_top_percent" type="number" min={0} max={99} step="1" defaultValue={readNum(basketTopItem, "topPercent")} className={inputCls} />
                   </label>
                   <label className="block">

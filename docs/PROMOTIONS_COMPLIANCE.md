@@ -98,7 +98,9 @@ mechanic can ever produce):
 - percent → `discountPercent`; fixed → `discountFixed` against each price
 - multi_item_tier / weight_tier / threshold_spend → the highest tier percent
 - bogo → `getPercent` (a unit can be the discounted one)
-- basket top-item → `topPercent`
+- basket headline-item → `max(topPercent, restPercent)` (the engine puts the
+  bigger percent on the LOWEST-priced eligible item — store-favorable, owner
+  directive — so the guard assumes any product could receive it)
 - basket N-for-M → `(n−m)/n × 100` (basket-wide equivalent)
 - either/or → the **max** across both options (conservative; the runtime
   picks the store-advantaged option, but the guard assumes the worst)

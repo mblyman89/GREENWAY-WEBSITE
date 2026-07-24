@@ -119,7 +119,11 @@ export type EngineConfig = {
   bogo?: { buyQty: number; getQty: number; getPercent: number };
   /** Basket: "buy N for the price of M" (savings spread as an equivalent percent). */
   basketNforM?: { n: number; m: number };
-  /** Basket: top item at `topPercent`, the rest at `restPercent` (Super Saturday). */
+  /**
+   * Basket: ONE item at the higher percent, the rest at the lower percent
+   * (Super Saturday). STORE-FAVORABLE: the headline percent always lands on
+   * the LOWEST-priced eligible item, never the most expensive one.
+   */
   basketTopItem?: { topPercent: number; restPercent: number };
   /**
    * Either/or (Doobie Tuesday): a flat percent OR a bundle "buy N for M",
@@ -435,33 +439,38 @@ export function applyOnePromotion(
     }
     case "basket": {
       if (rule.config.basketTopItem) {
-        // Top item at topPercent, the rest at restPercent (Super Saturday).
+        // Headline percent on ONE item + rest percent on everything else
+        // (Super Saturday). STORE-FAVORABLE (owner directive): the HIGHER of
+        // the two percents always lands on the single LOWEST-priced eligible
+        // unit — never on the most expensive item in a multi-item cart.
         const { topPercent, restPercent } = rule.config.basketTopItem;
-        let topId: string | null = null;
-        let top = -1;
+        const headlinePercent = Math.max(topPercent, restPercent);
+        const othersPercent = Math.min(topPercent, restPercent);
+        let targetId: string | null = null;
+        let lowest = Number.POSITIVE_INFINITY;
         for (const l of eligible) {
-          if (l.regularPriceMinorUnits > top) {
-            top = l.regularPriceMinorUnits;
-            topId = l.lineId;
+          if (l.regularPriceMinorUnits < lowest) {
+            lowest = l.regularPriceMinorUnits;
+            targetId = l.lineId;
           }
         }
         for (const l of eligible) {
-          if (l.lineId === topId) {
+          if (l.lineId === targetId) {
             if (l.quantity <= 1) {
-              out.set(l.lineId, flatPercentDiscount(l, topPercent, rule.title));
+              out.set(l.lineId, flatPercentDiscount(l, headlinePercent, rule.title));
             } else {
-              const oneAtTop = round(l.regularPriceMinorUnits * (1 - topPercent / 100));
-              const restAt = round(l.regularPriceMinorUnits * (1 - restPercent / 100));
-              const blendedTotal = oneAtTop + restAt * (l.quantity - 1);
+              const oneAtHeadline = round(l.regularPriceMinorUnits * (1 - headlinePercent / 100));
+              const restAt = round(l.regularPriceMinorUnits * (1 - othersPercent / 100));
+              const blendedTotal = oneAtHeadline + restAt * (l.quantity - 1);
               const blendedUnit = clampEngineUnit(l, round(blendedTotal / l.quantity));
               out.set(l.lineId, {
                 unitPrice: blendedUnit,
-                percent: restPercent,
-                label: `${rule.title} · ${topPercent}% top + ${restPercent}%`,
+                percent: othersPercent,
+                label: `${rule.title} · ${headlinePercent}% one item + ${othersPercent}%`,
               });
             }
           } else {
-            out.set(l.lineId, flatPercentDiscount(l, restPercent, rule.title));
+            out.set(l.lineId, flatPercentDiscount(l, othersPercent, rule.title));
           }
         }
       } else {
@@ -814,7 +823,8 @@ export function __runDiscountEngineTests(): void {
     expect("bogo merch may be free", r.lines.find((l) => l.lineId === "a")!.unitPriceMinorUnits === 0);
   }
 
-  // basket top-item (Super Saturday): top 30%, rest 15%
+  // basket top-item (Super Saturday) — STORE-FAVORABLE: the 30% headline
+  // lands on the LOWEST-priced eligible unit; everything else gets 15%.
   {
     const rule = baseRule({ discountType: "basket", storewide: true, config: { basketTopItem: { topPercent: 30, restPercent: 15 } } });
     const lines: EngineCartLine[] = [
@@ -822,8 +832,34 @@ export function __runDiscountEngineTests(): void {
       { lineId: "b", regularPriceMinorUnits: 5000, quantity: 1, categories: ["flower"] },
     ];
     const r = computePromotions(lines, [rule]);
-    expect("basket top 30%", r.lines.find((l) => l.lineId === "b")!.unitPriceMinorUnits === 3500);
-    expect("basket rest 15%", r.lines.find((l) => l.lineId === "a")!.unitPriceMinorUnits === 850);
+    expect("basket headline 30% on cheapest", r.lines.find((l) => l.lineId === "a")!.unitPriceMinorUnits === 700);
+    expect("basket 15% on pricier item", r.lines.find((l) => l.lineId === "b")!.unitPriceMinorUnits === 4250);
+  }
+  // basket top-item — swapped percents still put the HIGHER percent on the
+  // cheapest unit (config order can never aim the headline at the top item).
+  {
+    const rule = baseRule({ discountType: "basket", storewide: true, config: { basketTopItem: { topPercent: 15, restPercent: 30 } } });
+    const lines: EngineCartLine[] = [
+      { lineId: "a", regularPriceMinorUnits: 1000, quantity: 1, categories: ["flower"] },
+      { lineId: "b", regularPriceMinorUnits: 5000, quantity: 1, categories: ["flower"] },
+    ];
+    const r = computePromotions(lines, [rule]);
+    expect("swapped percents: 30% still on cheapest", r.lines.find((l) => l.lineId === "a")!.unitPriceMinorUnits === 700);
+    expect("swapped percents: 15% still on pricier", r.lines.find((l) => l.lineId === "b")!.unitPriceMinorUnits === 4250);
+  }
+
+  // basket top-item — BELOW-COST FLOOR double-check: the headline percent on
+  // the cheapest unit still clamps at ceil(cost × tax-inclusive divisor).
+  {
+    const rule = baseRule({ discountType: "basket", storewide: true, config: { basketTopItem: { topPercent: 30, restPercent: 15 } } });
+    const lines: EngineCartLine[] = [
+      // Cheapest line: 30% off 1000 would be 700, but floor is ceil(600×1.463)=878.
+      { lineId: "a", regularPriceMinorUnits: 1000, quantity: 1, categories: ["flower"], costMinorUnits: 600 },
+      { lineId: "b", regularPriceMinorUnits: 5000, quantity: 1, categories: ["flower"], costMinorUnits: 600 },
+    ];
+    const r = computePromotions(lines, [rule]);
+    expect("basket headline clamps at cost floor", r.lines.find((l) => l.lineId === "a")!.unitPriceMinorUnits === 878);
+    expect("basket rest line unaffected by clamp", r.lines.find((l) => l.lineId === "b")!.unitPriceMinorUnits === 4250);
   }
 
   // basket N-for-M (Ice Cream Sunday): the cheapest units' value becomes an
@@ -839,6 +875,23 @@ export function __runDiscountEngineTests(): void {
     expect("basket 3for2 spread percent", r.lines[0].appliedPercent === 33);
     expect("basket 3for2 savings", r.totalSavingsMinorUnits === 990);
     expect("basket 3for2 unit never $0", r.lines[0].unitPriceMinorUnits > 0);
+  }
+  // OWNER'S EXAMPLE (store-favorable pin): Sunday 3-for-2 on a $150 + $20 +
+  // $15 cart — the deal's value is the LOWEST-priced item ($15), never more.
+  // Total savings must never exceed 1500 cents and the highest-priced item
+  // never receives a bigger PERCENT than anything else.
+  {
+    const rule = baseRule({ discountType: "basket", storewide: true, config: { basketNforM: { n: 3, m: 2 } } });
+    const lines: EngineCartLine[] = [
+      { lineId: "half", regularPriceMinorUnits: 15000, quantity: 1, categories: ["flower"] },
+      { lineId: "j1", regularPriceMinorUnits: 2000, quantity: 1, categories: ["preroll"] },
+      { lineId: "j2", regularPriceMinorUnits: 1500, quantity: 1, categories: ["preroll"] },
+    ];
+    const r = computePromotions(lines, [rule]);
+    expect("owner Sunday example: savings ≤ $15", r.totalSavingsMinorUnits <= 1500);
+    expect("owner Sunday example: some savings applied", r.totalSavingsMinorUnits > 0);
+    const pcts = r.lines.map((l) => l.appliedPercent);
+    expect("owner Sunday example: equal percent every line", pcts.every((p) => p === pcts[0]));
   }
   // N-for-M spreads across ALL eligible lines, not just the cheapest one's line.
   {

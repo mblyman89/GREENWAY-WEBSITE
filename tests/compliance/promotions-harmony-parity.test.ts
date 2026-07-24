@@ -198,6 +198,11 @@ const CARTS: Record<string, SrcLine[]> = {
       filterCategories: ["rso"] as GreenwayCategory[],
     },
   ],
+  "owner example: $150 half + $20 joint + $15 joint": [
+    { lineId: "half", regularPriceMinorUnits: 15000, quantity: 1, category: "flower", variantLabel: "14g" },
+    { lineId: "j1", regularPriceMinorUnits: 2000, quantity: 1, category: "preroll" },
+    { lineId: "j2", regularPriceMinorUnits: 1500, quantity: 1, category: "preroll" },
+  ],
   "cost floor clamps identically": [
     {
       lineId: "a",
@@ -215,6 +220,42 @@ describe("PROMOTIONS HARMONY — seed rules == legacy static engine (every weekd
       for (const weekday of WEEKDAYS) expectParity(cart, weekday);
     });
   }
+
+  it("STORE-FAVORABLE (owner directive): Saturday headline 30% lands on the LOWEST-priced item in both engines", () => {
+    const cart: SrcLine[] = [
+      { lineId: "half", regularPriceMinorUnits: 15000, quantity: 1, category: "flower", variantLabel: "14g" },
+      { lineId: "j1", regularPriceMinorUnits: 2000, quantity: 1, category: "preroll" },
+      { lineId: "j2", regularPriceMinorUnits: 1500, quantity: 1, category: "preroll" },
+    ];
+    for (const result of [legacyResultFor(cart, "saturday"), rulesResultFor(cart, "saturday")]) {
+      const byId = new Map(result.lines.map((l) => [l.lineId, l]));
+      // Cheapest item ($15 joint) gets the 30% headline; the rest get 15%.
+      expect(byId.get("j2")!.unitPriceMinorUnits).toBe(1050); // 30% off 1500
+      expect(byId.get("j1")!.unitPriceMinorUnits).toBe(1700); // 15% off 2000
+      expect(byId.get("half")!.unitPriceMinorUnits).toBe(12750); // 15% off 15000
+      // The highest-priced item NEVER receives the biggest percent.
+      const pctOf = (id: string) =>
+        (byId.get(id)!.unitSavingsMinorUnits / byId.get(id)!.regularPriceMinorUnits) * 100;
+      expect(pctOf("half")).toBeLessThanOrEqual(pctOf("j2"));
+      expect(pctOf("half")).toBeLessThanOrEqual(pctOf("j1"));
+    }
+  });
+
+  it("STORE-FAVORABLE (owner directive): Sunday 3-for-2 on $150+$20+$15 saves at most the $15 item in both engines", () => {
+    const cart: SrcLine[] = [
+      { lineId: "half", regularPriceMinorUnits: 15000, quantity: 1, category: "flower", variantLabel: "14g" },
+      { lineId: "j1", regularPriceMinorUnits: 2000, quantity: 1, category: "preroll" },
+      { lineId: "j2", regularPriceMinorUnits: 1500, quantity: 1, category: "preroll" },
+    ];
+    for (const result of [legacyResultFor(cart, "sunday"), rulesResultFor(cart, "sunday")]) {
+      // The deal's value is the LOWEST-priced item ($15.00 = 1500) — never more.
+      expect(result.totalSavingsMinorUnits).toBeGreaterThan(0);
+      expect(result.totalSavingsMinorUnits).toBeLessThanOrEqual(1500);
+      // Spread as an equal percent — the $150 item never gets a bigger percent.
+      const pcts = result.lines.map((l) => l.appliedPercent);
+      for (const p of pcts) expect(p).toBe(pcts[0]);
+    }
+  });
 
   it("no active rules (weekday unresolved) prices everything at regular", () => {
     const cart = [

@@ -1784,6 +1784,26 @@ attempt, even the ones the system wins.*
   anywhere, overlapping or clipped controls, a native-white control
   breaking the dark theme, or any screen that makes you squint.
 
+- **T-189 (store-favorable discounts — the deal never favors the
+  priciest item):** on a Sunday (or with the Sunday seed active in the
+  simulator), build a cart of three items priced roughly $150, $20 and
+  $15. The 3-for-2 deal must save AT MOST the price of the cheapest
+  item (about $15), spread as the same percent across all three lines
+  — the $150 item must never carry a bigger percent than the others.
+  Then switch to Saturday: in the same cart the 30% headline must land
+  on the CHEAPEST item and everything else gets 15% — never 30% off
+  the $150 item. Now attach a loyalty member with the 25% tier: on any
+  line where the daily deal saved less than 25%, the price should drop
+  to exactly 25% off the regular price (replaced, not added); on any
+  line where the deal already saved 30%, the price must NOT change.
+  Finally, set one item's cost close to its price and confirm the
+  discounted price refuses to fall below the cost floor. **Expect:**
+  savings capped by the cheapest item on Sunday; Saturday headline on
+  the cheapest line; loyalty replaces smaller deals and never stacks;
+  no price ever below cost. **Red flag:** the priciest item getting
+  the biggest percent, combined loyalty-plus-deal savings exceeding
+  the better of the two, or any unit priced below its cost floor.
+
 ---
 
 <a id="phase-13"></a>

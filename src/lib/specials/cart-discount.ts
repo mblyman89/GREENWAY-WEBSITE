@@ -319,14 +319,16 @@ export function computeCartDiscounts(
       break;
     }
     case "saturday": {
-      // Super Saturday: 30% off the single most-expensive eligible UNIT,
-      // 15% off everything else (storewide cannabis). Merch/accessories excluded.
+      // Super Saturday: 30% off ONE eligible unit + 15% off everything else
+      // (storewide cannabis; merch/accessories excluded). STORE-FAVORABLE
+      // (owner directive): the 30% headline lands on the single LOWEST-priced
+      // eligible unit — never on the most expensive item in a multi-item cart.
       const eligible = cartLines.filter((l) => !isMerchOrAccessory(l));
-      // Find the most expensive eligible unit to receive the 30% headline deal.
+      // Find the LOWEST-priced eligible unit to receive the 30% headline deal.
       let topLineId: string | null = null;
-      let topUnitPrice = -1;
+      let topUnitPrice = Number.POSITIVE_INFINITY;
       for (const line of eligible) {
-        if (line.regularPriceMinorUnits > topUnitPrice) {
+        if (line.regularPriceMinorUnits < topUnitPrice) {
           topUnitPrice = line.regularPriceMinorUnits;
           topLineId = line.lineId;
         }
@@ -347,7 +349,7 @@ export function computeCartDiscounts(
               regularPriceMinorUnits: line.regularPriceMinorUnits,
               quantity: line.quantity,
               unitSavingsMinorUnits: line.regularPriceMinorUnits - blendedUnit,
-              appliedLabel: "Super Saturday · 30% top item + 15%",
+              appliedLabel: "Super Saturday · 30% one item + 15%",
               appliedPercent: 15,
             });
           }

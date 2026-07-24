@@ -228,7 +228,8 @@ export function getActiveMenuDiscount(
     case "saturday":
       // Super Saturday: 30% off ONE item + 15% off everything else storewide.
       // Because the 30% only applies to a single item, the per-item card shows an
-      // informational note; the cart applies 30% to the top item + 15% to the rest.
+      // informational note; the cart applies 30% to the LOWEST-priced eligible
+      // item + 15% to the rest (store-favorable — owner directive).
       return buildDiscount(item, {
         label: "Super Saturday",
         discountPercent: 30,
