@@ -327,6 +327,20 @@ export const CONCIERGE_KB: ConciergeTopic[] = [
     ],
   },
   {
+    id: "regulatory-watch",
+    area: "compliance",
+    title: "Regulatory Watch (rule-change radar)",
+    tab: "CCRS",
+    href: "/admin/compliance/regulatory",
+    facts: [
+      "Regulatory Watch tracks WSLCB rulemaking so you stay ahead of rule changes \u2014 it polls the LCB's GovDelivery bulletin feed daily and can also receive forwarded LCB newsletter emails.",
+      "Each bulletin is analyzed: the AI writes a plain-English briefing, flags the rulemaking stage (CR-101 preproposal, CR-102 proposed, CR-103 adopted, emergency), pulls out WAC/RCW citations with deep links, and lists comment deadlines and effective dates.",
+      "It proposes roadmap tasks when a rule change may require updating how the store or the software operates \u2014 you accept, start, finish, or dismiss each task.",
+      "Reach it from the CCRS Command Center's 'Regulatory Watch' header link or via Quick Search (\u2318K / Ctrl+K).",
+      "It is advisory only \u2014 it never changes settings or code by itself, and you can always comment on proposed rules at rules@lcb.wa.gov.",
+    ],
+  },
+  {
     id: "sales-limits",
     area: "compliance",
     title: "Sales limits",

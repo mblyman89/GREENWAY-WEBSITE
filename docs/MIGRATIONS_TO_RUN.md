@@ -369,3 +369,22 @@
   unlock at the register is politely refused until they acknowledge —
   either digitally, or by you marking their signed paper copy in their
   employee file.**
+
+## Feature slice — regulatory compliance command center (rule-change radar)
+
+- [ ] **`supabase/migrations/0137_regulatory_watch.sql`** — four new
+  tables behind the Regulatory Watch page (CCRS — command center —
+  Regulatory Watch): `regulatory_sources` (the watched LCB feeds and
+  pages, pre-seeded — including the LCB's GovDelivery bulletin feed
+  that the daily cron polls), `regulatory_items` (every bulletin,
+  forwarded LCB email, or pasted notice — deduplicated so the same
+  bulletin never appears twice), `regulatory_analyses` (the AI's
+  plain-English briefing for an item: rulemaking stage, impact,
+  affected areas, deadlines, strategy), and `regulatory_roadmap_items`
+  (the task list the AI proposes and you accept/start/finish/dismiss).
+  Staff can read; only the server writes. Idempotent; safe to re-run.
+  **Until this is run, the app works normally — the Regulatory Watch
+  page shows a friendly setup notice instead of data, and the daily
+  cron quietly does nothing. Once run, the radar goes live: bulletins
+  flow in daily, deadlines land on the timeline, and the AI (when
+  configured) writes briefings and proposes roadmap tasks.**
