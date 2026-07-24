@@ -1580,6 +1580,31 @@ attempt, even the ones the system wins.*
   Promotions page, a manager reaching the dials, or a garbage percent
   slipping through.
 
+- **T-181 (special discounts at the register — the money and the safety rules):**
+  refresh a register's menu (Sync now, or re-unlock while online) so it
+  picks up the discount programs, then ring three test sales. FIRST —
+  veteran: add an item, tap Veteran discount in the checkout rail; the
+  Apply button must stay dead until you tick "I checked a military ID".
+  Apply it and watch a separate "Veteran discount (15%)" line reduce the
+  TOTAL; now change the item's quantity — the discount must silently
+  drop (re-apply it on the fixed cart; a stale discount must never
+  survive a cart change). SECOND — industry: the Apply button must stay
+  dead until a company name is typed; after the sale syncs, the company
+  must appear on the recorded use. THIRD — employee, the strict one: the
+  buying employee enters their OWN PIN first; if it's the PIN of the
+  cashier logged into THIS register the panel must refuse with "ring it
+  on another register". Then a SECOND employee witnesses with their PIN
+  — typing the buyer's PIN again must be refused ("someone OTHER than
+  the buyer"). With a real buyer + witness pair the 35% comes off and
+  the sale tenders normally. **Expect:** the sync completes all three
+  sales, each writes one row in the use ledger (who gave it, who got it,
+  cents saved) plus an audit entry, and heavily-promoted items discount
+  LESS (legal price floors always win — an item can never sell below
+  cost or for free). **Red flag:** a discount surviving a cart change,
+  an employee self-witnessing or buying on their own register, applying
+  a loyalty redemption AND a special discount to the same sale, or a
+  synced sale with no ledger row.
+
 ---
 
 <a id="phase-13"></a>

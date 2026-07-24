@@ -125,6 +125,7 @@ import { __runReservationExpiryTests } from "../../src/lib/orders/reservation-ex
 import { __runListWindowTests } from "../../src/lib/admin/list-window-core";
 import { __runListFilterTests } from "../../src/lib/admin/list-filter-core";
 import { __runSpecialDiscountTests } from "../../src/lib/discounts/special-discount-core";
+import { __runSpecialDiscountSaleTests } from "../../src/lib/pos/special-discount-sale-core";
 import { __runConstantTimeTests } from "../../src/lib/security/constant-time";
 import { __runGramsPerOunceTests } from "../../src/lib/compliance/grams-per-ounce";
 
@@ -256,6 +257,7 @@ async function main() {
   __runListWindowTests();
   __runListFilterTests();
   __runSpecialDiscountTests();
+  __runSpecialDiscountSaleTests();
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

@@ -896,6 +896,8 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
         registerName={creds.name}
         employeeName={employee.fullName}
         employeeSawUsername={employee.sawUsername ?? null}
+        employeeId={employee.id}
+        registerId={creds.registerId ?? undefined}
         initialCart={resumedCart ?? resumeCart ?? loadedCart ?? undefined}
         initialMember={resumeSnapshot?.member ?? loadedMember ?? undefined}
         initialVerdict={resumeSnapshot?.verdict ?? undefined}
@@ -1006,6 +1008,35 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
               return { ok: false as const, error: body?.error ?? "Approval failed." };
             }
             return { ok: true as const, approver: body.approver };
+          } catch {
+            return { ok: false as const, error: "Could not reach the server — try again." };
+          }
+        }}
+        onWitness={async (pin) => {
+          // SLICE 28 — employee-identity PIN check for the EMPLOYEE purchase
+          // program: /api/pos/witness (scrypt + shared throttle, NO role
+          // gate — any active employee counts). ONLINE-ONLY; the PIN never
+          // rides in any queue payload — only the employee's id does.
+          if (!navigator.onLine) {
+            return { ok: false as const, error: "Offline — employee PINs need a connection to verify." };
+          }
+          try {
+            const res = await fetch("/api/pos/witness", {
+              method: "POST",
+              headers: {
+                "content-type": "application/json",
+                "x-pos-device-id": creds.deviceId,
+                "x-pos-device-key": creds.deviceKey,
+              },
+              body: JSON.stringify({ pin }),
+            });
+            const body = (await res.json().catch(() => null)) as
+              | { employee?: { id: string; fullName: string }; error?: string }
+              | null;
+            if (!res.ok || !body?.employee) {
+              return { ok: false as const, error: body?.error ?? "PIN check failed." };
+            }
+            return { ok: true as const, employee: body.employee };
           } catch {
             return { ok: false as const, error: "Could not reach the server — try again." };
           }

@@ -70,6 +70,12 @@ import {
   type MenuPriceRow,
 } from "./price-drift-core";
 import { getPublishedVersion } from "./menu-version";
+// SLICE 28 — special discounts (employee/industry/veteran): the pure rules +
+// percent math the register used, re-run server-side, plus the settings and
+// the migration-0133 use ledger.
+import { applySpecialDiscount } from "@/lib/discounts/special-discount-core";
+import { getSpecialDiscountSettings, recordSpecialDiscountUse } from "@/lib/discounts/special-discount-store";
+import { checkSpecialDiscountAtRegister } from "./special-discount-sale-core";
 import { findAuthorizationByUpid, attachCardToOrder } from "@/lib/medical/sale-store";
 import { toRecognitionCard } from "@/lib/medical/store";
 import { authorizationValidityAt } from "@/lib/medical/medical-authorization-core";
@@ -645,6 +651,108 @@ async function processSale(
     redemptionRow = { id: row.id, code: row.code, account_id: row.account_id, value_minor: row.value_minor };
   }
 
+  // SLICE 28 — special discount (employee/industry/veteran) applied at the
+  // register: re-run EVERY rule server-side before materializing the order,
+  // so a stale cached bundle, a tampered payload, or a rate the owner changed
+  // mid-flight can never make an off-book discount stick.
+  //  1. no stacking — a special discount and a loyalty redemption share the
+  //     "reduce the unit price" lane; the register enforces it, so both at
+  //     once means corruption;
+  //  2. the program must be ENABLED right now and the applied rate must be
+  //     the owner's CURRENT saved rate (basis points, exact match);
+  //  3. per line, the reduction can never exceed the program's cut of the
+  //     pre-discount price (floors only ever make it smaller);
+  //  4. the program's people-rules re-run with the ENVELOPE's cashier +
+  //     register (employee program: buyer + a DIFFERENT approver, and never
+  //     on the register the buyer is logged into; industry: company name;
+  //     veteran: military-ID confirmation);
+  //  5. employee program: the buyer and the approver must BOTH resolve to
+  //     ACTIVE employees (the PIN was verified online by /api/pos/witness
+  //     moments before enqueue — this catches deactivations since).
+  if (sale.specialDiscount) {
+    const sd = sale.specialDiscount;
+    if (sale.loyaltyRedemption) {
+      return markException(
+        admin,
+        ledgerId,
+        envelope.clientUuid,
+        "A sale cannot carry BOTH a loyalty redemption and a special discount — re-ring with one or the other, then resolve this exception.",
+      );
+    }
+    const settings = await getSpecialDiscountSettings();
+    const program = settings.find((s) => s.kind === sd.kind);
+    if (!program || !program.enabled) {
+      return markException(
+        admin,
+        ledgerId,
+        envelope.clientUuid,
+        `The ${sd.kind} discount program is turned OFF — the register applied it from a stale menu. Refresh the register's menu, re-ring the sale, then resolve this exception.`,
+      );
+    }
+    if (program.percentBps !== sd.percentBps) {
+      return markException(
+        admin,
+        ledgerId,
+        envelope.clientUuid,
+        `The ${sd.kind} discount rate changed (register applied ${sd.percentBps} bps; the saved rate is ${program.percentBps} bps). Refresh the register's menu, re-ring the sale, then resolve this exception.`,
+      );
+    }
+    for (const [i, l] of sale.lines.entries()) {
+      if (!l.specialDiscountMinor) continue;
+      const preDiscountUnit = l.unitPriceMinor + l.specialDiscountMinor;
+      const maxCut = applySpecialDiscount(preDiscountUnit, sd.percentBps).discountMinor;
+      if (l.specialDiscountMinor > maxCut) {
+        return markException(
+          admin,
+          ledgerId,
+          envelope.clientUuid,
+          `Line ${i + 1} ("${l.productName}") took ${l.specialDiscountMinor}¢ per unit off, more than the ${sd.kind} program's ${sd.percentBps} bps allows (${maxCut}¢) — refused.`,
+        );
+      }
+    }
+    const ruleError = checkSpecialDiscountAtRegister({
+      kind: sd.kind,
+      cashierEmployeeId: envelope.employeeId,
+      registerId: envelope.registerId,
+      beneficiaryEmployeeId: sd.beneficiaryEmployeeId ?? null,
+      approvedByEmployeeId: sd.approvedByEmployeeId ?? null,
+      companyName: sd.companyName ?? null,
+      militaryIdChecked: sd.militaryIdChecked,
+    });
+    if (ruleError) {
+      return markException(admin, ledgerId, envelope.clientUuid, `Special discount refused: ${ruleError}`);
+    }
+    if (sd.kind === "employee") {
+      const ids = [sd.beneficiaryEmployeeId!, sd.approvedByEmployeeId!];
+      const { data: empRows, error: empError } = await admin
+        .from("employees")
+        .select("id, active")
+        .in("id", ids);
+      if (empError) {
+        return markException(
+          admin,
+          ledgerId,
+          envelope.clientUuid,
+          `Employee discount: staff lookup failed (${empError.message}).`,
+        );
+      }
+      for (const [label, id] of [
+        ["buying employee", sd.beneficiaryEmployeeId!],
+        ["approving employee", sd.approvedByEmployeeId!],
+      ] as const) {
+        const row = (empRows ?? []).find((r) => r.id === id);
+        if (!row || !row.active) {
+          return markException(
+            admin,
+            ledgerId,
+            envelope.clientUuid,
+            `Employee discount: the ${label} (${id}) is not an active employee — refused.`,
+          );
+        }
+      }
+    }
+  }
+
   // Employee name for the customer-facing snapshot (orders require a name).
   const { data: emp } = await admin
     .from("employees")
@@ -947,6 +1055,55 @@ async function processSale(
       `Order passed the gate but the status write failed${completed.refusal ? `: ${completed.refusal}` : "."}`,
       { order_id: order.id },
     );
+  }
+
+  // SLICE 28 — the sale completed with a special discount on it: write the
+  // migration-0133 use ledger row (who gave it, who got it, cents saved) and
+  // the audit trail. Idempotent by client_uuid — a sync retry can never
+  // double-count a discount. Best-effort by design: a completed, paid-for
+  // sale must never be undone by a bookkeeping hiccup — a failed write
+  // leaves a loud audit row for the manager instead.
+  if (sale.specialDiscount) {
+    const sd = sale.specialDiscount;
+    const recorded = await recordSpecialDiscountUse({
+      kind: sd.kind,
+      cashierEmployeeId: envelope.employeeId,
+      registerId: envelope.registerId,
+      beneficiaryEmployeeId: sd.beneficiaryEmployeeId ?? null,
+      approvedByEmployeeId: sd.approvedByEmployeeId ?? null,
+      companyName: sd.companyName ?? null,
+      militaryIdChecked: sd.militaryIdChecked === true,
+      subtotalMinor: sale.subtotalMinor,
+      discountMinor: sd.appliedMinor,
+      clientUuid: envelope.clientUuid,
+      orderId: order.id,
+    });
+    await recordAudit({
+      actorId: null,
+      actorEmail: `pos-device:${device.id}`,
+      action: recorded.ok ? "register.special_discount" : "register.special_discount_record_failed",
+      entityType: "order",
+      entityId: order.id,
+      after: {
+        kind: sd.kind,
+        percentBps: sd.percentBps,
+        appliedMinor: sd.appliedMinor,
+        beneficiaryEmployeeId: sd.beneficiaryEmployeeId ?? null,
+        approvedByEmployeeId: sd.approvedByEmployeeId ?? null,
+        companyName: sd.companyName ?? null,
+        militaryIdChecked: sd.militaryIdChecked === true,
+        soldByEmployeeId: envelope.employeeId,
+        clientUuid: envelope.clientUuid,
+        occurredAt: envelope.occurredAt,
+        ...(recorded.ok ? {} : { error: recorded.error ?? "unknown" }),
+      },
+    });
+    await admin.from("order_events").insert({
+      order_id: order.id,
+      event_type: "note",
+      note: `Special discount (${sd.kind}) applied at the register ($${(sd.appliedMinor / 100).toFixed(2)} off).`,
+      actor_label: `POS · ${employeeName}`,
+    });
   }
 
   // AM-D2 — supersede the SOURCE website order NOW (on completion), not on

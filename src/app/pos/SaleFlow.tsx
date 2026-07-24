@@ -61,6 +61,16 @@ import {
   type PosLoyaltyGrant,
   type PosLoyaltyRequest,
 } from "@/lib/pos/register-loyalty-core";
+// SLICE 28 — special discounts (employee/industry/veteran) at the register:
+// pure percent math + floors + the people-rules, plus the display formatter.
+import {
+  applySpecialDiscountToLines,
+  applySpecialDiscountToPricedLines,
+  availableSpecialDiscounts,
+  checkSpecialDiscountAtRegister,
+  type AppliedSpecialDiscount,
+} from "@/lib/pos/special-discount-sale-core";
+import { formatBps, type SpecialDiscountKind } from "@/lib/discounts/special-discount-core";
 import { categoryColorIndex, filterMenuProducts, menuCategoryChips, CATEGORY_COLOR_COUNT } from "@/lib/pos/sale-grid-core";
 import {
   FAVORITES_KEY,
@@ -292,6 +302,23 @@ export type SaleFlowProps = {
    */
   onApprove?: (pin: string) => Promise<{ ok: true; approver: { id: string; fullName: string } } | { ok: false; error: string }>;
   /**
+   * SLICE 28 — employee-identity PIN check for the EMPLOYEE purchase
+   * program. ONLINE-ONLY (a PIN can't be verified offline). The shell posts
+   * /api/pos/witness (device auth + scrypt + shared throttle, NO role gate —
+   * any active employee counts). Called twice: once so the BUYING employee
+   * identifies themselves, once for the WITNESS; the register refuses to
+   * proceed when both resolve to the same person.
+   */
+  onWitness?: (pin: string) => Promise<{ ok: true; employee: { id: string; fullName: string } } | { ok: false; error: string }>;
+  /**
+   * SLICE 28 — the unlocked cashier's employees.id + this device's register
+   * id, needed by the employee-program safety rules (the buyer can't be the
+   * cashier logged into THIS register). Optional so nothing else breaks;
+   * the employee program simply won't offer itself without them.
+   */
+  employeeId?: string;
+  registerId?: string;
+  /**
    * B42 — resolve the info card's photo (ONLINE-ONLY; the shell calls
    * /api/pos/product-image with device auth). The ONE image the register
    * ever shows — the grid stays text-first by owner decision. Offline or
@@ -389,7 +416,7 @@ function priceForBuyer(
   };
 }
 
-export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, employeeSawUsername, initialCart, initialMember, initialVerdict, initialMedicalCard, initialSourceOrderId, onSnapshot, onHold, heldSale, onReleaseHold, onReceiptFrozen, onMemberLookup, onMemberMatch, onMemberHistory, onEmailReceipt, onApprove, onProductImage, onStockFlag, onLoyalty, onEnqueue, onComplete, onCancel }: SaleFlowProps) {
+export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, employeeSawUsername, initialCart, initialMember, initialVerdict, initialMedicalCard, initialSourceOrderId, onSnapshot, onHold, heldSale, onReleaseHold, onReceiptFrozen, onMemberLookup, onMemberMatch, onMemberHistory, onEmailReceipt, onApprove, onWitness, employeeId, registerId, onProductImage, onStockFlag, onLoyalty, onEnqueue, onComplete, onCancel }: SaleFlowProps) {
   // SESSION RESUME — a re-validated parked verdict starts the flow PAST the
   // age gate (at the cart), so the customer's ID is not rescanned.
   const [step, setStep] = useState<Step>(initialVerdict ? "cart" : "idgate");
@@ -502,6 +529,18 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
       setAppliedLoyalty(null);
     }
   }, [appliedLoyalty, loyaltyFingerprint, releaseLoyalty]);
+  // SLICE 28 — the special discount (employee/industry/veteran) applied to
+  // THIS sale. Same drift discipline as loyalty: the per-line reductions are
+  // only valid for the EXACT priced cart they were computed on — any change
+  // drops the discount and the budtender re-applies. Nothing to release
+  // server-side (the ledger row is only written at sync, on completion).
+  const [appliedSpecial, setAppliedSpecial] = useState<AppliedSpecialDiscount | null>(null);
+  useEffect(() => {
+    if (appliedSpecial && appliedSpecial.fingerprint !== loyaltyFingerprint) {
+      /* eslint-disable-next-line react-hooks/set-state-in-effect */
+      setAppliedSpecial(null);
+    }
+  }, [appliedSpecial, loyaltyFingerprint]);
 
   // Sales hours (WAC 314-55-147) checked on-device with the owner's window;
   // the server completion gate re-checks with ITS clock at sync time.
@@ -589,6 +628,12 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
         setAppliedLoyalty={setAppliedLoyalty}
         releaseLoyalty={releaseLoyalty}
         loyaltyFingerprint={loyaltyFingerprint}
+        appliedSpecial={appliedSpecial}
+        setAppliedSpecial={setAppliedSpecial}
+        onWitness={onWitness}
+        employeeId={employeeId}
+        registerId={registerId}
+        employeeName={employeeName}
         overrides={overrides}
         setOverrides={setOverrides}
         onCancel={() => {
@@ -627,6 +672,7 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
         medicalCard={medicalCard}
         overrides={overrides}
         appliedLoyalty={appliedLoyalty}
+        appliedSpecial={appliedSpecial}
         initialTenderedMinor={initialTendered}
         onBack={() => setStep("cart")}
         onCancel={() => {
@@ -641,10 +687,16 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
           const loyaltyAdj = appliedLoyalty
             ? applyLoyaltyToPricedLines(base.lines, appliedLoyalty.perVariant)
             : null;
+          // SLICE 28 — the special-discount reductions apply the same way
+          // (never both; applying one cleared the other on the cart screen).
+          const specialAdj =
+            !appliedLoyalty && appliedSpecial
+              ? applySpecialDiscountToPricedLines(base.lines, appliedSpecial.perLine)
+              : null;
           const priced = {
             ...base,
-            lines: loyaltyAdj ? loyaltyAdj.lines : base.lines,
-            totals: loyaltyAdj ? loyaltyAdj.totals : base.totals,
+            lines: loyaltyAdj ? loyaltyAdj.lines : specialAdj ? specialAdj.lines : base.lines,
+            totals: loyaltyAdj ? loyaltyAdj.totals : specialAdj ? specialAdj.totals : base.totals,
           };
           const built = buildSalePayload({
             lines: priced.lines,
@@ -676,6 +728,25 @@ export function SaleFlow({ bundle, drawerSessionId, registerName, employeeName, 
                     redemptionId: appliedLoyalty.redemptionId,
                     code: appliedLoyalty.code,
                     appliedMinor: loyaltyAdj.appliedMinor,
+                  },
+                }
+              : {}),
+            // SLICE 28 — the special-discount block: the sync re-runs every
+            // program rule server-side and writes the 0133 use ledger.
+            ...(appliedSpecial && specialAdj && specialAdj.appliedMinor > 0
+              ? {
+                  specialDiscount: {
+                    kind: appliedSpecial.kind,
+                    percentBps: appliedSpecial.percentBps,
+                    appliedMinor: specialAdj.appliedMinor,
+                    ...(appliedSpecial.beneficiaryEmployeeId
+                      ? { beneficiaryEmployeeId: appliedSpecial.beneficiaryEmployeeId }
+                      : {}),
+                    ...(appliedSpecial.approvedByEmployeeId
+                      ? { approvedByEmployeeId: appliedSpecial.approvedByEmployeeId }
+                      : {}),
+                    ...(appliedSpecial.companyName ? { companyName: appliedSpecial.companyName } : {}),
+                    ...(appliedSpecial.militaryIdChecked === true ? { militaryIdChecked: true } : {}),
                   },
                 }
               : {}),
@@ -1856,6 +1927,12 @@ function CartScreen({
   setAppliedLoyalty,
   releaseLoyalty,
   loyaltyFingerprint,
+  appliedSpecial,
+  setAppliedSpecial,
+  onWitness,
+  employeeId,
+  registerId,
+  employeeName,
   overrides,
   setOverrides,
   onCancel,
@@ -1892,6 +1969,17 @@ function CartScreen({
   releaseLoyalty: (a: AppliedLoyalty | null) => void;
   /** AM-B — fingerprint of the CURRENT priced cart (stale-spread guard). */
   loyaltyFingerprint: string;
+  /** SLICE 28 — the special discount applied to this sale (null = none). */
+  appliedSpecial: AppliedSpecialDiscount | null;
+  setAppliedSpecial: (a: AppliedSpecialDiscount | null) => void;
+  /** SLICE 28 — employee-identity PIN check (ONLINE-ONLY; /api/pos/witness via the shell). */
+  onWitness?: (pin: string) => Promise<{ ok: true; employee: { id: string; fullName: string } } | { ok: false; error: string }>;
+  /** SLICE 28 — the unlocked cashier's employees.id (employee-program rules). */
+  employeeId?: string;
+  /** SLICE 28 — this device's register id (employee-program rules). */
+  registerId?: string;
+  /** SLICE 28 — the cashier's display name (shown in the employee-program picker). */
+  employeeName?: string;
   /** B24 — this sale's manager price overrides, keyed by variantId. */
   overrides: Record<string, PosLineOverride>;
   setOverrides: (o: Record<string, PosLineOverride>) => void;
@@ -2079,7 +2167,13 @@ function CartScreen({
     () => (appliedLoyalty ? applyLoyaltyToPricedLines(priced.lines, appliedLoyalty.perVariant) : null),
     [priced.lines, appliedLoyalty],
   );
-  const railTotals = loyaltyView ? loyaltyView.totals : priced.totals;
+  // SLICE 28 — the special-discount-reduced view (same shape as loyaltyView;
+  // the two never coexist — applying one clears the other, no stacking).
+  const specialView = useMemo(
+    () => (appliedSpecial ? applySpecialDiscountToPricedLines(priced.lines, appliedSpecial.perLine) : null),
+    [priced.lines, appliedSpecial],
+  );
+  const railTotals = loyaltyView ? loyaltyView.totals : specialView ? specialView.totals : priced.totals;
 
   // B24 — an override approved against a price the engine no longer charges
   // (promo tier moved with a quantity change) is dropped LOUDLY: clear it
@@ -2676,7 +2770,12 @@ function CartScreen({
                 bundle={bundle}
                 member={member}
                 appliedLoyalty={appliedLoyalty}
-                setAppliedLoyalty={setAppliedLoyalty}
+                setAppliedLoyalty={(a) => {
+                  // SLICE 28 — no stacking: a loyalty redemption and a special
+                  // discount share the "reduce the unit price" lane.
+                  if (a) setAppliedSpecial(null);
+                  setAppliedLoyalty(a);
+                }}
                 releaseLoyalty={releaseLoyalty}
                 loyaltyFingerprint={loyaltyFingerprint}
                 pricedLines={priced.lines}
@@ -2684,6 +2783,28 @@ function CartScreen({
                 cartEmpty={cart.length === 0}
               />
             ) : null}
+            {/* SLICE 28 — special discounts (employee / industry / veteran).
+                Programs come from the bundle (owner-set rates); each collects
+                its facts before applying, and applying one drops any loyalty
+                redemption (no stacking). */}
+            <SpecialDiscountPanel
+              bundle={bundle}
+              appliedSpecial={appliedSpecial}
+              setAppliedSpecial={(a) => {
+                if (a && appliedLoyalty) {
+                  releaseLoyalty(appliedLoyalty);
+                  setAppliedLoyalty(null);
+                }
+                setAppliedSpecial(a);
+              }}
+              loyaltyFingerprint={loyaltyFingerprint}
+              pricedLines={priced.lines}
+              onWitness={onWitness}
+              employeeId={employeeId}
+              registerId={registerId}
+              employeeName={employeeName}
+              cartEmpty={cart.length === 0}
+            />
             <Row label="Subtotal (pre-tax)" value={money(railTotals.subtotalMinorUnits)} />
             {/* Promo savings only — the loyalty reduction gets its OWN row
                 below, so the two never double-count in the display. */}
@@ -2699,6 +2820,13 @@ function CartScreen({
             ) : null}
             {appliedLoyalty && loyaltyView ? (
               <Row label={`Loyalty ${appliedLoyalty.code}`} value={`−${money(loyaltyView.appliedMinor)}`} accent />
+            ) : null}
+            {appliedSpecial && specialView ? (
+              <Row
+                label={`${SPECIAL_DISCOUNT_LABELS[appliedSpecial.kind]} (${formatBps(appliedSpecial.percentBps)})`}
+                value={`−${money(specialView.appliedMinor)}`}
+                accent
+              />
             ) : null}
             <Row label="Tax (excise + sales)" value={money(railTotals.estimatedTaxMinorUnits)} />
             <div className="mt-1 flex justify-between text-xl font-bold">
@@ -3664,6 +3792,333 @@ function LoyaltyRedeemPanel({
   );
 }
 
+/** SLICE 28 — human labels for the three special-discount programs. */
+const SPECIAL_DISCOUNT_LABELS: Record<SpecialDiscountKind, string> = {
+  employee: "Employee discount",
+  industry: "Industry discount",
+  veteran: "Veteran discount",
+};
+
+/**
+ * SLICE 28 — the special-discount panel (employee / industry / veteran).
+ * Programs come from the bundle (owner-set rates, admin-only page); each
+ * collects its facts BEFORE the percent applies:
+ *
+ *   veteran  — the cashier ticks "I checked a military ID";
+ *   industry — the visitor's company name (tracked per-company);
+ *   employee — WHO is buying (their own PIN, verified online) + a DIFFERENT
+ *              employee's witness PIN, and the buyer can never be the
+ *              cashier logged into THIS register (they ring it elsewhere).
+ *
+ * The math runs through applySpecialDiscountToLines (percent off each line,
+ * legal floors always win) and the application pins the cart's fingerprint —
+ * any cart change drops it, exactly like loyalty. No stacking: the caller
+ * clears any loyalty redemption when a special discount applies.
+ */
+function SpecialDiscountPanel({
+  bundle,
+  appliedSpecial,
+  setAppliedSpecial,
+  loyaltyFingerprint,
+  pricedLines,
+  onWitness,
+  employeeId,
+  registerId,
+  employeeName,
+  cartEmpty,
+}: {
+  bundle: PosMenuBundle;
+  appliedSpecial: AppliedSpecialDiscount | null;
+  setAppliedSpecial: (a: AppliedSpecialDiscount | null) => void;
+  loyaltyFingerprint: string;
+  pricedLines: PricedSaleLine[];
+  onWitness?: (pin: string) => Promise<{ ok: true; employee: { id: string; fullName: string } } | { ok: false; error: string }>;
+  employeeId?: string;
+  registerId?: string;
+  employeeName?: string;
+  cartEmpty: boolean;
+}) {
+  const programs = useMemo(() => availableSpecialDiscounts(bundle.specialDiscounts), [bundle.specialDiscounts]);
+  const [open, setOpen] = useState<SpecialDiscountKind | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  // veteran
+  const [idChecked, setIdChecked] = useState(false);
+  // industry
+  const [company, setCompany] = useState("");
+  // employee — two PIN steps: the buyer identifies themselves, then a
+  // DIFFERENT employee witnesses. Both verified online by /api/pos/witness.
+  const [buyer, setBuyer] = useState<{ id: string; fullName: string } | null>(null);
+  const [pinInput, setPinInput] = useState("");
+
+  const reset = () => {
+    setOpen(null);
+    setError(null);
+    setIdChecked(false);
+    setCompany("");
+    setBuyer(null);
+    setPinInput("");
+  };
+
+  const applyProgram = (
+    kind: SpecialDiscountKind,
+    percentBps: number,
+    facts: Partial<AppliedSpecialDiscount>,
+  ): string | null => {
+    const gate = checkSpecialDiscountAtRegister({
+      kind,
+      cashierEmployeeId: employeeId ?? "",
+      registerId: registerId ?? "",
+      beneficiaryEmployeeId: facts.beneficiaryEmployeeId ?? null,
+      approvedByEmployeeId: facts.approvedByEmployeeId ?? null,
+      companyName: facts.companyName ?? null,
+      militaryIdChecked: facts.militaryIdChecked,
+    });
+    if (gate) return gate;
+    const applied = applySpecialDiscountToLines(
+      pricedLines.map((l) => ({
+        ...(l.variantId ? { variantId: l.variantId } : {}),
+        productId: l.productId,
+        category: l.category,
+        quantity: l.quantity,
+        unitPriceMinor: l.unitPriceMinor,
+        regularPriceMinor: l.regularPriceMinor,
+        // Costs never ride the bundle lines (server-side only); the sync's
+        // completion gate re-checks the acquisition-cost floor with the
+        // real numbers, so on-device we clamp at the statutory floor.
+        costMinorUnits: null,
+      })),
+      percentBps,
+    );
+    if (!applied.ok) return applied.reason;
+    const perLine: Record<string, number> = {};
+    for (const l of applied.lines) {
+      if (l.specialDiscountMinor > 0) perLine[l.variantId ?? l.productId] = l.specialDiscountMinor;
+    }
+    setAppliedSpecial({
+      kind,
+      percentBps,
+      appliedMinor: applied.appliedMinor,
+      ...facts,
+      fingerprint: loyaltyFingerprint,
+      perLine,
+    });
+    reset();
+    return null;
+  };
+
+  // Applied state — show what's on, offer removal.
+  if (appliedSpecial) {
+    return (
+      <div className="mb-3 flex items-center justify-between gap-2 rounded-xl border border-[var(--pos-accent-border)] bg-[var(--pos-accent-soft)] px-3 py-2">
+        <p className="text-xs font-semibold text-[var(--pos-accent)]">
+          ★ {SPECIAL_DISCOUNT_LABELS[appliedSpecial.kind]} {formatBps(appliedSpecial.percentBps)} — {money(appliedSpecial.appliedMinor)} off
+          {appliedSpecial.kind === "employee" && appliedSpecial.beneficiaryName ? ` (${appliedSpecial.beneficiaryName})` : ""}
+          {appliedSpecial.kind === "industry" && appliedSpecial.companyName ? ` (${appliedSpecial.companyName})` : ""}
+        </p>
+        <button
+          type="button"
+          onClick={() => setAppliedSpecial(null)}
+          className="pos-tile min-h-11 rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-1.5 text-xs font-semibold text-[var(--pos-text-muted)]"
+        >
+          Remove
+        </button>
+      </div>
+    );
+  }
+
+  if (programs.length === 0) return null;
+
+  const verifyPin = async (): Promise<{ id: string; fullName: string } | null> => {
+    if (!onWitness) {
+      setError("PIN checks need the register shell — restart the app.");
+      return null;
+    }
+    if (!navigator.onLine) {
+      setError("Offline — employee PINs can only be verified with a connection.");
+      return null;
+    }
+    setBusy(true);
+    setError(null);
+    const res = await onWitness(pinInput);
+    setBusy(false);
+    setPinInput("");
+    if (!res.ok) {
+      setError(res.error);
+      return null;
+    }
+    return res.employee;
+  };
+
+  return (
+    <div className="mb-3">
+      <div className="flex flex-wrap gap-2">
+        {programs.map((p) => (
+          <button
+            key={p.kind}
+            type="button"
+            disabled={cartEmpty || busy}
+            onClick={() => {
+              setError(null);
+              setOpen((v) => (v === p.kind ? null : p.kind));
+            }}
+            title={
+              p.kind === "employee"
+                ? "Staff purchase — needs the buying employee's PIN plus a second employee's witness PIN, on a register the buyer is NOT logged into."
+                : p.kind === "industry"
+                  ? "Visiting vendor/industry guest — records the company name."
+                  : "Veteran discount — confirm a military ID first."
+            }
+            className="pos-tile min-h-11 flex-1 rounded-xl border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2 text-xs font-semibold text-[var(--pos-text-muted)] disabled:opacity-40"
+          >
+            {SPECIAL_DISCOUNT_LABELS[p.kind]} {formatBps(p.percentBps)}
+          </button>
+        ))}
+      </div>
+      {open === "veteran" ? (
+        <div className="mt-2 rounded-xl border border-[var(--pos-border)] bg-[var(--pos-surface-2)] px-3 py-2">
+          <label className="flex min-h-11 items-center gap-2 text-xs font-semibold">
+            <input type="checkbox" checked={idChecked} onChange={(e) => setIdChecked(e.target.checked)} className="h-5 w-5" />
+            I checked a military ID
+          </label>
+          <button
+            type="button"
+            disabled={!idChecked}
+            onClick={() => {
+              const err = applyProgram(
+                "veteran",
+                programs.find((p) => p.kind === "veteran")!.percentBps,
+                { militaryIdChecked: true },
+              );
+              if (err) setError(err);
+            }}
+            className="pos-tile mt-2 min-h-11 w-full rounded-xl bg-[var(--pos-accent)] px-4 py-2 text-sm font-bold text-[var(--pos-accent-ink)] disabled:opacity-40"
+          >
+            Apply veteran discount
+          </button>
+        </div>
+      ) : null}
+      {open === "industry" ? (
+        <div className="mt-2 rounded-xl border border-[var(--pos-border)] bg-[var(--pos-surface-2)] px-3 py-2">
+          <input
+            value={company}
+            onChange={(e) => setCompany(e.target.value)}
+            placeholder="Company name (who are they with?)"
+            maxLength={120}
+            className="w-full rounded-xl border border-[var(--pos-border-strong)] bg-[var(--pos-surface)] px-3 py-2 text-sm placeholder:text-[var(--pos-text-faint)] focus:border-[var(--pos-accent-border)] focus:outline-none"
+          />
+          <button
+            type="button"
+            disabled={company.trim().length < 2}
+            onClick={() => {
+              const err = applyProgram(
+                "industry",
+                programs.find((p) => p.kind === "industry")!.percentBps,
+                { companyName: company.trim() },
+              );
+              if (err) setError(err);
+            }}
+            className="pos-tile mt-2 min-h-11 w-full rounded-xl bg-[var(--pos-accent)] px-4 py-2 text-sm font-bold text-[var(--pos-accent-ink)] disabled:opacity-40"
+          >
+            Apply industry discount
+          </button>
+        </div>
+      ) : null}
+      {open === "employee" ? (
+        <div className="mt-2 rounded-xl border border-[var(--pos-border)] bg-[var(--pos-surface-2)] px-3 py-2">
+          {!buyer ? (
+            <>
+              <p className="text-xs font-semibold text-[var(--pos-text-muted)]">
+                Step 1 of 2 — the BUYING employee enters their own PIN.
+                {employeeName ? ` They can't be ${employeeName} (the cashier logged into this register).` : ""}
+              </p>
+              <div className="mt-2 flex gap-2">
+                <input
+                  value={pinInput}
+                  onChange={(e) => setPinInput(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  type="password"
+                  inputMode="numeric"
+                  placeholder="Buyer's PIN"
+                  className="min-w-0 flex-1 rounded-xl border border-[var(--pos-border-strong)] bg-[var(--pos-surface)] px-3 py-2 text-sm placeholder:text-[var(--pos-text-faint)] focus:border-[var(--pos-accent-border)] focus:outline-none"
+                />
+                <button
+                  type="button"
+                  disabled={busy || pinInput.length < 4}
+                  onClick={() => {
+                    void verifyPin().then((emp) => {
+                      if (!emp) return;
+                      if (employeeId && emp.id === employeeId) {
+                        setError(
+                          "That's the cashier logged into THIS register — employees buy on a register they're not logged into.",
+                        );
+                        return;
+                      }
+                      setBuyer(emp);
+                    });
+                  }}
+                  className="pos-tile min-h-11 rounded-xl bg-[var(--pos-accent)] px-4 py-2 text-sm font-bold text-[var(--pos-accent-ink)] disabled:opacity-40"
+                >
+                  Verify
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-xs font-semibold text-[var(--pos-text-muted)]">
+                Step 2 of 2 — buying: <span className="text-[var(--pos-accent)]">{buyer.fullName}</span>. A DIFFERENT
+                employee witnesses with their PIN.
+              </p>
+              <div className="mt-2 flex gap-2">
+                <input
+                  value={pinInput}
+                  onChange={(e) => setPinInput(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  type="password"
+                  inputMode="numeric"
+                  placeholder="Witness PIN"
+                  className="min-w-0 flex-1 rounded-xl border border-[var(--pos-border-strong)] bg-[var(--pos-surface)] px-3 py-2 text-sm placeholder:text-[var(--pos-text-faint)] focus:border-[var(--pos-accent-border)] focus:outline-none"
+                />
+                <button
+                  type="button"
+                  disabled={busy || pinInput.length < 4}
+                  onClick={() => {
+                    void verifyPin().then((witness) => {
+                      if (!witness) return;
+                      if (witness.id === buyer.id) {
+                        setError("The witness must be someone OTHER than the buyer.");
+                        return;
+                      }
+                      const err = applyProgram(
+                        "employee",
+                        programs.find((p) => p.kind === "employee")!.percentBps,
+                        {
+                          beneficiaryEmployeeId: buyer.id,
+                          beneficiaryName: buyer.fullName,
+                          approvedByEmployeeId: witness.id,
+                          approvedByName: witness.fullName,
+                        },
+                      );
+                      if (err) setError(err);
+                    });
+                  }}
+                  className="pos-tile min-h-11 rounded-xl bg-[var(--pos-accent)] px-4 py-2 text-sm font-bold text-[var(--pos-accent-ink)] disabled:opacity-40"
+                >
+                  Witness &amp; apply
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      ) : null}
+      {busy ? <p className="mt-1 text-xs text-[var(--pos-text-faint)]">Checking with the server…</p> : null}
+      {error ? (
+        <p className="mt-1 rounded-lg border border-[var(--pos-warn-border)] bg-[var(--pos-warn-soft)] px-3 py-1.5 text-xs text-[var(--pos-warn)]">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 /**
  * AO-4 — the customer band (owner-approved register.html mockup). The person
  * owns the top of the sale screen:
@@ -4134,6 +4589,7 @@ function TenderScreen({
   medicalCard,
   overrides,
   appliedLoyalty,
+  appliedSpecial,
   initialTenderedMinor,
   onBack,
   onCancel,
@@ -4146,6 +4602,8 @@ function TenderScreen({
   overrides: Record<string, PosLineOverride>;
   /** AM-B — the loyalty redemption applied to this sale (reduces the due). */
   appliedLoyalty: AppliedLoyalty | null;
+  /** SLICE 28 — the special discount applied to this sale (reduces the due). */
+  appliedSpecial: AppliedSpecialDiscount | null;
   /** AO-4 — cash amount pre-entered by a rail quick-tender chip (null = $0). */
   initialTenderedMinor: number | null;
   onBack: () => void;
@@ -4155,12 +4613,19 @@ function TenderScreen({
 }) {
   const priced = useMemo(() => {
     const base = priceForBuyer(cart, bundle, medicalCard !== null, overrides);
-    if (!appliedLoyalty) return base;
-    // AM-B — the customer owes the loyalty-reduced total; the SAME spread
-    // buildSalePayload will apply, so the display and the payload agree.
-    const adj = applyLoyaltyToPricedLines(base.lines, appliedLoyalty.perVariant);
-    return { ...base, lines: adj.lines, totals: adj.totals };
-  }, [cart, bundle, medicalCard, overrides, appliedLoyalty]);
+    if (appliedLoyalty) {
+      // AM-B — the customer owes the loyalty-reduced total; the SAME spread
+      // buildSalePayload will apply, so the display and the payload agree.
+      const adj = applyLoyaltyToPricedLines(base.lines, appliedLoyalty.perVariant);
+      return { ...base, lines: adj.lines, totals: adj.totals };
+    }
+    if (appliedSpecial) {
+      // SLICE 28 — same discipline for a special discount (never both).
+      const adj = applySpecialDiscountToPricedLines(base.lines, appliedSpecial.perLine);
+      return { ...base, lines: adj.lines, totals: adj.totals };
+    }
+    return base;
+  }, [cart, bundle, medicalCard, overrides, appliedLoyalty, appliedSpecial]);
   const total = priced.totals.totalMinorUnits;
   // B33 — the owner's cash-rounding policy decides the amount DUE at the
   // drawer. TOTAL (and its tax) stays pre-rounded per WA DOR guidance; the

@@ -43,6 +43,9 @@ import type { PosReceiptConfig } from "./receipt-config-core";
 import { roundCashDue, type PosCashRoundingConfig } from "./cash-rounding-core";
 // Type-only (erased at compile time) — no runtime cycle with scan-required-core.
 import type { PosScanRequiredConfig } from "./scan-required-core";
+// Type-only — special-discount-core is pure (SLICE 28); the settings ride the
+// bundle so the register offers the programs OFFLINE with the saved rates.
+import type { SpecialDiscountSetting } from "@/lib/discounts/special-discount-core";
 // AN-1 — pure per-variant grams helpers (no cycle: variant-grams-core imports nothing from here).
 import { lineGramsFromUnit } from "./variant-grams-core";
 import {
@@ -171,6 +174,17 @@ export type PosMenuBundle = {
    * missing block means OFF.
    */
   scanRequired?: PosScanRequiredConfig;
+  /**
+   * Special-discount program settings (SLICE 28): the owner's saved
+   * employee/industry/veteran rates + on/off switches, shipped with the
+   * bundle so the register offers the programs OFFLINE with the exact saved
+   * percentages (availableSpecialDiscounts filters to enabled ones
+   * on-device). Optional so pre-SLICE-28 cached bundles still parse; a
+   * missing block hides the special-discount panel until the next refresh.
+   * The sync re-verifies kind, rate, and program rules server-side, so a
+   * stale cached rate can never make an off-book discount stick.
+   */
+  specialDiscounts?: SpecialDiscountSetting[];
   /** ISO timestamp of the download (staleness display on-device). */
   fetchedAt: string;
 };
@@ -391,6 +405,16 @@ export type BuildSaleArgs = {
    */
   loyaltyRedemption?: PosSalePayload["loyaltyRedemption"];
   /**
+   * Present when a SPECIAL discount program (employee / industry / veteran,
+   * SLICE 28) was applied at the register: the program facts + the applied
+   * total. The reduced prices already live in `lines` (each reduced line
+   * carries specialDiscountMinor, stamped by applySpecialDiscountToLines).
+   * validateSalePayload enforces block/line coherence AND the program's
+   * structural rules before the queue accepts the sale; the sync re-validates
+   * and records the use.
+   */
+  specialDiscount?: PosSalePayload["specialDiscount"];
+  /**
    * Cash-rounding policy from the bundle (POS B33). When set and the mode
    * rounds this total, the customer owes the ROUNDED due amount: change is
    * computed against it and the payload carries the auditable `rounding`
@@ -442,6 +466,9 @@ export function buildSalePayload(args: BuildSaleArgs): BuildSaleResult {
       // Task AM-B: optional per-UNIT loyalty reduction (forwarded verbatim;
       // validateSalePayload proves the sum matches the redemption block).
       ...(l.loyaltyDiscountMinor ? { loyaltyDiscountMinor: l.loyaltyDiscountMinor } : {}),
+      // SLICE 28: optional per-UNIT special-discount reduction (forwarded
+      // verbatim; validateSalePayload proves the sum matches the block).
+      ...(l.specialDiscountMinor ? { specialDiscountMinor: l.specialDiscountMinor } : {}),
       // AN-1: true per-unit weight (omitted when unknown so pre-AN-1 payload
       // shapes stay byte-identical for weightless items).
       ...(typeof l.unitGrams === "number" && l.unitGrams > 0 ? { unitGrams: l.unitGrams } : {}),
@@ -460,6 +487,9 @@ export function buildSalePayload(args: BuildSaleArgs): BuildSaleResult {
     ...(args.medical ? { medical: args.medical } : {}),
     ...(args.loyalty ? { loyalty: args.loyalty } : {}),
     ...(args.loyaltyRedemption ? { loyaltyRedemption: args.loyaltyRedemption } : {}),
+    // SLICE 28 — carry the special-discount block only when one was applied
+    // (omitted otherwise so pre-existing payload shapes stay byte-identical).
+    ...(args.specialDiscount ? { specialDiscount: args.specialDiscount } : {}),
     // POS B33 — carry the rounding block only when a real adjustment
     // happened (mode !== off AND the total missed the nickel), so pre-B33
     // payload shapes stay byte-identical.
@@ -702,6 +732,33 @@ export function __runSaleFlowCoreTests(): void {
     loyalty: { customerId: "not-a-uuid", memberLabel: "Jane D." },
   });
   ok(!badMember.ok, "loyalty with bad customer id refused before enqueue");
+
+  // SLICE 28 — special-discount block + per-line reductions travel through
+  // the payload builder as a coherent pair; orphaned per-line reductions are
+  // refused before the sale can reach the queue.
+  const vetLine = { ...priced.lines[0], unitPriceMinor: 2975, specialDiscountMinor: 525 };
+  const vetBuild = buildSalePayload({
+    lines: [vetLine],
+    totals: { ...priced.totals, totalMinorUnits: 2975 },
+    tenderedMinor: 3000,
+    drawerSessionId: drawerId,
+    idVerification: { method: "scan" },
+    specialDiscount: { kind: "veteran", percentBps: 1500, appliedMinor: 525, militaryIdChecked: true },
+  });
+  ok(
+    vetBuild.ok &&
+      vetBuild.payload.specialDiscount?.appliedMinor === 525 &&
+      vetBuild.payload.lines[0].specialDiscountMinor === 525,
+    "special-discount block + per-line reduction carried in payload",
+  );
+  const orphanBuild = buildSalePayload({
+    lines: [vetLine],
+    totals: { ...priced.totals, totalMinorUnits: 2975 },
+    tenderedMinor: 3000,
+    drawerSessionId: drawerId,
+    idVerification: { method: "scan" },
+  });
+  ok(!orphanBuild.ok, "per-line special reductions without the block refused before enqueue");
 
   // Medical block pass-through (B9): buildSalePayload carries it verbatim and
   // validateSalePayload enforces its structure before the queue accepts it.
