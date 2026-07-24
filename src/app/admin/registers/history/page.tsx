@@ -77,9 +77,14 @@ export default async function RegisterHistoryPage({
         title="Cash drawer reports"
         subtitle="Closed, reconciled, and verified drawer sessions across all registers."
         action={
-          <Button href={backHref(BASE, back)} variant="neutral">
-            Back to Register Activity
-          </Button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <Button href={`${BASE}/eod`} variant="neutral">
+              End-of-day report
+            </Button>
+            <Button href={backHref(BASE, back)} variant="neutral">
+              Back to Register Activity
+            </Button>
+          </div>
         }
         help={
           <HelpPanel id="registers-history" title="About cash drawer reports">
@@ -129,7 +134,7 @@ export default async function RegisterHistoryPage({
         />
       ) : (
         <div className="overflow-x-auto rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)]">
-          <table className="w-full min-w-[900px] text-sm">
+          <table className="w-full min-w-[1000px] text-sm">
             <thead>
               <tr className="border-b border-[var(--admin-border)] text-left text-xs uppercase tracking-wide text-white/40">
                 <th className="px-4 py-3 font-medium">Register</th>
@@ -141,6 +146,7 @@ export default async function RegisterHistoryPage({
                 <th className="px-4 py-3 text-right font-medium">Over / short</th>
                 <th className="px-4 py-3 text-right font-medium">Tips</th>
                 <th className="px-4 py-3 font-medium">Closed</th>
+                <th className="px-4 py-3 font-medium">Record</th>
               </tr>
             </thead>
             <tbody>
@@ -181,6 +187,14 @@ export default async function RegisterHistoryPage({
                     {s.tips_minor != null ? formatCents(s.tips_minor) : "\u2014"}
                   </td>
                   <td className="px-4 py-3 text-white/50">{fmtTime(s.closed_at)}</td>
+                  <td className="px-4 py-3">
+                    <a
+                      href={`${BASE}/history/${s.id}`}
+                      className="text-xs font-semibold text-[var(--admin-accent)] underline-offset-2 hover:underline"
+                    >
+                      Till summary
+                    </a>
+                  </td>
                 </tr>
               ))}
             </tbody>

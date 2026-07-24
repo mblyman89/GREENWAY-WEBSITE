@@ -128,6 +128,7 @@ import { __runSpecialDiscountTests } from "../../src/lib/discounts/special-disco
 import { __runSpecialDiscountSaleTests } from "../../src/lib/pos/special-discount-sale-core";
 import { __runSpecialDiscountReportTests } from "../../src/lib/discounts/special-discount-report-core";
 import { __runSafeCoreTests } from "../../src/lib/registers/safe-core";
+import { __runEodCoreTests } from "../../src/lib/registers/eod-core";
 import { __runConstantTimeTests } from "../../src/lib/security/constant-time";
 import { __runGramsPerOunceTests } from "../../src/lib/compliance/grams-per-ounce";
 
@@ -262,6 +263,7 @@ async function main() {
   __runSpecialDiscountSaleTests();
   __runSpecialDiscountReportTests();
   __runSafeCoreTests();
+  __runEodCoreTests();
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 
