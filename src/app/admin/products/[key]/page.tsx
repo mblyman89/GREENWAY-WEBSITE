@@ -8,12 +8,16 @@ import { getEnrichment, mediaUrlsForIds } from "@/lib/enrichment/store";
 import { listAllBrands } from "@/lib/vendors/store";
 import { listSuggestions, isAiConfigured } from "@/lib/ai/suggestions";
 import { checkCompliance } from "@/lib/ai/compliance";
+import { getEnrichmentCommandCenter } from "@/lib/enrichment/command-center";
 import {
   updateProductEnrichment,
   setEnrichmentStatus,
   generateProductAi,
   acceptSuggestion,
   rejectSuggestion,
+  applyMatchedText,
+  attachMatchedMedia,
+  importVendorImage,
 } from "../actions";
 
 export const dynamic = "force-dynamic";
@@ -43,6 +47,7 @@ export default async function ProductEditorPage({
   const enrichment = await getEnrichment(key);
   const brands = await listAllBrands();
   const suggestions = await listSuggestions("product", key, "pending");
+  const center = await getEnrichmentCommandCenter({ item });
 
   // Resolve gallery image URLs.
   const galleryIds = enrichment?.image_media_ids ?? [];
@@ -79,6 +84,267 @@ export default async function ProductEditorPage({
           {item.strain_name ? ` (${item.strain_name})` : ""} · THC {item.thc ?? "—"} · CBD {item.cbd ?? "—"}.
           <span className="ml-1 text-white/35">Price &amp; stock are never edited here.</span>
         </div>
+
+        {/* SLICE 38 — Command center: what the menu shows now + how to fix gaps */}
+        <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
+          {/* Live menu image + provenance */}
+          <div className="space-y-3 rounded-xl border border-white/10 bg-[#0a0a0a] p-4">
+            <p className="text-sm font-semibold text-white">On the menu right now</p>
+            {center.liveImage ? (
+              <>
+                <div className="aspect-square overflow-hidden rounded-lg border border-white/10 bg-black">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={center.liveImage.url} alt="" className="h-full w-full object-cover" />
+                </div>
+                <p className="text-[11px] text-white/50">
+                  {center.liveImage.isFallback ? (
+                    <span className="rounded bg-[var(--admin-gold-soft)] px-1.5 py-0.5 font-semibold text-[var(--admin-gold)]">
+                      Fallback: {center.liveImage.source.replace(/-/g, " ")}
+                    </span>
+                  ) : (
+                    <span className="rounded bg-[var(--admin-accent-soft)] px-1.5 py-0.5 font-semibold text-[var(--admin-accent)]">
+                      This product&apos;s own photo
+                    </span>
+                  )}
+                </p>
+              </>
+            ) : (
+              <p className="text-xs text-white/45">
+                No image resolves for this product — the menu shows a generic mockup card.
+              </p>
+            )}
+            {!center.gaps.hasImage && center.substitute && (
+              <div className="flex items-center gap-2 border-t border-white/10 pt-3">
+                <div className="h-12 w-12 shrink-0 overflow-hidden rounded border border-white/10 bg-black">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={center.substitute.url} alt="" className="h-full w-full object-cover" />
+                </div>
+                <p className="text-[11px] text-white/50">
+                  Approved fallback for <span className="text-white/75">{center.substitute.key}</span> covers this card
+                  automatically — no action needed unless you want a real photo.
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Guidance + KB knowledge */}
+          <div className="space-y-4">
+            {center.guidance.length > 0 && (
+              <div className="rounded-xl border border-[var(--admin-gold)]/25 bg-[var(--admin-gold)]/5 p-4">
+                <p className="text-sm font-semibold text-[var(--admin-gold)]">How to finish enriching this product</p>
+                <ol className="mt-2 list-decimal space-y-1 pl-5 text-xs text-white/70">
+                  {center.guidance.map((g) => (
+                    <li key={g}>{g}</li>
+                  ))}
+                </ol>
+              </div>
+            )}
+
+            {/* KB knowledge ladder result */}
+            <div className="rounded-xl border border-white/10 bg-[#0a0a0a] p-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-sm font-semibold text-white">Knowledge base</p>
+                <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] uppercase text-white/60">
+                  {center.knowledge.source === "none" ? "no match" : center.knowledge.source}
+                </span>
+              </div>
+              {center.knowledge.source !== "none" ? (
+                <div className="mt-3 space-y-3 text-xs text-white/70">
+                  {center.knowledge.description && (
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="whitespace-pre-wrap">{center.knowledge.description}</p>
+                      {!enrichment?.description && (
+                        <form action={applyMatchedText}>
+                          <input type="hidden" name="key" value={key} />
+                          <input type="hidden" name="field" value="description" />
+                          <input type="hidden" name="value" value={center.knowledge.description} />
+                          <input type="hidden" name="source" value={`kb:${center.knowledge.source}`} />
+                          <Button type="submit" variant="confirm" size="sm">Use as description</Button>
+                        </form>
+                      )}
+                    </div>
+                  )}
+                  {center.knowledge.shortDescription && (
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="text-white/55">{center.knowledge.shortDescription}</p>
+                      {!enrichment?.short_description && (
+                        <form action={applyMatchedText}>
+                          <input type="hidden" name="key" value={key} />
+                          <input type="hidden" name="field" value="short_description" />
+                          <input type="hidden" name="value" value={center.knowledge.shortDescription} />
+                          <input type="hidden" name="source" value={`kb:${center.knowledge.source}`} />
+                          <Button type="submit" variant="neutral" size="sm">Use as short description</Button>
+                        </form>
+                      )}
+                    </div>
+                  )}
+                  {(center.knowledge.aromaNotes.length > 0 ||
+                    center.knowledge.flavorNotes.length > 0 ||
+                    center.knowledge.terpenes.length > 0 ||
+                    center.knowledge.effects.length > 0) && (
+                    <div className="flex flex-wrap gap-1.5 border-t border-white/10 pt-2">
+                      {center.knowledge.aromaNotes.map((n) => (
+                        <span key={`a-${n}`} className="rounded-full border border-white/15 px-2 py-0.5 text-[10px] text-white/60">aroma: {n}</span>
+                      ))}
+                      {center.knowledge.flavorNotes.map((n) => (
+                        <span key={`f-${n}`} className="rounded-full border border-white/15 px-2 py-0.5 text-[10px] text-white/60">flavor: {n}</span>
+                      ))}
+                      {center.knowledge.terpenes.map((n) => (
+                        <span key={`t-${n}`} className="rounded-full border border-white/15 px-2 py-0.5 text-[10px] text-white/60">terp: {n}</span>
+                      ))}
+                      {center.knowledge.effects.map((n) => (
+                        <span key={`e-${n}`} className="rounded-full border border-white/15 px-2 py-0.5 text-[10px] text-white/60">effect: {n}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="mt-2 text-xs text-white/45">
+                  Nothing validated in the KB matches this product yet. Publishing this enrichment will seed the KB
+                  automatically.
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Suggested matches (KB products / media library / vendor menus) */}
+        {(center.kbSuggestions.length > 0 || center.mediaSuggestions.length > 0 || center.vendorSuggestions.length > 0) && (
+          <div className="rounded-xl border border-white/10 bg-[#0a0a0a] p-5">
+            <p className="text-sm font-semibold text-white">Suggested matches</p>
+            <p className="mt-1 text-[11px] text-white/45">
+              Conservative name + brand matching — every suggestion shows WHY it matched. Nothing is applied until you click.
+            </p>
+
+            {center.kbSuggestions.length > 0 && (
+              <div className="mt-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-white/50">From the knowledge base</p>
+                <ul className="mt-2 space-y-2">
+                  {center.kbSuggestions.map((m) => (
+                    <li key={m.candidate.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-white/10 bg-black p-3">
+                      {m.imageUrl && (
+                        <div className="h-14 w-14 overflow-hidden rounded border border-white/10">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={m.imageUrl} alt="" className="h-full w-full object-cover" />
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm text-white/85">
+                          {m.candidate.display_name}
+                          <span className="ml-2 rounded bg-white/10 px-1.5 py-0.5 text-[10px] text-white/55">{Math.round(m.score * 100)}% match</span>
+                        </p>
+                        <p className="mt-0.5 text-[11px] text-white/45">{m.reasons.join(" ")}</p>
+                      </div>
+                      <div className="flex gap-2">
+                        {m.primaryMediaId && !center.gaps.hasImage && (
+                          <form action={attachMatchedMedia}>
+                            <input type="hidden" name="key" value={key} />
+                            <input type="hidden" name="mediaId" value={m.primaryMediaId} />
+                            <input type="hidden" name="source" value="kb-product" />
+                            <Button type="submit" variant="confirm" size="sm">Use image</Button>
+                          </form>
+                        )}
+                        {m.description && !enrichment?.description && (
+                          <form action={applyMatchedText}>
+                            <input type="hidden" name="key" value={key} />
+                            <input type="hidden" name="field" value="description" />
+                            <input type="hidden" name="value" value={m.description} />
+                            <input type="hidden" name="source" value="kb-product" />
+                            <Button type="submit" variant="neutral" size="sm">Use description</Button>
+                          </form>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {center.mediaSuggestions.length > 0 && (
+              <div className="mt-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-white/50">From the media library</p>
+                <ul className="mt-2 space-y-2">
+                  {center.mediaSuggestions.map((m) => (
+                    <li key={m.candidate.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-white/10 bg-black p-3">
+                      {m.url && (
+                        <div className="h-14 w-14 overflow-hidden rounded border border-white/10">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={m.url} alt={m.candidate.alt_text ?? ""} className="h-full w-full object-cover" />
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm text-white/85">
+                          {m.candidate.title || "(untitled image)"}
+                          <span className="ml-2 rounded bg-white/10 px-1.5 py-0.5 text-[10px] text-white/55">{Math.round(m.score * 100)}% match</span>
+                        </p>
+                        <p className="mt-0.5 text-[11px] text-white/45">{m.reasons.join(" ")}</p>
+                      </div>
+                      <form action={attachMatchedMedia}>
+                        <input type="hidden" name="key" value={key} />
+                        <input type="hidden" name="mediaId" value={m.candidate.id} />
+                        <input type="hidden" name="source" value="media-library" />
+                        <Button type="submit" variant="confirm" size="sm">Attach image</Button>
+                      </form>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {center.vendorSuggestions.length > 0 && (
+              <div className="mt-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-white/50">From vendor menus</p>
+                <ul className="mt-2 space-y-2">
+                  {center.vendorSuggestions.map((m) => (
+                    <li key={m.candidate.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-white/10 bg-black p-3">
+                      {m.savedMediaUrl && (
+                        <div className="h-14 w-14 overflow-hidden rounded border border-white/10">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={m.savedMediaUrl} alt="" className="h-full w-full object-cover" />
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm text-white/85">
+                          {m.candidate.name}
+                          <span className="ml-2 rounded bg-white/10 px-1.5 py-0.5 text-[10px] uppercase text-white/55">{m.candidate.platform}</span>
+                          <span className="ml-2 rounded bg-white/10 px-1.5 py-0.5 text-[10px] text-white/55">{Math.round(m.score * 100)}% match</span>
+                        </p>
+                        <p className="mt-0.5 text-[11px] text-white/45">{m.reasons.join(" ")}</p>
+                      </div>
+                      <div className="flex gap-2">
+                        {m.candidate.media_asset_id ? (
+                          <form action={attachMatchedMedia}>
+                            <input type="hidden" name="key" value={key} />
+                            <input type="hidden" name="mediaId" value={m.candidate.media_asset_id} />
+                            <input type="hidden" name="source" value={`vendor:${m.candidate.platform}`} />
+                            <Button type="submit" variant="confirm" size="sm">Use saved image</Button>
+                          </form>
+                        ) : m.candidate.image_url ? (
+                          <form action={importVendorImage}>
+                            <input type="hidden" name="key" value={key} />
+                            <input type="hidden" name="imageUrl" value={m.candidate.image_url} />
+                            <input type="hidden" name="label" value={m.candidate.name ?? item.name} />
+                            <input type="hidden" name="platform" value={m.candidate.platform} />
+                            <Button type="submit" variant="confirm" size="sm">Import image</Button>
+                          </form>
+                        ) : null}
+                        {m.candidate.description && !enrichment?.description && (
+                          <form action={applyMatchedText}>
+                            <input type="hidden" name="key" value={key} />
+                            <input type="hidden" name="field" value="description" />
+                            <input type="hidden" name="value" value={m.candidate.description} />
+                            <input type="hidden" name="source" value={`vendor:${m.candidate.platform}`} />
+                            <Button type="submit" variant="neutral" size="sm">Use description</Button>
+                          </form>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* AI panel */}
         <div id="ai" className="rounded-xl border border-[var(--admin-gold)]/20 bg-[var(--admin-gold)]/5 p-5">

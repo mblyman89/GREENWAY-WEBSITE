@@ -17,6 +17,10 @@ import {
 } from "@/lib/ai/suggestions";
 import { writeBackOnPublish } from "@/lib/ai/kb/writeback";
 import { acceptWithComplianceGate } from "@/lib/ai/accept-gate";
+import { checkCompliance } from "@/lib/ai/compliance";
+import { getMedia } from "@/lib/media/store";
+import { attachImageToGallery } from "@/lib/ai/kb/product-images-core";
+import { importImageFromUrl, HarvestImageError } from "@/lib/media/harvest";
 
 const ALLOWED_TAGS = new Set([
   "new-arrival",
@@ -265,4 +269,153 @@ export async function rejectSuggestion(formData: FormData): Promise<void> {
   await reviewSuggestion(id, "rejected", session.userId);
   revalidatePath(`/admin/products/${encodeURIComponent(key)}`);
   redirect(`/admin/products/${encodeURIComponent(key)}?#ai`);
+}
+
+// ---------------------------------------------------------------------------
+// SLICE 38 — command-center apply actions. Each one is an explicit human
+// click on a SUGGESTED match (KB copy, media asset, vendor image). Nothing is
+// auto-applied; every apply is audited; text is compliance-scanned first.
+// ---------------------------------------------------------------------------
+
+const APPLYABLE_TEXT_FIELDS = new Set(["description", "short_description"]);
+
+/** Copy suggested text (from the KB or a vendor menu line) into the draft. */
+export async function applyMatchedText(formData: FormData): Promise<void> {
+  const session = await requirePermission("products.enrich");
+  const key = String(formData.get("key") ?? "");
+  const field = String(formData.get("field") ?? "");
+  const value = String(formData.get("value") ?? "").trim();
+  const source = String(formData.get("source") ?? "match");
+  if (!key) redirect("/admin/products?error=" + encodeURIComponent("Missing product key."));
+  if (!APPLYABLE_TEXT_FIELDS.has(field) || !value) {
+    redirect(`/admin/products/${encodeURIComponent(key)}?error=` + encodeURIComponent("Nothing to apply."));
+  }
+
+  // Compliance gate: blocking flags refuse the apply (warn-only passes).
+  const scan = checkCompliance(value);
+  if (scan.blockingFlags.length > 0) {
+    redirect(
+      `/admin/products/${encodeURIComponent(key)}?error=` +
+        encodeURIComponent(`Blocked by compliance check: ${scan.blockingFlags.join(", ")}.`),
+    );
+  }
+
+  await ensureEnrichment(key, {}, session.userId);
+  await updateEnrichment(key, { [field]: value } as Parameters<typeof updateEnrichment>[1], session.userId);
+
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "product.match_text_applied",
+    entityType: "product",
+    entityId: key,
+    after: { field, source, warnings: scan.flags },
+  });
+
+  revalidatePath(`/admin/products/${encodeURIComponent(key)}`);
+  redirect(`/admin/products/${encodeURIComponent(key)}?saved=1`);
+}
+
+/** Attach an EXISTING media-library asset (KB image / library match) to the gallery. */
+export async function attachMatchedMedia(formData: FormData): Promise<void> {
+  const session = await requirePermission("products.enrich");
+  const key = String(formData.get("key") ?? "");
+  const mediaId = String(formData.get("mediaId") ?? "").trim();
+  const source = String(formData.get("source") ?? "match");
+  if (!key) redirect("/admin/products?error=" + encodeURIComponent("Missing product key."));
+  if (!mediaId) redirect(`/admin/products/${encodeURIComponent(key)}?error=` + encodeURIComponent("Missing media id."));
+
+  const asset = await getMedia(mediaId);
+  if (!asset) {
+    redirect(`/admin/products/${encodeURIComponent(key)}?error=` + encodeURIComponent("That media asset no longer exists."));
+  }
+
+  await ensureEnrichment(key, {}, session.userId);
+  const current = await getEnrichment(key);
+  const merge = attachImageToGallery(
+    {
+      image_media_ids: current?.image_media_ids ?? [],
+      primary_media_id: current?.primary_media_id ?? null,
+    },
+    mediaId,
+  );
+  if (merge.alreadyPresent) {
+    redirect(`/admin/products/${encodeURIComponent(key)}?saved=1`);
+  }
+  await updateEnrichment(
+    key,
+    { image_media_ids: merge.image_media_ids, primary_media_id: merge.primary_media_id },
+    session.userId,
+  );
+  await recordUsage(mediaId, "product", key, "image");
+
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "product.match_image_attached",
+    entityType: "product",
+    entityId: key,
+    after: { mediaId, source, becamePrimary: merge.becamePrimary },
+  });
+
+  revalidatePath(`/admin/products/${encodeURIComponent(key)}`);
+  redirect(`/admin/products/${encodeURIComponent(key)}?saved=1`);
+}
+
+/** Import a VENDOR-hosted image (Cultivera/GrowFlow menu line) then attach it. */
+export async function importVendorImage(formData: FormData): Promise<void> {
+  const session = await requirePermission("products.enrich");
+  const key = String(formData.get("key") ?? "");
+  const imageUrl = String(formData.get("imageUrl") ?? "").trim();
+  const label = String(formData.get("label") ?? "Product").trim() || "Product";
+  const platform = String(formData.get("platform") ?? "vendor");
+  if (!key) redirect("/admin/products?error=" + encodeURIComponent("Missing product key."));
+  if (!imageUrl) redirect(`/admin/products/${encodeURIComponent(key)}?error=` + encodeURIComponent("Missing image URL."));
+
+  let assetId: string;
+  try {
+    const { asset } = await importImageFromUrl({
+      imageUrl,
+      usageType: "product",
+      title: `${label} (${platform} import)`,
+      altText: label,
+      uploadedBy: session.userId,
+      tags: [platform, "enrichment-import"],
+    });
+    assetId = asset.id;
+  } catch (err) {
+    const msg = err instanceof HarvestImageError ? err.message : "Could not import that vendor image.";
+    redirect(`/admin/products/${encodeURIComponent(key)}?error=` + encodeURIComponent(msg));
+    return;
+  }
+
+  await ensureEnrichment(key, {}, session.userId);
+  const current = await getEnrichment(key);
+  const merge = attachImageToGallery(
+    {
+      image_media_ids: current?.image_media_ids ?? [],
+      primary_media_id: current?.primary_media_id ?? null,
+    },
+    assetId,
+  );
+  if (!merge.alreadyPresent) {
+    await updateEnrichment(
+      key,
+      { image_media_ids: merge.image_media_ids, primary_media_id: merge.primary_media_id },
+      session.userId,
+    );
+    await recordUsage(assetId, "product", key, "image");
+  }
+
+  await recordAudit({
+    actorId: session.userId,
+    actorEmail: session.email,
+    action: "product.vendor_image_imported",
+    entityType: "product",
+    entityId: key,
+    after: { assetId, platform, becamePrimary: merge.becamePrimary },
+  });
+
+  revalidatePath(`/admin/products/${encodeURIComponent(key)}`);
+  redirect(`/admin/products/${encodeURIComponent(key)}?saved=1`);
 }
