@@ -22,6 +22,7 @@
  */
 
 import { type DenomCounts, EMPTY_DENOMS, denomTotalMinor } from "@/lib/registers/cash";
+import { validateSwapAmount } from "@/lib/registers/safe-core";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -57,7 +58,22 @@ export type TillCloseRequest = {
   tipsMinor?: number;
 };
 
-export type TillRequest = TillOpenRequest | TillDropRequest | TillCloseRequest;
+export type TillSwapRequest = {
+  action: "swap";
+  pin: string;
+  /**
+   * Value swapped with the safe, MINOR units (cents), integer > 0.
+   * Value-neutral: big bills go IN, the exact same value comes OUT in
+   * change — drawer expected-close math and the safe total are untouched,
+   * but every trip into the safe leaves this record.
+   */
+  amountMinor: number;
+  /** Manager/lead approval PIN — verified and role-gated server-side. */
+  approverPin: string;
+  notes?: string;
+};
+
+export type TillRequest = TillOpenRequest | TillDropRequest | TillCloseRequest | TillSwapRequest;
 
 export type TillValidation = { ok: true; req: TillRequest } | { ok: false; error: string };
 
@@ -194,6 +210,29 @@ export function validateTillRequest(body: unknown): TillValidation {
     };
   }
 
+  if (action === "swap") {
+    const amount = validateSwapAmount(b.amountMinor);
+    if (!amount.ok) return { ok: false, error: amount.error };
+    const approverPin = typeof b.approverPin === "string" ? b.approverPin.trim() : "";
+    if (!approverPin) {
+      return { ok: false, error: "A manager or lead must approve the swap with their PIN." };
+    }
+    const notesRaw = typeof b.notes === "string" ? b.notes.trim() : "";
+    if (notesRaw.length > MAX_NOTES_LEN) {
+      return { ok: false, error: `Notes must be ${MAX_NOTES_LEN} characters or fewer.` };
+    }
+    return {
+      ok: true,
+      req: {
+        action,
+        pin,
+        amountMinor: amount.amountMinor,
+        approverPin,
+        ...(notesRaw ? { notes: notesRaw } : {}),
+      },
+    };
+  }
+
   return { ok: false, error: "Unknown till action." };
 }
 
@@ -285,6 +324,26 @@ export function __runTillCoreTests(): void {
   const openNoTips = validateTillRequest({ action: "open", pin: "1234", denoms: { ones: 1 }, tipsMinor: 500 });
   ok(openNoTips.ok && openNoTips.req.action === "open" && !("tipsMinor" in openNoTips.req),
     "open: stray tipsMinor ignored (tips only exist at close)");
+
+  // validateTillRequest — swap (value-neutral change trade with the safe)
+  const swap1 = validateTillRequest({ action: "swap", pin: "1234", amountMinor: 10000, approverPin: "5678" });
+  ok(swap1.ok && swap1.req.action === "swap" && swap1.req.amountMinor === 10000 && swap1.req.approverPin === "5678",
+    "swap: $100.00 change swap with manager approval accepted");
+  const swap2 = validateTillRequest({
+    action: "swap", pin: "1234", amountMinor: 2000, approverPin: "5678", notes: "  needed quarters  ",
+  });
+  ok(swap2.ok && swap2.req.action === "swap" && swap2.req.notes === "needed quarters",
+    "swap: trimmed notes carried");
+  ok(!validateTillRequest({ action: "swap", pin: "1234", amountMinor: 10000 }).ok,
+    "swap: missing approver PIN rejected (every safe trip needs a manager)");
+  ok(!validateTillRequest({ action: "swap", pin: "1234", amountMinor: 0, approverPin: "5678" }).ok,
+    "swap: zero amount rejected");
+  ok(!validateTillRequest({ action: "swap", pin: "1234", amountMinor: 200_001, approverPin: "5678" }).ok,
+    "swap: implausibly large amount rejected");
+  ok(!validateTillRequest({ action: "swap", pin: "1234", amountMinor: 100.5, approverPin: "5678" }).ok,
+    "swap: non-integer cents rejected");
+  ok(!validateTillRequest({ action: "swap", pin: "1234", amountMinor: 500, approverPin: "5678", notes: "x".repeat(501) }).ok,
+    "swap: oversized notes rejected");
 
   // shape guards
   ok(!validateTillRequest(null).ok, "null body rejected");

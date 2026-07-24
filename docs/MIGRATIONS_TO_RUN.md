@@ -327,3 +327,25 @@
   skipped when saving (best-effort write, same pattern as 0120's device
   stamp). Once run, tips start appearing on the reconcile cards and in
   Admin → Register Activity → Cash drawer reports automatically.**
+
+## Feature slice — master till / safe
+
+- [ ] **`supabase/migrations/0135_safe_counts_swaps.sql`** — the store safe
+  (your $1,000 master change fund) becomes a tracked, audited thing. Two
+  new tables: `safe_counts` records each manager count of the safe —
+  twice a day, morning and evening — with the full bill-and-coin
+  breakdown, the counted total, the expected $1,000, and the variance
+  (safe counts are open, not blind: the target is known policy, so the
+  manager sees the variance live while counting). `safe_swaps` records
+  every change swap between a register and the safe — the cashier puts
+  big bills in and takes the exact same value out in change, so no money
+  moves on net, but every trip into the safe now leaves a record with
+  the cashier's PIN and a manager's approval PIN. Read access is
+  manager-and-up; all writes go through the app's server code only
+  (same hardened security posture as the special-discounts tables).
+  Idempotent; safe to re-run. **Until this is run, the new Safe page in
+  the back office politely says to run this migration, and the swap
+  button on the register returns a clear "run migration 0135" message —
+  a swap can't be best-effort, because an untracked trip into the safe
+  is exactly what this feature exists to prevent. Nothing else in the
+  app is affected.**

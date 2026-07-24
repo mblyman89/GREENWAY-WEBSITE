@@ -184,7 +184,8 @@ export function RegisterShell({ buildVersion }: { buildVersion?: string }) {
   // B17 — no-sale modal visibility (manager PIN approval happens inside).
   const [noSaleOpen, setNoSaleOpen] = useState(false);
   // B21 — register-side till action in progress (count-in / drop / blind close).
-  const [tillMode, setTillMode] = useState<"open" | "drop" | "close" | null>(null);
+  // Slice 31 adds "swap": the manager-approved change trade with the safe.
+  const [tillMode, setTillMode] = useState<"open" | "drop" | "close" | "swap" | null>(null);
   // B22 — X/Z day report modal (manager PIN inside).
   const [dayReportOpen, setDayReportOpen] = useState(false);
   const [voidOpen, setVoidOpen] = useState(false); // B27
@@ -1909,8 +1910,8 @@ function HomeScreen({
   onReprintLast?: () => void;
   /** B17 — open the manager-approved no-sale drawer flow. */
   onNoSale: () => void;
-  /** B21 — open a register-side till action (count-in / drop / blind close). */
-  onTill: (mode: "open" | "drop" | "close") => void;
+  /** B21 — open a register-side till action (count-in / drop / blind close / safe swap). */
+  onTill: (mode: "open" | "drop" | "close" | "swap") => void;
   /** B22 — open the manager-gated X/Z day-report flow. */
   onDayReport: () => void;
   /** B27 — open the manager-gated same-day void flow (undefined offline). */
@@ -2075,6 +2076,16 @@ function HomeScreen({
                       className="block w-full rounded-lg px-3 py-2.5 text-left text-sm font-semibold hover:bg-[var(--pos-surface-hover)]"
                     >
                       💰 Cash drop
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMoreOpen(false);
+                        onTill("swap");
+                      }}
+                      className="block w-full rounded-lg px-3 py-2.5 text-left text-sm font-semibold hover:bg-[var(--pos-surface-hover)]"
+                    >
+                      🔁 Change swap
                     </button>
                     <button
                       type="button"
@@ -2345,6 +2356,13 @@ function HomeScreen({
                   className="pos-tile rounded-lg border border-[var(--pos-border)] bg-[var(--pos-surface-2)] px-3 py-2 text-sm font-semibold"
                 >
                   Cash drop
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onTill("swap")}
+                  className="pos-tile rounded-lg border border-[var(--pos-border)] bg-[var(--pos-surface-2)] px-3 py-2 text-sm font-semibold"
+                >
+                  Change swap
                 </button>
                 <button
                   type="button"
@@ -3811,10 +3829,10 @@ function TillModal({
   onDone,
 }: {
   creds: DeviceCreds;
-  mode: "open" | "drop" | "close";
+  mode: "open" | "drop" | "close" | "swap";
   employeeName: string;
   onClose: () => void;
-  onDone: (mode: "open" | "drop" | "close", drawer: DrawerInfo, message: string) => void;
+  onDone: (mode: "open" | "drop" | "close" | "swap", drawer: DrawerInfo, message: string) => void;
 }) {
   const [denoms, setDenoms] = useState<DenomCounts>({ ...EMPTY_DENOMS });
   const [amount, setAmount] = useState("");
@@ -3829,6 +3847,8 @@ function TillModal({
   // money, counted separately and openly — it must never sit in the drawer
   // count or it would show as a false overage at reconcile.
   const [tips, setTips] = useState("");
+  // Safe swap (mode "swap" only): a manager/lead approves with their PIN.
+  const [approverPin, setApproverPin] = useState("");
 
   const countedMinor = denomTotalMinor(denoms);
   const amountMinor = dollarsToMinor(amount);
@@ -3840,12 +3860,15 @@ function TillModal({
       ? countedMinor > 0
       : mode === "drop"
         ? amountMinor !== null
-        : tipsMinor !== null);
+        : mode === "swap"
+          ? amountMinor !== null && approverPin.length >= 4
+          : tipsMinor !== null);
 
   const TITLES = {
     open: "Count in drawer",
     drop: "Cash drop to safe",
     close: "Close drawer — blind count",
+    swap: "Change swap with the safe",
   } as const;
 
   const submit = async () => {
@@ -3867,6 +3890,14 @@ function TillModal({
               ...(witnessPin ? { witnessPin } : {}),
               ...(notes.trim() ? { notes: notes.trim() } : {}),
             }
+          : mode === "swap"
+            ? {
+                action: "swap",
+                pin,
+                amountMinor,
+                approverPin,
+                ...(notes.trim() ? { notes: notes.trim() } : {}),
+              }
           : mode === "close"
             ? {
                 action: mode,
@@ -3899,6 +3930,8 @@ function TillModal({
         onDone("open", resBody.drawer ?? null, `Drawer counted in at ${formatCents(countedMinor)} — ready to ring sales.`);
       } else if (mode === "drop") {
         onDone("drop", null, `${formatCents(amountMinor ?? 0)} dropped to the safe (${dropWindow}).`);
+      } else if (mode === "swap") {
+        onDone("swap", null, `${formatCents(amountMinor ?? 0)} change swap with the safe recorded.`);
       } else {
         onDone(
           "close",
@@ -3929,7 +3962,9 @@ function TillModal({
             ? `Count every bill and coin going into the drawer. The total is your starting float, recorded under ${employeeName}'s PIN.`
             : mode === "drop"
               ? `Cash pulled from the drawer into the safe. Recorded under ${employeeName}'s PIN; a second person can witness with theirs.`
-              : `Count what's in the drawer right now. You will NOT see the expected amount — a manager reveals over/short at reconcile. That protects you.`}
+              : mode === "swap"
+                ? `Swap big bills for change with the safe — the same value goes each way, so the drawer total does not move. Recorded under ${employeeName}'s PIN and approved by a manager or lead with theirs.`
+                : `Count what's in the drawer right now. You will NOT see the expected amount — a manager reveals over/short at reconcile. That protects you.`}
         </p>
 
         {mode === "drop" ? (
@@ -3972,6 +4007,42 @@ function TillModal({
               value={witnessPin}
               maxLength={6}
               onChange={(e) => setWitnessPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
+            />
+            <input
+              className="mt-3 w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2.5 text-sm"
+              placeholder="Notes (optional)…"
+              value={notes}
+              maxLength={500}
+              onChange={(e) => setNotes(e.target.value)}
+            />
+          </>
+        ) : mode === "swap" ? (
+          <>
+            <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
+              Amount swapped
+            </label>
+            <input
+              className="mt-1 w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2.5 text-lg"
+              inputMode="decimal"
+              placeholder="$0.00"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+            />
+            <p className="mt-1 text-xs text-[var(--pos-text-muted)]">
+              Example: $100 in twenties goes to the safe, $100 in fives, ones and
+              coins comes back. Enter the value of one side.
+            </p>
+            <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
+              Manager or lead PIN (approval)
+            </label>
+            <input
+              className="mt-1 w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2.5 text-center font-mono text-lg tracking-[0.5em]"
+              type="password"
+              inputMode="numeric"
+              autoComplete="off"
+              value={approverPin}
+              maxLength={6}
+              onChange={(e) => setApproverPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
             />
             <input
               className="mt-3 w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2.5 text-sm"
@@ -4057,7 +4128,9 @@ function TillModal({
               ? `Open drawer with ${formatCents(countedMinor)}`
               : mode === "drop"
                 ? `Record drop${amountMinor !== null ? ` of ${formatCents(amountMinor)}` : ""}`
-                : "Record blind count & close"}
+                : mode === "swap"
+                  ? `Record swap${amountMinor !== null ? ` of ${formatCents(amountMinor)}` : ""}`
+                  : "Record blind count & close"}
         </button>
       </div>
     </div>

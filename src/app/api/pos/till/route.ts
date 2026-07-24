@@ -20,6 +20,11 @@
  *   close — count-out, recorded BLIND. This endpoint NEVER returns expected
  *           cash or variance — the manager reveals over/short at reconcile
  *           in the back office. That is the whole point of a blind count.
+ *   swap  — value-neutral change trade with the safe (big bills in, equal
+ *           change out; zero net movement on both sides). Requires a
+ *           manager/lead approval PIN verified here (same role gate as
+ *           /api/pos/approve) and refuses to be best-effort — an untracked
+ *           trip into the safe is what this record exists to prevent.
  *
  * ONLINE-ONLY by nature: PINs cannot be verified offline, and cash custody
  * events must land server-side the moment the cash moves.
@@ -31,11 +36,15 @@ import { isValidPin } from "@/lib/staffing/time";
 import { pinPadBlocked, notePinFailure, notePinSuccess, deviceThrottleScope } from "@/lib/security/pin-throttle-store";
 import { validateTillRequest } from "@/lib/pos/till-core";
 import { openDrawer, recordDrop, closeDrawerBlind, openSessionForRegister, getSession } from "@/lib/registers/store";
+import { recordSwap } from "@/lib/registers/safe-store";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { recordAudit } from "@/lib/auth/audit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+/** Roles allowed to approve a safe swap (mirrors /api/pos/approve). */
+const SWAP_APPROVER_ROLES = new Set(["manager", "lead"]);
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const deviceId = req.headers.get("x-pos-device-id") ?? "";
@@ -165,6 +174,59 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         amountMinor: till.amountMinor,
         window: till.window,
         witnessed: !!witnessedBy,
+      },
+    });
+    return NextResponse.json({ ok: true });
+  }
+
+  // ── swap: value-neutral change trade with the safe ──
+  if (till.action === "swap") {
+    // A swap moves ZERO net cash (big bills in, equal change out) but every
+    // trip into the safe needs a manager/lead approval PIN — same role gate
+    // as /api/pos/approve, verified right here.
+    if (!isValidPin(till.approverPin)) {
+      return NextResponse.json({ error: "Approver PIN must be 4–6 digits." }, { status: 400 });
+    }
+    const approver = await getEmployeeByPin(till.approverPin);
+    if (!approver) {
+      await notePinFailure(throttleScope);
+      return NextResponse.json({ error: "No active employee for the approver PIN." }, { status: 401 });
+    }
+    await notePinSuccess(throttleScope);
+    if (!SWAP_APPROVER_ROLES.has(approver.job_role)) {
+      return NextResponse.json(
+        { error: `${approver.full_name} is not a manager or lead — safe swaps need a manager PIN.` },
+        { status: 403 },
+      );
+    }
+    if (approver.id === employee.id) {
+      return NextResponse.json(
+        { error: "A swap cannot approve itself — a manager or lead must enter their PIN." },
+        { status: 400 },
+      );
+    }
+
+    const result = await recordSwap({
+      sessionId: session.id,
+      deviceId: auth.device.id,
+      amountMinor: till.amountMinor,
+      performedBy: employee.id,
+      approvedBy: approver.id,
+      notes: till.notes ?? null,
+    });
+    if (!result.ok) return NextResponse.json({ error: result.error ?? "Swap failed." }, { status: 409 });
+
+    await recordAudit({
+      actorId: employee.staff_id,
+      actorEmail: employee.full_name,
+      action: "safe.swap",
+      entityType: "drawer_session",
+      entityId: session.id,
+      after: {
+        via: "register",
+        deviceId: auth.device.id,
+        amountMinor: till.amountMinor,
+        approvedBy: approver.id,
       },
     });
     return NextResponse.json({ ok: true });
