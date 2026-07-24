@@ -24,6 +24,7 @@ import { __runLoyaltySaleTests } from "../../src/lib/loyalty/loyalty-sale-core";
 import { __runSignupCustomerTests } from "../../src/lib/loyalty/signup-customer-core";
 import { __runScheduleCoreTests } from "../../src/lib/staffing/schedule-core";
 import { __runEmployeeLifecycleTests } from "../../src/lib/staffing/employee-lifecycle-core";
+import { __runHandbookAckTests } from "../../src/lib/staffing/handbook-ack-core";
 import { __runUserGuardTests } from "../../src/lib/auth/user-guards-core";
 import { __runSetPasswordCoreTests } from "../../src/lib/auth/set-password-core";
 import { __runLoginMessagesCoreTests } from "../../src/lib/auth/login-messages-core";
@@ -153,6 +154,7 @@ async function main() {
   __runSignupCustomerTests();
   __runScheduleCoreTests();
   __runEmployeeLifecycleTests();
+  __runHandbookAckTests();
   __runUserGuardTests();
   __runSetPasswordCoreTests();
   __runLoginMessagesCoreTests();

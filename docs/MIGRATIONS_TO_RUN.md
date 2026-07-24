@@ -349,3 +349,23 @@
   a swap can't be best-effort, because an untracked trip into the safe
   is exactly what this feature exists to prevent. Nothing else in the
   app is affected.**
+
+## Feature slice — employee handbook acknowledgment gate
+
+- [ ] **`supabase/migrations/0136_handbook_acknowledgments.sql`** — one new
+  table, `handbook_acknowledgments`: every staff member must READ the
+  employee handbook and check the acknowledgment box (typing their full
+  name) before the back office or a register will let them in. One row
+  per person per handbook version — when you update the handbook and
+  bump its version, everyone re-reads and re-acknowledges. Rows are
+  evidence: staff can record only their OWN acknowledgment, and nobody
+  can edit or delete one afterwards. Owners are exempt (you wrote the
+  policies — you can never be locked out of your own store). Idempotent;
+  safe to re-run. **Until this is run, the app works normally and the
+  gate stays OPEN for everyone — a missing table must never lock your
+  whole staff out. The Employees roster shows a gold notice reminding
+  you to run it; once run, unacknowledged staff see the handbook (with
+  the checkbox at the bottom) instead of the back office, and a PIN
+  unlock at the register is politely refused until they acknowledge —
+  either digitally, or by you marking their signed paper copy in their
+  employee file.**
