@@ -14,6 +14,7 @@
 import "server-only";
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { pagedAll } from "@/lib/supabase/chunked-in";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import {
   DEFAULT_SPECIAL_DISCOUNTS,
@@ -150,6 +151,64 @@ export async function recordSpecialDiscountUse(u: RecordSpecialDiscountUse): Pro
   }
 }
 
+const USE_SELECT =
+  "id, kind, cashier_employee_id, register_id, beneficiary_employee_id, approved_by_employee_id, company_name, military_id_checked, subtotal_minor, discount_minor, client_uuid, order_id, occurred_at";
+
+/** Map raw ledger rows to typed rows, skipping any with an unknown kind. */
+function mapUseRows(data: Record<string, unknown>[] | null): SpecialDiscountUseRow[] {
+  const rows: SpecialDiscountUseRow[] = [];
+  for (const r of data ?? []) {
+    const kind = String(r.kind ?? "");
+    if (!isSpecialDiscountKind(kind)) continue;
+    rows.push({
+      id: String(r.id ?? ""),
+      kind,
+      cashierEmployeeId: String(r.cashier_employee_id ?? ""),
+      registerId: String(r.register_id ?? ""),
+      beneficiaryEmployeeId: r.beneficiary_employee_id ? String(r.beneficiary_employee_id) : null,
+      approvedByEmployeeId: r.approved_by_employee_id ? String(r.approved_by_employee_id) : null,
+      companyName: r.company_name ? String(r.company_name) : null,
+      militaryIdChecked: r.military_id_checked === true,
+      subtotalMinor: Math.round(Number(r.subtotal_minor) || 0),
+      discountMinor: Math.round(Number(r.discount_minor) || 0),
+      clientUuid: r.client_uuid ? String(r.client_uuid) : null,
+      orderId: r.order_id ? String(r.order_id) : null,
+      occurredAt: String(r.occurred_at ?? ""),
+    });
+  }
+  return rows;
+}
+
+/**
+ * ALL recorded uses in a date window, newest first — the reporting fetch.
+ * Pages with pagedAll (stable order + id tiebreaker) so a busy window is
+ * never silently truncated at PostgREST's row cap the way a bare select
+ * would be. ISO bounds come from resolveRange (Pacific day edges).
+ */
+export async function listSpecialDiscountUsesBetween(
+  fromISO: string,
+  toISO: string,
+): Promise<SpecialDiscountUseRow[]> {
+  if (!isSupabaseServiceConfigured) return [];
+  try {
+    const admin = createSupabaseAdminClient();
+    const raw = await pagedAll(async (from, to) => {
+      const { data } = await admin
+        .from("special_discount_uses")
+        .select(USE_SELECT)
+        .gte("occurred_at", fromISO)
+        .lte("occurred_at", toISO)
+        .order("occurred_at", { ascending: false })
+        .order("id", { ascending: false })
+        .range(from, to);
+      return (data as Record<string, unknown>[] | null) ?? [];
+    });
+    return mapUseRows(raw);
+  } catch {
+    return [];
+  }
+}
+
 /** Newest-first page of recorded uses (reporting; optional kind filter). */
 export async function listSpecialDiscountUses(opts?: {
   kind?: SpecialDiscountKind;
@@ -160,34 +219,12 @@ export async function listSpecialDiscountUses(opts?: {
     const admin = createSupabaseAdminClient();
     let query = admin
       .from("special_discount_uses")
-      .select(
-        "id, kind, cashier_employee_id, register_id, beneficiary_employee_id, approved_by_employee_id, company_name, military_id_checked, subtotal_minor, discount_minor, client_uuid, order_id, occurred_at",
-      )
+      .select(USE_SELECT)
       .order("occurred_at", { ascending: false })
       .limit(Math.max(1, Math.min(500, Math.round(opts?.limit ?? 100))));
     if (opts?.kind && isSpecialDiscountKind(opts.kind)) query = query.eq("kind", opts.kind);
     const { data } = await query;
-    const rows: SpecialDiscountUseRow[] = [];
-    for (const r of (data as Record<string, unknown>[] | null) ?? []) {
-      const kind = String(r.kind ?? "");
-      if (!isSpecialDiscountKind(kind)) continue;
-      rows.push({
-        id: String(r.id ?? ""),
-        kind,
-        cashierEmployeeId: String(r.cashier_employee_id ?? ""),
-        registerId: String(r.register_id ?? ""),
-        beneficiaryEmployeeId: r.beneficiary_employee_id ? String(r.beneficiary_employee_id) : null,
-        approvedByEmployeeId: r.approved_by_employee_id ? String(r.approved_by_employee_id) : null,
-        companyName: r.company_name ? String(r.company_name) : null,
-        militaryIdChecked: r.military_id_checked === true,
-        subtotalMinor: Math.round(Number(r.subtotal_minor) || 0),
-        discountMinor: Math.round(Number(r.discount_minor) || 0),
-        clientUuid: r.client_uuid ? String(r.client_uuid) : null,
-        orderId: r.order_id ? String(r.order_id) : null,
-        occurredAt: String(r.occurred_at ?? ""),
-      });
-    }
-    return rows;
+    return mapUseRows((data as Record<string, unknown>[] | null) ?? []);
   } catch {
     return [];
   }

@@ -780,6 +780,11 @@ export const HELP_SECTIONS: HelpSection[] = [
         href: "/admin/reports/loyalty",
       },
       {
+        q: "How do I see who's been given employee, industry, or veteran discounts?",
+        a: "The Special Discounts report tracks every use of the three courtesy programs: which cashier gave it, which employee or company received it, who approved employee purchases, and how often — with CSV/XLSX export.",
+        href: "/admin/reports/special-discounts",
+      },
+      {
         q: "How do I compare against local competitors?",
         a: "The Benchmarks report (under Reports) is the local competitor view of pricing and assortment. For the statewide market view from CCRS data, use CCRS Benchmarks in the Product Intake tab.",
         href: "/admin/reports/benchmarks",

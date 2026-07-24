@@ -1605,6 +1605,29 @@ attempt, even the ones the system wins.*
   a loyalty redemption AND a special discount to the same sale, or a
   synced sale with no ledger row.
 
+- **T-182 (the special-discounts report — who, to whom, how often):**
+  after running T-181's three test sales (and letting them sync), open
+  Reports → Special Discounts and set the date range to today. The
+  headline cards must count all three uses and total the exact cents
+  given away. Check each question: WHO — the "Who gives them" chart and
+  Cashier detail table must show the cashier(s) who rang the sales; TO
+  WHOM — the buying employee must appear under "who bought", the witness
+  under "who approved", and the industry visitor's company in the
+  companies table (type the company differently-cased on a second sale —
+  "ACME FARMS" and "Acme Farms" must roll up to ONE row); HOW OFTEN —
+  today's bar appears in the per-day chart and every sale is listed
+  newest-first under Recent uses with register, approver, and cents
+  saved. Download both CSV and Excel and confirm the same numbers. Then
+  the doors: sign in as a MANAGER — the report must open (managers may
+  READ); the link at the bottom back to Settings → Special discounts
+  must still turn a manager away. **Expect:** every number on the page
+  traces to a ledger row from T-181 — nothing invented, nothing missing,
+  and the export matches the screen to the cent. **Red flag:** a use
+  missing from the report, the same company split across two rows over
+  casing, sums that disagree with the receipts, or a date window that
+  drops a sale rung late in the evening (days must bucket in Pacific
+  time, not UTC).
+
 ---
 
 <a id="phase-13"></a>

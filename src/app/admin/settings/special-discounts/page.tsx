@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Breadcrumbs, HelpPanel } from "@/components/admin/ux";
@@ -73,7 +74,7 @@ export default async function SpecialDiscountsSettingsPage({
               "Set each program's percent (like 35 or 12.5) and tick Enabled to make it available at the registers.",
               "Employee purchases always need a second employee's PIN, on a register the buyer is not logged into.",
               "Industry visitors must give their company name; veterans need a military ID check ticked by the cashier.",
-              "Every single use is recorded — who gave it, who received it, and the exact cents saved — for reporting.",
+              "Every single use is recorded — who gave it, who received it, and the exact cents saved — see Reports \u2192 Special Discounts.",
             ]}
           >
             <p>
@@ -155,6 +156,18 @@ export default async function SpecialDiscountsSettingsPage({
             );
           })}
         </div>
+
+        <p className="mt-5 text-xs text-[var(--admin-text-muted)]">
+          Want the paper trail? The{" "}
+          <Link
+            href="/admin/reports/special-discounts"
+            className="font-bold text-[var(--admin-text)] underline"
+          >
+            Special Discounts report
+          </Link>{" "}
+          shows who gave each discount, who received it, and how often {"\u2014"} with CSV and
+          Excel export.
+        </p>
       </div>
     </div>
   );
