@@ -32,6 +32,10 @@ import {
   isAiConfigured as isAdvisorAiConfigured,
   type PromotionsAdvice,
 } from "@/lib/promotions/promotions-advisor";
+// SLICE 39 connectivity audit: the engine-config AI drafter (built Slice 39 of
+// the promotions track) was never callable from any page — now wired here.
+import { draftEngineConfig } from "@/lib/promotions/engine-ai";
+import type { EngineConfig } from "@/lib/promotions/discount-engine-core";
 
 export type PromotionCopyResult =
   | {
@@ -105,6 +109,57 @@ export async function suggestPromotionCopyAction(
       complianceFlags: suggestion.complianceFlags,
       model: suggestion.model,
     };
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : "AI request failed. Please try again.";
+    return { ok: false, error: message };
+  }
+}
+
+export type EngineConfigDraftResult =
+  | { ok: true; config: EngineConfig; summary: string; }
+  | { ok: false; error: string };
+
+/**
+ * SLICE 39: draft the structured discount-engine mechanics (tiers / BOGO /
+ * basket / either-or) from a plain-English description. DRAFTS-ONLY — the
+ * result only pre-fills the form's cfg_* inputs; nothing is saved until the
+ * manager reviews and submits. Permission `promotions.manage`.
+ */
+export async function draftEngineConfigAction(input: {
+  discountType: DiscountType;
+  request: string;
+}): Promise<EngineConfigDraftResult> {
+  const session = await requirePermission("promotions.manage");
+
+  if (!isPromoAiConfigured) {
+    return {
+      ok: false,
+      error:
+        "AI isn't set up yet. Add an AI_API_KEY in your environment to enable “Draft mechanics with AI.”",
+    };
+  }
+
+  const discountType: DiscountType = DISCOUNT_TYPES.includes(input.discountType)
+    ? input.discountType
+    : "percent";
+  const request = (input.request ?? "").trim().slice(0, 500);
+  if (!request) {
+    return { ok: false, error: "Describe the mechanics first (e.g. “buy 2 get 15% off, 4 or more get 25%”)." };
+  }
+
+  try {
+    const { draft, config } = await draftEngineConfig({ discountType, request });
+
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: "promotion.ai_engine_config",
+      entityType: "promotion",
+      after: { discountType, request, config, summary: draft.summary },
+    });
+
+    return { ok: true, config, summary: draft.summary || "" };
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "AI request failed. Please try again.";

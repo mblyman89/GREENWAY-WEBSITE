@@ -182,7 +182,8 @@ export function attachStrainProfile(
 // ---------------------------------------------------------------------------
 // Self-tests (run: npx tsx src/lib/menu/strain-terpenes.ts)
 // ---------------------------------------------------------------------------
-export function __runStrainTerpeneTests(): void {
+// SLICE 39: returns counts so the pure runner can assert failed === 0.
+export function __runStrainTerpeneTests(): { passed: number; failed: number } {
   let passed = 0;
   let failed = 0;
   const expect = (name: string, cond: boolean) => {
@@ -244,11 +245,10 @@ export function __runStrainTerpeneTests(): void {
 
   console.log(`strain-terpenes self-tests: ${passed} passed, ${failed} failed`);
   if (failed > 0 && typeof process !== "undefined") process.exitCode = 1;
+  return { passed, failed };
 }
 
-// Node ESM/tsx entry guard.
-declare const require: { main?: unknown } | undefined;
-declare const module: unknown;
-if (typeof require !== "undefined" && typeof module !== "undefined" && require.main === module) {
-  __runStrainTerpeneTests();
-}
+// SLICE 39: the standalone `require.main === module` entry guard was removed —
+// this suite now runs in CI via scripts/compliance/run-pure-selftests.ts
+// (which asserts failed === 0), and the guard tripped eslint's
+// no-assign-module-variable rule.

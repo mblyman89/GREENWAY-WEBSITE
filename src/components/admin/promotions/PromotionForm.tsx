@@ -27,6 +27,7 @@ import {
 } from "@/lib/promotions/types";
 import { GREENWAY_CATEGORY_VALUES } from "@/lib/promotions/category-values";
 import { PromotionAiCopy } from "@/components/admin/promotions/PromotionAiCopy";
+import { PromotionAiMechanics } from "@/components/admin/promotions/PromotionAiMechanics";
 import { Button } from "@/components/admin/ui";
 import { StickyActionBar } from "@/components/admin/ux";
 
@@ -240,6 +241,10 @@ export function PromotionForm({ action, promotion, brands, submitLabel, aiEnable
           never stack: every item gets the single best deal, and the register clamps any price at
           the product&apos;s cost floor (CCRS: never below the cost of acquisition).
         </p>
+
+        {/* SLICE 39 — plain-English mechanics drafter (engine-ai, finally
+            connected). Drafts-only: pre-fills the cfg_* inputs below. */}
+        <PromotionAiMechanics aiEnabled={aiEnabled} />
 
         <div className="grid gap-6 lg:grid-cols-2">
           {/* Multi-item qty tiers + either/or */}

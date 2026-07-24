@@ -160,6 +160,41 @@ export const HELP_SECTIONS: HelpSection[] = [
         a: "Open the Price Match page builder in the Pages section to edit your price-match policy and the words customers see, with preview before it goes live.",
         href: "/admin/pages/price-match",
       },
+      {
+        q: "Where do I edit the Home page specifically?",
+        a: "The Home page builder edits your homepage blocks — hero, banners, featured sections — with a preview before anything goes live.",
+        href: "/admin/pages/home",
+      },
+      {
+        q: "Where do I edit the Menu page's words and layout?",
+        a: "The Menu page builder controls the text and layout around your public menu (the products themselves come from your published menu upload).",
+        href: "/admin/pages/menu",
+      },
+      {
+        q: "Where do I edit the Specials page?",
+        a: "The Specials page builder controls the words and layout of the public specials page; the deals themselves come from Promotions.",
+        href: "/admin/pages/specials",
+      },
+      {
+        q: "Where do I edit the Vendors page?",
+        a: "The Vendors page builder edits the public page that showcases the brands and farms you carry.",
+        href: "/admin/pages/vendors",
+      },
+      {
+        q: "Where do I edit the About page?",
+        a: "The About page builder edits your store's story, team, and photos on the public site, with preview before publishing.",
+        href: "/admin/pages/about",
+      },
+      {
+        q: "Where do I edit the Locations page?",
+        a: "The Locations page builder edits your address, hours, parking notes, and map details customers see.",
+        href: "/admin/pages/locations",
+      },
+      {
+        q: "How do I check that my public site matches what I published?",
+        a: "Website Sync reads your storefront through the exact same loaders the public site uses and shows what's being served right now — a one-page harmony check between the back office and the live site.",
+        href: "/admin/website-sync",
+      },
     ],
   },
   {
@@ -252,6 +287,16 @@ export const HELP_SECTIONS: HelpSection[] = [
         q: "Where do I manage the employee list?",
         a: "Under the Employees area of staffing. You add employees, set their details, and review their time.",
         href: "/admin/staffing/employees",
+      },
+      {
+        q: "How do I plan the week's shifts?",
+        a: "The Schedule builder lets you plan each week's shifts per employee, so coverage is decided ahead of time and everyone can see when they work.",
+        href: "/admin/staffing/schedule",
+      },
+      {
+        q: "Where is the employee handbook?",
+        a: "The Employee Handbook page holds your policies in a printable form. Print it, have each employee read and sign the last page, then mark the handbook \"Read & signed\" in their file.",
+        href: "/admin/staffing/handbook",
       },
     ],
   },
@@ -406,6 +451,11 @@ export const HELP_SECTIONS: HelpSection[] = [
         a: "Returns & Destruction handles customer returns, samples, and lawful destruction with the documentation WA compliance requires.",
         href: "/admin/inventory/disposition",
       },
+      {
+        q: "Where do I track glass, papers, and other non-cannabis merchandise?",
+        a: "Non-cannabis inventory tracks your accessories — glass, papers, devices — professionally (counts, costs, restock) without touching CCRS, since the state doesn't require reporting for them.",
+        href: "/admin/inventory/noncannabis",
+      },
     ],
   },
   {
@@ -508,6 +558,45 @@ export const HELP_SECTIONS: HelpSection[] = [
         a: "The check lists exactly what to fix (for example a lot missing its ID). Fix the flagged items, then rebuild the batch. Blocking errors must be cleared; warnings are advisory.",
         href: "/admin/reports/compliance",
       },
+      {
+        q: "Is there a guided weekly CCRS routine?",
+        a: "Yes — the CCRS command center walks the whole weekly upload: pick the reporting week, review activity, pass the validation gate, follow the upload walkthrough (with the state's dependency order and wait timers), then record the week in the submission ledger.",
+        href: "/admin/compliance/ccrs",
+      },
+      {
+        q: "How do I know if I'm compliant overall right now?",
+        a: "Compliance Health is the one-glance \"am I safe?\" page — it checks every compliance gate live (filings, limits, data integrity) and tells you what needs attention.",
+        href: "/admin/compliance/health",
+      },
+      {
+        q: "How do I keep up with LCB rule changes?",
+        a: "Regulatory Watch tracks upcoming rule changes and what they might mean for the store, so future compliance never sneaks up on you.",
+        href: "/admin/compliance/regulatory",
+      },
+      {
+        q: "Where are my recurring licensing deadlines?",
+        a: "The Compliance calendar lists the recurring obligations — renewals, filings, and due dates — in one place so nothing is missed.",
+        href: "/admin/compliance/calendar",
+      },
+    ],
+  },
+  {
+    id: "employee-samples",
+    title: "Employee samples",
+    icon: "🎁",
+    category: "Compliance",
+    intro: "Trade samples for paid employees, within WA limits (WAC 314-55-096).",
+    items: [
+      {
+        q: "How do I give employees product samples legally?",
+        a: "Use Employee Samples. It assigns trade samples to paid employees and enforces the state's per-employee limits automatically (WAC 314-55-096), so a sample can never put you out of compliance.",
+        href: "/admin/compliance/samples",
+      },
+      {
+        q: "Where can I see past sample assignments?",
+        a: "Employee Sample History is the read-only record of every sample assigned — who received what, when, and against which limit period.",
+        href: "/admin/compliance/samples/history",
+      },
     ],
   },
   {
@@ -590,6 +679,25 @@ export const HELP_SECTIONS: HelpSection[] = [
         q: "Can something help me with Sage 50?",
         a: "Yes — the Accounting page has an upload area for your Sage/POS reports and a Sage 50 assistant grounded in the official import rules that answers questions in plain language.",
         href: "/admin/reports/accounting",
+      },
+    ],
+  },
+  {
+    id: "payroll",
+    title: "Payroll direct deposit",
+    icon: "💵",
+    category: "Money & accounting",
+    intro: "Paying your employees by ACH direct deposit.",
+    items: [
+      {
+        q: "How do I pay employees by direct deposit?",
+        a: "The Payroll page turns a manual-entry payroll run into a bank-ready ACH (NACHA) file: enter each employee's net pay, generate the file, and upload it to your bank. Every run is recorded with its status.",
+        href: "/admin/payroll",
+      },
+      {
+        q: "Where do I set up the bank details for ACH files?",
+        a: "Banking settings holds your originating bank and company details for ACH files. Set it once — Payroll and Accounts Payable both use it.",
+        href: "/admin/settings/banking",
       },
     ],
   },

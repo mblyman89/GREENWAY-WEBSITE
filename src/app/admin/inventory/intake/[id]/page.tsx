@@ -9,7 +9,9 @@ import { getManifestById } from "@/lib/inventory/store";
 import { resolveWebsiteCategories } from "@/lib/inventory/website-category-resolver-server";
 import { matchIntakeLinesToKb } from "@/lib/ai/kb/intake-strain-match-server";
 import { getVendorById } from "@/lib/vendors/store";
-import { listManifestLots, listManifestEvents } from "@/lib/inventory/intake-store";
+import { listManifestLots, listManifestEvents, listLabFactsByIds } from "@/lib/inventory/intake-store";
+import { summarizeStagedIntake } from "@/lib/inventory/intake-review-adapter";
+import { IntakeReviewFlagsPanel } from "@/components/admin/inventory/IntakeReviewFlagsPanel";
 import { ManifestTimeline } from "@/components/admin/inventory/ManifestTimeline";
 import { ManifestLotDisposition } from "@/components/admin/inventory/ManifestLotDisposition";
 import { manifestStatusBadge } from "@/lib/inventory/intake-disposition-core";
@@ -133,6 +135,37 @@ export default async function ManifestReviewPage({
 
   const lots = await listManifestLots(id);
   const events = await listManifestEvents(id);
+
+  // SLICE 39: Slice 97's intake REVIEW summary, finally connected. Built from
+  // the STAGED rows (what acceptance would actually commit), not by
+  // re-parsing raw_payload. Vendor license comes from the linked vendor
+  // record — the manifest row does not store it.
+  const labFacts = await listLabFactsByIds(
+    lots.map((l) => l.lab_result_id).filter((v): v is string => Boolean(v)),
+  );
+  const reviewSummary = summarizeStagedIntake(
+    {
+      manifest_number: manifest.manifest_number,
+      vendor_label: manifest.vendor_label,
+      vendor_license: linkedVendor?.license_number ?? null,
+      source_format: manifest.source_format,
+    },
+    lots.map((l) => ({
+      product_name: l.product_name,
+      lot_code: l.lot_code,
+      pos_product_key: l.pos_product_key,
+      received_qty: Number(l.received_qty),
+      unit: l.unit,
+      unit_cost_minor_units: l.unit_cost_minor_units,
+      lab_result_id: l.lab_result_id,
+      is_sample: l.is_sample,
+      strain_name: l.strain_name,
+      category: l.category,
+      inventory_type: l.inventory_type,
+      expires_on: l.expires_on,
+    })),
+    labFacts,
+  );
 
   // W5: manifest ↔ PO link state (suggest-and-confirm). {available:false}
   // pre-migration-0102 — the panel simply doesn't render until it's applied.
@@ -392,6 +425,12 @@ export default async function ManifestReviewPage({
         {/* Slice AO — the command-center checklist: everything this page needs,
             with honest done/todo/automatic states and jump links. */}
         <IntakeChecklistPanel checklist={checklist} />
+
+        {/* SLICE 39 — the Slice 97 review summary, finally connected: per-line
+            compliance flags (vendor license, lot codes, COAs, failed labs,
+            samples, quantities) the receiver eyeballs BEFORE accepting.
+            Renders nothing when the staged intake is clean. */}
+        <IntakeReviewFlagsPanel summary={reviewSummary} />
 
         {/* W5: which order is this delivery for? (suggest-and-confirm; hidden
             entirely until migration 0102 is applied) */}
