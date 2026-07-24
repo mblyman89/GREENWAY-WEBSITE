@@ -18,7 +18,7 @@
  */
 import { useMemo, useRef, useState, useTransition } from "react";
 import { Button } from "@/components/admin/ui";
-import { useToast } from "@/components/admin/ux";
+import { StickyActionBar, useToast } from "@/components/admin/ux";
 import { suggestHeroAltAction } from "@/app/admin/blog/actions";
 import { FONT_OPTIONS } from "@/lib/cms/fonts";
 import { TITLE_SIZE_OPTIONS } from "@/lib/blog/title-style";
@@ -462,9 +462,13 @@ export function BlogEditorClient({ initial, categories, aiEnabled, updateAction 
           </div>
         </div>
 
-        <Button type="submit" variant="confirm">
-          Save changes
-        </Button>
+        {/* GW-035: pinned save — the post editor is one of the longest
+            forms in the admin; Save stays reachable at any scroll depth. */}
+        <StickyActionBar status="Edits are not saved until you press Save changes" statusTone="warning">
+          <Button type="submit" variant="confirm">
+            Save changes
+          </Button>
+        </StickyActionBar>
       </form>
 
       {/* ---------------- RIGHT: live preview ---------------- */}

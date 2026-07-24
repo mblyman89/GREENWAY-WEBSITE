@@ -7,9 +7,9 @@
  * basis points by the server action (pctToBps). The tax engine + reports read
  * these values, so this is the missing UI for settings the app already uses.
  */
-import { useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { Button, Card, CardHeader, Field, Input, Select } from "@/components/admin/ui";
-import { useToast } from "@/components/admin/ux";
+import { ConfirmDialog, useToast } from "@/components/admin/ux";
 import { saveTaxSettingsAction, saveTaxCategoryRulesAction } from "@/app/admin/settings/actions";
 import type { TaxSettings } from "@/lib/reports/tax";
 import type { TaxCategoryRule } from "@/lib/admin/settings-store";
@@ -28,6 +28,21 @@ export function TaxSettingsForm({
   const { toast } = useToast();
   const [pendingRates, startRates] = useTransition();
   const [pendingRules, startRules] = useTransition();
+  // GW-035: friendly confirm dialog (with a typed gate — this is a
+  // compliance-critical deviation) instead of the browser's window.confirm.
+  const [deviationPct, setDeviationPct] = useState<number | null>(null);
+  const pendingFdRef = useRef<FormData | null>(null);
+
+  function submitRates(fd: FormData) {
+    startRates(async () => {
+      const res = await saveTaxSettingsAction(fd);
+      toast(
+        res.ok
+          ? { tone: "success", message: "Tax rates saved." }
+          : { tone: "error", message: res.error ?? "Couldn't save tax rates." },
+      );
+    });
+  }
 
   function onSaveRates(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -37,20 +52,11 @@ export function TaxSettingsForm({
     // which the server also enforces.
     const excisePct = Number(String(fd.get("excisePct") ?? "").trim());
     if (Number.isFinite(excisePct) && Math.round(excisePct * 100) !== 3700) {
-      const confirmed = window.confirm(
-        `You are setting the cannabis excise to ${excisePct}%, but the WA statutory rate is 37% (RCW 69.50.535).\n\nEvery excise report and the POS tax engine will use this rate. Are you sure?`,
-      );
-      if (!confirmed) return;
-      fd.set("confirmExciseDeviation", "1");
+      pendingFdRef.current = fd;
+      setDeviationPct(excisePct);
+      return;
     }
-    startRates(async () => {
-      const res = await saveTaxSettingsAction(fd);
-      toast(
-        res.ok
-          ? { tone: "success", message: "Tax rates saved." }
-          : { tone: "error", message: res.error ?? "Couldn't save tax rates." },
-      );
-    });
+    submitRates(fd);
   }
 
   function onSaveRules(e: React.FormEvent<HTMLFormElement>) {
@@ -179,6 +185,27 @@ export function TaxSettingsForm({
           )}
         </Card>
       </form>
+      <ConfirmDialog
+        open={deviationPct !== null}
+        title={`Set the cannabis excise to ${deviationPct ?? 0}%?`}
+        description={`The WA statutory rate is 37% (RCW 69.50.535). Every excise report and the POS tax engine will use ${deviationPct ?? 0}% instead. Type CONFIRM to proceed.`}
+        confirmLabel="Save the deviating rate"
+        tone="danger"
+        requireTextToConfirm="CONFIRM"
+        onConfirm={() => {
+          const fd = pendingFdRef.current;
+          setDeviationPct(null);
+          pendingFdRef.current = null;
+          if (fd) {
+            fd.set("confirmExciseDeviation", "1");
+            submitRates(fd);
+          }
+        }}
+        onCancel={() => {
+          setDeviationPct(null);
+          pendingFdRef.current = null;
+        }}
+      />
     </div>
   );
 }

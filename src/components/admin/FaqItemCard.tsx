@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/admin/ui";
+import { ConfirmDialog } from "@/components/admin/ux";
 import type { FaqAdminVM } from "@/lib/cms/faq-store";
 
 /**
@@ -35,6 +36,9 @@ export function FaqItemCard({
   };
 
   const [question, setQuestion] = useState(d.question);
+  // GW-035: friendly confirm dialog instead of the browser's window.confirm.
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const deleteFormRef = useRef<HTMLFormElement>(null);
   const [answer, setAnswer] = useState(d.answer);
   const [enabled, setEnabled] = useState(d.enabled);
 
@@ -105,23 +109,24 @@ export function FaqItemCard({
               ↓
             </Button>
           </form>
-          <form
-            action={deleteAction}
-            onSubmit={(e) => {
-              if (
-                !window.confirm(
-                  "Delete this Q&A? This removes it from the FAQ page and can't be undone.",
-                )
-              ) {
-                e.preventDefault();
-              }
-            }}
-          >
+          <form ref={deleteFormRef} action={deleteAction}>
             <input type="hidden" name="item_id" value={item.id} />
-            <Button type="submit" variant="danger" size="sm">
+            <Button type="button" variant="danger" size="sm" onClick={() => setConfirmDelete(true)}>
               Delete
             </Button>
           </form>
+          <ConfirmDialog
+            open={confirmDelete}
+            title="Delete this Q&A?"
+            description="This removes it from the FAQ page and can't be undone."
+            confirmLabel="Delete Q&A"
+            tone="danger"
+            onConfirm={() => {
+              setConfirmDelete(false);
+              deleteFormRef.current?.requestSubmit();
+            }}
+            onCancel={() => setConfirmDelete(false)}
+          />
         </div>
       </div>
 

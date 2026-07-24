@@ -13,7 +13,7 @@
  */
 import { useMemo, useState, useTransition } from "react";
 import { Button, Card, CardHeader, Field, Input, Select, Textarea, Badge } from "@/components/admin/ui";
-import { useToast } from "@/components/admin/ux";
+import { ConfirmDialog, useToast } from "@/components/admin/ux";
 import {
   previewEarn,
   type ConfigDraft,
@@ -212,6 +212,8 @@ function TiersEditor({ tiers }: { tiers: TierRow[] }) {
 function TierForm({ tier }: { tier: TierRow | null }) {
   const notify = useActionToast();
   const [pending, startTransition] = useTransition();
+  // GW-035: friendly confirm dialog instead of the browser's window.confirm.
+  const [confirmRetire, setConfirmRetire] = useState(false);
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -225,9 +227,12 @@ function TierForm({ tier }: { tier: TierRow | null }) {
   function onDelete(e: React.MouseEvent) {
     e.preventDefault();
     if (!tier) return;
-    if (!window.confirm(`Retire the "${tier.name}" tier? Customers keep their points; the discount stops applying.`)) {
-      return;
-    }
+    setConfirmRetire(true);
+  }
+
+  function retireNow() {
+    if (!tier) return;
+    setConfirmRetire(false);
     const fd = new FormData();
     fd.set("id", tier.id);
     startTransition(async () => {
@@ -275,6 +280,17 @@ function TierForm({ tier }: { tier: TierRow | null }) {
           </Button>
         )}
       </div>
+      {tier && (
+        <ConfirmDialog
+          open={confirmRetire}
+          title={`Retire the "${tier.name}" tier?`}
+          description="Customers keep their points; the discount stops applying."
+          confirmLabel="Retire tier"
+          tone="danger"
+          onConfirm={retireNow}
+          onCancel={() => setConfirmRetire(false)}
+        />
+      )}
     </form>
   );
 }

@@ -28,6 +28,7 @@ import {
 import { GREENWAY_CATEGORY_VALUES } from "@/lib/promotions/category-values";
 import { PromotionAiCopy } from "@/components/admin/promotions/PromotionAiCopy";
 import { Button } from "@/components/admin/ui";
+import { StickyActionBar } from "@/components/admin/ux";
 
 type Props = {
   action: (formData: FormData) => void | Promise<void>;
@@ -512,14 +513,16 @@ export function PromotionForm({ action, promotion, brands, submitLabel, aiEnable
         </div>
       </section>
 
-      <div className="flex items-center gap-3">
-        <Button type="submit" variant="save">
-          {submitLabel}
-        </Button>
+      {/* GW-035: pinned save — this form is long enough that the buttons
+          used to disappear off-screen while editing the top sections. */}
+      <StickyActionBar status="Edits are not saved until you press the save button" statusTone="warning">
         <Button href="/admin/promotions" variant="neutral">
           Cancel
         </Button>
-      </div>
+        <Button type="submit" variant="save">
+          {submitLabel}
+        </Button>
+      </StickyActionBar>
     </form>
   );
 }

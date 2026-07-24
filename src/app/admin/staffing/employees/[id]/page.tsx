@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { Breadcrumbs, HelpPanel, EmptyState } from "@/components/admin/ux";
+import { Breadcrumbs, HelpPanel, EmptyState, StickyActionBar } from "@/components/admin/ux";
 import { Button, Badge, Field, Input, Select, Textarea } from "@/components/admin/ui";
 import { getEmployeeFile, taskStateOf } from "@/lib/staffing/employee-lifecycle-store";
 import {
@@ -498,9 +498,13 @@ export default async function EmployeeFilePage({
                     placeholder="Anything worth remembering (kept on file)."
                   />
                 </Field>
-                <Button type="submit" size="sm">
-                  Save basics
-                </Button>
+                {/* GW-035: pinned save — the basics form is the long one on
+                    this file; keep its Save reachable without scrolling. */}
+                <StickyActionBar status="Edits are not saved until you press Save basics" statusTone="warning">
+                  <Button type="submit" size="sm">
+                    Save basics
+                  </Button>
+                </StickyActionBar>
               </form>
             </div>
 

@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/admin/ui";
+import { ConfirmDialog } from "@/components/admin/ux";
 import { ContentImageField, type MediaChoice } from "./ContentImageField";
 import { SECTION_BANNER_SPEC } from "@/lib/cms/image-spec-core";
 import { controlClassName, labelClassName } from "./ui";
@@ -74,6 +75,9 @@ export function SectionCard({
   const [body, setBody] = useState(d.body);
   const [enabled, setEnabled] = useState(d.enabled);
   const [buttons, setButtons] = useState<DraftButton[]>(withIds(d.buttons));
+  // GW-035: friendly confirm dialog instead of the browser's window.confirm.
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const deleteFormRef = useRef<HTMLFormElement>(null);
 
   const buttonsJson = JSON.stringify(
     buttons.map(({ _id, ...b }) => {
@@ -187,24 +191,25 @@ export function SectionCard({
                 ↓
               </Button>
             </form>
-            <form
-              action={deleteAction}
-              onSubmit={(e) => {
-                if (
-                  !window.confirm(
-                    "Delete this section? This removes it from the page and can't be undone.",
-                  )
-                ) {
-                  e.preventDefault();
-                }
-              }}
-            >
+            <form ref={deleteFormRef} action={deleteAction}>
               <input type="hidden" name="page_slug" value={pageSlug} />
               <input type="hidden" name="section_id" value={section.id} />
-              <Button type="submit" variant="danger" size="sm">
+              <Button type="button" variant="danger" size="sm" onClick={() => setConfirmDelete(true)}>
                 Delete
               </Button>
             </form>
+            <ConfirmDialog
+              open={confirmDelete}
+              title="Delete this section?"
+              description="This removes it from the page and can't be undone."
+              confirmLabel="Delete section"
+              tone="danger"
+              onConfirm={() => {
+                setConfirmDelete(false);
+                deleteFormRef.current?.requestSubmit();
+              }}
+              onCancel={() => setConfirmDelete(false)}
+            />
           </div>
         ) : null}
       </div>
