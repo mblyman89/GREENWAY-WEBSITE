@@ -42,7 +42,7 @@ import {
 } from "@/lib/pos/receipt-core";
 import { normalizePosReceiptConfig, receiptAddressLines } from "@/lib/pos/receipt-config-core";
 import { DENOM_FIELDS, EMPTY_DENOMS, denomTotalMinor, formatCents, type DenomCounts } from "@/lib/registers/cash";
-import { dollarsToMinor } from "@/lib/pos/till-core";
+import { dollarsToMinor, tipsToMinor } from "@/lib/pos/till-core";
 import { changeBreakdown, formatChangeBreakdown } from "@/lib/pos/change-calc-core";
 import { lowStockCount } from "@/lib/pos/low-stock-core";
 import { applyLocalStockFlag } from "@/lib/pos/stock-flag-core";
@@ -3825,12 +3825,22 @@ function TillModal({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  // Tips at close (mode "close" only). The tip jar is the cashier's OWN
+  // money, counted separately and openly — it must never sit in the drawer
+  // count or it would show as a false overage at reconcile.
+  const [tips, setTips] = useState("");
+
   const countedMinor = denomTotalMinor(denoms);
   const amountMinor = dollarsToMinor(amount);
+  const tipsMinor = tipsToMinor(tips); // blank/"0" → 0; garbage → null (blocks)
 
   const ready =
     pin.length >= 4 &&
-    (mode === "open" ? countedMinor > 0 : mode === "drop" ? amountMinor !== null : true);
+    (mode === "open"
+      ? countedMinor > 0
+      : mode === "drop"
+        ? amountMinor !== null
+        : tipsMinor !== null);
 
   const TITLES = {
     open: "Count in drawer",
@@ -3857,7 +3867,17 @@ function TillModal({
               ...(witnessPin ? { witnessPin } : {}),
               ...(notes.trim() ? { notes: notes.trim() } : {}),
             }
-          : { action: mode, pin, denoms };
+          : mode === "close"
+            ? {
+                action: mode,
+                pin,
+                denoms,
+                // Only send tips when the box was actually filled in: an
+                // untouched field stays "not recorded" (NULL) while a typed
+                // "0" is a real counted-zero jar.
+                ...(tips.trim() && tipsMinor !== null ? { tipsMinor } : {}),
+              }
+            : { action: mode, pin, denoms };
       const res = await fetch("/api/pos/till", {
         method: "POST",
         headers: {
@@ -3880,7 +3900,13 @@ function TillModal({
       } else if (mode === "drop") {
         onDone("drop", null, `${formatCents(amountMinor ?? 0)} dropped to the safe (${dropWindow}).`);
       } else {
-        onDone("close", null, "Blind count recorded — a manager reconciles it in the back office.");
+        onDone(
+          "close",
+          null,
+          tips.trim() && tipsMinor !== null
+            ? `Blind count recorded with ${formatCents(tipsMinor)} in tips — a manager reconciles it in the back office.`
+            : "Blind count recorded — a manager reconciles it in the back office.",
+        );
       }
     } catch {
       setError("Could not reach the server — try again.");
@@ -3977,6 +4003,30 @@ function TillModal({
             <p className="mt-3 rounded-lg bg-[var(--pos-surface-2)] px-3 py-2 text-right text-base font-bold">
               Counted: {formatCents(countedMinor)}
             </p>
+            {mode === "close" && (
+              <>
+                <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-[var(--pos-text-muted)]">
+                  Tips (counted separately)
+                </label>
+                <input
+                  className="mt-1 w-full rounded-lg border border-[var(--pos-border-strong)] bg-[var(--pos-surface-2)] px-3 py-2.5 text-lg"
+                  inputMode="decimal"
+                  placeholder="$0.00"
+                  value={tips}
+                  onChange={(e) => setTips(e.target.value)}
+                />
+                {tips.trim() !== "" && tipsMinor === null && (
+                  <p className="mt-1 text-xs text-red-400">
+                    Enter tips as dollars and cents (like 42.50) or leave it blank.
+                  </p>
+                )}
+                <p className="mt-1 text-xs text-[var(--pos-text-muted)]">
+                  Count the tip jar by itself — tips are your money, NOT drawer
+                  cash, so keep them out of the count above. Leave blank if there is
+                  no tip jar.
+                </p>
+              </>
+            )}
           </>
         )}
 

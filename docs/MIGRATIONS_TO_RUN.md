@@ -310,3 +310,20 @@
   run, the new Admin → Settings → Special Discounts page shows the built-in
   defaults and saving is politely refused with a note to run this migration
   — nothing else in the app is affected.**
+
+## Feature slice — tips in the end-of-shift count-out
+
+- [ ] **`supabase/migrations/0134_drawer_tips.sql`** — one new column,
+  `drawer_sessions.tips_minor`, recording the tips counted out at the end
+  of a shift (in cents). Tips are the employee's money, not store cash, so
+  this figure deliberately stays OUT of the drawer math: expected close is
+  still opening float + cash sales − safe drops, and over/short still
+  compares the blind drawer count against that. A blank value means tips
+  simply weren't recorded (every close from before this feature), and 0
+  means the cashier explicitly counted a zero tip jar. Idempotent
+  (`add column if not exists`); safe to re-run; no backfill needed.
+  **Until this is run, the app works normally — the close screen shows the
+  new Tips box and the close always succeeds, but the tip amount is quietly
+  skipped when saving (best-effort write, same pattern as 0120's device
+  stamp). Once run, tips start appearing on the reconcile cards and in
+  Admin → Register Activity → Cash drawer reports automatically.**

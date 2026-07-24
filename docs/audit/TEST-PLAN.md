@@ -1628,6 +1628,32 @@ attempt, even the ones the system wins.*
   drops a sale rung late in the evening (days must bucket in Pacific
   time, not UTC).
 
+- **T-183 (tips in the end-of-shift count-out — employee money, never drawer math):**
+  first make sure migration `0134_drawer_tips.sql` has been run. On the
+  register iPad, open a drawer with a known float, ring one small cash
+  sale, then choose Close drawer (blind count). The close screen must
+  now show a “Tips (counted separately)” box under the denomination
+  grid with guidance that the tip jar is the cashier's own money and
+  must stay OUT of the drawer count. Count the drawer honestly, type
+  42.50 in the tips box, enter your PIN, and close — the confirmation
+  must mention $42.50 in tips, and the screen must still never show the
+  expected amount (the count stays blind). In the back office, the
+  reconcile card on Register Activity must show “$42.50 tips at close”
+  marked as employee money, and reconciling with the true cash sales
+  must come out BALANCED — the tips must not move expected close or
+  over/short by a cent. Cash drawer reports must show a Tips column
+  with $42.50 on that session, a dash on old sessions from before this
+  feature, and a “Tips at close” card totaling across sessions. Now the
+  edges: close another drawer typing 0 in the tips box (must record
+  $0.00, not a dash), close a third leaving the box blank (must show a
+  dash — not recorded), and try garbage like “abc” or a negative — the
+  close button must refuse until the box is fixed or cleared.
+  **Expect:** tips ride along with the blind close for visibility only;
+  drawer math is identical with or without them. **Red flag:** tips
+  changing expected/over-short, a blank box blocking the close, “0”
+  and “blank” collapsing into the same thing, or the close screen
+  revealing expected cash.
+
 ---
 
 <a id="phase-13"></a>

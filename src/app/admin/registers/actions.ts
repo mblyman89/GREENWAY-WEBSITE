@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import { parseDenoms } from "@/lib/registers/cash";
+import { tipsToMinor } from "@/lib/pos/till-core";
 import {
   openDrawer,
   closeDrawerBlind,
@@ -78,7 +79,16 @@ export async function closeDrawerAction(formData: FormData): Promise<void> {
   const employeeId = str(formData, "employee_id") || null;
   if (!sessionId) redirect(`${BASE}?error=` + encodeURIComponent("Missing session."));
   const denoms = parseDenoms((k) => formData.get(k) as string | null);
-  const result = await closeDrawerBlind({ sessionId, employeeId, denoms });
+  // Tips counted at close (employee money, kept OUT of drawer math).
+  // Blank field = not recorded (NULL); a typed "0" = counted-zero jar.
+  const tipsRaw = str(formData, "tips");
+  const tipsParsed = tipsRaw ? tipsToMinor(tipsRaw) : null;
+  const result = await closeDrawerBlind({
+    sessionId,
+    employeeId,
+    denoms,
+    ...(tipsRaw && tipsParsed !== null ? { tipsMinor: tipsParsed } : {}),
+  });
   if (!result.ok) redirect(`${BASE}?error=` + encodeURIComponent(result.error ?? "Failed."));
   await recordAudit({
     actorId: session.userId,

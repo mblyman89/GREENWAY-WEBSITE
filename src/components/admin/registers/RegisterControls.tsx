@@ -140,6 +140,12 @@ export function RegisterControls({
           </p>
           {/* No expected shown on purpose: this is a blind close. */}
           <CountGrid totalLabel="Count-out total" />
+          <label className="block text-xs text-[var(--admin-text-muted)]">
+            Tips counted at close ($) — the tip jar is the employee&apos;s money;
+            count it separately and keep it OUT of the drawer count above. Leave
+            blank if not recorded.
+            <Input name="tips" type="number" step="0.01" min="0" placeholder="0.00" />
+          </label>
           <EmployeePicker name="employee_id" employees={employees} label="Counted by" />
           <div className="flex justify-end">
             <Button type="submit" variant="danger" size="sm">

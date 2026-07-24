@@ -66,6 +66,9 @@ export default async function RegisterHistoryPage({
   const totalOverShort = sessions
     .filter((s) => s.over_short_minor != null)
     .reduce((acc, s) => acc + (s.over_short_minor ?? 0), 0);
+  // Tips at close (migration 0134) — employee money, informational only.
+  const tipSessions = sessions.filter((s) => s.tips_minor != null);
+  const totalTips = tipSessions.reduce((acc, s) => acc + (s.tips_minor ?? 0), 0);
 
   return (
     <div className="space-y-6">
@@ -89,11 +92,16 @@ export default async function RegisterHistoryPage({
               Over/short totals are informational. Investigate any single session that exceeds your store&apos;s
               tolerance, and review patterns by employee over time.
             </p>
+            <p className="mt-2">
+              <strong>Tips</strong> counted at close are the employee&apos;s money, recorded here for visibility
+              only &mdash; they are counted separately from the drawer and never enter the expected-close or
+              over/short math. A dash means tips weren&apos;t recorded for that session.
+            </p>
           </HelpPanel>
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Sessions shown" value={String(sessions.length)} hint="Most recent 80" accent="muted" />
         <StatCard label="Awaiting reconcile" value={String(awaiting)} hint="Blind-closed" accent={awaiting > 0 ? "orange" : "muted"} />
         <StatCard
@@ -101,6 +109,16 @@ export default async function RegisterHistoryPage({
           value={overShortLabel(totalOverShort)}
           hint={`${reconciledCount} reconciled`}
           accent={totalOverShort === 0 ? "green" : totalOverShort > 0 ? "gold" : "orange"}
+        />
+        <StatCard
+          label="Tips at close"
+          value={formatCents(totalTips)}
+          hint={
+            tipSessions.length > 0
+              ? `${tipSessions.length} session${tipSessions.length === 1 ? "" : "s"} recorded tips`
+              : "None recorded in these sessions"
+          }
+          accent={totalTips > 0 ? "gold" : "muted"}
         />
       </div>
 
@@ -111,7 +129,7 @@ export default async function RegisterHistoryPage({
         />
       ) : (
         <div className="overflow-x-auto rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)] bg-[var(--admin-surface)]">
-          <table className="w-full min-w-[820px] text-sm">
+          <table className="w-full min-w-[900px] text-sm">
             <thead>
               <tr className="border-b border-[var(--admin-border)] text-left text-xs uppercase tracking-wide text-white/40">
                 <th className="px-4 py-3 font-medium">Register</th>
@@ -121,6 +139,7 @@ export default async function RegisterHistoryPage({
                 <th className="px-4 py-3 text-right font-medium">Counted close</th>
                 <th className="px-4 py-3 text-right font-medium">Expected</th>
                 <th className="px-4 py-3 text-right font-medium">Over / short</th>
+                <th className="px-4 py-3 text-right font-medium">Tips</th>
                 <th className="px-4 py-3 font-medium">Closed</th>
               </tr>
             </thead>
@@ -157,6 +176,9 @@ export default async function RegisterHistoryPage({
                     ) : (
                       <span className="text-white/30">hidden</span>
                     )}
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums text-white/70">
+                    {s.tips_minor != null ? formatCents(s.tips_minor) : "\u2014"}
                   </td>
                   <td className="px-4 py-3 text-white/50">{fmtTime(s.closed_at)}</td>
                 </tr>

@@ -203,6 +203,9 @@ export default async function RegisterActivityPage({
                       <p className="mb-3 text-xs text-[var(--admin-text-muted)]">
                         {a.businessDay} · counted {formatCents(a.closingCountMinor)} vs expected{" "}
                         {formatCents(a.expectedCloseMinor)}
+                        {a.tipsMinor != null
+                          ? ` · ${formatCents(a.tipsMinor)} tips at close (employee money, not drawer cash)`
+                          : ""}
                       </p>
                       {a.dayRefundTotalMinor > 0 && (
                         <p className="mb-3 text-xs font-medium text-[var(--admin-text)]">
@@ -241,6 +244,7 @@ export default async function RegisterActivityPage({
                       </div>
                       <p className="mb-3 text-xs text-[var(--admin-text-muted)]">
                         {a.businessDay} · reconciled, awaiting manager verify
+                        {a.tipsMinor != null ? ` · ${formatCents(a.tipsMinor)} tips at close` : ""}
                       </p>
                       <form action={verifyTillAction} className="flex flex-wrap items-end gap-2">
                         <input type="hidden" name="session_id" value={a.sessionId} />

@@ -8,7 +8,9 @@ import { describe, expect, it } from "vitest";
 import {
   MAX_DENOM_COUNT,
   MAX_DROP_MINOR,
+  MAX_TIPS_MINOR,
   dollarsToMinor,
+  tipsToMinor,
   sanitizeDenoms,
   validateTillRequest,
   __runTillCoreTests,
@@ -70,6 +72,39 @@ describe("till-core (POS B21)", () => {
     expect(
       validateTillRequest({ action: "drop", pin: "1234", amountMinor: 500, window: "other", notes: "x".repeat(501) }).ok,
     ).toBe(false);
+  });
+
+  it("tipsToMinor: blank/'0' are real answers; garbage, negatives, sub-cent rejected", () => {
+    expect(tipsToMinor("42.50")).toBe(4250);
+    expect(tipsToMinor("$1,250.50")).toBe(125050);
+    expect(tipsToMinor("0")).toBe(0);
+    expect(tipsToMinor("")).toBe(0);
+    expect(tipsToMinor("-5")).toBeNull();
+    expect(tipsToMinor("12.345")).toBeNull();
+    expect(tipsToMinor("abc")).toBeNull();
+  });
+
+  it("close carries optional tips (employee money, kept out of drawer math)", () => {
+    const withTips = validateTillRequest({ action: "close", pin: "1234", denoms: { twenties: 2 }, tipsMinor: 4250 });
+    expect(withTips.ok).toBe(true);
+    if (withTips.ok && withTips.req.action === "close") expect(withTips.req.tipsMinor).toBe(4250);
+
+    const zeroTips = validateTillRequest({ action: "close", pin: "1234", denoms: {}, tipsMinor: 0 });
+    expect(zeroTips.ok).toBe(true);
+    if (zeroTips.ok && zeroTips.req.action === "close") expect(zeroTips.req.tipsMinor).toBe(0);
+
+    const omitted = validateTillRequest({ action: "close", pin: "1234", denoms: {} });
+    expect(omitted.ok).toBe(true);
+    if (omitted.ok && omitted.req.action === "close") expect(omitted.req.tipsMinor).toBeUndefined();
+
+    expect(validateTillRequest({ action: "close", pin: "1234", denoms: {}, tipsMinor: -1 }).ok).toBe(false);
+    expect(validateTillRequest({ action: "close", pin: "1234", denoms: {}, tipsMinor: 10.5 }).ok).toBe(false);
+    expect(validateTillRequest({ action: "close", pin: "1234", denoms: {}, tipsMinor: MAX_TIPS_MINOR + 1 }).ok).toBe(false);
+
+    // Tips only exist at close — a stray tipsMinor on open is ignored.
+    const open = validateTillRequest({ action: "open", pin: "1234", denoms: { ones: 1 }, tipsMinor: 500 });
+    expect(open.ok).toBe(true);
+    if (open.ok) expect("tipsMinor" in open.req).toBe(false);
   });
 
   it("rejects missing PIN, null body, and register-side reconcile (manager-only, back office)", () => {
