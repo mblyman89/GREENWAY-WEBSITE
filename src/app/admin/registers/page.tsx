@@ -92,6 +92,9 @@ export default async function RegisterActivityPage({
             <Button href={`${BASE}/history`} variant="neutral" size="sm">
               Cash drawer reports
             </Button>
+            <Button href={`${BASE}/eod`} variant="neutral" size="sm">
+              End-of-day report
+            </Button>
           </div>
         }
         help={

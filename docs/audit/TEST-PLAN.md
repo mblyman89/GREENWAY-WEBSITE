@@ -1681,6 +1681,34 @@ attempt, even the ones the system wins.*
   swap recording without the safe tables, or the safe count hiding the
   live variance (safe counts are open, not blind).
 
+- **T-185 (printable physical records — till summary + end-of-day report):**
+  in the back office, open Register Activity and click the new
+  End-of-day report button (it is also on the Cash drawer reports
+  page). The report must show the business day, a PRELIMINARY banner
+  while any drawer is still open (flipping to FINAL once every drawer
+  is closed), the store-wide sales summary from server-verified
+  facts (sales count, subtotal, tax, gross, no-sales), a till table
+  with one row per register that worked today (opening float, drops,
+  blind close count, over/short, tips) plus a store-total row, and a
+  safe section (AM/PM counts with variances, change swap count and
+  total). The blind rules must hold on paper too: over/short shows a
+  dash until a manager has reconciled that session, and tips are
+  labeled employee money. Click Print — the print preview must be
+  crisp black-on-white with no admin chrome (no sidebar, no buttons)
+  and must end with signature and date lines. Now the till summary:
+  on Cash drawer reports, every session row must have a Till summary
+  link opening a one-page sheet for that drawer — register, day,
+  status, who opened/closed and when, opening float, each safe drop
+  (time, window, who, witness, amount), the blind close count,
+  expected close and over/short ONLY if the session has been
+  reconciled, tips if recorded, and any change swaps with both names.
+  Print it — same clean black-on-white sheet with signature lines.
+  **Expect:** two printable physical records — a store-wide
+  end-of-day summary and a per-drawer till sheet — that respect the
+  blind-count discipline. **Red flag:** over/short printing for an
+  unreconciled session, tips mixed into drawer math, admin chrome on
+  the printed page, or an open drawer being reported as FINAL.
+
 ---
 
 <a id="phase-13"></a>
