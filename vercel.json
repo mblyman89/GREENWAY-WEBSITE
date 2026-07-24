@@ -4,6 +4,10 @@
     {
       "path": "/api/cron/compliance-reminders",
       "schedule": "0 16 * * *"
+    },
+    {
+      "path": "/api/cron/regulatory-watch",
+      "schedule": "0 17 * * *"
     }
   ]
 }

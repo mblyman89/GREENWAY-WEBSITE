@@ -45,6 +45,7 @@ import {
   type InboundDisposition,
 } from "@/lib/inbound-email/inbound-store";
 import { enrichResendInbound } from "@/lib/inbound-email/resend-receiving-fetch";
+import { ingestFromText } from "@/lib/regulatory/regulatory-ingest";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -56,6 +57,11 @@ function resolveProvider(): InboundProvider {
 
 function intakeMailbox(): string {
   return (process.env.VENDOR_INTAKE_MAILBOX ?? "vendor_intake").trim();
+}
+
+// SLICE 37: second mailbox — forwarded LCB bulletins for Regulatory Watch.
+function regulatoryMailbox(): string {
+  return (process.env.REGULATORY_MAILBOX ?? "lcb-watch").trim();
 }
 
 export async function POST(request: Request) {
@@ -206,6 +212,25 @@ async function finish(
 
   const toIntake = isForIntakeMailbox(email, intakeMailbox());
   if (!toIntake) {
+    // SLICE 37: forwarded LCB bulletins route to Regulatory Watch instead.
+    if (isForIntakeMailbox(email, regulatoryMailbox())) {
+      const body = (email.bodyText ?? "").trim();
+      const res = await ingestFromText(email.subject || "Forwarded LCB bulletin", body);
+      await logInboundEmail({
+        email,
+        signatureOk,
+        toIntake: false,
+        disposition: "ignored",
+        manifestId: null,
+        note: res.ok
+          ? `regulatory watch: ingested (${res.created ? "new" : "duplicate"}${res.analyzed ? ", analyzed" : ""})`
+          : `regulatory watch: ${res.error}`,
+      });
+      return NextResponse.json(
+        { ok: true, regulatory: res.ok, created: res.ok ? res.created : false },
+        { status: 200 },
+      );
+    }
     await logInboundEmail({
       email,
       signatureOk,

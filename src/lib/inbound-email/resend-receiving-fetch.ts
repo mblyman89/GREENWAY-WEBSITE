@@ -354,6 +354,9 @@ export async function enrichResendInbound(
     subject: subject || baseSubject,
     receivedAt: baseReceivedAt,
     attachments,
+    // SLICE 37: carry the plain-text body so the Regulatory Watch funnel can
+    // read forwarded LCB bulletins (they arrive as body text, not attachments).
+    bodyText: text || null,
   };
 
   return {

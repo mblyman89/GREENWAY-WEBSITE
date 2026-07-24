@@ -196,6 +196,9 @@ export default async function CcrsCommandCenterPage({
           <Link href="/admin/compliance/health" className="rounded-lg border border-white/15 px-3 py-1.5 font-semibold text-white/60 transition hover:bg-white/5">
             Compliance Health
           </Link>
+          <Link href="/admin/compliance/regulatory" className="rounded-lg border border-white/15 px-3 py-1.5 font-semibold text-white/60 transition hover:bg-white/5">
+            Regulatory Watch
+          </Link>
           <Link href="/admin/reports/compliance" className="rounded-lg border border-white/15 px-3 py-1.5 font-semibold text-white/60 transition hover:bg-white/5">
             Classic CCRS tab
           </Link>

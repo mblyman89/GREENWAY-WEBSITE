@@ -45,6 +45,12 @@ export type NormalizedInboundEmail = {
   subject: string;
   receivedAt: string; // ISO 8601
   attachments: NormalizedAttachment[];
+  /**
+   * Plain-text body when the provider supplied one (SLICE 37: the Regulatory
+   * Watch funnel reads forwarded LCB bulletins from the body, not from
+   * attachments). Optional — older payload shapes simply omit it.
+   */
+  bodyText?: string | null;
 };
 
 function lc(v: unknown): string {
@@ -139,6 +145,7 @@ export function normalizeResendInbound(raw: Record<string, unknown>): Normalized
     subject: str(data.subject),
     receivedAt,
     attachments,
+    bodyText: str(data.text) || null,
   };
 }
 
@@ -174,6 +181,7 @@ export function normalizeSendgridInbound(raw: Record<string, unknown>): Normaliz
     subject: str(raw.subject),
     receivedAt: new Date().toISOString(),
     attachments,
+    bodyText: str(raw.text) || null,
   };
 }
 
