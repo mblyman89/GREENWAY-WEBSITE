@@ -134,6 +134,7 @@ import { __runSafeCoreTests } from "../../src/lib/registers/safe-core";
 import { __runEodCoreTests } from "../../src/lib/registers/eod-core";
 import { __runConstantTimeTests } from "../../src/lib/security/constant-time";
 import { __runGramsPerOunceTests } from "../../src/lib/compliance/grams-per-ounce";
+import { __runEnrichmentMatchCoreTests } from "../../src/lib/enrichment/match-core";
 
 async function main() {
   __runOrderPricingTests();
@@ -270,6 +271,7 @@ async function main() {
   __runSpecialDiscountReportTests();
   __runSafeCoreTests();
   __runEodCoreTests();
+  __runEnrichmentMatchCoreTests();
   console.log("ALL PURE SELF-TESTS PASSED");
 }
 

@@ -18,6 +18,12 @@ import { computeProductStats, productGapInsights } from "@/lib/insight/products"
 import { MissingInsight } from "@/components/admin/insight/MissingInsight";
 import { withBackParam } from "@/lib/admin/back-link-core";
 import { DistributionBars } from "@/components/admin/insight/DistributionBars";
+import {
+  parseEnrichmentSort,
+  parseEnrichmentStatusFilter,
+  sortEnrichmentList,
+  filterByEnrichmentStatus,
+} from "@/lib/enrichment/match-core";
 
 function fmtMoney(minor: number | null): string {
   if (minor == null) return "—";
@@ -29,11 +35,13 @@ export const dynamic = "force-dynamic";
 export default async function ProductsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; gap?: string; category?: string; view?: string; back?: string }>;
+  searchParams: Promise<{ q?: string; gap?: string; category?: string; view?: string; sort?: string; status?: string; back?: string }>;
 }) {
   await requirePermission("products.enrich");
   const sp = await searchParams;
   const { q, gap, category, view } = sp;
+  const sort = parseEnrichmentSort(sp.sort);
+  const statusFilter = parseEnrichmentStatusFilter(sp.status);
   const isTable = view === "table";
   // GW-029: carry the current filters into detail links for BackLink restore.
   const detailHref = (posKey: string) =>
@@ -152,6 +160,9 @@ export default async function ProductsPage({
   if (gap === "description") filtered = filtered.filter((g) => !g.hasDescription);
   else if (gap === "image") filtered = filtered.filter((g) => !g.hasImage);
   else if (gap === "brand") filtered = filtered.filter((g) => !g.hasBrandLink);
+  else if (gap === "any") filtered = filtered.filter((g) => !g.hasDescription || !g.hasImage || !g.hasBrandLink);
+  filtered = filterByEnrichmentStatus(filtered, statusFilter);
+  filtered = sortEnrichmentList(filtered, sort);
 
   const missingDesc = gaps.filter((g) => !g.hasDescription).length;
   const missingImg = gaps.filter((g) => !g.hasImage).length;
@@ -191,6 +202,8 @@ export default async function ProductsPage({
   if (q) baseQs.set("q", q);
   if (category) baseQs.set("category", category);
   if (gap) baseQs.set("gap", gap);
+  if (sp.sort) baseQs.set("sort", sort);
+  if (statusFilter) baseQs.set("status", statusFilter);
   const gridHref = `/admin/products?${baseQs.toString()}`;
   const tableQs = new URLSearchParams(baseQs);
   tableQs.set("view", "table");
@@ -350,9 +363,24 @@ export default async function ProductsPage({
           </Select>
           <Select name="gap" defaultValue={gap ?? ""} className="w-auto">
             <option value="">All products</option>
+            <option value="any">Any gap</option>
             <option value="description">Missing description</option>
             <option value="image">Missing image</option>
             <option value="brand">Missing brand link</option>
+          </Select>
+          <Select name="status" defaultValue={statusFilter} className="w-auto">
+            <option value="">Any enrichment status</option>
+            <option value="none">Never enriched</option>
+            <option value="draft">Draft</option>
+            <option value="published">Published</option>
+            <option value="archived">Archived</option>
+          </Select>
+          <Select name="sort" defaultValue={sort} className="w-auto">
+            <option value="gaps">Sort: most gaps first</option>
+            <option value="name">Sort: name A–Z</option>
+            <option value="brand">Sort: brand A–Z</option>
+            <option value="category">Sort: category</option>
+            <option value="status">Sort: enrichment status</option>
           </Select>
           <Button type="submit" variant="neutral">
             Filter
