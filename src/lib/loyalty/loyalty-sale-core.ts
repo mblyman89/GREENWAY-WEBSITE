@@ -323,6 +323,22 @@ export function __runLoyaltySaleTests(): void {
     ok(r.additionalSavingsMinorUnits === 200, "savings = 100 x qty 2");
   }
   {
+    // OWNER DIRECTIVE PIN: loyalty 25% REPLACES a smaller daily-deal percent
+    // (e.g. Saturday 15% rest) — never stacked on top of it. 25% off regular
+    // 1000 = 750 beats the 15% promo price 850; reduction measured from the
+    // CURRENT (promo) price, so total off regular is exactly 25%, not 40%.
+    const r = applyTierPricing([line({ unitPriceMinorUnits: 850 })], 2500);
+    ok(r.lines[0].winner === "tier" && r.lines[0].unitPriceMinorUnits === 750, "25% tier replaces 15% deal");
+    ok(r.lines[0].loyaltyDiscountMinorUnits === 100, "replacement, not stacking (850->750)");
+  }
+  {
+    // OWNER DIRECTIVE PIN: when the daily deal is BIGGER than the 25% tier
+    // (e.g. Saturday 30% headline = 700), the deal price stands untouched.
+    const r = applyTierPricing([line({ unitPriceMinorUnits: 700 })], 2500);
+    ok(r.lines[0].winner === "existing" && r.lines[0].unitPriceMinorUnits === 700, "30% deal beats 25% tier");
+    ok(r.lines[0].loyaltyDiscountMinorUnits === 0, "no tier reduction when deal wins");
+  }
+  {
     // Tier price clamped to the cost floor.
     const r = applyTierPricing([line({ costMinorUnits: 650 })], 5000); // 50% -> 500 raw
     const floor = Math.ceil(650 * 1.463); // 951

@@ -93,8 +93,8 @@ const draftSchema = defineSchema<EngineConfigDraft>("promo_engine_config", {
   bogoGetPercent: pct("BOGO percent off the 'get' items (100 = free)."),
   basketN: num("Basket 'buy N for M': N. 0 if not applicable.", 24),
   basketM: num("Basket 'buy N for M': M. 0 if not applicable.", 24),
-  basketTopPercent: pct("Basket top-item: percent off the single most expensive item. 0 if n/a."),
-  basketRestPercent: pct("Basket top-item: percent off the remaining items. 0 if n/a."),
+  basketTopPercent: pct("Basket headline-item: the bigger percent off ONE item (the engine applies it to the LOWEST-priced eligible item — store policy). 0 if n/a."),
+  basketRestPercent: pct("Basket headline-item: percent off the remaining items. 0 if n/a."),
   eitherOrFlatPercent: pct("Either/or: the flat percent option (e.g. 20 for '20% off OR 4 for 3'). 0 if n/a."),
   eitherOrN: num("Either/or bundle: buy N. 0 if n/a.", 24),
   eitherOrM: num("Either/or bundle: pay for M (M < N). 0 if n/a.", 24),
@@ -166,7 +166,7 @@ export async function draftEngineConfig(params: {
     "- 'spend $50 15%, $100 20%, $150 30%' -> spend1At 5000 spend1Pct 15, spend2At 10000 spend2Pct 20, spend3At 15000 spend3Pct 30",
     "- 'buy one get one' -> bogoBuyQty 1 bogoGetQty 1 bogoGetPercent 99 (cannabis is never free)",
     "- 'buy 3 for the price of 2' -> basketN 3 basketM 2",
-    "- '30% off top item, 15% off the rest' -> basketTopPercent 30 basketRestPercent 15",
+    "- '30% off one item, 15% off the rest' -> basketTopPercent 30 basketRestPercent 15 (the 30% is applied to the lowest-priced item)",
     "- '20% off OR 4 for the price of 3, whichever applies' -> eitherOrFlatPercent 20 eitherOrN 4 eitherOrM 3",
   ].join("\n");
 

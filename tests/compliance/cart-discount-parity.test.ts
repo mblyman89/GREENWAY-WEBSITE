@@ -143,19 +143,21 @@ describe("weekday mechanics", () => {
     expect(half.lines[0].appliedPercent).toBe(20);
   });
 
-  it("Super Saturday: 30% on the top unit, 15% on the rest; blended when qty>1", () => {
+  it("Super Saturday (store-favorable): 30% on the LOWEST-priced unit, 15% on the rest; blended when qty>1", () => {
+    // Owner directive: never award the biggest discount to the highest-priced
+    // item in a multi-item cart — the 30% headline lands on the cheapest unit.
     const r = computeCartDiscounts(
       [
-        line({ lineId: "top", regularPriceMinorUnits: 5000 }),
-        line({ lineId: "rest", regularPriceMinorUnits: 1000 }),
+        line({ lineId: "pricey", regularPriceMinorUnits: 5000 }),
+        line({ lineId: "cheap", regularPriceMinorUnits: 1000 }),
       ],
       "saturday",
     );
-    expect(r.lines.find((l) => l.lineId === "top")!.unitPriceMinorUnits).toBe(3500); // 30% off
-    expect(r.lines.find((l) => l.lineId === "rest")!.unitPriceMinorUnits).toBe(850); // 15% off
-    // Blended: qty 2 top line = one unit at 30%, one at 15%, averaged per-unit.
+    expect(r.lines.find((l) => l.lineId === "pricey")!.unitPriceMinorUnits).toBe(4250); // 15% off
+    expect(r.lines.find((l) => l.lineId === "cheap")!.unitPriceMinorUnits).toBe(700); // 30% off
+    // Blended: qty 2 single line = one unit at 30%, one at 15%, averaged per-unit.
     const blended = computeCartDiscounts(
-      [line({ lineId: "top", regularPriceMinorUnits: 5000, quantity: 2 })],
+      [line({ lineId: "only", regularPriceMinorUnits: 5000, quantity: 2 })],
       "saturday",
     );
     const expected = Math.round((Math.round(5000 * 0.7) + Math.round(5000 * 0.85)) / 2);
