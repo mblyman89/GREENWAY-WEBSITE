@@ -219,49 +219,13 @@ const CANNABINOID_MG_CAP: Record<string, number> = {
 };
 const DEFAULT_CANNABINOID_MG_CAP = 5000;
 
-// --- Section G: THC/CBD average fallback table --------------------------------------------
-// When a product has no usable THC/CBD value in its source columns, we display a category-level
-// AVERAGE so every product card shows a value. Averages blend the raw-spreadsheet medians (from
-// the INVENTORIES Total column) with public dispensary/lab potency research:
-//   * Frontiers 2024 (ElSohly et al.): dispensary flower ~20-25% THC (we use 22%).
-//   * Kootenay Botanicals / industry: vape carts ~80-85%, concentrates ~85-90%, flower 15-30%.
-//   * Raw INVENTORIES Total medians: Usable Marijuana 23.7%, Concentrate 74.2%, Liquid Edible
-//     100mg, Solid Edible 10mg.
-// Values are intentionally approximate; batch-to-batch variance makes an average fair. Every
-// fallback application is logged via the "cannabinoid_average_fallback" diagnostic for audit.
-const THC_FALLBACK_BY_CATEGORY: Partial<Record<GreenwayCategory, number>> = {
-  "flower": 22,
-  "popcorn-bud": 20,
-  "infused-flower": 35,
-  "preroll": 22,
-  "infused-preroll": 35,
-  "blunt": 22,
-  "infused-blunt": 35,
-  "trim": 15,
-  "concentrate": 80,
-  "rso": 75,
-  "cartridge": 85,
-  "disposable-cartridge": 85,
-  "edible-solid": 10,
-  "edible-liquid": 100,
-  "tincture": 300,
-};
-const CBD_FALLBACK_BY_CATEGORY: Partial<Record<GreenwayCategory, number>> = {
-  // Most products are THC-dominant; CBD averages are intentionally low. Edible/tincture CBD is
-  // left to source data (no blanket mg fallback) since CBD content varies wildly by SKU.
-  "flower": 0.5,
-  "popcorn-bud": 0.5,
-  "infused-flower": 0.5,
-  "preroll": 0.5,
-  "infused-preroll": 0.5,
-  "blunt": 0.5,
-  "infused-blunt": 0.5,
-  "trim": 0.5,
-  "concentrate": 1,
-  "rso": 1,
-  "cartridge": 1,
-  "disposable-cartridge": 1,
-};
+// --- Section G (RETIRED — owner decision, Optimus Prime slice) ----------------------------
+// The category-average "~" potency fallback tables were REMOVED. The owner's card rules
+// (SLICE 43) hide any estimated ("~"-prefixed) value, and the owner confirmed: "remove the
+// estimate. We will enrich them so they are accurate and not estimated." A product with no
+// usable source potency now carries NULL (box hidden on the site) plus a
+// "cannabinoid_missing" info diagnostic so the import review screen lists every product that
+// needs potency enrichment. Real values only — never invented.
 
 function normalizeWhitespace(value: unknown) { return String(value ?? "").replace(/\u0000/g, "").replace(/\s+/g, " ").trim(); }
 function comparableName(value: unknown) { return normalizeWhitespace(value).toLowerCase(); }
@@ -605,15 +569,17 @@ function capCannabinoidValue(raw: number, inventoryType: string): { value: numbe
 
 type CannabinoidResolution = { display: string | null; rawUsed: number | null; fallback: boolean };
 
-// Resolve a cannabinoid display value with Bug 3 capping and Section G average fallback.
+// Resolve a cannabinoid display value with Bug 3 capping. REAL VALUES ONLY (owner decision):
 //   primaryRaw  : the value normally displayed (THC: Total column; CBD: Cbd column)
 //   siblingRaw  : a sane alternative from a sibling column (e.g. the Thc column) used when the
 //                 primary value is corrupt/over the cap. Optional.
-//   fallbackAvg : category-level average to use when no usable source value exists. Optional.
+// When no usable source value exists the display is NULL (the site hides the potency box) and
+// a "cannabinoid_missing" info diagnostic flags the product for enrichment. The retired
+// Section G category-average "~" fallback is gone — values are never invented.
 function resolveCannabinoid(
   primaryRaw: number | null,
   inventoryType: string,
-  opts: { siblingRaw?: number | null; fallbackAvg?: number; kind: "thc" | "cbd"; productName?: string; category?: string },
+  opts: { siblingRaw?: number | null; kind: "thc" | "cbd"; productName?: string; category?: string },
 ): CannabinoidResolution {
   if (!shouldDisplayThcTotal(inventoryType)) return { display: null, rawUsed: null, fallback: false };
   const unit = cannabinoidUnitForInventoryType(inventoryType);
@@ -647,15 +613,15 @@ function resolveCannabinoid(
     return { display: `${formatNumber(sib.value, 2)}${unit}`, rawUsed: sib.value, fallback: false };
   }
 
-  // 3) Section G: category-level average fallback so the card never shows "N/A" where we have one.
-  if (opts.fallbackAvg !== undefined && opts.fallbackAvg > 0) {
-    addDiagnostic("info", "cannabinoid_average_fallback", "No source cannabinoid value; applied category-average fallback for display.", {
-      productName: opts.productName, category: opts.category, inventoryType, kind: opts.kind, fallback: opts.fallbackAvg, unit,
+  // 3) No usable source value at all: NULL (site hides the box) + enrichment diagnostic.
+  // THC missing on a cannabinoid-displayable type is the actionable case; missing CBD is
+  // routine (most THC-dominant products list none), so only THC emits the diagnostic.
+  if (opts.kind === "thc") {
+    addDiagnostic("info", "cannabinoid_missing", "No source THC/Total potency value; product will show no THC box until enriched.", {
+      productName: opts.productName, category: opts.category, inventoryType, kind: opts.kind, unit,
     });
-    return { display: `~${formatNumber(opts.fallbackAvg, 2)}${unit}`, rawUsed: opts.fallbackAvg, fallback: true };
   }
-
-  return { display: "N/A", rawUsed: null, fallback: false };
+  return { display: null, rawUsed: null, fallback: false };
 }
 
 function productRowsByName(products: ProductRow[]) {
@@ -742,6 +708,11 @@ function stripVariantNoise(value: string, brand: string, category: string): stri
   if (brandComparable) s = s.replace(new RegExp(`^${brandComparable}\\s*[-:|]?\\s*`, "i"), "");
   s = s
     .replace(/\b\d+(?:\.\d+)?\s*(?:g|gram|grams|mg|milligram|milligrams|oz|ounce|ounces|ml|milliliter|milliliters|fl\.?\s*oz|fluid\s*ounce|fluidounce)\b/gi, " ")
+    // Numbered pack tokens ("5pk", "3 pack", "2-pack") strip away so a multi-pack lands on the
+    // same display family as its single form — EXACT parity with the intake system's
+    // familyFromName (intake-mastering-core.ts), so a Cultivera-imported card and an
+    // intake-received restock of the same product derive the same name and merge correctly.
+    .replace(/\b\d+\s*(?:-\s*)?(?:pk|pack|packs)\b/gi, " ")
     .replace(/\b(?:single|pack|packs|pouch|jar|tin|unit|each)\b/gi, " ")
     .replace(/\b(?:pre[- ]?rolls?|infused|blunt|flower|cartridge|disposable|vape|rosin|resin|bho|badder|hash|gummies|edible|beverage|shot|topical)\b/gi, " ")
     .replace(/[()\[\]]/g, " ")
@@ -960,14 +931,12 @@ function toMenuItem(group: ProductGroup): GreenwayMenuItem {
   // when Total is corrupt/over-cap. CBD displays from the Cbd column with Cbda as sibling.
   const thcResolved = resolveCannabinoid(firstAvailable?.totalRaw ?? null, inventoryType, {
     siblingRaw: firstAvailable?.thcRaw ?? null,
-    fallbackAvg: THC_FALLBACK_BY_CATEGORY[group.category],
     kind: "thc",
     productName: group.displayName,
     category: group.category,
   });
   const cbdResolved = resolveCannabinoid(firstAvailable?.cbdRaw ?? null, inventoryType, {
     siblingRaw: firstAvailable?.cbdaRaw ?? null,
-    fallbackAvg: CBD_FALLBACK_BY_CATEGORY[group.category],
     kind: "cbd",
     productName: group.displayName,
     category: group.category,
@@ -996,8 +965,10 @@ function toMenuItem(group: ProductGroup): GreenwayMenuItem {
     strainName: group.strainName,
     thc,
     cbd,
-    totalThc: shouldDisplayThcTotal(inventoryType) ? { type: "thc", value: thc && thc !== "N/A" ? thc.replace(/^~/, "").replace(unitPattern, "") : null, unit } : null,
-    totalCbd: shouldDisplayThcTotal(inventoryType) ? { type: "cbd", value: cbd && cbd !== "N/A" ? cbd.replace(/^~/, "").replace(unitPattern, "") : null, unit } : null,
+    // Real values only: thc/cbd are either a formatted "12.34%"/"100mg" string or null — the
+    // "~" estimate prefix and "N/A" placeholder no longer exist anywhere in the pipeline.
+    totalThc: shouldDisplayThcTotal(inventoryType) ? { type: "thc", value: thc ? thc.replace(unitPattern, "") : null, unit } : null,
+    totalCbd: shouldDisplayThcTotal(inventoryType) ? { type: "cbd", value: cbd ? cbd.replace(unitPattern, "") : null, unit } : null,
     compounds: cannabinoidCompounds(firstAvailable),
     description: group.descriptions.sort((a, b) => b.length - a.length)[0] ?? genericDescription(group),
     priceLabel,
@@ -1233,3 +1204,69 @@ export type {
 
 // Re-export pure helpers the CLI wrapper still needs for FS-side formatting.
 export { collapseKeyPart, formatCurrency };
+
+// ---------------------------------------------------------------------------
+// Self-tests (registered in scripts/compliance/run-pure-selftests.ts).
+// Covers the Optimus Prime slice changes: real-values-only potency (no "~"
+// category averages, no "N/A" placeholder) and intake-parity name cleaning
+// (numbered pack tokens stripped). The workbook pipeline itself is exercised
+// by the admin import flow; these tests pin the pure decision logic.
+// ---------------------------------------------------------------------------
+export function __runTransformCoreTests(): void {
+  let passed = 0;
+  const ok = (cond: boolean, msg: string) => {
+    if (!cond) throw new Error("FAIL: " + msg);
+    passed++;
+  };
+
+  // Isolate module diagnostic state, then restore at the end.
+  const savedDiagnostics = diagnostics;
+  diagnostics = [];
+  try {
+    // --- resolveCannabinoid: real values only -------------------------------
+    // 1) Missing THC on a displayable type → null display + cannabinoid_missing diagnostic.
+    let r = resolveCannabinoid(null, "Usable Marijuana", { kind: "thc", productName: "Test Flower", category: "flower" });
+    ok(r.display === null && r.rawUsed === null && r.fallback === false, "missing THC resolves to null, never invented");
+    ok(diagnostics.some((d) => d.code === "cannabinoid_missing"), "missing THC emits enrichment diagnostic");
+    ok(!diagnostics.some((d) => d.code === "cannabinoid_average_fallback"), "category-average fallback is retired");
+
+    // 2) Missing CBD → null quietly (no diagnostic spam for the routine case).
+    diagnostics = [];
+    r = resolveCannabinoid(null, "Usable Marijuana", { kind: "cbd", productName: "Test Flower", category: "flower" });
+    ok(r.display === null, "missing CBD resolves to null");
+    ok(diagnostics.length === 0, "missing CBD emits no diagnostic");
+
+    // 3) Real value passes through with the right unit; no "~" prefix anywhere.
+    r = resolveCannabinoid(23.71, "Usable Marijuana", { kind: "thc" });
+    ok(r.display === "23.71%", "real percent value formats plainly");
+    r = resolveCannabinoid(100, "Solid Edible", { kind: "thc" });
+    ok(r.display === "100mg", "edible values format in mg");
+
+    // 4) Corrupt primary (over cap) falls back to the sane sibling column.
+    diagnostics = [];
+    r = resolveCannabinoid(15000000, "Usable Marijuana", { siblingRaw: 24.5, kind: "thc" });
+    ok(r.display === "24.5%", "corrupt primary uses sane sibling");
+    ok(diagnostics.some((d) => d.code === "cannabinoid_value_capped"), "cap substitution logged");
+
+    // 5) Corrupt primary with no sibling clamps to the cap (still a real bound, never "~").
+    r = resolveCannabinoid(250, "Usable Marijuana", { kind: "thc" });
+    ok(r.display === "100%", "percent clamps at 100");
+
+    // 6) Non-displayable type → null with no diagnostics.
+    diagnostics = [];
+    r = resolveCannabinoid(null, "Topical Ointment", { kind: "thc" });
+    ok(r.display === null && diagnostics.length === 0, "non-displayable type stays silent");
+
+    // --- stripVariantNoise: intake-parity name cleaning ---------------------
+    ok(stripVariantNoise("Blue Dream 5pk", "", "Pre-roll") === "Blue Dream", "numbered pk token stripped");
+    ok(stripVariantNoise("Sour Gummies 3 pack", "", "Gummies") === "Sour", "numbered pack token stripped (gummies is category noise)");
+    ok(stripVariantNoise("Healing Balm 2-pack", "", "Topical") === "Healing Balm", "hyphenated pack token stripped");
+    ok(stripVariantNoise("Fairwinds - Healing Balm 300mg", "Fairwinds", "Topical") === "Healing Balm", "brand prefix + mg dose stripped");
+    ok(stripVariantNoise("Bite_ind_peanut_butter_chip_1:1_10pk", "", "Edible") === "Bite Ind Peanut Butter Chip 1:1", "underscore name cleans, ratio preserved, 10pk stripped");
+    ok(stripVariantNoise("AK-47 3.5g", "", "Flower") === "Ak 47", "mid-name number survives, only size stripped");
+
+    console.log(`transform-core: ${passed} assertions passed`);
+  } finally {
+    diagnostics = savedDiagnostics;
+  }
+}
