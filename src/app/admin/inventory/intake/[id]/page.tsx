@@ -26,6 +26,7 @@ import {
   CONCIERGE_HINTS,
 } from "@/lib/inventory/guided-accept-core";
 import { GuidedAcceptRibbon } from "@/components/admin/inventory/GuidedAcceptRibbon";
+import { fmtPacificDateTime } from "@/lib/inventory/manifest-table-core";
 import { CatalogStageStrip } from "@/components/admin/catalog/CatalogStageStrip";
 import { IntakeChecklistPanel } from "@/components/admin/inventory/IntakeChecklistPanel";
 import { buildIntakeChecklist } from "@/lib/inventory/intake-checklist-core";
@@ -686,7 +687,7 @@ export default async function ManifestReviewPage({
             </h2>
             {hasTransport && manifest.transport_recorded_at && (
               <span className="text-xs text-[var(--admin-text-faint)]">
-                last updated {new Date(manifest.transport_recorded_at).toLocaleString()}
+                last updated {fmtPacificDateTime(manifest.transport_recorded_at)}
               </span>
             )}
           </div>

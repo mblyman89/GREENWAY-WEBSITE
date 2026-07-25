@@ -96,6 +96,7 @@ import { __runVariantGramsCoreTests } from "../../src/lib/pos/variant-grams-core
 import { __runMenuLiveStepCoreTests } from "../../src/lib/inventory/menu-live-step-core";
 import { __runVendorResolveCoreTests } from "../../src/lib/inventory/vendor-resolve-core";
 import { __runCultiveraInvoiceTests } from "../../src/lib/inventory/pdf-cultivera-invoice-core";
+import { __runGenericPdfTransportTests } from "../../src/lib/inventory/pdf-generic-transport-core";
 import { __runIntakeChecklistCoreTests } from "../../src/lib/inventory/intake-checklist-core";
 import { __runIdCaptureCoreTests } from "../../src/lib/pos/id-capture-core";
 import { __runCultiveraMenuCoreTests } from "../../src/lib/purchasing/cultivera-menu-core";
@@ -295,6 +296,7 @@ async function main() {
   __runMenuLiveStepCoreTests();
   __runVendorResolveCoreTests();
   __runCultiveraInvoiceTests();
+  assertNoFailures("generic-pdf-transport", __runGenericPdfTransportTests());
   __runIntakeChecklistCoreTests();
   __runIdCaptureCoreTests();
   __runCultiveraMenuCoreTests();

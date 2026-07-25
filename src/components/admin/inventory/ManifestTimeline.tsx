@@ -7,6 +7,8 @@
  * actual recorded events underneath.
  */
 
+import { fmtPacificDateTime } from "@/lib/inventory/manifest-table-core";
+
 type ManifestEvent = { id: string; event_type: string; note: string | null; created_at: string };
 
 const STAGES: { key: string; label: string }[] = [
@@ -79,7 +81,7 @@ export function ManifestTimeline({
             <li key={e.id} className="flex items-start justify-between gap-3">
               <span className="font-bold capitalize text-white/70">{e.event_type.replace(/_/g, " ")}</span>
               <span className="flex-1 truncate text-white/40">{e.note ?? ""}</span>
-              <span className="shrink-0 text-white/30">{new Date(e.created_at).toLocaleString()}</span>
+              <span className="shrink-0 text-white/30">{fmtPacificDateTime(e.created_at)}</span>
             </li>
           ))}
         </ul>

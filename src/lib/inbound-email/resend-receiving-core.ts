@@ -137,6 +137,77 @@ function hostLooksVendor(url: string): boolean {
 }
 
 /**
+ * SLICE 41 — SHAPE-based transfer-link recognition (provider-agnostic).
+ *
+ * The owner's rule: DON'T hard-code provider names — new manifest providers
+ * appear without warning (the real failure: Phat Panda via Bamboo/Bamboo Metro
+ * LLC, whose "WCIA Transfer Data Link" points at
+ *   https://api-trace.getbamboo.com/shared/manifests/json/<long-token>
+ * — no `.json` extension, host not on any list, path not the GrowFlow shape —
+ * so the old harvest never fetched it and the email logged "no manifest").
+ *
+ * A URL qualifies by its PATH SHAPE alone when the path mentions transfer
+ * data concepts: a `wcia` segment, a `transfer` segment, or BOTH `manifest`
+ * and `json` segments (Bamboo's `/shared/manifests/json/<token>`). Query-only
+ * mentions don't count (tracking params love the word "transfer").
+ *
+ * SAFETY: being harvested only means being FETCHED. Staging still requires
+ * the fetched text to JSON.parse (fetchTransferJson) AND pass the strict WCIA
+ * shape gate (looksLikeWciaTransferStrict) — so a false positive costs one
+ * HTTP GET, never a junk manifest. PURE.
+ */
+export function pathLooksTransferData(url: string): boolean {
+  let path: string;
+  try {
+    path = new URL(stripTrailingPunct(url)).pathname.toLowerCase();
+  } catch {
+    return false;
+  }
+  if (/(^|\/)wcia(\/|$|\.)/.test(path)) return true;
+  if (/(^|\/)transfers?(\/|$|\.)/.test(path)) return true;
+  if (/manifest/.test(path) && /(^|\/)jsons?(\/|$|\.)/.test(path)) return true;
+  return false;
+}
+
+/**
+ * SLICE 41 — LABEL-based transfer-link recognition (provider-agnostic).
+ *
+ * Every verified vendor email (Cultivera, GrowFlow, OpenTHC, and now Bamboo)
+ * presents the link under the SAME human label: "WCIA Transfer Data Link".
+ * The label is the most stable cross-provider signal there is — it's what the
+ * WCIA standard tells vendors to call it. This finds every anchor whose text
+ * or ±80-char context mentions "transfer data link" or "wcia", plus plaintext
+ * URLs on a line mentioning the label. Same safety story as the path shape:
+ * a harvested link still has to fetch as JSON and pass the strict WCIA gate.
+ * PURE.
+ */
+export function labeledTransferLinks(html: string, text: string): string[] {
+  const out: string[] = [];
+  const labelRe = /transfer\s*data\s*link|wcia/i;
+
+  const anchorRe = /<a\b[^>]*?href\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = anchorRe.exec(html)) !== null) {
+    const href = stripTrailingPunct(m[1]);
+    if (!/^https?:\/\//i.test(href)) continue;
+    const inner = stripTags(m[2]);
+    const before = html.slice(Math.max(0, m.index - 80), m.index);
+    const after = html.slice(m.index + m[0].length, m.index + m[0].length + 80);
+    if (labelRe.test(inner) || labelRe.test(stripTags(before)) || labelRe.test(stripTags(after))) {
+      out.push(href);
+    }
+  }
+
+  for (const line of text.split(/\r?\n/)) {
+    if (!labelRe.test(line)) continue;
+    for (const url of line.match(ANY_URL_RE) ?? []) {
+      out.push(stripTrailingPunct(url));
+    }
+  }
+  return Array.from(new Set(out));
+}
+
+/**
  * Extract the WCIA Transfer Data Link and the invoice/manifest download links
  * from an email body. Accepts BOTH the HTML body (preferred — anchors carry the
  * real hrefs) and the plaintext body (fallback). PURE.
@@ -180,7 +251,20 @@ export function extractAllTransferLinksFromBody(
   // Order-preserve as they appear (json first, then endpoints — matching how the
   // single-link picker prioritizes), de-duplicated.
   const vendorLinks = [...jsonMatches, ...endpointMatches].filter(hostLooksVendor);
-  return Array.from(new Set(vendorLinks));
+
+  // SLICE 41 — provider-agnostic recognition. A NEW provider (the real Bamboo
+  // failure) matches none of the name-based rules above, so we ALSO accept:
+  //  (a) any URL whose PATH SHAPE says "transfer data" (pathLooksTransferData),
+  //  (b) any link presented under the "WCIA Transfer Data Link" LABEL.
+  // Both are conservative on their own axis, and a harvested link still has to
+  //   1) fetch successfully, 2) JSON.parse, 3) pass looksLikeWciaTransferStrict
+  // before anything stages — so unknown providers work without a code change
+  // while noise still can't create manifests.
+  const allUrls = (combined.match(ANY_URL_RE) ?? []).map(stripTrailingPunct);
+  const shapeLinks = allUrls.filter(pathLooksTransferData);
+  const labelLinks = labeledTransferLinks(htmlStr, textStr);
+
+  return Array.from(new Set([...vendorLinks, ...shapeLinks, ...labelLinks]));
 }
 
 export function extractTransferLinksFromBody(
@@ -203,17 +287,27 @@ export function extractTransferLinksFromBody(
   );
   // De-dupe while preserving order; a URL can match both regexes only rarely.
   const allCandidates = Array.from(new Set([...jsonMatches, ...endpointMatches]));
+  // SLICE 41 — provider-agnostic candidates (see extractAllTransferLinksFromBody):
+  // path-shape matches (Bamboo's /shared/manifests/json/<token>) and links
+  // presented under the "WCIA Transfer Data Link" label.
+  const allUrls = (combined.match(ANY_URL_RE) ?? []).map(stripTrailingPunct);
+  const shapeMatches = allUrls.filter(pathLooksTransferData);
+  const labelMatches = labeledTransferLinks(htmlStr, textStr);
   transferJsonUrl =
     // Priority (most trustworthy first):
     //   1) a vendor-recognized `.json` (Cultivera / OpenTHC — the direct file),
     //   2) a vendor-recognized transfer endpoint (GrowFlow token URL),
     //   3) any transfer endpoint (structurally a WCIA transfer, even if the host
     //      isn't on our vendor list yet — still beats an unrelated `.json`),
-    //   4) any `.json` at all (last-resort fallback),
-    //   5) the first candidate found.
+    //   4) a path-shape transfer link (SLICE 41 — new providers like Bamboo),
+    //   5) a link labeled "WCIA Transfer Data Link" (SLICE 41),
+    //   6) any `.json` at all (last-resort fallback),
+    //   7) the first candidate found.
     jsonMatches.find(hostLooksVendor) ??
     endpointMatches.find(hostLooksVendor) ??
     endpointMatches[0] ??
+    shapeMatches[0] ??
+    labelMatches[0] ??
     jsonMatches[0] ??
     allCandidates[0] ??
     null;
@@ -323,6 +417,10 @@ function isWciaTransferUrl(url: string): boolean {
   const clean = stripTrailingPunct(url);
   if (/\.json(?:\?|$)/i.test(clean)) return true;
   if (/\/(?:wa\/)?wcia\/transfer\?/i.test(clean)) return true;
+  // SLICE 41: shape-recognized transfer links (e.g. Bamboo's
+  // /shared/manifests/json/<token>) are transfer DATA too — never let the
+  // invoice/manifest PDF picker claim one just because its path says "manifests".
+  if (pathLooksTransferData(clean)) return true;
   return false;
 }
 
@@ -607,6 +705,55 @@ export function __runResendReceivingTests(): { passed: number; failed: number } 
 
   // No links -> empty array (never null).
   ok(extractAllTransferLinksFromBody("<p>no links here</p>", null).length === 0, "no links -> empty harvest");
+
+  // SLICE 41 — provider-agnostic recognition (the REAL Bamboo failure).
+  // Phat Panda via Bamboo (Bamboo Metro LLC): the "WCIA Transfer Data Link"
+  // anchor points at an api-trace.getbamboo.com URL with NO .json extension,
+  // an unknown host, and a /shared/manifests/json/<token> path. The old
+  // harvest returned nothing for this email.
+  const bambooUrl =
+    "https://api-trace.getbamboo.com/shared/manifests/json/f8rgv5tckz325vcrgnsd1r6x37zt4nsgh1vx1mth3jqgm8";
+  const bambooHtml = `
+    <p>Hi Stephen,</p>
+    <p>Phat Panda (phat.panda@email.getbamboo.com) has sent you the invoice.</p>
+    <p>Manifest WA413287.TRBOCF</p>
+    <p>WCIA Transfer Data Link<br/><a href="${bambooUrl}">${bambooUrl}</a></p>
+  `;
+  ok(pathLooksTransferData(bambooUrl) === true, "bamboo /shared/manifests/json path recognized by shape");
+  ok(pathLooksTransferData("https://x.example.com/a/transfer/123") === true, "generic /transfer/ path recognized");
+  ok(pathLooksTransferData("https://x.example.com/api/wcia/9") === true, "generic /wcia/ path recognized");
+  ok(pathLooksTransferData("https://cdn.example.com/tracking.json") === false, "unrelated .json path NOT shape-recognized");
+  ok(pathLooksTransferData("https://x.example.com/?goto=transfer") === false, "query-only 'transfer' NOT shape-recognized");
+  ok(pathLooksTransferData("not a url") === false, "non-url -> false");
+
+  const bambooAll = extractAllTransferLinksFromBody(bambooHtml, null);
+  ok(bambooAll.length === 1 && bambooAll[0] === bambooUrl, "bamboo transfer link harvested (unknown provider)");
+  const bambooSingle = extractTransferLinksFromBody(bambooHtml, null);
+  ok(bambooSingle.transferJsonUrl === bambooUrl, "bamboo link chosen by the single-link picker");
+  ok(bambooSingle.manifestUrl === null, "bamboo transfer link NOT misclaimed as the manifest PDF link");
+
+  // Label-based recognition: an anchor under the "WCIA Transfer Data Link"
+  // label is harvested even when host AND path shape are unrecognizable.
+  const weirdUrl = "https://totally-new-provider.example.com/x/y/z?t=abc";
+  const labeledHtml = `<p>WCIA Transfer Data Link</p><p><a href="${weirdUrl}">click</a></p>`;
+  ok(
+    labeledTransferLinks(labeledHtml, "").includes(weirdUrl),
+    "label-adjacent anchor harvested for an unknown provider",
+  );
+  ok(
+    extractAllTransferLinksFromBody(labeledHtml, null).includes(weirdUrl),
+    "labeled link flows into the multi-link harvest",
+  );
+  // Plaintext form: URL on the same line as the label.
+  ok(
+    labeledTransferLinks("", `WCIA Transfer Data Link: ${weirdUrl}`).includes(weirdUrl),
+    "label-line plaintext URL harvested",
+  );
+  // No label, no shape, no vendor host -> still conservative (nothing harvested).
+  ok(
+    extractAllTransferLinksFromBody(`<a href="https://example.com/newsletter">read</a>`, null).length === 0,
+    "unlabeled unrecognizable link still NOT harvested",
+  );
 
   // mapReceivingAttachments
   const mapped = mapReceivingAttachments([
