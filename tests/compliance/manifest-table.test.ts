@@ -145,11 +145,17 @@ describe("H15c — movingBadge", () => {
 });
 
 describe("H15c — fmtPulledIn", () => {
-  it("renders the short stamp", () => {
-    // Local-naive input avoids TZ ambiguity in CI.
-    expect(fmtPulledIn("2026-07-08T14:14:00")).toBe("Jul 8, 2:14 PM");
-    expect(fmtPulledIn("2026-01-02T00:05:00")).toBe("Jan 2, 12:05 AM");
-    expect(fmtPulledIn("2026-12-31T12:00:00")).toBe("Dec 31, 12:00 PM");
+  it("renders the short stamp in PACIFIC wall-clock time (SLICE 41 fix)", () => {
+    // Explicit UTC instants with Pacific expectations — the formatter must
+    // produce store time no matter what timezone CI/Vercel runs in.
+    expect(fmtPulledIn("2026-07-08T21:14:00Z")).toBe("Jul 8, 2:14 PM"); // PDT = UTC-7
+    expect(fmtPulledIn("2026-01-02T08:05:00Z")).toBe("Jan 2, 12:05 AM"); // PST = UTC-8
+    expect(fmtPulledIn("2026-12-31T20:00:00Z")).toBe("Dec 31, 12:00 PM");
+  });
+  it("never shows tomorrow's date for a Pacific-evening arrival (the owner's bug)", () => {
+    // Jul 25, 5:44 PM Pacific = Jul 26, 12:44 AM UTC. The old server-zone
+    // formatter printed "Jul 26, 12:44 AM" on Vercel (UTC).
+    expect(fmtPulledIn("2026-07-26T00:44:00Z")).toBe("Jul 25, 5:44 PM");
   });
   it("degrades to a dash", () => {
     expect(fmtPulledIn(null)).toBe("—");

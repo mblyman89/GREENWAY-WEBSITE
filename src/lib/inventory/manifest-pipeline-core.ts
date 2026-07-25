@@ -3,7 +3,8 @@
  *
  * PURE logic for the inbound manifest PIPELINE — a Cultivera-style
  * "where is every incoming transfer right now" view. No I/O, no server-only
- * imports, so it is unit-testable with tsx.
+ * imports, so it is unit-testable with tsx. (pacificDayKey is likewise pure —
+ * Intl-based wall-clock math, no I/O.)
  *
  * GROUNDING (deep-researched, WSLCB + WCIA + Cultivera, verified):
  *   - CCRS has NO inbound-manifest push/feed/query API. A manifest is a CSV the
@@ -20,6 +21,8 @@
  * counts, an "awaiting intake" bucket, and ETA/overdue surfacing. It never
  * pretends a live CCRS query exists.
  */
+
+import { pacificDayKey } from "@/lib/reports/timezone";
 
 /** The canonical inbound lifecycle stages, in order. */
 export const MANIFEST_STAGES = [
@@ -173,9 +176,13 @@ export function classifyEta(
 ): EtaStatus {
   const eta = dayNumber(etaDate);
   if (eta === null) return "none";
-  const today = Math.floor(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) / 86400000,
-  );
+  // SLICE 41 TIMEZONE FIX: "today" must be the STORE's (Pacific) calendar day,
+  // not the server's UTC day. On Vercel (UTC), between 5 PM and midnight
+  // Pacific the UTC day is already tomorrow — an ETA due today briefly showed
+  // "Overdue" and the Today badge shifted a day early. eta_date is a Pacific
+  // calendar label (YYYY-MM-DD), so both sides now use the Pacific day.
+  const today = dayNumber(pacificDayKey(now));
+  if (today === null) return "none";
   if (eta < today) return "overdue";
   if (eta === today) return "today";
   return "upcoming";

@@ -67,6 +67,7 @@ import {
   type TransportDonor,
 } from "@/lib/inventory/manifest-merge-core";
 import { extractCultiveraInvoiceTransport } from "@/lib/inventory/pdf-cultivera-invoice-core";
+import { extractGenericPdfTransport } from "@/lib/inventory/pdf-generic-transport-core";
 import { archiveEmailedCoaForManifest } from "@/lib/inventory/coa-archive";
 
 export type InboundDisposition =
@@ -274,7 +275,19 @@ export async function stageManifestsFromEmail(
         // returns null unless the text really is this invoice AND at least
         // one transport fact was found — never a donor full of nulls.
         const inv = extractCultiveraInvoiceTransport(parsed.text);
-        if (inv) invoiceDonors.push(inv);
+        if (inv) {
+          invoiceDonors.push(inv);
+        } else {
+          // SLICE 41 — provider-agnostic fallback. A NEW provider's PDFs
+          // (the real Bamboo "Washington Marijuana Transportation Manifest")
+          // match no layout-specific parser, so their transport never
+          // reached the form. Field-LABEL extraction reads driver / vehicle
+          // / plate / VIN / carrier / times from ANY transport-ish PDF;
+          // arrival feeds eta_date only, arrived_at never doc-sourced, and
+          // null unless real facts were found (never a donor of nulls).
+          const gen = extractGenericPdfTransport(parsed.text);
+          if (gen) invoiceDonors.push(gen);
+        }
       }
     }
     // Invoice donors go LAST so an exact manifest-number tie prefers the

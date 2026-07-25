@@ -21,6 +21,7 @@
  */
 
 import { normalizeStage, classifyEta, type ManifestStage } from "@/lib/inventory/manifest-pipeline-core";
+import { pacificParts } from "@/lib/reports/timezone";
 
 // ── Invoice / order number ──────────────────────────────────────────────────
 
@@ -131,15 +132,48 @@ export function movingBadge(
 
 // ── "Pulled in" timestamp ───────────────────────────────────────────────────
 
-/** "Jul 8, 2:14 PM"-style short stamp for the Pulled-in column. PURE. */
+/**
+ * "Jul 8, 2:14 PM"-style short stamp for the Pulled-in column. PURE.
+ *
+ * SLICE 41 TIMEZONE FIX: this previously used `Date#getHours()` etc., which
+ * render in the SERVER's timezone. EmailIntakeTable is a server component and
+ * Vercel runs in UTC, so a manifest pulled in at 5:44 PM Pacific on Jul 25
+ * displayed as "Jul 26, 12:44 AM" — tomorrow's date. Store time is Pacific
+ * (America/Los_Angeles) everywhere else in the app (src/lib/reports/timezone),
+ * so this now formats the instant's PACIFIC wall-clock parts regardless of
+ * where the render happens.
+ */
 export function fmtPulledIn(createdAt: string | null | undefined): string {
   if (!createdAt) return "—";
   const d = new Date(createdAt);
   if (Number.isNaN(d.getTime())) return "—";
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  let hh = d.getHours();
+  const p = pacificParts(d);
+  let hh = p.hour;
   const mer = hh >= 12 ? "PM" : "AM";
   hh = hh % 12 || 12;
-  const mm = String(d.getMinutes()).padStart(2, "0");
-  return `${months[d.getMonth()]} ${d.getDate()}, ${hh}:${mm} ${mer}`;
+  const mm = String(p.minute).padStart(2, "0");
+  return `${months[p.month - 1]} ${p.day}, ${hh}:${mm} ${mer}`;
+}
+
+/**
+ * "7/25/2026, 5:44:38 PM"-style full stamp in PACIFIC wall-clock time. PURE.
+ *
+ * SLICE 41: replaces bare `new Date(x).toLocaleString()` in server components
+ * (the intake transport panel's "last updated" and the manifest timeline),
+ * which rendered in the server's timezone (UTC on Vercel) — the same
+ * "tomorrow's date" bug as fmtPulledIn. Deterministic manual formatting (no
+ * locale dependence) so the output is stable across environments.
+ */
+export function fmtPacificDateTime(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  const p = pacificParts(d);
+  let hh = p.hour;
+  const mer = hh >= 12 ? "PM" : "AM";
+  hh = hh % 12 || 12;
+  const mm = String(p.minute).padStart(2, "0");
+  const ss = String(p.second).padStart(2, "0");
+  return `${p.month}/${p.day}/${p.year}, ${hh}:${mm}:${ss} ${mer}`;
 }
