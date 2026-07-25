@@ -113,7 +113,7 @@ export function statusForOnHand(level: number | null): "in-stock" | "low-stock" 
   return "in-stock";
 }
 
-const COMPOUND_TYPES = new Set(["thc", "thca", "cbd", "cbda", "cbg", "cbn", "cbdv"]);
+const COMPOUND_TYPES = new Set(["thc", "thca", "cbd", "cbda", "cbg", "cbn", "cbc", "cbdv"]);
 
 function pctString(v: number): string {
   return `${Number(v.toFixed(2))}%`;

@@ -81,14 +81,16 @@ export function SpecialsDailyDeals({ items }: { items: GreenwayMenuItem[] }) {
         {title} products
       </h2>
 
+      {/* SLICE 43 (owner directive): ONE full-width card per row on mobile —
+          matching the shop page's grid — instead of two cramped columns. */}
       {!isResolvingWeekday && deals.length ? (
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-5 lg:grid-cols-4">
+        <div className="grid gap-5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
           {deals.map((item) => (
             <ProductCard key={item.id} item={item} />
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-5 lg:grid-cols-4">
+        <div className="grid gap-5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
           {Array.from({ length: 8 }).map((_, index) => (
             <div
               key={index}

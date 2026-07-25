@@ -5,27 +5,33 @@
  * ----------------
  * The website product card historically rendered only two opaque strings —
  * `THC: {item.thc}` and `CBD: {item.cbd}` — and ignored the richer `compounds[]`
- * array entirely. For an edible/beverage that means a 100 mg-per-package
- * lemonade could read like a 10 mg microdose, and multi-cannabinoid products
- * (THC:CBD:CBN blends, 1:1 tinctures) lost their profile. This module turns the
- * verified menu-item data into honest, compliance-aware display pieces:
+ * array entirely. This module turns the verified menu-item data into honest,
+ * compliance-aware display pieces.
  *
- *   • a cannabinoid PROFILE badge  (THC-only / 1:1 / 2:1 / THC:CBD:CBN / CBD)
- *   • per-compound chips           (THC 8.2 mg, CBD 8.4 mg, CBN 2 mg, …)
- *   • a package-TOTAL THC headline (mg products only — "100 mg THC total")
- *   • a net weight/volume line in  oz + g  for edibles/drinks (flower stays g/%)
+ * SLICE 43 (owner directive — validated data only, totals only)
+ * -------------------------------------------------------------
+ *   • Info boxes appear ONLY when there is validated data for them and are
+ *     hidden otherwise. No "--" placeholders, and category-average ESTIMATES
+ *     (values carrying the "~" marker from transform.ts Section G) count as
+ *     NOT validated and are hidden.
+ *   • ONE combined THC box showing the TOTAL (the POS "Total" column, which is
+ *     the lab-reported total that already folds THC + THC-A). No separate
+ *     THC/THCA boxes. Same for CBD (total CBD; no separate CBDA box).
+ *   • Minor cannabinoids (CBG, CBN, CBC, CBDV) get their own full info boxes
+ *     when present — promoted from the old tiny pills (owner Q4).
+ *   • Every value shown is the total cannabinoid figure — package-total mg for
+ *     edibles/drinks/tinctures, lab-total % for flower/concentrate/cartridge —
+ *     never a per-serving amount.
  *
  * GROUNDING (verified, never guessed)
  * -----------------------------------
- *   • `compounds`, `totalThc`, `totalCbd` for Solid/Liquid Edible + Tincture are
- *     already stored as the PACKAGE TOTAL in mg (src/lib/pos/transform.ts). Flower/
- *     concentrate/cartridge are stored as `%`. This module never converts units.
- *   • WAC 314-55-095 caps Δ9-THC at 10 mg/serving and 100 mg/package; WAC
- *     314-55-105 requires Total THC/CBD + net weight in oz and grams. We surface
- *     the total and net weight; we DO NOT invent a "× N servings" breakdown
- *     because per-serving mg is not persisted on the menu item (reported to owner
- *     as a follow-up plumbing task — no guessing).
- *   • The profile badge is derived through the finalized naming engine
+ *   • `totalThc`/`totalCbd` come from transform.ts resolveCannabinoid (the POS
+ *     Total/Cbd columns): Solid/Liquid Edible + Tincture are PACKAGE TOTALS in
+ *     mg; flower/concentrate/cartridge are lab-total `%`. This module never
+ *     converts units.
+ *   • Section G average fallbacks are prefixed "~" by transform.ts; the owner
+ *     ruled those are not validated COA data, so they hide the box.
+ *   • The profile badge derives through the finalized naming engine
  *     (`cannabinoidTag`) so the card and the compliance name stay in lock-step.
  *
  * All functions here are pure and unit-tested via `__runCardCannabinoidTests()`.
@@ -39,10 +45,10 @@ import type { GreenwayCannabinoid, GreenwayMenuItem } from "@/lib/leafly/types";
  *  Types
  * ------------------------------------------------------------------ */
 
-export type CannabinoidChip = {
-  /** Upper-cased short label, e.g. "THC", "CBD", "CBN". */
+export type CannabinoidBox = {
+  /** Upper-cased short label, e.g. "THC", "CBD", "CBG". */
   label: string;
-  /** Formatted value + unit, e.g. "8.2 mg" or "21.4%". */
+  /** Formatted value + unit, e.g. "100 mg" or "21.4%". */
   display: string;
 };
 
@@ -56,49 +62,40 @@ export type CardProfile =
 export type CardCannabinoids = {
   /** Profile badge for the card. `null` when there is nothing meaningful to show. */
   profile: CardProfile | null;
-  /** All present compounds as display chips (already unit-formatted). */
-  chips: CannabinoidChip[];
   /**
-   * Prominent package-total THC headline for mg products (edibles/drinks/
-   * tinctures), e.g. "100 mg THC total". `null` for %-based products (flower,
-   * concentrate, cartridge) where a total-mg headline is meaningless.
+   * Validated info boxes in display order: total THC, total CBD, then minor
+   * cannabinoids (CBG, CBN, CBC, CBDV). Empty when no validated data exists —
+   * the card renders NOTHING in that case (owner rule: no placeholder boxes).
    */
-  totalThcHeadline: string | null;
-  /** Optional package-total CBD companion line, e.g. "50 mg CBD total". */
-  totalCbdHeadline: string | null;
-  /** True when the item is dosed in mg (edible/liquid/tincture). */
-  isMgProduct: boolean;
+  boxes: CannabinoidBox[];
 };
 
 /* ------------------------------------------------------------------ *
  *  Small utilities
  * ------------------------------------------------------------------ */
 
-const COMPOUND_LABEL: Record<GreenwayCannabinoid["type"], string> = {
-  thc: "THC",
-  thca: "THCA",
-  cbd: "CBD",
-  cbda: "CBDA",
+const MINOR_LABEL: Partial<Record<GreenwayCannabinoid["type"], string>> = {
   cbg: "CBG",
   cbn: "CBN",
+  cbc: "CBC",
   cbdv: "CBDV",
 };
 
-/** Display order for chips: THC family first, then CBD family, then minors. */
-const CHIP_ORDER: GreenwayCannabinoid["type"][] = [
-  "thc",
-  "thca",
-  "cbd",
-  "cbda",
-  "cbg",
-  "cbn",
-  "cbdv",
-];
+/** Display order for the minor-cannabinoid boxes (after THC and CBD). */
+const MINOR_ORDER: GreenwayCannabinoid["type"][] = ["cbg", "cbn", "cbc", "cbdv"];
 
 function toNumber(value: string | number | null | undefined): number | null {
   if (value === null || value === undefined) return null;
   const n = typeof value === "number" ? value : Number(String(value).replace(/[^0-9.]/g, ""));
   return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Section G category-average fallbacks are prefixed "~" by transform.ts.
+ * The owner ruled estimates are NOT validated COA data → treat as absent.
+ */
+function isEstimate(value: string | number | null | undefined): boolean {
+  return typeof value === "string" && value.includes("~");
 }
 
 /** Trim a trailing ".00"/".0" so "10.00" reads "10" but "8.25" is preserved. */
@@ -114,7 +111,7 @@ function formatCompound(value: string | number | null, unit: "%" | "mg"): string
 }
 
 /* ------------------------------------------------------------------ *
- *  Profile + chips
+ *  Profile
  * ------------------------------------------------------------------ */
 
 /**
@@ -128,8 +125,10 @@ function toEngineCannabinoid(c: GreenwayCannabinoid): Cannabinoid {
 
 export function deriveProfile(item: Pick<GreenwayMenuItem, "compounds" | "totalThc" | "totalCbd">): CardProfile | null {
   const compounds = (item.compounds ?? []).map(toEngineCannabinoid);
-  const totalThc = item.totalThc ? toEngineCannabinoid(item.totalThc) : null;
-  const totalCbd = item.totalCbd ? toEngineCannabinoid(item.totalCbd) : null;
+  // SLICE 43: "~" estimates are not validated data → null them out so the
+  // profile badge can never be driven by a category-average guess.
+  const totalThc = item.totalThc && !isEstimate(item.totalThc.value) ? toEngineCannabinoid(item.totalThc) : null;
+  const totalCbd = item.totalCbd && !isEstimate(item.totalCbd.value) ? toEngineCannabinoid(item.totalCbd) : null;
 
   const tag = cannabinoidTag(compounds, totalThc, totalCbd);
 
@@ -137,6 +136,7 @@ export function deriveProfile(item: Pick<GreenwayMenuItem, "compounds" | "totalT
   const has = (t: "thc" | "cbd") => {
     const check = (c?: Cannabinoid | null) => {
       if (!c) return false;
+      if (isEstimate(c.value)) return false;
       const n = toNumber(c.value);
       if (n === null || n <= 0) return false;
       const folded = c.type === "thca" ? "thc" : c.type === "cbda" || c.type === "cbdv" ? "cbd" : c.type;
@@ -160,35 +160,42 @@ export function deriveProfile(item: Pick<GreenwayMenuItem, "compounds" | "totalT
   return { kind: "multi", label: tag };
 }
 
-export function deriveChips(item: Pick<GreenwayMenuItem, "compounds">): CannabinoidChip[] {
-  const compounds = item.compounds ?? [];
-  const chips: CannabinoidChip[] = [];
-  for (const type of CHIP_ORDER) {
-    const match = compounds.find((c) => c.type === type);
-    if (!match) continue;
-    const display = formatCompound(match.value, match.unit);
-    if (!display) continue;
-    chips.push({ label: COMPOUND_LABEL[type], display });
-  }
-  return chips;
-}
-
 /* ------------------------------------------------------------------ *
- *  Total headline (mg products only)
+ *  Info boxes (SLICE 43)
  * ------------------------------------------------------------------ */
 
-export function deriveTotalHeadlines(
-  item: Pick<GreenwayMenuItem, "totalThc" | "totalCbd">,
-): { thc: string | null; cbd: string | null; isMg: boolean } {
-  const isMg = item.totalThc?.unit === "mg" || item.totalCbd?.unit === "mg";
-  if (!isMg) return { thc: null, cbd: null, isMg: false };
+/**
+ * Build the validated cannabinoid info boxes:
+ *   1. "THC"  — the combined TOTAL (POS Total column; folds THC + THC-A).
+ *   2. "CBD"  — the total CBD (POS Cbd column; CBDA folded upstream).
+ *   3. Minors — CBG, CBN, CBC, CBDV from `compounds[]`, each its own box.
+ * A box only appears when its value is validated: present, > 0, and NOT a
+ * "~" category-average estimate. THCA/CBDA never get their own boxes (they
+ * are folded into the totals — owner Q3).
+ */
+export function deriveBoxes(
+  item: Pick<GreenwayMenuItem, "totalThc" | "totalCbd" | "compounds">,
+): CannabinoidBox[] {
+  const boxes: CannabinoidBox[] = [];
+  const push = (label: string, c: GreenwayCannabinoid | null | undefined) => {
+    if (!c || isEstimate(c.value)) return;
+    const display = formatCompound(c.value, c.unit);
+    if (!display) return;
+    boxes.push({ label, display });
+  };
 
-  const thcVal = toNumber(item.totalThc?.value ?? null);
-  const cbdVal = toNumber(item.totalCbd?.value ?? null);
+  push("THC", item.totalThc);
+  push("CBD", item.totalCbd);
 
-  const thc = thcVal !== null && thcVal > 0 ? `${trimZeros(thcVal)} mg THC total` : null;
-  const cbd = cbdVal !== null && cbdVal > 0 ? `${trimZeros(cbdVal)} mg CBD total` : null;
-  return { thc, cbd, isMg: true };
+  const compounds = item.compounds ?? [];
+  for (const type of MINOR_ORDER) {
+    const match = compounds.find((c) => c.type === type);
+    if (!match) continue;
+    const label = MINOR_LABEL[type];
+    if (!label) continue;
+    push(label, match);
+  }
+  return boxes;
 }
 
 /* ------------------------------------------------------------------ *
@@ -258,13 +265,9 @@ export function deriveNetWeightLine(
  * ------------------------------------------------------------------ */
 
 export function cardCannabinoids(item: GreenwayMenuItem): CardCannabinoids {
-  const totals = deriveTotalHeadlines(item);
   return {
     profile: deriveProfile(item),
-    chips: deriveChips(item),
-    totalThcHeadline: totals.thc,
-    totalCbdHeadline: totals.cbd,
-    isMgProduct: totals.isMg,
+    boxes: deriveBoxes(item),
   };
 }
 
@@ -296,7 +299,7 @@ export function __runCardCannabinoidTests(): void {
       ...over,
     }) as GreenwayMenuItem;
 
-  // 1) 100 mg lemonade: total headline shows package total, not a microdose.
+  // 1) 100 mg lemonade: ONE total THC box carrying the package total.
   const lemonade = mk({
     category: "edible-liquid",
     totalThc: { type: "thc", value: "100", unit: "mg" },
@@ -304,12 +307,12 @@ export function __runCardCannabinoidTests(): void {
     variants: [{ id: "v", label: "12fl oz", priceMinorUnits: 500, inventoryLevel: 4, medical: false }],
   });
   const l = cardCannabinoids(lemonade);
-  check("lemonade total headline", l.totalThcHeadline === "100 mg THC total", l.totalThcHeadline);
+  check("lemonade one box", l.boxes.length === 1, l.boxes);
+  check("lemonade box is package-total mg", l.boxes[0]?.label === "THC" && l.boxes[0]?.display === "100 mg", l.boxes[0]);
   check("lemonade profile THC", l.profile?.kind === "thc", l.profile);
-  // "12fl oz" parses to 355.735? No: 12 * 29.5735 = 354.882 ml → leads with fl oz.
   check("lemonade net weight fl oz", deriveNetWeightLine(lemonade) === "12 fl oz (354.88 ml)", deriveNetWeightLine(lemonade));
 
-  // 2) 1:1 tincture.
+  // 2) 1:1 tincture: THC + CBD boxes, ratio profile.
   const oneToOne = mk({
     category: "tincture",
     totalThc: { type: "thc", value: "50", unit: "mg" },
@@ -321,10 +324,10 @@ export function __runCardCannabinoidTests(): void {
   });
   const o = cardCannabinoids(oneToOne);
   check("1:1 ratio profile", o.profile?.kind === "ratio" && o.profile.label === "1:1", o.profile);
-  check("1:1 two chips", o.chips.length === 2, o.chips);
-  check("1:1 cbd headline", o.totalCbdHeadline === "50 mg CBD total", o.totalCbdHeadline);
+  check("1:1 two boxes", o.boxes.length === 2, o.boxes);
+  check("1:1 box order THC then CBD", o.boxes[0]?.label === "THC" && o.boxes[1]?.label === "CBD", o.boxes);
 
-  // 3) 3-compound blend → THC:CBD:CBN.
+  // 3) 3-compound blend → THC + CBD + CBN boxes (minor PROMOTED to a full box, owner Q4).
   const blend = mk({
     category: "edible-solid",
     totalThc: { type: "thc", value: "10", unit: "mg" },
@@ -337,21 +340,55 @@ export function __runCardCannabinoidTests(): void {
   });
   const b = cardCannabinoids(blend);
   check("blend multi profile", b.profile?.kind === "multi" && b.profile.label === "THC:CBD:CBN", b.profile);
-  check("blend three chips", b.chips.length === 3, b.chips);
+  check("blend three boxes", b.boxes.length === 3, b.boxes);
+  check("blend CBN box promoted", b.boxes[2]?.label === "CBN" && b.boxes[2]?.display === "2 mg", b.boxes[2]);
 
-  // 4) Flower (%): NO mg headline, NO net-weight-oz line here.
+  // 4) Flower (%): ONE combined total-THC box; THCA folded, never its own box (owner Q3).
   const flower = mk({
     category: "flower",
-    totalThc: { type: "thc", value: "24.5", unit: "%" },
-    compounds: [{ type: "thc", value: "24.5", unit: "%" }],
+    totalThc: { type: "thc", value: "28.94", unit: "%" },
+    compounds: [
+      { type: "thc", value: "24.5", unit: "%" },
+      { type: "thca", value: "3.9", unit: "%" },
+    ],
     variants: [{ id: "v", label: "3.5g", priceMinorUnits: 3500, inventoryLevel: 5, medical: false }],
   });
   const f = cardCannabinoids(flower);
-  check("flower no mg headline", f.totalThcHeadline === null, f.totalThcHeadline);
-  check("flower chip is percent", f.chips[0]?.display === "24.5%", f.chips);
+  check("flower one combined THC box", f.boxes.length === 1, f.boxes);
+  check("flower box shows lab TOTAL", f.boxes[0]?.label === "THC" && f.boxes[0]?.display === "28.94%", f.boxes[0]);
+  check("flower no THCA box", f.boxes.every((x) => x.label !== "THCA"), f.boxes);
   check("flower no oz net line", deriveNetWeightLine(flower) === null, deriveNetWeightLine(flower));
 
-  // 5) parseNetMeasure edge cases.
+  // 5) "~" category-average estimate is NOT validated → box hidden (owner Q2).
+  const estimated = mk({
+    category: "flower",
+    totalThc: { type: "thc", value: "~21.00", unit: "%" },
+    compounds: [],
+  });
+  const e = cardCannabinoids(estimated);
+  check("estimate hides THC box", e.boxes.length === 0, e.boxes);
+  check("estimate hides profile too", e.profile === null, e.profile);
+
+  // 6) No data at all → no boxes, no profile (card shows nothing — no "--").
+  const bare = mk({ category: "topical" });
+  const n = cardCannabinoids(bare);
+  check("no data no boxes", n.boxes.length === 0, n.boxes);
+  check("no data no profile", n.profile === null, n.profile);
+
+  // 7) CBG minor on a % product gets its own box after THC.
+  const cbgFlower = mk({
+    category: "flower",
+    totalThc: { type: "thc", value: "22", unit: "%" },
+    compounds: [
+      { type: "thc", value: "22", unit: "%" },
+      { type: "cbg", value: "1.2", unit: "%" },
+    ],
+  });
+  const g = cardCannabinoids(cbgFlower);
+  check("cbg box present", g.boxes.some((x) => x.label === "CBG" && x.display === "1.2%"), g.boxes);
+  check("cbg after THC", g.boxes[0]?.label === "THC" && g.boxes[1]?.label === "CBG", g.boxes);
+
+  // 8) parseNetMeasure edge cases.
   check("parse 1oz", JSON.stringify(parseNetMeasure("1oz")) === JSON.stringify({ grams: 28.3495, ml: null }), parseNetMeasure("1oz"));
   check("parse 100mg is null (potency)", parseNetMeasure("100mg") === null, parseNetMeasure("100mg"));
   check("parse 10pk is null", parseNetMeasure("10pk") === null, parseNetMeasure("10pk"));

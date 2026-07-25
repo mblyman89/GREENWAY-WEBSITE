@@ -114,9 +114,14 @@ function toneForItem(item: GreenwayMenuItem) {
   return productTones[item.strainType];
 }
 
-function displayStrain(item: GreenwayMenuItem) {
-  if (isNonCannabisItem(item)) return "Non Cannabis";
-  if (item.strainType === "unknown") return categoryAliases[item.category] ?? formatWebsiteCategory(item.category);
+/**
+ * SLICE 43 (owner directive): the strain-type chip only appears for a VALIDATED
+ * strain type. Unknown strain / non-cannabis → null → the chip is hidden (the
+ * page tone still falls back to hybrid for unknown-strain cannabis).
+ */
+function displayStrain(item: GreenwayMenuItem): string | null {
+  if (isNonCannabisItem(item)) return null;
+  if (item.strainType === "unknown") return null;
   return strainTypeLabel(item.strainType);
 }
 
@@ -195,9 +200,13 @@ function ProductHeroArt({ item, tone }: { item: GreenwayMenuItem; tone: ProductT
         <div className="absolute inset-x-0 top-0 h-12 bg-white/12" />
         <div className="relative z-10 w-full text-center text-[0.54rem] font-black uppercase tracking-[0.22em] text-black/62">{label}</div>
         <div className="relative z-10 grid h-[5.35rem] w-[5.35rem] place-items-center rounded-full bg-black text-xl font-black uppercase text-white shadow-xl shadow-black/30">{initials}</div>
-        <div className="relative z-10 w-full rounded-md bg-black/16 px-2 py-1.5 text-center text-[0.68rem] font-black uppercase leading-tight text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.65)]">
-          {displayStrain(item)} Formula
-        </div>
+        {/* SLICE 43: validated strain only — the category already prints in the
+            top ribbon, so an unknown strain hides this ribbon entirely. */}
+        {displayStrain(item) ? (
+          <div className="relative z-10 w-full rounded-md bg-black/16 px-2 py-1.5 text-center text-[0.68rem] font-black uppercase leading-tight text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.65)]">
+            {displayStrain(item)} Formula
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -358,15 +367,19 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
             <h1 className="mt-2 text-[2.15rem] font-black leading-[0.96] tracking-[-0.045em] text-white md:text-6xl">{item.name}</h1>
 
             <div className="mt-3 flex flex-wrap items-center gap-2">
-              {!isMerchItem(item) ? (
-                <span className="inline-flex min-h-7 items-center px-2.5 py-1 text-[0.72rem] font-black uppercase leading-none text-white" style={{ backgroundColor: tone.pill, color: isNonCannabisItem(item) ? "#111" : "#fff" }}>
-                  {displayStrain(item)}
-                </span>
-              ) : (
+              {/* SLICE 43: validated-data-only chips. The strain chip appears only
+                  when a strain type is assigned; cannabinoid boxes come from the
+                  unified `boxes` model (TOTAL THC folding THCA, total CBD, plus
+                  minors CBG/CBN/CBC/CBDV). No "--" placeholders, ever. */}
+              {isMerchItem(item) ? (
                 <span className="inline-flex min-h-7 items-center bg-[var(--greenway)] px-2.5 py-1 text-[0.72rem] font-black uppercase leading-none text-black">
                   Greenway Merch
                 </span>
-              )}
+              ) : displayStrain(item) ? (
+                <span className="inline-flex min-h-7 items-center px-2.5 py-1 text-[0.72rem] font-black uppercase leading-none text-white" style={{ backgroundColor: tone.pill }}>
+                  {displayStrain(item)}
+                </span>
+              ) : null}
               {showCannabinoids && detailCannabinoids?.profile ? (
                 <span className="inline-flex min-h-7 items-center gap-1.5 rounded-full border border-white/25 bg-black/45 px-2.5 py-1 text-[0.66rem] font-black uppercase tracking-[0.1em] text-white/90">
                   <span className="h-1.5 w-1.5 rounded-full bg-[var(--greenway)]" aria-hidden="true" />
@@ -379,37 +392,17 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
                         : detailCannabinoids.profile.label}
                 </span>
               ) : null}
-              {showCannabinoids && detailCannabinoids?.isMgProduct ? (
-                <>
-                  {detailCannabinoids.totalThcHeadline ? (
-                    <span className="inline-flex min-h-7 items-center bg-white px-2.5 py-1 text-[0.72rem] font-black uppercase leading-none text-black">
-                      {detailCannabinoids.totalThcHeadline}
-                    </span>
-                  ) : null}
-                  {detailCannabinoids.totalCbdHeadline ? (
-                    <span className="inline-flex min-h-7 items-center bg-white/85 px-2.5 py-1 text-[0.72rem] font-black uppercase leading-none text-black">
-                      {detailCannabinoids.totalCbdHeadline}
-                    </span>
-                  ) : null}
-                  {detailNetWeightLine ? (
-                    <span className="inline-flex min-h-7 items-center bg-black/40 px-2.5 py-1 text-[0.66rem] font-bold uppercase tracking-[0.06em] text-white/80">
-                      {detailNetWeightLine}
-                    </span>
-                  ) : null}
-                </>
-              ) : showCannabinoids && detailCannabinoids ? (
-                detailCannabinoids.chips.length > 0 ? (
-                  detailCannabinoids.chips.map((chip) => (
-                    <span key={chip.label} className="inline-flex min-h-7 items-center bg-white px-2.5 py-1 text-[0.72rem] font-black uppercase leading-none text-black">
-                      {chip.label}: {chip.display}
+              {showCannabinoids && detailCannabinoids
+                ? detailCannabinoids.boxes.map((box) => (
+                    <span key={box.label} className="inline-flex min-h-7 items-center bg-white px-2.5 py-1 text-[0.72rem] font-black uppercase leading-none text-black">
+                      {box.label}: {box.display}
                     </span>
                   ))
-                ) : (
-                  <>
-                    <span className="inline-flex min-h-7 items-center bg-white px-2.5 py-1 text-[0.72rem] font-black uppercase leading-none text-black">THC: --</span>
-                    <span className="inline-flex min-h-7 items-center bg-white px-2.5 py-1 text-[0.72rem] font-black uppercase leading-none text-black">CBD: --</span>
-                  </>
-                )
+                : null}
+              {showCannabinoids && detailNetWeightLine ? (
+                <span className="inline-flex min-h-7 items-center bg-black/40 px-2.5 py-1 text-[0.66rem] font-bold uppercase tracking-[0.06em] text-white/80">
+                  {detailNetWeightLine}
+                </span>
               ) : null}
             </div>
 
