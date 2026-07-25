@@ -13,6 +13,7 @@ import type { GreenwayMenuItem } from "@/lib/leafly/types";
 import { formatWebsiteCategory } from "@/lib/pos/category-taxonomy";
 import { strainTypeLabel } from "@/lib/menu/strain-taxonomy";
 import { cardCannabinoids, deriveNetWeightLine } from "@/lib/menu/card-cannabinoids";
+import { cardDisplay } from "@/lib/menu/card-brand-core";
 import { getLiveMenuItemById, loadLiveMenuItems } from "@/lib/pos/live-menu";
 import { withResolvedImages } from "@/lib/enrichment/image-resolver";
 import { withMenuProfile } from "@/lib/menu/strain-terpenes-server";
@@ -291,6 +292,12 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
 
   const tone = toneForItem(item);
   const relatedItems = await relatedItemsFor(item);
+  // SLICE 47 (owner Q4): label = brand, else vendor, else nothing; the shown
+  // label is clipped from the FRONT of the displayed name (display only —
+  // item.name is untouched for search/cart/admin/CCRS). Only a BRAND label
+  // links to the brand filter; a vendor fallback renders as plain text because
+  // the menu has no vendor filter param.
+  const { label: pdpLabel, source: pdpLabelSource, name: pdpName } = cardDisplay(item);
   const brandHref = `/menu?brand=${encodeURIComponent(item.brand)}`;
   // Prefer curated KB copy when present, then the item's own description, then a
   // generic line. All KB copy is already compliance-filtered by the resolver.
@@ -361,10 +368,14 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
           </div>
 
           <article className="md:pt-1">
-            <Link href={brandHref} className="text-[0.78rem] font-black uppercase tracking-[0.18em] text-[var(--orange)] transition hover:text-white">
-              {item.brand}
-            </Link>
-            <h1 className="mt-2 text-[2.15rem] font-black leading-[0.96] tracking-[-0.045em] text-white md:text-6xl">{item.name}</h1>
+            {pdpLabelSource === "brand" ? (
+              <Link href={brandHref} className="text-[0.78rem] font-black uppercase tracking-[0.18em] text-[var(--orange)] transition hover:text-white">
+                {pdpLabel}
+              </Link>
+            ) : pdpLabel ? (
+              <span className="text-[0.78rem] font-black uppercase tracking-[0.18em] text-[var(--orange)]">{pdpLabel}</span>
+            ) : null}
+            <h1 className="mt-2 text-[2.15rem] font-black leading-[0.96] tracking-[-0.045em] text-white md:text-6xl">{pdpName}</h1>
 
             <div className="mt-3 flex flex-wrap items-center gap-2">
               {/* SLICE 43: validated-data-only chips. The strain chip appears only
@@ -457,11 +468,16 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
           <div className="flex items-end justify-between gap-4">
             <div>
               <p className="text-[1.15rem] font-black leading-none text-white">More from</p>
-              <h2 className="mt-1 text-[1.6rem] font-black leading-none text-white">{item.brand}</h2>
+              {/* SLICE 47: heading follows the same brand-else-vendor label; falls
+                  back to the category when neither exists so it never shows a
+                  blank/placeholder brand. */}
+              <h2 className="mt-1 text-[1.6rem] font-black leading-none text-white">{pdpLabel ?? formatWebsiteCategory(item.category)}</h2>
             </div>
-            <Link href={brandHref} className="shrink-0 text-[0.72rem] font-black uppercase tracking-[0.2em] text-white hover:text-[var(--greenway)]">
-              View All
-            </Link>
+            {pdpLabelSource === "brand" ? (
+              <Link href={brandHref} className="shrink-0 text-[0.72rem] font-black uppercase tracking-[0.2em] text-white hover:text-[var(--greenway)]">
+                View All
+              </Link>
+            ) : null}
           </div>
 
           {relatedItems.length > 0 ? (

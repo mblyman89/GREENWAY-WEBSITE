@@ -4,6 +4,7 @@ import type { GreenwayMenuItem } from "@/lib/leafly/types";
 import { formatWebsiteCategory } from "@/lib/pos/category-taxonomy";
 import { strainTypeLabel } from "@/lib/menu/strain-taxonomy";
 import { cardCannabinoids, deriveNetWeightLine } from "@/lib/menu/card-cannabinoids";
+import { cardDisplay } from "@/lib/menu/card-brand-core";
 import { ProductCardPriceSelector } from "./ProductCardPriceSelector";
 
 type CardTone = {
@@ -181,13 +182,16 @@ function pillBackground(tone: CardTone): CSSProperties["background"] {
   return tone.pill;
 }
 
-function productCardDisplayName(item: GreenwayMenuItem) {
+function productCardDisplayName(item: GreenwayMenuItem, baseName: string = item.name) {
+  // SLICE 47 (owner Q4): `baseName` is the label-clipped name from cardDisplay —
+  // the brand/vendor shown above the picture is removed from the front of the
+  // name (display only; item.name itself is never mutated).
   const rawCategory = item.posInventoryCategory?.trim();
-  if (!rawCategory || rawCategory.toLowerCase() === "flower") return item.name;
-  const normalizedName = item.name.trim().toLowerCase();
+  if (!rawCategory || rawCategory.toLowerCase() === "flower") return baseName;
+  const normalizedName = baseName.trim().toLowerCase();
   const normalizedCategory = rawCategory.toLowerCase();
-  if (normalizedName.endsWith(normalizedCategory)) return item.name;
-  return `${item.name} ${rawCategory}`;
+  if (normalizedName.endsWith(normalizedCategory)) return baseName;
+  return `${baseName} ${rawCategory}`;
 }
 
 function brandInitials(brand: string) {
@@ -266,7 +270,12 @@ type ProductCardVisualProps = {
 export function ProductCardVisual({ item, salePriceMinorUnits, saleBadgeLabel, ctaLabel = "ADD TO CART", className = "" }: ProductCardVisualProps) {
   const showCannabinoids = isCannabisItem(item);
   const tone = cardToneForItem(item);
-  const displayName = productCardDisplayName(item);
+  // SLICE 47 (owner Q4): label above the picture = brand, else vendor, else
+  // nothing; the shown label is clipped from the FRONT of the display name so
+  // the card never reads "Fairwinds — Fairwinds Healing Balm". Website display
+  // only — item.name is untouched everywhere else (search, cart, admin, CCRS).
+  const { label: cardLabel, name: clippedName } = cardDisplay(item);
+  const displayName = productCardDisplayName(item, clippedName);
   // SLICE 43: honest, validated-only display. Boxes appear ONLY when there is
   // real data (no "--" placeholders, no "~" category-average estimates). One
   // combined TOTAL THC box (folds THC-A), total CBD, and full boxes for minors
@@ -285,7 +294,12 @@ export function ProductCardVisual({ item, salePriceMinorUnits, saleBadgeLabel, c
       <span className="pointer-events-none absolute inset-x-7 -bottom-px h-px opacity-70 blur-[1px]" style={{ background: tone.glow }} aria-hidden="true" />
 
       <div>
-        <p className="truncate pb-3 text-center text-lg font-black leading-none text-white md:text-xl">{item.brand}</p>
+        {cardLabel ? (
+          <p className="truncate pb-3 text-center text-lg font-black leading-none text-white md:text-xl">{cardLabel}</p>
+        ) : (
+          // Keep the card grid aligned when no brand/vendor exists to show.
+          <p className="pb-3 text-center text-lg font-black leading-none text-transparent md:text-xl" aria-hidden="true">&nbsp;</p>
+        )}
 
         <Link href={`/menu/products/${item.id}`} className="block" aria-label={`View ${item.name}`}>
           <div className="relative h-[14.15rem] overflow-hidden bg-white p-0 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.1)] md:h-[14.65rem]">

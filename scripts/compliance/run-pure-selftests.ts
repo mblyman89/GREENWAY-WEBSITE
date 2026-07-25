@@ -73,6 +73,7 @@ import { __runPinThrottleCoreTests } from "../../src/lib/security/pin-throttle-c
 import { __runScanToCartCoreTests } from "../../src/lib/pos/scan-to-cart-core";
 import { __runVariantLotCoreTests } from "../../src/lib/pos/variant-lot-core";
 import { __runImportLotCoreTests } from "../../src/lib/pos/import-lot-core";
+import { __runCardBrandCoreTests } from "../../src/lib/menu/card-brand-core";
 import { __runIntakeMasteringCoreTests } from "../../src/lib/pos/intake-mastering-core";
 import { __runIntakeMenuStagingCoreTests } from "../../src/lib/pos/intake-menu-staging-core";
 import { __runPriceOverrideCoreTests } from "../../src/lib/pos/price-override-core";
@@ -265,6 +266,7 @@ async function main() {
   __runScanToCartCoreTests();
   __runVariantLotCoreTests();
   __runImportLotCoreTests();
+  __runCardBrandCoreTests();
   __runIntakeMasteringCoreTests();
   __runIntakeMenuStagingCoreTests();
   __runPriceOverrideCoreTests();
