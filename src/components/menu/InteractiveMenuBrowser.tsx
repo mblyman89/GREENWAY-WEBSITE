@@ -784,6 +784,9 @@ export function InteractiveMenuBrowser({ items, initialSearchParams = {} }: Inte
       pool = pool.filter((item) => clearanceItemIds.includes(item.id));
     }
     if (dailyDealsOnly) {
+      // Intentionally uses menuDiscountForItem (not the weekday-gated card variant):
+      // this filter selects deal-ELIGIBLE items. On Fri/Sat/Sun the cards hide the
+      // discounted price, but the cart still applies the deal, so eligibility stands.
       pool = pool.filter((item) => menuDiscountForItem(item, activeDealRules ?? []) !== undefined);
     }
 

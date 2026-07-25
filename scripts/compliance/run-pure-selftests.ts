@@ -164,6 +164,7 @@ import { __runManifestPipelineTests } from "../../src/lib/inventory/manifest-pip
 import { __runSampleGuardrailTests } from "../../src/lib/inventory/sample-guardrails";
 import { __runCardCannabinoidTests } from "../../src/lib/menu/card-cannabinoids";
 import { __runStrainTerpeneTests } from "../../src/lib/menu/strain-terpenes";
+import { __runVariantSortTests } from "../../src/lib/menu/variant-sort";
 import { __runNonCannabisTests } from "../../src/lib/naming/noncannabis-core";
 import { __runNachaCoreTests } from "../../src/lib/payments/nacha-core";
 import { __runVendorAchTests } from "../../src/lib/payments/vendor-ach-core";
@@ -354,6 +355,7 @@ async function main() {
   __runSampleGuardrailTests();
   __runCardCannabinoidTests();
   assertNoFailures("strain-terpenes", __runStrainTerpeneTests());
+  assertNoFailures("variant-sort", __runVariantSortTests());
   __runNonCannabisTests();
   assertNoFailures("nacha-core", __runNachaCoreTests());
   assertNoFailures("vendor-ach-core", __runVendorAchTests());

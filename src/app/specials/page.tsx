@@ -9,6 +9,7 @@ import { weeklyDealSummaries } from "@/lib/promotions/published-rules-core";
 import { getContentValues, isPreviewActive } from "@/lib/cms/render-content";
 import { getPageBanners } from "@/lib/cms/page-sections-store";
 import { loadLiveMenuItems } from "@/lib/pos/live-menu";
+import { withMenuProfile } from "@/lib/menu/strain-terpenes-server";
 
 // Menu is dynamic (published DB version), so specials render on demand.
 export const dynamic = "force-dynamic";
@@ -34,7 +35,9 @@ export default async function SpecialsPage() {
     ]),
     isPreviewActive(),
     getPageBanners("specials", ["specials.hero"]),
-    loadLiveMenuItems(),
+    // SLICE 40: overlay the KB strain profile (same as home + shop) so the
+    // specials cards show the strain type instead of the raw POS value.
+    loadLiveMenuItems().then((items) => withMenuProfile(items)),
   ]);
 
   // Pages-builder hero (specials.hero) is the source of truth when present;
