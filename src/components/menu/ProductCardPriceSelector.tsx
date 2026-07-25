@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { formatMinorCurrency } from "@/lib/leafly/format";
 import type { GreenwayMenuItem, GreenwayMenuVariant } from "@/lib/leafly/types";
+import { sortVariantsBySize } from "@/lib/menu/variant-sort";
 
 type ProductCardPriceSelectorProps = {
   item: GreenwayMenuItem;
@@ -64,16 +65,18 @@ function PriceLine({ variant, itemPriceMinorUnits, salePriceMinorUnits }: PriceL
   // without wrapping. Centered horizontally AND vertically in the box: the outer
   // span fills the full height and uses items-center so the row sits dead-center
   // (the struck price + discounted price share a baseline within an inline row).
+  // SLICE 40: desktop fonts trimmed (1.5rem → 1.28rem sale, 0.95 → 0.8rem struck)
+  // so the row never crowds/overlaps the size-selector chevron on the shop page.
   return (
-    <span className="flex min-h-[3.35rem] w-full flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5 px-2 text-center leading-none md:gap-x-2 md:px-3">
+    <span className="flex min-h-[3.35rem] w-full flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5 px-2 text-center leading-none md:gap-x-2 md:px-2.5">
       {/* "Before" (regular) price — struck through, smaller */}
-      <span className="text-[0.66rem] font-black text-zinc-400 line-through md:text-[0.95rem]">
+      <span className="text-[0.66rem] font-black text-zinc-400 line-through md:text-[0.8rem]">
         {formatMinorCurrency(regularPrice)}
       </span>
       {/* Discounted price-per-unit */}
       <span className="inline-flex items-baseline justify-center gap-0.5">
-        <span className="text-[0.98rem] font-black text-[var(--orange)] md:text-[1.5rem]">{formatMinorCurrency(displayPrice)}</span>
-        {unitLabel ? <span className="text-[0.66rem] font-black text-white/95 md:text-[0.92rem]">{unitLabel}</span> : null}
+        <span className="text-[0.98rem] font-black text-[var(--orange)] md:text-[1.28rem]">{formatMinorCurrency(displayPrice)}</span>
+        {unitLabel ? <span className="text-[0.62rem] font-black text-white/95 md:text-[0.8rem]">{unitLabel}</span> : null}
       </span>
       {variant.medical ? <MedChip /> : null}
     </span>
@@ -89,10 +92,13 @@ function ChevronIcon({ open }: { open: boolean }) {
 }
 
 export function ProductCardPriceSelector({ item, salePriceMinorUnits }: ProductCardPriceSelectorProps) {
+  // SLICE 40 (owner directive): the LOWEST package size shows first and the
+  // list ascends (1g → 3.5g → 7g → 14g → 1oz). Sorted at render time so the
+  // card never trusts upstream row order (mastered cards / legacy snapshots).
   const variants = useMemo(
     () =>
       item.variants.length > 0
-        ? item.variants
+        ? sortVariantsBySize(item.variants)
         : [
             {
               id: `${item.id}-default`,
@@ -146,7 +152,11 @@ export function ProductCardPriceSelector({ item, salePriceMinorUnits }: ProductC
         aria-expanded={showDropdown ? isOpen : undefined}
         disabled={!showDropdown}
       >
-        <PriceLine variant={selectedVariant} itemPriceMinorUnits={item.priceMinorUnits} salePriceMinorUnits={salePriceMinorUnits} />
+        {/* SLICE 40: reserve the chevron strip's width so a long sale row
+            ($53.35 $37.34 /7g) can never slide underneath the chevron. */}
+        <span className={`block w-full ${showDropdown ? "pr-[2.35rem]" : ""}`}>
+          <PriceLine variant={selectedVariant} itemPriceMinorUnits={item.priceMinorUnits} salePriceMinorUnits={salePriceMinorUnits} />
+        </span>
         {showDropdown ? (
           <span className="pointer-events-none absolute inset-y-0 right-0 grid w-[2.35rem] place-items-center border-l border-white/10 bg-white/[0.03] text-white/90">
             <ChevronIcon open={isOpen} />

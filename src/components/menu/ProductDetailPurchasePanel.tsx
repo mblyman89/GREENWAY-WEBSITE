@@ -4,8 +4,10 @@ import { useMemo, useState } from "react";
 import { useMockCart } from "@/components/cart/CartProvider";
 import { formatMinorCurrency } from "@/lib/leafly/format";
 import type { GreenwayMenuItem } from "@/lib/leafly/types";
-import { menuDiscountForItem } from "@/lib/promotions/published-rules-core";
+import { menuCardDiscountForItem } from "@/lib/promotions/published-rules-core";
 import { useActiveDealRules } from "@/components/promotions/PublishedRulesProvider";
+import { useStoreWeekday } from "@/lib/specials/useStoreWeekday";
+import { sortVariantsBySize } from "@/lib/menu/variant-sort";
 
 type ProductDetailPurchasePanelProps = {
   item: GreenwayMenuItem;
@@ -16,15 +18,19 @@ export function ProductDetailPurchasePanel({ item }: ProductDetailPurchasePanelP
   // Resolve today's deal on the client so prices stay accurate despite SSG.
   // PROMOTIONS HARMONY (Task T / PR 1): the deal derives from the back
   // office's PUBLISHED promotion rules (the same rules the cart charges with).
+  // SLICE 40 (owner directive): Friday/Saturday/Sunday show the regular price
+  // (basket-dependent deals finalize in the cart); Mon–Thu keep the sale price.
   const activeRules = useActiveDealRules();
-  const deal = activeRules ? menuDiscountForItem(item, activeRules) : undefined;
+  const weekday = useStoreWeekday();
+  const deal = menuCardDiscountForItem(item, activeRules, weekday);
   // Only clean per-item deals show an exact sale price here (legacy behaviour:
   // basket/tier deals finalize in the cart).
   const salePriceMinorUnits = deal?.perItemSalePrice ? deal.salePriceMinorUnits : undefined;
+  // SLICE 40: lowest size first, ascending (same order as the product cards).
   const variants = useMemo(
     () =>
       item.variants.length > 0
-        ? item.variants
+        ? sortVariantsBySize(item.variants)
         : [
             {
               id: `${item.id}-default`,

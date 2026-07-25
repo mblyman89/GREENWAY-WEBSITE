@@ -567,4 +567,20 @@ EXTRA_STRAINS = [
      ["limonene", "caryophyllene", "myrcene", "linalool"], "thc", "18-24% THC", "dense", US,
      "A balanced, uplifting Tropicana Cookies x Cherry Cookies hybrid with tropical-citrus and cherry notes.",
      ["trop cherry", "tropicanna cherry"], [LEAFLY, ALLBUD], 0.8),
+
+    # SLICE 40 — strains live on the Greenway menu that were missing from the KB
+    # (cards showed the category instead of the strain type). Types + lineage
+    # corroborated by AllBud + Leafly; sensory facts from AllBud; terpene data
+    # not corroborated across sources so left empty (no guessing).
+    ("Lemon Pastries", "sativa-hybrid", "Oooze (aka Oreoz) x Jet Fuel Gelato", "",
+     ["lemon", "sweet", "blueberry", "diesel", "sugary"], ["lemon", "citrus", "sweet", "creamy", "blueberry"],
+     [], "thc", "23-27% THC", "fluffy", US,
+     "A sativa-dominant (~70/30) Compound Genetics hybrid with a sweet, citrusy lemon-pastry flavor and hints of blueberry and flaky crust.",
+     ["lemon pastry"], [ALLBUD, LEAFLY], 0.8),
+
+    ("Crepe Ape", "indica-hybrid", "(London Pound Cake #75 x Kush Mints) x Project 4516", "",
+     ["blueberry", "citrus", "mint", "spicy", "earthy"], ["blueberry", "citrus", "mint", "sweet", "fruity"],
+     [], "thc", "18-19% THC", "fluffy", US,
+     "An indica-dominant (~70/30) hybrid with a sweet blueberry-citrus flavor cut by sharp mint and fresh herbs.",
+     [], [ALLBUD, LEAFLY], 0.8),
 ]

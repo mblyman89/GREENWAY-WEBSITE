@@ -227,7 +227,9 @@ async function relatedItemsFor(item: GreenwayMenuItem) {
   if (isMerchItem(item)) {
     return merchMenuItems.filter((candidate) => candidate.id !== item.id).slice(0, 8);
   }
-  const allItems = await loadLiveMenuItems();
+  // SLICE 40: overlay the KB strain profile (same as home + shop) so related
+  // cards show the strain type instead of the raw POS value.
+  const allItems = await withMenuProfile(await loadLiveMenuItems());
   const sameBrand = allItems.filter((candidate) => candidate.brand === item.brand && candidate.id !== item.id);
   const fallback = allItems.filter((candidate) => candidate.id !== item.id && candidate.category === item.category);
   const related = sameBrand.length ? sameBrand : fallback;

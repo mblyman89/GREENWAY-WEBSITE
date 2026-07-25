@@ -449,6 +449,50 @@ export function menuDiscountForItem(
   };
 }
 
+// ---------------------------------------------------------------------------
+// Card-display policy (SLICE 40 — owner directive)
+// ---------------------------------------------------------------------------
+
+/**
+ * Weekdays whose deals do NOT show a discounted price on product cards.
+ * OWNER RULE: Friday (Ounce Friday — weight tiers), Saturday (Super Saturday —
+ * one-item + storewide split) and Sunday (Ice Cream Sunday — 3-for-2 bundle)
+ * are basket-dependent: a single item on the card may earn nothing by itself,
+ * so a struck "before" price would overpromise. Those days the card shows the
+ * regular price and the CART reveals the real savings once the basket
+ * qualifies. Monday–Thursday keep their card discounts (clean category/brand
+ * deals — including the Thursday featured-brand picks from the back office).
+ */
+export const CARD_DISCOUNT_HIDDEN_WEEKDAYS: ReadonlySet<StoreWeekday> = new Set<StoreWeekday>([
+  "friday",
+  "saturday",
+  "sunday",
+]);
+
+/** True when product cards may show a struck-through discount for `weekday`. */
+export function weekdayShowsCardDiscounts(weekday: StoreWeekday | null | undefined): boolean {
+  if (!weekday) return false;
+  return !CARD_DISCOUNT_HIDDEN_WEEKDAYS.has(weekday);
+}
+
+/**
+ * The discount a PRODUCT CARD may display for an item — menuDiscountForItem
+ * gated by the weekday card policy above. Friday/Saturday/Sunday return
+ * undefined (regular price on the card; the cart still applies the real deal —
+ * the cart/checkout engine is untouched by this display policy). Returns
+ * undefined while the weekday is still resolving on the client (first paint),
+ * matching useStoreWeekday's hydration-safe contract.
+ */
+export function menuCardDiscountForItem(
+  item: GreenwayMenuItem,
+  activeRules: PublishedRuleSnapshot[] | undefined,
+  weekday: StoreWeekday | undefined,
+): MenuItemDeal | undefined {
+  if (!activeRules || !weekday) return undefined;
+  if (!weekdayShowsCardDiscounts(weekday)) return undefined;
+  return menuDiscountForItem(item, activeRules);
+}
+
 /** Card badge text — mirrors formatActiveDiscountBadge in daily-deals.ts. */
 export function formatMenuDealBadge(deal: MenuItemDeal): string {
   if (!deal.perItemSalePrice) {
