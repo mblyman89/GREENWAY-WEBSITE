@@ -118,7 +118,7 @@ export async function countManifestsByStatus(): Promise<StageCounts> {
  * Best-effort: any step's failure degrades to the next; a total failure
  * returns null exactly like before (staging never breaks on vendor lookup).
  */
-async function resolveOrCreateVendor(
+export async function resolveOrCreateVendor(
   admin: ReturnType<typeof createSupabaseAdminClient>,
   label: string | null,
   license: string | null,
@@ -227,7 +227,7 @@ async function resolveOrCreateVendor(
 }
 
 /** Try to match a brand label (optionally within a vendor). */
-async function resolveBrandId(
+export async function resolveBrandId(
   admin: ReturnType<typeof createSupabaseAdminClient>,
   label: string | null,
   vendorId: string | null,

@@ -21,6 +21,9 @@
 import crypto from "node:crypto";
 import * as XLSX from "xlsx";
 import { STATUTORY_GRAMS_PER_OUNCE } from "@/lib/compliance/grams-per-ounce";
+// Type-only: the per-row lot source shape consumed by the compliance lot
+// planner (import-lot-core.ts). No runtime dependency — no import cycle.
+import type { ImportLotSource } from "@/lib/pos/import-lot-core";
 
 type GreenwayCategory =
   | "flower" | "popcorn-bud" | "infused-flower" | "blunt" | "infused-blunt" | "tincture" | "rso" | "paraphernalia" | "preroll-pack" | "cartridge" | "disposable-cartridge"
@@ -763,7 +766,13 @@ function buildGroups(products: ProductRow[], inventories: InventoryRow[]) {
       const brand = firstNonBlank(inv.brand, "Greenway");
       const { displayName, strainName } = deriveDisplayName(undefined, inv, category);
       const identity = groupingIdentity(undefined, inv, category, displayName) + "|no-product-master";
-      const group: ProductGroup = {
+      // SLICE 46 fix: MERGE into an existing same-identity group instead of
+      // overwriting it. The old `groups.set(identity, freshGroup)` silently
+      // REPLACED a previously-built group when two master-less inventory rows
+      // derived the same identity (e.g. two sizes of the same strain), losing
+      // the earlier rows' variants — 50 raw rows / 260 physical units vanished
+      // from the review menu AND from lot planning on the real export.
+      const group: ProductGroup = groups.get(identity) ?? {
         identityKey: identity,
         brand,
         category,
@@ -772,12 +781,14 @@ function buildGroups(products: ProductRow[], inventories: InventoryRow[]) {
         strainType: normalizeStrainType(inv.strain, category),
         strainName,
         displayName,
-        productNames: new Set([inv.productName]),
+        productNames: new Set<string>(),
         descriptions: [],
-        variants: [inv],
+        variants: [],
         hidden: true,
         hiddenReason: "no_product_master",
       };
+      group.productNames.add(inv.productName);
+      group.variants.push(inv);
       groups.set(identity, group);
       continue;
     }
@@ -982,6 +993,46 @@ function toMenuItem(group: ProductGroup): GreenwayMenuItem {
   return item;
 }
 
+/**
+ * SLICE 46 (owner Q1): flatten every raw INVENTORIES row under its final menu
+ * card into a lot source for the compliance lot planner (import-lot-core.ts).
+ * One entry per raw row — the planner merges duplicate barcodes itself.
+ * Includes HIDDEN cards' rows too: hidden means "not on the public menu", but
+ * the physical stock still exists and must be tracked/reported (CCRS, cycle
+ * counts, COGS). Cards with no inventory rows contribute nothing naturally.
+ */
+function collectLotSources(groups: ProductGroup[]): ImportLotSource[] {
+  const sources: ImportLotSource[] = [];
+  for (const group of groups) {
+    const itemId = `pos-${stableId(group.identityKey)}`;
+    for (const variant of group.variants) {
+      for (const row of variant.rows) {
+        sources.push({
+          posProductKey: itemId,
+          itemName: group.displayName,
+          barcode: normalizeWhitespace(row.Barcode),
+          productName: variant.productName,
+          category: variant.category,
+          inventoryType: variant.inventoryType,
+          strainName: group.strainName,
+          brand: group.brand,
+          vendor: variant.vendor,
+          units: Math.max(0, Math.floor(toNumber(row["Units Available For Sale"]) ?? 0)),
+          costRaw: normalizeWhitespace(row.Cost),
+          receivedDateRaw: normalizeWhitespace(row["Received date"]),
+          expirationDateRaw: normalizeWhitespace(row["Expiration date"]),
+          coaRaw: normalizeWhitespace(row["[COA Y/N]"]),
+          isMedical: variant.medical,
+          isSample: toBool(row["Is Sample"]),
+          unitWeight: variant.package.quantity,
+          unitWeightUom: variant.package.unit,
+        });
+      }
+    }
+  }
+  return sources;
+}
+
 function validateMenuItems(items: GreenwayMenuItem[]) {
   const ids = new Set<string>();
   for (const item of items) {
@@ -1117,6 +1168,12 @@ export type TransformResult = {
   diagnosticCounts: { total: number; errors: number; warnings: number; info: number };
   /** Hidden items flattened for the review spreadsheet / admin review screen. */
   reviewRows: ReviewRow[];
+  /**
+   * SLICE 46: one entry per raw INVENTORIES row, keyed to the menu card it
+   * rolled into — the input to planImportLots() (compliance inventory lots
+   * created when the imported version is published).
+   */
+  lotSources: ImportLotSource[];
   /** Aggregate run summary (matches transform-summary.json). */
   summary: TransformSummary;
   /** True when no error-severity diagnostics were raised (safe to publish). */
@@ -1184,6 +1241,7 @@ export function transformWorkbooks(input: TransformInput): TransformResult {
     diagnostics: [...diagnostics],
     diagnosticCounts: { total: diagnostics.length, errors, warnings, info },
     reviewRows: buildReviewRows(items),
+    lotSources: collectLotSources(groups),
     summary: summary(products, inventories, groups, items),
     ok: errors === 0,
   };
@@ -1264,6 +1322,53 @@ export function __runTransformCoreTests(): void {
     ok(stripVariantNoise("Fairwinds - Healing Balm 300mg", "Fairwinds", "Topical") === "Healing Balm", "brand prefix + mg dose stripped");
     ok(stripVariantNoise("Bite_ind_peanut_butter_chip_1:1_10pk", "", "Edible") === "Bite Ind Peanut Butter Chip 1:1", "underscore name cleans, ratio preserved, 10pk stripped");
     ok(stripVariantNoise("AK-47 3.5g", "", "Flower") === "Ak 47", "mid-name number survives, only size stripped");
+
+    // --- SLICE 46: lotSources exposure + master-less group merge fix --------
+    // Build a tiny in-memory workbook pair and run the REAL pipeline.
+    {
+      const makeSheet = (rows: Record<string, string>[]) => XLSX.utils.json_to_sheet(rows);
+      const toBuffer = (sheetName: string, rows: Record<string, string>[]) => {
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, makeSheet(rows), sheetName);
+        return XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
+      };
+      const productsBuffer = toBuffer("Sheet1", [
+        {
+          "Product Name": "Acme Blue Dream 3.5g", "Inventory Type": "Usable Marijuana", Category: "Flower",
+          Brand: "Acme", Type: "Hybrid", Strain: "Blue Dream", UOM: "Grams", "Package Size": "3.50 Grams",
+          Price: "$25.00", Description: "Nice flower.",
+        },
+      ]);
+      const invRow = (over: Record<string, string>) => ({
+        Id: "1", Location: "Main", Barcode: "BC-1", Alias: "", Product: "Acme Blue Dream 3.5g",
+        Category: "Flower", InventoryType: "Usable Marijuana", Strain: "Blue Dream", Brand: "Acme",
+        Vendor: "ACME FARMS", "Product Price": "$25.00", Cost: "$10.00", "Units Available For Sale": "4",
+        "Units In Stock": "4", "Package Size": "3.50 Grams", "Storage Location": "Sales Floor",
+        "Is Medical": "False", "Is Cannabis": "True", "Is Sample": "False", Lab: "", "[COA Y/N]": "Y",
+        Cbd: "0.5", Cbda: "", Thc: "22", Thca: "", Total: "24.5", "Terpene Total": "",
+        "Units On Hold": "0", "Quantity Sold": "0", "Quantity Purchased": "4",
+        "Expiration date": "", "Received date": "06/17/2026",
+        ...over,
+      });
+      // Two master-less rows (no PRODUCTS match) sharing one derived identity
+      // (same strain, two sizes) — the pre-fix code overwrote the first group.
+      const inventoriesBuffer = toBuffer("Inventories", [
+        invRow({}),
+        invRow({ Id: "2", Barcode: "BC-ORPH-A", Product: "Downtown flower toasted crunch 7g", Strain: "Toasted Crunch", Brand: "Downtown", "Package Size": "7.00 Grams", "Units Available For Sale": "2" }),
+        invRow({ Id: "3", Barcode: "BC-ORPH-B", Product: "Downtown flower toasted crunch 14g", Strain: "Toasted Crunch", Brand: "Downtown", "Package Size": "14.00 Grams", "Units Available For Sale": "3" }),
+      ]);
+      const run = transformWorkbooks({ productsBuffer, inventoriesBuffer });
+      ok(run.lotSources.length === 3, "every raw inventory row yields a lot source");
+      const bd = run.lotSources.find((s) => s.barcode === "BC-1");
+      ok(!!bd && bd.units === 4 && bd.costRaw === "$10.00" && bd.receivedDateRaw === "06/17/2026" && bd.coaRaw === "Y", "lot source carries barcode/cost/received/COA verbatim");
+      ok(!!bd && run.items.some((i) => i.id === bd.posProductKey), "lot source keys to a real menu card id");
+      const orphKeys = new Set(run.lotSources.filter((s) => s.barcode.startsWith("BC-ORPH")).map((s) => s.posProductKey));
+      ok(run.lotSources.filter((s) => s.barcode.startsWith("BC-ORPH")).length === 2, "master-less rows BOTH survive (group merge fix)");
+      ok(orphKeys.size === 1, "same-identity master-less rows merge into ONE hidden card");
+      const orphCard = run.items.find((i) => orphKeys.has(i.id));
+      ok(!!orphCard && orphCard.hidden === true, "master-less card stays hidden for review");
+      ok(!!orphCard && orphCard.variants.reduce((s, v) => s + v.inventoryLevel, 0) === 5, "merged master-less card keeps ALL units (2+3)");
+    }
 
     console.log(`transform-core: ${passed} assertions passed`);
   } finally {
