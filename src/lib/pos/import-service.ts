@@ -19,6 +19,9 @@ import { transformWorkbooks, type TransformResult } from "@/lib/pos/transform";
 import type { GreenwayMenuItem } from "@/lib/pos/transform";
 import type { MenuVersion, PosImport } from "@/lib/pos/db-types";
 import { injectApprovedDraftsIntoVersion } from "@/lib/pos/draft-injection";
+import { planImportLots } from "@/lib/pos/import-lot-core";
+import { resolveOrCreateVendor, resolveBrandId } from "@/lib/inventory/intake-store";
+import { chunkedIn } from "@/lib/supabase/chunked-in";
 
 const POS_RAW_BUCKET = "pos-raw";
 
@@ -115,6 +118,21 @@ export async function runImport(input: CreateImportInput): Promise<CreateImportR
       inventoriesSheet: "Inventories",
     });
 
+    // 3b. SLICE 46 (owner Q1: imported products enter the system "as if we
+    // received them through intake"): plan the compliance inventory lots NOW so
+    // the full worklist (COA-missing lots, merged barcodes, mixed-size cards)
+    // sits on the review screen before the manager publishes. The lots
+    // themselves are created at PUBLISH time (createImportLots below) — a
+    // staged draft that is never published must never mint inventory.
+    const lotPlan = planImportLots(result.lotSources);
+    const allDiagnostics = [...result.diagnostics, ...lotPlan.diagnostics];
+    const combinedCounts = {
+      total: allDiagnostics.length,
+      errors: allDiagnostics.filter((d) => d.severity === "error").length,
+      warnings: allDiagnostics.filter((d) => d.severity === "warning").length,
+      info: allDiagnostics.filter((d) => d.severity === "info").length,
+    };
+
     // 4. Create the staged menu_version.
     const { data: versionRow, error: versionErr } = await admin
       .from("menu_versions")
@@ -126,9 +144,9 @@ export async function runImport(input: CreateImportInput): Promise<CreateImportR
         variant_count: result.items.reduce((s, i) => s + i.variants.length, 0),
         vendor_count: result.vendors.length,
         hidden_count: result.items.filter((i) => i.hidden).length,
-        error_count: result.diagnosticCounts.errors,
-        warning_count: result.diagnosticCounts.warnings,
-        summary_json: result.summary,
+        error_count: combinedCounts.errors,
+        warning_count: combinedCounts.warnings,
+        summary_json: { ...result.summary, lotPlan: lotPlan.summary },
         created_by: input.uploadedBy,
       })
       .select("*")
@@ -141,8 +159,9 @@ export async function runImport(input: CreateImportInput): Promise<CreateImportR
     // 5. Persist items + variants in batches.
     await persistMenuItems(version.id, result.items);
 
-    // 6. Persist diagnostics in batches.
-    await persistDiagnostics(posImport.id, result.diagnostics);
+    // 6. Persist diagnostics in batches (transform + lot plan together, so
+    // the review screen shows the whole worklist before publish).
+    await persistDiagnostics(posImport.id, allDiagnostics);
 
     // 6b. W7 (owner Decision B): append APPROVED onboarding drafts to this
     // STAGED version so validated new products truly reach the next publish.
@@ -160,7 +179,7 @@ export async function runImport(input: CreateImportInput): Promise<CreateImportR
       .from("pos_imports")
       .update({
         status: "staged",
-        summary_json: result.summary,
+        summary_json: { ...result.summary, lotPlan: lotPlan.summary },
         completed_at: new Date().toISOString(),
       })
       .eq("id", posImport.id);
@@ -169,9 +188,9 @@ export async function runImport(input: CreateImportInput): Promise<CreateImportR
       import: { ...posImport, status: "staged" },
       version,
       transform: {
-        diagnosticCounts: result.diagnosticCounts,
+        diagnosticCounts: combinedCounts,
         summary: result.summary,
-        ok: result.ok,
+        ok: combinedCounts.errors === 0,
       },
     };
   } catch (err) {
@@ -280,6 +299,12 @@ async function persistDiagnostics(
 /**
  * Publish a staged menu version (after manager approval + no blocking errors).
  * Delegates the atomic swap to the publish_menu_version() SQL function.
+ *
+ * SLICE 46: for POS-import versions (import_id set), compliance inventory
+ * lots are created FIRST — if lot creation fails, nothing publishes, and a
+ * retry skips lots that already exist (idempotent by CCRS identifier). Only
+ * then does the atomic menu swap run, so a live imported menu always has its
+ * traceability backbone in place before the first sale.
  */
 export async function publishMenuVersion(versionId: string, actorId: string | null): Promise<void> {
   const admin = createSupabaseAdminClient();
@@ -287,7 +312,7 @@ export async function publishMenuVersion(versionId: string, actorId: string | nu
   // Guard: refuse to publish a version that has error-severity diagnostics.
   const { data: version } = await admin
     .from("menu_versions")
-    .select("id, status, error_count, import_id")
+    .select("id, status, error_count, import_id, is_test")
     .eq("id", versionId)
     .single();
   if (!version) throw new Error("Menu version not found.");
@@ -295,11 +320,207 @@ export async function publishMenuVersion(versionId: string, actorId: string | nu
     throw new Error("Cannot publish: this version has blocking errors. Resolve them and re-import.");
   }
 
+  const importId = (version as MenuVersion).import_id;
+  const isTest = Boolean((version as MenuVersion & { is_test?: boolean }).is_test);
+  if (importId && !isTest) {
+    // Compliance lots BEFORE the menu swap. Throws on failure → publish aborts.
+    await createImportLots(importId, actorId);
+  }
+
   const { error } = await admin.rpc("publish_menu_version", {
     p_version_id: versionId,
     p_actor: actorId,
   });
   if (error) throw new Error(`Publish failed: ${error.message}`);
+}
+
+const LOT_BATCH = 200;
+
+/**
+ * Create compliance inventory lots for a POS import (owner Q1: imported
+ * products must live in the system "as if we received them through intake").
+ *
+ * How it works, end to end:
+ *   1. Re-download the import's RAW workbooks from the private pos-raw bucket
+ *      and re-run the deterministic transform + lot planner — the plan the
+ *      manager reviewed is exactly the plan executed.
+ *   2. Create ONE synthetic inbound_manifest (status "accepted") recording the
+ *      migration event, so every lot has the same manifest → lot lineage an
+ *      intake delivery gets.
+ *   3. Resolve each lot's vendor via the intake resolver ladder
+ *      (license → exact name → alias → normalized scan → auto-create DRAFT
+ *      vendor) and its brand within that vendor — identical behavior to a
+ *      real delivery.
+ *   4. Dedupe by ccrs_inventory_external_id: lots already in the table are
+ *      skipped, so re-publishing (or retrying a failed publish) NEVER doubles
+ *      inventory.
+ *   5. Insert lots with status "active". WHY ACTIVE, NOT QUARANTINE: these
+ *      products were already received, tested, and reported to CCRS by the
+ *      previous POS (Cultivera is a WSLCB integrator; the Barcode column is
+ *      the identifier it filed). The migration changes the system of record,
+ *      not the product's regulatory state — quarantining would block the sale
+ *      floor and make the weekly Sale.csv flag every line. Lots with COA flag
+ *      "N" are surfaced as a warning-severity enrichment worklist instead.
+ *   6. created_at is backdated to each lot's Received date so the sale path's
+ *      created_at-ordered FIFO consumes genuinely-oldest stock first.
+ *
+ * Test-mode imports NEVER reach this function (guarded by the caller), so
+ * Clean Slate stays sufficient for rehearsals.
+ */
+async function createImportLots(importId: string, actorId: string | null): Promise<void> {
+  const admin = createSupabaseAdminClient();
+
+  const { data: importRow, error: impErr } = await admin
+    .from("pos_imports")
+    .select("id, products_storage_key, inventories_storage_key, is_test")
+    .eq("id", importId)
+    .single();
+  if (impErr || !importRow) throw new Error(`Lot creation failed: import ${importId} not found.`);
+  const imp = importRow as Pick<PosImport, "id" | "products_storage_key" | "inventories_storage_key" | "is_test">;
+  if (imp.is_test) return; // belt & braces — the caller already skips test versions
+  if (!imp.products_storage_key || !imp.inventories_storage_key) {
+    throw new Error("Lot creation failed: this import has no stored raw workbook files to re-read.");
+  }
+
+  // 1. Re-run the deterministic transform on the stored raw files.
+  const [productsDl, inventoriesDl] = await Promise.all([
+    admin.storage.from(POS_RAW_BUCKET).download(imp.products_storage_key),
+    admin.storage.from(POS_RAW_BUCKET).download(imp.inventories_storage_key),
+  ]);
+  if (productsDl.error || !productsDl.data || inventoriesDl.error || !inventoriesDl.data) {
+    throw new Error(
+      `Lot creation failed: could not re-read the raw workbook files (${productsDl.error?.message ?? inventoriesDl.error?.message ?? "unknown"}).`,
+    );
+  }
+  const result = transformWorkbooks({
+    productsBuffer: Buffer.from(await productsDl.data.arrayBuffer()),
+    inventoriesBuffer: Buffer.from(await inventoriesDl.data.arrayBuffer()),
+    productsSheet: "Sheet1",
+    inventoriesSheet: "Inventories",
+  });
+  const plan = planImportLots(result.lotSources);
+  if (plan.lots.length === 0) return;
+
+  // 4 (early). Dedupe against lots that already exist (idempotent re-publish).
+  const existingIds = new Set<string>(
+    (
+      await chunkedIn(
+        plan.lots.map((l) => l.ccrsExternalId),
+        async (chunk, from, to) => {
+          const { data } = await admin
+            .from("inventory_lots")
+            .select("ccrs_inventory_external_id")
+            .in("ccrs_inventory_external_id", chunk)
+            .order("id", { ascending: true })
+            .range(from, to);
+          return ((data as { ccrs_inventory_external_id: string | null }[] | null) ?? [])
+            .map((r) => r.ccrs_inventory_external_id)
+            .filter((v): v is string => !!v);
+        },
+      )
+    ),
+  );
+  const toCreate = plan.lots.filter((l) => !existingIds.has(l.ccrsExternalId));
+  if (toCreate.length === 0) {
+    await persistDiagnostics(importId, [
+      {
+        severity: "info",
+        code: "import_lots_already_created",
+        message: `All ${plan.lots.length} planned lot(s) already exist (previous publish); nothing inserted.`,
+      },
+    ]);
+    return;
+  }
+
+  // 2. Synthetic manifest recording the migration event.
+  const { data: manifestRow, error: mErr } = await admin
+    .from("inbound_manifests")
+    .insert({
+      manifest_number: `POS-IMPORT-${importId.slice(0, 8)}`,
+      vendor_id: null,
+      vendor_label: "Cultivera POS migration (multi-vendor import)",
+      transfer_date: new Date().toISOString().slice(0, 10),
+      raw_payload: { kind: "pos-import-migration", import_id: importId, lot_plan: plan.summary },
+      status: "accepted",
+      notes:
+        "Synthetic manifest for the one-time Cultivera POS migration. Each lot carries its own vendor; this manifest records the import event for lineage.",
+      created_by: actorId,
+      updated_by: actorId,
+    })
+    .select("id")
+    .single();
+  if (mErr || !manifestRow) throw new Error(`Lot creation failed: could not create the migration manifest (${mErr?.message ?? "unknown"}).`);
+  const manifestId = (manifestRow as { id: string }).id;
+
+  // 3. Vendor + brand resolution with per-label caches (121 vendors / 183
+  // brands in the real export — resolve each label once, not per lot).
+  const vendorIdByLabel = new Map<string, string | null>();
+  const brandIdByKey = new Map<string, string | null>();
+  async function vendorIdFor(label: string | null): Promise<string | null> {
+    const key = (label ?? "").trim();
+    if (!key) return null;
+    if (vendorIdByLabel.has(key)) return vendorIdByLabel.get(key) ?? null;
+    const id = await resolveOrCreateVendor(admin, key, null, actorId);
+    vendorIdByLabel.set(key, id);
+    return id;
+  }
+  async function brandIdFor(label: string | null, vendorId: string | null): Promise<string | null> {
+    const key = `${(label ?? "").trim()}|${vendorId ?? ""}`;
+    if (!(label ?? "").trim()) return null;
+    if (brandIdByKey.has(key)) return brandIdByKey.get(key) ?? null;
+    const id = await resolveBrandId(admin, label, vendorId);
+    brandIdByKey.set(key, id);
+    return id;
+  }
+
+  // 5 + 6. Insert in batches (plan order = oldest received first).
+  let created = 0;
+  for (let start = 0; start < toCreate.length; start += LOT_BATCH) {
+    const batch = toCreate.slice(start, start + LOT_BATCH);
+    const rows: Record<string, unknown>[] = [];
+    for (const lot of batch) {
+      const vendorId = await vendorIdFor(lot.vendorLabel);
+      const brandId = await brandIdFor(lot.brandLabel, vendorId);
+      rows.push({
+        lot_code: lot.lotCode,
+        vendor_id: vendorId,
+        brand_id: brandId,
+        manifest_id: manifestId,
+        pos_product_key: lot.posProductKey,
+        ccrs_inventory_external_id: lot.ccrsExternalId,
+        product_name: lot.productName,
+        strain_name: lot.strainName,
+        category: lot.category,
+        inventory_type: lot.inventoryType,
+        unit_weight: lot.unitWeight,
+        unit_weight_uom: lot.unitWeightUom,
+        is_sample: lot.isSample,
+        is_medical: lot.isMedical,
+        received_qty: lot.receivedQty,
+        on_hand_qty: lot.receivedQty,
+        unit: lot.unit,
+        unit_cost_minor_units: lot.unitCostMinorUnits,
+        expires_on: lot.expiresOn,
+        status: "active",
+        notes: lot.notes,
+        created_by: actorId,
+        updated_by: actorId,
+        ...(lot.createdAtIso ? { created_at: lot.createdAtIso } : {}),
+      });
+    }
+    const { error: insErr } = await admin.from("inventory_lots").insert(rows);
+    if (insErr) throw new Error(`Lot creation failed while inserting batch ${start / LOT_BATCH + 1}: ${insErr.message}`);
+    created += rows.length;
+  }
+
+  await persistDiagnostics(importId, [
+    {
+      severity: "info",
+      code: "import_lots_created",
+      message: `Created ${created} compliance inventory lot(s) (${existingIds.size} already existed) under migration manifest POS-IMPORT-${importId.slice(0, 8)}. Lots are ACTIVE: this stock was already received and CCRS-reported by the previous POS; the import migrates the system of record.`,
+      context: { created, skippedExisting: existingIds.size, manifestId, plan: plan.summary },
+    },
+  ]);
 }
 
 function sanitize(name: string): string {

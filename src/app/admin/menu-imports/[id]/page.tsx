@@ -88,6 +88,17 @@ export default async function ImportReviewPage({
 
   const blocked = (version?.error_count ?? 0) > 0;
 
+  // SLICE 46: the compliance lot plan computed at staging time (persisted in
+  // summary_json.lotPlan). Older imports staged before this feature have none.
+  const lotPlan = ((version?.summary_json ?? {}) as {
+    lotPlan?: {
+      lotsPlanned?: number;
+      unitsTotal?: number;
+      coaMissing?: number;
+      expirationMissing?: number;
+    };
+  }).lotPlan ?? null;
+
   return (
     <div>
       <AdminPageHeader
@@ -260,6 +271,35 @@ export default async function ImportReviewPage({
                   </span>
                 </div>
               ))}
+            </div>
+          </section>
+        )}
+
+        {/* Compliance inventory lots (SLICE 46) */}
+        {lotPlan && (
+          <section className="rounded-xl border border-[var(--admin-accent)]/25 bg-[var(--admin-accent)]/5 p-5">
+            <h2 className="text-sm font-semibold text-white">Compliance inventory lots</h2>
+            <p className="mt-1 text-xs text-white/50">
+              Publishing this version also creates traceable inventory lots &mdash; the same
+              records a receiving delivery gets &mdash; so every sale decrements real stock,
+              carries a CCRS identifier, and has a unit cost for margin reports. Lots that already
+              exist are skipped, so re-publishing never doubles inventory.
+            </p>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <StatCard label="Lots planned" value={lotPlan.lotsPlanned ?? 0} accent="green" />
+              <StatCard label="Units covered" value={lotPlan.unitsTotal ?? 0} accent="muted" />
+              <StatCard
+                label="COA to attach"
+                value={lotPlan.coaMissing ?? 0}
+                hint="Marked N in the POS export"
+                accent="orange"
+              />
+              <StatCard
+                label="Expiry to set"
+                value={lotPlan.expirationMissing ?? 0}
+                hint="Blank in the POS export"
+                accent="orange"
+              />
             </div>
           </section>
         )}
