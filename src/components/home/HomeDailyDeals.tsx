@@ -95,8 +95,10 @@ export function HomeDailyDeals({ items }: { items: GreenwayMenuItem[] }) {
           </Link>
         </div>
 
+        {/* SLICE 43 (owner directive): ONE full-width card per row on mobile —
+            matching the shop page's grid — instead of two cramped columns. */}
         {!isResolvingWeekday && deals.length ? (
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-5 lg:grid-cols-4">
+          <div className="grid gap-5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
             {deals.map((item) => (
               <ProductCard key={item.id} item={item} />
             ))}
@@ -105,7 +107,7 @@ export function HomeDailyDeals({ items }: { items: GreenwayMenuItem[] }) {
           // First paint only: keep height stable while the store weekday resolves
           // on the client (no layout shift). After it resolves we always have
           // products to show (the day's deals, or the menu fallback).
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-5 lg:grid-cols-4">
+          <div className="grid gap-5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
             {Array.from({ length: 8 }).map((_, index) => (
               <div
                 key={index}

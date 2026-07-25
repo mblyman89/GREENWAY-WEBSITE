@@ -124,7 +124,11 @@ export function ProductCardPriceSelector({ item, salePriceMinorUnits }: ProductC
     <div className="relative text-center">
       {showDropdown && isOpen ? (
         <div className="absolute inset-x-0 bottom-[calc(100%-1px)] z-30 overflow-hidden rounded-t-[0.95rem] border border-[#b9864f]/75 border-b-0 bg-[#0f0a07] shadow-[0_18px_34px_rgba(0,0,0,0.58)]">
-          {variants.map((variant) => {
+          {/* SLICE 43 (owner directive): this panel opens ABOVE the button, so
+              render the ascending list REVERSED (largest at the top). Reading
+              upward from the selected smallest size the list then ascends:
+              3.5g sits directly above 1g, 7g above that, 14g, then 1oz on top. */}
+          {[...variants].reverse().map((variant) => {
             const selected = variant.id === selectedVariant.id;
             return (
               <button

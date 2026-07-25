@@ -43,7 +43,7 @@ type GreenwayStrainType =
 type InventoryStatus = "in-stock" | "low-stock" | "unavailable";
 type CannabinoidUnit = "%" | "mg";
 
-type GreenwayCannabinoid = { type: "thc" | "thca" | "cbd" | "cbda" | "cbg" | "cbn" | "cbdv"; value: string | null; unit: CannabinoidUnit };
+type GreenwayCannabinoid = { type: "thc" | "thca" | "cbd" | "cbda" | "cbg" | "cbn" | "cbc" | "cbdv"; value: string | null; unit: CannabinoidUnit };
 type GreenwayMenuVariant = { id: string; label: string; priceMinorUnits: number; inventoryLevel: number; medical: boolean };
 type GreenwayMenuItem = {
   id: string;

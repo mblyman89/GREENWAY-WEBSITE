@@ -34,7 +34,7 @@ export type GreenwayStrainType =
   | "unknown";
 
 export type GreenwayCannabinoid = {
-  type: "thc" | "thca" | "cbd" | "cbda" | "cbg" | "cbn" | "cbdv";
+  type: "thc" | "thca" | "cbd" | "cbda" | "cbg" | "cbn" | "cbc" | "cbdv";
   value: string | null;
   unit: "%" | "mg";
 };

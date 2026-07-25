@@ -145,11 +145,16 @@ function isCannabisItem(item: GreenwayMenuItem) {
   return !isNonCannabisItem(item);
 }
 
-function displayStrain(item: GreenwayMenuItem) {
-  if (isNonCannabisItem(item)) return "Non Cannabis";
-  // For items where strain type is still unknown (edibles, topicals, paraphernalia),
-  // show the category label since strain type doesn't apply to those products
-  if (item.strainType === "unknown") return formatWebsiteCategory(item.category);
+/**
+ * SLICE 43 (owner directive): the strain-type box only appears when we have a
+ * VALIDATED strain type assigned. No fallback to the product category — if the
+ * strain type is unknown (or the item is non-cannabis), the box is hidden and
+ * this returns null. Unknown-strain cannabis still gets the hybrid card COLOR
+ * (see cardToneForItem); non-cannabis keeps the neutral white tone.
+ */
+function displayStrain(item: GreenwayMenuItem): string | null {
+  if (isNonCannabisItem(item)) return null;
+  if (item.strainType === "unknown") return null;
   return strainTypeLabel(item.strainType);
 }
 
@@ -209,6 +214,9 @@ function ProductImageMockup({ item, tone }: { item: GreenwayMenuItem; tone: Card
   const initials = brandInitials(item.brand);
   const nonCannabis = isNonCannabisItem(item);
   const label = categoryLabel(item).toUpperCase();
+  // SLICE 43: the mockup's "X Formula" ribbon only prints a VALIDATED strain
+  // type — never the category as a stand-in (owner rule: show real data or nothing).
+  const strain = displayStrain(item);
 
   if (nonCannabis) {
     return (
@@ -234,9 +242,14 @@ function ProductImageMockup({ item, tone }: { item: GreenwayMenuItem; tone: Card
         <div className="relative z-10 grid h-16 w-16 place-items-center rounded-full bg-black text-base font-black uppercase text-white shadow-xl shadow-black/30 md:h-[4.55rem] md:w-[4.55rem]">
           {initials}
         </div>
-        <div className="relative z-10 w-full rounded-md bg-black/16 px-1.5 py-1 text-center text-[0.58rem] font-black uppercase leading-tight text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.65)]">
-          {displayStrain(item)} Formula
-        </div>
+        {/* Bottom ribbon: validated strain only. The category already prints in
+            the top ribbon, so when strain is unknown the bottom ribbon hides
+            rather than repeating the category (owner rule: real data or nothing). */}
+        {strain ? (
+          <div className="relative z-10 w-full rounded-md bg-black/16 px-1.5 py-1 text-center text-[0.58rem] font-black uppercase leading-tight text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.65)]">
+            {strain} Formula
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -254,11 +267,13 @@ export function ProductCardVisual({ item, salePriceMinorUnits, saleBadgeLabel, c
   const showCannabinoids = isCannabisItem(item);
   const tone = cardToneForItem(item);
   const displayName = productCardDisplayName(item);
-  // Honest, compliance-aware cannabinoid display (profile badge + per-compound
-  // chips + PACKAGE-TOTAL mg headline for edibles/drinks so a 100 mg lemonade
-  // never reads like a 10 mg microdose). Grounded in verified menu-item data.
+  // SLICE 43: honest, validated-only display. Boxes appear ONLY when there is
+  // real data (no "--" placeholders, no "~" category-average estimates). One
+  // combined TOTAL THC box (folds THC-A), total CBD, and full boxes for minors
+  // (CBG/CBN/CBC/CBDV). All values are totals, never per-serving.
   const cannabinoids = showCannabinoids ? cardCannabinoids(item) : null;
   const netWeightLine = showCannabinoids ? deriveNetWeightLine(item) : null;
+  const strain = displayStrain(item);
 
   return (
     <article
@@ -303,15 +318,20 @@ export function ProductCardVisual({ item, salePriceMinorUnits, saleBadgeLabel, c
         </Link>
       </div>
 
-      {/* Bottom group: strain + THC/CBD + price + cart all hug the bottom so boxes align across cards regardless of name length. */}
+      {/* Bottom group: strain + cannabinoid boxes + price + cart all hug the bottom so boxes align across cards regardless of name length. */}
       <div className="pt-4 text-center">
         <div className="mb-3 grid gap-2 text-center">
-          <span
-            className="flex min-h-9 w-full items-center justify-center rounded-md px-3 py-2 text-sm font-black uppercase leading-none text-white"
-            style={{ background: pillBackground(tone), color: isNonCannabisItem(item) ? "#111" : "#fff" }}
-          >
-            {displayStrain(item)}
-          </span>
+          {/* SLICE 43: strain-type box ONLY when a validated strain type is
+              assigned. Unknown strain / non-cannabis = no box at all (the card
+              color still falls back to hybrid for unknown-strain cannabis). */}
+          {strain ? (
+            <span
+              className="flex min-h-9 w-full items-center justify-center rounded-md px-3 py-2 text-sm font-black uppercase leading-none text-white"
+              style={{ background: pillBackground(tone) }}
+            >
+              {strain}
+            </span>
+          ) : null}
           {showCannabinoids && cannabinoids ? (
             <div className="grid gap-2">
               {/* Profile badge — mirrors the compliance naming tag (THC / 1:1 / THC:CBD:CBN / CBD). */}
@@ -328,57 +348,28 @@ export function ProductCardVisual({ item, salePriceMinorUnits, saleBadgeLabel, c
                 </span>
               ) : null}
 
-              {/* Package-TOTAL headline for mg-dosed products (edibles/drinks/tinctures). */}
-              {cannabinoids.isMgProduct && (cannabinoids.totalThcHeadline || cannabinoids.totalCbdHeadline) ? (
-                <div className="grid gap-1">
-                  {cannabinoids.totalThcHeadline ? (
-                    <span className="flex min-h-9 items-center justify-center rounded-md bg-white px-2.5 py-2 text-[0.74rem] font-black uppercase leading-none text-black">
-                      {cannabinoids.totalThcHeadline}
-                    </span>
-                  ) : null}
-                  {cannabinoids.totalCbdHeadline ? (
-                    <span className="flex min-h-8 items-center justify-center rounded-md bg-white/85 px-2.5 py-1.5 text-[0.68rem] font-black uppercase leading-none text-black">
-                      {cannabinoids.totalCbdHeadline}
-                    </span>
-                  ) : null}
-                  {netWeightLine ? (
-                    <span className="text-center text-[0.62rem] font-bold uppercase tracking-[0.06em] text-white/70">
-                      {netWeightLine}
-                    </span>
-                  ) : null}
-                </div>
-              ) : cannabinoids.chips.length > 0 ? (
-                /* %-dosed products (flower/concentrate/cartridge): per-compound chips. */
-                <div className={`grid gap-2 ${cannabinoids.chips.length >= 2 ? "grid-cols-2" : "grid-cols-1"}`}>
-                  {cannabinoids.chips.slice(0, 4).map((chip) => (
+              {/* SLICE 43: unified validated info boxes — TOTAL THC (folds THCA),
+                  total CBD, then minors (CBG/CBN/CBC/CBDV) each promoted to the
+                  same white box. Values are package/lab TOTALS, never per-serving.
+                  When there is no validated data, NOTHING renders (no "--"). */}
+              {cannabinoids.boxes.length > 0 ? (
+                <div className={`grid gap-2 ${cannabinoids.boxes.length >= 2 ? "grid-cols-2" : "grid-cols-1"}`}>
+                  {cannabinoids.boxes.slice(0, 4).map((box) => (
                     <span
-                      key={chip.label}
+                      key={box.label}
                       className="flex min-h-9 items-center justify-center rounded-md bg-white px-2.5 py-2 text-[0.72rem] font-black uppercase leading-none text-black"
                     >
-                      {chip.label}: {chip.display}
+                      {box.label}: {box.display}
                     </span>
                   ))}
                 </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-2">
-                  <span className="flex min-h-9 items-center justify-center rounded-md bg-white px-2.5 py-2 text-[0.72rem] font-black uppercase leading-none text-black">THC: --</span>
-                  <span className="flex min-h-9 items-center justify-center rounded-md bg-white px-2.5 py-2 text-[0.72rem] font-black uppercase leading-none text-black">CBD: --</span>
-                </div>
-              )}
+              ) : null}
 
-              {/* For mg products that also list minor cannabinoids beyond THC/CBD,
-                  show the extra chips so a THC:CBD:CBN blend is fully transparent. */}
-              {cannabinoids.isMgProduct && cannabinoids.chips.length > 0 ? (
-                <div className="flex flex-wrap justify-center gap-1.5">
-                  {cannabinoids.chips.map((chip) => (
-                    <span
-                      key={chip.label}
-                      className="inline-flex items-center rounded-full bg-white/12 px-2 py-0.5 text-[0.6rem] font-bold uppercase tracking-[0.05em] text-white/85"
-                    >
-                      {chip.label} {chip.display}
-                    </span>
-                  ))}
-                </div>
+              {/* Net weight/volume companion line for edibles/drinks (WAC 314-55-105). */}
+              {netWeightLine ? (
+                <span className="text-center text-[0.62rem] font-bold uppercase tracking-[0.06em] text-white/70">
+                  {netWeightLine}
+                </span>
               ) : null}
             </div>
           ) : null}
