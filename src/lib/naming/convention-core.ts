@@ -96,6 +96,8 @@ const ACRONYMS = new Set([
   "RSO",
   "CBD:THC",
   "THC:CBD",
+  // Strain-vocabulary acronym: "OG" (OG Kush, Space OG) must never render as "Og".
+  "OG",
 ]);
 
 /** Title Case that preserves known cannabinoid acronyms and ratio tokens. */
@@ -133,6 +135,92 @@ export function collapseWhitespace(value: string): string {
 /** Strip disallowed characters (used by the suggester to auto-clean). */
 export function stripDisallowedChars(value: string): string {
   return value.replace(/[,/&!#$@"|\u0000-\u001f]/g, " ");
+}
+
+/* ------------------------------------------------------------------ *
+ *  Vendor short names (SLICE 52 — owner rule)
+ * ------------------------------------------------------------------ */
+
+/**
+ * Trailing tokens that carry no identity in a vendor name: legal-entity
+ * suffixes and generic industry words. Owner rule: "if the vendor name is too
+ * long, like downtown cannabis company... should be just downtown. Many
+ * vendors are like this."
+ *
+ * The list is grounded in the store's REAL vendor directory (121 distinct
+ * vendors in the owner's Cultivera INVENTORIES export) — every word here was
+ * observed as a trailing token on an actual vendor. Stripping is
+ * TRAILING-ONLY and repeats ("Downtown Cannabis Company" pops "Company" then
+ * "Cannabis"), so mid-name words are never touched ("Northwest Cannabis
+ * Solutions" keeps its name — "Cannabis" is not trailing).
+ */
+const VENDOR_NOISE_TOKENS = new Set([
+  "llc",
+  "llc.",
+  "l.l.c",
+  "l.l.c.",
+  "inc",
+  "inc.",
+  "incorporated",
+  "corp",
+  "corp.",
+  "corporation",
+  "ltd",
+  "ltd.",
+  "limited",
+  "pllc",
+  "spc",
+  "lp",
+  "co",
+  "co.",
+  "company",
+  "companies",
+  "cannabis",
+  "marijuana",
+  "farm",
+  "farms",
+  "group",
+  "holdings",
+  "enterprises",
+  "industries",
+  "brands",
+]);
+
+/** Connector words never left dangling at the end after stripping. */
+const VENDOR_TRAILING_CONNECTORS = new Set(["and", "&", "of", "the"]);
+
+/**
+ * Shorten a vendor name for use inside product names (compliance + display).
+ *
+ * Rules (all pinned on real vendors in the self-tests):
+ *  - Repeatedly strip TRAILING legal/generic tokens ("DOWNTOWN CANNABIS
+ *    COMPANY" -> "DOWNTOWN"; "Alpha Crux, llc" -> "Alpha Crux").
+ *  - Then strip a dangling connector or bare symbol ("GREEN BEARD & CO" ->
+ *    "GREEN BEARD", never "GREEN BEARD &").
+ *  - NEVER GUESS guards: the result must keep at least 3 characters and at
+ *    least one letter, and at least one token always remains — otherwise the
+ *    ORIGINAL name is returned unchanged ("1937 FARMS" stays "1937 FARMS";
+ *    a vendor literally named "Farms" would keep its name).
+ *  - Case is preserved (Title Case is applied later by the composer).
+ *  - Commas are converted to spaces (CCRS names are comma-free anyway).
+ */
+export function vendorShortName(raw: string | null | undefined): string {
+  const original = collapseWhitespace(String(raw ?? ""));
+  if (!original) return "";
+  let tokens = original.replace(/,/g, " ").replace(/\s+/g, " ").trim().split(" ");
+  while (tokens.length > 1 && VENDOR_NOISE_TOKENS.has(tokens[tokens.length - 1].toLowerCase())) {
+    tokens = tokens.slice(0, -1);
+  }
+  while (
+    tokens.length > 1 &&
+    (VENDOR_TRAILING_CONNECTORS.has(tokens[tokens.length - 1].toLowerCase()) ||
+      /^[^a-z0-9]+$/i.test(tokens[tokens.length - 1]))
+  ) {
+    tokens = tokens.slice(0, -1);
+  }
+  const short = tokens.join(" ").trim();
+  if (short.length < 3 || !/[a-z]/i.test(short)) return original;
+  return short;
 }
 
 /* ------------------------------------------------------------------ *
@@ -261,14 +349,24 @@ export type BuildResult = {
  * Word-boundary clamps to NAME_MAX_LEN (never mid-word) and reports truncation.
  */
 export function buildComplianceName(parts: ComplianceNameParts): BuildResult {
-  const vendor = collapseWhitespace(parts.vendor ?? "");
+  // SLICE 52 (owner rule): vendors go in SHORT ("Downtown Cannabis Company"
+  // -> "Downtown"). vendorShortName falls back to the full name whenever
+  // shortening would destroy identity, so this never guesses.
+  const vendor = vendorShortName(parts.vendor);
   let brand = collapseWhitespace(parts.brand ?? "");
   const subject = collapseWhitespace(parts.strainOrFlavor ?? "");
   const type = collapseWhitespace(parts.type ?? "");
   const size = collapseWhitespace(parts.size ?? "");
 
-  // Rule: drop brand when it equals vendor (case-insensitive).
-  if (brand && vendor && brand.toLowerCase() === vendor.toLowerCase()) {
+  // Rule: drop brand when it equals vendor (case-insensitive). Compared
+  // against BOTH the shortened and the full vendor name so "Walden Cannabis"
+  // (brand) + "WALDEN CANNABIS" (vendor, shortened to "WALDEN") still drops.
+  const fullVendor = collapseWhitespace(parts.vendor ?? "");
+  if (
+    brand &&
+    (vendor || fullVendor) &&
+    (brand.toLowerCase() === vendor.toLowerCase() || brand.toLowerCase() === fullVendor.toLowerCase())
+  ) {
     brand = "";
   }
 
@@ -442,9 +540,35 @@ export function __runNamingConventionTests(): void {
   // a genuine acid-form 1:1 still tags.
   assert(cannabinoidTag([c("thca", 50, "%"), c("cbda", 50, "%")]) === "1:1", "acid-form genuine 1:1");
 
+  // vendorShortName — pinned on REAL vendors from the owner's Cultivera
+  // export (SLICE 52 owner rule: "downtown cannabis company... should be
+  // just downtown").
+  assert(vendorShortName("DOWNTOWN CANNABIS COMPANY") === "DOWNTOWN", "downtown short: " + vendorShortName("DOWNTOWN CANNABIS COMPANY"));
+  assert(vendorShortName("Alpha Crux, llc") === "Alpha Crux", "legal suffix + comma stripped");
+  assert(vendorShortName("KLARITIE FARMS INC") === "KLARITIE", "farms+inc stripped");
+  assert(vendorShortName("GROW OP FARMS") === "GROW OP", "trailing farms stripped");
+  assert(vendorShortName("GREEN BEARD & CO") === "GREEN BEARD", "no dangling ampersand: " + vendorShortName("GREEN BEARD & CO"));
+  assert(vendorShortName("NCMX, LLC") === "NCMX", "acronym keeps identity");
+  assert(vendorShortName("Tiger Mountain Cannabis LLC") === "Tiger Mountain", "cannabis+llc stripped");
+  // NEVER GUESS guards: shortening must not destroy identity.
+  assert(vendorShortName("1937 FARMS") === "1937 FARMS", "digits-only remainder keeps original");
+  assert(vendorShortName("Farms") === "Farms", "single-token vendor untouched");
+  assert(vendorShortName("NORTHWEST CANNABIS SOLUTIONS") === "NORTHWEST CANNABIS SOLUTIONS", "mid-name cannabis untouched (trailing-only)");
+  assert(vendorShortName("Fire Bros.") === "Fire Bros.", "unknown suffix untouched");
+  assert(vendorShortName("") === "", "blank stays blank");
+
   // buildComplianceName: vendor==brand drop
   const r1 = buildComplianceName({ vendor: "Acme", brand: "Acme", strainOrFlavor: "Blue Dream", type: "Flower" });
   assert(r1.name === "Acme Blue Dream Flower", "vendor==brand dropped: " + r1.name);
+
+  // SLICE 52: composer uses the SHORT vendor name.
+  const rShort = buildComplianceName({ vendor: "Downtown Cannabis Company", brand: "Downtown", strainOrFlavor: "Space OG", type: "Flower" });
+  assert(rShort.name === "Downtown Space OG Flower", "short vendor + brand==short drop: " + rShort.name);
+  const rShort2 = buildComplianceName({ vendor: "KLARITIE FARMS INC", strainOrFlavor: "Gelato", type: "Live Resin", size: "1g" });
+  assert(rShort2.name === "Klaritie Gelato Live Resin 1g", "short vendor composed: " + rShort2.name);
+  // brand equal to the FULL vendor name still drops even though vendor shortens.
+  const rShort3 = buildComplianceName({ vendor: "WALDEN CANNABIS", brand: "Walden Cannabis", strainOrFlavor: "Dutch Treat", type: "Flower" });
+  assert(rShort3.name === "Walden Dutch Treat Flower", "brand==full vendor dropped: " + rShort3.name);
 
   // full: vendor+brand+flavor+ratio+type
   const r2 = buildComplianceName({ vendor: "Hometown", brand: "Wana", strainOrFlavor: "Strawberry Lemonade", type: "Drink", compounds: [c("thc", 100), c("cbd", 100)] });
