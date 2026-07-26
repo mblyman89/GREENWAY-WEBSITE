@@ -15,8 +15,14 @@ import {
 } from "@/lib/pos/menu-version";
 import { formatDateTime, formatMoney, formatBytes } from "@/lib/pos/format";
 import type { DiagnosticSeverity } from "@/lib/pos/db-types";
-import { listFactReviews } from "@/lib/pos/fact-review-store";
-import { REVIEW_DIAGNOSTIC_CODES } from "@/lib/pos/fact-review-core";
+import { listFactReviews, factReviewsToResolutions } from "@/lib/pos/fact-review-store";
+import {
+  REVIEW_DIAGNOSTIC_CODES,
+  buildFactReviewBuckets,
+  menuItemRowToFactReviewItem,
+  posDiagnosticToFactReviewDiagnostic,
+} from "@/lib/pos/fact-review-core";
+import { evaluateCommitGate } from "@/lib/pos/import-commit-core";
 import { publishVersion } from "../actions";
 
 export const dynamic = "force-dynamic";
@@ -55,7 +61,10 @@ export default async function ImportReviewPage({
     [versions, published, diagnostics, factReviews] = await Promise.all([
       listVersions(50),
       getPublishedVersion(),
-      getImportDiagnostics(id, { limit: 2000 }),
+      // SLICE 58: 5000 matches the fact-review screen and the server-side
+      // commit gate, so the publish preview and the real gate see the SAME
+      // diagnostic feed (never a preview that lies).
+      getImportDiagnostics(id, { limit: 5000 }),
       listFactReviews(id),
     ]);
   } catch (err) {
@@ -96,6 +105,18 @@ export default async function ImportReviewPage({
   const hiddenTotal = items.filter((i) => i.hidden).length;
 
   const blocked = (version?.error_count ?? 0) > 0;
+
+  // SLICE 58: preview the commit gate (Rule 3.1) so the reviewer sees the
+  // publish verdict BEFORE clicking -- pending fact reviews refuse the commit
+  // and the balanced Rule 3.3 equation is shown when the gate is open. The
+  // server-side publish path re-evaluates the same gate on fresh reads.
+  const gate = evaluateCommitGate(
+    buildFactReviewBuckets(
+      items.map(menuItemRowToFactReviewItem),
+      diagnostics.map(posDiagnosticToFactReviewDiagnostic),
+      factReviewsToResolutions(factReviews),
+    ),
+  );
 
   // SLICE 46: the compliance lot plan computed at staging time (persisted in
   // summary_json.lotPlan). Older imports staged before this feature have none.
@@ -344,6 +365,18 @@ export default async function ImportReviewPage({
               This import has {version?.error_count} blocking error(s). Resolve the source data and
               re-import before publishing.
             </p>
+          ) : !gate.ready ? (
+            <div className="mt-2">
+              <p className="text-sm text-[var(--admin-gold)]">{gate.message}</p>
+              <Button
+                href={`/admin/menu-imports/${id}/facts`}
+                variant="neutral"
+                size="sm"
+                className="mt-3"
+              >
+                Open fact review
+              </Button>
+            </div>
           ) : !canPublish ? (
             <p className="mt-2 text-sm text-white/50">
               Review looks good. A manager or admin must publish to make this menu live.
@@ -352,6 +385,7 @@ export default async function ImportReviewPage({
             <form action={publishVersion} className="mt-3">
               <input type="hidden" name="versionId" value={version?.id ?? ""} />
               <input type="hidden" name="importId" value={imp.id} />
+              <p className="mb-1 text-xs text-[var(--admin-accent)]">{gate.message}</p>
               <p className="mb-3 text-xs text-white/50">
                 Publishing replaces the current live menu with this version and refreshes the public
                 site. The previous version is archived (not deleted).

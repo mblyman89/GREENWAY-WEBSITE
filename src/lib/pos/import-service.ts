@@ -20,8 +20,16 @@ import type { GreenwayMenuItem } from "@/lib/pos/transform";
 import type { MenuVersion, PosImport } from "@/lib/pos/db-types";
 import { injectApprovedDraftsIntoVersion } from "@/lib/pos/draft-injection";
 import { planImportLots } from "@/lib/pos/import-lot-core";
-import { resolveOrCreateVendor, resolveBrandId } from "@/lib/inventory/intake-store";
+import { resolveOrCreateVendor, resolveBrandId, logManifestEvent } from "@/lib/inventory/intake-store";
 import { chunkedIn } from "@/lib/supabase/chunked-in";
+import { getImportDiagnostics, getVersionItems } from "@/lib/pos/menu-version";
+import { listFactReviews, factReviewsToResolutions } from "@/lib/pos/fact-review-store";
+import {
+  buildFactReviewBuckets,
+  menuItemRowToFactReviewItem,
+  posDiagnosticToFactReviewDiagnostic,
+} from "@/lib/pos/fact-review-core";
+import { evaluateCommitGate } from "@/lib/pos/import-commit-core";
 
 const POS_RAW_BUCKET = "pos-raw";
 
@@ -334,6 +342,34 @@ export async function publishMenuVersion(versionId: string, actorId: string | nu
   const importId = (version as MenuVersion).import_id;
   const isTest = Boolean((version as MenuVersion & { is_test?: boolean }).is_test);
   if (importId && !isTest) {
+    // SLICE 58 commit gate (Rule 3.1): rebuild the SLICE 57 dry-run buckets
+    // from FRESH database reads and refuse to publish while ANY fact-review
+    // exception is still awaiting a human decision. The gate also verifies
+    // the Rule 3.3 reconciliation arithmetic (rows in = going live +
+    // documented rejects + resolved flags) instead of assuming it.
+    const [diagnostics, reviews, items] = await Promise.all([
+      getImportDiagnostics(importId, { limit: 5000 }),
+      listFactReviews(importId),
+      getVersionItems(versionId),
+    ]);
+    const buckets = buildFactReviewBuckets(
+      items.map(menuItemRowToFactReviewItem),
+      diagnostics.map(posDiagnosticToFactReviewDiagnostic),
+      factReviewsToResolutions(reviews),
+    );
+    const gate = evaluateCommitGate(buckets);
+    if (!gate.ready) throw new Error(gate.message);
+    // Persist the balanced equation so the audit trail shows exactly what
+    // this publish committed (idempotent by code+import via the review UI).
+    await persistDiagnostics(importId, [
+      {
+        severity: "info",
+        code: "import_commit_reconciled",
+        message: gate.message,
+        context: gate.reconciliation,
+      },
+    ]);
+
     // Compliance lots BEFORE the menu swap. Throws on failure → publish aborts.
     await createImportLots(importId, actorId);
   }
@@ -443,7 +479,10 @@ async function createImportLots(importId: string, actorId: string | null): Promi
     return;
   }
 
-  // 2. Synthetic manifest recording the migration event.
+  // 2. Synthetic manifest recording the migration event. SLICE 58 (one door):
+  // stamped accepted_at and given a manifest_events timeline entry so it wears
+  // the SAME lifecycle fingerprint as a natively accepted delivery -- nothing
+  // downstream can tell an imported manifest from a native one.
   const { data: manifestRow, error: mErr } = await admin
     .from("inbound_manifests")
     .insert({
@@ -453,6 +492,7 @@ async function createImportLots(importId: string, actorId: string | null): Promi
       transfer_date: new Date().toISOString().slice(0, 10),
       raw_payload: { kind: "pos-import-migration", import_id: importId, lot_plan: plan.summary },
       status: "accepted",
+      accepted_at: new Date().toISOString(),
       notes:
         "Synthetic manifest for the one-time Cultivera POS migration. Each lot carries its own vendor; this manifest records the import event for lineage.",
       created_by: actorId,
@@ -462,6 +502,12 @@ async function createImportLots(importId: string, actorId: string | null): Promi
     .single();
   if (mErr || !manifestRow) throw new Error(`Lot creation failed: could not create the migration manifest (${mErr?.message ?? "unknown"}).`);
   const manifestId = (manifestRow as { id: string }).id;
+  await logManifestEvent(
+    manifestId,
+    "accepted",
+    `Cultivera POS migration: ${toCreate.length} lot(s) created under this manifest via the menu-import publish path.`,
+    actorId,
+  );
 
   // 3. Vendor + brand resolution with per-label caches (121 vendors / 183
   // brands in the real export — resolve each label once, not per lot).
