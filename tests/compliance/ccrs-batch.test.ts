@@ -223,6 +223,51 @@ describe("Sale numeric-column safety (defense in depth)", () => {
   });
 });
 
+describe("CCRS Product.Name two-layer composition (SLICE 53)", () => {
+  it("composes the owner-approved example and guards duplication/collisions", async () => {
+    const { composeCcrsProductName, disambiguateCcrsName } = await import(
+      "@/lib/compliance/ccrs-product-name-core"
+    );
+    // The approved two-layer example, verbatim.
+    expect(
+      composeCcrsProductName({
+        name: "Space OG",
+        vendor: "DOWNTOWN CANNABIS COMPANY",
+        brand: "Downtown",
+        posInventoryCategory: "Flower",
+        category: "flower",
+        unitWeightGrams: 1,
+      }).name,
+    ).toBe("Downtown Space OG Flower 1g");
+    // Brand/type/dose duplication guards.
+    const wana = composeCcrsProductName({
+      name: "Wana Sour Gummies 100mg",
+      vendor: "NORTHWEST CANNABIS SOLUTIONS",
+      brand: "Wana",
+      posInventoryCategory: "Gummies",
+      category: "edible-solid",
+      unitWeightGrams: 40,
+    }).name;
+    expect(wana).not.toMatch(/Wana Wana/i);
+    expect(wana).toMatch(/100mg/);
+    expect(wana).not.toMatch(/40g/);
+    // Deterministic collision suffix keeps the Inventory→Product join unique.
+    const used = new Set<string>();
+    const first = disambiguateCcrsName("Downtown Comatoast Concentrate 1g", "GW-LOT-000123", used);
+    const second = disambiguateCcrsName("Downtown Comatoast Concentrate 1g", "GW-LOT-000456", used);
+    expect(first.disambiguated).toBe(false);
+    expect(second.disambiguated).toBe(true);
+    expect(second.name).toBe("Downtown Comatoast Concentrate 1g 000456");
+  });
+
+  it("__runCcrsProductNameCoreTests", async () => {
+    const { __runCcrsProductNameCoreTests } = await import(
+      "@/lib/compliance/ccrs-product-name-core"
+    );
+    expect(() => __runCcrsProductNameCoreTests()).not.toThrow();
+  });
+});
+
 describe("embedded self-tests still pass under vitest", () => {
   it("__runCcrsBatchCoreTests", async () => {
     const { __runCcrsBatchCoreTests } = await import("@/lib/compliance/ccrs-batch-core");
