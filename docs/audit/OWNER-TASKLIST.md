@@ -48,7 +48,9 @@ files, one by one**. Here is the honest, verified answer:
 
 Also: `docs/MIGRATIONS_TO_RUN.md` is your standing checklist of migrations
 from 0054 onward with a description of what breaks until each is run. If
-you haven't checked off through **0139** (the current last file — 0139 adds
+you haven't checked off through **0140** (the current last file — 0140 extends
+the "Reset operational data" wipe to the newer operational tables it missed,
+so the pre-go-live reset is truly clean; 0139 adds
 the golden-record fact-review queue: the decision log behind the new import
 Fact Review screen where you approve/fix/reject flagged products; 0138 adds
 the structured product-fact boxes + strain-type column and runs the

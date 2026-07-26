@@ -2,12 +2,16 @@
  * src/lib/admin/reset-service.ts
  *
  * Server-only service that wraps the `reset_operational_data()` DB function
- * (migration 0069). That function deletes ONLY operational/transactional data
- * (sales, COGS, inventory, imported products, customers/loyalty signups, tills,
- * time/payroll, etc.) in a verified child->parent order, and NEVER touches
- * owner settings/config, the knowledge base, CMS/marketing, product masters /
- * members / enrichments, brands, vendors, promotions, people/hardware, or
- * audit_logs.
+ * (migration 0069; retention guard 0097; coverage sweep 0140 extends it to the
+ * newer operational tables — register sale events, receipt print jobs, safe
+ * counts/swaps, special-discount uses, customer returns, non-cannabis
+ * invoices/adjustments, CCRS week submissions, sample JSON imports, payroll
+ * source documents, fact-review decisions). That function deletes ONLY
+ * operational/transactional data (sales, COGS, inventory, imported products,
+ * customers/loyalty signups, tills, time/payroll, etc.) in a verified
+ * child->parent order, and NEVER touches owner settings/config, the knowledge
+ * base, CMS/marketing/media, product masters / members / enrichments, brands,
+ * vendors, non-cannabis products, promotions, people/hardware, or audit_logs.
  *
  * The caller (server action) is responsible for permission gating + a typed
  * confirmation + audit logging. This module just executes the RPC and returns

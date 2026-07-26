@@ -425,3 +425,21 @@
   buckets, notes, and the CSV export all render from existing data — but
   saving an approve/fix/reject decision fails with a friendly database
   error message. Run it before you start working the exception queue.**
+
+## SLICE 60 — reset coverage sweep
+
+- [ ] **`supabase/migrations/0140_reset_coverage_sweep.sql`** — replaces
+  `reset_operational_data()` with the same guarded wipe (identical S-6 /
+  WAC 314-55-087 retention guard from 0097) extended to the newer
+  operational tables the old version missed: register sale events,
+  receipt print jobs, safe counts & swaps, special-discount uses,
+  customer returns, non-cannabis invoices/lines/adjustments, CCRS week
+  submissions & compliance reminder log, sample JSON imports, payroll
+  source documents, and the fact-review decision log. Deletion order is
+  verified child→parent. Still keeps everything you curate: settings,
+  knowledge base, media, site content, product masters/enrichments,
+  brands & vendors, non-cannabis products, promotions, people/hardware,
+  and the audit log. Idempotent; safe to re-run.
+  **Until this is run, "Reset operational data" still works but leaves
+  test activity behind in those newer tables — run it BEFORE your final
+  pre-go-live reset so the November 1st start is truly clean.**
