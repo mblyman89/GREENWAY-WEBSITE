@@ -45,6 +45,20 @@ export type PosImportDiagnostic = {
   created_at: string;
 };
 
+// SLICE 57: one human decision per (import, staged row) in the golden-record
+// exception queue (migration 0139). action 'fix' carries the corrected facts.
+export type PosFactReview = {
+  id: string;
+  import_id: string;
+  source_item_id: string;
+  action: "approve" | "fix" | "reject";
+  note: string | null;
+  corrected_facts_json: unknown | null;
+  reviewed_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type MenuVersion = {
   id: string;
   import_id: string | null;

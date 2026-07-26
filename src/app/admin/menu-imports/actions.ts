@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import { runImport, publishMenuVersion, findDuplicateImport, sha256, cleanSlateTestData } from "@/lib/pos/import-service";
+import { recordFactReview } from "@/lib/pos/fact-review-store";
+import type { FactReviewFacts } from "@/lib/pos/fact-review-core";
 
 const PRODUCTS_HINT = "PRODUCTS.xlsx";
 const INVENTORIES_HINT = "INVENTORIES.xlsx";
@@ -125,6 +127,89 @@ export async function publishVersion(formData: FormData): Promise<void> {
 
   const dest = importId ? `/admin/menu-imports/${importId}` : "/admin/menu-imports";
   redirect(dest + "?published=1");
+}
+
+/**
+ * PROGRAM 3 / SLICE 57 — record one human decision in the golden-record
+ * exception queue (approve / fix / reject) and mirror it onto the STAGED
+ * menu_items row (fix writes corrected facts with provenance "reviewer";
+ * reject hides the row with a documented reason). Rule 3.1: a human decides —
+ * the machine never guesses.
+ */
+export async function resolveFactReview(formData: FormData): Promise<void> {
+  const session = await requirePermission("menu.import");
+
+  const importId = String(formData.get("importId") ?? "");
+  const sourceItemId = String(formData.get("sourceItemId") ?? "");
+  const action = String(formData.get("action") ?? "");
+  const note = String(formData.get("note") ?? "").trim() || null;
+  const dest = `/admin/menu-imports/${importId}/facts`;
+
+  if (!importId || !sourceItemId) {
+    redirect("/admin/menu-imports?error=" + encodeURIComponent("Missing import or item id."));
+  }
+  if (action !== "approve" && action !== "fix" && action !== "reject") {
+    redirect(dest + "?error=" + encodeURIComponent("Unknown review action."));
+  }
+
+  // Inline-fix fields: only what the reviewer actually typed is applied.
+  // Numbers are validated (never guess — a bad number is refused, not coerced
+  // to something else); text fields pass through as typed.
+  let correctedFacts: Partial<FactReviewFacts> | null = null;
+  if (action === "fix") {
+    const facts: Partial<FactReviewFacts> = {};
+    const numberFields: [keyof FactReviewFacts, string][] = [
+      ["servingsPerPack", "servingsPerPack"],
+      ["mgPerServing", "mgPerServing"],
+      ["packageThcMg", "packageThcMg"],
+      ["packageCbdMg", "packageCbdMg"],
+      ["netWeightGrams", "netWeightGrams"],
+      ["netVolumeMl", "netVolumeMl"],
+    ];
+    for (const [key, field] of numberFields) {
+      const raw = String(formData.get(field) ?? "").trim();
+      if (raw === "") continue;
+      const value = Number(raw);
+      if (!Number.isFinite(value) || value < 0) {
+        redirect(dest + "?error=" + encodeURIComponent(`"${raw}" is not a valid number for ${field}.`));
+      }
+      (facts as Record<string, number>)[key] = value;
+    }
+    for (const key of ["thc", "cbd", "ratioLabel"] as const) {
+      const raw = String(formData.get(key) ?? "").trim();
+      if (raw !== "") (facts as Record<string, string>)[key] = raw;
+    }
+    if (Object.keys(facts).length === 0) {
+      redirect(dest + "?error=" + encodeURIComponent("Fix chosen but no corrected values were entered."));
+    }
+    correctedFacts = facts;
+  }
+
+  try {
+    await recordFactReview({
+      importId,
+      sourceItemId,
+      action,
+      note,
+      correctedFacts,
+      reviewedBy: session.userId,
+    });
+    await recordAudit({
+      actorId: session.userId,
+      actorEmail: session.email,
+      action: `fact_review.${action}`,
+      entityType: "pos_fact_review",
+      entityId: `${importId}:${sourceItemId}`,
+      after: { note, correctedFacts },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Saving the review decision failed.";
+    console.error("[menu-imports] resolveFactReview failed:", err);
+    redirect(dest + "?error=" + encodeURIComponent(message));
+  }
+
+  revalidatePath(dest);
+  redirect(dest + "?saved=1");
 }
 
 /**
