@@ -6,6 +6,7 @@ import { requirePermission } from "@/lib/auth/session";
 import { recordAudit } from "@/lib/auth/audit";
 import { runImport, publishMenuVersion, findDuplicateImport, sha256, cleanSlateTestData } from "@/lib/pos/import-service";
 import { recordFactReview } from "@/lib/pos/fact-review-store";
+import { revalidatePublicMenuSurfaces } from "@/lib/site/public-surfaces";
 import type { FactReviewFacts } from "@/lib/pos/fact-review-core";
 
 const PRODUCTS_HINT = "PRODUCTS.xlsx";
@@ -118,12 +119,12 @@ export async function publishVersion(formData: FormData): Promise<void> {
   }
 
   // Refresh public menu surfaces so they read the new published snapshot.
-  // SLICE 39 connectivity audit: "/shop" was never a route in this app —
-  // the menu-derived public surfaces are /menu and /specials.
+  // SLICE 59: ONE canonical list (public-surfaces.ts) covers "/", "/menu",
+  // "/specials", AND "/vendor-delivery" — the vendor directory is derived
+  // from the live menu, so a publish must refresh it too. (SLICE 39: "/shop"
+  // was never a route in this app.)
   revalidatePath("/admin/menu-imports");
-  revalidatePath("/menu");
-  revalidatePath("/specials");
-  revalidatePath("/");
+  revalidatePublicMenuSurfaces();
 
   const dest = importId ? `/admin/menu-imports/${importId}` : "/admin/menu-imports";
   redirect(dest + "?published=1");

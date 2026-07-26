@@ -24,6 +24,7 @@ import { getTaxSettings, type TaxBaseMode, type TaxSettings } from "@/lib/report
 import { getPricingSettings, type PricingSettings } from "@/lib/inventory/pricing";
 import { redirect } from "next/navigation";
 import { resetOperationalData } from "@/lib/admin/reset-service";
+import { revalidatePublicMenuSurfaces } from "@/lib/site/public-surfaces";
 
 export type ActionResult = { ok: boolean; error?: string; errors?: string[] };
 
@@ -245,5 +246,11 @@ export async function resetOperationalDataAction(fd: FormData): Promise<void> {
   ]) {
     revalidatePath(p);
   }
+  // SLICE 59 (owner-reported ghost-vendors bug): the reset wipes the published
+  // menu, so the PUBLIC pages derived from it — home, /menu, /specials, and
+  // /vendor-delivery — must refresh too. Before this, the site kept serving a
+  // pre-reset copy of the vendor directory until the next publish happened to
+  // refresh it.
+  revalidatePublicMenuSurfaces();
   redirect("/admin/settings/reset?done=" + encodeURIComponent(summaryMsg));
 }
