@@ -7,17 +7,19 @@
  * design is: exactly one `menu_versions` row is `published` at a time, and "the
  * public site reads the single published menu_version snapshot."
  *
- * Historically the site instead imported the committed static JSON
+ * Historically the site instead imported a committed static JSON snapshot
  * (src/data/pos-menu-preview.json) via src/lib/pos/preview-menu.ts, which meant
  * clearing the back office had NO effect on the website (frozen snapshot). This
  * module fixes that: it loads the PUBLISHED DB menu and converts the DB rows
  * (MenuItemRow + variants) into the GreenwayMenuItem shape the site renders.
  *
- * Fallback policy (explicit, not silent product data):
- *   - If Supabase isn't configured (e.g. certain build contexts) → fall back to
- *     the committed JSON so builds/preview still render.
+ * Fallback policy (SLICE 48, owner Q3 — no stale product data, ever):
+ *   - If Supabase isn't configured (e.g. certain build contexts) → return []
+ *     (an EMPTY menu). The committed JSON snapshot and its preview-menu loader
+ *     are RETIRED; a build without a database renders an empty menu rather
+ *     than year-old products.
  *   - If Supabase IS configured but there is NO published version, or the
- *     published version has zero items → return [] (an EMPTY menu). This is the
+ *     published version has zero items → return [] as well. This is the
  *     correct behavior the owner expects: an empty back office = no product
  *     cards on the site.
  */
@@ -32,7 +34,6 @@ import type {
 import type { MenuItemRow, MenuVariantRow } from "@/lib/pos/db-types";
 import { getPublishedVersion, getVersionItems } from "@/lib/pos/menu-version";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
-import { posMenuPreviewItems, getPosPreviewMenuItemById } from "@/lib/pos/preview-menu";
 
 type MenuItemWithVariants = MenuItemRow & { variants: MenuVariantRow[] };
 
@@ -106,8 +107,9 @@ export function menuRowToGreenwayItem(row: MenuItemWithVariants): GreenwayMenuIt
  */
 export async function loadLiveMenuAll(): Promise<GreenwayMenuItem[]> {
   if (!isSupabaseServiceConfigured) {
-    // Build-time / unconfigured: keep the committed snapshot so preview works.
-    return posMenuPreviewAll();
+    // SLICE 48: no stale fallback. An unconfigured build renders an empty
+    // menu — the committed snapshot is retired (owner Q3).
+    return [];
   }
   const version = await getPublishedVersion();
   if (!version) return [];
@@ -123,17 +125,8 @@ export async function loadLiveMenuItems(): Promise<GreenwayMenuItem[]> {
 
 /** Look up a single visible item by its stable source_item_id. */
 export async function getLiveMenuItemById(id: string): Promise<GreenwayMenuItem | undefined> {
-  if (!isSupabaseServiceConfigured) {
-    return getPosPreviewMenuItemById(id);
-  }
+  // SLICE 48: unconfigured builds have an empty menu (loadLiveMenuAll returns
+  // []), so the lookup naturally resolves to undefined — no stale snapshot.
   const items = await loadLiveMenuItems();
   return items.find((item) => item.id === id);
-}
-
-// ── Committed-JSON fallback (unconfigured builds only) ─────────────────────────
-function posMenuPreviewAll(): GreenwayMenuItem[] {
-  // preview-menu already filters hidden for the visible export; for the "all"
-  // loader we still only have the visible committed set, which is acceptable for
-  // an unconfigured build context.
-  return posMenuPreviewItems;
 }

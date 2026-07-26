@@ -5,6 +5,8 @@ import { VendorDirectory } from "@/components/vendors/VendorDirectory";
 import { pageMetadata } from "@/lib/seo/seo";
 import { getContentValues, isPreviewActive } from "@/lib/cms/render-content";
 import { getPageBanners } from "@/lib/cms/page-sections-store";
+import { buildVendorDirectory } from "@/lib/menu/vendor-directory-core";
+import { loadLiveMenuAll } from "@/lib/pos/live-menu";
 
 export const metadata = pageMetadata({
   title: "Vendors & Partners — Washington Cannabis Brands",
@@ -14,17 +16,24 @@ export const metadata = pageMetadata({
 });
 
 export default async function VendorDeliveryPage() {
-  const [copy, preview, banners] = await Promise.all([
+  const [copy, preview, banners, menuItems] = await Promise.all([
     getContentValues(["vendors.outreach.heading"]),
     isPreviewActive(),
     getPageBanners("vendors", ["vendors.grow", "vendors.brands"]),
+    loadLiveMenuAll(),
   ]);
+
+  // SLICE 48: vendor directory is now derived live from the menu instead of
+  // the retired static vendors.json snapshot. buildVendorDirectory skips
+  // hidden items itself, so we hand it the full menu.
+  const vendors = buildVendorDirectory(menuItems);
 
   return (
     <main id="top" className="min-h-screen bg-black text-white">
       <Header />
       <Breadcrumbs items={[{ label: "Vendors & Partners" }]} />
       <VendorDirectory
+        vendors={vendors}
         content={{
           heading: copy["vendors.outreach.heading"],
           editable: preview,

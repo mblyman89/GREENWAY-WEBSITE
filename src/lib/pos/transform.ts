@@ -5,18 +5,18 @@
  *
  * This is the SINGLE SOURCE OF TRUTH for turning Cultivera/POS workbook exports
  * (PRODUCTS.xlsx + INVENTORIES.xlsx) into Greenway menu items. It is intentionally
- * free of all `fs`/`path` I/O so the EXACT same transform runs in two places:
+ * free of all `fs`/`path` I/O so the transform is fully testable in memory.
  *
- *   1. The CLI build script (scripts/pos/transform_pos_data.ts) — reads files,
- *      calls transformWorkbooks(), writes JSON to src/data + diagnostics.
- *   2. The Supabase-backed admin import flow (Slice 2) — reads uploaded buffers
- *      from private storage, calls transformWorkbooks(), stages a menu_version.
+ * SLICE 48: the legacy CLI build script (scripts/pos/transform_pos_data.ts) and
+ * the static JSON snapshots it wrote are RETIRED. The sole production consumer
+ * is now the Supabase-backed admin import flow (src/lib/pos/import-service.ts) —
+ * it reads uploaded buffers from private storage, calls transformWorkbooks(),
+ * stages a menu_version, and creates compliance inventory lots at publish.
  *
- * Behaviour is identical to the legacy in-script transformer; the only change is
- * that inputs are in-memory Buffers and outputs are returned as a structured
- * object instead of being written to disk. Module-level diagnostic state is reset
- * at the top of every transformWorkbooks() call. The pipeline is fully synchronous
- * (no await), so this reset is safe under Node's single-threaded event loop.
+ * Inputs are in-memory Buffers and outputs are returned as a structured object.
+ * Module-level diagnostic state is reset at the top of every transformWorkbooks()
+ * call. The pipeline is fully synchronous (no await), so this reset is safe under
+ * Node's single-threaded event loop.
  */
 import crypto from "node:crypto";
 import * as XLSX from "xlsx";
@@ -1156,10 +1156,8 @@ function readWorkbookRowsFromBuffer(buffer: Buffer | Uint8Array, preferredSheet?
 export type TransformSummary = ReturnType<typeof summary>;
 
 export type TransformResult = {
-  /** Full menu (includes hidden items). Identical shape to pos-menu-preview.json. */
+  /** Full menu (includes hidden items) in the GreenwayMenuItem website shape. */
   items: GreenwayMenuItem[];
-  /** First 60 items, used for the lightweight sample preview file. */
-  sampleItems: GreenwayMenuItem[];
   /** Distinct vendor directory built from visible items. */
   vendors: VendorEntry[];
   /** Every diagnostic raised during the run (info/warning/error). */
@@ -1236,7 +1234,6 @@ export function transformWorkbooks(input: TransformInput): TransformResult {
 
   return {
     items,
-    sampleItems: items.slice(0, 60),
     vendors: buildVendorList(items),
     diagnostics: [...diagnostics],
     diagnosticCounts: { total: diagnostics.length, errors, warnings, info },
@@ -1259,9 +1256,6 @@ export type {
   ReviewRow,
   VendorEntry,
 };
-
-// Re-export pure helpers the CLI wrapper still needs for FS-side formatting.
-export { collapseKeyPart, formatCurrency };
 
 // ---------------------------------------------------------------------------
 // Self-tests (registered in scripts/compliance/run-pure-selftests.ts).
