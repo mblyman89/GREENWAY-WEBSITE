@@ -178,6 +178,7 @@ export function __runIntakeReviewTests(): { passed: number; failed: number } {
     brand_name: "Acme",
     category: "Usable Marijuana",
     strain_name: "Blue Dream",
+    strain_type: null,
     received_qty: 10,
     unit: "each",
     unit_cost_minor_units: 500,

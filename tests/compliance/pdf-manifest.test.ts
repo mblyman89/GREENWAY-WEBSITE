@@ -87,7 +87,9 @@ describe("pdf-manifest-core (H14a — WA LCB Internal Shipping Document)", () =>
     expect(m!.lines[0].product_name).toBe(
       "Northwest Concentrates - SELECT DABS - Moonbow - 1g",
     );
-    expect(m!.lines[0].inventory_type).toBe("hybrid");
+    // SLICE 54 (Rule 1.4): [H] is a STRAIN type — right box, right fact.
+    expect(m!.lines[0].strain_type).toBe("hybrid");
+    expect(m!.lines[0].inventory_type).toBeNull();
     expect(m!.lines[0].received_qty).toBe(20);
 
     // last line lives on page 2 (after a form-feed) — must still parse
@@ -95,7 +97,7 @@ describe("pdf-manifest-core (H14a — WA LCB Internal Shipping Document)", () =>
     expect(m!.lines[8].product_name).toBe(
       "Northwest CCELL® Classic Cart - 1g - Wedding Cake",
     );
-    expect(m!.lines[8].inventory_type).toBe("hybrid");
+    expect(m!.lines[8].strain_type).toBe("hybrid");
   });
 
   it("marks lines as sparse drafts (no COA/price captured)", () => {

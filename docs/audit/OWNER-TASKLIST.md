@@ -48,7 +48,9 @@ files, one by one**. Here is the honest, verified answer:
 
 Also: `docs/MIGRATIONS_TO_RUN.md` is your standing checklist of migrations
 from 0054 onward with a description of what breaks until each is run. If
-you haven't checked off through **0137** (the current last file — 0137 adds
+you haven't checked off through **0138** (the current last file — 0138 adds
+the structured product-fact boxes + strain-type column and runs the
+owner-approved strain-name cleanup; 0137 adds
 the regulatory-watch tables: the rule-change radar that tracks WSLCB
 rulemaking bulletins, AI briefings, and the compliance roadmap; 0136 adds
 the handbook-acknowledgment table: staff must read the employee handbook and

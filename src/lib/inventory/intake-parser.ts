@@ -16,6 +16,8 @@
  * Pure functions, no DB / no server-only — easy to unit test.
  */
 
+import { splitStrainField } from "@/lib/inventory/strain-fields-core";
+
 export type ParsedLab = {
   labtest_external_identifier: string | null;
   lab_name: string | null;
@@ -46,6 +48,8 @@ export type ParsedLine = {
   brand_name: string | null;
   category: string | null;
   strain_name: string | null;
+  /** "indica" | "sativa" | "hybrid" | null — split out of the strain field at the door (Rule 1.4). */
+  strain_type: string | null;
   received_qty: number;
   unit: string;
   unit_cost_minor_units: number | null;
@@ -352,7 +356,14 @@ function parseWciaLine(item: unknown): ParsedLine {
   const qty = asNumber(pick(item, ["qty"])) ?? 0;
   const linePrice = asNumber(pick(item, ["line_price"]));
   const unit = asString(pick(item, ["uom"])) ?? "ea";
-  const strain = asString(pick(item, ["strain_name"]));
+  // Rule 1.4 (docs/data-governance.md): split strain TYPE out of the strain
+  // NAME at the door — vendor lines like "Chocolate Turtle Sativa" pollute
+  // the name box otherwise (real Grow Op Farms / Cultivera behavior).
+  const strainSplit = splitStrainField(
+    asString(pick(item, ["strain_name"])),
+    asString(pick(item, ["strain_type", "strain_class", "phenotype"])),
+  );
+  const strain = strainSplit.strainName;
   const category = asString(pick(item, ["inventory_category"]));
   const inventory_type = asString(pick(item, ["inventory_type"]));
   const is_sample = asBool(pick(item, ["is_sample"])) === true;
@@ -387,6 +398,7 @@ function parseWciaLine(item: unknown): ParsedLine {
     brand_name: null, // WCIA carries vendor at the document level, not per line
     category,
     strain_name: strain,
+    strain_type: strainSplit.strainType,
     received_qty: qty,
     unit,
     unit_cost_minor_units,
@@ -454,6 +466,7 @@ function blankLine(raw: unknown, warnings: string[]): ParsedLine {
     brand_name: null,
     category: null,
     strain_name: null,
+    strain_type: null,
     received_qty: 0,
     unit: "each",
     unit_cost_minor_units: null,
@@ -531,7 +544,12 @@ function parseGenericLine(raw: unknown): ParsedLine {
   );
   const brand_name = asString(pick(raw, ["brand", "brand_name", "producer", "manufacturer"]));
   const category = asString(pick(raw, ["category", "product_type", "type", "class"]));
-  const strain_name = asString(pick(raw, ["strain", "strain_name", "cultivar"]));
+  // Rule 1.4: split strain TYPE out of the strain NAME at the door.
+  const strainSplit = splitStrainField(
+    asString(pick(raw, ["strain", "strain_name", "cultivar"])),
+    asString(pick(raw, ["strain_type", "strain_class", "phenotype"])),
+  );
+  const strain_name = strainSplit.strainName;
   const received_qty = asNumber(pick(raw, ["quantity", "qty", "received_qty", "units", "count"])) ?? 0;
   const unit = asString(pick(raw, ["unit", "uom", "unit_of_measure"])) ?? "each";
   const unit_cost_minor_units = asMinorUnits(
@@ -566,6 +584,7 @@ function parseGenericLine(raw: unknown): ParsedLine {
     brand_name,
     category,
     strain_name,
+    strain_type: strainSplit.strainType,
     received_qty,
     unit,
     unit_cost_minor_units,

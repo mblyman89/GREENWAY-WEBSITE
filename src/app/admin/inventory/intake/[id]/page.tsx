@@ -161,6 +161,7 @@ export default async function ManifestReviewPage({
       lab_result_id: l.lab_result_id,
       is_sample: l.is_sample,
       strain_name: l.strain_name,
+      strain_type: l.strain_type ?? null,
       category: l.category,
       inventory_type: l.inventory_type,
       expires_on: l.expires_on,

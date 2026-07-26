@@ -42,6 +42,7 @@ export type StagedLotFacts = {
   lab_result_id: string | null;
   is_sample: boolean;
   strain_name: string | null;
+  strain_type: string | null;
   category: string | null;
   inventory_type: string | null;
   expires_on: string | null;
@@ -116,6 +117,7 @@ export function summarizeStagedIntake(
       brand_name: null,
       category: lot.category,
       strain_name: lot.strain_name,
+      strain_type: lot.strain_type,
       received_qty: Number.isFinite(lot.received_qty) ? lot.received_qty : 0,
       unit: lot.unit,
       unit_cost_minor_units: lot.unit_cost_minor_units,
@@ -171,6 +173,7 @@ export function __runIntakeReviewAdapterTests(): { passed: number; failed: numbe
     lab_result_id: "lab-1",
     is_sample: false,
     strain_name: "Blue Dream",
+    strain_type: null,
     category: null,
     inventory_type: null,
     expires_on: null,

@@ -490,6 +490,8 @@ async function createImportLots(importId: string, actorId: string | null): Promi
         ccrs_inventory_external_id: lot.ccrsExternalId,
         product_name: lot.productName,
         strain_name: lot.strainName,
+        // SLICE 54 (migration 0138, Rule 1.4): strain type in its own box.
+        strain_type: lot.strainType,
         category: lot.category,
         inventory_type: lot.inventoryType,
         unit_weight: lot.unitWeight,

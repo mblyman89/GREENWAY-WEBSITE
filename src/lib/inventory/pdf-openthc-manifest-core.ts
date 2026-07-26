@@ -176,6 +176,7 @@ export function parseOpenThcInvoiceManifest(text: string): ParsedManifest | null
       brand_name: null,
       category: null,
       strain_name: null,
+      strain_type: null,
       received_qty: Number.isFinite(count) ? count : 0,
       unit: "each",
       unit_cost_minor_units,

@@ -1038,6 +1038,7 @@ function collectLotSources(groups: ProductGroup[]): ImportLotSource[] {
           category: variant.category,
           inventoryType: variant.inventoryType,
           strainName: group.strainName,
+          strainType: group.strainType,
           brand: group.brand,
           vendor: variant.vendor,
           units: Math.max(0, Math.floor(toNumber(row["Units Available For Sale"]) ?? 0)),

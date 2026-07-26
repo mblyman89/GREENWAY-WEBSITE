@@ -139,6 +139,7 @@ function toParsedLine(g: TlLine): ParsedLine {
     brand_name: null,
     category: g.type,
     strain_name: null,
+    strain_type: null,
     received_qty: g.shipped,
     unit: "each",
     unit_cost_minor_units: null,

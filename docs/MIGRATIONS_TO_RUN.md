@@ -388,3 +388,25 @@
   cron quietly does nothing. Once run, the radar goes live: bulletins
   flow in daily, deadlines land on the timeline, and the AI (when
   configured) writes briefings and proposes roadmap tasks.**
+
+## PROGRAM 3 / SLICE 54 — golden-record groundwork (structured product facts)
+
+- [ ] **`supabase/migrations/0138_structured_product_facts.sql`** — adds the
+  dedicated "boxes" for facts that were previously trapped inside product
+  names (docs/data-governance.md, Rules 1.3/1.4): `strain_type` on
+  `inventory_lots`, plus structured dose/measure columns on BOTH
+  `inventory_lots` and `menu_items` (`servings_per_pack`, `mg_per_serving`,
+  `package_thc_mg`, `package_cbd_mg`, `minor_cannabinoids_json`,
+  `ratio_label`, `net_weight_grams`, `net_volume_ml`, `fact_provenance`),
+  with indexes on strain type and ratio. It ALSO runs the owner-approved
+  strain-name cleanup: bare "Indica"/"Sativa"/"Hybrid" strain values move
+  into the strain-type box (name goes empty), and embedded type words
+  ("Chocolate Turtle Sativa", "Cinnamon (Sativa)") are stripped from the
+  name with the type captured — "CBD" is deliberately NOT treated as a type
+  word so real strain names like "Xtra Dragon CBD" stay intact. Idempotent:
+  safe to re-run.
+  **IMPORTANT — run this BEFORE receiving your next manifest or running the
+  Cultivera import: intake and import now write the `strain_type` column, and
+  Supabase REJECTS inserts that name a column that does not exist yet, so
+  receiving will fail with a database error until this migration is applied.
+  The inventory-table Strain Type column simply shows an em-dash until then.**

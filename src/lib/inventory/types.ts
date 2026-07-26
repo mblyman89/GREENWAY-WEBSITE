@@ -111,6 +111,8 @@ export type InventoryLot = {
   pos_product_key: string | null;
   product_name: string | null;
   strain_name: string | null;
+  /** "indica" | "sativa" | "hybrid" | null (migration 0138 — Rule 1.4, own box). */
+  strain_type: string | null;
   category: string | null;
   inventory_type: string | null;
   unit_weight: number | null;

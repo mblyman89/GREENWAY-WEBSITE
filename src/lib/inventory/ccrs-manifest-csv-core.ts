@@ -367,6 +367,7 @@ export type CcrsParsedLine = {
   brand_name: string | null;
   category: string | null;
   strain_name: string | null;
+  strain_type: string | null;
   received_qty: number;
   unit: string;
   unit_cost_minor_units: number | null;
@@ -488,6 +489,7 @@ export function ccrsToParsedManifest(parse: {
       brand_name: null,
       category: null,
       strain_name: null,
+      strain_type: null,
       received_qty: it.quantity ?? 0,
       unit: isGram ? "g" : "each",
       unit_cost_minor_units: null,
