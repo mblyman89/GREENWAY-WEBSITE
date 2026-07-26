@@ -9,6 +9,7 @@ import { Input, Select, Button } from "@/components/admin/ui";
 import { MissingInsight } from "@/components/admin/insight/MissingInsight";
 import { CatalogStageStrip } from "@/components/admin/catalog/CatalogStageStrip";
 import { listLotsPaged, computeInventoryStats, EXPIRING_SOON_DAYS } from "@/lib/inventory/store";
+import { lotReceivedDate, lotTypeLabel, lotSizeLabel, lotSoldQty, lotStrainLabel } from "@/lib/inventory/lot-table-core";
 import { listWindow, parsePageParam, DEFAULT_PAGE_SIZE } from "@/lib/admin/list-window-core";
 import { LOT_SORTS, parseYesNo, resolveSort } from "@/lib/admin/list-filter-core";
 import { ListPager } from "@/components/admin/ux/ListPager";
@@ -355,12 +356,22 @@ export default async function InventoryPage({
           <div className="overflow-hidden rounded-[var(--admin-radius-lg)] border border-[var(--admin-border)]">
             <table className="w-full text-sm">
               <thead className="bg-[var(--admin-surface-2)] text-left text-xs uppercase tracking-wide text-[var(--admin-text-faint)]">
+                {/* SLICE 50 (owner request): Received / Type / Size / Sold / Strain columns
+                    added beside the existing ones. Received = the lot's true arrival date
+                    (import backdates created_at to the POS Received date); Sold = received
+                    minus on hand, never negative. All values come straight from the lot row
+                    via the pure lot-table-core helpers — nothing invented. */}
                 <tr>
                   <th className="px-4 py-3">Product / lot</th>
                   <th className="px-4 py-3">Vendor · brand</th>
+                  <th className="px-4 py-3">Type</th>
+                  <th className="px-4 py-3">Strain</th>
+                  <th className="px-4 py-3">Size</th>
                   <th className="px-4 py-3 text-center">COA</th>
                   <th className="px-4 py-3 text-right">THC</th>
+                  <th className="px-4 py-3">Received</th>
                   <th className="px-4 py-3 text-right">On hand</th>
+                  <th className="px-4 py-3 text-right">Sold</th>
                   <th className="px-4 py-3">Expires</th>
                   <th className="px-4 py-3 text-center">Status</th>
                 </tr>
@@ -393,12 +404,16 @@ export default async function InventoryPage({
                           <span className="text-[var(--admin-text-faint)]"> · {l.brand_name}</span>
                         )}
                       </td>
+                      <td className="px-4 py-3 text-[var(--admin-text-muted)]">{lotTypeLabel(l)}</td>
+                      <td className="px-4 py-3 text-[var(--admin-text-muted)]">{lotStrainLabel(l)}</td>
+                      <td className="px-4 py-3 text-[var(--admin-text-muted)]">{lotSizeLabel(l)}</td>
                       <td className="px-4 py-3 text-center">
                         {l.lab ? "✅" : <span className="text-[var(--admin-orange)]">—</span>}
                       </td>
                       <td className="px-4 py-3 text-right text-[var(--admin-text-muted)]">
                         {l.lab?.total_thc_pct != null ? `${l.lab.total_thc_pct}%` : "—"}
                       </td>
+                      <td className="px-4 py-3 text-[var(--admin-text-muted)]">{lotReceivedDate(l)}</td>
                       <td className="px-4 py-3 text-right font-medium text-[var(--admin-text)]">
                         {fmtQty(l.on_hand_qty, l.unit)}
                         {l.is_sample && (
@@ -406,6 +421,9 @@ export default async function InventoryPage({
                             sample
                           </span>
                         )}
+                      </td>
+                      <td className="px-4 py-3 text-right text-[var(--admin-text-muted)]">
+                        {fmtQty(lotSoldQty(l), l.unit)}
                       </td>
                       <td className="px-4 py-3 text-[var(--admin-text-muted)]">
                         {l.expires_on ? (
