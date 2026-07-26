@@ -15,6 +15,8 @@ import {
 } from "@/lib/pos/menu-version";
 import { formatDateTime, formatMoney, formatBytes } from "@/lib/pos/format";
 import type { DiagnosticSeverity } from "@/lib/pos/db-types";
+import { listFactReviews } from "@/lib/pos/fact-review-store";
+import { REVIEW_DIAGNOSTIC_CODES } from "@/lib/pos/fact-review-core";
 import { publishVersion } from "../actions";
 
 export const dynamic = "force-dynamic";
@@ -47,12 +49,14 @@ export default async function ImportReviewPage({
   let diagnostics: Awaited<ReturnType<typeof getImportDiagnostics>> = [];
   let diff: Awaited<ReturnType<typeof diffVersions>> | null = null;
   let items: Awaited<ReturnType<typeof getVersionItems>> = [];
+  let factReviews: Awaited<ReturnType<typeof listFactReviews>> = [];
 
   try {
-    [versions, published, diagnostics] = await Promise.all([
+    [versions, published, diagnostics, factReviews] = await Promise.all([
       listVersions(50),
       getPublishedVersion(),
       getImportDiagnostics(id, { limit: 2000 }),
+      listFactReviews(id),
     ]);
   } catch (err) {
     console.error("[menu-imports/:id] load error:", err);
@@ -74,6 +78,11 @@ export default async function ImportReviewPage({
   const info = diagnostics.filter((d) => d.severity === "info");
 
   const codeSummary = summarizeByCode(diagnostics);
+
+  // SLICE 57: how many diagnostics feed the golden-record exception queue,
+  // and how many decisions are already saved for this import.
+  const factFlagCount = diagnostics.filter((d) => REVIEW_DIAGNOSTIC_CODES.has(d.code)).length;
+  const factDecidedCount = factReviews.length;
 
   // Hidden items (first 100) for review.
   if (version) {
@@ -218,6 +227,25 @@ export default async function ImportReviewPage({
             )}
           </section>
         )}
+
+        {/* Fact review — golden-record exception queue (SLICE 57) */}
+        <section className="rounded-xl border border-[var(--admin-gold)]/25 bg-[var(--admin-gold)]/[0.03] p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold text-white">Fact review</h2>
+              <p className="mt-1 text-xs text-white/50">
+                The dry-run report: every staged row lands in exactly one bucket — auto-accepted,
+                needs-review, or rejected — with its facts, sources, confidence, and plain-English
+                notes. {factFlagCount} flag{factFlagCount === 1 ? "" : "s"} raised
+                {factDecidedCount > 0 ? ` · ${factDecidedCount} decision${factDecidedCount === 1 ? "" : "s"} saved` : ""}.
+                Nothing uncertain goes live without a named human decision.
+              </p>
+            </div>
+            <Button href={`/admin/menu-imports/${id}/facts`} variant="primary" size="sm">
+              Open fact review
+            </Button>
+          </div>
+        </section>
 
         {/* Diagnostics */}
         <section className="rounded-xl border border-white/10 bg-[#0a0a0a] p-5">

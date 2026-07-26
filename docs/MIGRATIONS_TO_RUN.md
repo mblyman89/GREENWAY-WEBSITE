@@ -410,3 +410,18 @@
   Supabase REJECTS inserts that name a column that does not exist yet, so
   receiving will fail with a database error until this migration is applied.
   The inventory-table Strain Type column simply shows an em-dash until then.**
+
+## PROGRAM 3 / SLICE 57 — golden-record fact-review queue
+
+- [ ] **`supabase/migrations/0139_fact_review_queue.sql`** — creates
+  `pos_fact_reviews`, the decision log for the new import Fact Review
+  screen (Menu Imports → open an import → “Open fact review”). Each row
+  records ONE human decision per flagged product: approve as staged, fix
+  (with the corrected values, applied to the staged menu item with
+  provenance “reviewer”), or reject (hides the item with a documented
+  reason). Staff can read; only the server writes. RLS enabled.
+  Idempotent; safe to re-run.
+  **Until this is run, the Fact Review screen still works for LOOKING —
+  buckets, notes, and the CSV export all render from existing data — but
+  saving an approve/fix/reject decision fails with a friendly database
+  error message. Run it before you start working the exception queue.**
