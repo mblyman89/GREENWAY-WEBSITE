@@ -32,6 +32,7 @@
  */
 import "server-only";
 import { revalidatePath } from "next/cache";
+import { revalidatePublicMenuSurfaces } from "@/lib/site/public-surfaces";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseServiceConfigured } from "@/lib/supabase/env";
 import { recordAudit } from "@/lib/auth/audit";
@@ -353,12 +354,12 @@ async function autoPublishIntakeVersion(
   // Refresh the public menu surfaces + the Menu Imports admin list (same set
   // the manual publish action revalidates).
   try {
-    // SLICE 39 connectivity audit: "/shop" was never a route — /specials is
-    // the other menu-derived public surface.
+    // SLICE 59: the canonical public-surfaces list covers "/", "/menu",
+    // "/specials", AND "/vendor-delivery" — the vendor directory is derived
+    // from the live menu, so an auto-publish must refresh it too. (SLICE 39:
+    // "/shop" was never a route.)
     revalidatePath("/admin/menu-imports");
-    revalidatePath("/menu");
-    revalidatePath("/specials");
-    revalidatePath("/");
+    revalidatePublicMenuSurfaces();
   } catch (err) {
     console.error("[intake-menu-staging] revalidate failed:", err);
   }
