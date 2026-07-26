@@ -11,6 +11,7 @@ import { JsonLd } from "@/components/seo/JsonLd";
 
 import type { GreenwayMenuItem } from "@/lib/leafly/types";
 import { formatWebsiteCategory } from "@/lib/pos/category-taxonomy";
+import { cardTypeLabel } from "@/lib/menu/card-type-core";
 import { strainTypeLabel } from "@/lib/menu/strain-taxonomy";
 import { cardCannabinoids, deriveNetWeightLine } from "@/lib/menu/card-cannabinoids";
 import { cardDisplay } from "@/lib/menu/card-brand-core";
@@ -375,6 +376,9 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
             ) : pdpLabel ? (
               <span className="text-[0.78rem] font-black uppercase tracking-[0.18em] text-[var(--orange)]">{pdpLabel}</span>
             ) : null}
+            {/* SLICE 49 (owner card layout): product TYPE line under the
+                brand/vendor, mirroring the menu card. */}
+            <p className="mt-1 text-[0.68rem] font-bold uppercase tracking-[0.2em] text-white/55">{cardTypeLabel(item)}</p>
             <h1 className="mt-2 text-[2.15rem] font-black leading-[0.96] tracking-[-0.045em] text-white md:text-6xl">{pdpName}</h1>
 
             <div className="mt-3 flex flex-wrap items-center gap-2">

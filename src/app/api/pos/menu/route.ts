@@ -145,7 +145,10 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         // beside its real size chip ("3.5 g") instead of "SPR - Sour Diesel
         // -7g · 3.5 g". Pure + reversible; stored data (back office + website)
         // is untouched — only what the register displays changes.
-        name: cleanCardDisplayName(item.name, variant.label),
+        // SLICE 49: the card's category rides along so dose-led categories
+        // (edibles/liquids/topicals/tinctures/RSO) keep their trailing mg dose
+        // in the register name — the dose is identity, not package-size noise.
+        name: cleanCardDisplayName(item.name, variant.label, String(item.category)),
         brand: item.brand || null,
         category: String(item.category),
         categories,

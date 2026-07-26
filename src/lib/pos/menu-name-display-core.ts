@@ -37,6 +37,18 @@
 const TRAILING_SIZE_RE =
   /\s*[-·:|/]?\s*\d+(?:\.\d+)?\s*(?:g|gram|grams|mg|milligram|milligrams|oz|ounce|ounces|ml|milliliter|milliliters|fl\.?\s*oz|fluid\s*ounce|fluidounce|pk|pack|packs)\b\.?\s*$/i;
 
+// SLICE 49 (owner rule): dose-led categories keep the mg dose in the customer
+// name — the transform and intake mastering now deliberately PRESERVE it there
+// ("Const Moonshot Grape 100mg"), so the register cleanup must not strip it
+// back off. Same vocabulary as transform.ts DOSE_LED_CATEGORIES /
+// intake-mastering-core DOSE_LED_CATEGORIES.
+const DOSE_LED_CATEGORIES = new Set(["edible-solid", "edible-liquid", "topical", "tincture", "rso"]);
+
+// Dose-preserving variant of TRAILING_SIZE_RE: identical except the mg
+// vocabulary is EXCLUDED, so "… 100mg" survives while "… 3.5g" still strips.
+const TRAILING_SIZE_NO_MG_RE =
+  /\s*[-·:|/]?\s*\d+(?:\.\d+)?\s*(?:g|gram|grams|oz|ounce|ounces|ml|milliliter|milliliters|fl\.?\s*oz|fluid\s*ounce|fluidounce|pk|pack|packs)\b\.?\s*$/i;
+
 // A trailing bare pack/count word with no number ("… 2-pack" already caught
 // above; this catches "… single", "… each", "… pouch" style trailers).
 const TRAILING_FORM_RE = /\s*[-·:|/]?\s*(?:single|each|pouch|jar|tin|unit)\s*$/i;
@@ -55,15 +67,20 @@ function collapse(value: unknown): string {
  * is not required for the strip to run, because a trailing size token in a
  * card name is noise regardless.
  */
-export function cleanCardDisplayName(name: string, variantLabel?: string | null): string {
+export function cleanCardDisplayName(name: string, variantLabel?: string | null, category?: string | null): string {
   const original = collapse(name);
   if (!original) return original;
+
+  // SLICE 49: dose-led categories (edibles/liquids/topicals/tinctures/RSO)
+  // keep a trailing mg dose — it is part of the product's identity, not a
+  // package-size leftover. Grams/oz/ml/pack trailers still strip.
+  const sizeRe = category && DOSE_LED_CATEGORIES.has(String(category).toLowerCase()) ? TRAILING_SIZE_NO_MG_RE : TRAILING_SIZE_RE;
 
   let s = original;
   // Strip AT MOST a couple of trailing tokens ("… 7g single" → "…"): loop a
   // small bounded number of times so we never spin on pathological input.
   for (let i = 0; i < 3; i += 1) {
-    let next = s.replace(TRAILING_SIZE_RE, "");
+    let next = s.replace(sizeRe, "");
     next = next.replace(TRAILING_FORM_RE, "");
     next = next.replace(/[\s\-·:|/]+$/, "").trim();
     if (next === s) break;
@@ -129,6 +146,15 @@ export function __runMenuNameDisplayCoreTests(): void {
 
   // Whitespace is collapsed.
   ok(cleanCardDisplayName("  Blue   Dream   3.5g  ") === "Blue Dream", "collapses whitespace + strips");
+
+  // SLICE 49: dose-led categories keep the trailing mg dose (owner rule).
+  ok(cleanCardDisplayName("Const Moonshot Grape 100mg", "each", "edible-liquid") === "Const Moonshot Grape 100mg", "dose-led: mg dose preserved");
+  ok(cleanCardDisplayName("Fairwinds Healing Balm 300mg", null, "topical") === "Fairwinds Healing Balm 300mg", "dose-led topical: mg preserved");
+  ok(cleanCardDisplayName("Wana Gummies 100mg 10pk", null, "edible-solid") === "Wana Gummies 100mg", "dose-led: pack strips, mg stays");
+  ok(cleanCardDisplayName("Blaze POG Can 100mg", null, "edible-liquid") === "Blaze POG Can 100mg", "dose-led beverage: mg preserved");
+  // Non-dose categories keep the ORIGINAL behavior byte-for-byte.
+  ok(cleanCardDisplayName("Fairwinds Healing Balm 300mg", null, "flower") === "Fairwinds Healing Balm", "non-dose category still strips mg");
+  ok(cleanCardDisplayName("Blue Dream 3.5g", null, "edible-solid") === "Blue Dream", "dose-led: grams still strip (package size, not dose)");
 
   if (failed > 0) {
     throw new Error(`menu-name-display-core self-tests: ${failed} failed (${passed} passed): ${failures.join("; ")}`);

@@ -124,6 +124,17 @@ export type IntakeMasteringPlan = {
 
 // --- Family normalization (mirrors transform.ts :265-269 and :734-775) -----
 
+/**
+ * SLICE 49 mirror of transform.ts DOSE_LED_CATEGORIES (owner rule): edible /
+ * liquid / topical / tincture / RSO customer names KEEP their mg dose and
+ * ratio info ("people will only buy it because it's the ratio or specific
+ * cannabinoid they need"). For these categories the mg token is part of the
+ * product IDENTITY too — a 10mg single and a 100mg pack are DIFFERENT cards
+ * (one card name cannot honestly carry two doses), and a restocked 50mg lot
+ * must never merge into a live card named "…100mg".
+ */
+const DOSE_LED_CATEGORIES = new Set(["edible-solid", "edible-liquid", "topical", "tincture", "rso"]);
+
 /** Categories whose display/family name is the STRAIN (transform.ts :763). */
 const STRAIN_LED_CATEGORIES = new Set([
   "flower",
@@ -172,17 +183,21 @@ function titleCase(value: string): string {
  * to the raw name or the category (that would over-merge), so an
  * unconfident result returns NULL instead.
  */
-export function familyFromName(value: string, labels: string | string[]): string | null {
+export function familyFromName(value: string, labels: string | string[], preserveDose = false): string | null {
   let s = normalizeWhitespace(value).replace(/_+/g, " ").replace(/\s+/g, " ").trim();
   for (const label of Array.isArray(labels) ? labels : [labels]) {
     const comparable = normalizeWhitespace(label).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     if (comparable) s = s.replace(new RegExp(`^${comparable}\\s*[-:|]?\\s*`, "i"), "");
   }
+  // SLICE 49 (mirror of transform.ts stripVariantNoise dose mode): canonicalize the dose
+  // spelling first ("100 MG" → "100mg") so identities are stable, then EXCLUDE mg from the
+  // size strip so the dose stays part of the family/display for dose-led categories.
+  if (preserveDose) s = s.replace(/\b(\d+(?:\.\d+)?)\s*(?:mg|milligram|milligrams)\b/gi, "$1mg");
+  const sizeUnitRe = preserveDose
+    ? /\b\d+(?:\.\d+)?\s*(?:g|gram|grams|oz|ounce|ounces|ml|milliliter|milliliters|fl\.?\s*oz|fluid\s*ounce|fluidounce)\b/gi
+    : /\b\d+(?:\.\d+)?\s*(?:g|gram|grams|mg|milligram|milligrams|oz|ounce|ounces|ml|milliliter|milliliters|fl\.?\s*oz|fluid\s*ounce|fluidounce)\b/gi;
   s = s
-    .replace(
-      /\b\d+(?:\.\d+)?\s*(?:g|gram|grams|mg|milligram|milligrams|oz|ounce|ounces|ml|milliliter|milliliters|fl\.?\s*oz|fluid\s*ounce|fluidounce)\b/gi,
-      " ",
-    )
+    .replace(sizeUnitRe, " ")
     // Numbered pack tokens ("5pk", "3 pack", "2-pack") strip away so a
     // multi-pack lands on the same family as its single form. Safe deviation
     // from transform.ts stripVariantNoise: identity here is computed by THIS
@@ -222,7 +237,10 @@ export function deriveFamily(input: {
   if (STRAIN_LED_CATEGORIES.has(input.category) && strain) {
     return { family: collapseFamilyKeyPart(strain), display: strain };
   }
-  const stripped = familyFromName(input.name, [input.brand ?? "", input.vendor]);
+  // SLICE 49: dose-led categories keep the mg dose in the family AND display —
+  // matching the Cultivera transform's dose-preserving display names so intake
+  // restocks still line up with live cards, and different doses never merge.
+  const stripped = familyFromName(input.name, [input.brand ?? "", input.vendor], DOSE_LED_CATEGORIES.has(input.category));
   if (!stripped) return null;
   return { family: collapseFamilyKeyPart(stripped), display: stripped };
 }
@@ -650,8 +668,10 @@ export function __runIntakeMasteringCoreTests(): { passed: number } {
     assert(p.newCards.length === 2, "strain split: two cards");
   }
 
-  // Non-strain category groups on the noise-stripped name: sizes/pack words
-  // strip away, brand prefix strips, so both land on one "Rainbow Chews" card.
+  // SLICE 49 (owner rule): edible names KEEP their mg dose, and the dose is part
+  // of the identity — a 100mg pack and a 10mg single are DIFFERENT products, so
+  // they become TWO cards (pre-SLICE-49 they merged into one dose-less
+  // "Rainbow Chews" card, which lost the info the owner says sells the product).
   {
     const p = plan(
       [
@@ -674,8 +694,27 @@ export function __runIntakeMasteringCoreTests(): { passed: number } {
         ["d2", enrich({ websiteCategory: "edible-solid", packageLabel: "10mg" })],
       ],
     );
-    assert(p.newCards.length === 1, "edible rollup: one card");
-    assert(p.newCards[0].name === "Rainbow Chews", "edible rollup: family name derived");
+    assert(p.newCards.length === 2, "edible dose split: two cards (doses never merge)");
+    const names = p.newCards.map((c) => c.name).sort();
+    assert(names.includes("Fairwinds - Rainbow Chews 100mg pack"), "edible dose split: 100mg standalone keeps its draft name");
+    assert(names.includes("Rainbow_Chews_10mg_single"), "edible dose split: 10mg standalone keeps its draft name");
+  }
+
+  // SLICE 49: SAME dose still rolls up — two lots of the identical 100mg product
+  // become ONE card whose family name keeps the dose.
+  {
+    const p = plan(
+      [
+        draft({ id: "d1", pos_product_key: "LOT-D1", name: "Fairwinds - Rainbow Chews 100mg pack", strain_name: null }),
+        draft({ id: "d2", pos_product_key: "LOT-D2", name: "Rainbow_Chews_100_mg_single", strain_name: null, price_minor_units: 900 }),
+      ],
+      [
+        ["d1", enrich({ websiteCategory: "edible-solid", packageLabel: "100mg" })],
+        ["d2", enrich({ websiteCategory: "edible-solid", packageLabel: "100mg" })],
+      ],
+    );
+    assert(p.newCards.length === 1, "edible same-dose rollup: one card");
+    assert(p.newCards[0].name === "Rainbow Chews 100mg", "edible rollup: family name keeps the dose");
     assert(p.newCards[0].variants.length === 2, "edible rollup: two variants");
   }
 
@@ -919,8 +958,9 @@ export function __runIntakeMasteringCoreTests(): { passed: number } {
       "pack-axis restock: merged lot's pack category recorded for filter union");
   }
 
-  // Other variant-bearing categories: topicals group on the noise-stripped
-  // name (sizes strip away, brand prefix strips).
+  // SLICE 49: topicals are dose-led too — a 100mg balm and a 300mg balm are
+  // DIFFERENT doses so they stay separate cards; two lots of the SAME dose
+  // still roll up on the noise-stripped, dose-keeping name.
   {
     const p = plan(
       [
@@ -932,8 +972,22 @@ export function __runIntakeMasteringCoreTests(): { passed: number } {
         ["t2", enrich({ websiteCategory: "topical", packageLabel: "300mg" })],
       ],
     );
-    assert(p.newCards.length === 1, "topical: sizes roll up on the stripped name");
-    assert(p.newCards[0].variants.length === 2, "topical: two variants");
+    assert(p.newCards.length === 2, "topical dose split: different doses never merge");
+  }
+  {
+    const p = plan(
+      [
+        draft({ id: "t1", pos_product_key: "LOT-T1", name: "Healing Balm 300mg", strain_name: null, price_minor_units: 4200 }),
+        draft({ id: "t2", pos_product_key: "LOT-T2", name: "Fairwinds Healing Balm 300mg jar", strain_name: null, price_minor_units: 4200 }),
+      ],
+      [
+        ["t1", enrich({ websiteCategory: "topical", packageLabel: "300mg" })],
+        ["t2", enrich({ websiteCategory: "topical", packageLabel: "300mg" })],
+      ],
+    );
+    assert(p.newCards.length === 1, "topical same-dose rollup: one card");
+    assert(p.newCards[0].name === "Healing Balm 300mg", "topical rollup: dose kept in the family name");
+    assert(p.newCards[0].variants.length === 2, "topical rollup: two variants");
   }
 
   // RSO is strain-led: two syringe sizes of the same strain roll up.
