@@ -395,6 +395,9 @@ export async function stageManifest(
       }),
       product_name: line.product_name,
       strain_name: line.strain_name,
+      // Rule 1.4 (docs/data-governance.md): strain TYPE lives in its own box,
+      // split from the strain name at the parser door (migration 0138).
+      strain_type: line.strain_type,
       category: line.category,
       inventory_type: line.inventory_type,
       unit_weight: line.unit_weight,
@@ -1249,7 +1252,7 @@ export async function listManifestLots(manifestId: string) {
     .select(
       // SLICE 39: + unit_cost_minor_units for the intake review summary
       // (honest "confirm pricing" flags instead of a hardcoded null).
-      "id, product_name, lot_code, received_qty, unit, pos_product_key, lab_result_id, status, expires_on, is_sample, strain_name, category, inventory_type, disposition, reject_reason, reject_reason_code, unit_cost_minor_units",
+      "id, product_name, lot_code, received_qty, unit, pos_product_key, lab_result_id, status, expires_on, is_sample, strain_name, strain_type, category, inventory_type, disposition, reject_reason, reject_reason_code, unit_cost_minor_units",
     )
     .eq("manifest_id", manifestId)
     .order("product_name", { ascending: true });
@@ -1267,6 +1270,7 @@ export async function listManifestLots(manifestId: string) {
           expires_on: string | null;
           is_sample: boolean;
           strain_name: string | null;
+          strain_type: string | null;
           // RAW LCB/CCRS classification as stored (untouched — for display/resolve only).
           category: string | null;
           inventory_type: string | null;

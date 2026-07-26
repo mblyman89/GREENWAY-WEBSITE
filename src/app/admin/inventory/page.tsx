@@ -9,7 +9,7 @@ import { Input, Select, Button } from "@/components/admin/ui";
 import { MissingInsight } from "@/components/admin/insight/MissingInsight";
 import { CatalogStageStrip } from "@/components/admin/catalog/CatalogStageStrip";
 import { listLotsPaged, computeInventoryStats, EXPIRING_SOON_DAYS } from "@/lib/inventory/store";
-import { lotReceivedDate, lotTypeLabel, lotSizeLabel, lotSoldQty, lotStrainLabel } from "@/lib/inventory/lot-table-core";
+import { lotReceivedDate, lotTypeLabel, lotSizeLabel, lotSoldQty, lotStrainLabel, lotStrainTypeLabel } from "@/lib/inventory/lot-table-core";
 import { listWindow, parsePageParam, DEFAULT_PAGE_SIZE } from "@/lib/admin/list-window-core";
 import { LOT_SORTS, parseYesNo, resolveSort } from "@/lib/admin/list-filter-core";
 import { ListPager } from "@/components/admin/ux/ListPager";
@@ -366,6 +366,8 @@ export default async function InventoryPage({
                   <th className="px-4 py-3">Vendor · brand</th>
                   <th className="px-4 py-3">Type</th>
                   <th className="px-4 py-3">Strain</th>
+                  {/* SLICE 54: strain TYPE from its own column (migration 0138, Rule 1.4). */}
+                  <th className="px-4 py-3">Strain Type</th>
                   <th className="px-4 py-3">Size</th>
                   <th className="px-4 py-3 text-center">COA</th>
                   <th className="px-4 py-3 text-right">THC</th>
@@ -406,6 +408,7 @@ export default async function InventoryPage({
                       </td>
                       <td className="px-4 py-3 text-[var(--admin-text-muted)]">{lotTypeLabel(l)}</td>
                       <td className="px-4 py-3 text-[var(--admin-text-muted)]">{lotStrainLabel(l)}</td>
+                      <td className="px-4 py-3 text-[var(--admin-text-muted)]">{lotStrainTypeLabel(l)}</td>
                       <td className="px-4 py-3 text-[var(--admin-text-muted)]">{lotSizeLabel(l)}</td>
                       <td className="px-4 py-3 text-center">
                         {l.lab ? "✅" : <span className="text-[var(--admin-orange)]">—</span>}

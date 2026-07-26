@@ -78,6 +78,22 @@ export function lotStrainLabel(lot: Pick<LotTableFields, "strain_name">): string
   return strain || EM_DASH;
 }
 
+/**
+ * Strain type from its OWN column (migration 0138 — Rule 1.4), title-cased
+ * for display; em-dash when unset/unknown. Never derived here — the
+ * splitting happens at the intake door / migration, not at render time.
+ * Full vocabulary: the big three plus the menu pipeline's hyphenated
+ * hybrids and CBD ("indica-hybrid" → "Indica Hybrid", "cbd" → "CBD").
+ */
+export function lotStrainTypeLabel(lot: { strain_type?: string | null }): string {
+  const t = String(lot.strain_type ?? "").trim().toLowerCase();
+  if (t === "indica" || t === "sativa" || t === "hybrid") return t.charAt(0).toUpperCase() + t.slice(1);
+  if (t === "indica-hybrid") return "Indica Hybrid";
+  if (t === "sativa-hybrid") return "Sativa Hybrid";
+  if (t === "cbd") return "CBD";
+  return EM_DASH;
+}
+
 // ---------------------------------------------------------------------------
 // self-tests (pure, deterministic) — registered in the pure runner
 // ---------------------------------------------------------------------------
@@ -115,6 +131,17 @@ export function __runLotTableCoreTests(): void {
   ok(lotStrainLabel({ strain_name: "Blue Dream" }) === "Blue Dream", "strain: verbatim");
   ok(lotStrainLabel({ strain_name: "  " }) === EM_DASH, "strain: blank yields em-dash");
   ok(lotStrainLabel({ strain_name: null }) === EM_DASH, "strain: null yields em-dash");
+
+  // Strain type (SLICE 54): own column, display title-cased, never derived.
+  ok(lotStrainTypeLabel({ strain_type: "indica" }) === "Indica", "strain type: indica title-cased");
+  ok(lotStrainTypeLabel({ strain_type: "SATIVA" }) === "Sativa", "strain type: case-insensitive");
+  ok(lotStrainTypeLabel({ strain_type: "hybrid" }) === "Hybrid", "strain type: hybrid");
+  ok(lotStrainTypeLabel({ strain_type: null }) === EM_DASH, "strain type: null yields em-dash");
+  ok(lotStrainTypeLabel({ strain_type: "indica-hybrid" }) === "Indica Hybrid", "strain type: indica-hybrid");
+  ok(lotStrainTypeLabel({ strain_type: "sativa-hybrid" }) === "Sativa Hybrid", "strain type: sativa-hybrid");
+  ok(lotStrainTypeLabel({ strain_type: "cbd" }) === "CBD", "strain type: cbd renders CBD");
+  ok(lotStrainTypeLabel({ strain_type: "unknown" }) === EM_DASH, "strain type: unknown yields em-dash");
+  ok(lotStrainTypeLabel({}) === EM_DASH, "strain type: absent field yields em-dash");
 
   console.log(`lot-table-core: ${passed} assertions passed`);
 }

@@ -45,6 +45,7 @@ function blankPdfLine(raw: unknown, warnings: string[]): ParsedLine {
     brand_name: null,
     category: null,
     strain_name: null,
+    strain_type: null,
     received_qty: 0,
     unit: "each",
     unit_cost_minor_units: null,
@@ -339,7 +340,11 @@ export function parseShippingManifestText(text: string): ParsedManifest | null {
     l.product_name = cleanName || null;
     l.lot_code = cur.id;
     l.pos_product_key = cur.id; // best available key for catalog linking
-    l.inventory_type = strainType;
+    // SLICE 54 fix (Rule 1.4, docs/data-governance.md): the [H]/[I]/[S] token
+    // is a STRAIN TYPE, not an LCB inventory type. It used to be stuffed into
+    // inventory_type (wrong box); it now lands in the dedicated strain_type
+    // field. inventory_type stays null — the PDF genuinely doesn't carry it.
+    l.strain_type = strainType;
     l.received_qty = Number.isFinite(shipped) ? shipped : 0;
     l.unit = "each";
     parsedLines.push(l);
@@ -412,7 +417,9 @@ export function __runPdfManifestTests(sampleText: string): { passed: number; fai
   ok(m?.lines.length === 9, `all 9 line items parsed (got ${m?.lines.length})`);
   ok(m?.lines[0].lot_code === "11373796120454282", "line 1 lot id");
   ok(m?.lines[0].product_name === "Northwest Concentrates - SELECT DABS - Moonbow - 1g", "line 1 name cleaned");
-  ok(m?.lines[0].inventory_type === "hybrid", "line 1 type from [H]");
+  // SLICE 54: [H] token is a STRAIN type; inventory_type no longer receives it.
+  ok(m?.lines[0].strain_type === "hybrid", "line 1 strain type from [H]");
+  ok(m?.lines[0].inventory_type === null, "line 1 inventory_type stays null (right box)");
   ok(m?.lines[0].received_qty === 20, "line 1 shipped qty");
   ok(m?.lines[8].lot_code === "11373840130059962", "line 9 lot id parsed");
   ok(m?.lines[8].product_name === "Northwest CCELL® Classic Cart - 1g - Wedding Cake", "line 9 name");

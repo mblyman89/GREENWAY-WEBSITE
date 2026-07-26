@@ -53,6 +53,8 @@ export type ImportLotSource = {
   /** CCRS inventory type ("Usable Marijuana", "Solid Edible", …). */
   inventoryType: string;
   strainName: string;
+  /** Card strain type ("indica" | "sativa" | "hybrid" | hyphenated hybrids | "cbd" | "unknown"). */
+  strainType: string;
   brand: string;
   vendor: string;
   /** Units Available For Sale for THIS row (integer, ≥ 0). */
@@ -82,6 +84,8 @@ export type PlannedImportLot = {
   posProductKey: string;
   productName: string;
   strainName: string | null;
+  /** inventory_lots.strain_type — card strain type, null when unknown (Rule 1.4). */
+  strainType: string | null;
   category: string | null;
   inventoryType: string | null;
   unitWeight: number | null;
@@ -313,6 +317,8 @@ export function planImportLots(sources: readonly ImportLotSource[]): ImportLotPl
       posProductKey: first.posProductKey,
       productName: first.productName,
       strainName: first.strainName.trim() || null,
+      // "unknown" is the pipeline's null — store real types only (Rule 1.4).
+      strainType: first.strainType.trim() && first.strainType !== "unknown" ? first.strainType : null,
       category: first.category.trim() || null,
       inventoryType: first.inventoryType.trim() || null,
       unitWeight: first.unitWeight,
@@ -420,6 +426,7 @@ export function __runImportLotCoreTests(): void {
     category: "Flower",
     inventoryType: "Usable Marijuana",
     strainName: "Blue Dream",
+    strainType: "hybrid",
     brand: "Acme",
     vendor: "ACME FARMS",
     units: 10,
@@ -457,6 +464,8 @@ export function __runImportLotCoreTests(): void {
     ok(l.expiresOn === null, "blank expiration stays null (never invented)");
     ok(l.coaPresent === true, "COA Y -> present");
     ok(l.notes.includes("Cultivera migration"), "provenance note");
+    ok(l.strainType === "hybrid", "strain type carried into lot plan (SLICE 54)");
+    ok(planImportLots([src({ strainType: "unknown" })]).lots[0].strainType === null, "'unknown' strain type stored as null");
   }
 
   // Duplicate barcode merge: units summed, earliest received date kept.

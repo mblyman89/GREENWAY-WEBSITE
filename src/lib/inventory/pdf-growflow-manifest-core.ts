@@ -136,6 +136,7 @@ function toParsedLine(g: GfLine): ParsedLine {
     brand_name: null,
     category: g.category,
     strain_name: null,
+    strain_type: null,
     received_qty: g.qty,
     unit: "each",
     unit_cost_minor_units: null,
