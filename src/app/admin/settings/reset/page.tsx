@@ -8,14 +8,15 @@ export const dynamic = "force-dynamic";
 
 // What the reset removes vs. keeps — surfaced verbatim so the admin knows
 // exactly what happens before typing the confirmation phrase. Mirrors the
-// reset_operational_data() DB function (migration 0069).
+// reset_operational_data() DB function (migration 0069, guarded in 0097,
+// coverage sweep in 0140).
 const CLEARED: { group: string; items: string }[] = [
-  { group: "Sales & COGS", items: "Orders, order lines & events, medical exempt sales, sales-limit events, excise & CCRS export/adjustment batches, syndication logs" },
-  { group: "Inventory", items: "Inventory lots & adjustments, lab results (COAs), cycle counts, destruction events, vendor returns, trade samples, inbound manifests, manifest events & payments" },
+  { group: "Sales & COGS", items: "Orders, order lines & events, register sale events, receipt print jobs, customer returns, special-discount uses, medical exempt sales, sales-limit events, excise & CCRS export/adjustment batches, CCRS week submissions & reminder log, syndication logs" },
+  { group: "Inventory", items: "Inventory lots & adjustments, lab results (COAs), cycle counts, destruction events, vendor returns, trade samples & sample JSON imports, inbound manifests, manifest events & payments, non-cannabis invoices & adjustments" },
   { group: "Purchasing", items: "Purchase orders & lines" },
-  { group: "Imported products", items: "Menu imports, staged/published menu versions, menu items & variants, catalog drafts, AI & master suggestions" },
+  { group: "Imported products", items: "Menu imports, staged/published menu versions, menu items & variants, fact-review decisions, catalog drafts, AI & master suggestions" },
   { group: "Customers & loyalty", items: "Customers, loyalty accounts / ledger / redemptions, loyalty signups, patient authorizations, newsletter & inbound-email activity" },
-  { group: "Registers & staffing", items: "Drawer sessions / counts / drops, till verifications, time punches, shifts, payroll runs & lines, equipment service history" },
+  { group: "Registers & staffing", items: "Drawer sessions / counts / drops, safe counts & swaps, till verifications, time punches, shifts, payroll runs & lines & source documents, equipment service history" },
   { group: "Rehearsal & usage", items: "Sage import uploads & chat, AI usage ledger" },
 ];
 
@@ -23,7 +24,7 @@ const KEPT: { group: string; items: string }[] = [
   { group: "Your settings", items: "Store profile, tax, pricing, license, accounting/ACH, loyalty config & tiers, reorder, samples, sales limits, medical endorsement, receipt printer, integrations & credentials, inventory & website category types" },
   { group: "Knowledge base", items: "All strains, terpenes, brands, category terms, banned phrases, image substitutes, and notes" },
   { group: "Your content", items: "Site content & revisions, page sections, blog posts, home carousel, FAQ, media library, SEO entries, marketing ideas" },
-  { group: "Catalog you curate", items: "Product masters & members, product enrichments, brands & vendors (and their aliases)" },
+  { group: "Catalog you curate", items: "Product masters & members, product enrichments, brands & vendors (and their aliases), non-cannabis products" },
   { group: "Promotions", items: "Promotions, targets, exclusions, audit snapshots" },
   { group: "People & hardware", items: "Employees, staff profiles, registers, equipment, passkeys" },
   { group: "History", items: "The activity / audit log" },
