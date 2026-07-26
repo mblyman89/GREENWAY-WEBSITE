@@ -75,6 +75,7 @@ import { __runVariantLotCoreTests } from "../../src/lib/pos/variant-lot-core";
 import { __runImportLotCoreTests } from "../../src/lib/pos/import-lot-core";
 import { __runCardBrandCoreTests } from "../../src/lib/menu/card-brand-core";
 import { __runVendorDirectoryCoreTests } from "../../src/lib/menu/vendor-directory-core";
+import { __runCardTypeCoreTests } from "../../src/lib/menu/card-type-core";
 import { __runIntakeMasteringCoreTests } from "../../src/lib/pos/intake-mastering-core";
 import { __runIntakeMenuStagingCoreTests } from "../../src/lib/pos/intake-menu-staging-core";
 import { __runPriceOverrideCoreTests } from "../../src/lib/pos/price-override-core";
@@ -269,6 +270,7 @@ async function main() {
   __runImportLotCoreTests();
   __runCardBrandCoreTests();
   __runVendorDirectoryCoreTests();
+  __runCardTypeCoreTests();
   __runIntakeMasteringCoreTests();
   __runIntakeMenuStagingCoreTests();
   __runPriceOverrideCoreTests();

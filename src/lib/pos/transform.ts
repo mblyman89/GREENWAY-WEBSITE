@@ -701,7 +701,18 @@ function collapseInventoryRows(inventories: InventoryRow[]): Map<string, Collaps
   return collapsed;
 }
 
-function stripVariantNoise(value: string, brand: string, category: string): string {
+// SLICE 49 (owner rule): categories whose DOSE info must stay in the customer-facing
+// name — "for edibles and rso and liquids and topicals and such, I want the customer
+// name to be inclusive of ratios and such... people will only buy it because it's the
+// ratio or specific cannabinoid they need." Ratio tokens ("1:1") and cannabinoid words
+// (CBD/CBN/CBG) were never stripped; the mg dose token was — for these categories it is
+// now PRESERVED. Note "tincture"/"rso" are included for completeness even though the
+// Cultivera CATEGORY_MAP folds those raw categories into edible-liquid/concentrate —
+// intake-onboarded cards can carry them directly, and the mirrored intake helper
+// (intake-mastering-core.ts) uses the same vocabulary.
+const DOSE_LED_CATEGORIES: ReadonlySet<GreenwayCategory> = new Set<GreenwayCategory>(["edible-solid", "edible-liquid", "topical", "tincture", "rso"]);
+
+function stripVariantNoise(value: string, brand: string, category: string, preserveDose = false): string {
   // Section E: convert underscores to spaces up front so machine-style names like
   // "Bite_ind_peanut_butter_chip_1:1_10pk" or "Chew_sat_..." read as normal words. Done before
   // brand stripping and tokenization so the rest of the pipeline sees clean word boundaries; the
@@ -709,8 +720,18 @@ function stripVariantNoise(value: string, brand: string, category: string): stri
   let s = normalizeWhitespace(value).replace(/_+/g, " ").replace(/\s+/g, " ").trim();
   const brandComparable = normalizeWhitespace(brand).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   if (brandComparable) s = s.replace(new RegExp(`^${brandComparable}\\s*[-:|]?\\s*`, "i"), "");
+  // SLICE 49: in dose-preserving mode, canonicalize the dose spelling FIRST ("100 MG" /
+  // "100 milligrams" → "100mg") so the grouping identity derived from this display name is
+  // stable — "100 mg" and "100mg" variants of the same product must land on ONE card.
+  if (preserveDose) s = s.replace(/\b(\d+(?:\.\d+)?)\s*(?:mg|milligram|milligrams)\b/gi, "$1mg");
+  // Package-size tokens strip away (the size lives on the variant chip). In dose-preserving
+  // mode the mg vocabulary is EXCLUDED from this strip so the dose stays in the name;
+  // grams/oz/ml are still package sizes and still strip either way.
+  const sizeUnitRe = preserveDose
+    ? /\b\d+(?:\.\d+)?\s*(?:g|gram|grams|oz|ounce|ounces|ml|milliliter|milliliters|fl\.?\s*oz|fluid\s*ounce|fluidounce)\b/gi
+    : /\b\d+(?:\.\d+)?\s*(?:g|gram|grams|mg|milligram|milligrams|oz|ounce|ounces|ml|milliliter|milliliters|fl\.?\s*oz|fluid\s*ounce|fluidounce)\b/gi;
   s = s
-    .replace(/\b\d+(?:\.\d+)?\s*(?:g|gram|grams|mg|milligram|milligrams|oz|ounce|ounces|ml|milliliter|milliliters|fl\.?\s*oz|fluid\s*ounce|fluidounce)\b/gi, " ")
+    .replace(sizeUnitRe, " ")
     // Numbered pack tokens ("5pk", "3 pack", "2-pack") strip away so a multi-pack lands on the
     // same display family as its single form — EXACT parity with the intake system's
     // familyFromName (intake-mastering-core.ts), so a Cultivera-imported card and an
@@ -738,7 +759,9 @@ function deriveDisplayName(product: ProductRow | undefined, inv: CollapsedInvent
     const displayName = strain || stripVariantNoise(firstNonBlank(product?.["Product Name"], inv.productName), firstNonBlank(product?.Brand, inv.brand), inv.category);
     return { displayName, strainName: displayName };
   }
-  const displayName = stripVariantNoise(firstNonBlank(product?.["Product Name"], inv.productName), firstNonBlank(product?.Brand, inv.brand), inv.category);
+  // SLICE 49: dose-led categories keep their mg dose in the display name (owner rule) —
+  // "Const Moonshot Grape 100mg" stays "Const Moonshot Grape 100mg", never "Const Moonshot Grape".
+  const displayName = stripVariantNoise(firstNonBlank(product?.["Product Name"], inv.productName), firstNonBlank(product?.Brand, inv.brand), inv.category, DOSE_LED_CATEGORIES.has(category));
   return { displayName, strainName: strain || displayName };
 }
 
@@ -828,7 +851,7 @@ function buildGroups(products: ProductRow[], inventories: InventoryRow[]) {
       const afterPopcorn = detectPopcornBud(firstNonBlank(product["Product Name"]), rawCategory);
       const category = detectInfusedFlower(firstNonBlank(product["Product Name"]), afterPopcorn);
       const brand = firstNonBlank(product.Brand, "Greenway");
-      const displayName = stripVariantNoise(firstNonBlank(product["Product Name"]), brand, product.Category ?? "");
+      const displayName = stripVariantNoise(firstNonBlank(product["Product Name"]), brand, product.Category ?? "", DOSE_LED_CATEGORIES.has(category));
       const strainName = firstNonBlank(normalizeWhitespace(product.Strain), displayName);
       const identity = groupingIdentity(product, { brand, vendor: "", category: product.Category ?? "", inventoryType: product["Inventory Type"] ?? "", medical: false, strain: strainName, productKey, productName: product["Product Name"] ?? "", rows: [], totalUnits: 0, package: parsePackageSize(product["Package Size"] ?? ""), priceMinorUnits: priceToMinorUnits(product.Price), totalRaw: null, cbdRaw: null, thcRaw: null, cbdaRaw: null, thcaRaw: null } as CollapsedInventory, category, displayName) + "|no-inventory";
       const group: ProductGroup = {
@@ -1316,6 +1339,20 @@ export function __runTransformCoreTests(): void {
     ok(stripVariantNoise("Fairwinds - Healing Balm 300mg", "Fairwinds", "Topical") === "Healing Balm", "brand prefix + mg dose stripped");
     ok(stripVariantNoise("Bite_ind_peanut_butter_chip_1:1_10pk", "", "Edible") === "Bite Ind Peanut Butter Chip 1:1", "underscore name cleans, ratio preserved, 10pk stripped");
     ok(stripVariantNoise("AK-47 3.5g", "", "Flower") === "Ak 47", "mid-name number survives, only size stripped");
+
+    // --- SLICE 49: dose-preserving mode (owner rule: edibles/liquids/topicals/RSO keep
+    // their mg/ratio info in the customer name). Pinned on REAL lost names from the
+    // owner's Cultivera export (117 products lost their dose before this fix).
+    ok(stripVariantNoise("Const Moonshot Grape 100mg", "", "Edible", true) === "Const Moonshot Grape 100mg", "dose mode: trailing mg dose preserved");
+    ok(stripVariantNoise("Canna Cantina Shot - Dankchata - 100mg", "", "Shots", true) === "Canna Cantina Dankchata 100mg", "dose mode: mg survives separator cleanup ('shot' is category noise)");
+    ok(stripVariantNoise("Wook Gone Wild Tea Mango Lemonade - 400mg", "", "Beverage", true) === "Wook Gone Wild Tea Mango Lemonade 400mg", "dose mode: beverage keeps 400mg");
+    ok(stripVariantNoise("A.C. Topical Drops - 1000mg THC", "", "Topical", true) === "A.C. Drops 1000mg THC", "dose mode: mg + cannabinoid word preserved ('topical' is category noise)");
+    ok(stripVariantNoise("Blaze POG - 6oz Can - 100mg THC", "", "Beverage", true) === "Blaze Pog Can 100mg THC", "dose mode: package oz stripped, dose mg kept");
+    ok(stripVariantNoise("Rainbow Chews 100 MG 10pk", "", "Gummies", true) === "Rainbow Chews 100mg", "dose mode: '100 MG' canonicalizes to '100mg', pack token still stripped");
+    ok(stripVariantNoise("Bite_ind_peanut_butter_chip_1:1_10pk", "", "Edible", true) === "Bite Ind Peanut Butter Chip 1:1", "dose mode: ratio still preserved, pack stripped");
+    ok(stripVariantNoise("Fairwinds - Healing Balm 300mg", "Fairwinds", "Topical", true) === "Healing Balm 300mg", "dose mode: brand strips, dose stays");
+    // Default (non-dose) mode is byte-for-byte UNCHANGED for flower-family names.
+    ok(stripVariantNoise("Fairwinds - Healing Balm 300mg", "Fairwinds", "Topical") === "Healing Balm", "non-dose mode still strips mg (unchanged default)");
 
     // --- SLICE 46: lotSources exposure + master-less group merge fix --------
     // Build a tiny in-memory workbook pair and run the REAL pipeline.

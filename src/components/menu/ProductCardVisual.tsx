@@ -1,8 +1,8 @@
 import type { CSSProperties } from "react";
 import Link from "next/link";
 import type { GreenwayMenuItem } from "@/lib/leafly/types";
-import { formatWebsiteCategory } from "@/lib/pos/category-taxonomy";
 import { strainTypeLabel } from "@/lib/menu/strain-taxonomy";
+import { cardTypeLabel, websiteCategoryCardLabel } from "@/lib/menu/card-type-core";
 import { cardCannabinoids, deriveNetWeightLine } from "@/lib/menu/card-cannabinoids";
 import { cardDisplay } from "@/lib/menu/card-brand-core";
 import { ProductCardPriceSelector } from "./ProductCardPriceSelector";
@@ -111,17 +111,8 @@ const cardTones: Record<GreenwayMenuItem["strainType"], CardTone> = {
   },
 };
 
-const categoryAliases: Partial<Record<GreenwayMenuItem["category"], string>> = {
-  "preroll-pack": "Preroll",
-  preroll: "Preroll",
-  "infused-preroll": "Preroll",
-  "infused-preroll-pack": "Preroll",
-  "disposable-cartridge": "Vape",
-  cartridge: "Vape",
-  "edible-solid": "Edible",
-  "edible-liquid": "Drink",
-  paraphernalia: "Accessory",
-};
+// SLICE 49: categoryAliases moved to card-type-core.ts (websiteCategoryCardLabel)
+// so the card mockup label and the new type line share one source of truth.
 
 function cardStyle(tone: CardTone): CSSProperties {
   // Split neon: left uses the leaning color, right uses the base hybrid color.
@@ -166,7 +157,7 @@ function cardToneForItem(item: GreenwayMenuItem) {
 }
 
 function categoryLabel(item: GreenwayMenuItem) {
-  return categoryAliases[item.category] ?? formatWebsiteCategory(item.category);
+  return websiteCategoryCardLabel(item.category);
 }
 
 /**
@@ -186,12 +177,13 @@ function productCardDisplayName(item: GreenwayMenuItem, baseName: string = item.
   // SLICE 47 (owner Q4): `baseName` is the label-clipped name from cardDisplay —
   // the brand/vendor shown above the picture is removed from the front of the
   // name (display only; item.name itself is never mutated).
-  const rawCategory = item.posInventoryCategory?.trim();
-  if (!rawCategory || rawCategory.toLowerCase() === "flower") return baseName;
-  const normalizedName = baseName.trim().toLowerCase();
-  const normalizedCategory = rawCategory.toLowerCase();
-  if (normalizedName.endsWith(normalizedCategory)) return baseName;
-  return `${baseName} ${rawCategory}`;
+  // SLICE 49: the product TYPE is no longer appended here — it has its own
+  // dedicated line under the brand/vendor label (owner card-layout request),
+  // so the name stays simple. Ratio/cannabinoid info living IN the source name
+  // (e.g. "Paradise Punch 1:1 THC:CBD 200mg") is untouched — clipping only ever
+  // removes the brand/vendor prefix.
+  void item;
+  return baseName;
 }
 
 function brandInitials(brand: string) {
@@ -295,11 +287,18 @@ export function ProductCardVisual({ item, salePriceMinorUnits, saleBadgeLabel, c
 
       <div>
         {cardLabel ? (
-          <p className="truncate pb-3 text-center text-lg font-black leading-none text-white md:text-xl">{cardLabel}</p>
+          <p className="truncate pb-1 text-center text-lg font-black leading-none text-white md:text-xl">{cardLabel}</p>
         ) : (
           // Keep the card grid aligned when no brand/vendor exists to show.
-          <p className="pb-3 text-center text-lg font-black leading-none text-transparent md:text-xl" aria-hidden="true">&nbsp;</p>
+          <p className="pb-1 text-center text-lg font-black leading-none text-transparent md:text-xl" aria-hidden="true">&nbsp;</p>
         )}
+        {/* SLICE 49 (owner card layout): product TYPE gets its own line right
+            under the brand/vendor — "Live Resin", "Gummies", "Flower" — so the
+            product name below the picture stays simple. Never empty (falls
+            back to the website category), so the grid stays aligned. */}
+        <p className="truncate pb-2 text-center text-[0.7rem] font-bold uppercase tracking-[0.18em] text-white/60">
+          {cardTypeLabel(item)}
+        </p>
 
         <Link href={`/menu/products/${item.id}`} className="block" aria-label={`View ${item.name}`}>
           <div className="relative h-[14.15rem] overflow-hidden bg-white p-0 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.1)] md:h-[14.65rem]">

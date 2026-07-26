@@ -246,6 +246,8 @@ describe("intake-mastering-core: family derivation", () => {
     expect(
       deriveFamily({ category: "flower", vendor: "X", name: "whatever", strainName: "Blue_Dream" }),
     ).toEqual({ family: "blue-dream", display: "Blue Dream" });
+    // SLICE 49 (owner rule): dose-led categories keep the mg dose in the
+    // family and display — the dose sells the product and is identity.
     expect(
       deriveFamily({
         category: "edible-solid",
@@ -254,7 +256,7 @@ describe("intake-mastering-core: family derivation", () => {
         name: "Fairwinds - Rainbow Chews 100mg pack",
         strainName: null,
       }),
-    ).toEqual({ family: "rainbow-chews", display: "Rainbow Chews" });
+    ).toEqual({ family: "rainbow-chews-100mg", display: "Rainbow Chews 100mg" });
   });
 
   it("refuses to guess when the name strips to nothing", () => {
@@ -369,7 +371,10 @@ describe("intake-mastering-core: pack-axis rollup (prerolls / infused prerolls /
 });
 
 describe("intake-mastering-core: other variant-bearing categories (topicals / RSO / liquids / tinctures)", () => {
-  it("groups topical sizes on the noise-stripped name", () => {
+  // SLICE 49 (owner rule): topicals are dose-led — the mg dose stays in the
+  // name and is part of the identity, so DIFFERENT doses never merge while
+  // the SAME dose still rolls up.
+  it("keeps different topical doses as separate cards (dose is identity)", () => {
     const p = buildIntakeMasteringPlan({
       drafts: [
         draft({ id: "t1", pos_product_key: "LOT-T1", name: "Healing Balm 100mg", strain_name: null, price_minor_units: 1800 }),
@@ -382,7 +387,24 @@ describe("intake-mastering-core: other variant-bearing categories (topicals / RS
       ]),
       liveCards: [],
     });
+    expect(p.newCards).toHaveLength(2);
+  });
+
+  it("rolls up two lots of the SAME topical dose into one card that keeps the dose in its name", () => {
+    const p = buildIntakeMasteringPlan({
+      drafts: [
+        draft({ id: "t1", pos_product_key: "LOT-T1", name: "Healing Balm 300mg", strain_name: null, price_minor_units: 4200 }),
+        draft({ id: "t2", pos_product_key: "LOT-T2", name: "Fairwinds Healing Balm 300mg jar", strain_name: null, price_minor_units: 4200 }),
+      ],
+      existingKeys: new Set(),
+      enrichmentByDraftId: new Map([
+        ["t1", enrich({ websiteCategory: "topical", packageLabel: "300mg" })],
+        ["t2", enrich({ websiteCategory: "topical", packageLabel: "300mg" })],
+      ]),
+      liveCards: [],
+    });
     expect(p.newCards).toHaveLength(1);
+    expect(p.newCards[0].name).toBe("Healing Balm 300mg");
     expect(p.newCards[0].variants).toHaveLength(2);
   });
 
