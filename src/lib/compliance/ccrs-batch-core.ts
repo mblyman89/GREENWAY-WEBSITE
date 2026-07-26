@@ -260,8 +260,60 @@ export const CCRS_INVENTORY_TYPES: Record<CcrsInventoryCategory, readonly string
   ],
 } as const;
 
+/* ------------------------------------------------------------------ *
+ * SLICE 51 — legacy LCB vocabulary aliases.
+ *
+ * GROUNDED IN: the 2021 CCRS Data Model Manual (Product.InventoryType valid
+ * values, /tmp/ccrs_datamodel.txt) used "Marijuana" naming — "Usable
+ * Marijuana", "Marijuana Mix", "Marijuana Mix Packaged/Infused" — and listed
+ * the inhalation concentrates ("Concentrate for Inhalation", "Non-Solvent
+ * based Concentrate", "Hydrocarbon/CO2/Ethanol Concentrate") under
+ * IntermediateProduct. The v2023+ guide (2026-02 Table 2, enum-of-record
+ * above) renamed those to "Cannabis" terms and MOVED the inhalation
+ * concentrates to EndProduct. Vendor manifests still arrive in BOTH dialects
+ * (owner report: Downtown Cannabis Company ships "Usable Cannabis" /
+ * "Concentrate for Inhalation" while other vendors' data carries the legacy
+ * "Usable Marijuana" strings), so intake must accept the old vocabulary and
+ * CANONICALIZE it to the modern spelling for CCRS — never reject a real
+ * legacy value, never invent anything beyond this documented LCB migration.
+ *
+ * Keyed by the normalized legacy TYPE string; each entry names the exact
+ * modern category+type pair from Table 2. The category is canonicalized too
+ * (a legacy IntermediateProduct concentrate becomes EndProduct).
+ * ------------------------------------------------------------------ */
+export const CCRS_LEGACY_TYPE_ALIASES: Record<string, { category: CcrsInventoryCategory; type: string }> = {
+  // v2021 "Marijuana" naming → v2023+ "Cannabis" naming.
+  "usable marijuana": { category: "EndProduct", type: "Usable Cannabis" },
+  "marijuana mix": { category: "IntermediateProduct", type: "Cannabis Mix" },
+  "marijuana mix packaged": { category: "EndProduct", type: "Cannabis Mix Packaged" },
+  "marijuana mix infused": { category: "EndProduct", type: "Cannabis Mix Infused" },
+  // Singular "Clone" seen in the wild; Table 2 lists "Clones".
+  "clone": { category: "PropagationMaterial", type: "Clones" },
+};
+
+/**
+ * Inhalation-concentrate types that lived under IntermediateProduct in the
+ * 2021 Data Model but are EndProduct in Table 2 (v2023+). The TYPE spelling
+ * is unchanged (case-insensitive), only the CATEGORY moved.
+ */
+const CCRS_MOVED_TO_END_PRODUCT = new Set([
+  "concentrate for inhalation",
+  "non-solvent based concentrate",
+  "hydrocarbon concentrate",
+  "co2 concentrate",
+  "ethanol concentrate",
+]);
+
 export type ProductClassificationResult =
-  | { ok: true; category: CcrsInventoryCategory; type: string }
+  | {
+      ok: true;
+      category: CcrsInventoryCategory;
+      type: string;
+      /** SLICE 51: true when a legacy (2021) value was canonicalized to the modern enum. */
+      aliased?: boolean;
+      /** Human note describing the canonicalization (for INFO-level surfacing). */
+      aliasNote?: string;
+    }
   | { ok: false; category: string; type: string; error: string };
 
 /**
@@ -311,6 +363,34 @@ export function validateProductClassification(
   const validTypes = CCRS_INVENTORY_TYPES[canonCat];
   const canonType = validTypes.find((t) => norm(t) === norm(typeIn));
   if (!canonType) {
+    // SLICE 51: before rejecting, check the documented LEGACY vocabulary.
+    // Order matters — the exact modern enum was tried first, so valid modern
+    // pairs are returned byte-identically as before; only values that would
+    // have been REJECTED reach this canonicalization.
+    const legacy = CCRS_LEGACY_TYPE_ALIASES[norm(typeIn)];
+    if (legacy) {
+      return {
+        ok: true,
+        category: legacy.category,
+        type: legacy.type,
+        aliased: true,
+        aliasNote: `Legacy LCB value "${typeIn}" (2021 Data Model vocabulary) canonicalized to "${legacy.type}" under ${legacy.category} (current CCRS Table 2).`,
+      };
+    }
+    // SLICE 51: inhalation concentrates moved IntermediateProduct → EndProduct
+    // in v2023+; the type spelling itself is unchanged.
+    if (canonCat === "IntermediateProduct" && CCRS_MOVED_TO_END_PRODUCT.has(norm(typeIn))) {
+      const modernType = CCRS_INVENTORY_TYPES.EndProduct.find((t) => norm(t) === norm(typeIn));
+      if (modernType) {
+        return {
+          ok: true,
+          category: "EndProduct",
+          type: modernType,
+          aliased: true,
+          aliasNote: `"${modernType}" moved from IntermediateProduct to EndProduct in CCRS v2023+ — category canonicalized.`,
+        };
+      }
+    }
     return {
       ok: false,
       category: catIn,
@@ -871,8 +951,38 @@ export function __runCcrsBatchCoreTests(): void {
   assert(validateProductClassification("", "").ok === false, "both missing rejected");
   assert(validateProductClassification("EndProduct", "").ok === false, "missing type rejected");
   assert(validateProductClassification("", "Seed").ok === false, "missing category rejected");
-  // legacy Data Model Manual names are NOT valid in the current enum (grounding).
-  assert(validateProductClassification("HarvestedMaterial", "Marijuana Mix").ok === false, "legacy 'Marijuana Mix' rejected");
+  // SLICE 51: legacy Data Model Manual (2021) names are ACCEPTED and
+  // canonicalized to the current Table 2 enum — vendor manifests still carry
+  // the old vocabulary (owner report: Downtown ships modern strings while
+  // others ship legacy). The exact modern enum is tried FIRST, so valid
+  // modern pairs return byte-identically as before (never aliased).
+  {
+    const mix = validateProductClassification("HarvestedMaterial", "Marijuana Mix");
+    assert(mix.ok === true, "legacy 'Marijuana Mix' accepted via alias");
+    if (mix.ok) {
+      assert(mix.category === "IntermediateProduct" && mix.type === "Cannabis Mix", "legacy 'Marijuana Mix' canonicalized to IntermediateProduct/Cannabis Mix");
+      assert(mix.aliased === true && !!mix.aliasNote, "legacy alias flagged with a note");
+    }
+    const usable = validateProductClassification("EndProduct", "Usable Marijuana");
+    assert(usable.ok === true && usable.ok && usable.type === "Usable Cannabis" && usable.category === "EndProduct", "legacy 'Usable Marijuana' → 'Usable Cannabis'");
+    const mixPkg = validateProductClassification("EndProduct", "Marijuana Mix Packaged");
+    assert(mixPkg.ok === true && mixPkg.ok && mixPkg.type === "Cannabis Mix Packaged", "legacy 'Marijuana Mix Packaged' canonicalized");
+    const mixInf = validateProductClassification("EndProduct", "marijuana mix infused");
+    assert(mixInf.ok === true && mixInf.ok && mixInf.type === "Cannabis Mix Infused", "legacy 'Marijuana Mix Infused' canonicalized (case-insensitive)");
+    const clone = validateProductClassification("PropagationMaterial", "Clone");
+    assert(clone.ok === true && clone.ok && clone.type === "Clones", "singular 'Clone' → 'Clones'");
+    // 2021 layout put inhalation concentrates under IntermediateProduct; the
+    // category (not the type) is what moved in v2023+.
+    const moved = validateProductClassification("IntermediateProduct", "Concentrate for Inhalation");
+    assert(moved.ok === true && moved.ok && moved.category === "EndProduct" && moved.type === "Concentrate for Inhalation", "2021 IntermediateProduct concentrate re-homed to EndProduct");
+    const movedNs = validateProductClassification("IntermediateProduct", "Non-Solvent based Concentrate");
+    assert(movedNs.ok === true && movedNs.ok && movedNs.category === "EndProduct" && movedNs.type === "Non-Solvent Based Concentrate", "2021 'Non-Solvent based' casing + category canonicalized");
+    // Modern pairs are untouched — never marked aliased.
+    const modern = validateProductClassification("EndProduct", "Usable Cannabis");
+    assert(modern.ok === true && modern.ok && modern.type === "Usable Cannabis" && !modern.aliased, "modern pair returned verbatim, not aliased");
+    // Genuinely invalid values are still rejected — aliasing never guesses.
+    assert(validateProductClassification("EndProduct", "Vape Juice").ok === false, "unknown type still rejected");
+  }
 
   // clampText (C2): under-limit unchanged; over-limit truncated + flagged.
   assert(clampText("hello", 75).truncated === false, "short text not truncated");

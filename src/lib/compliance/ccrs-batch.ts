@@ -225,6 +225,13 @@ function buildProductFile(
     if (cls.ok) {
       category = cls.category;
       type = cls.type;
+      // SLICE 51: a legacy 2021-vocabulary value ("Usable Marijuana",
+      // "Marijuana Mix …", concentrate under IntermediateProduct) was
+      // accepted and canonicalized to the current Table 2 spelling. Surface
+      // an ADVISORY note (never blocks) so staff see what was translated.
+      if (cls.aliased && cls.aliasNote) {
+        warnings.push(`Product "${productName || ext}": ${cls.aliasNote}`);
+      }
     } else {
       warnings.push(`ERROR — Product "${productName || ext}": ${cls.error} Fix the CCRS mapping (Inventory types) before submitting.`);
     }
