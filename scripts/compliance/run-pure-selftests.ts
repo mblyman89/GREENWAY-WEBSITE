@@ -174,6 +174,7 @@ import { __runStrainTerpeneTests } from "../../src/lib/menu/strain-terpenes";
 import { __runVariantSortTests } from "../../src/lib/menu/variant-sort";
 import { __runNonCannabisTests } from "../../src/lib/naming/noncannabis-core";
 import { __runNamingConventionTests } from "../../src/lib/naming/convention-core";
+import { __runCcrsProductNameCoreTests } from "../../src/lib/compliance/ccrs-product-name-core";
 import { __runNachaCoreTests } from "../../src/lib/payments/nacha-core";
 import { __runVendorAchTests } from "../../src/lib/payments/vendor-ach-core";
 import { __runPayrollCoreTests } from "../../src/lib/payroll/payroll-core";
@@ -373,6 +374,7 @@ async function main() {
   assertNoFailures("variant-sort", __runVariantSortTests());
   __runNonCannabisTests();
   __runNamingConventionTests();
+  __runCcrsProductNameCoreTests();
   assertNoFailures("nacha-core", __runNachaCoreTests());
   assertNoFailures("vendor-ach-core", __runVendorAchTests());
   assertNoFailures("payroll-core", __runPayrollCoreTests());

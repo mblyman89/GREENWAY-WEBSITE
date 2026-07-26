@@ -35,7 +35,8 @@ import {
   type CcrsRetailerFileType,
 } from "@/lib/compliance/ccrs-batch-core";
 import { deriveInventoryExternalId, validateExternalId, sanitizeExternalId } from "@/lib/compliance/ccrs-identifiers";
-import { validateName, suggestName } from "@/lib/naming/convention-core";
+import { validateName, suggestName, type Cannabinoid } from "@/lib/naming/convention-core";
+import { composeCcrsProductName, disambiguateCcrsName } from "@/lib/compliance/ccrs-product-name-core";
 import { getCcrsLicenseSettings, buildCcrsSaleCsv } from "@/lib/compliance/ccrs-sales";
 import { buildCcrsInventoryAdjustmentCsv } from "@/lib/compliance/ccrs-inventory-adjustment";
 
@@ -94,7 +95,31 @@ type MenuItemRow = {
   pos_inventory_type: string | null;
   pos_inventory_category: string | null;
   description: string | null;
+  // SLICE 53 (two-layer naming): fields the CCRS Product.Name composer uses.
+  brand_name: string | null;
+  vendor_name: string | null;
+  category: string | null;
+  total_thc_json: unknown;
+  total_cbd_json: unknown;
+  compounds_json: unknown;
 };
+
+/** Parse a stored cannabinoid JSON blob (same shape live-menu.ts reads). */
+function jsonToCannabinoid(json: unknown): Cannabinoid | null {
+  if (!json || typeof json !== "object") return null;
+  const o = json as Record<string, unknown>;
+  if (typeof o.type !== "string" || typeof o.unit !== "string") return null;
+  return {
+    type: o.type as Cannabinoid["type"],
+    value: typeof o.value === "string" || typeof o.value === "number" ? o.value : null,
+    unit: o.unit as Cannabinoid["unit"],
+  };
+}
+
+function jsonToCompounds(json: unknown): Cannabinoid[] {
+  if (!Array.isArray(json)) return [];
+  return json.map(jsonToCannabinoid).filter((c): c is Cannabinoid => c != null);
+}
 
 type LotRow = {
   id: string;
@@ -203,6 +228,7 @@ function buildProductFile(
     }
   }
   const seen = new Set<string>();
+  const usedNamesLower = new Set<string>();
   const rows: string[][] = [];
   for (const it of items) {
     const key = (it.source_item_id ?? "").trim();
@@ -213,7 +239,34 @@ function buildProductFile(
     const rawCategory = (it.pos_inventory_category ?? "").trim();
     const rawType = (it.pos_inventory_type ?? "").trim();
     const grams = weightByKey.get(key) ?? "";
-    const productName = (it.name ?? "").trim();
+
+    // SLICE 53 (two-layer naming, owner-approved): the CCRS Product.Name is
+    // AUTO-COMPOSED from stored fields — short vendor + brand + display name +
+    // measured cannabinoid tag + type + size ("Downtown Space OG Flower 1g").
+    // The human-facing menu_items.name is untouched; the composed name lives
+    // only in these files. Falls back to the display name when composition is
+    // impossible (never guesses).
+    const composed = composeCcrsProductName({
+      name: (it.name ?? "").trim(),
+      vendor: it.vendor_name,
+      brand: it.brand_name,
+      posInventoryCategory: it.pos_inventory_category,
+      category: it.category,
+      unitWeightGrams: grams || null,
+      totalThc: jsonToCannabinoid(it.total_thc_json),
+      totalCbd: jsonToCannabinoid(it.total_cbd_json),
+      compounds: jsonToCompounds(it.compounds_json),
+    });
+    // CCRS joins Inventory.Product -> Product.Name by EXACT string, so two
+    // DIFFERENT products must never share one Name. Deterministic suffix from
+    // the product's own external id on collision (stable batch after batch).
+    const disamb = disambiguateCcrsName(composed.name, ext, usedNamesLower);
+    if (disamb.disambiguated) {
+      warnings.push(
+        `Product "${composed.name.slice(0, 40)}…": composed CCRS name collided with another product — suffixed to "${disamb.name.slice(0, 60)}" to keep the Inventory→Product join unambiguous.`,
+      );
+    }
+    const productName = disamb.name;
 
     // C1: validate the category/type against the CCRS enum. DRAFTS-ONLY policy —
     // we KEEP the POS-supplied values (canonicalized when valid) and never invent
@@ -385,7 +438,7 @@ export async function buildCcrsBatch(fromISO: string, toISO: string): Promise<Cc
     const { data } = await admin
       .from("menu_items")
       .select(
-        "source_item_id, name, strain_name, strain_type, pos_inventory_type, pos_inventory_category, description",
+        "source_item_id, name, strain_name, strain_type, pos_inventory_type, pos_inventory_category, description, brand_name, vendor_name, category, total_thc_json, total_cbd_json, compounds_json",
       )
       .eq("menu_version_id", versionId)
       .eq("hidden", false);
