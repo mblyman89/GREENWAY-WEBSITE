@@ -4,15 +4,13 @@ import Image from "next/image";
 import { useState } from "react";
 import { SectionBanner, type SectionBannerData } from "@/components/home/SectionBanner";
 import { greenwayBusiness } from "@/content/business";
-import vendorsData from "@/data/vendors.json";
+import type { VendorDirectoryEntry } from "@/lib/menu/vendor-directory-core";
 
-type Vendor = {
-  name: string;
-  slug: string;
-  productCount: number;
-};
-
-const vendors = vendorsData as Vendor[];
+// SLICE 48 (owner Q3): the static vendors.json snapshot is retired. Vendors
+// now arrive as a prop, derived from the LIVE published menu by the server
+// page (src/app/vendor-delivery/page.tsx via buildVendorDirectory), so the
+// directory always reflects what is actually on the shelves.
+type Vendor = VendorDirectoryEntry;
 
 // Accent palette cycles across the vendor tiles for a lively, on-brand grid
 // (mirrors the home "Shop by Brand" treatment).
@@ -143,7 +141,7 @@ type VendorContent = {
   extraSections?: SectionBannerData[];
 };
 
-export function VendorDirectory({ content }: { content?: VendorContent } = {}) {
+export function VendorDirectory({ content, vendors = [] }: { content?: VendorContent; vendors?: Vendor[] } = {}) {
   return (
     <div className="bg-black px-4 py-6 text-white md:px-8 md:py-8">
       <div className="mx-auto max-w-[88rem] space-y-6 md:space-y-8">
@@ -214,16 +212,27 @@ export function VendorDirectory({ content }: { content?: VendorContent } = {}) {
           buttons={content?.brands?.buttons}
         />
 
-        {/* Vendor directory — HomeBrands-style cards, logo + name, tap to expand. */}
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4 lg:grid-cols-4">
-          {vendors.map((vendor, index) => (
-            <VendorCard key={vendor.slug} vendor={vendor} index={index} />
-          ))}
-        </div>
+        {/* Vendor directory — HomeBrands-style cards, logo + name, tap to expand.
+            SLICE 48: derived live from the published menu, so an empty menu
+            shows a friendly note instead of a bare grid. */}
+        {vendors.length > 0 ? (
+          <>
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4 lg:grid-cols-4">
+              {vendors.map((vendor, index) => (
+                <VendorCard key={vendor.slug} vendor={vendor} index={index} />
+              ))}
+            </div>
 
-        <p className="pt-2 text-center text-xs font-semibold text-zinc-500">
-          Logos and partner descriptions shown are placeholders pending final vendor assets.
-        </p>
+            <p className="pt-2 text-center text-xs font-semibold text-zinc-500">
+              Logos and partner descriptions shown are placeholders pending final vendor assets.
+            </p>
+          </>
+        ) : (
+          <p className="rounded-2xl border border-white/10 bg-zinc-950/60 p-8 text-center text-sm font-semibold text-zinc-400">
+            Our partner directory is being refreshed — check back soon to meet the
+            Washington producers and processors stocking our shelves.
+          </p>
+        )}
 
         {/* Extra banners staff added in the Pages builder render here. */}
         {(content?.extraSections ?? []).map((s) => (
