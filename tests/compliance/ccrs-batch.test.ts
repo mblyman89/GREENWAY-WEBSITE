@@ -180,6 +180,25 @@ describe("product classification (Table 2)", () => {
     ).toBe(false);
     expect(validateProductClassification("Bogus", "Usable Cannabis").ok).toBe(false);
   });
+
+  // SLICE 51: legacy 2021 Data Model vocabulary is accepted and canonicalized
+  // to the current Table 2 enum (vendor manifests still arrive in both dialects).
+  it("canonicalizes legacy 2021 LCB vocabulary to the modern enum", () => {
+    const usable = validateProductClassification("EndProduct", "Usable Marijuana");
+    expect(usable.ok).toBe(true);
+    if (usable.ok) {
+      expect(usable.type).toBe("Usable Cannabis");
+      expect(usable.aliased).toBe(true);
+    }
+    const moved = validateProductClassification("IntermediateProduct", "Concentrate for Inhalation");
+    expect(moved.ok).toBe(true);
+    if (moved.ok) expect(moved.category).toBe("EndProduct");
+    // Modern pairs stay verbatim and are never flagged as aliased.
+    const modern = validateProductClassification("EndProduct", "Usable Cannabis");
+    expect(modern.ok && !modern.aliased).toBe(true);
+    // Aliasing never guesses: unknown values still fail.
+    expect(validateProductClassification("EndProduct", "Vape Juice").ok).toBe(false);
+  });
 });
 
 describe("Sale numeric-column safety (defense in depth)", () => {
