@@ -84,6 +84,15 @@ export type MenuItemRow = {
   total_thc_json: unknown | null;
   total_cbd_json: unknown | null;
   compounds_json: unknown;
+  // SLICE 56: structured facts (migration 0138) — verified-only, null = "not verified".
+  servings_per_pack: number | null;
+  mg_per_serving: number | null;
+  package_thc_mg: number | null;
+  package_cbd_mg: number | null;
+  ratio_label: string | null;
+  net_weight_grams: number | null;
+  net_volume_ml: number | null;
+  fact_provenance: unknown;
   description: string;
   price_label: string;
   price_minor_units: number;

@@ -20,7 +20,13 @@
  */
 import crypto from "node:crypto";
 import * as XLSX from "xlsx";
-import { STATUTORY_GRAMS_PER_OUNCE } from "@/lib/compliance/grams-per-ounce";
+import { STATUTORY_GRAMS_PER_OUNCE, AVOIRDUPOIS_GRAMS_PER_OUNCE } from "@/lib/compliance/grams-per-ounce";
+// SLICE 56: the word-by-word extraction engine (SLICE 55). Pure module — the
+// transformer cross-examines every mg-dosed row's NAME against its potency
+// COLUMNS and only trusts arithmetic-verified facts (docs/data-governance.md
+// Rules 1.2/2.2/3.1). The KNOWN-INCONSISTENT Total column loses priority to a
+// verified package total.
+import { crossExamineRow, MG_FACT_TYPES, type CrossExamResult } from "@/lib/inventory/fact-extraction-core";
 // Type-only: the per-row lot source shape consumed by the compliance lot
 // planner (import-lot-core.ts). No runtime dependency — no import cycle.
 import type { ImportLotSource } from "@/lib/pos/import-lot-core";
@@ -65,6 +71,18 @@ type GreenwayMenuItem = {
   totalThc: GreenwayCannabinoid | null;
   totalCbd: GreenwayCannabinoid | null;
   compounds: GreenwayCannabinoid[];
+  // SLICE 56: structured facts (migration 0138) filled from the word-by-word
+  // extraction engine — only arithmetic-VERIFIED facts land here; anything
+  // uncertain stays null and is flagged via diagnostics for the exception
+  // queue (docs/data-governance.md Rule 3.1).
+  servingsPerPack: number | null;
+  mgPerServing: number | null;
+  packageThcMg: number | null;
+  packageCbdMg: number | null;
+  ratioLabel: string | null;
+  netWeightGrams: number | null;
+  netVolumeMl: number | null;
+  factProvenance: Record<string, string>;
   description: string;
   priceLabel: string;
   priceMinorUnits: number;
@@ -205,8 +223,12 @@ const STRAIN_MAP: Record<string, GreenwayStrainType> = {
   "50/50 hybrid": "hybrid",
 };
 
-const THC_TOTAL_ALLOWED_TYPES = new Set(["Concentrate for Inhalation", "Usable Marijuana", "Solid Edible", "Liquid Edible", "Tincture"]);
-const MG_CANNABINOID_TYPES = new Set(["Solid Edible", "Liquid Edible", "Tincture"]);
+// SLICE 56: Topical Ointment joins both sets — topicals are mg-dosed products
+// (real rows: "A.C. Topical Drops - 1000mg THC", Thc column up to 1500) and
+// previously showed NO potency box at all. Keyed off the same MG_FACT_TYPES
+// vocabulary as the extraction engine so the two can never drift apart.
+const THC_TOTAL_ALLOWED_TYPES = new Set(["Concentrate for Inhalation", "Usable Marijuana", ...MG_FACT_TYPES]);
+const MG_CANNABINOID_TYPES = MG_FACT_TYPES;
 
 // --- Bug 3: sanity caps on cannabinoid values ---------------------------------------------
 // Percent-based values (flower, concentrate, cartridge, etc.) can never exceed 100%. mg-based
@@ -219,6 +241,10 @@ const CANNABINOID_MG_CAP: Record<string, number> = {
   "Solid Edible": 2000,
   "Liquid Edible": 1000,
   "Tincture": 5000,
+  // SLICE 56: topicals now display mg. Observed maxima in the real corpus:
+  // Thc column 1500, Total column 3000 ("A.C. Topical Drops" family) —
+  // 5000 gives the same generous-but-finite headroom as tinctures.
+  "Topical Ointment": 5000,
 };
 const DEFAULT_CANNABINOID_MG_CAP = 5000;
 
@@ -488,6 +514,22 @@ function packageCandidateFromProductName(productName: string, category: string, 
 
 function validatedPackageSize(productName: string, rawPackage: string, category: string, inventoryType: string): ParsedPackage {
   const packageColumn = parsePackageSize(rawPackage);
+  // SLICE 56 package-size sanity rule: milligrams are a POTENCY unit, not a
+  // physical package measure. A dose-led label ("100mg") may legitimately
+  // stand in for the size, but a value beyond any sane potency ("25000.00
+  // Milligrams" — 22 real corpus rows) is garbage data and gets flagged for
+  // the review queue instead of quietly flowing downstream.
+  if (packageColumn.unit === "mg") {
+    const mgCeiling = CANNABINOID_MG_CAP[normalizeWhitespace(inventoryType)] ?? DEFAULT_CANNABINOID_MG_CAP;
+    if (packageColumn.quantity > mgCeiling) {
+      addDiagnostic("warning", "package_size_mg_garbage", "Package Size column carries a milligram figure beyond any sane potency — not a physical measure; flagged for enrichment.", {
+        productName,
+        inventoryType,
+        rawPackage,
+        mg: packageColumn.quantity,
+      });
+    }
+  }
   const candidate = packageCandidateFromProductName(productName, category, inventoryType);
   if (!candidate) return packageColumn;
   const fromName = candidate.pkg;
@@ -892,7 +934,7 @@ function mergeVariantDuplicates(group: ProductGroup): CollapsedInventory[] {
   return [...merged.values()].sort((a, b) => a.package.sortValue - b.package.sortValue || a.priceMinorUnits - b.priceMinorUnits || a.productName.localeCompare(b.productName));
 }
 
-function cannabinoidCompounds(base: CollapsedInventory | undefined): GreenwayCannabinoid[] {
+function cannabinoidCompounds(base: CollapsedInventory | undefined, exam?: CrossExamResult | null): GreenwayCannabinoid[] {
   if (!base || !shouldDisplayThcTotal(base.inventoryType)) return [];
   const compounds: GreenwayCannabinoid[] = [];
   const unit = cannabinoidUnitForInventoryType(base.inventoryType);
@@ -903,6 +945,19 @@ function cannabinoidCompounds(base: CollapsedInventory | undefined): GreenwayCan
   push("thca", base.thcaRaw);
   push("cbd", base.cbdRaw);
   push("cbda", base.cbdaRaw);
+  // SLICE 56: minor cannabinoids (CBG/CBN/CBC/CBDV) live ONLY in Cultivera
+  // names — no columns exist for them. The extraction engine surfaces them;
+  // only arithmetic-VERIFIED mg figures are displayed (Rule 3.1: uncertain
+  // facts go to the review queue instead, never to customers).
+  if (exam) {
+    for (const minor of exam.minorCannabinoids) {
+      if (minor.confidence !== "verified" || minor.mg === null) continue;
+      const type = minor.cannabinoid.toLowerCase();
+      if (type !== "cbg" && type !== "cbn" && type !== "cbc" && type !== "cbdv") continue;
+      if (compounds.some((c) => c.type === type)) continue;
+      compounds.push({ type, value: formatNumber(minor.mg, 2), unit: "mg" });
+    }
+  }
   return compounds;
 }
 
@@ -961,6 +1016,29 @@ function toMenuItem(group: ProductGroup): GreenwayMenuItem {
   }));
   const totalUnits = menuVariants.reduce((sum, variant) => sum + variant.inventoryLevel, 0);
   const inventoryType = firstAvailable?.inventoryType ?? group.posInventoryType;
+
+  // SLICE 56: word-by-word extraction (SLICE 55 engine) for mg-dosed types.
+  // The raw Cultivera product name is cross-examined against the Thc/Cbd
+  // potency columns; only arithmetic-VERIFIED facts are used downstream.
+  const exam: CrossExamResult | null = MG_FACT_TYPES.has(normalizeWhitespace(inventoryType))
+    ? crossExamineRow({
+        productText: firstAvailable?.productName ?? group.displayName,
+        inventoryType: normalizeWhitespace(inventoryType),
+        thcColumn: firstAvailable?.thcRaw ?? null,
+        cbdColumn: firstAvailable?.cbdRaw ?? null,
+      })
+    : null;
+  if (exam?.needsReview) {
+    // Feeds the SLICE 57 exception queue — one info diagnostic per card with
+    // every plain-English reason the cross-examiner produced.
+    addDiagnostic("info", "fact_extraction_review", exam.reviewReasons[0] ?? "Extraction needs review.", {
+      productName: firstAvailable?.productName ?? group.displayName,
+      displayName: group.displayName,
+      inventoryType,
+      reasons: exam.reviewReasons,
+    });
+  }
+
   // THC displays from the Total column (totalRaw); the Thc column (thcRaw) is the sane sibling used
   // when Total is corrupt/over-cap. CBD displays from the Cbd column with Cbda as sibling.
   const thcResolved = resolveCannabinoid(firstAvailable?.totalRaw ?? null, inventoryType, {
@@ -975,9 +1053,72 @@ function toMenuItem(group: ProductGroup): GreenwayMenuItem {
     productName: group.displayName,
     category: group.category,
   });
-  const thc = thcResolved.display;
-  const cbd = cbdResolved.display;
+  let thc = thcResolved.display;
+  let cbd = cbdResolved.display;
   const unit = cannabinoidUnitForInventoryType(inventoryType);
+
+  // SLICE 56: PACKAGE-TOTAL-FIRST THC policy for mg-dosed types. The Total
+  // column is KNOWN-INCONSISTENT (per-serving on some rows, per-package on
+  // others, zero on others — docs/data-governance.md Rule 3.4). A VERIFIED
+  // package total from the extraction engine outranks it; mismatches are
+  // logged so the review screen can show exactly what was overridden.
+  const factProvenance: Record<string, string> = {};
+  let servingsPerPack: number | null = null;
+  let mgPerServing: number | null = null;
+  let packageThcMg: number | null = null;
+  let packageCbdMg: number | null = null;
+  if (exam && unit === "mg") {
+    if (exam.packageThcMg?.confidence === "verified") {
+      const capped = capCannabinoidValue(exam.packageThcMg.value, inventoryType);
+      packageThcMg = capped.value;
+      factProvenance.package_thc_mg = exam.packageThcMg.source;
+      const display = `${formatNumber(capped.value, 2)}mg`;
+      if (thc !== null && thc !== display) {
+        addDiagnostic("info", "thc_package_total_override", "Displayed THC now uses the verified package total; the inconsistent Total column value was set aside.", {
+          productName: firstAvailable?.productName ?? group.displayName,
+          inventoryType,
+          totalColumnDisplay: thc,
+          verifiedPackageTotal: display,
+          how: exam.packageThcMg.note,
+        });
+      }
+      thc = display;
+    }
+    if (exam.packageCbdMg?.confidence === "verified") {
+      const capped = capCannabinoidValue(exam.packageCbdMg.value, inventoryType);
+      packageCbdMg = capped.value;
+      factProvenance.package_cbd_mg = exam.packageCbdMg.source;
+      cbd = `${formatNumber(capped.value, 2)}mg`;
+    }
+    if (exam.servingsPerPack?.confidence === "verified") {
+      servingsPerPack = exam.servingsPerPack.value;
+      factProvenance.servings_per_pack = exam.servingsPerPack.source;
+    }
+    if (exam.mgPerServing?.confidence === "verified") {
+      mgPerServing = exam.mgPerServing.value;
+      factProvenance.mg_per_serving = exam.mgPerServing.source;
+    }
+  }
+  const ratioLabel = exam?.ratioLabel?.value ?? null;
+  if (ratioLabel) factProvenance.ratio_label = exam!.ratioLabel!.source;
+
+  // SLICE 56: net weight / net volume as structured fields, from the package
+  // measure (real units only). oz→grams uses the true avoirdupois conversion
+  // (GW-016); fl oz→ml uses 29.5735 (shared with card-cannabinoids.ts).
+  let netWeightGrams: number | null = null;
+  let netVolumeMl: number | null = null;
+  const pkgMeasure = firstAvailable?.package;
+  if (pkgMeasure) {
+    if (pkgMeasure.unit === "g") netWeightGrams = pkgMeasure.quantity;
+    else if (pkgMeasure.unit === "oz") netWeightGrams = pkgMeasure.quantity * AVOIRDUPOIS_GRAMS_PER_OUNCE;
+    else if (pkgMeasure.unit === "ml") netVolumeMl = pkgMeasure.quantity;
+    else if (pkgMeasure.unit === "floz") netVolumeMl = pkgMeasure.quantity * 29.5735;
+    // (unit === "mg": milligrams are potency, not a physical measure — no net
+    // weight is derived. Garbage mg sizes are flagged once in
+    // validatedPackageSize via the package_size_mg_garbage diagnostic.)
+  }
+  if (netWeightGrams !== null) factProvenance.net_weight_grams = "column";
+  if (netVolumeMl !== null) factProvenance.net_volume_ml = "column";
   const unitPattern = unit === "%" ? /%$/ : /mg$/;
   const packageLabel = firstAvailable?.package.label ?? "each";
   const displayPackageLabel = packageLabel === "each" ? "" : packageLabel;
@@ -1003,7 +1144,15 @@ function toMenuItem(group: ProductGroup): GreenwayMenuItem {
     // "~" estimate prefix and "N/A" placeholder no longer exist anywhere in the pipeline.
     totalThc: shouldDisplayThcTotal(inventoryType) ? { type: "thc", value: thc ? thc.replace(unitPattern, "") : null, unit } : null,
     totalCbd: shouldDisplayThcTotal(inventoryType) ? { type: "cbd", value: cbd ? cbd.replace(unitPattern, "") : null, unit } : null,
-    compounds: cannabinoidCompounds(firstAvailable),
+    compounds: cannabinoidCompounds(firstAvailable, exam),
+    servingsPerPack,
+    mgPerServing,
+    packageThcMg,
+    packageCbdMg,
+    ratioLabel,
+    netWeightGrams,
+    netVolumeMl,
+    factProvenance,
     description: group.descriptions.sort((a, b) => b.length - a.length)[0] ?? genericDescription(group),
     priceLabel,
     priceMinorUnits: firstPrice,
@@ -1328,10 +1477,21 @@ export function __runTransformCoreTests(): void {
     r = resolveCannabinoid(250, "Usable Marijuana", { kind: "thc" });
     ok(r.display === "100%", "percent clamps at 100");
 
-    // 6) Non-displayable type → null with no diagnostics.
+    // 6) Non-displayable type → null with no diagnostics. (SLICE 56: Topical
+    //    Ointment is now DISPLAYABLE in mg, so a paraphernalia-style type is
+    //    the non-displayable probe.)
     diagnostics = [];
-    r = resolveCannabinoid(null, "Topical Ointment", { kind: "thc" });
+    r = resolveCannabinoid(null, "Marijuana Mix Infused", { kind: "thc" });
     ok(r.display === null && diagnostics.length === 0, "non-displayable type stays silent");
+
+    // --- SLICE 56: topicals join the mg display group ------------------------
+    r = resolveCannabinoid(1000, "Topical Ointment", { kind: "thc" });
+    ok(r.display === "1000mg", "topical THC displays in mg (was hidden before SLICE 56)");
+    diagnostics = [];
+    r = resolveCannabinoid(25000, "Topical Ointment", { kind: "thc" });
+    ok(r.display === "5000mg", "topical mg clamps at the 5000mg sanity cap");
+    ok(diagnostics.some((d) => d.code === "cannabinoid_value_capped"), "topical cap logged");
+    ok(cannabinoidUnitForInventoryType("Topical Ointment") === "mg", "topical unit is mg");
 
     // --- stripVariantNoise: intake-parity name cleaning ---------------------
     ok(stripVariantNoise("Blue Dream 5pk", "", "Pre-roll") === "Blue Dream", "numbered pk token stripped");
@@ -1400,6 +1560,71 @@ export function __runTransformCoreTests(): void {
       const orphCard = run.items.find((i) => orphKeys.has(i.id));
       ok(!!orphCard && orphCard.hidden === true, "master-less card stays hidden for review");
       ok(!!orphCard && orphCard.variants.reduce((s, v) => s + v.inventoryLevel, 0) === 5, "merged master-less card keeps ALL units (2+3)");
+    }
+
+    // --- SLICE 56: extraction-engine wiring, end-to-end ----------------------
+    // Real Cultivera rows through the FULL pipeline: minors/ratios into
+    // fields, package-total-first THC, topical mg display, net weight,
+    // mg-garbage package-size flag.
+    {
+      const makeSheet = (rows: Record<string, string>[]) => XLSX.utils.json_to_sheet(rows);
+      const toBuffer = (sheetName: string, rows: Record<string, string>[]) => {
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, makeSheet(rows), sheetName);
+        return XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
+      };
+      const productsBuffer = toBuffer("Sheet1", [
+        {
+          "Product Name": "Placeholder Flower 3.5g", "Inventory Type": "Usable Marijuana", Category: "Flower",
+          Brand: "Placeholder", Type: "Hybrid", Strain: "Placeholder", UOM: "Grams", "Package Size": "3.50 Grams",
+          Price: "$20.00", Description: "Header carrier.",
+        },
+      ]);
+      const invRow = (over: Record<string, string>) => ({
+        Id: "1", Location: "Main", Barcode: "BC-1", Alias: "", Product: "x",
+        Category: "Gummies", InventoryType: "Solid Edible", Strain: "", Brand: "B",
+        Vendor: "V", "Product Price": "$20.00", Cost: "$8.00", "Units Available For Sale": "3",
+        "Units In Stock": "3", "Package Size": "32.00 Grams", "Storage Location": "Sales Floor",
+        "Is Medical": "False", "Is Cannabis": "True", "Is Sample": "False", Lab: "", "[COA Y/N]": "Y",
+        Cbd: "0", Cbda: "", Thc: "10", Thca: "", Total: "10", "Terpene Total": "",
+        "Units On Hold": "0", "Quantity Sold": "0", "Quantity Purchased": "3",
+        "Expiration date": "", "Received date": "06/17/2026",
+        ...over,
+      });
+      const inventoriesBuffer = toBuffer("Inventories", [
+        // Real row: Const HRG Blueberry — Total column 10 (per-serving, INCONSISTENT),
+        // engine verifies 100mg package THC + 100mg CBN + 100mg CBD (Cbd col 9.1 x 10).
+        invRow({ Id: "1", Barcode: "BC-CONST", Product: "Const HRG CBN 1:1:1 Blueberry 10 Pack 300mg", Strain: "Blueberry", Brand: "Constellation", Cbd: "9.1", Thc: "10", Total: "10" }),
+        // Real row: A.C. topical — mg display for Topical Ointment + 250mg CBN minor.
+        invRow({ Id: "2", Barcode: "BC-AC", Product: "A.C. Topical Drops 4:1 - 1000mg THC 250mg CBN - 1.7 oz", Strain: "", Brand: "A.C.", Category: "Topical", InventoryType: "Topical Ointment", "Package Size": "1.70 Ounce", Cbd: "12", Thc: "1000", Total: "1300" }),
+        // Real garbage: "25000.00 Milligrams" package size (22 rows in the corpus).
+        invRow({ Id: "3", Barcode: "BC-JG", Product: "Jelly Gems - JG Jelly Gems 400mg Total - Tropical Trip", Strain: "Tropical Trip", Brand: "Jelly Gems", "Package Size": "25000.00 Milligrams", Cbd: "0", Thc: "0", Total: "400" }),
+      ]);
+      const run = transformWorkbooks({ productsBuffer, inventoriesBuffer });
+
+      const constCard = run.items.find((i) => i.variants.length && (i.productName ?? "").includes("Const HRG"));
+      ok(!!constCard, "Const HRG card exists");
+      ok(!!constCard && constCard.packageThcMg === 100, "package-total-first: 100mg THC (not the Total column's 10)");
+      ok(!!constCard && constCard.thc === "100mg", "displayed THC is the verified package total");
+      ok(!!constCard && constCard.servingsPerPack === 10 && constCard.mgPerServing === 10, "servings 10 x 10mg captured");
+      ok(!!constCard && constCard.ratioLabel === "1:1:1", "ratio label captured as a field");
+      ok(!!constCard && constCard.compounds.some((c) => c.type === "cbn" && c.value === "100" && c.unit === "mg"), "CBN minor from the NAME reaches compounds");
+      ok(!!constCard && constCard.packageCbdMg === 100, "CBD package total verified via Cbd column x pack");
+      ok(!!constCard && constCard.factProvenance.package_thc_mg !== undefined, "provenance recorded for THC");
+      ok(run.diagnostics.some((d) => d.code === "thc_package_total_override"), "Total-column override logged for review");
+
+      const acCard = run.items.find((i) => (i.productName ?? "").includes("A.C. Topical"));
+      ok(!!acCard, "A.C. topical card exists");
+      ok(!!acCard && acCard.thc === "1000mg", "topical shows 1000mg THC (was hidden before SLICE 56)");
+      ok(!!acCard && acCard.compounds.some((c) => c.type === "cbn" && c.value === "250"), "topical CBN 250mg minor captured");
+      ok(!!acCard && acCard.ratioLabel === "4:1", "topical ratio label captured");
+      ok(!!acCard && acCard.netWeightGrams !== null && Math.abs(acCard.netWeightGrams - 1.7 * 28.3495) < 0.01, "topical net weight from 1.70 Ounce (avoirdupois)");
+
+      const jgCard = run.items.find((i) => (i.productName ?? "").includes("Jelly Gems"));
+      ok(!!jgCard, "Jelly Gems card exists");
+      ok(!!jgCard && jgCard.netWeightGrams === null && jgCard.netVolumeMl === null, "mg-garbage package size yields NO net measure");
+      ok(run.diagnostics.some((d) => d.code === "package_size_mg_garbage"), "25000mg package size flagged as garbage");
+      ok(run.diagnostics.some((d) => d.code === "fact_extraction_review"), "unverifiable rows feed the exception queue diagnostic");
     }
 
     console.log(`transform-core: ${passed} assertions passed`);

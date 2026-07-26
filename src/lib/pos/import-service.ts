@@ -230,6 +230,17 @@ async function persistMenuItems(versionId: string, items: GreenwayMenuItem[]) {
       total_thc_json: item.totalThc ?? null,
       total_cbd_json: item.totalCbd ?? null,
       compounds_json: item.compounds ?? [],
+      // SLICE 56: structured facts (migration 0138) — verified-only values
+      // from the word-by-word extraction engine; null means "not verified",
+      // never "zero".
+      servings_per_pack: item.servingsPerPack,
+      mg_per_serving: item.mgPerServing,
+      package_thc_mg: item.packageThcMg,
+      package_cbd_mg: item.packageCbdMg,
+      ratio_label: item.ratioLabel,
+      net_weight_grams: item.netWeightGrams,
+      net_volume_ml: item.netVolumeMl,
+      fact_provenance: item.factProvenance ?? {},
       description: item.description ?? "",
       price_label: item.priceLabel ?? "",
       price_minor_units: item.priceMinorUnits ?? 0,
