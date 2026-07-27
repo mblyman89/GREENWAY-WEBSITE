@@ -8,6 +8,7 @@ import { menuCardDiscountForItem } from "@/lib/promotions/published-rules-core";
 import { useActiveDealRules } from "@/components/promotions/PublishedRulesProvider";
 import { useStoreWeekday } from "@/lib/specials/useStoreWeekday";
 import { sortVariantsBySize } from "@/lib/menu/variant-sort";
+import { collapseVariantsForDisplay } from "@/lib/menu/variant-collapse-core";
 
 type ProductDetailPurchasePanelProps = {
   item: GreenwayMenuItem;
@@ -27,10 +28,13 @@ export function ProductDetailPurchasePanel({ item }: ProductDetailPurchasePanelP
   // basket/tier deals finalize in the cart).
   const salePriceMinorUnits = deal?.perItemSalePrice ? deal.salePriceMinorUnits : undefined;
   // SLICE 40: lowest size first, ascending (same order as the product cards).
+  // SLICE 70 (restock readiness): identical label+price lots collapse to one
+  // row (first in-stock lot = oldest represents; display-only, see
+  // variant-collapse-core). The register and admin still see every lot.
   const variants = useMemo(
     () =>
       item.variants.length > 0
-        ? sortVariantsBySize(item.variants)
+        ? collapseVariantsForDisplay(sortVariantsBySize(item.variants))
         : [
             {
               id: `${item.id}-default`,
